@@ -11,7 +11,6 @@ from sqlmesh.core import constants as c
 from sqlmesh.core.config import CategorizerConfig
 from sqlmesh.core.dialect import parse_one
 from sqlmesh.core.model import SqlModel
-from sqlmesh.core.plan import LoadedSnapshotIntervals
 from sqlmesh.core.snapshot import SnapshotChangeCategory
 from sqlmesh.core.user import User, UserRole
 from sqlmesh.integrations.github.cicd.config import GithubCICDBotConfig, MergeMethod
@@ -530,7 +529,7 @@ def test_bot_command_parsing(
     assert controller.get_command_from_comment() == command
 
 
-def test_unloaded_snapshots(
+def test_uncategorized(
     mocker,
     github_client,
     make_controller,
@@ -543,12 +542,12 @@ def test_unloaded_snapshots(
     snapshot_categrozied.categorize_as(SnapshotChangeCategory.BREAKING)
     snapshot_uncategorized = make_snapshot(SqlModel(name="b", query=parse_one("select 1, ds")))
     mocker.patch(
-        "sqlmesh.core.plan.Plan.loaded_snapshot_intervals",
+        "sqlmesh.core.plan.Plan.modified_snapshots",
         PropertyMock(
-            return_value=(
-                [LoadedSnapshotIntervals.from_snapshot(snapshot_categrozied)],
-                [snapshot_uncategorized],
-            )
+            return_value={
+                snapshot_categrozied.snapshot_id: snapshot_categrozied,
+                snapshot_uncategorized.snapshot_id: snapshot_uncategorized,
+            },
         ),
     )
     mock_repo = github_client.get_repo()
