@@ -16,6 +16,8 @@ from dateparser import freshness_date_parser as freshness_date_parser_module
 from dateparser.freshness_date_parser import freshness_date_parser
 from sqlglot import exp
 
+from sqlmesh.utils import ttl_cache
+
 UTC = timezone.utc
 TimeLike = t.Union[date, datetime, str, int, float]
 DATE_INT_FMT = "%Y%m%d"
@@ -117,6 +119,7 @@ def to_timestamp(value: TimeLike, relative_base: t.Optional[datetime] = None) ->
     return int(to_datetime(value, relative_base=relative_base).timestamp() * 1000)
 
 
+@ttl_cache()
 def to_datetime(value: TimeLike, relative_base: t.Optional[datetime] = None) -> datetime:
     """Converts a value into a UTC datetime object.
 
