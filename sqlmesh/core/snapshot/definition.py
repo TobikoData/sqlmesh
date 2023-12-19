@@ -214,7 +214,7 @@ class SnapshotInfoMixin(ModelKindMixin):
     previous_versions: t.Tuple[SnapshotDataVersion, ...]
     # Added to support Migration # 34 (default catalog)
     # This can be removed from this model once Pydantic 1 support is dropped (must remain in `Snapshot` though)
-    base_table_name_override: t.Optional[str] = None
+    base_table_name_override: t.Optional[str]
 
     @property
     def identifier(self) -> str:
