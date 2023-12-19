@@ -9,7 +9,7 @@ ENV AIRFLOW_UID=$AIRFLOW_UID
 RUN usermod -u $AIRFLOW_UID airflow
 
 # Workaround the expired MySQL GPG key.
-RUN rm /etc/apt/sources.list.d/mysql.list
+RUN rm -f /etc/apt/sources.list.d/mysql.list
 
 RUN apt-get autoclean
 RUN apt-get update

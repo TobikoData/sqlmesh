@@ -143,6 +143,17 @@ class BaseAirflowClient(abc.ABC):
             The state of the given DAG Run.
         """
 
+    @abc.abstractmethod
+    def get_variable(self, key: str) -> t.Optional[str]:
+        """Returns the value of an Airflow variable with the given key.
+
+        Args:
+            key: The variable key.
+
+        Returns:
+            The variable value or None if no variable with the given key exists.
+        """
+
     def _console_loading_start(self) -> t.Optional[uuid.UUID]:
         if self._console:
             return self._console.loading_start()
@@ -283,6 +294,13 @@ class AirflowClient(BaseAirflowClient):
         if not dag_runs:
             return None
         return dag_runs[0]["dag_run_id"]
+
+    def get_variable(self, key: str) -> t.Optional[str]:
+        try:
+            variables_response = self._get(f"api/v1/variables/{key}")
+            return variables_response["value"]
+        except NotFoundError:
+            return None
 
     def close(self) -> None:
         self._session.close()

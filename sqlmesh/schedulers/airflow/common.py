@@ -36,6 +36,8 @@ SNAPSHOT_PAYLOAD_KEY_PREFIX = "sqlmesh__snapshot_payload"
 SNAPSHOT_VERSION_KEY_PREFIX = "sqlmesh__snapshot_version_index"
 ENV_KEY_PREFIX = "sqlmesh__environment"
 
+DEFAULT_CATALOG_VARIABLE_NAME = "sqlmesh_default_catalog"
+
 AIRFLOW_LOCAL_URL = "http://localhost:8080/"
 
 SQLMESH_API_BASE_PATH: str = f"{c.SQLMESH}/api/v1"

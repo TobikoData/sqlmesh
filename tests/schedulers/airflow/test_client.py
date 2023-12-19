@@ -398,3 +398,16 @@ def test_invalidat_environment(mocker: MockerFixture):
     delete_environment_mock.assert_called_once_with(
         "http://localhost:8080/sqlmesh/api/v1/environments/test_environment"
     )
+
+
+def test_get_variable(mocker: MockerFixture):
+    get_variable_response_mock = mocker.Mock()
+    get_variable_response_mock.status_code = 200
+    get_variable_response_mock.json.return_value = {"value": "test_value", "key": "test_key"}
+    get_variable_mock = mocker.patch("requests.Session.get")
+    get_variable_mock.return_value = get_variable_response_mock
+
+    client = AirflowClient(airflow_url=common.AIRFLOW_LOCAL_URL, session=requests.Session())
+    assert client.get_variable("test_key") == "test_value"
+
+    get_variable_mock.assert_called_once_with("http://localhost:8080/api/v1/variables/test_key")
