@@ -167,11 +167,11 @@ def test_restate_models(sushi_context_pre_scheduling: Context):
         restate_models=["sushi.waiter_revenue_by_day"], no_prompts=True
     )
     assert plan.restatements == {
-        SnapshotId(name='"memory"."sushi"."waiter_revenue_by_day"', identifier="1947760989"): (
+        SnapshotId(name='"memory"."sushi"."waiter_revenue_by_day"', identifier="643718449"): (
             plan.start,
             to_timestamp(to_date("today")),
         ),
-        SnapshotId(name='"memory"."sushi"."top_waiters"', identifier="2658028575"): (
+        SnapshotId(name='"memory"."sushi"."top_waiters"', identifier="630183694"): (
             plan.start,
             to_timestamp(to_date("today")),
         ),
