@@ -496,7 +496,11 @@ class QueryRenderer(BaseExpressionRenderer):
                 simplify(
                     annotate_types(
                         qualify(
-                            query, dialect=self._dialect, schema=self.schema, infer_schema=False, catalog=self._default_catalog,
+                            query,
+                            dialect=self._dialect,
+                            schema=self.schema,
+                            infer_schema=False,
+                            catalog=self._default_catalog,
                         ),
                         schema=self.schema,
                     )
