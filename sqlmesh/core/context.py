@@ -289,7 +289,7 @@ class Context(BaseContext):
         self.concurrent_tasks = concurrent_tasks or connection_config.concurrent_tasks
         self._engine_adapter = engine_adapter or connection_config.create_engine_adapter()
 
-        test_connection_config = self.config.get_test_connection(self.gateway)
+        test_connection_config = self.config.get_test_connection(self.gateway, self.default_catalog)
         self._test_engine_adapter = test_connection_config.create_engine_adapter()
 
         self._snapshot_evaluator: t.Optional[SnapshotEvaluator] = None
