@@ -1008,7 +1008,7 @@ class SqlModel(_SqlBasedModel):
 
             self._columns_to_types = {
                 select.output_name: select.type or exp.DataType.build("unknown")
-                for select in query.expressions
+                for select in query.selects
             }
 
         if "*" in self._columns_to_types:
