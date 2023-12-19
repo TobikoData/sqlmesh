@@ -3,7 +3,6 @@ import shutil
 import typing as t
 from collections import Counter
 from datetime import timedelta
-from unittest.mock import PropertyMock
 
 import numpy as np
 import pandas as pd
@@ -14,11 +13,7 @@ from sqlglot import exp
 from sqlglot.expressions import DataType
 
 from sqlmesh.core import constants as c
-from sqlmesh.core.config import (
-    AutoCategorizationMode,
-    CategorizerConfig,
-    DuckDBConnectionConfig,
-)
+from sqlmesh.core.config import AutoCategorizationMode
 from sqlmesh.core.console import Console
 from sqlmesh.core.context import Context
 from sqlmesh.core.engine_adapter import EngineAdapter
@@ -40,9 +35,7 @@ from sqlmesh.core.snapshot import (
     SnapshotInfoLike,
     SnapshotTableInfo,
 )
-from sqlmesh.core.state_sync import EngineAdapterStateSync
 from sqlmesh.utils.date import TimeLike, to_date, to_datetime, to_timestamp, to_ts
-from sqlmesh.utils.errors import SQLMeshError
 from tests.conftest import DuckDBMetadata, SushiDataValidator, init_and_plan_context
 
 
@@ -1807,139 +1800,6 @@ def test_scd_type_2(tmp_path: pathlib.Path):
         ]
     )
     compare_dataframes(df_actual, df_expected)
-
-
-@pytest.mark.integration
-@pytest.mark.core_integration
-@freeze_time("2023-12-06 00:00:00")
-def test_migration_with_default_catalog(mocker: MockerFixture):
-    """
-    Verifies the behavior of migrating to a release supporting default catalog when before it wasn't supported
-    and having that default catalog set.
-    We explicitly create a separate engine adapter for the state sync in order to make sure we can change the default
-    catalog on the non-state sync engine adapter and have that not affect the state sync engine adapter. If you don't do
-    this then when changing the default catalog it would look like there is no state out there to SQLMesh and the prod
-    plan would be against a new environment.
-    """
-    state_sync_engine_adapter = DuckDBConnectionConfig().create_engine_adapter()
-    engine_adapter = DuckDBConnectionConfig().create_engine_adapter()
-    engine_adapter.execute(f"IMPORT DATABASE 'tests/fixtures/migrations/33/duckdb'")
-    state_sync_engine_adapter.execute(f"IMPORT DATABASE 'tests/fixtures/migrations/33/duckdb'")
-    state_sync_engine_adapter.drop_schema("raw", cascade=True)
-    state_sync_engine_adapter.drop_schema("sushi__dev", cascade=True)
-    state_sync_engine_adapter.drop_schema("sushi", cascade=True)
-    state_sync_engine_adapter.drop_schema("sqlmesh__sushi", cascade=True)
-    engine_adapter.drop_schema("sqlmesh", cascade=True)
-    state_sync = EngineAdapterStateSync(state_sync_engine_adapter, schema="sqlmesh")
-    sushi_context = Context(
-        paths=["tests/fixtures/migrations/33/project"],
-        engine_adapter=engine_adapter,
-        state_sync=state_sync,
-    )
-    # Make sure views are not currently fully qualified
-    assert (
-        engine_adapter.fetchone(
-            "SELECT sql FROM duckdb_views() WHERE database_name = 'memory' AND schema_name = 'sushi' AND view_name = 'marketing'"
-        )[0]
-        == "CREATE VIEW sushi.marketing (customer_id, status, updated_at, valid_from, valid_to) AS SELECT * FROM sqlmesh__sushi.sushi__marketing__2156224001;\n"
-    )
-    with pytest.raises(SQLMeshError, match=".*Please run a migration.*"):
-        sushi_context.plan("prod")
-    sushi_context.migrate()
-    # Make sure that views are still not fully qualified after migration since we haven't run a plan against the environment yet
-    assert (
-        engine_adapter.fetchone(
-            "SELECT sql FROM duckdb_views() WHERE database_name = 'memory' AND schema_name = 'sushi' AND view_name = 'marketing'"
-        )[0]
-        == "CREATE VIEW sushi.marketing (customer_id, status, updated_at, valid_from, valid_to) AS SELECT * FROM sqlmesh__sushi.sushi__marketing__2156224001;\n"
-    )
-    assert (
-        sushi_context.state_sync.engine_adapter.fetchone(  # type: ignore
-            "SELECT COUNT(*) FROM sqlmesh._environments"
-        )[0]
-        == 2
-    )
-    assert (
-        sushi_context.state_sync.engine_adapter.fetchone("SELECT COUNT(*) FROM sqlmesh._snapshots")[  # type: ignore
-            0
-        ]
-        == 34
-    )
-    assert (
-        sushi_context.engine_adapter.fetchone(
-            "SELECT COUNT(DISTINCT event_date) FROM sushi.customer_revenue_by_day"
-        )[0]
-        == 7
-    )
-    plan = sushi_context.plan("prod", auto_apply=True)
-    assert not plan.context_diff.is_new_environment
-    assert plan.context_diff.is_unfinalized_environment
-    assert not plan.context_diff.added
-    assert not plan.context_diff.removed_snapshots
-    assert not plan.context_diff.modified_snapshots
-    assert plan.missing_intervals == []
-    assert len(plan.snapshots) == 15
-    # Standalone audit does not start with the default catalog
-    assert len([x for x in plan.snapshots if x.name.startswith('"memory"')]) == 14
-    num_sushi_marketing_rows = 88
-    assert (
-        sushi_context.engine_adapter.fetchone("SELECT COUNT(*) FROM sushi.marketing")[0]
-        == num_sushi_marketing_rows
-    )
-    assert (
-        sushi_context.engine_adapter.fetchone(
-            "SELECT COUNT(DISTINCT event_date) FROM sushi.customer_revenue_by_day"
-        )[0]
-        == 7
-    )
-    # Make sure views are now fully qualified
-    assert (
-        engine_adapter.fetchone(
-            "SELECT sql FROM duckdb_views() WHERE database_name = 'memory' AND schema_name = 'sushi' AND view_name = 'marketing'"
-        )[0]
-        == "CREATE VIEW sushi.marketing (customer_id, status, updated_at, valid_from, valid_to) AS SELECT * FROM memory.sqlmesh__sushi.sushi__marketing__2156224001;\n"
-    )
-
-    # Change the catalog and make sure models are recreated
-    mocker.patch(
-        "sqlmesh.core.engine_adapter.base.EngineAdapter.default_catalog",
-        PropertyMock(return_value="other_catalog"),
-    )
-    engine_adapter.execute("ATTACH ':memory:' AS other_catalog")
-    engine_adapter.set_current_catalog("other_catalog")
-    sushi_context_diff_default_catalog = Context(
-        paths=["tests/fixtures/migrations/33/project"],
-        config="local_catalogs",
-        engine_adapter=engine_adapter,
-        state_sync=state_sync,
-    )
-    plan = sushi_context_diff_default_catalog.plan(
-        "prod", categorizer_config=CategorizerConfig.all_full()
-    )
-    assert not plan.context_diff.is_new_environment
-    assert not plan.context_diff.is_unfinalized_environment
-    assert plan.has_changes
-    assert len(plan.context_diff.added) == 14
-    assert len(plan.context_diff.removed_snapshots) == 14
-    assert len(plan.context_diff.modified_snapshots) == 1
-    assert len(plan.directly_modified) == 14
-    # Not all model kinds (like embedded or audits) have missing intervals
-    assert len(plan.missing_intervals) == 12
-    sushi_context_diff_default_catalog.apply(plan)
-    # This is a forward-only model but since the catalog change is seen as an add/remove
-    # then it is rebuilt
-    assert (
-        sushi_context_diff_default_catalog.engine_adapter.fetchone(
-            "SELECT COUNT(*) FROM other_catalog.sushi.marketing"
-        )[0]
-        == num_sushi_marketing_rows
-    )
-    assert (
-        sushi_context_diff_default_catalog.engine_adapter.fetchone(
-            "SELECT COUNT(DISTINCT event_date) FROM other_catalog.sushi.customer_revenue_by_day"
-        )[0]
-        == 7
-    )
 
 
 def initial_add(context: Context, environment: str):

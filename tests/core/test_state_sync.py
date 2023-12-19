@@ -1147,7 +1147,7 @@ def test_migrate_rows(state_sync: EngineAdapterStateSync, mocker: MockerFixture)
 
     state_sync.engine_adapter.replace_query(
         "sqlmesh._snapshots",
-        pd.read_json("tests/fixtures/migrations/0/snapshots.json"),
+        pd.read_json("tests/fixtures/migrations/snapshots.json"),
         columns_to_types={
             "name": exp.DataType.build("text"),
             "identifier": exp.DataType.build("text"),
@@ -1158,7 +1158,7 @@ def test_migrate_rows(state_sync: EngineAdapterStateSync, mocker: MockerFixture)
 
     state_sync.engine_adapter.replace_query(
         "sqlmesh._environments",
-        pd.read_json("tests/fixtures/migrations/0/environments.json"),
+        pd.read_json("tests/fixtures/migrations/environments.json"),
         columns_to_types={
             "name": exp.DataType.build("text"),
             "snapshots": exp.DataType.build("text"),
@@ -1218,7 +1218,7 @@ def test_migrate_rows(state_sync: EngineAdapterStateSync, mocker: MockerFixture)
 def test_backup_state(state_sync: EngineAdapterStateSync, mocker: MockerFixture) -> None:
     state_sync.engine_adapter.replace_query(
         "sqlmesh._snapshots",
-        pd.read_json("tests/fixtures/migrations/0/snapshots.json"),
+        pd.read_json("tests/fixtures/migrations/snapshots.json"),
         columns_to_types={
             "name": exp.DataType.build("text"),
             "identifier": exp.DataType.build("text"),
@@ -1243,7 +1243,7 @@ def test_restore_snapshots_table(state_sync: EngineAdapterStateSync) -> None:
     }
     state_sync.engine_adapter.replace_query(
         "sqlmesh._snapshots",
-        pd.read_json("tests/fixtures/migrations/0/snapshots.json"),
+        pd.read_json("tests/fixtures/migrations/snapshots.json"),
         columns_to_types=snapshot_columns_to_types,
     )
 
