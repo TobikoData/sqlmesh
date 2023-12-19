@@ -46,18 +46,6 @@ The SQLMesh project-level `model_defaults` key supports the following options, d
 
 The project-level `model_defaults` key also supports two keys for specifying a default catalog or schema, described [below](#default-schema--catalog).
 
-#### Default Schema / Catalog
-SQLMesh model names may contain one to three levels of nesting, where the naming hierarchy is `catalog.schema.model`.
-
-SQLMesh requires all model names and references to have the same level of nesting. For example, if you decide to specify a catalog in any model name, all model names and references must include a catalog.
-
-You can specify default schema and catalog names in the `model_defaults` key if you want to omit them from some model names.
-
-| Option    | Description                                                        | Type | Required |
-| --------- | ------------------------------------------------------------------ | :--: | :------: |
-| `catalog` | The default catalog name for models that do not specify a catalog. | str  |    N     |
-| `schema`  | The default schema name for models that do not specify a schema.   | str  |    N     |
-
 ## Model kind properties
 
 Configuration options for kind-specific SQLMesh model properties.

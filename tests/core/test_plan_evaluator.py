@@ -37,6 +37,7 @@ def test_builtin_evaluator_push(sushi_context: Context, make_snapshot):
         cron="@daily",
         start="2020-01-01",
         query=parse_one("SELECT 1::INT AS one"),
+        default_catalog="memory",
     )
     new_view_model = SqlModel(
         name="sushi.new_test_view_model",
@@ -44,14 +45,14 @@ def test_builtin_evaluator_push(sushi_context: Context, make_snapshot):
         owner="jen",
         start="2020-01-01",
         query=parse_one("SELECT 1::INT AS one FROM sushi.new_test_model, sushi.waiters"),
+        default_catalog="memory",
     )
 
     sushi_context.upsert_model(new_model)
     sushi_context.upsert_model(new_view_model)
 
-    snapshots = sushi_context.snapshots
-    new_model_snapshot = snapshots[new_model.name]
-    new_view_model_snapshot = snapshots[new_view_model.name]
+    new_model_snapshot = sushi_context.get_snapshot(new_model, raise_if_missing=True)
+    new_view_model_snapshot = sushi_context.get_snapshot(new_view_model, raise_if_missing=True)
 
     new_model_snapshot.categorize_as(SnapshotChangeCategory.BREAKING)
     new_view_model_snapshot.categorize_as(SnapshotChangeCategory.BREAKING)
@@ -61,6 +62,7 @@ def test_builtin_evaluator_push(sushi_context: Context, make_snapshot):
     evaluator = BuiltInPlanEvaluator(
         sushi_context.state_sync,
         sushi_context.snapshot_evaluator,
+        sushi_context.default_catalog,
         console=sushi_context.console,
     )
     evaluator._push(plan)

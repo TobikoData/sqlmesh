@@ -168,9 +168,9 @@ class _Node(PydanticModel):
         cron: A cron string specifying how often the node should be run, leveraging the
             [croniter](https://github.com/kiorky/croniter) library.
         interval_unit: The duration of an interval for the node. By default, it is computed from the cron expression.
+        tags: A list of tags that can be used to filter nodes.
         stamp: An optional arbitrary string sequence used to create new node versions without making
             changes to any of the functional components of the definition.
-        tags: A list of tags that can be used to filter nodes.
     """
 
     name: str
@@ -193,8 +193,12 @@ class _Node(PydanticModel):
 
     @field_validator("name", mode="before")
     @classmethod
-    def _name_validator(cls, v: t.Any) -> str:
-        return v.meta.get("sql") or v.sql() if isinstance(v, exp.Expression) else str(v)
+    def _name_validator(cls, v: t.Any) -> t.Optional[str]:
+        if v is None:
+            return None
+        if isinstance(v, exp.Expression):
+            return v.meta["sql"]
+        return str(v)
 
     @field_validator("start", mode="before")
     @classmethod
@@ -224,6 +228,7 @@ class _Node(PydanticModel):
         return str_or_exp_to_str(v)
 
     @field_validator("interval_unit_", mode="before")
+    @classmethod
     def _interval_unit_validator(cls, v: t.Any) -> t.Optional[t.Union[IntervalUnit, str]]:
         if isinstance(v, IntervalUnit):
             return v
@@ -270,6 +275,10 @@ class _Node(PydanticModel):
     @property
     def depends_on(self) -> t.Set[str]:
         return set()
+
+    @property
+    def fqn(self) -> str:
+        return self.name
 
     def metadata_hash(self, audits: t.Dict[str, ModelAudit]) -> str:
         """

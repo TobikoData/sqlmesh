@@ -181,7 +181,7 @@ class EngineAdapter:
             connection_factory, multithreaded, cursor_kwargs=cursor_kwargs, cursor_init=cursor_init
         )
         self.sql_gen_kwargs = sql_gen_kwargs or {}
-        self.default_catalog = default_catalog
+        self._default_catalog = default_catalog
         self._execute_log_level = execute_log_level
         self._extra_config = kwargs
 
@@ -190,7 +190,7 @@ class EngineAdapter:
             lambda: None,
             dialect=self.dialect,
             sql_gen_kwargs=self.sql_gen_kwargs,
-            default_catalog=self.default_catalog,
+            default_catalog=self._default_catalog,
             execute_log_level=level,
             **self._extra_config,
         )
@@ -234,6 +234,15 @@ class EngineAdapter:
             exp.alias_(exp.cast(column, to=kind), column, copy=False)
             for column, kind in columns_to_types.items()
         ]
+
+    @property
+    def default_catalog(self) -> t.Optional[str]:
+        if self.CATALOG_SUPPORT.is_unsupported:
+            return None
+        default_catalog = self._default_catalog or self.get_current_catalog()
+        if not default_catalog:
+            raise SQLMeshError("Could not determine a default catalog despite it being supported.")
+        return default_catalog
 
     def _get_source_queries(
         self,
@@ -1006,6 +1015,7 @@ class EngineAdapter:
             )
         )
 
+    @set_catalog()
     def scd_type_2(
         self,
         target_table: TableName,
@@ -1521,7 +1531,9 @@ class EngineAdapter:
         Returns the name of the temp table that should be used for the given table name.
         """
         table = t.cast(exp.Table, exp.to_table(table).copy())
-        table.set("this", exp.to_identifier(f"__temp_{table.name}_{random_id(short=True)}"))
+        table.set(
+            "this", exp.to_identifier(f"__temp_{table.name}_{random_id(short=True)}", quoted=True)
+        )
 
         if table_only:
             table.set("db", None)

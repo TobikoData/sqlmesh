@@ -59,7 +59,8 @@ class SnowflakeEngineAdapter(GetCurrentCatalogFromFunctionMixin):
                 self._connection_pool.get(),
                 df,
                 temp_table.name,
-                schema=temp_table.db,
+                schema=temp_table.db or None,
+                database=temp_table.catalog or None,
                 chunk_size=self.DEFAULT_BATCH_SIZE,
             )
             return exp.select(*self._casted_columns(columns_to_types)).from_(temp_table)

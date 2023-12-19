@@ -168,7 +168,7 @@ class AirflowClient(BaseAirflowClient):
         request_id: str,
         no_gaps: bool = False,
         skip_backfill: bool = False,
-        restatements: t.Optional[t.Dict[str, Interval]] = None,
+        restatements: t.Optional[t.Dict[SnapshotId, Interval]] = None,
         notification_targets: t.Optional[t.List[NotificationTarget]] = None,
         backfill_concurrent_tasks: int = 1,
         ddl_concurrent_tasks: int = 1,

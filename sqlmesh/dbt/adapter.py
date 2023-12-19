@@ -7,11 +7,10 @@ import typing as t
 import pandas as pd
 from dbt.contracts.relation import Policy
 from sqlglot import exp, parse_one
-from sqlglot.helper import seq_get
-from sqlglot.optimizer.normalize_identifiers import normalize_identifiers
 
-from sqlmesh.core.dialect import normalize_model_name, schema_
+from sqlmesh.core.dialect import normalize_model_name
 from sqlmesh.core.engine_adapter import EngineAdapter
+from sqlmesh.core.renderer import _normalize_and_quote
 from sqlmesh.core.snapshot import DeployabilityIndex, Snapshot, to_table_mapping
 from sqlmesh.utils.errors import ConfigError, ParsetimeAdapterCallError
 from sqlmesh.utils.jinja import JinjaMacroRegistry, MacroReference
@@ -41,6 +40,10 @@ class BaseAdapter(abc.ABC):
     @abc.abstractmethod
     def get_relation(self, database: str, schema: str, identifier: str) -> t.Optional[BaseRelation]:
         """Returns a single relation that matches the provided path."""
+
+    @abc.abstractmethod
+    def load_relation(self, relation: BaseRelation) -> t.Optional[BaseRelation]:
+        """Returns a single relation that matches the provided relation if present."""
 
     @abc.abstractmethod
     def list_relations(self, database: t.Optional[str], schema: str) -> t.List[BaseRelation]:
@@ -115,6 +118,10 @@ class ParsetimeAdapter(BaseAdapter):
         self._raise_parsetime_adapter_call_error("get relation")
         raise
 
+    def load_relation(self, relation: BaseRelation) -> t.Optional[BaseRelation]:
+        self._raise_parsetime_adapter_call_error("load relation")
+        raise
+
     def list_relations(self, database: t.Optional[str], schema: str) -> t.List[BaseRelation]:
         self._raise_parsetime_adapter_call_error("list relation")
         raise
@@ -166,12 +173,14 @@ class RuntimeAdapter(BaseAdapter):
         jinja_macros: JinjaMacroRegistry,
         jinja_globals: t.Optional[t.Dict[str, t.Any]] = None,
         relation_type: t.Optional[t.Type[BaseRelation]] = None,
+        column_type: t.Optional[t.Type[Column]] = None,
         quote_policy: t.Optional[Policy] = None,
         snapshots: t.Optional[t.Dict[str, Snapshot]] = None,
         table_mapping: t.Optional[t.Dict[str, str]] = None,
         deployability_index: t.Optional[DeployabilityIndex] = None,
     ):
         from dbt.adapters.base import BaseRelation
+        from dbt.adapters.base.column import Column
         from dbt.adapters.base.relation import Policy
 
         super().__init__(jinja_macros, jinja_globals=jinja_globals, dialect=engine_adapter.dialect)
@@ -180,6 +189,7 @@ class RuntimeAdapter(BaseAdapter):
 
         self.engine_adapter = engine_adapter
         self.relation_type = relation_type or BaseRelation
+        self.column_type = column_type or Column
         self.quote_policy = quote_policy or Policy()
         self.table_mapping = {
             **to_table_mapping((snapshots or {}).values(), deployability_index),
@@ -189,28 +199,32 @@ class RuntimeAdapter(BaseAdapter):
     def get_relation(
         self, database: t.Optional[str], schema: str, identifier: str
     ) -> t.Optional[BaseRelation]:
-        mapped_table = self._map_table_name(database, schema, identifier)
-        schema, identifier = mapped_table.db, mapped_table.name
+        return self.load_relation(
+            self.relation_type.create(
+                database=database,
+                schema=schema,
+                identifier=identifier,
+                quote_policy=self.quote_policy,
+            )
+        )
 
-        relations_list = self.list_relations(database, schema)
-        matching_relations = [
-            r
-            for r in relations_list
-            if r.identifier == identifier
-            and r.schema == schema
-            and (r.database == database or database is None)
-        ]
-        return seq_get(matching_relations, 0)
+    def load_relation(self, relation: BaseRelation) -> t.Optional[BaseRelation]:
+        mapped_table = self._map_table_name(self._normalize(self._relation_to_table(relation)))
+        if not self.engine_adapter.table_exists(mapped_table):
+            return None
+
+        return self._table_to_relation(mapped_table)
 
     def list_relations(self, database: t.Optional[str], schema: str) -> t.List[BaseRelation]:
-        reference_relation = self.relation_type.create(database=database, schema=schema)
+        reference_relation = self.relation_type.create(
+            database=database, schema=schema, quote_policy=self.quote_policy
+        )
         return self.list_relations_without_caching(reference_relation)
 
     def list_relations_without_caching(self, schema_relation: BaseRelation) -> t.List[BaseRelation]:
         from dbt.contracts.relation import RelationType
 
-        assert schema_relation.schema is not None
-        schema = self._normalize(schema_(schema_relation.schema, schema_relation.database))
+        schema = self._normalize(self._schema(schema_relation))
 
         relations = [
             self.relation_type.create(
@@ -228,13 +242,9 @@ class RuntimeAdapter(BaseAdapter):
         return relations
 
     def get_columns_in_relation(self, relation: BaseRelation) -> t.List[Column]:
-        from dbt.adapters.base.column import Column
-
-        table = self._normalize(self._relation_to_table(relation))
-        mapped_table = self._map_table_name(table.catalog, table.db, table.name)
-
+        mapped_table = self._map_table_name(self._normalize(self._relation_to_table(relation)))
         return [
-            Column.from_description(
+            self.column_type.from_description(
                 name=name, raw_data_type=dtype.sql(dialect=self.engine_adapter.dialect)
             )
             for name, dtype in self.engine_adapter.columns(table_name=mapped_table).items()
@@ -253,13 +263,11 @@ class RuntimeAdapter(BaseAdapter):
 
     def create_schema(self, relation: BaseRelation) -> None:
         if relation.schema is not None:
-            schema = self._normalize(schema_(relation.schema, relation.database))
-            self.engine_adapter.create_schema(schema)
+            self.engine_adapter.create_schema(self._normalize(self._schema(relation)))
 
     def drop_schema(self, relation: BaseRelation) -> None:
         if relation.schema is not None:
-            schema = self._normalize(schema_(relation.schema, relation.database))
-            self.engine_adapter.drop_schema(schema)
+            self.engine_adapter.drop_schema(self._normalize(self._schema(relation)))
 
     def drop_relation(self, relation: BaseRelation) -> None:
         if relation.schema is not None and relation.identifier is not None:
@@ -279,9 +287,12 @@ class RuntimeAdapter(BaseAdapter):
         )
 
         expression = parse_one(sql, read=self.engine_adapter.dialect)
-        expression = exp.replace_tables(
-            expression, self.table_mapping, dialect=self.dialect, copy=False
-        )
+        with _normalize_and_quote(
+            expression, self.engine_adapter.dialect, self.engine_adapter.default_catalog
+        ) as expression:
+            expression = exp.replace_tables(
+                expression, self.table_mapping, dialect=self.dialect, copy=False
+            )
 
         if auto_begin:
             # TODO: This could be a bug. I think dbt leaves the transaction open while we close immediately.
@@ -297,44 +308,50 @@ class RuntimeAdapter(BaseAdapter):
         return AdapterResponse("Success"), empty_table()
 
     def resolve_schema(self, relation: BaseRelation) -> t.Optional[str]:
-        schema = self._map_table_name(relation.database, relation.schema, relation.identifier).db
-        if not schema:
-            return None
-        return schema
+        schema = self._map_table_name(self._normalize(self._relation_to_table(relation))).db
+        return schema if schema else None
 
     def resolve_identifier(self, relation: BaseRelation) -> t.Optional[str]:
-        identifier = self._map_table_name(
-            relation.database, relation.schema, relation.identifier
-        ).name
-        if not identifier:
-            return None
-        return identifier
+        identifier = self._map_table_name(self._normalize(self._relation_to_table(relation))).name
+        return identifier if identifier else None
 
-    def _map_table_name(
-        self, database: t.Optional[str], schema: t.Optional[str], identifier: t.Optional[str]
-    ) -> exp.Table:
-        name = normalize_model_name(
-            exp.table_(identifier or "", db=schema, catalog=database),
-            dialect=self.engine_adapter.dialect,
-        )
-        if name not in self.table_mapping:
-            return exp.to_table(name, dialect=self.engine_adapter.dialect)
+    def _map_table_name(self, table: exp.Table) -> exp.Table:
+        name = table.sql()
+        physical_table_name = self.table_mapping.get(name)
+        if not physical_table_name:
+            return table
 
-        physical_table_name = self.table_mapping[name]
         logger.debug("Resolved ref '%s' to snapshot table '%s'", name, physical_table_name)
 
         return exp.to_table(physical_table_name, dialect=self.engine_adapter.dialect)
 
     def _relation_to_table(self, relation: BaseRelation) -> exp.Table:
-        assert relation.identifier is not None
-        return exp.table_(relation.identifier, db=relation.schema, catalog=relation.database)
+        table = exp.to_table(relation.render(), dialect=self.engine_adapter.dialect)
+        return exp.to_table(relation.render(), dialect=self.engine_adapter.dialect)
 
-    def _normalize(self, table: exp.Table) -> exp.Table:
-        if self.quote_policy.identifier and isinstance(table.this, exp.Identifier):
-            table.this.set("quoted", True)
-        if self.quote_policy.schema and isinstance(table.args.get("db"), exp.Identifier):
-            table.args["db"].set("quoted", True)
-        if self.quote_policy.database and isinstance(table.args.get("catalog"), exp.Identifier):
-            table.args["catalog"].set("quoted", True)
+    def _table_to_relation(self, table: exp.Table) -> BaseRelation:
+        return self.relation_type.create(
+            database=table.catalog or None,
+            schema=table.db,
+            identifier=table.name,
+            quote_policy=self.quote_policy,
+        )
 
-        return normalize_identifiers(table, dialect=self.engine_adapter.dialect)
+    def _schema(self, schema_relation: BaseRelation) -> exp.Table:
+        assert schema_relation.schema is not None
+        return exp.Table(
+            this=None,
+            db=exp.to_identifier(schema_relation.schema, quoted=self.quote_policy.schema),
+            catalog=exp.to_identifier(schema_relation.database, quoted=self.quote_policy.database),
+        )
+
+    def _normalize(self, input_table: exp.Table) -> exp.Table:
+        normalized_name = normalize_model_name(
+            input_table, self.engine_adapter.default_catalog, self.engine_adapter.dialect
+        )
+        normalized_table = exp.to_table(normalized_name)
+        if not input_table.this:
+            normalized_table.set("catalog", normalized_table.args.get("db"))
+            normalized_table.set("db", normalized_table.this)
+            normalized_table.set("this", None)
+        return normalized_table

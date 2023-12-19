@@ -118,10 +118,6 @@ class Rewriter:
                     if node.name in mapping:
                         node.set("this", exp.to_identifier(mapping[node.name]))
 
-        for expr in select.selects:
-            for col in expr.find_all(exp.Column):
-                col.set("table", exp.to_identifier(base_alias))
-
     def _add_joins(
         self,
         source: exp.Select,
@@ -144,7 +140,8 @@ class Rewriter:
                     elif models:
                         t = mapping.get(node.table)
                         model = next(
-                            (model for model in models if remove_namespace(model) == t), models[0]
+                            (model for model in models if remove_namespace(model) == t),
+                            models[0],
                         )
                         node.args["table"] = exp.to_identifier(t or remove_namespace(model))
                         if model not in joins:
@@ -198,6 +195,7 @@ def rewrite(
     return optimize(
         d.parse_one(sql, dialect=dialect) if isinstance(sql, str) else sql,
         dialect=dialect,
+        quote_identifiers=False,
         rules=(
             qualify,
             rewriter.rewrite,

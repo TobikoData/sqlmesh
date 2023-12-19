@@ -59,7 +59,7 @@ def test_apply_plan(mocker: MockerFixture, snapshot: Snapshot):
     request_id = "test_request_id"
 
     client = AirflowClient(airflow_url=common.AIRFLOW_LOCAL_URL, session=requests.Session())
-    client.apply_plan([snapshot], environment, request_id, models_to_backfill={"test_model"})
+    client.apply_plan([snapshot], environment, request_id, models_to_backfill={'"test_model"'})
 
     apply_plan_mock.assert_called_once()
     args, data = apply_plan_mock.call_args_list[0]
@@ -107,7 +107,7 @@ def test_apply_plan(mocker: MockerFixture, snapshot: Snapshot):
                     "signals": [],
                 },
                 "audits": [],
-                "name": "test_model",
+                "name": '"test_model"',
                 "parents": [],
                 "previous_versions": [],
                 "updated_ts": 1665014400000,
@@ -122,7 +122,7 @@ def test_apply_plan(mocker: MockerFixture, snapshot: Snapshot):
             "snapshots": [
                 {
                     "fingerprint": snapshot.fingerprint.dict(),
-                    "name": "test_model",
+                    "name": '"test_model"',
                     "node_type": NodeType.MODEL,
                     "previous_versions": [],
                     "version": snapshot.version,
@@ -138,7 +138,7 @@ def test_apply_plan(mocker: MockerFixture, snapshot: Snapshot):
             "previous_plan_id": "previous_plan_id",
             "promoted_snapshot_ids": [
                 {
-                    "name": "test_model",
+                    "name": '"test_model"',
                     "identifier": snapshot.identifier,
                 }
             ],
@@ -154,7 +154,7 @@ def test_apply_plan(mocker: MockerFixture, snapshot: Snapshot):
         "users": [],
         "is_dev": False,
         "forward_only": False,
-        "models_to_backfill": ["test_model"],
+        "models_to_backfill": ['"test_model"'],
     }
 
 

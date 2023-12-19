@@ -4,14 +4,23 @@ import typing as t
 from dataclasses import dataclass, field, replace
 from pathlib import Path
 
+from dbt.adapters.base import BaseRelation
+
 from sqlmesh.core.config import Config as SQLMeshConfig
+from sqlmesh.dbt.builtin import _relation_info_to_relation
 from sqlmesh.dbt.manifest import ManifestHelper
 from sqlmesh.dbt.target import TargetConfig
 from sqlmesh.utils import AttributeDict
 from sqlmesh.utils.errors import ConfigError, SQLMeshError
-from sqlmesh.utils.jinja import JinjaGlobalAttribute, JinjaMacroRegistry
+from sqlmesh.utils.jinja import (
+    JinjaGlobalAttribute,
+    JinjaMacroRegistry,
+    MacroInfo,
+    MacroReference,
+)
 
 if t.TYPE_CHECKING:
+    from dbt.contracts.relation import Policy
     from jinja2 import Environment
 
     from sqlmesh.dbt.basemodel import Dependencies
@@ -118,6 +127,10 @@ class DbtContext:
 
         self.variables = rendered_variables
 
+    def add_macros(self, macros: t.Dict[str, MacroInfo], package: str) -> None:
+        self.jinja_macros.add_macros(macros, package=package)
+        self._jinja_environment = None
+
     @property
     def models(self) -> t.Dict[str, ModelConfig]:
         return self._models
@@ -176,7 +189,9 @@ class DbtContext:
         return self._refs
 
     @property
-    def target(self) -> t.Optional[TargetConfig]:
+    def target(self) -> TargetConfig:
+        if not self._target:
+            raise SQLMeshError("Target has not been set in the context.")
         return self._target
 
     @target.setter
@@ -189,6 +204,13 @@ class DbtContext:
 
     def render(self, source: str, **kwargs: t.Any) -> str:
         return self.jinja_environment.from_string(source).render(**kwargs)
+
+    def get_callable_macro(
+        self, name: str, package: t.Optional[str] = None
+    ) -> t.Optional[t.Callable]:
+        return self.jinja_macros.build_macro(
+            MacroReference(name=name, package=package), **self.jinja_globals
+        )
 
     def copy(self) -> DbtContext:
         return replace(self)
@@ -247,6 +269,15 @@ class DbtContext:
         dependency_context._refs = {**dependency_context._seeds, **dependency_context._models}  # type: ignore
 
         return dependency_context
+
+    def create_relation(
+        self, relation_info: AttributeDict[str, t.Any], quote_policy: t.Optional[Policy] = None
+    ) -> BaseRelation:
+        if not self.target:
+            raise SQLMeshError("Target must be configured before calling create_relation.")
+        return _relation_info_to_relation(
+            relation_info, self.target.relation_class, quote_policy or self.target.quote_policy
+        )
 
 
 SQLMESH_DBT_PACKAGE = "sqlmesh.dbt"

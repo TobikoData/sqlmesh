@@ -7,6 +7,7 @@ from sqlglot import exp
 from sqlglot.optimizer.qualify_columns import quote_identifiers
 
 from sqlmesh.core.engine_adapter.base import EngineAdapter, SourceQuery
+from sqlmesh.core.engine_adapter.shared import set_catalog
 from sqlmesh.core.node import IntervalUnit
 from sqlmesh.utils.errors import SQLMeshError
 
@@ -19,6 +20,7 @@ logger = logging.getLogger(__name__)
 
 
 class LogicalMergeMixin(EngineAdapter):
+    @set_catalog()
     def merge(
         self,
         target_table: TableName,
@@ -103,6 +105,7 @@ class LogicalReplaceQueryMixin(EngineAdapter):
             engine_adapter.execute(engine_adapter._truncate_table(target_table))
             return engine_adapter._insert_append_query(target_table, temp_query, columns_to_types)
 
+    @set_catalog()
     def replace_query(
         self,
         table_name: TableName,

@@ -542,6 +542,9 @@ class BigQueryConnectionConfig(ConnectionConfig):
 
         return connect
 
+    def get_catalog(self) -> t.Optional[str]:
+        return self.project
+
 
 class GCPPostgresConnectionConfig(ConnectionConfig):
     """

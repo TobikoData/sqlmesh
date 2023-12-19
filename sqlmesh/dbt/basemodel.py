@@ -5,7 +5,7 @@ from abc import abstractmethod
 from enum import Enum
 from pathlib import Path
 
-from dbt.contracts.relation import RelationType
+from dbt.contracts.relation import Policy, RelationType
 from pydantic import Field
 from sqlglot.helper import ensure_list
 
@@ -103,6 +103,8 @@ class BaseModelConfig(GeneralConfig):
     columns: t.Dict[str, ColumnConfig] = {}
     quoting: t.Dict[str, t.Optional[bool]] = {}
 
+    _canonical_name: t.Optional[str] = None
+
     @field_validator("pre_hook", "post_hook", mode="before")
     @classmethod
     def _validate_hooks(cls, v: t.Union[str, t.List[t.Union[SqlStr, str]]]) -> t.List[Hook]:
@@ -169,17 +171,22 @@ class BaseModelConfig(GeneralConfig):
         """
         return f"{self.package_name}.{self.name}"
 
-    @property
-    def sql_name(self) -> str:
+    def canonical_name(self, context: DbtContext) -> str:
         """
         Get the sqlmesh model name
 
         Returns:
             The sqlmesh model name
         """
-        return ".".join(
-            part for part in (self.database, self.table_schema, self.table_name) if part
-        )
+        if not self._canonical_name:
+            relation = context.create_relation(
+                self.relation_info,
+                quote_policy=Policy(database=False, schema=False, identifier=False),
+            )
+            if relation.database == context.target.database:
+                relation = relation.include(database=False)
+            self._canonical_name = relation.render()
+        return self._canonical_name
 
     @property
     def model_materialization(self) -> Materialization:
@@ -271,14 +278,13 @@ class BaseModelConfig(GeneralConfig):
                 **model_context.jinja_globals,  # type: ignore
             }
         )
-
         return {
             "audits": [(test.name, {}) for test in self.tests],
             "columns": column_types_to_sqlmesh(self.columns, context.dialect) or None,
             "column_descriptions_": column_descriptions_to_sqlmesh(self.columns) or None,
-            "depends_on": {model.sql_name for model in model_context.refs.values()}.union(
-                {source.sql_name for source in model_context.sources.values()}
-            ),
+            "depends_on": {
+                model.canonical_name(context) for model in model_context.refs.values()
+            }.union({source.canonical_name(context) for source in model_context.sources.values()}),
             "jinja_macros": jinja_macros,
             "path": self.path,
             "hash_raw_query": True,
@@ -286,6 +292,7 @@ class BaseModelConfig(GeneralConfig):
             "post_statements": [d.jinja_statement(hook.sql) for hook in self.post_hook],
             "tags": self.tags,
             "physical_schema_override": context.sqlmesh_config.physical_schema_override,
+            "default_catalog": context.target.database,
             **self.sqlmesh_config_kwargs,
         }
 

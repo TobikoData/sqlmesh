@@ -5,23 +5,29 @@ from sqlmesh.utils.errors import SQLMeshError
 
 
 def test_downstream(sushi_context):
-    assert set(sushi_context.dag.downstream("sushi.order_items")) == {
-        "sushi.customer_revenue_by_day",
-        "sushi.customer_revenue_lifetime",
-        "sushi.top_waiters",
-        "sushi.waiter_revenue_by_day",
+    assert set(sushi_context.dag.downstream('"memory"."sushi"."order_items"')) == {
+        '"memory"."sushi"."customer_revenue_by_day"',
+        '"memory"."sushi"."customer_revenue_lifetime"',
+        '"memory"."sushi"."top_waiters"',
+        '"memory"."sushi"."waiter_revenue_by_day"',
     }
 
 
 def test_no_downstream(sushi_context):
-    assert sushi_context.dag.downstream("sushi.top_waiters") == []
+    assert sushi_context.dag.downstream("memory.sushi.top_waiters") == []
 
 
 def test_lineage(sushi_context):
-    lineage = sushi_context.dag.lineage("sushi.order_items").sorted
-    assert lineage.index("sushi.order_items") > lineage.index("sushi.items")
-    assert lineage.index("sushi.customer_revenue_by_day") > lineage.index("sushi.order_items")
-    assert lineage.index("sushi.waiter_revenue_by_day") > lineage.index("sushi.order_items")
+    lineage = sushi_context.dag.lineage('"memory"."sushi"."order_items"').sorted
+    assert lineage.index('"memory"."sushi"."order_items"') > lineage.index(
+        '"memory"."sushi"."items"'
+    )
+    assert lineage.index('"memory"."sushi"."customer_revenue_by_day"') > lineage.index(
+        '"memory"."sushi"."order_items"'
+    )
+    assert lineage.index('"memory"."sushi"."waiter_revenue_by_day"') > lineage.index(
+        '"memory"."sushi"."order_items"'
+    )
 
 
 def test_sorted():

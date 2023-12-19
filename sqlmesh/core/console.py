@@ -27,6 +27,7 @@ from sqlmesh.core.environment import EnvironmentNamingInfo
 from sqlmesh.core.snapshot import (
     Snapshot,
     SnapshotChangeCategory,
+    SnapshotId,
     SnapshotInfoLike,
     start_date,
 )
@@ -71,6 +72,7 @@ class Console(abc.ABC):
         self,
         batches: t.Dict[Snapshot, int],
         environment_naming_info: EnvironmentNamingInfo,
+        default_catalog: t.Optional[str],
     ) -> None:
         """Indicates that a new snapshot evaluation progress has begun."""
 
@@ -128,14 +130,21 @@ class Console(abc.ABC):
     def show_model_difference_summary(
         self,
         context_diff: ContextDiff,
+        environment_naming_info: EnvironmentNamingInfo,
+        default_catalog: t.Optional[str],
         no_diff: bool = True,
-        ignored_snapshot_names: t.Optional[t.Set[str]] = None,
+        ignored_snapshot_ids: t.Optional[t.Set[SnapshotId]] = None,
     ) -> None:
         """Displays a summary of differences for the given models."""
 
     @abc.abstractmethod
     def plan(
-        self, plan: Plan, auto_apply: bool, no_diff: bool = False, no_prompts: bool = False
+        self,
+        plan: Plan,
+        auto_apply: bool,
+        default_catalog: t.Optional[str],
+        no_diff: bool = False,
+        no_prompts: bool = False,
     ) -> None:
         """The main plan flow.
 
@@ -208,7 +217,10 @@ class TerminalConsole(Console):
         self.evaluation_model_progress: t.Optional[Progress] = None
         self.evaluation_model_tasks: t.Dict[str, TaskID] = {}
         self.evaluation_model_batches: t.Dict[Snapshot, int] = {}
+
+        # Put in temporary values that are replaced when evaluating
         self.evaluation_environment_naming_info = EnvironmentNamingInfo()
+        self.default_catalog: t.Optional[str] = None
 
         self.creation_progress: t.Optional[Progress] = None
         self.creation_task: t.Optional[TaskID] = None
@@ -240,6 +252,7 @@ class TerminalConsole(Console):
         self,
         batches: t.Dict[Snapshot, int],
         environment_naming_info: EnvironmentNamingInfo,
+        default_catalog: t.Optional[str],
     ) -> None:
         """Indicates that a new snapshot evaluation progress has begun."""
         if not self.evaluation_progress_live:
@@ -273,15 +286,16 @@ class TerminalConsole(Console):
 
             self.evaluation_model_batches = batches
             self.evaluation_environment_naming_info = environment_naming_info
+            self.default_catalog = default_catalog
 
     def start_snapshot_evaluation_progress(self, snapshot: Snapshot) -> None:
         if self.evaluation_model_progress and snapshot.name not in self.evaluation_model_tasks:
-            view_name = snapshot.qualified_view_name.for_environment(
-                self.evaluation_environment_naming_info
+            display_name = snapshot.display_name(
+                self.evaluation_environment_naming_info, self.default_catalog
             )
             self.evaluation_model_tasks[snapshot.name] = self.evaluation_model_progress.add_task(
-                f"Evaluating {view_name}...",
-                view_name=view_name,
+                f"Evaluating {display_name}...",
+                view_name=display_name,
                 total=self.evaluation_model_batches[snapshot],
             )
 
@@ -298,7 +312,7 @@ class TerminalConsole(Console):
 
             if duration_ms:
                 self.evaluation_progress_live.console.print(
-                    f"[{batch_idx + 1}/{total_batches}] {snapshot.name} [green]finished[/green] in {(duration_ms / 1000.0):.2f}s"
+                    f"[{batch_idx + 1}/{total_batches}] {snapshot.display_name(self.evaluation_environment_naming_info, self.default_catalog)} [green]finished[/green] in {(duration_ms / 1000.0):.2f}s"
                 )
 
             self.evaluation_total_progress.update(
@@ -324,6 +338,7 @@ class TerminalConsole(Console):
         self.evaluation_model_tasks = {}
         self.evaluation_model_batches = {}
         self.evaluation_environment_naming_info = EnvironmentNamingInfo()
+        self.default_catalog = None
 
     def start_creation_progress(self, total_tasks: int) -> None:
         """Indicates that a new creation progress has begun."""
@@ -428,17 +443,21 @@ class TerminalConsole(Console):
     def show_model_difference_summary(
         self,
         context_diff: ContextDiff,
+        environment_naming_info: EnvironmentNamingInfo,
+        default_catalog: t.Optional[str],
         no_diff: bool = True,
-        ignored_snapshot_names: t.Optional[t.Set[str]] = None,
+        ignored_snapshot_ids: t.Optional[t.Set[SnapshotId]] = None,
     ) -> None:
         """Shows a summary of the differences.
 
         Args:
             context_diff: The context diff to use to print the summary
+            environment_naming_info: The environment naming info to reference when printing model names
+            default_catalog: The default catalog to reference when deciding to remove catalog from display names
             no_diff: Hide the actual SQL differences.
-            ignored_snapshot_names: A set of snapshot names that are ignored
+            ignored_snapshot_ids: A set of snapshot ids that are ignored
         """
-        ignored_snapshot_names = ignored_snapshot_names or set()
+        ignored_snapshot_ids = ignored_snapshot_ids or set()
         if context_diff.is_new_environment:
             self._print(
                 Tree(
@@ -457,19 +476,28 @@ class TerminalConsole(Console):
             context_diff,
             "Models",
             lambda x: x.is_model,
+            environment_naming_info,
+            default_catalog,
             no_diff=no_diff,
-            ignored_names=ignored_snapshot_names,
+            ignored_snapshot_ids=ignored_snapshot_ids,
         )
         self._show_summary_tree_for(
             context_diff,
             "Standalone Audits",
             lambda x: x.is_audit,
+            environment_naming_info,
+            default_catalog,
             no_diff=no_diff,
-            ignored_names=ignored_snapshot_names,
+            ignored_snapshot_ids=ignored_snapshot_ids,
         )
 
     def plan(
-        self, plan: Plan, auto_apply: bool, no_diff: bool = False, no_prompts: bool = False
+        self,
+        plan: Plan,
+        auto_apply: bool,
+        default_catalog: t.Optional[str],
+        no_diff: bool = False,
+        no_prompts: bool = False,
     ) -> None:
         """The main plan flow.
 
@@ -479,27 +507,40 @@ class TerminalConsole(Console):
         Args:
             plan: The plan to make choices for.
             auto_apply: Whether to automatically apply the plan after all choices have been made.
+            default_catalog: The default catalog to reference when deciding to remove catalog from display names
             no_diff: Hide text differences for changed models.
             no_prompts: Whether to disable interactive prompts for the backfill time range. Please note that
                 if this flag is set to true and there are uncategorized changes the plan creation will
                 fail. Default: False
         """
-        self._prompt_categorize(plan, auto_apply, no_diff=no_diff, no_prompts=no_prompts)
+        self._prompt_categorize(
+            plan,
+            auto_apply,
+            no_diff=no_diff,
+            no_prompts=no_prompts,
+            default_catalog=default_catalog,
+        )
 
         if not no_prompts:
-            self._show_options_after_categorization(plan, auto_apply)
+            self._show_options_after_categorization(
+                plan, auto_apply, default_catalog=default_catalog
+            )
 
         if auto_apply:
             plan.apply()
 
     def _get_ignored_tree(
-        self, ignored_snapshot_names: t.Set[str], snapshots: t.Dict[str, Snapshot]
+        self,
+        ignored_snapshot_ids: t.Set[SnapshotId],
+        snapshots: t.Dict[SnapshotId, Snapshot],
+        environment_naming_info: EnvironmentNamingInfo,
+        default_catalog: t.Optional[str],
     ) -> Tree:
         ignored = Tree(f"[bold][ignored]Ignored Models (Expected Plan Start):")
-        for model in ignored_snapshot_names:
-            snapshot = snapshots[model]
+        for s_id in ignored_snapshot_ids:
+            snapshot = snapshots[s_id]
             ignored.add(
-                f"[ignored]{model} ({snapshot.get_latest(start_date(snapshot, snapshots.values()))})"
+                f"[ignored]{snapshot.display_name(environment_naming_info, default_catalog)} ({snapshot.get_latest(start_date(snapshot, snapshots.values()))})"
             )
         return ignored
 
@@ -508,67 +549,82 @@ class TerminalConsole(Console):
         context_diff: ContextDiff,
         header: str,
         snapshot_selector: t.Callable[[SnapshotInfoLike], bool],
+        environment_naming_info: EnvironmentNamingInfo,
+        default_catalog: t.Optional[str],
         no_diff: bool = True,
-        ignored_names: t.Optional[t.Set[str]] = None,
+        ignored_snapshot_ids: t.Optional[t.Set[SnapshotId]] = None,
     ) -> None:
-        ignored_names = ignored_names or set()
+        ignored_snapshot_ids = ignored_snapshot_ids or set()
         selected_snapshots = {
-            name: snapshot
-            for name, snapshot in context_diff.snapshots.items()
+            s_id: snapshot
+            for s_id, snapshot in context_diff.snapshots.items()
             if snapshot_selector(snapshot)
         }
-        selected_ignored_names = {name for name in selected_snapshots if name in ignored_names}
-        added_names = {
-            name for name in context_diff.added if snapshot_selector(context_diff.snapshots[name])
-        } - selected_ignored_names
-        removed_names = {
-            name
-            for name, snapshot in context_diff.removed_snapshots.items()
+        selected_ignored_snapshot_ids = {
+            s_id for s_id in selected_snapshots if s_id in ignored_snapshot_ids
+        }
+        added_snapshot_ids = {
+            s_id for s_id in context_diff.added if snapshot_selector(context_diff.snapshots[s_id])
+        } - selected_ignored_snapshot_ids
+        removed_snapshot_ids = {
+            s_id
+            for s_id, snapshot in context_diff.removed_snapshots.items()
             if snapshot_selector(snapshot)
-        } - selected_ignored_names
-        modified_names = {
-            name
-            for name, snapshots in context_diff.modified_snapshots.items()
-            if snapshot_selector(snapshots[0])
-        } - selected_ignored_names
+        } - selected_ignored_snapshot_ids
+        modified_snapshot_ids = {
+            current_snapshot.snapshot_id
+            for _, (current_snapshot, _) in context_diff.modified_snapshots.items()
+            if snapshot_selector(current_snapshot)
+        } - selected_ignored_snapshot_ids
 
-        tree_sets = (added_names, removed_names, modified_names, selected_ignored_names)
-        if all(not names for names in tree_sets):
+        tree_sets = (
+            added_snapshot_ids,
+            removed_snapshot_ids,
+            modified_snapshot_ids,
+            selected_ignored_snapshot_ids,
+        )
+        if all(not s_ids for s_ids in tree_sets):
             return
 
         tree = Tree(f"[bold]{header}:")
-        if added_names:
+        if added_snapshot_ids:
             added_tree = Tree(f"[bold][added]Added:")
-            for name in added_names:
-                added_tree.add(f"[added]{name}")
+            for s_id in added_snapshot_ids:
+                snapshot = context_diff.snapshots[s_id]
+                added_tree.add(
+                    f"[added]{snapshot.display_name(environment_naming_info, default_catalog)}"
+                )
             tree.add(added_tree)
-        if removed_names:
+        if removed_snapshot_ids:
             removed_tree = Tree(f"[bold][removed]Removed:")
-            for name in removed_names:
-                removed_tree.add(f"[removed]{name}")
+            for s_id in removed_snapshot_ids:
+                snapshot_table_info = context_diff.removed_snapshots[s_id]
+                removed_tree.add(
+                    f"[removed]{snapshot_table_info.display_name(environment_naming_info, default_catalog)}"
+                )
             tree.add(removed_tree)
-        if modified_names:
+        if modified_snapshot_ids:
             direct = Tree(f"[bold][direct]Directly Modified:")
             indirect = Tree(f"[bold][indirect]Indirectly Modified:")
             metadata = Tree(f"[bold][metadata]Metadata Updated:")
-            for name in modified_names:
+            for s_id in modified_snapshot_ids:
+                name = s_id.name
+                display_name = context_diff.snapshots[s_id].display_name(
+                    environment_naming_info, default_catalog
+                )
                 if context_diff.directly_modified(name):
                     direct.add(
-                        f"[direct]{name}"
+                        f"[direct]{display_name}"
                         if no_diff
-                        else Syntax(
-                            f"{name}\n{context_diff.text_diff(name)}", "sql", word_wrap=True
-                        )
+                        else Syntax(f"{display_name}\n{context_diff.text_diff(name)}", "sql")
                     )
                 elif context_diff.indirectly_modified(name):
-                    indirect.add(f"[indirect]{name}")
+                    indirect.add(f"[indirect]{display_name}")
                 elif context_diff.metadata_updated(name):
                     metadata.add(
-                        f"[metadata]{name}"
+                        f"[metadata]{display_name}"
                         if no_diff
-                        else Syntax(
-                            f"{name}\n{context_diff.text_diff(name)}", "sql", word_wrap=True
-                        )
+                        else Syntax(f"{display_name}", "sql", word_wrap=True)
                     )
             if direct.children:
                 tree.add(direct)
@@ -576,17 +632,26 @@ class TerminalConsole(Console):
                 tree.add(indirect)
             if metadata.children:
                 tree.add(metadata)
-        if selected_ignored_names:
-            tree.add(self._get_ignored_tree(selected_ignored_names, selected_snapshots))
+        if selected_ignored_snapshot_ids:
+            tree.add(
+                self._get_ignored_tree(
+                    selected_ignored_snapshot_ids,
+                    selected_snapshots,
+                    environment_naming_info,
+                    default_catalog,
+                )
+            )
         self._print(tree)
 
-    def _show_options_after_categorization(self, plan: Plan, auto_apply: bool) -> None:
+    def _show_options_after_categorization(
+        self, plan: Plan, auto_apply: bool, default_catalog: t.Optional[str]
+    ) -> None:
         if plan.forward_only and plan.new_snapshots:
-            self._prompt_effective_from(plan, auto_apply)
+            self._prompt_effective_from(plan, auto_apply, default_catalog)
 
         if plan.requires_backfill:
-            self._show_missing_dates(plan)
-            self._prompt_backfill(plan, auto_apply)
+            self._show_missing_dates(plan, default_catalog)
+            self._prompt_backfill(plan, auto_apply, default_catalog)
         elif plan.has_changes and not auto_apply:
             self._prompt_promote(plan)
         elif plan.has_unmodified_unpromoted and not auto_apply:
@@ -594,65 +659,84 @@ class TerminalConsole(Console):
             self._prompt_promote(plan)
 
     def _prompt_categorize(
-        self, plan: Plan, auto_apply: bool, no_diff: bool, no_prompts: bool
+        self,
+        plan: Plan,
+        auto_apply: bool,
+        no_diff: bool,
+        no_prompts: bool,
+        default_catalog: t.Optional[str],
     ) -> None:
         """Get the user's change category for the directly modified models."""
         self.show_model_difference_summary(
-            plan.context_diff, ignored_snapshot_names=plan.ignored_snapshot_names
+            plan.context_diff,
+            plan.environment_naming_info,
+            default_catalog=default_catalog,
+            ignored_snapshot_ids=plan.ignored_snapshot_ids,
         )
 
         if not no_diff:
-            self._show_categorized_snapshots(plan)
+            self._show_categorized_snapshots(plan, default_catalog)
 
         for snapshot in plan.uncategorized:
             if not no_diff:
                 self.show_sql(plan.context_diff.text_diff(snapshot.name))
-            tree = Tree(f"[bold][direct]Directly Modified: {snapshot.name}")
+            tree = Tree(
+                f"[bold][direct]Directly Modified: {snapshot.display_name(plan.environment_naming_info, default_catalog)}"
+            )
             indirect_tree = None
 
-            for child in plan.indirectly_modified[snapshot.name]:
+            for child_sid in plan.indirectly_modified[snapshot.snapshot_id]:
+                child_snapshot = plan.context_diff.snapshots[child_sid]
                 if not indirect_tree:
                     indirect_tree = Tree(f"[indirect]Indirectly Modified Children:")
                     tree.add(indirect_tree)
-                indirect_tree.add(f"[indirect]{child}")
+                indirect_tree.add(
+                    f"[indirect]{child_snapshot.display_name(plan.environment_naming_info, default_catalog)}"
+                )
             self._print(tree)
             if not no_prompts:
-                self._get_snapshot_change_category(snapshot, plan, auto_apply)
+                self._get_snapshot_change_category(snapshot, plan, auto_apply, default_catalog)
 
-    def _show_categorized_snapshots(self, plan: Plan) -> None:
+    def _show_categorized_snapshots(self, plan: Plan, default_catalog: t.Optional[str]) -> None:
         context_diff = plan.context_diff
         for snapshot in plan.categorized:
             if not context_diff.directly_modified(snapshot.name):
                 continue
 
             category_str = SNAPSHOT_CHANGE_CATEGORY_STR[snapshot.change_category]
-            tree = Tree(f"[bold][direct]Directly Modified: {snapshot.name} ({category_str})")
+            tree = Tree(
+                f"[bold][direct]Directly Modified: {snapshot.display_name(plan.environment_naming_info, default_catalog)} ({category_str})"
+            )
             indirect_tree = None
-            for child in plan.indirectly_modified[snapshot.name]:
+            for child_sid in plan.indirectly_modified[snapshot.snapshot_id]:
+                child_snapshot = context_diff.snapshots[child_sid]
                 if not indirect_tree:
                     indirect_tree = Tree(f"[indirect]Indirectly Modified Children:")
                     tree.add(indirect_tree)
-                child_category_str = SNAPSHOT_CHANGE_CATEGORY_STR[
-                    plan.context_diff.snapshots[child].change_category
-                ]
-                indirect_tree.add(f"[indirect]{child} ({child_category_str})")
+                child_category_str = SNAPSHOT_CHANGE_CATEGORY_STR[child_snapshot.change_category]
+                indirect_tree.add(
+                    f"[indirect]{child_snapshot.display_name(plan.environment_naming_info, default_catalog)} ({child_category_str})"
+                )
             self._print(Syntax(context_diff.text_diff(snapshot.name), "sql", word_wrap=True))
             self._print(tree)
 
-    def _show_missing_dates(self, plan: Plan) -> None:
+    def _show_missing_dates(self, plan: Plan, default_catalog: t.Optional[str]) -> None:
         """Displays the models with missing dates."""
         if not plan.missing_intervals:
             return
         backfill = Tree("[bold]Models needing backfill (missing dates):")
         for missing in plan.missing_intervals:
-            snapshot = plan.context_diff.snapshots[missing.snapshot_name]
+            snapshot = plan.context_diff.snapshots[missing.snapshot_id]
             if not snapshot.is_model:
                 continue
-            view_name = snapshot.qualified_view_name.for_environment(plan.environment_naming_info)
-            backfill.add(f"{view_name}: {missing.format_intervals(snapshot.node.interval_unit)}")
+            backfill.add(
+                f"{snapshot.display_name(plan.environment_naming_info, default_catalog)}: {missing.format_intervals(snapshot.node.interval_unit)}"
+            )
         self._print(backfill)
 
-    def _prompt_effective_from(self, plan: Plan, auto_apply: bool) -> None:
+    def _prompt_effective_from(
+        self, plan: Plan, auto_apply: bool, default_catalog: t.Optional[str]
+    ) -> None:
         if not plan.effective_from:
             effective_from = self._prompt(
                 "Enter the effective date (eg. '1 year', '2020-01-01') to apply forward-only changes retroactively or blank to only apply them going forward once changes are deployed to prod"
@@ -660,7 +744,9 @@ class TerminalConsole(Console):
             if effective_from:
                 plan.effective_from = effective_from
 
-    def _prompt_backfill(self, plan: Plan, auto_apply: bool) -> None:
+    def _prompt_backfill(
+        self, plan: Plan, auto_apply: bool, default_catalog: t.Optional[str]
+    ) -> None:
         is_forward_only_dev = plan.is_dev and plan.forward_only
         backfill_or_preview = "preview" if is_forward_only_dev else "backfill"
 
@@ -693,9 +779,14 @@ class TerminalConsole(Console):
                 )
                 if end:
                     plan.end = end
-        if plan.ignored_snapshot_names:
+        if plan.ignored_snapshot_ids:
             self._print(
-                self._get_ignored_tree(plan.ignored_snapshot_names, plan.context_diff.snapshots)
+                self._get_ignored_tree(
+                    plan.ignored_snapshot_ids,
+                    plan.context_diff.snapshots,
+                    plan.environment_naming_info,
+                    default_catalog,
+                )
             )
         if not auto_apply and self._confirm(f"Apply - {backfill_or_preview.capitalize()} Tables"):
             plan.apply()
@@ -827,7 +918,7 @@ class TerminalConsole(Console):
                 self.console.print(row_diff.t_sample.to_string(index=False), end="\n\n")
 
     def _get_snapshot_change_category(
-        self, snapshot: Snapshot, plan: Plan, auto_apply: bool
+        self, snapshot: Snapshot, plan: Plan, auto_apply: bool, default_catalog: t.Optional[str]
     ) -> None:
         choices = self._snapshot_change_choices(snapshot)
         response = self._prompt(
@@ -903,11 +994,11 @@ class NotebookMagicConsole(TerminalConsole):
         self.missing_dates_output = widgets.Output()
         self.dynamic_options_after_categorization_output = widgets.VBox()
 
-    def _show_missing_dates(self, plan: Plan) -> None:
+    def _show_missing_dates(self, plan: Plan, default_catalog: t.Optional[str]) -> None:
         self._add_to_dynamic_options(self.missing_dates_output)
         self.missing_dates_output.outputs = ()
         with self.missing_dates_output:
-            super()._show_missing_dates(plan)
+            super()._show_missing_dates(plan, default_catalog)
 
     def _apply(self, button: widgets.Button) -> None:
         button.disabled = True
@@ -933,19 +1024,23 @@ class NotebookMagicConsole(TerminalConsole):
         button.on_click(self._apply)
         button.output = output
 
-    def _prompt_effective_from(self, plan: Plan, auto_apply: bool) -> None:
+    def _prompt_effective_from(
+        self, plan: Plan, auto_apply: bool, default_catalog: t.Optional[str]
+    ) -> None:
         import ipywidgets as widgets
 
         prompt = widgets.VBox()
 
         def effective_from_change_callback(change: t.Dict[str, datetime.datetime]) -> None:
             plan.effective_from = change["new"]
-            self._show_options_after_categorization(plan, auto_apply)
+            self._show_options_after_categorization(plan, auto_apply, default_catalog)
 
         def going_forward_change_callback(change: t.Dict[str, bool]) -> None:
             checked = change["new"]
             plan.effective_from = None if checked else yesterday_ds()
-            self._show_options_after_categorization(plan, auto_apply=auto_apply)
+            self._show_options_after_categorization(
+                plan, auto_apply=auto_apply, default_catalog=default_catalog
+            )
 
         date_picker = widgets.DatePicker(
             disabled=plan.effective_from is None,
@@ -975,7 +1070,9 @@ class NotebookMagicConsole(TerminalConsole):
 
         self._add_to_dynamic_options(prompt)
 
-    def _prompt_backfill(self, plan: Plan, auto_apply: bool) -> None:
+    def _prompt_backfill(
+        self, plan: Plan, auto_apply: bool, default_catalog: t.Optional[str]
+    ) -> None:
         import ipywidgets as widgets
 
         prompt = widgets.VBox()
@@ -996,11 +1093,11 @@ class NotebookMagicConsole(TerminalConsole):
 
         def start_change_callback(change: t.Dict[str, datetime.datetime]) -> None:
             plan.start = change["new"]
-            self._show_options_after_categorization(plan, auto_apply)
+            self._show_options_after_categorization(plan, auto_apply, default_catalog)
 
         def end_change_callback(change: t.Dict[str, datetime.datetime]) -> None:
             plan.end = change["new"]
-            self._show_options_after_categorization(plan, auto_apply)
+            self._show_options_after_categorization(plan, auto_apply, default_catalog)
 
         if plan.is_start_and_end_allowed:
             add_to_layout_widget(
@@ -1045,22 +1142,24 @@ class NotebookMagicConsole(TerminalConsole):
             button.on_click(self._apply)
             button.output = output
 
-    def _show_options_after_categorization(self, plan: Plan, auto_apply: bool) -> None:
+    def _show_options_after_categorization(
+        self, plan: Plan, auto_apply: bool, default_catalog: t.Optional[str]
+    ) -> None:
         self.dynamic_options_after_categorization_output.children = ()
         self.display(self.dynamic_options_after_categorization_output)
-        super()._show_options_after_categorization(plan, auto_apply)
+        super()._show_options_after_categorization(plan, auto_apply, default_catalog)
 
     def _add_to_dynamic_options(self, *widgets: widgets.Widget) -> None:
         add_to_layout_widget(self.dynamic_options_after_categorization_output, *widgets)
 
     def _get_snapshot_change_category(
-        self, snapshot: Snapshot, plan: Plan, auto_apply: bool
+        self, snapshot: Snapshot, plan: Plan, auto_apply: bool, default_catalog: t.Optional[str]
     ) -> None:
         import ipywidgets as widgets
 
         def radio_button_selected(change: t.Dict[str, t.Any]) -> None:
             plan.set_choice(snapshot, choices[change["owner"].index])
-            self._show_options_after_categorization(plan, auto_apply)
+            self._show_options_after_categorization(plan, auto_apply, default_catalog)
 
         choice_mapping = self._snapshot_change_choices(snapshot, use_rich_formatting=False)
         choices = list(choice_mapping)
@@ -1173,17 +1272,21 @@ class MarkdownConsole(CaptureTerminalConsole):
     def show_model_difference_summary(
         self,
         context_diff: ContextDiff,
+        environment_naming_info: EnvironmentNamingInfo,
+        default_catalog: t.Optional[str],
         no_diff: bool = True,
-        ignored_snapshot_names: t.Optional[t.Set[str]] = None,
+        ignored_snapshot_ids: t.Optional[t.Set[SnapshotId]] = None,
     ) -> None:
         """Shows a summary of the differences.
 
         Args:
             context_diff: The context diff to use to print the summary.
+            environment_naming_info: The environment naming info to reference when printing model names
+            default_catalog: The default catalog to reference when deciding to remove catalog from display names
             no_diff: Hide the actual SQL differences.
-            ignored_snapshot_names: A set of snapshot names that are ignored
+            ignored_snapshot_ids: A set of snapshot names that are ignored
         """
-        ignored_snapshot_names = ignored_snapshot_names or set()
+        ignored_snapshot_ids = ignored_snapshot_ids or set()
         if context_diff.is_new_environment:
             self._print(
                 f"**New environment `{context_diff.environment}` will be created from `{context_diff.create_from}`**\n\n"
@@ -1197,110 +1300,132 @@ class MarkdownConsole(CaptureTerminalConsole):
 
         self._print(f"**Summary of differences against `{context_diff.environment}`:**\n\n")
 
-        added_model_names = {
-            name for name in context_diff.added if context_diff.snapshots[name].is_model
-        } - ignored_snapshot_names
-        if added_model_names:
+        added_snapshots = {
+            context_diff.snapshots[s_id]
+            for s_id in context_diff.added
+            if s_id not in ignored_snapshot_ids
+        }
+        added_snapshot_models = {s for s in added_snapshots if s.is_model}
+        if added_snapshot_models:
             self._print(f"**Added Models:**\n")
-            for model_name in added_model_names:
-                self._print(f"- {model_name}\n")
-            self._print("\n")
-
-        added_audit_names = {
-            name for name in context_diff.added if context_diff.snapshots[name].is_audit
-        } - ignored_snapshot_names
-        if added_audit_names:
-            self._print(f"**Added Standalone Audits:**\n")
-            for audit_name in added_audit_names:
-                self._print(f"- {audit_name}\n")
-            self._print("\n")
-
-        removed_model_names = {
-            name for name, snapshot in context_diff.removed_snapshots.items() if snapshot.is_model
-        } - ignored_snapshot_names
-        if removed_model_names:
-            self._print(f"**Removed Models:**\n")
-            for model_name in removed_model_names:
-                self._print(f"- {model_name}\n")
-            self._print("\n")
-
-        removed_audit_names = {
-            name for name, snapshot in context_diff.removed_snapshots.items() if snapshot.is_audit
-        } - ignored_snapshot_names
-        if removed_audit_names:
-            self._print(f"**Removed Standalone Audits:**\n")
-            for audit_name in removed_audit_names:
-                self._print(f"- {audit_name}\n")
-            self._print("\n")
-
-        modified_model_names = context_diff.modified_snapshots.keys() - ignored_snapshot_names
-        if modified_model_names:
-            directly_modified = []
-            indirectly_modified = []
-            metadata_modified = []
-            for model_name in modified_model_names:
-                if context_diff.directly_modified(model_name):
-                    directly_modified.append(model_name)
-                elif context_diff.indirectly_modified(model_name):
-                    indirectly_modified.append(model_name)
-                elif context_diff.metadata_updated(model_name):
-                    metadata_modified.append(model_name)
-            if directly_modified:
-                self._print(f"**Directly Modified:**\n")
-                for model_name in directly_modified:
-                    self._print(f"- `{model_name}`\n")
-                    if not no_diff:
-                        self._print(f"```diff\n{context_diff.text_diff(model_name)}\n```\n")
-                self._print("\n")
-            if indirectly_modified:
-                self._print(f"**Indirectly Modified:**\n")
-                for model_name in indirectly_modified:
-                    self._print(f"- `{model_name}`\n")
-                self._print("\n")
-            if metadata_modified:
-                self._print(f"**Metadata Updated:**\n")
-                for model_name in metadata_modified:
-                    self._print(f"- `{model_name}`\n")
-                self._print("\n")
-        if ignored_snapshot_names:
-            self._print(f"**Ignored Models (Expected Plan Start):**\n")
-            for model_name in ignored_snapshot_names:
-                snapshot = context_diff.snapshots[model_name]
+            for snapshot in added_snapshot_models:
                 self._print(
-                    f"- `{model_name}` ({snapshot.get_latest(start_date(snapshot, context_diff.snapshots.values()))})\n"
+                    f"- {snapshot.display_name(environment_naming_info, default_catalog)}\n"
                 )
             self._print("\n")
 
-    def _show_missing_dates(self, plan: Plan) -> None:
+        added_snapshot_audits = {s for s in added_snapshots if s.is_audit}
+        if added_snapshot_audits:
+            self._print(f"**Added Standalone Audits:**\n")
+            for snapshot in added_snapshot_audits:
+                self._print(
+                    f"- {snapshot.display_name(environment_naming_info, default_catalog)}\n"
+                )
+            self._print("\n")
+
+        removed_snapshot_table_infos = {
+            snapshot_table_info
+            for s_id, snapshot_table_info in context_diff.removed_snapshots.items()
+            if s_id not in ignored_snapshot_ids
+        }
+        removed_model_snapshot_table_infos = {s for s in removed_snapshot_table_infos if s.is_model}
+        if removed_model_snapshot_table_infos:
+            self._print(f"**Removed Models:**\n")
+            for snapshot_table_info in removed_model_snapshot_table_infos:
+                self._print(
+                    f"- {snapshot_table_info.display_name(environment_naming_info, default_catalog)}\n"
+                )
+            self._print("\n")
+
+        removed_audit_snapshot_table_infos = {s for s in removed_snapshot_table_infos if s.is_audit}
+        if removed_audit_snapshot_table_infos:
+            self._print(f"**Removed Standalone Audits:**\n")
+            for snapshot_table_info in removed_audit_snapshot_table_infos:
+                self._print(
+                    f"- {snapshot_table_info.display_name(environment_naming_info, default_catalog)}\n"
+                )
+            self._print("\n")
+
+        modified_snapshots = {
+            current_snapshot
+            for current_snapshot, _ in context_diff.modified_snapshots.values()
+            if current_snapshot.snapshot_id not in ignored_snapshot_ids
+        }
+        if modified_snapshots:
+            directly_modified = []
+            indirectly_modified = []
+            metadata_modified = []
+            for snapshot in modified_snapshots:
+                if context_diff.directly_modified(snapshot.name):
+                    directly_modified.append(snapshot)
+                elif context_diff.indirectly_modified(snapshot.name):
+                    indirectly_modified.append(snapshot)
+                elif context_diff.metadata_updated(snapshot.name):
+                    metadata_modified.append(snapshot)
+            if directly_modified:
+                self._print(f"**Directly Modified:**\n")
+                for snapshot in directly_modified:
+                    self._print(
+                        f"- `{snapshot.display_name(environment_naming_info, default_catalog)}`\n"
+                    )
+                    if not no_diff:
+                        self._print(f"```diff\n{context_diff.text_diff(snapshot.name)}\n```\n")
+                self._print("\n")
+            if indirectly_modified:
+                self._print(f"**Indirectly Modified:**\n")
+                for snapshot in indirectly_modified:
+                    self._print(
+                        f"- `{snapshot.display_name(environment_naming_info, default_catalog)}`\n"
+                    )
+                self._print("\n")
+            if metadata_modified:
+                self._print(f"**Metadata Updated:**\n")
+                for snapshot in metadata_modified:
+                    self._print(
+                        f"- `{snapshot.display_name(environment_naming_info, default_catalog)}`\n"
+                    )
+                self._print("\n")
+        if ignored_snapshot_ids:
+            self._print(f"**Ignored Models (Expected Plan Start):**\n")
+            for s_id in ignored_snapshot_ids:
+                snapshot = context_diff.snapshots[s_id]
+                self._print(
+                    f"- `{snapshot.display_name(environment_naming_info, default_catalog)}` ({snapshot.get_latest(start_date(snapshot, context_diff.snapshots.values()))})\n"
+                )
+            self._print("\n")
+
+    def _show_missing_dates(self, plan: Plan, default_catalog: t.Optional[str]) -> None:
         """Displays the models with missing dates."""
         if not plan.missing_intervals:
             return
         self._print("**Models needing backfill (missing dates):**\n\n")
         for missing in plan.missing_intervals:
-            snapshot = plan.context_diff.snapshots[missing.snapshot_name]
-            view_name = snapshot.qualified_view_name.for_environment(plan.environment_naming_info)
+            snapshot = plan.context_diff.snapshots[missing.snapshot_id]
             self._print(
-                f"* `{view_name}`: {missing.format_intervals(snapshot.node.interval_unit)}\n"
+                f"* `{snapshot.display_name(plan.environment_naming_info, default_catalog)}`: {missing.format_intervals(snapshot.node.interval_unit)}\n"
             )
         self._print("\n")
 
-    def _show_categorized_snapshots(self, plan: Plan) -> None:
+    def _show_categorized_snapshots(self, plan: Plan, default_catalog: t.Optional[str]) -> None:
         context_diff = plan.context_diff
         for snapshot in plan.categorized:
             if not context_diff.directly_modified(snapshot.name):
                 continue
 
             category_str = SNAPSHOT_CHANGE_CATEGORY_STR[snapshot.change_category]
-            tree = Tree(f"[bold][direct]Directly Modified: {snapshot.name} ({category_str})")
+            tree = Tree(
+                f"[bold][direct]Directly Modified: {snapshot.display_name(plan.environment_naming_info, default_catalog)} ({category_str})"
+            )
             indirect_tree = None
-            for child in plan.indirectly_modified[snapshot.name]:
+            for child_sid in plan.indirectly_modified[snapshot.snapshot_id]:
+                child_snapshot = context_diff.snapshots[child_sid]
                 if not indirect_tree:
                     indirect_tree = Tree(f"[indirect]Indirectly Modified Children:")
                     tree.add(indirect_tree)
-                child_category_str = SNAPSHOT_CHANGE_CATEGORY_STR[
-                    plan.context_diff.snapshots[child].change_category
-                ]
-                indirect_tree.add(f"[indirect]{child} ({child_category_str})")
+                child_category_str = SNAPSHOT_CHANGE_CATEGORY_STR[child_snapshot.change_category]
+                indirect_tree.add(
+                    f"[indirect]{child_snapshot.display_name(plan.environment_naming_info, default_catalog)} ({child_category_str})"
+                )
             self._print(f"```diff\n{context_diff.text_diff(snapshot.name)}\n```\n")
             self._print("```\n")
             self._print(tree)
@@ -1333,7 +1458,7 @@ class DatabricksMagicConsole(CaptureTerminalConsole):
 
     def __init__(self, *args: t.Any, **kwargs: t.Any) -> None:
         super().__init__(*args, **kwargs)
-        self.evaluation_batch_progress: t.Dict[str, t.Tuple[str, int]] = {}
+        self.evaluation_batch_progress: t.Dict[SnapshotId, t.Tuple[str, int]] = {}
         self.promotion_status: t.Tuple[int, int] = (0, 0)
         self.model_creation_status: t.Tuple[int, int] = (0, 0)
         self.migration_status: t.Tuple[int, int] = (0, 0)
@@ -1357,26 +1482,28 @@ class DatabricksMagicConsole(CaptureTerminalConsole):
         self,
         batches: t.Dict[Snapshot, int],
         environment_naming_info: EnvironmentNamingInfo,
+        default_catalog: t.Optional[str],
     ) -> None:
         self.evaluation_batches = batches
         self.evaluation_environment_naming_info = environment_naming_info
+        self.default_catalog = default_catalog
 
     def start_snapshot_evaluation_progress(self, snapshot: Snapshot) -> None:
-        if not self.evaluation_batch_progress.get(snapshot.name):
-            view_name = snapshot.qualified_view_name.for_environment(
-                self.evaluation_environment_naming_info
+        if not self.evaluation_batch_progress.get(snapshot.snapshot_id):
+            display_name = snapshot.display_name(
+                self.evaluation_environment_naming_info, self.default_catalog
             )
-            self.evaluation_batch_progress[snapshot.name] = (view_name, 0)
-            print(f"Starting '{view_name}', Total batches: {self.evaluation_batches[snapshot]}")
+            self.evaluation_batch_progress[snapshot.snapshot_id] = (display_name, 0)
+            print(f"Starting '{display_name}', Total batches: {self.evaluation_batches[snapshot]}")
 
     def update_snapshot_evaluation_progress(
         self, snapshot: Snapshot, batch_idx: int, duration_ms: t.Optional[int]
     ) -> None:
-        view_name, loaded_batches = self.evaluation_batch_progress[snapshot.name]
+        view_name, loaded_batches = self.evaluation_batch_progress[snapshot.snapshot_id]
         total_batches = self.evaluation_batches[snapshot]
 
         loaded_batches += 1
-        self.evaluation_batch_progress[snapshot.name] = (view_name, loaded_batches)
+        self.evaluation_batch_progress[snapshot.snapshot_id] = (view_name, loaded_batches)
 
         finished_loading = loaded_batches == total_batches
         status = "Loaded" if finished_loading else "Loading"
@@ -1386,7 +1513,7 @@ class DatabricksMagicConsole(CaptureTerminalConsole):
                 [
                     s
                     for s, total in self.evaluation_batches.items()
-                    if self.evaluation_batch_progress.get(s.name, (None, -1))[1] == total
+                    if self.evaluation_batch_progress.get(s.snapshot_id, (None, -1))[1] == total
                 ]
             )
             total = len(self.evaluation_batch_progress)

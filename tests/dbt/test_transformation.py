@@ -40,45 +40,65 @@ from sqlmesh.utils.errors import ConfigError, MacroEvalError, SQLMeshError
 
 
 def test_model_name():
-    assert ModelConfig(schema="foo", path="models/bar.sql").sql_name == "foo.bar"
-    assert ModelConfig(schema="foo", path="models/bar.sql", alias="baz").sql_name == "foo.baz"
+    context = DbtContext()
+    context._target = DuckDbConfig(name="duckdb", schema="foo")
+    assert ModelConfig(schema="foo", path="models/bar.sql").canonical_name(context) == "foo.bar"
+    assert (
+        ModelConfig(schema="foo", path="models/bar.sql", alias="baz").canonical_name(context)
+        == "foo.baz"
+    )
+    assert (
+        ModelConfig(
+            database="memory", schema="foo", path="models/bar.sql", alias="baz"
+        ).canonical_name(context)
+        == "foo.baz"
+        == "foo.baz"
+    )
+    assert (
+        ModelConfig(
+            database="other", schema="foo", path="models/bar.sql", alias="baz"
+        ).canonical_name(context)
+        == "other.foo.baz"
+    )
 
 
 def test_model_kind():
-    target = DuckDbConfig(name="target", schema="foo")
+    context = DbtContext()
+    context.project_name = "Test"
+    context.target = DuckDbConfig(name="target", schema="foo")
 
-    assert ModelConfig(materialized=Materialization.TABLE).model_kind(target) == FullKind()
-    assert ModelConfig(materialized=Materialization.VIEW).model_kind(target) == ViewKind()
-    assert ModelConfig(materialized=Materialization.EPHEMERAL).model_kind(target) == EmbeddedKind()
+    assert ModelConfig(materialized=Materialization.TABLE).model_kind(context) == FullKind()
+    assert ModelConfig(materialized=Materialization.VIEW).model_kind(context) == ViewKind()
+    assert ModelConfig(materialized=Materialization.EPHEMERAL).model_kind(context) == EmbeddedKind()
 
     assert ModelConfig(materialized=Materialization.INCREMENTAL, time_column="foo").model_kind(
-        target
+        context
     ) == IncrementalByTimeRangeKind(time_column="foo", forward_only=True)
     assert ModelConfig(
         materialized=Materialization.INCREMENTAL,
         time_column="foo",
         incremental_strategy="delete+insert",
         forward_only=False,
-    ).model_kind(target) == IncrementalByTimeRangeKind(time_column="foo")
+    ).model_kind(context) == IncrementalByTimeRangeKind(time_column="foo")
     assert ModelConfig(
         materialized=Materialization.INCREMENTAL,
         time_column="foo",
         incremental_strategy="insert_overwrite",
-    ).model_kind(target) == IncrementalByTimeRangeKind(time_column="foo", forward_only=True)
+    ).model_kind(context) == IncrementalByTimeRangeKind(time_column="foo", forward_only=True)
     assert ModelConfig(
         materialized=Materialization.INCREMENTAL, time_column="foo", unique_key=["bar"]
-    ).model_kind(target) == IncrementalByTimeRangeKind(time_column="foo", forward_only=True)
+    ).model_kind(context) == IncrementalByTimeRangeKind(time_column="foo", forward_only=True)
 
     assert ModelConfig(
         materialized=Materialization.INCREMENTAL, unique_key=["bar"], incremental_strategy="merge"
-    ).model_kind(target) == IncrementalByUniqueKeyKind(unique_key=["bar"], forward_only=True)
+    ).model_kind(context) == IncrementalByUniqueKeyKind(unique_key=["bar"], forward_only=True)
     assert ModelConfig(materialized=Materialization.INCREMENTAL, unique_key=["bar"]).model_kind(
-        target
+        context
     ) == IncrementalByUniqueKeyKind(unique_key=["bar"], forward_only=True)
 
     assert ModelConfig(
         materialized=Materialization.INCREMENTAL, time_column="foo", incremental_strategy="merge"
-    ).model_kind(target) == IncrementalByTimeRangeKind(
+    ).model_kind(context) == IncrementalByTimeRangeKind(
         time_column="foo", forward_only=True, disable_restatement=False
     )
 
@@ -87,7 +107,7 @@ def test_model_kind():
         time_column="foo",
         incremental_strategy="append",
         disable_restatement=True,
-    ).model_kind(target) == IncrementalByTimeRangeKind(
+    ).model_kind(context) == IncrementalByTimeRangeKind(
         time_column="foo", forward_only=True, disable_restatement=True
     )
 
@@ -97,22 +117,22 @@ def test_model_kind():
         incremental_strategy="insert_overwrite",
         partition_by={"field": "bar"},
         forward_only=False,
-    ).model_kind(target) == IncrementalByTimeRangeKind(time_column="foo")
+    ).model_kind(context) == IncrementalByTimeRangeKind(time_column="foo")
 
     assert ModelConfig(
         materialized=Materialization.INCREMENTAL,
         incremental_strategy="insert_overwrite",
         partition_by={"field": "bar"},
-    ).model_kind(target) == IncrementalUnmanagedKind(insert_overwrite=True)
+    ).model_kind(context) == IncrementalUnmanagedKind(insert_overwrite=True)
 
     assert ModelConfig(materialized=Materialization.INCREMENTAL).model_kind(
-        target
+        context
     ) == IncrementalUnmanagedKind(insert_overwrite=True)
 
     assert (
         ModelConfig(
             materialized=Materialization.INCREMENTAL, incremental_strategy="append"
-        ).model_kind(target)
+        ).model_kind(context)
         == IncrementalUnmanagedKind()
     )
 
@@ -120,26 +140,26 @@ def test_model_kind():
         materialized=Materialization.INCREMENTAL,
         incremental_strategy="insert_overwrite",
         partition_by={"field": "bar", "data_type": "int64"},
-    ).model_kind(target) == IncrementalUnmanagedKind(insert_overwrite=True)
+    ).model_kind(context) == IncrementalUnmanagedKind(insert_overwrite=True)
 
     with pytest.raises(ConfigError) as exception:
         ModelConfig(
             materialized=Materialization.INCREMENTAL,
             unique_key=["bar"],
             incremental_strategy="delete+insert",
-        ).model_kind(target)
+        ).model_kind(context)
     with pytest.raises(ConfigError) as exception:
         ModelConfig(
             materialized=Materialization.INCREMENTAL,
             unique_key=["bar"],
             incremental_strategy="insert_overwrite",
-        ).model_kind(target)
+        ).model_kind(context)
     with pytest.raises(ConfigError) as exception:
         ModelConfig(
             materialized=Materialization.INCREMENTAL,
             unique_key=["bar"],
             incremental_strategy="append",
-        ).model_kind(target)
+        ).model_kind(context)
 
 
 def test_model_columns():
@@ -217,10 +237,12 @@ def test_seed_columns():
     assert sqlmesh_seed.column_descriptions == expected_column_descriptions
 
 
-@pytest.mark.parametrize("model", ["sushi.waiters", "sushi.waiter_names"])
-def test_hooks(sushi_test_dbt_context: Context, model: str):
+@pytest.mark.parametrize(
+    "model_fqn", ['"memory"."sushi"."waiters"', '"memory"."sushi"."waiter_names"']
+)
+def test_hooks(sushi_test_dbt_context: Context, model_fqn: str):
     engine_adapter = sushi_test_dbt_context.engine_adapter
-    waiters = sushi_test_dbt_context.models[model]
+    waiters = sushi_test_dbt_context.models[model_fqn]
 
     logger = logging.getLogger("sqlmesh.dbt.builtin")
     with patch.object(logger, "debug") as mock_logger:
@@ -261,6 +283,7 @@ def test_schema_jinja(sushi_test_project: Project, assert_exp_eq):
         name="model",
         package_name="package",
         schema="sushi",
+        alias="table",
         sql="SELECT 1 AS one FROM {{ schema }}",
     )
     context = sushi_test_project.context
@@ -277,6 +300,7 @@ def test_config_jinja(sushi_test_project: Project):
         package_name="package",
         schema="sushi",
         sql="""SELECT 1 AS one FROM foo""",
+        alias="model",
         **{"pre-hook": hook},
     )
     context = sushi_test_project.context
@@ -289,6 +313,7 @@ def test_model_this(assert_exp_eq, sushi_test_project: Project):
     model_config = ModelConfig(
         name="model",
         package_name="package",
+        schema="schema",
         alias="test",
         sql="SELECT 1 AS one FROM {{ this.identifier }}",
     )
@@ -499,6 +524,7 @@ def test_parsetime_adapter_call(
         name="model",
         package_name="package",
         alias="test",
+        schema="sushi",
         sql="""
             {% set results = run_query('select 1 as one') %}
             SELECT {{ results.columns[0].values()[0] }} AS one FROM {{ this.identifier }}
@@ -525,6 +551,7 @@ def test_partition_by(sushi_test_project: Project):
     context.target = BigQueryConfig(name="production", database="main", schema="sushi")
     model_config = ModelConfig(
         name="model",
+        alias="model",
         schema="test",
         package_name="package",
         materialized="table",
@@ -597,6 +624,7 @@ def test_is_incremental(sushi_test_project: Project, assert_exp_eq, mocker):
         name="model",
         package_name="package",
         schema="sushi",
+        alias="some_table",
         sql="""
         SELECT 1 AS one FROM tbl_a
         {% if is_incremental() %}
@@ -623,6 +651,7 @@ def test_is_incremental(sushi_test_project: Project, assert_exp_eq, mocker):
 def test_dbt_max_partition(sushi_test_project: Project, assert_exp_eq, mocker: MockerFixture):
     model_config = ModelConfig(
         name="model",
+        alias="model",
         package_name="package",
         schema="sushi",
         partition_by={"field": "`ds`", "data_type": "datetime", "granularity": "month"},
@@ -660,6 +689,7 @@ def test_bigquery_table_properties(sushi_test_project: Project, mocker: MockerFi
 
     base_config = ModelConfig(
         name="model",
+        alias="model",
         package_name="package",
         schema="sushi",
         partition_by={"field": "`ds`", "data_type": "datetime", "granularity": "month"},
@@ -691,7 +721,9 @@ def test_bigquery_table_properties(sushi_test_project: Project, mocker: MockerFi
 
 def test_snapshot_json_payload():
     sushi_context = Context(paths=["tests/fixtures/dbt/sushi_test"])
-    snapshot_json = json.loads(_snapshot_to_json(sushi_context.snapshots["sushi.top_waiters"]))
+    snapshot_json = json.loads(
+        _snapshot_to_json(sushi_context.get_snapshot("sushi.top_waiters", raise_if_missing=True))
+    )
     assert snapshot_json["node"]["jinja_macros"]["global_objs"]["target"] == {
         "type": "duckdb",
         "name": "in_memory",

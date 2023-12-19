@@ -77,7 +77,7 @@ def test_model_to_sqlmesh_fields():
         database="database",
         materialized=Materialization.INCREMENTAL,
         description="test model",
-        sql="SELECT 1 AS a FROM foo",
+        sql="SELECT 1 AS a FROM foo.table",
         start="Jan 1 2023",
         partition_by=["a"],
         cluster_by=["a", '"b"'],
@@ -98,7 +98,10 @@ def test_model_to_sqlmesh_fields():
     assert isinstance(model, SqlModel)
     assert model.name == "database.custom.model"
     assert model.description == "test model"
-    assert model.render_query_or_raise().sql() == 'SELECT 1 AS "a" FROM "foo" AS "foo"'
+    assert (
+        model.render_query_or_raise().sql()
+        == 'SELECT 1 AS "a" FROM "memory"."foo"."table" AS "table"'
+    )
     assert model.start == "Jan 1 2023"
     assert [col.sql() for col in model.partitioned_by] == ["a"]
     assert model.clustered_by == ["a", "b"]
@@ -155,9 +158,9 @@ def test_test_to_sqlmesh_fields():
 
 
 def test_singular_test_to_standalone_audit():
-    sql = "SELECT * FROM FOO WHERE cost > 100"
+    sql = "SELECT * FROM FOO.BAR WHERE cost > 100"
     test_config = TestConfig(
-        name="foo_test",
+        name="bar_test",
         description="test description",
         owner="Sally",
         stamp="bump",
@@ -166,12 +169,12 @@ def test_singular_test_to_standalone_audit():
         sql=sql,
         severity="ERROR",
         enabled=True,
-        dependencies=Dependencies(refs=["foo"]),
+        dependencies=Dependencies(refs=["bar"]),
     )
 
     assert test_config.is_standalone == True
 
-    model = ModelConfig(name="foo", alias="foo")
+    model = ModelConfig(schema="foo", name="bar", alias="bar")
 
     context = DbtContext()
     context.add_models({model.name: model})
@@ -179,7 +182,7 @@ def test_singular_test_to_standalone_audit():
     context.target = DuckDbConfig(name="target", schema="foo")
     standalone_audit = test_config.to_sqlmesh(context)
 
-    assert standalone_audit.name == "foo_test"
+    assert standalone_audit.name == "bar_test"
     assert standalone_audit.description == "test description"
     assert standalone_audit.owner == "Sally"
     assert standalone_audit.stamp == "bump"
@@ -187,7 +190,7 @@ def test_singular_test_to_standalone_audit():
     assert standalone_audit.interval_unit.value == "day"
     assert standalone_audit.dialect == "duckdb"
     assert standalone_audit.query == jinja_query(sql)
-    assert standalone_audit.depends_on == {"foo"}
+    assert standalone_audit.depends_on == {'"memory"."foo"."bar"'}
 
 
 def test_model_config_sql_no_config():
@@ -234,7 +237,7 @@ def test_variables(assert_exp_eq, sushi_test_project):
     context.variables = defined_variables
 
     model_config = ModelConfig(
-        alias="test",
+        alias="sushi.test",
         sql="SELECT {{ var('foo') }}",
         dependencies=Dependencies(variables=["foo", "bar"]),
     )
@@ -312,7 +315,10 @@ def test_source_config(sushi_test_project: Project):
     }
     assert actual_config == expected_config
 
-    assert source_configs["streaming.order_items"].sql_name == "raw.order_items"
+    assert (
+        source_configs["streaming.order_items"].canonical_name(sushi_test_project.context)
+        == "raw.order_items"
+    )
 
 
 def test_seed_config(sushi_test_project: Project, mocker: MockerFixture):
@@ -327,11 +333,16 @@ def test_seed_config(sushi_test_project: Project, mocker: MockerFixture):
     actual_config = {k: getattr(raw_items_seed, k) for k, v in expected_config.items()}
     assert actual_config == expected_config
 
-    assert raw_items_seed.sql_name == "sushi.waiter_names"
-    assert raw_items_seed.to_sqlmesh(sushi_test_project.context).name == "sushi.waiter_names"
+    context = sushi_test_project.context
+    assert raw_items_seed.canonical_name(context) == "sushi.waiter_names"
+    assert raw_items_seed.to_sqlmesh(context).name == "sushi.waiter_names"
     mock_dialect = PropertyMock(return_value="snowflake")
     mocker.patch("sqlmesh.dbt.context.DbtContext.dialect", mock_dialect)
-    assert raw_items_seed.to_sqlmesh(sushi_test_project.context).name == "SUSHI.WAITER_NAMES"
+    assert raw_items_seed.to_sqlmesh(sushi_test_project.context).name == "sushi.waiter_names"
+    assert (
+        raw_items_seed.to_sqlmesh(sushi_test_project.context).fqn
+        == '"MEMORY"."SUSHI"."WAITER_NAMES"'
+    )
 
 
 def test_quoting():

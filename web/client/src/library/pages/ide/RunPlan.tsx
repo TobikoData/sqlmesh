@@ -24,6 +24,7 @@ import PlanChangePreview from '@components/plan/PlanChangePreview'
 import { EnumErrorKey, useIDE } from './context'
 import { EnumPlanAction, ModelPlanAction } from '@models/plan-action'
 import { useStorePlan } from '@context/plan'
+import { type SnapshotId } from '@api/client'
 
 export default function RunPlan(): JSX.Element {
   const { setIsPlanOpen } = useIDE()
@@ -169,9 +170,11 @@ function PlanChanges(): JSX.Element {
           headline="Backfills"
           type={EnumPlanChangeType.Default}
           changes={
-            planOverview.backfills?.models.map(
-              ({ model_name, view_name }) => model_name ?? view_name,
-            ) ?? []
+            (planOverview.backfills?.models.map(
+              ({ model_name, view_name }) => ({
+                name: model_name ?? view_name,
+              }),
+            ) as SnapshotId[]) ?? []
           }
         />
       )}
@@ -187,8 +190,9 @@ function PlanChanges(): JSX.Element {
           headline="Direct Changes"
           type={EnumPlanChangeType.Direct}
           changes={
-            planOverview.modified?.direct.map(({ model_name }) => model_name) ??
-            []
+            (planOverview.modified?.direct.map(({ model_name }) => ({
+              name: model_name,
+            })) as SnapshotId[]) ?? []
           }
         />
       )}
@@ -197,9 +201,9 @@ function PlanChanges(): JSX.Element {
           headline="Indirectly Modified"
           type={EnumPlanChangeType.Indirect}
           changes={
-            planOverview.modified?.indirect.map(
-              ({ model_name }) => model_name,
-            ) ?? []
+            (planOverview.modified?.indirect.map(({ model_name }) => ({
+              name: model_name,
+            })) as SnapshotId[]) ?? []
           }
         />
       )}
@@ -494,7 +498,7 @@ function ChangesPreview({
 }: {
   headline?: string
   type: PlanChangeType
-  changes: string[]
+  changes: SnapshotId[]
 }): JSX.Element {
   const [isShowing, setIsShowing] = useState(false)
 
