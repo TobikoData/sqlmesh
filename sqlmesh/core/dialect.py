@@ -11,7 +11,6 @@ import pandas as pd
 from sqlglot import Dialect, Generator, ParseError, Parser, Tokenizer, TokenType, exp
 from sqlglot.dialects.dialect import DialectType
 from sqlglot.dialects.snowflake import Snowflake
-from sqlglot.helper import seq_get
 from sqlglot.optimizer.normalize_identifiers import normalize_identifiers
 from sqlglot.optimizer.scope import traverse_scope
 from sqlglot.tokens import Token
@@ -714,10 +713,6 @@ def extend_sqlglot() -> None:
         parser.PLACEHOLDER_PARSERS.update({TokenType.PARAMETER: _parse_macro})
         parser.QUERY_MODIFIER_PARSERS.update(
             {TokenType.PARAMETER: lambda self: _parse_body_macro(self)}
-        )
-        # FIXME: Delete the extension below after upgrading to SQLGlot >= 20.3.0.
-        parser.EXPRESSION_PARSERS.update(
-            {exp.When: lambda self: seq_get(self._parse_when_matched(), 0)}
         )
 
     for generator in generators:
