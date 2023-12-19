@@ -18,11 +18,11 @@ from rich.console import Console
 from sqlglot.helper import seq_get
 
 from sqlmesh.core import constants as c
-from sqlmesh.core.console import MarkdownConsole
+from sqlmesh.core.console import SNAPSHOT_CHANGE_CATEGORY_STR, MarkdownConsole
 from sqlmesh.core.context import Context
 from sqlmesh.core.environment import Environment
-from sqlmesh.core.plan import LoadedSnapshotIntervals, Plan
-from sqlmesh.core.snapshot.definition import Snapshot
+from sqlmesh.core.plan import Plan
+from sqlmesh.core.snapshot.definition import Snapshot, SnapshotId, format_intervals
 from sqlmesh.core.user import User
 from sqlmesh.integrations.github.cicd.config import GithubCICDBotConfig
 from sqlmesh.utils import word_characters_only
@@ -428,6 +428,10 @@ class GithubController:
         logger.debug(f"Bot config: {bot_config.json(indent=2)}")
         return bot_config
 
+    @property
+    def modified_snapshots(self) -> t.Dict[SnapshotId, Snapshot]:
+        return self.prod_plan_with_gaps.modified_snapshots
+
     @classmethod
     def _append_output(cls, key: str, value: str) -> None:
         """
@@ -563,11 +567,6 @@ class GithubController:
         """
         if self.bot_config.invalidate_environment_after_deploy:
             self._context.invalidate_environment(self.pr_environment_name)
-
-    def get_loaded_snapshot_intervals(
-        self,
-    ) -> t.Tuple[t.List[LoadedSnapshotIntervals], t.List[Snapshot]]:
-        return self.prod_plan_with_gaps.loaded_snapshot_intervals
 
     def _update_check(
         self,
@@ -747,8 +746,7 @@ class GithubController:
             conclusion: GithubCheckConclusion, exception: t.Optional[Exception]
         ) -> t.Tuple[GithubCheckConclusion, str, t.Optional[str]]:
             if conclusion.is_success:
-                loaded_snapshots, unloaded_snapshots = self.get_loaded_snapshot_intervals()
-                if not loaded_snapshots and not unloaded_snapshots:
+                if not self.modified_snapshots:
                     summary = "No models were modified in this PR.\n"
                 else:
                     header_rows = [
@@ -760,22 +758,31 @@ class GithubController:
                         ],
                     ]
                     body_rows: List[Element | List[Element]] = []
-                    for loaded_snapshot in loaded_snapshots:
-                        model_rows = [
-                            h("td", loaded_snapshot.node_name),
-                            h("td", loaded_snapshot.change_category_str),
-                        ]
-                        if loaded_snapshot.intervals:
-                            model_rows.append(h("td", loaded_snapshot.format_intervals()))
-                        else:
-                            model_rows.append(h("td", "N/A"))
-                        body_rows.append(model_rows)
-                    for unloaded_snapshot in unloaded_snapshots:
+                    for modified_snapshot in self.modified_snapshots.values():
+                        # We don't want to display indirect non-breaking since to users these are effectively no-op changes
+                        if modified_snapshot.is_indirect_non_breaking:
+                            continue
+                        model_name = modified_snapshot.node.name
+                        change_category = (
+                            "Uncategorized"
+                            if not modified_snapshot.change_category
+                            else SNAPSHOT_CHANGE_CATEGORY_STR[modified_snapshot.change_category]
+                        )
+                        intervals = (
+                            modified_snapshot.dev_intervals
+                            if modified_snapshot.is_forward_only
+                            else modified_snapshot.intervals
+                        )
+                        interval_output = (
+                            format_intervals(intervals, modified_snapshot.node.interval_unit)
+                            if intervals
+                            else "N/A"
+                        )
                         body_rows.append(
                             [
-                                h("td", unloaded_snapshot.node.name),
-                                h("td", "Uncategorized"),
-                                h("td", "N/A"),
+                                h("td", model_name),
+                                h("td", change_category),
+                                h("td", interval_output),
                             ]
                         )
                     table_header = h("thead", [h("tr", row) for row in header_rows])
