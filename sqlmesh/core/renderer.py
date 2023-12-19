@@ -24,7 +24,6 @@ from sqlmesh.utils.errors import (
     ConfigError,
     MacroEvalError,
     ParsetimeAdapterCallError,
-    SQLMeshError,
     raise_config_error,
 )
 from sqlmesh.utils.jinja import JinjaMacroRegistry
@@ -122,6 +121,7 @@ class BaseExpressionRenderer:
                 try:
                     rendered_expression = jinja_env.from_string(self._expression.name).render()
                     if not rendered_expression.strip():
+                        self._cache[cache_key] = []
                         return []
 
                     parsed_expressions = [
@@ -203,15 +203,13 @@ class BaseExpressionRenderer:
 
     def update_cache(
         self,
-        expression: t.Optional[exp.Expression],
+        expression: exp.Expression,
         start: t.Optional[TimeLike] = None,
         end: t.Optional[TimeLike] = None,
         execution_time: t.Optional[TimeLike] = None,
         **kwargs: t.Any,
     ) -> None:
-        self._cache[self._cache_key(start, end, execution_time)] = (
-            [expression] if expression else []
-        )
+        self._cache[self._cache_key(start, end, execution_time)] = [expression]
 
     def _resolve_tables(
         self,
@@ -364,7 +362,7 @@ class QueryRenderer(BaseExpressionRenderer):
 
         self._model_fqn = model_fqn
 
-        self._optimized_cache: t.Dict[CacheKey, exp.Subqueryable] = {}
+        self._optimized_cache: t.Dict[CacheKey, exp.Expression] = {}
 
     def update_schema(self, schema: t.Dict[str, t.Any]) -> None:
         super().update_schema(schema)
@@ -426,24 +424,13 @@ class QueryRenderer(BaseExpressionRenderer):
             if len(expressions) > 1:
                 raise ConfigError(f"Too many statements in query:\n{self._expression}")
 
-            query = expressions[0]
-
-            if not query:
-                return None
-            if not isinstance(query, exp.Subqueryable):
-                raise_config_error(f"Query needs to be a SELECT or a UNION {query}.", self._path)
-                raise
-
-            # we find deps here so that it is cached in the model cache
-            deps = d.find_tables(
-                query, default_catalog=self._default_catalog, dialect=self._dialect
-            )
+            query = t.cast(exp.Subqueryable, expressions[0])
 
             if optimize:
-                query = self._optimize_query(query, deps)
+                query = self._optimize_query(query)
                 self._optimized_cache[cache_key] = query
         else:
-            query = self._optimized_cache[cache_key]
+            query = t.cast(exp.Subqueryable, self._optimized_cache[cache_key])
 
         # Table resolution MUST happen after optimization, otherwise the schema won't match the table names.
         query = self._resolve_tables(
@@ -458,31 +445,35 @@ class QueryRenderer(BaseExpressionRenderer):
             runtime_stage=runtime_stage,
             **kwargs,
         )
+
+        if not isinstance(query, exp.Subqueryable):
+            raise_config_error(f"Query needs to be a SELECT or a UNION {query}.", self._path)
+
         return query
 
     def update_cache(
         self,
-        expression: t.Optional[exp.Expression],
+        expression: exp.Expression,
         start: t.Optional[TimeLike] = None,
         end: t.Optional[TimeLike] = None,
         execution_time: t.Optional[TimeLike] = None,
         optimized: bool = False,
         **kwargs: t.Any,
     ) -> None:
-        if optimized:
-            if not isinstance(expression, exp.Subqueryable):
-                raise SQLMeshError(f"Expected a subqueryable but got: {expression}")
-            self._optimized_cache[self._cache_key(start, end, execution_time)] = expression
-        else:
+        if not optimized:
             super().update_cache(
                 expression, start=start, end=end, execution_time=execution_time, **kwargs
             )
+        else:
+            self._optimized_cache[self._cache_key(start, end, execution_time)] = expression
 
-    def _optimize_query(self, query: exp.Subqueryable, all_deps: t.Set[str]) -> exp.Subqueryable:
+    def _optimize_query(self, query: exp.Subqueryable) -> exp.Subqueryable:
         # We don't want to normalize names in the schema because that's handled by the optimizer
         original = query
         missing_deps = set()
-        all_deps = all_deps - {self._model_fqn}
+        all_deps = d.find_tables(
+            query, default_catalog=self._default_catalog, dialect=self._dialect
+        ) - {self._model_fqn}
         should_optimize = not self.schema.empty or not all_deps
 
         for dep in all_deps:
