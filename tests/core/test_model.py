@@ -2556,3 +2556,26 @@ def test_null_column_type():
         "id": exp.DataType.build("int"),
     }
     assert not model.annotated
+
+
+def test_when_matched():
+    expressions = d.parse(
+        """
+        MODEL (
+          name db.employees,
+          kind INCREMENTAL_BY_UNIQUE_KEY (
+            unique_key name,
+            when_matched WHEN MATCHED THEN UPDATE SET target.salary = COALESCE(source.salary, target.salary)
+          )
+        );
+        SELECT 'name' AS name, 1 AS salary;
+    """
+    )
+
+    expected_when_matched = "WHEN MATCHED THEN UPDATE SET __MERGE_TARGET__.salary = COALESCE(__MERGE_SOURCE__.salary, __MERGE_TARGET__.salary)"
+
+    model = load_sql_based_model(expressions, dialect="hive")
+    assert model.kind.when_matched.sql() == expected_when_matched
+
+    model = SqlModel.parse_raw(model.json())
+    assert model.kind.when_matched.sql() == expected_when_matched
