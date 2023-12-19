@@ -46,8 +46,7 @@ class ModelCache:
         cache_entry = self._file_cache.get(name, entry_id)
         if cache_entry:
             model = cache_entry.model
-            if cache_entry.rendered_query is not None:
-                model._query_renderer.update_cache(cache_entry.rendered_query, optimized=False)
+            model._query_renderer.update_cache(cache_entry.rendered_query, optimized=False)
             return model
 
         loaded_model = loader()
