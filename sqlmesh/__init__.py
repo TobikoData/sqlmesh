@@ -129,27 +129,26 @@ def configure_logging(
     logger = logging.getLogger()
     debug = force_debug or debug_mode_enabled()
 
-    if not logger.hasHandlers():
-        # base logger needs to be the lowest level that we plan to log
-        level = logging.DEBUG if debug else logging.INFO
-        logger.setLevel(level)
+    # base logger needs to be the lowest level that we plan to log
+    level = logging.DEBUG if debug else logging.INFO
+    logger.setLevel(level)
 
-        stdout_handler = logging.StreamHandler(sys.stdout)
-        stdout_handler.setFormatter(CustomFormatter())
-        stdout_handler.setLevel(
-            level if write_to_stdout else (logging.ERROR if ignore_warnings else logging.WARNING)
-        )
-        logger.addHandler(stdout_handler)
+    stdout_handler = logging.StreamHandler(sys.stdout)
+    stdout_handler.setFormatter(CustomFormatter())
+    stdout_handler.setLevel(
+        level if write_to_stdout else (logging.ERROR if ignore_warnings else logging.WARNING)
+    )
+    logger.addHandler(stdout_handler)
 
-        if write_to_file:
-            os.makedirs("logs", exist_ok=True)
-            filename = f"{LOG_PREFIX}{datetime.now().strftime('%Y_%m_%d_%H_%M_%S')}.log"
-            file_handler = logging.FileHandler(filename, mode="w", encoding="utf-8")
-            # the log files should always log at least info so that users will always have
-            # minimal info for debugging even if they specify "ignore_warnings"
-            file_handler.setLevel(level)
-            file_handler.setFormatter(logging.Formatter(LOG_FORMAT))
-            logger.addHandler(file_handler)
+    if write_to_file:
+        os.makedirs("logs", exist_ok=True)
+        filename = f"{LOG_PREFIX}{datetime.now().strftime('%Y_%m_%d_%H_%M_%S')}.log"
+        file_handler = logging.FileHandler(filename, mode="w", encoding="utf-8")
+        # the log files should always log at least info so that users will always have
+        # minimal info for debugging even if they specify "ignore_warnings"
+        file_handler.setLevel(level)
+        file_handler.setFormatter(logging.Formatter(LOG_FORMAT))
+        logger.addHandler(file_handler)
 
     if log_limit > 0:
         for path in list(sorted(glob.glob(f"{LOG_PREFIX}*.log"), reverse=True))[log_limit:]:
