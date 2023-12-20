@@ -5,7 +5,8 @@ import io
 import typing as t
 
 import pandas as pd
-from fastapi import APIRouter, Body, Depends, Request
+from fastapi import APIRouter, Body, Depends, Request, Response
+from starlette.status import HTTP_204_NO_CONTENT
 
 from sqlmesh.core.context import Context
 from sqlmesh.core.snapshot.definition import SnapshotChangeCategory
@@ -28,6 +29,7 @@ router = APIRouter()
 @router.post("/apply", response_model=t.Optional[models.PlanApplyStageTracker])
 async def initiate_apply(
     request: Request,
+    response: Response,
     context: Context = Depends(get_loaded_context),
     environment: t.Optional[str] = Body(None),
     plan_dates: t.Optional[models.PlanDates] = None,
@@ -51,6 +53,7 @@ async def initiate_apply(
             categories,
         )
     )
+    response.status_code = HTTP_204_NO_CONTENT
 
     return None
 

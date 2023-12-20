@@ -3,7 +3,8 @@ from __future__ import annotations
 import asyncio
 import typing as t
 
-from fastapi import APIRouter, Body, Depends, Request
+from fastapi import APIRouter, Body, Depends, Request, Response
+from starlette.status import HTTP_204_NO_CONTENT
 
 from sqlmesh.core.context import Context
 from sqlmesh.core.plan.definition import Plan
@@ -20,6 +21,7 @@ router = APIRouter()
 @router.post("", response_model=t.Optional[models.PlanOverviewStageTracker])
 async def initiate_plan(
     request: Request,
+    response: Response,
     context: Context = Depends(get_loaded_context),
     environment: t.Optional[str] = Body(None),
     plan_dates: t.Optional[models.PlanDates] = None,
@@ -42,12 +44,15 @@ async def initiate_plan(
             plan_dates,
         )
     )
+    response.status_code = HTTP_204_NO_CONTENT
+
     return None
 
 
 @router.post("/cancel", response_model=t.Optional[models.PlanCancelStageTracker])
 async def cancel_plan(
     request: Request,
+    response: Response,
 ) -> t.Optional[models.PlanCancelStageTracker]:
     """Cancel a plan application"""
     if not hasattr(request.app.state, "task") or request.app.state.task.done():
@@ -63,6 +68,8 @@ async def cancel_plan(
     tracker.add_stage(stage=models.PlanStage.cancel, data=tracker_stage_cancel)
     tracker_stage_cancel.stop(success=True)
     api_console.stop_plan_tracker(tracker)
+    response.status_code = HTTP_204_NO_CONTENT
+
     return None
 
 
