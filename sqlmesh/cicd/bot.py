@@ -21,7 +21,7 @@ def bot(
     config: t.Optional[str] = None,
 ) -> None:
     """SQLMesh CI/CD Bot. Currently only Github Actions is supported. See https://sqlmesh.readthedocs.io/en/stable/integrations/github/ for details"""
-    configure_logging(write_to_file=False)
+    configure_logging(write_to_stdout=True, write_to_file=False)
 
     ctx.obj = {
         "paths": paths,
