@@ -122,7 +122,7 @@ class CustomFormatter(logging.Formatter):
 def configure_logging(
     force_debug: bool = False,
     ignore_warnings: bool = False,
-    write_to_stdout: bool = True,
+    write_to_stdout: bool = False,
     write_to_file: bool = True,
     log_limit: int = c.DEFAULT_LOG_LIMIT,
 ) -> None:

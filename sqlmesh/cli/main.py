@@ -77,7 +77,7 @@ def cli(
 
     configs = load_configs(config, paths)
     log_limit = list(configs.values())[0].log_limit
-    configure_logging(debug, ignore_warnings, write_to_stdout=False, log_limit=log_limit)
+    configure_logging(debug, ignore_warnings, log_limit=log_limit)
 
     try:
         context = Context(
