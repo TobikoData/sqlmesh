@@ -131,7 +131,8 @@ export default function PlanApplyStageTracker(): JSX.Element {
         </>
       )}
       {isNotNil(validation) && <StageValidate report={validation} />}
-      {planAction.isApplyVirtual && (
+      {(planApply.overview?.isVirtualUpdate ??
+        planOverview.isVirtualUpdate) && (
         <PlanVirtualUpdate isUpdated={isTrue(planApply.promote?.meta?.done)} />
       )}
       {hasFailedTests ||
