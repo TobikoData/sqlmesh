@@ -186,11 +186,11 @@ class RuntimeAdapter(BaseAdapter):
 
         table_mapping = table_mapping or {}
 
-        self.engine_adapter = engine_adapter
         self.relation_type = relation_type or BaseRelation
         self.column_type = column_type or Column
         self.quote_policy = quote_policy or Policy()
         self.cache: t.Dict[exp.Table, t.List[BaseRelation]] = {}
+        self.engine_adapter = CachingAdapter(engine_adapter, self.cache, self.relation_type)
         self.table_mapping = {
             **to_table_mapping((snapshots or {}).values(), deployability_index),
             **table_mapping,
@@ -379,7 +379,7 @@ class CachingAdapter:
         self.cache = cache
         self.relation_type = relation_type
 
-    def __getattr__(self, attr: str) -> None:
+    def __getattr__(self, attr: str) -> t.Any:
         return getattr(self.engine_adapter, attr)
 
     def drop_table(self, *args: t.Any, **kwargs: t.Any) -> None:
