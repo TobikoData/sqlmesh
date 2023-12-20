@@ -7,7 +7,7 @@ import {
 } from '@heroicons/react/24/solid'
 import clsx from 'clsx'
 import { useState, useEffect, Fragment, type MouseEvent } from 'react'
-import { apiDeleteEnvironment, useApiEnvironments, useApiPlanRun } from '~/api'
+import { apiDeleteEnvironment, useApiEnvironments } from '~/api'
 import { useStoreContext } from '~/context/context'
 import { type ModelEnvironment } from '~/models/environment'
 import { EnumSide, EnumSize, EnumVariant, type Side } from '~/types/enum'
@@ -24,7 +24,7 @@ import PlanChangePreview from '@components/plan/PlanChangePreview'
 import { EnumErrorKey, useIDE } from './context'
 import { EnumPlanAction, ModelPlanAction } from '@models/plan-action'
 import { useStorePlan } from '@context/plan'
-import { type SnapshotId } from '@api/client'
+import { initiatePlanApiPlanPost, type SnapshotId } from '@api/client'
 
 export default function RunPlan(): JSX.Element {
   const { setIsPlanOpen } = useIDE()
@@ -89,7 +89,6 @@ export default function RunPlan(): JSX.Element {
                         <SelectEnvironemnt
                           className="mr-2"
                           side="left"
-                          environment={environment}
                           showAddEnvironment={false}
                           onSelect={() => {
                             setShouldStartPlanAutomatically(true)
@@ -123,7 +122,6 @@ export default function RunPlan(): JSX.Element {
         </Button>
         <SelectEnvironemnt
           className="rounded-none rounded-r-lg border-l mx-0"
-          environment={environment}
           disabled={
             isFetchingEnvironments ||
             planAction.isProcessing ||
@@ -235,14 +233,12 @@ function PlanChanges(): JSX.Element {
 
 function SelectEnvironemnt({
   onSelect,
-  environment,
   disabled,
   side = EnumSide.Right,
   className,
   showAddEnvironment = true,
   size = EnumSize.sm,
 }: {
-  environment: ModelEnvironment
   disabled: boolean
   className?: string
   size?: ButtonSize
@@ -252,13 +248,10 @@ function SelectEnvironemnt({
 }): JSX.Element {
   const { addError } = useIDE()
 
+  const environment = useStoreContext(s => s.environment)
   const environments = useStoreContext(s => s.environments)
   const setEnvironment = useStoreContext(s => s.setEnvironment)
   const removeLocalEnvironment = useStoreContext(s => s.removeLocalEnvironment)
-
-  const { refetch: planRun } = useApiPlanRun(environment.name, {
-    planOptions: { skip_tests: true, include_unmodified: true },
-  })
 
   const ButtonMenu = makeButton<HTMLDivElement>(Menu.Button)
 
@@ -270,6 +263,16 @@ function SelectEnvironemnt({
       .catch(error => {
         addError(EnumErrorKey.Environments, error)
       })
+  }
+
+  function runPlan(environment: ModelEnvironment): void {
+    void initiatePlanApiPlanPost({
+      environment: environment.name,
+      plan_options: {
+        skip_tests: true,
+        include_unmodified: true,
+      },
+    })
   }
 
   return (
@@ -319,9 +322,9 @@ function SelectEnvironemnt({
                         onClick={(e: MouseEvent) => {
                           e.stopPropagation()
 
-                          void planRun()
-
                           setEnvironment(env)
+
+                          runPlan(env)
 
                           onSelect?.()
                         }}
