@@ -15,6 +15,7 @@ import {
   isNotNil,
   isFalse,
   isObjectNotEmpty,
+  isTrue,
 } from '~/utils'
 import { useStoreContext } from '~/context/context'
 import { ArrowLongRightIcon } from '@heroicons/react/24/solid'
@@ -28,6 +29,7 @@ import {
   type Model,
   type Environments,
   type EnvironmentsEnvironments,
+  Status,
 } from '@api/client'
 import { Button } from '@components/button/Button'
 import { Divider } from '@components/divider/Divider'
@@ -275,32 +277,24 @@ export default function PageIDE(): JSX.Element {
   }, [models])
 
   useEffect(() => {
-    if (planOverview.isFetching !== isFetchingPlanRun) {
-      planOverview.isFetching = isFetchingPlanRun
+    planOverview.isFetching = isFetchingPlanRun
 
-      setPlanOverview(planOverview)
-    }
+    setPlanOverview(planOverview)
+  }, [isFetchingPlanRun])
 
-    if (planApply.isFetching !== isFetchingPlanApply) {
-      planApply.isFetching = isFetchingPlanApply
+  useEffect(() => {
+    planOverview.isFetching = isFetchingPlanApply
 
-      if (planApply.isFinished) {
-        void getEnvironments().then(({ data }) => {
-          updateEnviroments(data)
+    setPlanApply(planApply)
+  }, [isFetchingPlanApply])
 
-          void planRun()
-        })
-      }
+  useEffect(() => {
+    planOverview.isFetching = isFetchingPlanCancel
 
-      setPlanApply(planApply)
-    }
+    setPlanCancel(planCancel)
+  }, [isFetchingPlanCancel])
 
-    if (planCancel.isFetching !== isFetchingPlanCancel) {
-      planCancel.isFetching = isFetchingPlanCancel
-
-      setPlanCancel(planCancel)
-    }
-
+  useEffect(() => {
     const value = ModelPlanAction.getPlanAction({
       planOverview,
       planApply,
@@ -310,14 +304,7 @@ export default function PageIDE(): JSX.Element {
     if (isNotNil(value)) {
       setPlanAction(new ModelPlanAction({ value }))
     }
-  }, [
-    planOverview,
-    planApply,
-    planCancel,
-    isFetchingPlanRun,
-    isFetchingPlanApply,
-    isFetchingPlanCancel,
-  ])
+  }, [planOverview, planApply, planCancel])
 
   function updateModels(models?: Model[]): void {
     if (isNotNil(models)) {
@@ -348,6 +335,17 @@ export default function PageIDE(): JSX.Element {
 
   function updatePlanApplyTracker(data: PlanApplyTracker): void {
     planApply.update(data, planOverview)
+
+    const isFinished =
+      isTrue(data.meta?.done) && data.meta?.status !== Status.init
+
+    if (isFinished) {
+      void getEnvironments().then(({ data }) => {
+        updateEnviroments(data)
+
+        void planRun()
+      })
+    }
 
     setPlanApply(planApply)
   }
