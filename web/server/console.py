@@ -11,7 +11,7 @@ from sse_starlette.sse import ServerSentEvent
 from sqlmesh.core.console import TerminalConsole
 from sqlmesh.core.environment import EnvironmentNamingInfo
 from sqlmesh.core.plan.definition import Plan
-from sqlmesh.core.snapshot import Snapshot
+from sqlmesh.core.snapshot import Snapshot, SnapshotInfoLike
 from sqlmesh.core.test import ModelTest
 from sqlmesh.utils.date import now_timestamp
 from web.server import models
@@ -39,7 +39,12 @@ class ApiConsole(TerminalConsole):
         if self.plan_apply_stage_tracker:
             self.stop_plan_tracker(tracker=self.plan_apply_stage_tracker, success=True)
 
-    def start_creation_progress(self, total_tasks: int) -> None:
+    def start_creation_progress(
+        self,
+        total_tasks: int,
+        environment_naming_info: EnvironmentNamingInfo,
+        default_catalog: t.Optional[str],
+    ) -> None:
         if self.plan_apply_stage_tracker:
             self.plan_apply_stage_tracker.add_stage(
                 models.PlanStage.creation,
@@ -48,10 +53,10 @@ class ApiConsole(TerminalConsole):
 
         self.log_event_plan_apply()
 
-    def update_creation_progress(self, num_tasks: int) -> None:
+    def update_creation_progress(self, snapshot: SnapshotInfoLike) -> None:
         if self.plan_apply_stage_tracker and self.plan_apply_stage_tracker.creation:
             self.plan_apply_stage_tracker.creation.update(
-                {"num_tasks": self.plan_apply_stage_tracker.creation.num_tasks + num_tasks}
+                {"num_tasks": self.plan_apply_stage_tracker.creation.num_tasks + 1}
             )
 
         self.log_event_plan_apply()
@@ -131,21 +136,28 @@ class ApiConsole(TerminalConsole):
             if not success:
                 self.stop_plan_tracker(tracker=self.plan_apply_stage_tracker, success=False)
 
-    def start_promotion_progress(self, environment: str, total_tasks: int) -> None:
+    def start_promotion_progress(
+        self,
+        total_tasks: int,
+        environment_naming_info: EnvironmentNamingInfo,
+        default_catalog: t.Optional[str],
+    ) -> None:
         if self.plan_apply_stage_tracker:
             self.plan_apply_stage_tracker.add_stage(
                 models.PlanStage.promote,
                 models.PlanStagePromote(
-                    total_tasks=total_tasks, num_tasks=0, target_environment=environment
+                    total_tasks=total_tasks,
+                    num_tasks=0,
+                    target_environment=environment_naming_info.name,
                 ),
             )
 
         self.log_event_plan_apply()
 
-    def update_promotion_progress(self, num_tasks: int) -> None:
+    def update_promotion_progress(self, snapshot: SnapshotInfoLike, promoted: bool) -> None:
         if self.plan_apply_stage_tracker and self.plan_apply_stage_tracker.promote:
             self.plan_apply_stage_tracker.promote.update(
-                {"num_tasks": self.plan_apply_stage_tracker.promote.num_tasks + num_tasks}
+                {"num_tasks": self.plan_apply_stage_tracker.promote.num_tasks + 1}
             )
 
         self.log_event_plan_apply()

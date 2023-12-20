@@ -29,7 +29,6 @@ from sqlmesh.core.snapshot import (
     Snapshot,
     SnapshotEvaluator,
     SnapshotId,
-    SnapshotInfoLike,
 )
 from sqlmesh.core.state_sync import StateSync
 from sqlmesh.core.state_sync.base import PromotionResult
@@ -158,10 +157,9 @@ class BuiltInPlanEvaluator(PlanEvaluator):
         new_model_snapshot_count = len([s for s in plan.new_snapshots if s.is_model])
 
         if new_model_snapshot_count > 0:
-            self.console.start_creation_progress(new_model_snapshot_count)
-
-        def on_complete(snapshot: SnapshotInfoLike) -> None:
-            self.console.update_creation_progress(1)
+            self.console.start_creation_progress(
+                new_model_snapshot_count, plan.environment_naming_info, self.default_catalog
+            )
 
         completed = False
         try:
@@ -169,7 +167,7 @@ class BuiltInPlanEvaluator(PlanEvaluator):
                 plan.new_snapshots,
                 plan.snapshot_mapping,
                 deployability_index=deployability_index,
-                on_complete=on_complete,
+                on_complete=self.console.update_creation_progress,
             )
             completed = True
         finally:
@@ -217,11 +215,10 @@ class BuiltInPlanEvaluator(PlanEvaluator):
         environment = plan.environment
 
         self.console.start_promotion_progress(
-            environment.name, len(promotion_result.added) + len(promotion_result.removed)
+            len(promotion_result.added) + len(promotion_result.removed),
+            environment.naming_info,
+            self.default_catalog,
         )
-
-        def on_complete(snapshot: SnapshotInfoLike) -> None:
-            self.console.update_promotion_progress(1)
 
         completed = False
         try:
@@ -229,13 +226,13 @@ class BuiltInPlanEvaluator(PlanEvaluator):
                 [plan.context_diff.snapshots[s.snapshot_id] for s in promotion_result.added],
                 environment.naming_info,
                 deployability_index=deployability_index,
-                on_complete=on_complete,
+                on_complete=lambda s: self.console.update_promotion_progress(s, True),
             )
             if promotion_result.removed_environment_naming_info:
                 self.snapshot_evaluator.demote(
                     promotion_result.removed,
                     promotion_result.removed_environment_naming_info,
-                    on_complete=on_complete,
+                    on_complete=lambda s: self.console.update_promotion_progress(s, False),
                 )
             self.state_sync.finalize(environment)
             completed = True
