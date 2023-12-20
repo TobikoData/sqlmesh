@@ -5,11 +5,14 @@ import os
 import time
 import typing as t
 
+from airflow.models import Variable
 from airflow.plugins_manager import AirflowPlugin
 
 from sqlmesh.core import constants as c
 from sqlmesh.schedulers.airflow import util
 from sqlmesh.schedulers.airflow.api import sqlmesh_api_v1
+from sqlmesh.schedulers.airflow.common import DEFAULT_CATALOG_VARIABLE_NAME
+from sqlmesh.utils.errors import SQLMeshError
 
 logger = logging.getLogger(__name__)
 
@@ -25,10 +28,16 @@ class SqlmeshAirflowPlugin(AirflowPlugin):
             logger.info("MWAA Webserver instance detected. Skipping SQLMesh state migration...")
             return
 
+        default_catalog = Variable.get(DEFAULT_CATALOG_VARIABLE_NAME, default_var=None)
+        if not default_catalog:
+            raise SQLMeshError(
+                "Must set variable `sqlmesh_default_catalog`. See docs for more info: https://sqlmesh.readthedocs.io/en/stable/integrations/airflow/#airflow-cluster-configuration"
+            )
+
         with util.scoped_state_sync() as state_sync:
             try:
                 logger.info("Migrating SQLMesh state ...")
-                state_sync.migrate(default_catalog=None)
+                state_sync.migrate(default_catalog=default_catalog)
             except Exception as ex:
                 # This method is called once for each Gunicorn worker spawned by the Airflow Webserver,
                 # which leads to SQLMesh schema being initialized concurrently from multiple processes.
@@ -37,4 +46,4 @@ class SqlmeshAirflowPlugin(AirflowPlugin):
                 # the schema initialization once as a workaround.
                 logger.warning("Failed to initialize the SQLMesh State Sync: %s. Retrying...", ex)
                 time.sleep(1)
-                state_sync.migrate(default_catalog=None)
+                state_sync.migrate(default_catalog=default_catalog)

@@ -27,6 +27,13 @@ The name of the module file can be arbitrary, but we recommend something descrip
 
 **Note**: The name of the engine operator is the only mandatory parameter needed for `sqlmesh.schedulers.airflow.integration.SQLMeshAirflow`. Currently supported engines are listed in the [Engine support](#engine-support) section.
 
+The final step is to configure required SQLMesh Airflow variables. See [Managed Variables](https://airflow.apache.org/docs/apache-airflow/stable/howto/variable.html) for details on how to define variables within Airflow.
+
+| Variable Name             | Description                                                                                                                                                   |  Type  | Required |
+|---------------------------|---------------------------------------------------------------------------------------------------------------------------------------------------------------|:------:|:--------:|
+| `sqlmesh_default_catalog` | The catalog name to use when models are defined that do not contain a catalog in their name. This should match the default catalog applied by the connection. | string |    Y     |
+
+
 ### State connection
 
 By default, SQLMesh uses the Airflow's database connection to read and write its state.

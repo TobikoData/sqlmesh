@@ -27,6 +27,9 @@ def test_sushi(mocker: MockerFixture, is_docker: bool):
 
     airflow_config = "airflow_config_docker" if is_docker else "airflow_config"
     context = Context(paths="./examples/sushi", config=airflow_config)
+    assert context.default_catalog == "spark_catalog"
+    for fqn in context.models:
+        assert fqn.startswith('"spark_catalog"."')
     data_validator = SushiDataValidator.from_context(context)
 
     context.plan(
