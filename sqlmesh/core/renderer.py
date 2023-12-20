@@ -63,7 +63,7 @@ class BaseExpressionRenderer:
         self._only_execution_time = only_execution_time
         self._default_catalog = default_catalog
         self.update_schema({} if schema is None else schema)
-        self._cache: t.Dict[CacheKey, t.List[exp.Expression]] = {}
+        self._cache: t.Dict[CacheKey, t.List[t.Optional[exp.Expression]]] = {}
 
     def update_schema(self, schema: t.Dict[str, t.Any]) -> None:
         self.schema = MappingSchema(schema, dialect=self._dialect, normalize=False)
@@ -78,7 +78,7 @@ class BaseExpressionRenderer:
         deployability_index: t.Optional[DeployabilityIndex] = None,
         runtime_stage: RuntimeStage = RuntimeStage.LOADING,
         **kwargs: t.Any,
-    ) -> t.List[exp.Expression]:
+    ) -> t.List[t.Optional[exp.Expression]]:
         """Renders a expression, expanding macros with provided kwargs
 
         Args:
@@ -120,16 +120,15 @@ class BaseExpressionRenderer:
 
             if isinstance(self._expression, d.Jinja):
                 try:
+                    expressions = []
                     rendered_expression = jinja_env.from_string(self._expression.name).render()
-                    if not rendered_expression.strip():
-                        return []
+                    if rendered_expression.strip():
+                        expressions = [
+                            e for e in parse(rendered_expression, read=self._dialect) if e
+                        ]
 
-                    parsed_expressions = [
-                        e for e in parse(rendered_expression, read=self._dialect) if e
-                    ]
-                    if not parsed_expressions:
-                        raise ConfigError(f"Failed to parse an expression:\n{self._expression}")
-                    expressions = parsed_expressions
+                        if not expressions:
+                            raise ConfigError(f"Failed to parse an expression:\n{self._expression}")
                 except ParsetimeAdapterCallError:
                     raise
                 except Exception as ex:
@@ -166,7 +165,7 @@ class BaseExpressionRenderer:
 
             macro_evaluator.locals.update(render_kwargs)
 
-            resolved_expressions: t.List[exp.Expression] = []
+            resolved_expressions: t.List[t.Optional[exp.Expression]] = []
             for expression in expressions:
                 try:
                     expression = macro_evaluator.transform(expression)  # type: ignore
@@ -209,9 +208,7 @@ class BaseExpressionRenderer:
         execution_time: t.Optional[TimeLike] = None,
         **kwargs: t.Any,
     ) -> None:
-        self._cache[self._cache_key(start, end, execution_time)] = (
-            [expression] if expression else []
-        )
+        self._cache[self._cache_key(start, end, execution_time)] = [expression]
 
     def _resolve_tables(
         self,
@@ -333,6 +330,7 @@ class ExpressionRenderer(BaseExpressionRenderer):
                 **kwargs,
             )
             for e in expressions
+            if e
         ]
 
 
