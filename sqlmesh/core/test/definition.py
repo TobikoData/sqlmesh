@@ -68,7 +68,8 @@ class ModelTest(unittest.TestCase):
         for table_name, rows in self.body.get("inputs", {}).items():
             columns_to_types: t.Dict[str, exp.DataType] = {}
             if table_name in self.models:
-                columns_to_types = self.models[table_name].columns_to_types or {}
+                model = self.models[table_name]
+                columns_to_types = model.columns_to_types if model.annotated else {}
 
             if not columns_to_types and rows:
                 for i, v in rows[0].items():
