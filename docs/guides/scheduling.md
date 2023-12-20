@@ -47,11 +47,11 @@ To integrate with [Airflow](../integrations/airflow.md), ensure that you meet th
 
 2. Within the Airflow `dags/` folder, create a file called `sqlmesh.py`.
 
-3. Within that file add the following, making sure to replace "spark" with your engine if you are using a different one:
+3. Within that file add the following, making sure to replace "spark" with your engine and `spark_catalog` with your default catalog (or "database" in some engines):
 
         from sqlmesh.schedulers.airflow.integration import SQLMeshAirflow
 
-        sqlmesh_airflow = SQLMeshAirflow("spark")
+        sqlmesh_airflow = SQLMeshAirflow("spark", default_catalog="spark_catalog")
 
         for dag in sqlmesh_airflow.dags:
             globals()[dag.dag_id] = dag

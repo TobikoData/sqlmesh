@@ -95,10 +95,7 @@ docker_compose["services"]["sqlmesh-tests"] = {
 
 engine_operator = os.environ.get("AIRFLOW_ENGINE_OPERATOR", "spark").lower()
 for airflow_component in ["airflow-scheduler", "airflow-worker"]:
-    environment_variables = {
-        "AIRFLOW_ENGINE_OPERATOR": engine_operator,
-        "AIRFLOW_VAR_SQLMESH_DEFAULT_CATALOG": "spark_catalog",
-    }
+    environment_variables = {"AIRFLOW_ENGINE_OPERATOR": engine_operator}
     if engine_operator == "databricks":
         if not all(
             variable in os.environ

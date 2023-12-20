@@ -29,13 +29,18 @@ class SqlmeshAirflowPlugin(AirflowPlugin):
             return
 
         default_catalog = Variable.get(DEFAULT_CATALOG_VARIABLE_NAME, default_var=None)
-        if not default_catalog:
-            raise SQLMeshError(
-                "Must set variable `sqlmesh_default_catalog`. See docs for more info: https://sqlmesh.readthedocs.io/en/stable/integrations/airflow/#airflow-cluster-configuration"
-            )
 
         with util.scoped_state_sync() as state_sync:
             try:
+                # If default catalog is not defined then we want to raise an error unless
+                # this is a fresh install since we know nothing needs to be migrated and
+                # the client will prevent making any changes until the default catalog is set.
+                if not default_catalog:
+                    versions = state_sync.get_versions(validate=False)
+                    if versions.schema_version != 0:
+                        raise SQLMeshError(
+                            f"Must define `default_catalog` when creating `SQLMeshAirflow` object. See docs for more info: https://sqlmesh.readthedocs.io/en/stable/integrations/airflow/#airflow-cluster-configuration"
+                        )
                 logger.info("Migrating SQLMesh state ...")
                 state_sync.migrate(default_catalog=default_catalog)
             except Exception as ex:

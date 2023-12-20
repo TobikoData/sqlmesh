@@ -20,7 +20,7 @@ from sqlmesh.core.state_sync import EngineAdapterStateSync, StateSync
 from sqlmesh.schedulers.airflow.client import AirflowClient
 from sqlmesh.schedulers.airflow.common import DEFAULT_CATALOG_VARIABLE_NAME
 from sqlmesh.schedulers.airflow.mwaa_client import MWAAClient
-from sqlmesh.utils.errors import ConfigError
+from sqlmesh.utils.errors import ConfigError, SQLMeshError
 from sqlmesh.utils.pydantic import model_validator, model_validator_v1_args
 
 if t.TYPE_CHECKING:
@@ -140,7 +140,14 @@ class _BaseAirflowSchedulerConfig(_EngineAdapterStateSyncSchedulerConfig):
         )
 
     def get_default_catalog(self, context: Context) -> t.Optional[str]:
-        return self.get_client(context.console).get_variable(DEFAULT_CATALOG_VARIABLE_NAME)
+        default_catalog = self.get_client(context.console).get_variable(
+            DEFAULT_CATALOG_VARIABLE_NAME
+        )
+        if not default_catalog:
+            raise SQLMeshError(
+                "Must define `default_catalog` when creating `SQLMeshAirflow` object. See docs for more info: https://sqlmesh.readthedocs.io/en/stable/integrations/airflow/#airflow-cluster-configuration"
+            )
+        return default_catalog
 
 
 class AirflowSchedulerConfig(_BaseAirflowSchedulerConfig, BaseConfig):
@@ -299,7 +306,14 @@ class MWAASchedulerConfig(_EngineAdapterStateSyncSchedulerConfig, BaseConfig):
         )
 
     def get_default_catalog(self, context: Context) -> t.Optional[str]:
-        return self.get_client(context.console).get_variable(DEFAULT_CATALOG_VARIABLE_NAME)
+        default_catalog = self.get_client(context.console).get_variable(
+            DEFAULT_CATALOG_VARIABLE_NAME
+        )
+        if not default_catalog:
+            raise SQLMeshError(
+                "Must define `default_catalog` when creating `SQLMeshAirflow` object. See docs for more info: https://sqlmesh.readthedocs.io/en/stable/integrations/airflow/#airflow-cluster-configuration"
+            )
+        return default_catalog
 
 
 SchedulerConfig = Annotated[
