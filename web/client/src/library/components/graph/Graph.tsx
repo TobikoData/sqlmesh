@@ -794,13 +794,11 @@ function ModelColumnLineage({
   const [edges, setEdges] = useState<Edge[]>([])
 
   useEffect(() => {
+    setIsBuildingLayout(true)
+
     const WITH_COLUMNS_LIMIT = 30
 
     if (isArrayEmpty(allEdges) || isNil(mainNode)) return
-
-    if (activeEdges.size > 0) {
-      setIsBuildingLayout(true)
-    }
 
     const newActiveNodes = getActiveNodes(
       allEdges,
@@ -851,7 +849,6 @@ function ModelColumnLineage({
           setActiveNodes(newActiveNodes)
 
           if (isNotNil(node)) {
-            setIsBuildingLayout(false)
             setCenter(node.position.x, node.position.y, {
               zoom: 0.5,
               duration: 0,
@@ -864,6 +861,8 @@ function ModelColumnLineage({
           ) {
             setWithColumns(false)
           }
+
+          setIsBuildingLayout(false)
         })
     }, 100)
   }, [lineageIndex, withColumns, activeEdges, selectedEdges])
@@ -1125,39 +1124,41 @@ function GraphControls({ nodes = [] }: { nodes: Node[] }): JSX.Element {
           </span>
         )}
       </div>
-      <SearchList<{ name: string; description: string }>
-        list={currentModels}
-        placeholder="Find"
-        searchBy="name"
-        displayBy="name"
-        descriptionBy="description"
-        showIndex={false}
-        size={EnumSize.sm}
-        onSelect={handleSelect}
-        className="w-full min-w-[10rem] max-w-[15rem]"
-        isFullWidth={true}
-      />
-      <ListboxShow
-        options={{
-          Background: setHasBackground,
-          Columns:
-            activeNodes.size > 0 && selectedNodes.size === 0
-              ? undefined
-              : setWithColumns,
-          Connected: activeNodes.size > 0 ? undefined : setWithConnected,
-          Impact: activeNodes.size > 0 ? undefined : setWithImpacted,
-          Secondary: activeNodes.size > 0 ? undefined : setWithSecondary,
-        }}
-        value={
-          [
-            withColumns && 'Columns',
-            hasBackground && 'Background',
-            withConnected && 'Connected',
-            withImpacted && 'Impact',
-            withSecondary && 'Secondary',
-          ].filter(Boolean) as string[]
-        }
-      />
+      <div className="flex w-full justify-end items-center">
+        <SearchList<{ name: string; description: string }>
+          list={currentModels}
+          placeholder="Find"
+          searchBy="name"
+          displayBy="name"
+          descriptionBy="description"
+          showIndex={false}
+          size={EnumSize.sm}
+          onSelect={handleSelect}
+          className="w-full min-w-[10rem] max-w-[15rem]"
+          isFullWidth={true}
+        />
+        <ListboxShow
+          options={{
+            Background: setHasBackground,
+            Columns:
+              activeNodes.size > 0 && selectedNodes.size === 0
+                ? undefined
+                : setWithColumns,
+            Connected: activeNodes.size > 0 ? undefined : setWithConnected,
+            Impact: activeNodes.size > 0 ? undefined : setWithImpacted,
+            Secondary: activeNodes.size > 0 ? undefined : setWithSecondary,
+          }}
+          value={
+            [
+              withColumns && 'Columns',
+              hasBackground && 'Background',
+              withConnected && 'Connected',
+              withImpacted && 'Impact',
+              withSecondary && 'Secondary',
+            ].filter(Boolean) as string[]
+          }
+        />
+      </div>
     </div>
   )
 }
