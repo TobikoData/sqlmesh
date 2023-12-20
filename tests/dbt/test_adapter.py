@@ -47,7 +47,10 @@ def test_adapter_relation(sushi_test_project: Project, runtime_renderer: t.Calla
 
     assert renderer("{{ adapter.cache }}") == "{}"
     assert renderer("{{ adapter.list_relations(database=None, schema='foo')|length }}") == "2"
-    assert renderer("{{ adapter.cache }}") == '{(TABLE db: \n  (IDENTIFIER this: foo, quoted: True), catalog: \n  (IDENTIFIER this: memory, quoted: True)): [<DuckDBRelation "memory"."foo"."another">, <DuckDBRelation "memory"."foo"."bar">]}'
+    assert (
+        renderer("{{ adapter.cache }}")
+        == '{(TABLE db: \n  (IDENTIFIER this: foo, quoted: True), catalog: \n  (IDENTIFIER this: memory, quoted: True)): [<DuckDBRelation "memory"."foo"."another">, <DuckDBRelation "memory"."foo"."bar">]}'
+    )
     assert renderer("{{ adapter.list_relations(database=None, schema='foo')|length }}") == "2"
 
     assert (
