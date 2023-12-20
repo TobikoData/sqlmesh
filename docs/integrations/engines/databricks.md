@@ -77,6 +77,7 @@ from sqlmesh.schedulers.airflow.integration import SQLMeshAirflow
 
 sqlmesh_airflow = SQLMeshAirflow(
     "databricks",
+    default_catalog="<catalog name>",
     engine_operator_args={
         "databricks_conn_id": "<Connection ID>",
         "dbfs_location": "dbfs:/FileStore/sqlmesh",
@@ -94,6 +95,7 @@ for dag in sqlmesh_airflow.dags:
 ```python linenums="1"
 sqlmesh_airflow = SQLMeshAirflow(
     "databricks",
+    default_catalog="<catalog name>",
     engine_operator_args={
         "dbfs_location": "dbfs:/FileStore/sqlmesh",
         "existing_cluster_id": "1234-123456-slid123",

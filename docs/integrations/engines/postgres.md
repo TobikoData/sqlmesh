@@ -40,6 +40,7 @@ By default, the connection ID is set to `postgres_default`, but can be overridde
 ```python linenums="1"
 sqlmesh_airflow = SQLMeshAirflow(
     "postgres",
+    default_catalog="<database name>",
     engine_operator_args={
         "postgres_conn_id": "<Connection ID>"
     },

@@ -47,18 +47,16 @@ To integrate with [Airflow](../integrations/airflow.md), ensure that you meet th
 
 2. Within the Airflow `dags/` folder, create a file called `sqlmesh.py`.
 
-3. Within that file add the following, making sure to replace "spark" with your engine if you are using a different one:
+3. Within that file add the following, making sure to replace "spark" with your engine and `spark_catalog` with your default catalog:
 
         from sqlmesh.schedulers.airflow.integration import SQLMeshAirflow
 
-        sqlmesh_airflow = SQLMeshAirflow("spark")
+        sqlmesh_airflow = SQLMeshAirflow("spark", default_catalog="spark_catalog")
 
         for dag in sqlmesh_airflow.dags:
             globals()[dag.dag_id] = dag
 
-    The example above uses `spark` as the engine of choice. Other engines can be configured instead by providing a corresponding string as an argument to the `SQLMeshAirflow` constructor. Supported strings are `"spark"`, `"databricks"`, `"snowflake"`, `"bigquery"` and `"redshift"`.
-
-    **Note:** An Airflow Connection must be configured for each engine accordingly. Refer to [Engine support](../integrations/airflow.md#engine-support) for more details.
+    The example above uses `spark` as the engine of choice. Other engines can be configured instead by providing a corresponding string as an argument to the `SQLMeshAirflow` constructor. Supported strings are `"spark"`, `"databricks"`, `"snowflake"`, `"bigquery"` and `"redshift"`. See the [Airflow Cluster Configuration](../integrations/airflow.md#airflow-cluster-configuration) for full list of arguments and their descriptions.
 
 After setup is completed, the `sqlmesh_janitor_dag` DAG should become available in the Airflow UI when filtered by the `sqlmesh` tag:
 

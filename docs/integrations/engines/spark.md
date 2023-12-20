@@ -30,6 +30,7 @@ By default, the connection ID is set to `spark_default`, but it can be overridde
 ```python linenums="1"
 sqlmesh_airflow = SQLMeshAirflow(
     "spark",
+    default_catalog="<catalog name>",
     engine_operator_args={
         "connection_id": "<Connection ID>"
     },

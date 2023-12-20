@@ -18,6 +18,7 @@ from sqlmesh.core.plan import (
 )
 from sqlmesh.core.state_sync import EngineAdapterStateSync, StateSync
 from sqlmesh.schedulers.airflow.client import AirflowClient
+from sqlmesh.schedulers.airflow.mwaa_client import MWAAClient
 from sqlmesh.utils.errors import ConfigError
 from sqlmesh.utils.pydantic import model_validator, model_validator_v1_args
 
@@ -77,9 +78,6 @@ class _EngineAdapterStateSyncSchedulerConfig(_SchedulerConfig):
         schema = context.config.get_state_schema(context.gateway)
         return EngineAdapterStateSync(engine_adapter, schema=schema, console=context.console)
 
-    def get_default_catalog(self, context: Context) -> t.Optional[str]:
-        return context.engine_adapter.default_catalog
-
 
 class BuiltInSchedulerConfig(_EngineAdapterStateSyncSchedulerConfig, BaseConfig):
     """The Built-In Scheduler configuration."""
@@ -95,6 +93,9 @@ class BuiltInSchedulerConfig(_EngineAdapterStateSyncSchedulerConfig, BaseConfig)
             console=context.console,
             notification_target_manager=context.notification_target_manager,
         )
+
+    def get_default_catalog(self, context: Context) -> t.Optional[str]:
+        return context.engine_adapter.default_catalog
 
 
 class _BaseAirflowSchedulerConfig(_EngineAdapterStateSyncSchedulerConfig):
@@ -138,7 +139,7 @@ class _BaseAirflowSchedulerConfig(_EngineAdapterStateSyncSchedulerConfig):
         )
 
     def get_default_catalog(self, context: Context) -> t.Optional[str]:
-        return None
+        return self.get_client(context.console).default_catalog
 
 
 class AirflowSchedulerConfig(_BaseAirflowSchedulerConfig, BaseConfig):
@@ -279,11 +280,12 @@ class MWAASchedulerConfig(_EngineAdapterStateSyncSchedulerConfig, BaseConfig):
 
     _concurrent_tasks_validator = concurrent_tasks_validator
 
-    def create_plan_evaluator(self, context: Context) -> PlanEvaluator:
-        from sqlmesh.schedulers.airflow.mwaa_client import MWAAClient
+    def get_client(self, console: t.Optional[Console] = None) -> MWAAClient:
+        return MWAAClient(self.environment, console=console)
 
+    def create_plan_evaluator(self, context: Context) -> PlanEvaluator:
         return MWAAPlanEvaluator(
-            client=MWAAClient(self.environment, console=context.console),
+            client=self.get_client(context.console),
             state_sync=context.state_sync,
             console=context.console,
             dag_run_poll_interval_secs=self.dag_run_poll_interval_secs,
@@ -296,7 +298,7 @@ class MWAASchedulerConfig(_EngineAdapterStateSyncSchedulerConfig, BaseConfig):
         )
 
     def get_default_catalog(self, context: Context) -> t.Optional[str]:
-        return None
+        return self.get_client(context.console).default_catalog
 
 
 SchedulerConfig = Annotated[
