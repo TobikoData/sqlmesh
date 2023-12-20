@@ -8,7 +8,7 @@ import pandas as pd
 from dbt.contracts.relation import Policy
 from sqlglot import exp, parse_one
 
-from sqlmesh.core.dialect import normalize_model_name
+from sqlmesh.core.dialect import normalize_model_name, to_schema
 from sqlmesh.core.engine_adapter import EngineAdapter
 from sqlmesh.core.renderer import _normalize_and_quote
 from sqlmesh.core.snapshot import DeployabilityIndex, Snapshot, to_table_mapping
@@ -20,6 +20,8 @@ if t.TYPE_CHECKING:
     from dbt.adapters.base import BaseRelation
     from dbt.adapters.base.column import Column
     from dbt.adapters.base.impl import AdapterResponse
+
+    from sqlmesh.core._typing import TableName
 
 
 logger = logging.getLogger(__name__)
@@ -47,10 +49,7 @@ class BaseAdapter(abc.ABC):
 
     @abc.abstractmethod
     def list_relations(self, database: t.Optional[str], schema: str) -> t.List[BaseRelation]:
-        """Gets all relations in a given schema and optionally database.
-
-        TODO: Add caching functionality to avoid repeat visits to DB
-        """
+        """Gets all relations in a given schema and optionally database."""
 
     @abc.abstractmethod
     def list_relations_without_caching(self, schema_relation: BaseRelation) -> t.List[BaseRelation]:
@@ -191,6 +190,7 @@ class RuntimeAdapter(BaseAdapter):
         self.relation_type = relation_type or BaseRelation
         self.column_type = column_type or Column
         self.quote_policy = quote_policy or Policy()
+        self.cache: t.Dict[exp.Table, t.List[BaseRelation]] = {}
         self.table_mapping = {
             **to_table_mapping((snapshots or {}).values(), deployability_index),
             **table_mapping,
@@ -219,7 +219,14 @@ class RuntimeAdapter(BaseAdapter):
         reference_relation = self.relation_type.create(
             database=database, schema=schema, quote_policy=self.quote_policy
         )
-        return self.list_relations_without_caching(reference_relation)
+        normalized_schema = self._normalize(self._schema(reference_relation))
+
+        relations = self.cache.get(normalized_schema)
+        if relations is None:
+            relations = self.list_relations_without_caching(reference_relation)
+            self.cache[normalized_schema] = relations
+
+        return relations
 
     def list_relations_without_caching(self, schema_relation: BaseRelation) -> t.List[BaseRelation]:
         from dbt.contracts.relation import RelationType
@@ -357,3 +364,54 @@ class RuntimeAdapter(BaseAdapter):
             normalized_table.set("db", normalized_table.this)
             normalized_table.set("this", None)
         return normalized_table
+
+
+class CachingAdapter:
+    """Proxy that enhances engine adapter methods with dbt cache updating logic."""
+
+    def __init__(
+        self,
+        engine_adapter: EngineAdapter,
+        cache: t.Dict[exp.Table, t.List[BaseRelation]],
+        relation_type: t.Type[BaseRelation],
+    ):
+        self.engine_adapter = engine_adapter
+        self.cache = cache
+        self.relation_type = relation_type
+
+    def __getattr__(self, attr: str) -> None:
+        return getattr(self.engine_adapter, attr)
+
+    def drop_table(self, *args: t.Any, **kwargs: t.Any) -> None:
+        self.engine_adapter.drop_table(*args, **kwargs)
+        self.cache.clear()
+
+    def drop_schema(self, *args: t.Any, **kwargs: t.Any) -> None:
+        self.engine_adapter.drop_schema(*args, **kwargs)
+        self.cache.clear()
+
+    def drop_view(self, *args: t.Any, **kwargs: t.Any) -> None:
+        self.engine_adapter.drop_view(*args, **kwargs)
+        self.cache.clear()
+
+    def create_table(self, table_name: TableName, *args: t.Any, **kwargs: t.Any) -> None:
+        self.engine_adapter.create_table(table_name, *args, **kwargs)
+        self._cache_relation(table_name)
+
+    def create_view(self, view_name: TableName, *args: t.Any, **kwargs: t.Any) -> None:
+        self.engine_adapter.create_view(view_name, *args, **kwargs)
+        self._cache_relation(view_name)
+
+    def _cache_relation(self, relation_name: TableName) -> None:
+        table = exp.to_table(relation_name)
+        schema = to_schema(table)
+        relation = self.relation_type.create(
+            database=table.catalog or None, schema=table.db, identifier=table.name
+        )
+
+        relations = self.cache.get(schema)
+        if relations is None:
+            relations = []
+            self.cache[schema] = relations
+
+        relations.append(relation)
