@@ -103,7 +103,7 @@ class SQLMeshAirflow:
         self._plan_application_dag_ttl = plan_application_dag_ttl
         self._external_table_sensor_factory = external_table_sensor_factory
         self._generate_cadence_dags = generate_cadence_dags
-        self.set_default_catalog(default_catalog)
+        self._default_catalog = default_catalog
 
     @classmethod
     def set_default_catalog(cls, default_catalog: str) -> None:
@@ -121,6 +121,7 @@ class SQLMeshAirflow:
         Returns:
             The list of DAG instances managed by the platform.
         """
+        self.set_default_catalog(self._default_catalog)
         with util.scoped_state_sync() as state_sync:
             stored_snapshots = state_sync.get_snapshots(None)
             plan_dag_specs = PlanDagState.from_state_sync(state_sync).get_dag_specs()

@@ -42,6 +42,15 @@ class BaseAirflowClient(abc.ABC):
         self._airflow_url = airflow_url
         self._console = console
 
+    @property
+    def default_catalog(self) -> str:
+        default_catalog = self.get_variable(common.DEFAULT_CATALOG_VARIABLE_NAME)
+        if not default_catalog:
+            raise SQLMeshError(
+                "Must define `default_catalog` when creating `SQLMeshAirflow` object. See docs for more info: https://sqlmesh.readthedocs.io/en/stable/integrations/airflow/#airflow-cluster-configuration"
+            )
+        return default_catalog
+
     def print_tracking_url(self, dag_id: str, dag_run_id: str, op_name: str) -> None:
         if not self._console:
             return
