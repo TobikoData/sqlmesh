@@ -160,7 +160,7 @@ class DuckDBConnectionConfig(ConnectionConfig):
 
             for i, (alias, path) in enumerate((self.catalogs or {}).items()):
                 try:
-                    cursor.execute(f"ATTACH '{path}' AS {alias}")
+                    cursor.execute(f'''ATTACH '{path}' AS "{alias}"''')
                 except BinderException as e:
                     # If a user tries to create a catalog pointing at `:memory:` and with the name `memory`
                     # then we don't want to raise since this happens by default. They are just doing this to
