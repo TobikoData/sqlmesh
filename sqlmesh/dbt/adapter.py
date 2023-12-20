@@ -189,8 +189,7 @@ class RuntimeAdapter(BaseAdapter):
         self.relation_type = relation_type or BaseRelation
         self.column_type = column_type or Column
         self.quote_policy = quote_policy or Policy()
-        self.cache: t.Dict[exp.Table, t.List[BaseRelation]] = {}
-        self.engine_adapter = CachingAdapter(engine_adapter, self.cache, self.relation_type)
+        self.engine_adapter = CachingEngineAdapter(engine_adapter, self.relation_type)
         self.table_mapping = {
             **to_table_mapping((snapshots or {}).values(), deployability_index),
             **table_mapping,
@@ -221,10 +220,10 @@ class RuntimeAdapter(BaseAdapter):
         )
         normalized_schema = self._normalize(self._schema(reference_relation))
 
-        relations = self.cache.get(normalized_schema)
+        relations = self.engine_adapter.get_cached_relations(normalized_schema)
         if relations is None:
             relations = self.list_relations_without_caching(reference_relation)
-            self.cache[normalized_schema] = relations
+            self.engine_adapter.set_cached_relations(normalized_schema, relations)
 
         return relations
 
@@ -366,21 +365,22 @@ class RuntimeAdapter(BaseAdapter):
         return normalized_table
 
 
-class CachingAdapter:
+class CachingEngineAdapter:
     """Proxy that enhances engine adapter methods with dbt cache updating logic."""
 
-    def __init__(
-        self,
-        engine_adapter: EngineAdapter,
-        cache: t.Dict[exp.Table, t.List[BaseRelation]],
-        relation_type: t.Type[BaseRelation],
-    ):
+    def __init__(self, engine_adapter: EngineAdapter, relation_type: t.Type[BaseRelation]):
         self.engine_adapter = engine_adapter
-        self.cache = cache
         self.relation_type = relation_type
+        self.cache: t.Dict[exp.Table, t.List[BaseRelation]] = {}
 
     def __getattr__(self, attr: str) -> t.Any:
         return getattr(self.engine_adapter, attr)
+
+    def get_cached_relations(self, schema: exp.Table) -> t.Optional[t.List[BaseRelation]]:
+        return self.cache.get(schema)
+
+    def set_cached_relations(self, schema: exp.Table, relations: t.List[BaseRelation]) -> None:
+        self.cache[schema] = relations
 
     def drop_table(self, *args: t.Any, **kwargs: t.Any) -> None:
         self.engine_adapter.drop_table(*args, **kwargs)
