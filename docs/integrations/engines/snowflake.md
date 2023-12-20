@@ -22,6 +22,19 @@ pip install "sqlmesh[snowflake]"
 | `role`          | The Snowflake role name                | string |    N     |
 | `private_key`   | Local path to the private key file     | string |    N     |
 
+#### Lowercase object names
+
+Snowflake object names are case-insensitive by default. If you have intentionally created an object with a case-sensitive lowercase name, specify it with outer single and inner double quotes.
+
+For example, a connection to the database `"my_db"` would include:
+
+``` yaml
+connection:
+    type: snowflake
+    <other connection options>
+    database: '"my_db"'
+```
+
 ### Snowflake SSO Authorization
 
 SQLMesh supports Snowflake SSO authorization connections using the `externalbrowser` authenticator method. For example:
