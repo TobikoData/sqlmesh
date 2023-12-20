@@ -65,6 +65,57 @@ def test_get_dag_run_state(mocker: MockerFixture):
     url_and_auth_token_mock.assert_called_once_with("test_environment")
 
 
+def test_get_variable(mocker: MockerFixture):
+    get_variable_response_mock = mocker.Mock()
+    get_variable_response_mock.json.return_value = {
+        "stdout": _encode_output("test_value"),
+        "stderr": "",
+    }
+    get_variable_response_mock.status_code = 200
+    get_variable_mock = mocker.patch("requests.Session.post")
+    get_variable_mock.return_value = get_variable_response_mock
+
+    url_and_auth_token_mock = mocker.patch(
+        "sqlmesh.schedulers.airflow.mwaa_client.url_and_auth_token_for_environment"
+    )
+    url_and_auth_token_mock.return_value = ("https://test_airflow_host", "test_token")
+
+    client = MWAAClient("test_environment")
+
+    assert client.get_variable("test_key") == "test_value"
+
+    get_variable_mock.assert_called_once_with(
+        "https://test_airflow_host/aws_mwaa/cli",
+        data="variables get test_key",
+    )
+    url_and_auth_token_mock.assert_called_once_with("test_environment")
+
+
+def test_get_variable_not_found(mocker: MockerFixture):
+    get_variable_response_mock = mocker.Mock()
+    get_variable_response_mock.json.return_value = {
+        "stdout": "",
+        "stderr": _encode_output("Variable test_key does not exist"),
+    }
+    get_variable_response_mock.status_code = 200
+    get_variable_mock = mocker.patch("requests.Session.post")
+    get_variable_mock.return_value = get_variable_response_mock
+
+    url_and_auth_token_mock = mocker.patch(
+        "sqlmesh.schedulers.airflow.mwaa_client.url_and_auth_token_for_environment"
+    )
+    url_and_auth_token_mock.return_value = ("https://test_airflow_host", "test_token")
+
+    client = MWAAClient("test_environment")
+
+    assert client.get_variable("test_key") is None
+
+    get_variable_mock.assert_called_once_with(
+        "https://test_airflow_host/aws_mwaa/cli",
+        data="variables get test_key",
+    )
+
+
 def test_token_refresh(mocker: MockerFixture):
     list_runs_response_mock = mocker.Mock()
     list_runs_response_mock.json.return_value = {

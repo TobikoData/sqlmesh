@@ -47,6 +47,7 @@ class SQLMeshAirflow:
         engine_operator: The type of the Airflow operator that will be used for model evaluation.
             If a string value is passed, an automatic operator discovery is attempted based
             on the engine name specified in the string.
+        default_catalog: The default catalog to use when models are defined that do not contain a catalog in their name. This should match the default catalog applied by the connection.
         engine_operator_args: The dictionary of arguments that will be passed into the evaluate engine
             operator during its construction.
             This can be used to customize parameters such as connection ID.
@@ -69,6 +70,7 @@ class SQLMeshAirflow:
     def __init__(
         self,
         engine_operator: t.Union[str, t.Type[BaseOperator]],
+        default_catalog: str,
         engine_operator_args: t.Optional[t.Dict[str, t.Any]] = None,
         ddl_engine_operator: t.Optional[t.Union[str, t.Type[BaseOperator]]] = None,
         ddl_engine_operator_args: t.Optional[t.Dict[str, t.Any]] = None,
@@ -101,6 +103,15 @@ class SQLMeshAirflow:
         self._plan_application_dag_ttl = plan_application_dag_ttl
         self._external_table_sensor_factory = external_table_sensor_factory
         self._generate_cadence_dags = generate_cadence_dags
+        self._default_catalog = default_catalog
+
+    @classmethod
+    def set_default_catalog(cls, default_catalog: str) -> None:
+        current_value = Variable.get(common.DEFAULT_CATALOG_VARIABLE_NAME, default_var=None)
+        if not current_value:
+            Variable.set(common.DEFAULT_CATALOG_VARIABLE_NAME, default_catalog)
+        if current_value != default_catalog:
+            Variable.update(common.DEFAULT_CATALOG_VARIABLE_NAME, default_catalog)
 
     @property
     def dags(self) -> t.List[DAG]:
@@ -110,6 +121,7 @@ class SQLMeshAirflow:
         Returns:
             The list of DAG instances managed by the platform.
         """
+        self.set_default_catalog(self._default_catalog)
         with util.scoped_state_sync() as state_sync:
             stored_snapshots = state_sync.get_snapshots(None)
             plan_dag_specs = PlanDagState.from_state_sync(state_sync).get_dag_specs()
