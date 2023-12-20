@@ -339,7 +339,7 @@ class RuntimeAdapter(BaseAdapter):
 
     def _table_to_relation(self, table: exp.Table) -> BaseRelation:
         return self.relation_type.create(
-            database=table.catalog or None,
+            database=table.catalog or self.engine_adapter.default_catalog,
             schema=table.db,
             identifier=table.name,
             quote_policy=self.quote_policy,
@@ -406,7 +406,9 @@ class CachingEngineAdapter:
         table = exp.to_table(relation_name)
         schema = to_schema(table)
         relation = self.relation_type.create(
-            database=table.catalog or None, schema=table.db, identifier=table.name
+            database=table.catalog or self.engine_adapter.default_catalog,
+            schema=table.db,
+            identifier=table.name,
         )
 
         relations = self.cache.get(schema)
