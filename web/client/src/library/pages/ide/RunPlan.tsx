@@ -81,8 +81,9 @@ export default function RunPlan(): JSX.Element {
                 },
                 children: (
                   <div className="mt-5 pt-4">
-                    <h4 className="mb-2">{`${environments.size > 1 ? 'Select or ' : ''
-                      }Add Environment`}</h4>
+                    <h4 className="mb-2">{`${
+                      environments.size > 1 ? 'Select or ' : ''
+                    }Add Environment`}</h4>
                     <div className="flex items-center relative">
                       {environments.size > 1 && (
                         <SelectEnvironemnt
@@ -172,19 +173,6 @@ function PlanChanges(): JSX.Element {
 
   return (
     <span className="flex align-center h-full w-full">
-      {isArrayNotEmpty(planOverview.backfills?.models) && (
-        <ChangesPreview
-          headline="Backfills"
-          type={EnumPlanChangeType.Default}
-          changes={
-            (planOverview.backfills?.models.map(
-              ({ model_name, view_name }) => ({
-                name: model_name ?? view_name,
-              }),
-            ) as SnapshotId[]) ?? []
-          }
-        />
-      )}
       {isArrayNotEmpty(planOverview.added) && (
         <ChangesPreview
           headline="Added Models"
@@ -233,9 +221,11 @@ function PlanChanges(): JSX.Element {
           headline="Backfills"
           type={EnumPlanChangeType.Default}
           changes={
-            planOverview.backfills?.models.map(
-              ({ model_name, view_name }) => model_name ?? view_name,
-            ) ?? []
+            (planOverview.backfills?.models.map(
+              ({ model_name, view_name }) => ({
+                name: model_name ?? view_name,
+              }),
+            ) as SnapshotId[]) ?? []
           }
         />
       )}
@@ -339,7 +329,7 @@ function SelectEnvironemnt({
                           'flex justify-between items-center pl-2 pr-1 py-1 cursor-pointer overflow-auto',
                           active && 'bg-primary-10',
                           env === environment &&
-                          'pointer-events-none cursor-default bg-secondary-10',
+                            'pointer-events-none cursor-default bg-secondary-10',
                         )}
                       >
                         <div className="flex items-start">
@@ -531,15 +521,15 @@ function ChangesPreview({
             className={clsx(
               'inline-block ml-1 px-2 rounded-full text-xs font-bold text-neutral-100 cursor-default border border-inherit',
               type === EnumPlanChangeType.Add &&
-              'bg-success-500 border-success-500',
+                'bg-success-500 border-success-500',
               type === EnumPlanChangeType.Remove &&
-              'bg-danger-500 border-danger-500',
+                'bg-danger-500 border-danger-500',
               type === EnumPlanChangeType.Direct &&
-              'bg-secondary-500 border-secondary-500',
+                'bg-secondary-500 border-secondary-500',
               type === EnumPlanChangeType.Indirect &&
-              'bg-warning-500 border-warning-500',
+                'bg-warning-500 border-warning-500',
               type === EnumPlanChangeType.Default &&
-              'bg-neutral-500 border-neutral-500',
+                'bg-neutral-500 border-neutral-500',
             )}
           >
             {changes.length}
