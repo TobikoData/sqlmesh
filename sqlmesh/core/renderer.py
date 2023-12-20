@@ -24,6 +24,7 @@ from sqlmesh.utils.errors import (
     ConfigError,
     MacroEvalError,
     ParsetimeAdapterCallError,
+    SQLMeshError,
     raise_config_error,
 )
 from sqlmesh.utils.jinja import JinjaMacroRegistry
@@ -62,7 +63,7 @@ class BaseExpressionRenderer:
         self._only_execution_time = only_execution_time
         self._default_catalog = default_catalog
         self.update_schema({} if schema is None else schema)
-        self._cache: t.Dict[CacheKey, t.List[exp.Expression]] = {}
+        self._cache: t.Dict[CacheKey, t.List[t.Optional[exp.Expression]]] = {}
 
     def update_schema(self, schema: t.Dict[str, t.Any]) -> None:
         self.schema = MappingSchema(schema, dialect=self._dialect, normalize=False)
@@ -77,7 +78,7 @@ class BaseExpressionRenderer:
         deployability_index: t.Optional[DeployabilityIndex] = None,
         runtime_stage: RuntimeStage = RuntimeStage.LOADING,
         **kwargs: t.Any,
-    ) -> t.List[exp.Expression]:
+    ) -> t.List[t.Optional[exp.Expression]]:
         """Renders a expression, expanding macros with provided kwargs
 
         Args:
@@ -119,17 +120,15 @@ class BaseExpressionRenderer:
 
             if isinstance(self._expression, d.Jinja):
                 try:
+                    expressions = []
                     rendered_expression = jinja_env.from_string(self._expression.name).render()
-                    if not rendered_expression.strip():
-                        self._cache[cache_key] = []
-                        return []
+                    if rendered_expression.strip():
+                        expressions = [
+                            e for e in parse(rendered_expression, read=self._dialect) if e
+                        ]
 
-                    parsed_expressions = [
-                        e for e in parse(rendered_expression, read=self._dialect) if e
-                    ]
-                    if not parsed_expressions:
-                        raise ConfigError(f"Failed to parse an expression:\n{self._expression}")
-                    expressions = parsed_expressions
+                        if not expressions:
+                            raise ConfigError(f"Failed to parse an expression:\n{self._expression}")
                 except ParsetimeAdapterCallError:
                     raise
                 except Exception as ex:
@@ -166,7 +165,7 @@ class BaseExpressionRenderer:
 
             macro_evaluator.locals.update(render_kwargs)
 
-            resolved_expressions: t.List[exp.Expression] = []
+            resolved_expressions: t.List[t.Optional[exp.Expression]] = []
             for expression in expressions:
                 try:
                     expression = macro_evaluator.transform(expression)  # type: ignore
@@ -203,7 +202,7 @@ class BaseExpressionRenderer:
 
     def update_cache(
         self,
-        expression: exp.Expression,
+        expression: t.Optional[exp.Expression],
         start: t.Optional[TimeLike] = None,
         end: t.Optional[TimeLike] = None,
         execution_time: t.Optional[TimeLike] = None,
@@ -331,6 +330,7 @@ class ExpressionRenderer(BaseExpressionRenderer):
                 **kwargs,
             )
             for e in expressions
+            if e
         ]
 
 
@@ -362,7 +362,7 @@ class QueryRenderer(BaseExpressionRenderer):
 
         self._model_fqn = model_fqn
 
-        self._optimized_cache: t.Dict[CacheKey, exp.Expression] = {}
+        self._optimized_cache: t.Dict[CacheKey, exp.Subqueryable] = {}
 
     def update_schema(self, schema: t.Dict[str, t.Any]) -> None:
         super().update_schema(schema)
@@ -424,13 +424,24 @@ class QueryRenderer(BaseExpressionRenderer):
             if len(expressions) > 1:
                 raise ConfigError(f"Too many statements in query:\n{self._expression}")
 
-            query = t.cast(exp.Subqueryable, expressions[0])
+            query = expressions[0]
+
+            if not query:
+                return None
+            if not isinstance(query, exp.Subqueryable):
+                raise_config_error(f"Query needs to be a SELECT or a UNION {query}.", self._path)
+                raise
+
+            # we find deps here so that it is cached in the model cache
+            deps = d.find_tables(
+                query, default_catalog=self._default_catalog, dialect=self._dialect
+            )
 
             if optimize:
-                query = self._optimize_query(query)
+                query = self._optimize_query(query, deps)
                 self._optimized_cache[cache_key] = query
         else:
-            query = t.cast(exp.Subqueryable, self._optimized_cache[cache_key])
+            query = self._optimized_cache[cache_key]
 
         # Table resolution MUST happen after optimization, otherwise the schema won't match the table names.
         query = self._resolve_tables(
@@ -445,35 +456,31 @@ class QueryRenderer(BaseExpressionRenderer):
             runtime_stage=runtime_stage,
             **kwargs,
         )
-
-        if not isinstance(query, exp.Subqueryable):
-            raise_config_error(f"Query needs to be a SELECT or a UNION {query}.", self._path)
-
         return query
 
     def update_cache(
         self,
-        expression: exp.Expression,
+        expression: t.Optional[exp.Expression],
         start: t.Optional[TimeLike] = None,
         end: t.Optional[TimeLike] = None,
         execution_time: t.Optional[TimeLike] = None,
         optimized: bool = False,
         **kwargs: t.Any,
     ) -> None:
-        if not optimized:
+        if optimized:
+            if not isinstance(expression, exp.Subqueryable):
+                raise SQLMeshError(f"Expected a subqueryable but got: {expression}")
+            self._optimized_cache[self._cache_key(start, end, execution_time)] = expression
+        else:
             super().update_cache(
                 expression, start=start, end=end, execution_time=execution_time, **kwargs
             )
-        else:
-            self._optimized_cache[self._cache_key(start, end, execution_time)] = expression
 
-    def _optimize_query(self, query: exp.Subqueryable) -> exp.Subqueryable:
+    def _optimize_query(self, query: exp.Subqueryable, all_deps: t.Set[str]) -> exp.Subqueryable:
         # We don't want to normalize names in the schema because that's handled by the optimizer
         original = query
         missing_deps = set()
-        all_deps = d.find_tables(
-            query, default_catalog=self._default_catalog, dialect=self._dialect
-        ) - {self._model_fqn}
+        all_deps = all_deps - {self._model_fqn}
         should_optimize = not self.schema.empty or not all_deps
 
         for dep in all_deps:
