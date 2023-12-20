@@ -98,6 +98,7 @@ By default, the connection ID is set to `snowflake_default`, but can be overridd
 ```python linenums="1"
 sqlmesh_airflow = SQLMeshAirflow(
     "snowflake",
+    default_catalog="<database name>",
     engine_operator_args={
         "snowflake_conn_id": "<Connection ID>"
     },

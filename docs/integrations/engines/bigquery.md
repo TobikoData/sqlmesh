@@ -52,6 +52,7 @@ By default, the connection ID is set to `sqlmesh_google_cloud_bigquery_default`,
 ```python linenums="1"
 sqlmesh_airflow = SQLMeshAirflow(
     "bigquery",
+    default_catalog="<project name>",
     engine_operator_args={
         "bigquery_conn_id": "<Connection ID>"
     },
@@ -65,6 +66,7 @@ sqlmesh_airflow = SQLMeshAirflow(
 ```python linenums="1"
 sqlmesh_airflow = SQLMeshAirflow(
     "bigquery",
+    default_catalog="<project name>",
     engine_operator_args={
         "bigquery_conn_id": "<Connection ID>",
         "location": "<location>"
