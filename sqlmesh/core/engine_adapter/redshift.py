@@ -1,7 +1,6 @@
 from __future__ import annotations
 
 import typing as t
-import uuid
 
 import pandas as pd
 from sqlglot import exp
@@ -223,9 +222,6 @@ class RedshiftEngineAdapter(
             )
             for row in df.itertuples()
         ]
-
-    def _short_hash(self) -> str:
-        return uuid.uuid4().hex[:8]
 
 
 def parse_plan(plan: str) -> t.Optional[t.Dict]:

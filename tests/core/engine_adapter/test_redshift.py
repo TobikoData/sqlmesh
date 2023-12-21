@@ -181,10 +181,16 @@ def test_replace_query_with_df_table_exists(adapter: t.Callable, mocker: MockerF
         "sqlmesh.core.engine_adapter.redshift.RedshiftEngineAdapter.table_exists",
         return_value=True,
     )
-    mocker.patch(
-        "sqlmesh.core.engine_adapter.redshift.RedshiftEngineAdapter._short_hash",
-        return_value="1234",
-    )
+    call_counter = 0
+
+    def mock_table(*args, **kwargs):
+        nonlocal call_counter
+        call_counter += 1
+        return f"temp_table_{call_counter}"
+
+    mock_temp_table = mocker.MagicMock(side_effect=mock_table)
+    mocker.patch("sqlmesh.core.engine_adapter.EngineAdapter._get_temp_table", mock_temp_table)
+
     adapter.replace_query(
         table_name="test_table",
         query_or_df=df,
@@ -198,11 +204,11 @@ def test_replace_query_with_df_table_exists(adapter: t.Callable, mocker: MockerF
     adapter.cursor.commit.assert_called_once()
 
     assert to_sql_calls(adapter) == [
-        'CREATE TABLE "test_table_temp_1234" ("a" INTEGER, "b" INTEGER)',
-        'INSERT INTO "test_table_temp_1234" ("a", "b") SELECT CAST("a" AS INTEGER) AS "a", CAST("b" AS INTEGER) AS "b" FROM (SELECT 1 AS "a", 4 AS "b" UNION ALL SELECT 2, 5 UNION ALL SELECT 3, 6) AS "t"',
-        'ALTER TABLE "test_table" RENAME TO "test_table_old_1234"',
-        'ALTER TABLE "test_table_temp_1234" RENAME TO "test_table"',
-        'DROP TABLE IF EXISTS "test_table_old_1234"',
+        'CREATE TABLE "temp_table_1" ("a" INTEGER, "b" INTEGER)',
+        'INSERT INTO "temp_table_1" ("a", "b") SELECT CAST("a" AS INTEGER) AS "a", CAST("b" AS INTEGER) AS "b" FROM (SELECT 1 AS "a", 4 AS "b" UNION ALL SELECT 2, 5 UNION ALL SELECT 3, 6) AS "t"',
+        'ALTER TABLE "test_table" RENAME TO "temp_table_2"',
+        'ALTER TABLE "temp_table_1" RENAME TO "test_table"',
+        'DROP TABLE IF EXISTS "temp_table_2"',
     ]
 
 
