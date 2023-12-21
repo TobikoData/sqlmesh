@@ -375,7 +375,7 @@ def test_apply(project_tmp_path: Path) -> None:
     sql_file.write_text("MODEL (name foo); SELECT 1;")
 
     response = client.post("/api/commands/apply", json={"environment": "dev"})
-    assert response.status_code == 200
+    assert response.status_code == 204
 
 
 @pytest.mark.skip(
@@ -390,7 +390,7 @@ def test_apply_test_failures(web_sushi_context: Context, mocker: MockerFixture) 
 
 def test_plan(web_sushi_context: Context) -> None:
     response = client.post("/api/plan", json={"environment": "dev"})
-    assert response.status_code == 200
+    assert response.status_code == 204
 
 
 @pytest.mark.skip(
@@ -408,7 +408,7 @@ async def test_cancel() -> None:
     app.state.task = asyncio.create_task(asyncio.sleep(1))
     response = client.post("/api/plan/cancel")
     await asyncio.sleep(0.1)
-    assert response.status_code == 200
+    assert response.status_code == 204
     assert app.state.task.cancelled()
 
 
