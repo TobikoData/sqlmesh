@@ -1,3 +1,4 @@
+import { isNil } from '@utils/index'
 import { tableFromIPC } from 'apache-arrow'
 
 const baseURL = window.location.origin
@@ -64,8 +65,10 @@ export async function fetchAPI<T = any, B extends object = any>(
       signal: options?.signal,
     })
       .then(async response => {
+        if (response.status === 204) return { ok: true }
+
         const headerContentType = response.headers.get('Content-Type')
-        if (headerContentType == null)
+        if (isNil(headerContentType))
           return { ok: false, message: 'Empty response' }
         if (response.status >= 400) {
           try {
@@ -81,8 +84,6 @@ export async function fetchAPI<T = any, B extends object = any>(
             } as unknown as Error
           }
         }
-
-        if (response.status === 204) return { ok: true }
 
         const isEventStream = headerContentType.includes('text/event-stream')
         const isApplicationJson = headerContentType.includes('application/json')
