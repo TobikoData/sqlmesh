@@ -50,6 +50,7 @@ By default, the connection ID is set to `sqlmesh_redshift_default`, but it can b
 ```python linenums="1"
 sqlmesh_airflow = SQLMeshAirflow(
     "redshift",
+    default_catalog="<database name>",
     engine_operator_args={
         "redshift_conn_id": "<Connection ID>"
     },

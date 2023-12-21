@@ -123,9 +123,10 @@ def test_render(sushi_context, assert_exp_eq):
           FROM (VALUES
             (1)) AS "t"("dummy")
         ) AS "i"
-          ON "oi"."event_date" = "i"."event_date" AND "oi"."item_id" = "i"."id"
+          ON "i"."event_date" = "oi"."event_date" AND "i"."id" = "oi"."item_id"
         WHERE
-          "o"."event_date" <= CAST('2021-01-01' AS DATE) AND "o"."event_date" >= CAST('2021-01-01' AS DATE)
+          "o"."event_date" <= CAST('2021-01-01' AS DATE)
+          AND "o"."event_date" >= CAST('2021-01-01' AS DATE)
         GROUP BY
           "o"."waiter_id",
           "o"."event_date"
@@ -145,7 +146,7 @@ def test_render(sushi_context, assert_exp_eq):
         LEFT JOIN "memory"."sushi"."order_items" AS "oi"
           ON "o"."event_date" = "oi"."event_date" AND "o"."id" = "oi"."order_id"
         LEFT JOIN "memory"."sushi"."items" AS "i"
-          ON "oi"."event_date" = "i"."event_date" AND "oi"."item_id" = "i"."id"
+          ON "i"."event_date" = "oi"."event_date" AND "i"."id" = "oi"."item_id"
         WHERE
           "o"."event_date" <= CAST('1970-01-01' AS DATE) AND "o"."event_date" >= CAST('1970-01-01' AS DATE)
         GROUP BY

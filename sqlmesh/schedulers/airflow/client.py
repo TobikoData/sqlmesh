@@ -42,6 +42,15 @@ class BaseAirflowClient(abc.ABC):
         self._airflow_url = airflow_url
         self._console = console
 
+    @property
+    def default_catalog(self) -> str:
+        default_catalog = self.get_variable(common.DEFAULT_CATALOG_VARIABLE_NAME)
+        if not default_catalog:
+            raise SQLMeshError(
+                "Must define `default_catalog` when creating `SQLMeshAirflow` object. See docs for more info: https://sqlmesh.readthedocs.io/en/stable/integrations/airflow/#airflow-cluster-configuration"
+            )
+        return default_catalog
+
     def print_tracking_url(self, dag_id: str, dag_run_id: str, op_name: str) -> None:
         if not self._console:
             return
@@ -141,6 +150,17 @@ class BaseAirflowClient(abc.ABC):
 
         Returns:
             The state of the given DAG Run.
+        """
+
+    @abc.abstractmethod
+    def get_variable(self, key: str) -> t.Optional[str]:
+        """Returns the value of an Airflow variable with the given key.
+
+        Args:
+            key: The variable key.
+
+        Returns:
+            The variable value or None if no variable with the given key exists.
         """
 
     def _console_loading_start(self) -> t.Optional[uuid.UUID]:
@@ -283,6 +303,13 @@ class AirflowClient(BaseAirflowClient):
         if not dag_runs:
             return None
         return dag_runs[0]["dag_run_id"]
+
+    def get_variable(self, key: str) -> t.Optional[str]:
+        try:
+            variables_response = self._get(f"api/v1/variables/{key}")
+            return variables_response["value"]
+        except NotFoundError:
+            return None
 
     def close(self) -> None:
         self._session.close()

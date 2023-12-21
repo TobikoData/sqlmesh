@@ -77,7 +77,7 @@ def cli(
 
     configs = load_configs(config, paths)
     log_limit = list(configs.values())[0].log_limit
-    configure_logging(debug, ignore_warnings, write_to_stdout=False, log_limit=log_limit)
+    configure_logging(debug, ignore_warnings, log_limit=log_limit)
 
     try:
         context = Context(
@@ -301,14 +301,18 @@ def diff(ctx: click.Context, environment: t.Optional[str] = None) -> None:
     is_flag=True,
     help="Hide text differences for changed models.",
 )
+@opt.verbose
 @click.pass_context
 @error_handler
-def plan(ctx: click.Context, environment: t.Optional[str] = None, **kwargs: t.Any) -> None:
+def plan(
+    ctx: click.Context, verbose: bool, environment: t.Optional[str] = None, **kwargs: t.Any
+) -> None:
     """Plan a migration of the current context's models with the given environment."""
     context = ctx.obj
     restate_models = kwargs.pop("restate_model", None)
     select_models = kwargs.pop("select_model", None)
     backfill_models = kwargs.pop("backfill_model", None)
+    context.console.verbose = verbose
     context.plan(
         environment,
         restate_models=restate_models,

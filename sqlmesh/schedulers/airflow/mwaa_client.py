@@ -41,6 +41,12 @@ class MWAAClient(BaseAirflowClient):
                 return dag_run["state"].lower()
         raise NotFoundError(f"DAG run '{dag_run_id}' was not found for DAG '{dag_id}'")
 
+    def get_variable(self, key: str) -> t.Optional[str]:
+        stdout, stderr = self._post(f"variables get {key}")
+        if "does not exist" in stderr:
+            return None
+        return stdout
+
     def _list_dag_runs(self, dag_id: str) -> t.Optional[t.List[t.Dict[str, t.Any]]]:
         stdout, stderr = self._post(f"dags list-runs -o json -d {dag_id}")
         if stdout:

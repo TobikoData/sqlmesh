@@ -47,6 +47,8 @@ def test_apply_plan_create_backfill_promote(
     environment.start_at = yesterday() - timedelta(days=1)
     environment.end_at = None
 
+    assert airflow_client.get_variable(common.DEFAULT_CATALOG_VARIABLE_NAME) == "spark_catalog"
+
     assert airflow_client.get_environment(environment_name) is None
 
     _apply_plan_and_block(airflow_client, [snapshot], environment, is_dev=False)

@@ -18,14 +18,27 @@ Once the package is installed, the following Python module must be created in th
 ```python linenums="1"
 from sqlmesh.schedulers.airflow.integration import SQLMeshAirflow
 
-sqlmesh_airflow = SQLMeshAirflow("spark")
+sqlmesh_airflow = SQLMeshAirflow("spark", default_catalog="spark_catalog")
 
 for dag in sqlmesh_airflow.dags:
     globals()[dag.dag_id] = dag
 ```
 The name of the module file can be arbitrary, but we recommend something descriptive such as `sqlmesh.py` or `sqlmesh_integration.py`.
 
-**Note**: The name of the engine operator is the only mandatory parameter needed for `sqlmesh.schedulers.airflow.integration.SQLMeshAirflow`. Currently supported engines are listed in the [Engine support](#engine-support) section.
+`SQLMeshAirflow` has two required arguments (`engine_operator` and `default_catalog`). Details on these and additional optional arguments below:
+
+| Argument                        | Description                                                                                                                                                                                                |          Type          | Required |
+|---------------------------------|------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------|:----------------------:|:--------:|
+| `engine_operator`               | Name or operator to use for creating models. See [Engine Support](#engine-support) for list of options                                                                                                     | string or BaseOperator |    Y     |
+| `default_catalog`               | The default catalog (also called "database" in other engines) to use when models are defined that do not contain a catalog in their name. This should match the default catalog applied by the connection. |         string         |    Y     |
+| `engine_operator_args`          | The dictionary of arguments that will be passed into the evaluate engine operator during its construction. This can be used to customize parameters such as connection ID.                                 |          dict          |    N     |
+| `ddl_engine_operator`           | The type of the Airflow operator that will be used for environment management. These operations are SQL only. `engine_operator` is used if not provided                                                    | string or BaseOperator |    N     |
+| `ddl_engine_operator_args`      | Args to be passed into just the environment management operator. This can be used to customize parameters such as connection ID.                                                                           |          dict          |    N     |
+| `janitor_interval`              | Defines how often the janitor DAG runs. The janitor DAG removes platform-managed DAG instances that are pending deletion from Airflow. Default: 1 hour.                                                    |       timedelta        |    N     |
+| `plan_application_dag_ttl`      | Determines the time-to-live period for finished plan application DAGs. Once this period is exceeded, finished plan application DAGs are deleted by the janitor. Default: 2 days.                           |       timedelta        |    N     |
+| `external_table_sensor_factory` | A factory function that creates a sensor operator for a given signal payload. See [External signals](#external-signals) for more info                                                                      |        function        |    N     |
+| `generate_cadence_dags`         | Whether to generate cadence DAGs for model versions that are currently deployed to production.                                                                                                             |          bool          |    N     |
+
 
 ### State connection
 
@@ -91,6 +104,7 @@ def create_external_sensor(signal: t.Dict[str, t.Any]) -> BaseSensorOperator:
 
 sqlmesh_airflow = SQLMeshAirflow(
     "spark",
+    default_catalog="spark_catalog",
     external_table_sensor_factory=create_external_sensor,
 )
 ```
