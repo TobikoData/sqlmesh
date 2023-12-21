@@ -1,9 +1,12 @@
+import typing as t
+
 import pandas as pd
 import pytest
 from sqlglot import expressions as exp
 from sqlglot import parse_one
 
 from sqlmesh.core.engine_adapter import DuckDBEngineAdapter, EngineAdapter
+from tests.core.engine_adapter import to_sql_calls
 
 
 @pytest.fixture
@@ -61,3 +64,12 @@ def test_replace_query_pandas(adapter: EngineAdapter, duck_conn):
         "test_table", df, {"a": exp.DataType.build("long"), "b": exp.DataType.build("long")}
     )
     pd.testing.assert_frame_equal(adapter.fetchdf("SELECT * FROM test_table"), df)
+
+
+def test_set_current_catalog(make_mocked_engine_adapter: t.Callable, duck_conn):
+    adapter = make_mocked_engine_adapter(DuckDBEngineAdapter)
+    adapter.set_current_catalog("test_catalog")
+
+    assert to_sql_calls(adapter) == [
+        'USE "test_catalog"',
+    ]

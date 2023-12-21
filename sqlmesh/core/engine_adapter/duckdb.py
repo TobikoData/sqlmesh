@@ -23,7 +23,7 @@ class DuckDBEngineAdapter(LogicalMergeMixin, GetCurrentCatalogFromFunctionMixin)
 
     def set_current_catalog(self, catalog: str) -> None:
         """Sets the catalog name of the current connection."""
-        self.execute(f"USE {catalog}")
+        self.execute(exp.Use(this=exp.to_identifier(catalog)))
 
     def _df_to_source_queries(
         self,
