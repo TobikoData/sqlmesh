@@ -210,7 +210,7 @@ class HiveMetastoreTablePropertiesMixin(EngineAdapter):
             exp.Property(this=key, value=value.copy()) for key, value in table_properties.items()
         ]
 
-    def _create_table_properties(
+    def _build_table_properties_exp(
         self,
         storage_format: t.Optional[str] = None,
         partitioned_by: t.Optional[t.List[exp.Expression]] = None,
@@ -218,6 +218,7 @@ class HiveMetastoreTablePropertiesMixin(EngineAdapter):
         clustered_by: t.Optional[t.List[str]] = None,
         table_properties: t.Optional[t.Dict[str, exp.Expression]] = None,
         columns_to_types: t.Optional[t.Dict[str, exp.DataType]] = None,
+        table_description: t.Optional[str] = None,
     ) -> t.Optional[exp.Properties]:
         properties: t.List[exp.Expression] = []
 
@@ -236,20 +237,31 @@ class HiveMetastoreTablePropertiesMixin(EngineAdapter):
                 )
             )
 
+        if table_description:
+            properties.append(exp.SchemaCommentProperty(this=exp.Literal.string(table_description)))
+
         properties.extend(self.__table_properties_to_expressions(table_properties))
 
         if properties:
             return exp.Properties(expressions=properties)
         return None
 
-    def _create_view_properties(
+    def _build_view_properties_exp(
         self,
         table_properties: t.Optional[t.Dict[str, exp.Expression]] = None,
+        table_description: t.Optional[str] = None,
     ) -> t.Optional[exp.Properties]:
         """Creates a SQLGlot table properties expression for view"""
-        if not table_properties:
-            return None
-        return exp.Properties(expressions=self.__table_properties_to_expressions(table_properties))
+        properties: t.List[exp.Expression] = []
+
+        if table_description:
+            properties.append(exp.SchemaCommentProperty(this=exp.Literal.string(table_description)))
+
+        properties.extend(self.__table_properties_to_expressions(table_properties))
+
+        if properties:
+            return exp.Properties(expressions=properties)
+        return None
 
 
 class GetCurrentCatalogFromFunctionMixin(EngineAdapter):

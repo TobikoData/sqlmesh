@@ -4,6 +4,11 @@ import typing as t
 
 from sqlglot import exp
 
+from sqlmesh.core.engine_adapter.base import (
+    CatalogSupport,
+    CommentCreation,
+    SourceQuery,
+)
 from sqlmesh.core.engine_adapter.mixins import (
     GetCurrentCatalogFromFunctionMixin,
     LogicalMergeMixin,
@@ -26,6 +31,7 @@ class DuckDBEngineAdapter(LogicalMergeMixin, GetCurrentCatalogFromFunctionMixin)
     DIALECT = "duckdb"
     SUPPORTS_TRANSACTIONS = False
     CATALOG_SUPPORT = CatalogSupport.FULL_SUPPORT
+    COMMENT_CREATION = CommentCreation.UNSUPPORTED
 
     def set_current_catalog(self, catalog: str) -> None:
         """Sets the catalog name of the current connection."""

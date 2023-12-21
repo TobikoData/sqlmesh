@@ -25,6 +25,7 @@ class MySQLEngineAdapter(
     DIALECT = "mysql"
     ESCAPE_JSON = True
     SUPPORTS_INDEXES = True
+    SUPPORTS_VIEW_COMMENT = False
 
     def get_current_catalog(self) -> t.Optional[str]:
         """Returns the catalog name of the current connection."""

@@ -62,7 +62,91 @@ MERGE_TARGET_ALIAS = "__MERGE_TARGET__"
 MERGE_SOURCE_ALIAS = "__MERGE_SOURCE__"
 
 
-@set_catalog()
+class InsertOverwriteStrategy(Enum):
+    DELETE_INSERT = 1
+    INSERT_OVERWRITE = 2
+    # Note: Replace where on Databricks requires that `spark.sql.sources.partitionOverwriteMode` be set to `static`
+    REPLACE_WHERE = 3
+    INTO_IS_OVERWRITE = 4
+
+    @property
+    def is_delete_insert(self) -> bool:
+        return self == InsertOverwriteStrategy.DELETE_INSERT
+
+    @property
+    def is_insert_overwrite(self) -> bool:
+        return self == InsertOverwriteStrategy.INSERT_OVERWRITE
+
+    @property
+    def is_replace_where(self) -> bool:
+        return self == InsertOverwriteStrategy.REPLACE_WHERE
+
+    @property
+    def is_into_is_overwrite(self) -> bool:
+        return self == InsertOverwriteStrategy.INTO_IS_OVERWRITE
+
+    @property
+    def requires_condition(self) -> bool:
+        return self.is_replace_where or self.is_delete_insert
+
+
+class CatalogSupport(Enum):
+    UNSUPPORTED = 1
+    SINGLE_CATALOG_ONLY = 2
+    REQUIRES_SET_CATALOG = 3
+    FULL_SUPPORT = 4
+
+    @property
+    def is_unsupported(self) -> bool:
+        return self == CatalogSupport.UNSUPPORTED
+
+    @property
+    def is_single_catalog_only(self) -> bool:
+        return self == CatalogSupport.SINGLE_CATALOG_ONLY
+
+    @property
+    def is_requires_set_catalog(self) -> bool:
+        return self == CatalogSupport.REQUIRES_SET_CATALOG
+
+    @property
+    def is_full_support(self) -> bool:
+        return self == CatalogSupport.FULL_SUPPORT
+
+    @property
+    def is_supported(self) -> bool:
+        return self.is_requires_set_catalog or self.is_full_support
+
+
+class CommentCreation(Enum):
+    UNSUPPORTED = 1
+    IN_SCHEMA_DEF = 2
+    COMMENT_COMMAND_ONLY = 3
+
+
+class SourceQuery:
+    def __init__(
+        self,
+        query_factory: t.Callable[[], Query],
+        cleanup_func: t.Optional[t.Callable[[], None]] = None,
+        **kwargs: t.Any,
+    ) -> None:
+        self.query_factory = query_factory
+        self.cleanup_func = cleanup_func
+
+    def __enter__(self) -> Query:
+        return self.query_factory()
+
+    def __exit__(
+        self,
+        exc_type: t.Optional[t.Type[BaseException]],
+        exc_val: t.Optional[BaseException],
+        exc_tb: t.Optional[types.TracebackType],
+    ) -> t.Optional[bool]:
+        if self.cleanup_func:
+            self.cleanup_func()
+        return None
+
+
 class EngineAdapter:
     """Base class wrapping a Database API compliant connection.
 
@@ -81,6 +165,8 @@ class EngineAdapter:
     ESCAPE_JSON = False
     SUPPORTS_TRANSACTIONS = True
     SUPPORTS_INDEXES = False
+    COMMENT_CREATION = CommentCreation.IN_SCHEMA_DEF
+    SUPPORTS_VIEW_COMMENT = True
     INSERT_OVERWRITE_STRATEGY = InsertOverwriteStrategy.DELETE_INSERT
     SUPPORTS_MATERIALIZED_VIEWS = False
     SUPPORTS_MATERIALIZED_VIEW_SCHEMA = False
@@ -408,15 +494,82 @@ class EngineAdapter:
             if primary_key and self.SUPPORTS_INDEXES
             else []
         )
-        schema = exp.Schema(
-            this=table,
-            expressions=[
-                exp.ColumnDef(this=exp.to_identifier(column), kind=kind)
-                for column, kind in columns_to_types.items()
-            ]
-            + primary_key_expression,
+
+        column_descriptions = kwargs.pop("column_descriptions", None)
+        schema = self._build_schema_exp(
+            table,
+            columns_to_types,
+            column_descriptions if self.COMMENT_CREATION == CommentCreation.IN_SCHEMA_DEF else None,
+            primary_key_expression,
         )
-        self._create_table(schema, None, exists=exists, columns_to_types=columns_to_types, **kwargs)
+
+        table_description = kwargs.pop("table_description", None)
+        self._create_table(
+            schema,
+            None,
+            exists=exists,
+            columns_to_types=columns_to_types,
+            table_description=table_description
+            if self.COMMENT_CREATION == CommentCreation.IN_SCHEMA_DEF
+            else None,
+            **kwargs,
+        )
+
+        # Register comments with commands if the engine doesn't support comments in the schema or CREATE
+        if (
+            table_description or column_descriptions
+        ) and self.COMMENT_CREATION == CommentCreation.COMMENT_COMMAND_ONLY:
+            self._create_comments(
+                table_name,
+                table_description,
+                column_descriptions,
+                columns_to_types=columns_to_types,
+            )
+
+    def _build_schema_exp(
+        self,
+        table: exp.Table,
+        columns_to_types: t.Dict[str, exp.DataType],
+        column_descriptions: t.Optional[t.Dict[str, str]],
+        expressions: t.List[exp.PrimaryKey] = [],
+    ) -> exp.Schema:
+        """
+        Build a schema expression for a table, columns, column comments, and additional schema properties.
+        """
+        if column_descriptions:
+            return exp.Schema(
+                this=table,
+                expressions=[
+                    exp.ColumnDef(
+                        this=exp.to_identifier(column),
+                        kind=kind,
+                        constraints=self._build_col_comment_exp(column, column_descriptions),
+                    )
+                    for column, kind in columns_to_types.items()
+                ]
+                + expressions,
+            )
+        else:
+            return exp.Schema(
+                this=table,
+                expressions=[
+                    exp.ColumnDef(this=exp.to_identifier(column), kind=kind)
+                    for column, kind in columns_to_types.items()
+                ]
+                + expressions,
+            )
+
+    def _build_col_comment_exp(
+        self, col_name: str, column_descriptions: t.Dict[str, str]
+    ) -> t.List[exp.ColumnConstraint | None]:
+        comment = column_descriptions.get(col_name)
+        if comment:
+            return [
+                exp.ColumnConstraint(
+                    kind=exp.CommentColumnConstraint(this=exp.Literal.string(comment))
+                )
+            ]
+        return []
 
     def _create_table_from_source_queries(
         self,
@@ -428,22 +581,46 @@ class EngineAdapter:
         **kwargs: t.Any,
     ) -> None:
         table = exp.to_table(table_name)
+
+        # Build a schema expression with column comments if the engine supports it
+        table_description = kwargs.pop("table_description", None)
+        column_descriptions = kwargs.pop("column_descriptions", None)
+        schema = None
+        if column_descriptions and self.COMMENT_CREATION == CommentCreation.IN_SCHEMA_DEF:
+            schema = self._build_schema_exp(
+                table, columns_to_types or self.columns(table), column_descriptions
+            )
+
         with self.transaction(condition=len(source_queries) > 1):
             for i, source_query in enumerate(source_queries):
                 with source_query as query:
                     if i == 0:
                         self._create_table(
-                            table,
+                            schema if schema else table,
                             query,
                             columns_to_types=columns_to_types,
                             exists=exists,
                             replace=replace,
+                            table_description=table_description
+                            if self.COMMENT_CREATION == CommentCreation.IN_SCHEMA_DEF
+                            else None,
                             **kwargs,
                         )
                     else:
                         self._insert_append_query(
                             table_name, query, columns_to_types or self.columns(table)
                         )
+
+        # Register comments with commands if the engine doesn't support comments in the schema
+        if (
+            table_description or column_descriptions
+        ) and self.COMMENT_CREATION == CommentCreation.COMMENT_COMMAND_ONLY:
+            self._create_comments(
+                table_name,
+                table_description,
+                column_descriptions,
+                columns_to_types=columns_to_types,
+            )
 
     def _create_table(
         self,
@@ -455,7 +632,7 @@ class EngineAdapter:
         **kwargs: t.Any,
     ) -> None:
         self.execute(
-            self._create_table_exp(
+            self._build_create_table_exp(
                 table_name_or_schema,
                 expression=expression,
                 exists=exists,
@@ -465,7 +642,7 @@ class EngineAdapter:
             )
         )
 
-    def _create_table_exp(
+    def _build_create_table_exp(
         self,
         table_name_or_schema: t.Union[exp.Schema, TableName],
         expression: t.Optional[exp.Expression],
@@ -478,7 +655,7 @@ class EngineAdapter:
         if not isinstance(table_name_or_schema, exp.Schema):
             table_name_or_schema = exp.to_table(table_name_or_schema)
         properties = (
-            self._create_table_properties(**kwargs, columns_to_types=columns_to_types)
+            self._build_table_properties_exp(**kwargs, columns_to_types=columns_to_types)
             if kwargs
             else None
         )
@@ -627,8 +804,12 @@ class EngineAdapter:
             if not self.SUPPORTS_MATERIALIZED_VIEW_SCHEMA and isinstance(schema, exp.Schema):
                 schema = schema.this
 
-        create_view_properties = self._create_view_properties(
-            create_kwargs.pop("table_properties", None)
+        table_description = create_kwargs.pop("table_description", None)
+        create_view_properties = self._build_view_properties_exp(
+            create_kwargs.pop("table_properties", None),
+            table_description
+            if self.COMMENT_CREATION == CommentCreation.IN_SCHEMA_DEF and self.SUPPORTS_VIEW_COMMENT
+            else None,
         )
         if create_view_properties:
             for view_property in create_view_properties.expressions:
@@ -648,6 +829,14 @@ class EngineAdapter:
                 )
             )
 
+        if (
+            table_description
+            and self.COMMENT_CREATION == CommentCreation.COMMENT_COMMAND_ONLY
+            and self.SUPPORTS_VIEW_COMMENT
+        ):
+            self._create_comments(view_name, table_description, None, "VIEW")
+
+    @set_catalog()
     def create_schema(
         self,
         schema_name: SchemaName,
@@ -1140,10 +1329,13 @@ class EngineAdapter:
                     distinct=False,
                 )
             )
+
             self.replace_query(
                 target_table,
                 query,
                 columns_to_types=columns_to_types,
+                table_description=kwargs.get("table_description", None),
+                column_descriptions=kwargs.get("column_descriptions", None),
             )
 
     def merge(
@@ -1396,6 +1588,11 @@ class EngineAdapter:
         source_queries, columns_to_types = self._get_source_queries_and_columns_to_types(
             query_or_df, columns_to_types=columns_to_types, target_table=name
         )
+
+        # do not add comments to temp tables
+        kwargs.pop("table_description", None)
+        kwargs.pop("column_descriptions", None)
+
         with self.transaction():
             table = self._get_temp_table(name)
             if table.db:
@@ -1409,7 +1606,7 @@ class EngineAdapter:
             finally:
                 self.drop_table(table)
 
-    def _create_table_properties(
+    def _build_table_properties_exp(
         self,
         storage_format: t.Optional[str] = None,
         partitioned_by: t.Optional[t.List[exp.Expression]] = None,
@@ -1417,15 +1614,31 @@ class EngineAdapter:
         clustered_by: t.Optional[t.List[str]] = None,
         table_properties: t.Optional[t.Dict[str, exp.Expression]] = None,
         columns_to_types: t.Optional[t.Dict[str, exp.DataType]] = None,
+        table_description: t.Optional[str] = None,
     ) -> t.Optional[exp.Properties]:
         """Creates a SQLGlot table properties expression for ddl."""
+        properties: t.List[exp.Expression] = []
+
+        if table_description:
+            properties.append(exp.SchemaCommentProperty(this=exp.Literal.string(table_description)))
+
+        if properties:
+            return exp.Properties(expressions=properties)
         return None
 
-    def _create_view_properties(
+    def _build_view_properties_exp(
         self,
         table_properties: t.Optional[t.Dict[str, exp.Expression]] = None,
+        table_description: t.Optional[str] = None,
     ) -> t.Optional[exp.Properties]:
         """Creates a SQLGlot table properties expression for view"""
+        properties: t.List[exp.Expression] = []
+
+        if table_description:
+            properties.append(exp.SchemaCommentProperty(this=exp.Literal.string(table_description)))
+
+        if properties:
+            return exp.Properties(expressions=properties)
         return None
 
     def _to_sql(self, expression: exp.Expression, quote: bool = True, **kwargs: t.Any) -> str:
@@ -1494,8 +1707,37 @@ class EngineAdapter:
         table = exp.to_table(table_name)
         self.execute(f"TRUNCATE TABLE {table.sql(dialect=self.dialect, identify=True)}")
 
+    def _create_comments(
+        self,
+        table_name: TableName,
+        table_comment: t.Optional[str],
+        column_comments: t.Optional[t.Dict[str, str]],
+        table_kind: str = "TABLE",
+        columns_to_types: t.Optional[t.Dict[str, exp.DataType]] = None,
+    ) -> None:
+        """
+        Executes commands to create table and column comments.
+        """
+        if table_comment:
+            self.execute(
+                exp.Comment(
+                    this=exp.to_table(table_name),
+                    kind=table_kind,
+                    expression=exp.Literal.string(table_comment),
+                )
+            )
 
-@set_catalog()
+        if column_comments:
+            for col, comment in column_comments.items():
+                self.execute(
+                    exp.Comment(
+                        this=exp.to_column(f"{table_name}.{col}"),
+                        kind="COLUMN",
+                        expression=exp.Literal.string(comment),
+                    )
+                )
+
+
 class EngineAdapterWithIndexSupport(EngineAdapter):
     SUPPORTS_INDEXES = True
 

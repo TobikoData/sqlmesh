@@ -21,6 +21,7 @@ class BasePostgresEngineAdapter(EngineAdapter):
     DEFAULT_BATCH_SIZE = 400
     COLUMNS_TABLE = "information_schema.columns"
     CATALOG_SUPPORT = CatalogSupport.SINGLE_CATALOG_ONLY
+    COMMENT_CREATION = CommentCreation.COMMENT_COMMAND_ONLY
 
     def columns(
         self, table_name: TableName, include_pseudo_columns: bool = False

@@ -42,6 +42,7 @@ class MSSQLEngineAdapter(
     SUPPORTS_MATERIALIZED_VIEWS = False
     CATALOG_SUPPORT = CatalogSupport.REQUIRES_SET_CATALOG
     CURRENT_CATALOG_EXPRESSION = exp.func("db_name")
+    COMMENT_CREATION = CommentCreation.UNSUPPORTED
 
     def columns(
         self,

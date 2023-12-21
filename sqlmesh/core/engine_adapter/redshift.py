@@ -79,7 +79,7 @@ class RedshiftEngineAdapter(
             table_name, source_queries, exists=False, **kwargs
         )
 
-    def _create_table_exp(
+    def _build_create_table_exp(
         self,
         table_name_or_schema: t.Union[exp.Schema, TableName],
         expression: t.Optional[exp.Expression],
@@ -88,7 +88,7 @@ class RedshiftEngineAdapter(
         columns_to_types: t.Optional[t.Dict[str, exp.DataType]] = None,
         **kwargs: t.Any,
     ) -> exp.Create:
-        statement = super()._create_table_exp(
+        statement = super()._build_create_table_exp(
             table_name_or_schema,
             expression=expression,
             exists=exists,
