@@ -8,6 +8,7 @@ from sqlglot import exp, parse_one
 from sqlmesh.core.engine_adapter.mixins import (
     LogicalMergeMixin,
     LogicalReplaceQueryMixin,
+    NonTransactionalTruncateMixin,
 )
 from tests.core.engine_adapter import to_sql_calls
 
@@ -30,7 +31,7 @@ def test_logical_replace_query_already_exists(
     adapter.replace_query("db.table", parse_one("SELECT col FROM db.other_table"))
 
     assert to_sql_calls(adapter) == [
-        'TRUNCATE "db"."table"',
+        'TRUNCATE TABLE "db"."table"',
         'INSERT INTO "db"."table" ("col") SELECT "col" FROM "db"."other_table"',
     ]
 
@@ -76,7 +77,7 @@ def test_logical_replace_self_reference(
     assert to_sql_calls(adapter) == [
         f'CREATE SCHEMA IF NOT EXISTS "db"',
         f'CREATE TABLE IF NOT EXISTS "db"."__temp_table_{temp_table_id}" AS SELECT "col" FROM "db"."table"',
-        'TRUNCATE "db"."table"',
+        'TRUNCATE TABLE "db"."table"',
         f'INSERT INTO "db"."table" ("col") SELECT "col" + 1 AS "col" FROM "db"."__temp_table_{temp_table_id}"',
         f'DROP TABLE IF EXISTS "db"."__temp_table_{temp_table_id}"',
     ]
@@ -135,3 +136,23 @@ def test_logical_merge(make_mocked_engine_adapter: t.Callable, mocker: MockerFix
             call('''DROP TABLE IF EXISTS "temporary"'''),
         ]
     )
+
+
+def test_non_transaction_truncate_mixin(
+    make_mocked_engine_adapter: t.Callable, mocker: MockerFixture, make_temp_table_name: t.Callable
+):
+    adapter = make_mocked_engine_adapter(NonTransactionalTruncateMixin, "redshift")
+    adapter._truncate_table(table_name="test_table")
+
+    assert to_sql_calls(adapter) == ['TRUNCATE TABLE "test_table"']
+
+
+def test_non_transaction_truncate_mixin_within_transaction(
+    make_mocked_engine_adapter: t.Callable, mocker: MockerFixture, make_temp_table_name: t.Callable
+):
+    adapter = make_mocked_engine_adapter(NonTransactionalTruncateMixin, "redshift")
+    adapter._connection_pool = mocker.MagicMock()
+    adapter._connection_pool.is_transaction_active = True
+    adapter._truncate_table(table_name="test_table")
+
+    assert to_sql_calls(adapter) == ['DELETE FROM "test_table"']

@@ -266,6 +266,10 @@ class SnowflakeConnectionConfig(ConnectionConfig):
         return engine_adapter.SnowflakeEngineAdapter
 
     @property
+    def _static_connection_kwargs(self) -> t.Dict[str, t.Any]:
+        return {"autocommit": False}
+
+    @property
     def _connection_factory(self) -> t.Callable:
         from snowflake import connector
 
