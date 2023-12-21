@@ -1,6 +1,6 @@
 import { type PlanStageCancel, Status } from '@api/client'
 import { ModelPlanTracker, type PlanTracker } from './tracker-plan'
-import { isFalseOrNil } from '@utils/index'
+import { isFalse, isFalseOrNil } from '@utils/index'
 
 export interface PlanCancelTracker extends PlanTracker {
   cancel?: PlanStageCancel
@@ -20,5 +20,6 @@ export class ModelPlanCancelTracker extends ModelPlanTracker<PlanCancelTracker> 
 
   update(tracker: PlanCancelTracker): void {
     this._current = tracker
+    this.isFetching = isFalse(tracker.meta?.done)
   }
 }

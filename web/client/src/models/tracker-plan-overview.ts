@@ -130,6 +130,7 @@ export class ModelPlanOverviewTracker
 
   update(tracker: PlanOverviewTracker): void {
     this._current = tracker
+    this.isFetching = isFalse(tracker.meta?.done)
   }
 
   reset(): void {

@@ -12,7 +12,7 @@ import {
   type PlanOverviewStageTrackerStart,
 } from '@api/client'
 import { ModelPlanTracker, type PlanTracker } from './tracker-plan'
-import { isFalseOrNil, isNil, isNotNil, isTrue } from '@utils/index'
+import { isFalse, isFalseOrNil, isNil, isNotNil, isTrue } from '@utils/index'
 import { ModelPlanOverviewTracker } from './tracker-plan-overview'
 
 export interface PlanApplyTracker extends PlanTracker {
@@ -193,6 +193,8 @@ export class ModelPlanApplyTracker
       this._current = undefined
       this._planOverview = undefined
     }
+
+    this.isFetching = isFalse(tracker.meta?.done)
   }
 
   reset(): void {

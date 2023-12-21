@@ -5,7 +5,7 @@ import { useApiPlanRun, useApiPlanApply, useApiCancelPlan } from '~/api'
 import PlanHeader from './PlanHeader'
 import PlanActions from './PlanActions'
 import PlanOptions from './PlanOptions'
-import { EnumPlanActions, usePlan, usePlanDispatch } from './context'
+import { EnumPlanActions, usePlanDispatch } from './context'
 import { useApplyPayload, usePlanPayload } from './hooks'
 import { EnumErrorKey, useIDE } from '~/library/pages/ide/context'
 import Loading from '@components/loading/Loading'
@@ -26,8 +26,6 @@ function Plan({
 }): JSX.Element {
   const dispatch = usePlanDispatch()
   const { removeError } = useIDE()
-
-  const { auto_apply } = usePlan()
 
   const planOverviewTracker = useStorePlan(s => s.planOverview)
   const planApplyTracker = useStorePlan(s => s.planApply)
@@ -131,19 +129,7 @@ function Plan({
       },
     ])
 
-    void planRun().then(({ data }) => {
-      dispatch([
-        {
-          type: EnumPlanActions.Dates,
-          start: data?.start,
-          end: data?.end,
-        },
-      ])
-
-      if (auto_apply) {
-        apply()
-      }
-    })
+    void planRun()
   }
 
   return (
