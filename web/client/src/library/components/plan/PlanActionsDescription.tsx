@@ -12,6 +12,7 @@ export default function PlanActionsDescription(): JSX.Element {
     forward_only,
     restate_models,
     include_unmodified,
+    auto_apply,
   } = usePlan()
 
   const environment = useStoreContext(s => s.environment)
@@ -22,6 +23,11 @@ export default function PlanActionsDescription(): JSX.Element {
         <span>Plan for</span>
         <b className="text-primary-500 font-bold mx-1">{environment.name}</b>
         <span className="inline-block mr-1">environment</span>
+        {auto_apply && (
+          <span className="inline-block mr-1">
+            and <b>apply</b> automatically
+          </span>
+        )}
         {
           <span className="inline-block mr-1">
             from{' '}

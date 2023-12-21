@@ -97,6 +97,7 @@ def get_plan(
             skip_backfill=plan_options.skip_backfill,
             forward_only=plan_options.forward_only,
             no_auto_categorization=plan_options.no_auto_categorization,
+            auto_apply=plan_options.auto_apply,
         )
         tracker.start = plan.start
         tracker.end = plan.end

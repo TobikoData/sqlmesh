@@ -1593,6 +1593,11 @@
           "restate_models": {
             "anyOf": [{ "type": "string" }, { "type": "null" }],
             "title": "Restate Models"
+          },
+          "auto_apply": {
+            "type": "boolean",
+            "title": "Auto Apply",
+            "default": false
           }
         },
         "type": "object",
