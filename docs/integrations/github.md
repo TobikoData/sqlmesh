@@ -292,7 +292,7 @@ Below is an example of how to define the default config for the bot in either YA
 | `auto_categorize_changes`             | Auto categorization behavior to use for the bot. If not provided then the project-wide categorization behavior is used. See [Auto-categorize model changes](https://sqlmesh.readthedocs.io/en/stable/guides/configuration/#auto-categorize-model-changes) for details. |  dict  |    N     |
 | `default_pr_start`                    | Default start when creating PR environment plans. If running in a mode where the bot automatically backfills models (based on `auto_categorize_changes` behavior) then this can be used to limit the amount of data backfilled. Defaults to `1 day ago`                |  str   |    N     |
 | `skip_pr_backfill`                    | Indicates if the bot should skip backfilling models in the PR environment. Default: `True`                                                                                                                                                                             |  bool  |    N     |
-
+| `pr_include_unmodified`               | Indicates whether to include unmodified models in the PR environment. Default to the project's config value (which defaults to `False`)                                                                                                                                |  bool  |    N     |
 
 Example with all properties defined:
 
