@@ -218,11 +218,13 @@ SQLMesh Observer allows you to calculate and track custom measures in addition t
 
 Each custom measure is associated with a model and is defined by a SQL query in the model file.
 
-A measure query is specified in the `@measure` macro after the primary model query. The measure query will be executed during a SQLMesh `plan` or `run` after the primary model query is executed.
+The `@measure` macro is used to define custom measures. The body of the `@measure` macro is the query, and each column in the query defines a separate measure.
 
-A measure query may return multiple columns, each of which will be stored as individual measures. Multiple measure queries may be specified in a model.
+A measure's name is the name of the column that defined it. Measure names must be unique within a model, but a name may be used in multiple models.
 
-This example shows a model definition that includes a measure query calculating the total number of rows in the table and the average value of the model's `numeric_col` column:
+A model may contain more than one `@measure` macro specification. The `@measure` macros must be specified after the model's primary query. They will be executed during a SQLMesh `plan` or `run` after the primary model query is executed.
+
+This example shows a model definition that includes a measure query defining two measures: `row_count` (the total number of rows in the table) and `num_col_avg` (the average value of the model's `numeric_col` column).
 
 ```sql
 MODEL (
@@ -245,9 +247,9 @@ FROM
 
 Every time the `custom_measure.example` model is executed, Observer will execute the measure query and store the value it returns.
 
-Observer will automatically associate the value with the execution time of the `plan`/`run` that calculated it and will record each measure under its column name. This example will create two custom measures: `row_count` and `num_col_avg`.
+By default, the measure's timestamp will be the execution time of the `plan`/`run` that captured the measure. [Incremental by time range](../concepts/models/model_kinds.md#incremental_by_time_range) models may specify [custom timestamps](#custom-time-column).
 
-Observer charts will display the value of the two measures on the y-axis and the execution time of the associated `plan`/`run` on the x-axis, allowing you to monitor whether the value has meaningfully changed since the previous execution.
+An Observer chart allows you to select which measure to display. The chart displays the value of the selected measure on the y-axis and the execution time of the associated `plan`/`run` on the x-axis, allowing you to monitor whether the value has meaningfully changed since the previous execution.
 
 ### Incremental by time models
 
@@ -301,6 +303,6 @@ These two measure types help answer different questions:
 1. Execution time: has something meaningfully changed **on this `plan`/`run`** compared to previous plans/runs?
 2. Custom time: has something meaningfully changed **in a specific time point's data** compared to other time points?
 
-If multiple time points of data are processed during each model execution, an anomaly at a specific time may not be detectable from an execution time measure.
+If multiple time points of data are processed during each model execution, an anomaly at a specific time may not be detectable from an execution time measure alone.
 
 Custom time measures enable monitoring at the temporal granularity of the data itself.
