@@ -8,7 +8,6 @@ import typing as t
 import pandas as pd
 from pandas.api.types import is_datetime64_any_dtype  # type: ignore
 from sqlglot import exp
-from sqlglot.optimizer.qualify_columns import quote_identifiers
 
 from sqlmesh.core.engine_adapter.base import (
     CatalogSupport,
@@ -242,10 +241,6 @@ class MSSQLEngineAdapter(
             )
             for row in dataframe.itertuples()
         ]
-
-    def _truncate_table(self, table_name: TableName) -> str:
-        table = quote_identifiers(exp.to_table(table_name))
-        return f"TRUNCATE TABLE {table.sql(dialect=self.dialect)}"
 
     def _to_sql(self, expression: exp.Expression, quote: bool = True, **kwargs: t.Any) -> str:
         sql = super()._to_sql(expression, quote=quote, **kwargs)

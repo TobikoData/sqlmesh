@@ -5,7 +5,6 @@ import typing as t
 import pandas as pd
 from pandas.api.types import is_datetime64_any_dtype  # type: ignore
 from sqlglot import exp
-from sqlglot.optimizer.qualify_columns import quote_identifiers
 
 from sqlmesh.core.dialect import to_schema
 from sqlmesh.core.engine_adapter.base import (
@@ -68,9 +67,10 @@ class TrinoEngineAdapter(
             f"SET SESSION {self.get_current_catalog()}.insert_existing_partitions_behavior='APPEND'"
         )
 
-    def _truncate_table(self, table_name: TableName) -> str:
-        table = quote_identifiers(exp.to_table(table_name))
-        return f"DELETE FROM {table.sql(dialect=self.dialect)}"
+    def _truncate_table(self, table_name: TableName) -> None:
+        table = exp.to_table(table_name)
+        # Some trino connectors don't support truncate so we use delete.
+        self.execute(f"DELETE FROM {table.sql(dialect=self.dialect, identify=True)}")
 
     def _get_data_objects(self, schema_name: SchemaName) -> t.List[DataObject]:
         """

@@ -500,10 +500,6 @@ class SparkEngineAdapter(GetCurrentCatalogFromFunctionMixin, HiveMetastoreTableP
         )
         self.execute(f"ALTER TABLE {fqn.sql(dialect=self.dialect)} DROP BRANCH {branch_name}")
 
-    def _truncate_table(self, table_name: TableName) -> str:
-        table = quote_identifiers(exp.to_table(table_name))
-        return f"TRUNCATE TABLE {table.sql(dialect=self.dialect)}"
-
     def _ensure_fqn(self, table_name: TableName) -> exp.Table:
         if isinstance(table_name, exp.Table):
             table_name = table_name.copy()
