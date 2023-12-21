@@ -91,7 +91,6 @@ export default function PlanActions({
                   EnumPlanAction.ApplyBackfill,
                   EnumPlanAction.ApplyVirtual,
                   EnumPlanAction.ApplyChangesAndBackfill,
-                  EnumPlanAction.ApplyChanges,
                   EnumPlanAction.ApplyMetadata,
                 ],
                 'Apply',
