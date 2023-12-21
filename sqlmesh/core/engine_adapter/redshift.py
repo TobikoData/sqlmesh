@@ -12,6 +12,7 @@ from sqlmesh.core.engine_adapter.mixins import (
     GetCurrentCatalogFromFunctionMixin,
     LogicalMergeMixin,
     LogicalReplaceQueryMixin,
+    NonTransactionalTruncateMixin,
 )
 from sqlmesh.core.engine_adapter.shared import DataObject, DataObjectType, set_catalog
 
@@ -25,6 +26,7 @@ class RedshiftEngineAdapter(
     LogicalReplaceQueryMixin,
     LogicalMergeMixin,
     GetCurrentCatalogFromFunctionMixin,
+    NonTransactionalTruncateMixin,
 ):
     DIALECT = "redshift"
     ESCAPE_JSON = True
@@ -169,12 +171,8 @@ class RedshiftEngineAdapter(
         columns_to_types = columns_to_types or self.columns(table_name)
         target_table = exp.to_table(table_name)
         with self.transaction():
-            temp_table_name = f"{target_table.alias_or_name}_temp_{self._short_hash()}"
-            temp_table = target_table.copy()
-            temp_table.set("this", exp.to_identifier(temp_table_name))
-            old_table_name = f"{target_table.alias_or_name}_old_{self._short_hash()}"
-            old_table = target_table.copy()
-            old_table.set("this", exp.to_identifier(old_table_name))
+            temp_table = self._get_temp_table(target_table)
+            old_table = self._get_temp_table(target_table)
             self.create_table(temp_table, columns_to_types, exists=False, **kwargs)
             self._insert_append_source_queries(temp_table, source_queries, columns_to_types)
             self.rename_table(target_table, old_table)
@@ -189,9 +187,10 @@ class RedshiftEngineAdapter(
         """
         Returns all the data objects that exist in the given schema and optionally catalog.
         """
+        catalog_name = self.get_current_catalog()
         query = f"""
             SELECT
-                null AS catalog_name,
+                '{catalog_name}' AS catalog_name,
                 tablename AS name,
                 schemaname AS schema_name,
                 'TABLE' AS type
@@ -199,7 +198,7 @@ class RedshiftEngineAdapter(
             WHERE schemaname ILIKE '{schema_name}'
             UNION ALL
             SELECT
-                null AS catalog_name,
+                '{catalog_name}' AS catalog_name,
                 viewname AS name,
                 schemaname AS schema_name,
                 'VIEW' AS type
@@ -208,7 +207,7 @@ class RedshiftEngineAdapter(
             AND definition not ilike '%create materialized view%'
             UNION ALL
             SELECT
-                null AS catalog_name,
+                '{catalog_name}' AS catalog_name,
                 viewname AS name,
                 schemaname AS schema_name,
                 'MATERIALIZED_VIEW' AS type

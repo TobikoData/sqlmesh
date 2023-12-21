@@ -897,6 +897,53 @@ def test_scd_type_2(ctx: TestContext):
     )
 
 
+def test_truncate_table(ctx: TestContext):
+    if ctx.test_type != "query":
+        pytest.skip("Truncate table test does not change based on input data type")
+
+    ctx.init()
+    table = ctx.table("test_table")
+    ctx.engine_adapter.create_table(table, ctx.columns_to_types)
+    input_data = pd.DataFrame(
+        [
+            {"id": 1, "ds": "2022-01-01"},
+            {"id": 2, "ds": "2022-01-02"},
+            {"id": 3, "ds": "2022-01-03"},
+        ]
+    )
+    ctx.engine_adapter.insert_append(table, ctx.input_data(input_data))
+    ctx.compare_with_current(table, input_data)
+    ctx.engine_adapter._truncate_table(table)
+    assert ctx.engine_adapter.fetchone(exp.select("count(*)").from_(table))[0] == 0
+
+
+def test_transaction(ctx: TestContext):
+    if ctx.engine_adapter.SUPPORTS_TRANSACTIONS is False:
+        pytest.skip(f"Engine adapter {ctx.engine_adapter.dialect} doesn't support transactions")
+    if ctx.test_type != "query":
+        pytest.skip("Transaction test can just run for query")
+
+    ctx.init()
+    table = ctx.table("test_table")
+    input_data = pd.DataFrame(
+        [
+            {"id": 1, "ds": "2022-01-01"},
+            {"id": 2, "ds": "2022-01-02"},
+            {"id": 3, "ds": "2022-01-03"},
+        ]
+    )
+    with ctx.engine_adapter.transaction():
+        ctx.engine_adapter.create_table(table, ctx.columns_to_types)
+        ctx.engine_adapter.insert_append(
+            table, ctx.input_data(input_data, ctx.columns_to_types), ctx.columns_to_types
+        )
+    ctx.compare_with_current(table, input_data)
+    with ctx.engine_adapter.transaction():
+        ctx.engine_adapter._truncate_table(table)
+        ctx.engine_adapter._connection_pool.rollback()
+    ctx.compare_with_current(table, input_data)
+
+
 def test_sushi(ctx: TestContext):
     if ctx.test_type != "query":
         pytest.skip("Sushi end-to-end tests only need to run for query")

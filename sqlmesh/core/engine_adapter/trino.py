@@ -68,9 +68,10 @@ class TrinoEngineAdapter(
             f"SET SESSION {self.get_current_catalog()}.insert_existing_partitions_behavior='APPEND'"
         )
 
-    def _truncate_table(self, table_name: TableName) -> str:
+    def _truncate_table(self, table_name: TableName) -> None:
         table = quote_identifiers(exp.to_table(table_name))
-        return f"DELETE FROM {table.sql(dialect=self.dialect)}"
+        # Some trino connectors don't support truncate so we use delete.
+        self.execute(f"DELETE FROM {table.sql(dialect=self.dialect)}")
 
     def _get_data_objects(self, schema_name: SchemaName) -> t.List[DataObject]:
         """
