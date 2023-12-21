@@ -142,7 +142,7 @@ function FileExplorerContextMenu({
       {trigger}
       <ContextMenu.Portal>
         <ContextMenu.Content
-          className="bg-light rounded-md overflow-hidden shadow-lg py-2 px-1"
+          className="bg-light rounded-md overflow-hidden shadow-lg py-2 px-1 z-50"
           onClick={(e: MouseEvent) => {
             e.stopPropagation()
           }}
