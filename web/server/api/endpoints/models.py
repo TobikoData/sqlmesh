@@ -6,6 +6,7 @@ from fastapi import APIRouter, Depends
 from sqlglot import exp
 
 from sqlmesh.core.context import Context
+from sqlmesh.core.dialect import normalize_model_name
 from sqlmesh.core.model import Model
 from sqlmesh.utils.date import now, to_datetime
 from web.server import models
@@ -93,7 +94,9 @@ def get_all_models(context: Context) -> t.List[models.Model]:
 
         output.append(
             models.Model(
-                name=model.name,
+                name=normalize_model_name(
+                    model.name, context.default_catalog, context.config.dialect
+                ),
                 path=str(model._path.relative_to(context.path)),
                 dialect=dialect,
                 columns=columns,

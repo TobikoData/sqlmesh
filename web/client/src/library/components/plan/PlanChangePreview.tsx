@@ -110,7 +110,7 @@ function PlanChangePreviewDefault({
             title={change.name}
             className="w-full text-xs whitespace-nowrap text-ellipsis overflow-hidden"
           >
-            {truncate(change.name, 50, 20)}
+            {truncate(change.name, 50, 25)}
           </small>
         </li>
       ))}

@@ -428,8 +428,8 @@ const ModelColumn = memo(function ModelColumn({
       className={clsx(
         isActive
           ? 'bg-secondary-10 dark:bg-primary-900 text-secondary-500 dark:text-neutral-100'
-          : 'text-neutral-600 dark:text-neutral-100',
-        withHandles ? 'p-0' : 'py-1 px-2 rounded-md mb-1',
+          : 'text-neutral-600 dark:text-neutral-100 hover:bg-neutral-5',
+        withHandles ? 'p-0 mb-1' : 'px-2 rounded-md mb-1',
         className,
       )}
       onClick={debounceSync(toggleColumnLineage, 500, true)}
@@ -929,7 +929,7 @@ function ModelColumnLineage({
   return (
     <div className={clsx('px-1 w-full h-full relative', className)}>
       {isBuildingLayout && (
-        <div className="absolute top-0 left-0 z-50 bg-theme flex justify-center items-center w-full h-full">
+        <div className="absolute top-0 left-0 z-10 bg-theme flex justify-center items-center w-full h-full">
           <Loading className="inline-block">
             <Spinner className="w-3 h-3 border border-neutral-10 mr-4" />
             <h3 className="text-md">Building Lineage...</h3>
@@ -1020,14 +1020,15 @@ function GraphControls({ nodes = [] }: { nodes: Node[] }): JSX.Element {
 
     return Object.keys(lineage)
       .map(model => ({
-        name: model,
+        name: models.get(model)?.displayName ?? model,
         description: `${
           ancestors.includes(model) ? 'Upstream' : 'Downstream'
-        } | Directly Connected: ${connectedNodes.has(model) ? 'Yes' : 'No'}`,
+        } | ${connectedNodes.has(model) ? 'Directly' : 'Indirectly'} Connected`,
       }))
       .filter(Boolean) as Array<{ name: string; description: string }>
   }, [lineage, mainNode])
 
+  const model = isNil(mainNode) ? undefined : models.get(mainNode)
   const countSelected = selectedNodes.size
   const countImpact = connectedNodes.size - 1
   const countSecondary = nodes.filter(n =>
@@ -1069,12 +1070,14 @@ function GraphControls({ nodes = [] }: { nodes: Node[] }): JSX.Element {
   return (
     <div className="pl-2 flex items-center text-xs text-neutral-400">
       <div className="contents">
-        <span
-          title={mainNode}
-          className="mr-2 whitespace-nowrap text-ellipsis overflow-hidden"
-        >
-          <b>Model:</b> {mainNode}
-        </span>
+        {isNotNil(model) && (
+          <span
+            title={model?.displayName}
+            className="mr-2 w-full min-w-[10rem] whitespace-nowrap text-ellipsis overflow-hidden"
+          >
+            <b>Model:</b> {truncate(model?.displayName, 50, 25)}
+          </span>
+        )}
         {isNotNil(highlightedNodes) ?? (
           <span className="mr-2 whitespace-nowrap">
             <b>Highlighted:</b> {Object.keys(highlightedNodes ?? {}).length}
@@ -1129,7 +1132,7 @@ function GraphControls({ nodes = [] }: { nodes: Node[] }): JSX.Element {
           showIndex={false}
           size={EnumSize.sm}
           onSelect={handleSelect}
-          className="w-full min-w-[10rem] max-w-[15rem]"
+          className="w-full min-w-[15rem] max-w-[20rem]"
           isFullWidth={true}
         />
         <ListboxShow

@@ -12,6 +12,7 @@ interface PropsSearchListInput {
   value: string
   placeholder?: string
   className?: string
+  type?: string
   size?: Size
   autoFocus?: boolean
   onInput?: (e: React.ChangeEvent<HTMLInputElement>) => void
@@ -24,6 +25,7 @@ const SearchListInput = React.forwardRef<
 >(function SearchListInput(
   {
     value,
+    type,
     placeholder,
     size = EnumSize.md,
     autoFocus = false,
@@ -41,6 +43,7 @@ const SearchListInput = React.forwardRef<
       {({ className }) => (
         <Input.Textfield
           ref={ref}
+          type={type}
           className={clsx(className, 'w-full')}
           autoFocus={autoFocus}
           placeholder={placeholder}
@@ -137,11 +140,11 @@ export default function SearchList<
           ref={elTrigger}
           as={SearchListInput}
           className="w-full !m-0"
+          type="search"
           size={size}
           value={search}
           placeholder={placeholder}
           onInput={(e: React.ChangeEvent<HTMLInputElement>) => {
-            console.log(e, e.target.value)
             setSearch(e.target.value.trim())
           }}
           onKeyDown={(e: React.KeyboardEvent) => {
@@ -165,7 +168,7 @@ export default function SearchList<
             static
             focus
             className={clsx(
-              'absolute z-10 transform cursor-pointer rounded-lg bg-theme border-2 border-neutral-200',
+              'absolute z-50 transform cursor-pointer rounded-lg bg-theme border-2 border-neutral-200',
               'p-2 bg-theme dark:bg-theme-lighter overflow-auto hover:scrollbar scrollbar--vertical scrollbar--horizontal shadow-2xl',
               size === EnumSize.sm && 'mt-7 max-h-[30vh]',
               size === EnumSize.md && 'mt-9 max-h-[40vh]',
@@ -217,7 +220,7 @@ export default function SearchList<
             ) : (
               found.map(([item, index], idx) => (
                 <div
-                  key={item[displayBy]}
+                  key={index}
                   role="menuitem"
                   data-index={idx}
                   className={clsx(
@@ -296,6 +299,7 @@ function SearchResult<T extends Record<string, any> = Record<string, any>>({
         </>
       ) : (
         <span
+          title={item[displayBy]}
           className="font-bold"
           dangerouslySetInnerHTML={{
             __html: highlightMatch(item[displayBy], search),

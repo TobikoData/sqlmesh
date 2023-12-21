@@ -17,8 +17,8 @@ export interface InitialSQLMeshModel extends Model {
 export class ModelSQLMeshModel<
   T extends InitialSQLMeshModel = InitialSQLMeshModel,
 > extends ModelInitial<T> {
-  path: string
   name: string
+  path: string
   dialect: string
   type: ModelType
   columns: Column[]
@@ -31,15 +31,15 @@ export class ModelSQLMeshModel<
       (initial as ModelSQLMeshModel<T>)?.isModel
         ? (initial as ModelSQLMeshModel<T>).initial
         : {
-            ...(initial as T),
-            dialect: initial?.dialect ?? 'Default',
-            columns: initial?.columns ?? [],
-            details: initial?.details ?? {},
-          },
+          ...(initial as T),
+          dialect: initial?.dialect ?? 'Default',
+          columns: initial?.columns ?? [],
+          details: initial?.details ?? {},
+        },
     )
 
+    this.name = encodeURI(this.initial.name)
     this.path = this.initial.path
-    this.name = this.initial.name
     this.dialect = this.initial.dialect
     this.description = this.initial.description
     this.sql = this.initial.sql
@@ -51,7 +51,7 @@ export class ModelSQLMeshModel<
   get index(): string {
     return [
       this.path,
-      this.name,
+      this.displayName,
       this.dialect,
       this.type,
       this.description,
@@ -80,14 +80,20 @@ export class ModelSQLMeshModel<
     return this.type === ModelType.external
   }
 
+  get displayName(): string {
+    return decodeURI(this.name)
+  }
+
   update(initial: Partial<InitialSQLMeshModel> = {}): void {
     for (const [key, value] of Object.entries(initial)) {
       if (key === 'columns') {
         this.columns = value as Column[]
       } else if (key === 'details') {
         this.details = value as ModelDetails
+      } else if (key === 'name') {
+        this.name = encodeURI(value as string)
       } else if (key in this) {
-        this[key as 'path' | 'name' | 'dialect' | 'description' | 'sql'] =
+        this[key as 'path' | 'dialect' | 'description' | 'sql'] =
           value as string
       }
     }

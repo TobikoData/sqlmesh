@@ -307,7 +307,7 @@ function FormActionsModel({
   const setPreviewTable = useStoreEditor(s => s.setPreviewTable)
 
   const [form, setForm] = useState<EvaluateInput | RenderInput>({
-    model: model.name,
+    model: model.displayName,
     start: toDateFormat(toDate(Date.now() - DAY)),
     end: toDateFormat(new Date()),
     execution_time: toDateFormat(toDate(Date.now() - DAY)),
@@ -315,14 +315,14 @@ function FormActionsModel({
   })
 
   const { refetch: getRender } = useApiRender(
-    Object.assign(form, { model: model.name }) as RenderInput,
+    Object.assign(form, { model: model.displayName }) as RenderInput,
   )
   const {
     refetch: getEvaluate,
     isFetching,
     cancel: cancelEvaluate,
   } = useApiEvaluate(
-    Object.assign(form, { model: model.name }) as EvaluateInput,
+    Object.assign(form, { model: model.displayName }) as EvaluateInput,
   )
 
   const shouldEvaluate =

@@ -89,7 +89,8 @@ export const useStoreContext = create<ContextStore>((set, get) => ({
 
     set(() => ({
       models: models.reduce((acc: Map<string, ModelSQLMeshModel>, model) => {
-        let tempModel = s.models.get(model.path) ?? s.models.get(model.name)
+        const modelName = encodeURI(model.name)
+        let tempModel = s.models.get(model.path) ?? s.models.get(modelName)
 
         if (isNil(tempModel)) {
           tempModel = new ModelSQLMeshModel(model)
@@ -97,7 +98,7 @@ export const useStoreContext = create<ContextStore>((set, get) => ({
           tempModel.update(model)
         }
 
-        acc.set(model.name, tempModel)
+        acc.set(modelName, tempModel)
         acc.set(model.path, tempModel)
 
         return acc
