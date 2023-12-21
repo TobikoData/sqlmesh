@@ -23,4 +23,9 @@ from sqlmesh.core.config.loader import (
 from sqlmesh.core.config.model import ModelDefaultsConfig
 from sqlmesh.core.config.root import Config
 from sqlmesh.core.config.run import RunConfig
-from sqlmesh.core.config.scheduler import AirflowSchedulerConfig, BuiltInSchedulerConfig
+from sqlmesh.core.config.scheduler import (
+    AirflowSchedulerConfig,
+    BuiltInSchedulerConfig,
+    CloudComposerSchedulerConfig,
+    MWAASchedulerConfig,
+)
