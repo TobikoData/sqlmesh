@@ -108,11 +108,16 @@ class RedshiftEngineAdapter(
                     if target["name"] == "TARGETENTRY":
                         resdom = target["resdom"]
                         # https://github.com/postgres/postgres/blob/master/src/include/catalog/pg_type.dat
-                        if resdom["restype"] == "1043" and resdom["restypmod"] == "- 1":
+                        if resdom["restype"] == "1043":
+                            size = (
+                                int(resdom["restypmod"]) - 4
+                                if resdom["restypmod"] != "- 1"
+                                else "MAX"
+                            )
                             select.select(
                                 exp.cast(
                                     exp.to_identifier(resdom["resname"]),
-                                    "VARCHAR(MAX)",
+                                    f"VARCHAR({size})",
                                     dialect=self.dialect,
                                 ),
                                 copy=False,
