@@ -102,7 +102,7 @@ class LogicalReplaceQueryMixin(EngineAdapter):
             temp_query = query.transform(
                 replace_table, curr_table=target_table, new_table=temp_table
             )
-            engine_adapter.execute(engine_adapter._truncate_table(target_table))
+            engine_adapter._truncate_table(target_table)
             return engine_adapter._insert_append_query(target_table, temp_query, columns_to_types)
 
     @set_catalog()
@@ -141,7 +141,7 @@ class LogicalReplaceQueryMixin(EngineAdapter):
                     return self.overwrite_target_from_temp(
                         self, query, columns_to_types, target_table
                     )
-                self.execute(self._truncate_table(table_name))
+                self._truncate_table(table_name)
                 return self._insert_append_query(table_name, query, columns_to_types)
 
 
@@ -263,3 +263,12 @@ class GetCurrentCatalogFromFunctionMixin(EngineAdapter):
         if result:
             return result[0]
         return None
+
+
+class NonTransactionalTruncateMixin(EngineAdapter):
+    def _truncate_table(self, table_name: TableName) -> None:
+        # Truncate forces a commit of the current transaction so we want to do an unconditional delete to
+        # preserve the transaction if one exists otherwise we can truncate
+        if self._connection_pool.is_transaction_active:
+            return self.execute(exp.Delete(this=exp.to_table(table_name)))
+        super()._truncate_table(table_name)

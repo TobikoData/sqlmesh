@@ -5,6 +5,7 @@ import typing as t
 from sqlmesh.core.engine_adapter.mixins import (
     LogicalMergeMixin,
     LogicalReplaceQueryMixin,
+    NonTransactionalTruncateMixin,
     PandasNativeFetchDFSupportMixin,
 )
 from sqlmesh.core.engine_adapter.shared import DataObject, DataObjectType, set_catalog
@@ -17,6 +18,7 @@ class MySQLEngineAdapter(
     LogicalMergeMixin,
     LogicalReplaceQueryMixin,
     PandasNativeFetchDFSupportMixin,
+    NonTransactionalTruncateMixin,
 ):
     DEFAULT_BATCH_SIZE = 200
     DIALECT = "mysql"
