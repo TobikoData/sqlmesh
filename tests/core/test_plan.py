@@ -16,7 +16,14 @@ from sqlmesh.core.snapshot import (
     SnapshotFingerprint,
 )
 from sqlmesh.utils.dag import DAG
-from sqlmesh.utils.date import now, to_date, to_datetime, to_timestamp, yesterday_ds
+from sqlmesh.utils.date import (
+    now,
+    now_timestamp,
+    to_date,
+    to_datetime,
+    to_timestamp,
+    yesterday_ds,
+)
 from sqlmesh.utils.errors import PlanError
 
 
@@ -263,6 +270,7 @@ def test_forward_only_revert_not_allowed(make_snapshot, mocker: MockerFixture):
     forward_only_snapshot = make_snapshot(SqlModel(name="a", query=parse_one("select 2, ds")))
     forward_only_snapshot.categorize_as(SnapshotChangeCategory.FORWARD_ONLY)
     forward_only_snapshot.version = snapshot.version
+    forward_only_snapshot.unpaused_ts = now_timestamp()
     assert forward_only_snapshot.is_forward_only
 
     context_diff_mock = mocker.Mock()

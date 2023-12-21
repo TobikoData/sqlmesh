@@ -666,6 +666,7 @@ class Plan:
             if (
                 candidate.snapshot_id not in self.context_diff.new_snapshots
                 and promoted.is_forward_only
+                and not promoted.is_paused
                 and not candidate.is_forward_only
                 and not candidate.is_indirect_non_breaking
                 and (
