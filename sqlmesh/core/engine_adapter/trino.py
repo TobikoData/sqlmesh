@@ -6,7 +6,7 @@ import pandas as pd
 from pandas.api.types import is_datetime64_any_dtype  # type: ignore
 from sqlglot import exp
 
-from sqlmesh.core.dialect import to_schema
+from sqlmesh.core.dialect import schema_, to_schema
 from sqlmesh.core.engine_adapter.base import (
     CatalogSupport,
     InsertOverwriteStrategy,
@@ -50,7 +50,7 @@ class TrinoEngineAdapter(
 
     def set_current_catalog(self, catalog: str) -> None:
         """Sets the catalog name of the current connection."""
-        self.execute(f"USE {catalog}.information_schema")
+        self.execute(exp.Use(this=schema_(catalog, "information_schema")))
 
     def _insert_overwrite_by_condition(
         self,
