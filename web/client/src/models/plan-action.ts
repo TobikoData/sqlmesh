@@ -1,4 +1,4 @@
-import { includes, isFalse, isNil, isNotNil } from '@utils/index'
+import { includes, isFalse, isNil } from '@utils/index'
 import { ModelInitial } from './initial'
 import { type ModelPlanOverviewTracker } from './tracker-plan-overview'
 import { type ModelPlanApplyTracker } from './tracker-plan-apply'
@@ -11,7 +11,6 @@ export const EnumPlanAction = {
   RunningTask: 'running-task',
   ApplyVirtual: 'apply-virtual',
   ApplyBackfill: 'apply-backfill',
-  ApplyChanges: 'apply-changes',
   ApplyChangesAndBackfill: 'apply-changes-and-backfill',
   ApplyMetadata: 'apply-metadata',
   Applying: 'applying',
@@ -62,10 +61,6 @@ export class ModelPlanAction<
     return this.value === EnumPlanAction.ApplyBackfill
   }
 
-  get isApplyChanges(): boolean {
-    return this.value === EnumPlanAction.ApplyChanges
-  }
-
   get isApplyChangesAndBackfill(): boolean {
     return this.value === EnumPlanAction.ApplyChangesAndBackfill
   }
@@ -78,7 +73,6 @@ export class ModelPlanAction<
     return (
       this.isApplyVirtual ||
       this.isApplyBackfill ||
-      this.isApplyChanges ||
       this.isApplyChangesAndBackfill ||
       this.isApplyMetadata
     )
@@ -154,9 +148,6 @@ export class ModelPlanAction<
       case EnumPlanAction.ApplyChangesAndBackfill:
         name = 'Apply Changes And Backfill'
         break
-      case EnumPlanAction.ApplyChanges:
-        name = 'Apply Changes And Skip Backfill'
-        break
       case EnumPlanAction.ApplyVirtual:
         name = 'Apply Virtual Update'
         break
@@ -183,38 +174,19 @@ export class ModelPlanAction<
     planApply: ModelPlanApplyTracker
     planCancel: ModelPlanCancelTracker
   }): Optional<PlanAction> {
-    const {
-      isLatest,
-      hasBackfills,
-      hasChanges,
-      isRunning,
-      metadata,
-      skipBackfill,
-    } = planOverview
+    const isRunningPlan = planOverview.isRunning
     const isRunningApply = planApply.isRunning
     const isRunningCancel = planCancel.isRunning
-    const isFinished =
-      planApply.isFinished ||
-      isLatest ||
-      (isNil(hasChanges) && Boolean(hasBackfills) && skipBackfill)
-    const isMetadataUpdate = Boolean(metadata?.length) && isNil(hasBackfills)
-    const isChangesUpdate =
-      Boolean(hasChanges) && Boolean(hasBackfills) && skipBackfill
-    const isVirtualUpdate = isNotNil(hasChanges) && isNil(hasBackfills)
-    const isBackfillUpdate =
-      isNil(hasChanges) && Boolean(hasBackfills) && isFalse(skipBackfill)
-    const isChangesAndBackfillUpdate =
-      Boolean(hasChanges) && Boolean(hasBackfills) && isFalse(skipBackfill)
+    const isFinished = planApply.isFinished || planOverview.isLatest
 
-    if (isRunning) return EnumPlanAction.Running
+    if (isRunningPlan) return EnumPlanAction.Running
     if (isRunningCancel) return EnumPlanAction.Cancelling
     if (isRunningApply) return EnumPlanAction.Applying
     if (isFinished) return EnumPlanAction.Done
-    if (isMetadataUpdate) return EnumPlanAction.ApplyMetadata
-    if (isVirtualUpdate) return EnumPlanAction.ApplyVirtual
-    if (isChangesUpdate) return EnumPlanAction.ApplyChanges
-    if (isBackfillUpdate) return EnumPlanAction.ApplyBackfill
-    if (isChangesAndBackfillUpdate)
+    if (planOverview.isMetadataUpdate) return EnumPlanAction.ApplyMetadata
+    if (planOverview.isVirtualUpdate) return EnumPlanAction.ApplyVirtual
+    if (planOverview.isBackfillUpdate) return EnumPlanAction.ApplyBackfill
+    if (planOverview.isChangesAndBackfillUpdate)
       return EnumPlanAction.ApplyChangesAndBackfill
   }
 }

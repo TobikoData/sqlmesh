@@ -8,11 +8,10 @@ import {
   type PlanStageChangesAdded,
   type PlanStageChangesModified,
   type PlanStageChangesRemoved,
-  type ModelsDiff,
   type SnapshotId,
 } from '@api/client'
 import { ModelPlanTracker, type PlanTracker } from './tracker-plan'
-import { isArrayNotEmpty, isNil } from '@utils/index'
+import { isArrayNotEmpty, isFalse, isNil, isNotNil } from '@utils/index'
 
 export interface PlanOverviewTracker extends PlanTracker {
   validation?: PlanStageValidation
@@ -86,8 +85,39 @@ export class ModelPlanOverviewTracker
     return this._current?.changes?.modified?.metadata
   }
 
+  get isVirtualUpdate(): boolean {
+    return (
+      (isNotNil(this.hasChanges) && isNil(this.hasBackfills)) ||
+      (Boolean(this.hasChanges) && this.skipBackfill)
+    )
+  }
+
+  get isMetadataUpdate(): boolean {
+    return Boolean(this.metadata?.length) && isNil(this.hasBackfills)
+  }
+
+  get isBackfillUpdate(): boolean {
+    return (
+      isNil(this.hasChanges) &&
+      Boolean(this.hasBackfills) &&
+      isFalse(this.skipBackfill)
+    )
+  }
+
+  get isChangesAndBackfillUpdate(): boolean {
+    return (
+      Boolean(this.hasChanges) &&
+      Boolean(this.hasBackfills) &&
+      isFalse(this.skipBackfill)
+    )
+  }
+
   get isLatest(): boolean {
-    return this.isFinished && isNil(this.hasBackfills) && isNil(this.hasChanges)
+    return (
+      this.isFinished &&
+      isNil(this.hasChanges) &&
+      (isNil(this.hasBackfills) || this.skipBackfill)
+    )
   }
 
   get skipTests(): boolean {
