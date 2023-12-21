@@ -661,7 +661,3 @@ def prompt(
     context.console.log_status_update(query)
     if evaluate:
         context.console.log_success(context.fetchdf(query))
-
-
-if __name__ == "__main__":
-    cli()
