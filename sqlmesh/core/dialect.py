@@ -810,7 +810,7 @@ def select_from_values_for_batch_range(
 def pandas_to_sql(
     df: pd.DataFrame,
     columns_to_types: t.Optional[t.Dict[str, exp.DataType]] = None,
-    batch_size: int = 0,
+    batch_size: int = sys.maxsize,
     alias: str = "t",
 ) -> t.Iterator[exp.Select]:
     """Convert a pandas dataframe into a VALUES sql statement.
