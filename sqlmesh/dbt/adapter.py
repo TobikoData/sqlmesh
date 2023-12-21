@@ -242,9 +242,11 @@ class RuntimeAdapter(BaseAdapter):
         return relations
 
     def get_columns_in_relation(self, relation: BaseRelation) -> t.List[Column]:
+        from dbt.adapters.base.column import Column
+
         mapped_table = self._map_table_name(self._normalize(self._relation_to_table(relation)))
         return [
-            self.column_type.from_description(
+            Column.from_description(
                 name=name, raw_data_type=dtype.sql(dialect=self.engine_adapter.dialect)
             )
             for name, dtype in self.engine_adapter.columns(table_name=mapped_table).items()
