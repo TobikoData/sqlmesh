@@ -31,6 +31,7 @@ class GithubCICDBotConfig(BaseConfig):
     auto_categorize_changes: CategorizerConfig = CategorizerConfig.all_off()
     default_pr_start: t.Optional[TimeLike] = "1 day ago"
     skip_pr_backfill: bool = True
+    pr_include_unmodified: t.Optional[bool] = None
 
     @model_validator(mode="before")
     @model_validator_v1_args
