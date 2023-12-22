@@ -1290,18 +1290,35 @@ class CaptureTerminalConsole(TerminalConsole):
     def __init__(self, console: t.Optional[RichConsole] = None, **kwargs: t.Any) -> None:
         super().__init__(console=console, **kwargs)
         self._captured_outputs: t.List[str] = []
+        self._errors: t.List[str] = []
 
     @property
     def captured_output(self) -> str:
         return "".join(self._captured_outputs)
+
+    @property
+    def captured_errors(self) -> str:
+        return "".join(self._errors)
 
     def consume_captured_output(self) -> str:
         output = self.captured_output
         self.clear_captured_outputs()
         return output
 
+    def consume_captured_errors(self) -> str:
+        errors = self.captured_errors
+        self.clear_captured_errors()
+        return errors
+
     def clear_captured_outputs(self) -> None:
         self._captured_outputs = []
+
+    def clear_captured_errors(self) -> None:
+        self._errors = []
+
+    def log_error(self, message: str) -> None:
+        self._errors.append(message)
+        super().log_error(message)
 
     def _print(self, value: t.Any, **kwargs: t.Any) -> None:
         with self.console.capture() as capture:
@@ -1493,6 +1510,9 @@ class MarkdownConsole(CaptureTerminalConsole):
                 if isinstance(test, ModelTest):
                     self._print(f"* Failure Test: `{test.model.name}` - `{test.test_name}`\n\n")
             self._print(f"```{output}```\n\n")
+
+    def log_error(self, message: str) -> None:
+        super().log_error(f"```\n{message}```\n\n")
 
 
 class DatabricksMagicConsole(CaptureTerminalConsole):
