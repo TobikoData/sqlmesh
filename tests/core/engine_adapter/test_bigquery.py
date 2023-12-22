@@ -540,6 +540,42 @@ def test_create_table_table_options(make_mocked_engine_adapter: t.Callable, mock
     ]
 
 
+def test_comments(make_mocked_engine_adapter: t.Callable, mocker: MockerFixture):
+    adapter = make_mocked_engine_adapter(BigQueryEngineAdapter)
+
+    execute_mock = mocker.patch(
+        "sqlmesh.core.engine_adapter.bigquery.BigQueryEngineAdapter.execute"
+    )
+
+    adapter.create_table(
+        "test_table",
+        {"a": "int", "b": "int"},
+        table_description="test description",
+        column_descriptions={"a": "a description"},
+    )
+
+    adapter.ctas(
+        "test_table",
+        parse_one("SELECT a, b FROM source_table"),
+        {"a": "int", "b": "int"},
+        table_description="test description",
+        column_descriptions={"a": "a description"},
+    )
+
+    adapter.create_view(
+        "test_table",
+        parse_one("SELECT a, b FROM source_table"),
+        table_description="test description",
+    )
+
+    sql_calls = _to_sql_calls(execute_mock)
+    assert sql_calls == [
+        "CREATE TABLE IF NOT EXISTS `test_table` (`a` int OPTIONS (description='a description'), `b` int) OPTIONS (description='test description')",
+        "CREATE TABLE IF NOT EXISTS `test_table` (`a` int OPTIONS (description='a description'), `b` int) OPTIONS (description='test description') AS SELECT `a`, `b` FROM `source_table`",
+        "CREATE OR REPLACE VIEW `test_table` OPTIONS (description='test description') AS SELECT `a`, `b` FROM `source_table`",
+    ]
+
+
 def test_select_partitions_expr():
     assert (
         select_partitions_expr(

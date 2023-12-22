@@ -371,6 +371,50 @@ def test_create_table_properties(make_mocked_engine_adapter: t.Callable):
     )
 
 
+def test_comments(make_mocked_engine_adapter: t.Callable, mocker: MockerFixture):
+    adapter = make_mocked_engine_adapter(EngineAdapter)
+
+    execute_mock = mocker.patch(
+        "sqlmesh.core.engine_adapter.bigquery.BigQueryEngineAdapter.execute"
+    )
+
+    adapter.create_table(
+        "test_table",
+        {"a": "int", "b": "int"},
+        table_description="test description",
+        column_descriptions={"a": "a description"},
+    )
+
+    adapter.ctas(
+        "test_table",
+        parse_one("SELECT a, b FROM source_table"),
+        {"a": "int", "b": "int"},
+        table_description="test description",
+        column_descriptions={"a": "a description"},
+    )
+
+    adapter.create_view(
+        "test_table",
+        parse_one("SELECT a, b FROM source_table"),
+        table_description="test description",
+    )
+
+    adapter._create_comments(
+        "test_table",
+        "test description",
+        {"a": "a description"},
+    )
+
+    sql_calls = to_sql_calls(adapter)
+    assert sql_calls == [
+        """CREATE TABLE IF NOT EXISTS "test_table" ("a" int COMMENT 'a description', "b" int) COMMENT='test description'""",
+        """CREATE TABLE IF NOT EXISTS "test_table" ("a" int COMMENT 'a description', "b" int) COMMENT='test description' AS SELECT "a", "b" FROM "source_table\"""",
+        """CREATE OR REPLACE VIEW "test_table" COMMENT='test description' AS SELECT "a", "b" FROM "source_table\"""",
+        """COMMENT ON TABLE "test_table" IS 'test description'""",
+        """COMMENT ON COLUMN "test_table"."a" IS 'a description'""",
+    ]
+
+
 @pytest.mark.parametrize(
     "schema_differ_config, current_table, target_table, expected_final_structure, expected",
     [

@@ -554,7 +554,6 @@ class EngineAdapter:
                 table_name,
                 table_description,
                 column_descriptions,
-                columns_to_types=columns_to_types,
             )
 
     def _build_schema_exp(
@@ -641,7 +640,6 @@ class EngineAdapter:
                 table_name,
                 table_description,
                 column_descriptions,
-                columns_to_types=columns_to_types,
             )
 
     def _create_table(
@@ -1748,7 +1746,6 @@ class EngineAdapter:
         table_comment: t.Optional[str],
         column_comments: t.Optional[t.Dict[str, str]],
         table_kind: str = "TABLE",
-        columns_to_types: t.Optional[t.Dict[str, exp.DataType]] = None,
     ) -> None:
         """
         Executes commands to create table and column comments.
