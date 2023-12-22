@@ -79,7 +79,7 @@ def test_dag(sushi_context):
     }
 
 
-def test_render(sushi_context, assert_exp_eq):
+def test_render_sql_model(sushi_context, assert_exp_eq):
     assert_exp_eq(
         sushi_context.render(
             "sushi.waiter_revenue_by_day",
@@ -152,6 +152,27 @@ def test_render(sushi_context, assert_exp_eq):
         GROUP BY
           "o"."waiter_id",
           "o"."event_date"
+        """,
+    )
+
+
+def test_render_seed_model(sushi_context, assert_exp_eq):
+    assert_exp_eq(
+        sushi_context.render(
+            "sushi.waiter_names",
+            start=date(2021, 1, 1),
+            end=date(2021, 1, 1),
+        ),
+        """
+        SELECT
+          CAST(id AS BIGINT) AS id,
+          CAST(name AS TEXT) AS name
+        FROM (VALUES
+          (0, 'Toby'),
+          (1, 'Tyson'),
+          (2, 'Ryan'),
+          (3, 'George'),
+          (4, 'Chris')) AS t(id, name)
         """,
     )
 

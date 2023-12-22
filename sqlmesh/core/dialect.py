@@ -756,7 +756,7 @@ def extend_sqlglot() -> None:
 def select_from_values(
     values: t.List[t.Tuple[t.Any, ...]],
     columns_to_types: t.Dict[str, exp.DataType],
-    batch_size: int = sys.maxsize,
+    batch_size: int = 0,
     alias: str = "t",
 ) -> t.Iterator[exp.Select]:
     """Generate a VALUES expression that has a select wrapped around it to cast the values to their correct types.
@@ -764,12 +764,14 @@ def select_from_values(
     Args:
         values: List of values to use for the VALUES expression.
         columns_to_types: Mapping of column names to types to assign to the values.
-        batch_size: The maximum number of tuples per batch.
+        batch_size: The maximum number of tuples per batches. Defaults to sys.maxsize if <= 0.
         alias: The alias to assign to the values expression. If not provided then will default to "t"
 
     Returns:
         This method operates as a generator and yields a VALUES expression.
     """
+    if batch_size <= 0:
+        batch_size = sys.maxsize
     num_rows = len(values)
     for i in range(0, num_rows, batch_size):
         yield select_from_values_for_batch_range(
@@ -818,7 +820,7 @@ def pandas_to_sql(
     Args:
         df: A pandas dataframe to convert.
         columns_to_types: Mapping of column names to types to assign to the values.
-        batch_size: The maximum number of tuples per batch, if <= 0 then no batching will occur.
+        batch_size: The maximum number of tuples per batches. Defaults to sys.maxsize if <= 0.
         alias: The alias to assign to the values expression. If not provided then will default to "t"
 
     Returns:
