@@ -71,7 +71,7 @@ function InspectorModel({
   const environment = useStoreContext(s => s.environment)
   const environments = useStoreContext(s => s.environments)
   const list = Array.from(environments)
-    .filter(({ isSynchronized }) => isSynchronized)
+    .filter(({ isRemote }) => isRemote)
     .map(({ name }) => ({ text: name, value: name }))
 
   const modelExtensions = useSQLMeshModelExtensions(model.path, model => {
@@ -85,7 +85,7 @@ function InspectorModel({
             'Actions',
             'Columns',
             tab.file.isSQLMeshModelSQL && 'Query',
-            list.length > 1 && environment.isSynchronized && 'Diff',
+            list.length > 1 && environment.isRemote && 'Diff',
           ].filter(Boolean) as string[]
         }
       />
@@ -130,7 +130,7 @@ function InspectorModel({
             className="text-xs"
           />
         </Tab.Panel>
-        {list.length > 1 && environment.isSynchronized && (
+        {list.length > 1 && environment.isRemote && (
           <Tab.Panel
             unmount={false}
             className={clsx(
