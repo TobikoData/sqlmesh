@@ -892,6 +892,40 @@ def test_delete_expired_snapshots_dev_table_cleanup_only(
     assert set(state_sync.get_snapshots(None)) == {new_snapshot.snapshot_id}
 
 
+def test_delete_expired_snapshots_shared_dev_table(
+    state_sync: EngineAdapterStateSync, make_snapshot: t.Callable
+):
+    now_ts = now_timestamp()
+
+    snapshot = make_snapshot(
+        SqlModel(
+            name="a",
+            query=parse_one("select a, ds"),
+        ),
+    )
+    snapshot.ttl = "in 10 seconds"
+    snapshot.categorize_as(SnapshotChangeCategory.BREAKING)
+    snapshot.updated_ts = now_ts - 15000
+
+    new_snapshot = make_snapshot(
+        SqlModel(
+            name="a",
+            query=parse_one("select a, b, ds"),
+        ),
+    )
+    new_snapshot.ttl = "in 10 seconds"
+    new_snapshot.categorize_as(SnapshotChangeCategory.FORWARD_ONLY)
+    new_snapshot.version = snapshot.version
+    new_snapshot.temp_version = snapshot.temp_version_get_or_generate()
+    new_snapshot.updated_ts = now_ts - 5000
+
+    state_sync.push_snapshots([snapshot, new_snapshot])
+    assert set(state_sync.get_snapshots(None)) == {snapshot.snapshot_id, new_snapshot.snapshot_id}
+
+    assert not state_sync.delete_expired_snapshots()  # No dev table cleanup
+    assert set(state_sync.get_snapshots(None)) == {new_snapshot.snapshot_id}
+
+
 def test_environment_start_as_timestamp(
     state_sync: EngineAdapterStateSync, make_snapshot: t.Callable
 ):

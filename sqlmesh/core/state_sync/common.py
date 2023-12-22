@@ -216,8 +216,10 @@ class CommonStateSyncMixin(StateSync):
         snapshots = self._get_snapshots(hydrate_intervals=False)
 
         snapshots_by_version = defaultdict(set)
+        snapshots_by_temp_version = defaultdict(set)
         for s in snapshots.values():
             snapshots_by_version[(s.name, s.version)].add(s.snapshot_id)
+            snapshots_by_temp_version[(s.name, s.temp_version_get_or_generate())].add(s.snapshot_id)
 
         promoted_snapshot_ids = {
             snapshot.snapshot_id
@@ -241,11 +243,18 @@ class CommonStateSyncMixin(StateSync):
         for snapshot in expired_snapshots:
             shared_version_snapshots = snapshots_by_version[(snapshot.name, snapshot.version)]
             shared_version_snapshots.discard(snapshot.snapshot_id)
-            cleanup_targets.append(
-                SnapshotTableCleanupTask(
-                    snapshot=snapshot.table_info, dev_table_only=bool(shared_version_snapshots)
+
+            shared_temp_version_snapshots = snapshots_by_temp_version[
+                (snapshot.name, snapshot.temp_version_get_or_generate())
+            ]
+            shared_temp_version_snapshots.discard(snapshot.snapshot_id)
+
+            if not shared_temp_version_snapshots:
+                cleanup_targets.append(
+                    SnapshotTableCleanupTask(
+                        snapshot=snapshot.table_info, dev_table_only=bool(shared_version_snapshots)
+                    )
                 )
-            )
 
         return cleanup_targets
 
