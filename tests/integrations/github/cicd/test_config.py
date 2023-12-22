@@ -33,6 +33,7 @@ model_defaults:
     assert config.cicd_bot.default_pr_start == "1 day ago"
     assert not config.cicd_bot.enable_deploy_command
     assert config.cicd_bot.skip_pr_backfill
+    assert config.cicd_bot.pr_include_unmodified is None
 
 
 def test_load_yaml_config(tmp_path):
@@ -53,6 +54,7 @@ cicd_bot:
     default_pr_start: 
     enable_deploy_command: true
     skip_pr_backfill: false
+    pr_include_unmodified: true
 model_defaults:
     dialect: duckdb
 """,
@@ -73,6 +75,7 @@ model_defaults:
     assert config.cicd_bot.default_pr_start is None
     assert config.cicd_bot.enable_deploy_command
     assert not config.cicd_bot.skip_pr_backfill
+    assert config.cicd_bot.pr_include_unmodified
 
 
 def test_load_python_config_defaults(tmp_path):
@@ -100,6 +103,7 @@ config = Config(
     assert config.cicd_bot.default_pr_start == "1 day ago"
     assert not config.cicd_bot.enable_deploy_command
     assert config.cicd_bot.skip_pr_backfill
+    assert config.cicd_bot.pr_include_unmodified is None
 
 
 def test_load_python_config(tmp_path):
@@ -124,6 +128,7 @@ config = Config(
         default_pr_start="1 week ago",
         enable_deploy_command=True,
         skip_pr_backfill=False,
+        pr_include_unmodified=True,
     ),
     model_defaults=ModelDefaultsConfig(dialect="duckdb"),
 )
@@ -146,6 +151,7 @@ config = Config(
     assert config.cicd_bot.default_pr_start == "1 week ago"
     assert config.cicd_bot.enable_deploy_command
     assert not config.cicd_bot.skip_pr_backfill
+    assert config.cicd_bot.pr_include_unmodified
 
 
 def test_validation(tmp_path):

@@ -391,6 +391,7 @@ class GithubController:
                 categorizer_config=self.bot_config.auto_categorize_changes,
                 start=self.bot_config.default_pr_start,
                 skip_backfill=self.bot_config.skip_pr_backfill,
+                include_unmodified=self.bot_config.pr_include_unmodified,
             )
         return self._pr_plan
 
