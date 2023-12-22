@@ -276,6 +276,7 @@ class Context(BaseContext):
         self._macros: UniqueKeyDict[str, ExecutableOrMacro] = UniqueKeyDict("macros")
         self._metrics: UniqueKeyDict[str, Metric] = UniqueKeyDict("metrics")
         self._jinja_macros = JinjaMacroRegistry()
+        self._default_catalog: t.Optional[str] = None
 
         self.path, self.config = t.cast(t.Tuple[Path, Config], next(iter(self.configs.items())))
 
@@ -626,7 +627,9 @@ class Context(BaseContext):
 
     @property
     def default_catalog(self) -> t.Optional[str]:
-        return self._scheduler.get_default_catalog(self)
+        if self._default_catalog is None:
+            self._default_catalog = self._scheduler.get_default_catalog(self)
+        return self._default_catalog
 
     def render(
         self,

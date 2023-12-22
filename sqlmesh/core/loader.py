@@ -440,8 +440,5 @@ class SqlMeshLoader(Loader):
                 [
                     str(int(max(m for m in mtimes if m is not None))),
                     self._loader._context.config.fingerprint,
-                    # adding this in case the default catalog is configured outside of project
-                    # config which is likely the case for something like Airflow
-                    self._loader._context.default_catalog or "",
                 ]
             )
