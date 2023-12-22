@@ -109,6 +109,8 @@ class LogicalReplaceQueryMixin(EngineAdapter):
         table_name: TableName,
         query_or_df: QueryOrDF,
         columns_to_types: t.Optional[t.Dict[str, exp.DataType]] = None,
+        table_description: t.Optional[str] = None,
+        column_descriptions: t.Optional[t.Dict[str, str]] = None,
         **kwargs: t.Any,
     ) -> None:
         """
@@ -117,7 +119,15 @@ class LogicalReplaceQueryMixin(EngineAdapter):
         """
 
         if not self.table_exists(table_name):
-            return self.ctas(table_name, query_or_df, columns_to_types, exists=False, **kwargs)
+            return self.ctas(
+                table_name,
+                query_or_df,
+                columns_to_types,
+                exists=False,
+                table_description=table_description,
+                column_descriptions=column_descriptions,
+                **kwargs,
+            )
         with self.transaction():
             # TODO: remove quote_identifiers when sqlglot has an expression to represent TRUNCATE
             source_queries, columns_to_types = self._get_source_queries_and_columns_to_types(

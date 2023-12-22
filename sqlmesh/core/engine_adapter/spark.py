@@ -362,6 +362,8 @@ class SparkEngineAdapter(GetCurrentCatalogFromFunctionMixin, HiveMetastoreTableP
         table_name: TableName,
         query_or_df: QueryOrDF,
         columns_to_types: t.Optional[t.Dict[str, exp.DataType]] = None,
+        table_description: t.Optional[str] = None,
+        column_descriptions: t.Optional[t.Dict[str, str]] = None,
         **kwargs: t.Any,
     ) -> None:
         # Note: Some storage formats (like Delta and Iceberg) support REPLACE TABLE but since we don't
@@ -412,6 +414,7 @@ class SparkEngineAdapter(GetCurrentCatalogFromFunctionMixin, HiveMetastoreTableP
         columns_to_types: t.Optional[t.Dict[str, exp.DataType]] = None,
         replace: bool = True,
         materialized: bool = False,
+        table_description: t.Optional[str] = None,
         **create_kwargs: t.Any,
     ) -> None:
         """Create a view with a query or dataframe.
@@ -423,14 +426,22 @@ class SparkEngineAdapter(GetCurrentCatalogFromFunctionMixin, HiveMetastoreTableP
             view_name: The view name.
             query_or_df: A query or dataframe.
             columns_to_types: Columns to use in the view statement.
-            replace: Whether or not to replace an existing view defaults to True.
+            replace: Whether or not to replace an existing view - defaults to True.
+            materialized: Whether or not the view should be materialized - defaults to False.
+            table_description: Optional table description from MODEL DDL.
             create_kwargs: Additional kwargs to pass into the Create expression
         """
         pyspark_df = self.try_get_pyspark_df(query_or_df)
         if pyspark_df:
             query_or_df = pyspark_df.toPandas()
         super().create_view(
-            view_name, query_or_df, columns_to_types, replace, materialized, **create_kwargs
+            view_name,
+            query_or_df,
+            columns_to_types,
+            replace,
+            materialized,
+            table_description,
+            **create_kwargs,
         )
 
     def _create_table(
@@ -440,6 +451,8 @@ class SparkEngineAdapter(GetCurrentCatalogFromFunctionMixin, HiveMetastoreTableP
         exists: bool = True,
         replace: bool = False,
         columns_to_types: t.Optional[t.Dict[str, exp.DataType]] = None,
+        table_description: t.Optional[str] = None,
+        column_descriptions: t.Optional[t.Dict[str, str]] = None,
         **kwargs: t.Any,
     ) -> None:
         super()._create_table(
@@ -448,6 +461,8 @@ class SparkEngineAdapter(GetCurrentCatalogFromFunctionMixin, HiveMetastoreTableP
             exists=exists,
             replace=replace,
             columns_to_types=columns_to_types,
+            table_description=table_description,
+            column_descriptions=column_descriptions,
             **kwargs,
         )
         table_name = (

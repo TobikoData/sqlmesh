@@ -61,6 +61,8 @@ class RedshiftEngineAdapter(
         columns_to_types: t.Optional[t.Dict[str, exp.DataType]] = None,
         exists: bool = True,
         replace: bool = False,
+        table_description: t.Optional[str] = None,
+        column_descriptions: t.Optional[t.Dict[str, str]] = None,
         **kwargs: t.Any,
     ) -> None:
         """
@@ -71,12 +73,23 @@ class RedshiftEngineAdapter(
         """
         if not exists:
             return super()._create_table_from_source_queries(
-                table_name, source_queries, columns_to_types, exists, **kwargs
+                table_name,
+                source_queries,
+                columns_to_types,
+                exists,
+                table_description=table_description,
+                column_descriptions=column_descriptions,
+                **kwargs,
             )
         if self.table_exists(table_name):
             return
         super()._create_table_from_source_queries(
-            table_name, source_queries, exists=False, **kwargs
+            table_name,
+            source_queries,
+            exists=False,
+            table_description=table_description,
+            column_descriptions=column_descriptions,
+            **kwargs,
         )
 
     def _build_create_table_exp(
@@ -86,6 +99,7 @@ class RedshiftEngineAdapter(
         exists: bool = True,
         replace: bool = False,
         columns_to_types: t.Optional[t.Dict[str, exp.DataType]] = None,
+        table_description: t.Optional[str] = None,
         **kwargs: t.Any,
     ) -> exp.Create:
         statement = super()._build_create_table_exp(
@@ -94,6 +108,7 @@ class RedshiftEngineAdapter(
             exists=exists,
             replace=replace,
             columns_to_types=columns_to_types,
+            table_description=table_description,
             **kwargs,
         )
 
@@ -147,6 +162,7 @@ class RedshiftEngineAdapter(
         columns_to_types: t.Optional[t.Dict[str, exp.DataType]] = None,
         replace: bool = True,
         materialized: bool = False,
+        table_description: t.Optional[str] = None,
         **create_kwargs: t.Any,
     ) -> None:
         """
@@ -160,6 +176,7 @@ class RedshiftEngineAdapter(
             columns_to_types,
             replace,
             materialized,
+            table_description=table_description,
             no_schema_binding=True,
             **create_kwargs,
         )
@@ -169,6 +186,8 @@ class RedshiftEngineAdapter(
         table_name: TableName,
         query_or_df: QueryOrDF,
         columns_to_types: t.Optional[t.Dict[str, exp.DataType]] = None,
+        table_description: t.Optional[str] = None,
+        column_descriptions: t.Optional[t.Dict[str, str]] = None,
         **kwargs: t.Any,
     ) -> None:
         """
@@ -180,7 +199,14 @@ class RedshiftEngineAdapter(
             `CREATE TABLE...`, `INSERT INTO...`, `RENAME TABLE...`, `RENAME TABLE...`, DROP TABLE...`  dance.
         """
         if not self.is_pandas_df(query_or_df) or not self.table_exists(table_name):
-            return super().replace_query(table_name, query_or_df, columns_to_types, **kwargs)
+            return super().replace_query(
+                table_name,
+                query_or_df,
+                columns_to_types,
+                table_description,
+                column_descriptions,
+                **kwargs,
+            )
         source_queries, columns_to_types = self._get_source_queries_and_columns_to_types(
             query_or_df, columns_to_types, target_table=table_name
         )
@@ -189,7 +215,14 @@ class RedshiftEngineAdapter(
         with self.transaction():
             temp_table = self._get_temp_table(target_table)
             old_table = self._get_temp_table(target_table)
-            self.create_table(temp_table, columns_to_types, exists=False, **kwargs)
+            self.create_table(
+                temp_table,
+                columns_to_types,
+                exists=False,
+                table_description=table_description,
+                column_descriptions=column_descriptions,
+                **kwargs,
+            )
             self._insert_append_source_queries(temp_table, source_queries, columns_to_types)
             self.rename_table(target_table, old_table)
             self.rename_table(temp_table, target_table)

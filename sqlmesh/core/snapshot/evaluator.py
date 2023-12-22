@@ -1202,6 +1202,8 @@ class SCDType2Strategy(MaterializableStrategy):
             updated_at_name=model.kind.updated_at_name,
             updated_at_as_valid_from=model.kind.updated_at_as_valid_from,
             columns_to_types=model.columns_to_types,
+            table_description=model.description,
+            column_descriptions=model.column_descriptions,
             **kwargs,
         )
 
@@ -1225,6 +1227,8 @@ class SCDType2Strategy(MaterializableStrategy):
             updated_at_name=model.kind.updated_at_name,
             updated_at_as_valid_from=model.kind.updated_at_as_valid_from,
             columns_to_types=model.columns_to_types,
+            table_description=model.description,
+            column_descriptions=model.column_descriptions,
             **kwargs,
         )
 

@@ -510,6 +510,26 @@ class BigQueryEngineAdapter(InsertOverwriteWithMergeMixin):
             ]
         return []
 
+    def _build_view_properties_exp(
+        self,
+        table_properties: t.Optional[t.Dict[str, exp.Expression]] = None,
+        table_description: t.Optional[str] = None,
+    ) -> t.Optional[exp.Properties]:
+        """Creates a SQLGlot table properties expression for view"""
+        properties: t.List[exp.Expression] = []
+
+        if table_description:
+            properties.append(
+                exp.Property(
+                    this=exp.Identifier(this="description", quoted=False),
+                    value=exp.Literal.string(table_description),
+                )
+            )
+
+        if properties:
+            return exp.Properties(expressions=properties)
+        return None
+
     def create_state_table(
         self,
         table_name: str,

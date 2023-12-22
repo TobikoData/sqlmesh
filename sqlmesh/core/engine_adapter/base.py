@@ -359,6 +359,8 @@ class EngineAdapter:
         table_name: TableName,
         query_or_df: QueryOrDF,
         columns_to_types: t.Optional[t.Dict[str, exp.DataType]] = None,
+        table_description: t.Optional[str] = None,
+        column_descriptions: t.Optional[t.Dict[str, str]] = None,
         **kwargs: t.Any,
     ) -> None:
         """Replaces an existing table with a query.
@@ -377,7 +379,13 @@ class EngineAdapter:
             query_or_df, columns_to_types, target_table=table_name
         )
         return self._create_table_from_source_queries(
-            table, source_queries, columns_to_types, replace=True, **kwargs
+            table,
+            source_queries,
+            columns_to_types,
+            replace=True,
+            table_description=table_description,
+            column_descriptions=column_descriptions,
+            **kwargs,
         )
 
     def create_index(
@@ -415,6 +423,8 @@ class EngineAdapter:
         columns_to_types: t.Dict[str, exp.DataType],
         primary_key: t.Optional[t.Tuple[str, ...]] = None,
         exists: bool = True,
+        table_description: t.Optional[str] = None,
+        column_descriptions: t.Optional[t.Dict[str, str]] = None,
         **kwargs: t.Any,
     ) -> None:
         """Create a table using a DDL statement
@@ -424,9 +434,19 @@ class EngineAdapter:
             columns_to_types: A mapping between the column name and its data type.
             primary_key: Determines the table primary key.
             exists: Indicates whether to include the IF NOT EXISTS check.
+            table_description: Optional table description from MODEL DDL.
+            column_descriptions: Optional column descriptions from model query.
             kwargs: Optional create table properties.
         """
-        self._create_table_from_columns(table_name, columns_to_types, primary_key, exists, **kwargs)
+        self._create_table_from_columns(
+            table_name,
+            columns_to_types,
+            primary_key,
+            exists,
+            table_description,
+            column_descriptions,
+            **kwargs,
+        )
 
     def ctas(
         self,
@@ -434,6 +454,8 @@ class EngineAdapter:
         query_or_df: QueryOrDF,
         columns_to_types: t.Optional[t.Dict[str, exp.DataType]] = None,
         exists: bool = True,
+        table_description: t.Optional[str] = None,
+        column_descriptions: t.Optional[t.Dict[str, str]] = None,
         **kwargs: t.Any,
     ) -> None:
         """Create a table using a CTAS statement
@@ -443,13 +465,21 @@ class EngineAdapter:
             query_or_df: The SQL query to run or a dataframe for the CTAS.
             columns_to_types: A mapping between the column name and its data type. Required if using a DataFrame.
             exists: Indicates whether to include the IF NOT EXISTS check.
+            table_description: Optional table description from MODEL DDL.
+            column_descriptions: Optional column descriptions from model query.
             kwargs: Optional create table properties.
         """
         source_queries, columns_to_types = self._get_source_queries_and_columns_to_types(
             query_or_df, columns_to_types, target_table=table_name
         )
         return self._create_table_from_source_queries(
-            table_name, source_queries, columns_to_types, exists, **kwargs
+            table_name,
+            source_queries,
+            columns_to_types,
+            exists,
+            table_description=table_description,
+            column_descriptions=column_descriptions,
+            **kwargs,
         )
 
     def create_state_table(
@@ -477,6 +507,8 @@ class EngineAdapter:
         columns_to_types: t.Dict[str, exp.DataType],
         primary_key: t.Optional[t.Tuple[str, ...]] = None,
         exists: bool = True,
+        table_description: t.Optional[str] = None,
+        column_descriptions: t.Optional[t.Dict[str, str]] = None,
         **kwargs: t.Any,
     ) -> None:
         """
@@ -485,7 +517,10 @@ class EngineAdapter:
         Args:
             table_name: The name of the table to create. Can be fully qualified or just table name.
             columns_to_types: Mapping between the column name and its data type.
+            primary_key: Determines the table primary key.
             exists: Indicates whether to include the IF NOT EXISTS check.
+            table_description: Optional table description from MODEL DDL.
+            column_descriptions: Optional column descriptions from model query.
             kwargs: Optional create table properties.
         """
         table = exp.to_table(table_name)
@@ -495,23 +530,19 @@ class EngineAdapter:
             else []
         )
 
-        column_descriptions = kwargs.pop("column_descriptions", None)
         schema = self._build_schema_exp(
             table,
             columns_to_types,
-            column_descriptions if self.COMMENT_CREATION == CommentCreation.IN_SCHEMA_DEF else None,
+            column_descriptions,
             primary_key_expression,
         )
 
-        table_description = kwargs.pop("table_description", None)
         self._create_table(
             schema,
             None,
             exists=exists,
             columns_to_types=columns_to_types,
-            table_description=table_description
-            if self.COMMENT_CREATION == CommentCreation.IN_SCHEMA_DEF
-            else None,
+            table_description=table_description,
             **kwargs,
         )
 
@@ -536,33 +567,26 @@ class EngineAdapter:
         """
         Build a schema expression for a table, columns, column comments, and additional schema properties.
         """
-        if column_descriptions:
-            return exp.Schema(
-                this=table,
-                expressions=[
-                    exp.ColumnDef(
-                        this=exp.to_identifier(column),
-                        kind=kind,
-                        constraints=self._build_col_comment_exp(column, column_descriptions),
-                    )
-                    for column, kind in columns_to_types.items()
-                ]
-                + expressions,
-            )
-        else:
-            return exp.Schema(
-                this=table,
-                expressions=[
-                    exp.ColumnDef(this=exp.to_identifier(column), kind=kind)
-                    for column, kind in columns_to_types.items()
-                ]
-                + expressions,
-            )
+        return exp.Schema(
+            this=table,
+            expressions=[
+                exp.ColumnDef(
+                    this=exp.to_identifier(column),
+                    kind=kind,
+                    constraints=self._build_col_comment_exp(column, column_descriptions)
+                    if column_descriptions
+                    and self.COMMENT_CREATION == CommentCreation.IN_SCHEMA_DEF
+                    else None,
+                )
+                for column, kind in columns_to_types.items()
+            ]
+            + expressions,
+        )
 
     def _build_col_comment_exp(
         self, col_name: str, column_descriptions: t.Dict[str, str]
     ) -> t.List[exp.ColumnConstraint | None]:
-        comment = column_descriptions.get(col_name)
+        comment = column_descriptions.get(col_name, None)
         if comment:
             return [
                 exp.ColumnConstraint(
@@ -578,13 +602,13 @@ class EngineAdapter:
         columns_to_types: t.Optional[t.Dict[str, exp.DataType]] = None,
         exists: bool = True,
         replace: bool = False,
+        table_description: t.Optional[str] = None,
+        column_descriptions: t.Optional[t.Dict[str, str]] = None,
         **kwargs: t.Any,
     ) -> None:
         table = exp.to_table(table_name)
 
         # Build a schema expression with column comments if the engine supports it
-        table_description = kwargs.pop("table_description", None)
-        column_descriptions = kwargs.pop("column_descriptions", None)
         schema = None
         if column_descriptions and self.COMMENT_CREATION == CommentCreation.IN_SCHEMA_DEF:
             schema = self._build_schema_exp(
@@ -601,9 +625,7 @@ class EngineAdapter:
                             columns_to_types=columns_to_types,
                             exists=exists,
                             replace=replace,
-                            table_description=table_description
-                            if self.COMMENT_CREATION == CommentCreation.IN_SCHEMA_DEF
-                            else None,
+                            table_description=table_description,
                             **kwargs,
                         )
                     else:
@@ -629,6 +651,8 @@ class EngineAdapter:
         exists: bool = True,
         replace: bool = False,
         columns_to_types: t.Optional[t.Dict[str, exp.DataType]] = None,
+        table_description: t.Optional[str] = None,
+        column_descriptions: t.Optional[t.Dict[str, str]] = None,
         **kwargs: t.Any,
     ) -> None:
         self.execute(
@@ -638,6 +662,9 @@ class EngineAdapter:
                 exists=exists,
                 replace=replace,
                 columns_to_types=columns_to_types,
+                table_description=table_description
+                if self.COMMENT_CREATION == CommentCreation.IN_SCHEMA_DEF
+                else None,
                 **kwargs,
             )
         )
@@ -649,14 +676,17 @@ class EngineAdapter:
         exists: bool = True,
         replace: bool = False,
         columns_to_types: t.Optional[t.Dict[str, exp.DataType]] = None,
+        table_description: t.Optional[str] = None,
         **kwargs: t.Any,
     ) -> exp.Create:
         exists = False if replace else exists
         if not isinstance(table_name_or_schema, exp.Schema):
             table_name_or_schema = exp.to_table(table_name_or_schema)
         properties = (
-            self._build_table_properties_exp(**kwargs, columns_to_types=columns_to_types)
-            if kwargs
+            self._build_table_properties_exp(
+                **kwargs, columns_to_types=columns_to_types, table_description=table_description
+            )
+            if kwargs or table_description
             else None
         )
         return exp.Create(
@@ -754,6 +784,7 @@ class EngineAdapter:
         columns_to_types: t.Optional[t.Dict[str, exp.DataType]] = None,
         replace: bool = True,
         materialized: bool = False,
+        table_description: t.Optional[str] = None,
         **create_kwargs: t.Any,
     ) -> None:
         """Create a view with a query or dataframe.
@@ -767,6 +798,7 @@ class EngineAdapter:
             columns_to_types: Columns to use in the view statement.
             replace: Whether or not to replace an existing view defaults to True.
             materialized: Whether to create a a materialized view. Only used for engines that support this feature.
+            table_description: Optional table description from MODEL DDL.
             create_kwargs: Additional kwargs to pass into the Create expression
         """
         if self.is_pandas_df(query_or_df):
@@ -804,7 +836,6 @@ class EngineAdapter:
             if not self.SUPPORTS_MATERIALIZED_VIEW_SCHEMA and isinstance(schema, exp.Schema):
                 schema = schema.this
 
-        table_description = create_kwargs.pop("table_description", None)
         create_view_properties = self._build_view_properties_exp(
             create_kwargs.pop("table_properties", None),
             table_description
@@ -1138,6 +1169,8 @@ class EngineAdapter:
         execution_time: TimeLike,
         updated_at_as_valid_from: bool = False,
         columns_to_types: t.Optional[t.Dict[str, exp.DataType]] = None,
+        table_description: t.Optional[str] = None,
+        column_descriptions: t.Optional[t.Dict[str, str]] = None,
         **kwargs: t.Any,
     ) -> None:
         source_queries, columns_to_types = self._get_source_queries_and_columns_to_types(
@@ -1334,8 +1367,8 @@ class EngineAdapter:
                 target_table,
                 query,
                 columns_to_types=columns_to_types,
-                table_description=kwargs.get("table_description", None),
-                column_descriptions=kwargs.get("column_descriptions", None),
+                table_description=table_description,
+                column_descriptions=column_descriptions,
             )
 
     def merge(
@@ -1589,16 +1622,18 @@ class EngineAdapter:
             query_or_df, columns_to_types=columns_to_types, target_table=name
         )
 
-        # do not add comments to temp tables
-        kwargs.pop("table_description", None)
-        kwargs.pop("column_descriptions", None)
-
         with self.transaction():
             table = self._get_temp_table(name)
             if table.db:
                 self.create_schema(schema_(table.args["db"], table.args.get("catalog")))
             self._create_table_from_source_queries(
-                table, source_queries, columns_to_types, exists=True, **kwargs
+                table,
+                source_queries,
+                columns_to_types,
+                exists=True,
+                table_description=None,
+                column_descriptions=None,
+                **kwargs,
             )
 
             try:

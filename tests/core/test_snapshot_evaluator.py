@@ -153,16 +153,19 @@ def test_evaluate(mocker: MockerFixture, adapter_mock, make_snapshot):
         partition_interval_unit=IntervalUnit.DAY,
         clustered_by=[],
         table_properties={},
+        table_description=None,
     )
 
     adapter_mock.create_table.assert_has_calls(
         [
             call(
                 snapshot.table_name(is_deployable=False),
+                column_descriptions=None,
                 **common_kwargs,
             ),
             call(
                 snapshot.table_name(),
+                column_descriptions={},
                 **common_kwargs,
             ),
         ]
@@ -247,6 +250,7 @@ def test_promote(mocker: MockerFixture, adapter_mock, make_snapshot):
         parse_one(
             f"SELECT * FROM sqlmesh__test_schema.test_schema__test_model__{snapshot.version}"
         ),
+        table_description=None,
     )
 
 
@@ -274,6 +278,7 @@ def test_promote_default_catalog(adapter_mock, make_snapshot):
         parse_one(
             f"SELECT * FROM test_catalog.sqlmesh__test_schema.test_schema__test_model__{snapshot.version}"
         ),
+        table_description=None,
     )
 
 
@@ -316,12 +321,14 @@ def test_promote_forward_only(mocker: MockerFixture, adapter_mock, make_snapshot
                 parse_one(
                     f"SELECT * FROM sqlmesh__test_schema.test_schema__test_model__{snapshot.fingerprint.to_version()}__temp"
                 ),
+                table_description=None,
             ),
             call(
                 "test_schema__test_env.test_model",
                 parse_one(
                     "SELECT * FROM sqlmesh__test_schema.test_schema__test_model__test_version"
                 ),
+                table_description=None,
             ),
         ]
     )
@@ -423,6 +430,7 @@ def test_evaluate_materialized_view(
             model.columns_to_types,
             materialized=True,
             table_properties={},
+            table_description=None,
         )
 
 
@@ -463,6 +471,7 @@ def test_evaluate_materialized_view_with_execution_time_macro(
         model.columns_to_types,
         materialized=True,
         table_properties={},
+        table_description=None,
     )
 
 
@@ -529,6 +538,7 @@ def test_create_materialized_view(mocker: MockerFixture, adapter_mock, make_snap
     common_kwargs = dict(
         materialized=True,
         table_properties={},
+        table_description=None,
     )
 
     adapter_mock.create_view.assert_has_calls(
@@ -570,6 +580,7 @@ def test_create_view_with_properties(mocker: MockerFixture, adapter_mock, make_s
         table_properties={
             "key": exp.convert("value"),
         },
+        table_description=None,
     )
 
     adapter_mock.create_view.assert_has_calls(
@@ -602,6 +613,7 @@ def test_promote_model_info(mocker: MockerFixture, make_snapshot):
     adapter_mock.create_view.assert_called_once_with(
         "test_schema__test_env.test_model",
         parse_one(f"SELECT * FROM physical_schema.test_schema__test_model__{snapshot.version}"),
+        table_description=None,
     )
 
 
@@ -898,6 +910,8 @@ def test_create_clone_in_dev(mocker: MockerFixture, adapter_mock, make_snapshot)
         partition_interval_unit=IntervalUnit.DAY,
         clustered_by=[],
         table_properties={},
+        table_description=None,
+        column_descriptions=None,
     )
 
     adapter_mock.clone_table.assert_called_once_with(
@@ -947,15 +961,18 @@ def test_forward_only_snapshot_for_added_model(mocker: MockerFixture, adapter_mo
         partition_interval_unit=IntervalUnit.DAY,
         clustered_by=[],
         table_properties={},
+        table_description=None,
     )
     adapter_mock.create_table.assert_has_calls(
         [
             call(
                 f"sqlmesh__test_schema.test_schema__test_model__{snapshot.version}__temp",
+                column_descriptions=None,
                 **common_create_args,
             ),
             call(
                 f"sqlmesh__test_schema.test_schema__test_model__{snapshot.version}",
+                column_descriptions={},
                 **common_create_args,
             ),
         ]
@@ -998,12 +1015,15 @@ def test_create_scd_type_2(mocker: MockerFixture, adapter_mock, make_snapshot):
         partition_interval_unit=IntervalUnit.DAY,
         clustered_by=[],
         table_properties={},
+        table_description=None,
     )
 
     adapter_mock.create_table.assert_has_calls(
         [
-            call(snapshot.table_name(is_deployable=False), **common_kwargs),
-            call(snapshot.table_name(), **common_kwargs),
+            call(
+                snapshot.table_name(is_deployable=False), column_descriptions=None, **common_kwargs
+            ),
+            call(snapshot.table_name(), column_descriptions={}, **common_kwargs),
         ]
     )
 
@@ -1041,12 +1061,19 @@ def test_create_ctas_scd_type_2(mocker: MockerFixture, adapter_mock, make_snapsh
         partition_interval_unit=IntervalUnit.DAY,
         clustered_by=[],
         table_properties={},
+        table_description=None,
     )
 
     adapter_mock.ctas.assert_has_calls(
         [
-            call(snapshot.table_name(is_deployable=False), query, None, **common_kwargs),
-            call(snapshot.table_name(), query, None, **common_kwargs),
+            call(
+                snapshot.table_name(is_deployable=False),
+                query,
+                None,
+                column_descriptions=None,
+                **common_kwargs,
+            ),
+            call(snapshot.table_name(), query, None, column_descriptions={}, **common_kwargs),
         ]
     )
 
@@ -1097,6 +1124,8 @@ def test_insert_into_scd_type_2(adapter_mock, make_snapshot):
         start="2020-01-01",
         end="2020-01-02",
         execution_time="2020-01-02",
+        table_description=None,
+        column_descriptions={},
         updated_at_as_valid_from=False,
     )
 
