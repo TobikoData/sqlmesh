@@ -9,5 +9,5 @@ def test_set_current_catalog(make_mocked_engine_adapter: t.Callable, duck_conn):
     adapter.set_current_catalog("test_catalog")
 
     assert to_sql_calls(adapter) == [
-        'USE "information_schema"."test_catalog"',
+        'USE "test_catalog"."information_schema"',
     ]
