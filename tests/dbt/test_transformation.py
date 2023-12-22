@@ -12,6 +12,7 @@ from dbt.exceptions import CompilationError
 from pytest_mock.plugin import MockerFixture
 from sqlglot import exp, parse_one
 
+from sqlmesh.core import dialect as d
 from sqlmesh.core.audit import StandaloneAudit
 from sqlmesh.core.context import Context
 from sqlmesh.core.model import (
@@ -639,8 +640,10 @@ def test_dbt_max_partition(sushi_test_project: Project, assert_exp_eq, mocker: M
         name="test_target", schema="test_schema", database="test-project"
     )
 
+    pre_statement = model_config.to_sqlmesh(context).pre_statements[-1]  # type: ignore
+
     assert (
-        model_config.to_sqlmesh(context).pre_statements[-1].sql().strip()  # type: ignore
+        pre_statement.sql().strip()
         == """
 JINJA_STATEMENT_BEGIN;
 {% if is_incremental() %}
@@ -650,6 +653,8 @@ JINJA_STATEMENT_BEGIN;
 {% endif %}
 JINJA_END;""".strip()
     )
+
+    assert d.parse_one(pre_statement.sql()) == pre_statement
 
 
 def test_bigquery_table_properties(sushi_test_project: Project, mocker: MockerFixture):
