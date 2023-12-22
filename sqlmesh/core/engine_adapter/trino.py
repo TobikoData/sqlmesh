@@ -50,7 +50,7 @@ class TrinoEngineAdapter(
 
     def set_current_catalog(self, catalog: str) -> None:
         """Sets the catalog name of the current connection."""
-        self.execute(exp.Use(this=schema_(catalog, "information_schema")))
+        self.execute(exp.Use(this=schema_(db="information_schema", catalog=catalog)))
 
     def _insert_overwrite_by_condition(
         self,
