@@ -282,6 +282,10 @@ class SnapshotInfoMixin(ModelKindMixin):
     def data_hash_matches(self, other: t.Optional[SnapshotInfoMixin | SnapshotDataVersion]) -> bool:
         return other is not None and self.fingerprint.data_hash == other.fingerprint.data_hash
 
+    def temp_version_get_or_generate(self) -> str:
+        """Helper method to get the temp version or generate it from the fingerprint."""
+        return self.temp_version or self.fingerprint.to_version()
+
     def _table_name(self, version: str, is_deployable: bool) -> str:
         """Full table name pointing to the materialized location of the snapshot.
 
@@ -291,7 +295,7 @@ class SnapshotInfoMixin(ModelKindMixin):
         """
         is_dev_table = not is_deployable
         if is_dev_table:
-            version = self.temp_version or self.fingerprint.to_version()
+            version = self.temp_version_get_or_generate()
 
         if self.fully_qualified_table is None:
             raise SQLMeshError(
