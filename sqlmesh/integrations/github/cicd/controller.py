@@ -796,9 +796,6 @@ class GithubController:
                 if updated_comment:
                     self._append_output("created_pr_environment", "true")
             else:
-                captured_errors = self._console.consume_captured_errors()
-                if captured_errors:
-                    logger.debug(f"Captured errors: {captured_errors}")
                 if isinstance(exception, NoChangesPlanError):
                     skip_reason = "No changes were detected compared to the prod environment."
                 elif isinstance(exception, TestFailure):
@@ -806,23 +803,23 @@ class GithubController:
                 else:
                     skip_reason = "A prior stage failed resulting in skipping PR creation."
 
-                if not captured_errors:
-                    if isinstance(exception, NodeExecutionFailedError):
-                        logger.debug(
-                            "Got Node Execution Failed Error. Stack trace: "
-                            + traceback.format_exc()
-                        )
-                        failure_msg = f"Node `{exception.node.name}` failed to apply.\n\n**Stack Trace:**\n```\n{traceback.format_exc()}\n```"
-                    else:
-                        logger.debug(
-                            "Got unexpected error. Error Type: "
-                            + str(type(exception))
-                            + " Stack trace: "
-                            + traceback.format_exc()
-                        )
-                        failure_msg = f"This is an unexpected error.\n\n**Exception:**\n```\n{traceback.format_exc()}\n```"
-                else:
+                captured_errors = self._console.consume_captured_errors()
+                if captured_errors:
+                    logger.debug(f"Captured errors: {captured_errors}")
                     failure_msg = f"**Errors:**\n{captured_errors}\n"
+                elif isinstance(exception, NodeExecutionFailedError):
+                    logger.debug(
+                        "Got Node Execution Failed Error. Stack trace: " + traceback.format_exc()
+                    )
+                    failure_msg = f"Node `{exception.node.name}` failed to apply.\n\n**Stack Trace:**\n```\n{traceback.format_exc()}\n```"
+                else:
+                    logger.debug(
+                        "Got unexpected error. Error Type: "
+                        + str(type(exception))
+                        + " Stack trace: "
+                        + traceback.format_exc()
+                    )
+                    failure_msg = f"This is an unexpected error.\n\n**Exception:**\n```\n{traceback.format_exc()}\n```"
                 conclusion_to_summary = {
                     GithubCheckConclusion.SKIPPED: f":next_track_button: Skipped creating or updating PR Environment `{self.pr_environment_name}`. {skip_reason}",
                     GithubCheckConclusion.FAILURE: f":x: Failed to create or update PR Environment `{self.pr_environment_name}`.\n{failure_msg}",
@@ -915,6 +912,11 @@ class GithubController:
             )
             if conclusion.is_skipped:
                 summary = title
+            elif conclusion.is_failure:
+                captured_errors = self._console.consume_captured_errors()
+                summary = (
+                    captured_errors or f"{title}\n\n**Error:**\n```\n{traceback.format_exc()}\n```"
+                )
             else:
                 summary = "**Generated Prod Plan**\n" + self.get_plan_summary(self.prod_plan)
             return conclusion, title, summary
