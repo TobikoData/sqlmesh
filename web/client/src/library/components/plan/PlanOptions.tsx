@@ -27,7 +27,7 @@ export default function PlanOptions(): JSX.Element {
   const environment = useStoreContext(s => s.environment)
   const environments = useStoreContext(s => s.environments)
 
-  const synchronizedEnvironments = ModelEnvironment.getOnlySynchronized(
+  const remoteEnvironments = ModelEnvironment.getOnlyRemote(
     Array.from(environments),
   )
 
@@ -58,17 +58,17 @@ export default function PlanOptions(): JSX.Element {
               <Disclosure.Panel className="px-4 pb-2 text-sm text-neutral-500">
                 <div className="mt-3">
                   <div className="flex flex-wrap md:flex-nowrap">
-                    {isFalse(environment.isDefault) && (
+                    {isFalse(environment.isProd) && (
                       <Input
                         className="w-full"
                         label="Create From Environment"
                         info="The environment to base the plan on rather than local files"
-                        disabled={synchronizedEnvironments.length < 2}
+                        disabled={remoteEnvironments.length < 2}
                       >
                         {({ className, disabled }) => (
                           <Input.Selector
                             className={clsx(className, 'w-full')}
-                            list={ModelEnvironment.getOnlySynchronized(
+                            list={ModelEnvironment.getOnlyRemote(
                               Array.from(environments),
                             ).map(env => ({
                               value: env.name,
@@ -140,13 +140,13 @@ export default function PlanOptions(): JSX.Element {
               models in the target environment"
                         enabled={
                           no_gaps ||
-                          (skip_backfill && environment.isDefaultInitial) ||
-                          environment.isDefaultInitial
+                          (skip_backfill && environment.isInitialProd) ||
+                          environment.isInitialProd
                         }
                         disabled={
                           isInitialPlanRun ||
-                          (skip_backfill && environment.isDefaultInitial) ||
-                          environment.isDefaultInitial
+                          (skip_backfill && environment.isInitialProd) ||
+                          environment.isInitialProd
                         }
                         setEnabled={(value: boolean) => {
                           dispatch({
@@ -161,9 +161,7 @@ export default function PlanOptions(): JSX.Element {
                         label="Skip Backfill"
                         info="Skip the backfill step"
                         enabled={skip_backfill}
-                        disabled={
-                          isInitialPlanRun || environment.isDefaultInitial
-                        }
+                        disabled={isInitialPlanRun || environment.isInitialProd}
                         setEnabled={(value: boolean) => {
                           dispatch({
                             type: EnumPlanActions.PlanOptions,
@@ -179,9 +177,7 @@ export default function PlanOptions(): JSX.Element {
                         label="Include Unmodified"
                         info="Indicates whether to create views for all models in the target development environment or only for modified ones"
                         enabled={include_unmodified}
-                        disabled={
-                          isInitialPlanRun || environment.isDefaultInitial
-                        }
+                        disabled={isInitialPlanRun || environment.isInitialProd}
                         setEnabled={(value: boolean) => {
                           dispatch({
                             type: EnumPlanActions.PlanOptions,
@@ -193,9 +189,7 @@ export default function PlanOptions(): JSX.Element {
                         label="Forward Only"
                         info="Create a plan for forward-only changes"
                         enabled={forward_only}
-                        disabled={
-                          isInitialPlanRun || environment.isDefaultInitial
-                        }
+                        disabled={isInitialPlanRun || environment.isInitialProd}
                         setEnabled={(value: boolean) => {
                           dispatch({
                             type: EnumPlanActions.PlanOptions,
@@ -222,9 +216,7 @@ export default function PlanOptions(): JSX.Element {
                         label="No Auto Categorization"
                         info="Set category manually"
                         enabled={no_auto_categorization}
-                        disabled={
-                          isInitialPlanRun || environment.isDefaultInitial
-                        }
+                        disabled={isInitialPlanRun || environment.isInitialProd}
                         setEnabled={(value: boolean) => {
                           dispatch({
                             type: EnumPlanActions.PlanOptions,

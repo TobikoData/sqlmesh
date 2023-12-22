@@ -70,9 +70,7 @@ export default function PageIDE(): JSX.Element {
   const removeConfirmation = useStoreContext(s => s.removeConfirmation)
   const environment = useStoreContext(s => s.environment)
   const setModels = useStoreContext(s => s.setModels)
-  const addSynchronizedEnvironments = useStoreContext(
-    s => s.addSynchronizedEnvironments,
-  )
+  const addRemoteEnvironments = useStoreContext(s => s.addRemoteEnvironments)
 
   const planOverview = useStorePlan(s => s.planOverview)
   const planApply = useStorePlan(s => s.planApply)
@@ -355,7 +353,7 @@ export default function PageIDE(): JSX.Element {
       data ?? {}
 
     if (isObjectNotEmpty<EnvironmentsEnvironments>(environments)) {
-      addSynchronizedEnvironments(
+      addRemoteEnvironments(
         Object.values(environments),
         default_target_environment,
         pinned_environments,

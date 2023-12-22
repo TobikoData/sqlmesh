@@ -12,7 +12,7 @@ export default function PlanHeader(): JSX.Element {
 
   return (
     <div className="flex flex-col pb-2 w-full">
-      <div className="flex justify-between items-center">
+      <div className="flex justify-between items-center mt-2">
         <h4 className="flex items-center text-xl px-6 font-bold whitespace-nowrap">
           <span>Target Environment is</span>
           <span className="block ml-2 px-2 py-1 font-sm rounded-md bg-primary-10 text-primary-500">

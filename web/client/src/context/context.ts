@@ -15,8 +15,6 @@ interface ContextStore {
   confirmations: Confirmation[]
   environment: ModelEnvironment
   environments: Set<ModelEnvironment>
-  defaultEnvironment?: ModelEnvironment
-  pinnedEnvironments: ModelEnvironment[]
   models: Map<string, ModelSQLMeshModel>
   setVersion: (version?: string) => void
   setShowConfirmation: (showConfirmation: boolean) => void
@@ -33,16 +31,17 @@ interface ContextStore {
     created_from: EnvironmentName,
   ) => void
   removeLocalEnvironment: (environments: ModelEnvironment) => void
-  addSynchronizedEnvironments: (
+  addRemoteEnvironments: (
     environments: Environment[],
     defaultEnvironment?: string,
     pinnedEnvironments?: string[],
   ) => void
-  hasSynchronizedEnvironments: () => boolean
+  hasRemoteEnvironments: () => boolean
 }
 
 const environments = new Set(ModelEnvironment.getEnvironments())
-const environment = environments.values().next().value
+const environment =
+  ModelEnvironment.getEnvironment() ?? environments.values().next().value
 
 export const useStoreContext = create<ContextStore>((set, get) => ({
   version: undefined,
@@ -50,8 +49,6 @@ export const useStoreContext = create<ContextStore>((set, get) => ({
   confirmations: [],
   environment,
   environments,
-  defaultEnvironment: undefined,
-  pinnedEnvironments: [],
   initialStartDate: undefined,
   initialEndDate: undefined,
   models: new Map(),
@@ -171,25 +168,26 @@ export const useStoreContext = create<ContextStore>((set, get) => ({
       }
     })
   },
-  addSynchronizedEnvironments(envs = [], defaultEnvironment, pinnedEnvs = []) {
+  addRemoteEnvironments(
+    remoteEnvironments = [],
+    defaultEnvironment,
+    pinnedEnvs = [],
+  ) {
     set(s => {
       const environments = Array.from(s.environments)
 
-      envs.forEach(env => {
+      remoteEnvironments.forEach(env => {
         let environment = environments.find(
           ({ name: envNameLocal }) => env.name === envNameLocal,
         )
 
         if (isNil(environment)) {
-          environment = new ModelEnvironment(
-            env,
-            EnumRelativeLocation.Synchronized,
-          )
+          environment = new ModelEnvironment(env, EnumRelativeLocation.Remote)
 
           environments.push(environment)
         } else {
           environment.update(env)
-          environment.setType(EnumRelativeLocation.Synchronized)
+          environment.setType(EnumRelativeLocation.Remote)
         }
 
         if (environment.isInitial && environment.isDefault) {
@@ -218,15 +216,10 @@ export const useStoreContext = create<ContextStore>((set, get) => ({
         }
       })
 
-      ModelEnvironment.save({ environments })
-      ModelEnvironment.sort(environments)
-
       const profileEnv = ModelEnvironment.getEnvironment()
-      let prodEnv = environments.find(({ name }) => name === 'prod')
-      let storedEnv = environments.find(({ name }) => name === profileEnv?.name)
-      let defaultEnv = environments.find(
-        ({ name }) => name === defaultEnvironment,
-      )
+      let prodEnv: Optional<ModelEnvironment>
+      let storedEnv: Optional<ModelEnvironment>
+      let defaultEnv: Optional<ModelEnvironment>
 
       environments.forEach(env => {
         switch (env.name) {
@@ -237,27 +230,28 @@ export const useStoreContext = create<ContextStore>((set, get) => ({
             storedEnv = env
             break
           case defaultEnvironment:
+            env.isDefault = true
             defaultEnv = env
         }
       })
 
       const currentEnv = storedEnv ?? defaultEnv ?? s.environment
+      const environment = isStringEmptyOrNil(prodEnv?.id) ? prodEnv : currentEnv
+
+      ModelEnvironment.save({ environments, environment })
+      ModelEnvironment.sort(environments)
 
       return {
-        environment: isStringEmptyOrNil(prodEnv?.id) ? prodEnv : currentEnv,
-        defaultEnvironment: defaultEnv,
-        pinnedEnvironments: environments.filter(env =>
-          pinnedEnvs.includes(env.name),
-        ),
+        environment,
         environments: new Set(environments),
       }
     })
   },
-  hasSynchronizedEnvironments() {
+  hasRemoteEnvironments() {
     const s = get()
 
     return Array.from(s.environments).some(
-      ({ type }) => type === EnumRelativeLocation.Synchronized,
+      ({ type }) => type === EnumRelativeLocation.Remote,
     )
   },
 }))
