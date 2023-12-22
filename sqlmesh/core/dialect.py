@@ -764,7 +764,7 @@ def select_from_values(
     Args:
         values: List of values to use for the VALUES expression.
         columns_to_types: Mapping of column names to types to assign to the values.
-        batch_size: The maximum number of tuples per batchs. Defaults to sys.maxsize if <= 0.
+        batch_size: The maximum number of tuples per batches. Defaults to sys.maxsize if <= 0.
         alias: The alias to assign to the values expression. If not provided then will default to "t"
 
     Returns:
@@ -820,7 +820,7 @@ def pandas_to_sql(
     Args:
         df: A pandas dataframe to convert.
         columns_to_types: Mapping of column names to types to assign to the values.
-        batch_size: The maximum number of tuples per batchs. Defaults to sys.maxsize if <= 0.
+        batch_size: The maximum number of tuples per batches. Defaults to sys.maxsize if <= 0.
         alias: The alias to assign to the values expression. If not provided then will default to "t"
 
     Returns:
