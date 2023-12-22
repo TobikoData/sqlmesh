@@ -803,7 +803,11 @@ class GithubController:
                 else:
                     skip_reason = "A prior stage failed resulting in skipping PR creation."
 
-                if isinstance(exception, NodeExecutionFailedError):
+                captured_errors = self._console.consume_captured_errors()
+                if captured_errors:
+                    logger.debug(f"Captured errors: {captured_errors}")
+                    failure_msg = f"**Errors:**\n{captured_errors}\n"
+                elif isinstance(exception, NodeExecutionFailedError):
                     logger.debug(
                         "Got Node Execution Failed Error. Stack trace: " + traceback.format_exc()
                     )
@@ -908,6 +912,11 @@ class GithubController:
             )
             if conclusion.is_skipped:
                 summary = title
+            elif conclusion.is_failure:
+                captured_errors = self._console.consume_captured_errors()
+                summary = (
+                    captured_errors or f"{title}\n\n**Error:**\n```\n{traceback.format_exc()}\n```"
+                )
             else:
                 summary = "**Generated Prod Plan**\n" + self.get_plan_summary(self.prod_plan)
             return conclusion, title, summary
