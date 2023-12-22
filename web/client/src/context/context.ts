@@ -93,7 +93,7 @@ export const useStoreContext = create<ContextStore>((set, get) => ({
         let maybeModel =
           s.models.get(tempModel.path) ??
           s.models.get(tempModel.name) ??
-          s.models.get(tempModel.id)
+          s.models.get(tempModel.fqn)
 
         if (isNil(maybeModel)) {
           maybeModel = tempModel
@@ -102,7 +102,7 @@ export const useStoreContext = create<ContextStore>((set, get) => ({
         }
 
         acc.set(maybeModel.name, maybeModel)
-        acc.set(maybeModel.id, maybeModel)
+        acc.set(maybeModel.fqn, maybeModel)
         acc.set(maybeModel.path, maybeModel)
 
         return acc

@@ -9,7 +9,6 @@ import {
 import clsx from 'clsx'
 import { Divider } from '../divider/Divider'
 import {
-  type Category,
   EnumPlanActions,
   EnumPlanChangeType,
   usePlan,
@@ -21,6 +20,8 @@ import LineageFlowProvider from '@components/graph/context'
 import { useStoreContext } from '@context/context'
 import ModelLineage from '@components/graph/ModelLineage'
 import { type ModelSQLMeshChangeDisplay } from '@models/sqlmesh-change-display'
+import { useEffect } from 'react'
+import { type SnapshotChangeCategory } from '@api/client'
 
 interface PropsPlanChangePreview extends React.HTMLAttributes<HTMLElement> {
   headline?: string
@@ -37,10 +38,10 @@ function PlanChangePreview({
     <div
       className={clsx(
         'flex flex-col rounded-md p-4',
-        type === EnumPlanChangeType.Add && 'bg-success-10',
-        type === EnumPlanChangeType.Remove && 'bg-danger-10',
-        type === EnumPlanChangeType.Direct && 'bg-secondary-10',
-        type === EnumPlanChangeType.Indirect && 'bg-warning-10',
+        type === EnumPlanChangeType.Add && 'bg-success-5',
+        type === EnumPlanChangeType.Remove && 'bg-danger-5',
+        type === EnumPlanChangeType.Direct && 'bg-secondary-5',
+        type === EnumPlanChangeType.Indirect && 'bg-warning-5',
         type === EnumPlanChangeType.Default && 'bg-neutral-5',
         className,
       )}
@@ -119,7 +120,22 @@ function PlanChangePreviewDirect({
 }: {
   changes: ModelSQLMeshChangeDisplay[]
 }): JSX.Element {
+  const dispatch = usePlanDispatch()
+  const { categories } = usePlan()
+
   const models = useStoreContext(s => s.models)
+
+  useEffect(() => {
+    dispatch(
+      changes.map(change => ({
+        type: EnumPlanActions.Category,
+        category: categories.find(
+          ({ value }) => value === change.change_category,
+        ),
+        change,
+      })),
+    )
+  }, [changes])
 
   return (
     <ul>
@@ -204,13 +220,13 @@ function ChangeCategories({
     <RadioGroup
       className="flex flex-col mt-2"
       value={
-        change_categorization.get(change.name)?.category ??
+        change_categorization.get(change.name)?.category.value ??
         change.change_category
       }
-      onChange={(category: Category) => {
+      onChange={(category: SnapshotChangeCategory) => {
         dispatch({
           type: EnumPlanActions.Category,
-          category,
+          category: categories.find(({ value }) => value === category),
           change,
         })
       }}
@@ -352,7 +368,7 @@ function PlanChangePreviewRelations({
 function PlanChangePreviewDiff({ diff }: { diff: string }): JSX.Element {
   return (
     <div className="my-4 bg-dark-lighter rounded-lg overflow-hidden">
-      <pre className="p-4 text-primary-100 max-h-[30vh] overflow-auto hover:scrollbar scrollbar--vertical scrollbar--horizontal">
+      <pre className="p-4 text-primary-100 max-h-[30vh] text-xs overflow-auto hover:scrollbar scrollbar--vertical scrollbar--horizontal">
         {diff.split('\n').map((line: string, idx: number) => (
           <p
             key={`${line}-${idx}`}

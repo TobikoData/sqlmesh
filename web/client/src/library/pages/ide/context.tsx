@@ -43,6 +43,7 @@ interface IDE {
     error: ErrorIDE
   }
   removeError: (error: ErrorIDE | ErrorKey) => void
+  clearErrors: () => void
 }
 
 export const IDEContext = createContext<IDE>({
@@ -51,6 +52,7 @@ export const IDEContext = createContext<IDE>({
   setIsPlanOpen: () => {},
   addError: () => ({ removeError: () => {}, error: {} as unknown as ErrorIDE }),
   removeError: () => {},
+  clearErrors: () => {},
 })
 
 export default function IDEProvider({
@@ -101,6 +103,10 @@ export default function IDEProvider({
     )
   }
 
+  function clearErrors(): void {
+    setErrors(new Set())
+  }
+
   return (
     <IDEContext.Provider
       value={{
@@ -109,6 +115,7 @@ export default function IDEProvider({
         errors,
         addError,
         removeError,
+        clearErrors,
       }}
     >
       {children}

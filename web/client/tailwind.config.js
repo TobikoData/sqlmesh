@@ -78,6 +78,7 @@ module.exports = {
         900: 'var(--color-neutral-900)',
       },
       primary: {
+        5: 'var(--color-primary-5)',
         10: 'var(--color-primary-10)',
         20: 'var(--color-primary-20)',
         30: 'var(--color-primary-30)',
@@ -98,6 +99,7 @@ module.exports = {
         900: 'var(--color-primary-900)',
       },
       secondary: {
+        5: 'var(--color-secondary-5)',
         10: 'var(--color-secondary-10)',
         20: 'var(--color-secondary-20)',
         30: 'var(--color-secondary-30)',
@@ -112,6 +114,7 @@ module.exports = {
         900: 'var(--color-secondary-900)',
       },
       accent: {
+        5: 'var(--color-accent-5)',
         100: 'var(--color-accent-100)',
         200: 'var(--color-accent-200)',
         300: 'var(--color-accent-300)',
@@ -155,6 +158,7 @@ module.exports = {
         900: 'var(--color-danger-900)',
       },
       warning: {
+        5: 'var(--color-warning-5)',
         10: 'var(--color-warning-10)',
         100: 'var(--color-warning-100)',
         200: 'var(--color-warning-200)',

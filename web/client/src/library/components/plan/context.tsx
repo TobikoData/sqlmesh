@@ -12,11 +12,13 @@ import {
   SnapshotChangeCategory,
   type PlanDatesStart,
   type PlanDatesEnd,
+  type PlanOptions,
 } from '~/api/client'
 
 export const EnumPlanActions = {
-  PlanOptions: 'plan-options',
   ResetPlanOptions: 'reset-plan-options',
+  ResetPlanDates: 'reset-plan-dates',
+  PlanOptions: 'plan-options',
   Dates: 'dates',
   DateStart: 'date-start',
   DateEnd: 'date-end',
@@ -57,18 +59,6 @@ export interface ChangeCategory {
   category: Category
 }
 
-interface PlanOptions {
-  skip_tests: boolean
-  no_gaps: boolean
-  skip_backfill: boolean
-  forward_only: boolean
-  auto_apply: boolean
-  no_auto_categorization: boolean
-  include_unmodified: boolean
-  create_from?: string
-  restate_models?: string
-}
-
 export interface TestReportError {
   ok: boolean
   time: number
@@ -103,10 +93,7 @@ type PlanAction = { type: PlanActions } & Partial<PlanDetails> &
   Partial<ChangeCategory> & { modified?: ModelsDiff }
 
 const [defaultCategory, categories] = useCategories()
-const initial = {
-  start: undefined,
-  end: undefined,
-
+const initialPlanOptions = {
   skip_tests: false,
   no_gaps: false,
   skip_backfill: false,
@@ -114,9 +101,18 @@ const initial = {
   auto_apply: false,
   no_auto_categorization: false,
   include_unmodified: true,
-  from: undefined,
   restate_models: undefined,
-  create_from: undefined,
+  create_from: 'prod',
+}
+
+const initialPlanDates = {
+  start: undefined,
+  end: undefined,
+}
+
+const initial = {
+  ...initialPlanDates,
+  ...initialPlanOptions,
 
   categories,
   defaultCategory,
@@ -174,22 +170,29 @@ function reducer(
   { type, ...newState }: PlanAction,
 ): PlanDetails {
   switch (type) {
+    case EnumPlanActions.ResetPlanDates: {
+      return Object.assign<
+        Record<string, unknown>,
+        PlanDetails,
+        Pick<PlanDetails, 'start' | 'end'>
+      >({}, plan, initialPlanDates)
+    }
     case EnumPlanActions.ResetPlanOptions: {
       return Object.assign<Record<string, unknown>, PlanDetails, PlanOptions>(
         {},
         plan,
-        {
-          skip_tests: false,
-          no_gaps: false,
-          skip_backfill: false,
-          forward_only: false,
-          auto_apply: false,
-          no_auto_categorization: false,
-          include_unmodified: true,
-          create_from: undefined,
-          restate_models: undefined,
-        },
+        initialPlanOptions,
       )
+    }
+    case EnumPlanActions.ResetTestsReport: {
+      return Object.assign<
+        Record<string, unknown>,
+        PlanDetails,
+        Pick<PlanDetails, 'testsReportErrors' | 'testsReportMessages'>
+      >({}, plan, {
+        testsReportErrors: undefined,
+        testsReportMessages: undefined,
+      })
     }
     case EnumPlanActions.PlanOptions: {
       return Object.assign<
@@ -217,7 +220,6 @@ function reducer(
         isInitialPlanRun: newState.isInitialPlanRun ?? false,
       })
     }
-
     case EnumPlanActions.DateStart: {
       return Object.assign<
         Record<string, unknown>,
@@ -227,7 +229,6 @@ function reducer(
         start: newState.start,
       })
     }
-
     case EnumPlanActions.DateEnd: {
       return Object.assign<
         Record<string, unknown>,
@@ -237,7 +238,6 @@ function reducer(
         end: newState.end,
       })
     }
-
     case EnumPlanActions.TestsReportErrors: {
       return Object.assign<
         Record<string, unknown>,
@@ -247,7 +247,6 @@ function reducer(
         testsReportErrors: newState.testsReportErrors,
       })
     }
-
     case EnumPlanActions.TestsReportMessages: {
       return Object.assign<
         Record<string, unknown>,
@@ -257,18 +256,6 @@ function reducer(
         testsReportMessages: newState.testsReportMessages,
       })
     }
-
-    case EnumPlanActions.ResetTestsReport: {
-      return Object.assign<
-        Record<string, unknown>,
-        PlanDetails,
-        Pick<PlanDetails, 'testsReportErrors' | 'testsReportMessages'>
-      >({}, plan, {
-        testsReportErrors: undefined,
-        testsReportMessages: undefined,
-      })
-    }
-
     case EnumPlanActions.Category: {
       const { change, category } = newState as ChangeCategory
 
@@ -287,7 +274,6 @@ function reducer(
         change_categorization: new Map(plan.change_categorization),
       })
     }
-
     default: {
       return Object.assign({}, plan)
     }

@@ -4,14 +4,16 @@ import { EnumPlanActions, usePlan, usePlanDispatch } from './context'
 
 export default function PlanBackfillDates({
   disabled = false,
+  className,
 }: {
   disabled?: boolean
+  className?: string
 }): JSX.Element {
   const dispatch = usePlanDispatch()
   const { start, end, isInitialPlanRun } = usePlan()
 
   return (
-    <div className="flex w-full flex-wrap md:flex-nowrap">
+    <div className={clsx('flex w-full flex-wrap md:flex-nowrap', className)}>
       <Input
         className="w-full md:w-[50%]"
         label="Start Date (UTC)"

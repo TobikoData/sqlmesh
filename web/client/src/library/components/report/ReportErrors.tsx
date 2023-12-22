@@ -1,7 +1,7 @@
 import { Disclosure, Popover, Transition } from '@headlessui/react'
 import pluralize from 'pluralize'
 import clsx from 'clsx'
-import React, { useState, Fragment } from 'react'
+import React, { useState, Fragment, useEffect } from 'react'
 import { useIDE, type ErrorIDE, type ErrorKey } from '../../pages/ide/context'
 import { isNotNil, toDate, toDateFormat } from '@utils/index'
 import { MinusCircleIcon, PlusCircleIcon } from '@heroicons/react/24/solid'
@@ -11,16 +11,22 @@ import { Button } from '@components/button/Button'
 import { EnumSize, EnumVariant } from '~/types/enum'
 
 export default function ReportErrors(): JSX.Element {
-  const { errors } = useIDE()
+  const { errors, clearErrors } = useIDE()
 
   const [isShow, setIsShow] = useState(false)
+
+  useEffect(() => {
+    if (errors.size < 1) {
+      setIsShow(false)
+    }
+  }, [errors])
 
   const hasError = errors.size > 0
 
   return (
     <Popover
       onMouseEnter={() => {
-        setIsShow(true)
+        setIsShow(hasError)
       }}
       onMouseLeave={() => {
         setIsShow(false)
@@ -46,7 +52,7 @@ export default function ReportErrors(): JSX.Element {
             )}
           </span>
           <Transition
-            show={isShow && hasError}
+            show={isShow}
             as={Fragment}
             enter="transition ease-out duration-200"
             enterFrom="opacity-0 translate-y-1"
@@ -57,10 +63,19 @@ export default function ReportErrors(): JSX.Element {
           >
             <Popover.Panel
               className={clsx(
-                'absolute top-20 right-2 z-50 rounded-md bg-light transform overflow-hidden text-danger-700 shadow-2xl',
+                'absolute top-20 right-2 z-[1000] rounded-md bg-light transform text-danger-700 shadow-2xl',
                 'w-[90vw] max-h-[80vh]',
               )}
             >
+              <div className="flex justify-end mx-1 mt-2">
+                <Button
+                  size={EnumSize.sm}
+                  variant={EnumVariant.Neutral}
+                  onClick={() => clearErrors()}
+                >
+                  Clear
+                </Button>
+              </div>
               <ul
                 className={clsx(
                   'w-full p-2 overflow-auto hover:scrollbar scrollbar--vertical scrollbar--horizontal',

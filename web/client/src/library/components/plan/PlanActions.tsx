@@ -3,7 +3,6 @@ import useActiveFocus from '~/hooks/useActiveFocus'
 import { EnumVariant } from '~/types/enum'
 import { includes, isFalse } from '~/utils'
 import { Button } from '../button/Button'
-import { Divider } from '@components/divider/Divider'
 import PlanActionsDescription from './PlanActionsDescription'
 import { EnumPlanAction, ModelPlanAction } from '@models/plan-action'
 
@@ -55,10 +54,9 @@ export default function PlanActions({
   }
 
   return (
-    <div>
-      <PlanActionsDescription />
-      <Divider />
-      <div className="flex justify-between px-4 py-2">
+    <>
+      {isFalse(planAction.isDone) && <PlanActionsDescription />}
+      <div className="flex justify-between px-4 pb-2">
         <div className="flex w-full items-center">
           {(planAction.isRun || planAction.isRunning) && (
             <Button
@@ -150,6 +148,6 @@ export default function PlanActions({
           </Button>
         </div>
       </div>
-    </div>
+    </>
   )
 }

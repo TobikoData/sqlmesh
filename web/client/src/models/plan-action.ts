@@ -120,7 +120,7 @@ export class ModelPlanAction<
   static getActionDisplayName(
     action: ModelPlanAction,
     options: PlanAction[] = [],
-    fallback: string = 'Run',
+    fallback: string = 'Plan',
   ): string {
     if (!options.includes(action.value)) return fallback
 
@@ -143,7 +143,7 @@ export class ModelPlanAction<
         name = 'Cancelling...'
         break
       case EnumPlanAction.Run:
-        name = 'Run'
+        name = 'Plan'
         break
       case EnumPlanAction.ApplyChangesAndBackfill:
         name = 'Apply Changes And Backfill'
@@ -173,20 +173,20 @@ export class ModelPlanAction<
     planOverview: ModelPlanOverviewTracker
     planApply: ModelPlanApplyTracker
     planCancel: ModelPlanCancelTracker
-  }): Optional<PlanAction> {
+  }): PlanAction {
     const isRunningPlan = planOverview.isRunning
     const isRunningApply = planApply.isRunning
     const isRunningCancel = planCancel.isRunning
-    const isFinished = planApply.isFinished || planOverview.isLatest
 
     if (isRunningPlan) return EnumPlanAction.Running
     if (isRunningCancel) return EnumPlanAction.Cancelling
     if (isRunningApply) return EnumPlanAction.Applying
-    if (isFinished) return EnumPlanAction.Done
-    if (planOverview.isMetadataUpdate) return EnumPlanAction.ApplyMetadata
     if (planOverview.isVirtualUpdate) return EnumPlanAction.ApplyVirtual
+    if (planOverview.isMetadataUpdate) return EnumPlanAction.ApplyMetadata
     if (planOverview.isBackfillUpdate) return EnumPlanAction.ApplyBackfill
     if (planOverview.isChangesAndBackfillUpdate)
       return EnumPlanAction.ApplyChangesAndBackfill
+
+    return EnumPlanAction.Done
   }
 }

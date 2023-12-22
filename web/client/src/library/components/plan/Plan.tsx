@@ -1,6 +1,5 @@
-import { isNil, isNotNil, isTrue } from '~/utils'
+import { isNil, isTrue } from '~/utils'
 import { useStorePlan } from '~/context/plan'
-import { Divider } from '~/library/components/divider/Divider'
 import { useApiPlanRun, useApiPlanApply, useApiCancelPlan } from '~/api'
 import PlanHeader from './PlanHeader'
 import PlanActions from './PlanActions'
@@ -14,7 +13,6 @@ import { EnumVariant } from '~/types/enum'
 import PlanApplyStageTracker from './PlanApplyStageTracker'
 import { type ModelEnvironment } from '@models/environment'
 import { EnumPlanAction, ModelPlanAction } from '@models/plan-action'
-import { useEffect } from 'react'
 import { useStoreProject } from '@context/project'
 
 function Plan({
@@ -25,7 +23,7 @@ function Plan({
   onClose: () => void
 }): JSX.Element {
   const dispatch = usePlanDispatch()
-  const { removeError } = useIDE()
+  const { removeError, clearErrors } = useIDE()
 
   const planOverviewTracker = useStorePlan(s => s.planOverview)
   const planApplyTracker = useStorePlan(s => s.planApply)
@@ -48,21 +46,11 @@ function Plan({
     useApiPlanApply(environment.name, applyPayload)
   const { refetch: cancelPlan } = useApiCancelPlan()
 
-  useEffect(() => {
-    if (
-      isNotNil(planOverviewTracker.environment) &&
-      planOverviewTracker.environment !== environment.name
-    ) {
-      setPlanAction(new ModelPlanAction({ value: EnumPlanAction.Run }))
-      reset()
-    }
-  }, [planOverviewTracker, environment])
-
   function cleanUp(): void {
     dispatch([
-      {
-        type: EnumPlanActions.ResetPlanOptions,
-      },
+      { type: EnumPlanActions.ResetPlanDates },
+      { type: EnumPlanActions.ResetPlanOptions },
+      { type: EnumPlanActions.ResetTestsReport },
     ])
   }
 
@@ -70,6 +58,7 @@ function Plan({
     planApplyTracker.reset()
 
     cleanUp()
+    clearErrors()
 
     setPlanAction(new ModelPlanAction({ value: EnumPlanAction.Run }))
   }
@@ -82,11 +71,7 @@ function Plan({
   }
 
   function cancel(): void {
-    dispatch([
-      {
-        type: EnumPlanActions.ResetTestsReport,
-      },
-    ])
+    dispatch([{ type: EnumPlanActions.ResetTestsReport }])
     setPlanAction(new ModelPlanAction({ value: EnumPlanAction.Cancelling }))
 
     let cancelAction
@@ -108,11 +93,7 @@ function Plan({
   }
 
   function apply(): void {
-    dispatch([
-      {
-        type: EnumPlanActions.ResetTestsReport,
-      },
-    ])
+    dispatch([{ type: EnumPlanActions.ResetTestsReport }])
 
     planApply().catch(console.log)
   }
@@ -123,11 +104,7 @@ function Plan({
     planOverviewTracker.reset()
     planApplyTracker.reset()
 
-    dispatch([
-      {
-        type: EnumPlanActions.ResetTestsReport,
-      },
-    ])
+    dispatch([{ type: EnumPlanActions.ResetTestsReport }])
 
     void planRun()
   }
@@ -136,15 +113,13 @@ function Plan({
     <div className="flex flex-col w-full h-full overflow-hidden">
       <PlanHeader />
       <div className="w-full h-full px-4 overflow-y-scroll hover:scrollbar scrollbar--vertical">
+        <PlanOptions />
         {planAction.isCancelling ? (
           <CancellingPlanApply />
-        ) : planAction.isRun ? (
-          <PlanOptions />
         ) : (
           <PlanApplyStageTracker />
         )}
       </div>
-      <Divider />
       <PlanActions
         planAction={planAction}
         apply={apply}
