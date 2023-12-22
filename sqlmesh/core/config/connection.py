@@ -171,7 +171,7 @@ class DuckDBConnectionConfig(ConnectionConfig):
                     ):
                         raise e
                 if i == 0 and not self.database:
-                    cursor.execute(f"USE {alias}")
+                    cursor.execute(f'USE "{alias}"')
 
         return init
 
