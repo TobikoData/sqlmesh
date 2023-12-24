@@ -7,7 +7,6 @@ from fastapi import APIRouter, Depends
 from sqlglot import exp
 from sqlglot.lineage import Node, lineage
 
-from sqlmesh import Snapshot
 from sqlmesh.core.context import Context
 from sqlmesh.core.dialect import normalize_model_name
 from web.server.exceptions import ApiException
@@ -34,15 +33,13 @@ def _get_node_source(node: Node, dialect: str) -> str:
     return source
 
 
-def _process_downstream(
-    downstream: t.List[Node], model_fqn_to_snapshot: t.Dict[str, Snapshot]
-) -> t.Dict[str, t.List[str]]:
+def _process_downstream(downstream: t.List[Node]) -> t.Dict[str, t.List[str]]:
     """Aggregate a list of downstream nodes by table/source"""
     graph = collections.defaultdict(list)
     for node in downstream:
         column = exp.to_column(node.name).name
         table = _get_table(node) or node.name
-        table = model_fqn_to_snapshot[table].name if table in model_fqn_to_snapshot else table
+        table = normalize_model_name(table, None)
         graph[table].append(column)
     return graph
 
@@ -54,17 +51,17 @@ async def column_lineage(
     context: Context = Depends(get_loaded_context),
 ) -> t.Dict[str, t.Dict[str, LineageColumn]]:
     """Get a column's lineage"""
-    model_fqn = normalize_model_name(model_name, context.default_catalog, context.config.dialect)
+    model_name = normalize_model_name(model_name, context.default_catalog, context.config.dialect)
     try:
         node = lineage(
             column=column_name,
-            sql=context.models[model_fqn].render_query_or_raise(),
+            sql=context.models[model_name].render_query_or_raise(),
             sources={
                 model: context.models[model].render_query_or_raise()
-                for model in context.dag.upstream(model_fqn)
+                for model in context.dag.upstream(model_name)
                 if model in context.models
             },
-            dialect=context.models[model_fqn].dialect,
+            dialect=context.models[model_name].dialect,
         )
     except Exception:
         raise ApiException(
@@ -78,20 +75,17 @@ async def column_lineage(
     for i, node in enumerate(node.walk()):
         if i > 0:
             node_name = _get_table(node) or node.name
-            node_name = (
-                context.snapshots[node_name].name if node_name in context.snapshots else node_name
-            )
+            node_name = normalize_model_name(node_name, None)
             column_name = exp.to_column(node.name).name
         if column_name in graph.get(node_name, []):
             continue
 
-        node_fqn = normalize_model_name(node_name, context.default_catalog, context.config.dialect)
-        dialect = context.models[node_fqn].dialect if node_fqn in context.models else ""
+        dialect = context.models[node_name].dialect if node_name in context.models else ""
         graph[node_name] = {
             column_name: LineageColumn(
                 expression=node.expression.sql(pretty=True, dialect=dialect),
                 source=_get_node_source(node=node, dialect=dialect),
-                models=_process_downstream(node.downstream, context.snapshots),
+                models=_process_downstream(node.downstream),
             )
         }
 
@@ -105,8 +99,4 @@ async def model_lineage(
 ) -> t.Dict[str, t.Set[str]]:
     """Get a model's lineage"""
     model_name = normalize_model_name(model_name, context.default_catalog, context.config.dialect)
-    graph = context.dag.lineage(model_name).graph
-    return {
-        context.snapshots[fqn].name: {context.snapshots[dep].name for dep in deps}
-        for fqn, deps in graph.items()
-    }
+    return context.dag.lineage(model_name).graph
