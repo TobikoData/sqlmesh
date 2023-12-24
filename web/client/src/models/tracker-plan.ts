@@ -29,13 +29,8 @@ export class ModelPlanTracker<
   constructor(model?: ModelPlanTracker<TData>) {
     super(model?.initial)
 
-    if (isNil(model)) {
-      this._current = undefined
-      this._isFetching = false
-    } else if (model?.isModel) {
-      this._current = model?._current
-      this._isFetching = model?._isFetching ?? false
-    }
+    this._current = model?._current
+    this._isFetching = model?._isFetching ?? false
   }
 
   get current(): Optional<TData> {

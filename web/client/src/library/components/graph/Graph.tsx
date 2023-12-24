@@ -1072,10 +1072,10 @@ function GraphControls({ nodes = [] }: { nodes: Node[] }): JSX.Element {
       <div className="contents">
         {isNotNil(model) && (
           <span
-            title={model?.displayName}
+            title={model.displayName}
             className="mr-2 w-full min-w-[10rem] whitespace-nowrap text-ellipsis overflow-hidden"
           >
-            <b>Model:</b> {truncate(model?.displayName, 50, 25)}
+            <b>Model:</b> {truncate(model.displayName, 50, 25)}
           </span>
         )}
         {isNotNil(highlightedNodes) ?? (
