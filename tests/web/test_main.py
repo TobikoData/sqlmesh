@@ -508,7 +508,7 @@ def test_get_lineage(web_sushi_context: Context) -> None:
 
     assert response.status_code == 200
     assert response.json() == {
-        "sushi.waiters": {
+        '"memory"."sushi"."waiters"': {
             "event_date": {
                 "source": """SELECT DISTINCT
   CAST(o.event_date AS DATE) AS event_date
@@ -527,10 +527,10 @@ WHERE
   o.event_date <= CAST('1970-01-01' AS DATE)
   AND o.event_date >= CAST('1970-01-01' AS DATE)""",
                 "expression": "CAST(o.event_date AS DATE) AS event_date",
-                "models": {"memory.sushi.orders": ["event_date"]},
+                "models": {'"memory"."sushi"."orders"': ["event_date"]},
             }
         },
-        "memory.sushi.orders": {
+        '"memory"."sushi"."orders"': {
             "event_date": {
                 "source": "SELECT\n  CAST(NULL AS DATE) AS event_date\nFROM (VALUES\n  (1)) AS t(dummy)",
                 "expression": "CAST(NULL AS DATE) AS event_date",
