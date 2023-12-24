@@ -1,6 +1,5 @@
 import clsx from 'clsx'
 import React, { type RefObject, useMemo } from 'react'
-import { type PlanTaskStatus, type PlanTasks } from '~/context/plan'
 import {
   isArrayNotEmpty,
   isNil,
@@ -14,37 +13,36 @@ import pluralize from 'pluralize'
 import { type EnvironmentName } from '~/models/environment'
 import { EnumPlanChangeType, type PlanChangeType } from '../plan/context'
 import Title from '@components/title/Title'
-import { type SnapshotId, type PlanStageChanges } from '@api/client'
-
-interface PropsTasks {
-  tasks: PlanTasks
-  setRefTasksOverview?: RefObject<HTMLDivElement>
-  children: (options: {
-    models?: Array<[string, PlanTaskStatus]>
-    completed: number
-    total: number
-    completedBatches: number
-    totalBatches: number
-  }) => JSX.Element
-}
+import { type ModelSQLMeshChangeDisplay } from '@models/sqlmesh-change-display'
 
 const TasksOverview = function TasksOverview({
   children,
   setRefTasksOverview,
   tasks,
-}: PropsTasks): JSX.Element {
+}: {
+  tasks: Record<string, ModelSQLMeshChangeDisplay>
+  setRefTasksOverview?: RefObject<HTMLDivElement>
+  children: (options: {
+    models: ModelSQLMeshChangeDisplay[]
+    completed: number
+    total: number
+    completedBatches: number
+    totalBatches: number
+  }) => JSX.Element
+}): JSX.Element {
   const { models, taskCompleted, taskTotal, batchesTotal, batchesCompleted } =
     useMemo(() => {
-      const models = Object.entries(tasks)
+      const models = Object.values(tasks)
       const taskTotal = models.length
       let taskCompleted = 0
       let batchesTotal = 0
       let batchesCompleted = 0
 
-      models.forEach(([_, { completed, total }]) => {
-        taskCompleted = completed === total ? taskCompleted + 1 : taskCompleted
-        batchesTotal += total
-        batchesCompleted += completed
+      models.forEach(model => {
+        taskCompleted =
+          model.completed === model.total ? taskCompleted + 1 : taskCompleted
+        batchesTotal += model.total
+        batchesCompleted += model.completed
       })
 
       return {
@@ -123,7 +121,7 @@ function TasksSummary({
           </TaskDetailsProgress>
         </TaskDetails>
         <Progress progress={toRatio(completedBatches, totalBatches)} />
-        {updatedAt != null && (
+        {isNotNil(updatedAt) && (
           <TaskCompletedMeta
             updatedAt={updatedAt}
             updateType={updateType}
@@ -137,71 +135,53 @@ function TasksSummary({
 function TasksDetails({
   models,
   className,
-  changes,
+  added,
+  removed,
+  direct,
+  indirect,
+  metadata,
   showBatches = true,
   showProgress = true,
   showVirtualUpdate = false,
   queue,
 }: {
   className?: string
-  changes?: PlanStageChanges
-  models: Array<[string, PlanTaskStatus]>
-  queue?: string[]
+  models: ModelSQLMeshChangeDisplay[]
+  added: ModelSQLMeshChangeDisplay[]
+  removed: ModelSQLMeshChangeDisplay[]
+  direct: ModelSQLMeshChangeDisplay[]
+  indirect: ModelSQLMeshChangeDisplay[]
+  metadata: ModelSQLMeshChangeDisplay[]
+  queue: ModelSQLMeshChangeDisplay[]
   showBatches: boolean
   showProgress: boolean
   showVirtualUpdate: boolean
 }): JSX.Element {
-  const {
-    changesAdded,
-    changesRemoved,
-    changesModifiedDirect,
-    changesModifiedIndirect,
-  } = useMemo(() => {
-    const modified = changes?.modified
-
-    return {
-      changesAdded: changes?.added ?? [],
-      changesRemoved: changes?.removed ?? [],
-      changesModifiedMetadata: modified?.metadata ?? [],
-      changesModifiedIndirect: (modified?.indirect ?? []).map(
-        ({ model_name }) => model_name,
-      ),
-      changesModifiedDirect: (modified?.direct ?? []).map(
-        ({ model_name }) => model_name,
-      ),
-    }
-  }, [changes])
-
-  const modelsInQueue = useMemo(() => {
-    if (isNil(queue)) return []
-
-    return models.filter(([modelName]) => queue.includes(modelName))
-  }, [queue, models])
-
   return (
     <>
       {isArrayNotEmpty(queue) && (
         <div className="p-4 mt-6 shadow-lg bg-neutral-5 rounded-lg">
           <Title text="Currently in proccess" />
-          <Tasks models={modelsInQueue}>
-            {([modelName, task]) => (
+          <Tasks models={queue}>
+            {task => (
               <Task>
                 <TaskDetails>
                   <TaskDetailsInfo>
-                    {isNotNil(task.interval) && (
+                    {isArrayNotEmpty(task.interval) && (
                       <TaskInterval
-                        start={task.interval[0]}
-                        end={task.interval[1]}
+                        start={task.interval[0]!}
+                        end={task.interval[1]!}
                       />
                     )}
                     <TaskModelName
-                      modelName={modelName}
+                      modelName={task.displayViewName}
                       changeType={getChangeType({
-                        modelName,
-                        changesAdded,
-                        changesRemoved,
-                        changesModifiedDirect,
-                        changesModifiedIndirect,
+                        modelName: task.name,
+                        added,
+                        removed,
+                        direct,
+                        indirect,
+                        metadata,
                       })}
                     />
                   </TaskDetailsInfo>
@@ -251,24 +231,25 @@ function TasksDetails({
       )}
       <TasksBlock className={className}>
         <Tasks models={models}>
-          {([modelName, task]) => (
+          {task => (
             <Task>
               <TaskDetails>
                 <TaskDetailsInfo>
-                  {isNotNil(task.interval) && (
+                  {isArrayNotEmpty(task.interval) && (
                     <TaskInterval
-                      start={task.interval[0]}
-                      end={task.interval[1]}
+                      start={task.interval[0]!}
+                      end={task.interval[1]!}
                     />
                   )}
                   <TaskModelName
-                    modelName={modelName}
+                    modelName={task.displayViewName}
                     changeType={getChangeType({
-                      modelName,
-                      changesAdded,
-                      changesRemoved,
-                      changesModifiedDirect,
-                      changesModifiedIndirect,
+                      modelName: task.name,
+                      added,
+                      removed,
+                      direct,
+                      indirect,
+                      metadata,
                     })}
                   />
                 </TaskDetailsInfo>
@@ -307,8 +288,7 @@ function TasksDetails({
                 <Progress
                   progress={toRatio(task.completed, task.total)}
                   startFromZero={
-                    modelsInQueue.findIndex(([name]) => name === modelName) ===
-                    -1
+                    queue.findIndex(c => c.name === task.name) === -1
                   }
                 />
               ) : (
@@ -357,8 +337,8 @@ function Tasks({
   children,
 }: {
   className?: string
-  models: Array<[string, PlanTaskStatus]>
-  children: (model: [string, PlanTaskStatus]) => JSX.Element
+  models: ModelSQLMeshChangeDisplay[]
+  children: (model: ModelSQLMeshChangeDisplay) => JSX.Element
 }): JSX.Element {
   return (
     <ul
@@ -367,12 +347,12 @@ function Tasks({
         className,
       )}
     >
-      {models.map(([modelName, task]) => (
+      {models.map(task => (
         <li
-          key={modelName}
+          key={task.name}
           className="mb-2"
         >
-          {children([modelName, task])}
+          {children(task)}
         </li>
       ))}
     </ul>
@@ -596,25 +576,26 @@ export default TasksOverview
 
 function getChangeType({
   modelName,
-  changesAdded,
-  changesRemoved,
-  changesModifiedDirect,
-  changesModifiedIndirect,
+  added,
+  removed,
+  direct,
+  indirect,
+  metadata,
 }: {
   modelName: string
-  changesAdded: SnapshotId[]
-  changesRemoved: SnapshotId[]
-  changesModifiedDirect: string[]
-  changesModifiedIndirect: string[]
+  added: ModelSQLMeshChangeDisplay[]
+  removed: ModelSQLMeshChangeDisplay[]
+  direct: ModelSQLMeshChangeDisplay[]
+  indirect: ModelSQLMeshChangeDisplay[]
+  metadata: ModelSQLMeshChangeDisplay[]
 }): PlanChangeType {
-  if (changesAdded.some(c => c.name === modelName))
-    return EnumPlanChangeType.Add
-  if (changesRemoved.some(c => c.name === modelName))
-    return EnumPlanChangeType.Remove
-  if (changesModifiedDirect.includes(modelName))
-    return EnumPlanChangeType.Direct
-  if (changesModifiedIndirect.includes(modelName))
+  if (added.some(c => c.name === modelName)) return EnumPlanChangeType.Add
+  if (removed.some(c => c.name === modelName)) return EnumPlanChangeType.Remove
+  if (direct.some(c => c.name === modelName)) return EnumPlanChangeType.Direct
+  if (indirect.some(c => c.name === modelName))
     return EnumPlanChangeType.Indirect
+  if (metadata.some(c => c.name === modelName))
+    return EnumPlanChangeType.Metadata
 
   return EnumPlanChangeType.Default
 }

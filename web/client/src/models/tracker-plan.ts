@@ -29,9 +29,12 @@ export class ModelPlanTracker<
   constructor(model?: ModelPlanTracker<TData>) {
     super(model?.initial)
 
-    if ((model as ModelPlanTracker<TData>)?.isModel) {
-      this._current = structuredClone(model?.current)
-      this._isFetching = model?.isFetching ?? false
+    if (isNil(model)) {
+      this._current = undefined
+      this._isFetching = false
+    } else if (model?.isModel) {
+      this._current = model?._current
+      this._isFetching = model?._isFetching ?? false
     }
   }
 

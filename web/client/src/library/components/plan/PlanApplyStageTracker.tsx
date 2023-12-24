@@ -7,11 +7,7 @@ import {
 } from '@heroicons/react/24/solid'
 import clsx from 'clsx'
 import { useEffect, useMemo, useRef } from 'react'
-import {
-  useStorePlan,
-  type PlanTasks,
-  type PlanTaskStatus,
-} from '../../../context/plan'
+import { useStorePlan } from '../../../context/plan'
 import {
   isArrayNotEmpty,
   isFalse,
@@ -20,6 +16,7 @@ import {
   isTrue,
   isNil,
   toDateFormat,
+  isFalseOrNil,
 } from '../../../utils'
 import Spinner from '../logo/Spinner'
 import { EnumPlanChangeType, usePlan } from './context'
@@ -34,21 +31,14 @@ import ReportTestsErrors from '@components/report/ReportTestsErrors'
 import { Divider } from '@components/divider/Divider'
 import Progress from '@components/progress/Progress'
 import {
-  type PlanStageBackfill,
-  type PlanStageCreation,
-  type PlanStagePromote,
-  type PlanStageRestate,
-  type PlanStageBackfills,
-  type PlanStageChanges,
-  type PlanStageValidation,
   SnapshotChangeCategory,
   type PlanOverviewStageTrackerStart,
   type PlanOverviewStageTrackerEnd,
   Status,
-  type SnapshotId,
 } from '@api/client'
 import { type PlanTrackerMeta } from '@models/tracker-plan'
 import { type Tests, useStoreProject } from '@context/project'
+import { type ModelSQLMeshChangeDisplay } from '@models/sqlmesh-change-display'
 
 interface PropsPlanStageMessage extends React.HTMLAttributes<HTMLElement> {
   hasSpinner?: boolean
@@ -63,21 +53,11 @@ export default function PlanApplyStageTracker(): JSX.Element {
   const planOverview = useStorePlan(s => s.planOverview)
   const planAction = useStorePlan(s => s.planAction)
 
-  const {
-    meta,
-    start,
-    end,
-    hasChanges,
-    hasBackfills,
-    changes,
-    backfills,
-    validation,
-    plan_options,
-  } = getPlanOverviewDetails(planApply, planOverview)
+  const { start, end, hasChanges, hasBackfills, plan_options } =
+    getPlanOverviewDetails(planApply, planOverview)
 
   const showTestsDetails = isNotNil(tests) && Boolean(tests.total)
   const showTestsMessage = isNotNil(tests) && Boolean(tests.message)
-  const hasFailedTests = isNotNil(tests) && Boolean(tests.failures)
 
   return (
     <div className="py-4">
@@ -93,9 +73,7 @@ export default function PlanApplyStageTracker(): JSX.Element {
         </div>
       )}
       {planAction.isRunning || isTrue(hasChanges) ? (
-        <StageChanges
-          report={changes ?? { meta: meta ?? { status: Status.init } }}
-        />
+        <StageChanges />
       ) : (
         <PlanStageMessage
           variant={EnumVariant.Info}
@@ -104,11 +82,8 @@ export default function PlanApplyStageTracker(): JSX.Element {
           No Changes
         </PlanStageMessage>
       )}
-
       {planAction.isRunning || isTrue(hasBackfills) ? (
-        <StageBackfills
-          report={backfills ?? { meta: meta ?? { status: Status.init } }}
-        />
+        <StageBackfills />
       ) : (
         <PlanStageMessage
           variant={EnumVariant.Info}
@@ -130,58 +105,30 @@ export default function PlanApplyStageTracker(): JSX.Element {
           {showTestsDetails && <StageTestsFailed report={tests} />}
         </>
       )}
-      {isNotNil(validation) && <StageValidate report={validation} />}
-      {(planApply.overview?.isVirtualUpdate ??
-        planOverview.isVirtualUpdate) && (
-        <PlanVirtualUpdate isUpdated={isTrue(planApply.promote?.meta?.done)} />
-      )}
-      {hasFailedTests ||
-        (planApply.shouldShowEvaluation && (
-          <StageEvaluate
-            start={planApply.evaluationStart}
-            end={planApply.evaluationEnd}
-          >
-            {isNotNil(planApply.creation) && (
-              <StageCreation report={planApply.creation} />
-            )}
-            {isNotNil(planApply.restate) ? (
-              <StageRestate report={planApply.restate} />
-            ) : (
-              <PlanStageMessage
-                variant={EnumVariant.Info}
-                className="mt-2"
-              >
-                No Models To Restate
-              </PlanStageMessage>
-            )}
-            {isNotNil(planApply.backfill) &&
-              isNotNil(planApply.environment) && (
-                <StageBackfill
-                  backfill={planApply.backfill}
-                  backfills={backfills}
-                  isVirtualUpdate={planAction.isApplyVirtual}
-                  environment={planApply.environment}
-                />
-              )}
-            {isNotNil(planApply.promote) && (
-              <StagePromote report={planApply.promote} />
-            )}
-          </StageEvaluate>
-        ))}
+      <StageValidate />
+      <StageVirtualUpdate />
+      <StageEvaluate
+        start={planApply.evaluationStart}
+        end={planApply.evaluationEnd}
+      >
+        <StageCreation />
+        <StageRestate />
+        <StageBackfill />
+        <StagePromote />
+      </StageEvaluate>
     </div>
   )
 }
 
-function StageChanges({
-  report,
-  isOpen = false,
-}: {
-  isOpen?: boolean
-  report: PlanStageChanges
-}): JSX.Element {
+function StageChanges({ isOpen = false }: { isOpen?: boolean }): JSX.Element {
+  const planApply = useStorePlan(s => s.planApply)
+  const planOverview = useStorePlan(s => s.planOverview)
+
+  const { meta, stageChanges } = getPlanOverviewDetails(planApply, planOverview)
+
   return (
     <Stage
-      meta={report.meta!}
+      meta={stageChanges?.meta ?? meta ?? { status: Status.init }}
       states={[
         'Changes Collected',
         'Failed Getting Plan Changes',
@@ -193,16 +140,18 @@ function StageChanges({
   )
 }
 
-function StageBackfills({
-  report,
-  isOpen = false,
-}: {
-  isOpen?: boolean
-  report: PlanStageBackfills
-}): JSX.Element {
+function StageBackfills({ isOpen }: { isOpen?: boolean }): JSX.Element {
+  const planApply = useStorePlan(s => s.planApply)
+  const planOverview = useStorePlan(s => s.planOverview)
+
+  const { meta, stageBackfills, backfills } = getPlanOverviewDetails(
+    planApply,
+    planOverview,
+  )
+
   return (
     <Stage
-      meta={report.meta!}
+      meta={stageBackfills?.meta ?? meta ?? { status: Status.init }}
       states={[
         'Backfills Collected',
         'Failed Getting Plan Backfills',
@@ -211,16 +160,12 @@ function StageBackfills({
       isOpen={isOpen}
       panel={
         <PlanChangePreview
-          headline={`Models ${report.models?.length ?? 0}`}
+          headline={`Models ${backfills.length}`}
           type={EnumPlanChangeType.Default}
         >
           <PlanChangePreview.Default
             type={EnumPlanChangeType.Default}
-            changes={
-              (report?.models?.map(({ model_name }: any) => ({
-                name: model_name,
-              })) as SnapshotId[]) ?? []
-            }
+            changes={backfills}
           />
         </PlanChangePreview>
       }
@@ -277,14 +222,15 @@ function StageTestsFailed({ report }: { report: Tests }): JSX.Element {
   )
 }
 
-function StageValidate({
-  report,
-}: {
-  report: PlanStageValidation
-}): JSX.Element {
+function StageValidate(): JSX.Element {
+  const planApply = useStorePlan(s => s.planApply)
+  const planOverview = useStorePlan(s => s.planOverview)
+
+  const { stageValidation } = getPlanOverviewDetails(planApply, planOverview)
+
   return (
     <Stage
-      meta={report.meta!}
+      meta={stageValidation?.meta}
       states={[
         'Plan Validated',
         'Plan Validation Failed',
@@ -304,7 +250,12 @@ function StageEvaluate({
   end?: PlanOverviewStageTrackerEnd
   children: React.ReactNode
 }): JSX.Element {
+  const tests = useStoreProject(s => s.tests)
+  const planApply = useStorePlan(s => s.planApply)
+
   const elStageEvaluate = useRef<HTMLDivElement>(null)
+
+  const hasFailedTests = isNotNil(tests) && Boolean(tests.failures)
 
   useEffect(() => {
     requestAnimationFrame(() => {
@@ -314,6 +265,9 @@ function StageEvaluate({
       })
     })
   }, [])
+
+  if (isFalse(hasFailedTests) && isFalse(planApply.shouldShowEvaluation))
+    return <></>
 
   return (
     <div
@@ -349,16 +303,14 @@ function StageEvaluate({
   )
 }
 
-function StageCreation({
-  report,
-  isOpen,
-}: {
-  report: PlanStageCreation
-  isOpen?: boolean
-}): JSX.Element {
+function StageCreation({ isOpen }: { isOpen?: boolean }): JSX.Element {
+  const planApply = useStorePlan(s => s.planApply)
+
+  if (isNil(planApply.stageCreation)) return <></>
+
   return (
     <Stage
-      meta={report.meta!}
+      meta={planApply.stageCreation?.meta}
       states={[
         'Snapshot Tables Created',
         'Snapshot Tables Creation Failed',
@@ -366,40 +318,50 @@ function StageCreation({
       ]}
       isOpen={isOpen}
     >
-      {isNotNil(report.total_tasks) && (
-        <TasksOverview.Block>
-          <TasksOverview.Task>
-            <TasksOverview.TaskDetails>
-              <TasksOverview.TaskInfo>
-                <TasksOverview.TaskHeadline headline="Snapshot Tables" />
-              </TasksOverview.TaskInfo>
-              <TasksOverview.DetailsProgress>
-                <TasksOverview.TaskSize
-                  completed={report.total_tasks}
-                  total={report.num_tasks}
-                  unit="task"
-                />
-                <TasksOverview.TaskDivider />
-                <TasksOverview.TaskProgress
-                  completed={report.num_tasks}
-                  total={report.total_tasks}
-                />
-              </TasksOverview.DetailsProgress>
-            </TasksOverview.TaskDetails>
-            <Progress
-              progress={toRatio(report.num_tasks, report.total_tasks)}
-            />
-          </TasksOverview.Task>
-        </TasksOverview.Block>
-      )}
+      <TasksOverview.Block>
+        <TasksOverview.Task>
+          <TasksOverview.TaskDetails>
+            <TasksOverview.TaskInfo>
+              <TasksOverview.TaskHeadline headline="Snapshot Tables" />
+            </TasksOverview.TaskInfo>
+            <TasksOverview.DetailsProgress>
+              <TasksOverview.TaskSize
+                completed={planApply.stageCreation.total_tasks}
+                total={planApply.stageCreation.num_tasks}
+                unit="task"
+              />
+              <TasksOverview.TaskDivider />
+              <TasksOverview.TaskProgress
+                completed={planApply.stageCreation.num_tasks}
+                total={planApply.stageCreation.total_tasks}
+              />
+            </TasksOverview.DetailsProgress>
+          </TasksOverview.TaskDetails>
+          <Progress
+            progress={toRatio(
+              planApply.stageCreation.num_tasks,
+              planApply.stageCreation.total_tasks,
+            )}
+          />
+        </TasksOverview.Task>
+      </TasksOverview.Block>
     </Stage>
   )
 }
 
-function StageRestate({ report }: { report: PlanStageRestate }): JSX.Element {
-  return (
+function StageRestate(): JSX.Element {
+  const planApply = useStorePlan(s => s.planApply)
+
+  return isNil(planApply.stageRestate) ? (
+    <PlanStageMessage
+      variant={EnumVariant.Info}
+      className="mt-2"
+    >
+      No Models To Restate
+    </PlanStageMessage>
+  ) : (
     <Stage
-      meta={report.meta!}
+      meta={planApply.stageRestate?.meta}
       states={[
         'Restate Models',
         'Restate Models Failed',
@@ -409,17 +371,12 @@ function StageRestate({ report }: { report: PlanStageRestate }): JSX.Element {
   )
 }
 
-function StageBackfill({
-  environment,
-  backfill,
-  isVirtualUpdate,
-  backfills,
-}: {
-  environment: string
-  backfill: PlanStageBackfill
-  isVirtualUpdate: boolean
-  backfills?: PlanStageBackfills
-}): JSX.Element {
+function StageBackfill(): JSX.Element {
+  const planApply = useStorePlan(s => s.planApply)
+  const planAction = useStorePlan(s => s.planAction)
+  const environment = planApply.environment
+  const stageBackfill = planApply.stageBackfill
+
   const { change_categorization } = usePlan()
 
   const categories = useMemo(
@@ -427,16 +384,16 @@ function StageBackfill({
       Array.from(change_categorization.values()).reduce<
         Record<string, boolean[]>
       >((acc, { category, change }) => {
-        change?.indirect?.forEach(model => {
-          if (isNil(acc[model])) {
-            acc[model] = []
+        change.indirect?.forEach(c => {
+          if (isNil(acc[c.name])) {
+            acc[c.name] = []
           }
 
-          acc[model]?.push(category.value !== SnapshotChangeCategory.NUMBER_1)
+          acc[c.name]?.push(category.value !== SnapshotChangeCategory.NUMBER_1)
         })
 
         if (category.value === SnapshotChangeCategory.NUMBER_3) {
-          acc[change.model_name] = [true]
+          acc[change.name] = [true]
         }
 
         return acc
@@ -444,33 +401,33 @@ function StageBackfill({
     [change_categorization],
   )
 
-  const tasks: PlanTasks = useMemo(
+  const tasks = useMemo(
     () =>
-      backfills?.models?.reduce((acc: PlanTasks, model) => {
-        const taskModelName = model.model_name ?? model.view_name
-        const taskInterval = model.interval as [string, string]
-        const taskBackfill: PlanTaskStatus = {
-          completed: 0,
-          total: model.batches,
-          interval: taskInterval,
-          view_name: model.view_name,
-          ...backfill?.tasks?.[taskModelName],
-        }
-        const choices = categories[taskModelName]
-        const shouldExclude = isNil(choices) ? false : choices.every(Boolean)
+      planApply.backfills.reduce(
+        (acc: Record<string, ModelSQLMeshChangeDisplay>, model) => {
+          const taskBackfill = planApply.tasks[model.name] ?? model
 
-        if (shouldExclude) return acc
+          taskBackfill.interval = model.interval ?? []
 
-        acc[taskModelName] = taskBackfill
+          const choices = categories[model.name]
+          const shouldExclude = isNil(choices) ? false : choices.every(Boolean)
 
-        return acc
-      }, {}) ?? {},
-    [backfill, backfills, change_categorization],
+          if (shouldExclude) return acc
+
+          acc[model.name] = taskBackfill
+
+          return acc
+        },
+        {},
+      ),
+    [planApply.backfills, categories],
   )
+
+  if (isNil(stageBackfill) || isNil(environment)) return <></>
 
   return (
     <Stage
-      meta={backfill.meta!}
+      meta={stageBackfill.meta}
       states={[
         'Intervals Backfilled',
         'Intervals Backfilling Failed',
@@ -483,20 +440,25 @@ function StageBackfill({
         {({ total, completed, models, completedBatches, totalBatches }) => (
           <>
             <TasksOverview.Summary
-              environment={environment}
               headline="Target Environment"
+              environment={environment}
               completed={completed}
               total={total}
               completedBatches={completedBatches}
               totalBatches={totalBatches}
-              updateType={isVirtualUpdate ? 'Virtual' : 'Backfill'}
+              updateType={planAction.isApplyVirtual ? 'Virtual' : 'Backfill'}
             />
             {isNotNil(models) && (
               <TasksOverview.Details
                 models={models}
-                queue={backfill.queue}
+                added={planApply.added}
+                removed={planApply.removed}
+                direct={planApply.direct}
+                indirect={planApply.indirect}
+                metadata={planApply.metadata}
+                queue={planApply.queue}
                 showBatches={true}
-                showVirtualUpdate={isVirtualUpdate}
+                showVirtualUpdate={planAction.isApplyVirtual}
                 showProgress={true}
               />
             )}
@@ -507,7 +469,8 @@ function StageBackfill({
   )
 }
 
-function StagePromote({ report }: { report: PlanStagePromote }): JSX.Element {
+function StagePromote(): JSX.Element {
+  const planApply = useStorePlan(s => s.planApply)
   const elStagePromote = useRef<HTMLDivElement>(null)
 
   useEffect(() => {
@@ -519,10 +482,12 @@ function StagePromote({ report }: { report: PlanStagePromote }): JSX.Element {
     })
   }, [])
 
+  if (isNil(planApply.stagePromote)) return <></>
+
   return (
     <div ref={elStagePromote}>
       <Stage
-        meta={report.meta!}
+        meta={planApply.stagePromote?.meta}
         states={[
           'Environment Promoted',
           'Promotion Failed',
@@ -534,24 +499,27 @@ function StagePromote({ report }: { report: PlanStagePromote }): JSX.Element {
             <TasksOverview.TaskDetails>
               <TasksOverview.TaskInfo>
                 <TasksOverview.TaskHeadline
-                  headline={`Promote Environment: ${report.target_environment}`}
+                  headline={`Promote Environment: ${planApply.stagePromote.target_environment}`}
                 />
               </TasksOverview.TaskInfo>
               <TasksOverview.DetailsProgress>
                 <TasksOverview.TaskSize
-                  completed={report.total_tasks}
-                  total={report.num_tasks}
+                  completed={planApply.stagePromote.total_tasks}
+                  total={planApply.stagePromote.num_tasks}
                   unit="task"
                 />
                 <TasksOverview.TaskDivider />
                 <TasksOverview.TaskProgress
-                  completed={report.num_tasks}
-                  total={report.total_tasks}
+                  completed={planApply.stagePromote.num_tasks}
+                  total={planApply.stagePromote.total_tasks}
                 />
               </TasksOverview.DetailsProgress>
             </TasksOverview.TaskDetails>
             <Progress
-              progress={toRatio(report.num_tasks, report.total_tasks)}
+              progress={toRatio(
+                planApply.stagePromote.num_tasks,
+                planApply.stagePromote.total_tasks,
+              )}
             />
           </TasksOverview.Task>
         </TasksOverview.Block>
@@ -565,12 +533,8 @@ function PlanChanges(): JSX.Element {
   const planApply = useStorePlan(s => s.planApply)
   const planAction = useStorePlan(s => s.planAction)
 
-  const { hasChanges, changes } = getPlanOverviewDetails(
-    planApply,
-    planOverview,
-  )
-
-  const { added = [], removed = [], modified = {} } = changes ?? {}
+  const { hasChanges, added, removed, direct, indirect, metadata } =
+    getPlanOverviewDetails(planApply, planOverview)
 
   return (
     <div className="w-full my-2">
@@ -623,25 +587,25 @@ function PlanChanges(): JSX.Element {
               />
             </PlanChangePreview>
           )}
-          {isArrayNotEmpty(modified?.direct) && (
+          {isArrayNotEmpty(direct) && (
             <PlanChangePreview
               className="my-2 w-full"
               headline="Modified Directly"
               type={EnumPlanChangeType.Direct}
             >
-              <PlanChangePreview.Direct changes={modified.direct ?? []} />
+              <PlanChangePreview.Direct changes={direct} />
             </PlanChangePreview>
           )}
-          {isArrayNotEmpty(modified?.indirect) && (
+          {isArrayNotEmpty(indirect) && (
             <PlanChangePreview
               className="my-2 w-full"
               headline="Modified Indirectly"
               type={EnumPlanChangeType.Indirect}
             >
-              <PlanChangePreview.Indirect changes={modified.indirect ?? []} />
+              <PlanChangePreview.Indirect changes={indirect} />
             </PlanChangePreview>
           )}
-          {isArrayNotEmpty(modified?.metadata) && (
+          {isArrayNotEmpty(metadata) && (
             <PlanChangePreview
               className="my-2 w-full"
               headline="Modified Metadata"
@@ -649,7 +613,7 @@ function PlanChanges(): JSX.Element {
             >
               <PlanChangePreview.Default
                 type={EnumPlanChangeType.Default}
-                changes={modified?.metadata ?? []}
+                changes={metadata}
               />
             </PlanChangePreview>
           )}
@@ -659,12 +623,20 @@ function PlanChanges(): JSX.Element {
   )
 }
 
-function PlanVirtualUpdate({
-  isUpdated = false,
-}: {
-  isUpdated: boolean
-}): JSX.Element {
+function StageVirtualUpdate(): JSX.Element {
+  const planApply = useStorePlan(s => s.planApply)
+  const planOverview = useStorePlan(s => s.planOverview)
+
   const { virtualUpdateDescription } = usePlan()
+
+  if (
+    isFalseOrNil(planApply.overview?.isVirtualUpdate) &&
+    isFalse(planOverview.isVirtualUpdate)
+  )
+    return <></>
+
+  const isUpdated = isTrue(planApply.stagePromote?.meta?.done)
+
   return (
     <Disclosure>
       {({ open }) => (
@@ -739,7 +711,7 @@ function Stage({
   showDetails = true,
 }: {
   variant?: Variant
-  meta: PlanTrackerMeta
+  meta?: PlanTrackerMeta
   trigger?: React.ReactNode
   panel?: React.ReactNode
   children?: React.ReactNode
@@ -747,6 +719,8 @@ function Stage({
   isOpen?: boolean
   showDetails?: boolean
 }): JSX.Element {
+  if (isNil(meta)) return <></>
+
   const variant =
     meta.status === 'success'
       ? EnumVariant.Success

@@ -5,6 +5,7 @@ import {
   type ModelDescription,
   type ModelSql,
   ModelType,
+  type ModelDefaultCatalog,
 } from '@api/client'
 import { type Lineage } from '@context/editor'
 import { ModelInitial } from './initial'
@@ -18,11 +19,13 @@ export class ModelSQLMeshModel<
   T extends InitialSQLMeshModel = InitialSQLMeshModel,
 > extends ModelInitial<T> {
   name: string
+  normalized_name: string
   path: string
   dialect: string
   type: ModelType
   columns: Column[]
   details: ModelDetails
+  default_catalog?: ModelDefaultCatalog
   description?: ModelDescription
   sql?: ModelSql
 
@@ -39,6 +42,8 @@ export class ModelSQLMeshModel<
     )
 
     this.name = encodeURI(this.initial.name)
+    this.normalized_name = encodeURI(this.initial.normalized_name)
+    this.default_catalog = this.initial.default_catalog
     this.path = this.initial.path
     this.dialect = this.initial.dialect
     this.description = this.initial.description
@@ -46,6 +51,18 @@ export class ModelSQLMeshModel<
     this.columns = this.initial.columns ?? []
     this.details = this.initial.details ?? {}
     this.type = this.initial.type
+  }
+
+  get id(): string {
+    return this.normalized_name
+  }
+
+  get defaultCatalog(): Optional<ModelDefaultCatalog> {
+    return this.default_catalog
+  }
+
+  get normalizedName(): string {
+    return this.normalized_name
   }
 
   get index(): string {
@@ -84,6 +101,10 @@ export class ModelSQLMeshModel<
     return decodeURI(this.name)
   }
 
+  get displayNormalizedName(): string {
+    return decodeURI(this.normalized_name)
+  }
+
   update(initial: Partial<InitialSQLMeshModel> = {}): void {
     for (const [key, value] of Object.entries(initial)) {
       if (key === 'columns') {
@@ -92,9 +113,12 @@ export class ModelSQLMeshModel<
         this.details = value as ModelDetails
       } else if (key === 'name') {
         this.name = encodeURI(value as string)
+      } else if (key === 'normalized_name') {
+        this.normalized_name = encodeURI(value as string)
       } else if (key in this) {
-        this[key as 'path' | 'dialect' | 'description' | 'sql'] =
-          value as string
+        this[
+          key as 'path' | 'dialect' | 'description' | 'sql' | 'default_catalog'
+        ] = value as string
       }
     }
   }

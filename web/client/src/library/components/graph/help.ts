@@ -6,12 +6,13 @@ import {
   isNotNil,
   isObjectEmpty,
 } from '../../../utils'
-import { type LineageColumn, type Column, type Model } from '@api/client'
+import { type LineageColumn, type Column } from '@api/client'
 import { Position, type Edge, type Node, type XYPosition } from 'reactflow'
 import { type Lineage } from '@context/editor'
 import { type ActiveEdges, type Connections } from './context'
 import { EnumSide } from '~/types/enum'
 import { EnumLineageNodeModelType, type LineageNodeModelType } from './Graph'
+import { type ModelSQLMeshModel } from '@models/sqlmesh-model'
 
 export interface GraphNodeData {
   label: string
@@ -136,7 +137,7 @@ function getNodeMap({
   models,
   withColumns,
 }: {
-  models: Map<string, Model>
+  models: Map<string, ModelSQLMeshModel>
   withColumns: boolean
   lineage?: Record<string, Lineage>
 }): Record<string, Node> {
@@ -160,8 +161,8 @@ function getNodeMap({
 
   return modelNames.reduce((acc: Record<string, Node>, modelName: string) => {
     const model = models.get(modelName)
-    const node = createGraphNode({
-      label: modelName,
+    const node = createGraphNode(modelName, {
+      label: model?.displayName ?? modelName,
       type: isNotNil(model)
         ? (model.type as LineageNodeModelType)
         : // If model name present in lineage but not in global models
@@ -252,12 +253,13 @@ function repositionNodes(
 }
 
 function createGraphNode(
+  id: string,
   data: GraphNodeData,
   position: XYPosition = { x: 0, y: 0 },
   hidden: boolean = false,
 ): Node {
   return {
-    id: data.label,
+    id,
     dragHandle: '.drag-handle',
     type: 'model',
     position,

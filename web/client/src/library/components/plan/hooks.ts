@@ -117,7 +117,7 @@ export function useApplyPayload({
       change_categorization.values(),
     ).reduce<BodyInitiateApplyApiCommandsApplyPostCategoriesAnyOf>(
       (acc, { category, change }) => {
-        acc[change.model_name] = category.value
+        acc[change.name] = category.value
 
         return acc
       },

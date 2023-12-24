@@ -9,10 +9,10 @@ from pydantic import BaseModel, Field
 from sqlglot import exp
 from watchfiles import Change
 
-from sqlmesh.core.context_diff import ContextDiff
-from sqlmesh.core.dialect import normalize_model_name
+from sqlmesh.core.context import Context
 from sqlmesh.core.environment import Environment
-from sqlmesh.core.node import IntervalUnit
+from sqlmesh.core.node import IntervalUnit, NodeType
+from sqlmesh.core.plan.definition import Plan
 from sqlmesh.core.snapshot.definition import SnapshotChangeCategory, SnapshotId
 from sqlmesh.utils.date import TimeLike, now_timestamp
 from sqlmesh.utils.pydantic import (
@@ -29,6 +29,9 @@ class ModelType(str, enum.Enum):
     SQL = "sql"
     SEED = "seed"
     EXTERNAL = "external"
+class ArtifactType(str, enum.Enum):
+    file = "file"
+    directory = "directory"
 
 
 class FileType(str, enum.Enum):
@@ -106,99 +109,6 @@ class Meta(BaseModel):
     has_running_task: bool = False
 
 
-class ChangeDirect(BaseModel):
-    model_name: str
-    diff: str
-    indirect: t.List[str] = []
-    change_category: t.Optional[SnapshotChangeCategory] = None
-
-
-class ChangeIndirect(BaseModel):
-    model_name: str
-    direct: t.List[str] = []
-
-
-class ModelsDiff(BaseModel):
-    direct: t.List[ChangeDirect] = []
-    indirect: t.List[ChangeIndirect] = []
-    metadata: t.List[SnapshotId] = []
-
-    @classmethod
-    def get_modified_snapshots(
-        cls,
-        context_diff: ContextDiff,
-    ) -> ModelsDiff:
-        """Get the modified snapshots for a environment."""
-
-        indirect = [
-            ChangeIndirect(model_name=name, direct=[parent.name for parent in current.parents])
-            for name, (current, _) in context_diff.modified_snapshots.items()
-            if context_diff.indirectly_modified(name)
-        ]
-        direct: t.List[ChangeDirect] = []
-        metadata = set()
-
-        for name, (current, _) in context_diff.modified_snapshots.items():
-            if context_diff.directly_modified(name):
-                direct.append(
-                    ChangeDirect(
-                        model_name=name,
-                        diff=context_diff.text_diff(name),
-                        indirect=[
-                            change.model_name for change in indirect if name in change.direct
-                        ],
-                        change_category=current.change_category,
-                    )
-                )
-            elif context_diff.indirectly_modified(name):
-                continue
-            elif context_diff.metadata_updated(name):
-                metadata.add(current.snapshot_id)
-
-        direct_change_model_names = [change.model_name for change in direct]
-        indirect_change_model_names = [change.model_name for change in indirect]
-
-        for change in indirect:
-            change.direct = [
-                model_name
-                for model_name in change.direct
-                if model_name in direct_change_model_names
-                or model_name in indirect_change_model_names
-            ]
-            change.direct.reverse()
-
-        return ModelsDiff(
-            direct=direct,
-            indirect=indirect,
-            metadata=list(metadata),
-        )
-
-
-class Environments(BaseModel):
-    environments: t.Dict[str, Environment] = {}
-    pinned_environments: t.Set[str] = set()
-    default_target_environment: str = ""
-
-
-class EvaluateInput(BaseModel):
-    model: str
-    start: TimeLike
-    end: TimeLike
-    execution_time: TimeLike
-    limit: int = 1000
-
-
-class FetchdfInput(BaseModel):
-    sql: str
-    limit: int = 1000
-
-
-class Column(BaseModel):
-    name: str
-    type: str
-    description: t.Optional[str] = None
-
-
 class Reference(BaseModel):
     name: str
     expression: str
@@ -226,8 +136,15 @@ class ModelDetails(BaseModel):
     annotated: t.Optional[bool] = None
 
 
+class Column(BaseModel):
+    name: str
+    type: str
+    description: t.Optional[str] = None
+
+
 class Model(BaseModel):
     name: str
+    normalized_name: str
     path: str
     dialect: str
     type: ModelType
@@ -237,9 +154,131 @@ class Model(BaseModel):
     sql: t.Optional[str] = None
     default_catalog: t.Optional[str] = None
 
-    @property
-    def fqn(self) -> str:
-        return normalize_model_name(self.name, self.default_catalog, self.dialect)
+
+class ChangeDisplay(BaseModel):
+    name: str
+    view_name: str
+    node_type: NodeType = NodeType.MODEL
+
+
+class ChangeDirect(ChangeDisplay):
+    diff: str
+    indirect: t.List[ChangeDisplay] = []
+    change_category: t.Optional[SnapshotChangeCategory] = None
+
+
+class ChangeIndirect(ChangeDisplay):
+    direct: t.List[ChangeDisplay] = []
+
+
+class ModelsDiff(BaseModel):
+    direct: t.List[ChangeDirect] = []
+    indirect: t.List[ChangeIndirect] = []
+    metadata: t.List[ChangeDisplay] = []
+
+    @classmethod
+    def get_modified_snapshots(
+        cls,
+        context: Context,
+        plan: Plan,
+    ) -> ModelsDiff:
+        """Get the modified snapshots for a environment."""
+        snapshots = plan.context_diff.snapshots
+        modified_snapshots = plan.context_diff.modified_snapshots.items()
+        default_catalog = context.default_catalog
+        environment_naming_info = plan.environment_naming_info
+
+        def _display_name(snapshot_id: SnapshotId) -> str:
+            return (
+                snapshots[snapshot_id].display_name(environment_naming_info, default_catalog)
+                if snapshot_id in snapshots
+                else snapshot_id.name
+            )
+
+        def _node_type(snapshot_id: SnapshotId) -> t.Optional[NodeType]:
+            return snapshots[snapshot_id].node_type if snapshot_id in snapshots else None
+
+        direct: t.List[ChangeDirect] = []
+        metadata: t.List[ChangeDisplay] = []
+        indirect: t.List[ChangeIndirect] = [
+            ChangeIndirect(
+                name=name,
+                view_name=current.display_name(environment_naming_info, default_catalog),
+                node_type=current.node_type,
+                direct=[
+                    ChangeDisplay(
+                        name=parent.name,
+                        view_name=_display_name(parent),
+                        node_type=_node_type(parent),
+                    )
+                    for parent in current.parents
+                ],
+            )
+            for name, (current, _) in modified_snapshots
+            if plan.context_diff.indirectly_modified(name)
+        ]
+
+        for name, (current, _) in modified_snapshots:
+            if plan.context_diff.directly_modified(name):
+                direct.append(
+                    ChangeDirect(
+                        name=name,
+                        view_name=current.display_name(environment_naming_info, default_catalog),
+                        node_type=current.node_type,
+                        diff=plan.context_diff.text_diff(name),
+                        indirect=[
+                            change for change in indirect if name in [c.name for c in change.direct]
+                        ],
+                        change_category=current.change_category,
+                    )
+                )
+            elif plan.context_diff.indirectly_modified(name):
+                continue
+            elif plan.context_diff.metadata_updated(name):
+                metadata.append(
+                    ChangeDisplay(
+                        name=name,
+                        view_name=current.display_name(environment_naming_info, default_catalog),
+                        node_type=current.node_type,
+                    )
+                )
+
+        direct_change_model_names = [change.name for change in direct]
+        indirect_change_model_names = [change.name for change in indirect]
+
+        for change in indirect:
+            change.direct = [
+                model_display
+                for model_display in change.direct
+                if model_display.name in direct_change_model_names
+                or model_display.name in indirect_change_model_names
+            ]
+            change.direct.reverse()
+
+        return ModelsDiff(
+            direct=direct,
+            indirect=indirect,
+            metadata=metadata,
+        )
+
+
+class Environments(BaseModel):
+    environments: t.Dict[str, Environment] = {}
+    pinned_environments: t.Set[str] = set()
+    default_target_environment: str = ""
+
+
+class EvaluateInput(BaseModel):
+    model: str
+    start: TimeLike
+    end: TimeLike
+    execution_time: TimeLike
+    limit: int = 1000
+
+
+class FetchdfInput(BaseModel):
+    sql: str
+    limit: int = 1000
 
 
 class RenderInput(BaseModel):
@@ -358,11 +397,6 @@ class TestResult(BaseModel):
     skipped: t.List[TestSkipped]
 
 
-class ArtifactType(str, enum.Enum):
-    file = "file"
-    directory = "directory"
-
-
 class ArtifactChange(BaseModel):
     change: Change
     path: str
@@ -388,19 +422,17 @@ class ReportTestsFailure(ReportTestsResult):
     traceback: str
 
 
-class BackfillDetails(BaseModel):
-    model_name: t.Optional[str] = None
-    view_name: str
+class BackfillDetails(ChangeDisplay):
     interval: t.List[str]
     batches: int
 
 
-class BackfillTask(BaseModel):
+class BackfillTask(ChangeDisplay):
     completed: int
     total: int
-    view_name: str
     start: int
     end: t.Optional[int] = None
+    interval: t.Optional[t.List[str]] = None
 
 
 class TrackableMeta(BaseModel):
@@ -444,11 +476,15 @@ class PlanStageCancel(Trackable):
     pass
 
 
-class PlanStageChanges(Trackable):
+class PlanChanges(BaseModel):
     # can't have a set of pydantic models: https://github.com/pydantic/pydantic/issues/1090
-    added: t.Optional[t.List[SnapshotId]] = None
-    removed: t.Optional[t.List[SnapshotId]] = None
+    added: t.Optional[t.List[ChangeDisplay]] = None
+    removed: t.Optional[t.List[ChangeDisplay]] = None
     modified: t.Optional[ModelsDiff] = None
+
+
+class PlanStageChanges(Trackable, PlanChanges):
+    pass
 
 
 class PlanStageBackfills(Trackable):

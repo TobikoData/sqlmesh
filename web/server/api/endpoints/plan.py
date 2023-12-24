@@ -7,7 +7,9 @@ from fastapi import APIRouter, Body, Depends, Request, Response
 from starlette.status import HTTP_204_NO_CONTENT
 
 from sqlmesh.core.context import Context
+from sqlmesh.core.node import NodeType
 from sqlmesh.core.plan.definition import Plan
+from sqlmesh.core.snapshot.definition import SnapshotId
 from sqlmesh.utils.date import make_inclusive, to_ds
 from web.server import models
 from web.server.console import api_console
@@ -121,7 +123,14 @@ def get_plan(
     tracker_stage_changes = models.PlanStageChanges()
     tracker.add_stage(stage=models.PlanStage.changes, data=tracker_stage_changes)
     if plan.context_diff.has_changes:
-        tracker_stage_changes.update(_get_plan_changes(plan))
+        changes = _get_plan_changes(context, plan)
+        tracker_stage_changes.update(
+            {
+                "added": changes.added,
+                "removed": changes.removed,
+                "modified": changes.modified,
+            }
+        )
     tracker_stage_changes.stop(success=True)
     api_console.log_event_plan_overview()
     tracker_stage_backfills = models.PlanStageBackfills()
@@ -136,28 +145,61 @@ def get_plan(
     return plan
 
 
-def _get_plan_changes(plan: Plan) -> t.Dict[str, t.Any]:
+def _get_plan_changes(context: Context, plan: Plan) -> models.PlanChanges:
     """Get plan changes"""
-    return {
-        "removed": set(plan.context_diff.removed_snapshots),
-        "added": list(plan.context_diff.added),
-        "modified": models.ModelsDiff.get_modified_snapshots(plan.context_diff),
-    }
+    snapshots = plan.context_diff.snapshots
+    default_catalog = context.default_catalog
+
+    def _display_name(snapshot_id: SnapshotId) -> str:
+        return (
+            snapshots[snapshot_id].display_name(plan.environment_naming_info, default_catalog)
+            if snapshot_id in snapshots
+            else snapshot_id.name
+        )
+
+    def _node_type(snapshot_id: SnapshotId) -> t.Optional[NodeType]:
+        return snapshots[snapshot_id].node_type if snapshot_id in snapshots else None
+
+    return models.PlanChanges(
+        added=[
+            models.ChangeDisplay(
+                name=snapshot_id.name,
+                view_name=_display_name(snapshot_id),
+                node_type=_node_type(snapshot_id),
+            )
+            for snapshot_id in plan.context_diff.added
+        ],
+        removed=[
+            models.ChangeDisplay(
+                name=snapshot_id.name,
+                view_name=_display_name(snapshot_id),
+                node_type=_node_type(snapshot_id),
+            )
+            for snapshot_id in plan.context_diff.removed_snapshots
+        ],
+        modified=models.ModelsDiff.get_modified_snapshots(context, plan),
+    )
 
 
 def _get_plan_backfills(context: Context, plan: Plan) -> t.Dict[str, t.Any]:
     """Get plan backfills"""
     batches = context.scheduler().batches()
     tasks = {snapshot.name: len(intervals) for snapshot, intervals in batches.items()}
+    snapshots = plan.context_diff.snapshots
+    default_catalog = context.default_catalog
+
+    def _display_name(snapshot_id: SnapshotId) -> str:
+        return (
+            snapshots[snapshot_id].display_name(plan.environment_naming_info, default_catalog)
+            if snapshot_id in snapshots
+            else snapshot_id.name
+        )
+
     return {
         "models": [
             models.BackfillDetails(
-                model_name=interval.snapshot_id.name,
-                view_name=plan.context_diff.snapshots[
-                    interval.snapshot_id
-                ].qualified_view_name.for_environment(plan.environment_naming_info)
-                if interval.snapshot_id in plan.context_diff.snapshots
-                else interval.snapshot_id,
+                name=interval.snapshot_id.name,
+                view_name=_display_name(interval.snapshot_id),
                 interval=[
                     tuple(to_ds(t) for t in make_inclusive(start, end))
                     for start, end in interval.merged_intervals

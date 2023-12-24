@@ -7,11 +7,6 @@ import {
   ArrowPathRoundedSquareIcon,
 } from '@heroicons/react/24/solid'
 import clsx from 'clsx'
-import {
-  type SnapshotId,
-  type ChangeDirect,
-  type ChangeIndirect,
-} from '~/api/client'
 import { Divider } from '../divider/Divider'
 import {
   type Category,
@@ -21,10 +16,11 @@ import {
   usePlanDispatch,
   type PlanChangeType,
 } from './context'
-import { isArrayNotEmpty, truncate } from '@utils/index'
+import { isArrayNotEmpty, isNil, isNotNil, truncate } from '@utils/index'
 import LineageFlowProvider from '@components/graph/context'
 import { useStoreContext } from '@context/context'
 import ModelLineage from '@components/graph/ModelLineage'
+import { type ModelSQLMeshChangeDisplay } from '@models/sqlmesh-change-display'
 
 interface PropsPlanChangePreview extends React.HTMLAttributes<HTMLElement> {
   headline?: string
@@ -49,7 +45,7 @@ function PlanChangePreview({
         className,
       )}
     >
-      {headline != null && (
+      {isNotNil(headline) && (
         <h4
           className={clsx(
             `mb-2 font-bold whitespace-nowrap`,
@@ -78,7 +74,7 @@ function PlanChangePreviewDefault({
   type,
 }: {
   type: PlanChangeType
-  changes: SnapshotId[]
+  changes: ModelSQLMeshChangeDisplay[]
 }): JSX.Element {
   return (
     <ul>
@@ -107,10 +103,10 @@ function PlanChangePreviewDefault({
             <ArrowPathRoundedSquareIcon className="h-4 mr-2" />
           )}
           <small
-            title={change.name}
+            title={change.displayViewName}
             className="w-full text-xs whitespace-nowrap text-ellipsis overflow-hidden"
           >
-            {truncate(change.name, 50, 25)}
+            {truncate(change.displayViewName, 50, 25)}
           </small>
         </li>
       ))}
@@ -121,7 +117,7 @@ function PlanChangePreviewDefault({
 function PlanChangePreviewDirect({
   changes = [],
 }: {
-  changes: ChangeDirect[]
+  changes: ModelSQLMeshChangeDisplay[]
 }): JSX.Element {
   const models = useStoreContext(s => s.models)
 
@@ -129,7 +125,7 @@ function PlanChangePreviewDirect({
     <ul>
       {changes.map(change => (
         <li
-          key={change.model_name}
+          key={change.name}
           className="text-secondary-500 dark:text-primary-500 mt-1"
         >
           <Disclosure>
@@ -138,7 +134,7 @@ function PlanChangePreviewDirect({
                 <Disclosure.Button className="flex items-center w-full justify-between rounded-lg text-left">
                   <PlanChangePreviewTitle
                     className="w-full"
-                    model_name={change.model_name}
+                    change={change}
                   />
                   {(() => {
                     const Tag = open ? MinusCircleIcon : PlusCircleIcon
@@ -159,13 +155,13 @@ function PlanChangePreviewDirect({
                   <ChangeCategories change={change} />
                   <Divider className="border-neutral-200 mt-2" />
                   <div className="flex flex-col w-full h-full overflow-hidden overflow-y-auto hover:scrollbar scrollbar--vertical scrollbar--horizontal">
-                    {change?.diff != null && (
+                    {isNotNil(change?.diff) && (
                       <PlanChangePreviewDiff diff={change?.diff} />
                     )}
                     {(() => {
-                      const model = models.get(change.model_name)
+                      const model = models.get(change.name)
 
-                      if (model == null) return <></>
+                      if (isNil(model)) return <></>
 
                       return (
                         <div className="h-[16rem] bg-theme-lighter rounded-xl p-2">
@@ -176,7 +172,7 @@ function PlanChangePreviewDirect({
                               highlightedNodes={{
                                 'border-4 border-secondary-500': [model.name],
                                 'border-4 border-warning-500':
-                                  change.indirect ?? [],
+                                  change.indirect?.map(c => c.name) ?? [],
                                 '*': ['opacity-50 hover:opacity-100'],
                               }}
                             />
@@ -195,7 +191,11 @@ function PlanChangePreviewDirect({
   )
 }
 
-function ChangeCategories({ change }: { change: ChangeDirect }): JSX.Element {
+function ChangeCategories({
+  change,
+}: {
+  change: ModelSQLMeshChangeDisplay
+}): JSX.Element {
   const dispatch = usePlanDispatch()
 
   const { change_categorization, categories } = usePlan()
@@ -204,7 +204,7 @@ function ChangeCategories({ change }: { change: ChangeDirect }): JSX.Element {
     <RadioGroup
       className="flex flex-col mt-2"
       value={
-        change_categorization.get(change.model_name)?.category ??
+        change_categorization.get(change.name)?.category ??
         change.change_category
       }
       onChange={(category: Category) => {
@@ -255,13 +255,13 @@ function ChangeCategories({ change }: { change: ChangeDirect }): JSX.Element {
 function PlanChangePreviewIndirect({
   changes = [],
 }: {
-  changes: ChangeIndirect[]
+  changes: ModelSQLMeshChangeDisplay[]
 }): JSX.Element {
   return (
     <ul>
       {changes.map(change => (
         <li
-          key={change.model_name}
+          key={change.name}
           className="text-warning-700 dark:text-warning-500"
         >
           {isArrayNotEmpty(change.direct) ? (
@@ -269,7 +269,7 @@ function PlanChangePreviewIndirect({
               {({ open }) => (
                 <>
                   <Disclosure.Button className="flex items-center w-full justify-between rounded-lg text-left">
-                    <PlanChangePreviewTitle model_name={change.model_name} />
+                    <PlanChangePreviewTitle change={change} />
                     {(() => {
                       const Tag = open ? MinusCircleIcon : PlusCircleIcon
 
@@ -288,7 +288,7 @@ function PlanChangePreviewIndirect({
               )}
             </Disclosure>
           ) : (
-            <PlanChangePreviewTitle model_name={change.model_name} />
+            <PlanChangePreviewTitle change={change} />
           )}
         </li>
       ))}
@@ -297,22 +297,22 @@ function PlanChangePreviewIndirect({
 }
 
 function PlanChangePreviewTitle({
-  model_name,
+  change,
   className,
 }: {
-  model_name: string
+  change: ModelSQLMeshChangeDisplay
   className?: string
 }): JSX.Element {
   const { change_categorization } = usePlan()
-  const category = change_categorization.get(model_name)?.category
+  const category = change_categorization.get(change.name)?.category
 
   return (
     <div className={clsx('flex items-center font-bold', className)}>
       <ArrowPathRoundedSquareIcon className="h-4 mr-2" />
       <small className="w-full text-xs whitespace-nowrap text-ellipsis overflow-hidden">
-        {model_name}
+        {change.displayViewName}
       </small>
-      {category != null && (
+      {isNotNil(category) && (
         <span className="ml-2 text-xs px-1 bg-neutral-400 text-neutral-100  dark:bg-neutral-400 dark:text-neutral-800 rounded whitespace-nowrap mr-2">
           {category.name}
         </span>
@@ -326,7 +326,7 @@ function PlanChangePreviewRelations({
   models,
 }: {
   type: 'direct' | 'indirect'
-  models: string[]
+  models: ModelSQLMeshChangeDisplay[]
 }): JSX.Element {
   return (
     <ul
@@ -336,13 +336,13 @@ function PlanChangePreviewRelations({
         type === 'direct' && 'text-secondary-500 dark:text-primary-500',
       )}
     >
-      {models.map(model_name => (
+      {models.map(model => (
         <li
-          key={model_name}
+          key={model.name}
           className="flex"
         >
           <span className="h-3 w-3 border-l-2 border-b-2 inline-block mr-2"></span>
-          {model_name}
+          {model.displayViewName}
         </li>
       ))}
     </ul>
