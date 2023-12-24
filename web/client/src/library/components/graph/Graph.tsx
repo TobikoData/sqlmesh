@@ -773,7 +773,7 @@ function ModelColumnLineage({
   } = useLineageFlow()
   const { setCenter } = useReactFlow()
 
-  const [isBuildingLayout, setIsBuildingLayout] = useState(true)
+  const [isBuildingLayout, setIsBuildingLayout] = useState(false)
 
   const nodeTypes = useMemo(() => ({ model: ModelNode }), [])
   const nodesMap = useMemo(
@@ -792,11 +792,11 @@ function ModelColumnLineage({
   const [edges, setEdges] = useState<Edge[]>([])
 
   useEffect(() => {
-    setIsBuildingLayout(true)
-
     const WITH_COLUMNS_LIMIT = 30
 
     if (isArrayEmpty(allEdges) || isNil(mainNode)) return
+
+    setIsBuildingLayout(true)
 
     const newActiveNodes = getActiveNodes(
       allEdges,
