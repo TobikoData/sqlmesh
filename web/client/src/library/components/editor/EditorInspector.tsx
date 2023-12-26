@@ -11,7 +11,7 @@ import Input from '../input/Input'
 import { type EditorTab, useStoreEditor } from '~/context/editor'
 import { Tab } from '@headlessui/react'
 import Banner from '@components/banner/Banner'
-import { type ModelSQLMeshModel } from '@models/sqlmesh-model'
+import { ModelSQLMeshModel } from '@models/sqlmesh-model'
 import {
   useApiEvaluate,
   useApiFetchdf,
@@ -45,7 +45,7 @@ export default function EditorInspector({
         'flex flex-col w-full h-full items-center overflow-hidden',
       )}
     >
-      {tab.file.isSQLMeshModel ? (
+      {ModelSQLMeshModel.isSQLMeshModel(tab.file) ? (
         model != null && (
           <InspectorModel
             tab={tab}
@@ -84,7 +84,7 @@ function InspectorModel({
           [
             'Actions',
             'Columns',
-            tab.file.isSQLMeshModelSQL && 'Query',
+            model.isModelSQL && 'Query',
             list.length > 1 && environment.isRemote && 'Diff',
           ].filter(Boolean) as string[]
         }
@@ -112,7 +112,7 @@ function InspectorModel({
             className="max-h-[15rem]"
             nodeId={model.name}
             columns={model.columns}
-            disabled={model.type === 'python'}
+            disabled={model.isModelPython}
             withHandles={false}
             withSource={false}
             withDescription={true}
@@ -323,7 +323,8 @@ function FormActionsModel({
   )
 
   const shouldEvaluate =
-    tab.file.isSQLMeshModel && Object.values(form).every(Boolean)
+    ModelSQLMeshModel.isSQLMeshModel(tab.file) &&
+    Object.values(form).every(Boolean)
 
   useEffect(() => {
     return () => {
@@ -447,7 +448,7 @@ function FormActionsModel({
       <Divider />
       <InspectorActions>
         <div className="flex w-full justify-end">
-          {tab.file.isSQLMeshModel && isFetching ? (
+          {ModelSQLMeshModel.isSQLMeshModel(tab.file) && isFetching ? (
             <div className="flex items-center">
               <Spinner className="w-3" />
               <small className="text-xs text-neutral-400 block mx-2">
@@ -535,7 +536,8 @@ function FormDiffModel({
   }, [list])
 
   const shouldEnableAction =
-    tab.file.isSQLMeshModel && [selectedSource, target, limit].every(Boolean)
+    ModelSQLMeshModel.isSQLMeshModel(tab.file) &&
+    [selectedSource, target, limit].every(Boolean)
 
   return (
     <>

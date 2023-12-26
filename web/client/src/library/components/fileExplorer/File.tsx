@@ -220,7 +220,6 @@ function FileDisplay({ file }: { file: ModelFile }): JSX.Element {
       title={file.name}
       className={clsx(
         'inline-block overflow-hidden overflow-ellipsis py-[0.125rem]',
-        !file.is_supported && 'opacity-50',
       )}
     >
       {truncate(file.name, 50, 20)}

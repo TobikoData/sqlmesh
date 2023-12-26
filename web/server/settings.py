@@ -14,7 +14,6 @@ from sqlmesh.core.context import Context
 from sqlmesh.core.model.definition import Model
 from sqlmesh.utils.pydantic import PydanticModel
 from web.server.exceptions import ApiException
-from web.server.models import FileType
 
 logger = logging.getLogger(__name__)
 get_context_lock = asyncio.Lock()
@@ -41,21 +40,6 @@ def _get_context(path: str | Path, config: str, gateway: str) -> Context:
 
 
 @lru_cache()
-def _get_path_mappings(context: Context) -> dict[Path, FileType]:
-    mapping: dict[Path, FileType] = {}
-    for audit in context._audits.values():
-        if audit._path:
-            path = audit._path.relative_to(context.path)
-            mapping[path] = FileType.audit
-    for model in context.models.values():
-        if model.kind.is_external or not model._path:
-            continue
-        path = model._path.relative_to(context.path)
-        mapping[path] = FileType.model
-    return mapping
-
-
-@lru_cache()
 def _get_loaded_context(path: str | Path, config: str, gateway: str) -> Context:
     context = _get_context(path, config, gateway)
     context.load()
@@ -65,15 +49,6 @@ def _get_loaded_context(path: str | Path, config: str, gateway: str) -> Context:
 @lru_cache()
 def _get_path_to_model_mapping(context: Context) -> dict[Path, Model]:
     return {model._path: model for model in context._models.values()}
-
-
-async def get_path_mapping(settings: Settings = Depends(get_settings)) -> dict[Path, FileType]:
-    try:
-        context = await get_loaded_context(settings)
-    except Exception:
-        logger.exception("Error creating a context")
-        return {}
-    return _get_path_mappings(context)
 
 
 async def get_path_to_model_mapping(

@@ -37,7 +37,7 @@ export default function ModelNode({
     highlightedNodes,
   } = useLineageFlow()
 
-  const { model, columns } = useMemo(() => {
+  const { columns } = useMemo(() => {
     const model = models.get(id)
     const columns = model?.columns ?? []
 
@@ -60,7 +60,6 @@ export default function ModelNode({
     })
 
     return {
-      model,
       columns,
     }
   }, [id, models, lineage])
@@ -104,8 +103,9 @@ export default function ModelNode({
   const splat = highlightedNodes?.['*']
   const isInteractive = mainNode !== id && isNotNil(handleClickModel)
   const isCTE = data.type === EnumLineageNodeModelType.cte
-  const isModelExternal = model?.type === EnumLineageNodeModelType.external
-  const isModelSeed = model?.type === EnumLineageNodeModelType.seed
+  const isModelExternal = data.type === EnumLineageNodeModelType.external
+  const isModelSeed = data.type === EnumLineageNodeModelType.seed
+  const isModelSQL = data.type === EnumLineageNodeModelType.sql
   const showColumns = withColumns && isArrayNotEmpty(columns)
   const isMainNode = mainNode === id || highlightedNodeModels.includes(id)
   const isActiveNode =
@@ -164,7 +164,7 @@ export default function ModelNode({
             className="max-h-[15rem]"
             nodeId={id}
             columns={columns}
-            disabled={model?.type !== EnumLineageNodeModelType.sql}
+            disabled={isModelSQL}
             withHandles={true}
             withSource={true}
             withDescription={false}

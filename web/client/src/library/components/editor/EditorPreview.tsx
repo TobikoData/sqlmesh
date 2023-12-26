@@ -15,6 +15,7 @@ import TableDiff from '@components/tableDiff/TableDiff'
 import TabList from '@components/tab/Tab'
 import { useSQLMeshModelExtensions } from './hooks'
 import Table from '@components/table/Table'
+import { ModelSQLMeshModel } from '@models/sqlmesh-model'
 
 const ModelLineage = lazy(
   async () => await import('@components/graph/ModelLineage'),
@@ -55,7 +56,9 @@ export default function EditorPreview({
 
   const model = models.get(tab.file.path)
   const showLineage =
-    isFalse(tab.file.isEmpty) && isNotNil(model) && tab.file.isSQLMeshModel
+    isFalse(tab.file.isEmpty) &&
+    isNotNil(model) &&
+    ModelSQLMeshModel.isSQLMeshModel(tab.file)
 
   const tabs: string[] = useMemo(
     () =>

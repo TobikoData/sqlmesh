@@ -26,6 +26,7 @@ import { useApiFetchdf } from '@api/index'
 import { getTableDataFromArrowStreamResult } from '@components/table/help'
 import { type Table } from 'apache-arrow'
 import { type KeyBinding } from '@codemirror/view'
+import { ModelSQLMeshModel } from '@models/sqlmesh-model'
 
 function Editor(): JSX.Element {
   const tab = useStoreEditor(s => s.tab)
@@ -170,7 +171,8 @@ function EditorMain({ tab }: { tab: EditorTab }): JSX.Element {
   const sizesCodeEditorAndInspector = useMemo(() => {
     const model = models.get(tab?.file.path)
     const showInspector =
-      ((tab.file.isSQLMeshModel && model != null) || tab.file.isLocal) &&
+      ((isNotNil(model) && ModelSQLMeshModel.isSQLMeshModel(tab.file)) ||
+        tab.file.isLocal) &&
       isFalse(isStringEmptyOrNil(tab.file.content))
 
     return showInspector ? [75, 25] : [100, 0]
@@ -179,7 +181,9 @@ function EditorMain({ tab }: { tab: EditorTab }): JSX.Element {
   const sizesCodeEditorAndPreview = useMemo(() => {
     const model = models.get(tab.file.path)
     const showLineage =
-      isFalse(tab.file.isEmpty) && isNotNil(model) && tab.file.isSQLMeshModel
+      isFalse(tab.file.isEmpty) &&
+      isNotNil(model) &&
+      ModelSQLMeshModel.isSQLMeshModel(tab.file)
     const showPreview =
       (tab.file.isLocal && [previewTable, previewDiff].some(Boolean)) ||
       showLineage

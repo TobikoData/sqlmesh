@@ -18,11 +18,10 @@ from web.server.exceptions import ApiException
 from web.server.settings import (
     Settings,
     get_context,
-    get_path_mapping,
     get_path_to_model_mapping,
     get_settings,
 )
-from web.server.utils import is_relative_to, replace_file, validate_path
+from web.server.utils import replace_file, validate_path
 
 router = APIRouter()
 
@@ -31,27 +30,23 @@ router = APIRouter()
 def get_files(
     context: t.Optional[Context] = Depends(get_context),
     settings: Settings = Depends(get_settings),
-    path_mapping: t.Dict[Path, models.FileType] = Depends(get_path_mapping),
 ) -> models.Directory:
     """Get all project files."""
     return _get_directory(
         path=settings.project_path,
         settings=settings,
-        path_mapping=path_mapping,
         context=context,
     )
 
 
 @router.get("/{path:path}", response_model=models.File)
 def get_file(
-    path: str = Depends(validate_path),
-    settings: Settings = Depends(get_settings),
-    path_mapping: t.Dict[Path, models.FileType] = Depends(get_path_mapping),
+    path: str = Depends(validate_path), settings: Settings = Depends(get_settings)
 ) -> models.File:
     """Get a file, including its contents."""
     try:
         file_path = Path(path)
-        file = _get_file_with_content(file_path, settings, path_mapping)
+        file = _get_file_with_content(file_path, settings)
     except FileNotFoundError:
         raise HTTPException(status_code=HTTP_404_NOT_FOUND)
 
@@ -93,13 +88,9 @@ async def write_file(
 
         full_path.write_text(content, encoding="utf-8")
 
-    path_or_new_path_mapping = await get_path_mapping(settings=settings)
     content = (settings.project_path / path_or_new_path).read_text()
     return models.File(
-        name=os.path.basename(path_or_new_path),
-        path=path_or_new_path,
-        content=content,
-        type=path_or_new_path_mapping.get(Path(path_or_new_path)),
+        name=os.path.basename(path_or_new_path), path=path_or_new_path, content=content
     )
 
 
@@ -125,12 +116,9 @@ async def delete_file(
 def _get_directory(
     path: str | Path,
     settings: Settings,
-    path_mapping: t.Dict[Path, models.FileType],
     context: t.Optional[Context] = None,
 ) -> models.Directory:
     ignore_patterns = context.config.ignore_patterns if context else c.IGNORE_PATTERNS
-    macro_directory_path = Path(c.MACROS)
-    test_directory_path = Path(c.TESTS)
 
     def walk_path(
         path: str | Path,
@@ -161,20 +149,7 @@ def _get_directory(
                         )
                     )
                 elif entry.is_file(follow_symlinks=False):
-                    file_type = None
-                    if is_relative_to(relative_path, macro_directory_path):
-                        file_type = models.FileType.macros
-                    elif is_relative_to(relative_path, test_directory_path):
-                        file_type = models.FileType.tests
-                    else:
-                        file_type = path_mapping.get(relative_path)
-                    files.append(
-                        models.File(
-                            name=entry.name,
-                            path=str(relative_path),
-                            type=file_type,
-                        )
-                    )
+                    files.append(models.File(name=entry.name, path=str(relative_path)))
         return sorted(directories, key=lambda x: x.name), sorted(files, key=lambda x: x.name)
 
     directories, files = walk_path(path)
@@ -190,7 +165,6 @@ def _get_directory(
 def _get_file_with_content(
     path: Path,
     settings: Settings,
-    path_mapping: t.Dict[Path, models.FileType],
 ) -> models.File:
     """Get a file, including its contents."""
     file_path = settings.project_path / path
@@ -202,5 +176,4 @@ def _get_file_with_content(
         name=path.name,
         path=str(path),
         content=content,
-        type=path_mapping.get(path),
     )
