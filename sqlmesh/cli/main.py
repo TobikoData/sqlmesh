@@ -58,7 +58,7 @@ def cli(
     debug: bool = False,
 ) -> None:
     """SQLMesh command line tool."""
-    if ctx.invoked_subcommand == "version":
+    if "--help" in sys.argv:
         return
 
     load = True
@@ -70,10 +70,6 @@ def cli(
             return
         elif ctx.invoked_subcommand in ("create_external_models", "migrate", "rollback", "ui"):
             load = False
-
-    # Delegates the execution of the --help option to the corresponding subcommand
-    if "--help" in sys.argv:
-        return
 
     configs = load_configs(config, paths)
     log_limit = list(configs.values())[0].log_limit
