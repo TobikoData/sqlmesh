@@ -1,6 +1,5 @@
 import React, { useEffect, lazy } from 'react'
 import {
-  useApiModels,
   useApiFiles,
   useApiEnvironments,
   useApiPlanRun,
@@ -13,7 +12,6 @@ import {
   isArrayEmpty,
   isNil,
   isNotNil,
-  isFalse,
   isObjectNotEmpty,
   isTrue,
 } from '~/utils'
@@ -26,10 +24,10 @@ import { type Tests, useStoreProject } from '@context/project'
 import { EnumErrorKey, type ErrorIDE, useIDE } from './context'
 import {
   type Directory,
-  type Model,
   type Environments,
   type EnvironmentsEnvironments,
   Status,
+  type PlanStageModelsModels,
 } from '@api/client'
 import { Button } from '@components/button/Button'
 import { Divider } from '@components/divider/Divider'
@@ -63,7 +61,6 @@ export default function PageIDE(): JSX.Element {
 
   const { removeError, addError } = useIDE()
 
-  const models = useStoreContext(s => s.models)
   const showConfirmation = useStoreContext(s => s.showConfirmation)
   const setShowConfirmation = useStoreContext(s => s.setShowConfirmation)
   const confirmations = useStoreContext(s => s.confirmations)
@@ -75,7 +72,6 @@ export default function PageIDE(): JSX.Element {
   const planOverview = useStorePlan(s => s.planOverview)
   const planApply = useStorePlan(s => s.planApply)
   const planCancel = useStorePlan(s => s.planCancel)
-  const planAction = useStorePlan(s => s.planAction)
   const setPlanOverview = useStorePlan(s => s.setPlanOverview)
   const setPlanApply = useStorePlan(s => s.setPlanApply)
   const setPlanCancel = useStorePlan(s => s.setPlanCancel)
@@ -101,11 +97,6 @@ export default function PageIDE(): JSX.Element {
 
   // We need to fetch from IDE level to make sure
   // all pages have access to models and files
-  const {
-    refetch: getModels,
-    isFetching: isFetchingModels,
-    cancel: cancelRequestModels,
-  } = useApiModels()
   const { refetch: getFiles, cancel: cancelRequestFiles } = useApiFiles()
   const {
     refetch: getEnvironments,
@@ -126,15 +117,17 @@ export default function PageIDE(): JSX.Element {
   })
 
   useEffect(() => {
-    const channelModels = channel<Model[]>('models', updateModels)
     const channelTests = channel<Tests>('tests', updateTests)
     const channelErrors = channel<ErrorIDE>('errors', displayErrors)
-    const channelPlanOverview = channel<any>(
+    const channelPlanOverview = channel<PlanOverviewTracker>(
       'plan-overview',
       updatePlanOverviewTracker,
     )
-    const channelPlanApply = channel<any>('plan-apply', updatePlanApplyTracker)
-    const channelPlanCancel = channel<any>(
+    const channelPlanApply = channel<PlanApplyTracker>(
+      'plan-apply',
+      updatePlanApplyTracker,
+    )
+    const channelPlanCancel = channel<PlanCancelTracker>(
       'plan-cancel',
       updatePlanCancelTracker,
     )
@@ -145,77 +138,7 @@ export default function PageIDE(): JSX.Element {
         file: ModelFile
       }>
       directories: Record<string, Directory>
-    }>('file', ({ changes, directories }) => {
-      changes.sort((a: any) =>
-        a.change === EnumFileExplorerChange.Deleted ? -1 : 1,
-      )
-
-      changes.forEach(({ change, path, file }) => {
-        if (change === EnumFileExplorerChange.Modified) {
-          const currentFile = findArtifactByPath(file.path) as
-            | ModelFile
-            | undefined
-
-          if (isNil(currentFile) || isNil(file)) return
-
-          currentFile.update(file)
-        }
-
-        if (change === EnumFileExplorerChange.Deleted) {
-          const artifact = findArtifactByPath(path)
-
-          if (isNil(artifact)) return
-
-          if (artifact instanceof ModelDirectory) {
-            artifact.parent?.removeDirectory(artifact)
-          }
-
-          if (artifact instanceof ModelFile) {
-            artifact.parent?.removeFile(artifact)
-
-            if (inTabs(artifact)) {
-              closeTab(artifact)
-            }
-          }
-        }
-      })
-
-      for (const path in directories) {
-        const directory = directories[path]!
-
-        const currentDirectory = findArtifactByPath(path) as
-          | ModelDirectory
-          | undefined
-
-        if (isNil(currentDirectory)) continue
-
-        directory.directories?.forEach((d: any) => {
-          const directory = findArtifactByPath(d.path) as
-            | ModelDirectory
-            | undefined
-
-          if (isNil(directory)) {
-            currentDirectory.addDirectory(
-              new ModelDirectory(d, currentDirectory),
-            )
-          }
-        })
-
-        directory.files?.forEach((f: any) => {
-          const file = findArtifactByPath(f.path) as ModelFile | undefined
-
-          if (isNil(file)) {
-            currentDirectory.addFile(new ModelFile(f, currentDirectory))
-          }
-        })
-
-        currentDirectory.directories.sort((a, b) => (a.name > b.name ? 1 : -1))
-        currentDirectory.files.sort((a, b) => (a.name > b.name ? 1 : -1))
-      }
-
-      refreshFiles()
-      setActiveRange()
-    })
+    }>('file', updateFile)
 
     void getFiles().then(({ data }) => {
       if (isNil(data)) return
@@ -230,11 +153,6 @@ export default function PageIDE(): JSX.Element {
 
     void getEnvironments().then(({ data }) => updateEnviroments(data))
 
-    void getModels().then(({ data }) => {
-      updateModels(data as Model[])
-    })
-
-    channelModels.subscribe()
     channelErrors.subscribe()
     channelPlanOverview.subscribe()
     channelPlanApply.subscribe()
@@ -243,13 +161,11 @@ export default function PageIDE(): JSX.Element {
     channelTests.subscribe()
 
     return () => {
-      void cancelRequestModels()
       void cancelRequestFiles()
       void cancelRequestEnvironments()
       void cancelRequestPlan()
 
       channelTests.unsubscribe()
-      channelModels.unsubscribe()
       channelErrors.unsubscribe()
       channelPlanOverview.unsubscribe()
       channelPlanApply.unsubscribe()
@@ -267,12 +183,6 @@ export default function PageIDE(): JSX.Element {
   useEffect(() => {
     setShowConfirmation(confirmations.length > 0)
   }, [confirmations])
-
-  useEffect(() => {
-    if (models.size > 0 && isFalse(planAction.isProcessing)) {
-      void planRun()
-    }
-  }, [models])
 
   useEffect(() => {
     planOverview.isFetching = isFetchingPlanRun
@@ -304,7 +214,11 @@ export default function PageIDE(): JSX.Element {
     }
   }, [planOverview, planApply, planCancel])
 
-  function updateModels(models?: Model[]): void {
+  useEffect(() => {
+    void planRun()
+  }, [environment])
+
+  function updateModels(models?: PlanStageModelsModels): void {
     if (isNotNil(models)) {
       removeError(EnumErrorKey.Models)
       setModels(models)
@@ -322,6 +236,10 @@ export default function PageIDE(): JSX.Element {
   function updatePlanOverviewTracker(data: PlanOverviewTracker): void {
     planOverview.update(data)
 
+    if (isNotNil(data.models)) {
+      updateModels(data.models.models)
+    }
+
     setPlanOverview(planOverview)
   }
 
@@ -338,11 +256,7 @@ export default function PageIDE(): JSX.Element {
       isTrue(data.meta?.done) && data.meta?.status !== Status.init
 
     if (isFinished) {
-      void getEnvironments().then(({ data }) => {
-        updateEnviroments(data)
-
-        void planRun()
-      })
+      void getEnvironments().then(({ data }) => updateEnviroments(data))
     }
 
     setPlanApply(planApply)
@@ -359,6 +273,90 @@ export default function PageIDE(): JSX.Element {
         pinned_environments,
       )
     }
+
+    void planRun()
+  }
+
+  function updateFile({
+    changes,
+    directories,
+  }: {
+    changes: Array<{
+      change: FileExplorerChange
+      path: string
+      file: ModelFile
+    }>
+    directories: Record<string, Directory>
+  }): void {
+    void planRun()
+
+    changes.sort((a: any) =>
+      a.change === EnumFileExplorerChange.Deleted ? -1 : 1,
+    )
+
+    changes.forEach(({ change, path, file }) => {
+      if (change === EnumFileExplorerChange.Modified) {
+        const currentFile = findArtifactByPath(file.path) as
+          | ModelFile
+          | undefined
+
+        if (isNil(currentFile) || isNil(file)) return
+
+        currentFile.update(file)
+      }
+
+      if (change === EnumFileExplorerChange.Deleted) {
+        const artifact = findArtifactByPath(path)
+
+        if (isNil(artifact)) return
+
+        if (artifact instanceof ModelDirectory) {
+          artifact.parent?.removeDirectory(artifact)
+        }
+
+        if (artifact instanceof ModelFile) {
+          artifact.parent?.removeFile(artifact)
+
+          if (inTabs(artifact)) {
+            closeTab(artifact)
+          }
+        }
+      }
+    })
+
+    for (const path in directories) {
+      const directory = directories[path]!
+
+      const currentDirectory = findArtifactByPath(path) as
+        | ModelDirectory
+        | undefined
+
+      if (isNil(currentDirectory)) continue
+
+      directory.directories?.forEach((d: any) => {
+        const directory = findArtifactByPath(d.path) as
+          | ModelDirectory
+          | undefined
+
+        if (isNil(directory)) {
+          currentDirectory.addDirectory(new ModelDirectory(d, currentDirectory))
+        }
+      })
+
+      directory.files?.forEach((f: any) => {
+        const file = findArtifactByPath(f.path) as ModelFile | undefined
+
+        if (isNil(file)) {
+          currentDirectory.addFile(new ModelFile(f, currentDirectory))
+        }
+      })
+
+      currentDirectory.directories.sort((a, b) => (a.name > b.name ? 1 : -1))
+      currentDirectory.files.sort((a, b) => (a.name > b.name ? 1 : -1))
+    }
+
+    refreshFiles()
+    setActiveRange()
   }
 
   function restoreEditorTabsFromSaved(files: ModelFile[]): void {
@@ -412,13 +410,11 @@ export default function PageIDE(): JSX.Element {
           </Button>
         </div>
         <div className="px-3 flex items-center min-w-[10rem] justify-end">
-          {isFetchingEnvironments || isFetchingModels ? (
+          {isFetchingEnvironments ? (
             <div className="flex justify-center items-center w-full h-full">
               <Loading className="inline-block">
                 <Spinner className="w-3 h-3 border border-neutral-10 mr-2" />
-                <h3 className="text-xs">
-                  Loading {isFetchingModels ? 'Models' : 'Environments'}...
-                </h3>
+                <h3 className="text-xs">Loading Environments...</h3>
               </Loading>
             </div>
           ) : (

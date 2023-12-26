@@ -23,7 +23,6 @@ import {
   initiatePlanApiPlanPost,
   initiateApplyApiCommandsApplyPost,
   cancelPlanApiPlanCancelPost,
-  getModelsApiModelsGet,
   type ModelLineageApiLineageModelNameGet200,
   modelLineageApiLineageModelNameGet,
   type ColumnLineageApiLineageModelNameColumnNameGet200,
@@ -40,13 +39,14 @@ import {
   type FetchdfInput,
   type Meta,
   getApiMetaApiMetaGet,
-  type GetModelsApiModelsGet200,
   type ApiExceptionPayload,
   deleteEnvironmentApiEnvironmentsEnvironmentDelete as apiDeleteEnvironment,
   type Environments,
   type PlanOverviewStageTracker,
   type PlanApplyStageTracker,
   type BodyInitiateApplyApiCommandsApplyPostCategories,
+  getModelApiModelsModelNameGet,
+  type Model,
 } from './client'
 import {
   useIDE,
@@ -100,18 +100,20 @@ export function useApiMeta(
   )
 }
 
-export function useApiModels(
+export function useApiModel(
+  modelName: string,
   options?: ApiOptions,
-): UseQueryWithTimeoutOptions<GetModelsApiModelsGet200> {
+): UseQueryWithTimeoutOptions<Model> {
   return useQueryWithTimeout(
     {
-      queryKey: ['/api/models'],
-      queryFn: getModelsApiModelsGet,
+      queryKey: ['/api/models', modelName],
+      queryFn: async ({ signal }) =>
+        await getModelApiModelsModelNameGet(modelName, { signal }),
     },
     {
       ...options,
       errorKey: EnumErrorKey.Models,
-      trigger: 'API -> useApiModels',
+      trigger: 'API -> useApiModel',
     },
   )
 }

@@ -15,6 +15,7 @@ import { type ModelSQLMeshModel } from '@models/sqlmesh-model'
 import {
   useApiEvaluate,
   useApiFetchdf,
+  useApiModel,
   useApiRender,
   useApiTableDiff,
 } from '@api/index'
@@ -47,7 +48,7 @@ export default function EditorInspector({
       )}
     >
       {isModel(tab.file.path) ? (
-        model != null && (
+        isNotNil(model) && (
           <InspectorModel
             tab={tab}
             model={model}
@@ -74,6 +75,20 @@ function InspectorModel({
   const list = Array.from(environments)
     .filter(({ isRemote }) => isRemote)
     .map(({ name }) => ({ text: name, value: name }))
+
+  const { refetch: getModel, cancel: cancelRequestModel } = useApiModel(
+    model.name,
+  )
+
+  useEffect(() => {
+    void getModel().then(({ data }) => {
+      model.update(data)
+    })
+
+    return () => {
+      cancelRequestModel()
+    }
+  }, [model.name])
 
   const modelExtensions = useSQLMeshModelExtensions(model.path, model => {
     handleClickModel?.(model.name)

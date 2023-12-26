@@ -7,12 +7,9 @@ from sse_starlette.sse import ServerSentEvent
 from watchfiles import Change, DefaultFilter, awatch
 
 from sqlmesh.core import constants as c
-from sqlmesh.core.context import Context
 from web.server import models
 from web.server.api.endpoints.files import _get_directory, _get_file_with_content
-from web.server.api.endpoints.models import get_all_models
 from web.server.console import api_console
-from web.server.exceptions import ApiException
 from web.server.settings import get_context, get_settings
 from web.server.utils import is_relative_to
 
@@ -63,8 +60,6 @@ async def watch_project() -> None:
                         file=_get_file_with_content(relative_path, settings),
                     )
                 )
-        if should_load_context:
-            reload_context(context)
 
         api_console.queue.put_nowait(
             ServerSentEvent(
@@ -79,19 +74,3 @@ async def watch_project() -> None:
                 ),
             )
         )
-
-
-def reload_context(context: Context) -> None:
-    try:
-        context.load()
-        api_console.queue.put_nowait(
-            ServerSentEvent(
-                event="models", data=json.dumps(jsonable_encoder(get_all_models(context)))
-            )
-        )
-    except Exception:
-        error = ApiException(
-            message="Error refreshing the models while watching file changes",
-            origin="API -> watcher -> reload_context",
-        ).to_dict()
-        api_console.queue.put_nowait(ServerSentEvent(event="errors", data=json.dumps(error)))

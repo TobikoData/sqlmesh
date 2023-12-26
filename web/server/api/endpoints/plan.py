@@ -10,6 +10,7 @@ from sqlmesh.core.context import Context
 from sqlmesh.core.plan.definition import Plan
 from sqlmesh.utils.date import make_inclusive, to_ds
 from web.server import models
+from web.server.api.endpoints.models import get_all_models
 from web.server.console import api_console
 from web.server.exceptions import ApiException
 from web.server.settings import get_loaded_context
@@ -33,7 +34,6 @@ async def initiate_plan(
             message="Plan/apply is already running",
             origin="API -> plan -> run_plan",
         )
-
     plan_options = plan_options or models.PlanOptions()
     request.app.state.circuit_breaker.clear()
     request.app.state.task = asyncio.create_task(
@@ -87,6 +87,28 @@ def get_plan(
 ) -> Plan:
     tracker = models.PlanOverviewStageTracker(environment=environment, plan_options=plan_options)
     api_console.start_plan_tracker(tracker)
+
+    tracker_stage_load = models.PlanStageLoad()
+    tracker.add_stage(stage=models.PlanStage.LOAD, data=tracker_stage_load)
+    try:
+        context.refresh()
+        tracker_stage_load.stop(success=True)
+        api_console.log_event_plan_overview()
+    except Exception:
+        tracker_stage_load.stop(success=False)
+        tracker.stop(success=False)
+        api_console.log_event_plan_overview()
+        raise ApiException(
+            message="Error refreshing the conetext",
+            origin="API -> plan -> run_plan",
+        )
+
+    tracker_stage_models = models.PlanStageModels()
+    tracker.add_stage(stage=models.PlanStage.MODELS, data=tracker_stage_models)
+    tracker_stage_models.update({"models": get_all_models(context)})
+    tracker_stage_models.stop(success=True)
+    api_console.log_event_plan_overview()
+
     tracker_stage_validate = models.PlanStageValidation()
     tracker.add_stage(stage=models.PlanStage.validation, data=tracker_stage_validate)
     try:
@@ -124,6 +146,7 @@ def get_plan(
         tracker_stage_changes.update(_get_plan_changes(plan))
     tracker_stage_changes.stop(success=True)
     api_console.log_event_plan_overview()
+
     tracker_stage_backfills = models.PlanStageBackfills()
     tracker.add_stage(stage=models.PlanStage.backfills, data=tracker_stage_backfills)
     if plan.requires_backfill:
@@ -132,6 +155,7 @@ def get_plan(
         )
     tracker_stage_backfills.stop(success=True)
     api_console.log_event_plan_overview()
+
     api_console.stop_plan_tracker(tracker)
     return plan
 

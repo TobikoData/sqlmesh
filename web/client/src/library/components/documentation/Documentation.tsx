@@ -1,4 +1,4 @@
-import React from 'react'
+import React, { useEffect } from 'react'
 import { Disclosure, Tab } from '@headlessui/react'
 import { MinusCircleIcon, PlusCircleIcon } from '@heroicons/react/24/solid'
 import { EnumFileExtensions } from '@models/file'
@@ -21,6 +21,7 @@ import {
   CodeEditorDefault,
   CodeEditorRemoteFile,
 } from '@components/editor/EditorCode'
+import { useApiModel } from '@api/index'
 
 const Documentation = function Documentation({
   model,
@@ -38,6 +39,20 @@ const Documentation = function Documentation({
   withColumns?: boolean
 }): JSX.Element {
   const { handleClickModel } = useLineageFlow()
+
+  const { refetch: getModel, cancel: cancelRequestModel } = useApiModel(
+    model.name,
+  )
+
+  useEffect(() => {
+    void getModel().then(({ data }) => {
+      model.update(data)
+    })
+
+    return () => {
+      cancelRequestModel()
+    }
+  }, [model.name])
 
   const modelExtensions = useSQLMeshModelExtensions(model.path, model => {
     handleClickModel?.(model.name)

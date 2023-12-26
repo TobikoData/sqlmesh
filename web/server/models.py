@@ -59,14 +59,16 @@ class ConsoleEvent(str, enum.Enum):
 class Status(str, enum.Enum):
     """An enumeration of statuses."""
 
-    init = "init"
-    success = "success"
-    fail = "fail"
+    INIT = "init"
+    SUCCESS = "success"
+    FAIL = "fail"
 
 
 class PlanStage(str, enum.Enum):
     """An enumeration of plan apply stages."""
 
+    LOAD = "load"
+    MODELS = "models"
     validation = "validation"
     changes = "changes"
     backfills = "backfills"
@@ -231,7 +233,7 @@ class Model(BaseModel):
     path: str
     dialect: str
     type: ModelType
-    columns: t.List[Column]
+    columns: t.Optional[t.List[Column]] = None
     description: t.Optional[str] = None
     details: t.Optional[ModelDetails] = None
     sql: t.Optional[str] = None
@@ -404,7 +406,7 @@ class BackfillTask(BaseModel):
 
 
 class TrackableMeta(BaseModel):
-    status: Status = Status.init
+    status: Status = Status.INIT
     start: int = Field(default_factory=now_timestamp)
     end: t.Optional[int] = None
     done: bool = False
@@ -424,9 +426,9 @@ class Trackable(BaseModel):
 
     def stop(self, success: bool = True) -> None:
         if success:
-            self.meta.status = Status.success
+            self.meta.status = Status.SUCCESS
         else:
-            self.meta.status = Status.fail
+            self.meta.status = Status.FAIL
 
         self.meta.end = now_timestamp()
         self.meta.done = bool(self.meta.start and self.meta.end)
@@ -434,6 +436,14 @@ class Trackable(BaseModel):
     def update(self, data: t.Dict[str, t.Any]) -> None:
         for k, v in data.items():
             setattr(self, k, v)
+
+
+class PlanStageLoad(Trackable):
+    pass
+
+
+class PlanStageModels(Trackable):
+    models: t.Optional[t.List[Model]] = None
 
 
 class PlanStageValidation(Trackable):
@@ -480,10 +490,12 @@ class PlanStageTracker(Trackable, PlanDates):
     plan_options: t.Optional[PlanOptions] = None
 
     def add_stage(self, stage: PlanStage, data: Trackable) -> None:
-        setattr(self, stage, data)
+        setattr(self, stage.value, data)
 
 
 class PlanOverviewStageTracker(PlanStageTracker):
+    load: t.Optional[PlanStageLoad] = None
+    models: t.Optional[PlanStageModels] = None
     validation: t.Optional[PlanStageValidation] = None
     changes: t.Optional[PlanStageChanges] = None
     backfills: t.Optional[PlanStageBackfills] = None

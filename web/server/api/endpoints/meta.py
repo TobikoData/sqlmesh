@@ -1,3 +1,7 @@
+from __future__ import annotations
+
+import typing as t
+
 from fastapi import APIRouter, Request
 
 from sqlmesh.cli.main import _sqlmesh_version
@@ -9,7 +13,7 @@ router = APIRouter()
 
 @router.get(
     "",
-    response_model=models.Meta,
+    response_model=t.Union[models.Meta, models.ApiExceptionPayload],
     response_model_exclude_unset=True,
 )
 def get_api_meta(

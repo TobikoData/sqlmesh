@@ -603,26 +603,33 @@
         }
       }
     },
-    "/api/models": {
+    "/api/models/{model_name}": {
       "get": {
-        "summary": "Get Models",
-        "description": "Get a mapping of model names to model metadata",
-        "operationId": "get_models_api_models_get",
+        "summary": "Get Model",
+        "description": "Get a file, including its contents.",
+        "operationId": "get_model_api_models__model_name__get",
+        "parameters": [
+          {
+            "name": "model_name",
+            "in": "path",
+            "required": true,
+            "schema": { "type": "string", "title": "Model Name" }
+          }
+        ],
         "responses": {
           "200": {
             "description": "Successful Response",
             "content": {
               "application/json": {
-                "schema": {
-                  "anyOf": [
-                    {
-                      "items": { "$ref": "#/components/schemas/Model" },
-                      "type": "array"
-                    },
-                    { "$ref": "#/components/schemas/ApiExceptionPayload" }
-                  ],
-                  "title": "Response Get Models Api Models Get"
-                }
+                "schema": { "$ref": "#/components/schemas/Model" }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/HTTPValidationError" }
               }
             }
           }
@@ -639,7 +646,13 @@
             "description": "Successful Response",
             "content": {
               "application/json": {
-                "schema": { "$ref": "#/components/schemas/Meta" }
+                "schema": {
+                  "anyOf": [
+                    { "$ref": "#/components/schemas/Meta" },
+                    { "$ref": "#/components/schemas/ApiExceptionPayload" }
+                  ],
+                  "title": "Response Get Api Meta Api Meta Get"
+                }
               }
             }
           }
@@ -1219,8 +1232,13 @@
           "dialect": { "type": "string", "title": "Dialect" },
           "type": { "$ref": "#/components/schemas/ModelType" },
           "columns": {
-            "items": { "$ref": "#/components/schemas/Column" },
-            "type": "array",
+            "anyOf": [
+              {
+                "items": { "$ref": "#/components/schemas/Column" },
+                "type": "array"
+              },
+              { "type": "null" }
+            ],
             "title": "Columns"
           },
           "description": {
@@ -1243,7 +1261,7 @@
           }
         },
         "type": "object",
-        "required": ["name", "path", "dialect", "type", "columns"],
+        "required": ["name", "path", "dialect", "type"],
         "title": "Model"
       },
       "ModelDetails": {
@@ -1626,6 +1644,18 @@
               { "type": "null" }
             ]
           },
+          "load": {
+            "anyOf": [
+              { "$ref": "#/components/schemas/PlanStageLoad" },
+              { "type": "null" }
+            ]
+          },
+          "models": {
+            "anyOf": [
+              { "$ref": "#/components/schemas/PlanStageModels" },
+              { "type": "null" }
+            ]
+          },
           "validation": {
             "anyOf": [
               { "$ref": "#/components/schemas/PlanStageValidation" },
@@ -1736,6 +1766,30 @@
         "type": "object",
         "required": ["total_tasks", "num_tasks"],
         "title": "PlanStageCreation"
+      },
+      "PlanStageLoad": {
+        "properties": {
+          "meta": { "$ref": "#/components/schemas/TrackableMeta" }
+        },
+        "type": "object",
+        "title": "PlanStageLoad"
+      },
+      "PlanStageModels": {
+        "properties": {
+          "meta": { "$ref": "#/components/schemas/TrackableMeta" },
+          "models": {
+            "anyOf": [
+              {
+                "items": { "$ref": "#/components/schemas/Model" },
+                "type": "array"
+              },
+              { "type": "null" }
+            ],
+            "title": "Models"
+          }
+        },
+        "type": "object",
+        "title": "PlanStageModels"
       },
       "PlanStagePromote": {
         "properties": {

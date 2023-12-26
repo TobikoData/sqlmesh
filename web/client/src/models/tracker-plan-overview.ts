@@ -9,11 +9,15 @@ import {
   type PlanStageChangesModified,
   type PlanStageChangesRemoved,
   type SnapshotId,
+  type PlanStageLoad,
+  type PlanStageModels,
 } from '@api/client'
 import { ModelPlanTracker, type PlanTracker } from './tracker-plan'
 import { isArrayNotEmpty, isFalse, isNil, isNotNil } from '@utils/index'
 
 export interface PlanOverviewTracker extends PlanTracker {
+  load?: PlanStageLoad
+  models?: PlanStageModels
   validation?: PlanStageValidation
   changes?: PlanStageChanges
   backfills?: PlanStageBackfills

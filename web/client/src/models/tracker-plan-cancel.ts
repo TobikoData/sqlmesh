@@ -14,7 +14,7 @@ export class ModelPlanCancelTracker extends ModelPlanTracker<PlanCancelTracker> 
   get isCancelling(): boolean {
     return (
       isFalseOrNil(this._current?.cancel?.meta?.done) &&
-      this._current?.cancel?.meta?.status === Status.init
+      this._current?.cancel?.meta?.status === Status.INIT
     )
   }
 

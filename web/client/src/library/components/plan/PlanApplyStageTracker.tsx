@@ -94,7 +94,7 @@ export default function PlanApplyStageTracker(): JSX.Element {
       )}
       {planAction.isRunning || isTrue(hasChanges) ? (
         <StageChanges
-          report={changes ?? { meta: meta ?? { status: Status.init } }}
+          report={changes ?? { meta: meta ?? { status: Status.INIT } }}
         />
       ) : (
         <PlanStageMessage
@@ -107,7 +107,7 @@ export default function PlanApplyStageTracker(): JSX.Element {
 
       {planAction.isRunning || isTrue(hasBackfills) ? (
         <StageBackfills
-          report={backfills ?? { meta: meta ?? { status: Status.init } }}
+          report={backfills ?? { meta: meta ?? { status: Status.INIT } }}
         />
       ) : (
         <PlanStageMessage
