@@ -241,7 +241,7 @@ class JinjaMacroRegistry(PydanticModel):
         Returns:
             The macro as a Python callable or None if not found.
         """
-        env: Environment = self.build_environment(**kwargs)
+        env = self.build_environment(**kwargs)
         if reference.package is not None:
             package = env.globals.get(reference.package, {})
             return package.get(reference.name)  # type: ignore
