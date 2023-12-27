@@ -109,13 +109,20 @@ class RedshiftEngineAdapter(
                     if target["name"] == "TARGETENTRY":
                         resdom = target["resdom"]
                         # https://github.com/postgres/postgres/blob/master/src/include/catalog/pg_type.dat
-                        if resdom["restype"] == "1043" and resdom["restypmod"] == "- 1":
+                        if resdom["restype"] == "1043":
+                            size = (
+                                int(resdom["restypmod"]) - 4
+                                if resdom["restypmod"] != "- 1"
+                                else "MAX"
+                            )
+                            # Cast NULL instead of the original projection to trick the planner into assigning a
+                            # correct type to the column.
                             select.select(
                                 exp.cast(
-                                    exp.to_identifier(resdom["resname"]),
-                                    "VARCHAR(MAX)",
+                                    exp.null(),
+                                    f"VARCHAR({size})",
                                     dialect=self.dialect,
-                                ),
+                                ).as_(resdom["resname"]),
                                 copy=False,
                             )
                         else:
