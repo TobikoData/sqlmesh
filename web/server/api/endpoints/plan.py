@@ -57,7 +57,7 @@ async def cancel_plan(
     """Cancel a plan application"""
     if not hasattr(request.app.state, "task") or request.app.state.task.done():
         raise ApiException(
-            message="Plan/apply is already running",
+            message="Plan/apply is not running",
             origin="API -> plan -> cancel_plan",
         )
 
