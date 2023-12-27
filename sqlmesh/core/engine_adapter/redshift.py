@@ -90,7 +90,11 @@ class RedshiftEngineAdapter(
             **kwargs,
         )
 
-        if statement.expression:
+        if (
+            statement.expression
+            and statement.expression.args.get("limit") is not None
+            and statement.expression.args["limit"].expression.this == "0"
+        ):
             # redshift has a bug where CTAS statements have non determistic types. if a limit
             # is applied to a ctas statement, VARCHAR types default to 1 in some instances.
             # this checks the explain plain from redshift and tries to detect when these optimizer

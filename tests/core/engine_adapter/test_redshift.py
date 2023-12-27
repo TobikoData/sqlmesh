@@ -78,15 +78,15 @@ def test_create_table_from_query_exists_no_if_not_exists(
 
     adapter.ctas(
         table_name="test_table",
-        query_or_df=parse_one("SELECT a, b, x + 1 AS c, d AS d FROM table"),
+        query_or_df=parse_one("SELECT a, b, x + 1 AS c, d AS d FROM table LIMIT 0"),
         exists=False,
     )
 
     assert to_sql_calls(adapter) == [
-        'EXPLAIN VERBOSE CREATE TABLE "test_table" AS SELECT "a", "b", "x" + 1 AS "c", "d" AS "d" FROM "table"',
+        'EXPLAIN VERBOSE CREATE TABLE "test_table" AS SELECT "a", "b", "x" + 1 AS "c", "d" AS "d" FROM "table" LIMIT 0',
         'CREATE TABLE "test_table" AS SELECT CAST(NULL AS VARCHAR(MAX)) AS "a", CAST(NULL AS VARCHAR(60)) AS "b", CAST(NULL '
         'AS VARCHAR(MAX)) AS "c", CAST(NULL AS VARCHAR(MAX)) AS "d" FROM (SELECT "a", "b", "x" + 1 '
-        'AS "c", "d" AS "d" FROM "table") AS "_subquery"',
+        'AS "c", "d" AS "d" FROM "table" LIMIT 0) AS "_subquery"',
     ]
 
 
@@ -170,7 +170,6 @@ def test_replace_query_with_query(adapter: t.Callable, mocker: MockerFixture):
     adapter.replace_query(table_name="test_table", query_or_df=parse_one("SELECT cola FROM table"))
 
     assert to_sql_calls(adapter) == [
-        'EXPLAIN VERBOSE CREATE TABLE "test_table" AS SELECT "cola" FROM "table"',
         'CREATE TABLE "test_table" AS SELECT "cola" FROM "table"',
     ]
 
@@ -222,7 +221,6 @@ def test_replace_query_with_df_table_not_exists(adapter: t.Callable, mocker: Moc
     )
 
     assert to_sql_calls(adapter) == [
-        'EXPLAIN VERBOSE CREATE TABLE "test_table" AS SELECT CAST("a" AS INTEGER) AS "a", CAST("b" AS INTEGER) AS "b" FROM (SELECT 1 AS "a", 4 AS "b" UNION ALL SELECT 2, 5 UNION ALL SELECT 3, 6) AS "t"',
         'CREATE TABLE "test_table" AS SELECT CAST("a" AS INTEGER) AS "a", CAST("b" AS INTEGER) AS "b" FROM (SELECT 1 AS "a", 4 AS "b" UNION ALL SELECT 2, 5 UNION ALL SELECT 3, 6) AS "t"',
     ]
 
