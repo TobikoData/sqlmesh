@@ -92,8 +92,4 @@ export class ModelSQLMeshModel<
       }
     }
   }
-
-  static isSQLMeshModel(file?: ModelFile): boolean {
-    return Boolean(file?.path?.startsWith('models'))
-  }
 }

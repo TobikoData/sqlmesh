@@ -11,7 +11,7 @@ import Input from '../input/Input'
 import { type EditorTab, useStoreEditor } from '~/context/editor'
 import { Tab } from '@headlessui/react'
 import Banner from '@components/banner/Banner'
-import { ModelSQLMeshModel } from '@models/sqlmesh-model'
+import { type ModelSQLMeshModel } from '@models/sqlmesh-model'
 import {
   useApiEvaluate,
   useApiFetchdf,
@@ -37,6 +37,7 @@ export default function EditorInspector({
   tab: EditorTab
 }): JSX.Element {
   const models = useStoreContext(s => s.models)
+  const isModel = useStoreContext(s => s.isModel)
   const model = useMemo(() => models.get(tab.file.path), [tab, models])
 
   return (
@@ -45,7 +46,7 @@ export default function EditorInspector({
         'flex flex-col w-full h-full items-center overflow-hidden',
       )}
     >
-      {ModelSQLMeshModel.isSQLMeshModel(tab.file) ? (
+      {isModel(tab.file.path) ? (
         model != null && (
           <InspectorModel
             tab={tab}
@@ -300,6 +301,8 @@ function FormActionsModel({
   tab: EditorTab
   model: ModelSQLMeshModel
 }): JSX.Element {
+  const isModel = useStoreContext(s => s.isModel)
+
   const setPreviewQuery = useStoreEditor(s => s.setPreviewQuery)
   const setPreviewTable = useStoreEditor(s => s.setPreviewTable)
 
@@ -323,8 +326,7 @@ function FormActionsModel({
   )
 
   const shouldEvaluate =
-    ModelSQLMeshModel.isSQLMeshModel(tab.file) &&
-    Object.values(form).every(Boolean)
+    isModel(tab.file.path) && Object.values(form).every(Boolean)
 
   useEffect(() => {
     return () => {
@@ -448,7 +450,7 @@ function FormActionsModel({
       <Divider />
       <InspectorActions>
         <div className="flex w-full justify-end">
-          {ModelSQLMeshModel.isSQLMeshModel(tab.file) && isFetching ? (
+          {isModel(tab.file.path) && isFetching ? (
             <div className="flex items-center">
               <Spinner className="w-3" />
               <small className="text-xs text-neutral-400 block mx-2">
@@ -497,6 +499,8 @@ function FormDiffModel({
   list: Array<{ text: string; value: string }>
   target: { text: string; value: string }
 }): JSX.Element {
+  const isModel = useStoreContext(s => s.isModel)
+
   const setPreviewDiff = useStoreEditor(s => s.setPreviewDiff)
 
   const [selectedSource, setSelectedSource] = useState(list[0]!.value)
@@ -536,8 +540,7 @@ function FormDiffModel({
   }, [list])
 
   const shouldEnableAction =
-    ModelSQLMeshModel.isSQLMeshModel(tab.file) &&
-    [selectedSource, target, limit].every(Boolean)
+    isModel(tab.file.path) && [selectedSource, target, limit].every(Boolean)
 
   return (
     <>

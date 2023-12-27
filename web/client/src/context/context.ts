@@ -21,6 +21,7 @@ interface ContextStore {
   addConfirmation: (confirmation: Confirmation) => void
   removeConfirmation: () => void
   setModels: (models?: Model[]) => void
+  isModel: (nameOrPath: string) => boolean
   isExistingEnvironment: (
     environment: ModelEnvironment | EnvironmentName,
   ) => boolean
@@ -52,6 +53,9 @@ export const useStoreContext = create<ContextStore>((set, get) => ({
   initialStartDate: undefined,
   initialEndDate: undefined,
   models: new Map(),
+  isModel(nameOrPath) {
+    return get().models.has(nameOrPath)
+  },
   setVersion(version) {
     set(() => ({
       version,

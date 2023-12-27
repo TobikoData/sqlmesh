@@ -5,7 +5,7 @@ import { useEffect } from 'react'
 import { isNil, isNotNil, isStringEmptyOrNil } from '~/utils'
 import Input from '@components/input/Input'
 import { EnumSize } from '~/types/enum'
-import { ModelSQLMeshModel } from '@models/sqlmesh-model'
+import { useStoreContext } from '@context/context'
 
 const EnumFileType = {
   Model: 'model',
@@ -18,12 +18,14 @@ const EnumFileType = {
   Seed: 'seed',
   Metric: 'metric',
   Schema: 'schema',
-  None: 'none',
+  Unknown: 'unknown',
 } as const
 
 export type FileType = (typeof EnumFileType)[keyof typeof EnumFileType]
 
 export default function EditorFooter({ tab }: { tab: EditorTab }): JSX.Element {
+  const isModel = useStoreContext(s => s.isModel)
+
   const engine = useStoreEditor(s => s.engine)
   const dialects = useStoreEditor(s => s.dialects)
   const refreshTab = useStoreEditor(s => s.refreshTab)
@@ -90,16 +92,14 @@ export default function EditorFooter({ tab }: { tab: EditorTab }): JSX.Element {
           </Input>
         </EditorIndicator>
       )}
-      {ModelSQLMeshModel.isSQLMeshModel(tab.file) &&
-        isNotNil(tab.dialect) &&
-        tab.dialect !== '' && (
-          <EditorIndicator
-            className="mr-2"
-            text="Dialect"
-          >
-            <EditorIndicator.Text text={tab.dialect} />
-          </EditorIndicator>
-        )}
+      {isModel(tab.file.path) && !isStringEmptyOrNil(tab.dialect) && (
+        <EditorIndicator
+          className="mr-2"
+          text="Dialect"
+        >
+          <EditorIndicator.Text text={tab.dialect} />
+        </EditorIndicator>
+      )}
       <EditorIndicator
         className="mr-2"
         text="SQLMesh Type"
@@ -111,7 +111,7 @@ export default function EditorFooter({ tab }: { tab: EditorTab }): JSX.Element {
 }
 
 function getFileType(path?: string): FileType {
-  if (isStringEmptyOrNil(path)) return EnumFileType.None
+  if (isStringEmptyOrNil(path)) return EnumFileType.Unknown
 
   if (path.startsWith('models')) return EnumFileType.Model
   if (path.startsWith('tests')) return EnumFileType.Test
@@ -124,5 +124,5 @@ function getFileType(path?: string): FileType {
     return EnumFileType.Config
   if (['schema.yaml', 'schema.yml'].includes(path)) return EnumFileType.Schema
 
-  return EnumFileType.None
+  return EnumFileType.Unknown
 }
