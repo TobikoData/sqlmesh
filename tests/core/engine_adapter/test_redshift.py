@@ -84,8 +84,8 @@ def test_create_table_from_query_exists_no_if_not_exists(
 
     assert to_sql_calls(adapter) == [
         'EXPLAIN VERBOSE CREATE TABLE "test_table" AS SELECT "a", "b", "x" + 1 AS "c", "d" AS "d" FROM "table"',
-        'CREATE TABLE "test_table" AS SELECT CAST("a" AS VARCHAR(MAX)), CAST("b" AS VARCHAR(60)), CAST("c" '
-        'AS VARCHAR(MAX)), CAST("d" AS VARCHAR(MAX)) FROM (SELECT "a", "b", "x" + 1 '
+        'CREATE TABLE "test_table" AS SELECT CAST(NULL AS VARCHAR(MAX)) AS "a", CAST(NULL AS VARCHAR(60)) AS "b", CAST(NULL '
+        'AS VARCHAR(MAX)) AS "c", CAST(NULL AS VARCHAR(MAX)) AS "d" FROM (SELECT "a", "b", "x" + 1 '
         'AS "c", "d" AS "d" FROM "table") AS "_subquery"',
     ]
 

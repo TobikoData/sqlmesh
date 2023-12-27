@@ -114,12 +114,14 @@ class RedshiftEngineAdapter(
                                 if resdom["restypmod"] != "- 1"
                                 else "MAX"
                             )
+                            # Cast NULL instead of the original projection to trick the planner into assigning a
+                            # correct type to the column.
                             select.select(
                                 exp.cast(
-                                    exp.to_identifier(resdom["resname"]),
+                                    exp.null(),
                                     f"VARCHAR({size})",
                                     dialect=self.dialect,
-                                ),
+                                ).as_(resdom["resname"]),
                                 copy=False,
                             )
                         else:
