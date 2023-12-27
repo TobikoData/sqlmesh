@@ -485,7 +485,7 @@ class BigQueryEngineAdapter(InsertOverwriteWithMergeMixin):
             )
 
         for key, value in (table_properties or {}).items():
-            properties.append(exp.Property(this=key, value=value))
+            properties.append(exp.Property(this=key, value=value.copy()))
 
         if properties:
             return exp.Properties(expressions=properties)

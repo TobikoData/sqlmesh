@@ -374,10 +374,6 @@ def test_create_table_properties(make_mocked_engine_adapter: t.Callable):
 def test_comments(make_mocked_engine_adapter: t.Callable, mocker: MockerFixture):
     adapter = make_mocked_engine_adapter(EngineAdapter)
 
-    execute_mock = mocker.patch(
-        "sqlmesh.core.engine_adapter.bigquery.BigQueryEngineAdapter.execute"
-    )
-
     adapter.create_table(
         "test_table",
         {"a": "int", "b": "int"},
