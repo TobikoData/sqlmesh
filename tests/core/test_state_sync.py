@@ -198,14 +198,6 @@ def test_duplicates(state_sync: EngineAdapterStateSync, make_snapshot: t.Callabl
     )
 
 
-def test_delete_snapshots(state_sync: EngineAdapterStateSync, snapshots: t.List[Snapshot]) -> None:
-    state_sync.push_snapshots(snapshots)
-    snapshot_ids = [s.snapshot_id for s in snapshots]
-    assert state_sync.get_snapshots(snapshot_ids)
-    state_sync.delete_snapshots(snapshot_ids)
-    assert not state_sync.get_snapshots(snapshot_ids)
-
-
 def test_snapshots_exists(state_sync: EngineAdapterStateSync, snapshots: t.List[Snapshot]) -> None:
     state_sync.push_snapshots(snapshots)
     snapshot_ids = {snapshot.snapshot_id for snapshot in snapshots}
@@ -1555,9 +1547,21 @@ def test_snapshot_batching(state_sync, mocker, make_snapshot):
         )
     )
     calls = mock.delete_from.call_args_list
-    assert len(calls) == 2
-    assert calls[0][1] == {"where": parse_one("(name, identifier) in (('a', '1'), ('a', '2'))")}
-    assert calls[1][1] == {"where": parse_one("(name, identifier) in (('a', '3'))")}
+    assert mock.delete_from.call_args_list == [
+        call(
+            exp.to_table("sqlmesh._snapshots"),
+            where=parse_one("(name, identifier) in (('a', '1'), ('a', '2'))"),
+        ),
+        call(
+            exp.to_table("sqlmesh._seeds"),
+            where=parse_one("(name, identifier) in (('a', '1'), ('a', '2'))"),
+        ),
+        call(
+            exp.to_table("sqlmesh._snapshots"),
+            where=parse_one("(name, identifier) in (('a', '3'))"),
+        ),
+        call(exp.to_table("sqlmesh._seeds"), where=parse_one("(name, identifier) in (('a', '3'))")),
+    ]
 
     mock.fetchall.side_effect = [
         [

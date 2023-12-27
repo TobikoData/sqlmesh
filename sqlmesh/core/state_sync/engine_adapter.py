@@ -276,6 +276,7 @@ class EngineAdapterStateSync(CommonStateSyncMixin, StateSync):
     def delete_snapshots(self, snapshot_ids: t.Iterable[SnapshotIdLike]) -> None:
         for where in self._snapshot_id_filter(snapshot_ids):
             self.engine_adapter.delete_from(self.snapshots_table, where=where)
+            self.engine_adapter.delete_from(self.seeds_table, where=where)
 
     def snapshots_exist(self, snapshot_ids: t.Iterable[SnapshotIdLike]) -> t.Set[SnapshotId]:
         return {
