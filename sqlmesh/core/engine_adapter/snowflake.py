@@ -21,6 +21,13 @@ if t.TYPE_CHECKING:
     from sqlmesh.core.engine_adapter._typing import DF, Query
 
 
+@set_catalog(
+    override_mapping={
+        "_get_data_objects": CatalogSupport.REQUIRES_SET_CATALOG,
+        "create_schema": CatalogSupport.REQUIRES_SET_CATALOG,
+        "drop_schema": CatalogSupport.REQUIRES_SET_CATALOG,
+    }
+)
 class SnowflakeEngineAdapter(GetCurrentCatalogFromFunctionMixin):
     DIALECT = "snowflake"
     ESCAPE_JSON = True
@@ -94,7 +101,6 @@ class SnowflakeEngineAdapter(GetCurrentCatalogFromFunctionMixin):
             columns = self.cursor._result_set.batches[0].column_names
             return pd.DataFrame([dict(zip(columns, row)) for row in rows])
 
-    @set_catalog(override=CatalogSupport.REQUIRES_SET_CATALOG)
     def _get_data_objects(self, schema_name: SchemaName) -> t.List[DataObject]:
         """
         Returns all the data objects that exist in the given schema and optionally catalog.
@@ -119,26 +125,6 @@ class SnowflakeEngineAdapter(GetCurrentCatalogFromFunctionMixin):
             )
             for row in df[["database_name", "schema_name", "name", "kind"]].itertuples()
         ]
-
-    @set_catalog(override=CatalogSupport.REQUIRES_SET_CATALOG)
-    def create_schema(
-        self,
-        schema_name: SchemaName,
-        ignore_if_exists: bool = True,
-        warn_on_error: bool = True,
-    ) -> None:
-        super().create_schema(
-            schema_name, ignore_if_exists=ignore_if_exists, warn_on_error=warn_on_error
-        )
-
-    @set_catalog(override=CatalogSupport.REQUIRES_SET_CATALOG)
-    def drop_schema(
-        self,
-        schema_name: SchemaName,
-        ignore_if_not_exists: bool = True,
-        cascade: bool = False,
-    ) -> None:
-        super().drop_schema(schema_name, ignore_if_not_exists=ignore_if_not_exists, cascade=cascade)
 
     def set_current_catalog(self, catalog: str) -> None:
         self.execute(exp.Use(this=exp.to_identifier(catalog)))

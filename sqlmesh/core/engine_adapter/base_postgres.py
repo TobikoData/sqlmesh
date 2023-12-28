@@ -9,7 +9,6 @@ from sqlmesh.core.engine_adapter.shared import (
     CatalogSupport,
     DataObject,
     DataObjectType,
-    set_catalog,
 )
 from sqlmesh.utils.errors import SQLMeshError
 
@@ -23,7 +22,6 @@ class BasePostgresEngineAdapter(EngineAdapter):
     COLUMNS_TABLE = "information_schema.columns"
     CATALOG_SUPPORT = CatalogSupport.SINGLE_CATALOG_ONLY
 
-    @set_catalog()
     def columns(
         self, table_name: TableName, include_pseudo_columns: bool = False
     ) -> t.Dict[str, exp.DataType]:
@@ -45,7 +43,6 @@ class BasePostgresEngineAdapter(EngineAdapter):
             for column_name, data_type in resp
         }
 
-    @set_catalog()
     def table_exists(self, table_name: TableName) -> bool:
         """
         Postgres doesn't support describe so I'm using what the redshift cursor does to check if a table
@@ -70,7 +67,6 @@ class BasePostgresEngineAdapter(EngineAdapter):
 
         return result[0] == 1 if result is not None else False
 
-    @set_catalog()
     def create_view(
         self,
         view_name: TableName,
@@ -99,7 +95,6 @@ class BasePostgresEngineAdapter(EngineAdapter):
                 **create_kwargs,
             )
 
-    @set_catalog()
     def _get_data_objects(self, schema_name: SchemaName) -> t.List[DataObject]:
         """
         Returns all the data objects that exist in the given schema and optionally catalog.

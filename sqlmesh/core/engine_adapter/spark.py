@@ -41,6 +41,13 @@ if t.TYPE_CHECKING:
 logger = logging.getLogger(__name__)
 
 
+@set_catalog(
+    override_mapping={
+        "_get_data_objects": CatalogSupport.REQUIRES_SET_CATALOG,
+        "create_schema": CatalogSupport.REQUIRES_SET_CATALOG,
+        "drop_schema": CatalogSupport.REQUIRES_SET_CATALOG,
+    }
+)
 class SparkEngineAdapter(GetCurrentCatalogFromFunctionMixin, HiveMetastoreTablePropertiesMixin):
     DIALECT = "spark"
     ESCAPE_JSON = True
@@ -291,7 +298,6 @@ class SparkEngineAdapter(GetCurrentCatalogFromFunctionMixin, HiveMetastoreTableP
             self._fetch_native_df(query, quote_identifiers=quote_identifiers)
         )
 
-    @set_catalog(override=CatalogSupport.REQUIRES_SET_CATALOG)
     def _get_data_objects(self, schema_name: SchemaName) -> t.List[DataObject]:
         schema_name = to_schema(schema_name).sql(dialect=self.dialect)
         sql = f"SHOW TABLE EXTENDED IN {schema_name} LIKE '*'"
@@ -333,7 +339,6 @@ class SparkEngineAdapter(GetCurrentCatalogFromFunctionMixin, HiveMetastoreTableP
             return self.spark.catalog.currentDatabase()
         return self.fetchone(exp.select(exp.func("current_database")))[0]
 
-    @set_catalog(override=CatalogSupport.REQUIRES_SET_CATALOG)
     def create_schema(
         self,
         schema_name: SchemaName,
@@ -344,7 +349,6 @@ class SparkEngineAdapter(GetCurrentCatalogFromFunctionMixin, HiveMetastoreTableP
             schema_name, ignore_if_exists=ignore_if_exists, warn_on_error=warn_on_error
         )
 
-    @set_catalog(override=CatalogSupport.REQUIRES_SET_CATALOG)
     def drop_schema(
         self,
         schema_name: SchemaName,

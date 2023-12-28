@@ -19,6 +19,7 @@ from sqlmesh.core.engine_adapter.shared import (
     DataObjectType,
     InsertOverwriteStrategy,
     SourceQuery,
+    set_catalog,
 )
 
 if t.TYPE_CHECKING:
@@ -28,6 +29,7 @@ if t.TYPE_CHECKING:
     from sqlmesh.core.engine_adapter._typing import DF
 
 
+@set_catalog()
 class TrinoEngineAdapter(
     PandasNativeFetchDFSupportMixin,
     LogicalReplaceQueryMixin,
