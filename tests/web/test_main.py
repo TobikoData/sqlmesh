@@ -1,9 +1,12 @@
-import asyncio
+from __future__ import annotations
+
+import threading
 from pathlib import Path
 
 import pyarrow as pa  # type: ignore
 import pytest
 from fastapi.testclient import TestClient
+from httpx import AsyncClient
 from pytest_mock.plugin import MockerFixture
 
 from sqlmesh.core.context import Context
@@ -374,6 +377,7 @@ def test_apply(project_tmp_path: Path) -> None:
     sql_file = models_dir / "foo.sql"
     sql_file.write_text("MODEL (name foo); SELECT 1;")
 
+    client.app.state.circuit_breaker = threading.Event()  # type: ignore
     response = client.post("/api/commands/apply", json={"environment": "dev"})
     assert response.status_code == 204
 
@@ -389,6 +393,7 @@ def test_apply_test_failures(web_sushi_context: Context, mocker: MockerFixture) 
 
 
 def test_plan(web_sushi_context: Context) -> None:
+    client.app.state.circuit_breaker = threading.Event()  # type: ignore
     response = client.post("/api/plan", json={"environment": "dev"})
     assert response.status_code == 204
 
@@ -405,9 +410,9 @@ def test_plan_test_failures(web_sushi_context: Context, mocker: MockerFixture) -
 
 @pytest.mark.asyncio
 async def test_cancel() -> None:
-    app.state.task = asyncio.create_task(asyncio.sleep(1))
-    response = client.post("/api/plan/cancel")
-    await asyncio.sleep(0.1)
+    async with AsyncClient(app=app, base_url="http://testserver") as _client:
+        await _client.post("/api/plan", json={"environment": "dev"})
+        response = await _client.post("/api/plan/cancel")
     assert response.status_code == 204
     assert app.state.task.cancelled()
 
@@ -415,7 +420,7 @@ async def test_cancel() -> None:
 def test_cancel_no_task() -> None:
     response = client.post("/api/plan/cancel")
     assert response.status_code == 422
-    assert response.json()["message"] == "Plan/apply is already running"
+    assert response.json()["message"] == "Plan/apply is not running"
 
 
 def test_evaluate(web_sushi_context: Context) -> None:
