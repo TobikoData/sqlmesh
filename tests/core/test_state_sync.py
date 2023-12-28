@@ -1,4 +1,5 @@
 import json
+import re
 import typing as t
 from unittest.mock import call, patch
 
@@ -79,8 +80,10 @@ def promote_snapshots(
     no_gaps: bool = False,
     no_gaps_snapshot_names: t.Optional[t.Set[str]] = None,
     environment_suffix_target: EnvironmentSuffixTarget = EnvironmentSuffixTarget.SCHEMA,
+    environment_catalog_mapping: t.Optional[t.Dict[re.Pattern, str]] = None,
 ) -> PromotionResult:
-    env = Environment(
+    env = Environment.from_environment_catalog_mapping(
+        environment_catalog_mapping or {},
         name=environment,
         suffix_target=environment_suffix_target,
         snapshots=[snapshot.table_info for snapshot in snapshots],
@@ -571,6 +574,69 @@ def test_promote_snapshots_suffix_change(
     # Make sure the removed suffix target is correctly seen as table
     assert promotion_result.removed_environment_naming_info
     assert promotion_result.removed_environment_naming_info.suffix_target.is_table
+
+
+def test_promote_snapshots_catalog_name_override_change(
+    state_sync: EngineAdapterStateSync, make_snapshot: t.Callable
+):
+    snapshot_a = make_snapshot(
+        SqlModel(
+            name="a",
+            query=parse_one("select 1, ds"),
+        ),
+    )
+    snapshot_a.categorize_as(SnapshotChangeCategory.BREAKING)
+
+    snapshot_b = make_snapshot(
+        SqlModel(
+            name="b",
+            kind=FullKind(),
+            query=parse_one("select * from a"),
+        ),
+        nodes={"a": snapshot_a.model},
+    )
+    snapshot_b.categorize_as(SnapshotChangeCategory.BREAKING)
+
+    state_sync.push_snapshots([snapshot_a, snapshot_b])
+
+    promotion_result = promote_snapshots(
+        state_sync,
+        [snapshot_a, snapshot_b],
+        "prod",
+        environment_suffix_target=EnvironmentSuffixTarget.TABLE,
+        environment_catalog_mapping={},
+    )
+
+    assert set(promotion_result.added) == set([snapshot_a.table_info, snapshot_b.table_info])
+    assert not promotion_result.removed
+    assert not promotion_result.removed_environment_naming_info
+
+    snapshot_c = make_snapshot(
+        SqlModel(
+            name="c",
+            query=parse_one("select 3, ds"),
+        ),
+    )
+    snapshot_c.categorize_as(SnapshotChangeCategory.BREAKING)
+
+    state_sync.push_snapshots([snapshot_c])
+
+    promotion_result = promote_snapshots(
+        state_sync,
+        [snapshot_b, snapshot_c],
+        "prod",
+        environment_catalog_mapping={
+            re.compile("^prod$"): "prod_catalog",
+        },
+    )
+
+    # We still only add the snapshots that are included in the promotion
+    assert set(promotion_result.added) == set([snapshot_b.table_info, snapshot_c.table_info])
+    # We also remove b because of the catalog change. The new one will be created in the new catalog
+    assert set(promotion_result.removed) == set([snapshot_a.table_info, snapshot_b.table_info])
+    # Make sure the removed suffix target correctly has the old catalog name set
+    assert promotion_result.removed_environment_naming_info
+    assert promotion_result.removed_environment_naming_info.catalog_name_override is None
 
 
 def test_promote_snapshots_parent_plan_id_mismatch(
@@ -1446,9 +1512,9 @@ def test_cleanup_expired_views(
     mocker: MockerFixture, state_sync: EngineAdapterStateSync, make_snapshot: t.Callable
 ):
     adapter = mocker.MagicMock()
-    snapshot_a = make_snapshot(SqlModel(name="a", query=parse_one("select 1, ds")))
+    snapshot_a = make_snapshot(SqlModel(name="catalog.schema.a", query=parse_one("select 1, ds")))
     snapshot_a.categorize_as(SnapshotChangeCategory.BREAKING)
-    snapshot_b = make_snapshot(SqlModel(name="b", query=parse_one("select 1, ds")))
+    snapshot_b = make_snapshot(SqlModel(name="catalog.schema.b", query=parse_one("select 1, ds")))
     snapshot_b.categorize_as(SnapshotChangeCategory.BREAKING)
     schema_environment = Environment(
         name="test_environment",
@@ -1461,10 +1527,11 @@ def test_cleanup_expired_views(
         end_at="2022-01-01",
         plan_id="test_plan_id",
         previous_plan_id="test_plan_id",
+        catalog_name_override="catalog_override",
     )
-    snapshot_c = make_snapshot(SqlModel(name="c", query=parse_one("select 1, ds")))
+    snapshot_c = make_snapshot(SqlModel(name="catalog.schema.c", query=parse_one("select 1, ds")))
     snapshot_c.categorize_as(SnapshotChangeCategory.BREAKING)
-    snapshot_d = make_snapshot(SqlModel(name="d", query=parse_one("select 1, ds")))
+    snapshot_d = make_snapshot(SqlModel(name="catalog.schema.d", query=parse_one("select 1, ds")))
     snapshot_d.categorize_as(SnapshotChangeCategory.BREAKING)
     table_environment = Environment(
         name="test_environment",
@@ -1477,16 +1544,21 @@ def test_cleanup_expired_views(
         end_at="2022-01-01",
         plan_id="test_plan_id",
         previous_plan_id="test_plan_id",
+        catalog_name_override="catalog_override",
     )
     cleanup_expired_views(adapter, [schema_environment, table_environment])
     assert adapter.drop_schema.called
     assert adapter.drop_view.called
     assert adapter.drop_schema.call_args_list == [
-        call(schema_("default__test_environment"), ignore_if_not_exists=True, cascade=True)
+        call(
+            schema_("schema__test_environment", "catalog_override"),
+            ignore_if_not_exists=True,
+            cascade=True,
+        )
     ]
     assert sorted(adapter.drop_view.call_args_list) == [
-        call("default.c__test_environment", ignore_if_not_exists=True),
-        call("default.d__test_environment", ignore_if_not_exists=True),
+        call("catalog_override.schema.c__test_environment", ignore_if_not_exists=True),
+        call("catalog_override.schema.d__test_environment", ignore_if_not_exists=True),
     ]
 
 

@@ -1614,6 +1614,70 @@ def test_environment_suffix_target_table(mocker: MockerFixture):
 
 @pytest.mark.integration
 @pytest.mark.core_integration
+def test_environment_catalog_mapping(mocker: MockerFixture):
+    environments_schemas = {"raw", "sushi"}
+
+    def get_prod_dev_views(metadata: DuckDBMetadata) -> t.Tuple[t.Set[exp.Table], t.Set[exp.Table]]:
+        views = metadata.qualified_views
+        prod_views = {
+            x for x in views if x.catalog == "prod_catalog" if x.db in environments_schemas
+        }
+        dev_views = {x for x in views if x.catalog == "dev_catalog" if x.db in environments_schemas}
+        return prod_views, dev_views
+
+    def get_default_catalog_and_non_tables(
+        metadata: DuckDBMetadata, default_catalog: t.Optional[str]
+    ) -> t.Tuple[t.Set[exp.Table], t.Set[exp.Table]]:
+        tables = metadata.qualified_tables
+        default_tables = {x for x in tables if x.catalog == default_catalog}
+        non_default_tables = {x for x in tables if x.catalog != default_catalog}
+        return default_tables, non_default_tables
+
+    context, plan = init_and_plan_context(
+        "examples/sushi", mocker, config="environment_catalog_mapping_config"
+    )
+    context.apply(plan)
+    metadata = DuckDBMetadata.from_context(context)
+    prod_views, dev_views = get_prod_dev_views(metadata)
+    default_tables, non_default_tables = get_default_catalog_and_non_tables(
+        metadata, context.default_catalog
+    )
+    assert len(prod_views) == 12
+    assert len(dev_views) == 0
+    assert len(default_tables) == 29
+    assert len(non_default_tables) == 0
+    apply_to_environment(context, "dev")
+    prod_views, dev_views = get_prod_dev_views(metadata)
+    default_tables, non_default_tables = get_default_catalog_and_non_tables(
+        metadata, context.default_catalog
+    )
+    assert len(prod_views) == 12
+    assert len(dev_views) == 12
+    assert len(default_tables) == 29
+    assert len(non_default_tables) == 0
+    apply_to_environment(context, "prodnot")
+    prod_views, dev_views = get_prod_dev_views(metadata)
+    default_tables, non_default_tables = get_default_catalog_and_non_tables(
+        metadata, context.default_catalog
+    )
+    assert len(prod_views) == 12
+    assert len(dev_views) == 24
+    assert len(default_tables) == 29
+    assert len(non_default_tables) == 0
+    context.invalidate_environment("dev")
+    context._run_janitor()
+    prod_views, dev_views = get_prod_dev_views(metadata)
+    default_tables, non_default_tables = get_default_catalog_and_non_tables(
+        metadata, context.default_catalog
+    )
+    assert len(prod_views) == 12
+    assert len(dev_views) == 12
+    assert len(default_tables) == 29
+    assert len(non_default_tables) == 0
+
+
+@pytest.mark.integration
+@pytest.mark.core_integration
 @pytest.mark.parametrize(
     "context_fixture",
     ["sushi_context", "sushi_no_default_catalog"],
@@ -1943,8 +2007,10 @@ def validate_environment_views(
         if not snapshot.is_model or snapshot.is_symbolic:
             continue
         view_name = snapshot.qualified_view_name.for_environment(
-            EnvironmentNamingInfo(
-                name=environment, suffix_target=context.config.environment_suffix_target
+            EnvironmentNamingInfo.from_environment_catalog_mapping(
+                context.config.environment_catalog_mapping,
+                name=environment,
+                suffix_target=context.config.environment_suffix_target,
             )
         )
 

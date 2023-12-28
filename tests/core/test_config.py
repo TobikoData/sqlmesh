@@ -1,5 +1,6 @@
 import os
 import pathlib
+import re
 from pathlib import Path
 from unittest import mock
 
@@ -319,3 +320,56 @@ model_defaults:
     assert load_config_from_paths(
         project_paths=[config_path],
     )
+
+
+@pytest.mark.parametrize(
+    [
+        "mapping",
+        "expected",
+        "raise_error",
+    ],
+    [
+        (
+            "'^dev$': dev_catalog\n    '^other$': other_catalog",
+            {re.compile("^dev$"): "dev_catalog", re.compile("^other$"): "other_catalog"},
+            "",
+        ),
+        (
+            "'^(?!prod$)': dev",
+            {re.compile("^(?!prod$)"): "dev"},
+            "",
+        ),
+        (
+            "'^dev$': dev_catalog\n    '[': other_catalog",
+            {},
+            "`\[` is not a valid regular expression.",
+        ),
+    ],
+)
+def test_environment_catalog_mapping(tmp_path_factory, mapping, expected, raise_error):
+    config_path = tmp_path_factory.mktemp("yaml_config") / "config.yaml"
+    with open(config_path, "w") as fd:
+        fd.write(
+            f"""
+gateways:
+    local:
+        connection:
+            type: duckdb
+
+model_defaults:
+    dialect: duckdb
+
+environment_catalog_mapping:
+    {mapping}
+        """
+        )
+    if raise_error:
+        with pytest.raises(ConfigError, match=raise_error):
+            load_config_from_paths(
+                project_paths=[config_path],
+            )
+    else:
+        assert (
+            load_config_from_paths(project_paths=[config_path]).environment_catalog_mapping
+            == expected
+        )

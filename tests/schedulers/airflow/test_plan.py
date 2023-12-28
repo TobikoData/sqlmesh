@@ -98,6 +98,7 @@ def test_create_plan_dag_spec(
         end_at="2022-01-04",
         plan_id="test_plan_id",
         suffix_target=EnvironmentSuffixTarget.TABLE,
+        catalog_name_override="test_catalog",
     )
 
     plan_request = common.PlanApplicationRequest(
@@ -151,7 +152,9 @@ def test_create_plan_dag_spec(
     assert plan_spec == common.PlanDagSpec(
         request_id="test_request_id",
         environment_naming_info=EnvironmentNamingInfo(
-            name=environment_name, suffix_target=EnvironmentSuffixTarget.TABLE
+            name=environment_name,
+            suffix_target=EnvironmentSuffixTarget.TABLE,
+            catalog_name_override="test_catalog",
         ),
         new_snapshots=[the_snapshot],
         backfill_intervals_per_snapshot=[
