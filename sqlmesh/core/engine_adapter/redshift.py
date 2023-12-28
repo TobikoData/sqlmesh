@@ -13,11 +13,16 @@ from sqlmesh.core.engine_adapter.mixins import (
     LogicalReplaceQueryMixin,
     NonTransactionalTruncateMixin,
 )
-from sqlmesh.core.engine_adapter.shared import DataObject, DataObjectType, set_catalog
+from sqlmesh.core.engine_adapter.shared import (
+    DataObject,
+    DataObjectType,
+    SourceQuery,
+    set_catalog,
+)
 
 if t.TYPE_CHECKING:
     from sqlmesh.core._typing import SchemaName, TableName
-    from sqlmesh.core.engine_adapter.base import QueryOrDF, SourceQuery
+    from sqlmesh.core.engine_adapter.base import QueryOrDF
 
 
 class RedshiftEngineAdapter(

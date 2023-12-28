@@ -7,18 +7,19 @@ from pandas.api.types import is_datetime64_any_dtype  # type: ignore
 from sqlglot import exp
 
 from sqlmesh.core.dialect import schema_, to_schema
-from sqlmesh.core.engine_adapter.base import (
-    CatalogSupport,
-    InsertOverwriteStrategy,
-    SourceQuery,
-)
 from sqlmesh.core.engine_adapter.mixins import (
     GetCurrentCatalogFromFunctionMixin,
     HiveMetastoreTablePropertiesMixin,
     LogicalReplaceQueryMixin,
     PandasNativeFetchDFSupportMixin,
 )
-from sqlmesh.core.engine_adapter.shared import DataObject, DataObjectType
+from sqlmesh.core.engine_adapter.shared import (
+    CatalogSupport,
+    DataObject,
+    DataObjectType,
+    InsertOverwriteStrategy,
+    SourceQuery,
+)
 
 if t.TYPE_CHECKING:
     from trino.dbapi import Connection as TrinoConnection
