@@ -189,9 +189,6 @@ class RedshiftEngineAdapter(
             self.rename_table(temp_table, target_table)
             self.drop_table(old_table)
 
-    def set_current_catalog(self, catalog_name: str) -> None:
-        self.cursor.connection._database = catalog_name
-
     @set_catalog()
     def _get_data_objects(self, schema_name: SchemaName) -> t.List[DataObject]:
         """
