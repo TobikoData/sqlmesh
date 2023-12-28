@@ -210,16 +210,6 @@ class InsertOverwriteWithMergeMixin(EngineAdapter):
 
 
 class HiveMetastoreTablePropertiesMixin(EngineAdapter):
-    @classmethod
-    def __table_properties_to_expressions(
-        cls, table_properties: t.Optional[t.Dict[str, exp.Expression]] = None
-    ) -> t.List[exp.Property]:
-        if not table_properties:
-            return []
-        return [
-            exp.Property(this=key, value=value.copy()) for key, value in table_properties.items()
-        ]
-
     def _build_table_properties_exp(
         self,
         storage_format: t.Optional[str] = None,

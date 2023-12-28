@@ -424,6 +424,12 @@ class BigQueryEngineAdapter(InsertOverwriteWithMergeMixin):
         self.execute(query, quote_identifiers=quote_identifiers)
         return self._query_job.to_dataframe()
 
+    def _build_description_property_exp(self, description: str) -> exp.Property:
+        return exp.Property(
+            this=exp.Identifier(this="description", quoted=False),
+            value=exp.Literal.string(description),
+        )
+
     def _build_table_properties_exp(
         self,
         storage_format: t.Optional[str] = None,
@@ -478,14 +484,10 @@ class BigQueryEngineAdapter(InsertOverwriteWithMergeMixin):
 
         if table_description:
             properties.append(
-                exp.Property(
-                    this=exp.Identifier(this="description", quoted=False),
-                    value=exp.Literal.string(table_description),
-                )
+                self._build_description_property_exp(table_description),
             )
 
-        for key, value in (table_properties or {}).items():
-            properties.append(exp.Property(this=key, value=value.copy()))
+        properties.extend(self.__table_properties_to_expressions(table_properties))
 
         if properties:
             return exp.Properties(expressions=properties)
@@ -493,17 +495,14 @@ class BigQueryEngineAdapter(InsertOverwriteWithMergeMixin):
 
     def _build_col_comment_exp(
         self, col_name: str, column_descriptions: t.Dict[str, str]
-    ) -> t.List[exp.ColumnConstraint | None]:
+    ) -> t.List[exp.ColumnConstraint]:
         comment = column_descriptions.get(col_name, None)
         if comment:
             return [
                 exp.ColumnConstraint(
                     kind=exp.Properties(
                         expressions=[
-                            exp.Property(
-                                this=exp.Identifier(this="description", quoted=False),
-                                value=exp.Literal.string(comment),
-                            )
+                            self._build_description_property_exp(comment),
                         ]
                     )
                 )
@@ -520,10 +519,7 @@ class BigQueryEngineAdapter(InsertOverwriteWithMergeMixin):
 
         if table_description:
             properties.append(
-                exp.Property(
-                    this=exp.Identifier(this="description", quoted=False),
-                    value=exp.Literal.string(table_description),
-                )
+                self._build_description_property_exp(table_description),
             )
 
         if properties:
