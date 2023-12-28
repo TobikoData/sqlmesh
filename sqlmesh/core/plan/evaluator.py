@@ -45,7 +45,9 @@ logger = logging.getLogger(__name__)
 
 class PlanEvaluator(abc.ABC):
     @abc.abstractmethod
-    def evaluate(self, plan: Plan) -> None:
+    def evaluate(
+        self, plan: Plan, circuit_breaker: t.Optional[t.Callable[[], bool]] = None
+    ) -> None:
         """Evaluates a plan by pushing snapshots and backfilling data.
 
         Given a plan, it pushes snapshots into the state and then kicks off
@@ -77,7 +79,11 @@ class BuiltInPlanEvaluator(PlanEvaluator):
 
         self.__all_snapshots: t.Dict[str, t.Dict[SnapshotId, Snapshot]] = {}
 
-    def evaluate(self, plan: Plan) -> None:
+    def evaluate(
+        self,
+        plan: Plan,
+        circuit_breaker: t.Optional[t.Callable[[], bool]] = None,
+    ) -> None:
         self.console.start_plan_evaluation(plan)
 
         try:
@@ -101,9 +107,13 @@ class BuiltInPlanEvaluator(PlanEvaluator):
 
             self._push(plan, deployability_index)
             self._restate(plan)
-            self._backfill(plan, before_promote_snapshots, deployability_index)
+            self._backfill(
+                plan, before_promote_snapshots, deployability_index, circuit_breaker=circuit_breaker
+            )
             promotion_result = self._promote(plan, before_promote_snapshots)
-            self._backfill(plan, after_promote_snapshots, deployability_index)
+            self._backfill(
+                plan, after_promote_snapshots, deployability_index, circuit_breaker=circuit_breaker
+            )
             self._update_views(plan, promotion_result, deployability_index)
 
             if not plan.requires_backfill:
@@ -112,7 +122,11 @@ class BuiltInPlanEvaluator(PlanEvaluator):
             self.console.stop_plan_evaluation()
 
     def _backfill(
-        self, plan: Plan, selected_snapshots: t.Set[str], deployability_index: DeployabilityIndex
+        self,
+        plan: Plan,
+        selected_snapshots: t.Set[str],
+        deployability_index: DeployabilityIndex,
+        circuit_breaker: t.Optional[t.Callable[[], bool]] = None,
     ) -> None:
         """Backfill missing intervals for snapshots that are part of the given plan.
 
@@ -141,6 +155,7 @@ class BuiltInPlanEvaluator(PlanEvaluator):
             ignore_cron=True,
             selected_snapshots=selected_snapshots,
             deployability_index=deployability_index,
+            circuit_breaker=circuit_breaker,
         )
         if not is_run_successful:
             raise SQLMeshError("Plan application failed.")
@@ -268,7 +283,9 @@ class BaseAirflowPlanEvaluator(PlanEvaluator):
         self.dag_creation_max_retry_attempts = dag_creation_max_retry_attempts
         self.console = console or get_console()
 
-    def evaluate(self, plan: Plan) -> None:
+    def evaluate(
+        self, plan: Plan, circuit_breaker: t.Optional[t.Callable[[], bool]] = None
+    ) -> None:
         plan_request_id = random_id()
         self._apply_plan(plan, plan_request_id)
 

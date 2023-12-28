@@ -905,7 +905,11 @@ class Context(BaseContext):
 
         return plan
 
-    def apply(self, plan: Plan) -> None:
+    def apply(
+        self,
+        plan: Plan,
+        circuit_breaker: t.Optional[t.Callable[[], bool]] = None,
+    ) -> None:
         """Applies a plan by pushing snapshots and backfilling data.
 
         Given a plan, it pushes snapshots into the state sync and then uses the scheduler
@@ -926,7 +930,9 @@ class Context(BaseContext):
             NotificationEvent.APPLY_START, environment=plan.environment.name
         )
         try:
-            self._scheduler.create_plan_evaluator(self).evaluate(plan)
+            self._scheduler.create_plan_evaluator(self).evaluate(
+                plan, circuit_breaker=circuit_breaker
+            )
         except Exception as e:
             self.notification_target_manager.notify(
                 NotificationEvent.APPLY_FAILURE, traceback.format_exc()

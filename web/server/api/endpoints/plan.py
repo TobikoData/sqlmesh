@@ -35,6 +35,7 @@ async def initiate_plan(
         )
 
     plan_options = plan_options or models.PlanOptions()
+    request.app.state.circuit_breaker.clear()
     request.app.state.task = asyncio.create_task(
         run_in_executor(
             get_plan,
@@ -57,11 +58,16 @@ async def cancel_plan(
     """Cancel a plan application"""
     if not hasattr(request.app.state, "task") or request.app.state.task.done():
         raise ApiException(
-            message="Plan/apply is already running",
+            message="Plan/apply is not running",
             origin="API -> plan -> cancel_plan",
         )
 
+    request.app.state.circuit_breaker.set()
     request.app.state.task.cancel()
+    try:
+        await request.app.state.task
+    except asyncio.CancelledError:
+        pass
     tracker = models.PlanCancelStageTracker()
     api_console.start_plan_tracker(tracker)
     tracker_stage_cancel = models.PlanStageCancel()
