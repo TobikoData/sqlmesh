@@ -44,7 +44,10 @@ from sqlmesh.utils.errors import SQLMeshError, UnsupportedCatalogOperationError
 from sqlmesh.utils.pandas import columns_to_types_from_df
 
 if t.TYPE_CHECKING:
-    from pandas.core.frame import _PandasNamedTuple
+    if sys.version_info >= (3, 9):
+        from pandas.core.frame import _PandasNamedTuple
+    else:
+        _PandasNamedTuple = t.Tuple[t.Any, ...]
 
     from sqlmesh.core._typing import SchemaName, TableName
     from sqlmesh.core.engine_adapter._typing import (
