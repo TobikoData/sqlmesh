@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import json
+import re
 import typing as t
 
 from pydantic import Field
@@ -12,6 +13,8 @@ from sqlmesh.utils import word_characters_only
 from sqlmesh.utils.date import TimeLike
 from sqlmesh.utils.pydantic import PydanticModel, field_validator
 
+T = t.TypeVar("T", bound="EnvironmentNamingInfo")
+
 
 class EnvironmentNamingInfo(PydanticModel):
     """
@@ -20,11 +23,13 @@ class EnvironmentNamingInfo(PydanticModel):
     Args:
         name: The name of the environment.
         suffix_target: Indicates whether to append the environment name to the schema or table name.
+        catalog_name_override: The name of the catalog to use for this environment if an override was provided
 
     """
 
     name: str = c.PROD
     suffix_target: EnvironmentSuffixTarget = Field(default=EnvironmentSuffixTarget.SCHEMA)
+    catalog_name_override: t.Optional[str] = None
 
     @field_validator("name", mode="before")
     @classmethod
@@ -56,6 +61,22 @@ class EnvironmentNamingInfo(PydanticModel):
     @classmethod
     def normalize_names(cls, values: t.Iterable[str]) -> t.Set[str]:
         return {cls.normalize_name(value) for value in values}
+
+    @classmethod
+    def from_environment_catalog_mapping(
+        cls: t.Type[T],
+        environment_catalog_mapping: t.Dict[re.Pattern, str],
+        name: str = c.PROD,
+        **kwargs: t.Any,
+    ) -> T:
+        construction_kwargs = dict(name=name, **kwargs)
+        for re_pattern, catalog_name in environment_catalog_mapping.items():
+            if re.match(re_pattern, name):
+                return cls(
+                    catalog_name_override=catalog_name,
+                    **construction_kwargs,
+                )
+        return cls(**construction_kwargs)
 
 
 class Environment(EnvironmentNamingInfo):
@@ -108,4 +129,8 @@ class Environment(EnvironmentNamingInfo):
 
     @property
     def naming_info(self) -> EnvironmentNamingInfo:
-        return EnvironmentNamingInfo(name=self.name, suffix_target=self.suffix_target)
+        return EnvironmentNamingInfo(
+            name=self.name,
+            suffix_target=self.suffix_target,
+            catalog_name_override=self.catalog_name_override,
+        )

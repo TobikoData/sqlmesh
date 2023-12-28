@@ -94,7 +94,7 @@ class CatalogSupport(Enum):
         return self == CatalogSupport.FULL_SUPPORT
 
     @property
-    def is_supported(self) -> bool:
+    def is_multi_catalog_supported(self) -> bool:
         return self.is_requires_set_catalog or self.is_full_support
 
 

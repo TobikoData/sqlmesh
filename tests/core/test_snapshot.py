@@ -10,7 +10,11 @@ from pytest_mock.plugin import MockerFixture
 from sqlglot import exp, to_column
 
 from sqlmesh.core.audit import StandaloneAudit
-from sqlmesh.core.config import AutoCategorizationMode, CategorizerConfig
+from sqlmesh.core.config import (
+    AutoCategorizationMode,
+    CategorizerConfig,
+    EnvironmentSuffixTarget,
+)
 from sqlmesh.core.context import Context
 from sqlmesh.core.dialect import parse, parse_one
 from sqlmesh.core.environment import EnvironmentNamingInfo
@@ -36,6 +40,7 @@ from sqlmesh.core.snapshot import (
     fingerprint_from_node,
     has_paused_forward_only,
 )
+from sqlmesh.core.snapshot.definition import display_name
 from sqlmesh.utils import AttributeDict
 from sqlmesh.utils.date import to_date, to_datetime, to_timestamp
 from sqlmesh.utils.errors import SQLMeshError
@@ -1290,12 +1295,49 @@ def test_is_valid_start(make_snapshot):
     assert not snapshot.is_valid_start("2023-01-02", "2023-01-01")
 
 
-def test_qualified_view_name():
-    env = EnvironmentNamingInfo()
-    assert (
-        QualifiedViewName(catalog="a-b", schema_name="c", table="d").for_environment(env)
-        == '"a-b".c.d'
-    )
+@pytest.mark.parametrize(
+    "qualified_view_name, environment_naming_info, expected",
+    (
+        (
+            QualifiedViewName(catalog="a-b", schema_name="c", table="d"),
+            EnvironmentNamingInfo(),
+            '"a-b".c.d',
+        ),
+        (
+            QualifiedViewName(catalog="a-b", schema_name="c-d", table="e"),
+            EnvironmentNamingInfo(name="dev"),
+            '"a-b"."c-d__dev".e',
+        ),
+        (
+            QualifiedViewName(catalog="a-b", schema_name="c-d", table="e-f"),
+            EnvironmentNamingInfo(name="dev", suffix_target=EnvironmentSuffixTarget.TABLE),
+            '"a-b"."c-d"."e-f__dev"',
+        ),
+        (
+            QualifiedViewName(catalog="a-b", schema_name="c-d", table="e-f"),
+            EnvironmentNamingInfo(name="dev", suffix_target=EnvironmentSuffixTarget.SCHEMA),
+            '"a-b"."c-d__dev"."e-f"',
+        ),
+        (
+            QualifiedViewName(catalog="a-b", schema_name="c-d", table="e-f"),
+            EnvironmentNamingInfo(name="dev", catalog_name_override="g-h"),
+            '"g-h"."c-d__dev"."e-f"',
+        ),
+        (
+            QualifiedViewName(schema_name="c-d", table="e-f"),
+            EnvironmentNamingInfo(name="dev", catalog_name_override="g-h"),
+            '"g-h"."c-d__dev"."e-f"',
+        ),
+        (
+            QualifiedViewName(table="e-f"),
+            EnvironmentNamingInfo(name="dev", catalog_name_override="g-h"),
+            '"g-h".default__dev."e-f"',
+        ),
+        (QualifiedViewName(table="e-f"), EnvironmentNamingInfo(name="dev"), 'default__dev."e-f"'),
+    ),
+)
+def test_qualified_view_name(qualified_view_name, environment_naming_info, expected):
+    assert qualified_view_name.for_environment(environment_naming_info) == expected
 
 
 def test_multi_interval_merge(make_snapshot):
@@ -1456,3 +1498,87 @@ def test_deployability_index_uncategorized_forward_only_model(make_snapshot):
 
     assert not deplyability_index.is_representative(snapshot_a)
     assert not deplyability_index.is_representative(snapshot_b)
+
+
+@pytest.mark.parametrize(
+    "model_name, environment_naming_info, default_catalog, expected",
+    (
+        (
+            "test_db.test_model",
+            EnvironmentNamingInfo(),
+            None,
+            "test_db.test_model",
+        ),
+        (
+            "test_db.test_model",
+            EnvironmentNamingInfo(name="dev"),
+            None,
+            "test_db__dev.test_model",
+        ),
+        (
+            "test_db.test_model",
+            EnvironmentNamingInfo(name="dev", suffix_target=EnvironmentSuffixTarget.SCHEMA),
+            None,
+            "test_db__dev.test_model",
+        ),
+        (
+            "test_db.test_model",
+            EnvironmentNamingInfo(name="dev", suffix_target=EnvironmentSuffixTarget.TABLE),
+            None,
+            "test_db.test_model__dev",
+        ),
+        (
+            "test_db.test_model",
+            EnvironmentNamingInfo(
+                name="dev",
+                suffix_target=EnvironmentSuffixTarget.TABLE,
+                catalog_name_override="catalog_override",
+            ),
+            None,
+            "catalog_override.test_db.test_model__dev",
+        ),
+        (
+            "original_catalog.test_db.test_model",
+            EnvironmentNamingInfo(name="dev", suffix_target=EnvironmentSuffixTarget.TABLE),
+            "default_catalog",
+            "original_catalog.test_db.test_model__dev",
+        ),
+        (
+            "original_catalog.test_db.test_model",
+            EnvironmentNamingInfo(
+                name="dev",
+                suffix_target=EnvironmentSuffixTarget.TABLE,
+                catalog_name_override="catalog_override",
+            ),
+            "default_catalog",
+            "catalog_override.test_db.test_model__dev",
+        ),
+        (
+            "test_db.test_model",
+            EnvironmentNamingInfo(
+                name="dev",
+                suffix_target=EnvironmentSuffixTarget.TABLE,
+                catalog_name_override="catalog_override",
+            ),
+            "default_catalog",
+            "catalog_override.test_db.test_model__dev",
+        ),
+        (
+            "test_db.test_model",
+            EnvironmentNamingInfo(name="dev", suffix_target=EnvironmentSuffixTarget.TABLE),
+            "default_catalog",
+            "test_db.test_model__dev",
+        ),
+    ),
+)
+def test_display_name(
+    make_snapshot, model_name, environment_naming_info, default_catalog, expected
+):
+    input_model = SqlModel(
+        name=model_name,
+        query=parse_one("SELECT 1, ds"),
+        kind=IncrementalByTimeRangeKind(time_column="ds", forward_only=True),
+        default_catalog=default_catalog,
+    )
+    input_snapshot = make_snapshot(input_model)
+    assert display_name(input_snapshot, environment_naming_info, default_catalog) == expected

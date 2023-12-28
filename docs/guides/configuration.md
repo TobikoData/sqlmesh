@@ -229,7 +229,7 @@ If you had a model name of `my_schema.table`, the physical table would be create
 
 This key only applies to the _physical tables_ that SQLMesh creates - the views are still created in `my_schema` (prod) or `my_schema__<env>`.
 
-#### View schemas
+#### Environment view schemas
 
 By default, SQLMesh appends the environment name to the schema name when creating new environments. This can be changed to append a suffix at the end of table/view name instead.
 
@@ -259,6 +259,67 @@ Config example:
 If you created a `dev` environment for a project containing a model named `my_schema.users`, the model view would be created as `my_schema.users__dev` instead of the default behavior of `my_schema__dev.users`.
 
 The default behavior of appending the suffix to schemas is recommended because it leaves production with a single clean interface for accessing the views. However, if you are deploying SQLMesh in an environment with tight restrictions on schema creation then this can be a useful way of reducing the number of schemas SQLMesh uses.
+
+#### Environment view catalogs
+
+By default, SQLMesh creates environment views in the same [catalog](../concepts/glossary.md#catalog) as the table it is pointing to. 
+The table's catalog is determine by either the catalog defined in it's name or the default catalog defined in the connection.
+A common use case though would be to have the "prod" catalog contain just the tables and "prod" environment views and then put all the "dev" views in a separate catalog. 
+Another use case could be if you have a CI/CD pipeline creating environments, like the [Github Action CI/CD Bot](../integrations/github.md), and you want to put these environments in a dedicated catalog since there can be many of them.
+
+To configure this, you provide a mapping from a [regex pattern](https://en.wikipedia.org/wiki/Regular_expression) to apply to an environment name to a desired catalog name.
+These names are evaluated in the order defined in the configuration and the first match is used.
+
+Config example:
+
+=== "YAML"
+
+    ```yaml linenums="1"
+    environment_catalog_mapping:
+        '^prod$': prod
+        '^dev.*': dev
+        '^analytics_repo.*': cicd
+    ```
+
+=== "Python"
+
+    ```python linenums="1"
+    from sqlmesh.core.config import Config, ModelDefaultsConfig
+
+    config = Config(
+        model_defaults=ModelDefaultsConfig(dialect=<dialect>),
+        environment_catalog_mapping={
+            '^prod$': 'prod',
+            '^dev.*': 'dev',
+            '^analytics_repo.*': 'cicd',
+        },
+    )
+    ```
+
+Example evaluation logic:
+
+* If the environment name is `prod`, the catalog will be `prod`.
+* If the environment name starts with `dev`, the catalog will be `dev`.
+* If the environment name starts with `analytics_repo`, the catalog will be `cicd`.
+
+If no match is found, the catalog defined in the model or the default catalog defined on the connection will be used.
+
+*Note:* This feature is only available for engines that support querying across catalogs. At the time of writing, this is the supported list:
+
+* [BigQuery](../integrations/engines/bigquery.md)
+* [Databricks](../integrations/engines/databricks.md)
+* [DuckDB](../integrations/engines/duckdb.md)
+* [MSSQL](../integrations/engines/mssql.md)
+* [Snowflake](../integrations/engines/snowflake.md)
+* [Spark](../integrations/engines/spark.md)
+* [Trino](../integrations/engines/trino.md)
+
+##### Tips
+* If you are less familiar with regex, you can use a tool like [regex101](https://regex101.com/) to help you build your regex patterns.
+    * LLMs, like [ChatGPT](https://chat.openai.com), can help with generating regex patterns. Make sure to validate the suggestion in regex101.
+* If you are wanting to do an exact word match then surround it with `^` and `$` like in the example above.
+* If you want a catch-all at the end of your mapping, to avoid ever using the model catalog or default catalog, then use `.*` as the pattern. This will match any environment name that hasn't already been matched.
+
 
 ### Auto-categorize model changes
 

@@ -306,6 +306,14 @@ class Context(BaseContext):
         self.users = list({user.username: user for user in self.users}.values())
         self._register_notification_targets()
 
+        if (
+            self.config.environment_catalog_mapping
+            and not self.engine_adapter.CATALOG_SUPPORT.is_multi_catalog_supported
+        ):
+            raise SQLMeshError(
+                "Environment catalog mapping is only supported for engine adapters that support multiple catalogs"
+            )
+
         if load:
             self.load()
 
@@ -882,6 +890,7 @@ class Context(BaseContext):
             forward_only=forward_only,
             environment_ttl=environment_ttl,
             environment_suffix_target=self.config.environment_suffix_target,
+            environment_catalog_mapping=self.config.environment_catalog_mapping,
             categorizer_config=categorizer_config or self.auto_categorize_changes,
             auto_categorization_enabled=not no_auto_categorization,
             effective_from=effective_from,
@@ -948,8 +957,10 @@ class Context(BaseContext):
         environment = Environment.normalize_name(environment)
         self.console.show_model_difference_summary(
             self._context_diff(environment),
-            EnvironmentNamingInfo(
-                name=environment, suffix_target=self.config.environment_suffix_target
+            EnvironmentNamingInfo.from_environment_catalog_mapping(
+                self.config.environment_catalog_mapping,
+                name=environment,
+                suffix_target=self.config.environment_suffix_target,
             ),
             self.default_catalog,
             no_diff=not detailed,
@@ -1413,8 +1424,10 @@ class Context(BaseContext):
             fqn: snapshot.table_name()
             if snapshot.version
             else snapshot.qualified_view_name.for_environment(
-                EnvironmentNamingInfo(
-                    name=c.PROD, suffix_target=self.config.environment_suffix_target
+                EnvironmentNamingInfo.from_environment_catalog_mapping(
+                    self.config.environment_catalog_mapping,
+                    name=c.PROD,
+                    suffix_target=self.config.environment_suffix_target,
                 )
             )
             for fqn, snapshot in self.snapshots.items()

@@ -125,3 +125,19 @@ local_catalogs = Config(
     default_test_connection=DuckDBConnectionConfig(catalogs=CATALOGS),
     model_defaults=ModelDefaultsConfig(dialect="duckdb"),
 )
+
+environment_catalog_mapping_config = Config(
+    default_connection=DuckDBConnectionConfig(
+        catalogs={
+            "physical": ":memory:",
+            "prod_catalog": ":memory:",
+            "dev_catalog": ":memory:",
+        }
+    ),
+    model_defaults=ModelDefaultsConfig(dialect="duckdb"),
+    environment_suffix_target=EnvironmentSuffixTarget.TABLE,
+    environment_catalog_mapping={
+        "^prod$": "prod_catalog",
+        ".*": "dev_catalog",
+    },
+)

@@ -41,7 +41,7 @@ def cleanup_expired_views(adapter: EngineAdapter, environments: t.List[Environme
     ]
     for expired_catalog, expired_schema in {
         (
-            snapshot.qualified_view_name.catalog,
+            snapshot.qualified_view_name.catalog_for_environment(environment.naming_info),
             snapshot.qualified_view_name.schema_for_environment(environment.naming_info),
         )
         for environment in expired_schema_environments
@@ -128,18 +128,28 @@ class CommonStateSyncMixin(StateSync):
         existing_environment = self._get_environment(environment.name, lock_for_update=True)
 
         environment_suffix_target_changed = False
+        environment_catalog_changed = False
         removed_environment_naming_info = environment.naming_info
         if existing_environment:
-            environment_suffix_target_changed = (
-                environment.suffix_target != existing_environment.suffix_target
-            )
-            if environment_suffix_target_changed:
-                removed_environment_naming_info.suffix_target = existing_environment.suffix_target
             if environment.previous_plan_id != existing_environment.plan_id:
                 raise SQLMeshError(
                     f"Plan '{environment.plan_id}' is no longer valid for the target environment '{environment.name}'. "
                     f"Expected previous plan ID: '{environment.previous_plan_id}', actual previous plan ID: '{existing_environment.plan_id}'. "
                     "Please recreate the plan and try again"
+                )
+
+            environment_suffix_target_changed = (
+                environment.suffix_target != existing_environment.suffix_target
+            )
+            if environment_suffix_target_changed:
+                removed_environment_naming_info.suffix_target = existing_environment.suffix_target
+
+            environment_catalog_changed = (
+                environment.catalog_name_override != existing_environment.catalog_name_override
+            )
+            if environment_catalog_changed:
+                removed_environment_naming_info.catalog_name_override = (
+                    existing_environment.catalog_name_override
                 )
 
             if no_gaps_snapshot_names != set():
@@ -171,6 +181,7 @@ class CommonStateSyncMixin(StateSync):
             existing_environment
             and existing_environment.finalized_ts
             and not environment_suffix_target_changed
+            and not environment_catalog_changed
         ):
             # Only promote new snapshots.
             table_infos -= set(existing_environment.promoted_snapshots)
@@ -179,7 +190,7 @@ class CommonStateSyncMixin(StateSync):
 
         removed = (
             list(existing_table_infos.values())
-            if environment_suffix_target_changed
+            if environment_suffix_target_changed or environment_catalog_changed
             else [existing_table_infos[name] for name in missing_models]
         )
 

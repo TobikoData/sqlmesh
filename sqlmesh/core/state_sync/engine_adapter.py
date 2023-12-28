@@ -122,6 +122,7 @@ class EngineAdapterStateSync(CommonStateSyncMixin, StateSync):
             "finalized_ts": exp.DataType.build("bigint"),
             "promoted_snapshot_ids": exp.DataType.build("text"),
             "suffix_target": exp.DataType.build("text"),
+            "catalog_name_override": exp.DataType.build("text"),
         }
 
         self._seed_columns_to_types = {
@@ -1107,6 +1108,7 @@ def _environment_to_df(environment: Environment) -> pd.DataFrame:
                 if environment.promoted_snapshot_ids is not None
                 else None,
                 "suffix_target": environment.suffix_target.value,
+                "catalog_name_override": environment.catalog_name_override,
             }
         ]
     )

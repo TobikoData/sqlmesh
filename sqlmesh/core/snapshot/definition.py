@@ -184,8 +184,13 @@ class QualifiedViewName(PydanticModel, frozen=True):
         return exp.table_(
             self.table_name_for_environment(environment_naming_info),
             db=self.schema_for_environment(environment_naming_info),
-            catalog=self.catalog,
+            catalog=self.catalog_for_environment(environment_naming_info),
         )
+
+    def catalog_for_environment(
+        self, environment_naming_info: EnvironmentNamingInfo
+    ) -> t.Optional[str]:
+        return environment_naming_info.catalog_name_override or self.catalog
 
     def schema_for_environment(self, environment_naming_info: EnvironmentNamingInfo) -> str:
         schema = self.schema_name or c.DEFAULT_SCHEMA
