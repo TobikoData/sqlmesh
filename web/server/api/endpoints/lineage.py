@@ -78,7 +78,7 @@ async def column_lineage(
         if column_name in graph.get(node_name, []):
             continue
 
-        # At his point node_name should be fqn/normalized/quoted
+        # At this point node_name should be fqn/normalized/quoted
         dialect = context.models[node_name].dialect if node_name in context.models else ""
         graph[node_name] = {
             column_name: LineageColumn(
