@@ -221,7 +221,7 @@ def test_model_validation_union_query():
 
 def test_model_qualification():
     logger = logging.getLogger("sqlmesh.core.renderer")
-    with patch.object(logger, "error") as mock_logger:
+    with patch.object(logger, "warning") as mock_logger:
         expressions = d.parse(
             """
             MODEL (

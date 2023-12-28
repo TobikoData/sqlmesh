@@ -515,7 +515,7 @@ class QueryRenderer(BaseExpressionRenderer):
         except SqlglotError as ex:
             query = original
 
-            logger.error(
+            logger.warning(
                 "%s for model '%s', the column may not exist or is ambiguous", ex, self._model_fqn
             )
 
