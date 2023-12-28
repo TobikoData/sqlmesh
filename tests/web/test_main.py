@@ -1,7 +1,7 @@
 from __future__ import annotations
 
-import typing as t
 from pathlib import Path
+import threading
 
 import pyarrow as pa  # type: ignore
 import pytest
@@ -15,11 +15,7 @@ from sqlmesh.utils.errors import PlanError
 from web.server.main import api_console, app
 from web.server.settings import Settings, get_loaded_context, get_settings
 
-
-@pytest.fixture
-def client() -> t.Generator[TestClient, None, None]:
-    with TestClient(app) as test_client:
-        yield test_client
+client = TestClient(app)
 
 
 @pytest.fixture
@@ -59,7 +55,7 @@ def web_sushi_context(sushi_context: Context) -> Context:
     return sushi_context
 
 
-def test_get_files(client: TestClient, project_tmp_path: Path) -> None:
+def test_get_files(project_tmp_path: Path) -> None:
     models_dir = project_tmp_path / "models"
     models_dir.mkdir()
     sql_file = models_dir / "foo.sql"
@@ -100,7 +96,7 @@ def test_get_files(client: TestClient, project_tmp_path: Path) -> None:
     }
 
 
-def test_get_file(client: TestClient, project_tmp_path: Path) -> None:
+def test_get_file(project_tmp_path: Path) -> None:
     txt_file = project_tmp_path / "foo.txt"
     txt_file.write_text("bar")
 
@@ -116,14 +112,12 @@ def test_get_file(client: TestClient, project_tmp_path: Path) -> None:
     }
 
 
-def test_get_file_not_found(
-    client: TestClient,
-) -> None:
+def test_get_file_not_found() -> None:
     response = client.get("/api/files/not_found.txt")
     assert response.status_code == 404
 
 
-def test_get_file_invalid_path(client: TestClient, project_tmp_path: Path) -> None:
+def test_get_file_invalid_path(project_tmp_path: Path) -> None:
     config = project_tmp_path / "config.py"
     config.write_text(
         """from sqlmesh.core.config import Config, ModelDefaultsConfig
@@ -137,7 +131,7 @@ config = Config(ignore_patterns=["*.txt"], model_defaults=ModelDefaultsConfig(di
     assert response.status_code == 404
 
 
-def test_write_file(client: TestClient, project_tmp_path: Path) -> None:
+def test_write_file(project_tmp_path: Path) -> None:
     response = client.post("/api/files/foo.txt", json={"content": "bar"})
     assert response.status_code == 200
     assert response.json() == {
@@ -151,7 +145,7 @@ def test_write_file(client: TestClient, project_tmp_path: Path) -> None:
     assert (project_tmp_path / "foo.txt").read_text() == "bar"
 
 
-def test_update_file(client: TestClient, project_tmp_path: Path) -> None:
+def test_update_file(project_tmp_path: Path) -> None:
     txt_file = project_tmp_path / "foo.txt"
     txt_file.write_text("bar")
 
@@ -168,7 +162,7 @@ def test_update_file(client: TestClient, project_tmp_path: Path) -> None:
     assert (project_tmp_path / "foo.txt").read_text() == "baz"
 
 
-def test_rename_file(client: TestClient, project_tmp_path: Path) -> None:
+def test_rename_file(project_tmp_path: Path) -> None:
     txt_file = project_tmp_path / "foo.txt"
     txt_file.write_text("bar")
 
@@ -186,7 +180,7 @@ def test_rename_file(client: TestClient, project_tmp_path: Path) -> None:
     assert (project_tmp_path / "baz.txt").read_text() == "bar"
 
 
-def test_rename_file_and_keep_content(client: TestClient, project_tmp_path: Path) -> None:
+def test_rename_file_and_keep_content(project_tmp_path: Path) -> None:
     txt_file = project_tmp_path / "foo.txt"
     txt_file.write_text("bar")
 
@@ -206,14 +200,12 @@ def test_rename_file_and_keep_content(client: TestClient, project_tmp_path: Path
     assert (project_tmp_path / "baz.txt").read_text() == "bar"
 
 
-def test_rename_file_not_found(
-    client: TestClient,
-) -> None:
+def test_rename_file_not_found() -> None:
     response = client.post("/api/files/foo.txt", json={"new_path": "baz.txt"})
     assert response.status_code == 404
 
 
-def test_rename_file_already_exists(client: TestClient, project_tmp_path: Path) -> None:
+def test_rename_file_already_exists(project_tmp_path: Path) -> None:
     foo_file = project_tmp_path / "foo.txt"
     foo_file.write_text("foo")
     bar_file = project_tmp_path / "bar.txt"
@@ -232,7 +224,7 @@ def test_rename_file_already_exists(client: TestClient, project_tmp_path: Path) 
     assert not foo_file.exists()
 
 
-def test_rename_file_to_existing_directory(client: TestClient, project_tmp_path: Path) -> None:
+def test_rename_file_to_existing_directory(project_tmp_path: Path) -> None:
     foo_file = project_tmp_path / "foo.txt"
     foo_file.touch()
     existing_dir = project_tmp_path / "existing_dir"
@@ -243,9 +235,7 @@ def test_rename_file_to_existing_directory(client: TestClient, project_tmp_path:
     assert foo_file.exists()
 
 
-def test_write_file_empty_body(
-    client: TestClient,
-) -> None:
+def test_write_file_empty_body() -> None:
     response = client.post("/api/files/foo.txt", json={})
     assert response.status_code == 200
     assert response.json() == {
@@ -258,7 +248,7 @@ def test_write_file_empty_body(
     }
 
 
-def test_delete_file(client: TestClient, project_tmp_path: Path) -> None:
+def test_delete_file(project_tmp_path: Path) -> None:
     txt_file = project_tmp_path / "foo.txt"
     txt_file.write_text("bar")
 
@@ -267,21 +257,19 @@ def test_delete_file(client: TestClient, project_tmp_path: Path) -> None:
     assert not txt_file.exists()
 
 
-def test_delete_file_not_found(
-    client: TestClient,
-) -> None:
+def test_delete_file_not_found() -> None:
     response = client.delete("/api/files/not_found.txt")
     assert response.status_code == 404
 
 
-def test_create_directory(client: TestClient, project_tmp_path: Path) -> None:
+def test_create_directory(project_tmp_path: Path) -> None:
     response = client.post("/api/directories/new_dir")
     assert response.status_code == 200
     assert (project_tmp_path / "new_dir").exists()
     assert response.json() == {"directories": [], "files": [], "name": "new_dir", "path": "new_dir"}
 
 
-def test_create_directory_already_exists(client: TestClient, project_tmp_path: Path) -> None:
+def test_create_directory_already_exists(project_tmp_path: Path) -> None:
     new_dir = project_tmp_path / "new_dir"
     new_dir.mkdir()
 
@@ -290,7 +278,7 @@ def test_create_directory_already_exists(client: TestClient, project_tmp_path: P
     assert response.json()["message"] == "Directory already exists"
 
 
-def test_rename_directory(client: TestClient, project_tmp_path: Path) -> None:
+def test_rename_directory(project_tmp_path: Path) -> None:
     new_dir = project_tmp_path / "new_dir"
     new_dir.mkdir()
 
@@ -306,7 +294,7 @@ def test_rename_directory(client: TestClient, project_tmp_path: Path) -> None:
     }
 
 
-def test_rename_directory_already_exists_empty(client: TestClient, project_tmp_path: Path) -> None:
+def test_rename_directory_already_exists_empty(project_tmp_path: Path) -> None:
     new_dir = project_tmp_path / "new_dir"
     new_dir.mkdir()
     existing_dir = project_tmp_path / "renamed_dir"
@@ -324,9 +312,7 @@ def test_rename_directory_already_exists_empty(client: TestClient, project_tmp_p
     }
 
 
-def test_rename_directory_already_exists_not_empty(
-    client: TestClient, project_tmp_path: Path
-) -> None:
+def test_rename_directory_already_exists_not_empty(project_tmp_path: Path) -> None:
     new_dir = project_tmp_path / "new_dir"
     new_dir.mkdir()
     existing_dir = project_tmp_path / "renamed_dir"
@@ -340,7 +326,7 @@ def test_rename_directory_already_exists_not_empty(
     assert new_dir.exists()
 
 
-def test_rename_directory_to_existing_file(client: TestClient, project_tmp_path: Path) -> None:
+def test_rename_directory_to_existing_file(project_tmp_path: Path) -> None:
     new_dir = project_tmp_path / "new_dir"
     new_dir.mkdir()
     existing_file = project_tmp_path / "foo.txt"
@@ -352,7 +338,7 @@ def test_rename_directory_to_existing_file(client: TestClient, project_tmp_path:
     assert new_dir.exists()
 
 
-def test_delete_directory(client: TestClient, project_tmp_path: Path) -> None:
+def test_delete_directory(project_tmp_path: Path) -> None:
     new_dir = project_tmp_path / "new_dir"
     new_dir.mkdir()
 
@@ -361,12 +347,12 @@ def test_delete_directory(client: TestClient, project_tmp_path: Path) -> None:
     assert not new_dir.exists()
 
 
-def test_delete_directory_not_found(client: TestClient, project_tmp_path: Path) -> None:
+def test_delete_directory_not_found(project_tmp_path: Path) -> None:
     response = client.delete("/api/directories/fake_dir")
     assert response.status_code == 404
 
 
-def test_delete_directory_not_a_directory(client: TestClient, project_tmp_path: Path) -> None:
+def test_delete_directory_not_a_directory(project_tmp_path: Path) -> None:
     txt_file = project_tmp_path / "foo.txt"
     txt_file.touch()
 
@@ -375,7 +361,7 @@ def test_delete_directory_not_a_directory(client: TestClient, project_tmp_path: 
     assert response.json()["message"] == "Not a directory"
 
 
-def test_delete_directory_not_empty(client: TestClient, project_tmp_path: Path) -> None:
+def test_delete_directory_not_empty(project_tmp_path: Path) -> None:
     new_dir = project_tmp_path / "new_dir"
     new_dir.mkdir()
     (new_dir / "foo.txt").touch()
@@ -385,12 +371,13 @@ def test_delete_directory_not_empty(client: TestClient, project_tmp_path: Path) 
     assert not new_dir.exists()
 
 
-def test_apply(client: TestClient, project_tmp_path: Path) -> None:
+def test_apply(project_tmp_path: Path) -> None:
     models_dir = project_tmp_path / "models"
     models_dir.mkdir()
     sql_file = models_dir / "foo.sql"
     sql_file.write_text("MODEL (name foo); SELECT 1;")
 
+    client.app.state.circuit_breaker = threading.Event()
     response = client.post("/api/commands/apply", json={"environment": "dev"})
     assert response.status_code == 204
 
@@ -398,16 +385,15 @@ def test_apply(client: TestClient, project_tmp_path: Path) -> None:
 @pytest.mark.skip(
     reason="needs to be fixed: plan tests are failing inside coroutine and won't throw 422"
 )
-def test_apply_test_failures(
-    client: TestClient, web_sushi_context: Context, mocker: MockerFixture
-) -> None:
+def test_apply_test_failures(web_sushi_context: Context, mocker: MockerFixture) -> None:
     mocker.patch.object(web_sushi_context, "_run_plan_tests", side_effect=PlanError())
     response = client.post("/api/commands/apply", json={"environment": "dev"})
     assert response.status_code == 422
     assert response.json()["message"] == "Unable to run a plan"
 
 
-def test_plan(client: TestClient, web_sushi_context: Context) -> None:
+def test_plan(web_sushi_context: Context) -> None:
+    client.app.state.circuit_breaker = threading.Event()
     response = client.post("/api/plan", json={"environment": "dev"})
     assert response.status_code == 204
 
@@ -415,9 +401,7 @@ def test_plan(client: TestClient, web_sushi_context: Context) -> None:
 @pytest.mark.skip(
     reason="needs to be fixed: plan tests are failing inside coroutine and won't throw 422"
 )
-def test_plan_test_failures(
-    client: TestClient, web_sushi_context: Context, mocker: MockerFixture
-) -> None:
+def test_plan_test_failures(web_sushi_context: Context, mocker: MockerFixture) -> None:
     mocker.patch.object(web_sushi_context, "_run_plan_tests", side_effect=PlanError())
     response = client.post("/api/plan", json={"environment": "dev"})
     assert response.status_code == 422
@@ -425,9 +409,7 @@ def test_plan_test_failures(
 
 
 @pytest.mark.asyncio
-async def test_cancel(
-    client: TestClient,
-) -> None:
+async def test_cancel() -> None:
     async with AsyncClient(app=app, base_url="http://testserver") as _client:
         await _client.post("/api/plan", json={"environment": "dev"})
         response = await _client.post("/api/plan/cancel")
@@ -435,15 +417,13 @@ async def test_cancel(
     assert app.state.task.cancelled()
 
 
-def test_cancel_no_task(
-    client: TestClient,
-) -> None:
+def test_cancel_no_task() -> None:
     response = client.post("/api/plan/cancel")
     assert response.status_code == 422
     assert response.json()["message"] == "Plan/apply is not running"
 
 
-def test_evaluate(client: TestClient, web_sushi_context: Context) -> None:
+def test_evaluate(web_sushi_context: Context) -> None:
     response = client.post(
         "/api/commands/evaluate",
         json={
@@ -460,7 +440,7 @@ def test_evaluate(client: TestClient, web_sushi_context: Context) -> None:
     assert not df.empty
 
 
-def test_fetchdf(client: TestClient, web_sushi_context: Context) -> None:
+def test_fetchdf(web_sushi_context: Context) -> None:
     response = client.post("/api/commands/fetchdf", json={"sql": "SELECT * from sushi.top_waiters"})
     assert response.status_code == 200
     with pa.ipc.open_stream(response.content) as reader:
@@ -469,7 +449,7 @@ def test_fetchdf(client: TestClient, web_sushi_context: Context) -> None:
 
 
 # TODO: add better tests for this endpoint
-def test_get_models(client: TestClient, web_sushi_context: Context) -> None:
+def test_get_models(web_sushi_context: Context) -> None:
     response = client.get("/api/models")
 
     assert response.status_code == 200
@@ -482,19 +462,19 @@ def test_get_models(client: TestClient, web_sushi_context: Context) -> None:
     assert test_model.get("columns")
 
 
-def test_render(client: TestClient, web_sushi_context: Context) -> None:
+def test_render(web_sushi_context: Context) -> None:
     response = client.post("/api/commands/render", json={"model": "sushi.items"})
     assert response.status_code == 200
     assert response.json()["sql"]
 
 
-def test_render_invalid_model(client: TestClient, web_sushi_context: Context) -> None:
+def test_render_invalid_model(web_sushi_context: Context) -> None:
     response = client.post("/api/commands/render", json={"model": "foo.bar"})
     assert response.status_code == 422
     assert response.json()["message"] == "Unable to find a model"
 
 
-def test_get_environments(client: TestClient, project_context: Context) -> None:
+def test_get_environments(project_context: Context) -> None:
     response = client.get("/api/environments")
     assert response.status_code == 200
     response_json = response.json()
@@ -511,15 +491,13 @@ def test_get_environments(client: TestClient, project_context: Context) -> None:
     )
 
 
-def test_delete_environment_success(client: TestClient, web_sushi_context: Context):
+def test_delete_environment_success(web_sushi_context: Context):
     response = client.delete("/api/environments/test")
 
     assert response.status_code == 204
 
 
-def test_delete_environment_failure(
-    client: TestClient, web_sushi_context: Context, mocker: MockerFixture
-):
+def test_delete_environment_failure(web_sushi_context: Context, mocker: MockerFixture):
     mocker.patch.object(
         web_sushi_context.state_sync, "invalidate_environment", side_effect=Exception("Some error")
     )
@@ -530,7 +508,7 @@ def test_delete_environment_failure(
     assert response.json()["message"] == "Unable to delete environments"
 
 
-def test_get_lineage(client: TestClient, web_sushi_context: Context) -> None:
+def test_get_lineage(web_sushi_context: Context) -> None:
     response = client.get("/api/lineage/sushi.waiters/event_date")
 
     assert response.status_code == 200
@@ -567,7 +545,7 @@ WHERE
     }
 
 
-def test_table_diff(client: TestClient, web_sushi_context: Context) -> None:
+def test_table_diff(web_sushi_context: Context) -> None:
     web_sushi_context.plan(
         "dev",
         no_prompts=True,
@@ -588,7 +566,7 @@ def test_table_diff(client: TestClient, web_sushi_context: Context) -> None:
     assert "row_diff" in response.json()
 
 
-def test_test(client: TestClient, web_sushi_context: Context) -> None:
+def test_test(web_sushi_context: Context) -> None:
     response = client.get("/api/commands/test")
     assert response.status_code == 200
     response_json = response.json()
@@ -603,7 +581,7 @@ def test_test(client: TestClient, web_sushi_context: Context) -> None:
     assert response_json["failures"] == []
 
 
-def test_test_failure(client: TestClient, project_context: Context) -> None:
+def test_test_failure(project_context: Context) -> None:
     models_dir = project_context.path / "models"
     models_dir.mkdir()
     sql_file = models_dir / "foo.sql"
