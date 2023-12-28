@@ -8,7 +8,6 @@ from sqlglot import exp
 from sqlglot.lineage import Node, lineage
 
 from sqlmesh.core.context import Context
-from sqlmesh.core.dialect import normalize_model_name
 from web.server.exceptions import ApiException
 from web.server.models import LineageColumn
 from web.server.settings import get_loaded_context
@@ -40,7 +39,6 @@ def _process_downstream(downstream: t.List[Node]) -> t.Dict[str, t.List[str]]:
     for node in downstream:
         column = exp.to_column(node.name).name
         table = _get_table(node)
-        table = normalize_model_name(table, None)
         graph[table].append(column)
     return graph
 
@@ -80,7 +78,7 @@ async def column_lineage(
         if column_name in graph.get(node_name, []):
             continue
 
-        # At his point node_name is already fqn/normalized/quoted
+        # At his point node_name should be fqn/normalized/quoted
         dialect = context.models[node_name].dialect if node_name in context.models else ""
         graph[node_name] = {
             column_name: LineageColumn(
