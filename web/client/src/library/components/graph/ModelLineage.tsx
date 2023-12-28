@@ -48,7 +48,7 @@ export default function ModelLineage({
         setActiveEdges(new Map())
         setConnections(new Map())
         setSelectedNodes(new Set())
-        setMainNode(model.normalizedName)
+        setMainNode(model.fqn)
         setHighlightedNodes(highlightedNodes)
       })
 

@@ -19,7 +19,7 @@ export class ModelSQLMeshModel<
   T extends InitialSQLMeshModel = InitialSQLMeshModel,
 > extends ModelInitial<T> {
   name: string
-  normalized_name: string
+  fqn: string
   path: string
   dialect: string
   type: ModelType
@@ -42,7 +42,7 @@ export class ModelSQLMeshModel<
     )
 
     this.name = encodeURI(this.initial.name)
-    this.normalized_name = encodeURI(this.initial.normalized_name)
+    this.fqn = encodeURI(this.initial.fqn)
     this.default_catalog = this.initial.default_catalog
     this.path = this.initial.path
     this.dialect = this.initial.dialect
@@ -54,15 +54,11 @@ export class ModelSQLMeshModel<
   }
 
   get id(): string {
-    return this.normalized_name
+    return this.fqn
   }
 
   get defaultCatalog(): Optional<ModelDefaultCatalog> {
     return this.default_catalog
-  }
-
-  get normalizedName(): string {
-    return this.normalized_name
   }
 
   get index(): string {
@@ -102,7 +98,7 @@ export class ModelSQLMeshModel<
   }
 
   get displayNormalizedName(): string {
-    return decodeURI(this.normalized_name)
+    return decodeURI(this.fqn)
   }
 
   update(initial: Partial<InitialSQLMeshModel> = {}): void {
@@ -113,8 +109,8 @@ export class ModelSQLMeshModel<
         this.details = value as ModelDetails
       } else if (key === 'name') {
         this.name = encodeURI(value as string)
-      } else if (key === 'normalized_name') {
-        this.normalized_name = encodeURI(value as string)
+      } else if (key === 'fqn') {
+        this.fqn = encodeURI(value as string)
       } else if (key in this) {
         this[
           key as 'path' | 'dialect' | 'description' | 'sql' | 'default_catalog'

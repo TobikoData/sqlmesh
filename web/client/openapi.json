@@ -1907,7 +1907,7 @@
         "type": "object",
         "required": [
           "name",
-          "normalized_name",
+          "fqn",
           "path",
           "type",
           "dialect",

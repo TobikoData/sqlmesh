@@ -144,7 +144,7 @@ class Column(BaseModel):
 
 class Model(BaseModel):
     name: str
-    normalized_name: str
+    fqn: str
     path: str
     dialect: str
     type: ModelType
