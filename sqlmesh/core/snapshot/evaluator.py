@@ -34,7 +34,7 @@ from sqlglot.executor import execute
 from sqlmesh.core.audit import Audit, AuditResult
 from sqlmesh.core.dialect import schema_
 from sqlmesh.core.engine_adapter import EngineAdapter
-from sqlmesh.core.engine_adapter.base import InsertOverwriteStrategy
+from sqlmesh.core.engine_adapter.shared import InsertOverwriteStrategy
 from sqlmesh.core.macros import RuntimeStage
 from sqlmesh.core.model import IncrementalUnmanagedKind, Model, SCDType2Kind, ViewKind
 from sqlmesh.core.snapshot import (

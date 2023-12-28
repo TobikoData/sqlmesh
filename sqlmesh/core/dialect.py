@@ -19,6 +19,9 @@ from sqlmesh.core.constants import MAX_MODEL_DEFINITION_SIZE
 from sqlmesh.utils.errors import SQLMeshError
 from sqlmesh.utils.pandas import columns_to_types_from_df
 
+if t.TYPE_CHECKING:
+    from sqlmesh.utils.pandas import PandasNamedTuple
+
 SQLMESH_MACRO_PREFIX = "@"
 
 JSON_TYPE = exp.DataType.build("json")
@@ -754,7 +757,7 @@ def extend_sqlglot() -> None:
 
 
 def select_from_values(
-    values: t.List[t.Tuple[t.Any, ...]],
+    values: t.List[PandasNamedTuple],
     columns_to_types: t.Dict[str, exp.DataType],
     batch_size: int = 0,
     alias: str = "t",
@@ -784,7 +787,7 @@ def select_from_values(
 
 
 def select_from_values_for_batch_range(
-    values: t.List[t.Tuple[t.Any, ...]],
+    values: t.List[PandasNamedTuple],
     columns_to_types: t.Dict[str, exp.DataType],
     batch_start: int,
     batch_end: int,

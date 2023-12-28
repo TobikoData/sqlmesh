@@ -12,7 +12,7 @@ from sqlglot.helper import ensure_list
 
 from sqlmesh.core.dialect import normalize_model_name
 from sqlmesh.core.engine_adapter import EngineAdapter, EngineAdapterWithIndexSupport
-from sqlmesh.core.engine_adapter.base import InsertOverwriteStrategy
+from sqlmesh.core.engine_adapter.shared import InsertOverwriteStrategy
 from sqlmesh.core.schema_diff import SchemaDiffer, TableAlterOperation
 from sqlmesh.utils.date import to_ds
 from sqlmesh.utils.errors import UnsupportedCatalogOperationError

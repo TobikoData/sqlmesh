@@ -9,11 +9,8 @@ from sqlglot import parse, parse_one, select
 from sqlmesh.core.audit import ModelAudit, StandaloneAudit
 from sqlmesh.core.dialect import schema_, to_schema
 from sqlmesh.core.engine_adapter import EngineAdapter, create_engine_adapter
-from sqlmesh.core.engine_adapter.base import (
-    MERGE_SOURCE_ALIAS,
-    MERGE_TARGET_ALIAS,
-    InsertOverwriteStrategy,
-)
+from sqlmesh.core.engine_adapter.base import MERGE_SOURCE_ALIAS, MERGE_TARGET_ALIAS
+from sqlmesh.core.engine_adapter.shared import InsertOverwriteStrategy
 from sqlmesh.core.environment import EnvironmentNamingInfo
 from sqlmesh.core.macros import RuntimeStage, macro
 from sqlmesh.core.model import (
