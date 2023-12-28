@@ -18,10 +18,11 @@ router = APIRouter()
 
 def _get_table(node: Node) -> str:
     """Get a node's table/source"""
+    table: t.Union[exp.Table, str] = node.alias or node.name
     if isinstance(node.expression, exp.Table):
-        return exp.table_name(node.expression)
-    else:
-        return node.alias
+        table = node.expression
+
+    return exp.table_name(table, identify=True)
 
 
 def _get_node_source(node: Node, dialect: str) -> str:
@@ -38,7 +39,7 @@ def _process_downstream(downstream: t.List[Node]) -> t.Dict[str, t.List[str]]:
     graph = collections.defaultdict(list)
     for node in downstream:
         column = exp.to_column(node.name).name
-        table = _get_table(node) or node.name
+        table = _get_table(node)
         table = normalize_model_name(table, None)
         graph[table].append(column)
     return graph
@@ -51,17 +52,17 @@ async def column_lineage(
     context: Context = Depends(get_loaded_context),
 ) -> t.Dict[str, t.Dict[str, LineageColumn]]:
     """Get a column's lineage"""
-    model_name = normalize_model_name(model_name, context.default_catalog, context.config.dialect)
     try:
+        model = context.get_model(model_name)
         node = lineage(
             column=column_name,
-            sql=context.models[model_name].render_query_or_raise(),
+            sql=model.render_query_or_raise(),
             sources={
-                model: context.models[model].render_query_or_raise()
-                for model in context.dag.upstream(model_name)
-                if model in context.models
+                m: context.models[m].render_query_or_raise()
+                for m in context.dag.upstream(model.fqn)
+                if m in context.models
             },
-            dialect=context.models[model_name].dialect,
+            dialect=model.dialect,
         )
     except Exception:
         raise ApiException(
@@ -70,16 +71,16 @@ async def column_lineage(
         )
 
     graph: t.Dict[str, t.Dict[str, LineageColumn]] = {}
-    node_name = model_name
+    node_name = model.fqn
 
     for i, node in enumerate(node.walk()):
         if i > 0:
-            node_name = _get_table(node) or node.name
-            node_name = normalize_model_name(node_name, None)
+            node_name = _get_table(node)
             column_name = exp.to_column(node.name).name
         if column_name in graph.get(node_name, []):
             continue
 
+        # At his point node_name is already fqn/normalized/quoted
         dialect = context.models[node_name].dialect if node_name in context.models else ""
         graph[node_name] = {
             column_name: LineageColumn(
@@ -98,5 +99,12 @@ async def model_lineage(
     context: Context = Depends(get_loaded_context),
 ) -> t.Dict[str, t.Set[str]]:
     """Get a model's lineage"""
-    model_name = normalize_model_name(model_name, context.default_catalog, context.config.dialect)
+    try:
+        model_name = context.get_model(model_name).fqn
+    except Exception:
+        raise ApiException(
+            message="Unable to get a model lineage",
+            origin="API -> lineage -> model_lineage",
+        )
+
     return context.dag.lineage(model_name).graph
