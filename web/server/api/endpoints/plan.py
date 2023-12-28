@@ -35,6 +35,7 @@ async def initiate_plan(
         )
 
     plan_options = plan_options or models.PlanOptions()
+    request.app.state.circuit_breaker.clear()
     request.app.state.task = asyncio.create_task(
         run_in_executor(
             get_plan,
@@ -74,7 +75,6 @@ async def cancel_plan(
     tracker_stage_cancel.stop(success=True)
     api_console.stop_plan_tracker(tracker)
     response.status_code = HTTP_204_NO_CONTENT
-    request.app.state.circuit_breaker.clear()
 
     return None
 

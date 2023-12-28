@@ -43,6 +43,7 @@ async def initiate_apply(
             origin="API -> commands -> apply",
         )
 
+    request.app.state.circuit_breaker.clear()
     request.app.state.task = asyncio.create_task(
         run_in_executor(
             _run_plan_apply,
