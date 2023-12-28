@@ -1,10 +1,22 @@
 from __future__ import annotations
 
+import sys
 import typing as t
 
 import numpy as np
 import pandas as pd
 from sqlglot import exp
+
+if t.TYPE_CHECKING:
+    # https://github.com/python/mypy/issues/1153
+    if sys.version_info >= (3, 9):
+        try:
+            from pandas.core.frame import _PandasNamedTuple as PandasNamedTuple
+        except ImportError:
+            PandasNamedTuple = t.Tuple[t.Any, ...]  # type: ignore
+    else:
+        PandasNamedTuple = t.Tuple[t.Any, ...]
+
 
 PANDAS_TYPE_MAPPINGS = {
     np.dtype("int8"): exp.DataType.build("tinyint"),
