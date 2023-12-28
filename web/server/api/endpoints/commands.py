@@ -51,6 +51,7 @@ async def initiate_apply(
             plan_options,
             plan_dates,
             categories,
+            request.app.state.circuit_breaker.is_set,
         )
     )
     response.status_code = HTTP_204_NO_CONTENT
@@ -192,6 +193,7 @@ def _run_plan_apply(
     plan_options: t.Optional[models.PlanOptions] = None,
     plan_dates: t.Optional[models.PlanDates] = None,
     categories: t.Optional[t.Dict[str, SnapshotChangeCategory]] = None,
+    circuit_breaker: t.Optional[t.Callable[[], bool]] = None,
 ) -> None:
     """Run plan apply"""
     plan_options = plan_options or models.PlanOptions()
@@ -208,7 +210,7 @@ def _run_plan_apply(
     tracker_apply.end = plan.end
     api_console.start_plan_tracker(tracker_apply)
     try:
-        context.apply(plan)
+        context.apply(plan, circuit_breaker)
         if not plan.requires_backfill or plan_options.skip_backfill:
             api_console.stop_plan_tracker(tracker_apply, success=True)
     except PlanError as e:

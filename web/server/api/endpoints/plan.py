@@ -61,6 +61,7 @@ async def cancel_plan(
             origin="API -> plan -> cancel_plan",
         )
 
+    request.app.state.circuit_breaker.set()
     request.app.state.task.cancel()
     try:
         await request.app.state.task
@@ -73,6 +74,7 @@ async def cancel_plan(
     tracker_stage_cancel.stop(success=True)
     api_console.stop_plan_tracker(tracker)
     response.status_code = HTTP_204_NO_CONTENT
+    request.app.state.circuit_breaker.clear()
 
     return None
 
