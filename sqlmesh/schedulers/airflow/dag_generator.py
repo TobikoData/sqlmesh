@@ -643,4 +643,5 @@ def plan_dag_spec_to_environment(plan_dag_spec: common.PlanDagSpec) -> Environme
         previous_plan_id=plan_dag_spec.previous_plan_id,
         expiration_ts=plan_dag_spec.environment_expiration_ts,
         suffix_target=plan_dag_spec.environment_naming_info.suffix_target,
+        catalog_name_override=plan_dag_spec.environment_naming_info.catalog_name_override,
     )

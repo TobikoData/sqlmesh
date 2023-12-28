@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import logging
+import re
 import sys
 import typing as t
 from collections import defaultdict
@@ -94,6 +95,7 @@ class Plan:
         forward_only: bool = False,
         environment_ttl: t.Optional[str] = None,
         environment_suffix_target: EnvironmentSuffixTarget = EnvironmentSuffixTarget.default,
+        environment_catalog_mapping: t.Optional[t.Dict[re.Pattern, str]] = None,
         categorizer_config: t.Optional[CategorizerConfig] = None,
         auto_categorization_enabled: bool = True,
         effective_from: t.Optional[TimeLike] = None,
@@ -111,6 +113,7 @@ class Plan:
         self.forward_only = forward_only
         self.environment_ttl = environment_ttl
         self.environment_suffix_target = environment_suffix_target
+        self.environment_catalog_mapping = environment_catalog_mapping or {}
         self.categorizer_config = categorizer_config or CategorizerConfig()
         self.auto_categorization_enabled = auto_categorization_enabled
         self.include_unmodified = include_unmodified
@@ -284,7 +287,8 @@ class Plan:
                 if s.snapshot_id in self.context_diff.promotable_snapshot_ids
             ]
 
-        return Environment(
+        return Environment.from_environment_catalog_mapping(
+            self.environment_catalog_mapping,
             name=self.context_diff.environment,
             snapshots=snapshots,
             start_at=self.start,
@@ -298,8 +302,10 @@ class Plan:
 
     @property
     def environment_naming_info(self) -> EnvironmentNamingInfo:
-        return EnvironmentNamingInfo(
-            name=self.context_diff.environment, suffix_target=self.environment_suffix_target
+        return EnvironmentNamingInfo.from_environment_catalog_mapping(
+            self.environment_catalog_mapping,
+            name=self.context_diff.environment,
+            suffix_target=self.environment_suffix_target,
         )
 
     @property

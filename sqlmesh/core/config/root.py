@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import pickle
+import re
 import typing as t
 import zlib
 
@@ -90,6 +91,7 @@ class Config(BaseConfig):
     environment_suffix_target: EnvironmentSuffixTarget = Field(
         default=EnvironmentSuffixTarget.default
     )
+    environment_catalog_mapping: t.Dict[re.Pattern, str] = {}
     default_target_environment: str = c.PROD
     log_limit: int = c.DEFAULT_LOG_LIMIT
     cicd_bot: t.Optional[CICDBotConfig] = None
@@ -119,6 +121,19 @@ class Config(BaseConfig):
             return {"": value}
         except Exception:
             return value
+
+    @field_validator("environment_catalog_mapping", mode="before")
+    @classmethod
+    def _validate_regex_keys(
+        cls, value: t.Dict[str | re.Pattern, t.Any]
+    ) -> t.Dict[re.Pattern, t.Any]:
+        compiled_regexes = {}
+        for k, v in value.items():
+            try:
+                compiled_regexes[re.compile(k)] = v
+            except re.error:
+                raise ConfigError(f"`{k}` is not a valid regular expression.")
+        return compiled_regexes
 
     @model_validator(mode="before")
     @model_validator_v1_args
