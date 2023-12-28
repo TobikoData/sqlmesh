@@ -283,16 +283,17 @@ Below is an example of how to define the default config for the bot in either YA
 
 ### Configuration Properties
 
-| Option                                | Description                                                                                                                                                                                                                                                            |  Type  | Required |
+| Option                                | Description                                                                                                                                                                                                                                                            | Type   | Required |
 |---------------------------------------|------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------|:------:|:--------:|
-| `invalidate_environment_after_deploy` | Indicates if the PR environment created should be automatically invalidated after changes are deployed. Invalidated environments are cleaned up automatically by the Janitor. Default: `True`                                                                          |  bool  |    N     |
-| `merge_method`                        | The merge method to use when automatically merging a PR after deploying to prod. Defaults to `None` meaning automatic merge is not done. Options: `merge`, `squash`, `rebase`                                                                                          | string |    N     |
-| `enable_deploy_command`               | Indicates if the `/deploy` command should be enabled in order to allowed synchronized deploys to production. Default: `False`                                                                                                                                          |  bool  |    N     |
-| `command_namespace`                   | The namespace to use for SQLMesh commands. For example if you provide `#SQLMesh` as a value then commands will be expected in the format of `#SQLMesh/<command>`. Default: `None` meaning no namespace is used.                                                        | string |    N     |
-| `auto_categorize_changes`             | Auto categorization behavior to use for the bot. If not provided then the project-wide categorization behavior is used. See [Auto-categorize model changes](https://sqlmesh.readthedocs.io/en/stable/guides/configuration/#auto-categorize-model-changes) for details. |  dict  |    N     |
-| `default_pr_start`                    | Default start when creating PR environment plans. If running in a mode where the bot automatically backfills models (based on `auto_categorize_changes` behavior) then this can be used to limit the amount of data backfilled. Defaults to `1 day ago`                |  str   |    N     |
-| `skip_pr_backfill`                    | Indicates if the bot should skip backfilling models in the PR environment. Default: `True`                                                                                                                                                                             |  bool  |    N     |
-| `pr_include_unmodified`               | Indicates whether to include unmodified models in the PR environment. Default to the project's config value (which defaults to `False`)                                                                                                                                |  bool  |    N     |
+| `invalidate_environment_after_deploy` | Indicates if the PR environment created should be automatically invalidated after changes are deployed. Invalidated environments are cleaned up automatically by the Janitor. Default: `True`                                                                          | bool   | N        |
+| `merge_method`                        | The merge method to use when automatically merging a PR after deploying to prod. Defaults to `None` meaning automatic merge is not done. Options: `merge`, `squash`, `rebase`                                                                                          | string | N        |
+| `enable_deploy_command`               | Indicates if the `/deploy` command should be enabled in order to allowed synchronized deploys to production. Default: `False`                                                                                                                                          | bool   | N        |
+| `command_namespace`                   | The namespace to use for SQLMesh commands. For example if you provide `#SQLMesh` as a value then commands will be expected in the format of `#SQLMesh/<command>`. Default: `None` meaning no namespace is used.                                                        | string | N        |
+| `auto_categorize_changes`             | Auto categorization behavior to use for the bot. If not provided then the project-wide categorization behavior is used. See [Auto-categorize model changes](https://sqlmesh.readthedocs.io/en/stable/guides/configuration/#auto-categorize-model-changes) for details. | dict   | N        |
+| `default_pr_start`                    | Default start when creating PR environment plans. If running in a mode where the bot automatically backfills models (based on `auto_categorize_changes` behavior) then this can be used to limit the amount of data backfilled. Defaults to `1 day ago`                | str    | N        |
+| `skip_pr_backfill`                    | Indicates if the bot should skip backfilling models in the PR environment. Default: `True`                                                                                                                                                                             | bool   | N        |
+| `pr_include_unmodified`               | Indicates whether to include unmodified models in the PR environment. Default to the project's config value (which defaults to `False`)                                                                                                                                | bool   | N        |
+| `run_on_deploy_to_prod`               | Indicates whether to run latest intervals when deploying to prod. If set to false, the deployment will backfill only the changed models up to the existing latest interval in production, ignoring any missing intervals beyond this point. Default: `True`                | bool   | N        |
 
 Example with all properties defined:
 
@@ -312,6 +313,7 @@ Example with all properties defined:
           seed: full
         default_pr_start: "1 week ago"
         skip_pr_backfill: false
+        run_on_deploy_to_prod: true
     ```
 
 === "Python"
@@ -334,6 +336,7 @@ Example with all properties defined:
             ),
             default_pr_start="1 week ago",
             skip_pr_backfill=False,
+            run_on_deploy_to_prod=True,
         )
     )
     ```

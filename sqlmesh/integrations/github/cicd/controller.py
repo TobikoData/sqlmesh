@@ -405,6 +405,7 @@ class GithubController:
                 no_prompts=True,
                 skip_tests=True,
                 categorizer_config=self.bot_config.auto_categorize_changes,
+                run=self.bot_config.run_on_deploy_to_prod,
             )
         return self._prod_plan
 
@@ -418,6 +419,7 @@ class GithubController:
                 no_prompts=True,
                 no_auto_categorization=True,
                 skip_tests=True,
+                run=self.bot_config.run_on_deploy_to_prod,
             )
         return self._prod_plan_with_gaps
 

@@ -6,30 +6,34 @@ Usage: sqlmesh [OPTIONS] COMMAND [ARGS]...
   SQLMesh command line tool.
 
 Options:
-  --version         Show the version and exit.
-  -p, --paths TEXT  Path(s) to the SQLMesh config/project.
-  --config TEXT     Name of the config object. Only applicable to
-                    configuration defined using Python script.
-  --gateway TEXT    The name of the gateway.
-  --help            Show this message and exit.
+  --version          Show the version and exit.
+  -p, --paths TEXT   Path(s) to the SQLMesh config/project.
+  --config TEXT      Name of the config object. Only applicable to
+                     configuration defined using Python script.
+  --gateway TEXT     The name of the gateway.
+  --ignore-warnings  Ignore warnings.
+  --debug            Enable debug mode.
+  --help             Show this message and exit.
 
 Commands:
-  audit                   Run audits.
+  audit                   Run audits for given models.
   create_external_models  Create a schema file containing external model...
-  dag                     Renders the dag using graphviz.
-  diff                    Show the diff between the current context and a...
+  create_test             Generate a unit test fixture for a given model.
+  dag                     Render the dag as an html file.
+  diff                    Show the diff between the local state and the...
   evaluate                Evaluate a model and return a dataframe with a...
-  fetchdf                 Runs a sql query and displays the results.
+  fetchdf                 Run a sql query and display the results.
   format                  Format all models in a given directory.
-  ide                     Start a browser-based SQLMesh IDE.
-  info                    Print info.
+  info                    Print information about a SQLMesh project.
   init                    Create a new SQLMesh repository.
+  invalidate              Invalidate the target environment, forcing its...
   migrate                 Migrate SQLMesh to the current running version.
-  plan                    Plan a migration of the current context's...
+  plan                    Apply local changes to the target environment.
   prompt                  Uses LLM to generate a SQL query from a prompt.
   render                  Renders a model's query, optionally expanding...
+  rewrite                 Rewrite a sql expression with semantic...
   rollback                Rollback SQLMesh to the previous migration.
-  run                     Evaluates the DAG of models using the built-in...
+  run                     Evaluate missing intervals for the target...
   table_diff              Show the diff between two tables.
   test                    Run model unit tests.
   ui                      Start a browser-based SQLMesh UI.
@@ -39,16 +43,16 @@ Commands:
 ```
 Usage: sqlmesh audit [OPTIONS]
 
-  Run audits.
+  Run audits for the target model(s).
 
 Options:
-  --model TEXT       A model to audit. Multiple models can be audited.
-  -s, --start TEXT   The start datetime of the interval for which this command
-                     will be applied.
-  -e, --end TEXT     The end datetime of the interval for which this command
-                     will be applied.
-  --execution-time TEXT The execution time (defaults to now).
-  --help             Show this message and exit.
+  --model TEXT           A model to audit. Multiple models can be audited.
+  -s, --start TEXT       The start datetime of the interval for which this
+                         command will be applied.
+  -e, --end TEXT         The end datetime of the interval for which this
+                         command will be applied.
+  --execution-time TEXT  The execution time (defaults to now).
+  --help                 Show this message and exit.
 ```
 
 ## create_external_models
@@ -86,7 +90,7 @@ Options:
 ```
 Usage: sqlmesh dag [OPTIONS] FILE
 
-  Renders the dag as an html file.
+  Render the DAG as an html file.
 
 Options:
   --help  Show this message and exit.
@@ -122,7 +126,7 @@ Options:
 ```
 Usage: sqlmesh fetchdf [OPTIONS] SQL
 
-  Runs a sql query and displays the results.
+  Run a SQL query and displays the results.
 
 Options:
   --help  Show this message and exit.
@@ -181,7 +185,7 @@ Options:
 ```
 Usage: sqlmesh migrate
 
-  Migrates SQLMesh to the current running version.
+  Migrate SQLMesh to the current running version.
 
   Please contact your SQLMesh administrator before doing this.
 ```
@@ -190,7 +194,7 @@ Usage: sqlmesh migrate
 ```
 Usage: sqlmesh plan [OPTIONS] [ENVIRONMENT]
 
-  Plan a migration of the current context's models with the given environment.
+  Apply local changes to the target environment.
 
 Options:
   -s, --start TEXT          The start datetime of the interval for which this
@@ -230,6 +234,9 @@ Options:
                             expression. This is supported only when targeting
                             a development environment.
   --no-diff                 Hide text differences for changed models.
+  --run                     Run latest intervals as part of the plan
+                            application (prod environment only).
+  -v, --verbose             Verbose output.
   --help                    Show this message and exit.
 ```
 
@@ -253,7 +260,7 @@ Options:
 ```
 Usage: sqlmesh render [OPTIONS] MODEL
 
-  Renders a model's query, optionally expanding referenced models.
+  Render a model's query, optionally expanding referenced models.
 
 Options:
   -s, --start TEXT   The start datetime of the interval for which this command
@@ -282,7 +289,7 @@ Usage: sqlmesh rollback [OPTIONS]
 ```
 Usage: sqlmesh run [OPTIONS] [ENVIRONMENT]
 
-  Evaluates the DAG of models using the built-in scheduler.
+  Evaluate missing intervals for the target environment.
 
 Options:
   -s, --start TEXT  The start datetime of the interval for which this command
@@ -311,7 +318,7 @@ Options:
 ```
 Usage: sqlmesh rewrite [OPTIONS] SQL
 
-  Rewrite a sql expression with semantic references into an executable query.
+  Rewrite a SQL expression with semantic references into an executable query.
 
   https://sqlmesh.readthedocs.io/en/latest/concepts/metrics/overview/
 
