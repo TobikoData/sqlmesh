@@ -7,9 +7,14 @@ from pandas.api.types import is_datetime64_any_dtype  # type: ignore
 from sqlglot import exp
 
 from sqlmesh.core.dialect import to_schema
-from sqlmesh.core.engine_adapter.base import CatalogSupport, SourceQuery
 from sqlmesh.core.engine_adapter.mixins import GetCurrentCatalogFromFunctionMixin
-from sqlmesh.core.engine_adapter.shared import DataObject, DataObjectType, set_catalog
+from sqlmesh.core.engine_adapter.shared import (
+    CatalogSupport,
+    DataObject,
+    DataObjectType,
+    SourceQuery,
+    set_catalog,
+)
 
 if t.TYPE_CHECKING:
     from sqlmesh.core._typing import SchemaName, TableName

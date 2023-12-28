@@ -9,17 +9,19 @@ from sqlglot import exp
 from sqlglot.optimizer.qualify_columns import quote_identifiers
 
 from sqlmesh.core.dialect import to_schema
-from sqlmesh.core.engine_adapter.base import (
-    CatalogSupport,
-    InsertOverwriteStrategy,
-    SourceQuery,
-)
 from sqlmesh.core.engine_adapter.mixins import (
     GetCurrentCatalogFromFunctionMixin,
     HiveMetastoreTablePropertiesMixin,
     LogicalReplaceQueryMixin,
 )
-from sqlmesh.core.engine_adapter.shared import DataObject, DataObjectType, set_catalog
+from sqlmesh.core.engine_adapter.shared import (
+    CatalogSupport,
+    DataObject,
+    DataObjectType,
+    InsertOverwriteStrategy,
+    SourceQuery,
+    set_catalog,
+)
 from sqlmesh.utils import classproperty
 from sqlmesh.utils.errors import SQLMeshError
 

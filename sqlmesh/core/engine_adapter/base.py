@@ -12,10 +12,8 @@ import contextlib
 import itertools
 import logging
 import sys
-import types
 import typing as t
 from datetime import datetime, timezone
-from enum import Enum
 from functools import partial
 
 import pandas as pd
@@ -30,7 +28,13 @@ from sqlmesh.core.dialect import (
     select_from_values_for_batch_range,
     to_schema,
 )
-from sqlmesh.core.engine_adapter.shared import DataObject, set_catalog
+from sqlmesh.core.engine_adapter.shared import (
+    CatalogSupport,
+    DataObject,
+    InsertOverwriteStrategy,
+    SourceQuery,
+    set_catalog,
+)
 from sqlmesh.core.model.kind import TimeColumn
 from sqlmesh.core.schema_diff import SchemaDiffer
 from sqlmesh.utils import double_escape, random_id
@@ -56,85 +60,6 @@ logger = logging.getLogger(__name__)
 
 MERGE_TARGET_ALIAS = "__MERGE_TARGET__"
 MERGE_SOURCE_ALIAS = "__MERGE_SOURCE__"
-
-
-class InsertOverwriteStrategy(Enum):
-    DELETE_INSERT = 1
-    INSERT_OVERWRITE = 2
-    # Note: Replace where on Databricks requires that `spark.sql.sources.partitionOverwriteMode` be set to `static`
-    REPLACE_WHERE = 3
-    INTO_IS_OVERWRITE = 4
-
-    @property
-    def is_delete_insert(self) -> bool:
-        return self == InsertOverwriteStrategy.DELETE_INSERT
-
-    @property
-    def is_insert_overwrite(self) -> bool:
-        return self == InsertOverwriteStrategy.INSERT_OVERWRITE
-
-    @property
-    def is_replace_where(self) -> bool:
-        return self == InsertOverwriteStrategy.REPLACE_WHERE
-
-    @property
-    def is_into_is_overwrite(self) -> bool:
-        return self == InsertOverwriteStrategy.INTO_IS_OVERWRITE
-
-    @property
-    def requires_condition(self) -> bool:
-        return self.is_replace_where or self.is_delete_insert
-
-
-class CatalogSupport(Enum):
-    UNSUPPORTED = 1
-    SINGLE_CATALOG_ONLY = 2
-    REQUIRES_SET_CATALOG = 3
-    FULL_SUPPORT = 4
-
-    @property
-    def is_unsupported(self) -> bool:
-        return self == CatalogSupport.UNSUPPORTED
-
-    @property
-    def is_single_catalog_only(self) -> bool:
-        return self == CatalogSupport.SINGLE_CATALOG_ONLY
-
-    @property
-    def is_requires_set_catalog(self) -> bool:
-        return self == CatalogSupport.REQUIRES_SET_CATALOG
-
-    @property
-    def is_full_support(self) -> bool:
-        return self == CatalogSupport.FULL_SUPPORT
-
-    @property
-    def is_supported(self) -> bool:
-        return self.is_requires_set_catalog or self.is_full_support
-
-
-class SourceQuery:
-    def __init__(
-        self,
-        query_factory: t.Callable[[], Query],
-        cleanup_func: t.Optional[t.Callable[[], None]] = None,
-        **kwargs: t.Any,
-    ) -> None:
-        self.query_factory = query_factory
-        self.cleanup_func = cleanup_func
-
-    def __enter__(self) -> Query:
-        return self.query_factory()
-
-    def __exit__(
-        self,
-        exc_type: t.Optional[t.Type[BaseException]],
-        exc_val: t.Optional[BaseException],
-        exc_tb: t.Optional[types.TracebackType],
-    ) -> t.Optional[bool]:
-        if self.cleanup_func:
-            self.cleanup_func()
-        return None
 
 
 class EngineAdapter:

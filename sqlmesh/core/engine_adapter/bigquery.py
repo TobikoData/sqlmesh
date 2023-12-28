@@ -8,9 +8,13 @@ from sqlglot import exp
 from sqlglot.transforms import remove_precision_parameterized_types
 
 from sqlmesh.core.dialect import to_schema
-from sqlmesh.core.engine_adapter.base import CatalogSupport, SourceQuery
 from sqlmesh.core.engine_adapter.mixins import InsertOverwriteWithMergeMixin
-from sqlmesh.core.engine_adapter.shared import DataObject, DataObjectType
+from sqlmesh.core.engine_adapter.shared import (
+    CatalogSupport,
+    DataObject,
+    DataObjectType,
+    SourceQuery,
+)
 from sqlmesh.core.node import IntervalUnit
 from sqlmesh.core.schema_diff import SchemaDiffer
 from sqlmesh.utils.date import to_datetime
