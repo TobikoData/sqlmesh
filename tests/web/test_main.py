@@ -1,7 +1,7 @@
 from __future__ import annotations
 
-from pathlib import Path
 import threading
+from pathlib import Path
 
 import pyarrow as pa  # type: ignore
 import pytest
@@ -377,7 +377,7 @@ def test_apply(project_tmp_path: Path) -> None:
     sql_file = models_dir / "foo.sql"
     sql_file.write_text("MODEL (name foo); SELECT 1;")
 
-    client.app.state.circuit_breaker = threading.Event()
+    client.app.state.circuit_breaker = threading.Event()  # type: ignore
     response = client.post("/api/commands/apply", json={"environment": "dev"})
     assert response.status_code == 204
 
@@ -393,7 +393,7 @@ def test_apply_test_failures(web_sushi_context: Context, mocker: MockerFixture) 
 
 
 def test_plan(web_sushi_context: Context) -> None:
-    client.app.state.circuit_breaker = threading.Event()
+    client.app.state.circuit_breaker = threading.Event()  # type: ignore
     response = client.post("/api/plan", json={"environment": "dev"})
     assert response.status_code == 204
 
