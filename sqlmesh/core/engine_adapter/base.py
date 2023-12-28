@@ -28,13 +28,7 @@ from sqlmesh.core.dialect import (
     select_from_values_for_batch_range,
     to_schema,
 )
-from sqlmesh.core.engine_adapter.shared import (
-    CatalogSupport,
-    DataObject,
-    InsertOverwriteStrategy,
-    SourceQuery,
-    set_catalog,
-)
+from sqlmesh.core.engine_adapter.shared import CommentCreation, DataObject, set_catalog
 from sqlmesh.core.model.kind import TimeColumn
 from sqlmesh.core.schema_diff import SchemaDiffer
 from sqlmesh.utils import double_escape, random_id
@@ -120,12 +114,6 @@ class CatalogSupport(Enum):
     @property
     def is_supported(self) -> bool:
         return self.is_requires_set_catalog or self.is_full_support
-
-
-class CommentCreation(Enum):
-    UNSUPPORTED = 1
-    IN_SCHEMA_DEF = 2
-    COMMENT_COMMAND_ONLY = 3
 
 
 class SourceQuery:
@@ -554,7 +542,7 @@ class EngineAdapter:
         # Register comments with commands if the engine doesn't support comments in the schema or CREATE
         if (
             table_description or column_descriptions
-        ) and self.COMMENT_CREATION == CommentCreation.COMMENT_COMMAND_ONLY:
+        ) and self.COMMENT_CREATION.is_comment_command_only:
             self._create_comments(
                 table_name,
                 table_description,
@@ -565,7 +553,7 @@ class EngineAdapter:
         self,
         table: exp.Table,
         columns_to_types: t.Dict[str, exp.DataType],
-        column_descriptions: t.Optional[t.Dict[str, str]],
+        column_descriptions: t.Optional[t.Dict[str, str]] = None,
         expressions: t.List[exp.PrimaryKey] = [],
     ) -> exp.Schema:
         """
@@ -578,8 +566,7 @@ class EngineAdapter:
                     this=exp.to_identifier(column),
                     kind=kind,
                     constraints=self._build_col_comment_exp(column, column_descriptions)
-                    if column_descriptions
-                    and self.COMMENT_CREATION == CommentCreation.IN_SCHEMA_DEF
+                    if column_descriptions and self.COMMENT_CREATION.is_in_schema_def
                     else None,
                 )
                 for column, kind in columns_to_types.items()
@@ -589,7 +576,7 @@ class EngineAdapter:
 
     def _build_col_comment_exp(
         self, col_name: str, column_descriptions: t.Dict[str, str]
-    ) -> t.List[exp.ColumnConstraint | None]:
+    ) -> t.List[exp.ColumnConstraint]:
         comment = column_descriptions.get(col_name, None)
         if comment:
             return [
@@ -614,7 +601,7 @@ class EngineAdapter:
 
         # Build a schema expression with column comments if the engine supports it
         schema = None
-        if column_descriptions and self.COMMENT_CREATION == CommentCreation.IN_SCHEMA_DEF:
+        if column_descriptions and self.COMMENT_CREATION.is_in_schema_def:
             schema = self._build_schema_exp(
                 table, columns_to_types or self.columns(table), column_descriptions
             )
@@ -640,7 +627,7 @@ class EngineAdapter:
         # Register comments with commands if the engine doesn't support comments in the schema
         if (
             table_description or column_descriptions
-        ) and self.COMMENT_CREATION == CommentCreation.COMMENT_COMMAND_ONLY:
+        ) and self.COMMENT_CREATION.is_comment_command_only:
             self._create_comments(
                 table_name,
                 table_description,
@@ -666,7 +653,7 @@ class EngineAdapter:
                 replace=replace,
                 columns_to_types=columns_to_types,
                 table_description=table_description
-                if self.COMMENT_CREATION == CommentCreation.IN_SCHEMA_DEF
+                if self.COMMENT_CREATION.is_in_schema_def
                 else None,
                 **kwargs,
             )
@@ -842,7 +829,7 @@ class EngineAdapter:
         create_view_properties = self._build_view_properties_exp(
             create_kwargs.pop("table_properties", None),
             table_description
-            if self.COMMENT_CREATION == CommentCreation.IN_SCHEMA_DEF and self.SUPPORTS_VIEW_COMMENT
+            if self.COMMENT_CREATION.is_in_schema_def and self.SUPPORTS_VIEW_COMMENT
             else None,
         )
         if create_view_properties:
@@ -865,7 +852,7 @@ class EngineAdapter:
 
         if (
             table_description
-            and self.COMMENT_CREATION == CommentCreation.COMMENT_COMMAND_ONLY
+            and self.COMMENT_CREATION.is_comment_command_only
             and self.SUPPORTS_VIEW_COMMENT
         ):
             self._create_comments(view_name, table_description, None, "VIEW")
@@ -1643,6 +1630,15 @@ class EngineAdapter:
                 yield table
             finally:
                 self.drop_table(table)
+
+    def __table_properties_to_expressions(
+        self, table_properties: t.Optional[t.Dict[str, exp.Expression]] = None
+    ) -> t.List[exp.Property]:
+        if not table_properties:
+            return []
+        return [
+            exp.Property(this=key, value=value.copy()) for key, value in table_properties.items()
+        ]
 
     def _build_table_properties_exp(
         self,

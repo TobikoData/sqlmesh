@@ -52,6 +52,24 @@ class DataObjectType(str, Enum):
         return DataObjectType.UNKNOWN
 
 
+class CommentCreation(Enum):
+    UNSUPPORTED = 1
+    IN_SCHEMA_DEF = 2
+    COMMENT_COMMAND_ONLY = 3
+
+    @property
+    def is_unsupported(self) -> bool:
+        return self == CommentCreation.UNSUPPORTED
+
+    @property
+    def is_in_schema_def(self) -> bool:
+        return self == CommentCreation.IN_SCHEMA_DEF
+
+    @property
+    def is_comment_command_only(self) -> bool:
+        return self == CommentCreation.COMMENT_COMMAND_ONLY
+
+
 class DataObject(PydanticModel):
     catalog: t.Optional[str] = None
     schema_name: str = Field(alias="schema")
