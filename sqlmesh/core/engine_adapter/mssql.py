@@ -9,18 +9,20 @@ import pandas as pd
 from pandas.api.types import is_datetime64_any_dtype  # type: ignore
 from sqlglot import exp
 
-from sqlmesh.core.engine_adapter.base import (
-    CatalogSupport,
-    EngineAdapterWithIndexSupport,
-    SourceQuery,
-)
+from sqlmesh.core.engine_adapter.base import EngineAdapterWithIndexSupport
 from sqlmesh.core.engine_adapter.mixins import (
     GetCurrentCatalogFromFunctionMixin,
     InsertOverwriteWithMergeMixin,
     LogicalReplaceQueryMixin,
     PandasNativeFetchDFSupportMixin,
 )
-from sqlmesh.core.engine_adapter.shared import DataObject, DataObjectType, set_catalog
+from sqlmesh.core.engine_adapter.shared import (
+    CatalogSupport,
+    DataObject,
+    DataObjectType,
+    SourceQuery,
+    set_catalog,
+)
 
 if t.TYPE_CHECKING:
     from sqlmesh.core._typing import SchemaName, TableName

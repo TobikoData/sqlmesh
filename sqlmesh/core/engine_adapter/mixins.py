@@ -6,8 +6,8 @@ import typing as t
 from sqlglot import exp
 from sqlglot.optimizer.qualify_columns import quote_identifiers
 
-from sqlmesh.core.engine_adapter.base import EngineAdapter, SourceQuery
-from sqlmesh.core.engine_adapter.shared import set_catalog
+from sqlmesh.core.engine_adapter.base import EngineAdapter
+from sqlmesh.core.engine_adapter.shared import SourceQuery, set_catalog
 from sqlmesh.core.node import IntervalUnit
 from sqlmesh.utils.errors import SQLMeshError
 

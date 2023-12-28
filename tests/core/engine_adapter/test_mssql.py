@@ -8,9 +8,12 @@ from pytest_mock.plugin import MockerFixture
 from sqlglot import expressions as exp
 from sqlglot import parse_one
 
-from sqlmesh.core.engine_adapter.base import InsertOverwriteStrategy
 from sqlmesh.core.engine_adapter.mssql import MSSQLEngineAdapter
-from sqlmesh.core.engine_adapter.shared import DataObject, DataObjectType
+from sqlmesh.core.engine_adapter.shared import (
+    DataObject,
+    DataObjectType,
+    InsertOverwriteStrategy,
+)
 from sqlmesh.utils.date import to_ds
 from tests.core.engine_adapter import to_sql_calls
 

@@ -5,8 +5,12 @@ import typing as t
 from sqlglot import exp
 
 from sqlmesh.core.engine_adapter import EngineAdapter
-from sqlmesh.core.engine_adapter.base import CatalogSupport
-from sqlmesh.core.engine_adapter.shared import DataObject, DataObjectType, set_catalog
+from sqlmesh.core.engine_adapter.shared import (
+    CatalogSupport,
+    DataObject,
+    DataObjectType,
+    set_catalog,
+)
 from sqlmesh.utils.errors import SQLMeshError
 
 if t.TYPE_CHECKING:
