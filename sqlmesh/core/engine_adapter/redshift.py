@@ -25,6 +25,7 @@ if t.TYPE_CHECKING:
     from sqlmesh.core.engine_adapter.base import QueryOrDF
 
 
+@set_catalog()
 class RedshiftEngineAdapter(
     BasePostgresEngineAdapter,
     LogicalReplaceQueryMixin,
@@ -194,7 +195,6 @@ class RedshiftEngineAdapter(
             self.rename_table(temp_table, target_table)
             self.drop_table(old_table)
 
-    @set_catalog()
     def _get_data_objects(self, schema_name: SchemaName) -> t.List[DataObject]:
         """
         Returns all the data objects that exist in the given schema and optionally catalog.

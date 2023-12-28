@@ -11,6 +11,7 @@ from sqlmesh.core.engine_adapter.mixins import (
     LogicalReplaceQueryMixin,
     PandasNativeFetchDFSupportMixin,
 )
+from sqlmesh.core.engine_adapter.shared import set_catalog
 
 if t.TYPE_CHECKING:
     from sqlmesh.core.engine_adapter._typing import DF
@@ -18,6 +19,7 @@ if t.TYPE_CHECKING:
 logger = logging.getLogger(__name__)
 
 
+@set_catalog()
 class PostgresEngineAdapter(
     BasePostgresEngineAdapter,
     LogicalReplaceQueryMixin,

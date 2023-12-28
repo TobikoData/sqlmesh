@@ -15,6 +15,7 @@ from sqlmesh.utils.pydantic import PydanticModel
 
 if t.TYPE_CHECKING:
     from sqlmesh.core.engine_adapter._typing import Query
+    from sqlmesh.core.engine_adapter.base import EngineAdapter
 
 
 class DataObjectType(str, Enum):
@@ -58,19 +59,6 @@ class DataObject(PydanticModel):
     type: DataObjectType
 
 
-def _get_args_pos_and_kwarg_name(
-    func: t.Callable,
-) -> t.Optional[t.Tuple[str, int, str]]:
-    spec = inspect.getfullargspec(func)
-    for i, name in enumerate(spec.args):
-        obj_type = spec.annotations.get(name)
-        if obj_type == "SchemaName":
-            return name, i, obj_type
-        if obj_type == "TableName":
-            return name, i, obj_type
-    return None
-
-
 class CatalogSupport(Enum):
     UNSUPPORTED = 1
     SINGLE_CATALOG_ONLY = 2
@@ -96,69 +84,6 @@ class CatalogSupport(Enum):
     @property
     def is_multi_catalog_supported(self) -> bool:
         return self.is_requires_set_catalog or self.is_full_support
-
-
-def set_catalog(
-    *,
-    override: t.Optional[CatalogSupport] = None,
-) -> t.Callable:
-    def decorator(func: t.Callable) -> t.Callable:
-        @functools.wraps(func)
-        def wrapper(*args: t.Any, **kwargs: t.Any) -> t.Any:
-            # Need to convert args to list in order to later do assignment to the object
-            list_args = list(args)
-            engine_adapter = list_args[0]
-            catalog_support = override or engine_adapter.CATALOG_SUPPORT
-            # If there is full catalog support then we have nothing to do
-            if catalog_support.is_full_support:
-                return func(*list_args, **kwargs)
-
-            # Get the field value and the container which it came from so we can update it later
-            location = _get_args_pos_and_kwarg_name(func)
-            if location is None:
-                return func(*list_args, **kwargs)
-            name, pos, obj_type = location
-            obj, container, key = t.cast(
-                t.Tuple[t.Union[str, exp.Table], t.Union[t.Dict, t.List], t.Union[int, str]],
-                (kwargs.get(name), kwargs, name)
-                if kwargs.get(name)
-                else (list_args[pos], list_args, pos),
-            )
-            to_expression_func = t.cast(
-                t.Callable[[t.Union[str, exp.Table]], exp.Table],
-                exp.to_table if obj_type == "TableName" else to_schema,
-            )
-            expression = to_expression_func(obj.copy() if isinstance(obj, exp.Table) else obj)
-            catalog_name = expression.catalog
-            if not catalog_name:
-                return func(*list_args, **kwargs)
-            # If we have a catalog and this engine doesn't support catalogs then we need to error
-            if catalog_support.is_unsupported:
-                raise UnsupportedCatalogOperationError(
-                    f"{engine_adapter.dialect} does not support catalogs and a catalog was provided: {catalog_name}"
-                )
-            # Remove the catalog name from the argument so the engine adapter doesn't try to use it
-            expression.set("catalog", None)
-            container[key] = expression  # type: ignore
-            if catalog_support.is_single_catalog_only:
-                if catalog_name != engine_adapter._default_catalog:
-                    raise UnsupportedCatalogOperationError(
-                        f"{engine_adapter.dialect} requires that all catalog operations be against a single catalog: {engine_adapter._default_catalog}"
-                    )
-                return func(*list_args, **kwargs)
-            # Set the catalog name on the engine adapter if needed
-            current_catalog = engine_adapter.get_current_catalog()
-            if catalog_name != current_catalog:
-                engine_adapter.set_current_catalog(catalog_name)
-                resp = func(*list_args, **kwargs)
-                engine_adapter.set_current_catalog(current_catalog)
-            else:
-                resp = func(*list_args, **kwargs)
-            return resp
-
-        return wrapper
-
-    return decorator
 
 
 class InsertOverwriteStrategy(Enum):
@@ -211,3 +136,99 @@ class SourceQuery:
         if self.cleanup_func:
             self.cleanup_func()
         return None
+
+
+def set_catalog(override_mapping: t.Optional[t.Dict[str, CatalogSupport]] = None) -> t.Callable:
+    def set_catalog_decorator(
+        func: t.Callable,
+        target_name: str,
+        target_pos: int,
+        target_type: str,
+        override: t.Optional[CatalogSupport] = None,
+    ) -> t.Callable:
+        @functools.wraps(func)
+        def internal_wrapper(*args: t.Any, **kwargs: t.Any) -> t.Any:
+            # Need to convert args to list in order to later do assignment to the object
+            list_args = list(args)
+            engine_adapter = list_args[0]
+            catalog_support = override or engine_adapter.CATALOG_SUPPORT
+            # If there is full catalog support then we have nothing to do
+            if catalog_support.is_full_support:
+                return func(*list_args, **kwargs)
+
+            obj, container, key = t.cast(
+                t.Tuple[t.Union[str, exp.Table], t.Union[t.Dict, t.List], t.Union[int, str]],
+                (kwargs.get(target_name), kwargs, target_name)
+                if kwargs.get(target_name)
+                else (list_args[target_pos], list_args, target_pos),
+            )
+            to_expression_func = t.cast(
+                t.Callable[[t.Union[str, exp.Table]], exp.Table],
+                exp.to_table if target_type == "TableName" else to_schema,
+            )
+            expression = to_expression_func(obj.copy() if isinstance(obj, exp.Table) else obj)
+            catalog_name = expression.catalog
+            if not catalog_name:
+                return func(*list_args, **kwargs)
+            # If we have a catalog and this engine doesn't support catalogs then we need to error
+            if catalog_support.is_unsupported:
+                raise UnsupportedCatalogOperationError(
+                    f"{engine_adapter.dialect} does not support catalogs and a catalog was provided: {catalog_name}"
+                )
+            # Remove the catalog name from the argument so the engine adapter doesn't try to use it
+            expression.set("catalog", None)
+            container[key] = expression  # type: ignore
+            if catalog_support.is_single_catalog_only:
+                if catalog_name != engine_adapter._default_catalog:
+                    raise UnsupportedCatalogOperationError(
+                        f"{engine_adapter.dialect} requires that all catalog operations be against a single catalog: {engine_adapter._default_catalog}"
+                    )
+                return func(*list_args, **kwargs)
+            # Set the catalog name on the engine adapter if needed
+            current_catalog = engine_adapter.get_current_catalog()
+            if catalog_name != current_catalog:
+                engine_adapter.set_current_catalog(catalog_name)
+                resp = func(*list_args, **kwargs)
+                engine_adapter.set_current_catalog(current_catalog)
+            else:
+                resp = func(*list_args, **kwargs)
+            return resp
+
+        return internal_wrapper
+
+    inclusion_list = {
+        "_get_data_objects",
+    }
+
+    # Exclude this to avoid a circular dependency from inspecting the classproperty
+    exclusion_list = {
+        "can_access_spark_session",
+    }
+
+    override_mapping = override_mapping or {}
+
+    def wrapper(cls: t.Type[EngineAdapter]) -> t.Callable:
+        for name in dir(cls):
+            if name in exclusion_list or (name.startswith("_") and name not in inclusion_list):
+                continue
+            m = getattr(cls, name)
+            if inspect.isfunction(m):
+                spec = inspect.getfullargspec(m)
+                for i, obj_name in enumerate(spec.args):
+                    obj_type = spec.annotations.get(obj_name)
+                    if obj_type not in {"SchemaName", "TableName"}:
+                        continue
+                    setattr(
+                        cls,
+                        name,
+                        set_catalog_decorator(
+                            m,
+                            target_name=obj_name,
+                            target_pos=i,
+                            target_type=obj_type,
+                            override=override_mapping.get(name),
+                        ),
+                    )
+        return cls
+
+    return wrapper

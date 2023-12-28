@@ -6,7 +6,11 @@ import typing as t
 import pandas as pd
 from sqlglot import exp
 
-from sqlmesh.core.engine_adapter.shared import CatalogSupport, InsertOverwriteStrategy
+from sqlmesh.core.engine_adapter.shared import (
+    CatalogSupport,
+    InsertOverwriteStrategy,
+    set_catalog,
+)
 from sqlmesh.core.engine_adapter.spark import SparkEngineAdapter
 from sqlmesh.core.schema_diff import SchemaDiffer
 from sqlmesh.utils import classproperty
@@ -19,6 +23,7 @@ if t.TYPE_CHECKING:
 logger = logging.getLogger(__name__)
 
 
+@set_catalog()
 class DatabricksEngineAdapter(SparkEngineAdapter):
     DIALECT = "databricks"
     INSERT_OVERWRITE_STRATEGY = InsertOverwriteStrategy.INSERT_OVERWRITE
