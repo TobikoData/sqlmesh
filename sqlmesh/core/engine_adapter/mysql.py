@@ -14,6 +14,7 @@ if t.TYPE_CHECKING:
     from sqlmesh.core._typing import SchemaName, TableName
 
 
+@set_catalog()
 class MySQLEngineAdapter(
     LogicalMergeMixin,
     LogicalReplaceQueryMixin,
@@ -48,7 +49,6 @@ class MySQLEngineAdapter(
         # MySQL doesn't support CASCADE clause and drops schemas unconditionally.
         super().drop_schema(schema_name, ignore_if_not_exists=ignore_if_not_exists, cascade=False)
 
-    @set_catalog()
     def _get_data_objects(self, schema_name: SchemaName) -> t.List[DataObject]:
         """
         Returns all the data objects that exist in the given schema and optionally catalog.

@@ -26,9 +26,10 @@ from sqlmesh.core.engine_adapter.shared import (
 
 if t.TYPE_CHECKING:
     from sqlmesh.core._typing import SchemaName, TableName
-    from sqlmesh.core.engine_adapter._typing import DF, Query, QueryOrDF
+    from sqlmesh.core.engine_adapter._typing import DF, Query
 
 
+@set_catalog()
 class MSSQLEngineAdapter(
     EngineAdapterWithIndexSupport,
     LogicalReplaceQueryMixin,
@@ -36,22 +37,12 @@ class MSSQLEngineAdapter(
     InsertOverwriteWithMergeMixin,
     GetCurrentCatalogFromFunctionMixin,
 ):
-    """Implementation of EngineAdapterWithIndexSupport for MsSql compatibility.
-
-    Args:
-        connection_factory: a callable which produces a new Database API-compliant
-            connection on every call.
-        dialect: The dialect with which this adapter is associated.
-        multithreaded: Indicates whether this adapter will be used by more than one thread.
-    """
-
     DIALECT: str = "tsql"
     SUPPORTS_TUPLE_IN = False
     SUPPORTS_MATERIALIZED_VIEWS = False
     CATALOG_SUPPORT = CatalogSupport.REQUIRES_SET_CATALOG
     CURRENT_CATALOG_EXPRESSION = exp.func("db_name")
 
-    @set_catalog()
     def columns(
         self,
         table_name: TableName,
@@ -121,7 +112,6 @@ class MSSQLEngineAdapter(
     def set_current_catalog(self, catalog_name: str) -> None:
         self.execute(exp.Use(this=exp.to_identifier(catalog_name)))
 
-    @set_catalog()
     def drop_schema(
         self,
         schema_name: SchemaName,
@@ -144,33 +134,6 @@ class MSSQLEngineAdapter(
                         ".".join([obj.schema_name, obj.name]), exists=ignore_if_not_exists  # type: ignore
                     )
         super().drop_schema(schema_name, ignore_if_not_exists=ignore_if_not_exists, cascade=False)
-
-    @set_catalog()
-    def create_view(
-        self,
-        view_name: TableName,
-        query_or_df: QueryOrDF,
-        columns_to_types: t.Optional[t.Dict[str, exp.DataType]] = None,
-        replace: bool = True,
-        materialized: bool = False,
-        **create_kwargs: t.Any,
-    ) -> None:
-        super().create_view(
-            view_name,
-            query_or_df,
-            columns_to_types=columns_to_types,
-            replace=replace,
-            materialized=materialized,
-            **create_kwargs,
-        )
-
-    @set_catalog()
-    def drop_view(
-        self, view_name: TableName, ignore_if_not_exists: bool = True, materialized: bool = False
-    ) -> None:
-        super().drop_view(
-            view_name, ignore_if_not_exists=ignore_if_not_exists, materialized=materialized
-        )
 
     def _convert_df_datetime(self, df: DF, columns_to_types: t.Dict[str, exp.DataType]) -> None:
         # pymssql doesn't convert Pandas Timestamp (datetime64) types
@@ -218,7 +181,6 @@ class MSSQLEngineAdapter(
             )
         ]
 
-    @set_catalog()
     def _get_data_objects(self, schema_name: SchemaName) -> t.List[DataObject]:
         """
         Returns all the data objects that exist in the given schema and catalog.

@@ -21,6 +21,7 @@ if t.TYPE_CHECKING:
     from sqlmesh.core.engine_adapter._typing import DF
 
 
+@set_catalog(override_mapping={"_get_data_objects": CatalogSupport.REQUIRES_SET_CATALOG})
 class DuckDBEngineAdapter(LogicalMergeMixin, GetCurrentCatalogFromFunctionMixin):
     DIALECT = "duckdb"
     SUPPORTS_TRANSACTIONS = False
@@ -51,7 +52,6 @@ class DuckDBEngineAdapter(LogicalMergeMixin, GetCurrentCatalogFromFunctionMixin)
             )
         ]
 
-    @set_catalog(override=CatalogSupport.REQUIRES_SET_CATALOG)
     def _get_data_objects(self, schema_name: SchemaName) -> t.List[DataObject]:
         """
         Returns all the data objects that exist in the given schema and optionally catalog.

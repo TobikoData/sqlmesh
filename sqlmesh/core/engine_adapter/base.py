@@ -62,6 +62,7 @@ MERGE_TARGET_ALIAS = "__MERGE_TARGET__"
 MERGE_SOURCE_ALIAS = "__MERGE_SOURCE__"
 
 
+@set_catalog()
 class EngineAdapter:
     """Base class wrapping a Database API compliant connection.
 
@@ -647,7 +648,6 @@ class EngineAdapter:
                 )
             )
 
-    @set_catalog()
     def create_schema(
         self,
         schema_name: SchemaName,
@@ -668,7 +668,6 @@ class EngineAdapter:
                 raise
             logger.warning("Failed to create schema '%s': %s", schema_name, e)
 
-    @set_catalog()
     def drop_schema(
         self,
         schema_name: SchemaName,
@@ -702,7 +701,6 @@ class EngineAdapter:
             )
         )
 
-    @set_catalog()
     def columns(
         self, table_name: TableName, include_pseudo_columns: bool = False
     ) -> t.Dict[str, exp.DataType]:
@@ -719,7 +717,6 @@ class EngineAdapter:
             if column_name and column_name.strip() and column_type and column_type.strip()
         }
 
-    @set_catalog()
     def table_exists(self, table_name: TableName) -> bool:
         try:
             self.execute(exp.Describe(this=exp.to_table(table_name), kind="TABLE"))
@@ -941,7 +938,6 @@ class EngineAdapter:
             )
         )
 
-    @set_catalog()
     def scd_type_2(
         self,
         target_table: TableName,
@@ -1192,7 +1188,6 @@ class EngineAdapter:
                     match_expressions=[when_matched, when_not_matched],
                 )
 
-    @set_catalog()
     def rename_table(
         self,
         old_table_name: TableName,
@@ -1494,6 +1489,7 @@ class EngineAdapter:
         self.execute(f"TRUNCATE TABLE {table.sql(dialect=self.dialect, identify=True)}")
 
 
+@set_catalog()
 class EngineAdapterWithIndexSupport(EngineAdapter):
     SUPPORTS_INDEXES = True
 

@@ -14,6 +14,7 @@ from sqlmesh.core.engine_adapter.shared import (
     DataObject,
     DataObjectType,
     SourceQuery,
+    set_catalog,
 )
 from sqlmesh.core.node import IntervalUnit
 from sqlmesh.core.schema_diff import SchemaDiffer
@@ -36,6 +37,7 @@ if t.TYPE_CHECKING:
 logger = logging.getLogger(__name__)
 
 
+@set_catalog()
 class BigQueryEngineAdapter(InsertOverwriteWithMergeMixin):
     """
     BigQuery Engine Adapter using the `google-cloud-bigquery` library's DB API.
