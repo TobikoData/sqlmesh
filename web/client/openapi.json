@@ -1,9 +1,6 @@
 {
   "openapi": "3.1.0",
-  "info": {
-    "title": "FastAPI",
-    "version": "0.1.0"
-  },
+  "info": { "title": "FastAPI", "version": "0.1.0" },
   "paths": {
     "/api/commands/apply": {
       "post": {
@@ -31,12 +28,8 @@
               "application/json": {
                 "schema": {
                   "anyOf": [
-                    {
-                      "$ref": "#/components/schemas/PlanApplyStageTracker"
-                    },
-                    {
-                      "type": "null"
-                    }
+                    { "$ref": "#/components/schemas/PlanApplyStageTracker" },
+                    { "type": "null" }
                   ],
                   "title": "Response Initiate Apply Api Commands Apply Post"
                 }
@@ -47,9 +40,7 @@
             "description": "Validation Error",
             "content": {
               "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/HTTPValidationError"
-                }
+                "schema": { "$ref": "#/components/schemas/HTTPValidationError" }
               }
             }
           }
@@ -64,9 +55,7 @@
         "requestBody": {
           "content": {
             "application/json": {
-              "schema": {
-                "$ref": "#/components/schemas/EvaluateInput"
-              }
+              "schema": { "$ref": "#/components/schemas/EvaluateInput" }
             }
           },
           "required": true
@@ -74,19 +63,13 @@
         "responses": {
           "200": {
             "description": "Successful Response",
-            "content": {
-              "application/json": {
-                "schema": {}
-              }
-            }
+            "content": { "application/json": { "schema": {} } }
           },
           "422": {
             "description": "Validation Error",
             "content": {
               "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/HTTPValidationError"
-                }
+                "schema": { "$ref": "#/components/schemas/HTTPValidationError" }
               }
             }
           }
@@ -101,9 +84,7 @@
         "requestBody": {
           "content": {
             "application/json": {
-              "schema": {
-                "$ref": "#/components/schemas/FetchdfInput"
-              }
+              "schema": { "$ref": "#/components/schemas/FetchdfInput" }
             }
           },
           "required": true
@@ -111,19 +92,13 @@
         "responses": {
           "200": {
             "description": "Successful Response",
-            "content": {
-              "application/json": {
-                "schema": {}
-              }
-            }
+            "content": { "application/json": { "schema": {} } }
           },
           "422": {
             "description": "Validation Error",
             "content": {
               "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/HTTPValidationError"
-                }
+                "schema": { "$ref": "#/components/schemas/HTTPValidationError" }
               }
             }
           }
@@ -138,9 +113,7 @@
         "requestBody": {
           "content": {
             "application/json": {
-              "schema": {
-                "$ref": "#/components/schemas/RenderInput"
-              }
+              "schema": { "$ref": "#/components/schemas/RenderInput" }
             }
           },
           "required": true
@@ -150,9 +123,7 @@
             "description": "Successful Response",
             "content": {
               "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/Query"
-                }
+                "schema": { "$ref": "#/components/schemas/Query" }
               }
             }
           },
@@ -160,9 +131,7 @@
             "description": "Validation Error",
             "content": {
               "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/HTTPValidationError"
-                }
+                "schema": { "$ref": "#/components/schemas/HTTPValidationError" }
               }
             }
           }
@@ -180,14 +149,7 @@
             "in": "query",
             "required": false,
             "schema": {
-              "anyOf": [
-                {
-                  "type": "string"
-                },
-                {
-                  "type": "null"
-                }
-              ],
+              "anyOf": [{ "type": "string" }, { "type": "null" }],
               "title": "Test"
             }
           },
@@ -207,9 +169,7 @@
             "description": "Successful Response",
             "content": {
               "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/TestResult"
-                }
+                "schema": { "$ref": "#/components/schemas/TestResult" }
               }
             }
           },
@@ -217,9 +177,7 @@
             "description": "Validation Error",
             "content": {
               "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/HTTPValidationError"
-                }
+                "schema": { "$ref": "#/components/schemas/HTTPValidationError" }
               }
             }
           }
@@ -236,9 +194,7 @@
             "description": "Successful Response",
             "content": {
               "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/Directory"
-                }
+                "schema": { "$ref": "#/components/schemas/Directory" }
               }
             }
           }
@@ -255,10 +211,7 @@
             "name": "path",
             "in": "path",
             "required": true,
-            "schema": {
-              "type": "string",
-              "title": "Path"
-            }
+            "schema": { "type": "string", "title": "Path" }
           }
         ],
         "responses": {
@@ -266,9 +219,7 @@
             "description": "Successful Response",
             "content": {
               "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/File"
-                }
+                "schema": { "$ref": "#/components/schemas/File" }
               }
             }
           },
@@ -276,9 +227,7 @@
             "description": "Validation Error",
             "content": {
               "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/HTTPValidationError"
-                }
+                "schema": { "$ref": "#/components/schemas/HTTPValidationError" }
               }
             }
           }
@@ -293,10 +242,7 @@
             "name": "path",
             "in": "path",
             "required": true,
-            "schema": {
-              "type": "string",
-              "title": "Path"
-            }
+            "schema": { "type": "string", "title": "Path" }
           }
         ],
         "requestBody": {
@@ -318,9 +264,7 @@
             "description": "Successful Response",
             "content": {
               "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/File"
-                }
+                "schema": { "$ref": "#/components/schemas/File" }
               }
             }
           },
@@ -328,9 +272,7 @@
             "description": "Validation Error",
             "content": {
               "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/HTTPValidationError"
-                }
+                "schema": { "$ref": "#/components/schemas/HTTPValidationError" }
               }
             }
           }
@@ -345,10 +287,7 @@
             "name": "path",
             "in": "path",
             "required": true,
-            "schema": {
-              "type": "string",
-              "title": "Path"
-            }
+            "schema": { "type": "string", "title": "Path" }
           }
         ],
         "responses": {
@@ -367,9 +306,7 @@
             "description": "Validation Error",
             "content": {
               "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/HTTPValidationError"
-                }
+                "schema": { "$ref": "#/components/schemas/HTTPValidationError" }
               }
             }
           }
@@ -386,10 +323,7 @@
             "name": "path",
             "in": "path",
             "required": true,
-            "schema": {
-              "type": "string",
-              "title": "Path"
-            }
+            "schema": { "type": "string", "title": "Path" }
           }
         ],
         "requestBody": {
@@ -411,9 +345,7 @@
             "description": "Successful Response",
             "content": {
               "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/Directory"
-                }
+                "schema": { "$ref": "#/components/schemas/Directory" }
               }
             }
           },
@@ -421,9 +353,7 @@
             "description": "Validation Error",
             "content": {
               "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/HTTPValidationError"
-                }
+                "schema": { "$ref": "#/components/schemas/HTTPValidationError" }
               }
             }
           }
@@ -438,28 +368,19 @@
             "name": "path",
             "in": "path",
             "required": true,
-            "schema": {
-              "type": "string",
-              "title": "Path"
-            }
+            "schema": { "type": "string", "title": "Path" }
           }
         ],
         "responses": {
           "200": {
             "description": "Successful Response",
-            "content": {
-              "application/json": {
-                "schema": {}
-              }
-            }
+            "content": { "application/json": { "schema": {} } }
           },
           "422": {
             "description": "Validation Error",
             "content": {
               "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/HTTPValidationError"
-                }
+                "schema": { "$ref": "#/components/schemas/HTTPValidationError" }
               }
             }
           }
@@ -492,12 +413,8 @@
               "application/json": {
                 "schema": {
                   "anyOf": [
-                    {
-                      "$ref": "#/components/schemas/PlanOverviewStageTracker"
-                    },
-                    {
-                      "type": "null"
-                    }
+                    { "$ref": "#/components/schemas/PlanOverviewStageTracker" },
+                    { "type": "null" }
                   ],
                   "title": "Response Initiate Plan Api Plan Post"
                 }
@@ -508,9 +425,7 @@
             "description": "Validation Error",
             "content": {
               "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/HTTPValidationError"
-                }
+                "schema": { "$ref": "#/components/schemas/HTTPValidationError" }
               }
             }
           }
@@ -529,12 +444,8 @@
               "application/json": {
                 "schema": {
                   "anyOf": [
-                    {
-                      "$ref": "#/components/schemas/PlanCancelStageTracker"
-                    },
-                    {
-                      "type": "null"
-                    }
+                    { "$ref": "#/components/schemas/PlanCancelStageTracker" },
+                    { "type": "null" }
                   ],
                   "title": "Response Cancel Plan Api Plan Cancel Post"
                 }
@@ -554,9 +465,7 @@
             "description": "Successful Response",
             "content": {
               "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/Environments"
-                }
+                "schema": { "$ref": "#/components/schemas/Environments" }
               }
             }
           }
@@ -573,28 +482,19 @@
             "name": "environment",
             "in": "path",
             "required": true,
-            "schema": {
-              "type": "string",
-              "title": "Environment"
-            }
+            "schema": { "type": "string", "title": "Environment" }
           }
         ],
         "responses": {
           "200": {
             "description": "Successful Response",
-            "content": {
-              "application/json": {
-                "schema": {}
-              }
-            }
+            "content": { "application/json": { "schema": {} } }
           },
           "422": {
             "description": "Validation Error",
             "content": {
               "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/HTTPValidationError"
-                }
+                "schema": { "$ref": "#/components/schemas/HTTPValidationError" }
               }
             }
           }
@@ -609,11 +509,7 @@
         "responses": {
           "200": {
             "description": "Successful Response",
-            "content": {
-              "application/json": {
-                "schema": {}
-              }
-            }
+            "content": { "application/json": { "schema": {} } }
           }
         }
       }
@@ -628,19 +524,13 @@
             "name": "column_name",
             "in": "path",
             "required": true,
-            "schema": {
-              "type": "string",
-              "title": "Column Name"
-            }
+            "schema": { "type": "string", "title": "Column Name" }
           },
           {
             "name": "model_name",
             "in": "path",
             "required": true,
-            "schema": {
-              "type": "string",
-              "title": "Model Name"
-            }
+            "schema": { "type": "string", "title": "Model Name" }
           }
         ],
         "responses": {
@@ -665,9 +555,7 @@
             "description": "Validation Error",
             "content": {
               "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/HTTPValidationError"
-                }
+                "schema": { "$ref": "#/components/schemas/HTTPValidationError" }
               }
             }
           }
@@ -684,10 +572,7 @@
             "name": "model_name",
             "in": "path",
             "required": true,
-            "schema": {
-              "type": "string",
-              "title": "Model Name"
-            }
+            "schema": { "type": "string", "title": "Model Name" }
           }
         ],
         "responses": {
@@ -700,9 +585,7 @@
                   "additionalProperties": {
                     "type": "array",
                     "uniqueItems": true,
-                    "items": {
-                      "type": "string"
-                    }
+                    "items": { "type": "string" }
                   },
                   "title": "Response Model Lineage Api Lineage  Model Name  Get"
                 }
@@ -713,9 +596,7 @@
             "description": "Validation Error",
             "content": {
               "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/HTTPValidationError"
-                }
+                "schema": { "$ref": "#/components/schemas/HTTPValidationError" }
               }
             }
           }
@@ -735,14 +616,10 @@
                 "schema": {
                   "anyOf": [
                     {
-                      "items": {
-                        "$ref": "#/components/schemas/Model"
-                      },
+                      "items": { "$ref": "#/components/schemas/Model" },
                       "type": "array"
                     },
-                    {
-                      "$ref": "#/components/schemas/ApiExceptionPayload"
-                    }
+                    { "$ref": "#/components/schemas/ApiExceptionPayload" }
                   ],
                   "title": "Response Get Models Api Models Get"
                 }
@@ -762,9 +639,7 @@
             "description": "Successful Response",
             "content": {
               "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/Meta"
-                }
+                "schema": { "$ref": "#/components/schemas/Meta" }
               }
             }
           }
@@ -781,33 +656,20 @@
             "name": "source",
             "in": "query",
             "required": true,
-            "schema": {
-              "type": "string",
-              "title": "Source"
-            }
+            "schema": { "type": "string", "title": "Source" }
           },
           {
             "name": "target",
             "in": "query",
             "required": true,
-            "schema": {
-              "type": "string",
-              "title": "Target"
-            }
+            "schema": { "type": "string", "title": "Target" }
           },
           {
             "name": "on",
             "in": "query",
             "required": false,
             "schema": {
-              "anyOf": [
-                {
-                  "type": "string"
-                },
-                {
-                  "type": "null"
-                }
-              ],
+              "anyOf": [{ "type": "string" }, { "type": "null" }],
               "title": "On"
             }
           },
@@ -816,14 +678,7 @@
             "in": "query",
             "required": false,
             "schema": {
-              "anyOf": [
-                {
-                  "type": "string"
-                },
-                {
-                  "type": "null"
-                }
-              ],
+              "anyOf": [{ "type": "string" }, { "type": "null" }],
               "title": "Model Or Snapshot"
             }
           },
@@ -832,14 +687,7 @@
             "in": "query",
             "required": false,
             "schema": {
-              "anyOf": [
-                {
-                  "type": "string"
-                },
-                {
-                  "type": "null"
-                }
-              ],
+              "anyOf": [{ "type": "string" }, { "type": "null" }],
               "title": "Where"
             }
           },
@@ -847,11 +695,7 @@
             "name": "limit",
             "in": "query",
             "required": false,
-            "schema": {
-              "type": "integer",
-              "default": 20,
-              "title": "Limit"
-            }
+            "schema": { "type": "integer", "default": 20, "title": "Limit" }
           }
         ],
         "responses": {
@@ -859,9 +703,7 @@
             "description": "Successful Response",
             "content": {
               "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/TableDiff"
-                }
+                "schema": { "$ref": "#/components/schemas/TableDiff" }
               }
             }
           },
@@ -869,9 +711,7 @@
             "description": "Validation Error",
             "content": {
               "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/HTTPValidationError"
-                }
+                "schema": { "$ref": "#/components/schemas/HTTPValidationError" }
               }
             }
           }
@@ -906,28 +746,19 @@
             "name": "full_path",
             "in": "path",
             "required": true,
-            "schema": {
-              "type": "string",
-              "title": "Full Path"
-            }
+            "schema": { "type": "string", "title": "Full Path" }
           }
         ],
         "responses": {
           "200": {
             "description": "Successful Response",
-            "content": {
-              "application/json": {
-                "schema": {}
-              }
-            }
+            "content": { "application/json": { "schema": {} } }
           },
           "422": {
             "description": "Validation Error",
             "content": {
               "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/HTTPValidationError"
-                }
+                "schema": { "$ref": "#/components/schemas/HTTPValidationError" }
               }
             }
           }
@@ -939,232 +770,103 @@
     "schemas": {
       "ApiExceptionPayload": {
         "properties": {
-          "timestamp": {
-            "type": "integer",
-            "title": "Timestamp"
-          },
-          "message": {
-            "type": "string",
-            "title": "Message"
-          },
-          "origin": {
-            "type": "string",
-            "title": "Origin"
-          },
+          "timestamp": { "type": "integer", "title": "Timestamp" },
+          "message": { "type": "string", "title": "Message" },
+          "origin": { "type": "string", "title": "Origin" },
           "status": {
-            "anyOf": [
-              {
-                "type": "integer"
-              },
-              {
-                "type": "null"
-              }
-            ],
+            "anyOf": [{ "type": "integer" }, { "type": "null" }],
             "title": "Status"
           },
           "trigger": {
-            "anyOf": [
-              {
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
+            "anyOf": [{ "type": "string" }, { "type": "null" }],
             "title": "Trigger"
           },
           "type": {
-            "anyOf": [
-              {
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
+            "anyOf": [{ "type": "string" }, { "type": "null" }],
             "title": "Type"
           },
           "description": {
-            "anyOf": [
-              {
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
+            "anyOf": [{ "type": "string" }, { "type": "null" }],
             "title": "Description"
           },
           "traceback": {
-            "anyOf": [
-              {
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
+            "anyOf": [{ "type": "string" }, { "type": "null" }],
             "title": "Traceback"
           },
           "stack": {
             "anyOf": [
-              {
-                "items": {
-                  "type": "string"
-                },
-                "type": "array"
-              },
-              {
-                "type": "null"
-              }
+              { "items": { "type": "string" }, "type": "array" },
+              { "type": "null" }
             ],
             "title": "Stack"
           }
         },
         "type": "object",
-        "required": [
-          "timestamp",
-          "message",
-          "origin"
-        ],
+        "required": ["timestamp", "message", "origin"],
         "title": "ApiExceptionPayload"
       },
       "BackfillDetails": {
         "properties": {
-          "name": {
-            "type": "string",
-            "title": "Name"
-          },
-          "view_name": {
-            "type": "string",
-            "title": "View Name"
-          },
+          "name": { "type": "string", "title": "Name" },
+          "view_name": { "type": "string", "title": "View Name" },
           "node_type": {
-            "allOf": [
-              {
-                "$ref": "#/components/schemas/NodeType"
-              }
-            ],
+            "allOf": [{ "$ref": "#/components/schemas/NodeType" }],
             "default": "model"
           },
           "interval": {
-            "items": {
-              "type": "string"
-            },
+            "items": { "type": "string" },
             "type": "array",
             "title": "Interval"
           },
-          "batches": {
-            "type": "integer",
-            "title": "Batches"
-          }
+          "batches": { "type": "integer", "title": "Batches" }
         },
         "type": "object",
-        "required": [
-          "name",
-          "view_name",
-          "interval",
-          "batches"
-        ],
+        "required": ["name", "view_name", "interval", "batches"],
         "title": "BackfillDetails"
       },
       "BackfillTask": {
         "properties": {
-          "name": {
-            "type": "string",
-            "title": "Name"
-          },
-          "view_name": {
-            "type": "string",
-            "title": "View Name"
-          },
+          "name": { "type": "string", "title": "Name" },
+          "view_name": { "type": "string", "title": "View Name" },
           "node_type": {
-            "allOf": [
-              {
-                "$ref": "#/components/schemas/NodeType"
-              }
-            ],
+            "allOf": [{ "$ref": "#/components/schemas/NodeType" }],
             "default": "model"
           },
-          "completed": {
-            "type": "integer",
-            "title": "Completed"
-          },
-          "total": {
-            "type": "integer",
-            "title": "Total"
-          },
-          "start": {
-            "type": "integer",
-            "title": "Start"
-          },
+          "completed": { "type": "integer", "title": "Completed" },
+          "total": { "type": "integer", "title": "Total" },
+          "start": { "type": "integer", "title": "Start" },
           "end": {
-            "anyOf": [
-              {
-                "type": "integer"
-              },
-              {
-                "type": "null"
-              }
-            ],
+            "anyOf": [{ "type": "integer" }, { "type": "null" }],
             "title": "End"
           },
           "interval": {
             "anyOf": [
-              {
-                "items": {
-                  "type": "string"
-                },
-                "type": "array"
-              },
-              {
-                "type": "null"
-              }
+              { "items": { "type": "string" }, "type": "array" },
+              { "type": "null" }
             ],
             "title": "Interval"
           }
         },
         "type": "object",
-        "required": [
-          "name",
-          "view_name",
-          "completed",
-          "total",
-          "start"
-        ],
+        "required": ["name", "view_name", "completed", "total", "start"],
         "title": "BackfillTask"
       },
       "Body_initiate_apply_api_commands_apply_post": {
         "properties": {
           "environment": {
-            "anyOf": [
-              {
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
+            "anyOf": [{ "type": "string" }, { "type": "null" }],
             "title": "Environment"
           },
           "plan_dates": {
             "anyOf": [
-              {
-                "$ref": "#/components/schemas/PlanDates"
-              },
-              {
-                "type": "null"
-              }
+              { "$ref": "#/components/schemas/PlanDates" },
+              { "type": "null" }
             ]
           },
           "plan_options": {
             "anyOf": [
-              {
-                "$ref": "#/components/schemas/PlanOptions"
-              },
-              {
-                "type": "null"
-              }
+              { "$ref": "#/components/schemas/PlanOptions" },
+              { "type": "null" }
             ]
           },
           "categories": {
@@ -1175,9 +877,7 @@
                 },
                 "type": "object"
               },
-              {
-                "type": "null"
-              }
+              { "type": "null" }
             ],
             "title": "Categories"
           }
@@ -1188,34 +888,19 @@
       "Body_initiate_plan_api_plan_post": {
         "properties": {
           "environment": {
-            "anyOf": [
-              {
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
+            "anyOf": [{ "type": "string" }, { "type": "null" }],
             "title": "Environment"
           },
           "plan_dates": {
             "anyOf": [
-              {
-                "$ref": "#/components/schemas/PlanDates"
-              },
-              {
-                "type": "null"
-              }
+              { "$ref": "#/components/schemas/PlanDates" },
+              { "type": "null" }
             ]
           },
           "plan_options": {
             "anyOf": [
-              {
-                "$ref": "#/components/schemas/PlanOptions"
-              },
-              {
-                "type": "null"
-              }
+              { "$ref": "#/components/schemas/PlanOptions" },
+              { "type": "null" }
             ]
           }
         },
@@ -1225,14 +910,7 @@
       "Body_write_directory_api_directories__path__post": {
         "properties": {
           "new_path": {
-            "anyOf": [
-              {
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
+            "anyOf": [{ "type": "string" }, { "type": "null" }],
             "title": "New Path"
           }
         },
@@ -1241,20 +919,9 @@
       },
       "Body_write_file_api_files__path__post": {
         "properties": {
-          "content": {
-            "type": "string",
-            "title": "Content",
-            "default": ""
-          },
+          "content": { "type": "string", "title": "Content", "default": "" },
           "new_path": {
-            "anyOf": [
-              {
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
+            "anyOf": [{ "type": "string" }, { "type": "null" }],
             "title": "New Path"
           }
         },
@@ -1263,313 +930,168 @@
       },
       "ChangeDirect": {
         "properties": {
-          "name": {
-            "type": "string",
-            "title": "Name"
-          },
-          "view_name": {
-            "type": "string",
-            "title": "View Name"
-          },
+          "name": { "type": "string", "title": "Name" },
+          "view_name": { "type": "string", "title": "View Name" },
           "node_type": {
-            "allOf": [
-              {
-                "$ref": "#/components/schemas/NodeType"
-              }
-            ],
+            "allOf": [{ "$ref": "#/components/schemas/NodeType" }],
             "default": "model"
           },
-          "diff": {
-            "type": "string",
-            "title": "Diff"
-          },
+          "diff": { "type": "string", "title": "Diff" },
           "indirect": {
-            "items": {
-              "$ref": "#/components/schemas/ChangeDisplay"
-            },
+            "items": { "$ref": "#/components/schemas/ChangeDisplay" },
             "type": "array",
             "title": "Indirect",
             "default": []
           },
           "change_category": {
             "anyOf": [
-              {
-                "$ref": "#/components/schemas/SnapshotChangeCategory"
-              },
-              {
-                "type": "null"
-              }
+              { "$ref": "#/components/schemas/SnapshotChangeCategory" },
+              { "type": "null" }
             ]
           }
         },
         "type": "object",
-        "required": [
-          "name",
-          "view_name",
-          "diff"
-        ],
+        "required": ["name", "view_name", "diff"],
         "title": "ChangeDirect"
       },
       "ChangeDisplay": {
         "properties": {
-          "name": {
-            "type": "string",
-            "title": "Name"
-          },
-          "view_name": {
-            "type": "string",
-            "title": "View Name"
-          },
+          "name": { "type": "string", "title": "Name" },
+          "view_name": { "type": "string", "title": "View Name" },
           "node_type": {
-            "allOf": [
-              {
-                "$ref": "#/components/schemas/NodeType"
-              }
-            ],
+            "allOf": [{ "$ref": "#/components/schemas/NodeType" }],
             "default": "model"
           }
         },
         "type": "object",
-        "required": [
-          "name",
-          "view_name"
-        ],
+        "required": ["name", "view_name"],
         "title": "ChangeDisplay"
       },
       "ChangeIndirect": {
         "properties": {
-          "name": {
-            "type": "string",
-            "title": "Name"
-          },
-          "view_name": {
-            "type": "string",
-            "title": "View Name"
-          },
+          "name": { "type": "string", "title": "Name" },
+          "view_name": { "type": "string", "title": "View Name" },
           "node_type": {
-            "allOf": [
-              {
-                "$ref": "#/components/schemas/NodeType"
-              }
-            ],
+            "allOf": [{ "$ref": "#/components/schemas/NodeType" }],
             "default": "model"
           },
           "direct": {
-            "items": {
-              "$ref": "#/components/schemas/ChangeDisplay"
-            },
+            "items": { "$ref": "#/components/schemas/ChangeDisplay" },
             "type": "array",
             "title": "Direct",
             "default": []
           }
         },
         "type": "object",
-        "required": [
-          "name",
-          "view_name"
-        ],
+        "required": ["name", "view_name"],
         "title": "ChangeIndirect"
       },
       "Column": {
         "properties": {
-          "name": {
-            "type": "string",
-            "title": "Name"
-          },
-          "type": {
-            "type": "string",
-            "title": "Type"
-          },
+          "name": { "type": "string", "title": "Name" },
+          "type": { "type": "string", "title": "Type" },
           "description": {
-            "anyOf": [
-              {
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
+            "anyOf": [{ "type": "string" }, { "type": "null" }],
             "title": "Description"
           }
         },
         "type": "object",
-        "required": [
-          "name",
-          "type"
-        ],
+        "required": ["name", "type"],
         "title": "Column"
       },
       "Directory": {
         "properties": {
-          "name": {
-            "type": "string",
-            "title": "Name"
-          },
-          "path": {
-            "type": "string",
-            "title": "Path"
-          },
+          "name": { "type": "string", "title": "Name" },
+          "path": { "type": "string", "title": "Path" },
           "directories": {
-            "items": {
-              "$ref": "#/components/schemas/Directory"
-            },
+            "items": { "$ref": "#/components/schemas/Directory" },
             "type": "array",
             "title": "Directories",
             "default": []
           },
           "files": {
-            "items": {
-              "$ref": "#/components/schemas/File"
-            },
+            "items": { "$ref": "#/components/schemas/File" },
             "type": "array",
             "title": "Files",
             "default": []
           }
         },
         "type": "object",
-        "required": [
-          "name",
-          "path"
-        ],
+        "required": ["name", "path"],
         "title": "Directory"
       },
       "Environment": {
         "properties": {
-          "name": {
-            "type": "string",
-            "title": "Name",
-            "default": "prod"
-          },
+          "name": { "type": "string", "title": "Name", "default": "prod" },
           "suffix_target": {
             "allOf": [
-              {
-                "$ref": "#/components/schemas/EnvironmentSuffixTarget"
-              }
+              { "$ref": "#/components/schemas/EnvironmentSuffixTarget" }
             ],
             "default": "schema"
           },
+          "catalog_name_override": {
+            "anyOf": [{ "type": "string" }, { "type": "null" }],
+            "title": "Catalog Name Override"
+          },
           "snapshots": {
-            "items": {
-              "$ref": "#/components/schemas/SnapshotTableInfo"
-            },
+            "items": { "$ref": "#/components/schemas/SnapshotTableInfo" },
             "type": "array",
             "title": "Snapshots"
           },
           "start_at": {
             "anyOf": [
-              {
-                "type": "string",
-                "format": "date"
-              },
-              {
-                "type": "string",
-                "format": "date-time"
-              },
-              {
-                "type": "string"
-              },
-              {
-                "type": "integer"
-              },
-              {
-                "type": "number"
-              }
+              { "type": "string", "format": "date" },
+              { "type": "string", "format": "date-time" },
+              { "type": "string" },
+              { "type": "integer" },
+              { "type": "number" }
             ],
             "title": "Start At"
           },
           "end_at": {
             "anyOf": [
-              {
-                "type": "string",
-                "format": "date"
-              },
-              {
-                "type": "string",
-                "format": "date-time"
-              },
-              {
-                "type": "string"
-              },
-              {
-                "type": "integer"
-              },
-              {
-                "type": "number"
-              },
-              {
-                "type": "null"
-              }
+              { "type": "string", "format": "date" },
+              { "type": "string", "format": "date-time" },
+              { "type": "string" },
+              { "type": "integer" },
+              { "type": "number" },
+              { "type": "null" }
             ],
             "title": "End At"
           },
-          "plan_id": {
-            "type": "string",
-            "title": "Plan Id"
-          },
+          "plan_id": { "type": "string", "title": "Plan Id" },
           "previous_plan_id": {
-            "anyOf": [
-              {
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
+            "anyOf": [{ "type": "string" }, { "type": "null" }],
             "title": "Previous Plan Id"
           },
           "expiration_ts": {
-            "anyOf": [
-              {
-                "type": "integer"
-              },
-              {
-                "type": "null"
-              }
-            ],
+            "anyOf": [{ "type": "integer" }, { "type": "null" }],
             "title": "Expiration Ts"
           },
           "finalized_ts": {
-            "anyOf": [
-              {
-                "type": "integer"
-              },
-              {
-                "type": "null"
-              }
-            ],
+            "anyOf": [{ "type": "integer" }, { "type": "null" }],
             "title": "Finalized Ts"
           },
           "promoted_snapshot_ids": {
             "anyOf": [
               {
-                "items": {
-                  "$ref": "#/components/schemas/SnapshotId"
-                },
+                "items": { "$ref": "#/components/schemas/SnapshotId" },
                 "type": "array"
               },
-              {
-                "type": "null"
-              }
+              { "type": "null" }
             ],
             "title": "Promoted Snapshot Ids"
           }
         },
         "additionalProperties": false,
         "type": "object",
-        "required": [
-          "snapshots",
-          "start_at",
-          "plan_id"
-        ],
+        "required": ["snapshots", "start_at", "plan_id"],
         "title": "Environment",
         "description": "Represents an isolated environment.\n\nEnvironments are isolated workspaces that hold pointers to physical tables.\n\nArgs:\n    snapshots: The snapshots that are part of this environment.\n    start_at: The start time of the environment.\n    end_at: The end time of the environment.\n    plan_id: The ID of the plan that last updated this environment.\n    previous_plan_id: The ID of the previous plan that updated this environment.\n    expiration_ts: The timestamp when this environment will expire.\n    finalized_ts: The timestamp when this environment was finalized.\n    promoted_snapshot_ids: The IDs of the snapshots that are promoted in this environment\n        (i.e. for which the views are created). If not specified, all snapshots are promoted."
       },
       "EnvironmentSuffixTarget": {
         "type": "string",
-        "enum": [
-          "schema",
-          "table"
-        ],
+        "enum": ["schema", "table"],
         "title": "EnvironmentSuffixTarget"
       },
       "Environments": {
@@ -1583,9 +1105,7 @@
             "default": {}
           },
           "pinned_environments": {
-            "items": {
-              "type": "string"
-            },
+            "items": { "type": "string" },
             "type": "array",
             "uniqueItems": true,
             "title": "Pinned Environments",
@@ -1602,149 +1122,74 @@
       },
       "EvaluateInput": {
         "properties": {
-          "model": {
-            "type": "string",
-            "title": "Model"
-          },
+          "model": { "type": "string", "title": "Model" },
           "start": {
             "anyOf": [
-              {
-                "type": "string",
-                "format": "date"
-              },
-              {
-                "type": "string",
-                "format": "date-time"
-              },
-              {
-                "type": "string"
-              },
-              {
-                "type": "integer"
-              },
-              {
-                "type": "number"
-              }
+              { "type": "string", "format": "date" },
+              { "type": "string", "format": "date-time" },
+              { "type": "string" },
+              { "type": "integer" },
+              { "type": "number" }
             ],
             "title": "Start"
           },
           "end": {
             "anyOf": [
-              {
-                "type": "string",
-                "format": "date"
-              },
-              {
-                "type": "string",
-                "format": "date-time"
-              },
-              {
-                "type": "string"
-              },
-              {
-                "type": "integer"
-              },
-              {
-                "type": "number"
-              }
+              { "type": "string", "format": "date" },
+              { "type": "string", "format": "date-time" },
+              { "type": "string" },
+              { "type": "integer" },
+              { "type": "number" }
             ],
             "title": "End"
           },
           "execution_time": {
             "anyOf": [
-              {
-                "type": "string",
-                "format": "date"
-              },
-              {
-                "type": "string",
-                "format": "date-time"
-              },
-              {
-                "type": "string"
-              },
-              {
-                "type": "integer"
-              },
-              {
-                "type": "number"
-              }
+              { "type": "string", "format": "date" },
+              { "type": "string", "format": "date-time" },
+              { "type": "string" },
+              { "type": "integer" },
+              { "type": "number" }
             ],
             "title": "Execution Time"
           },
-          "limit": {
-            "type": "integer",
-            "title": "Limit",
-            "default": 1000
-          }
+          "limit": { "type": "integer", "title": "Limit", "default": 1000 }
         },
         "type": "object",
-        "required": [
-          "model",
-          "start",
-          "end",
-          "execution_time"
-        ],
+        "required": ["model", "start", "end", "execution_time"],
         "title": "EvaluateInput"
       },
       "FetchdfInput": {
         "properties": {
-          "sql": {
-            "type": "string",
-            "title": "Sql"
-          },
-          "limit": {
-            "type": "integer",
-            "title": "Limit",
-            "default": 1000
-          }
+          "sql": { "type": "string", "title": "Sql" },
+          "limit": { "type": "integer", "title": "Limit", "default": 1000 }
         },
         "type": "object",
-        "required": [
-          "sql"
-        ],
+        "required": ["sql"],
         "title": "FetchdfInput"
       },
       "File": {
         "properties": {
-          "name": {
-            "type": "string",
-            "title": "Name"
-          },
-          "path": {
-            "type": "string",
-            "title": "Path"
-          },
+          "name": { "type": "string", "title": "Name" },
+          "path": { "type": "string", "title": "Path" },
           "extension": {
             "type": "string",
             "title": "Extension",
             "default": ""
           },
           "content": {
-            "anyOf": [
-              {
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
+            "anyOf": [{ "type": "string" }, { "type": "null" }],
             "title": "Content"
           }
         },
         "type": "object",
-        "required": [
-          "name",
-          "path"
-        ],
+        "required": ["name", "path"],
         "title": "File"
       },
       "HTTPValidationError": {
         "properties": {
           "detail": {
-            "items": {
-              "$ref": "#/components/schemas/ValidationError"
-            },
+            "items": { "$ref": "#/components/schemas/ValidationError" },
             "type": "array",
             "title": "Detail"
           }
@@ -1769,57 +1214,34 @@
       "LineageColumn": {
         "properties": {
           "source": {
-            "anyOf": [
-              {
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
+            "anyOf": [{ "type": "string" }, { "type": "null" }],
             "title": "Source"
           },
           "expression": {
-            "anyOf": [
-              {
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
+            "anyOf": [{ "type": "string" }, { "type": "null" }],
             "title": "Expression"
           },
           "models": {
             "anyOf": [
               {
                 "additionalProperties": {
-                  "items": {
-                    "type": "string"
-                  },
+                  "items": { "type": "string" },
                   "type": "array"
                 },
                 "type": "object"
               },
-              {
-                "type": "null"
-              }
+              { "type": "null" }
             ],
             "title": "Models"
           }
         },
         "type": "object",
-        "required": [
-          "models"
-        ],
+        "required": ["models"],
         "title": "LineageColumn"
       },
       "Meta": {
         "properties": {
-          "version": {
-            "type": "string",
-            "title": "Version"
-          },
+          "version": { "type": "string", "title": "Version" },
           "has_running_task": {
             "type": "boolean",
             "title": "Has Running Task",
@@ -1827,344 +1249,148 @@
           }
         },
         "type": "object",
-        "required": [
-          "version"
-        ],
+        "required": ["version"],
         "title": "Meta"
       },
       "Model": {
         "properties": {
-          "name": {
-            "type": "string",
-            "title": "Name"
-          },
-          "normalized_name": {
-            "type": "string",
-            "title": "Normalized Name"
-          },
-          "path": {
-            "type": "string",
-            "title": "Path"
-          },
-          "dialect": {
-            "type": "string",
-            "title": "Dialect"
-          },
-          "type": {
-            "$ref": "#/components/schemas/ModelType"
-          },
+          "name": { "type": "string", "title": "Name" },
+          "fqn": { "type": "string", "title": "Fqn" },
+          "path": { "type": "string", "title": "Path" },
+          "dialect": { "type": "string", "title": "Dialect" },
+          "type": { "$ref": "#/components/schemas/ModelType" },
           "columns": {
-            "items": {
-              "$ref": "#/components/schemas/Column"
-            },
+            "items": { "$ref": "#/components/schemas/Column" },
             "type": "array",
             "title": "Columns"
           },
           "description": {
-            "anyOf": [
-              {
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
+            "anyOf": [{ "type": "string" }, { "type": "null" }],
             "title": "Description"
           },
           "details": {
             "anyOf": [
-              {
-                "$ref": "#/components/schemas/ModelDetails"
-              },
-              {
-                "type": "null"
-              }
+              { "$ref": "#/components/schemas/ModelDetails" },
+              { "type": "null" }
             ]
           },
           "sql": {
-            "anyOf": [
-              {
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
+            "anyOf": [{ "type": "string" }, { "type": "null" }],
             "title": "Sql"
           },
           "default_catalog": {
-            "anyOf": [
-              {
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
+            "anyOf": [{ "type": "string" }, { "type": "null" }],
             "title": "Default Catalog"
           }
         },
         "type": "object",
-        "required": [
-          "name",
-          "fqn",
-          "path",
-          "type",
-          "dialect",
-          "columns"
-        ],
+        "required": ["name", "fqn", "path", "dialect", "type", "columns"],
         "title": "Model"
       },
       "ModelDetails": {
         "properties": {
           "owner": {
-            "anyOf": [
-              {
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
+            "anyOf": [{ "type": "string" }, { "type": "null" }],
             "title": "Owner"
           },
           "kind": {
-            "anyOf": [
-              {
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
+            "anyOf": [{ "type": "string" }, { "type": "null" }],
             "title": "Kind"
           },
           "batch_size": {
-            "anyOf": [
-              {
-                "type": "integer"
-              },
-              {
-                "type": "null"
-              }
-            ],
+            "anyOf": [{ "type": "integer" }, { "type": "null" }],
             "title": "Batch Size"
           },
           "cron": {
-            "anyOf": [
-              {
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
+            "anyOf": [{ "type": "string" }, { "type": "null" }],
             "title": "Cron"
           },
           "stamp": {
             "anyOf": [
-              {
-                "type": "string",
-                "format": "date"
-              },
-              {
-                "type": "string",
-                "format": "date-time"
-              },
-              {
-                "type": "string"
-              },
-              {
-                "type": "integer"
-              },
-              {
-                "type": "number"
-              },
-              {
-                "type": "null"
-              }
+              { "type": "string", "format": "date" },
+              { "type": "string", "format": "date-time" },
+              { "type": "string" },
+              { "type": "integer" },
+              { "type": "number" },
+              { "type": "null" }
             ],
             "title": "Stamp"
           },
           "start": {
             "anyOf": [
-              {
-                "type": "string",
-                "format": "date"
-              },
-              {
-                "type": "string",
-                "format": "date-time"
-              },
-              {
-                "type": "string"
-              },
-              {
-                "type": "integer"
-              },
-              {
-                "type": "number"
-              },
-              {
-                "type": "null"
-              }
+              { "type": "string", "format": "date" },
+              { "type": "string", "format": "date-time" },
+              { "type": "string" },
+              { "type": "integer" },
+              { "type": "number" },
+              { "type": "null" }
             ],
             "title": "Start"
           },
           "retention": {
-            "anyOf": [
-              {
-                "type": "integer"
-              },
-              {
-                "type": "null"
-              }
-            ],
+            "anyOf": [{ "type": "integer" }, { "type": "null" }],
             "title": "Retention"
           },
           "storage_format": {
-            "anyOf": [
-              {
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
+            "anyOf": [{ "type": "string" }, { "type": "null" }],
             "title": "Storage Format"
           },
           "time_column": {
-            "anyOf": [
-              {
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
+            "anyOf": [{ "type": "string" }, { "type": "null" }],
             "title": "Time Column"
           },
           "tags": {
-            "anyOf": [
-              {
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
+            "anyOf": [{ "type": "string" }, { "type": "null" }],
             "title": "Tags"
           },
           "references": {
-            "items": {
-              "$ref": "#/components/schemas/Reference"
-            },
+            "items": { "$ref": "#/components/schemas/Reference" },
             "type": "array",
             "title": "References",
             "default": []
           },
           "partitioned_by": {
-            "anyOf": [
-              {
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
+            "anyOf": [{ "type": "string" }, { "type": "null" }],
             "title": "Partitioned By"
           },
           "clustered_by": {
-            "anyOf": [
-              {
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
+            "anyOf": [{ "type": "string" }, { "type": "null" }],
             "title": "Clustered By"
           },
           "lookback": {
-            "anyOf": [
-              {
-                "type": "integer"
-              },
-              {
-                "type": "null"
-              }
-            ],
+            "anyOf": [{ "type": "integer" }, { "type": "null" }],
             "title": "Lookback"
           },
           "cron_prev": {
             "anyOf": [
-              {
-                "type": "string",
-                "format": "date"
-              },
-              {
-                "type": "string",
-                "format": "date-time"
-              },
-              {
-                "type": "string"
-              },
-              {
-                "type": "integer"
-              },
-              {
-                "type": "number"
-              },
-              {
-                "type": "null"
-              }
+              { "type": "string", "format": "date" },
+              { "type": "string", "format": "date-time" },
+              { "type": "string" },
+              { "type": "integer" },
+              { "type": "number" },
+              { "type": "null" }
             ],
             "title": "Cron Prev"
           },
           "cron_next": {
             "anyOf": [
-              {
-                "type": "string",
-                "format": "date"
-              },
-              {
-                "type": "string",
-                "format": "date-time"
-              },
-              {
-                "type": "string"
-              },
-              {
-                "type": "integer"
-              },
-              {
-                "type": "number"
-              },
-              {
-                "type": "null"
-              }
+              { "type": "string", "format": "date" },
+              { "type": "string", "format": "date-time" },
+              { "type": "string" },
+              { "type": "integer" },
+              { "type": "number" },
+              { "type": "null" }
             ],
             "title": "Cron Next"
           },
           "interval_unit": {
             "anyOf": [
-              {
-                "$ref": "#/components/schemas/IntervalUnit"
-              },
-              {
-                "type": "null"
-              }
+              { "$ref": "#/components/schemas/IntervalUnit" },
+              { "type": "null" }
             ]
           },
           "annotated": {
-            "anyOf": [
-              {
-                "type": "boolean"
-              },
-              {
-                "type": "null"
-              }
-            ],
+            "anyOf": [{ "type": "boolean" }, { "type": "null" }],
             "title": "Annotated"
           }
         },
@@ -2189,36 +1415,25 @@
       },
       "ModelType": {
         "type": "string",
-        "enum": [
-          "python",
-          "sql",
-          "seed",
-          "external"
-        ],
+        "enum": ["python", "sql", "seed", "external"],
         "title": "ModelType"
       },
       "ModelsDiff": {
         "properties": {
           "direct": {
-            "items": {
-              "$ref": "#/components/schemas/ChangeDirect"
-            },
+            "items": { "$ref": "#/components/schemas/ChangeDirect" },
             "type": "array",
             "title": "Direct",
             "default": []
           },
           "indirect": {
-            "items": {
-              "$ref": "#/components/schemas/ChangeIndirect"
-            },
+            "items": { "$ref": "#/components/schemas/ChangeIndirect" },
             "type": "array",
             "title": "Indirect",
             "default": []
           },
           "metadata": {
-            "items": {
-              "$ref": "#/components/schemas/ChangeDisplay"
-            },
+            "items": { "$ref": "#/components/schemas/ChangeDisplay" },
             "type": "array",
             "title": "Metadata",
             "default": []
@@ -2229,126 +1444,66 @@
       },
       "NodeType": {
         "type": "string",
-        "enum": [
-          "model",
-          "audit"
-        ],
+        "enum": ["model", "audit"],
         "title": "NodeType"
       },
       "PlanApplyStageTracker": {
         "properties": {
           "start": {
             "anyOf": [
-              {
-                "type": "string",
-                "format": "date"
-              },
-              {
-                "type": "string",
-                "format": "date-time"
-              },
-              {
-                "type": "string"
-              },
-              {
-                "type": "integer"
-              },
-              {
-                "type": "number"
-              },
-              {
-                "type": "null"
-              }
+              { "type": "string", "format": "date" },
+              { "type": "string", "format": "date-time" },
+              { "type": "string" },
+              { "type": "integer" },
+              { "type": "number" },
+              { "type": "null" }
             ],
             "title": "Start"
           },
           "end": {
             "anyOf": [
-              {
-                "type": "string",
-                "format": "date"
-              },
-              {
-                "type": "string",
-                "format": "date-time"
-              },
-              {
-                "type": "string"
-              },
-              {
-                "type": "integer"
-              },
-              {
-                "type": "number"
-              },
-              {
-                "type": "null"
-              }
+              { "type": "string", "format": "date" },
+              { "type": "string", "format": "date-time" },
+              { "type": "string" },
+              { "type": "integer" },
+              { "type": "number" },
+              { "type": "null" }
             ],
             "title": "End"
           },
-          "meta": {
-            "$ref": "#/components/schemas/TrackableMeta"
-          },
+          "meta": { "$ref": "#/components/schemas/TrackableMeta" },
           "environment": {
-            "anyOf": [
-              {
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
+            "anyOf": [{ "type": "string" }, { "type": "null" }],
             "title": "Environment"
           },
           "plan_options": {
             "anyOf": [
-              {
-                "$ref": "#/components/schemas/PlanOptions"
-              },
-              {
-                "type": "null"
-              }
+              { "$ref": "#/components/schemas/PlanOptions" },
+              { "type": "null" }
             ]
           },
           "creation": {
             "anyOf": [
-              {
-                "$ref": "#/components/schemas/PlanStageCreation"
-              },
-              {
-                "type": "null"
-              }
+              { "$ref": "#/components/schemas/PlanStageCreation" },
+              { "type": "null" }
             ]
           },
           "restate": {
             "anyOf": [
-              {
-                "$ref": "#/components/schemas/PlanStageRestate"
-              },
-              {
-                "type": "null"
-              }
+              { "$ref": "#/components/schemas/PlanStageRestate" },
+              { "type": "null" }
             ]
           },
           "backfill": {
             "anyOf": [
-              {
-                "$ref": "#/components/schemas/PlanStageBackfill"
-              },
-              {
-                "type": "null"
-              }
+              { "$ref": "#/components/schemas/PlanStageBackfill" },
+              { "type": "null" }
             ]
           },
           "promote": {
             "anyOf": [
-              {
-                "$ref": "#/components/schemas/PlanStagePromote"
-              },
-              {
-                "type": "null"
-              }
+              { "$ref": "#/components/schemas/PlanStagePromote" },
+              { "type": "null" }
             ]
           }
         },
@@ -2359,86 +1514,41 @@
         "properties": {
           "start": {
             "anyOf": [
-              {
-                "type": "string",
-                "format": "date"
-              },
-              {
-                "type": "string",
-                "format": "date-time"
-              },
-              {
-                "type": "string"
-              },
-              {
-                "type": "integer"
-              },
-              {
-                "type": "number"
-              },
-              {
-                "type": "null"
-              }
+              { "type": "string", "format": "date" },
+              { "type": "string", "format": "date-time" },
+              { "type": "string" },
+              { "type": "integer" },
+              { "type": "number" },
+              { "type": "null" }
             ],
             "title": "Start"
           },
           "end": {
             "anyOf": [
-              {
-                "type": "string",
-                "format": "date"
-              },
-              {
-                "type": "string",
-                "format": "date-time"
-              },
-              {
-                "type": "string"
-              },
-              {
-                "type": "integer"
-              },
-              {
-                "type": "number"
-              },
-              {
-                "type": "null"
-              }
+              { "type": "string", "format": "date" },
+              { "type": "string", "format": "date-time" },
+              { "type": "string" },
+              { "type": "integer" },
+              { "type": "number" },
+              { "type": "null" }
             ],
             "title": "End"
           },
-          "meta": {
-            "$ref": "#/components/schemas/TrackableMeta"
-          },
+          "meta": { "$ref": "#/components/schemas/TrackableMeta" },
           "environment": {
-            "anyOf": [
-              {
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
+            "anyOf": [{ "type": "string" }, { "type": "null" }],
             "title": "Environment"
           },
           "plan_options": {
             "anyOf": [
-              {
-                "$ref": "#/components/schemas/PlanOptions"
-              },
-              {
-                "type": "null"
-              }
+              { "$ref": "#/components/schemas/PlanOptions" },
+              { "type": "null" }
             ]
           },
           "cancel": {
             "anyOf": [
-              {
-                "$ref": "#/components/schemas/PlanStageCancel"
-              },
-              {
-                "type": "null"
-              }
+              { "$ref": "#/components/schemas/PlanStageCancel" },
+              { "type": "null" }
             ]
           }
         },
@@ -2449,51 +1559,23 @@
         "properties": {
           "start": {
             "anyOf": [
-              {
-                "type": "string",
-                "format": "date"
-              },
-              {
-                "type": "string",
-                "format": "date-time"
-              },
-              {
-                "type": "string"
-              },
-              {
-                "type": "integer"
-              },
-              {
-                "type": "number"
-              },
-              {
-                "type": "null"
-              }
+              { "type": "string", "format": "date" },
+              { "type": "string", "format": "date-time" },
+              { "type": "string" },
+              { "type": "integer" },
+              { "type": "number" },
+              { "type": "null" }
             ],
             "title": "Start"
           },
           "end": {
             "anyOf": [
-              {
-                "type": "string",
-                "format": "date"
-              },
-              {
-                "type": "string",
-                "format": "date-time"
-              },
-              {
-                "type": "string"
-              },
-              {
-                "type": "integer"
-              },
-              {
-                "type": "number"
-              },
-              {
-                "type": "null"
-              }
+              { "type": "string", "format": "date" },
+              { "type": "string", "format": "date-time" },
+              { "type": "string" },
+              { "type": "integer" },
+              { "type": "number" },
+              { "type": "null" }
             ],
             "title": "End"
           }
@@ -2534,25 +1616,11 @@
             "default": false
           },
           "create_from": {
-            "anyOf": [
-              {
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
+            "anyOf": [{ "type": "string" }, { "type": "null" }],
             "title": "Create From"
           },
           "restate_models": {
-            "anyOf": [
-              {
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
+            "anyOf": [{ "type": "string" }, { "type": "null" }],
             "title": "Restate Models"
           },
           "auto_apply": {
@@ -2568,106 +1636,53 @@
         "properties": {
           "start": {
             "anyOf": [
-              {
-                "type": "string",
-                "format": "date"
-              },
-              {
-                "type": "string",
-                "format": "date-time"
-              },
-              {
-                "type": "string"
-              },
-              {
-                "type": "integer"
-              },
-              {
-                "type": "number"
-              },
-              {
-                "type": "null"
-              }
+              { "type": "string", "format": "date" },
+              { "type": "string", "format": "date-time" },
+              { "type": "string" },
+              { "type": "integer" },
+              { "type": "number" },
+              { "type": "null" }
             ],
             "title": "Start"
           },
           "end": {
             "anyOf": [
-              {
-                "type": "string",
-                "format": "date"
-              },
-              {
-                "type": "string",
-                "format": "date-time"
-              },
-              {
-                "type": "string"
-              },
-              {
-                "type": "integer"
-              },
-              {
-                "type": "number"
-              },
-              {
-                "type": "null"
-              }
+              { "type": "string", "format": "date" },
+              { "type": "string", "format": "date-time" },
+              { "type": "string" },
+              { "type": "integer" },
+              { "type": "number" },
+              { "type": "null" }
             ],
             "title": "End"
           },
-          "meta": {
-            "$ref": "#/components/schemas/TrackableMeta"
-          },
+          "meta": { "$ref": "#/components/schemas/TrackableMeta" },
           "environment": {
-            "anyOf": [
-              {
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
+            "anyOf": [{ "type": "string" }, { "type": "null" }],
             "title": "Environment"
           },
           "plan_options": {
             "anyOf": [
-              {
-                "$ref": "#/components/schemas/PlanOptions"
-              },
-              {
-                "type": "null"
-              }
+              { "$ref": "#/components/schemas/PlanOptions" },
+              { "type": "null" }
             ]
           },
           "validation": {
             "anyOf": [
-              {
-                "$ref": "#/components/schemas/PlanStageValidation"
-              },
-              {
-                "type": "null"
-              }
+              { "$ref": "#/components/schemas/PlanStageValidation" },
+              { "type": "null" }
             ]
           },
           "changes": {
             "anyOf": [
-              {
-                "$ref": "#/components/schemas/PlanStageChanges"
-              },
-              {
-                "type": "null"
-              }
+              { "$ref": "#/components/schemas/PlanStageChanges" },
+              { "type": "null" }
             ]
           },
           "backfills": {
             "anyOf": [
-              {
-                "$ref": "#/components/schemas/PlanStageBackfills"
-              },
-              {
-                "type": "null"
-              }
+              { "$ref": "#/components/schemas/PlanStageBackfills" },
+              { "type": "null" }
             ]
           }
         },
@@ -2676,13 +1691,9 @@
       },
       "PlanStageBackfill": {
         "properties": {
-          "meta": {
-            "$ref": "#/components/schemas/TrackableMeta"
-          },
+          "meta": { "$ref": "#/components/schemas/TrackableMeta" },
           "queue": {
-            "items": {
-              "type": "string"
-            },
+            "items": { "type": "string" },
             "type": "array",
             "uniqueItems": true,
             "title": "Queue",
@@ -2702,20 +1713,14 @@
       },
       "PlanStageBackfills": {
         "properties": {
-          "meta": {
-            "$ref": "#/components/schemas/TrackableMeta"
-          },
+          "meta": { "$ref": "#/components/schemas/TrackableMeta" },
           "models": {
             "anyOf": [
               {
-                "items": {
-                  "$ref": "#/components/schemas/BackfillDetails"
-                },
+                "items": { "$ref": "#/components/schemas/BackfillDetails" },
                 "type": "array"
               },
-              {
-                "type": "null"
-              }
+              { "type": "null" }
             ],
             "title": "Models"
           }
@@ -2725,9 +1730,7 @@
       },
       "PlanStageCancel": {
         "properties": {
-          "meta": {
-            "$ref": "#/components/schemas/TrackableMeta"
-          }
+          "meta": { "$ref": "#/components/schemas/TrackableMeta" }
         },
         "type": "object",
         "title": "PlanStageCancel"
@@ -2737,301 +1740,155 @@
           "added": {
             "anyOf": [
               {
-                "items": {
-                  "$ref": "#/components/schemas/ChangeDisplay"
-                },
+                "items": { "$ref": "#/components/schemas/ChangeDisplay" },
                 "type": "array"
               },
-              {
-                "type": "null"
-              }
+              { "type": "null" }
             ],
             "title": "Added"
           },
           "removed": {
             "anyOf": [
               {
-                "items": {
-                  "$ref": "#/components/schemas/ChangeDisplay"
-                },
+                "items": { "$ref": "#/components/schemas/ChangeDisplay" },
                 "type": "array"
               },
-              {
-                "type": "null"
-              }
+              { "type": "null" }
             ],
             "title": "Removed"
           },
           "modified": {
             "anyOf": [
-              {
-                "$ref": "#/components/schemas/ModelsDiff"
-              },
-              {
-                "type": "null"
-              }
+              { "$ref": "#/components/schemas/ModelsDiff" },
+              { "type": "null" }
             ]
           },
-          "meta": {
-            "$ref": "#/components/schemas/TrackableMeta"
-          }
+          "meta": { "$ref": "#/components/schemas/TrackableMeta" }
         },
         "type": "object",
         "title": "PlanStageChanges"
       },
       "PlanStageCreation": {
         "properties": {
-          "meta": {
-            "$ref": "#/components/schemas/TrackableMeta"
-          },
-          "total_tasks": {
-            "type": "integer",
-            "title": "Total Tasks"
-          },
-          "num_tasks": {
-            "type": "integer",
-            "title": "Num Tasks"
-          }
+          "meta": { "$ref": "#/components/schemas/TrackableMeta" },
+          "total_tasks": { "type": "integer", "title": "Total Tasks" },
+          "num_tasks": { "type": "integer", "title": "Num Tasks" }
         },
         "type": "object",
-        "required": [
-          "total_tasks",
-          "num_tasks"
-        ],
+        "required": ["total_tasks", "num_tasks"],
         "title": "PlanStageCreation"
       },
       "PlanStagePromote": {
         "properties": {
-          "meta": {
-            "$ref": "#/components/schemas/TrackableMeta"
-          },
-          "total_tasks": {
-            "type": "integer",
-            "title": "Total Tasks"
-          },
-          "num_tasks": {
-            "type": "integer",
-            "title": "Num Tasks"
-          },
+          "meta": { "$ref": "#/components/schemas/TrackableMeta" },
+          "total_tasks": { "type": "integer", "title": "Total Tasks" },
+          "num_tasks": { "type": "integer", "title": "Num Tasks" },
           "target_environment": {
             "type": "string",
             "title": "Target Environment"
           }
         },
         "type": "object",
-        "required": [
-          "total_tasks",
-          "num_tasks",
-          "target_environment"
-        ],
+        "required": ["total_tasks", "num_tasks", "target_environment"],
         "title": "PlanStagePromote"
       },
       "PlanStageRestate": {
         "properties": {
-          "meta": {
-            "$ref": "#/components/schemas/TrackableMeta"
-          }
+          "meta": { "$ref": "#/components/schemas/TrackableMeta" }
         },
         "type": "object",
         "title": "PlanStageRestate"
       },
       "PlanStageValidation": {
         "properties": {
-          "meta": {
-            "$ref": "#/components/schemas/TrackableMeta"
-          }
+          "meta": { "$ref": "#/components/schemas/TrackableMeta" }
         },
         "type": "object",
         "title": "PlanStageValidation"
       },
       "Query": {
-        "properties": {
-          "sql": {
-            "type": "string",
-            "title": "Sql"
-          }
-        },
+        "properties": { "sql": { "type": "string", "title": "Sql" } },
         "type": "object",
-        "required": [
-          "sql"
-        ],
+        "required": ["sql"],
         "title": "Query"
       },
       "Reference": {
         "properties": {
-          "name": {
-            "type": "string",
-            "title": "Name"
-          },
-          "expression": {
-            "type": "string",
-            "title": "Expression"
-          },
-          "unique": {
-            "type": "boolean",
-            "title": "Unique"
-          }
+          "name": { "type": "string", "title": "Name" },
+          "expression": { "type": "string", "title": "Expression" },
+          "unique": { "type": "boolean", "title": "Unique" }
         },
         "type": "object",
-        "required": [
-          "name",
-          "expression",
-          "unique"
-        ],
+        "required": ["name", "expression", "unique"],
         "title": "Reference"
       },
       "RenderInput": {
         "properties": {
-          "model": {
-            "type": "string",
-            "title": "Model"
-          },
+          "model": { "type": "string", "title": "Model" },
           "start": {
             "anyOf": [
-              {
-                "type": "string",
-                "format": "date"
-              },
-              {
-                "type": "string",
-                "format": "date-time"
-              },
-              {
-                "type": "string"
-              },
-              {
-                "type": "integer"
-              },
-              {
-                "type": "number"
-              },
-              {
-                "type": "null"
-              }
+              { "type": "string", "format": "date" },
+              { "type": "string", "format": "date-time" },
+              { "type": "string" },
+              { "type": "integer" },
+              { "type": "number" },
+              { "type": "null" }
             ],
             "title": "Start"
           },
           "end": {
             "anyOf": [
-              {
-                "type": "string",
-                "format": "date"
-              },
-              {
-                "type": "string",
-                "format": "date-time"
-              },
-              {
-                "type": "string"
-              },
-              {
-                "type": "integer"
-              },
-              {
-                "type": "number"
-              },
-              {
-                "type": "null"
-              }
+              { "type": "string", "format": "date" },
+              { "type": "string", "format": "date-time" },
+              { "type": "string" },
+              { "type": "integer" },
+              { "type": "number" },
+              { "type": "null" }
             ],
             "title": "End"
           },
           "execution_time": {
             "anyOf": [
-              {
-                "type": "string",
-                "format": "date"
-              },
-              {
-                "type": "string",
-                "format": "date-time"
-              },
-              {
-                "type": "string"
-              },
-              {
-                "type": "integer"
-              },
-              {
-                "type": "number"
-              },
-              {
-                "type": "null"
-              }
+              { "type": "string", "format": "date" },
+              { "type": "string", "format": "date-time" },
+              { "type": "string" },
+              { "type": "integer" },
+              { "type": "number" },
+              { "type": "null" }
             ],
             "title": "Execution Time"
           },
           "expand": {
             "anyOf": [
-              {
-                "type": "boolean"
-              },
-              {
-                "items": {
-                  "type": "string"
-                },
-                "type": "array"
-              }
+              { "type": "boolean" },
+              { "items": { "type": "string" }, "type": "array" }
             ],
             "title": "Expand",
             "default": false
           },
-          "pretty": {
-            "type": "boolean",
-            "title": "Pretty",
-            "default": true
-          },
+          "pretty": { "type": "boolean", "title": "Pretty", "default": true },
           "dialect": {
-            "anyOf": [
-              {
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
+            "anyOf": [{ "type": "string" }, { "type": "null" }],
             "title": "Dialect"
           }
         },
         "type": "object",
-        "required": [
-          "model"
-        ],
+        "required": ["model"],
         "title": "RenderInput"
       },
       "RowDiff": {
         "properties": {
-          "source": {
-            "type": "string",
-            "title": "Source"
-          },
-          "target": {
-            "type": "string",
-            "title": "Target"
-          },
+          "source": { "type": "string", "title": "Source" },
+          "target": { "type": "string", "title": "Target" },
           "stats": {
-            "additionalProperties": {
-              "type": "number"
-            },
+            "additionalProperties": { "type": "number" },
             "type": "object",
             "title": "Stats"
           },
-          "sample": {
-            "type": "object",
-            "title": "Sample"
-          },
-          "source_count": {
-            "type": "integer",
-            "title": "Source Count"
-          },
-          "target_count": {
-            "type": "integer",
-            "title": "Target Count"
-          },
-          "count_pct_change": {
-            "type": "number",
-            "title": "Count Pct Change"
-          }
+          "sample": { "type": "object", "title": "Sample" },
+          "source_count": { "type": "integer", "title": "Source Count" },
+          "target_count": { "type": "integer", "title": "Target Count" },
+          "count_pct_change": { "type": "number", "title": "Count Pct Change" }
         },
         "type": "object",
         "required": [
@@ -3047,46 +1904,30 @@
       },
       "SchemaDiff": {
         "properties": {
-          "source": {
-            "type": "string",
-            "title": "Source"
-          },
-          "target": {
-            "type": "string",
-            "title": "Target"
-          },
+          "source": { "type": "string", "title": "Source" },
+          "target": { "type": "string", "title": "Target" },
           "source_schema": {
-            "additionalProperties": {
-              "type": "string"
-            },
+            "additionalProperties": { "type": "string" },
             "type": "object",
             "title": "Source Schema"
           },
           "target_schema": {
-            "additionalProperties": {
-              "type": "string"
-            },
+            "additionalProperties": { "type": "string" },
             "type": "object",
             "title": "Target Schema"
           },
           "added": {
-            "additionalProperties": {
-              "type": "string"
-            },
+            "additionalProperties": { "type": "string" },
             "type": "object",
             "title": "Added"
           },
           "removed": {
-            "additionalProperties": {
-              "type": "string"
-            },
+            "additionalProperties": { "type": "string" },
             "type": "object",
             "title": "Removed"
           },
           "modified": {
-            "additionalProperties": {
-              "type": "string"
-            },
+            "additionalProperties": { "type": "string" },
             "type": "object",
             "title": "Modified"
           }
@@ -3105,76 +1946,38 @@
       },
       "SnapshotChangeCategory": {
         "type": "integer",
-        "enum": [
-          1,
-          2,
-          3,
-          4,
-          5
-        ],
+        "enum": [1, 2, 3, 4, 5],
         "title": "SnapshotChangeCategory",
         "description": "Values are ordered by decreasing severity and that ordering is required.\n\nBREAKING: The change requires that snapshot modified and downstream dependencies be rebuilt\nNON_BREAKING: The change requires that only the snapshot modified be rebuilt\nFORWARD_ONLY: The change requires no rebuilding\nINDIRECT_BREAKING: The change was caused indirectly and is breaking.\nINDIRECT_NON_BREAKING: The change was caused indirectly by a non-breaking change."
       },
       "SnapshotDataVersion": {
         "properties": {
-          "fingerprint": {
-            "$ref": "#/components/schemas/SnapshotFingerprint"
-          },
-          "version": {
-            "type": "string",
-            "title": "Version"
-          },
+          "fingerprint": { "$ref": "#/components/schemas/SnapshotFingerprint" },
+          "version": { "type": "string", "title": "Version" },
           "temp_version": {
-            "anyOf": [
-              {
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
+            "anyOf": [{ "type": "string" }, { "type": "null" }],
             "title": "Temp Version"
           },
           "change_category": {
             "anyOf": [
-              {
-                "$ref": "#/components/schemas/SnapshotChangeCategory"
-              },
-              {
-                "type": "null"
-              }
+              { "$ref": "#/components/schemas/SnapshotChangeCategory" },
+              { "type": "null" }
             ]
           },
           "physical_schema": {
-            "anyOf": [
-              {
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
+            "anyOf": [{ "type": "string" }, { "type": "null" }],
             "title": "Physical Schema"
           }
         },
         "additionalProperties": false,
         "type": "object",
-        "required": [
-          "fingerprint",
-          "version"
-        ],
+        "required": ["fingerprint", "version"],
         "title": "SnapshotDataVersion"
       },
       "SnapshotFingerprint": {
         "properties": {
-          "data_hash": {
-            "type": "string",
-            "title": "Data Hash"
-          },
-          "metadata_hash": {
-            "type": "string",
-            "title": "Metadata Hash"
-          },
+          "data_hash": { "type": "string", "title": "Data Hash" },
+          "metadata_hash": { "type": "string", "title": "Metadata Hash" },
           "parent_data_hash": {
             "type": "string",
             "title": "Parent Data Hash",
@@ -3188,111 +1991,58 @@
         },
         "additionalProperties": false,
         "type": "object",
-        "required": [
-          "data_hash",
-          "metadata_hash"
-        ],
+        "required": ["data_hash", "metadata_hash"],
         "title": "SnapshotFingerprint"
       },
       "SnapshotId": {
         "properties": {
-          "name": {
-            "type": "string",
-            "title": "Name"
-          },
-          "identifier": {
-            "type": "string",
-            "title": "Identifier"
-          }
+          "name": { "type": "string", "title": "Name" },
+          "identifier": { "type": "string", "title": "Identifier" }
         },
         "additionalProperties": false,
         "type": "object",
-        "required": [
-          "name",
-          "identifier"
-        ],
+        "required": ["name", "identifier"],
         "title": "SnapshotId"
       },
       "SnapshotTableInfo": {
         "properties": {
-          "name": {
-            "type": "string",
-            "title": "Name"
-          },
+          "name": { "type": "string", "title": "Name" },
           "temp_version": {
-            "anyOf": [
-              {
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
+            "anyOf": [{ "type": "string" }, { "type": "null" }],
             "title": "Temp Version"
           },
           "change_category": {
             "anyOf": [
-              {
-                "$ref": "#/components/schemas/SnapshotChangeCategory"
-              },
-              {
-                "type": "null"
-              }
+              { "$ref": "#/components/schemas/SnapshotChangeCategory" },
+              { "type": "null" }
             ]
           },
-          "fingerprint": {
-            "$ref": "#/components/schemas/SnapshotFingerprint"
-          },
+          "fingerprint": { "$ref": "#/components/schemas/SnapshotFingerprint" },
           "previous_versions": {
-            "items": {
-              "$ref": "#/components/schemas/SnapshotDataVersion"
-            },
+            "items": { "$ref": "#/components/schemas/SnapshotDataVersion" },
             "type": "array",
             "title": "Previous Versions",
             "default": []
           },
           "base_table_name_override": {
-            "anyOf": [
-              {
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
+            "anyOf": [{ "type": "string" }, { "type": "null" }],
             "title": "Base Table Name Override"
           },
-          "version": {
-            "type": "string",
-            "title": "Version"
-          },
-          "physical_schema": {
-            "type": "string",
-            "title": "Physical Schema"
-          },
+          "version": { "type": "string", "title": "Version" },
+          "physical_schema": { "type": "string", "title": "Physical Schema" },
           "parents": {
-            "items": {
-              "$ref": "#/components/schemas/SnapshotId"
-            },
+            "items": { "$ref": "#/components/schemas/SnapshotId" },
             "type": "array",
             "title": "Parents"
           },
           "kind_name": {
             "anyOf": [
-              {
-                "$ref": "#/components/schemas/ModelKindName"
-              },
-              {
-                "type": "null"
-              }
+              { "$ref": "#/components/schemas/ModelKindName" },
+              { "type": "null" }
             ]
           },
           "node_type": {
-            "allOf": [
-              {
-                "$ref": "#/components/schemas/NodeType"
-              }
-            ],
+            "allOf": [{ "$ref": "#/components/schemas/NodeType" }],
             "default": "model"
           }
         },
@@ -3309,156 +2059,79 @@
       },
       "Status": {
         "type": "string",
-        "enum": [
-          "init",
-          "success",
-          "fail"
-        ],
+        "enum": ["init", "success", "fail"],
         "title": "Status",
         "description": "An enumeration of statuses."
       },
       "TableDiff": {
         "properties": {
-          "schema_diff": {
-            "$ref": "#/components/schemas/SchemaDiff"
-          },
-          "row_diff": {
-            "$ref": "#/components/schemas/RowDiff"
-          },
+          "schema_diff": { "$ref": "#/components/schemas/SchemaDiff" },
+          "row_diff": { "$ref": "#/components/schemas/RowDiff" },
           "on": {
-            "items": {
-              "items": {
-                "type": "string"
-              },
-              "type": "array"
-            },
+            "items": { "items": { "type": "string" }, "type": "array" },
             "type": "array",
             "title": "On"
           }
         },
         "type": "object",
-        "required": [
-          "schema_diff",
-          "row_diff",
-          "on"
-        ],
+        "required": ["schema_diff", "row_diff", "on"],
         "title": "TableDiff"
       },
       "TestErrorOrFailure": {
         "properties": {
-          "name": {
-            "type": "string",
-            "title": "Name"
-          },
-          "path": {
-            "type": "string",
-            "format": "path",
-            "title": "Path"
-          },
-          "tb": {
-            "type": "string",
-            "title": "Tb"
-          }
+          "name": { "type": "string", "title": "Name" },
+          "path": { "type": "string", "format": "path", "title": "Path" },
+          "tb": { "type": "string", "title": "Tb" }
         },
         "type": "object",
-        "required": [
-          "name",
-          "path",
-          "tb"
-        ],
+        "required": ["name", "path", "tb"],
         "title": "TestErrorOrFailure"
       },
       "TestResult": {
         "properties": {
-          "tests_run": {
-            "type": "integer",
-            "title": "Tests Run"
-          },
+          "tests_run": { "type": "integer", "title": "Tests Run" },
           "failures": {
-            "items": {
-              "$ref": "#/components/schemas/TestErrorOrFailure"
-            },
+            "items": { "$ref": "#/components/schemas/TestErrorOrFailure" },
             "type": "array",
             "title": "Failures"
           },
           "errors": {
-            "items": {
-              "$ref": "#/components/schemas/TestErrorOrFailure"
-            },
+            "items": { "$ref": "#/components/schemas/TestErrorOrFailure" },
             "type": "array",
             "title": "Errors"
           },
           "skipped": {
-            "items": {
-              "$ref": "#/components/schemas/TestSkipped"
-            },
+            "items": { "$ref": "#/components/schemas/TestSkipped" },
             "type": "array",
             "title": "Skipped"
           }
         },
         "type": "object",
-        "required": [
-          "tests_run",
-          "failures",
-          "errors",
-          "skipped"
-        ],
+        "required": ["tests_run", "failures", "errors", "skipped"],
         "title": "TestResult"
       },
       "TestSkipped": {
         "properties": {
-          "name": {
-            "type": "string",
-            "title": "Name"
-          },
-          "path": {
-            "type": "string",
-            "format": "path",
-            "title": "Path"
-          },
-          "reason": {
-            "type": "string",
-            "title": "Reason"
-          }
+          "name": { "type": "string", "title": "Name" },
+          "path": { "type": "string", "format": "path", "title": "Path" },
+          "reason": { "type": "string", "title": "Reason" }
         },
         "type": "object",
-        "required": [
-          "name",
-          "path",
-          "reason"
-        ],
+        "required": ["name", "path", "reason"],
         "title": "TestSkipped"
       },
       "TrackableMeta": {
         "properties": {
           "status": {
-            "allOf": [
-              {
-                "$ref": "#/components/schemas/Status"
-              }
-            ],
+            "allOf": [{ "$ref": "#/components/schemas/Status" }],
             "default": "init"
           },
-          "start": {
-            "type": "integer",
-            "title": "Start"
-          },
+          "start": { "type": "integer", "title": "Start" },
           "end": {
-            "anyOf": [
-              {
-                "type": "integer"
-              },
-              {
-                "type": "null"
-              }
-            ],
+            "anyOf": [{ "type": "integer" }, { "type": "null" }],
             "title": "End"
           },
-          "done": {
-            "type": "boolean",
-            "title": "Done",
-            "default": false
-          }
+          "done": { "type": "boolean", "title": "Done", "default": false }
         },
         "type": "object",
         "title": "TrackableMeta"
@@ -3466,34 +2139,15 @@
       "ValidationError": {
         "properties": {
           "loc": {
-            "items": {
-              "anyOf": [
-                {
-                  "type": "string"
-                },
-                {
-                  "type": "integer"
-                }
-              ]
-            },
+            "items": { "anyOf": [{ "type": "string" }, { "type": "integer" }] },
             "type": "array",
             "title": "Location"
           },
-          "msg": {
-            "type": "string",
-            "title": "Message"
-          },
-          "type": {
-            "type": "string",
-            "title": "Error Type"
-          }
+          "msg": { "type": "string", "title": "Message" },
+          "type": { "type": "string", "title": "Error Type" }
         },
         "type": "object",
-        "required": [
-          "loc",
-          "msg",
-          "type"
-        ],
+        "required": ["loc", "msg", "type"],
         "title": "ValidationError"
       }
     }

@@ -34,11 +34,11 @@ export class ModelSQLMeshModel<
       (initial as ModelSQLMeshModel<T>)?.isModel
         ? (initial as ModelSQLMeshModel<T>).initial
         : {
-          ...(initial as T),
-          dialect: initial?.dialect ?? 'Default',
-          columns: initial?.columns ?? [],
-          details: initial?.details ?? {},
-        },
+            ...(initial as T),
+            dialect: initial?.dialect ?? 'Default',
+            columns: initial?.columns ?? [],
+            details: initial?.details ?? {},
+          },
     )
 
     this.name = encodeURI(this.initial.name)

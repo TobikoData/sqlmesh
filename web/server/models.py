@@ -29,6 +29,8 @@ class ModelType(str, enum.Enum):
     SQL = "sql"
     SEED = "seed"
     EXTERNAL = "external"
+
+
 class ArtifactType(str, enum.Enum):
     file = "file"
     directory = "directory"
