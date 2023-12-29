@@ -5,8 +5,27 @@ import { useEffect } from 'react'
 import { isNil, isNotNil, isStringEmptyOrNil } from '~/utils'
 import Input from '@components/input/Input'
 import { EnumSize } from '~/types/enum'
+import { useStoreContext } from '@context/context'
+
+const EnumFileType = {
+  Model: 'model',
+  Test: 'test',
+  Audit: 'audit',
+  Macro: 'macro',
+  Hook: 'hook',
+  Log: 'log',
+  Config: 'config',
+  Seed: 'seed',
+  Metric: 'metric',
+  Schema: 'schema',
+  Unknown: 'unknown',
+} as const
+
+export type FileType = (typeof EnumFileType)[keyof typeof EnumFileType]
 
 export default function EditorFooter({ tab }: { tab: EditorTab }): JSX.Element {
+  const isModel = useStoreContext(s => s.isModel)
+
   const engine = useStoreEditor(s => s.engine)
   const dialects = useStoreEditor(s => s.dialects)
   const refreshTab = useStoreEditor(s => s.refreshTab)
@@ -73,7 +92,7 @@ export default function EditorFooter({ tab }: { tab: EditorTab }): JSX.Element {
           </Input>
         </EditorIndicator>
       )}
-      {tab.file.isSQLMeshModel && tab.dialect != null && tab.dialect !== '' && (
+      {isModel(tab.file.path) && !isStringEmptyOrNil(tab.dialect) && (
         <EditorIndicator
           className="mr-2"
           text="Dialect"
@@ -81,16 +100,29 @@ export default function EditorFooter({ tab }: { tab: EditorTab }): JSX.Element {
           <EditorIndicator.Text text={tab.dialect} />
         </EditorIndicator>
       )}
-      {tab.file.type != null && (
-        <EditorIndicator
-          className="mr-2"
-          text="SQLMesh Type"
-        >
-          <EditorIndicator.Text
-            text={tab.file.isSQLMeshModel ? 'Model' : 'Unsupported'}
-          />
-        </EditorIndicator>
-      )}
+      <EditorIndicator
+        className="mr-2"
+        text="SQLMesh Type"
+      >
+        <EditorIndicator.Text text={getFileType(tab.file.path)} />
+      </EditorIndicator>
     </div>
   )
+}
+
+function getFileType(path?: string): FileType {
+  if (isStringEmptyOrNil(path)) return EnumFileType.Unknown
+
+  if (path.startsWith('models')) return EnumFileType.Model
+  if (path.startsWith('tests')) return EnumFileType.Test
+  if (path.startsWith('logs')) return EnumFileType.Log
+  if (path.startsWith('macros')) return EnumFileType.Macro
+  if (path.startsWith('hooks')) return EnumFileType.Hook
+  if (path.startsWith('seeds')) return EnumFileType.Seed
+  if (path.startsWith('metrics')) return EnumFileType.Metric
+  if (['config.yaml', 'config.yml', 'config.py'].includes(path))
+    return EnumFileType.Config
+  if (['schema.yaml', 'schema.yml'].includes(path)) return EnumFileType.Schema
+
+  return EnumFileType.Unknown
 }

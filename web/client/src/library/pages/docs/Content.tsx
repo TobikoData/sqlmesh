@@ -52,7 +52,7 @@ export default function Content(): JSX.Element {
             <div className="flex flex-col h-full dark:bg-theme-lighter round">
               <Documentation
                 model={model}
-                withQuery={model.type === 'sql'}
+                withQuery={model.isModelSQL}
               />
             </div>
             <div className="flex flex-col h-full px-2">

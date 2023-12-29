@@ -4,9 +4,11 @@ import {
   type Model,
   type ModelDescription,
   type ModelSql,
+  ModelType,
 } from '@api/client'
 import { type Lineage } from '@context/editor'
 import { ModelInitial } from './initial'
+import { type ModelFile } from './file'
 
 export interface InitialSQLMeshModel extends Model {
   lineage?: Record<string, Lineage>
@@ -18,7 +20,7 @@ export class ModelSQLMeshModel<
   path: string
   name: string
   dialect: string
-  type: string
+  type: ModelType
   columns: Column[]
   details: ModelDetails
   description?: ModelDescription
@@ -39,11 +41,11 @@ export class ModelSQLMeshModel<
     this.path = this.initial.path
     this.name = this.initial.name
     this.dialect = this.initial.dialect
-    this.type = this.initial.type
     this.description = this.initial.description
     this.sql = this.initial.sql
     this.columns = this.initial.columns ?? []
     this.details = this.initial.details ?? {}
+    this.type = this.initial.type
   }
 
   get index(): string {
@@ -60,6 +62,22 @@ export class ModelSQLMeshModel<
       .filter(Boolean)
       .join(' ')
       .toLocaleLowerCase()
+  }
+
+  get isModelPython(): boolean {
+    return this.type === ModelType.python
+  }
+
+  get isModelSQL(): boolean {
+    return this.type === ModelType.sql
+  }
+
+  get isModelSeed(): boolean {
+    return this.type === ModelType.seed
+  }
+
+  get isModelExternal(): boolean {
+    return this.type === ModelType.external
   }
 
   update(initial: Partial<InitialSQLMeshModel> = {}): void {

@@ -26,6 +26,7 @@ import { useApiFetchdf } from '@api/index'
 import { getTableDataFromArrowStreamResult } from '@components/table/help'
 import { type Table } from 'apache-arrow'
 import { type KeyBinding } from '@codemirror/view'
+import { useStoreContext } from '@context/context'
 
 function Editor(): JSX.Element {
   const tab = useStoreEditor(s => s.tab)
@@ -94,6 +95,9 @@ function EditorLoading(): JSX.Element {
 }
 
 function EditorMain({ tab }: { tab: EditorTab }): JSX.Element {
+  const models = useStoreContext(s => s.models)
+  const isModel = useStoreContext(s => s.isModel)
+
   const files = useStoreProject(s => s.files)
   const setSelectedFile = useStoreProject(s => s.setSelectedFile)
 
@@ -107,7 +111,7 @@ function EditorMain({ tab }: { tab: EditorTab }): JSX.Element {
   const setPreviewDiff = useStoreEditor(s => s.setPreviewDiff)
   const setDialects = useStoreEditor(s => s.setDialects)
 
-  const { models, setManuallySelectedColumn } = useLineageFlow()
+  const { setManuallySelectedColumn } = useLineageFlow()
 
   const defaultKeymapsEditorTab = useDefaultKeymapsEditorTab()
   const modelExtensions = useSQLMeshModelExtensions(
@@ -170,7 +174,7 @@ function EditorMain({ tab }: { tab: EditorTab }): JSX.Element {
   const sizesCodeEditorAndInspector = useMemo(() => {
     const model = models.get(tab?.file.path)
     const showInspector =
-      ((tab.file.isSQLMeshModel && model != null) || tab.file.isLocal) &&
+      ((isNotNil(model) && isModel(tab.file.path)) || tab.file.isLocal) &&
       isFalse(isStringEmptyOrNil(tab.file.content))
 
     return showInspector ? [75, 25] : [100, 0]
@@ -179,7 +183,7 @@ function EditorMain({ tab }: { tab: EditorTab }): JSX.Element {
   const sizesCodeEditorAndPreview = useMemo(() => {
     const model = models.get(tab.file.path)
     const showLineage =
-      isFalse(tab.file.isEmpty) && isNotNil(model) && tab.file.isSQLMeshModel
+      isFalse(tab.file.isEmpty) && isNotNil(model) && isModel(tab.file.path)
     const showPreview =
       (tab.file.isLocal && [previewTable, previewDiff].some(Boolean)) ||
       showLineage

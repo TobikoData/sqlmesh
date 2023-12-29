@@ -1,4 +1,3 @@
-import asyncio
 import json
 import typing as t
 from pathlib import Path
@@ -12,15 +11,15 @@ from sqlmesh.core.context import Context
 from web.server import models
 from web.server.api.endpoints.files import _get_directory, _get_file_with_content
 from web.server.api.endpoints.models import get_all_models
+from web.server.console import api_console
 from web.server.exceptions import ApiException
-from web.server.settings import get_context, get_path_mapping, get_settings
+from web.server.settings import get_context, get_settings
 from web.server.utils import is_relative_to
 
 
-async def watch_project(queue: asyncio.Queue) -> None:
+async def watch_project() -> None:
     settings = get_settings()
     context = await get_context(settings)
-    path_mapping = await get_path_mapping(settings)
 
     paths = [
         (context.path / c.MODELS).resolve(),
@@ -46,7 +45,7 @@ async def watch_project(queue: asyncio.Queue) -> None:
             should_load_context = should_load_context or any(is_relative_to(path, p) for p in paths)
 
             if change == Change.modified and path.is_dir():
-                directory = _get_directory(path, settings, path_mapping, context)
+                directory = _get_directory(path, settings, context)
                 directories[directory.path] = directory
             elif change == Change.deleted or not path.exists():
                 changes.append(
@@ -61,14 +60,13 @@ async def watch_project(queue: asyncio.Queue) -> None:
                         type=models.ArtifactType.file,
                         change=change,
                         path=str(relative_path),
-                        file=_get_file_with_content(relative_path, settings, path_mapping),
+                        file=_get_file_with_content(relative_path, settings),
                     )
                 )
-
         if should_load_context:
-            reload_context(queue, context)
+            reload_context(context)
 
-        queue.put_nowait(
+        api_console.queue.put_nowait(
             ServerSentEvent(
                 event="file",
                 data=json.dumps(
@@ -83,10 +81,10 @@ async def watch_project(queue: asyncio.Queue) -> None:
         )
 
 
-def reload_context(queue: asyncio.Queue, context: Context) -> None:
+def reload_context(context: Context) -> None:
     try:
         context.load()
-        queue.put_nowait(
+        api_console.queue.put_nowait(
             ServerSentEvent(
                 event="models", data=json.dumps(jsonable_encoder(get_all_models(context)))
             )
@@ -96,4 +94,4 @@ def reload_context(queue: asyncio.Queue, context: Context) -> None:
             message="Error refreshing the models while watching file changes",
             origin="API -> watcher -> reload_context",
         ).to_dict()
-        queue.put_nowait(ServerSentEvent(event="errors", data=json.dumps(error)))
+        api_console.queue.put_nowait(ServerSentEvent(event="errors", data=json.dumps(error)))

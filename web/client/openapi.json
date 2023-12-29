@@ -1137,31 +1137,14 @@
             "title": "Extension",
             "default": ""
           },
-          "is_supported": {
-            "type": "boolean",
-            "title": "Is Supported",
-            "default": false
-          },
           "content": {
             "anyOf": [{ "type": "string" }, { "type": "null" }],
             "title": "Content"
-          },
-          "type": {
-            "anyOf": [
-              { "$ref": "#/components/schemas/FileType" },
-              { "type": "null" }
-            ]
           }
         },
         "type": "object",
         "required": ["name", "path"],
         "title": "File"
-      },
-      "FileType": {
-        "type": "string",
-        "enum": ["audit", "macros", "model", "tests"],
-        "title": "FileType",
-        "description": "An enumeration of possible file types."
       },
       "HTTPValidationError": {
         "properties": {
@@ -1234,7 +1217,7 @@
           "name": { "type": "string", "title": "Name" },
           "path": { "type": "string", "title": "Path" },
           "dialect": { "type": "string", "title": "Dialect" },
-          "type": { "type": "string", "title": "Type" },
+          "type": { "$ref": "#/components/schemas/ModelType" },
           "columns": {
             "items": { "$ref": "#/components/schemas/Column" },
             "type": "array",
@@ -1388,6 +1371,11 @@
         ],
         "title": "ModelKindName",
         "description": "The kind of model, determining how this data is computed and stored in the warehouse."
+      },
+      "ModelType": {
+        "type": "string",
+        "enum": ["python", "sql", "seed", "external"],
+        "title": "ModelType"
       },
       "ModelsDiff": {
         "properties": {

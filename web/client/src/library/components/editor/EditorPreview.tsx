@@ -6,7 +6,6 @@ import { type EditorTab, useStoreEditor } from '~/context/editor'
 import { ViewColumnsIcon } from '@heroicons/react/24/solid'
 import { Button } from '@components/button/Button'
 import { EnumSize, EnumVariant } from '~/types/enum'
-import { useLineageFlow } from '@components/graph/context'
 import { EnumFileExtensions } from '@models/file'
 import { CodeEditorDefault } from './EditorCode'
 import { EnumRoutes } from '~/routes'
@@ -15,6 +14,7 @@ import TableDiff from '@components/tableDiff/TableDiff'
 import TabList from '@components/tab/Tab'
 import { useSQLMeshModelExtensions } from './hooks'
 import Table from '@components/table/Table'
+import { useStoreContext } from '@context/context'
 
 const ModelLineage = lazy(
   async () => await import('@components/graph/ModelLineage'),
@@ -39,7 +39,8 @@ export default function EditorPreview({
 }): JSX.Element {
   const navigate = useNavigate()
 
-  const { models } = useLineageFlow()
+  const models = useStoreContext(s => s.models)
+  const isModel = useStoreContext(s => s.isModel)
 
   const direction = useStoreEditor(s => s.direction)
   const previewQuery = useStoreEditor(s => s.previewQuery)
@@ -55,7 +56,7 @@ export default function EditorPreview({
 
   const model = models.get(tab.file.path)
   const showLineage =
-    isFalse(tab.file.isEmpty) && isNotNil(model) && tab.file.isSQLMeshModel
+    isFalse(tab.file.isEmpty) && isNotNil(model) && isModel(tab.file.path)
 
   const tabs: string[] = useMemo(
     () =>
