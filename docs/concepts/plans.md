@@ -44,7 +44,7 @@ This is a common choice in scenarios such as an addition of a new column, an act
 ### Forward-only change
 A modified (either directly or indirectly) model that is categorized as forward-only will continue to use the existing physical table once the change is deployed to production (the `prod` environment). This means that no backfill will take place.
 
-While iterating on forward-only changes in the development environment, the model's output will be stored in either a temporary table or a shallow clone of the production table if supported by the engine. In either case the data produced this way in the development environment will **not** be reused once the change is deployed to production. See [Forward-only Plans](#forward-only-plans) for more details.
+While iterating on forward-only changes in the development environment, the model's output will be stored in either a temporary table or a shallow clone of the production table if supported by the engine. In either case the data produced this way in the development environment can only be used for preview and will **not** be reused once the change is deployed to production. See [Forward-only Plans](#forward-only-plans) for more details.
 
 This category is assigned by SQLMesh automatically either when a user opts into using a [forward-only plan](#forward-only-plans) or when a model is explicitly configured to be forward-only.
 
@@ -75,6 +75,20 @@ At the moment, we are using the term backfilling broadly to describe any situati
 We will be iterating on terminology to better capture the nuances of each type in future versions.
 
 Note for incremental models: despite the fact that backfilling can happen incrementally (see `batch_size` parameter on models), there is an extra cost associated with this operation due to additional runtime involved. If the runtime cost is a concern, a [forward-only plan](#forward-only-plans) can be used instead.
+
+#### Data preview
+As mentioned earlier, the data output produced by [forward-only changes](#forward-only-change) in the development environment can only be used for preview and will not be reused upon deployment to production.
+
+The same holds true for any subsequent changes that depend on undeployed forward-only changes - data can be previewed but can't be reused in production.
+
+Backfills that are exclusively for preview purposes and will not be reused upon deployment to production are explicitly labeled as such in the plan summary:
+```bash
+Models needing backfill (missing dates):
+├── sushi__dev.customers: 2023-12-22 - 2023-12-28 (preview)
+├── sushi__dev.waiter_revenue_by_day: 2023-12-22 - 2023-12-28
+├── sushi__dev.top_waiters: 2023-12-22 - 2023-12-28
+└── sushi__dev.waiter_as_customer_by_day: 2023-12-22 - 2023-12-28 (preview)
+```
 
 ### Virtual Update
 Another benefit of the SQLMesh approach is that data for a new model version can be fully pre-built while still in a development environment. That way all changes and their downstream dependencies can be fully previewed before they are promoted to the production environment.

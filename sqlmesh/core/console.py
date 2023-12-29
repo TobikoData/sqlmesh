@@ -775,8 +775,13 @@ class TerminalConsole(Console):
             snapshot = plan.context_diff.snapshots[missing.snapshot_id]
             if not snapshot.is_model:
                 continue
+
+            preview_modifier = ""
+            if not plan.deployability_index.is_deployable(snapshot):
+                preview_modifier = " ([orange1]preview[/orange1])"
+
             backfill.add(
-                f"{snapshot.display_name(plan.environment_naming_info, default_catalog)}: {missing.format_intervals(snapshot.node.interval_unit)}"
+                f"{snapshot.display_name(plan.environment_naming_info, default_catalog)}: {missing.format_intervals(snapshot.node.interval_unit)}{preview_modifier}"
             )
         self._print(backfill)
 
@@ -1464,8 +1469,15 @@ class MarkdownConsole(CaptureTerminalConsole):
         self._print("**Models needing backfill (missing dates):**\n\n")
         for missing in plan.missing_intervals:
             snapshot = plan.context_diff.snapshots[missing.snapshot_id]
+            if not snapshot.is_model:
+                continue
+
+            preview_modifier = ""
+            if not plan.deployability_index.is_deployable(snapshot):
+                preview_modifier = " (**preview**)"
+
             self._print(
-                f"* `{snapshot.display_name(plan.environment_naming_info, default_catalog)}`: {missing.format_intervals(snapshot.node.interval_unit)}\n"
+                f"* `{snapshot.display_name(plan.environment_naming_info, default_catalog)}`: {missing.format_intervals(snapshot.node.interval_unit)}{preview_modifier}\n"
             )
         self._print("\n")
 
