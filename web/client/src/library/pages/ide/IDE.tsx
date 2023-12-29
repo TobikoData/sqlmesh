@@ -13,7 +13,6 @@ import {
   isArrayEmpty,
   isNil,
   isNotNil,
-  isFalse,
   isObjectNotEmpty,
   isTrue,
 } from '~/utils'
@@ -75,7 +74,6 @@ export default function PageIDE(): JSX.Element {
   const planOverview = useStorePlan(s => s.planOverview)
   const planApply = useStorePlan(s => s.planApply)
   const planCancel = useStorePlan(s => s.planCancel)
-  const planAction = useStorePlan(s => s.planAction)
   const setPlanOverview = useStorePlan(s => s.setPlanOverview)
   const setPlanApply = useStorePlan(s => s.setPlanApply)
   const setPlanCancel = useStorePlan(s => s.setPlanCancel)
@@ -269,10 +267,18 @@ export default function PageIDE(): JSX.Element {
   }, [confirmations])
 
   useEffect(() => {
-    if (models.size > 0 && isFalse(planAction.isProcessing)) {
+    if (models.size > 0) {
       void planRun()
     }
   }, [models])
+
+  useEffect(() => {
+    if (models.size > 0) {
+      planApply.reset()
+
+      void planRun()
+    }
+  }, [environment])
 
   useEffect(() => {
     planOverview.isFetching = isFetchingPlanRun
@@ -339,9 +345,9 @@ export default function PageIDE(): JSX.Element {
 
     if (isFinished) {
       void getEnvironments().then(({ data }) => {
-        updateEnviroments(data)
-
         void planRun()
+
+        updateEnviroments(data)
       })
     }
 

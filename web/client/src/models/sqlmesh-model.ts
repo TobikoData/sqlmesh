@@ -52,10 +52,6 @@ export class ModelSQLMeshModel<
     this.type = this.initial.type
   }
 
-  get id(): string {
-    return this.fqn
-  }
-
   get defaultCatalog(): Optional<ModelDefaultCatalog> {
     return this.default_catalog
   }
@@ -96,10 +92,6 @@ export class ModelSQLMeshModel<
     return decodeURI(this.name)
   }
 
-  get displayNormalizedName(): string {
-    return decodeURI(this.fqn)
-  }
-
   update(initial: Partial<InitialSQLMeshModel> = {}): void {
     for (const [key, value] of Object.entries(initial)) {
       if (key === 'columns') {
@@ -110,10 +102,14 @@ export class ModelSQLMeshModel<
         this.name = encodeURI(value as string)
       } else if (key === 'fqn') {
         this.fqn = encodeURI(value as string)
+      } else if (key === 'type') {
+        this.type = value as ModelType
+      } else if (key === 'default_catalog') {
+        this.default_catalog = value as ModelDefaultCatalog
+      } else if (key === 'description') {
+        this.description = value as ModelDescription
       } else if (key in this) {
-        this[
-          key as 'path' | 'dialect' | 'description' | 'sql' | 'default_catalog'
-        ] = value as string
+        this[key as 'path' | 'dialect' | 'sql'] = value as string
       }
     }
   }
