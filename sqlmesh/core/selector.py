@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import fnmatch
 import typing as t
+from collections import defaultdict
 from pathlib import Path
 
 from sqlmesh.core.dialect import normalize_model_name
@@ -28,6 +29,7 @@ class Selector:
         self._context_path = context_path
         self._default_catalog = default_catalog
         self._dialect = dialect
+        self.__models_by_tag: t.Optional[t.Dict[str, t.Set[str]]] = None
 
         if dag is None:
             self._dag: DAG[str] = DAG()
@@ -35,6 +37,15 @@ class Selector:
                 self._dag.add(fqn, model.depends_on)
         else:
             self._dag = dag
+
+    @property
+    def _models_by_tag(self) -> t.Dict[str, t.Set[str]]:
+        if self.__models_by_tag is None:
+            self.__models_by_tag = defaultdict(set)
+            for model in self._models.values():
+                for tag in model.tags:
+                    self.__models_by_tag[tag.lower()].add(model.fqn)
+        return self.__models_by_tag
 
     def select_models(
         self,
@@ -97,6 +108,65 @@ class Selector:
 
         return models
 
+    @classmethod
+    def _get_value_and_dependency_inclusion(cls, value: str) -> t.Tuple[str, bool, bool]:
+        include_upstream = False
+        include_downstream = False
+        if value[0] == "+":
+            value = value[1:]
+            include_upstream = True
+        if value[-1] == "+":
+            value = value[:-1]
+            include_downstream = True
+        return value, include_upstream, include_downstream
+
+    def _get_models(
+        self, model_name: str, include_upstream: bool, include_downstream: bool
+    ) -> t.Set[str]:
+        result = {model_name}
+        if include_upstream:
+            result.update(self._dag.upstream(model_name))
+        if include_downstream:
+            result.update(self._dag.downstream(model_name))
+        return result
+
+    def expand_model_tags(self, tag_selections: t.Iterable[str]) -> t.Set[str]:
+        """
+        Expands a set of model tags into a set of model names.
+        The tag matching is case-insensitive and supports wildcards and + prefix and suffix to
+        include upstream and downstream models.
+
+        Args:
+            tag_selections: A set of model tags which can have wildcards and + prefix and suffix.
+
+        Returns:
+            A set of model names.
+        """
+        result = set()
+        matched_tags = set()
+        for selection in tag_selections:
+            if not selection:
+                continue
+
+            (
+                selection,
+                include_upstream,
+                include_downstream,
+            ) = self._get_value_and_dependency_inclusion(selection.lower())
+
+            if "*" in selection:
+                for model_tag in self._models_by_tag:
+                    if fnmatch.fnmatchcase(model_tag, selection):
+                        matched_tags.add((model_tag, include_upstream, include_downstream))
+            elif selection in self._models_by_tag:
+                matched_tags.add((selection, include_upstream, include_downstream))
+
+        for tag, include_upstream, include_downstream in matched_tags:
+            for model in self._models_by_tag[tag]:
+                result.update(self._get_models(model, include_upstream, include_downstream))
+
+        return result
+
     def expand_model_selections(self, model_selections: t.Iterable[str]) -> t.Set[str]:
         """Expands a set of model selections into a set of model names.
 
@@ -108,35 +178,29 @@ class Selector:
         """
         result: t.Set[str] = set()
 
-        def _add_model(model_name: str, include_upstream: bool, include_downstream: bool) -> None:
-            result.add(model_name)
-            if include_upstream:
-                result.update(self._dag.upstream(model_name))
-            if include_downstream:
-                result.update(self._dag.downstream(model_name))
-
         for selection in model_selections:
             if not selection:
                 continue
 
-            include_upstream = False
-            include_downstream = False
-            if selection[0] == "+":
-                selection = selection[1:]
-                include_upstream = True
-            if selection[-1] == "+":
-                selection = selection[:-1]
-                include_downstream = True
+            (
+                selection,
+                include_upstream,
+                include_downstream,
+            ) = self._get_value_and_dependency_inclusion(selection)
 
             if "*" in selection:
                 for model in self._models.values():
-                    if fnmatch.fnmatch(model.name, selection):
-                        _add_model(model.fqn, include_upstream, include_downstream)
+                    if fnmatch.fnmatchcase(model.name, selection):
+                        result.update(
+                            self._get_models(model.fqn, include_upstream, include_downstream)
+                        )
             else:
-                _add_model(
-                    normalize_model_name(selection, self._default_catalog, self._dialect),
-                    include_upstream,
-                    include_downstream,
+                result.update(
+                    self._get_models(
+                        normalize_model_name(selection, self._default_catalog, self._dialect),
+                        include_upstream,
+                        include_downstream,
+                    )
                 )
 
         return result

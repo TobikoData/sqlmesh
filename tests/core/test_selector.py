@@ -177,6 +177,133 @@ def test_select_models_missing_env(mocker: MockerFixture, make_snapshot):
     )
 
 
+@pytest.mark.parametrize(
+    "tags, tag_selections, output",
+    [
+        # Direct matching only
+        (
+            [("model1", "tag1", None), ("model2", "tag2", None), ("model3", "tag3", None)],
+            ["tag1", "tag3"],
+            {'"model1"', '"model3"'},
+        ),
+        # Wildcard works
+        (
+            [("model1", "tag1", None), ("model2", "tag2", None), ("model3", "tag3", None)],
+            ["tag*"],
+            {'"model1"', '"model2"', '"model3"'},
+        ),
+        # Downstream models are included
+        (
+            [("model1", "tag1", None), ("model2", "tag2", {"model1"}), ("model3", "tag3", None)],
+            ["tag1+"],
+            {'"model1"', '"model2"'},
+        ),
+        # Upstream models are included
+        (
+            [("model1", "tag1", None), ("model2", "tag2", None), ("model3", "tag3", {"model2"})],
+            ["+tag3"],
+            {'"model2"', '"model3"'},
+        ),
+        # Upstream and downstream models are included
+        (
+            [
+                ("model1", "tag1", None),
+                ("model2", "tag2", {"model1"}),
+                ("model3", "tag3", {"model2"}),
+            ],
+            ["+tag2+"],
+            {'"model1"', '"model2"', '"model3"'},
+        ),
+        # Wildcard works with upstream and downstream models
+        (
+            [
+                ("model1", "tag1", None),
+                ("model2", "tag2", {"model1"}),
+                ("model3", "tag3", {"model2"}),
+                ("model4", "blah", {"model3"}),
+                ("model5", "tag4", None),
+                # Only excluded model since it doesn't match wildcard nor upstream/downstream
+                ("model6", "blah", None),
+            ],
+            ["+tag*+"],
+            {'"model1"', '"model2"', '"model3"', '"model4"', '"model5"'},
+        ),
+        # Multiple tags work
+        (
+            [
+                ("model1", "tag1", None),
+                ("model2", "tag2", None),
+                ("model3", "tag3", None),
+                ("model4", "tag4", None),
+            ],
+            ["tag1", "tag3"],
+            {'"model1"', '"model3"'},
+        ),
+        # Multiple tags work with upstream and downstream models
+        (
+            [
+                ("model1", "tag1", None),
+                ("model2", "tag2", {"model1"}),
+                ("model3", "tag3", {"model2"}),
+                ("model4", "tag4", None),
+                ("model5", "tag5", {"model4"}),
+                ("model6", "tag6", {"model5"}),
+            ],
+            ["+tag3", "tag5"],
+            {'"model1"', '"model2"', '"model3"', '"model5"'},
+        ),
+        # Case-insensitive matching
+        (
+            [
+                ("model1", "tag1", None),
+                ("model2", "tag2", None),
+                ("model3", "tag3", None),
+            ],
+            ["TAG*"],
+            {'"model1"', '"model2"', '"model3"'},
+        ),
+        # Wildcard returns everything
+        (
+            [
+                ("model1", "tag1", None),
+                ("model2", "tag2", None),
+                ("model3", "tag3", None),
+            ],
+            ["*"],
+            {'"model1"', '"model2"', '"model3"'},
+        ),
+        # Upstream that don't exist is fine
+        (
+            [
+                ("model1", "tag1", None),
+                ("model2", "tag2", None),
+            ],
+            ["+tag2"],
+            {'"model2"'},
+        ),
+        # No matches returns empty set
+        (
+            [
+                ("model1", "tag1", None),
+                ("model2", "tag2", None),
+            ],
+            ["+tag3*+", "+tag3+"],
+            set(),
+        ),
+    ],
+)
+def test_expand_model_tags(mocker: MockerFixture, make_snapshot, tags, tag_selections, output):
+    models: UniqueKeyDict[str, Model] = UniqueKeyDict("models")
+    for (model_name, tag, depends_on) in tags:
+        model = SqlModel(
+            name=model_name, query=d.parse_one("SELECT 1 AS a"), depends_on=depends_on, tags=[tag]
+        )
+        models[model.fqn] = model
+
+    selector = Selector(mocker.Mock(), models)
+    assert selector.expand_model_tags(tag_selections) == output
+
+
 def _assert_models_equal(actual: t.Dict[str, Model], expected: t.Dict[str, Model]) -> None:
     assert set(actual) == set(expected)
     for name, model in actual.items():

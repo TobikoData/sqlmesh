@@ -189,6 +189,24 @@ def test_restate_models(sushi_context_pre_scheduling: Context):
         sushi_context_pre_scheduling.plan(restate_models=['"unknown_model"'], no_prompts=True)
 
 
+def test_restate_tags(sushi_context_pre_scheduling: Context):
+    plan = sushi_context_pre_scheduling.plan(restate_tags=["expensive"], no_prompts=True)
+    assert plan.restatements == {
+        SnapshotId(name='"memory"."sushi"."customer_revenue_by_day"', identifier="553444871"): (
+            plan.start,
+            to_timestamp(to_date("today")),
+        ),
+        SnapshotId(name='"memory"."sushi"."customer_revenue_lifetime"', identifier="333411410"): (
+            plan.start,
+            to_timestamp(to_date("today")),
+        ),
+    }
+    assert plan.requires_backfill
+
+    with pytest.raises(PlanError, match=r"No models match the provided tags. Tags: unknown_tag"):
+        sushi_context_pre_scheduling.plan(restate_tags=["unknown_tag"], no_prompts=True)
+
+
 def test_restate_model_with_merge_strategy(make_snapshot, mocker: MockerFixture):
     snapshot_a = make_snapshot(
         SqlModel(

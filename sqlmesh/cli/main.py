@@ -238,6 +238,12 @@ def diff(ctx: click.Context, environment: t.Optional[str] = None) -> None:
     help="Restate data for specified models and models downstream from the one specified. For production environment, all related model versions will have their intervals wiped, but only the current versions will be backfilled. For development environment, only the current model versions will be affected.",
 )
 @click.option(
+    "--restate-tag",
+    type=str,
+    multiple=True,
+    help="Restate data for specified model tags and models downstream from the one specified. For production environment, all related model versions will have their intervals wiped, but only the current versions will be backfilled. For development environment, only the current model versions will be affected.",
+)
+@click.option(
     "--no-gaps",
     is_flag=True,
     help="Ensure that new snapshots have no data gaps when comparing to existing snapshots for matching models in the target environment.",
@@ -308,10 +314,12 @@ def plan(
     restate_models = kwargs.pop("restate_model", None)
     select_models = kwargs.pop("select_model", None)
     backfill_models = kwargs.pop("backfill_model", None)
+    restate_tags = kwargs.pop("restate_tag", None)
     context.console.verbose = verbose
     context.plan(
         environment,
         restate_models=restate_models,
+        restate_tags=restate_tags,
         select_models=select_models,
         backfill_models=backfill_models,
         **kwargs,

@@ -769,6 +769,7 @@ class Context(BaseContext):
         create_from: t.Optional[str] = None,
         skip_tests: bool = False,
         restate_models: t.Optional[t.Iterable[str]] = None,
+        restate_tags: t.Optional[t.Iterable[str]] = None,
         no_gaps: bool = False,
         skip_backfill: bool = False,
         forward_only: bool = False,
@@ -791,11 +792,17 @@ class Context(BaseContext):
             environment: The environment to diff and plan against.
             start: The start date of the backfill if there is one.
             end: The end date of the backfill if there is one.
-            execution_time: The date/time time reference to use for execution time. Defaults to now.
+            execution_time: The date/time reference to use for execution time. Defaults to now.
             create_from: The environment to create the target environment from if it
                 doesn't exist. If not specified, the "prod" environment will be used.
             skip_tests: Unit tests are run by default so this will skip them if enabled
-            restate_models: A list of of either internal or external models that need to be restated
+            restate_models: A list of either internal or external models that need to be restated
+                for the given plan interval. If the target environment is a production environment,
+                ALL snapshots that depended on these upstream tables will have their intervals deleted
+                (even ones not in this current environment). Only the snapshots in this environment will
+                be backfilled whereas others need to be recovered on a future plan application. For development
+                environments only snapshots that are part of this plan will be affected.
+            restate_tags: A list of tags defined on either internal or external models that need to be restated
                 for the given plan interval. If the target environment is a production environment,
                 ALL snapshots that depended on these upstream tables will have their intervals deleted
                 (even ones not in this current environment). Only the snapshots in this environment will
@@ -866,6 +873,14 @@ class Context(BaseContext):
 
         if restate_models is not None:
             restate_models = model_selector.expand_model_selections(restate_models)
+
+        if restate_tags is not None:
+            restate_models = restate_models or set()
+            restate_models.update(model_selector.expand_model_tags(restate_tags))
+            if not restate_models:
+                raise PlanError(
+                    f"No models match the provided tags. Tags: {', '.join(restate_tags)}"
+                )
 
         # If no end date is specified, use the max interval end from prod
         # to prevent unintended evaluation of the entire DAG.
