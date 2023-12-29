@@ -1,3 +1,4 @@
+import asyncio
 import json
 import typing as t
 from pathlib import Path
@@ -14,7 +15,7 @@ from web.server.api.endpoints.models import get_all_models
 from web.server.console import api_console
 from web.server.exceptions import ApiException
 from web.server.settings import get_context, get_settings
-from web.server.utils import is_relative_to
+from web.server.utils import is_relative_to, run_in_executor
 
 
 async def watch_project() -> None:
@@ -63,8 +64,6 @@ async def watch_project() -> None:
                         file=_get_file_with_content(relative_path, settings),
                     )
                 )
-        if should_load_context:
-            reload_context(context)
 
         api_console.queue.put_nowait(
             ServerSentEvent(
@@ -79,6 +78,9 @@ async def watch_project() -> None:
                 ),
             )
         )
+
+        if should_load_context:
+            asyncio.create_task(run_in_executor(reload_context, context))
 
 
 def reload_context(context: Context) -> None:
