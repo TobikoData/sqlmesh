@@ -95,7 +95,7 @@ const Documentation = function Documentation({
             className="max-h-[15rem]"
             nodeId={model.name}
             columns={model.columns}
-            disabled={model?.type === 'python'}
+            disabled={model?.isModelPython}
             withHandles={false}
             withSource={false}
             withDescription={true}

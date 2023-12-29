@@ -62,6 +62,7 @@ import {
   type ColumnLineageApiLineageModelNameColumnNameGet200,
   type LineageColumn,
   type LineageColumnSource,
+  ModelType,
 } from '@api/client'
 import Loading from '@components/loading/Loading'
 import Spinner from '@components/logo/Spinner'
@@ -82,11 +83,8 @@ import ListboxShow from '@components/listbox/ListboxShow'
 import SearchList from '@components/search/SearchList'
 
 export const EnumLineageNodeModelType = {
-  python: 'python',
-  sql: 'sql',
+  ...ModelType,
   cte: 'cte',
-  seed: 'seed',
-  external: 'external',
   unknown: 'unknown',
 } as const
 
@@ -997,7 +995,6 @@ function ColumnLoading({
 function GraphControls({ nodes = [] }: { nodes: Node[] }): JSX.Element {
   const {
     withColumns,
-    models,
     lineage,
     mainNode,
     selectedNodes,
@@ -1043,13 +1040,11 @@ function GraphControls({ nodes = [] }: { nodes: Node[] }): JSX.Element {
   const countDataSources = nodes.filter(
     n =>
       isFalse(n.hidden) &&
-      (models.get(n.id)?.type === EnumLineageNodeModelType.external ||
-        models.get(n.id)?.type === EnumLineageNodeModelType.seed),
+      (n.data.type === EnumLineageNodeModelType.external ||
+        n.data.type === EnumLineageNodeModelType.seed),
   ).length
   const countCTEs = nodes.filter(
-    n =>
-      isFalse(n.hidden) &&
-      models.get(n.id)?.type === EnumLineageNodeModelType.cte,
+    n => isFalse(n.hidden) && n.data.type === EnumLineageNodeModelType.cte,
   ).length
   const highlightedNodeModels = useMemo(
     () => Object.values(highlightedNodes ?? {}).flat(),

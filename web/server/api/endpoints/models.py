@@ -32,12 +32,12 @@ def get_all_models(context: Context) -> t.List[models.Model]:
 
     def _get_model_type(model: Model) -> str:
         if model.is_sql:
-            return "sql"
+            return models.ModelType.SQL
         if model.is_python:
-            return "python"
+            return models.ModelType.PYTHON
         if model.is_seed:
-            return "seed"
-        return "external"
+            return models.ModelType.SEED
+        return models.ModelType.EXTERNAL
 
     for model in context.models.values():
         type = _get_model_type(model)

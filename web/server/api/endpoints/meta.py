@@ -16,6 +16,8 @@ def get_api_meta(
     request: Request,
 ) -> models.Meta:
     """Get the metadata"""
+    api_console.log_event_plan_cancel()
+    api_console.log_event_plan_overview()
     api_console.log_event_plan_apply()
     return models.Meta(
         version=_sqlmesh_version(),

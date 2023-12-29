@@ -24,6 +24,13 @@ from sqlmesh.utils.pydantic import (
 SUPPORTED_EXTENSIONS = {".py", ".sql", ".yaml", ".yml", ".csv"}
 
 
+class ModelType(str, enum.Enum):
+    PYTHON = "python"
+    SQL = "sql"
+    SEED = "seed"
+    EXTERNAL = "external"
+
+
 class FileType(str, enum.Enum):
     """An enumeration of possible file types."""
 
@@ -74,9 +81,7 @@ class File(BaseModel):
     name: str
     path: str
     extension: str = ""
-    is_supported: bool = False
     content: t.Optional[str] = None
-    type: t.Optional[FileType] = None
 
     if PYDANTIC_MAJOR_VERSION >= 2:
         model_config = pydantic.ConfigDict(validate_default=True)  # type: ignore
@@ -86,13 +91,6 @@ class File(BaseModel):
     def default_extension(cls, v: str, values: t.Dict[str, t.Any]) -> str:
         if "name" in values:
             return pathlib.Path(values["name"]).suffix
-        return v
-
-    @field_validator("is_supported", always=True, mode="before")
-    @field_validator_v1_args
-    def default_is_supported(cls, v: bool, values: t.Dict[str, t.Any]) -> bool:
-        if "extension" in values:
-            return values["extension"] in SUPPORTED_EXTENSIONS
         return v
 
 
@@ -232,7 +230,7 @@ class Model(BaseModel):
     name: str
     path: str
     dialect: str
-    type: str
+    type: ModelType
     columns: t.List[Column]
     description: t.Optional[str] = None
     details: t.Optional[ModelDetails] = None
