@@ -1,4 +1,3 @@
-import asyncio
 import json
 import typing as t
 from pathlib import Path
@@ -80,7 +79,7 @@ async def watch_project() -> None:
         )
 
         if should_load_context:
-            asyncio.create_task(run_in_executor(reload_context, context))
+            await run_in_executor(reload_context, context)
 
 
 def reload_context(context: Context) -> None:
