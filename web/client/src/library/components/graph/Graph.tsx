@@ -401,7 +401,7 @@ const ModelColumn = memo(function ModelColumn({
   } = useApiColumnLineage(nodeId, column.name)
 
   useEffect(() => {
-    if (selectManually == null) return
+    if (isNil(selectManually)) return
 
     toggleColumnLineage()
     selectManually(undefined)
@@ -994,6 +994,7 @@ function ColumnLoading({
 
 function GraphControls({ nodes = [] }: { nodes: Node[] }): JSX.Element {
   const {
+    models,
     withColumns,
     lineage,
     mainNode,

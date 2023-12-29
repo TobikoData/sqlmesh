@@ -9,7 +9,6 @@ import {
 } from '@api/client'
 import { type Lineage } from '@context/editor'
 import { ModelInitial } from './initial'
-import { type ModelFile } from './file'
 
 export interface InitialSQLMeshModel extends Model {
   lineage?: Record<string, Lineage>
