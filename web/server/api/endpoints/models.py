@@ -50,6 +50,7 @@ def get_all_models(context: Context) -> t.List[models.Model]:
             return models.ModelType.SEED
         return models.ModelType.EXTERNAL
 
+
 def get_all_model_base(model: Model, context: Context) -> models.Model:
     return models.Model(
         name=model.name,
