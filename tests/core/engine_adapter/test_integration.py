@@ -14,7 +14,7 @@ from sqlglot import exp, parse_one
 from sqlmesh import Config, Context, EngineAdapter
 from sqlmesh.core.config import load_config_from_paths
 from sqlmesh.core.dialect import normalize_model_name
-from sqlmesh.core.engine_adapter.shared import DataObject
+from sqlmesh.core.engine_adapter.shared import DataObject, DataObjectType
 from sqlmesh.utils import random_id
 from sqlmesh.utils.date import now, to_date, to_ds, yesterday
 from sqlmesh.utils.errors import UnsupportedCatalogOperationError
@@ -179,6 +179,142 @@ class TestContext:
 
     def compare_with_current(self, table: exp.Table, expected: pd.DataFrame) -> None:
         self._compare_dfs(self.get_current_data(table), self.output_data(expected))
+
+    def get_table_comment(
+        self,
+        schema_name: str,
+        table_name: str,
+        table_kind: str = "BASE TABLE",
+    ) -> str:
+        if self.dialect in ["postgres", "redshift"]:
+            query = f"""
+                SELECT
+                    t.table_name,
+                    pg_catalog.obj_description(pgc.oid, 'pg_class')
+                FROM information_schema.tables t
+                INNER JOIN pg_catalog.pg_class pgc
+                ON t.table_name = pgc.relname
+                WHERE
+                    t.table_schema='{schema_name}'
+                    AND t.table_name='{table_name}'
+                    AND t.table_type='{table_kind}'
+                ;
+            """
+        elif self.dialect in ["mysql", "snowflake"]:
+            comment_field_name = {
+                "mysql": "table_comment",
+                "snowflake": "comment",
+            }
+
+            query = f"""
+                SELECT
+                    table_name,
+                    {comment_field_name[self.dialect]}
+                FROM INFORMATION_SCHEMA.TABLES
+                WHERE
+                    table_schema='{schema_name}'
+                    AND table_name='{table_name}'
+                    AND table_type='{table_kind}'
+            """
+        elif self.dialect == "bigquery":
+            query = f"""
+                SELECT
+                    table_name,
+                    option_value
+                FROM `region-us.INFORMATION_SCHEMA.TABLE_OPTIONS`
+                WHERE
+                    table_schema='{schema_name}'
+                    AND table_name='{table_name}'
+                    AND option_name = 'description'
+            """
+        elif self.dialect in ["spark", "databricks"]:
+            query = f"DESCRIBE TABLE EXTENDED {schema_name}.{table_name}"
+        elif self.dialect == "trino":
+            query = f"""
+                SELECT
+                    table_name,
+                    comment
+                FROM system.metadata.table_comments
+                WHERE
+                    schema_name = '{schema_name}'
+                    AND table_name = '{table_name}'
+            """
+
+        result = self.engine_adapter.fetchall(query)
+
+        if result:
+            if self.dialect == "bigquery":
+                comment = result[0][1].replace('"', "")
+            elif self.dialect in ["spark", "databricks"]:
+                comment = [x for x in result if x[0] == "Comment"][0][1]
+            else:
+                comment = result[0][1]
+
+            return comment
+
+        return None
+
+    def get_column_comments(self, schema_name: str, table_name: str) -> t.Dict[str, str]:
+        comment_index = 1
+        if self.dialect in ["postgres", "redshift"]:
+            query = f"""
+            SELECT
+                    cols.column_name,
+                    pg_catalog.col_description(c.oid, cols.ordinal_position::int) AS column_comment
+                FROM
+                    pg_catalog.pg_class c,
+                    information_schema.columns cols
+                WHERE
+                    cols.table_schema = '{schema_name}'
+                    AND cols.table_name = '{table_name}'
+                    AND cols.table_name = c.relname
+            """
+        elif self.dialect in ["mysql", "snowflake"]:
+            comment_field_name = {
+                "mysql": "column_comment",
+                "snowflake": "comment",
+            }
+
+            query = f"""
+                SELECT
+                    column_name,
+                    {comment_field_name[self.dialect]}
+                FROM
+                    information_schema.columns
+                WHERE
+                    table_schema = '{schema_name}'
+                    AND table_name = '{table_name}'
+                ;
+            """
+        elif self.dialect == "bigquery":
+            query = f"""
+                SELECT
+                    column_name,
+                    description
+                FROM
+                    `region-us.INFORMATION_SCHEMA.COLUMN_FIELD_PATHS`
+                WHERE
+                    table_schema = '{schema_name}'
+                    AND table_name = '{table_name}'
+                ;
+            """
+        elif self.dialect in ["spark", "databricks"]:
+            query = f"DESCRIBE TABLE {schema_name}.{table_name}"
+            comment_index = 2
+        elif self.dialect == "trino":
+            query = f"SHOW COLUMNS FROM {schema_name}.{table_name}"
+            comment_index = 3
+
+        result = self.engine_adapter.fetchall(query)
+
+        if self.dialect in ["spark", "databricks"]:
+            result = list(set([x for x in result if not x[0].startswith("#")]))
+
+        return {
+            x[0]: x[comment_index]
+            for x in result
+            if x[comment_index] != "" and x[comment_index] is not None
+        }
 
 
 class MetadataResults(PydanticModel):
@@ -461,6 +597,28 @@ def test_temp_table(ctx: TestContext):
     assert len(results.views) == len(results.tables) == len(results.non_temp_tables) == 0
 
 
+def test_create_table(ctx: TestContext):
+    table = ctx.table("test_table")
+    ctx.init()
+    ctx.engine_adapter.create_table(
+        table,
+        {"id": exp.DataType.build("int")},
+        table_description="test table description",
+        column_descriptions={"id": "test id column description"},
+    )
+    results = ctx.get_metadata_results()
+    assert len(results.tables) == 1
+    assert len(results.views) == 0
+    assert len(results.materialized_views) == 0
+    assert results.tables[0] == table.name
+
+    if not ctx.engine_adapter.COMMENT_CREATION.is_unsupported:
+        table_description = ctx.get_table_comment(TEST_SCHEMA, "test_table")
+        column_comments = ctx.get_column_comments(TEST_SCHEMA, "test_table")
+        assert table_description == "test table description"
+        assert column_comments == {"id": "test id column description"}
+
+
 def test_ctas(ctx: TestContext):
     ctx.init()
     table = ctx.table("test_table")
@@ -471,13 +629,24 @@ def test_ctas(ctx: TestContext):
             {"id": 3, "ds": "2022-01-03"},
         ]
     )
-    ctx.engine_adapter.ctas(table, ctx.input_data(input_data))
+    ctx.engine_adapter.ctas(
+        table,
+        ctx.input_data(input_data),
+        table_description="test table description",
+        column_descriptions={"id": "test id column description"},
+    )
     results = ctx.get_metadata_results()
     assert len(results.views) == 0
     assert len(results.materialized_views) == 0
     assert len(results.tables) == len(results.non_temp_tables) == 1
     assert results.non_temp_tables[0] == table.name
     ctx.compare_with_current(table, input_data)
+
+    if not ctx.engine_adapter.COMMENT_CREATION.is_unsupported:
+        table_description = ctx.get_table_comment(TEST_SCHEMA, "test_table")
+        column_comments = ctx.get_column_comments(TEST_SCHEMA, "test_table")
+        assert table_description == "test table description"
+        assert column_comments == {"id": "test id column description"}
 
 
 def test_create_view(ctx: TestContext):
@@ -490,13 +659,22 @@ def test_create_view(ctx: TestContext):
     )
     view = ctx.table("test_view")
     ctx.init()
-    ctx.engine_adapter.create_view(view, ctx.input_data(input_data))
+    ctx.engine_adapter.create_view(
+        view, ctx.input_data(input_data), table_description="test view description"
+    )
     results = ctx.get_metadata_results()
     assert len(results.tables) == 0
     assert len(results.views) == 1
     assert len(results.materialized_views) == 0
     assert results.views[0] == view.name
     ctx.compare_with_current(view, input_data)
+
+    if (
+        not ctx.engine_adapter.COMMENT_CREATION.is_unsupported
+        and ctx.engine_adapter.SUPPORTS_VIEW_COMMENT
+    ):
+        table_description = ctx.get_table_comment(TEST_SCHEMA, "test_view", table_kind="VIEW")
+        assert table_description == "test view description"
 
 
 def test_materialized_view(ctx: TestContext):
@@ -1028,6 +1206,75 @@ def test_sushi(ctx: TestContext):
         env_name="test_prod",
         dialect=ctx.dialect,
     )
+
+    # Ensure table and column comments were registered with engine
+    if not ctx.engine_adapter.COMMENT_CREATION.is_unsupported:
+        comments = {
+            "customer_revenue_by_day": {
+                "column": {
+                    "customer_id": "Customer id",
+                    "revenue": "Revenue from orders made by this customer",
+                    "event_date": "Date",
+                },
+            },
+            "customer_revenue_lifetime": {
+                "column": {
+                    "customer_id": "Customer id",
+                    "revenue": "Lifetime revenue from this customer",
+                    "event_date": "End date of the lifetime calculation",
+                },
+            },
+            "orders": {
+                "table": "Table of sushi orders.",
+            },
+            "raw_marketing": {
+                "table": "Table of marketing status.",
+            },
+            "waiter_revenue_by_day": {
+                "table": "Table of revenue generated by waiters by day.",
+                "column": {
+                    "waiter_id": "Waiter id",
+                    "revenue": "Revenue from orders taken by this waiter",
+                    "event_date": "Date",
+                },
+            },
+        }
+
+        physical_layer_objects = context.engine_adapter._get_data_objects("sqlmesh__sushi")
+        physical_layer_models = {
+            x.name.split("__")[1]: {
+                "table_name": x.name,
+                "is_view": x.type == DataObjectType.VIEW,
+            }
+            for x in physical_layer_objects
+            if not x.name.endswith("__temp")
+        }
+
+        for model_name, comment in comments.items():
+            physical_table_name = physical_layer_models[model_name]["table_name"]
+
+            if not (
+                physical_layer_models[model_name]["is_view"]
+                and not ctx.engine_adapter.SUPPORTS_VIEW_COMMENT
+            ):
+                expected_tbl_comment = comments.get(model_name).get("table", None)
+                if expected_tbl_comment:
+                    actual_tbl_comment = ctx.get_table_comment(
+                        "sqlmesh__sushi",
+                        physical_table_name,
+                        table_kind="VIEW"
+                        if physical_layer_models[model_name]["is_view"]
+                        else "BASE TABLE",
+                    )
+                    assert expected_tbl_comment == actual_tbl_comment
+
+            expected_col_comments = comments.get(model_name).get("column", None)
+            if expected_col_comments:
+                actual_col_comments = ctx.get_column_comments("sqlmesh__sushi", physical_table_name)
+                for column_name, expected_col_comment in expected_col_comments.items():
+                    expected_col_comment = expected_col_comments.get(column_name, None)
+                    actual_col_comment = actual_col_comments.get(column_name, None)
+                    assert expected_col_comment == actual_col_comment
 
     # Ensure that the plan has been applied successfully.
     no_change_plan = context.plan(
