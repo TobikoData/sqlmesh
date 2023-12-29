@@ -13,7 +13,7 @@ from sqlmesh.core.snapshot import DeployabilityIndex, SnapshotTableInfo
 from sqlmesh.core.state_sync import EngineAdapterStateSync, StateSync
 from sqlmesh.core.state_sync.base import DelegatingStateSync
 from sqlmesh.schedulers.airflow import common
-from sqlmesh.utils.date import now, now_timestamp
+from sqlmesh.utils.date import now, to_timestamp
 from sqlmesh.utils.errors import SQLMeshError
 
 
@@ -97,14 +97,9 @@ def create_plan_dag_spec(
 
     update_intervals_for_new_snapshots(new_snapshots.values(), state_sync)
 
-    if request.environment.end_at:
-        end = request.environment.end_at
-        unpaused_dt = None
-    else:
-        # Unbounded end date means we need to unpause all paused snapshots
-        # that are part of the target environment.
-        end = now()
-        unpaused_dt = end
+    now_dt = now()
+    end = request.environment.end_at or now_dt
+    unpaused_dt = end if not request.is_dev and not request.restatements else None
 
     if request.restatements:
         intervals_to_remove = [
@@ -174,7 +169,7 @@ def create_plan_dag_spec(
         is_dev=request.is_dev,
         forward_only=request.forward_only,
         environment_expiration_ts=request.environment.expiration_ts,
-        dag_start_ts=now_timestamp(),
+        dag_start_ts=to_timestamp(now_dt),
         deployability_index=deployability_index,
         no_gaps_snapshot_names=no_gaps_snapshot_names,
     )

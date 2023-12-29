@@ -126,7 +126,7 @@ class Plan:
         if not self._start and is_dev and forward_only:
             self._start = default_start or yesterday_ds()
 
-        self._end = end if end or not is_dev else (default_end or now())
+        self._end = end or default_end
         self._restate_models = set(restate_models or [])
         self._effective_from: t.Optional[TimeLike] = None
         self._execution_time = execution_time or now()
@@ -197,10 +197,10 @@ class Plan:
 
     @start.setter
     def start(self, new_start: TimeLike) -> None:
-        self._ensure_valid_date_range(new_start, self._end)
         self._start = new_start
         self.override_start = True
         self.__missing_intervals = None
+        self._ensure_valid_date_range()
         self._refresh_dag_and_ignored_snapshots()
 
     @property
@@ -212,6 +212,7 @@ class Plan:
     def end(self, new_end: TimeLike) -> None:
         self._end = new_end
         self.override_end = True
+        self._ensure_valid_date_range()
         self._refresh_dag_and_ignored_snapshots()
 
     @property
@@ -661,10 +662,8 @@ class Plan:
                     else SnapshotChangeCategory.BREAKING
                 )
 
-    def _ensure_valid_date_range(
-        self, start: t.Optional[TimeLike], end: t.Optional[TimeLike]
-    ) -> None:
-        if (start or end) and not self.is_start_and_end_allowed:
+    def _ensure_valid_date_range(self) -> None:
+        if (self.override_start or self.override_end) and not self.is_start_and_end_allowed:
             raise PlanError(
                 "The start and end dates can't be set for a production plan without restatements."
             )
@@ -749,7 +748,7 @@ class Plan:
         self.__missing_intervals = None
 
         self._ensure_new_env_with_changes()
-        self._ensure_valid_date_range(self._start, self._end)
+        self._ensure_valid_date_range()
         self._ensure_no_forward_only_revert()
         self._ensure_no_broken_references()
 

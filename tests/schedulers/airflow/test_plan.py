@@ -145,8 +145,8 @@ def test_create_plan_dag_spec(
     expected_no_gaps_snapshot_names = {the_snapshot.name} if not paused_forward_only else set()
 
     with mock.patch(
-        "sqlmesh.schedulers.airflow.plan.now_timestamp",
-        side_effect=lambda: to_timestamp("2023-01-01"),
+        "sqlmesh.schedulers.airflow.plan.now",
+        side_effect=lambda: to_datetime("2023-01-01"),
     ):
         plan_spec = create_plan_dag_spec(plan_request, state_sync_mock)
     assert plan_spec == common.PlanDagSpec(
@@ -168,7 +168,7 @@ def test_create_plan_dag_spec(
         demoted_snapshots=[deleted_snapshot],
         start="2022-01-01",
         end="2022-01-04",
-        unpaused_dt=None,
+        unpaused_dt="2022-01-04",
         no_gaps=True,
         plan_id="test_plan_id",
         previous_plan_id=None,
@@ -259,8 +259,6 @@ def test_restatement(
     now_value = "2022-01-09T23:59:59+00:00"
     with mock.patch(
         "sqlmesh.schedulers.airflow.plan.now", side_effect=lambda: to_datetime(now_value)
-    ), mock.patch(
-        "sqlmesh.schedulers.airflow.plan.now_timestamp", side_effect=lambda: to_timestamp(now_value)
     ):
         plan_spec = create_plan_dag_spec(plan_request, state_sync_mock)
 
@@ -363,8 +361,8 @@ def test_select_models_for_backfill(mocker: MockerFixture, random_name, make_sna
     state_sync_mock.refresh_snapshot_intervals.return_value = []
 
     with mock.patch(
-        "sqlmesh.schedulers.airflow.plan.now_timestamp",
-        side_effect=lambda: to_timestamp("2023-01-01"),
+        "sqlmesh.schedulers.airflow.plan.now",
+        side_effect=lambda: to_datetime("2023-01-01"),
     ):
         plan_spec = create_plan_dag_spec(plan_request, state_sync_mock)
 
@@ -385,7 +383,7 @@ def test_select_models_for_backfill(mocker: MockerFixture, random_name, make_sna
         demoted_snapshots=[],
         start="2022-01-01",
         end="2022-01-04",
-        unpaused_dt=None,
+        unpaused_dt="2022-01-04",
         no_gaps=True,
         plan_id="test_plan_id",
         previous_plan_id=None,

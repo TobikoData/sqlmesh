@@ -781,6 +781,7 @@ class Context(BaseContext):
         backfill_models: t.Optional[t.Collection[str]] = None,
         categorizer_config: t.Optional[CategorizerConfig] = None,
         no_diff: bool = False,
+        run: bool = False,
     ) -> Plan:
         """Interactively create a migration plan.
 
@@ -820,6 +821,7 @@ class Context(BaseContext):
             select_models: A list of model selection strings to filter the models that should be included into this plan.
             backfill_models: A list of model selection strings to filter the models for which the data should be backfilled.
             no_diff: Hide text differences for changed models.
+            run: Whether to run latest intervals as part of the plan application.
 
         Returns:
             The populated Plan object.
@@ -828,10 +830,13 @@ class Context(BaseContext):
         environment = Environment.normalize_name(environment)
         is_dev = environment != c.PROD
 
-        if skip_backfill and not no_gaps and environment == c.PROD:
+        if skip_backfill and not no_gaps and not is_dev:
             raise ConfigError(
                 "When targeting the production environment either the backfill should not be skipped or the lack of data gaps should be enforced (--no-gaps flag)."
             )
+
+        if run and is_dev:
+            raise ConfigError("The '--run' flag is only supported for the production environment.")
 
         self._run_plan_tests(skip_tests=skip_tests)
 
@@ -869,8 +874,8 @@ class Context(BaseContext):
 
         # If no end date is specified, use the max interval end from prod
         # to prevent unintended evaluation of the entire DAG.
-        default_end = self.state_sync.max_interval_end_for_environment(c.PROD) if is_dev else None
-        default_start = to_date(default_end) - timedelta(days=1) if default_end else None
+        default_end = self.state_sync.max_interval_end_for_environment(c.PROD) if not run else None
+        default_start = to_date(default_end) - timedelta(days=1) if default_end and is_dev else None
 
         plan = Plan(
             context_diff=self._context_diff(
