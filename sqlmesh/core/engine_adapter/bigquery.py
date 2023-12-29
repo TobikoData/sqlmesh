@@ -536,8 +536,7 @@ class BigQueryEngineAdapter(InsertOverwriteWithMergeMixin):
         """
         Executes commands to create table and column comments.
         """
-        table = exp.to_table(table_name)
-        table_sql = table.sql(dialect=self.dialect, identify=True)
+        table_sql = exp.to_table(table_name).sql(dialect=self.dialect, identify=True)
 
         if table_comment:
             self.execute(

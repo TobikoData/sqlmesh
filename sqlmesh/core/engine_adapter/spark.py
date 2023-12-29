@@ -55,6 +55,7 @@ class SparkEngineAdapter(GetCurrentCatalogFromFunctionMixin, HiveMetastoreTableP
     INSERT_OVERWRITE_STRATEGY = InsertOverwriteStrategy.INSERT_OVERWRITE
     CATALOG_SUPPORT = CatalogSupport.FULL_SUPPORT
     SUPPORTS_ROW_LEVEL_OP = False
+    SUPPORTS_CTAS_SCHEMA_COMMENTS = False
 
     @property
     def spark(self) -> PySparkSession:

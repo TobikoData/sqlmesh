@@ -187,20 +187,31 @@ class TestContext:
         table_kind: str = "BASE TABLE",
     ) -> str:
         if self.dialect in ["postgres", "redshift"]:
+            # multiple objects with the same schema and name can exist in pg_catalog.pg_class
+            # so we select the most recent one (largest oid)
             query = f"""
-                SELECT
-                    t.table_name,
-                    pg_catalog.obj_description(pgc.oid, 'pg_class')
-                FROM information_schema.tables t
-                INNER JOIN pg_catalog.pg_class pgc
-                ON t.table_name = pgc.relname
-                WHERE
-                    t.table_schema='{schema_name}'
-                    AND t.table_name='{table_name}'
-                    AND t.table_type='{table_kind}'
+                with source AS (
+                    SELECT
+                        t.table_name as table_name,
+                        pg_catalog.obj_description(pgc.oid, 'pg_class'),
+                        pgc.oid as oid
+                    FROM information_schema.tables t
+                    INNER JOIN pg_catalog.pg_class pgc
+                    ON t.table_name = pgc.relname
+                    WHERE
+                        t.table_schema='{schema_name}'
+                        AND t.table_name='{table_name}'
+                        AND t.table_type='{table_kind}'
+                )
+                SELECT table_name, obj_description
+                FROM source
+                WHERE source.oid = (SELECT MAX(oid) FROM source)
                 ;
             """
         elif self.dialect in ["mysql", "snowflake"]:
+            schema_name = schema_name.upper() if self.dialect == "snowflake" else schema_name
+            table_name = table_name.upper() if self.dialect == "snowflake" else table_name
+
             comment_field_name = {
                 "mysql": "table_comment",
                 "snowflake": "comment",
@@ -257,19 +268,30 @@ class TestContext:
     def get_column_comments(self, schema_name: str, table_name: str) -> t.Dict[str, str]:
         comment_index = 1
         if self.dialect in ["postgres", "redshift"]:
+            # multiple objects with the same schema and name can exist in pg_catalog.pg_class
+            # so we select the most recent one (largest oid)
             query = f"""
-            SELECT
-                    cols.column_name,
-                    pg_catalog.col_description(c.oid, cols.ordinal_position::int) AS column_comment
-                FROM
-                    pg_catalog.pg_class c,
-                    information_schema.columns cols
-                WHERE
-                    cols.table_schema = '{schema_name}'
-                    AND cols.table_name = '{table_name}'
-                    AND cols.table_name = c.relname
+                with source as (
+                    SELECT
+                        cols.column_name,
+                        pg_catalog.col_description(c.oid, cols.ordinal_position::int) AS column_comment,
+                        c.oid as oid
+                    FROM
+                        pg_catalog.pg_class c,
+                        information_schema.columns cols
+                    WHERE
+                        cols.table_schema = '{schema_name}'
+                        AND cols.table_name = '{table_name}'
+                        AND cols.table_name = c.relname
+                )
+                SELECT column_name, column_comment
+                FROM source
+                WHERE source.oid = (SELECT MAX(oid) FROM source)
             """
         elif self.dialect in ["mysql", "snowflake"]:
+            schema_name = schema_name.upper() if self.dialect == "snowflake" else schema_name
+            table_name = table_name.upper() if self.dialect == "snowflake" else table_name
+
             comment_field_name = {
                 "mysql": "column_comment",
                 "snowflake": "comment",
