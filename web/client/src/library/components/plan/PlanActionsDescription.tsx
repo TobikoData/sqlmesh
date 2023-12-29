@@ -74,7 +74,7 @@ export default function PlanActionsDescription(): JSX.Element {
           )}
           {isTrue(forward_only) && (
             <span className="inline-block mr-1">
-              consider as a <b>Breaking Change</b>
+              all changes will be <b>Forward Only</b>
             </span>
           )}
           {isTrue(no_auto_categorization) && (
@@ -84,11 +84,14 @@ export default function PlanActionsDescription(): JSX.Element {
           )}
           {isFalse(isStringEmptyOrNil(restate_models)) && (
             <span className="inline-block mr-1">
-              and restate the followingmodels <b>{restate_models}</b>
+              and restate the following models <b>{restate_models}</b>
             </span>
           )}
           {isTrue(include_unmodified) && (
-            <span className="inline-block mr-1">with views for all models</span>
+            <span className="inline-block mr-1">
+              and with views for all models in the target development
+              environment
+            </span>
           )}
         </p>
       </Banner>
