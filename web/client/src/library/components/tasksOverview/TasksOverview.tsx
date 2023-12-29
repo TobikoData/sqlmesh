@@ -160,7 +160,7 @@ function TasksDetails({
   return (
     <>
       {isArrayNotEmpty(queue) && (
-        <div className="p-4 mt-6 shadow-lg bg-neutral-5 rounded-lg">
+        <div className="p-4 mt-6 shadow-lg rounded-lg">
           <Title text="Currently in proccess" />
           <Tasks models={queue}>
             {task => (
@@ -312,7 +312,7 @@ function TasksBlock({
   return (
     <div
       className={clsx(
-        'my-3 max-h-[50vh] overflow-auto hover:scrollbar scrollbar--vertical scrollbar--horizontal',
+        'max-h-[50vh] overflow-auto hover:scrollbar scrollbar--vertical scrollbar--horizontal',
         className,
       )}
     >

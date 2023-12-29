@@ -11,7 +11,7 @@ import { apiDeleteEnvironment, useApiEnvironments } from '~/api'
 import { useStoreContext } from '~/context/context'
 import { type ModelEnvironment } from '~/models/environment'
 import { EnumSide, EnumSize, EnumVariant, type Side } from '~/types/enum'
-import { isArrayNotEmpty, isFalse, isStringEmptyOrNil, isTrue } from '~/utils'
+import { isArrayNotEmpty, isFalse, isStringEmptyOrNil } from '~/utils'
 import { Button, makeButton, type ButtonSize } from '@components/button/Button'
 import { Divider } from '@components/divider/Divider'
 import Input from '@components/input/Input'
@@ -22,9 +22,7 @@ import {
 } from '@components/plan/context'
 import PlanChangePreview from '@components/plan/PlanChangePreview'
 import { EnumErrorKey, useIDE } from './context'
-import { EnumPlanAction, ModelPlanAction } from '@models/plan-action'
 import { useStorePlan } from '@context/plan'
-import { initiatePlanApiPlanPost } from '@api/client'
 import { type ModelSQLMeshChangeDisplay } from '@models/sqlmesh-change-display'
 
 export default function RunPlan(): JSX.Element {
@@ -32,7 +30,6 @@ export default function RunPlan(): JSX.Element {
 
   const planOverview = useStorePlan(s => s.planOverview)
   const planAction = useStorePlan(s => s.planAction)
-  const setPlanAction = useStorePlan(s => s.setPlanAction)
 
   const addConfirmation = useStoreContext(s => s.addConfirmation)
   const setShowConfirmation = useStoreContext(s => s.setShowConfirmation)
@@ -52,10 +49,6 @@ export default function RunPlan(): JSX.Element {
   }, [shouldStartPlanAutomatically])
 
   function startPlan(): void {
-    if (isTrue(planOverview.skipTests)) {
-      setPlanAction(new ModelPlanAction({ value: EnumPlanAction.Run }))
-    }
-
     setIsPlanOpen(true)
   }
 
@@ -163,6 +156,14 @@ function EnvironmentStatus(): JSX.Element {
           Latest
         </span>
       )}
+      {planOverview.isEmpty && (
+        <span
+          title="Need to Re-Run Plan to get latest state"
+          className="block ml-1 px-2 first-child:ml-0 rounded-full  bg-warning-10 text-warning-700  dark:text-warning-400 text-xs text-center"
+        >
+          Unknown
+        </span>
+      )}
     </span>
   )
 }
@@ -252,16 +253,6 @@ function SelectEnvironemnt({
       })
   }
 
-  function runPlan(environment: ModelEnvironment): void {
-    void initiatePlanApiPlanPost({
-      environment: environment.name,
-      plan_options: {
-        skip_tests: true,
-        include_unmodified: true,
-      },
-    })
-  }
-
   return (
     <Menu>
       {({ close }) => (
@@ -310,8 +301,6 @@ function SelectEnvironemnt({
                           e.stopPropagation()
 
                           setEnvironment(env)
-
-                          runPlan(env)
 
                           onSelect?.()
                         }}

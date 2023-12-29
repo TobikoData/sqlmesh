@@ -2,23 +2,21 @@ import { Disclosure } from '@headlessui/react'
 import {
   MinusCircleIcon,
   PlusCircleIcon,
-  CheckCircleIcon,
   ExclamationCircleIcon,
 } from '@heroicons/react/24/solid'
+import { CheckIcon } from '@heroicons/react/20/solid'
 import clsx from 'clsx'
 import { useEffect, useMemo, useRef } from 'react'
 import { useStorePlan } from '../../../context/plan'
 import {
   isArrayNotEmpty,
-  isFalse,
   isNotNil,
   toRatio,
   isTrue,
   isNil,
   toDateFormat,
-  isFalseOrNil,
+  isFalse,
 } from '../../../utils'
-import Spinner from '../logo/Spinner'
 import { EnumPlanChangeType, usePlan } from './context'
 import { getPlanOverviewDetails } from './help'
 import PlanChangePreview from './PlanChangePreview'
@@ -40,12 +38,6 @@ import { type PlanTrackerMeta } from '@models/tracker-plan'
 import { type Tests, useStoreProject } from '@context/project'
 import { type ModelSQLMeshChangeDisplay } from '@models/sqlmesh-change-display'
 
-interface PropsPlanStageMessage extends React.HTMLAttributes<HTMLElement> {
-  hasSpinner?: boolean
-  variant?: Variant
-  index?: number
-}
-
 export default function PlanApplyStageTracker(): JSX.Element {
   const tests = useStoreProject(s => s.tests)
 
@@ -53,56 +45,60 @@ export default function PlanApplyStageTracker(): JSX.Element {
   const planOverview = useStorePlan(s => s.planOverview)
   const planAction = useStorePlan(s => s.planAction)
 
-  const { start, end, hasChanges, hasBackfills, plan_options } =
-    getPlanOverviewDetails(planApply, planOverview)
+  const { hasChanges, hasBackfills, plan_options } = getPlanOverviewDetails(
+    planApply,
+    planOverview,
+  )
 
   const showTestsDetails = isNotNil(tests) && Boolean(tests.total)
   const showTestsMessage = isNotNil(tests) && Boolean(tests.message)
 
-  return (
-    <div className="py-4">
-      {isNotNil(start) && isNotNil(end) && (
-        <div className="flex justify-between items-center mb-4 whitespace-nowrap">
-          <small className="text-neutral-500 block px-4">
-            Start Date:&nbsp;<b>{toDateFormat(new Date(start))}</b>
-          </small>
-          <Divider />
-          <small className="text-neutral-500 block px-4">
-            End Date:&nbsp;<b>{toDateFormat(new Date(end))}</b>
-          </small>
-        </div>
-      )}
+  return planAction.isRun ? (
+    <></>
+  ) : (
+    <div className="mt-8 mb-4">
       {planAction.isRunning || isTrue(hasChanges) ? (
-        <StageChanges />
+        <StageChanges isOpen={true} />
       ) : (
-        <PlanStageMessage
-          variant={EnumVariant.Info}
-          className="mt-2"
+        <Banner
+          className="flex items-center mb-1"
+          size={EnumSize.sm}
+          hasBackground={false}
         >
-          No Changes
-        </PlanStageMessage>
+          <CheckIcon className="w-5 mr-2" />
+          <Banner.Label className="mr-2 text-sm">No Changes</Banner.Label>
+        </Banner>
       )}
       {planAction.isRunning || isTrue(hasBackfills) ? (
-        <StageBackfills />
+        <StageBackfills isOpen={true} />
       ) : (
-        <PlanStageMessage
-          variant={EnumVariant.Info}
-          className="mt-2"
+        <Banner
+          className="flex items-center mb-1"
+          size={EnumSize.sm}
+          hasBackground={false}
         >
-          No Backfills
-        </PlanStageMessage>
+          <CheckIcon className="w-5 mr-2" />
+          <Banner.Label className="mr-2 text-sm">No Backfills</Banner.Label>
+        </Banner>
       )}
       {isTrue(plan_options?.skip_tests) ? (
-        <PlanStageMessage
-          variant={EnumVariant.Info}
-          className="mt-2"
+        <Banner
+          className="flex items-center mb-1"
+          size={EnumSize.sm}
+          hasBackground={false}
         >
-          Tests Skipped
-        </PlanStageMessage>
+          <CheckIcon className="w-5 mr-2" />
+          <Banner.Label className="mr-2 text-sm">Tests Skipped</Banner.Label>
+        </Banner>
       ) : (
         <>
           {showTestsMessage && <StageTestsCompleted report={tests} />}
-          {showTestsDetails && <StageTestsFailed report={tests} />}
+          {showTestsDetails && (
+            <StageTestsFailed
+              isOpen={true}
+              report={tests}
+            />
+          )}
         </>
       )}
       <StageValidate />
@@ -129,11 +125,7 @@ function StageChanges({ isOpen = false }: { isOpen?: boolean }): JSX.Element {
   return (
     <Stage
       meta={stageChanges?.meta ?? meta ?? { status: Status.init }}
-      states={[
-        'Changes Collected',
-        'Failed Getting Plan Changes',
-        'Getting Plan Changes...',
-      ]}
+      states={['Changes', 'Failed Getting Changes', 'Getting Changes...']}
       isOpen={isOpen}
       panel={<PlanChanges />}
     />
@@ -152,11 +144,7 @@ function StageBackfills({ isOpen }: { isOpen?: boolean }): JSX.Element {
   return (
     <Stage
       meta={stageBackfills?.meta ?? meta ?? { status: Status.init }}
-      states={[
-        'Backfills Collected',
-        'Failed Getting Plan Backfills',
-        'Getting Plan Backfills...',
-      ]}
+      states={['Backfills', 'Failed Getting Backfills', 'Getting Backfills...']}
       isOpen={isOpen}
       panel={
         <PlanChangePreview
@@ -177,45 +165,33 @@ function StageTestsCompleted({ report }: { report: Tests }): JSX.Element {
   return (
     <Stage
       meta={{
-        status: 'success',
+        status: Status.success,
         ...report,
       }}
-      trigger={
-        <>
-          <CheckCircleIcon className="w-6 mr-4" />
-          <Title
-            text="Tests Completed"
-            size={EnumSize.sm}
-            variant={EnumVariant.Success}
-            className="w-full"
-          />
-        </>
-      }
+      states={['Tests Completed', 'Failed Tests', 'Running Tests...']}
     >
-      <p className="mb-0.5">{report.message}</p>
+      {report.message}
     </Stage>
   )
 }
 
-function StageTestsFailed({ report }: { report: Tests }): JSX.Element {
+function StageTestsFailed({
+  report,
+  isOpen = false,
+}: {
+  report: Tests
+  isOpen: boolean
+}): JSX.Element {
   return (
     <Stage
       variant={EnumVariant.Danger}
       meta={{
-        status: 'fail',
+        status: Status.fail,
         ...report,
       }}
-      trigger={
-        <>
-          <CheckCircleIcon className="w-6 mr-4" />
-          <Title
-            text="Tests Failed"
-            size={EnumSize.sm}
-            variant={EnumVariant.Danger}
-            className="w-full"
-          />
-        </>
-      }
+      isOpen={isOpen}
+      states={['Tests Failed', 'One or More Tests Failed', 'Running Tests...']}
+      shouldCollapse={false}
     >
       <ReportTestsErrors report={report} />
     </Stage>
@@ -266,10 +242,7 @@ function StageEvaluate({
     })
   }, [])
 
-  if (isFalse(hasFailedTests) && isFalse(planApply.shouldShowEvaluation))
-    return <></>
-
-  return (
+  return hasFailedTests || planApply.shouldShowEvaluation ? (
     <div
       ref={elStageEvaluate}
       className="pt-6 pb-2"
@@ -300,6 +273,8 @@ function StageEvaluate({
         </>
       )}
     </div>
+  ) : (
+    <></>
   )
 }
 
@@ -353,12 +328,14 @@ function StageRestate(): JSX.Element {
   const planApply = useStorePlan(s => s.planApply)
 
   return isNil(planApply.stageRestate) ? (
-    <PlanStageMessage
-      variant={EnumVariant.Info}
-      className="mt-2"
+    <Banner
+      className="flex items-center mb-1"
+      size={EnumSize.sm}
+      hasBackground={false}
     >
-      No Models To Restate
-    </PlanStageMessage>
+      <CheckIcon className="w-5 mr-2" />
+      <Banner.Label className="mr-2 text-sm">No Models To Restate</Banner.Label>
+    </Banner>
   ) : (
     <Stage
       meta={planApply.stageRestate?.meta}
@@ -372,10 +349,22 @@ function StageRestate(): JSX.Element {
 }
 
 function StageBackfill(): JSX.Element {
+  const elStageBackfill = useRef<HTMLDivElement>(null)
+
   const planApply = useStorePlan(s => s.planApply)
   const planAction = useStorePlan(s => s.planAction)
+
   const environment = planApply.environment
   const stageBackfill = planApply.stageBackfill
+
+  useEffect(() => {
+    requestAnimationFrame(() => {
+      elStageBackfill.current?.scrollIntoView({
+        behavior: 'smooth',
+        block: 'start',
+      })
+    })
+  }, [])
 
   const { change_categorization } = usePlan()
 
@@ -426,52 +415,56 @@ function StageBackfill(): JSX.Element {
   if (isNil(stageBackfill) || isNil(environment)) return <></>
 
   return (
-    <Stage
-      meta={stageBackfill.meta}
-      states={[
-        'Intervals Backfilled',
-        'Intervals Backfilling Failed',
-        'Backfilling Intervals...',
-      ]}
-      showDetails={true}
-      isOpen={true}
-    >
-      <TasksOverview tasks={tasks}>
-        {({ total, completed, models, completedBatches, totalBatches }) => (
-          <>
-            <TasksOverview.Summary
-              headline="Target Environment"
-              environment={environment}
-              completed={completed}
-              total={total}
-              completedBatches={completedBatches}
-              totalBatches={totalBatches}
-              updateType={planAction.isApplyVirtual ? 'Virtual' : 'Backfill'}
-            />
-            {isNotNil(models) && (
-              <TasksOverview.Details
-                models={models}
-                added={planApply.added}
-                removed={planApply.removed}
-                direct={planApply.direct}
-                indirect={planApply.indirect}
-                metadata={planApply.metadata}
-                queue={planApply.queue}
-                showBatches={true}
-                showVirtualUpdate={planAction.isApplyVirtual}
-                showProgress={true}
+    <div ref={elStageBackfill}>
+      <Stage
+        meta={stageBackfill.meta}
+        states={[
+          'Intervals Backfilled',
+          'Intervals Backfilling Failed',
+          'Backfilling Intervals...',
+        ]}
+        showDetails={true}
+        isOpen={true}
+        shouldCollapse={false}
+      >
+        <TasksOverview tasks={tasks}>
+          {({ total, completed, models, completedBatches, totalBatches }) => (
+            <>
+              <TasksOverview.Summary
+                headline="Target Environment"
+                environment={environment}
+                completed={completed}
+                total={total}
+                completedBatches={completedBatches}
+                totalBatches={totalBatches}
+                updateType={planAction.isApplyVirtual ? 'Virtual' : 'Backfill'}
               />
-            )}
-          </>
-        )}
-      </TasksOverview>
-    </Stage>
+              {isNotNil(models) && (
+                <TasksOverview.Details
+                  models={models}
+                  added={planApply.added}
+                  removed={planApply.removed}
+                  direct={planApply.direct}
+                  indirect={planApply.indirect}
+                  metadata={planApply.metadata}
+                  queue={planApply.queue}
+                  showBatches={true}
+                  showVirtualUpdate={planAction.isApplyVirtual}
+                  showProgress={true}
+                />
+              )}
+            </>
+          )}
+        </TasksOverview>
+      </Stage>
+    </div>
   )
 }
 
 function StagePromote(): JSX.Element {
-  const planApply = useStorePlan(s => s.planApply)
   const elStagePromote = useRef<HTMLDivElement>(null)
+
+  const planApply = useStorePlan(s => s.planApply)
 
   useEffect(() => {
     requestAnimationFrame(() => {
@@ -528,39 +521,44 @@ function StagePromote(): JSX.Element {
   )
 }
 
+function StageVirtualUpdate(): JSX.Element {
+  const { virtualUpdateDescription } = usePlan()
+
+  const planApply = useStorePlan(s => s.planApply)
+  const planOverview = useStorePlan(s => s.planOverview)
+  const isVirtualUpdate = planOverview.isLatest
+    ? isTrue(planApply.overview?.isVirtualUpdate)
+    : planOverview.isVirtualUpdate
+  const isUpdated = isTrue(planApply.stagePromote?.meta?.done)
+
+  return isVirtualUpdate ? (
+    <Stage
+      meta={{
+        status: Status.success,
+        done: isUpdated,
+      }}
+      states={[
+        isUpdated ? 'Virtual Update Completed' : 'Virtual Update',
+        'Virtual Update Failed',
+        'Applying Virtual Update...',
+      ]}
+    >
+      {virtualUpdateDescription}
+    </Stage>
+  ) : (
+    <></>
+  )
+}
+
 function PlanChanges(): JSX.Element {
   const planOverview = useStorePlan(s => s.planOverview)
   const planApply = useStorePlan(s => s.planApply)
-  const planAction = useStorePlan(s => s.planAction)
 
   const { hasChanges, added, removed, direct, indirect, metadata } =
     getPlanOverviewDetails(planApply, planOverview)
 
   return (
     <div className="w-full my-2">
-      {planAction.isRunning && isNil(hasChanges) && (
-        <Banner
-          isFull
-          isCenter
-        >
-          <Loading
-            text="Checking Models..."
-            hasSpinner
-            size={EnumSize.lg}
-          />
-        </Banner>
-      )}
-      {isFalse(hasChanges) && (
-        <Banner
-          isFull={isFalse(planAction.isApplyVirtual)}
-          isCenter={isFalse(planAction.isApplyVirtual)}
-        >
-          <Title
-            size={planAction.isApplyVirtual ? EnumSize.md : EnumSize.lg}
-            text="No Changes"
-          />
-        </Banner>
-      )}
       {isTrue(hasChanges) && (
         <>
           {isArrayNotEmpty(added) && (
@@ -623,84 +621,6 @@ function PlanChanges(): JSX.Element {
   )
 }
 
-function StageVirtualUpdate(): JSX.Element {
-  const planApply = useStorePlan(s => s.planApply)
-  const planOverview = useStorePlan(s => s.planOverview)
-
-  const { virtualUpdateDescription } = usePlan()
-
-  if (
-    isFalseOrNil(planApply.overview?.isVirtualUpdate) &&
-    isFalse(planOverview.isVirtualUpdate)
-  )
-    return <></>
-
-  const isUpdated = isTrue(planApply.stagePromote?.meta?.done)
-
-  return (
-    <Disclosure>
-      {({ open }) => (
-        <>
-          <Banner
-            className="my-2 flex items-center"
-            variant={isUpdated ? EnumVariant.Success : EnumVariant.Info}
-          >
-            <>
-              {isUpdated && <CheckCircleIcon className="w-6 mr-4" />}
-              <Title
-                className="w-full"
-                text={isUpdated ? 'Virtual Update Completed' : 'Virtual Update'}
-                size={EnumSize.sm}
-                variant={isUpdated ? EnumVariant.Success : EnumVariant.Info}
-              />
-            </>
-
-            <div className="flex items-center">
-              <Disclosure.Button className="flex items-center justify-between rounded-lg text-left text-sm">
-                {open ? (
-                  <MinusCircleIcon className="w-5" />
-                ) : (
-                  <PlusCircleIcon className="w-5" />
-                )}
-              </Disclosure.Button>
-            </div>
-          </Banner>
-          <Disclosure.Panel className="px-2 text-xs">
-            <div className="p-4 rounded-md bg-neutral-5">
-              {virtualUpdateDescription}
-            </div>
-          </Disclosure.Panel>
-        </>
-      )}
-    </Disclosure>
-  )
-}
-
-function PlanStageMessage({
-  hasSpinner = false,
-  variant = EnumVariant.Primary,
-  index,
-  children,
-  className,
-}: PropsPlanStageMessage): JSX.Element {
-  return (
-    <Banner
-      className={className}
-      variant={variant}
-    >
-      <span className="flex items-center w-full">
-        {isNotNil(index) && (
-          <span className="inline-block mr-3 font-black whitespace-nowrap">
-            Stage {index}:
-          </span>
-        )}
-        {hasSpinner && <Spinner className="w-4 h-4 mr-2" />}
-        {children}
-      </span>
-    </Banner>
-  )
-}
-
 function Stage({
   meta,
   states = ['Success', 'Failed', 'Running'],
@@ -709,6 +629,7 @@ function Stage({
   panel,
   children,
   showDetails = true,
+  shouldCollapse = true,
 }: {
   variant?: Variant
   meta?: PlanTrackerMeta
@@ -718,92 +639,122 @@ function Stage({
   states?: [string, string, string]
   isOpen?: boolean
   showDetails?: boolean
+  shouldCollapse?: boolean
 }): JSX.Element {
+  const elTrigger = useRef<HTMLButtonElement>(null)
+
+  const planOverview = useStorePlan(s => s.planOverview)
+  const planApply = useStorePlan(s => s.planApply)
+
+  useEffect(() => {
+    if (isNil(elTrigger.current)) return
+
+    if (shouldCollapse && (planApply.isFinished || planOverview.isLatest)) {
+      if (elTrigger.current.classList.contains('--is-open')) {
+        elTrigger.current?.click()
+      }
+    }
+  }, [elTrigger, planOverview, planApply, shouldCollapse])
+
   if (isNil(meta)) return <></>
 
   const variant =
-    meta.status === 'success'
+    meta.status === Status.success
       ? EnumVariant.Success
-      : meta.status === 'fail'
+      : meta.status === Status.fail
       ? EnumVariant.Danger
       : EnumVariant.Info
   const [titleSuccess, titleFail, titleDefault] = states
   const text =
-    meta.status === 'success'
+    meta.status === Status.success
       ? titleSuccess
-      : meta.status === 'fail'
+      : meta.status === Status.fail
       ? titleFail
       : titleDefault
+
+  const hasChildren = isNotNil(panel) || isNotNil(children)
 
   return (
     <Disclosure defaultOpen={isOpen}>
       {({ open }) => (
         <>
           <Banner
-            className="my-2 flex items-center"
+            className="mb-1"
             variant={variant}
+            size={EnumSize.sm}
+            hasBackground={false}
+            hasBackgroundOnHover={hasChildren}
           >
-            {isNil(trigger) ? (
-              <>
-                {meta.status === 'success' && (
-                  <CheckCircleIcon className="w-6 mr-4" />
-                )}
-                {meta.status === 'fail' && (
-                  <ExclamationCircleIcon className="w-6 mr-4" />
-                )}
-                {meta.status === 'init' ? (
-                  <Loading
-                    text={text}
-                    hasSpinner
-                    size={EnumSize.sm}
-                    variant={EnumVariant.Primary}
-                    className="w-full"
-                  />
-                ) : (
-                  <span className="flex w-full items-baseline">
-                    <Title
+            <Disclosure.Button
+              ref={elTrigger}
+              className={clsx(
+                'w-full flex items-center',
+                open && '--is-open',
+                isFalse(hasChildren) && 'cursor-default',
+              )}
+            >
+              {isNil(trigger) ? (
+                <>
+                  {meta.status === Status.init ? (
+                    <Loading
                       text={text}
+                      hasSpinner
                       size={EnumSize.sm}
-                      variant={variant}
+                      variant={EnumVariant.Primary}
+                      className="w-full"
                     />
-                    {isNotNil(meta.duration) && (
-                      <p className="text-xs text-neutral-400 inline-block ml-2">
-                        in <b>{meta.duration / 1000}</b> seconds
-                      </p>
-                    )}
-                  </span>
-                )}
-              </>
-            ) : (
-              trigger
-            )}
-            {showDetails && (
-              <div className="flex items-center">
-                <Disclosure.Button className="flex items-center justify-between rounded-lg text-left text-sm">
-                  {open ? (
-                    <MinusCircleIcon className="w-5" />
                   ) : (
-                    <PlusCircleIcon className="w-5" />
+                    <>
+                      {showDetails ? (
+                        <>
+                          {open ? (
+                            <MinusCircleIcon className="w-5 mr-2" />
+                          ) : (
+                            <PlusCircleIcon className="w-5 mr-2" />
+                          )}
+                        </>
+                      ) : (
+                        <>
+                          {meta.status === Status.success && (
+                            <CheckIcon className="w-5 mr-2" />
+                          )}
+                          {meta.status === Status.fail && (
+                            <ExclamationCircleIcon className="w-5 mr-2" />
+                          )}
+                        </>
+                      )}
+                      <Banner.Label className="mr-2 text-sm w-full">
+                        <Title
+                          text={text}
+                          size={EnumSize.sm}
+                          variant={variant}
+                        />
+                      </Banner.Label>
+                    </>
                   )}
-                </Disclosure.Button>
-              </div>
-            )}
+                </>
+              ) : (
+                trigger
+              )}
+            </Disclosure.Button>
           </Banner>
-          <Disclosure.Panel className="px-2 text-xs">
-            {isNotNil(children) && (
-              <div
-                className={clsx(
-                  'p-4 rounded-md',
-                  variant === EnumVariant.Danger
-                    ? 'bg-danger-10 text-danger-500'
-                    : 'bg-neutral-5',
-                )}
-              >
-                {children}
-              </div>
-            )}
-            {meta.status !== 'fail' && panel}
-          </Disclosure.Panel>
+          {hasChildren && (
+            <Disclosure.Panel className="px-2 text-xs mb-2">
+              {isNotNil(children) && (
+                <div
+                  className={clsx(
+                    'p-4 rounded-md',
+                    variant === EnumVariant.Danger
+                      ? 'bg-danger-5 text-danger-500'
+                      : 'bg-neutral-5',
+                  )}
+                >
+                  {children}
+                </div>
+              )}
+              {meta.status !== Status.fail && panel}
+            </Disclosure.Panel>
+          )}
         </>
       )}
     </Disclosure>

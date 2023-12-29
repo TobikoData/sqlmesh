@@ -39,6 +39,8 @@ export default React.forwardRef<HTMLButtonElement, PropsSelector>(
     const item = list.find(i => i.value === value) ??
       list[0] ?? { text: '', value }
 
+    disabled = disabled || list.length < 2
+
     return (
       <Select.Root
         name={name}
@@ -49,7 +51,10 @@ export default React.forwardRef<HTMLButtonElement, PropsSelector>(
       >
         <Select.Trigger
           ref={ref}
-          className={className}
+          className={clsx(
+            className,
+            disabled && 'opacity-50 cursor-not-allowed',
+          )}
           autoFocus={autoFocus}
         >
           <Select.Value />

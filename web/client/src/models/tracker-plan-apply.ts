@@ -80,12 +80,6 @@ export class ModelPlanApplyTracker
   }
 
   get backfills(): ModelSQLMeshChangeDisplay[] {
-    console.log(
-      'this.overview?.backfills',
-      this._lastPlanOverview,
-      this._planOverview?.backfills,
-    )
-
     return this.overview?.backfills ?? []
   }
 
