@@ -95,6 +95,7 @@ class ApiConsole(TerminalConsole):
                     completed=0,
                     total=total_tasks,
                     start=now_timestamp(),
+                    name=snapshot.name,
                     view_name=snapshot.display_name(environment_naming_info, default_catalog),
                 )
                 for snapshot, total_tasks in batches.items()

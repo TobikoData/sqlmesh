@@ -5,10 +5,10 @@ import {
   type ModelDescription,
   type ModelSql,
   ModelType,
+  type ModelDefaultCatalog,
 } from '@api/client'
 import { type Lineage } from '@context/editor'
 import { ModelInitial } from './initial'
-import { type ModelFile } from './file'
 
 export interface InitialSQLMeshModel extends Model {
   lineage?: Record<string, Lineage>
@@ -17,12 +17,14 @@ export interface InitialSQLMeshModel extends Model {
 export class ModelSQLMeshModel<
   T extends InitialSQLMeshModel = InitialSQLMeshModel,
 > extends ModelInitial<T> {
-  path: string
   name: string
+  fqn: string
+  path: string
   dialect: string
   type: ModelType
   columns: Column[]
   details: ModelDetails
+  default_catalog?: ModelDefaultCatalog
   description?: ModelDescription
   sql?: ModelSql
 
@@ -38,8 +40,10 @@ export class ModelSQLMeshModel<
           },
     )
 
+    this.name = encodeURI(this.initial.name)
+    this.fqn = encodeURI(this.initial.fqn)
+    this.default_catalog = this.initial.default_catalog
     this.path = this.initial.path
-    this.name = this.initial.name
     this.dialect = this.initial.dialect
     this.description = this.initial.description
     this.sql = this.initial.sql
@@ -48,10 +52,18 @@ export class ModelSQLMeshModel<
     this.type = this.initial.type
   }
 
+  get id(): string {
+    return this.fqn
+  }
+
+  get defaultCatalog(): Optional<ModelDefaultCatalog> {
+    return this.default_catalog
+  }
+
   get index(): string {
     return [
       this.path,
-      this.name,
+      this.displayName,
       this.dialect,
       this.type,
       this.description,
@@ -80,15 +92,28 @@ export class ModelSQLMeshModel<
     return this.type === ModelType.external
   }
 
+  get displayName(): string {
+    return decodeURI(this.name)
+  }
+
+  get displayNormalizedName(): string {
+    return decodeURI(this.fqn)
+  }
+
   update(initial: Partial<InitialSQLMeshModel> = {}): void {
     for (const [key, value] of Object.entries(initial)) {
       if (key === 'columns') {
         this.columns = value as Column[]
       } else if (key === 'details') {
         this.details = value as ModelDetails
+      } else if (key === 'name') {
+        this.name = encodeURI(value as string)
+      } else if (key === 'fqn') {
+        this.fqn = encodeURI(value as string)
       } else if (key in this) {
-        this[key as 'path' | 'name' | 'dialect' | 'description' | 'sql'] =
-          value as string
+        this[
+          key as 'path' | 'dialect' | 'description' | 'sql' | 'default_catalog'
+        ] = value as string
       }
     }
   }

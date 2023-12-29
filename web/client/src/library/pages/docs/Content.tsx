@@ -14,7 +14,7 @@ export default function Content(): JSX.Element {
   const navigate = useNavigate()
 
   const models = useStoreContext(s => s.models)
-  const model = isNil(modelName) ? undefined : models.get(modelName)
+  const model = isNil(modelName) ? undefined : models.get(encodeURI(modelName))
 
   function handleClickModel(modelName: string): void {
     const model = models.get(modelName)

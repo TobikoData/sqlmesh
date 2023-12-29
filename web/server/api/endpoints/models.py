@@ -42,7 +42,7 @@ def get_all_models(context: Context) -> t.List[models.Model]:
     for model in context.models.values():
         type = _get_model_type(model)
         default_catalog = model.default_catalog
-        dialect = model.dialect if model.dialect else "Default"
+        dialect = model.dialect or "SQLGlot"
         time_column = (
             f"{model.time_column.column} | {model.time_column.format}"
             if model.time_column
@@ -94,6 +94,7 @@ def get_all_models(context: Context) -> t.List[models.Model]:
         output.append(
             models.Model(
                 name=model.name,
+                fqn=model.fqn,
                 path=str(model._path.relative_to(context.path)),
                 dialect=dialect,
                 columns=columns,

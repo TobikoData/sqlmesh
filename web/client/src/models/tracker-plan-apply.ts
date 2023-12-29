@@ -4,16 +4,20 @@ import {
   type PlanStageCreation,
   type PlanStagePromote,
   type PlanStageRestate,
-  type PlanStageChanges,
-  type PlanStageBackfills,
   type TrackableMeta,
   type PlanOverviewStageTrackerEnd,
   type PlanOptions,
   type PlanOverviewStageTrackerStart,
+  type PlanStageChanges,
+  type PlanStageBackfills,
 } from '@api/client'
 import { ModelPlanTracker, type PlanTracker } from './tracker-plan'
 import { isFalse, isFalseOrNil, isNil, isNotNil, isTrue } from '@utils/index'
-import { ModelPlanOverviewTracker } from './tracker-plan-overview'
+import { type ModelPlanOverviewTracker } from './tracker-plan-overview'
+import {
+  type InitialChangeDisplay,
+  ModelSQLMeshChangeDisplay,
+} from './sqlmesh-change-display'
 
 export interface PlanApplyTracker extends PlanTracker {
   creation?: PlanStageCreation
@@ -40,12 +44,10 @@ export class ModelPlanApplyTracker
   constructor(model?: ModelPlanApplyTracker) {
     super(model)
 
-    if (model instanceof ModelPlanApplyTracker) {
-      this._last = structuredClone(model._last)
-      this._planOverview = new ModelPlanOverviewTracker(model._planOverview)
-      this._lastPlanOverview = new ModelPlanOverviewTracker(
-        model._lastPlanOverview,
-      )
+    if (isNotNil(model) && model.isModel) {
+      this._last = model._last
+      this._planOverview = model._planOverview
+      this._lastPlanOverview = model._lastPlanOverview
     }
   }
 
@@ -77,69 +79,118 @@ export class ModelPlanApplyTracker
     return this._lastPlanOverview ?? this._planOverview
   }
 
-  get validation(): Optional<PlanStageValidation> {
-    return this.overview?.validation
+  get backfills(): ModelSQLMeshChangeDisplay[] {
+    console.log(
+      'this.overview?.backfills',
+      this._lastPlanOverview,
+      this._planOverview?.backfills,
+    )
+
+    return this.overview?.backfills ?? []
   }
 
-  get changes(): Optional<PlanStageChanges> {
-    return this.overview?.changes
+  get added(): ModelSQLMeshChangeDisplay[] {
+    return this.overview?.added ?? []
   }
 
-  get backfills(): Optional<PlanStageBackfills> {
-    return this.overview?.backfills
+  get removed(): ModelSQLMeshChangeDisplay[] {
+    return this.overview?.removed ?? []
   }
 
-  get creation(): Optional<PlanStageCreation> {
+  get direct(): ModelSQLMeshChangeDisplay[] {
+    return this.overview?.direct ?? []
+  }
+
+  get indirect(): ModelSQLMeshChangeDisplay[] {
+    return this.overview?.indirect ?? []
+  }
+
+  get metadata(): ModelSQLMeshChangeDisplay[] {
+    return this.overview?.metadata ?? []
+  }
+
+  get tasks(): Record<string, ModelSQLMeshChangeDisplay> {
+    const tasks =
+      this._last?.backfill?.tasks ?? this._current?.backfill?.tasks ?? {}
+
+    return Object.entries(tasks ?? {}).reduce(
+      (acc: Record<string, ModelSQLMeshChangeDisplay>, [key, value]) => {
+        acc[encodeURI(key)] = new ModelSQLMeshChangeDisplay(
+          value as InitialChangeDisplay,
+        )
+
+        return acc
+      },
+      {},
+    )
+  }
+
+  get queue(): ModelSQLMeshChangeDisplay[] {
+    return (
+      (this.stageBackfill?.queue
+        ?.map(key => this.tasks[encodeURI(key)])
+        .filter(Boolean) as ModelSQLMeshChangeDisplay[]) ?? []
+    )
+  }
+
+  get stageValidation(): Optional<PlanStageValidation> {
+    return this.overview?.stageValidation
+  }
+
+  get stageChanges(): Optional<PlanStageChanges> {
+    return this.overview?.stageChanges
+  }
+
+  get stageBackfills(): Optional<PlanStageBackfills> {
+    return this.overview?.stageBackfills
+  }
+
+  get stageCreation(): Optional<PlanStageCreation> {
     return this._last?.creation ?? this._current?.creation
   }
 
-  get restate(): Optional<PlanStageRestate> {
+  get stageRestate(): Optional<PlanStageRestate> {
     return this._last?.restate ?? this._current?.restate
   }
 
-  get backfill(): Optional<PlanStageBackfill> {
+  get stageBackfill(): Optional<PlanStageBackfill> {
     return this._last?.backfill ?? this._current?.backfill
   }
 
-  get promote(): Optional<PlanStagePromote> {
+  get stagePromote(): Optional<PlanStagePromote> {
     return this._last?.promote ?? this._current?.promote
   }
 
   get shouldShowEvaluation(): boolean {
     return (
       this.isFailed ||
-      isNotNil(this.creation) ||
-      isNotNil(this.backfill) ||
-      isNotNil(this.promote)
+      isNotNil(this.stageCreation) ||
+      isNotNil(this.stageBackfill) ||
+      isNotNil(this.stagePromote)
     )
   }
 
   get evaluationStart(): Optional<PlanOverviewStageTrackerStart> {
     return (
-      this.creation?.meta?.start ??
-      this.backfill?.meta?.start ??
-      this.promote?.meta?.start
+      this.stageCreation?.meta?.start ??
+      this.stageBackfill?.meta?.start ??
+      this.stagePromote?.meta?.start
     )
   }
 
   get evaluationEnd(): Optional<PlanOverviewStageTrackerEnd> {
     return (
-      this.promote?.meta?.end ??
-      this.backfill?.meta?.end ??
-      this.creation?.meta?.end
+      this.stagePromote?.meta?.end ??
+      this.stageBackfill?.meta?.end ??
+      this.stageCreation?.meta?.end
     )
   }
 
   update(
     tracker: PlanApplyTracker,
-    planOverview: ModelPlanOverviewTracker,
+    planOverview?: ModelPlanOverviewTracker,
   ): void {
-    if (
-      isTrue(planOverview.meta?.done) &&
-      (isNil(this.overview) || isNil(this.overview.current))
-    ) {
-      this._planOverview = new ModelPlanOverviewTracker(planOverview)
-    }
+    this._planOverview = planOverview?.clone()
 
     if (isNil(this._current)) {
       this._current = tracker
@@ -202,5 +253,15 @@ export class ModelPlanApplyTracker
     this._last = undefined
     this._planOverview = undefined
     this._lastPlanOverview = undefined
+  }
+
+  clone(): ModelPlanApplyTracker {
+    const tracker = new ModelPlanApplyTracker()
+
+    if (isNotNil(this.current)) {
+      tracker.update(structuredClone(this.current), this.overview?.clone())
+    }
+
+    return tracker
   }
 }

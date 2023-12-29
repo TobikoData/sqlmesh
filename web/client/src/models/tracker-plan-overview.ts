@@ -2,16 +2,13 @@ import {
   type PlanStageValidation,
   type PlanStageBackfills,
   type PlanStageChanges,
-  type ChangeIndirect,
-  type ChangeDirect,
-  type PlanStageBackfillsModels,
-  type PlanStageChangesAdded,
-  type PlanStageChangesModified,
-  type PlanStageChangesRemoved,
-  type SnapshotId,
 } from '@api/client'
 import { ModelPlanTracker, type PlanTracker } from './tracker-plan'
 import { isArrayNotEmpty, isFalse, isNil, isNotNil } from '@utils/index'
+import {
+  type InitialChangeDisplay,
+  ModelSQLMeshChangeDisplay,
+} from './sqlmesh-change-display'
 
 export interface PlanOverviewTracker extends PlanTracker {
   validation?: PlanStageValidation
@@ -27,6 +24,38 @@ export class ModelPlanOverviewTracker
   extends ModelPlanTracker<PlanOverviewTracker>
   implements InitialModelPlanOverviewTracker
 {
+  _added: ModelSQLMeshChangeDisplay[] = []
+  _removed: ModelSQLMeshChangeDisplay[] = []
+  _direct: ModelSQLMeshChangeDisplay[] = []
+  _indirect: ModelSQLMeshChangeDisplay[] = []
+  _metadata: ModelSQLMeshChangeDisplay[] = []
+  _backfills: ModelSQLMeshChangeDisplay[] = []
+
+  constructor(model?: ModelPlanOverviewTracker) {
+    super(model)
+
+    if (isNotNil(model) && model.isModel) {
+      this._added = model.added
+      this._removed = model.removed
+      this._direct = model.direct
+      this._indirect = model.indirect
+      this._metadata = model.metadata
+      this._backfills = model.backfills
+    }
+  }
+
+  get stageValidation(): Optional<PlanStageValidation> {
+    return this._current?.validation
+  }
+
+  get stageChanges(): Optional<PlanStageChanges> {
+    return this._current?.changes
+  }
+
+  get stageBackfills(): Optional<PlanStageBackfills> {
+    return this._current?.backfills
+  }
+
   get validation(): Optional<PlanStageValidation> {
     return this._current?.validation
   }
@@ -53,36 +82,28 @@ export class ModelPlanOverviewTracker
       : isArrayNotEmpty(this._current.backfills?.models)
   }
 
-  get backfills(): Optional<PlanStageBackfills> {
-    return this._current?.backfills
+  get backfills(): ModelSQLMeshChangeDisplay[] {
+    return this._backfills
   }
 
-  get models(): Optional<PlanStageBackfillsModels> {
-    return this._current?.backfills?.models
+  get added(): ModelSQLMeshChangeDisplay[] {
+    return this._added
   }
 
-  get added(): Optional<PlanStageChangesAdded> {
-    return this._current?.changes?.added
+  get removed(): ModelSQLMeshChangeDisplay[] {
+    return this._removed
   }
 
-  get removed(): Optional<PlanStageChangesRemoved> {
-    return this._current?.changes?.removed
+  get direct(): ModelSQLMeshChangeDisplay[] {
+    return this._direct
   }
 
-  get modified(): Optional<PlanStageChangesModified> {
-    return this._current?.changes?.modified
+  get indirect(): ModelSQLMeshChangeDisplay[] {
+    return this._indirect
   }
 
-  get direct(): Optional<ChangeDirect[]> {
-    return this._current?.changes?.modified?.direct
-  }
-
-  get indirect(): Optional<ChangeIndirect[]> {
-    return this._current?.changes?.modified?.indirect
-  }
-
-  get metadata(): Optional<SnapshotId[]> {
-    return this._current?.changes?.modified?.metadata
+  get metadata(): ModelSQLMeshChangeDisplay[] {
+    return this._metadata
   }
 
   get isVirtualUpdate(): boolean {
@@ -131,9 +152,44 @@ export class ModelPlanOverviewTracker
   update(tracker: PlanOverviewTracker): void {
     this._current = tracker
     this.isFetching = isFalse(tracker.meta?.done)
+
+    const changes = this._current?.changes ?? {}
+    const modified = changes?.modified ?? {}
+    const backfills = this._current?.backfills ?? {}
+
+    this._added =
+      changes.added?.map(
+        c => new ModelSQLMeshChangeDisplay(c as InitialChangeDisplay),
+      ) ?? []
+    this._removed =
+      changes.removed?.map(
+        c => new ModelSQLMeshChangeDisplay(c as InitialChangeDisplay),
+      ) ?? []
+    this._direct =
+      modified.direct?.map(
+        c => new ModelSQLMeshChangeDisplay(c as InitialChangeDisplay),
+      ) ?? []
+    this._indirect =
+      modified.indirect?.map(
+        c => new ModelSQLMeshChangeDisplay(c as InitialChangeDisplay),
+      ) ?? []
+    this._metadata =
+      modified.metadata?.map(
+        c => new ModelSQLMeshChangeDisplay(c as InitialChangeDisplay),
+      ) ?? []
+    this._backfills =
+      backfills.models?.map(
+        c => new ModelSQLMeshChangeDisplay(c as InitialChangeDisplay),
+      ) ?? []
   }
 
-  reset(): void {
-    this._current = undefined
+  clone(): ModelPlanOverviewTracker {
+    const tracker = new ModelPlanOverviewTracker()
+
+    if (isNotNil(this.current)) {
+      tracker.update(structuredClone(this.current))
+    }
+
+    return tracker
   }
 }

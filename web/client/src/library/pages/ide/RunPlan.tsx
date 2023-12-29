@@ -24,7 +24,8 @@ import PlanChangePreview from '@components/plan/PlanChangePreview'
 import { EnumErrorKey, useIDE } from './context'
 import { EnumPlanAction, ModelPlanAction } from '@models/plan-action'
 import { useStorePlan } from '@context/plan'
-import { initiatePlanApiPlanPost, type SnapshotId } from '@api/client'
+import { initiatePlanApiPlanPost } from '@api/client'
+import { type ModelSQLMeshChangeDisplay } from '@models/sqlmesh-change-display'
 
 export default function RunPlan(): JSX.Element {
   const { setIsPlanOpen } = useIDE()
@@ -175,56 +176,42 @@ function PlanChanges(): JSX.Element {
         <ChangesPreview
           headline="Added Models"
           type={EnumPlanChangeType.Add}
-          changes={planOverview.added ?? []}
+          changes={planOverview.added}
         />
       )}
-      {isArrayNotEmpty(planOverview.modified?.direct) && (
+      {isArrayNotEmpty(planOverview.direct) && (
         <ChangesPreview
           headline="Direct Changes"
           type={EnumPlanChangeType.Direct}
-          changes={
-            (planOverview.modified?.direct.map(({ model_name }) => ({
-              name: model_name,
-            })) as SnapshotId[]) ?? []
-          }
+          changes={planOverview.direct}
         />
       )}
-      {isArrayNotEmpty(planOverview.modified?.indirect) && (
+      {isArrayNotEmpty(planOverview.indirect) && (
         <ChangesPreview
           headline="Indirectly Modified"
           type={EnumPlanChangeType.Indirect}
-          changes={
-            (planOverview.modified?.indirect.map(({ model_name }) => ({
-              name: model_name,
-            })) as SnapshotId[]) ?? []
-          }
+          changes={planOverview.indirect}
         />
       )}
-      {isArrayNotEmpty(planOverview.modified?.metadata) && (
+      {isArrayNotEmpty(planOverview.metadata) && (
         <ChangesPreview
           headline="Metadata Changes"
           type={EnumPlanChangeType.Default}
-          changes={planOverview.modified?.metadata ?? []}
+          changes={planOverview.metadata}
         />
       )}
       {isArrayNotEmpty(planOverview.removed) && (
         <ChangesPreview
           headline="Removed Models"
           type={EnumPlanChangeType.Remove}
-          changes={planOverview.removed ?? []}
+          changes={planOverview.removed}
         />
       )}
-      {isArrayNotEmpty(planOverview.backfills?.models) && (
+      {isArrayNotEmpty(planOverview.backfills) && (
         <ChangesPreview
           headline="Backfills"
           type={EnumPlanChangeType.Default}
-          changes={
-            (planOverview.backfills?.models.map(
-              ({ model_name, view_name }) => ({
-                name: model_name ?? view_name,
-              }),
-            ) as SnapshotId[]) ?? []
-          }
+          changes={planOverview.backfills}
         />
       )}
     </span>
@@ -504,7 +491,7 @@ function ChangesPreview({
 }: {
   headline?: string
   type: PlanChangeType
-  changes: SnapshotId[]
+  changes: ModelSQLMeshChangeDisplay[]
 }): JSX.Element {
   const [isShowing, setIsShowing] = useState(false)
 
