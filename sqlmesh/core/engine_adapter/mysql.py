@@ -2,6 +2,8 @@ from __future__ import annotations
 
 import typing as t
 
+from sqlglot import exp, parse_one
+
 from sqlmesh.core.engine_adapter.mixins import (
     LogicalMergeMixin,
     LogicalReplaceQueryMixin,
@@ -26,6 +28,7 @@ class MySQLEngineAdapter(
     ESCAPE_JSON = True
     SUPPORTS_INDEXES = True
     SUPPORTS_VIEW_COMMENT = False
+    SUPPORTS_CTAS_SCHEMA_COMMENTS = False
 
     def get_current_catalog(self) -> t.Optional[str]:
         """Returns the catalog name of the current connection."""
@@ -74,3 +77,42 @@ class MySQLEngineAdapter(
             )
             for row in df.itertuples()
         ]
+
+    def _create_comments(
+        self,
+        table_name: TableName,
+        table_comment: t.Optional[str] = None,
+        column_comments: t.Optional[t.Dict[str, str]] = None,
+        table_kind: str = "TABLE",
+    ) -> None:
+        """
+        Executes commands to create table and column comments.
+        """
+        table = exp.to_table(table_name)
+        table_sql = table.sql(dialect=self.dialect, identify=True)
+
+        if table_comment:
+            self.execute(
+                f"ALTER TABLE {table_sql} COMMENT = '{table_comment}'",
+            )
+
+        if column_comments:
+            # MySQL ALTER TABLE MODIFY completely replaces the column (overwriting options and constraints).
+            # self.columns() only returns the column types so doesn't allow us to fully/correctly replace a column definition.
+            # To get the full column definition we retrieve and parse the table's CREATE TABLE statement.
+            create_table_exp = parse_one(
+                self.fetchone(f"SHOW CREATE TABLE {table_sql}")[1], dialect=self.dialect
+            )
+            col_def_exps = {
+                col_def.name: col_def.copy()
+                for col_def in create_table_exp.find(exp.Schema).find_all(exp.ColumnDef)  # type: ignore
+            }
+
+            for col in column_comments:
+                col_def = col_def_exps.get(col)
+                col_def.constraints.extend(  # type: ignore
+                    self._build_col_comment_exp(col_def.alias_or_name, column_comments)  # type: ignore
+                )
+                self.execute(
+                    f"ALTER TABLE {table_sql} MODIFY {col_def.sql(dialect=self.dialect, identify=True)}",  # type: ignore
+                )

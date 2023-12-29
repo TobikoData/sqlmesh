@@ -240,7 +240,7 @@ class HiveMetastoreTablePropertiesMixin(EngineAdapter):
         if table_description:
             properties.append(exp.SchemaCommentProperty(this=exp.Literal.string(table_description)))
 
-        properties.extend(self.__table_properties_to_expressions(table_properties))
+        properties.extend(self._table_properties_to_expressions(table_properties))
 
         if properties:
             return exp.Properties(expressions=properties)
@@ -257,7 +257,7 @@ class HiveMetastoreTablePropertiesMixin(EngineAdapter):
         if table_description:
             properties.append(exp.SchemaCommentProperty(this=exp.Literal.string(table_description)))
 
-        properties.extend(self.__table_properties_to_expressions(table_properties))
+        properties.extend(self._table_properties_to_expressions(table_properties))
 
         if properties:
             return exp.Properties(expressions=properties)

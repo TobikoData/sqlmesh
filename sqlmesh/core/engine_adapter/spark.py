@@ -531,6 +531,34 @@ class SparkEngineAdapter(GetCurrentCatalogFromFunctionMixin, HiveMetastoreTableP
             table.set("db", self.get_current_database())
         return table
 
+    def _create_comments(
+        self,
+        table_name: TableName,
+        table_comment: t.Optional[str] = None,
+        column_comments: t.Optional[t.Dict[str, str]] = None,
+        table_kind: str = "TABLE",
+    ) -> None:
+        """
+        Executes commands to create table and column comments.
+        """
+        table = exp.to_table(table_name)
+
+        if table_comment:
+            self.execute(
+                exp.Comment(
+                    this=table,
+                    kind=table_kind,
+                    expression=exp.Literal.string(table_comment),
+                )
+            )
+
+        if column_comments:
+            table_sql = table.sql(dialect=self.dialect, identify=True)
+            for col, comment in column_comments.items():
+                self.execute(
+                    f"ALTER TABLE {table_sql} ALTER COLUMN {exp.column(col).sql(dialect=self.dialect, identify=True)} COMMENT '{comment}'",
+                )
+
 
 def _wap_branch_name(wap_id: str) -> str:
     return f"wap_{wap_id}"

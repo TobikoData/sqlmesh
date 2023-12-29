@@ -28,7 +28,14 @@ from sqlmesh.core.dialect import (
     select_from_values_for_batch_range,
     to_schema,
 )
-from sqlmesh.core.engine_adapter.shared import CommentCreation, DataObject, set_catalog
+from sqlmesh.core.engine_adapter.shared import (
+    CatalogSupport,
+    CommentCreation,
+    DataObject,
+    InsertOverwriteStrategy,
+    SourceQuery,
+    set_catalog,
+)
 from sqlmesh.core.model.kind import TimeColumn
 from sqlmesh.core.schema_diff import SchemaDiffer
 from sqlmesh.utils import double_escape, random_id
@@ -38,11 +45,6 @@ from sqlmesh.utils.errors import SQLMeshError, UnsupportedCatalogOperationError
 from sqlmesh.utils.pandas import columns_to_types_from_df
 
 if t.TYPE_CHECKING:
-    if sys.version_info >= (3, 9):
-        from pandas.core.frame import _PandasNamedTuple
-    else:
-        _PandasNamedTuple = t.Tuple[t.Any, ...]
-
     from sqlmesh.core._typing import SchemaName, TableName
     from sqlmesh.core.engine_adapter._typing import (
         DF,
@@ -56,90 +58,11 @@ if t.TYPE_CHECKING:
 
 logger = logging.getLogger(__name__)
 
-
 MERGE_TARGET_ALIAS = "__MERGE_TARGET__"
 MERGE_SOURCE_ALIAS = "__MERGE_SOURCE__"
 
 
-class InsertOverwriteStrategy(Enum):
-    DELETE_INSERT = 1
-    INSERT_OVERWRITE = 2
-    # Note: Replace where on Databricks requires that `spark.sql.sources.partitionOverwriteMode` be set to `static`
-    REPLACE_WHERE = 3
-    INTO_IS_OVERWRITE = 4
-
-    @property
-    def is_delete_insert(self) -> bool:
-        return self == InsertOverwriteStrategy.DELETE_INSERT
-
-    @property
-    def is_insert_overwrite(self) -> bool:
-        return self == InsertOverwriteStrategy.INSERT_OVERWRITE
-
-    @property
-    def is_replace_where(self) -> bool:
-        return self == InsertOverwriteStrategy.REPLACE_WHERE
-
-    @property
-    def is_into_is_overwrite(self) -> bool:
-        return self == InsertOverwriteStrategy.INTO_IS_OVERWRITE
-
-    @property
-    def requires_condition(self) -> bool:
-        return self.is_replace_where or self.is_delete_insert
-
-
-class CatalogSupport(Enum):
-    UNSUPPORTED = 1
-    SINGLE_CATALOG_ONLY = 2
-    REQUIRES_SET_CATALOG = 3
-    FULL_SUPPORT = 4
-
-    @property
-    def is_unsupported(self) -> bool:
-        return self == CatalogSupport.UNSUPPORTED
-
-    @property
-    def is_single_catalog_only(self) -> bool:
-        return self == CatalogSupport.SINGLE_CATALOG_ONLY
-
-    @property
-    def is_requires_set_catalog(self) -> bool:
-        return self == CatalogSupport.REQUIRES_SET_CATALOG
-
-    @property
-    def is_full_support(self) -> bool:
-        return self == CatalogSupport.FULL_SUPPORT
-
-    @property
-    def is_supported(self) -> bool:
-        return self.is_requires_set_catalog or self.is_full_support
-
-
-class SourceQuery:
-    def __init__(
-        self,
-        query_factory: t.Callable[[], Query],
-        cleanup_func: t.Optional[t.Callable[[], None]] = None,
-        **kwargs: t.Any,
-    ) -> None:
-        self.query_factory = query_factory
-        self.cleanup_func = cleanup_func
-
-    def __enter__(self) -> Query:
-        return self.query_factory()
-
-    def __exit__(
-        self,
-        exc_type: t.Optional[t.Type[BaseException]],
-        exc_val: t.Optional[BaseException],
-        exc_tb: t.Optional[types.TracebackType],
-    ) -> t.Optional[bool]:
-        if self.cleanup_func:
-            self.cleanup_func()
-        return None
-
-
+@set_catalog()
 class EngineAdapter:
     """Base class wrapping a Database API compliant connection.
 
@@ -160,6 +83,7 @@ class EngineAdapter:
     SUPPORTS_INDEXES = False
     COMMENT_CREATION = CommentCreation.IN_SCHEMA_DEF
     SUPPORTS_VIEW_COMMENT = True
+    SUPPORTS_CTAS_SCHEMA_COMMENTS = True
     INSERT_OVERWRITE_STRATEGY = InsertOverwriteStrategy.DELETE_INSERT
     SUPPORTS_MATERIALIZED_VIEWS = False
     SUPPORTS_MATERIALIZED_VIEW_SCHEMA = False
@@ -599,12 +523,15 @@ class EngineAdapter:
     ) -> None:
         table = exp.to_table(table_name)
 
-        # Build a schema expression with column comments if the engine supports it
+        # Build a schema expression with column comments if the engine supports it and we have columns_to_types
         schema = None
-        if column_descriptions and self.COMMENT_CREATION.is_in_schema_def:
-            schema = self._build_schema_exp(
-                table, columns_to_types or self.columns(table), column_descriptions
-            )
+        if (
+            column_descriptions
+            and self.COMMENT_CREATION.is_in_schema_def
+            and self.SUPPORTS_CTAS_SCHEMA_COMMENTS
+            and columns_to_types
+        ):
+            schema = self._build_schema_exp(table, columns_to_types, column_descriptions)
 
         with self.transaction(condition=len(source_queries) > 1):
             for i, source_query in enumerate(source_queries):
@@ -626,8 +553,13 @@ class EngineAdapter:
 
         # Register comments with commands if the engine doesn't support comments in the schema
         if (
-            table_description or column_descriptions
-        ) and self.COMMENT_CREATION.is_comment_command_only:
+            (table_description or column_descriptions)
+            and self.COMMENT_CREATION.is_comment_command_only
+        ) or (
+            column_descriptions
+            and self.COMMENT_CREATION.is_in_schema_def
+            and (not self.SUPPORTS_CTAS_SCHEMA_COMMENTS or not columns_to_types)
+        ):
             self._create_comments(
                 table_name,
                 table_description,
@@ -1631,7 +1563,7 @@ class EngineAdapter:
             finally:
                 self.drop_table(table)
 
-    def __table_properties_to_expressions(
+    def _table_properties_to_expressions(
         self, table_properties: t.Optional[t.Dict[str, exp.Expression]] = None
     ) -> t.List[exp.Property]:
         if not table_properties:
@@ -1744,17 +1676,19 @@ class EngineAdapter:
     def _create_comments(
         self,
         table_name: TableName,
-        table_comment: t.Optional[str],
-        column_comments: t.Optional[t.Dict[str, str]],
+        table_comment: t.Optional[str] = None,
+        column_comments: t.Optional[t.Dict[str, str]] = None,
         table_kind: str = "TABLE",
     ) -> None:
         """
         Executes commands to create table and column comments.
         """
+        table = exp.to_table(table_name)
+
         if table_comment:
             self.execute(
                 exp.Comment(
-                    this=exp.to_table(table_name),
+                    this=table,
                     kind=table_kind,
                     expression=exp.Literal.string(table_comment),
                 )
@@ -1764,7 +1698,7 @@ class EngineAdapter:
             for col, comment in column_comments.items():
                 self.execute(
                     exp.Comment(
-                        this=exp.to_column(f"{table_name}.{col}"),
+                        this=exp.column(col, *reversed(table.parts)),  # type: ignore
                         kind="COLUMN",
                         expression=exp.Literal.string(comment),
                     )

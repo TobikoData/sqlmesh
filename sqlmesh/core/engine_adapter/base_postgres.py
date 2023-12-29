@@ -7,6 +7,7 @@ from sqlglot import exp
 from sqlmesh.core.engine_adapter import EngineAdapter
 from sqlmesh.core.engine_adapter.shared import (
     CatalogSupport,
+    CommentCreation,
     DataObject,
     DataObjectType,
 )
@@ -75,6 +76,7 @@ class BasePostgresEngineAdapter(EngineAdapter):
         columns_to_types: t.Optional[t.Dict[str, exp.DataType]] = None,
         replace: bool = True,
         materialized: bool = False,
+        table_description: t.Optional[str] = None,
         **create_kwargs: t.Any,
     ) -> None:
         """
@@ -93,6 +95,7 @@ class BasePostgresEngineAdapter(EngineAdapter):
                 columns_to_types=columns_to_types,
                 replace=False,
                 materialized=materialized,
+                table_description=table_description,
                 **create_kwargs,
             )
 

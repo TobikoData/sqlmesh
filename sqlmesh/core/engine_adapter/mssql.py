@@ -18,6 +18,7 @@ from sqlmesh.core.engine_adapter.mixins import (
 )
 from sqlmesh.core.engine_adapter.shared import (
     CatalogSupport,
+    CommentCreation,
     DataObject,
     DataObjectType,
     SourceQuery,

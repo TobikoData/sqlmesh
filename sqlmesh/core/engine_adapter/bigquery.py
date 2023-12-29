@@ -426,7 +426,7 @@ class BigQueryEngineAdapter(InsertOverwriteWithMergeMixin):
 
     def _build_description_property_exp(self, description: str) -> exp.Property:
         return exp.Property(
-            this=exp.Identifier(this="description", quoted=False),
+            this=exp.Identifier(this="description", quoted=True),
             value=exp.Literal.string(description),
         )
 
@@ -487,7 +487,7 @@ class BigQueryEngineAdapter(InsertOverwriteWithMergeMixin):
                 self._build_description_property_exp(table_description),
             )
 
-        properties.extend(self.__table_properties_to_expressions(table_properties))
+        properties.extend(self._table_properties_to_expressions(table_properties))
 
         if properties:
             return exp.Properties(expressions=properties)
@@ -525,6 +525,30 @@ class BigQueryEngineAdapter(InsertOverwriteWithMergeMixin):
         if properties:
             return exp.Properties(expressions=properties)
         return None
+
+    def _create_comments(
+        self,
+        table_name: TableName,
+        table_comment: t.Optional[str] = None,
+        column_comments: t.Optional[t.Dict[str, str]] = None,
+        table_kind: str = "TABLE",
+    ) -> None:
+        """
+        Executes commands to create table and column comments.
+        """
+        table = exp.to_table(table_name)
+        table_sql = table.sql(dialect=self.dialect, identify=True)
+
+        if table_comment:
+            self.execute(
+                f"ALTER {table_kind} {table_sql} SET OPTIONS(description = '{table_comment}')",
+            )
+
+        if column_comments:
+            for col, comment in column_comments.items():
+                self.execute(
+                    f"ALTER TABLE {table_sql} ALTER COLUMN {exp.column(col).sql(dialect=self.dialect, identify=True)} SET OPTIONS(description = '{comment}')",
+                )
 
     def create_state_table(
         self,

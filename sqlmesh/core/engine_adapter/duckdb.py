@@ -4,17 +4,13 @@ import typing as t
 
 from sqlglot import exp
 
-from sqlmesh.core.engine_adapter.base import (
-    CatalogSupport,
-    CommentCreation,
-    SourceQuery,
-)
 from sqlmesh.core.engine_adapter.mixins import (
     GetCurrentCatalogFromFunctionMixin,
     LogicalMergeMixin,
 )
 from sqlmesh.core.engine_adapter.shared import (
     CatalogSupport,
+    CommentCreation,
     DataObject,
     DataObjectType,
     SourceQuery,
