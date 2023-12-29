@@ -16,6 +16,7 @@ from sqlmesh.core.model import Model, ModelKindMixin, ModelKindName, ViewKind
 from sqlmesh.core.model.definition import _Model
 from sqlmesh.core.node import IntervalUnit, NodeType
 from sqlmesh.utils import sanitize_name
+from sqlmesh.utils.cron import get_ts_range
 from sqlmesh.utils.dag import DAG
 from sqlmesh.utils.date import (
     TimeLike,
@@ -793,28 +794,8 @@ class Snapshot(PydanticModel, SnapshotInfoMixin):
             )
             end_ts = min(end_ts, to_timestamp(interval_unit.cron_floor(upper_bound_ts)))
 
-        croniter = interval_unit.croniter(start_ts)
-        dates = [start_ts]
-
-        # get all individual dates with the addition of extra lookback dates up to the execution date
-        # when a model has lookback, we need to check all the intervals between itself and its lookback exist.
-        while True:
-            ts = to_timestamp(croniter.get_next(estimate=True))
-
-            if ts < end_ts:
-                dates.append(ts)
-            else:
-                croniter.get_prev()
-                break
-
         lookback = self.model.lookback if self.is_model else 0
-
-        for _ in range(lookback):
-            ts = to_timestamp(croniter.get_next(estimate=True))
-            if ts < upper_bound_ts:
-                dates.append(ts)
-            else:
-                break
+        dates = get_ts_range(interval_unit.cron_expr, start_ts, end_ts, upper_bound_ts, lookback)
 
         missing = []
         for i in range(len(dates)):

@@ -338,7 +338,7 @@ class StateBasedAirflowPlanEvaluator(BaseAirflowPlanEvaluator):
         from sqlmesh.schedulers.airflow.plan import PlanDagState, create_plan_dag_spec
 
         plan_application_request = airflow_common.PlanApplicationRequest(
-            new_snapshots=list(plan.new_snapshots),
+            new_snapshots=plan.new_snapshots,
             environment=plan.environment,
             no_gaps=plan.no_gaps,
             skip_backfill=plan.skip_backfill,

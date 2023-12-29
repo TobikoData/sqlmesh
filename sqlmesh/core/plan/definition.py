@@ -332,7 +332,10 @@ class Plan:
 
     def is_new_snapshot(self, snapshot: Snapshot) -> bool:
         """Returns True if the given snapshot is a new snapshot in this plan."""
-        return snapshot.snapshot_id in {s.snapshot_id for s in self.new_snapshots}
+        snapshot_id = snapshot.snapshot_id
+        return (
+            snapshot_id in self.context_diff.new_snapshots and snapshot_id in self.snapshot_mapping
+        )
 
     def is_selected_for_backfill(self, model_fqn: str) -> bool:
         """Returns True if a model with the given FQN should be backfilled as part of this plan."""

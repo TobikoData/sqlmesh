@@ -23,9 +23,6 @@ if t.TYPE_CHECKING:
     from sqlmesh.core.snapshot import Node
 
 
-DEFAULT_SAMPLE_SIZE = 5
-
-
 class IntervalUnit(str, Enum):
     """IntervalUnit is the inferred granularity of an incremental node.
 
@@ -43,12 +40,16 @@ class IntervalUnit(str, Enum):
     FIVE_MINUTE = "five_minute"
 
     @classmethod
-    def from_cron(klass, cron: str, sample_size: int = DEFAULT_SAMPLE_SIZE) -> IntervalUnit:
+    def from_cron(klass, cron: str) -> IntervalUnit:
         croniter = CroniterCache(cron)
-        samples = [croniter.get_next() for _ in range(sample_size)]
-        min_interval = min(b - a for a, b in zip(samples, samples[1:]))
-        for unit, seconds in sorted(INTERVAL_SECONDS.items(), key=lambda x: x[1], reverse=True):
-            if seconds <= min_interval.total_seconds():
+        interval_seconds = croniter.interval_seconds
+
+        if not interval_seconds:
+            samples = [croniter.get_next() for _ in range(5)]
+            interval_seconds = int(min(b - a for a, b in zip(samples, samples[1:])).total_seconds())
+
+        for unit, seconds in INTERVAL_SECONDS.items():
+            if seconds <= interval_seconds:
                 return unit
         raise ConfigError(f"Invalid cron '{cron}': must have a cadence of 5 minutes or more.")
 
@@ -77,7 +78,7 @@ class IntervalUnit(str, Enum):
         return self in (IntervalUnit.FIVE_MINUTE, IntervalUnit.QUARTER_HOUR, IntervalUnit.HALF_HOUR)
 
     @property
-    def _cron_expr(self) -> str:
+    def cron_expr(self) -> str:
         if self == IntervalUnit.FIVE_MINUTE:
             return "*/5 * * * *"
         if self == IntervalUnit.QUARTER_HOUR:
@@ -95,43 +96,48 @@ class IntervalUnit(str, Enum):
         return ""
 
     def croniter(self, value: TimeLike) -> CroniterCache:
-        return CroniterCache(self._cron_expr, value)
+        return CroniterCache(self.cron_expr, value)
 
-    def cron_next(self, value: TimeLike) -> datetime:
+    def cron_next(self, value: TimeLike, estimate: bool = False) -> datetime:
         """
         Get the next timestamp given a time-like value for this interval unit.
 
         Args:
             value: A variety of date formats.
+            estimate: Whether or not to estimate, only use this if the value is floored.
 
         Returns:
             The timestamp for the next run.
         """
-        return self.croniter(value).get_next()
+        return self.croniter(value).get_next(estimate=estimate)
 
-    def cron_prev(self, value: TimeLike) -> datetime:
+    def cron_prev(self, value: TimeLike, estimate: bool = False) -> datetime:
         """
         Get the previous timestamp given a time-like value for this interval unit.
 
         Args:
             value: A variety of date formats.
+            estimate: Whether or not to estimate, only use this if the value is floored.
 
         Returns:
             The timestamp for the previous run.
         """
-        return self.croniter(value).get_prev()
+        return self.croniter(value).get_prev(estimate=estimate)
 
-    def cron_floor(self, value: TimeLike) -> datetime:
+    def cron_floor(self, value: TimeLike, estimate: bool = False) -> datetime:
         """
         Get the floor timestamp given a time-like value for this interval unit.
 
         Args:
             value: A variety of date formats.
+            estimate: Whether or not to estimate, only use this if the value is floored.
 
         Returns:
             The timestamp floor.
         """
-        return self.croniter(self.cron_next(value)).get_prev()
+        croniter = self.croniter(value)
+        croniter.get_next(estimate=estimate)
+        return croniter.get_prev(estimate=True)
 
     @property
     def seconds(self) -> int:
@@ -142,6 +148,7 @@ class IntervalUnit(str, Enum):
         return self.seconds * 1000
 
 
+# this must be sorted in descending order
 INTERVAL_SECONDS = {
     IntervalUnit.YEAR: 60 * 60 * 24 * 365,
     IntervalUnit.MONTH: 60 * 60 * 24 * 28,
@@ -299,41 +306,44 @@ class _Node(PydanticModel):
             self._croniter.curr = to_datetime(value)
         return self._croniter
 
-    def cron_next(self, value: TimeLike) -> datetime:
+    def cron_next(self, value: TimeLike, estimate: bool = False) -> datetime:
         """
         Get the next timestamp given a time-like value and the node's cron.
 
         Args:
             value: A variety of date formats.
+            estimate: Whether or not to estimate, only use this if the value is floored.
 
         Returns:
             The timestamp for the next run.
         """
-        return self.croniter(value).get_next()
+        return self.croniter(value).get_next(estimate=estimate)
 
-    def cron_prev(self, value: TimeLike) -> datetime:
+    def cron_prev(self, value: TimeLike, estimate: bool = False) -> datetime:
         """
         Get the previous timestamp given a time-like value and the node's cron.
 
         Args:
             value: A variety of date formats.
+            estimate: Whether or not to estimate, only use this if the value is floored.
 
         Returns:
             The timestamp for the previous run.
         """
-        return self.croniter(value).get_prev()
+        return self.croniter(value).get_prev(estimate=estimate)
 
-    def cron_floor(self, value: TimeLike) -> datetime:
+    def cron_floor(self, value: TimeLike, estimate: bool = False) -> datetime:
         """
         Get the floor timestamp given a time-like value and the node's cron.
 
         Args:
             value: A variety of date formats.
+            estimate: Whether or not to estimate, only use this if the value is floored.
 
         Returns:
             The timestamp floor.
         """
-        return self.croniter(self.cron_next(value)).get_prev()
+        return self.croniter(self.cron_next(value, estimate=estimate)).get_prev(estimate=True)
 
     def text_diff(self, other: Node) -> str:
         """Produce a text diff against another node.
@@ -346,19 +356,16 @@ class _Node(PydanticModel):
         """
         raise NotImplementedError
 
-    def _inferred_interval_unit(self, sample_size: int = DEFAULT_SAMPLE_SIZE) -> IntervalUnit:
+    def _inferred_interval_unit(self) -> IntervalUnit:
         """Infers the interval unit from the cron expression.
 
         The interval unit is used to determine the lag applied to start_date and end_date for node rendering and intervals.
-
-        Args:
-            sample_size: The number of samples to take from the cron to infer the unit.
 
         Returns:
             The IntervalUnit enum.
         """
         if not self.__inferred_interval_unit:
-            self.__inferred_interval_unit = IntervalUnit.from_cron(self.cron, sample_size)
+            self.__inferred_interval_unit = IntervalUnit.from_cron(self.cron)
         return self.__inferred_interval_unit
 
     @property
