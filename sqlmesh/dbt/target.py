@@ -216,6 +216,11 @@ class SnowflakeConfig(TargetConfig):
     # SSO authentication
     authenticator: t.Optional[str] = None
 
+    # Key Pair Auth
+    private_key: t.Optional[str] = None
+    private_key_path: t.Optional[str] = None
+    private_key_passphrase: t.Optional[str] = None
+
     # TODO add other forms of authentication
 
     # Optional
@@ -233,7 +238,12 @@ class SnowflakeConfig(TargetConfig):
     def validate_authentication(
         cls, values: t.Dict[str, t.Union[t.Tuple[str, ...], t.Optional[str], t.Dict[str, t.Any]]]
     ) -> t.Dict[str, t.Union[t.Tuple[str, ...], t.Optional[str], t.Dict[str, t.Any]]]:
-        if values.get("password") or values.get("authenticator"):
+        if (
+            values.get("password")
+            or values.get("authenticator")
+            or values.get("private_key")
+            or values.get("private_key_path")
+        ):
             return values
         raise ConfigError("No supported Snowflake authentication method found in target profile.")
 
@@ -262,6 +272,9 @@ class SnowflakeConfig(TargetConfig):
             database=self.database,
             role=self.role,
             concurrent_tasks=self.threads,
+            private_key=self.private_key,
+            private_key_path=self.private_key_path,
+            private_key_passphrase=self.private_key_passphrase,
         )
 
     @classproperty

@@ -35,6 +35,7 @@ setup(
         "astor",
         "click",
         "croniter",
+        "cryptography",
         "duckdb",
         "dateparser",
         "fsspec",
