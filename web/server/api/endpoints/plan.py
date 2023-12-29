@@ -121,7 +121,14 @@ def get_plan(
     tracker_stage_changes = models.PlanStageChanges()
     tracker.add_stage(stage=models.PlanStage.changes, data=tracker_stage_changes)
     if plan.context_diff.has_changes:
-        tracker_stage_changes.update(_get_plan_changes(plan))
+        changes = _get_plan_changes(context, plan)
+        tracker_stage_changes.update(
+            {
+                "added": changes.added,
+                "removed": changes.removed,
+                "modified": changes.modified,
+            }
+        )
     tracker_stage_changes.stop(success=True)
     api_console.log_event_plan_overview()
     tracker_stage_backfills = models.PlanStageBackfills()
@@ -136,28 +143,60 @@ def get_plan(
     return plan
 
 
-def _get_plan_changes(plan: Plan) -> t.Dict[str, t.Any]:
+def _get_plan_changes(context: Context, plan: Plan) -> models.PlanChanges:
     """Get plan changes"""
-    return {
-        "removed": set(plan.context_diff.removed_snapshots),
-        "added": list(plan.context_diff.added),
-        "modified": models.ModelsDiff.get_modified_snapshots(plan.context_diff),
-    }
+    snapshots = plan.context_diff.snapshots
+    default_catalog = context.default_catalog
+    environment_naming_info = plan.environment_naming_info
+
+    return models.PlanChanges(
+        added=[
+            models.ChangeDisplay(
+                name=snapshot_id.name,
+                view_name=models.ChangeDisplay.get_view_name(
+                    snapshots,
+                    snapshot_id,
+                    environment_naming_info,
+                    default_catalog,
+                ),
+                node_type=models.ChangeDisplay.get_node_type(snapshots, snapshot_id),
+            )
+            for snapshot_id in plan.context_diff.added
+        ],
+        removed=[
+            models.ChangeDisplay(
+                name=snapshot_id.name,
+                view_name=models.ChangeDisplay.get_view_name(
+                    snapshots,
+                    snapshot_id,
+                    environment_naming_info,
+                    default_catalog,
+                ),
+                node_type=models.ChangeDisplay.get_node_type(snapshots, snapshot_id),
+            )
+            for snapshot_id in plan.context_diff.removed_snapshots
+        ],
+        modified=models.ModelsDiff.get_modified_snapshots(context, plan),
+    )
 
 
 def _get_plan_backfills(context: Context, plan: Plan) -> t.Dict[str, t.Any]:
     """Get plan backfills"""
     batches = context.scheduler().batches()
     tasks = {snapshot.name: len(intervals) for snapshot, intervals in batches.items()}
+    snapshots = plan.context_diff.snapshots
+    default_catalog = context.default_catalog
+
     return {
         "models": [
             models.BackfillDetails(
-                model_name=interval.snapshot_id.name,
-                view_name=plan.context_diff.snapshots[
-                    interval.snapshot_id
-                ].qualified_view_name.for_environment(plan.environment_naming_info)
-                if interval.snapshot_id in plan.context_diff.snapshots
-                else interval.snapshot_id,
+                name=interval.snapshot_id.name,
+                view_name=models.ChangeDisplay.get_view_name(
+                    snapshots,
+                    interval.snapshot_id,
+                    plan.environment_naming_info,
+                    default_catalog,
+                ),
                 interval=[
                     tuple(to_ds(t) for t in make_inclusive(start, end))
                     for start, end in interval.merged_intervals

@@ -13,10 +13,16 @@ type PlanOverviewDetails = Pick<
   | 'end'
   | 'hasChanges'
   | 'hasBackfills'
-  | 'changes'
+  | 'added'
+  | 'removed'
+  | 'direct'
+  | 'indirect'
+  | 'metadata'
   | 'backfills'
-  | 'validation'
   | 'plan_options'
+  | 'stageValidation'
+  | 'stageChanges'
+  | 'stageBackfills'
 >
 
 export function getPlanOverviewDetails(
@@ -36,9 +42,15 @@ export function getPlanOverviewDetails(
     end: plan.end,
     hasChanges: overview.hasChanges,
     hasBackfills: overview.hasBackfills,
-    changes: plan.changes,
-    backfills: plan.backfills,
-    validation: plan.validation,
+    backfills: plan.backfills ?? [],
+    added: plan.added ?? [],
+    removed: plan.removed ?? [],
+    direct: plan.direct ?? [],
+    indirect: plan.indirect ?? [],
+    metadata: plan.metadata ?? [],
     plan_options: plan.plan_options,
+    stageValidation: plan.stageValidation,
+    stageBackfills: plan.stageBackfills,
+    stageChanges: plan.stageChanges,
   }
 }

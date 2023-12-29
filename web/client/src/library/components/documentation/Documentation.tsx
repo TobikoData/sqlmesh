@@ -60,7 +60,8 @@ const Documentation = function Documentation({
             />
             <DetailsItem
               name="Name"
-              value={truncate(model.name, 25, 15)}
+              title={model.displayName}
+              value={truncate(model.displayName, 50, 25)}
             />
             <DetailsItem
               name="Dialect"

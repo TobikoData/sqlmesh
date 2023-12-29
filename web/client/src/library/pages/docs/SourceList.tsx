@@ -18,7 +18,9 @@ export default function SourceList({
   setFilter: (filter: string) => void
 }): JSX.Element {
   const modelsFiltered = Array.from(new Set(models.values())).filter(model =>
-    filter === '' ? true : model.name.toLocaleLowerCase().includes(filter),
+    filter === ''
+      ? true
+      : model.displayName.toLocaleLowerCase().includes(filter),
   )
   return (
     <div className="flex flex-col w-full h-full">
@@ -30,6 +32,7 @@ export default function SourceList({
           {({ className }) => (
             <Input.Textfield
               className={clsx(className, 'w-full')}
+              type="search"
               value={filter}
               placeholder="Filter models"
               onInput={(e: React.ChangeEvent<HTMLInputElement>) => {
@@ -61,18 +64,18 @@ export default function SourceList({
               className={clsx('text-sm font-normal')}
             >
               <NavLink
-                title={model.name}
+                title={model.displayName}
                 to={`${EnumRoutes.IdeDocsModels}/${model.name}`}
                 className={({ isActive }) =>
                   clsx(
-                    'block px-2 overflow-hidden whitespace-nowrap overflow-ellipsis py-1 rounded-md w-full hover:bg-primary-10',
+                    'block px-2 overflow-hidden whitespace-nowrap overflow-ellipsis py-1 rounded-md w-full',
                     isActive
-                      ? 'text-primary-500 bg-primary-10'
-                      : 'text-neutral-500 dark:text-neutral-100',
+                      ? 'text-primary-500 bg-primary-10 pointer-events-none'
+                      : 'text-neutral-500 dark:text-neutral-100 hover:bg-neutral-5',
                   )
                 }
               >
-                {truncate(model.name, 50, 20)}
+                {truncate(model.displayName, 50, 25)}
                 <span className="inline-block ml-2 bg-primary-10 px-2 rounded-md text-[0.65rem]">
                   {getModelNodeTypeTitle(model.type as LineageNodeModelType)}
                 </span>

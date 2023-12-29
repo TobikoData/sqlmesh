@@ -1,8 +1,8 @@
-import { Outlet, useLocation, useParams } from 'react-router-dom'
-import { useEffect, useState } from 'react'
-import { isArrayNotEmpty, isNil } from '@utils/index'
+import { Outlet, useLocation } from 'react-router-dom'
+import { useEffect, useMemo, useState } from 'react'
+import { isArrayNotEmpty } from '@utils/index'
 import { useStoreContext } from '@context/context'
-import { ModelSQLMeshModel } from '@models/sqlmesh-model'
+import { type ModelSQLMeshModel } from '@models/sqlmesh-model'
 import Container from '@components/container/Container'
 import SplitPane from '@components/splitPane/SplitPane'
 import SourceList from './SourceList'
@@ -12,23 +12,12 @@ import { EnumRoutes } from '~/routes'
 
 export default function PageDocs(): JSX.Element {
   const location = useLocation()
-  const { modelName } = useParams()
 
   const models = useStoreContext(s => s.models)
 
   const [filter, setFilter] = useState('')
 
-  const filtered = Array.from(models.entries()).reduce(
-    (acc: ModelSQLMeshModel[], [key, model]) => {
-      if (model.name === key) return acc
-      if (isNil(modelName) || model.name !== modelName) {
-        acc.push(model)
-      }
-
-      return acc
-    },
-    [],
-  )
+  const filtered = useMemo(() => Array.from(new Set(models.values())), [models])
 
   useEffect(() => {
     setFilter('')
@@ -59,7 +48,7 @@ export default function PageDocs(): JSX.Element {
               list={filtered}
               size={EnumSize.lg}
               searchBy="index"
-              displayBy="name"
+              displayBy="displayName"
               to={model => `${EnumRoutes.IdeDocsModels}/${model.name}`}
               isFullWidth={true}
             />

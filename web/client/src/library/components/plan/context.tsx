@@ -1,3 +1,4 @@
+import { type ModelSQLMeshChangeDisplay } from '@models/sqlmesh-change-display'
 import { isNotNil } from '@utils/index'
 import {
   createContext,
@@ -8,7 +9,6 @@ import {
 } from 'react'
 import {
   type ModelsDiff,
-  type ChangeDirect,
   SnapshotChangeCategory,
   type PlanDatesStart,
   type PlanDatesEnd,
@@ -32,6 +32,7 @@ export const EnumPlanChangeType = {
   Remove: 'remove',
   Direct: 'direct',
   Indirect: 'indirect',
+  Metadata: 'metadata',
   Default: 'default',
 } as const
 
@@ -52,7 +53,7 @@ export interface Category {
 }
 
 export interface ChangeCategory {
-  change: ChangeDirect
+  change: ModelSQLMeshChangeDisplay
   category: Category
 }
 
@@ -271,8 +272,8 @@ function reducer(
     case EnumPlanActions.Category: {
       const { change, category } = newState as ChangeCategory
 
-      if (isNotNil(change?.model_name)) {
-        plan.change_categorization.set(change.model_name, {
+      if (isNotNil(change?.name)) {
+        plan.change_categorization.set(change.name, {
           category,
           change,
         })

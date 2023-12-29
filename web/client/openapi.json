@@ -807,11 +807,12 @@
       },
       "BackfillDetails": {
         "properties": {
-          "model_name": {
-            "anyOf": [{ "type": "string" }, { "type": "null" }],
-            "title": "Model Name"
-          },
+          "name": { "type": "string", "title": "Name" },
           "view_name": { "type": "string", "title": "View Name" },
+          "node_type": {
+            "allOf": [{ "$ref": "#/components/schemas/NodeType" }],
+            "default": "model"
+          },
           "interval": {
             "items": { "type": "string" },
             "type": "array",
@@ -820,22 +821,34 @@
           "batches": { "type": "integer", "title": "Batches" }
         },
         "type": "object",
-        "required": ["view_name", "interval", "batches"],
+        "required": ["name", "view_name", "interval", "batches"],
         "title": "BackfillDetails"
       },
       "BackfillTask": {
         "properties": {
+          "name": { "type": "string", "title": "Name" },
+          "view_name": { "type": "string", "title": "View Name" },
+          "node_type": {
+            "allOf": [{ "$ref": "#/components/schemas/NodeType" }],
+            "default": "model"
+          },
           "completed": { "type": "integer", "title": "Completed" },
           "total": { "type": "integer", "title": "Total" },
-          "view_name": { "type": "string", "title": "View Name" },
           "start": { "type": "integer", "title": "Start" },
           "end": {
             "anyOf": [{ "type": "integer" }, { "type": "null" }],
             "title": "End"
+          },
+          "interval": {
+            "anyOf": [
+              { "items": { "type": "string" }, "type": "array" },
+              { "type": "null" }
+            ],
+            "title": "Interval"
           }
         },
         "type": "object",
-        "required": ["completed", "total", "view_name", "start"],
+        "required": ["name", "view_name", "completed", "total", "start"],
         "title": "BackfillTask"
       },
       "Body_initiate_apply_api_commands_apply_post": {
@@ -917,10 +930,15 @@
       },
       "ChangeDirect": {
         "properties": {
-          "model_name": { "type": "string", "title": "Model Name" },
+          "name": { "type": "string", "title": "Name" },
+          "view_name": { "type": "string", "title": "View Name" },
+          "node_type": {
+            "allOf": [{ "$ref": "#/components/schemas/NodeType" }],
+            "default": "model"
+          },
           "diff": { "type": "string", "title": "Diff" },
           "indirect": {
-            "items": { "type": "string" },
+            "items": { "$ref": "#/components/schemas/ChangeDisplay" },
             "type": "array",
             "title": "Indirect",
             "default": []
@@ -933,21 +951,39 @@
           }
         },
         "type": "object",
-        "required": ["model_name", "diff"],
+        "required": ["name", "view_name", "diff"],
         "title": "ChangeDirect"
+      },
+      "ChangeDisplay": {
+        "properties": {
+          "name": { "type": "string", "title": "Name" },
+          "view_name": { "type": "string", "title": "View Name" },
+          "node_type": {
+            "allOf": [{ "$ref": "#/components/schemas/NodeType" }],
+            "default": "model"
+          }
+        },
+        "type": "object",
+        "required": ["name", "view_name"],
+        "title": "ChangeDisplay"
       },
       "ChangeIndirect": {
         "properties": {
-          "model_name": { "type": "string", "title": "Model Name" },
+          "name": { "type": "string", "title": "Name" },
+          "view_name": { "type": "string", "title": "View Name" },
+          "node_type": {
+            "allOf": [{ "$ref": "#/components/schemas/NodeType" }],
+            "default": "model"
+          },
           "direct": {
-            "items": { "type": "string" },
+            "items": { "$ref": "#/components/schemas/ChangeDisplay" },
             "type": "array",
             "title": "Direct",
             "default": []
           }
         },
         "type": "object",
-        "required": ["model_name"],
+        "required": ["name", "view_name"],
         "title": "ChangeIndirect"
       },
       "Column": {
@@ -992,6 +1028,10 @@
               { "$ref": "#/components/schemas/EnvironmentSuffixTarget" }
             ],
             "default": "schema"
+          },
+          "catalog_name_override": {
+            "anyOf": [{ "type": "string" }, { "type": "null" }],
+            "title": "Catalog Name Override"
           },
           "snapshots": {
             "items": { "$ref": "#/components/schemas/SnapshotTableInfo" },
@@ -1215,6 +1255,7 @@
       "Model": {
         "properties": {
           "name": { "type": "string", "title": "Name" },
+          "fqn": { "type": "string", "title": "Fqn" },
           "path": { "type": "string", "title": "Path" },
           "dialect": { "type": "string", "title": "Dialect" },
           "type": { "$ref": "#/components/schemas/ModelType" },
@@ -1243,7 +1284,7 @@
           }
         },
         "type": "object",
-        "required": ["name", "path", "dialect", "type", "columns"],
+        "required": ["name", "fqn", "path", "dialect", "type", "columns"],
         "title": "Model"
       },
       "ModelDetails": {
@@ -1392,7 +1433,7 @@
             "default": []
           },
           "metadata": {
-            "items": { "$ref": "#/components/schemas/SnapshotId" },
+            "items": { "$ref": "#/components/schemas/ChangeDisplay" },
             "type": "array",
             "title": "Metadata",
             "default": []
@@ -1696,11 +1737,10 @@
       },
       "PlanStageChanges": {
         "properties": {
-          "meta": { "$ref": "#/components/schemas/TrackableMeta" },
           "added": {
             "anyOf": [
               {
-                "items": { "$ref": "#/components/schemas/SnapshotId" },
+                "items": { "$ref": "#/components/schemas/ChangeDisplay" },
                 "type": "array"
               },
               { "type": "null" }
@@ -1710,7 +1750,7 @@
           "removed": {
             "anyOf": [
               {
-                "items": { "$ref": "#/components/schemas/SnapshotId" },
+                "items": { "$ref": "#/components/schemas/ChangeDisplay" },
                 "type": "array"
               },
               { "type": "null" }
@@ -1722,7 +1762,8 @@
               { "$ref": "#/components/schemas/ModelsDiff" },
               { "type": "null" }
             ]
-          }
+          },
+          "meta": { "$ref": "#/components/schemas/TrackableMeta" }
         },
         "type": "object",
         "title": "PlanStageChanges"

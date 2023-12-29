@@ -1,20 +1,8 @@
-import { type BackfillTaskEnd } from '@api/client'
 import { ModelPlanAction } from '@models/plan-action'
 import { ModelPlanApplyTracker } from '@models/tracker-plan-apply'
 import { ModelPlanCancelTracker } from '@models/tracker-plan-cancel'
 import { ModelPlanOverviewTracker } from '@models/tracker-plan-overview'
 import { create } from 'zustand'
-
-export interface PlanTaskStatus {
-  total: number
-  completed: number
-  model_name?: string
-  view_name: string
-  start?: number
-  end?: BackfillTaskEnd
-  interval?: [string, string]
-}
-export type PlanTasks = Record<string, PlanTaskStatus>
 
 interface PlanStore {
   planAction: ModelPlanAction

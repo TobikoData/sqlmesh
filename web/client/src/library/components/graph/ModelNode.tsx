@@ -105,7 +105,7 @@ export default function ModelNode({
   const isCTE = data.type === EnumLineageNodeModelType.cte
   const isModelExternal = data.type === EnumLineageNodeModelType.external
   const isModelSeed = data.type === EnumLineageNodeModelType.seed
-  const isModelSQL = data.type === EnumLineageNodeModelType.sql
+  const isModelPython = data.type === EnumLineageNodeModelType.python
   const showColumns = withColumns && isArrayNotEmpty(columns)
   const isMainNode = mainNode === id || highlightedNodeModels.includes(id)
   const isActiveNode =
@@ -164,7 +164,7 @@ export default function ModelNode({
             className="max-h-[15rem]"
             nodeId={id}
             columns={columns}
-            disabled={isModelSQL}
+            disabled={isModelPython}
             withHandles={true}
             withSource={true}
             withDescription={false}
