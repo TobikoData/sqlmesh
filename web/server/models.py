@@ -10,10 +10,14 @@ from sqlglot import exp
 from watchfiles import Change
 
 from sqlmesh.core.context import Context
-from sqlmesh.core.environment import Environment
+from sqlmesh.core.environment import Environment, EnvironmentNamingInfo
 from sqlmesh.core.node import IntervalUnit, NodeType
 from sqlmesh.core.plan.definition import Plan
-from sqlmesh.core.snapshot.definition import SnapshotChangeCategory, SnapshotId
+from sqlmesh.core.snapshot.definition import (
+    Snapshot,
+    SnapshotChangeCategory,
+    SnapshotId,
+)
 from sqlmesh.utils.date import TimeLike, now_timestamp
 from sqlmesh.utils.pydantic import (
     PYDANTIC_MAJOR_VERSION,
@@ -162,6 +166,25 @@ class ChangeDisplay(BaseModel):
     view_name: str
     node_type: NodeType = NodeType.MODEL
 
+    @staticmethod
+    def get_view_name(
+        snapshots: t.Dict[SnapshotId, Snapshot],
+        snapshot_id: SnapshotId,
+        environment_naming_info: EnvironmentNamingInfo,
+        default_catalog: t.Optional[str],
+    ) -> str:
+        return (
+            snapshots[snapshot_id].display_name(environment_naming_info, default_catalog)
+            if snapshot_id in snapshots
+            else snapshot_id.name
+        )
+
+    @staticmethod
+    def get_node_type(
+        snapshots: t.Dict[SnapshotId, Snapshot], snapshot_id: SnapshotId
+    ) -> t.Optional[NodeType]:
+        return snapshots[snapshot_id].node_type if snapshot_id in snapshots else None
+
 
 class ChangeDirect(ChangeDisplay):
     diff: str
@@ -190,16 +213,6 @@ class ModelsDiff(BaseModel):
         default_catalog = context.default_catalog
         environment_naming_info = plan.environment_naming_info
 
-        def _display_name(snapshot_id: SnapshotId) -> str:
-            return (
-                snapshots[snapshot_id].display_name(environment_naming_info, default_catalog)
-                if snapshot_id in snapshots
-                else snapshot_id.name
-            )
-
-        def _node_type(snapshot_id: SnapshotId) -> t.Optional[NodeType]:
-            return snapshots[snapshot_id].node_type if snapshot_id in snapshots else None
-
         direct: t.List[ChangeDirect] = []
         metadata: t.List[ChangeDisplay] = []
         indirect: t.List[ChangeIndirect] = [
@@ -210,8 +223,13 @@ class ModelsDiff(BaseModel):
                 direct=[
                     ChangeDisplay(
                         name=parent.name,
-                        view_name=_display_name(parent),
-                        node_type=_node_type(parent),
+                        view_name=ChangeDisplay.get_view_name(
+                            snapshots,
+                            parent,
+                            environment_naming_info,
+                            default_catalog,
+                        ),
+                        node_type=ChangeDisplay.get_node_type(snapshots, parent),
                     )
                     for parent in current.parents
                 ],

@@ -6,7 +6,7 @@ import {
 import { ModelPlanTracker, type PlanTracker } from './tracker-plan'
 import { isArrayNotEmpty, isFalse, isNil, isNotNil } from '@utils/index'
 import {
-  type InitialalChangeDisplay,
+  type InitialChangeDisplay,
   ModelSQLMeshChangeDisplay,
 } from './sqlmesh-change-display'
 
@@ -159,27 +159,27 @@ export class ModelPlanOverviewTracker
 
     this._added =
       changes.added?.map(
-        c => new ModelSQLMeshChangeDisplay(c as InitialalChangeDisplay),
+        c => new ModelSQLMeshChangeDisplay(c as InitialChangeDisplay),
       ) ?? []
     this._removed =
       changes.removed?.map(
-        c => new ModelSQLMeshChangeDisplay(c as InitialalChangeDisplay),
+        c => new ModelSQLMeshChangeDisplay(c as InitialChangeDisplay),
       ) ?? []
     this._direct =
       modified.direct?.map(
-        c => new ModelSQLMeshChangeDisplay(c as InitialalChangeDisplay),
+        c => new ModelSQLMeshChangeDisplay(c as InitialChangeDisplay),
       ) ?? []
     this._indirect =
       modified.indirect?.map(
-        c => new ModelSQLMeshChangeDisplay(c as InitialalChangeDisplay),
+        c => new ModelSQLMeshChangeDisplay(c as InitialChangeDisplay),
       ) ?? []
     this._metadata =
       modified.metadata?.map(
-        c => new ModelSQLMeshChangeDisplay(c as InitialalChangeDisplay),
+        c => new ModelSQLMeshChangeDisplay(c as InitialChangeDisplay),
       ) ?? []
     this._backfills =
       backfills.models?.map(
-        c => new ModelSQLMeshChangeDisplay(c as InitialalChangeDisplay),
+        c => new ModelSQLMeshChangeDisplay(c as InitialChangeDisplay),
       ) ?? []
   }
 

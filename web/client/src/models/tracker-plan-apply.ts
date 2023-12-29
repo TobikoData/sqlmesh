@@ -15,7 +15,7 @@ import { ModelPlanTracker, type PlanTracker } from './tracker-plan'
 import { isFalse, isFalseOrNil, isNil, isNotNil, isTrue } from '@utils/index'
 import { type ModelPlanOverviewTracker } from './tracker-plan-overview'
 import {
-  type InitialalChangeDisplay,
+  type InitialChangeDisplay,
   ModelSQLMeshChangeDisplay,
 } from './sqlmesh-change-display'
 
@@ -116,7 +116,7 @@ export class ModelPlanApplyTracker
     return Object.entries(tasks ?? {}).reduce(
       (acc: Record<string, ModelSQLMeshChangeDisplay>, [key, value]) => {
         acc[encodeURI(key)] = new ModelSQLMeshChangeDisplay(
-          value as InitialalChangeDisplay,
+          value as InitialChangeDisplay,
         )
 
         return acc

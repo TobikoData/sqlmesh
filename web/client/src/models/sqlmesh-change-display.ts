@@ -11,13 +11,13 @@ import {
 } from '@api/client'
 import { ModelInitial } from './initial'
 
-export type InitialalChangeDisplay = ChangeDisplay &
+export type InitialChangeDisplay = ChangeDisplay &
   ChangeDirect &
   ChangeIndirect &
   BackfillDetails &
   BackfillTask
 
-export class ModelSQLMeshChangeDisplay extends ModelInitial<InitialalChangeDisplay> {
+export class ModelSQLMeshChangeDisplay extends ModelInitial<InitialChangeDisplay> {
   name: string
   view_name: string
   node_type?: NodeType
@@ -36,7 +36,7 @@ export class ModelSQLMeshChangeDisplay extends ModelInitial<InitialalChangeDispl
   start: number
   total: number
 
-  constructor(change?: InitialalChangeDisplay) {
+  constructor(change?: InitialChangeDisplay) {
     super(change)
 
     this.name = encodeURI(this.initial.name)
@@ -52,10 +52,10 @@ export class ModelSQLMeshChangeDisplay extends ModelInitial<InitialalChangeDispl
     this.end = this.initial.end
 
     this.indirect = this.initial.indirect?.map(
-      c => new ModelSQLMeshChangeDisplay(c as InitialalChangeDisplay),
+      c => new ModelSQLMeshChangeDisplay(c as InitialChangeDisplay),
     )
     this.direct = this.initial.direct?.map(
-      c => new ModelSQLMeshChangeDisplay(c as InitialalChangeDisplay),
+      c => new ModelSQLMeshChangeDisplay(c as InitialChangeDisplay),
     )
   }
 
