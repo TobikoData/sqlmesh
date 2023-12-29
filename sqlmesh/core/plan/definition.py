@@ -152,7 +152,7 @@ class Plan:
     @property
     def start(self) -> TimeLike:
         """Returns the start of the plan or the earliest date of all snapshots."""
-        if not self.override_start and not self._missing_intervals:
+        if not self.override_start and (self._restate_models or not self._missing_intervals):
             earliest_start = earliest_start_date(self.snapshots)
             earliest_interval_starts = [s.intervals[0][0] for s in self.snapshots if s.intervals]
             return (

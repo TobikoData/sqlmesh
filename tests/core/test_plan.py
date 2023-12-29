@@ -2,13 +2,14 @@ import typing as t
 from datetime import timedelta
 
 import pytest
+from freezegun import freeze_time
 from pytest_mock.plugin import MockerFixture
 from sqlglot import parse_one
 
 from sqlmesh.core.context import Context
 from sqlmesh.core.model import IncrementalByTimeRangeKind, SeedKind, SeedModel, SqlModel
 from sqlmesh.core.model.seed import Seed
-from sqlmesh.core.plan import Plan
+from sqlmesh.core.plan import Plan, SnapshotIntervals
 from sqlmesh.core.snapshot import (
     DeployabilityIndex,
     SnapshotChangeCategory,
@@ -156,18 +157,66 @@ def test_paused_forward_only_parent(make_snapshot, mocker: MockerFixture):
     assert snapshot_b.change_category == SnapshotChangeCategory.BREAKING
 
 
+@freeze_time()
 def test_restate_models(sushi_context_pre_scheduling: Context):
     plan = sushi_context_pre_scheduling.plan(
         restate_models=["sushi.waiter_revenue_by_day"], no_prompts=True
     )
     assert plan.restatements == {
-        "sushi.waiter_revenue_by_day": (plan.start, to_timestamp(to_date("today"))),
-        "sushi.top_waiters": (plan.start, to_timestamp(to_date("today"))),
+        "sushi.waiter_revenue_by_day": (to_timestamp(plan.start), to_timestamp(to_date("today"))),
+        "sushi.top_waiters": (to_timestamp(plan.start), to_timestamp(to_date("today"))),
     }
     assert plan.requires_backfill
 
     with pytest.raises(PlanError, match=r"Cannot restate from 'unknown_model'.*"):
         sushi_context_pre_scheduling.plan(restate_models=["unknown_model"], no_prompts=True)
+
+
+@freeze_time()
+def test_restate_models_with_existing_missing_intervals(sushi_context: Context):
+    yesterday_ts = to_timestamp(yesterday_ds())
+
+    assert not sushi_context.plan(no_prompts=True).requires_backfill
+    waiter_revenue_by_day = sushi_context.snapshots["sushi.waiter_revenue_by_day"]
+    waiter_revenue_by_day.intervals = [
+        (waiter_revenue_by_day.intervals[0][0], yesterday_ts),
+    ]
+    assert sushi_context.plan(no_prompts=True).requires_backfill
+
+    plan = sushi_context.plan(restate_models=["sushi.waiter_revenue_by_day"], no_prompts=True)
+
+    one_day_ms = 24 * 60 * 60 * 1000
+
+    today_ts = to_timestamp(to_date("today"))
+    plan_start_ts = to_timestamp(plan.start)
+    assert plan_start_ts == today_ts - 7 * one_day_ms
+
+    expected_missing_intervals = [
+        (i, i + one_day_ms) for i in range(plan_start_ts, today_ts, one_day_ms)
+    ]
+    assert len(expected_missing_intervals) == 7
+
+    assert plan.restatements == {
+        "sushi.waiter_revenue_by_day": (
+            plan_start_ts,
+            today_ts,
+        ),
+        "sushi.top_waiters": (
+            plan_start_ts,
+            today_ts,
+        ),
+    }
+    assert plan.missing_intervals == [
+        SnapshotIntervals(
+            snapshot_name="sushi.waiter_revenue_by_day",
+            intervals=expected_missing_intervals,
+        ),
+        SnapshotIntervals(
+            snapshot_name="sushi.top_waiters",
+            intervals=expected_missing_intervals,
+        ),
+    ]
+    assert plan.requires_backfill
 
 
 def test_restate_model_with_merge_strategy(make_snapshot, mocker: MockerFixture):
@@ -768,7 +817,7 @@ def test_disable_restatement(make_snapshot, mocker: MockerFixture):
 
     # Restatements should still be supported when in dev.
     plan = Plan(context_diff_mock, is_dev=True, restate_models=["a"])
-    assert plan.restatements == {"a": (plan.start, to_timestamp(to_date("today")))}
+    assert plan.restatements == {"a": (to_timestamp(plan.start), to_timestamp(to_date("today")))}
 
 
 def test_revert_to_previous_value(make_snapshot, mocker: MockerFixture):
