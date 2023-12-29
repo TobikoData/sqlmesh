@@ -140,7 +140,7 @@ def render(
     dialect: t.Optional[str] = None,
     no_format: bool = False,
 ) -> None:
-    """Renders a model's query, optionally expanding referenced models."""
+    """Render a model's query, optionally expanding referenced models."""
     rendered = ctx.obj.render(
         model,
         start=start,
@@ -211,7 +211,7 @@ def format(ctx: click.Context, transpile: t.Optional[str] = None, new_line: bool
 @click.pass_context
 @error_handler
 def diff(ctx: click.Context, environment: t.Optional[str] = None) -> None:
-    """Show the diff between the current context and a given environment."""
+    """Show the diff between the local state and the target environment."""
     ctx.obj.diff(environment)
 
 
@@ -297,13 +297,18 @@ def diff(ctx: click.Context, environment: t.Optional[str] = None) -> None:
     is_flag=True,
     help="Hide text differences for changed models.",
 )
+@click.option(
+    "--run",
+    is_flag=True,
+    help="Run latest intervals as part of the plan application (prod environment only).",
+)
 @opt.verbose
 @click.pass_context
 @error_handler
 def plan(
     ctx: click.Context, verbose: bool, environment: t.Optional[str] = None, **kwargs: t.Any
 ) -> None:
-    """Plan a migration of the current context's models with the given environment."""
+    """Apply local changes to the target environment."""
     context = ctx.obj
     restate_models = kwargs.pop("restate_model", None)
     select_models = kwargs.pop("select_model", None)
@@ -331,7 +336,7 @@ def plan(
 @click.pass_context
 @error_handler
 def run(ctx: click.Context, environment: t.Optional[str] = None, **kwargs: t.Any) -> None:
-    """Evaluates the DAG of models using the built-in scheduler."""
+    """Evaluate missing intervals for the target environment."""
     context = ctx.obj
     success = context.run(environment, **kwargs)
     if not success:
@@ -343,7 +348,7 @@ def run(ctx: click.Context, environment: t.Optional[str] = None, **kwargs: t.Any
 @click.pass_context
 @error_handler
 def invalidate(ctx: click.Context, environment: str) -> None:
-    """Invalidates the target environment, forcing its removal during the next run of the janitor process."""
+    """Invalidate the target environment, forcing its removal during the next run of the janitor process."""
     context = ctx.obj
     context.invalidate_environment(environment)
 
@@ -353,10 +358,7 @@ def invalidate(ctx: click.Context, environment: str) -> None:
 @click.pass_context
 @error_handler
 def dag(ctx: click.Context, file: str) -> None:
-    """
-    Renders the dag as an html file.
-
-    """
+    """Render the DAG as an html file."""
     rendered_dag_path = ctx.obj.render_dag(file)
     if rendered_dag_path:
         ctx.obj.console.log_success(f"Generated the dag to {rendered_dag_path}")
@@ -460,7 +462,7 @@ def audit(
     end: TimeLike,
     execution_time: t.Optional[TimeLike] = None,
 ) -> None:
-    """Run audits."""
+    """Run audits for the target model(s)."""
     obj.audit(models=models, start=start, end=end, execution_time=execution_time)
 
 
@@ -469,7 +471,7 @@ def audit(
 @click.pass_context
 @error_handler
 def fetchdf(ctx: click.Context, sql: str) -> None:
-    """Runs a sql query and displays the results."""
+    """Run a SQL query and display the results."""
     context = ctx.obj
     context.console.log_success(context.fetchdf(sql))
 
@@ -611,7 +613,7 @@ def table_diff(
 @click.pass_obj
 @error_handler
 def rewrite(obj: Context, sql: str, read: str = "", write: str = "") -> None:
-    """Rewrite a sql expression with semantic references into an executable query.
+    """Rewrite a SQL expression with semantic references into an executable query.
 
     https://sqlmesh.readthedocs.io/en/latest/concepts/metrics/overview/
     """

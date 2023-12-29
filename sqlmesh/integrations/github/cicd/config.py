@@ -32,6 +32,7 @@ class GithubCICDBotConfig(BaseConfig):
     default_pr_start: t.Optional[TimeLike] = "1 day ago"
     skip_pr_backfill: bool = True
     pr_include_unmodified: t.Optional[bool] = None
+    run_on_deploy_to_prod: bool = True
 
     @model_validator(mode="before")
     @model_validator_v1_args

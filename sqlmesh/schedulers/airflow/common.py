@@ -119,7 +119,7 @@ class InvalidateEnvironmentResponse(PydanticModel):
 
 class MaxIntervalEndResponse(PydanticModel):
     environment: str
-    max_interval_end: t.Optional[int]
+    max_interval_end: t.Optional[int] = None
 
 
 def snapshot_key(snapshot: SnapshotIdLike) -> str:
