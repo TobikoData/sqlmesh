@@ -792,7 +792,7 @@ class EngineAdapterStateSync(CommonStateSyncMixin, StateSync):
         logger.info("Starting migration rollback.")
         tables = (self.snapshots_table, self.environments_table, self.versions_table)
         optional_tables = (self.seeds_table, self.intervals_table, self.plan_dags_table)
-        versions = self.get_versions(validate=False)
+        versions = self.get_versions(force=True)
         if versions.schema_version == 0:
             # Clean up state tables
             for table in tables + optional_tables:

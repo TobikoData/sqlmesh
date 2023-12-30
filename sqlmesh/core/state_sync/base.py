@@ -157,11 +157,12 @@ class StateReader(abc.ABC):
     def close(self) -> None:
         """Closes all open connections and releases all allocated resources."""
 
-    def get_versions(self, validate: bool = True) -> Versions:
+    def get_versions(self, validate: bool = True, force: bool = False) -> Versions:
         """Get the current versions of the SQLMesh schema and libraries.
 
         Args:
             validate: Whether or not to raise error if the running version is ahead of state.
+            force: Whether or not to force the versions to be fetched and not raise an error.
 
         Returns:
             The versions object.
@@ -190,7 +191,7 @@ class StateReader(abc.ABC):
                 f"{lib} (local) is using version '{local}' which is behind '{remote}' (remote).{upgrade_suggestion}"
             )
 
-        if SCHEMA_VERSION < versions.schema_version:
+        if SCHEMA_VERSION < versions.schema_version and not force:
             raise_error(
                 "SQLMesh",
                 SCHEMA_VERSION,
@@ -198,7 +199,7 @@ class StateReader(abc.ABC):
                 remote_package_version=versions.sqlmesh_version,
             )
 
-        if major_minor(SQLGLOT_VERSION) < major_minor(versions.sqlglot_version):
+        if major_minor(SQLGLOT_VERSION) < major_minor(versions.sqlglot_version) and not force:
             raise_error(
                 "SQLGlot",
                 SQLGLOT_VERSION,
@@ -206,7 +207,7 @@ class StateReader(abc.ABC):
                 remote_package_version=versions.sqlglot_version,
             )
 
-        if validate:
+        if validate and not force:
             if SCHEMA_VERSION > versions.schema_version:
                 raise_error("SQLMesh", SCHEMA_VERSION, versions.schema_version, ahead=True)
 
