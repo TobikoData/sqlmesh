@@ -102,7 +102,7 @@ def test_forward_only_dev(make_snapshot, mocker: MockerFixture):
     assert plan.restatements == {
         snapshot_a.snapshot_id: (to_timestamp(expected_start), expected_interval_end)
     }
-    assert plan.start == to_datetime(expected_start)
+    assert plan.start == to_date(expected_start)
     assert plan.end == expected_end
 
     yesterday_ds_mock.assert_called_once()
