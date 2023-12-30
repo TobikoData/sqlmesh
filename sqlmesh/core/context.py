@@ -769,7 +769,6 @@ class Context(BaseContext):
         create_from: t.Optional[str] = None,
         skip_tests: bool = False,
         restate_models: t.Optional[t.Iterable[str]] = None,
-        restate_tags: t.Optional[t.Iterable[str]] = None,
         no_gaps: bool = False,
         skip_backfill: bool = False,
         forward_only: bool = False,
@@ -796,13 +795,7 @@ class Context(BaseContext):
             create_from: The environment to create the target environment from if it
                 doesn't exist. If not specified, the "prod" environment will be used.
             skip_tests: Unit tests are run by default so this will skip them if enabled
-            restate_models: A list of either internal or external models that need to be restated
-                for the given plan interval. If the target environment is a production environment,
-                ALL snapshots that depended on these upstream tables will have their intervals deleted
-                (even ones not in this current environment). Only the snapshots in this environment will
-                be backfilled whereas others need to be recovered on a future plan application. For development
-                environments only snapshots that are part of this plan will be affected.
-            restate_tags: A list of tags defined on either internal or external models that need to be restated
+            restate_models: A list of either internal or external models, or tags, that need to be restated
                 for the given plan interval. If the target environment is a production environment,
                 ALL snapshots that depended on these upstream tables will have their intervals deleted
                 (even ones not in this current environment). Only the snapshots in this environment will
@@ -871,15 +864,12 @@ class Context(BaseContext):
                 # Only backfill selected models unless explicitly specified.
                 backfill_models = model_selector.expand_model_selections(select_models)
 
+        expanded_restate_models = None
         if restate_models is not None:
-            restate_models = model_selector.expand_model_selections(restate_models)
-
-        if restate_tags is not None:
-            restate_models = restate_models or set()
-            restate_models.update(model_selector.expand_model_tags(restate_tags))
-            if not restate_models:
-                raise PlanError(
-                    f"No models match the provided tags. Tags: {', '.join(restate_tags)}"
+            expanded_restate_models = model_selector.expand_model_selections(restate_models)
+            if not expanded_restate_models:
+                self.console.log_error(
+                    f"Provided restated models do not match any models. No models will be included in plan. Provided: {', '.join(restate_models)}"
                 )
 
         # If no end date is specified, use the max interval end from prod
@@ -892,12 +882,14 @@ class Context(BaseContext):
                 environment or c.PROD,
                 snapshots=self._snapshots(models_override),
                 create_from=create_from,
+                force_no_diff=(restate_models is not None and not expanded_restate_models)
+                or (backfill_models is not None and not backfill_models),
             ),
             start=start,
             end=end,
             execution_time=execution_time,
             apply=self.apply,
-            restate_models=restate_models,
+            restate_models=expanded_restate_models,
             backfill_models=backfill_models,
             no_gaps=no_gaps,
             skip_backfill=skip_backfill,
@@ -1532,8 +1524,11 @@ class Context(BaseContext):
         environment: str,
         snapshots: t.Optional[t.Dict[str, Snapshot]] = None,
         create_from: t.Optional[str] = None,
+        force_no_diff: bool = False,
     ) -> ContextDiff:
         environment = Environment.normalize_name(environment)
+        if force_no_diff:
+            return ContextDiff.create_no_diff(environment)
         return ContextDiff.create(
             environment,
             snapshots=snapshots or self.snapshots,

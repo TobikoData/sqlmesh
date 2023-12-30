@@ -115,48 +115,34 @@ This way SQLMesh will know to recompute data intervals starting from the specifi
 ## Restatement plans
 There are cases when models need to be re-evaluated for a given time range, even though changes may not have been made to those model definitions. This could be due to an upstream issue with a dataset defined outside the SQLMesh platform, or when a [forward-only plan](#forward-only-plans) change needs to be applied retroactively to a bounded interval of historical data.
 
-For this reason, the `plan` command supports the `--restate-model` and `--restate-tag` options, which allows users to specify one or more names of a model or model tag to be reprocessed. These can also refer to an external table defined outside SQLMesh.
+For this reason, the `plan` command supports the `--restate-model`, which allows users to specify one or more names of a model or model tag (using `tag:<tag name>` syntax) to be reprocessed. These can also refer to an external table defined outside SQLMesh.
 
 Application of a plan will trigger a cascading backfill for all specified models (other than external tables), as well as all models downstream from them. The plan's date range determines the data intervals that will be affected.
 
-See examples of either using model names or tags below to include models and their downstream dependencies in a plan.
+See examples below for how to restate both based on model names and model tags.
 
-=== "Model"
+
+=== "Names Only"
 
     ```bash
-    sqlmesh plan --restate-model db.model_a --restate-model external.table_a
+    sqlmesh plan --restate-model db.model_a --restate-model tag:expensive
     ```
 
-=== "Tag"
+=== "Upstream"
 
     ```bash
-    sqlmesh plan --restate-tag expensive --restate-tag external
+    # All selected models (including upstream models) will also include their downstream models
+    sqlmesh plan --restate-model +db.model_a --restate-model tag:+expensive
     ```
 
-Upstream models can be included using a `+` prefix
-
-=== "Model"
+=== "Wildcards"
 
     ```bash
-    sqlmesh plan --restate-model +db.model_a
+    sqlmesh plan --restate-model db* --restate-model tag:exp*
     ```
 
-=== "Tag"
+=== "Upstream + Wildcards"
 
     ```bash
-    sqlmesh plan --restate-tag +expensive
-    ```
-
-In addition wildcards can be used to include all models that match a given pattern and this can also be combined with the `+` prefix to include upstream models.
-
-=== "Model"
-
-    ```bash
-    sqlmesh plan --restate-model +db*
-    ```
-
-=== "Tag"
-
-    ```bash
-    sqlmesh plan --restate-tag +exp*
+    sqlmesh plan --restate-model +db* --restate-model tag:+exp*
     ```

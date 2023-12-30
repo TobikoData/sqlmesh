@@ -24,17 +24,22 @@ from sqlmesh.utils import UniqueKeyDict
 )
 def test_select_models(mocker: MockerFixture, make_snapshot, default_catalog: t.Optional[str]):
     added_model = SqlModel(
-        name="db.added_model", query=d.parse_one("SELECT 1 AS a"), default_catalog=default_catalog
+        name="db.added_model",
+        query=d.parse_one("SELECT 1 AS a"),
+        default_catalog=default_catalog,
+        tags=["tag1"],
     )
     modified_model_v1 = SqlModel(
         name="db.modified_model",
         query=d.parse_one("SELECT a + 1 FROM db.added_model"),
         default_catalog=default_catalog,
+        tags=["tag2"],
     )
     modified_model_v2 = SqlModel(
         name="db.modified_model",
         query=d.parse_one("SELECT a + 2 FROM db.added_model"),
         default_catalog=default_catalog,
+        tags=["tag2"],
     )
     removed_model = SqlModel(
         name="db.removed_model",
@@ -147,6 +152,36 @@ def test_select_models(mocker: MockerFixture, make_snapshot, default_catalog: t.
         selector.select_models(["*_model", "db.removed_model"], env_name),
         local_models,
     )
+    _assert_models_equal(
+        selector.select_models(["tag:tag1", "tag:tag2"], "missing_env", fallback_env_name=env_name),
+        {
+            added_model.fqn: added_model,
+            modified_model_v2.fqn: modified_model_v2.copy(
+                update={"mapping_schema": added_model_schema}
+            ),
+            removed_model.fqn: removed_model.copy(update={"mapping_schema": added_model_schema}),
+        },
+    )
+    _assert_models_equal(
+        selector.select_models(["tag:tag*"], "missing_env", fallback_env_name=env_name),
+        {
+            added_model.fqn: added_model,
+            modified_model_v2.fqn: modified_model_v2.copy(
+                update={"mapping_schema": added_model_schema}
+            ),
+            removed_model.fqn: removed_model.copy(update={"mapping_schema": added_model_schema}),
+        },
+    )
+    _assert_models_equal(
+        selector.select_models(["tag:+tag2"], env_name),
+        {
+            added_model.fqn: added_model,
+            modified_model_v2.fqn: modified_model_v2.copy(
+                update={"mapping_schema": added_model_schema}
+            ),
+            removed_model.fqn: removed_model.copy(update={"mapping_schema": added_model_schema}),
+        },
+    )
 
 
 def test_select_models_missing_env(mocker: MockerFixture, make_snapshot):
@@ -183,25 +218,25 @@ def test_select_models_missing_env(mocker: MockerFixture, make_snapshot):
         # Direct matching only
         (
             [("model1", "tag1", None), ("model2", "tag2", None), ("model3", "tag3", None)],
-            ["tag1", "tag3"],
+            ["tag:tag1", "tag:tag3"],
             {'"model1"', '"model3"'},
         ),
         # Wildcard works
         (
             [("model1", "tag1", None), ("model2", "tag2", None), ("model3", "tag3", None)],
-            ["tag*"],
+            ["tag:tag*"],
             {'"model1"', '"model2"', '"model3"'},
         ),
         # Downstream models are included
         (
             [("model1", "tag1", None), ("model2", "tag2", {"model1"}), ("model3", "tag3", None)],
-            ["tag1+"],
+            ["tag:tag1+"],
             {'"model1"', '"model2"'},
         ),
         # Upstream models are included
         (
             [("model1", "tag1", None), ("model2", "tag2", None), ("model3", "tag3", {"model2"})],
-            ["+tag3"],
+            ["tag:+tag3"],
             {'"model2"', '"model3"'},
         ),
         # Upstream and downstream models are included
@@ -211,7 +246,7 @@ def test_select_models_missing_env(mocker: MockerFixture, make_snapshot):
                 ("model2", "tag2", {"model1"}),
                 ("model3", "tag3", {"model2"}),
             ],
-            ["+tag2+"],
+            ["tag:+tag2+"],
             {'"model1"', '"model2"', '"model3"'},
         ),
         # Wildcard works with upstream and downstream models
@@ -225,7 +260,7 @@ def test_select_models_missing_env(mocker: MockerFixture, make_snapshot):
                 # Only excluded model since it doesn't match wildcard nor upstream/downstream
                 ("model6", "blah", None),
             ],
-            ["+tag*+"],
+            ["tag:+tag*+"],
             {'"model1"', '"model2"', '"model3"', '"model4"', '"model5"'},
         ),
         # Multiple tags work
@@ -236,7 +271,7 @@ def test_select_models_missing_env(mocker: MockerFixture, make_snapshot):
                 ("model3", "tag3", None),
                 ("model4", "tag4", None),
             ],
-            ["tag1", "tag3"],
+            ["tag:tag1", "tag:tag3"],
             {'"model1"', '"model3"'},
         ),
         # Multiple tags work with upstream and downstream models
@@ -249,7 +284,7 @@ def test_select_models_missing_env(mocker: MockerFixture, make_snapshot):
                 ("model5", "tag5", {"model4"}),
                 ("model6", "tag6", {"model5"}),
             ],
-            ["+tag3", "tag5"],
+            ["tag:+tag3", "tag:tag5"],
             {'"model1"', '"model2"', '"model3"', '"model5"'},
         ),
         # Case-insensitive matching
@@ -259,7 +294,7 @@ def test_select_models_missing_env(mocker: MockerFixture, make_snapshot):
                 ("model2", "tag2", None),
                 ("model3", "tag3", None),
             ],
-            ["TAG*"],
+            ["tag:TAG*"],
             {'"model1"', '"model2"', '"model3"'},
         ),
         # Wildcard returns everything
@@ -269,7 +304,7 @@ def test_select_models_missing_env(mocker: MockerFixture, make_snapshot):
                 ("model2", "tag2", None),
                 ("model3", "tag3", None),
             ],
-            ["*"],
+            ["tag:*"],
             {'"model1"', '"model2"', '"model3"'},
         ),
         # Upstream that don't exist is fine
@@ -278,7 +313,7 @@ def test_select_models_missing_env(mocker: MockerFixture, make_snapshot):
                 ("model1", "tag1", None),
                 ("model2", "tag2", None),
             ],
-            ["+tag2"],
+            ["tag:+tag2"],
             {'"model2"'},
         ),
         # No matches returns empty set
@@ -287,8 +322,18 @@ def test_select_models_missing_env(mocker: MockerFixture, make_snapshot):
                 ("model1", "tag1", None),
                 ("model2", "tag2", None),
             ],
-            ["+tag3*+", "+tag3+"],
+            ["tag:+tag3*+", "tag:+tag3+"],
             set(),
+        ),
+        # Mix of models and tags
+        (
+            [
+                ("model1", "tag1", None),
+                ("model2", "tag2", None),
+                ("model3", "tag3", None),
+            ],
+            ["tag:tag1", "model2"],
+            {'"model1"', '"model2"'},
         ),
     ],
 )
@@ -301,7 +346,7 @@ def test_expand_model_tags(mocker: MockerFixture, make_snapshot, tags, tag_selec
         models[model.fqn] = model
 
     selector = Selector(mocker.Mock(), models)
-    assert selector.expand_model_tags(tag_selections) == output
+    assert selector.expand_model_selections(tag_selections) == output
 
 
 def _assert_models_equal(actual: t.Dict[str, Model], expected: t.Dict[str, Model]) -> None:
