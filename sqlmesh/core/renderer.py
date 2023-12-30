@@ -132,10 +132,9 @@ class BaseExpressionRenderer:
                 except ParsetimeAdapterCallError:
                     raise
                 except Exception as ex:
-                    logger.exception(
-                        f"Failing expression after Jinja rendering: '{rendered_expression}'"
-                    )
-                    raise ConfigError(f"Invalid expression at '{self._path}'.\n{ex}") from ex
+                    raise ConfigError(
+                        f"Could not render or parse jinja at '{self._path}'.\n{ex}"
+                    ) from ex
 
             macro_evaluator = MacroEvaluator(
                 self._dialect,
