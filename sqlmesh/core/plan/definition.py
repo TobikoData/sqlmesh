@@ -139,6 +139,8 @@ class Plan:
         self._input_backfill_models = backfill_models
         self._models_to_backfill: t.Optional[t.Set[str]] = None
 
+        self._deployability_index = DeployabilityIndex.all_deployable()
+
         self._refresh_dag_and_ignored_snapshots()
 
         if effective_from:
@@ -177,7 +179,7 @@ class Plan:
     @property
     def start(self) -> TimeLike:
         """Returns the start of the plan or the earliest date of all snapshots."""
-        if not self.override_start and (self._restate_models or not self._missing_intervals):
+        if not self._start and (self._restate_models or not self._missing_intervals):
             earliest_start = earliest_start_date(self.snapshots)
             earliest_interval_starts = [s.intervals[0][0] for s in self.snapshots if s.intervals]
             return (
@@ -250,6 +252,11 @@ class Plan:
     def snapshot_mapping(self) -> t.Dict[SnapshotId, Snapshot]:
         """Gets a mapping of snapshot ID to snapshot."""
         return self.__snapshot_mapping or self.context_diff.snapshots
+
+    @property
+    def deployability_index(self) -> DeployabilityIndex:
+        """Returns the snapshot deployability index for this plan."""
+        return self._deployability_index
 
     @property
     def _model_fqn_to_snapshot(self) -> t.Dict[str, Snapshot]:
@@ -472,12 +479,6 @@ class Plan:
                 if new.is_forward_only:
                     new.dev_intervals = new.intervals.copy()
 
-            deployability_index = (
-                DeployabilityIndex.create(self.snapshots)
-                if self.is_dev
-                else DeployabilityIndex.all_deployable()
-            )
-
             self.__missing_intervals = {
                 (snapshot.name, snapshot.version_get_or_generate()): missing
                 for snapshot, missing in missing_intervals(
@@ -486,7 +487,7 @@ class Plan:
                     end=self._end,
                     execution_time=self._execution_time,
                     restatements=self.restatements,
-                    deployability_index=deployability_index,
+                    deployability_index=self.deployability_index,
                     ignore_cron=True,
                 ).items()
             }
@@ -723,6 +724,9 @@ class Plan:
             self.ignored_snapshot_ids,
         ) = self._build_snapshots_and_dag()
 
+        if self.is_dev:
+            self._deployability_index = DeployabilityIndex.create(self._snapshots)
+
         if self._restate_models and self.new_snapshots:
             raise PlanError(
                 "Model changes and restatements can't be a part of the same plan. "
@@ -744,8 +748,8 @@ class Plan:
                 ).sorted
             }
 
-        self._add_restatements()
         self.__missing_intervals = None
+        self._add_restatements()
 
         self._ensure_new_env_with_changes()
         self._ensure_valid_date_range()
