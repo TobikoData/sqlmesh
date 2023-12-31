@@ -438,7 +438,7 @@ class SqlMeshLoader(Loader):
             ]
             return "__".join(
                 [
-                    str(int(max(m for m in mtimes if m is not None))),
+                    str(max(m for m in mtimes if m is not None)),
                     self._loader._context.config.fingerprint,
                     # We need to check default catalog since the provided config could not change but the
                     # gateway we are using could change, therefore potentially changing the default catalog
