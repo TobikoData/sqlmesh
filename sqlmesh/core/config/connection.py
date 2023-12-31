@@ -1,12 +1,15 @@
 from __future__ import annotations
 
 import abc
+import base64
 import os
 import pathlib
 import sys
 import typing as t
 from enum import Enum
 
+from cryptography.hazmat.backends import default_backend
+from cryptography.hazmat.primitives import serialization
 from pydantic import Field
 from sqlglot.helper import subclasses
 
@@ -197,7 +200,9 @@ class SnowflakeConnectionConfig(ConnectionConfig):
         concurrent_tasks: The maximum number of tasks that can use this connection concurrently.
         authenticator: The optional authenticator name. Defaults to username/password authentication ("snowflake").
                        Options: https://github.com/snowflakedb/snowflake-connector-python/blob/e937591356c067a77f34a0a42328907fda792c23/src/snowflake/connector/network.py#L178-L183
-        private_key: The optional private key to use for authentication. This is in the form of bytes and can only be created with the Python config. https://docs.snowflake.com/en/developer-guide/python-connector/python-connector-example#label-python-key-pair-authn-rotation
+        private_key: The optional private key to use for authentication. Key can be Base64-encoded DER format (representing the key bytes), a plain-text PEM format, or bytes (Python config only). https://docs.snowflake.com/en/developer-guide/python-connector/python-connector-connect#using-key-pair-authentication-key-pair-rotation
+        private_key_path: The optional path to the private key to use for authentication. This would be used instead of `private_key`.
+        private_key_passphrase: The optional passphrase to use to decrypt `private_key` or `private_key_path`. Keys can be created without encryption so only provide this if needed.
     """
 
     account: str
@@ -207,7 +212,11 @@ class SnowflakeConnectionConfig(ConnectionConfig):
     database: t.Optional[str] = None
     role: t.Optional[str] = None
     authenticator: t.Optional[str] = None
-    private_key: t.Optional[bytes] = None
+
+    # Private Key Auth
+    private_key: t.Optional[t.Union[str, bytes]] = None
+    private_key_path: t.Optional[str] = None
+    private_key_passphrase: t.Optional[str] = None
 
     concurrent_tasks: int = 4
 
@@ -220,33 +229,95 @@ class SnowflakeConnectionConfig(ConnectionConfig):
     def _validate_authenticator(
         cls, values: t.Dict[str, t.Optional[str]]
     ) -> t.Dict[str, t.Optional[str]]:
-        from snowflake.connector.network import (
-            DEFAULT_AUTHENTICATOR,
-            KEY_PAIR_AUTHENTICATOR,
-        )
+        from snowflake.connector.network import DEFAULT_AUTHENTICATOR
 
         auth = values.get("authenticator")
         auth = auth.upper() if auth else DEFAULT_AUTHENTICATOR
         user = values.get("user")
         password = values.get("password")
-        private_key = values.get("private_key")
-        if private_key:
-            auth = auth if auth and auth != DEFAULT_AUTHENTICATOR else KEY_PAIR_AUTHENTICATOR
-            if auth != KEY_PAIR_AUTHENTICATOR:
-                raise ConfigError(
-                    f"Private key can only be provided when using {KEY_PAIR_AUTHENTICATOR} authentication"
-                )
-            if not user:
-                raise ConfigError(
-                    f"User must be provided when using {KEY_PAIR_AUTHENTICATOR} authentication"
-                )
-            if password:
-                raise ConfigError(
-                    f"Password cannot be provided when using {KEY_PAIR_AUTHENTICATOR} authentication"
-                )
-        if auth == DEFAULT_AUTHENTICATOR and (not user or not password):
+        values["private_key"] = cls._get_private_key(values, auth)  # type: ignore
+        if (
+            auth == DEFAULT_AUTHENTICATOR
+            and not values.get("private_key")
+            and (not user or not password)
+        ):
             raise ConfigError("User and password must be provided if using default authentication")
         return values
+
+    @classmethod
+    def _get_private_key(cls, values: t.Dict[str, t.Optional[str]], auth: str) -> t.Optional[bytes]:
+        """
+        source: https://github.com/dbt-labs/dbt-snowflake/blob/0374b4ec948982f2ac8ec0c95d53d672ad19e09c/dbt/adapters/snowflake/connections.py#L247C5-L285C1
+
+        Overall code change: Use local variables instead of class attributes + Validation
+        """
+        # Start custom code
+        from snowflake.connector.network import (
+            DEFAULT_AUTHENTICATOR,
+            KEY_PAIR_AUTHENTICATOR,
+        )
+
+        private_key = values.get("private_key")
+        private_key_path = values.get("private_key_path")
+        private_key_passphrase = values.get("private_key_passphrase")
+        user = values.get("user")
+        password = values.get("password")
+        auth = auth if auth and auth != DEFAULT_AUTHENTICATOR else KEY_PAIR_AUTHENTICATOR
+
+        if not private_key and not private_key_path:
+            return None
+        if private_key and private_key_path:
+            raise ConfigError("Cannot specify both `private_key` and `private_key_path`")
+        if auth != KEY_PAIR_AUTHENTICATOR:
+            raise ConfigError(
+                f"Private key or private key path can only be provided when using {KEY_PAIR_AUTHENTICATOR} authentication"
+            )
+        if not user:
+            raise ConfigError(
+                f"User must be provided when using {KEY_PAIR_AUTHENTICATOR} authentication"
+            )
+        if password:
+            raise ConfigError(
+                f"Password cannot be provided when using {KEY_PAIR_AUTHENTICATOR} authentication"
+            )
+
+        if isinstance(private_key, bytes):
+            return private_key
+        # End Custom Code
+
+        if private_key_passphrase:
+            encoded_passphrase = private_key_passphrase.encode()
+        else:
+            encoded_passphrase = None
+
+        if private_key:
+            if private_key.startswith("-"):
+                p_key = serialization.load_pem_private_key(
+                    data=bytes(private_key, "utf-8"),
+                    password=encoded_passphrase,
+                    backend=default_backend(),
+                )
+
+            else:
+                p_key = serialization.load_der_private_key(
+                    data=base64.b64decode(private_key),
+                    password=encoded_passphrase,
+                    backend=default_backend(),
+                )
+
+        elif private_key_path:
+            with open(private_key_path, "rb") as key:
+                p_key = serialization.load_pem_private_key(
+                    key.read(), password=encoded_passphrase, backend=default_backend()
+                )
+        else:
+            return None
+
+        return p_key.private_bytes(
+            encoding=serialization.Encoding.DER,
+            format=serialization.PrivateFormat.PKCS8,
+            encryption_algorithm=serialization.NoEncryption(),
+        )
 
     @property
     def _connection_kwargs_keys(self) -> t.Set[str]:

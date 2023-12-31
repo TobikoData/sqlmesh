@@ -105,6 +105,7 @@ theme:
         icon: material/weather-night
         name: Switch to light mode
   features:
+    - content.tabs.link
     - navigation.tracking
     - navigation.tabs
     - navigation.sections
