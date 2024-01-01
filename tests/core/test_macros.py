@@ -11,32 +11,33 @@ from sqlmesh.utils.errors import SQLMeshError
 from sqlmesh.utils.metaprogramming import Executable, ExecutableKind
 
 
-@macro()
-def filter_country(
-    evaluator: MacroEvaluator, expression: exp.Condition, country: exp.Literal
-) -> exp.Condition:
-    return t.cast(exp.Condition, exp.and_(expression, exp.column("country").eq(country)))
-
-
-@macro("UPPER")
-def upper_case(evaluator: MacroEvaluator, expression: exp.Condition) -> str:
-    return f"UPPER({expression} + 1)"
-
-
-@macro("noop")
-def noop(evaluator: MacroEvaluator):
-    return None
-
-
 @pytest.fixture
-def macro_evaluator() -> MacroEvaluator:
-    return MacroEvaluator(
+def macro_evaluator() -> t.Generator[MacroEvaluator, None, None]:
+    @macro()
+    def filter_country(
+        evaluator: MacroEvaluator, expression: exp.Condition, country: exp.Literal
+    ) -> exp.Condition:
+        return t.cast(exp.Condition, exp.and_(expression, exp.column("country").eq(country)))
+
+    @macro("UPPER")
+    def upper_case(evaluator: MacroEvaluator, expression: exp.Condition) -> str:
+        return f"UPPER({expression} + 1)"
+
+    @macro("noop")
+    def noop(evaluator: MacroEvaluator):
+        return None
+
+    yield MacroEvaluator(
         "hive",
         {"test": Executable(name="test", payload=f"def test(_):\n    return 'test'")},
     )
 
+    del macro._registry["filter_country"]  # type: ignore
+    del macro._registry["upper"]  # type: ignore
+    del macro._registry["noop"]  # type: ignore
 
-def test_case():
+
+def test_case(macro_evaluator):
     assert macro.get_registry()["upper"]
 
 

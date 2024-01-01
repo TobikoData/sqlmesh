@@ -79,10 +79,7 @@ class RuntimeEnv(str, Enum):
         return not self.is_terminal
 
 
-runtime_env = RuntimeEnv.get()
-
-
-if runtime_env.is_notebook:
+if RuntimeEnv.get().is_notebook:
     try:
         from sqlmesh.magics import register_magics
 

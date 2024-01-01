@@ -1,10 +1,12 @@
 from __future__ import annotations
 
+import functools
+import logging
 import typing as t
 from collections import defaultdict
 
 from hyperscript import h
-from IPython.core.display import HTML, display
+from IPython.core.display import display
 from IPython.core.magic import (
     Magics,
     cell_magic,
@@ -13,9 +15,11 @@ from IPython.core.magic import (
     magics_class,
 )
 from IPython.core.magic_arguments import argument, magic_arguments, parse_argstring
+from rich.jupyter import JupyterRenderable
 
 from sqlmesh.cli.example_project import ProjectTemplate, init_example_project
 from sqlmesh.core import constants as c
+from sqlmesh.core.config import load_configs
 from sqlmesh.core.console import get_console
 from sqlmesh.core.context import Context
 from sqlmesh.core.dialect import format_model_expressions, parse
@@ -24,6 +28,8 @@ from sqlmesh.core.test import ModelTestMetadata, get_all_model_tests
 from sqlmesh.utils import sqlglot_dialects, yaml
 from sqlmesh.utils.errors import MagicError, MissingContextException, SQLMeshError
 
+logger = logging.getLogger(__name__)
+
 CONTEXT_VARIABLE_NAMES = [
     "context",
     "ctx",
@@ -31,41 +37,43 @@ CONTEXT_VARIABLE_NAMES = [
 ]
 
 
+def pass_sqlmesh_context(func: t.Callable) -> t.Callable:
+    @functools.wraps(func)
+    def wrapper(self: SQLMeshMagics, *args: t.Any, **kwargs: t.Any) -> None:
+        for variable_name in CONTEXT_VARIABLE_NAMES:
+            context = self._shell.user_ns.get(variable_name)
+            if isinstance(context, Context):
+                break
+        else:
+            raise MissingContextException(
+                f"Context must be defined and initialized with one of these names: {', '.join(CONTEXT_VARIABLE_NAMES)}"
+            )
+        old_console = context.console
+        context.console = get_console(display=self.display)
+        context.refresh()
+        func(self, context, *args, **kwargs)
+        context.console = old_console
+
+    return wrapper
+
+
 @magics_class
 class SQLMeshMagics(Magics):
     @property
     def display(self) -> t.Callable:
-        from sqlmesh import runtime_env
+        from sqlmesh import RuntimeEnv
 
-        if runtime_env.is_databricks:
+        if RuntimeEnv.get().is_databricks:
             # Use Databricks' special display instead of the normal IPython display
             return self._shell.user_ns["display"]
         return display
 
     @property
-    def _context(self) -> Context:
-        for variable_name in CONTEXT_VARIABLE_NAMES:
-            context = self._shell.user_ns.get(variable_name)
-            if context:
-                return context
-        raise MissingContextException(
-            f"Context must be defined and initialized with one of these names: {', '.join(CONTEXT_VARIABLE_NAMES)}"
-        )
-
-    def success_message(self, messages: t.Dict[str, str]) -> HTML:
-        unstyled = messages.get("unstyled")
-        msg = str(
-            h(
-                "div",
-                h(
-                    "span",
-                    messages.get("green-bold"),
-                    {"style": {"color": "green", "font-weight": "bold"}},
-                ),
-                h("span", unstyled) if unstyled else "",
-            )
-        )
-        return HTML(msg)
+    def _shell(self) -> t.Any:
+        # Make mypy happy.
+        if not self.shell:
+            raise RuntimeError("IPython Magics are in invalid state")
+        return self.shell
 
     @magic_arguments()
     @argument(
@@ -75,27 +83,37 @@ class SQLMeshMagics(Magics):
         default="",
         help="The path(s) to the SQLMesh project(s).",
     )
+    @argument(
+        "--config",
+        type=str,
+        help="Name of the config object. Only applicable to configuration defined using Python script.",
+    )
+    @argument("--gateway", type=str, help="The name of the gateway.")
+    @argument("--ignore-warnings", action="store_true", help="Ignore warnings.")
+    @argument("--debug", action="store_true", help="Enable debug mode.")
     @line_magic
     def context(self, line: str) -> None:
         """Sets the context in the user namespace."""
-        args = parse_argstring(self.context, line)
-        self._shell.user_ns["context"] = Context(paths=args.paths)
-        message = self.success_message(
-            {
-                "green-bold": "SQLMesh project context set to:",
-                "unstyled": "<br>&emsp;" + "<br>&emsp;".join(args.paths),
-            }
-        )
+        from sqlmesh import configure_logging
 
-        self.display(message)
+        args = parse_argstring(self.context, line)
+        configs = load_configs(args.config, args.paths)
+        log_limit = list(configs.values())[0].log_limit
+        configure_logging(args.debug, args.ignore_warnings, log_limit=log_limit)
+        try:
+            context = Context(paths=args.paths, config=configs, gateway=args.gateway)
+            self._shell.user_ns["context"] = context
+        except Exception:
+            if args.debug:
+                logger.exception("Failed to initialize SQLMesh context")
+            raise
+        context.console.log_success(f"SQLMesh project context set to: {', '.join(args.paths)}")
 
     @magic_arguments()
     @argument("path", type=str, help="The path where the new SQLMesh project should be created.")
     @argument(
         "sql_dialect",
         type=str,
-        nargs="?",
-        default=None,
         help=f"Default model SQL dialect. Supported values: {sqlglot_dialects()}.",
     )
     @argument(
@@ -115,7 +133,17 @@ class SQLMeshMagics(Magics):
         except ValueError:
             raise MagicError(f"Invalid project template '{args.template}'")
         init_example_project(args.path, args.sql_dialect, project_template)
-        self.display(self.success_message({"green-bold": "SQLMesh project scaffold created"}))
+        html = str(
+            h(
+                "div",
+                h(
+                    "span",
+                    {"style": {"color": "green", "font-weight": "bold"}},
+                    "SQLMesh project scaffold created",
+                ),
+            )
+        )
+        self.display(JupyterRenderable(html=html, text=""))
 
     @magic_arguments()
     @argument("model", type=str, help="The model.")
@@ -124,28 +152,29 @@ class SQLMeshMagics(Magics):
     @argument("--execution-time", type=str, help="Execution time.")
     @argument("--dialect", "-d", type=str, help="The rendered dialect.")
     @line_cell_magic
-    def model(self, line: str, sql: t.Optional[str] = None) -> None:
+    @pass_sqlmesh_context
+    def model(self, context: Context, line: str, sql: t.Optional[str] = None) -> None:
         """Renders the model and automatically fills in an editable cell with the model definition."""
         args = parse_argstring(self.model, line)
-        model = self._context.get_model(args.model, raise_if_missing=True)
+        model = context.get_model(args.model, raise_if_missing=True)
 
         if sql:
-            config = self._context.config_for_node(model)
+            config = context.config_for_node(model)
             loaded = load_sql_based_model(
                 parse(sql, default_dialect=config.dialect),
-                macros=self._context._macros,
-                jinja_macros=self._context._jinja_macros,
+                macros=context._macros,
+                jinja_macros=context._jinja_macros,
                 path=model._path,
                 dialect=config.dialect,
                 time_column_format=config.time_column_format,
-                physical_schema_override=self._context.config.physical_schema_override,
-                default_catalog=self._context.default_catalog,
+                physical_schema_override=context.config.physical_schema_override,
+                default_catalog=context.default_catalog,
             )
 
             if loaded.name == args.model:
                 model = loaded
 
-        self._context.upsert_model(model)
+        context.upsert_model(model)
         expressions = model.render_definition(include_python=False)
 
         formatted = format_model_expressions(expressions, model.dialect)
@@ -164,11 +193,11 @@ class SQLMeshMagics(Magics):
             file.write(formatted)
 
         if sql:
-            self.display(self.success_message({"green-bold": f"Model `{args.model}` updated"}))
+            context.console.log_success(f"Model `{args.model}` updated")
 
-        self._context.upsert_model(model)
-        self._context.console.show_sql(
-            self._context.render(
+        context.upsert_model(model)
+        context.console.show_sql(
+            context.render(
                 model.name,
                 start=args.start,
                 end=args.end,
@@ -181,7 +210,8 @@ class SQLMeshMagics(Magics):
     @argument("test_name", type=str, nargs="?", default=None, help="The test name to display")
     @argument("--ls", action="store_true", help="List tests associated with a model")
     @line_cell_magic
-    def test(self, line: str, test_def_raw: t.Optional[str] = None) -> None:
+    @pass_sqlmesh_context
+    def test(self, context: Context, line: str, test_def_raw: t.Optional[str] = None) -> None:
         """Allow the user to list tests for a model, output a specific test, and then write their changes back"""
         args = parse_argstring(self.test, line)
         if not args.test_name and not args.ls:
@@ -189,7 +219,7 @@ class SQLMeshMagics(Magics):
 
         test_meta = []
 
-        for path, config in self._context.configs.items():
+        for path, config in context.configs.items():
             test_meta.extend(
                 get_all_model_tests(
                     path / c.TESTS,
@@ -201,18 +231,18 @@ class SQLMeshMagics(Magics):
         for model_test_metadata in test_meta:
             model = model_test_metadata.body.get("model")
             if not model:
-                self._context.console.log_error(
+                context.console.log_error(
                     f"Test found that does not have `model` defined: {model_test_metadata.path}"
                 )
             else:
                 tests[model][model_test_metadata.test_name] = model_test_metadata
 
-        model = self._context.get_model(args.model, raise_if_missing=True)
+        model = context.get_model(args.model, raise_if_missing=True)
 
         if args.ls:
             # TODO: Provide better UI for displaying tests
             for test_name in tests[model.name]:
-                self._context.console.log_status_update(test_name)
+                context.console.log_status_update(test_name)
             return
 
         test = tests[model.name][args.test_name]
@@ -314,21 +344,28 @@ class SQLMeshMagics(Magics):
         help="Select specific model changes that should be included in the plan.",
     )
     @argument(
+        "--backfill-model",
+        type=str,
+        nargs="*",
+        help="Backfill only the models whose names match the expression. This is supported only when targeting a development environment.",
+    )
+    @argument(
         "--no-diff",
         action="store_true",
         help="Hide text differences for changed models.",
     )
+    @argument(
+        "--run",
+        action="store_true",
+        help="Run latest intervals as part of the plan application (prod environment only).",
+    )
     @line_magic
-    def plan(self, line: str) -> None:
+    @pass_sqlmesh_context
+    def plan(self, context: Context, line: str) -> None:
         """Goes through a set of prompts to both establish a plan and apply it"""
-        self._context.refresh()
         args = parse_argstring(self.plan, line)
 
-        # Since the magics share a context we want to clear out any state before generating a new plan
-        console = self._context.console
-        self._context.console = get_console(display=self.display)
-
-        self._context.plan(
+        context.plan(
             args.environment,
             start=args.start,
             end=args.end,
@@ -336,6 +373,7 @@ class SQLMeshMagics(Magics):
             create_from=args.create_from,
             skip_tests=args.skip_tests,
             restate_models=args.restate_model,
+            backfill_models=args.backfill_model,
             no_gaps=args.no_gaps,
             skip_backfill=args.skip_backfill,
             forward_only=args.forward_only,
@@ -346,8 +384,8 @@ class SQLMeshMagics(Magics):
             include_unmodified=args.include_unmodified,
             select_models=args.select_model,
             no_diff=args.no_diff,
+            run=args.run,
         )
-        self._context.console = console
 
     @magic_arguments()
     @argument(
@@ -365,22 +403,18 @@ class SQLMeshMagics(Magics):
         help="Run for all missing intervals, ignoring individual cron schedules.",
     )
     @line_magic
-    def run_dag(self, line: str) -> None:
+    @pass_sqlmesh_context
+    def run_dag(self, context: Context, line: str) -> None:
         """Evaluate the DAG of models using the built-in scheduler."""
         args = parse_argstring(self.run_dag, line)
 
-        # Since the magics share a context we want to clear out any state before generating a new plan
-        console = self._context.console
-        self._context.console = get_console(display=self.display)
-
-        success = self._context.run(
+        success = context.run(
             args.environment,
             start=args.start,
             end=args.end,
             skip_janitor=args.skip_janitor,
             ignore_cron=args.ignore_cron,
         )
-        self._context.console = console
         if not success:
             raise SQLMeshError("Error Running DAG. Check logs for details.")
 
@@ -395,12 +429,13 @@ class SQLMeshMagics(Magics):
         help="The number of rows which the query should be limited to.",
     )
     @line_magic
-    def evaluate(self, line: str) -> None:
+    @pass_sqlmesh_context
+    def evaluate(self, context: Context, line: str) -> None:
         """Evaluate a model query and fetches a dataframe."""
-        self._context.refresh()
+        context.refresh()
         args = parse_argstring(self.evaluate, line)
 
-        df = self._context.evaluate(
+        df = context.evaluate(
             args.model,
             start=args.start,
             end=args.end,
@@ -420,13 +455,15 @@ class SQLMeshMagics(Magics):
         help="Whether or not to use expand materialized models, defaults to False. If True, all referenced models are expanded as raw queries. If a list, only referenced models are expanded as raw queries.",
     )
     @argument("--dialect", type=str, help="SQL dialect to render.")
+    @argument("--no-format", action="store_true", help="Disable fancy formatting of the query.")
     @line_magic
-    def render(self, line: str) -> None:
+    @pass_sqlmesh_context
+    def render(self, context: Context, line: str) -> None:
         """Renders a model's query, optionally expanding referenced models."""
-        self._context.refresh()
+        context.refresh()
         args = parse_argstring(self.render, line)
 
-        query = self._context.render(
+        query = context.render(
             args.model,
             start=args.start,
             end=args.end,
@@ -434,7 +471,11 @@ class SQLMeshMagics(Magics):
             expand=args.expand,
         )
 
-        self._context.console.show_sql(query.sql(pretty=True, dialect=args.dialect))
+        sql = query.sql(pretty=True, dialect=args.dialect or context.config.dialect)
+        if args.no_format:
+            context.console.log_status_update(sql)
+        else:
+            context.console.show_sql(sql)
 
     @magic_arguments()
     @argument(
@@ -445,55 +486,56 @@ class SQLMeshMagics(Magics):
         help="An optional variable name to store the resulting dataframe.",
     )
     @cell_magic
-    def fetchdf(self, line: str, sql: str) -> None:
+    @pass_sqlmesh_context
+    def fetchdf(self, context: Context, line: str, sql: str) -> None:
         """Fetches a dataframe from sql, optionally storing it in a variable."""
         args = parse_argstring(self.fetchdf, line)
-        df = self._context.fetchdf(sql)
+        df = context.fetchdf(sql)
         if args.df_var:
             self._shell.user_ns[args.df_var] = df
         self.display(df)
 
     @magic_arguments()
+    @argument("--file", "-f", type=str, help="An optional file path to write the HTML output to.")
     @line_magic
-    def dag(self, line: str) -> None:
-        """Displays the dag"""
-        self._context.refresh()
-        self.display(self._context.get_dag())
+    @pass_sqlmesh_context
+    def dag(self, context: Context, line: str) -> None:
+        """Displays the HTML DAG."""
+        args = parse_argstring(self.dag, line)
+        dag = context.get_dag()
+        if args.file:
+            with open(args.file, "w") as file:
+                file.write(str(dag))
+        # TODO: Have this go through console instead of calling display directly
+        self.display(dag)
 
     @magic_arguments()
     @line_magic
-    def migrate(self, line: str) -> None:
+    @pass_sqlmesh_context
+    def migrate(self, context: Context, line: str) -> None:
         """Migrate SQLMesh to the current running version."""
-        self._context.migrate()
-        self.display("Migration complete")
+        context.migrate()
+        context.console.log_success("Migration complete")
 
     @magic_arguments()
     @line_magic
-    def create_external_models(self, line: str) -> None:
+    @pass_sqlmesh_context
+    def create_external_models(self, context: Context, line: str) -> None:
         """Create a schema file containing external model schemas."""
-        self._context.create_external_models()
+        context.create_external_models()
 
     @magic_arguments()
     @argument(
-        "--source",
-        "-s",
+        "source_to_target",
         type=str,
-        required=True,
-        help="The source environment or table.",
-    )
-    @argument(
-        "--target",
-        "-t",
-        type=str,
-        required=True,
-        help="The target environment or table.",
+        metavar="SOURCE:TARGET",
+        help="Source and target in `SOURCE:TARGET` format",
     )
     @argument(
         "--on",
         type=str,
-        nargs="+",
-        required=True,
-        help='The SQL join condition or list of columns to use as keys. Table aliases must be "s" and "t" for source and target.',
+        nargs="*",
+        help="The column to join on. Can be specified multiple times. The model grain will be used if not specified.",
     )
     @argument(
         "--model",
@@ -508,23 +550,31 @@ class SQLMeshMagics(Magics):
     @argument(
         "--limit",
         type=int,
+        default=20,
         help="The limit of the sample dataframe.",
     )
+    @argument(
+        "--show-sample",
+        action="store_true",
+        help="Show a sample of the rows that differ. With many columns, the output can be very wide.",
+    )
     @line_magic
-    def table_diff(self, line: str) -> None:
+    @pass_sqlmesh_context
+    def table_diff(self, context: Context, line: str) -> None:
         """Show the diff between two tables.
 
         Can either be two tables or two environments and a model.
         """
         args = parse_argstring(self.table_diff, line)
-
-        self._context.table_diff(
-            source=args.source,
-            target=args.target,
+        source, target = args.source_to_target.split(":")
+        context.table_diff(
+            source=source,
+            target=target,
             on=args.on,
             model_or_snapshot=args.model,
             where=args.where,
             limit=args.limit,
+            show_sample=args.show_sample,
         )
 
     @magic_arguments()
@@ -541,24 +591,155 @@ class SQLMeshMagics(Magics):
         help="The output dialect of the sql string.",
     )
     @line_cell_magic
-    def rewrite(self, line: str, sql: str) -> None:
+    @pass_sqlmesh_context
+    def rewrite(self, context: Context, line: str, sql: str) -> None:
         """Rewrite a sql expression with semantic references into an executable query.
 
         https://sqlmesh.readthedocs.io/en/latest/concepts/metrics/overview/
         """
         args = parse_argstring(self.rewrite, line)
-        self._context.console.show_sql(
-            self._context.rewrite(sql, args.read).sql(
-                dialect=args.write or self._context.config.dialect, pretty=True
+        context.console.show_sql(
+            context.rewrite(sql, args.read).sql(
+                dialect=args.write or context.config.dialect, pretty=True
             )
         )
 
-    @property
-    def _shell(self) -> t.Any:
-        # Make mypy happy.
-        if not self.shell:
-            raise RuntimeError("IPython Magics are in invalid state")
-        return self.shell
+    @magic_arguments()
+    @argument(
+        "--transpile",
+        "-t",
+        type=str,
+        help="Transpile project models to the specified dialect.",
+    )
+    @argument(
+        "--new-line",
+        action="store_true",
+        help="The output dialect of the sql string.",
+    )
+    @line_magic
+    @pass_sqlmesh_context
+    def format(self, context: Context, line: str) -> None:
+        """Format all SQL models."""
+        args = parse_argstring(self.format, line)
+        context.format(args.transpile, args.new_line)
+
+    @magic_arguments()
+    @argument("environment", type=str, help="The environment to diff local state against.")
+    @line_magic
+    @pass_sqlmesh_context
+    def diff(self, context: Context, line: str) -> None:
+        """Show the diff between the local state and the target environment."""
+        args = parse_argstring(self.diff, line)
+        context.diff(args.environment)
+
+    @magic_arguments()
+    @argument("environment", type=str, help="The environment to invalidate.")
+    @line_magic
+    @pass_sqlmesh_context
+    def invalidate(self, context: Context, line: str) -> None:
+        """Invalidate the target environment, forcing its removal during the next run of the janitor process."""
+        args = parse_argstring(self.invalidate, line)
+        context.invalidate_environment(args.environment)
+
+    @magic_arguments()
+    @argument("model", type=str)
+    @argument(
+        "--query",
+        "-q",
+        type=str,
+        nargs="+",
+        required=True,
+        help="Queries that will be used to generate data for the model's dependencies.",
+    )
+    @argument(
+        "--overwrite",
+        "-o",
+        action="store_true",
+        help="When true, the fixture file will be overwritten in case it already exists.",
+    )
+    @argument(
+        "--var",
+        "-v",
+        type=str,
+        nargs="+",
+        help="Key-value pairs that will define variables needed by the model.",
+    )
+    @argument(
+        "--path",
+        "-p",
+        type=str,
+        help="The file path corresponding to the fixture, relative to the test directory. "
+        "By default, the fixture will be created under the test directory and the file "
+        "name will be inferred based on the test's name.",
+    )
+    @argument(
+        "--name",
+        "-n",
+        type=str,
+        help="The name of the test that will be created. By default, it's inferred based on the model's name.",
+    )
+    @line_magic
+    @pass_sqlmesh_context
+    def create_test(self, context: Context, line: str) -> None:
+        """Generate a unit test fixture for a given model."""
+        args = parse_argstring(self.create_test, line)
+        queries = iter(args.query)
+        variables = iter(args.var) if args.var else None
+        context.create_test(
+            args.model,
+            input_queries={k: v.strip('"') for k, v in dict(zip(queries, queries)).items()},
+            overwrite=args.overwrite,
+            variables=dict(zip(variables, variables)) if variables else None,
+            name=args.name,
+            path=args.path,
+        )
+
+    @magic_arguments()
+    @argument("tests", nargs="*", type=str)
+    @argument(
+        "--pattern",
+        "-k",
+        nargs="*",
+        type=str,
+        help="Only run tests that match the pattern of substring.",
+    )
+    @argument("--verbose", "-v", action="store_true", help="Verbose output.")
+    @line_magic
+    @pass_sqlmesh_context
+    def run_test(self, context: Context, line: str) -> None:
+        """Run unit test(s)."""
+        args = parse_argstring(self.run_test, line)
+        context.test(match_patterns=args.pattern, tests=args.tests, verbose=args.verbose)
+
+    @magic_arguments()
+    @argument(
+        "models", type=str, nargs="*", help="A model to audit. Multiple models can be audited."
+    )
+    @argument("--start", "-s", type=str, help="Start date to audit.")
+    @argument("--end", "-e", type=str, help="End date to audit.")
+    @argument("--execution-time", type=str, help="Execution time.")
+    @line_magic
+    @pass_sqlmesh_context
+    def audit(self, context: Context, line: str) -> None:
+        """Run audit(s)"""
+        args = parse_argstring(self.audit, line)
+        context.audit(
+            models=args.models, start=args.start, end=args.end, execution_time=args.execution_time
+        )
+
+    @magic_arguments()
+    @line_magic
+    @pass_sqlmesh_context
+    def info(self, context: Context, line: str) -> None:
+        """Display SQLMesh project information."""
+        context.print_info()
+
+    @magic_arguments()
+    @line_magic
+    @pass_sqlmesh_context
+    def rollback(self, context: Context, line: str) -> None:
+        """Rollback SQLMesh to the previous migration."""
+        context.rollback()
 
 
 def register_magics() -> None:

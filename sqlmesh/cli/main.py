@@ -202,7 +202,7 @@ def evaluate(
 @click.pass_context
 @error_handler
 def format(ctx: click.Context, transpile: t.Optional[str] = None, new_line: bool = False) -> None:
-    """Format all models in a given directory."""
+    """Format all SQL models."""
     ctx.obj.format(transpile, new_line)
 
 

@@ -104,3 +104,6 @@ clean-build:
 	rm -rf build/ && rm -rf dist/ && rm -rf *.egg-info
 
 dev-publish: ui-build clean-build publish
+
+jupyter-example:
+	jupyter lab tests/integrations/jupyter/example_outputs.ipynb
