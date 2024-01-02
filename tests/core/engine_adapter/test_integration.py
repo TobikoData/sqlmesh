@@ -672,10 +672,8 @@ def test_ctas(ctx: TestContext):
         # The errors are thrown for both table and comments, but apparently the
         # table comments are actually registered with the engine. Column comments are not.
         assert table_description == "test table description"
-        assert (
-            column_comments == None
-            if ctx.dialect == "trino"
-            else {"id": "test id column description"}
+        assert column_comments == (
+            None if ctx.dialect == "trino" else {"id": "test id column description"}
         )
 
 

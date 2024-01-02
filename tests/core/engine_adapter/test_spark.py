@@ -686,3 +686,19 @@ def test_create_table_iceberg(make_mocked_engine_adapter: t.Callable):
             call("INSERT INTO `test_table` SELECT * FROM `test_table`"),
         ]
     )
+
+
+def test_comments(make_mocked_engine_adapter: t.Callable, mocker: MockerFixture):
+    adapter = make_mocked_engine_adapter(SparkEngineAdapter)
+
+    adapter._create_comments(
+        "test_table",
+        "test description",
+        {"a": "a description"},
+    )
+
+    sql_calls = to_sql_calls(adapter)
+    assert sql_calls == [
+        "COMMENT ON TABLE `test_table` IS 'test description'",
+        "ALTER TABLE `test_table` ALTER COLUMN `a` COMMENT 'a description'",
+    ]

@@ -119,7 +119,7 @@ class MySQLEngineAdapter(
 
                 for col in column_comments:
                     col_def = col_def_exps.get(col)
-                    col_def.constraints.extend(  # type: ignore
+                    col_def.args["constraints"].extend(  # type: ignore
                         self._build_col_comment_exp(col_def.alias_or_name, column_comments)  # type: ignore
                     )
                     self.execute(

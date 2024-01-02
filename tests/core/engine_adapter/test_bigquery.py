@@ -568,11 +568,19 @@ def test_comments(make_mocked_engine_adapter: t.Callable, mocker: MockerFixture)
         table_description="test description",
     )
 
+    adapter._create_comments(
+        "test_table",
+        "test description",
+        {"a": "a description"},
+    )
+
     sql_calls = _to_sql_calls(execute_mock)
     assert sql_calls == [
         "CREATE TABLE IF NOT EXISTS `test_table` (`a` int OPTIONS (description='a description'), `b` int) OPTIONS (description='test description')",
         "CREATE TABLE IF NOT EXISTS `test_table` (`a` int OPTIONS (description='a description'), `b` int) OPTIONS (description='test description') AS SELECT `a`, `b` FROM `source_table`",
         "CREATE OR REPLACE VIEW `test_table` OPTIONS (description='test description') AS SELECT `a`, `b` FROM `source_table`",
+        "ALTER TABLE `test_table` SET OPTIONS(description = 'test description')",
+        "ALTER TABLE `test_table` ALTER COLUMN `a` SET OPTIONS(description = 'a description')",
     ]
 
 
