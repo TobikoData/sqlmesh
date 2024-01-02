@@ -27,6 +27,15 @@ A selection may use the wildcard asterisk character `*` to select multiple model
 - `"example.seed*"` would match both `example.seed_cities` and `example.seed_states`
 - `"example.*l_model"` would match both `example.incremental_model` and `example.full_model`
 
+Multiple models can also be selected by using the tag selector syntax `tag:tag_name`. For example, `"tag:my_tag"` would select all models with the tag `my_tag`. 
+
+Assuming all seed models had a "seed" tag and all incremental models had an "incremental" tag:
+
+- `"tag:seed"` would match all seed models
+- `"tag:incremental"` would match all incremental models
+
+Wildcards also apply to tags. For example, `"tag:reporting*"` would match all models that have a tag starting with "reporting". 
+
 ### Upstream/downstream indicator
 
 By default, only the directly changed models in a selection are included in the plan.
@@ -50,6 +59,8 @@ The upstream/downstream indicator may be combined with the wildcard operator. Fo
 - `example.full_model` matches the wildcard
 
 The combination of the upstream/downstream indicator, wildcards, and multiple `--select-model` arguments enables granular and complex model selections for a plan.
+
+Upstream/downstream indicators also apply to tags. For example, `--select-model "tag:+reporting*"` would select all models with tags that start with `reporting` and their upstream models.
 
 ## Backfill
 
