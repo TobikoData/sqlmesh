@@ -738,7 +738,7 @@ class Context(BaseContext):
     def format(self, transpile: t.Optional[str] = None, newline: bool = False) -> None:
         """Format all models in a given directory."""
         for model in self._models.values():
-            if not model.is_sql:
+            if not model._path.suffix == ".sql":
                 continue
             with open(model._path, "r+", encoding="utf-8") as file:
                 expressions = parse(
