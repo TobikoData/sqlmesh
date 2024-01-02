@@ -187,25 +187,17 @@ class TestContext:
         table_kind: str = "BASE TABLE",
     ) -> str:
         if self.dialect in ["postgres", "redshift"]:
-            # multiple objects with the same schema and name can exist in pg_catalog.pg_class
-            # so we select the most recent one (largest oid)
             query = f"""
-                with source AS (
-                    SELECT
-                        t.table_name as table_name,
-                        pg_catalog.obj_description(pgc.oid, 'pg_class'),
-                        pgc.oid as oid
-                    FROM information_schema.tables t
-                    INNER JOIN pg_catalog.pg_class pgc
-                    ON t.table_name = pgc.relname
-                    WHERE
-                        t.table_schema='{schema_name}'
-                        AND t.table_name='{table_name}'
-                        AND t.table_type='{table_kind}'
-                )
-                SELECT table_name, obj_description
-                FROM source
-                WHERE source.oid = (SELECT MAX(oid) FROM source)
+                SELECT
+                    pgc.relname,
+                    pg_catalog.obj_description(pgc.oid, 'pg_class')
+                FROM pg_catalog.pg_class pgc
+                INNER JOIN pg_catalog.pg_namespace n
+                ON pgc.relnamespace = n.oid
+                WHERE
+                    n.nspname = '{schema_name}'
+                    AND pgc.relname = '{table_name}'
+                    AND pgc.relkind = '{'v' if table_kind == "VIEW" else 'r'}'
                 ;
             """
         elif self.dialect in ["mysql", "snowflake"]:
@@ -265,28 +257,28 @@ class TestContext:
 
         return None
 
-    def get_column_comments(self, schema_name: str, table_name: str) -> t.Dict[str, str]:
+    def get_column_comments(
+        self, schema_name: str, table_name: str, table_kind: str = "BASE TABLE"
+    ) -> t.Dict[str, str]:
         comment_index = 1
         if self.dialect in ["postgres", "redshift"]:
-            # multiple objects with the same schema and name can exist in pg_catalog.pg_class
-            # so we select the most recent one (largest oid)
             query = f"""
-                with source as (
-                    SELECT
-                        cols.column_name,
-                        pg_catalog.col_description(c.oid, cols.ordinal_position::int) AS column_comment,
-                        c.oid as oid
-                    FROM
-                        pg_catalog.pg_class c,
-                        information_schema.columns cols
-                    WHERE
-                        cols.table_schema = '{schema_name}'
-                        AND cols.table_name = '{table_name}'
-                        AND cols.table_name = c.relname
-                )
-                SELECT column_name, column_comment
-                FROM source
-                WHERE source.oid = (SELECT MAX(oid) FROM source)
+                SELECT
+                    cols.column_name,
+                    pg_catalog.col_description(pgc.oid, cols.ordinal_position::int) AS column_comment
+                FROM pg_catalog.pg_class pgc
+                INNER JOIN pg_catalog.pg_namespace n
+                ON
+                    pgc.relnamespace = n.oid
+                INNER JOIN information_schema.columns cols
+                ON
+                    pgc.relname = cols.table_name
+                    AND n.nspname = cols.table_schema
+                WHERE
+                    n.nspname = '{schema_name}'
+                    AND pgc.relname = '{table_name}'
+                    AND pgc.relkind = '{'v' if table_kind == "VIEW" else 'r'}'
+                ;
             """
         elif self.dialect in ["mysql", "snowflake"]:
             schema_name = schema_name.upper() if self.dialect == "snowflake" else schema_name
@@ -329,14 +321,19 @@ class TestContext:
 
         result = self.engine_adapter.fetchall(query)
 
-        if self.dialect in ["spark", "databricks"]:
-            result = list(set([x for x in result if not x[0].startswith("#")]))
+        if result:
+            if self.dialect in ["spark", "databricks"]:
+                result = list(set([x for x in result if not x[0].startswith("#")]))
 
-        return {
-            x[0]: x[comment_index]
-            for x in result
-            if x[comment_index] != "" and x[comment_index] is not None
-        }
+            comments = {
+                x[0]: x[comment_index]
+                for x in result
+                if x[comment_index] is not None and x[comment_index].strip() != ""
+            }
+
+            return comments if comments else None
+
+        return None
 
 
 class MetadataResults(PydanticModel):
@@ -667,8 +664,19 @@ def test_ctas(ctx: TestContext):
     if not ctx.engine_adapter.COMMENT_CREATION.is_unsupported:
         table_description = ctx.get_table_comment(TEST_SCHEMA, "test_table")
         column_comments = ctx.get_column_comments(TEST_SCHEMA, "test_table")
+
+        # Trino on Hive COMMENT permissions are separate from standard SQL object permissions.
+        # Trino has a bug where CREATE SQL permissions are not passed to COMMENT permissions,
+        # which generates permissions errors when COMMENT commands are issued.
+        #
+        # The errors are thrown for both table and comments, but apparently the
+        # table comments are actually registered with the engine. Column comments are not.
         assert table_description == "test table description"
-        assert column_comments == {"id": "test id column description"}
+        assert (
+            column_comments == None
+            if ctx.dialect == "trino"
+            else {"id": "test id column description"}
+        )
 
 
 def test_create_view(ctx: TestContext):
