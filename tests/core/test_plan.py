@@ -185,11 +185,11 @@ def test_restate_models(sushi_context_pre_scheduling: Context):
             to_timestamp(to_date("today")),
         ),
         SnapshotId(name='"memory"."sushi"."customer_revenue_by_day"', identifier="553444871"): (
-            plan.start,
+            to_timestamp(plan.start),
             to_timestamp(to_date("today")),
         ),
         SnapshotId(name='"memory"."sushi"."customer_revenue_lifetime"', identifier="333411410"): (
-            plan.start,
+            to_timestamp(plan.start),
             to_timestamp(to_date("today")),
         ),
     }
