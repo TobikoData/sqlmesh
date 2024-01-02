@@ -211,6 +211,30 @@ class ContextDiff(PydanticModel):
             previously_promoted_snapshot_ids=previously_promoted_snapshot_ids,
         )
 
+    @classmethod
+    def create_no_diff(cls, environment: str) -> ContextDiff:
+        """Create a no-op ContextDiff object.
+
+        Args:
+            environment: The environment to diff.
+
+        Returns:
+            The ContextDiff object.
+        """
+        return ContextDiff(
+            environment=environment,
+            is_new_environment=False,
+            is_unfinalized_environment=False,
+            create_from="",
+            added=set(),
+            removed_snapshots={},
+            modified_snapshots={},
+            snapshots={},
+            new_snapshots={},
+            previous_plan_id=None,
+            previously_promoted_snapshot_ids=set(),
+        )
+
     @property
     def has_changes(self) -> bool:
         return (

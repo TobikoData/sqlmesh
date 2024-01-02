@@ -12,6 +12,7 @@ MODEL (
   owner jen,
   cron '@daily',
   dialect hive,
+  tags expensive,
   columns (
     customer_id INT,
     revenue DOUBLE,

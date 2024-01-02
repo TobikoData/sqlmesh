@@ -173,7 +173,7 @@ def test_paused_forward_only_parent(make_snapshot, mocker: MockerFixture):
 @freeze_time()
 def test_restate_models(sushi_context_pre_scheduling: Context):
     plan = sushi_context_pre_scheduling.plan(
-        restate_models=["sushi.waiter_revenue_by_day"], no_prompts=True
+        restate_models=["sushi.waiter_revenue_by_day", "tag:expensive"], no_prompts=True
     )
     assert plan.restatements == {
         SnapshotId(name='"memory"."sushi"."waiter_revenue_by_day"', identifier="643718449"): (
@@ -184,11 +184,28 @@ def test_restate_models(sushi_context_pre_scheduling: Context):
             to_timestamp(plan.start),
             to_timestamp(to_date("today")),
         ),
+        SnapshotId(name='"memory"."sushi"."customer_revenue_by_day"', identifier="553444871"): (
+            plan.start,
+            to_timestamp(to_date("today")),
+        ),
+        SnapshotId(name='"memory"."sushi"."customer_revenue_lifetime"', identifier="333411410"): (
+            plan.start,
+            to_timestamp(to_date("today")),
+        ),
     }
     assert plan.requires_backfill
 
-    with pytest.raises(PlanError, match=r"""Cannot restate from '"unknown_model"'.*"""):
-        sushi_context_pre_scheduling.plan(restate_models=['"unknown_model"'], no_prompts=True)
+    plan = sushi_context_pre_scheduling.plan(restate_models=["unknown_model"], no_prompts=True)
+    assert plan.snapshots == []
+    assert plan.missing_intervals == []
+    assert not plan.has_changes
+    assert not plan.requires_backfill
+
+    plan = sushi_context_pre_scheduling.plan(restate_models=["tag:unknown_tag"], no_prompts=True)
+    assert plan.snapshots == []
+    assert plan.missing_intervals == []
+    assert not plan.has_changes
+    assert not plan.requires_backfill
 
 
 @freeze_time()
