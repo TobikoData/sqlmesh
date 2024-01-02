@@ -161,52 +161,53 @@ class StateReader(abc.ABC):
         """Get the current versions of the SQLMesh schema and libraries.
 
         Args:
-            validate: Whether or not to raise error if the running version is ahead of state.
+            validate: Whether or not to raise error if the running version is different from what's in state.
 
         Returns:
             The versions object.
         """
         versions = self._get_versions()
 
-        def raise_error(
-            lib: str,
-            local: str | int,
-            remote: str | int,
-            remote_package_version: t.Optional[str] = None,
-            ahead: bool = False,
-        ) -> None:
-            if ahead:
+        if validate:
+
+            def raise_error(
+                lib: str,
+                local: str | int,
+                remote: str | int,
+                remote_package_version: t.Optional[str] = None,
+                ahead: bool = False,
+            ) -> None:
+                if ahead:
+                    raise SQLMeshError(
+                        f"{lib} (local) is using version '{local}' which is ahead of '{remote}' (remote). "
+                        "Please run a migration ('sqlmesh migrate' command)."
+                    )
+
+                if remote_package_version:
+                    upgrade_suggestion = f" Please upgrade {lib} ('pip install --upgrade \"{lib.lower()}=={remote_package_version}\"' command)."
+                else:
+                    upgrade_suggestion = ""
+
                 raise SQLMeshError(
-                    f"{lib} (local) is using version '{local}' which is ahead of '{remote}' (remote). "
-                    "Please run a migration ('sqlmesh migrate' command)."
+                    f"{lib} (local) is using version '{local}' which is behind '{remote}' (remote).{upgrade_suggestion}"
                 )
 
-            if remote_package_version:
-                upgrade_suggestion = f" Please upgrade {lib} ('pip install --upgrade \"{lib.lower()}=={remote_package_version}\"' command)."
-            else:
-                upgrade_suggestion = ""
+            if SCHEMA_VERSION < versions.schema_version:
+                raise_error(
+                    "SQLMesh",
+                    SCHEMA_VERSION,
+                    versions.schema_version,
+                    remote_package_version=versions.sqlmesh_version,
+                )
 
-            raise SQLMeshError(
-                f"{lib} (local) is using version '{local}' which is behind '{remote}' (remote).{upgrade_suggestion}"
-            )
+            if major_minor(SQLGLOT_VERSION) < major_minor(versions.sqlglot_version):
+                raise_error(
+                    "SQLGlot",
+                    SQLGLOT_VERSION,
+                    versions.sqlglot_version,
+                    remote_package_version=versions.sqlglot_version,
+                )
 
-        if SCHEMA_VERSION < versions.schema_version:
-            raise_error(
-                "SQLMesh",
-                SCHEMA_VERSION,
-                versions.schema_version,
-                remote_package_version=versions.sqlmesh_version,
-            )
-
-        if major_minor(SQLGLOT_VERSION) < major_minor(versions.sqlglot_version):
-            raise_error(
-                "SQLGlot",
-                SQLGLOT_VERSION,
-                versions.sqlglot_version,
-                remote_package_version=versions.sqlglot_version,
-            )
-
-        if validate:
             if SCHEMA_VERSION > versions.schema_version:
                 raise_error("SQLMesh", SCHEMA_VERSION, versions.schema_version, ahead=True)
 
