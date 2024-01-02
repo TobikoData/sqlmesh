@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import logging
 import typing as t
 
 from sqlglot import exp, parse_one
@@ -14,6 +15,8 @@ from sqlmesh.core.engine_adapter.shared import DataObject, DataObjectType, set_c
 
 if t.TYPE_CHECKING:
     from sqlmesh.core._typing import SchemaName, TableName
+
+logger = logging.getLogger(__name__)
 
 
 @set_catalog()
@@ -88,30 +91,41 @@ class MySQLEngineAdapter(
         """
         Executes commands to create table and column comments.
         """
-        table_sql = exp.to_table(table_name).sql(dialect=self.dialect, identify=True)
+        table = exp.to_table(table_name)
+        table_sql = table.sql(dialect=self.dialect, identify=True)
 
         if table_comment:
-            self.execute(
-                f"ALTER TABLE {table_sql} COMMENT = '{table_comment}'",
-            )
+            try:
+                self.execute(
+                    f"ALTER TABLE {table_sql} COMMENT = '{table_comment}'",
+                )
+            except:
+                logger.warning(
+                    f"Table comment for table '{table.alias_or_name}' not registered - this may be due to limited permissions."
+                )
 
         if column_comments:
-            # MySQL ALTER TABLE MODIFY completely replaces the column (overwriting options and constraints).
-            # self.columns() only returns the column types so doesn't allow us to fully/correctly replace a column definition.
-            # To get the full column definition we retrieve and parse the table's CREATE TABLE statement.
-            create_table_exp = parse_one(
-                self.fetchone(f"SHOW CREATE TABLE {table_sql}")[1], dialect=self.dialect
-            )
-            col_def_exps = {
-                col_def.name: col_def.copy()
-                for col_def in create_table_exp.find(exp.Schema).find_all(exp.ColumnDef)  # type: ignore
-            }
-
-            for col in column_comments:
-                col_def = col_def_exps.get(col)
-                col_def.constraints.extend(  # type: ignore
-                    self._build_col_comment_exp(col_def.alias_or_name, column_comments)  # type: ignore
+            try:
+                # MySQL ALTER TABLE MODIFY completely replaces the column (overwriting options and constraints).
+                # self.columns() only returns the column types so doesn't allow us to fully/correctly replace a column definition.
+                # To get the full column definition we retrieve and parse the table's CREATE TABLE statement.
+                create_table_exp = parse_one(
+                    self.fetchone(f"SHOW CREATE TABLE {table_sql}")[1], dialect=self.dialect
                 )
-                self.execute(
-                    f"ALTER TABLE {table_sql} MODIFY {col_def.sql(dialect=self.dialect, identify=True)}",  # type: ignore
+                col_def_exps = {
+                    col_def.name: col_def.copy()
+                    for col_def in create_table_exp.find(exp.Schema).find_all(exp.ColumnDef)  # type: ignore
+                }
+
+                for col in column_comments:
+                    col_def = col_def_exps.get(col)
+                    col_def.constraints.extend(  # type: ignore
+                        self._build_col_comment_exp(col_def.alias_or_name, column_comments)  # type: ignore
+                    )
+                    self.execute(
+                        f"ALTER TABLE {table_sql} MODIFY {col_def.sql(dialect=self.dialect, identify=True)}",  # type: ignore
+                    )
+            except:
+                logger.warning(
+                    f"Column comments for table '{table.alias_or_name}' not registered - this may be due to limited permissions."
                 )

@@ -536,18 +536,29 @@ class BigQueryEngineAdapter(InsertOverwriteWithMergeMixin):
         """
         Executes commands to create table and column comments.
         """
-        table_sql = exp.to_table(table_name).sql(dialect=self.dialect, identify=True)
+        table = exp.to_table(table_name)
+        table_sql = table.sql(dialect=self.dialect, identify=True)
 
         if table_comment:
-            self.execute(
-                f"ALTER {table_kind} {table_sql} SET OPTIONS(description = '{table_comment}')",
-            )
+            try:
+                self.execute(
+                    f"ALTER {table_kind} {table_sql} SET OPTIONS(description = '{table_comment}')",
+                )
+            except:
+                logger.warning(
+                    f"Table comment for '{table.alias_or_name}' not registered - this may be due to limited account permissions."
+                )
 
         if column_comments:
             for col, comment in column_comments.items():
-                self.execute(
-                    f"ALTER TABLE {table_sql} ALTER COLUMN {exp.column(col).sql(dialect=self.dialect, identify=True)} SET OPTIONS(description = '{comment}')",
-                )
+                try:
+                    self.execute(
+                        f"ALTER TABLE {table_sql} ALTER COLUMN {exp.column(col).sql(dialect=self.dialect, identify=True)} SET OPTIONS(description = '{comment}')",
+                    )
+                except:
+                    logger.warning(
+                        f"Column comments for table '{table.alias_or_name}' not registered - this may be due to limited permissions."
+                    )
 
     def create_state_table(
         self,

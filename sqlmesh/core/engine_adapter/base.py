@@ -1686,23 +1686,33 @@ class EngineAdapter:
         table = exp.to_table(table_name)
 
         if table_comment:
-            self.execute(
-                exp.Comment(
-                    this=table,
-                    kind=table_kind,
-                    expression=exp.Literal.string(table_comment),
+            try:
+                self.execute(
+                    exp.Comment(
+                        this=table,
+                        kind=table_kind,
+                        expression=exp.Literal.string(table_comment),
+                    )
                 )
-            )
+            except:
+                logger.warning(
+                    f"Table comment for '{table.alias_or_name}' not registered - this may be due to limited permissions."
+                )
 
         if column_comments:
             for col, comment in column_comments.items():
-                self.execute(
-                    exp.Comment(
-                        this=exp.column(col, *reversed(table.parts)),  # type: ignore
-                        kind="COLUMN",
-                        expression=exp.Literal.string(comment),
+                try:
+                    self.execute(
+                        exp.Comment(
+                            this=exp.column(col, *reversed(table.parts)),  # type: ignore
+                            kind="COLUMN",
+                            expression=exp.Literal.string(comment),
+                        )
                     )
-                )
+                except:
+                    logger.warning(
+                        f"Column comments for table '{table.alias_or_name}' not registered - this may be due to limited permissions."
+                    )
 
 
 class EngineAdapterWithIndexSupport(EngineAdapter):

@@ -545,19 +545,30 @@ class SparkEngineAdapter(GetCurrentCatalogFromFunctionMixin, HiveMetastoreTableP
         table = exp.to_table(table_name)
 
         if table_comment:
-            self.execute(
-                exp.Comment(
-                    this=table,
-                    kind=table_kind,
-                    expression=exp.Literal.string(table_comment),
+            try:
+                self.execute(
+                    exp.Comment(
+                        this=table,
+                        kind=table_kind,
+                        expression=exp.Literal.string(table_comment),
+                    )
                 )
-            )
+            except:
+                logger.warning(
+                    f"Table comment for '{table.alias_or_name}' not registered - this may be due to limited account permissions."
+                )
 
         if column_comments:
             table_sql = table.sql(dialect=self.dialect, identify=True)
-            for col, comment in column_comments.items():
-                self.execute(
-                    f"ALTER TABLE {table_sql} ALTER COLUMN {exp.column(col).sql(dialect=self.dialect, identify=True)} COMMENT '{comment}'",
+
+            try:
+                for col, comment in column_comments.items():
+                    self.execute(
+                        f"ALTER TABLE {table_sql} ALTER COLUMN {exp.column(col).sql(dialect=self.dialect, identify=True)} COMMENT '{comment}'",
+                    )
+            except:
+                logger.warning(
+                    f"Column comments in table '{table.alias_or_name}' not registered - this may be due to limited permissions."
                 )
 
 
