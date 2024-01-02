@@ -67,6 +67,37 @@ SELECT
   SUM(x) as x, -- explicitly x
 ```
 
+### Model description and comments
+
+Model files may contain SQL comments in a format supported in the model's SQL dialect. (Comments begin with `--` or are gated by `/*` and `*/` in most dialects.)
+
+SQLMesh will automatically register a comment specified before the `MODEL` DDL block as the table description/comment in the underlying SQL engine (if supported by the engine). If the [`MODEL` DDL `description` field](#description) is also specified, SQLMesh will register it with the engine instead.
+
+If a comment is present on the same file line as a column definition in the model's SQL query, SQLMesh will automatically register the comment as a column description/comment in the underlying SQL engine (if supported by the engine).
+
+For example, the physical table created for the following model definition would have:
+
+1. The value of its `MODEL` DDL `description` field, "Total revenue for each customer," registered as a table comment in the SQL engine
+2. The comment on the same line as the `customer_id` column definition in the SQL query, "Customer's unique ID," registered as a column comment for the table's `customer_id` column
+
+```sql linenums="1" hl_lines="6 10"
+-- The MODEL DDL 'description' field is present, so this comment will not be registered with the SQL engine
+MODEL (
+  name sushi.customer_total_revenue,
+  owner toby,
+  cron '@daily',
+  grain customer_id,
+  description 'Total revenue for each customer'
+);
+
+SELECT
+  o.customer_id::TEXT, -- Customer's unique ID
+  -- This comment is between column definition lines so will not be registered with the SQL engine
+  SUM(o.amount)::DOUBLE AS revenue
+FROM sushi.orders AS o
+GROUP BY o.customer_id;
+```
+
 ## Model properties
 The `MODEL` DDL statement takes various properties, which are used for both metadata and controlling behavior.
 
@@ -121,6 +152,9 @@ Name is ***required*** and must be ***unique***.
 - By default, SQLMesh [infers a model's column names and types](#conventions) from its SQL query. Disable that behavior by manually specifying all column names and data types in the model's `columns` property.
 - **WARNING**: SQLMesh may exhibit unexpected behavior if the `columns` property includes columns not returned by the query, omits columns returned by the query, or specifies data types other than the ones returned by the query.
 - NOTE: Specifying column names and data types is required for [Python models](../models/python_models.md) that return DataFrames.
+
+### description
+- Optional description of the model. Automatically registered as a table description/comment with the underlying SQL engine (if supported by the engine).
 
 ### table_properties
 - A key-value of arbitrary table properties specific to the target engine. For example:
