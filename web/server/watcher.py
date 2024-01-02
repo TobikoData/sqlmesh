@@ -24,6 +24,7 @@ async def watch_project() -> None:
     paths = [
         (context.path / c.MODELS).resolve(),
         (context.path / c.SEEDS).resolve(),
+        (context.path / c.TESTS).resolve(),
     ]
     ignore_entity_patterns = context.config.ignore_patterns if context else c.IGNORE_PATTERNS
     ignore_entity_patterns.append("^\\.DS_Store$")
