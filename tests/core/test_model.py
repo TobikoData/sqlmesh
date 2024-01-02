@@ -33,7 +33,7 @@ from sqlmesh.core.model.seed import CsvSettings
 from sqlmesh.core.node import IntervalUnit, _Node
 from sqlmesh.core.snapshot import SnapshotChangeCategory
 from sqlmesh.utils.date import to_datetime, to_timestamp
-from sqlmesh.utils.errors import ConfigError
+from sqlmesh.utils.errors import ConfigError, SQLMeshError
 from sqlmesh.utils.jinja import JinjaMacroRegistry, MacroInfo
 from sqlmesh.utils.metaprogramming import Executable
 
@@ -1079,6 +1079,59 @@ def test_render_query(assert_exp_eq, sushi_context):
     )
     model = load_sql_based_model(expressions, dialect="duckdb")
     assert model.render_query().sql("duckdb") == '''SELECT ['1', '2', '3'] AS "x"'''
+
+    expressions = d.parse(
+        """
+        MODEL (
+          name dummy.model,
+          kind FULL
+        );
+
+        @DEF(area, r -> pi() * r * r);
+
+        SELECT route, centroid, @area(route_radius) AS area
+        """
+    )
+    model = load_sql_based_model(expressions)
+    assert (
+        model.render_query().sql()
+        == 'SELECT "route" AS "route", "centroid" AS "centroid", PI() * "route_radius" * "route_radius" AS "area"'
+    )
+
+    expressions = d.parse(
+        """
+        MODEL (
+          name dummy.model,
+          kind FULL
+        );
+
+        @DEF(area, r -> pi() * r * r);
+        @DEF(container_volume, (r, h) -> @area(@r) * h);
+
+        SELECT container_id, @container_volume((cont_di / 2), cont_hi) AS area
+        """
+    )
+    model = load_sql_based_model(expressions)
+    assert (
+        model.render_query().sql()
+        == 'SELECT "container_id" AS "container_id", PI() * ("cont_di" / 2) * ("cont_di" / 2) * "cont_hi" AS "area"'
+    )
+
+    expressions = d.parse(
+        """
+        MODEL (
+          name dummy.model,
+          kind FULL
+        );
+
+        @DEF(times2, x -> x * 2);
+
+        SELECT @times4(10) AS "i dont exist"
+        """
+    )
+    model = load_sql_based_model(expressions)
+    with pytest.raises(SQLMeshError, match=r"Macro 'times4' does not exist.*"):
+        model.render_query()
 
 
 def test_time_column():

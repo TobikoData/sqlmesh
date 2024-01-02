@@ -1823,6 +1823,10 @@ def _python_env(
             for macro_func_or_var in expression.find_all(d.MacroFunc, d.MacroVar):
                 if macro_func_or_var.__class__ is d.MacroFunc:
                     name = macro_func_or_var.this.name.lower()
+                    if name not in macros:
+                        # This macro is assumed to be in the same file as the model definition.
+                        # If it's not, it will be caught later when the macro is rendered.
+                        continue
                     used_macros[name] = macros[name]
                 elif macro_func_or_var.__class__ is d.MacroVar:
                     name = macro_func_or_var.name

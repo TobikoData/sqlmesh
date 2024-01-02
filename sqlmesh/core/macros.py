@@ -227,7 +227,7 @@ class MacroEvaluator:
             if isinstance(node.expression, exp.Lambda):
                 _, fn = _norm_var_arg_lambda(self, node.expression)
                 self.macros[normalize_macro_name(node.name)] = lambda _, *args: fn(
-                    exp.Tuple(expressions=args) if len(args) > 1 else args
+                    list(args) if len(args) <= 1 else exp.Tuple(expressions=list(args))
                 )
             else:
                 self.locals[node.name] = self.transform(node.expression)
