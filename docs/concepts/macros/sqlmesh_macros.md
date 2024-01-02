@@ -95,6 +95,68 @@ GROUP BY item_id
 
 This example defines the macro variable `size` with `@DEF(size, 1)`. When the model is run, SQLMesh will substitute in the number `1` where `@size` appears in the `WHERE` clause.
 
+### Macro functions
+
+In addition to inline user-defined variables, SQLMesh also supports inline macro functions. These functions can be used to express more readable and reusable logic than is possible with variables alone. Lets look at an example:
+
+```sql linenums="1"
+MODEL(...);
+
+@DEF(
+  rank_to_int,
+  x -> case when left(x, 1) = 'A' then 1 when left(x, 1) = 'B' then 2 when left(x, 1) = 'C' then 3 end
+);
+
+SELECT
+  id,
+  cust_rank_1,
+  cust_rank_2,
+  cust_rank_3
+  @rank_to_int(cust_rank_1) as cust_rank_1_int,
+  @rank_to_int(cust_rank_2) as cust_rank_2_int,
+  @rank_to_int(cust_rank_3) as cust_rank_3_int
+FROM
+  some.model
+```
+
+Multiple arguments can be expressed in a macro function as well:
+
+```sql linenums="1"
+@DEF(pythag, (x,y) -> sqrt(pow(x, 2) + pow(y, 2)));
+
+SELECT
+  sideA,
+  sideB,
+  @pythag(sideA, sideB) AS sideC
+FROM
+  some.triangle
+```
+
+```sql linenums="1"
+@DEF(nrr, (starting_mrr, expansion_mrr, churned_mrr) -> (starting_mrr + expansion_mrr - churned_mrr) / starting_mrr);
+
+SELECT
+  @nrr(fy21_mrr, fy21_expansions, fy21_churns) AS fy21_net_retention_rate,
+  @nrr(fy22_mrr, fy22_expansions, fy22_churns) AS fy22_net_retention_rate,
+  @nrr(fy23_mrr, fy23_expansions, fy23_churns) AS fy23_net_retention_rate,
+FROM
+  some.revenue
+```
+
+You can nest macro functions like so:
+
+```sql linenums="1"
+MODEL (
+  name dummy.model,
+  kind FULL
+);
+
+@DEF(area, r -> pi() * r * r);
+@DEF(container_volume, (r, h) -> @area(@r) * h);
+
+SELECT container_id, @container_volume((cont_di / 2), cont_hi) AS area
+```
+
 ### User-defined variable quoting
 
 More information to come on quoting behavior when quotes are included/excluded in the value passed to `@DEF()`.

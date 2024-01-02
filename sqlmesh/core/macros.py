@@ -224,7 +224,13 @@ class MacroEvaluator:
 
     def evaluate(self, node: MacroFunc) -> exp.Expression | t.List[exp.Expression] | None:
         if isinstance(node, MacroDef):
-            self.locals[node.name] = self.transform(node.expression)
+            if isinstance(node.expression, exp.Lambda):
+                _, fn = _norm_var_arg_lambda(self, node.expression)
+                self.macros[normalize_macro_name(node.name)] = lambda _, *args: fn(
+                    list(args) if len(args) <= 1 else exp.Tuple(expressions=list(args))
+                )
+            else:
+                self.locals[node.name] = self.transform(node.expression)
             return node
 
         if isinstance(node, (MacroSQL, MacroStrReplace)):

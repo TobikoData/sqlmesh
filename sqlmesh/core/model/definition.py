@@ -1823,7 +1823,8 @@ def _python_env(
             for macro_func_or_var in expression.find_all(d.MacroFunc, d.MacroVar):
                 if macro_func_or_var.__class__ is d.MacroFunc:
                     name = macro_func_or_var.this.name.lower()
-                    used_macros[name] = macros[name]
+                    if name in macros:
+                        used_macros[name] = macros[name]
                 elif macro_func_or_var.__class__ is d.MacroVar:
                     name = macro_func_or_var.name
                     if name in macros:
