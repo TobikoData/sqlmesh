@@ -225,10 +225,8 @@ class MacroEvaluator:
     def evaluate(self, node: MacroFunc) -> exp.Expression | t.List[exp.Expression] | None:
         if isinstance(node, MacroDef):
             if isinstance(node.expression, exp.Lambda):
-                _, func = _norm_var_arg_lambda(
-                    self, node.expression, node.expression.this.name
-                )
-                self.macros[normalize_macro_name(node.name)] = lambda _, *args: func(*args)
+                _, fn = _norm_var_arg_lambda(self, node.expression, node.expression.this.name)
+                self.macros[normalize_macro_name(node.name)] = lambda _, *args: fn(*args)
             else:
                 self.locals[node.name] = self.transform(node.expression)
             return node
