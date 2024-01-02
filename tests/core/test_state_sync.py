@@ -1119,8 +1119,8 @@ def test_get_version(state_sync: EngineAdapterStateSync) -> None:
     with pytest.raises(SQLMeshError, match=error):
         state_sync.get_versions()
 
-    with pytest.raises(SQLMeshError, match=error):
-        state_sync.get_versions(validate=False)
+    # should no longer raise
+    state_sync.get_versions(validate=False)
 
     # migration version is ahead, only raise when validate is true
     state_sync._update_versions(schema_version=SCHEMA_VERSION - 1)
@@ -1144,8 +1144,7 @@ def test_get_version(state_sync: EngineAdapterStateSync) -> None:
         rf"""Please upgrade SQLGlot \('pip install --upgrade "sqlglot=={sqlglot_version}"' command\)."""
     )
     state_sync._update_versions(sqlglot_version=sqlglot_version)
-    with pytest.raises(SQLMeshError, match=error):
-        state_sync.get_versions(validate=False)
+    state_sync.get_versions(validate=False)
 
     # sqlglot version is ahead, only raise with validate is true
     sqlglot_version = f"{major}.{int(minor) - 1}.{patch}"
