@@ -30,7 +30,11 @@ def get_or_create_spark_session(dialect: str) -> SparkSession:
 
 
 def main(
-    dialect: str, command_type: commands.CommandType, ddl_concurrent_tasks: int, payload_path: str
+    dialect: str,
+    default_catalog: str,
+    command_type: commands.CommandType,
+    ddl_concurrent_tasks: int,
+    payload_path: str,
 ) -> None:
     if dialect not in ("databricks", "spark"):
         raise NotSupportedError(
@@ -50,6 +54,7 @@ def main(
         create_engine_adapter(
             lambda: spark_session_db.connection(spark),
             dialect,
+            default_catalog=default_catalog,
             multithreaded=ddl_concurrent_tasks > 1,
             execute_log_level=logging.INFO,
         ),
@@ -80,6 +85,10 @@ if __name__ == "__main__":
         help="The dialect to use when creating the engine adapter.",
     )
     parser.add_argument(
+        "--default_catalog",
+        help="The default catalog to use when creating the engine adapter.",
+    )
+    parser.add_argument(
         "--command_type",
         type=commands.CommandType,
         choices=list(commands.CommandType),
@@ -96,4 +105,10 @@ if __name__ == "__main__":
         help="Path to the payload object. Can be a local or remote path.",
     )
     args = parser.parse_args()
-    main(args.dialect, args.command_type, args.ddl_concurrent_tasks, args.payload_path)
+    main(
+        args.dialect,
+        args.default_catalog,
+        args.command_type,
+        args.ddl_concurrent_tasks,
+        args.payload_path,
+    )
