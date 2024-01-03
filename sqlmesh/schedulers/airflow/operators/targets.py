@@ -3,6 +3,7 @@ import logging
 import typing as t
 
 from airflow.exceptions import AirflowSkipException
+from airflow.models import Variable
 from airflow.utils.context import Context
 from airflow.utils.session import provide_session
 from sqlalchemy.orm import Session
@@ -28,6 +29,10 @@ class BaseTarget(abc.ABC, t.Generic[CP]):
     command_type: commands.CommandType
     command_handler: t.Callable[[SnapshotEvaluator, CP], None]
     ddl_concurrent_tasks: int
+
+    @property
+    def default_catalog(self) -> str:
+        return Variable.get(common.DEFAULT_CATALOG_VARIABLE_NAME)
 
     def serialized_command_payload(self, context: Context) -> str:
         """Returns the serialized command payload for the Spark application.
@@ -62,6 +67,7 @@ class BaseTarget(abc.ABC, t.Generic[CP]):
                 dialect,
                 multithreaded=self.ddl_concurrent_tasks > 1,
                 execute_log_level=logging.INFO,
+                default_catalog=self.default_catalog,
                 **kwargs,
             ),
             ddl_concurrent_tasks=self.ddl_concurrent_tasks,

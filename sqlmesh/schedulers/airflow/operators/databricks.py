@@ -101,6 +101,7 @@ class SQLMeshDatabricksSubmitOperator(DatabricksSubmitRunOperator):
             )
         task_arguments = {
             "dialect": "databricks",
+            "default_catalog": self._target.default_catalog,
             "command_type": self._target.command_type.value if self._target.command_type else None,
             "ddl_concurrent_tasks": self._target.ddl_concurrent_tasks,
             "payload_path": remote_payload_path,

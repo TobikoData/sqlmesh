@@ -136,6 +136,7 @@ class SQLMeshSparkSubmitOperator(BaseOperator):
     ) -> SparkSubmitHook:
         application_args = {
             "dialect": "spark",
+            "default_catalog": self._target.default_catalog,
             "command_type": command_type.value if command_type else None,
             "ddl_concurrent_tasks": ddl_concurrent_tasks,
             "payload_path": command_payload_file_path.split("/")[-1]
