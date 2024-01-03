@@ -40,4 +40,4 @@ Therefore, it is not recommended to issue migrations from CI/CD pipelines.
 ### Airflow Scheduler Migrations
 
 If using Airflow, migrations are automatically run after the SQLMesh version is upgraded and cluster is restarted. 
-Therefore, migrations should not be run manually.
+Therefore, migrations **should not** be run manually.
