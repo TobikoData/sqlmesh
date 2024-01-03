@@ -185,6 +185,7 @@ class TestContext:
         schema_name: str,
         table_name: str,
         table_kind: str = "BASE TABLE",
+        snowflake_capitalize_ids: bool = True,
     ) -> str:
         if self.dialect in ["postgres", "redshift"]:
             query = f"""
@@ -201,8 +202,11 @@ class TestContext:
                 ;
             """
         elif self.dialect in ["mysql", "snowflake"]:
-            schema_name = schema_name.upper() if self.dialect == "snowflake" else schema_name
-            table_name = table_name.upper() if self.dialect == "snowflake" else table_name
+            # Snowflake treats all identifiers as uppercase unless they are lowercase and quoted.
+            # They are lowercase and quoted in sushi but not in the inline tests.
+            if self.dialect == "snowflake" and snowflake_capitalize_ids:
+                schema_name = schema_name.upper()
+                table_name = table_name.upper()
 
             comment_field_name = {
                 "mysql": "table_comment",
@@ -258,7 +262,11 @@ class TestContext:
         return None
 
     def get_column_comments(
-        self, schema_name: str, table_name: str, table_kind: str = "BASE TABLE"
+        self,
+        schema_name: str,
+        table_name: str,
+        table_kind: str = "BASE TABLE",
+        snowflake_capitalize_ids: bool = True,
     ) -> t.Dict[str, str]:
         comment_index = 1
         if self.dialect in ["postgres", "redshift"]:
@@ -281,8 +289,11 @@ class TestContext:
                 ;
             """
         elif self.dialect in ["mysql", "snowflake"]:
-            schema_name = schema_name.upper() if self.dialect == "snowflake" else schema_name
-            table_name = table_name.upper() if self.dialect == "snowflake" else table_name
+            # Snowflake treats all identifiers as uppercase unless they are lowercase and quoted.
+            # They are lowercase and quoted in sushi but not in the inline tests.
+            if self.dialect == "snowflake" and snowflake_capitalize_ids:
+                schema_name = schema_name.upper()
+                table_name = table_name.upper()
 
             comment_field_name = {
                 "mysql": "column_comment",
@@ -1293,12 +1304,15 @@ def test_sushi(ctx: TestContext):
                         table_kind="VIEW"
                         if physical_layer_models[model_name]["is_view"]
                         else "BASE TABLE",
+                        snowflake_capitalize_ids=False,
                     )
                     assert expected_tbl_comment == actual_tbl_comment
 
             expected_col_comments = comments.get(model_name).get("column", None)
             if expected_col_comments:
-                actual_col_comments = ctx.get_column_comments("sqlmesh__sushi", physical_table_name)
+                actual_col_comments = ctx.get_column_comments(
+                    "sqlmesh__sushi", physical_table_name, snowflake_capitalize_ids=False
+                )
                 for column_name, expected_col_comment in expected_col_comments.items():
                     expected_col_comment = expected_col_comments.get(column_name, None)
                     actual_col_comment = actual_col_comments.get(column_name, None)
