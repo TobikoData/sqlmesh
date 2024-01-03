@@ -228,7 +228,10 @@ def test_pr_plan(github_client, make_controller):
     assert not controller.pr_plan.no_gaps
     assert not controller._context.apply.called
     assert controller._context._run_plan_tests.call_args == call(skip_tests=True)
-    assert controller.pr_plan.categorizer_config == controller._context.auto_categorize_changes
+    assert (
+        controller._pr_plan_builder._categorizer_config
+        == controller._context.auto_categorize_changes
+    )
 
 
 def test_pr_plan_auto_categorization(github_client, make_controller):
@@ -246,7 +249,7 @@ def test_pr_plan_auto_categorization(github_client, make_controller):
     assert not controller.pr_plan.no_gaps
     assert not controller._context.apply.called
     assert controller._context._run_plan_tests.call_args == call(skip_tests=True)
-    assert controller.pr_plan.categorizer_config == custom_categorizer_config
+    assert controller._pr_plan_builder._categorizer_config == custom_categorizer_config
     assert controller.pr_plan.start == default_start
 
 
@@ -260,7 +263,10 @@ def test_prod_plan(github_client, make_controller):
     assert controller.prod_plan.no_gaps
     assert not controller._context.apply.called
     assert controller._context._run_plan_tests.call_args == call(skip_tests=True)
-    assert controller.prod_plan.categorizer_config == controller._context.auto_categorize_changes
+    assert (
+        controller._prod_plan_builder._categorizer_config
+        == controller._context.auto_categorize_changes
+    )
 
 
 def test_prod_plan_auto_categorization(github_client, make_controller):
@@ -279,7 +285,7 @@ def test_prod_plan_auto_categorization(github_client, make_controller):
     assert controller.prod_plan.no_gaps
     assert not controller._context.apply.called
     assert controller._context._run_plan_tests.call_args == call(skip_tests=True)
-    assert controller.prod_plan.categorizer_config == custom_categorizer_config
+    assert controller._prod_plan_builder._categorizer_config == custom_categorizer_config
     # default PR start should be ignored for prod plans
     assert controller.prod_plan.start != default_pr_start
 
@@ -291,7 +297,7 @@ def test_prod_plan_with_gaps(github_client, make_controller):
 
     assert controller.prod_plan_with_gaps.environment.name == c.PROD
     assert not controller.prod_plan_with_gaps.skip_backfill
-    assert not controller.prod_plan_with_gaps.auto_categorization_enabled
+    assert not controller._prod_plan_with_gaps_builder._auto_categorization_enabled
     assert not controller.prod_plan_with_gaps.no_gaps
     assert not controller._context.apply.called
     assert controller._context._run_plan_tests.call_args == call(skip_tests=True)

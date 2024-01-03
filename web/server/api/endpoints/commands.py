@@ -13,7 +13,7 @@ from sqlmesh.core.snapshot.definition import SnapshotChangeCategory
 from sqlmesh.core.test import ModelTest
 from sqlmesh.utils.errors import PlanError
 from web.server import models
-from web.server.api.endpoints.plan import get_plan
+from web.server.api.endpoints.plan import get_plan_builder
 from web.server.console import api_console
 from web.server.exceptions import ApiException
 from web.server.settings import get_loaded_context
@@ -199,16 +199,18 @@ def _run_plan_apply(
     """Run plan apply"""
     plan_options = plan_options or models.PlanOptions()
 
-    plan = get_plan(context, plan_options, environment, plan_dates)
+    plan_builder = get_plan_builder(context, plan_options, environment, plan_dates)
+    plan = plan_builder.build()
 
     if categories is not None:
         for new, _ in plan.context_diff.modified_snapshots.values():
             if plan.is_new_snapshot(new) and new.name in categories:
-                plan.set_choice(new, categories[new.name])
+                plan_builder.set_choice(new, categories[new.name])
+        plan = plan_builder.build()
 
     tracker_apply = models.PlanApplyStageTracker(environment=environment, plan_options=plan_options)
     tracker_apply.start = plan.start
-    tracker_apply.end = plan.end
+    tracker_apply.end = plan.end_or_now
     api_console.start_plan_tracker(tracker_apply)
     try:
         context.apply(plan, circuit_breaker)

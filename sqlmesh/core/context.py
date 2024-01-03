@@ -71,7 +71,7 @@ from sqlmesh.core.notification_target import (
     NotificationTarget,
     NotificationTargetManager,
 )
-from sqlmesh.core.plan import Plan
+from sqlmesh.core.plan import Plan, PlanBuilder
 from sqlmesh.core.reference import ReferenceGraph
 from sqlmesh.core.scheduler import Scheduler
 from sqlmesh.core.schema_loader import create_schema_file
@@ -787,9 +787,9 @@ class Context(BaseContext):
         no_diff: bool = False,
         run: bool = False,
     ) -> Plan:
-        """Interactively create a migration plan.
+        """Interactively creates a plan.
 
-        This method compares the current context with an environment. It then presents
+        This method compares the current context with the target environment. It then presents
         the differences and asks whether to backfill each modified model.
 
         Args:
@@ -829,6 +829,88 @@ class Context(BaseContext):
 
         Returns:
             The populated Plan object.
+        """
+        plan_builder = self.plan_builder(
+            environment,
+            start=start,
+            end=end,
+            execution_time=execution_time,
+            create_from=create_from,
+            skip_tests=skip_tests,
+            restate_models=restate_models,
+            no_gaps=no_gaps,
+            skip_backfill=skip_backfill,
+            forward_only=forward_only,
+            no_auto_categorization=no_auto_categorization,
+            effective_from=effective_from,
+            include_unmodified=include_unmodified,
+            select_models=select_models,
+            backfill_models=backfill_models,
+            categorizer_config=categorizer_config,
+            run=run,
+        )
+
+        self.console.plan(
+            plan_builder, auto_apply, self.default_catalog, no_diff=no_diff, no_prompts=no_prompts
+        )
+
+        return plan_builder.build()
+
+    def plan_builder(
+        self,
+        environment: t.Optional[str] = None,
+        *,
+        start: t.Optional[TimeLike] = None,
+        end: t.Optional[TimeLike] = None,
+        execution_time: t.Optional[TimeLike] = None,
+        create_from: t.Optional[str] = None,
+        skip_tests: bool = False,
+        restate_models: t.Optional[t.Iterable[str]] = None,
+        no_gaps: bool = False,
+        skip_backfill: bool = False,
+        forward_only: bool = False,
+        no_auto_categorization: t.Optional[bool] = None,
+        effective_from: t.Optional[TimeLike] = None,
+        include_unmodified: t.Optional[bool] = None,
+        select_models: t.Optional[t.Collection[str]] = None,
+        backfill_models: t.Optional[t.Collection[str]] = None,
+        categorizer_config: t.Optional[CategorizerConfig] = None,
+        run: bool = False,
+    ) -> PlanBuilder:
+        """Creates a plan builder.
+
+        Args:
+            environment: The environment to diff and plan against.
+            start: The start date of the backfill if there is one.
+            end: The end date of the backfill if there is one.
+            execution_time: The date/time reference to use for execution time. Defaults to now.
+            create_from: The environment to create the target environment from if it
+                doesn't exist. If not specified, the "prod" environment will be used.
+            skip_tests: Unit tests are run by default so this will skip them if enabled
+            restate_models: A list of either internal or external models, or tags, that need to be restated
+                for the given plan interval. If the target environment is a production environment,
+                ALL snapshots that depended on these upstream tables will have their intervals deleted
+                (even ones not in this current environment). Only the snapshots in this environment will
+                be backfilled whereas others need to be recovered on a future plan application. For development
+                environments only snapshots that are part of this plan will be affected.
+            no_gaps:  Whether to ensure that new snapshots for models that are already a
+                part of the target environment have no data gaps when compared against previous
+                snapshots for same models.
+            skip_backfill: Whether to skip the backfill step. Default: False.
+            forward_only: Whether the purpose of the plan is to make forward only changes.
+            no_auto_categorization: Indicates whether to disable automatic categorization of model
+                changes (breaking / non-breaking). If not provided, then the corresponding configuration
+                option determines the behavior.
+            categorizer_config: The configuration for the categorizer. Uses the categorizer configuration defined in the
+                project config by default.
+            effective_from: The effective date from which to apply forward-only changes on production.
+            include_unmodified: Indicates whether to include unmodified models in the target development environment.
+            select_models: A list of model selection strings to filter the models that should be included into this plan.
+            backfill_models: A list of model selection strings to filter the models for which the data should be backfilled.
+            run: Whether to run latest intervals as part of the plan application.
+
+        Returns:
+            The plan builder.
         """
         environment = environment or self.config.default_target_environment
         environment = Environment.normalize_name(environment)
@@ -890,7 +972,7 @@ class Context(BaseContext):
         )
         default_start = to_date(default_end) - timedelta(days=1) if default_end and is_dev else None
 
-        plan = Plan(
+        return PlanBuilder(
             context_diff=self._context_diff(
                 environment or c.PROD,
                 snapshots=self._snapshots(models_override),
@@ -919,12 +1001,6 @@ class Context(BaseContext):
             default_end=default_end,
         )
 
-        self.console.plan(
-            plan, auto_apply, self.default_catalog, no_diff=no_diff, no_prompts=no_prompts
-        )
-
-        return plan
-
     def apply(
         self,
         plan: Plan,
@@ -947,7 +1023,7 @@ class Context(BaseContext):
         if plan.uncategorized:
             raise UncategorizedPlanError("Can't apply a plan with uncategorized changes.")
         self.notification_target_manager.notify(
-            NotificationEvent.APPLY_START, environment=plan.environment.name
+            NotificationEvent.APPLY_START, environment=plan.environment_naming_info.name
         )
         try:
             self._scheduler.create_plan_evaluator(self).evaluate(
@@ -960,7 +1036,7 @@ class Context(BaseContext):
             logger.error(f"Apply Failure: {traceback.format_exc()}")
             raise e
         self.notification_target_manager.notify(
-            NotificationEvent.APPLY_END, environment=plan.environment.name
+            NotificationEvent.APPLY_END, environment=plan.environment_naming_info.name
         )
 
     def invalidate_environment(self, name: str) -> None:

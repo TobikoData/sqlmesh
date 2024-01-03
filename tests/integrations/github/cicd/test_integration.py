@@ -1553,7 +1553,7 @@ def test_overlapping_changes_models(
     assert pr_checks_runs[2]["output"]["title"] == "PR Virtual Data Environment: hello_world_2"
     assert (
         pr_checks_runs[2]["output"]["summary"]
-        == """<table><thead><tr><th colspan="3">PR Environment Summary</th></tr><tr><th>Model</th><th>Change Type</th><th>Dates Loaded</th></tr></thead><tbody><tr><td>sushi.waiter_names</td><td>Breaking</td><td>2022-12-31 - 2022-12-31</td></tr><tr><td>sushi.customers</td><td>Non-breaking</td><td>2022-12-25 - 2022-12-31</td></tr><tr><td>sushi.waiter_as_customer_by_day</td><td>Indirect Breaking</td><td>2022-12-25 - 2022-12-31</td></tr></tbody></table>"""
+        == """<table><thead><tr><th colspan="3">PR Environment Summary</th></tr><tr><th>Model</th><th>Change Type</th><th>Dates Loaded</th></tr></thead><tbody><tr><td>sushi.customers</td><td>Non-breaking</td><td>2022-12-25 - 2022-12-31</td></tr><tr><td>sushi.waiter_names</td><td>Breaking</td><td>2022-12-31 - 2022-12-31</td></tr><tr><td>sushi.waiter_as_customer_by_day</td><td>Indirect Breaking</td><td>2022-12-25 - 2022-12-31</td></tr></tbody></table>"""
     )
 
     assert "SQLMesh - Prod Plan Preview" in controller._check_run_mapping
@@ -1566,26 +1566,6 @@ def test_overlapping_changes_models(
     assert GithubCheckStatus(prod_plan_preview_checks_runs[2]["status"]).is_completed
     assert GithubCheckConclusion(prod_plan_preview_checks_runs[2]["conclusion"]).is_success
     expected_prod_plan_summary = """```diff
---- 
-
-+++ 
-
-@@ -9,4 +9,5 @@
-
- 7,Iaroslav
- 8,Emma
- 9,Maia
-+10,Trey
-```
-
-```
-
-Directly Modified: sushi.waiter_names (Breaking)
-└── Indirectly Modified Children:
-    └── sushi.waiter_as_customer_by_day (Indirect Breaking)
-
-```
-```diff
 --- 
 
 +++ 
@@ -1606,6 +1586,26 @@ Directly Modified: sushi.waiter_names (Breaking)
 ```
 
 Directly Modified: sushi.customers (Non-breaking)
+└── Indirectly Modified Children:
+    └── sushi.waiter_as_customer_by_day (Indirect Breaking)
+
+```
+```diff
+--- 
+
++++ 
+
+@@ -9,4 +9,5 @@
+
+ 7,Iaroslav
+ 8,Emma
+ 9,Maia
++10,Trey
+```
+
+```
+
+Directly Modified: sushi.waiter_names (Breaking)
 └── Indirectly Modified Children:
     └── sushi.waiter_as_customer_by_day (Indirect Breaking)
 
