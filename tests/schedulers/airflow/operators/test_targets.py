@@ -48,6 +48,10 @@ def test_evaluation_target_execute(mocker: MockerFixture, make_snapshot: t.Calla
         "sqlmesh.core.state_sync.engine_adapter.EngineAdapterStateSync.add_interval"
     )
 
+    variable_get_mock = mocker.patch("sqlmesh.schedulers.airflow.operators.targets.Variable.get")
+
+    variable_get_mock.return_value = "default_catalog"
+
     snapshot = make_snapshot(model)
     snapshot.categorize_as(SnapshotChangeCategory.BREAKING)
     parent_snapshots = {snapshot.name: snapshot}
@@ -82,6 +86,10 @@ def test_evaluation_target_execute_seed_model(mocker: MockerFixture, make_snapsh
     dag_run_mock.data_interval_start = interval_ds
     dag_run_mock.data_interval_end = interval_ds
     dag_run_mock.logical_date = logical_ds
+
+    variable_get_mock = mocker.patch("sqlmesh.schedulers.airflow.operators.targets.Variable.get")
+
+    variable_get_mock.return_value = "default_catalog"
 
     context = Context(dag_run=dag_run_mock)  # type: ignore
 
@@ -149,6 +157,10 @@ def test_cleanup_target_execute(mocker: MockerFixture, make_snapshot: t.Callable
 
     task_instance_mock = mocker.Mock()
     task_instance_mock.xcom_pull.return_value = command.json()
+
+    variable_get_mock = mocker.patch("sqlmesh.schedulers.airflow.operators.targets.Variable.get")
+
+    variable_get_mock.return_value = "default_catalog"
 
     context = Context(ti=task_instance_mock)  # type: ignore
 
