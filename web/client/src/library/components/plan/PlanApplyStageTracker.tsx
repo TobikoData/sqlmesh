@@ -50,8 +50,9 @@ export default function PlanApplyStageTracker(): JSX.Element {
     planOverview,
   )
 
-  const showTestsDetails = isNotNil(tests) && Boolean(tests.total)
-  const showTestsMessage = isNotNil(tests) && Boolean(tests.message)
+  const hasTestsDetails = isNotNil(tests) && Boolean(tests.total)
+  const showTestsMessage =
+    isNotNil(tests) && Boolean(tests.message) && isFalse(hasTestsDetails)
 
   return planAction.isRun ? (
     <></>
@@ -93,7 +94,7 @@ export default function PlanApplyStageTracker(): JSX.Element {
       ) : (
         <>
           {showTestsMessage && <StageTestsCompleted report={tests} />}
-          {showTestsDetails && (
+          {hasTestsDetails && (
             <StageTestsFailed
               isOpen={true}
               report={tests}

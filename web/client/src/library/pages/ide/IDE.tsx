@@ -328,6 +328,10 @@ export default function PageIDE(): JSX.Element {
   function updatePlanOverviewTracker(data: PlanOverviewTracker): void {
     planOverview.update(data)
 
+    if (planOverview.meta?.status === Status.init) {
+      setTests(undefined)
+    }
+
     setPlanOverview(planOverview)
   }
 
