@@ -16,7 +16,6 @@ from sqlmesh.core.snapshot import (
     SnapshotChangeCategory,
     SnapshotDataVersion,
     SnapshotFingerprint,
-    SnapshotId,
 )
 from sqlmesh.utils.dag import DAG
 from sqlmesh.utils.date import (
@@ -176,19 +175,27 @@ def test_restate_models(sushi_context_pre_scheduling: Context):
         restate_models=["sushi.waiter_revenue_by_day", "tag:expensive"], no_prompts=True
     )
     assert plan.restatements == {
-        SnapshotId(name='"memory"."sushi"."waiter_revenue_by_day"', identifier="643718449"): (
+        sushi_context_pre_scheduling.get_snapshot(
+            "sushi.waiter_revenue_by_day", raise_if_missing=True
+        ).snapshot_id: (
             to_timestamp(plan.start),
             to_timestamp(to_date("today")),
         ),
-        SnapshotId(name='"memory"."sushi"."top_waiters"', identifier="630183694"): (
+        sushi_context_pre_scheduling.get_snapshot(
+            "sushi.top_waiters", raise_if_missing=True
+        ).snapshot_id: (
             to_timestamp(plan.start),
             to_timestamp(to_date("today")),
         ),
-        SnapshotId(name='"memory"."sushi"."customer_revenue_by_day"', identifier="553444871"): (
+        sushi_context_pre_scheduling.get_snapshot(
+            "sushi.customer_revenue_by_day", raise_if_missing=True
+        ).snapshot_id: (
             to_timestamp(plan.start),
             to_timestamp(to_date("today")),
         ),
-        SnapshotId(name='"memory"."sushi"."customer_revenue_lifetime"', identifier="333411410"): (
+        sushi_context_pre_scheduling.get_snapshot(
+            "sushi.customer_revenue_lifetime", raise_if_missing=True
+        ).snapshot_id: (
             to_timestamp(plan.start),
             to_timestamp(to_date("today")),
         ),
@@ -232,25 +239,30 @@ def test_restate_models_with_existing_missing_intervals(sushi_context: Context):
     ]
     assert len(expected_missing_intervals) == 7
 
+    waiter_revenue_by_day_snapshot_id = sushi_context.get_snapshot(
+        "sushi.waiter_revenue_by_day", raise_if_missing=True
+    ).snapshot_id
+    top_waiters_snapshot_id = sushi_context.get_snapshot(
+        "sushi.top_waiters", raise_if_missing=True
+    ).snapshot_id
+
     assert plan.restatements == {
-        SnapshotId(name='"memory"."sushi"."waiter_revenue_by_day"', identifier="643718449"): (
+        waiter_revenue_by_day_snapshot_id: (
             plan_start_ts,
             today_ts,
         ),
-        SnapshotId(name='"memory"."sushi"."top_waiters"', identifier="630183694"): (
+        top_waiters_snapshot_id: (
             plan_start_ts,
             today_ts,
         ),
     }
     assert plan.missing_intervals == [
         SnapshotIntervals(
-            snapshot_id=SnapshotId(
-                name='"memory"."sushi"."waiter_revenue_by_day"', identifier="643718449"
-            ),
+            snapshot_id=waiter_revenue_by_day_snapshot_id,
             intervals=expected_missing_intervals,
         ),
         SnapshotIntervals(
-            snapshot_id=SnapshotId(name='"memory"."sushi"."top_waiters"', identifier="630183694"),
+            snapshot_id=top_waiters_snapshot_id,
             intervals=expected_missing_intervals,
         ),
     ]

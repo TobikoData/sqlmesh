@@ -556,6 +556,10 @@ class Context(BaseContext):
         return model
 
     @t.overload
+    def get_snapshot(self, node_or_snapshot: NodeOrSnapshot) -> t.Optional[Snapshot]:
+        ...
+
+    @t.overload
     def get_snapshot(
         self, node_or_snapshot: NodeOrSnapshot, raise_if_missing: Literal[True]
     ) -> Snapshot:
