@@ -76,7 +76,9 @@ class _EngineAdapterStateSyncSchedulerConfig(_SchedulerConfig):
                 + " See https://sqlmesh.readthedocs.io/en/stable/reference/configuration/#gateways for more information."
             )
         schema = context.config.get_state_schema(context.gateway)
-        return EngineAdapterStateSync(engine_adapter, schema=schema, console=context.console)
+        return EngineAdapterStateSync(
+            engine_adapter, schema=schema, context_path=context.path, console=context.console
+        )
 
 
 class BuiltInSchedulerConfig(_EngineAdapterStateSyncSchedulerConfig, BaseConfig):

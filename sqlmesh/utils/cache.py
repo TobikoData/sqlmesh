@@ -9,6 +9,7 @@ from pathlib import Path
 from sqlglot import __version__ as SQLGLOT_VERSION
 
 from sqlmesh.utils import sanitize_name
+from sqlmesh.utils.date import to_datetime
 from sqlmesh.utils.errors import SQLMeshError
 from sqlmesh.utils.pydantic import PydanticModel
 
@@ -41,7 +42,32 @@ class FileCache(t.Generic[T]):
         self._path = path / prefix if prefix else path
         self._entry_class = entry_class
 
-    def get_or_load(self, name: str, entry_id: str, loader: t.Callable[[], T]) -> T:
+        from sqlmesh.core.state_sync.base import SCHEMA_VERSION
+
+        try:
+            from sqlmesh._version import __version_tuple__
+
+            major, minor = __version_tuple__[0], __version_tuple__[1]
+        except ImportError:
+            major, minor = 0, 0
+
+        self._cache_version = "_".join(
+            [
+                str(major),
+                str(minor),
+                SQLGLOT_MAJOR_VERSION,
+                SQLGLOT_MINOR_VERSION,
+                str(SCHEMA_VERSION),
+            ]
+        )
+
+        threshold = to_datetime("1 week ago").timestamp()
+        # delete all old cache files
+        for file in self._path.glob("*"):
+            if not file.stem.startswith(self._cache_version) or file.stat().st_mtime < threshold:
+                file.unlink()
+
+    def get_or_load(self, name: str, entry_id: str = "", *, loader: t.Callable[[], T]) -> T:
         """Returns an existing cached entry or loads and caches a new one.
 
         Args:
@@ -57,10 +83,10 @@ class FileCache(t.Generic[T]):
             return cached_entry
 
         loaded_entry = loader()
-        self.put(name, entry_id, loaded_entry)
+        self.put(name, entry_id, value=loaded_entry)
         return loaded_entry
 
-    def get(self, name: str, entry_id: str) -> t.Optional[T]:
+    def get(self, name: str, entry_id: str = "") -> t.Optional[T]:
         """Returns a cached entry if exists.
 
         Args:
@@ -80,7 +106,7 @@ class FileCache(t.Generic[T]):
 
         return None
 
-    def put(self, name: str, entry_id: str, value: T) -> None:
+    def put(self, name: str, entry_id: str = "", *, value: T) -> None:
         """Stores the given value in the cache.
 
         Args:
@@ -93,30 +119,9 @@ class FileCache(t.Generic[T]):
         if not self._path.is_dir():
             raise SQLMeshError(f"Cache path '{self._path}' is not a directory.")
 
-        for obsolete_cache_file in self._path.glob(f"{name}__*"):
-            obsolete_cache_file.unlink()
-
         with gzip.open(self._cache_entry_path(name, entry_id), "wb", compresslevel=1) as fd:
             pickle.dump(value.dict(), fd)
 
-    def _cache_entry_path(self, name: str, entry_id: str) -> Path:
-        from sqlmesh.core.state_sync.base import SCHEMA_VERSION
-
-        try:
-            from sqlmesh._version import __version_tuple__
-
-            major, minor = __version_tuple__[0], __version_tuple__[1]
-        except ImportError:
-            major, minor = 0, 0
-        entry_file_name = "__".join(
-            [
-                name,
-                str(major),
-                str(minor),
-                SQLGLOT_MAJOR_VERSION,
-                SQLGLOT_MINOR_VERSION,
-                str(SCHEMA_VERSION),
-                entry_id,
-            ]
-        )
+    def _cache_entry_path(self, name: str, entry_id: str = "") -> Path:
+        entry_file_name = "__".join(p for p in (self._cache_version, name, entry_id) if p)
         return self._path / sanitize_name(entry_file_name)

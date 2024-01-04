@@ -100,7 +100,7 @@ class DbtLoader(Loader):
 
             for model in package_models.values():
                 sqlmesh_model = cache.get_or_load_model(
-                    model.path, lambda: self._to_sqlmesh(model, context)
+                    model.path, loader=lambda: self._to_sqlmesh(model, context)
                 )
                 models[sqlmesh_model.fqn] = sqlmesh_model
 
@@ -216,7 +216,9 @@ class DbtLoader(Loader):
 
         def get_or_load_model(self, target_path: Path, loader: t.Callable[[], Model]) -> Model:
             model = self._model_cache.get_or_load(
-                self._cache_entry_name(target_path), self._cache_entry_id(target_path), loader
+                self._cache_entry_name(target_path),
+                self._cache_entry_id(target_path),
+                loader=loader,
             )
             model._path = target_path
             return model

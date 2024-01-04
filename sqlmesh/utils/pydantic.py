@@ -1,3 +1,5 @@
+from __future__ import annotations
+
 import json
 import sys
 import typing as t
@@ -19,9 +21,8 @@ if t.TYPE_CHECKING:
     Model = t.TypeVar("Model", bound="PydanticModel")
 
 
+T = t.TypeVar("T")
 DEFAULT_ARGS = {"exclude_none": True, "by_alias": True}
-
-
 PYDANTIC_MAJOR_VERSION = int(pydantic.__version__.split(".")[0])
 
 
@@ -61,6 +62,12 @@ else:
             return _wrapper
 
         return _decorator
+
+
+def parse_obj_as(type_: T, obj: t.Any) -> T:
+    if PYDANTIC_MAJOR_VERSION >= 2:
+        return pydantic.TypeAdapter(type_).validate_python(obj)  # type: ignore
+    return pydantic.tools.parse_obj_as(type_, obj)  # type: ignore
 
 
 def _expression_encoder(e: exp.Expression) -> str:
@@ -255,7 +262,6 @@ elif PYDANTIC_MAJOR_VERSION >= 2:
     SQLGlotBool = Annotated[bool, BeforeValidator(bool_validator)]
     SQLGlotPositiveInt = Annotated[int, BeforeValidator(positive_int_validator)]
 else:
-    T = t.TypeVar("T")
 
     class PydanticTypeProxy(t.Generic[T]):
         validate: t.Callable[[t.Any], T]
