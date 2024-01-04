@@ -12,7 +12,7 @@ from sqlmesh.utils.metaprogramming import Executable, ExecutableKind
 
 
 @pytest.fixture
-def macro_evaluator() -> t.Generator[MacroEvaluator, None, None]:
+def macro_evaluator() -> MacroEvaluator:
     @macro()
     def filter_country(
         evaluator: MacroEvaluator, expression: exp.Condition, country: exp.Literal
@@ -27,14 +27,10 @@ def macro_evaluator() -> t.Generator[MacroEvaluator, None, None]:
     def noop(evaluator: MacroEvaluator):
         return None
 
-    yield MacroEvaluator(
+    return MacroEvaluator(
         "hive",
         {"test": Executable(name="test", payload=f"def test(_):\n    return 'test'")},
     )
-
-    del macro._registry["filter_country"]  # type: ignore
-    del macro._registry["upper"]  # type: ignore
-    del macro._registry["noop"]  # type: ignore
 
 
 def test_case(macro_evaluator):
