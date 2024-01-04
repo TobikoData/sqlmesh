@@ -135,6 +135,7 @@ class SQLMeshAirflow:
             cadence_dags = (
                 dag_generator.generate_cadence_dags(prod_env.snapshots) if prod_env else []
             )
+            _delete_orphaned_snapshot_dags({d.dag_id for d in cadence_dags})
         else:
             cadence_dags = []
 
@@ -214,13 +215,12 @@ def _janitor_task(
             session=session,
         )
 
-        all_snapshot_dag_ids = set(util.get_snapshot_dag_ids())
-        active_snapshot_dag_ids = {
-            common.dag_id_for_snapshot_info(s) for s in state_sync.get_snapshots(None).values()
-        }
-        expired_snapshot_dag_ids = all_snapshot_dag_ids - active_snapshot_dag_ids
-        logger.info("Deleting expired Snapshot DAGs: %s", expired_snapshot_dag_ids)
-        util.delete_dags(expired_snapshot_dag_ids, session=session)
+        prod_env = state_sync.get_environment(c.PROD)
+        if prod_env:
+            active_snapshot_dag_ids = {
+                common.dag_id_for_snapshot_info(s) for s in prod_env.snapshots
+            }
+            _delete_orphaned_snapshot_dags(active_snapshot_dag_ids, session=session)
 
         plan_application_dag_ids = util.get_finished_plan_application_dag_ids(
             ttl=plan_application_dag_ttl, session=session
@@ -235,6 +235,16 @@ def _janitor_task(
         util.delete_dags(plan_application_dag_ids, session=session)
 
         state_sync.compact_intervals()
+
+
+@provide_session
+def _delete_orphaned_snapshot_dags(
+    active_snapshot_dag_ids: t.Set[str], session: Session = util.PROVIDED_SESSION
+) -> None:
+    all_snapshot_dag_ids = set(util.get_snapshot_dag_ids(session=session))
+    orphaned_snapshot_dag_ids = all_snapshot_dag_ids - active_snapshot_dag_ids
+    logger.info("Deleting orphaned Snapshot DAGs: %s", orphaned_snapshot_dag_ids)
+    util.delete_dags(orphaned_snapshot_dag_ids, session=session)
 
 
 @provide_session
