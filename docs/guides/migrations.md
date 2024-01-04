@@ -22,10 +22,22 @@ SQLMeshError: SQLMesh (local) is using version '1' which is behind '2' (remote).
 ```
 
 ## How to migrate
+
+### Built-in Scheduler Migrations
+
 The project metadata can be migrated to the latest metadata format using SQLMesh's migrate command.
 
 ```bash
 > sqlmesh migrate
 ```
 
-Migrating project metadata will affect all users of the project. Please consult your SQLMesh administrator before running the migrate command.
+Migration should be issued manually by a single user and the migration will affect all users of the project. 
+Migrations should ideally run when no one will be running plan/apply. 
+Migrations should not be run in parallel. 
+Due to these constraints, it is better for a person responsible for managing SQLMesh to manually issue migrations. 
+Therefore, it is not recommended to issue migrations from CI/CD pipelines.
+
+### Airflow Scheduler Migrations
+
+If using Airflow, migrations are automatically run after the SQLMesh version is upgraded and cluster is restarted. 
+Therefore, migrations **should not** be run manually.
