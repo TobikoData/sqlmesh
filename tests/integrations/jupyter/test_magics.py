@@ -312,7 +312,8 @@ def test_plan(
     assert len(output.outputs) == 5
     text_output = convert_all_html_output_to_text(output)
     # TODO: Is this what we expect?
-    assert text_output[0] == "[2K"
+    # This has minor differences between CI/CD and local.
+    assert "[2K" in text_output[0]
     assert text_output[1].startswith(
         "Virtually Updating 'prod' ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ 100.0%"
     )
