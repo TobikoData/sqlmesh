@@ -933,7 +933,12 @@ class EngineAdapterStateSync(CommonStateSyncMixin, StateSync):
                 for name, versions in from_snapshot.indirect_versions.items()
             }
 
-        self._push_snapshots(new_snapshots.values(), overwrite=True)
+        existing_new_snapshots = self.snapshots_exist(new_snapshots)
+        new_snapshots_to_push = [
+            s for s in new_snapshots.values() if s.snapshot_id not in existing_new_snapshots
+        ]
+        if new_snapshots_to_push:
+            self._push_snapshots(new_snapshots_to_push)
 
         updated_prod_environment: t.Optional[Environment] = None
         updated_environments = []
