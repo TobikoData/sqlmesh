@@ -709,7 +709,7 @@ def eval_(evaluator: MacroEvaluator, condition: exp.Condition) -> t.Any:
 def star(
     evaluator: MacroEvaluator,
     relation: exp.Table,
-    alias: exp.Column = exp.column(""),
+    alias: exp.Column = t.cast(exp.Column, exp.column("")),
     except_: exp.Array | exp.Tuple = exp.Tuple(this=[]),
     prefix: exp.Literal = exp.Literal.string(""),
     suffix: exp.Literal = exp.Literal.string(""),
