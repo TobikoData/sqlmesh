@@ -1,6 +1,7 @@
 import logging
 import pathlib
 import shutil
+import sys
 import typing as t
 from unittest.mock import MagicMock
 
@@ -25,6 +26,11 @@ SUCCESS_STYLE = "color: #008000; text-decoration-color: #008000"
 NEUTRAL_STYLE = "color: #008080; text-decoration-color: #008080"
 RICH_PRE_STYLE = "white-space:pre;overflow-x:auto;line-height:normal;font-family:Menlo,'DejaVu Sans Mono',consolas,'Courier New',monospace"
 FREEZE_TIME = "2023-01-01 00:00:00"
+
+# Remove once 3.7 support is dropped
+pytestmark = pytest.mark.skipif(
+    sys.version_info < (3, 8), reason="3.7 runs an old version of IPython and has issue with tests"
+)
 
 
 @pytest.fixture(scope="session")
@@ -58,8 +64,8 @@ def sushi_context(tmp_path, notebook) -> Context:
     return notebook.user_ns["context"]
 
 
-@freeze_time(FREEZE_TIME)
 @pytest.fixture
+@freeze_time(FREEZE_TIME)
 def loaded_sushi_context(sushi_context) -> Context:
     with capture_output():
         sushi_context.plan(no_prompts=True, auto_apply=True)
@@ -360,6 +366,7 @@ def test_run_dag(
     ]
 
 
+@freeze_time(FREEZE_TIME)
 def test_invalidate(
     notebook, loaded_sushi_context, convert_all_html_output_to_text, get_all_html_output
 ):
@@ -638,6 +645,7 @@ def test_create_external_models(notebook, loaded_sushi_context):
     )
 
 
+@freeze_time(FREEZE_TIME)
 def test_table_diff(notebook, loaded_sushi_context, convert_all_html_output_to_text):
     with capture_output():
         loaded_sushi_context.plan("dev", no_prompts=True, auto_apply=True, include_unmodified=True)
@@ -651,7 +659,7 @@ def test_table_diff(notebook, loaded_sushi_context, convert_all_html_output_to_t
         """Schema Diff Between 'DEV' and 'PROD' environments for model 'sushi.top_waiters':
 └── Schemas match""",
         """Row Counts:
-├──  COMMON: 9 rows
+├──  COMMON: 8 rows
 ├──  DEV ONLY: 0 rows
 └──  PROD ONLY: 0 rows""",
         """COMMON ROWS column comparison stats:""",
