@@ -185,7 +185,7 @@ MODEL (
 
 The logic to use when updating columns when a match occurs (the source and target match on the given keys) by default updates all the columns. This can be overriden with custom logic like below:
 
-```sql linenums="1" hl_lines="4"
+```sql linenums="1" hl_lines="5"
 MODEL (
   name db.employees,
   kind INCREMENTAL_BY_UNIQUE_KEY (
@@ -342,7 +342,7 @@ FROM
 ```
 
 SQLMesh will materialize this table with the following structure:
-```sql linenums="1" hl_lines="3"
+```sql linenums="1"
 TABLE db.menu_items (
   id INT,
   name STRING,
@@ -355,7 +355,7 @@ TABLE db.menu_items (
 
 ### Column Names
 SQLMesh will automatically add the `valid_from` and `valid_to` columns to your table. If you would like to specify the names of these columns you can do so by adding the following to your model definition:
-```sql linenums="1" hl_lines="3"
+```sql linenums="1" hl_lines="5-6"
 MODEL (
   name db.menu_items,
   kind SCD_TYPE_2 (
@@ -367,7 +367,7 @@ MODEL (
 ```
 
 SQLMesh will materialize this table with the following structure:
-```sql linenums="1" hl_lines="3"
+```sql linenums="1"
 TABLE db.menu_items (
   id INT,
   name STRING,
@@ -379,7 +379,7 @@ TABLE db.menu_items (
 ```
 
 The `updated_at` column name can also be changed by adding the following to your model definition:
-```sql linenums="1" hl_lines="3"
+```sql linenums="1" hl_lines="5"
 MODEL (
   name db.menu_items,
   kind SCD_TYPE_2 (
@@ -398,7 +398,7 @@ FROM
 ```
 
 SQLMesh will materialize this table with the following structure:
-```sql linenums="1" hl_lines="3"
+```sql linenums="1"
 TABLE db.menu_items (
   id INT,
   name STRING,
@@ -491,7 +491,7 @@ Target table will be updated with the following data:
 
 Although SCD Type 2 models support history, it is still very easy to query for just the latest version of a record. Simply query the model as you would any other table. For example, if you wanted to query the latest version of the `menu_items` table you would simply run:
 
-```sql linenums="1" hl_lines="3"
+```sql linenums="1"
 SELECT
     *
 FROM
@@ -502,7 +502,7 @@ WHERE
 
 One could also create a view on top of the SCD Type 2 model that creates a new `is_current` column to make it easy for consumers to identify the current record.
 
-```sql linenums="1" hl_lines="3"
+```sql linenums="1"
 SELECT
     *,
     valid_to IS NULL AS is_current
@@ -514,7 +514,7 @@ FROM
 
 If you wanted to query the `menu_items` table as it was on `2020-01-02 01:00:00` you would simply run:
 
-```sql linenums="1" hl_lines="3"
+```sql linenums="1"
 SELECT
     *
 FROM
@@ -527,7 +527,7 @@ WHERE
 
 Example in a join:
 
-```sql linenums="1" hl_lines="3"
+```sql linenums="1"
 SELECT
     *
 FROM
@@ -541,7 +541,7 @@ FROM
 
 A view can be created to do the `COALESCE` automatically. This, combined with the `is_current` flag, makes it easier to query for a specific version of a record.
 
-```sql linenums="1" hl_lines="3"
+```sql linenums="1"
 SELECT
     id,
     name,
@@ -555,7 +555,7 @@ FROM
 ```
 
 Furthermore if you want to make it so users can use `BETWEEN` when querying by making `valid_to` inclusive you can do the following:
-```sql linenums="1" hl_lines="3"
+```sql linenums="1"
 SELECT
     id,
     name,
@@ -572,7 +572,7 @@ Note: The precision of the timestamps in this example is second so I subtract 1 
 
 One way to identify deleted records is to query for records that do not have a `valid_to` record of `NULL`. For example, if you wanted to query for all deleted ids in the `menu_items` table you would simply run:
 
-```sql linenums="1" hl_lines="3"
+```sql linenums="1"
 SELECT
     id,
     MAX(CASE WHEN valid_to IS NULL THEN 0 ELSE 1 END) AS is_deleted
