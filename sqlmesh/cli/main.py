@@ -310,9 +310,9 @@ def plan(
 ) -> None:
     """Apply local changes to the target environment."""
     context = ctx.obj
-    restate_models = kwargs.pop("restate_model", None)
-    select_models = kwargs.pop("select_model", None)
-    backfill_models = kwargs.pop("backfill_model", None)
+    restate_models = kwargs.pop("restate_model") or None
+    select_models = kwargs.pop("select_model") or None
+    backfill_models = kwargs.pop("backfill_model") or None
     context.console.verbose = verbose
     context.plan(
         environment,
