@@ -533,7 +533,7 @@ class _Model(ModelMeta, frozen=True):
             if mapping_schema:
                 nested_set(
                     self.mapping_schema,
-                    tuple(str(part) for part in table.parts),
+                    tuple(part.sql(copy=False) for part in table.parts),
                     {col: dtype.sql(dialect=self.dialect) for col, dtype in mapping_schema.items()},
                 )
 

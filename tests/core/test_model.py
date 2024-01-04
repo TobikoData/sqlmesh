@@ -1822,8 +1822,8 @@ def test_missing_schema_warnings():
 
     full_schema = MappingSchema(
         {
-            '"a"': {"x": exp.DataType.build("int")},
-            '"b"': {"y": exp.DataType.build("int")},
+            "a": {"x": exp.DataType.build("int")},
+            "b": {"y": exp.DataType.build("int")},
         },
         normalize=False,
     )
@@ -1832,7 +1832,6 @@ def test_missing_schema_warnings():
         {
             '"a"': {"x": exp.DataType.build("int")},
         },
-        normalize=False,
     )
 
     # star, no schema, no deps
