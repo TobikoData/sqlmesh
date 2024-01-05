@@ -23,20 +23,20 @@ def test_file_cache(tmp_path: Path, mocker: MockerFixture):
 
     assert cache.get("test_name", "test_entry_a") is None
 
-    assert cache.get_or_load("test_name", "test_entry_a", loader) == test_entry_a
-    assert cache.get_or_load("test_name", "test_entry_a", loader) == test_entry_a
+    assert cache.get_or_load("test_name", "test_entry_a", loader=loader) == test_entry_a
+    assert cache.get_or_load("test_name", "test_entry_a", loader=loader) == test_entry_a
     assert cache.get("test_name", "test_entry_a") == test_entry_a
 
-    cache.put("test_name", "test_entry_b", test_entry_b)
+    cache.put("test_name", "test_entry_b", value=test_entry_b)
     assert cache.get("test_name", "test_entry_b") == test_entry_b
-    assert cache.get_or_load("test_name", "test_entry_b", loader) == test_entry_b
-    assert cache.get("test_name", "test_entry_a") is None
+    assert cache.get_or_load("test_name", "test_entry_b", loader=loader) == test_entry_b
+    assert cache.get("test_name", "test_entry_a") == test_entry_a
 
     assert cache.get("different_name", "test_entry_b") is None
 
     loader.assert_called_once()
 
-    assert cache._cache_entry_path('"test_model"', "").name[0:12] == "_test_model_"
+    assert cache._cache_entry_path('"test_model"').name[12:] == "___test_model_"
 
 
 def test_optimized_query_cache(tmp_path: Path, mocker: MockerFixture):

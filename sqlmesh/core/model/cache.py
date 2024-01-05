@@ -32,7 +32,7 @@ class ModelCache:
             prefix="model_definition",
         )
 
-    def get_or_load(self, name: str, entry_id: str, loader: t.Callable[[], Model]) -> Model:
+    def get_or_load(self, name: str, entry_id: str = "", *, loader: t.Callable[[], Model]) -> Model:
         """Returns an existing cached model definition or loads and caches a new one.
 
         Args:
@@ -54,7 +54,7 @@ class ModelCache:
             new_entry = SqlModelCacheEntry(
                 model=loaded_model, rendered_query=loaded_model.render_query(optimize=False)
             )
-            self._file_cache.put(name, entry_id, new_entry)
+            self._file_cache.put(name, entry_id, value=new_entry)
 
         return loaded_model
 
@@ -89,8 +89,11 @@ class OptimizedQueryCache:
         if unoptimized_query is None:
             return False
 
-        entry_id = self._entry_id(model, unoptimized_query)
-        cache_entry = self._file_cache.get(model.name, entry_id)
+        hash_data = _mapping_schema_hash_data(model.mapping_schema)
+        hash_data.append(gen(unoptimized_query))
+        name = f"{model.name}_{crc32(hash_data)}"
+        cache_entry = self._file_cache.get(name)
+
         if cache_entry:
             model._query_renderer.update_cache(cache_entry.optimized_rendered_query, optimized=True)
             return True
@@ -98,26 +101,20 @@ class OptimizedQueryCache:
         optimized_query = model.render_query(optimize=True)
         if optimized_query is not None:
             new_entry = OptimizedQueryCacheEntry(optimized_rendered_query=optimized_query)
-            self._file_cache.put(model.name, entry_id, new_entry)
+            self._file_cache.put(name, value=new_entry)
 
         return False
 
-    @staticmethod
-    def _entry_id(model: SqlModel, unoptimized_query: exp.Expression) -> str:
-        data = OptimizedQueryCache._mapping_schema_hash_data(model.mapping_schema)
-        data.append(gen(unoptimized_query))
-        return crc32(data)
 
-    @staticmethod
-    def _mapping_schema_hash_data(schema: t.Dict[str, t.Any]) -> t.List[str]:
-        keys = sorted(schema) if all(isinstance(v, dict) for v in schema.values()) else schema
+def _mapping_schema_hash_data(schema: t.Dict[str, t.Any]) -> t.List[str]:
+    keys = sorted(schema) if all(isinstance(v, dict) for v in schema.values()) else schema
 
-        data = []
-        for k in keys:
-            data.append(k)
-            if isinstance(schema[k], dict):
-                data.extend(OptimizedQueryCache._mapping_schema_hash_data(schema[k]))
-            else:
-                data.append(str(schema[k]))
+    data = []
+    for k in keys:
+        data.append(k)
+        if isinstance(schema[k], dict):
+            data.extend(_mapping_schema_hash_data(schema[k]))
+        else:
+            data.append(str(schema[k]))
 
-        return data
+    return data
