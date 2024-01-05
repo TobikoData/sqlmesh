@@ -49,6 +49,7 @@ class Plan(PydanticModel, frozen=True):
     effective_from: t.Optional[TimeLike] = None
     execution_time: t.Optional[TimeLike] = None
 
+    # Make sure to use @cached_property instead once we stop supporting 3.7.
     _categorized: t.Optional[t.List[Snapshot]] = None
     _uncategorized: t.Optional[t.List[Snapshot]] = None
     _all_modified: t.Optional[t.Dict[SnapshotId, Snapshot]] = None
