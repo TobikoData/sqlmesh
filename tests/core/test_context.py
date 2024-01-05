@@ -22,7 +22,7 @@ from sqlmesh.core.context import Context
 from sqlmesh.core.dialect import parse, schema_
 from sqlmesh.core.environment import Environment
 from sqlmesh.core.model import load_sql_based_model
-from sqlmesh.core.plan import BuiltInPlanEvaluator, Plan
+from sqlmesh.core.plan import BuiltInPlanEvaluator, PlanBuilder
 from sqlmesh.utils.date import make_inclusive_end, now, to_date, yesterday_ds
 from sqlmesh.utils.errors import ConfigError
 from tests.utils.test_filesystem import create_temp_file
@@ -186,9 +186,9 @@ def test_diff(sushi_context: Context, mocker: MockerFixture):
     plan_evaluator = BuiltInPlanEvaluator(
         sushi_context.state_sync, sushi_context.snapshot_evaluator, sushi_context.default_catalog
     )
-    plan = Plan(
+    plan = PlanBuilder(
         context_diff=sushi_context._context_diff("prod"),
-    )
+    ).build()
 
     promotion_result = plan_evaluator._promote(plan)
     plan_evaluator._update_views(plan, promotion_result)
@@ -439,22 +439,24 @@ def test_janitor(sushi_context, mocker: MockerFixture) -> None:
 
 
 def test_plan_default_end(sushi_context_pre_scheduling: Context):
-    prod_plan = sushi_context_pre_scheduling.plan("prod", no_prompts=True)
+    prod_plan_builder = sushi_context_pre_scheduling.plan_builder("prod")
     # Simulate that the prod is 3 days behind.
     plan_end = to_date(now()) - timedelta(days=3)
-    prod_plan._end = plan_end
-    sushi_context_pre_scheduling.apply(prod_plan)
+    prod_plan_builder._end = plan_end
+    prod_plan_builder.apply()
 
     dev_plan = sushi_context_pre_scheduling.plan(
         "test_env", no_prompts=True, include_unmodified=True, skip_backfill=True, auto_apply=True
     )
+    assert dev_plan.end is not None
     assert to_date(make_inclusive_end(dev_plan.end)) == plan_end
 
     forward_only_dev_plan = sushi_context_pre_scheduling.plan(
         "test_env_forward_only", no_prompts=True, include_unmodified=True, forward_only=True
     )
+    assert forward_only_dev_plan.end is not None
     assert to_date(make_inclusive_end(forward_only_dev_plan.end)) == plan_end
-    assert forward_only_dev_plan._start == plan_end
+    assert forward_only_dev_plan.start == plan_end
 
 
 def test_schema_error_no_default(sushi_context_pre_scheduling) -> None:

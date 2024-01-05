@@ -7,7 +7,7 @@ from fastapi import APIRouter, Body, Depends, Request, Response
 from starlette.status import HTTP_204_NO_CONTENT
 
 from sqlmesh.core.context import Context
-from sqlmesh.core.plan.definition import Plan
+from sqlmesh.core.plan import Plan, PlanBuilder
 from sqlmesh.utils.date import make_inclusive, to_ds
 from web.server import models
 from web.server.console import api_console
@@ -38,7 +38,7 @@ async def initiate_plan(
     request.app.state.circuit_breaker.clear()
     request.app.state.task = asyncio.create_task(
         run_in_executor(
-            get_plan,
+            get_plan_builder,
             context,
             plan_options,
             environment,
@@ -79,20 +79,19 @@ async def cancel_plan(
     return None
 
 
-def get_plan(
+def get_plan_builder(
     context: Context,
     plan_options: models.PlanOptions,
     environment: t.Optional[str] = None,
     plan_dates: t.Optional[models.PlanDates] = None,
-) -> Plan:
+) -> PlanBuilder:
     tracker = models.PlanOverviewStageTracker(environment=environment, plan_options=plan_options)
     api_console.start_plan_tracker(tracker)
     tracker_stage_validate = models.PlanStageValidation()
     tracker.add_stage(stage=models.PlanStage.validation, data=tracker_stage_validate)
     try:
-        plan = context.plan(
+        plan_builder = context.plan_builder(
             environment=environment,
-            no_prompts=True,
             include_unmodified=plan_options.include_unmodified,
             start=plan_dates.start if plan_dates else None,
             end=plan_dates.end if plan_dates else None,
@@ -103,10 +102,10 @@ def get_plan(
             skip_backfill=plan_options.skip_backfill,
             forward_only=plan_options.forward_only,
             no_auto_categorization=plan_options.no_auto_categorization,
-            auto_apply=plan_options.auto_apply,
         )
+        plan = plan_builder.build()
         tracker.start = plan.start
-        tracker.end = plan.end
+        tracker.end = plan.end_or_now
         tracker_stage_validate.stop(success=True)
         api_console.log_event_plan_overview()
     except Exception:
@@ -140,7 +139,7 @@ def get_plan(
     tracker_stage_backfills.stop(success=True)
     api_console.log_event_plan_overview()
     api_console.stop_plan_tracker(tracker)
-    return plan
+    return plan_builder
 
 
 def _get_plan_changes(context: Context, plan: Plan) -> models.PlanChanges:

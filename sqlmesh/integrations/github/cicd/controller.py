@@ -21,7 +21,7 @@ from sqlmesh.core import constants as c
 from sqlmesh.core.console import SNAPSHOT_CHANGE_CATEGORY_STR, MarkdownConsole
 from sqlmesh.core.context import Context
 from sqlmesh.core.environment import Environment
-from sqlmesh.core.plan import Plan
+from sqlmesh.core.plan import Plan, PlanBuilder
 from sqlmesh.core.snapshot.definition import Snapshot, SnapshotId, format_intervals
 from sqlmesh.core.user import User
 from sqlmesh.integrations.github.cicd.config import GithubCICDBotConfig
@@ -293,9 +293,9 @@ class GithubController:
         self._token = token
         self._event = event or GithubEvent.from_env()
         logger.debug(f"Github event: {json.dumps(self._event.payload)}")
-        self._pr_plan: t.Optional[Plan] = None
-        self._prod_plan: t.Optional[Plan] = None
-        self._prod_plan_with_gaps: t.Optional[Plan] = None
+        self._pr_plan_builder: t.Optional[PlanBuilder] = None
+        self._prod_plan_builder: t.Optional[PlanBuilder] = None
+        self._prod_plan_with_gaps_builder: t.Optional[PlanBuilder] = None
         self._check_run_mapping: t.Dict[str, CheckRun] = {}
         self._console = MarkdownConsole(console=Console(no_color=True))
         self._client: Github = client or Github(
@@ -382,46 +382,40 @@ class GithubController:
 
     @property
     def pr_plan(self) -> Plan:
-        if not self._pr_plan:
-            self._pr_plan = self._context.plan(
+        if not self._pr_plan_builder:
+            self._pr_plan_builder = self._context.plan_builder(
                 environment=self.pr_environment_name,
-                auto_apply=False,
-                no_prompts=True,
                 skip_tests=True,
                 categorizer_config=self.bot_config.auto_categorize_changes,
                 start=self.bot_config.default_pr_start,
                 skip_backfill=self.bot_config.skip_pr_backfill,
                 include_unmodified=self.bot_config.pr_include_unmodified,
             )
-        return self._pr_plan
+        return self._pr_plan_builder.build()
 
     @property
     def prod_plan(self) -> Plan:
-        if not self._prod_plan:
-            self._prod_plan = self._context.plan(
+        if not self._prod_plan_builder:
+            self._prod_plan_builder = self._context.plan_builder(
                 c.PROD,
-                auto_apply=False,
                 no_gaps=True,
-                no_prompts=True,
                 skip_tests=True,
                 categorizer_config=self.bot_config.auto_categorize_changes,
                 run=self.bot_config.run_on_deploy_to_prod,
             )
-        return self._prod_plan
+        return self._prod_plan_builder.build()
 
     @property
     def prod_plan_with_gaps(self) -> Plan:
-        if not self._prod_plan_with_gaps:
-            self._prod_plan_with_gaps = self._context.plan(
+        if not self._prod_plan_with_gaps_builder:
+            self._prod_plan_with_gaps_builder = self._context.plan_builder(
                 c.PROD,
-                auto_apply=False,
                 no_gaps=False,
-                no_prompts=True,
                 no_auto_categorization=True,
                 skip_tests=True,
                 run=self.bot_config.run_on_deploy_to_prod,
             )
-        return self._prod_plan_with_gaps
+        return self._prod_plan_with_gaps_builder.build()
 
     @property
     def bot_config(self) -> GithubCICDBotConfig:

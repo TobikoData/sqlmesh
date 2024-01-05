@@ -27,7 +27,7 @@ from sqlmesh.core.model import (
     TimeColumn,
 )
 from sqlmesh.core.model.kind import model_kind_type_from_name
-from sqlmesh.core.plan import Plan, SnapshotIntervals
+from sqlmesh.core.plan import Plan, PlanBuilder, SnapshotIntervals
 from sqlmesh.core.snapshot import (
     Snapshot,
     SnapshotChangeCategory,
@@ -45,10 +45,10 @@ def mock_choices(mocker: MockerFixture):
     mocker.patch("sqlmesh.core.console.TerminalConsole._prompt_backfill")
 
 
-def plan_choice(plan: Plan, choice: SnapshotChangeCategory) -> None:
-    for snapshot in plan.snapshots:
+def plan_choice(plan_builder: PlanBuilder, choice: SnapshotChangeCategory) -> None:
+    for snapshot in plan_builder.build().snapshots.values():
         if not snapshot.version:
-            plan.set_choice(snapshot, choice)
+            plan_builder.set_choice(snapshot, choice)
 
 
 @freeze_time("2023-01-08 15:00:00")
@@ -66,7 +66,8 @@ def test_forward_only_plan_with_effective_date(context_fixture: Context, request
     snapshot = context.get_snapshot(model, raise_if_missing=True)
     top_waiters_snapshot = context.get_snapshot("sushi.top_waiters", raise_if_missing=True)
 
-    plan = context.plan("dev", no_prompts=True, skip_tests=True, forward_only=True)
+    plan_builder = context.plan_builder("dev", skip_tests=True, forward_only=True)
+    plan = plan_builder.build()
     assert len(plan.new_snapshots) == 2
     assert (
         plan.context_diff.snapshots[snapshot.snapshot_id].change_category
@@ -79,20 +80,20 @@ def test_forward_only_plan_with_effective_date(context_fixture: Context, request
     assert plan.start == to_date("2023-01-07")
     assert plan.missing_intervals == [
         SnapshotIntervals(
-            snapshot_id=snapshot.snapshot_id,
+            snapshot_id=top_waiters_snapshot.snapshot_id,
             intervals=[(to_timestamp("2023-01-07"), to_timestamp("2023-01-08"))],
         ),
         SnapshotIntervals(
-            snapshot_id=top_waiters_snapshot.snapshot_id,
+            snapshot_id=snapshot.snapshot_id,
             intervals=[(to_timestamp("2023-01-07"), to_timestamp("2023-01-08"))],
         ),
     ]
 
-    plan.effective_from = "2023-01-05"
+    plan = plan_builder.set_effective_from("2023-01-05").build()
     # Default start should be set to effective_from
     assert plan.missing_intervals == [
         SnapshotIntervals(
-            snapshot_id=snapshot.snapshot_id,
+            snapshot_id=top_waiters_snapshot.snapshot_id,
             intervals=[
                 (to_timestamp("2023-01-05"), to_timestamp("2023-01-06")),
                 (to_timestamp("2023-01-06"), to_timestamp("2023-01-07")),
@@ -100,7 +101,7 @@ def test_forward_only_plan_with_effective_date(context_fixture: Context, request
             ],
         ),
         SnapshotIntervals(
-            snapshot_id=top_waiters_snapshot.snapshot_id,
+            snapshot_id=snapshot.snapshot_id,
             intervals=[
                 (to_timestamp("2023-01-05"), to_timestamp("2023-01-06")),
                 (to_timestamp("2023-01-06"), to_timestamp("2023-01-07")),
@@ -109,18 +110,18 @@ def test_forward_only_plan_with_effective_date(context_fixture: Context, request
         ),
     ]
 
-    plan.start = "2023-01-06"
+    plan = plan_builder.set_start("2023-01-06").build()
     # Start override should take precedence
     assert plan.missing_intervals == [
         SnapshotIntervals(
-            snapshot_id=snapshot.snapshot_id,
+            snapshot_id=top_waiters_snapshot.snapshot_id,
             intervals=[
                 (to_timestamp("2023-01-06"), to_timestamp("2023-01-07")),
                 (to_timestamp("2023-01-07"), to_timestamp("2023-01-08")),
             ],
         ),
         SnapshotIntervals(
-            snapshot_id=top_waiters_snapshot.snapshot_id,
+            snapshot_id=snapshot.snapshot_id,
             intervals=[
                 (to_timestamp("2023-01-06"), to_timestamp("2023-01-07")),
                 (to_timestamp("2023-01-07"), to_timestamp("2023-01-08")),
@@ -128,19 +129,19 @@ def test_forward_only_plan_with_effective_date(context_fixture: Context, request
         ),
     ]
 
-    plan.effective_from = "2023-01-04"
+    plan = plan_builder.set_effective_from("2023-01-04").build()
     # Start should remain unchanged
     assert plan.start == "2023-01-06"
     assert plan.missing_intervals == [
         SnapshotIntervals(
-            snapshot_id=snapshot.snapshot_id,
+            snapshot_id=top_waiters_snapshot.snapshot_id,
             intervals=[
                 (to_timestamp("2023-01-06"), to_timestamp("2023-01-07")),
                 (to_timestamp("2023-01-07"), to_timestamp("2023-01-08")),
             ],
         ),
         SnapshotIntervals(
-            snapshot_id=top_waiters_snapshot.snapshot_id,
+            snapshot_id=snapshot.snapshot_id,
             intervals=[
                 (to_timestamp("2023-01-06"), to_timestamp("2023-01-07")),
                 (to_timestamp("2023-01-07"), to_timestamp("2023-01-08")),
@@ -163,7 +164,7 @@ def test_forward_only_plan_with_effective_date(context_fixture: Context, request
     assert prod_plan.start == to_timestamp("2023-01-04")
     assert prod_plan.missing_intervals == [
         SnapshotIntervals(
-            snapshot_id=snapshot.snapshot_id,
+            snapshot_id=top_waiters_snapshot.snapshot_id,
             intervals=[
                 (to_timestamp("2023-01-04"), to_timestamp("2023-01-05")),
                 (to_timestamp("2023-01-05"), to_timestamp("2023-01-06")),
@@ -172,7 +173,7 @@ def test_forward_only_plan_with_effective_date(context_fixture: Context, request
             ],
         ),
         SnapshotIntervals(
-            snapshot_id=top_waiters_snapshot.snapshot_id,
+            snapshot_id=snapshot.snapshot_id,
             intervals=[
                 (to_timestamp("2023-01-04"), to_timestamp("2023-01-05")),
                 (to_timestamp("2023-01-05"), to_timestamp("2023-01-06")),
@@ -231,18 +232,18 @@ def test_forward_only_model_regular_plan(mocker: MockerFixture):
     assert not dev_df["event_date"].tolist()
 
     # Run a restatement plan to preview changes
-    plan = context.plan("dev", no_prompts=True, skip_tests=True, restate_models=[model_name])
-    plan.start = "2023-01-06"
-    assert plan.missing_intervals == [
+    plan_builder = context.plan_builder("dev", skip_tests=True, restate_models=[model_name])
+    plan_builder.set_start("2023-01-06")
+    assert plan_builder.build().missing_intervals == [
         SnapshotIntervals(
-            snapshot_id=snapshot.snapshot_id,
+            snapshot_id=top_waiters_snapshot.snapshot_id,
             intervals=[
                 (to_timestamp("2023-01-06"), to_timestamp("2023-01-07")),
                 (to_timestamp("2023-01-07"), to_timestamp("2023-01-08")),
             ],
         ),
         SnapshotIntervals(
-            snapshot_id=top_waiters_snapshot.snapshot_id,
+            snapshot_id=snapshot.snapshot_id,
             intervals=[
                 (to_timestamp("2023-01-06"), to_timestamp("2023-01-07")),
                 (to_timestamp("2023-01-07"), to_timestamp("2023-01-08")),
@@ -251,23 +252,23 @@ def test_forward_only_model_regular_plan(mocker: MockerFixture):
     ]
 
     # Make sure that changed start is reflected in missing intervals
-    plan.start = "2023-01-07"
-    assert plan.missing_intervals == [
-        SnapshotIntervals(
-            snapshot_id=snapshot.snapshot_id,
-            intervals=[
-                (to_timestamp("2023-01-07"), to_timestamp("2023-01-08")),
-            ],
-        ),
+    plan_builder.set_start("2023-01-07")
+    assert plan_builder.build().missing_intervals == [
         SnapshotIntervals(
             snapshot_id=top_waiters_snapshot.snapshot_id,
             intervals=[
                 (to_timestamp("2023-01-07"), to_timestamp("2023-01-08")),
             ],
         ),
+        SnapshotIntervals(
+            snapshot_id=snapshot.snapshot_id,
+            intervals=[
+                (to_timestamp("2023-01-07"), to_timestamp("2023-01-08")),
+            ],
+        ),
     ]
 
-    context.apply(plan)
+    context.apply(plan_builder.build())
 
     dev_df = context.engine_adapter.fetchdf(
         "SELECT DISTINCT event_date FROM sushi__dev.waiter_revenue_by_day ORDER BY event_date"
@@ -301,7 +302,8 @@ def test_plan_set_choice_is_reflected_in_missing_intervals(mocker: MockerFixture
     snapshot = context.get_snapshot(model, raise_if_missing=True)
     top_waiters_snapshot = context.get_snapshot("sushi.top_waiters", raise_if_missing=True)
 
-    plan = context.plan("dev", no_prompts=True, skip_tests=True)
+    plan_builder = context.plan_builder("dev", skip_tests=True)
+    plan = plan_builder.build()
     assert len(plan.new_snapshots) == 2
     assert (
         plan.context_diff.snapshots[snapshot.snapshot_id].change_category
@@ -328,9 +330,9 @@ def test_plan_set_choice_is_reflected_in_missing_intervals(mocker: MockerFixture
     ]
 
     # Change the category to BREAKING
-    plan.set_choice(
+    plan = plan_builder.set_choice(
         plan.context_diff.snapshots[snapshot.snapshot_id], SnapshotChangeCategory.BREAKING
-    )
+    ).build()
     assert (
         plan.context_diff.snapshots[snapshot.snapshot_id].change_category
         == SnapshotChangeCategory.BREAKING
@@ -341,7 +343,7 @@ def test_plan_set_choice_is_reflected_in_missing_intervals(mocker: MockerFixture
     )
     assert plan.missing_intervals == [
         SnapshotIntervals(
-            snapshot_id=snapshot.snapshot_id,
+            snapshot_id=top_waiters_snapshot.snapshot_id,
             intervals=[
                 (to_timestamp("2023-01-01"), to_timestamp("2023-01-02")),
                 (to_timestamp("2023-01-02"), to_timestamp("2023-01-03")),
@@ -353,7 +355,7 @@ def test_plan_set_choice_is_reflected_in_missing_intervals(mocker: MockerFixture
             ],
         ),
         SnapshotIntervals(
-            snapshot_id=top_waiters_snapshot.snapshot_id,
+            snapshot_id=snapshot.snapshot_id,
             intervals=[
                 (to_timestamp("2023-01-01"), to_timestamp("2023-01-02")),
                 (to_timestamp("2023-01-02"), to_timestamp("2023-01-03")),
@@ -367,9 +369,9 @@ def test_plan_set_choice_is_reflected_in_missing_intervals(mocker: MockerFixture
     ]
 
     # Change the category back to NON_BREAKING
-    plan.set_choice(
+    plan = plan_builder.set_choice(
         plan.context_diff.snapshots[snapshot.snapshot_id], SnapshotChangeCategory.NON_BREAKING
-    )
+    ).build()
     assert (
         plan.context_diff.snapshots[snapshot.snapshot_id].change_category
         == SnapshotChangeCategory.NON_BREAKING
@@ -460,11 +462,11 @@ def test_non_breaking_change_after_forward_only_in_dev(mocker: MockerFixture):
     assert plan.start == pd.to_datetime("2023-01-07")
     assert plan.missing_intervals == [
         SnapshotIntervals(
-            snapshot_id=waiter_revenue_by_day_snapshot.snapshot_id,
+            snapshot_id=top_waiters_snapshot.snapshot_id,
             intervals=[(to_timestamp("2023-01-07"), to_timestamp("2023-01-08"))],
         ),
         SnapshotIntervals(
-            snapshot_id=top_waiters_snapshot.snapshot_id,
+            snapshot_id=waiter_revenue_by_day_snapshot.snapshot_id,
             intervals=[(to_timestamp("2023-01-07"), to_timestamp("2023-01-08"))],
         ),
     ]
@@ -648,7 +650,7 @@ def test_indirect_non_breaking_change_after_forward_only_in_dev(mocker: MockerFi
     assert plan.start == to_timestamp("2023-01-01")
     assert plan.missing_intervals == [
         SnapshotIntervals(
-            snapshot_id=waiter_revenue_by_day_snapshot.snapshot_id,
+            snapshot_id=top_waiters_snapshot.snapshot_id,
             intervals=[
                 (to_timestamp("2023-01-01"), to_timestamp("2023-01-02")),
                 (to_timestamp("2023-01-02"), to_timestamp("2023-01-03")),
@@ -660,7 +662,7 @@ def test_indirect_non_breaking_change_after_forward_only_in_dev(mocker: MockerFi
             ],
         ),
         SnapshotIntervals(
-            snapshot_id=top_waiters_snapshot.snapshot_id,
+            snapshot_id=waiter_revenue_by_day_snapshot.snapshot_id,
             intervals=[
                 (to_timestamp("2023-01-01"), to_timestamp("2023-01-02")),
                 (to_timestamp("2023-01-02"), to_timestamp("2023-01-03")),
@@ -778,13 +780,13 @@ def test_select_models_for_backfill(mocker: MockerFixture):
             intervals=expected_intervals,
         ),
         SnapshotIntervals(
-            snapshot_id=context.get_snapshot("sushi.orders", raise_if_missing=True).snapshot_id,
-            intervals=expected_intervals,
-        ),
-        SnapshotIntervals(
             snapshot_id=context.get_snapshot(
                 "sushi.order_items", raise_if_missing=True
             ).snapshot_id,
+            intervals=expected_intervals,
+        ),
+        SnapshotIntervals(
+            snapshot_id=context.get_snapshot("sushi.orders", raise_if_missing=True).snapshot_id,
             intervals=expected_intervals,
         ),
         SnapshotIntervals(
@@ -1035,7 +1037,7 @@ def validate_model_kind_change(
         assert (
             next(
                 snapshot
-                for snapshot in plan.snapshots
+                for snapshot in plan.snapshots.values()
                 if snapshot.name == '"memory"."sushi"."items"'
             ).model.kind.name
             == kind.name
@@ -1164,7 +1166,9 @@ def test_no_override(sushi_context: Context) -> None:
         DataType.Type.INT,
         DataType.Type.BIGINT,
     )
-    plan = sushi_context.plan("prod")
+
+    plan_builder = sushi_context.plan_builder("prod")
+    plan = plan_builder.build()
 
     sushi_items_snapshot = sushi_context.get_snapshot("sushi.items", raise_if_missing=True)
     sushi_order_items_snapshot = sushi_context.get_snapshot(
@@ -1177,11 +1181,13 @@ def test_no_override(sushi_context: Context) -> None:
     items = plan.context_diff.snapshots[sushi_items_snapshot.snapshot_id]
     order_items = plan.context_diff.snapshots[sushi_order_items_snapshot.snapshot_id]
     waiter_revenue = plan.context_diff.snapshots[sushi_water_revenue_by_day_snapshot.snapshot_id]
-    plan.set_choice(items, SnapshotChangeCategory.BREAKING)
-    plan.set_choice(order_items, SnapshotChangeCategory.NON_BREAKING)
+
+    plan_builder.set_choice(items, SnapshotChangeCategory.BREAKING).set_choice(
+        order_items, SnapshotChangeCategory.NON_BREAKING
+    )
     assert items.is_new_version
     assert waiter_revenue.is_new_version
-    plan.set_choice(items, SnapshotChangeCategory.NON_BREAKING)
+    plan_builder.set_choice(items, SnapshotChangeCategory.NON_BREAKING)
     assert not waiter_revenue.is_new_version
 
 
@@ -1241,10 +1247,11 @@ def setup_rebase(
         DataType.Type.DOUBLE,
         DataType.Type.FLOAT,
     )
-    plan = context.plan("prod")
+    plan_builder = context.plan_builder("prod")
 
-    plan_choice(plan, remote_choice)
-    remote_versions = {snapshot.name: snapshot.version for snapshot in plan.snapshots}
+    plan_choice(plan_builder, remote_choice)
+    plan = plan_builder.build()
+    remote_versions = {snapshot.name: snapshot.version for snapshot in plan.snapshots.values()}
     context.apply(plan)
 
     change_data_type(
@@ -1259,9 +1266,10 @@ def setup_rebase(
         DataType.Type.INT,
         DataType.Type.BIGINT,
     )
-    plan = context.plan("dev", start=start(context))
-    plan_choice(plan, local_choice)
-    local_versions = {snapshot.name: snapshot.version for snapshot in plan.snapshots}
+    plan_builder = context.plan_builder("dev", start=start(context))
+    plan_choice(plan_builder, local_choice)
+    plan = plan_builder.build()
+    local_versions = {snapshot.name: snapshot.version for snapshot in plan.snapshots.values()}
     context.apply(plan)
 
     change_data_type(
@@ -1288,7 +1296,7 @@ def setup_rebase(
         "assert_item_price_above_zero",
     ]
     context.apply(plan)
-    validate_apply_basics(context, "dev", plan.snapshots)
+    validate_apply_basics(context, "dev", plan.snapshots.values())
 
     if version_kind == "new":
         for versions in [remote_versions, local_versions]:
@@ -1369,7 +1377,7 @@ def test_revert(
     change_data_type(sushi_context, "sushi.items", types[len(change_categories)], types[0])
 
     def _validate_plan(_, plan):
-        snapshot = next(s for s in plan.snapshots if s.name == '"memory"."sushi"."items"')
+        snapshot = next(s for s in plan.snapshots.values() if s.name == '"memory"."sushi"."items"')
         assert snapshot.change_category == expected
         assert not plan.missing_intervals
 
@@ -1400,7 +1408,7 @@ def test_revert_after_downstream_change(sushi_context: Context):
     change_data_type(sushi_context, "sushi.items", DataType.Type.FLOAT, DataType.Type.DOUBLE)
 
     def _validate_plan(_, plan):
-        snapshot = next(s for s in plan.snapshots if s.name == '"memory"."sushi"."items"')
+        snapshot = next(s for s in plan.snapshots.values() if s.name == '"memory"."sushi"."items"')
         assert snapshot.change_category == SnapshotChangeCategory.BREAKING
         assert plan.missing_intervals
 
@@ -1475,7 +1483,7 @@ def test_multi(mocker):
     ]
     assert len(plan.missing_intervals) == 2
     context.apply(plan)
-    validate_apply_basics(context, c.PROD, plan.snapshots)
+    validate_apply_basics(context, c.PROD, plan.snapshots.values())
 
 
 @pytest.mark.integration
@@ -1535,7 +1543,7 @@ def test_incremental_time_self_reference(
         key=lambda x: x.snapshot_id,
     )
     sushi_context.console = mocker.Mock(spec=Console)
-    plan.apply()
+    sushi_context.apply(plan)
     num_batch_calls = Counter(
         [x[0][0] for x in sushi_context.console.update_snapshot_evaluation_progress.call_args_list]  # type: ignore
     )
@@ -1696,7 +1704,7 @@ def test_ignored_snapshots(context_fixture: Context, request):
         "sushi.customer_revenue_lifetime", raise_if_missing=True
     )
     # Validate that the depends_on_past model is ignored
-    assert plan.ignored_snapshot_ids == {revenue_lifetime_snapshot.snapshot_id}
+    assert plan.ignored == {revenue_lifetime_snapshot.snapshot_id}
     # Validate that the table was really ignored
     metadata = DuckDBMetadata.from_context(context)
     # Make sure prod view exists
@@ -1783,8 +1791,7 @@ def test_scd_type_2(tmp_path: pathlib.Path):
             (3, "c", "2020-01-01 00:00:00"),
         ],
     )
-    plan = context.plan("prod")
-    plan.apply()
+    plan = context.plan("prod", auto_apply=True)
     df_actual = get_current_df(context)
     df_expected = create_target_dataframe(
         [
@@ -1873,7 +1880,7 @@ def initial_add(context: Context, environment: str):
     validate_plan_changes(plan, added={x.snapshot_id for x in context.snapshots.values()})
 
     context.apply(plan)
-    validate_apply_basics(context, environment, plan.snapshots)
+    validate_apply_basics(context, environment, plan.snapshots.values())
 
 
 def apply_to_environment(
@@ -1887,23 +1894,24 @@ def apply_to_environment(
     plan_validators = plan_validators or []
     apply_validators = apply_validators or []
 
-    plan = context.plan(
+    plan_builder = context.plan_builder(
         environment,
         start=plan_start or start(context) if environment != c.PROD else None,
         forward_only=choice == SnapshotChangeCategory.FORWARD_ONLY,
-        no_prompts=True,
         include_unmodified=True,
     )
     if environment != c.PROD:
-        plan.start = plan_start or start(context)
+        plan_builder.set_start(plan_start or start(context))
 
     if choice:
-        plan_choice(plan, choice)
+        plan_choice(plan_builder, choice)
     for validator in plan_validators:
-        validator(context, plan)
+        validator(context, plan_builder.build())
 
+    plan = plan_builder.build()
     context.apply(plan)
-    validate_apply_basics(context, environment, plan.snapshots)
+
+    validate_apply_basics(context, environment, plan.snapshots.values())
     for validator in apply_validators:
         validator(context)
     return plan

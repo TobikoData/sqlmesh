@@ -39,7 +39,7 @@ if t.TYPE_CHECKING:
     import ipywidgets as widgets
 
     from sqlmesh.core.context_diff import ContextDiff
-    from sqlmesh.core.plan import Plan
+    from sqlmesh.core.plan import Plan, PlanBuilder
     from sqlmesh.core.table_diff import RowDiff, SchemaDiff
 
     LayoutWidget = t.TypeVar("LayoutWidget", bound=t.Union[widgets.VBox, widgets.HBox])
@@ -150,7 +150,7 @@ class Console(abc.ABC):
     @abc.abstractmethod
     def plan(
         self,
-        plan: Plan,
+        plan_builder: PlanBuilder,
         auto_apply: bool,
         default_catalog: t.Optional[str],
         no_diff: bool = False,
@@ -539,7 +539,7 @@ class TerminalConsole(Console):
 
     def plan(
         self,
-        plan: Plan,
+        plan_builder: PlanBuilder,
         auto_apply: bool,
         default_catalog: t.Optional[str],
         no_diff: bool = False,
@@ -560,7 +560,7 @@ class TerminalConsole(Console):
                 fail. Default: False
         """
         self._prompt_categorize(
-            plan,
+            plan_builder,
             auto_apply,
             no_diff=no_diff,
             no_prompts=no_prompts,
@@ -569,11 +569,11 @@ class TerminalConsole(Console):
 
         if not no_prompts:
             self._show_options_after_categorization(
-                plan, auto_apply, default_catalog=default_catalog
+                plan_builder, auto_apply, default_catalog=default_catalog
             )
 
         if auto_apply:
-            plan.apply()
+            plan_builder.apply()
 
     def _get_ignored_tree(
         self,
@@ -690,34 +690,37 @@ class TerminalConsole(Console):
         self._print(tree)
 
     def _show_options_after_categorization(
-        self, plan: Plan, auto_apply: bool, default_catalog: t.Optional[str]
+        self, plan_builder: PlanBuilder, auto_apply: bool, default_catalog: t.Optional[str]
     ) -> None:
+        plan = plan_builder.build()
         if plan.forward_only and plan.new_snapshots:
-            self._prompt_effective_from(plan, auto_apply, default_catalog)
+            self._prompt_effective_from(plan_builder, auto_apply, default_catalog)
 
         if plan.requires_backfill:
-            self._show_missing_dates(plan, default_catalog)
-            self._prompt_backfill(plan, auto_apply, default_catalog)
+            self._show_missing_dates(plan_builder.build(), default_catalog)
+            self._prompt_backfill(plan_builder, auto_apply, default_catalog)
         elif plan.has_changes and not auto_apply:
-            self._prompt_promote(plan)
+            self._prompt_promote(plan_builder)
         elif plan.has_unmodified_unpromoted and not auto_apply:
             self.log_status_update("\n[bold]Virtually updating unmodified models\n")
-            self._prompt_promote(plan)
+            self._prompt_promote(plan_builder)
 
     def _prompt_categorize(
         self,
-        plan: Plan,
+        plan_builder: PlanBuilder,
         auto_apply: bool,
         no_diff: bool,
         no_prompts: bool,
         default_catalog: t.Optional[str],
     ) -> None:
         """Get the user's change category for the directly modified models."""
+        plan = plan_builder.build()
+
         self.show_model_difference_summary(
             plan.context_diff,
             plan.environment_naming_info,
             default_catalog=default_catalog,
-            ignored_snapshot_ids=plan.ignored_snapshot_ids,
+            ignored_snapshot_ids=plan.ignored,
         )
 
         if not no_diff:
@@ -731,7 +734,7 @@ class TerminalConsole(Console):
             )
             indirect_tree = None
 
-            for child_sid in plan.indirectly_modified[snapshot.snapshot_id]:
+            for child_sid in sorted(plan.indirectly_modified.get(snapshot.snapshot_id, set())):
                 child_snapshot = plan.context_diff.snapshots[child_sid]
                 if not indirect_tree:
                     indirect_tree = Tree(f"[indirect]Indirectly Modified Children:")
@@ -741,10 +744,13 @@ class TerminalConsole(Console):
                 )
             self._print(tree)
             if not no_prompts:
-                self._get_snapshot_change_category(snapshot, plan, auto_apply, default_catalog)
+                self._get_snapshot_change_category(
+                    snapshot, plan_builder, auto_apply, default_catalog
+                )
 
     def _show_categorized_snapshots(self, plan: Plan, default_catalog: t.Optional[str]) -> None:
         context_diff = plan.context_diff
+
         for snapshot in plan.categorized:
             if not context_diff.directly_modified(snapshot.name):
                 continue
@@ -754,7 +760,7 @@ class TerminalConsole(Console):
                 f"[bold][direct]Directly Modified: {snapshot.display_name(plan.environment_naming_info, default_catalog)} ({category_str})"
             )
             indirect_tree = None
-            for child_sid in plan.indirectly_modified[snapshot.snapshot_id]:
+            for child_sid in sorted(plan.indirectly_modified.get(snapshot.snapshot_id, set())):
                 child_snapshot = context_diff.snapshots[child_sid]
                 if not indirect_tree:
                     indirect_tree = Tree(f"[indirect]Indirectly Modified Children:")
@@ -768,10 +774,11 @@ class TerminalConsole(Console):
 
     def _show_missing_dates(self, plan: Plan, default_catalog: t.Optional[str]) -> None:
         """Displays the models with missing dates."""
-        if not plan.missing_intervals:
+        missing_intervals = plan.missing_intervals
+        if not missing_intervals:
             return
         backfill = Tree("[bold]Models needing backfill (missing dates):")
-        for missing in plan.missing_intervals:
+        for missing in missing_intervals:
             snapshot = plan.context_diff.snapshots[missing.snapshot_id]
             if not snapshot.is_model:
                 continue
@@ -786,23 +793,24 @@ class TerminalConsole(Console):
         self._print(backfill)
 
     def _prompt_effective_from(
-        self, plan: Plan, auto_apply: bool, default_catalog: t.Optional[str]
+        self, plan_builder: PlanBuilder, auto_apply: bool, default_catalog: t.Optional[str]
     ) -> None:
-        if not plan.effective_from:
+        if not plan_builder.build().effective_from:
             effective_from = self._prompt(
                 "Enter the effective date (eg. '1 year', '2020-01-01') to apply forward-only changes retroactively or blank to only apply them going forward once changes are deployed to prod"
             )
             if effective_from:
-                plan.effective_from = effective_from
+                plan_builder.set_effective_from(effective_from)
 
     def _prompt_backfill(
-        self, plan: Plan, auto_apply: bool, default_catalog: t.Optional[str]
+        self, plan_builder: PlanBuilder, auto_apply: bool, default_catalog: t.Optional[str]
     ) -> None:
+        plan = plan_builder.build()
         is_forward_only_dev = plan.is_dev and plan.forward_only
         backfill_or_preview = "preview" if is_forward_only_dev else "backfill"
 
-        if plan.is_start_and_end_allowed:
-            if not plan.override_start:
+        if plan_builder.is_start_and_end_allowed:
+            if not plan_builder.override_start:
                 if is_forward_only_dev:
                     if plan.effective_from:
                         blank_meaning = (
@@ -820,33 +828,36 @@ class TerminalConsole(Console):
                     f"Enter the {backfill_or_preview} start date (eg. '1 year', '2020-01-01') or blank {blank_meaning}",
                 )
                 if start:
-                    plan.start = start
+                    plan_builder.set_start(start)
                 elif default_start:
-                    plan.start = default_start
+                    plan_builder.set_start(default_start)
 
-            if not plan.override_end:
+            if not plan_builder.override_end:
                 end = self._prompt(
                     f"Enter the {backfill_or_preview} end date (eg. '1 month ago', '2020-01-01') or blank to {backfill_or_preview} up until now",
                 )
                 if end:
-                    plan.end = end
-        if plan.ignored_snapshot_ids:
+                    plan_builder.set_end(end)
+
+            plan = plan_builder.build()
+
+        if plan.ignored:
             self._print(
                 self._get_ignored_tree(
-                    plan.ignored_snapshot_ids,
+                    plan.ignored,
                     plan.context_diff.snapshots,
                     plan.environment_naming_info,
                     default_catalog,
                 )
             )
         if not auto_apply and self._confirm(f"Apply - {backfill_or_preview.capitalize()} Tables"):
-            plan.apply()
+            plan_builder.apply()
 
-    def _prompt_promote(self, plan: Plan) -> None:
+    def _prompt_promote(self, plan_builder: PlanBuilder) -> None:
         if self._confirm(
             f"Apply - Virtual Update",
         ):
-            plan.apply()
+            plan_builder.apply()
 
     def log_test_results(
         self, result: unittest.result.TestResult, output: str, target_dialect: str
@@ -969,21 +980,31 @@ class TerminalConsole(Console):
                 self.console.print(row_diff.t_sample.to_string(index=False), end="\n\n")
 
     def _get_snapshot_change_category(
-        self, snapshot: Snapshot, plan: Plan, auto_apply: bool, default_catalog: t.Optional[str]
+        self,
+        snapshot: Snapshot,
+        plan_builder: PlanBuilder,
+        auto_apply: bool,
+        default_catalog: t.Optional[str],
     ) -> None:
-        choices = self._snapshot_change_choices(snapshot)
+        choices = self._snapshot_change_choices(
+            snapshot, plan_builder.environment_naming_info, default_catalog
+        )
         response = self._prompt(
             "\n".join([f"[{i+1}] {choice}" for i, choice in enumerate(choices.values())]),
             show_choices=False,
             choices=[f"{i+1}" for i in range(len(choices))],
         )
         choice = list(choices)[int(response) - 1]
-        plan.set_choice(snapshot, choice)
+        plan_builder.set_choice(snapshot, choice)
 
     def _snapshot_change_choices(
-        self, snapshot: Snapshot, use_rich_formatting: bool = True
+        self,
+        snapshot: Snapshot,
+        environment_naming_info: EnvironmentNamingInfo,
+        default_catalog: t.Optional[str],
+        use_rich_formatting: bool = True,
     ) -> t.Dict[SnapshotChangeCategory, str]:
-        direct = snapshot.name
+        direct = snapshot.display_name(environment_naming_info, default_catalog)
         if use_rich_formatting:
             direct = f"[direct]{direct}[/direct]"
         indirect = "indirectly modified children"
@@ -1054,9 +1075,9 @@ class NotebookMagicConsole(TerminalConsole):
     def _apply(self, button: widgets.Button) -> None:
         button.disabled = True
         with button.output:
-            button.plan.apply()
+            button.plan_builder.apply()
 
-    def _prompt_promote(self, plan: Plan) -> None:
+    def _prompt_promote(self, plan_builder: PlanBuilder) -> None:
         import ipywidgets as widgets
 
         button = widgets.Button(
@@ -1071,37 +1092,37 @@ class NotebookMagicConsole(TerminalConsole):
         output = widgets.Output()
         self._add_to_dynamic_options(output)
 
-        button.plan = plan
+        button.plan_builder = plan_builder
         button.on_click(self._apply)
         button.output = output
 
     def _prompt_effective_from(
-        self, plan: Plan, auto_apply: bool, default_catalog: t.Optional[str]
+        self, plan_builder: PlanBuilder, auto_apply: bool, default_catalog: t.Optional[str]
     ) -> None:
         import ipywidgets as widgets
 
         prompt = widgets.VBox()
 
         def effective_from_change_callback(change: t.Dict[str, datetime.datetime]) -> None:
-            plan.effective_from = change["new"]
-            self._show_options_after_categorization(plan, auto_apply, default_catalog)
+            plan_builder.set_effective_from(change["new"])
+            self._show_options_after_categorization(plan_builder, auto_apply, default_catalog)
 
         def going_forward_change_callback(change: t.Dict[str, bool]) -> None:
             checked = change["new"]
-            plan.effective_from = None if checked else yesterday_ds()
+            plan_builder.set_effective_from(None if checked else yesterday_ds())
             self._show_options_after_categorization(
-                plan, auto_apply=auto_apply, default_catalog=default_catalog
+                plan_builder, auto_apply=auto_apply, default_catalog=default_catalog
             )
 
         date_picker = widgets.DatePicker(
-            disabled=plan.effective_from is None,
-            value=to_date(plan.effective_from or yesterday_ds()),
+            disabled=plan_builder.build().effective_from is None,
+            value=to_date(plan_builder.build().effective_from or yesterday_ds()),
             layout={"width": "auto"},
         )
         date_picker.observe(effective_from_change_callback, "value")
 
         going_forward_checkbox = widgets.Checkbox(
-            value=plan.effective_from is None,
+            value=plan_builder.build().effective_from is None,
             description="Apply Going Forward Once Deployed To Prod",
             disabled=False,
             indent=False,
@@ -1122,16 +1143,20 @@ class NotebookMagicConsole(TerminalConsole):
         self._add_to_dynamic_options(prompt)
 
     def _prompt_backfill(
-        self, plan: Plan, auto_apply: bool, default_catalog: t.Optional[str]
+        self, plan_builder: PlanBuilder, auto_apply: bool, default_catalog: t.Optional[str]
     ) -> None:
         import ipywidgets as widgets
 
         prompt = widgets.VBox()
 
-        backfill_or_preview = "Preview" if plan.is_dev and plan.forward_only else "Backfill"
+        backfill_or_preview = (
+            "Preview"
+            if plan_builder.build().is_dev and plan_builder.build().forward_only
+            else "Backfill"
+        )
 
         def _date_picker(
-            plan: Plan, value: t.Any, on_change: t.Callable, disabled: bool = False
+            plan_builder: PlanBuilder, value: t.Any, on_change: t.Callable, disabled: bool = False
         ) -> widgets.DatePicker:
             picker = widgets.DatePicker(
                 disabled=disabled,
@@ -1143,14 +1168,14 @@ class NotebookMagicConsole(TerminalConsole):
             return picker
 
         def start_change_callback(change: t.Dict[str, datetime.datetime]) -> None:
-            plan.start = change["new"]
-            self._show_options_after_categorization(plan, auto_apply, default_catalog)
+            plan_builder.set_start(change["new"])
+            self._show_options_after_categorization(plan_builder, auto_apply, default_catalog)
 
         def end_change_callback(change: t.Dict[str, datetime.datetime]) -> None:
-            plan.end = change["new"]
-            self._show_options_after_categorization(plan, auto_apply, default_catalog)
+            plan_builder.set_end(change["new"])
+            self._show_options_after_categorization(plan_builder, auto_apply, default_catalog)
 
-        if plan.is_start_and_end_allowed:
+        if plan_builder.is_start_and_end_allowed:
             add_to_layout_widget(
                 prompt,
                 widgets.HBox(
@@ -1158,7 +1183,9 @@ class NotebookMagicConsole(TerminalConsole):
                         widgets.Label(
                             f"Start {backfill_or_preview} Date:", layout={"width": "8rem"}
                         ),
-                        _date_picker(plan, to_date(plan.start), start_change_callback),
+                        _date_picker(
+                            plan_builder, to_date(plan_builder.build().start), start_change_callback
+                        ),
                     ]
                 ),
             )
@@ -1169,8 +1196,8 @@ class NotebookMagicConsole(TerminalConsole):
                     [
                         widgets.Label(f"End {backfill_or_preview} Date:", layout={"width": "8rem"}),
                         _date_picker(
-                            plan,
-                            to_date(plan.end),
+                            plan_builder,
+                            to_date(plan_builder.build().end_or_now),
                             end_change_callback,
                         ),
                     ]
@@ -1189,32 +1216,41 @@ class NotebookMagicConsole(TerminalConsole):
             output = widgets.Output()
             self._add_to_dynamic_options(output)
 
-            button.plan = plan
+            button.plan_builder = plan_builder
             button.on_click(self._apply)
             button.output = output
 
     def _show_options_after_categorization(
-        self, plan: Plan, auto_apply: bool, default_catalog: t.Optional[str]
+        self, plan_builder: PlanBuilder, auto_apply: bool, default_catalog: t.Optional[str]
     ) -> None:
         self.dynamic_options_after_categorization_output.children = ()
         self.display(self.dynamic_options_after_categorization_output)
-        super()._show_options_after_categorization(plan, auto_apply, default_catalog)
+        super()._show_options_after_categorization(plan_builder, auto_apply, default_catalog)
 
     def _add_to_dynamic_options(self, *widgets: widgets.Widget) -> None:
         add_to_layout_widget(self.dynamic_options_after_categorization_output, *widgets)
 
     def _get_snapshot_change_category(
-        self, snapshot: Snapshot, plan: Plan, auto_apply: bool, default_catalog: t.Optional[str]
+        self,
+        snapshot: Snapshot,
+        plan_builder: PlanBuilder,
+        auto_apply: bool,
+        default_catalog: t.Optional[str],
     ) -> None:
         import ipywidgets as widgets
 
-        def radio_button_selected(change: t.Dict[str, t.Any]) -> None:
-            plan.set_choice(snapshot, choices[change["owner"].index])
-            self._show_options_after_categorization(plan, auto_apply, default_catalog)
-
-        choice_mapping = self._snapshot_change_choices(snapshot, use_rich_formatting=False)
+        choice_mapping = self._snapshot_change_choices(
+            snapshot,
+            plan_builder.environment_naming_info,
+            default_catalog,
+            use_rich_formatting=False,
+        )
         choices = list(choice_mapping)
-        plan.set_choice(snapshot, choices[0])
+        plan_builder.set_choice(snapshot, choices[0])
+
+        def radio_button_selected(change: t.Dict[str, t.Any]) -> None:
+            plan_builder.set_choice(snapshot, choices[change["owner"].index])
+            self._show_options_after_categorization(plan_builder, auto_apply, default_catalog)
 
         radio = widgets.RadioButtons(
             options=choice_mapping.values(),
@@ -1464,10 +1500,11 @@ class MarkdownConsole(CaptureTerminalConsole):
 
     def _show_missing_dates(self, plan: Plan, default_catalog: t.Optional[str]) -> None:
         """Displays the models with missing dates."""
-        if not plan.missing_intervals:
+        missing_intervals = plan.missing_intervals
+        if not missing_intervals:
             return
         self._print("**Models needing backfill (missing dates):**\n\n")
-        for missing in plan.missing_intervals:
+        for missing in missing_intervals:
             snapshot = plan.context_diff.snapshots[missing.snapshot_id]
             if not snapshot.is_model:
                 continue
@@ -1492,7 +1529,7 @@ class MarkdownConsole(CaptureTerminalConsole):
                 f"[bold][direct]Directly Modified: {snapshot.display_name(plan.environment_naming_info, default_catalog)} ({category_str})"
             )
             indirect_tree = None
-            for child_sid in plan.indirectly_modified[snapshot.snapshot_id]:
+            for child_sid in sorted(plan.indirectly_modified.get(snapshot.snapshot_id, set())):
                 child_snapshot = context_diff.snapshots[child_sid]
                 if not indirect_tree:
                     indirect_tree = Tree(f"[indirect]Indirectly Modified Children:")

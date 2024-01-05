@@ -9,6 +9,7 @@ from sqlmesh.core.plan import (
     BuiltInPlanEvaluator,
     MWAAPlanEvaluator,
     Plan,
+    PlanBuilder,
     update_intervals_for_new_snapshots,
 )
 from sqlmesh.core.snapshot import SnapshotChangeCategory
@@ -22,11 +23,11 @@ def sushi_plan(sushi_context: Context, mocker: MockerFixture) -> Plan:
     mock_prompt.ask.return_value = "2022-01-01"
     mocker.patch("sqlmesh.core.console.Prompt", mock_prompt)
 
-    return Plan(
+    return PlanBuilder(
         sushi_context._context_diff("dev"),
         is_dev=True,
         include_unmodified=True,
-    )
+    ).build()
 
 
 def test_builtin_evaluator_push(sushi_context: Context, make_snapshot):
@@ -57,7 +58,7 @@ def test_builtin_evaluator_push(sushi_context: Context, make_snapshot):
     new_model_snapshot.categorize_as(SnapshotChangeCategory.BREAKING)
     new_view_model_snapshot.categorize_as(SnapshotChangeCategory.BREAKING)
 
-    plan = Plan(sushi_context._context_diff("prod"))
+    plan = PlanBuilder(sushi_context._context_diff("prod")).build()
 
     evaluator = BuiltInPlanEvaluator(
         sushi_context.state_sync,
