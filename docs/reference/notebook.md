@@ -43,48 +43,62 @@ To use your Databricks cluster, update the `default_connection` and `test_connec
 
 See the [Execution Engines](../integrations/engines/databricks.md) page for information on configuring a Databricks connection.
 
-## context
+### Magic Commands
+
+All available magic commands can be listed with `%lsmagic` and then the docstring for any given magic can be displayed with `%magic_name?` for line magics and `%%magic_name?` for call magics.
+
+#### context
 ```
-%context paths [paths ...]
+%context [--config CONFIG] [--gateway GATEWAY] [--ignore-warnings]
+               [--debug]
+               paths [paths ...]
 
 Sets the context in the user namespace.
 
 positional arguments:
-  paths  The path(s) to the SQLMesh project(s).
+  paths              The path(s) to the SQLMesh project(s).
+
+options:
+  --config CONFIG    Name of the config object. Only applicable to
+                     configuration defined using Python script.
+  --gateway GATEWAY  The name of the gateway.
+  --ignore-warnings  Ignore warnings.
+  --debug            Enable debug mode.
 ```
 
-## init
+#### init
 ```
-%init path sql_dialect [--template TEMPLATE]
+%init [--template TEMPLATE] path sql_dialect
 
-Creates a SQLMesh project scaffold. Argument `sql_dialect` is required unless the dbt
-template option is specified.
+Creates a SQLMesh project scaffold with a default SQL dialect.
 
 positional arguments:
   path                  The path where the new SQLMesh project should be
                         created.
   sql_dialect           Default model SQL dialect. Supported values: '',
-                        'bigquery', 'clickhouse', 'databricks', 'drill',
-                        'duckdb', 'hive', 'mysql', 'oracle', 'postgres',
-                        'presto', 'redshift', 'snowflake', 'spark', 'spark2',
-                        'sqlite', 'starrocks', 'tableau', 'teradata', 'trino',
-                        'tsql'.
+                        'bigquery', 'clickhouse', 'databricks', 'doris',
+                        'drill', 'duckdb', 'hive', 'mysql', 'oracle',
+                        'postgres', 'presto', 'redshift', 'snowflake',
+                        'spark', 'spark2', 'sqlite', 'starrocks', 'tableau',
+                        'teradata', 'trino', 'tsql'.
 
 options:
   --template TEMPLATE, -t TEMPLATE
                         Project template. Supported values: airflow, dbt,
-                        default.
+                        default, empty.
 ```
 
-## plan
+#### plan
 ```
-%plan environment [--start START] [--end END] [--execution-time EXECUTION_TIME]
+%plan [--start START] [--end END] [--execution-time EXECUTION_TIME]
             [--create-from CREATE_FROM] [--skip-tests]
             [--restate-model [RESTATE_MODEL ...]] [--no-gaps]
             [--skip-backfill] [--forward-only]
             [--effective-from EFFECTIVE_FROM] [--no-prompts] [--auto-apply]
-            [--no-auto-categorization] [--no-diff]
-
+            [--no-auto-categorization] [--include-unmodified]
+            [--select-model [SELECT_MODEL ...]]
+            [--backfill-model [BACKFILL_MODEL ...]] [--no-diff] [--run]
+            [environment]
 
 Goes through a set of prompts to both establish a plan and apply it
 
@@ -122,12 +136,43 @@ options:
   --auto-apply          Automatically applies the new plan after creation.
   --no-auto-categorization
                         Disable automatic change categorization.
+  --include-unmodified  Include unmodified models in the target environment.
+  --select-model <[SELECT_MODEL ...]>
+                        Select specific model changes that should be included
+                        in the plan.
+  --backfill-model <[BACKFILL_MODEL ...]>
+                        Backfill only the models whose names match the
+                        expression. This is supported only when targeting a
+                        development environment.
   --no-diff             Hide text differences for changed models.
+  --run                 Run latest intervals as part of the plan application
+                        (prod environment only).
 ```
 
-## evaluate
+#### run_dag
 ```
-%evaluate model [--start START] [--end END] [--execution-time EXECUTION_TIME] [--limit LIMIT]
+%run_dag [--start START] [--end END] [--skip-janitor] [--ignore-cron]
+               [environment]
+
+Evaluate the DAG of models using the built-in scheduler.
+
+positional arguments:
+  environment           The environment to run against
+
+options:
+  --start START, -s START
+                        Start date to evaluate.
+  --end END, -e END     End date to evaluate.
+  --skip-janitor        Skip the janitor task.
+  --ignore-cron         Run for all missing intervals, ignoring individual
+                        cron schedules.
+```
+
+#### evaluate
+```
+%evaluate [--start START] [--end END] [--execution-time EXECUTION_TIME]
+                [--limit LIMIT]
+                model
 
 Evaluate a model query and fetches a dataframe.
 
@@ -144,11 +189,11 @@ options:
                         to.
 ```
 
-## render
+#### render
 ```
-%render model [--start START] [--end END] [--execution-time EXECUTION_TIME] [--expand EXPAND]
-              [--dialect DIALECT]
-
+%render [--start START] [--end END] [--execution-time EXECUTION_TIME]
+              [--expand EXPAND] [--dialect DIALECT] [--no-format]
+              model
 
 Renders a model's query, optionally expanding referenced models.
 
@@ -166,58 +211,191 @@ options:
                         expanded as raw queries. If a list, only referenced
                         models are expanded as raw queries.
   --dialect DIALECT     SQL dialect to render.
+  --no-format           Disable fancy formatting of the query.
 ```
 
-## fetchdf
+#### dag
+```
+%dag [--file FILE]
+
+Displays the HTML DAG.
+
+options:
+  --file FILE, -f FILE  An optional file path to write the HTML output to.
+```
+
+#### fetchdf
 ```
 %%fetchdf [df_var]
 
-Fetch a dataframe with a cell's SQL query, optionally storing it in a variable.
+Fetches a dataframe from sql, optionally storing it in a variable.
 
 positional arguments:
-  df_var                An optional variable name to store the resulting
-                        dataframe.
+  df_var  An optional variable name to store the resulting dataframe.
 ```
 
-## test
+#### test
 ```
-%test model [test_name] [--ls]
+%test [--ls] model [test_name]
 
-Allow the user to list tests for a model, output a specific test, and
-then write their changes back.
+Allow the user to list tests for a model, output a specific test, and then write their changes back
 
 positional arguments:
   model      The model.
-  test_name  The test name to display.
+  test_name  The test name to display
 
 options:
-  --ls       List tests associated with a model.
+  --ls       List tests associated with a model
 ```
 
-## table_diff
+#### migrate
 ```
-%table_diff --source SOURCE --target TARGET --on ON [ON ...]
-              [--model MODEL] [--where WHERE] [--limit LIMIT]
+%migrate
+
+Migrate SQLMesh to the current running version
+```
+
+#### create_external_models
+```
+%create_external_models
+
+Create a schema file containing external model schemas.
+```
+
+#### table_diff
+```
+%table_diff [--on [ON ...]] [--model MODEL] [--where WHERE]
+                  [--limit LIMIT] [--show-sample]
+                  SOURCE:TARGET
 
 Show the diff between two tables.
 
 Can either be two tables or two environments and a model.
 
+positional arguments:
+  SOURCE:TARGET    Source and target in `SOURCE:TARGET` format
+
 options:
-  --source SOURCE, -s SOURCE
-                        The source environment or table.
-  --target TARGET, -t TARGET
-                        The target environment or table.
-  --on <ON [ON ...]>    The SQL join condition or list of columns to use as
-                        keys. Table aliases must be "s" and "t" for source and
-                        target.
-  --model MODEL         The model to diff against when source and target are
-                        environments and not tables.
-  --where WHERE         An optional where statement to filter results.
-  --limit LIMIT         The limit of the sample dataframe.
+  --on <[ON ...]>  The column to join on. Can be specified multiple times. The
+                   model grain will be used if not specified.
+  --model MODEL    The model to diff against when source and target are
+                   environments and not tables.
+  --where WHERE    An optional where statement to filter results.
+  --limit LIMIT    The limit of the sample dataframe.
+  --show-sample    Show a sample of the rows that differ. With many columns,
+                   the output can be very wide.
 ```
 
-## rewrite
+#### model
+```
+%model [--start START] [--end END] [--execution-time EXECUTION_TIME]
+             [--dialect DIALECT]
+             model
+
+Renders the model and automatically fills in an editable cell with the model definition.
+
+positional arguments:
+  model                 The model.
+
+options:
+  --start START, -s START
+                        Start date to render.
+  --end END, -e END     End date to render.
+  --execution-time EXECUTION_TIME
+                        Execution time.
+  --dialect DIALECT, -d DIALECT
+                        The rendered dialect.
+```
+
+#### diff
+```
+%diff environment
+
+Show the diff between the local state and the target environment.
+
+positional arguments:
+  environment  The environment to diff local state against.
+```
+
+#### invalidate
+```
+%invalidate environment
+
+Invalidate the target environment, forcing its removal during the next run of the janitor process.
+
+positional arguments:
+  environment  The environment to invalidate.
+```
+
+#### create_test
+```
+%create_test --query QUERY [QUERY ...] [--overwrite]
+                   [--var VAR [VAR ...]] [--path PATH] [--name NAME]
+                   model
+
+Generate a unit test fixture for a given model.
+
+positional arguments:
+  model
+
+options:
+  --query <QUERY [QUERY ...]>, -q <QUERY [QUERY ...]>
+                        Queries that will be used to generate data for the
+                        model's dependencies.
+  --overwrite, -o       When true, the fixture file will be overwritten in
+                        case it already exists.
+  --var <VAR [VAR ...]>, -v <VAR [VAR ...]>
+                        Key-value pairs that will define variables needed by
+                        the model.
+  --path PATH, -p PATH  The file path corresponding to the fixture, relative
+                        to the test directory. By default, the fixture will be
+                        created under the test directory and the file name
+                        will be inferred based on the test's name.
+  --name NAME, -n NAME  The name of the test that will be created. By default,
+                        it's inferred based on the model's name.
+```
+
+#### run_test
+```
+%run_test [--pattern [PATTERN ...]] [--verbose] [tests ...]
+
+Run unit test(s).
+
+positional arguments:
+  tests
+
+options:
+  --pattern <[PATTERN ...]>, -k <[PATTERN ...]>
+                        Only run tests that match the pattern of substring.
+  --verbose, -v         Verbose output.
+```
+
+#### audit
+```
+%audit [--start START] [--end END] [--execution-time EXECUTION_TIME]
+             [models ...]
+
+Run audit(s)
+
+positional arguments:
+  models                A model to audit. Multiple models can be audited.
+
+options:
+  --start START, -s START
+                        Start date to audit.
+  --end END, -e END     End date to audit.
+  --execution-time EXECUTION_TIME
+                        Execution time.
+```
+
+#### rollback
+```
+%rollback
+
+Rollback SQLMesh to the previous migration.
+```
+
+#### rewrite
 ```
 %rewrite [--read READ] [--write WRITE]
 
@@ -226,7 +404,6 @@ Rewrite a sql expression with semantic references into an executable query.
 https://sqlmesh.readthedocs.io/en/latest/concepts/metrics/overview/
 
 options:
-  --read READ           The input dialect of the sql string.
-  --write WRITE, -t WRITE
-                        The output dialect of the sql string.
+  --read READ    The input dialect of the sql string.
+  --write WRITE  The output dialect of the sql string.
 ```

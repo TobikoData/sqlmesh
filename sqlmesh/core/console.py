@@ -1674,7 +1674,9 @@ def get_console(**kwargs: t.Any) -> TerminalConsole | DatabricksMagicConsole | N
     Note: Google Colab environment is untested and currently assumes is compatible with the base
     NotebookMagicConsole.
     """
-    from sqlmesh import RuntimeEnv, runtime_env
+    from sqlmesh import RuntimeEnv
+
+    runtime_env = RuntimeEnv.get()
 
     runtime_env_mapping = {
         RuntimeEnv.DATABRICKS: DatabricksMagicConsole,
@@ -1682,4 +1684,9 @@ def get_console(**kwargs: t.Any) -> TerminalConsole | DatabricksMagicConsole | N
         RuntimeEnv.TERMINAL: TerminalConsole,
         RuntimeEnv.GOOGLE_COLAB: NotebookMagicConsole,
     }
-    return runtime_env_mapping[runtime_env](**kwargs)
+    rich_console_kwargs: t.Dict[str, t.Any] = {"theme": srich.theme}
+    if runtime_env.is_jupyter or runtime_env.is_google_colab:
+        rich_console_kwargs["force_jupyter"] = True
+    return runtime_env_mapping[runtime_env](
+        **{**{"console": RichConsole(**rich_console_kwargs)}, **kwargs}
+    )

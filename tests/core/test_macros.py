@@ -11,32 +11,29 @@ from sqlmesh.utils.errors import SQLMeshError
 from sqlmesh.utils.metaprogramming import Executable, ExecutableKind
 
 
-@macro()
-def filter_country(
-    evaluator: MacroEvaluator, expression: exp.Condition, country: exp.Literal
-) -> exp.Condition:
-    return t.cast(exp.Condition, exp.and_(expression, exp.column("country").eq(country)))
-
-
-@macro("UPPER")
-def upper_case(evaluator: MacroEvaluator, expression: exp.Condition) -> str:
-    return f"UPPER({expression} + 1)"
-
-
-@macro("noop")
-def noop(evaluator: MacroEvaluator):
-    return None
-
-
 @pytest.fixture
 def macro_evaluator() -> MacroEvaluator:
+    @macro()
+    def filter_country(
+        evaluator: MacroEvaluator, expression: exp.Condition, country: exp.Literal
+    ) -> exp.Condition:
+        return t.cast(exp.Condition, exp.and_(expression, exp.column("country").eq(country)))
+
+    @macro("UPPER")
+    def upper_case(evaluator: MacroEvaluator, expression: exp.Condition) -> str:
+        return f"UPPER({expression} + 1)"
+
+    @macro("noop")
+    def noop(evaluator: MacroEvaluator):
+        return None
+
     return MacroEvaluator(
         "hive",
         {"test": Executable(name="test", payload=f"def test(_):\n    return 'test'")},
     )
 
 
-def test_case():
+def test_case(macro_evaluator):
     assert macro.get_registry()["upper"]
 
 

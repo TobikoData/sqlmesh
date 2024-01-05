@@ -44,9 +44,9 @@ class DatabricksEngineAdapter(SparkEngineAdapter):
 
     @classproperty
     def can_access_spark_session(cls) -> bool:
-        from sqlmesh import runtime_env
+        from sqlmesh import RuntimeEnv
 
-        if runtime_env.is_databricks:
+        if RuntimeEnv.get().is_databricks:
             return True
         try:
             from databricks.connect import DatabricksSession  # type: ignore
@@ -57,9 +57,9 @@ class DatabricksEngineAdapter(SparkEngineAdapter):
 
     @property
     def _use_spark_session(self) -> bool:
-        from sqlmesh import runtime_env
+        from sqlmesh import RuntimeEnv
 
-        if runtime_env.is_databricks:
+        if RuntimeEnv.get().is_databricks:
             return True
         return (
             self.can_access_spark_session

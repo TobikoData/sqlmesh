@@ -17,6 +17,8 @@ from sqlglot.helper import ensure_list
 
 from sqlmesh.core.context import Context
 from sqlmesh.core.engine_adapter.base import EngineAdapter
+from sqlmesh.core.macros import macro
+from sqlmesh.core.model import model
 from sqlmesh.core.plan import BuiltInPlanEvaluator, Plan
 from sqlmesh.core.snapshot import Node, Snapshot
 from sqlmesh.utils import random_id
@@ -136,6 +138,20 @@ class SushiDataValidator:
 def ignore_local_config_files():
     with mock.patch("sqlmesh.core.constants.SQLMESH_PATH", Path(TemporaryDirectory().name)):
         yield
+
+
+@pytest.fixture(scope="module", autouse=True)
+def rescope_global_macros(request):
+    existing_registry = macro.get_registry().copy()
+    yield
+    macro.set_registry(existing_registry)
+
+
+@pytest.fixture(scope="module", autouse=True)
+def rescope_global_models(request):
+    existing_registry = model.get_registry().copy()
+    yield
+    model.set_registry(existing_registry)
 
 
 @pytest.fixture
