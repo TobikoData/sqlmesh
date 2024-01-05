@@ -79,6 +79,9 @@ class PlanBuilder:
         default_start: t.Optional[TimeLike] = None,
         default_end: t.Optional[TimeLike] = None,
     ):
+        self.override_start = start is not None
+        self.override_end = end is not None
+
         self._context_diff = context_diff
         self._no_gaps = no_gaps
         self._skip_backfill = skip_backfill
@@ -105,22 +108,10 @@ class PlanBuilder:
             suffix_target=environment_suffix_target,
         )
 
-        self._override_start = start is not None
-        self._override_end = end is not None
         self._plan_id: str = random_id()
         self._model_fqn_to_snapshot = {s.name: s for s in self._context_diff.snapshots.values()}
 
         self._latest_plan: t.Optional[Plan] = None
-
-    @property
-    def override_start(self) -> bool:
-        """Indicates whether the start date was explicitly set by the user."""
-        return self._override_start
-
-    @property
-    def override_end(self) -> bool:
-        """Indicates whether the end date was explicitly set by the user."""
-        return self._override_end
 
     @property
     def is_start_and_end_allowed(self) -> bool:
@@ -129,13 +120,13 @@ class PlanBuilder:
 
     def set_start(self, new_start: TimeLike) -> PlanBuilder:
         self._start = new_start
-        self._override_start = True
+        self.override_start = True
         self._latest_plan = None
         return self
 
     def set_end(self, new_end: TimeLike) -> PlanBuilder:
         self._end = new_end
-        self._override_end = True
+        self.override_end = True
         self._latest_plan = None
         return self
 
@@ -148,7 +139,7 @@ class PlanBuilder:
             effective_from: The effective date to set.
         """
         self._effective_from = effective_from
-        if effective_from and self._is_dev and not self._override_start:
+        if effective_from and self._is_dev and not self.override_start:
             self._start = effective_from
         self._latest_plan = None
         return self
@@ -549,7 +540,7 @@ class PlanBuilder:
         return snapshot.snapshot_id in self._context_diff.new_snapshots
 
     def _ensure_valid_date_range(self) -> None:
-        if (self._override_start or self._override_end) and not self.is_start_and_end_allowed:
+        if (self.override_start or self.override_end) and not self.is_start_and_end_allowed:
             raise PlanError(
                 "The start and end dates can't be set for a production plan without restatements."
             )
