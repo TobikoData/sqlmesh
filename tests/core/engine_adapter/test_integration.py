@@ -1002,7 +1002,7 @@ def test_sushi(ctx: TestContext):
     assert no_change_plan.context_diff.is_new_environment
 
     # make and validate unmodified dev environment
-    no_change_plan.apply()
+    context.apply(no_change_plan)
 
     data_validator.validate(
         "sushi.customer_revenue_lifetime",

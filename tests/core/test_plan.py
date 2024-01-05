@@ -7,9 +7,10 @@ from pytest_mock.plugin import MockerFixture
 from sqlglot import parse_one
 
 from sqlmesh.core.context import Context
+from sqlmesh.core.context_diff import ContextDiff
 from sqlmesh.core.model import IncrementalByTimeRangeKind, SeedKind, SeedModel, SqlModel
 from sqlmesh.core.model.seed import Seed
-from sqlmesh.core.plan import Plan, SnapshotIntervals
+from sqlmesh.core.plan import PlanBuilder, SnapshotIntervals
 from sqlmesh.core.snapshot import (
     DeployabilityIndex,
     Snapshot,
@@ -46,24 +47,31 @@ def test_forward_only_plan_sets_version(make_snapshot, mocker: MockerFixture):
     )
     assert not snapshot_b.version
 
-    context_diff_mock = mocker.Mock()
-    context_diff_mock.snapshots = {
-        snapshot_a.snapshot_id: snapshot_a,
-        snapshot_b.snapshot_id: snapshot_b,
-    }
-    context_diff_mock.added = set()
-    context_diff_mock.removed_snapshots = set()
-    context_diff_mock.modified_snapshots = {snapshot_b.name: (snapshot_b, snapshot_b)}
-    context_diff_mock.new_snapshots = {snapshot_b.snapshot_id: snapshot_b}
-    context_diff_mock.added_materialized_snapshot_ids = set()
+    context_diff = ContextDiff(
+        environment="test_environment",
+        is_new_environment=True,
+        is_unfinalized_environment=False,
+        create_from="prod",
+        added=set(),
+        removed_snapshots={},
+        modified_snapshots={snapshot_b.name: (snapshot_b, snapshot_b)},
+        snapshots={
+            snapshot_a.snapshot_id: snapshot_a,
+            snapshot_b.snapshot_id: snapshot_b,
+        },
+        new_snapshots={snapshot_b.snapshot_id: snapshot_b},
+        previous_plan_id=None,
+        previously_promoted_snapshot_ids=set(),
+    )
 
-    plan = Plan(context_diff_mock, forward_only=True)
+    plan_builder = PlanBuilder(context_diff, forward_only=True)
 
+    plan_builder.build()
     assert snapshot_b.version == "test_version"
 
     # Make sure that the choice can't be set manually.
     with pytest.raises(PlanError, match="Choice setting is not supported by a forward-only plan."):
-        plan.set_choice(snapshot_b, SnapshotChangeCategory.BREAKING)
+        plan_builder.set_choice(snapshot_b, SnapshotChangeCategory.BREAKING).build()
 
 
 def test_forward_only_dev(make_snapshot, mocker: MockerFixture):
@@ -79,30 +87,36 @@ def test_forward_only_dev(make_snapshot, mocker: MockerFixture):
     expected_end = to_date("2022-01-03")
     expected_interval_end = to_timestamp(to_date("2022-01-04"))
 
-    context_diff_mock = mocker.Mock()
-    context_diff_mock.snapshots = {snapshot_a.snapshot_id: snapshot_a}
-    context_diff_mock.added = set()
-    context_diff_mock.removed_snapshots = set()
-    context_diff_mock.modified_snapshots = {}
-    context_diff_mock.new_snapshots = {snapshot_a.snapshot_id: snapshot_a}
-    context_diff_mock.added_materialized_snapshot_ids = set()
+    context_diff = ContextDiff(
+        environment="test_environment",
+        is_new_environment=True,
+        is_unfinalized_environment=False,
+        create_from="prod",
+        added=set(),
+        removed_snapshots={},
+        modified_snapshots={snapshot_a.name: (snapshot_a, snapshot_a)},
+        snapshots={snapshot_a.snapshot_id: snapshot_a},
+        new_snapshots={snapshot_a.snapshot_id: snapshot_a},
+        previous_plan_id=None,
+        previously_promoted_snapshot_ids=set(),
+    )
 
-    yesterday_ds_mock = mocker.patch("sqlmesh.core.plan.definition.yesterday_ds")
+    yesterday_ds_mock = mocker.patch("sqlmesh.core.plan.builder.yesterday_ds")
     yesterday_ds_mock.return_value = expected_start
 
     now_mock = mocker.patch("sqlmesh.core.snapshot.definition.now")
     now_mock.return_value = expected_end
 
-    now_ds_mock = mocker.patch("sqlmesh.core.plan.definition.now")
+    now_ds_mock = mocker.patch("sqlmesh.core.plan.builder.now")
     now_ds_mock.return_value = expected_end
 
-    plan = Plan(context_diff_mock, forward_only=True, is_dev=True)
+    plan = PlanBuilder(context_diff, forward_only=True, is_dev=True).build()
 
     assert plan.restatements == {
         snapshot_a.snapshot_id: (to_timestamp(expected_start), expected_interval_end)
     }
     assert plan.start == to_date(expected_start)
-    assert plan.end == expected_end
+    assert plan.end is None
 
     yesterday_ds_mock.assert_called_once()
     now_ds_mock.call_count == 2
@@ -115,21 +129,27 @@ def test_forward_only_plan_added_models(make_snapshot, mocker: MockerFixture):
         SqlModel(name="b", query=parse_one("select a, ds from a")), nodes={"a": snapshot_a.node}
     )
 
-    context_diff_mock = mocker.Mock()
-    context_diff_mock.snapshots = {
-        snapshot_a.snapshot_id: snapshot_a,
-        snapshot_b.snapshot_id: snapshot_b,
-    }
-    context_diff_mock.added = {snapshot_b.snapshot_id}
-    context_diff_mock.removed_snapshots = set()
-    context_diff_mock.modified_snapshots = {snapshot_a.name: (snapshot_a, snapshot_a)}
-    context_diff_mock.new_snapshots = {
-        snapshot_a.snapshot_id: snapshot_a,
-        snapshot_b.snapshot_id: snapshot_b,
-    }
-    context_diff_mock.added_materialized_snapshot_ids = {snapshot_b.snapshot_id}
+    context_diff = ContextDiff(
+        environment="test_environment",
+        is_new_environment=True,
+        is_unfinalized_environment=False,
+        create_from="prod",
+        added={snapshot_b.snapshot_id},
+        removed_snapshots={},
+        modified_snapshots={snapshot_a.name: (snapshot_a, snapshot_a)},
+        snapshots={
+            snapshot_a.snapshot_id: snapshot_a,
+            snapshot_b.snapshot_id: snapshot_b,
+        },
+        new_snapshots={
+            snapshot_a.snapshot_id: snapshot_a,
+            snapshot_b.snapshot_id: snapshot_b,
+        },
+        previous_plan_id=None,
+        previously_promoted_snapshot_ids=set(),
+    )
 
-    Plan(context_diff_mock, forward_only=True)
+    PlanBuilder(context_diff, forward_only=True).build()
     assert snapshot_a.change_category == SnapshotChangeCategory.FORWARD_ONLY
     assert snapshot_b.change_category == SnapshotChangeCategory.BREAKING
 
@@ -154,18 +174,24 @@ def test_paused_forward_only_parent(make_snapshot, mocker: MockerFixture):
     snapshot_b = make_snapshot(SqlModel(name="b", query=parse_one("select 3, ds from a")))
     assert not snapshot_b.version
 
-    context_diff_mock = mocker.Mock()
-    context_diff_mock.snapshots = {
-        snapshot_a.snapshot_id: snapshot_a,
-        snapshot_b.snapshot_id: snapshot_b,
-    }
-    context_diff_mock.added = set()
-    context_diff_mock.removed_snapshots = set()
-    context_diff_mock.modified_snapshots = {snapshot_b.name: (snapshot_b, snapshot_b_old)}
-    context_diff_mock.new_snapshots = {snapshot_b.snapshot_id: snapshot_b}
-    context_diff_mock.added_materialized_snapshot_ids = set()
+    context_diff = ContextDiff(
+        environment="test_environment",
+        is_new_environment=True,
+        is_unfinalized_environment=False,
+        create_from="prod",
+        added=set(),
+        removed_snapshots={},
+        modified_snapshots={snapshot_b.name: (snapshot_b, snapshot_b_old)},
+        snapshots={
+            snapshot_a.snapshot_id: snapshot_a,
+            snapshot_b.snapshot_id: snapshot_b,
+        },
+        new_snapshots={snapshot_b.snapshot_id: snapshot_b},
+        previous_plan_id=None,
+        previously_promoted_snapshot_ids=set(),
+    )
 
-    Plan(context_diff_mock, forward_only=False)
+    PlanBuilder(context_diff, forward_only=False).build()
     assert snapshot_b.change_category == SnapshotChangeCategory.BREAKING
 
 
@@ -203,13 +229,13 @@ def test_restate_models(sushi_context_pre_scheduling: Context):
     assert plan.requires_backfill
 
     plan = sushi_context_pre_scheduling.plan(restate_models=["unknown_model"], no_prompts=True)
-    assert plan.snapshots == []
+    assert plan.snapshots == {}
     assert plan.missing_intervals == []
     assert not plan.has_changes
     assert not plan.requires_backfill
 
     plan = sushi_context_pre_scheduling.plan(restate_models=["tag:unknown_tag"], no_prompts=True)
-    assert plan.snapshots == []
+    assert plan.snapshots == {}
     assert plan.missing_intervals == []
     assert not plan.has_changes
     assert not plan.requires_backfill
@@ -258,11 +284,11 @@ def test_restate_models_with_existing_missing_intervals(sushi_context: Context):
     }
     assert plan.missing_intervals == [
         SnapshotIntervals(
-            snapshot_id=waiter_revenue_by_day_snapshot_id,
+            snapshot_id=top_waiters_snapshot_id,
             intervals=expected_missing_intervals,
         ),
         SnapshotIntervals(
-            snapshot_id=top_waiters_snapshot_id,
+            snapshot_id=waiter_revenue_by_day_snapshot_id,
             intervals=expected_missing_intervals,
         ),
     ]
@@ -278,36 +304,49 @@ def test_restate_model_with_merge_strategy(make_snapshot, mocker: MockerFixture)
         )
     )
 
-    context_diff_mock = mocker.Mock()
-    context_diff_mock.snapshots = {snapshot_a.snapshot_id: snapshot_a}
-    context_diff_mock.added = set()
-    context_diff_mock.removed_snapshots = set()
-    context_diff_mock.modified_snapshots = {}
-    context_diff_mock.new_snapshots = {}
-    context_diff_mock.added_materialized_snapshot_ids = set()
+    context_diff = ContextDiff(
+        environment="test_environment",
+        is_new_environment=True,
+        is_unfinalized_environment=False,
+        create_from="prod",
+        added=set(),
+        removed_snapshots={},
+        modified_snapshots={},
+        snapshots={snapshot_a.snapshot_id: snapshot_a},
+        new_snapshots={},
+        previous_plan_id=None,
+        previously_promoted_snapshot_ids=set(),
+    )
 
     with pytest.raises(
         PlanError,
         match="Cannot restate from 'a'. Either such model doesn't exist, no other materialized model references it.*",
     ):
-        Plan(context_diff_mock, restate_models=["a"])
+        PlanBuilder(context_diff, restate_models=["a"]).build()
 
 
 def test_new_snapshots_with_restatements(make_snapshot, mocker: MockerFixture):
     snapshot_a = make_snapshot(SqlModel(name="a", query=parse_one("select 1, ds")))
 
-    context_diff_mock = mocker.Mock()
-    context_diff_mock.snapshots = {snapshot_a.snapshot_id: snapshot_a}
-    context_diff_mock.added = set()
-    context_diff_mock.removed_snapshots = set()
-    context_diff_mock.modified_snapshots = {}
-    context_diff_mock.new_snapshots = {snapshot_a.snapshot_id: snapshot_a}
+    context_diff = ContextDiff(
+        environment="test_environment",
+        is_new_environment=True,
+        is_unfinalized_environment=False,
+        create_from="prod",
+        added=set(),
+        removed_snapshots={},
+        modified_snapshots={},
+        snapshots={snapshot_a.snapshot_id: snapshot_a},
+        new_snapshots={snapshot_a.snapshot_id: snapshot_a},
+        previous_plan_id=None,
+        previously_promoted_snapshot_ids=set(),
+    )
 
     with pytest.raises(
         PlanError,
         match=r"Model changes and restatements can't be a part of the same plan.*",
     ):
-        Plan(context_diff_mock, restate_models=["a"])
+        PlanBuilder(context_diff, restate_models=["a"]).build()
 
 
 def test_end_validation(make_snapshot, mocker: MockerFixture):
@@ -319,46 +358,53 @@ def test_end_validation(make_snapshot, mocker: MockerFixture):
         )
     )
 
-    context_diff_mock = mocker.Mock()
-    context_diff_mock.snapshots = {snapshot_a.snapshot_id: snapshot_a}
-    context_diff_mock.added = set()
-    context_diff_mock.removed_snapshots = set()
-    context_diff_mock.modified_snapshots = {}
-    context_diff_mock.new_snapshots = {snapshot_a.snapshot_id: snapshot_a}
+    context_diff = ContextDiff(
+        environment="test_environment",
+        is_new_environment=True,
+        is_unfinalized_environment=False,
+        create_from="prod",
+        added={snapshot_a.snapshot_id},
+        removed_snapshots={},
+        modified_snapshots={},
+        snapshots={snapshot_a.snapshot_id: snapshot_a},
+        new_snapshots={snapshot_a.snapshot_id: snapshot_a},
+        previous_plan_id=None,
+        previously_promoted_snapshot_ids=set(),
+    )
 
-    dev_plan = Plan(context_diff_mock, end="2022-01-03", is_dev=True)
-    assert dev_plan.end == "2022-01-03"
-    dev_plan.end = "2022-01-04"
-    assert dev_plan.end == "2022-01-04"
+    dev_plan_builder = PlanBuilder(context_diff, end="2022-01-03", is_dev=True)
+    assert dev_plan_builder.build().end == "2022-01-03"
+    dev_plan_builder.set_end("2022-01-04")
+    assert dev_plan_builder.build().end == "2022-01-04"
 
     start_end_not_allowed_message = (
         "The start and end dates can't be set for a production plan without restatements."
     )
 
     with pytest.raises(PlanError, match=start_end_not_allowed_message):
-        Plan(context_diff_mock, end="2022-01-03")
+        PlanBuilder(context_diff, end="2022-01-03").build()
 
     with pytest.raises(PlanError, match=start_end_not_allowed_message):
-        Plan(context_diff_mock, start="2022-01-03")
+        PlanBuilder(context_diff, start="2022-01-03").build()
 
-    prod_plan = Plan(context_diff_mock)
-
-    with pytest.raises(PlanError, match=start_end_not_allowed_message):
-        prod_plan.end = "2022-01-03"
+    prod_plan_builder = PlanBuilder(context_diff)
 
     with pytest.raises(PlanError, match=start_end_not_allowed_message):
-        prod_plan.start = "2022-01-03"
+        prod_plan_builder.set_end("2022-01-03").build()
 
-    context_diff_mock.new_snapshots = {}
-    restatement_prod_plan = Plan(
-        context_diff_mock,
+    with pytest.raises(PlanError, match=start_end_not_allowed_message):
+        prod_plan_builder.set_start("2022-01-03").build()
+
+    context_diff.new_snapshots = {}
+    restatement_prod_plan_builder = PlanBuilder(
+        context_diff,
         start="2022-01-01",
         end="2022-01-03",
         restate_models=['"a"'],
     )
-    assert restatement_prod_plan.end == "2022-01-03"
-    restatement_prod_plan.end = "2022-01-04"
-    assert restatement_prod_plan.end == "2022-01-04"
+    assert restatement_prod_plan_builder.build().end == "2022-01-03"
+    restatement_prod_plan_builder.set_end("2022-01-04")
+    assert restatement_prod_plan_builder.build().end == "2022-01-04"
 
 
 def test_forward_only_revert_not_allowed(make_snapshot, mocker: MockerFixture):
@@ -372,30 +418,34 @@ def test_forward_only_revert_not_allowed(make_snapshot, mocker: MockerFixture):
     forward_only_snapshot.unpaused_ts = now_timestamp()
     assert forward_only_snapshot.is_forward_only
 
-    context_diff_mock = mocker.Mock()
-    context_diff_mock.snapshots = {snapshot.snapshot_id: snapshot}
-    context_diff_mock.added = set()
-    context_diff_mock.removed_snapshots = set()
-    context_diff_mock.modified_snapshots = {snapshot.name: (snapshot, forward_only_snapshot)}
-    context_diff_mock.new_snapshots = {}
-    context_diff_mock.added_materialized_snapshot_ids = set()
+    context_diff = ContextDiff(
+        environment="test_environment",
+        is_new_environment=True,
+        is_unfinalized_environment=False,
+        create_from="prod",
+        added=set(),
+        removed_snapshots={},
+        modified_snapshots={snapshot.name: (snapshot, forward_only_snapshot)},
+        snapshots={snapshot.snapshot_id: snapshot},
+        new_snapshots={},
+        previous_plan_id=None,
+        previously_promoted_snapshot_ids=set(),
+    )
 
     with pytest.raises(
         PlanError,
         match=r"Attempted to revert to an unrevertable version of model.*",
     ):
-        Plan(context_diff_mock, forward_only=True)
+        PlanBuilder(context_diff, forward_only=True).build()
 
     # Make sure the plan can be created if a new snapshot version was enforced.
     new_version_snapshot = make_snapshot(
         SqlModel(name="a", query=parse_one("select 1, ds"), stamp="test_stamp")
     )
     snapshot.categorize_as(SnapshotChangeCategory.BREAKING)
-    context_diff_mock.modified_snapshots = {
-        snapshot.name: (new_version_snapshot, forward_only_snapshot)
-    }
-    context_diff_mock.new_snapshots = {new_version_snapshot.snapshot_id: new_version_snapshot}
-    Plan(context_diff_mock, forward_only=True)
+    context_diff.modified_snapshots = {snapshot.name: (new_version_snapshot, forward_only_snapshot)}
+    context_diff.new_snapshots = {new_version_snapshot.snapshot_id: new_version_snapshot}
+    PlanBuilder(context_diff, forward_only=True).build()
 
 
 def test_forward_only_plan_seed_models(make_snapshot, mocker: MockerFixture):
@@ -422,17 +472,21 @@ def test_forward_only_plan_seed_models(make_snapshot, mocker: MockerFixture):
     assert snapshot_a_updated.version is None
     assert snapshot_a_updated.change_category is None
 
-    context_diff_mock = mocker.Mock()
-    context_diff_mock.snapshots = {snapshot_a_updated.snapshot_id: snapshot_a_updated}
-    context_diff_mock.added = set()
-    context_diff_mock.removed_snapshots = set()
-    context_diff_mock.modified_snapshots = {
-        snapshot_a_updated.name: (snapshot_a_updated, snapshot_a)
-    }
-    context_diff_mock.new_snapshots = {snapshot_a_updated.snapshot_id: snapshot_a_updated}
-    context_diff_mock.added_materialized_snapshot_ids = set()
+    context_diff = ContextDiff(
+        environment="test_environment",
+        is_new_environment=True,
+        is_unfinalized_environment=False,
+        create_from="prod",
+        added=set(),
+        removed_snapshots={},
+        modified_snapshots={snapshot_a_updated.name: (snapshot_a_updated, snapshot_a)},
+        snapshots={snapshot_a_updated.snapshot_id: snapshot_a_updated},
+        new_snapshots={snapshot_a_updated.snapshot_id: snapshot_a},
+        previous_plan_id=None,
+        previously_promoted_snapshot_ids=set(),
+    )
 
-    Plan(context_diff_mock, forward_only=True)
+    PlanBuilder(context_diff, forward_only=True).build()
     assert snapshot_a_updated.version == snapshot_a_updated.fingerprint.to_version()
     assert snapshot_a_updated.change_category == SnapshotChangeCategory.NON_BREAKING
 
@@ -446,26 +500,33 @@ def test_start_inference(make_snapshot, mocker: MockerFixture):
     snapshot_b = make_snapshot(SqlModel(name="b", query=parse_one("select 2, ds")))
     snapshot_b.categorize_as(SnapshotChangeCategory.BREAKING)
 
-    context_diff_mock = mocker.Mock()
-    context_diff_mock.snapshots = {
-        snapshot_a.snapshot_id: snapshot_a,
-        snapshot_b.snapshot_id: snapshot_b,
-    }
-    context_diff_mock.added = set()
-    context_diff_mock.removed_snapshots = set()
-    context_diff_mock.modified_snapshots = {}
-    context_diff_mock.new_snapshots = {}
+    context_diff = ContextDiff(
+        environment="test_environment",
+        is_new_environment=True,
+        is_unfinalized_environment=False,
+        create_from="prod",
+        added={snapshot_b.snapshot_id},
+        removed_snapshots={},
+        modified_snapshots={},
+        snapshots={
+            snapshot_a.snapshot_id: snapshot_a,
+            snapshot_b.snapshot_id: snapshot_b,
+        },
+        new_snapshots={},
+        previous_plan_id=None,
+        previously_promoted_snapshot_ids=set(),
+    )
 
     snapshot_b.add_interval("2022-01-01", now())
 
-    plan = Plan(context_diff_mock)
+    plan = PlanBuilder(context_diff).build()
     assert len(plan.missing_intervals) == 1
     assert plan.missing_intervals[0].snapshot_id == snapshot_a.snapshot_id
     assert plan.start == to_timestamp("2022-01-01")
 
     # Test inference from existing intervals
-    context_diff_mock.snapshots = {snapshot_b.snapshot_id: snapshot_b}
-    plan = Plan(context_diff_mock)
+    context_diff.snapshots = {snapshot_b.snapshot_id: snapshot_b}
+    plan = PlanBuilder(context_diff).build()
     assert not plan.missing_intervals
     assert plan.start == to_datetime("2022-01-01")
 
@@ -476,14 +537,21 @@ def test_auto_categorization(make_snapshot, mocker: MockerFixture):
 
     updated_snapshot = make_snapshot(SqlModel(name="a", query=parse_one("select 2, ds")))
 
-    context_diff_mock = mocker.Mock()
-    context_diff_mock.snapshots = {updated_snapshot.snapshot_id: updated_snapshot}
-    context_diff_mock.added = set()
-    context_diff_mock.removed_snapshots = set()
-    context_diff_mock.modified_snapshots = {updated_snapshot.name: (updated_snapshot, snapshot)}
-    context_diff_mock.new_snapshots = {updated_snapshot.snapshot_id: updated_snapshot}
+    context_diff = ContextDiff(
+        environment="test_environment",
+        is_new_environment=True,
+        is_unfinalized_environment=False,
+        create_from="prod",
+        added=set(),
+        removed_snapshots={},
+        modified_snapshots={updated_snapshot.name: (updated_snapshot, snapshot)},
+        snapshots={updated_snapshot.snapshot_id: updated_snapshot},
+        new_snapshots={updated_snapshot.snapshot_id: updated_snapshot},
+        previous_plan_id=None,
+        previously_promoted_snapshot_ids=set(),
+    )
 
-    Plan(context_diff_mock)
+    PlanBuilder(context_diff).build()
 
     assert updated_snapshot.version == updated_snapshot.fingerprint.to_version()
     assert updated_snapshot.change_category == SnapshotChangeCategory.BREAKING
@@ -506,21 +574,27 @@ def test_auto_categorization_missing_schema_downstream(make_snapshot, mocker: Mo
         nodes={'"a"': updated_snapshot.model},
     )
 
-    context_diff_mock = mocker.Mock()
-    context_diff_mock.snapshots = {
-        updated_snapshot.snapshot_id: updated_snapshot,
-        updated_downstream_snapshot.snapshot_id: updated_downstream_snapshot,
-    }
-    context_diff_mock.added = set()
-    context_diff_mock.removed_snapshots = set()
-    context_diff_mock.modified_snapshots = {
-        updated_snapshot.name: (updated_snapshot, snapshot),
-        updated_downstream_snapshot.name: (updated_downstream_snapshot, downstream_snapshot),
-    }
-    context_diff_mock.new_snapshots = {updated_snapshot.snapshot_id: updated_snapshot}
-    context_diff_mock.directly_modified.side_effect = lambda name: name == '"a"'
+    context_diff = ContextDiff(
+        environment="test_environment",
+        is_new_environment=True,
+        is_unfinalized_environment=False,
+        create_from="prod",
+        added=set(),
+        removed_snapshots={},
+        modified_snapshots={
+            updated_snapshot.name: (updated_snapshot, snapshot),
+            updated_downstream_snapshot.name: (updated_downstream_snapshot, downstream_snapshot),
+        },
+        snapshots={
+            updated_snapshot.snapshot_id: updated_snapshot,
+            updated_downstream_snapshot.snapshot_id: updated_downstream_snapshot,
+        },
+        new_snapshots={updated_snapshot.snapshot_id: updated_snapshot},
+        previous_plan_id=None,
+        previously_promoted_snapshot_ids=set(),
+    )
 
-    Plan(context_diff_mock)
+    PlanBuilder(context_diff).build()
 
     assert updated_snapshot.version
     assert updated_snapshot.change_category == SnapshotChangeCategory.BREAKING
@@ -528,23 +602,32 @@ def test_auto_categorization_missing_schema_downstream(make_snapshot, mocker: Mo
 
 def test_broken_references(make_snapshot, mocker: MockerFixture):
     snapshot_a = make_snapshot(SqlModel(name="a", query=parse_one("select 1, ds")))
+    snapshot_a.categorize_as(SnapshotChangeCategory.BREAKING)
+
     snapshot_b = make_snapshot(
         SqlModel(name="b", query=parse_one("select 2, ds FROM a")), nodes={'"a"': snapshot_a.node}
     )
     snapshot_b.categorize_as(SnapshotChangeCategory.BREAKING)
 
-    context_diff_mock = mocker.Mock()
-    context_diff_mock.snapshots = {snapshot_b.snapshot_id: snapshot_b}
-    context_diff_mock.added = set()
-    context_diff_mock.removed_snapshots = {snapshot_a.snapshot_id: snapshot_a}
-    context_diff_mock.modified_snapshots = {}
-    context_diff_mock.new_snapshots = {}
+    context_diff = ContextDiff(
+        environment="test_environment",
+        is_new_environment=True,
+        is_unfinalized_environment=False,
+        create_from="prod",
+        added=set(),
+        removed_snapshots={snapshot_a.snapshot_id: snapshot_a.table_info},
+        modified_snapshots={snapshot_b.name: (snapshot_b, snapshot_b)},
+        snapshots={snapshot_b.snapshot_id: snapshot_b},
+        new_snapshots={},
+        previous_plan_id=None,
+        previously_promoted_snapshot_ids=set(),
+    )
 
     with pytest.raises(
         PlanError,
         match=r"""Removed '"a"' are referenced in '"b"'.*""",
     ):
-        Plan(context_diff_mock)
+        PlanBuilder(context_diff).build()
 
 
 def test_effective_from(make_snapshot, mocker: MockerFixture):
@@ -559,25 +642,30 @@ def test_effective_from(make_snapshot, mocker: MockerFixture):
     )
     updated_snapshot.previous_versions = snapshot.all_versions
 
-    context_diff_mock = mocker.Mock()
-    context_diff_mock.snapshots = {updated_snapshot.snapshot_id: updated_snapshot}
-    context_diff_mock.added = set()
-    context_diff_mock.removed_snapshots = set()
-    context_diff_mock.modified_snapshots = {updated_snapshot.name: (updated_snapshot, snapshot)}
-    context_diff_mock.new_snapshots = {updated_snapshot.snapshot_id: updated_snapshot}
-    context_diff_mock.added_materialized_snapshot_ids = set()
+    context_diff = ContextDiff(
+        environment="test_environment",
+        is_new_environment=True,
+        is_unfinalized_environment=False,
+        create_from="prod",
+        added=set(),
+        removed_snapshots={},
+        modified_snapshots={updated_snapshot.name: (updated_snapshot, snapshot)},
+        snapshots={updated_snapshot.snapshot_id: updated_snapshot},
+        new_snapshots={updated_snapshot.snapshot_id: updated_snapshot},
+        previous_plan_id=None,
+        previously_promoted_snapshot_ids=set(),
+    )
 
     with pytest.raises(
         PlanError,
         match="Effective date can only be set for a forward-only plan.",
     ):
-        plan = Plan(context_diff_mock)
-        plan.effective_from = "2023-02-01"
+        PlanBuilder(context_diff).set_effective_from("2023-02-01").build()
 
     # The snapshot gets categorized as breaking in previous step so we want to reset that back to None
     updated_snapshot.change_category = None
-    plan = Plan(
-        context_diff_mock, forward_only=True, start="2023-01-01", end="2023-03-01", is_dev=True
+    plan_builder = PlanBuilder(
+        context_diff, forward_only=True, start="2023-01-01", end="2023-03-01", is_dev=True
     )
     updated_snapshot.add_interval("2023-01-01", "2023-03-01")
 
@@ -585,23 +673,23 @@ def test_effective_from(make_snapshot, mocker: MockerFixture):
         PlanError,
         match="Effective date cannot be in the future.",
     ):
-        plan.effective_from = now() + timedelta(days=1)
+        plan_builder.set_effective_from(now() + timedelta(days=1)).build()
 
-    assert plan.effective_from is None
+    assert plan_builder.set_effective_from(None).build().effective_from is None
     assert updated_snapshot.effective_from is None
-    assert not plan.missing_intervals
+    assert not plan_builder.build().missing_intervals
 
-    plan.effective_from = "2023-02-01"
-    assert plan.effective_from == "2023-02-01"
+    plan_builder.set_effective_from("2023-02-01")
+    assert plan_builder.build().effective_from == "2023-02-01"
     assert updated_snapshot.effective_from == "2023-02-01"
 
-    assert len(plan.missing_intervals) == 1
-    missing_intervals = plan.missing_intervals[0]
+    assert len(plan_builder.build().missing_intervals) == 1
+    missing_intervals = plan_builder.build().missing_intervals[0]
     assert missing_intervals.intervals[0][0] == to_timestamp("2023-02-01")
     assert missing_intervals.intervals[-1][-1] == to_timestamp("2023-03-02")
 
-    plan.effective_from = None
-    assert plan.effective_from is None
+    plan_builder.set_effective_from(None)
+    assert plan_builder.build().effective_from is None
     assert updated_snapshot.effective_from is None
 
 
@@ -609,26 +697,28 @@ def test_new_environment_no_changes(make_snapshot, mocker: MockerFixture):
     snapshot = make_snapshot(SqlModel(name="a", query=parse_one("select 1, ds")))
     snapshot.categorize_as(SnapshotChangeCategory.BREAKING)
 
-    context_diff_mock = mocker.Mock()
-    context_diff_mock.snapshots = {snapshot.snapshot_id: snapshot}
-    context_diff_mock.added = set()
-    context_diff_mock.removed_snapshots = set()
-    context_diff_mock.modified_snapshots = {}
-    context_diff_mock.promotable_snapshot_ids = set()
-    context_diff_mock.new_snapshots = {}
-    context_diff_mock.is_new_environment = True
-    context_diff_mock.has_snapshot_changes = False
-    context_diff_mock.environment = "test_dev"
-    context_diff_mock.previous_plan_id = "previous_plan_id"
+    context_diff = ContextDiff(
+        environment="test_environment",
+        is_new_environment=True,
+        is_unfinalized_environment=False,
+        create_from="prod",
+        added=set(),
+        removed_snapshots={},
+        modified_snapshots={},
+        snapshots={snapshot.snapshot_id: snapshot},
+        new_snapshots={},
+        previous_plan_id=None,
+        previously_promoted_snapshot_ids=set(),
+    )
 
     with pytest.raises(PlanError, match="No changes were detected.*"):
-        Plan(context_diff_mock, is_dev=True)
+        PlanBuilder(context_diff, is_dev=True).build()
 
-    assert Plan(context_diff_mock).environment.promoted_snapshot_ids is None
+    assert PlanBuilder(context_diff).build().environment.promoted_snapshot_ids is None
     assert (
-        Plan(
-            context_diff_mock, is_dev=True, include_unmodified=True
-        ).environment.promoted_snapshot_ids
+        PlanBuilder(context_diff, is_dev=True, include_unmodified=True)
+        .build()
+        .environment.promoted_snapshot_ids
         is None
     )
 
@@ -641,35 +731,37 @@ def test_new_environment_with_changes(make_snapshot, mocker: MockerFixture):
     snapshot_b = make_snapshot(SqlModel(name="b", query=parse_one("select 2, ds")))
     snapshot_b.categorize_as(SnapshotChangeCategory.BREAKING)
 
-    context_diff_mock = mocker.Mock()
-    context_diff_mock.snapshots = {
-        updated_snapshot_a.snapshot_id: updated_snapshot_a,
-        snapshot_b.snapshot_id: snapshot_b,
-    }
-    context_diff_mock.added = set()
-    context_diff_mock.removed_snapshots = set()
-    context_diff_mock.modified_snapshots = {
-        updated_snapshot_a.name: (updated_snapshot_a, snapshot_a)
-    }
-    context_diff_mock.promotable_snapshot_ids = {updated_snapshot_a.snapshot_id}
-    context_diff_mock.new_snapshots = {updated_snapshot_a.snapshot_id: updated_snapshot_a}
-    context_diff_mock.is_new_environment = True
-    context_diff_mock.has_snapshot_changes = True
-    context_diff_mock.environment = "test_dev"
-    context_diff_mock.previous_plan_id = "previous_plan_id"
+    context_diff = ContextDiff(
+        environment="test_environment",
+        is_new_environment=True,
+        is_unfinalized_environment=False,
+        create_from="prod",
+        added=set(),
+        removed_snapshots={},
+        modified_snapshots={updated_snapshot_a.name: (updated_snapshot_a, snapshot_a)},
+        snapshots={
+            updated_snapshot_a.snapshot_id: updated_snapshot_a,
+            snapshot_b.snapshot_id: snapshot_b,
+        },
+        new_snapshots={updated_snapshot_a.snapshot_id: updated_snapshot_a},
+        previous_plan_id=None,
+        previously_promoted_snapshot_ids=set(),
+    )
 
     # Modified the existing model.
-    assert Plan(context_diff_mock, is_dev=True).environment.promoted_snapshot_ids == [
+    assert PlanBuilder(context_diff, is_dev=True).build().environment.promoted_snapshot_ids == [
         updated_snapshot_a.snapshot_id
     ]
 
     # Updating the existing environment with a previously promoted snapshot.
-    context_diff_mock.promotable_snapshot_ids = {
+    context_diff.previously_promoted_snapshot_ids = {
         updated_snapshot_a.snapshot_id,
         snapshot_b.snapshot_id,
     }
-    context_diff_mock.is_new_environment = False
-    assert set(Plan(context_diff_mock, is_dev=True).environment.promoted_snapshot_ids or []) == {
+    context_diff.is_new_environment = False
+    assert set(
+        PlanBuilder(context_diff, is_dev=True).build().environment.promoted_snapshot_ids or []
+    ) == {
         updated_snapshot_a.snapshot_id,
         snapshot_b.snapshot_id,
     }
@@ -677,20 +769,18 @@ def test_new_environment_with_changes(make_snapshot, mocker: MockerFixture):
     # Adding a new model
     snapshot_c = make_snapshot(SqlModel(name="c", query=parse_one("select 4, ds")))
     snapshot_c.categorize_as(SnapshotChangeCategory.BREAKING)
-    context_diff_mock.snapshots = {
+    context_diff.snapshots = {
         updated_snapshot_a.snapshot_id: updated_snapshot_a,
         snapshot_b.snapshot_id: snapshot_b,
         snapshot_c.snapshot_id: snapshot_c,
     }
-    context_diff_mock.added = {snapshot_c.snapshot_id}
-    context_diff_mock.modified_snapshots = {}
-    context_diff_mock.new_snapshots = {snapshot_c.snapshot_id: snapshot_c}
-    context_diff_mock.promotable_snapshot_ids = {
-        updated_snapshot_a.snapshot_id,
-        snapshot_b.snapshot_id,
-        snapshot_c.snapshot_id,
-    }
-    assert set(Plan(context_diff_mock, is_dev=True).environment.promoted_snapshot_ids or []) == {
+    context_diff.added = {snapshot_c.snapshot_id}
+    context_diff.modified_snapshots = {}
+    context_diff.new_snapshots = {snapshot_c.snapshot_id: snapshot_c}
+
+    assert set(
+        PlanBuilder(context_diff, is_dev=True).build().environment.promoted_snapshot_ids or []
+    ) == {
         updated_snapshot_a.snapshot_id,
         snapshot_b.snapshot_id,
         snapshot_c.snapshot_id,
@@ -709,28 +799,31 @@ def test_forward_only_models(make_snapshot, mocker: MockerFixture):
     )
     updated_snapshot.previous_versions = snapshot.all_versions
 
-    context_diff_mock = mocker.Mock()
-    context_diff_mock.snapshots = {updated_snapshot.snapshot_id: updated_snapshot}
-    context_diff_mock.removed_snapshots = set()
-    context_diff_mock.added = set()
-    context_diff_mock.added_materialized_snapshot_ids = set()
-    context_diff_mock.modified_snapshots = {updated_snapshot.name: (updated_snapshot, snapshot)}
-    context_diff_mock.new_snapshots = {updated_snapshot.snapshot_id: updated_snapshot}
-    context_diff_mock.has_snapshot_changes = True
-    context_diff_mock.environment = "test_dev"
-    context_diff_mock.previous_plan_id = "previous_plan_id"
+    context_diff = ContextDiff(
+        environment="test_environment",
+        is_new_environment=True,
+        is_unfinalized_environment=False,
+        create_from="prod",
+        added=set(),
+        removed_snapshots={},
+        modified_snapshots={updated_snapshot.name: (updated_snapshot, snapshot)},
+        snapshots={updated_snapshot.snapshot_id: updated_snapshot},
+        new_snapshots={updated_snapshot.snapshot_id: updated_snapshot},
+        previous_plan_id=None,
+        previously_promoted_snapshot_ids=set(),
+    )
 
-    Plan(context_diff_mock, is_dev=True)
+    PlanBuilder(context_diff, is_dev=True).build()
     assert updated_snapshot.change_category == SnapshotChangeCategory.FORWARD_ONLY
 
     updated_snapshot.change_category = None
     updated_snapshot.version = None
-    Plan(context_diff_mock, is_dev=True, forward_only=True)
+    PlanBuilder(context_diff, is_dev=True, forward_only=True).build()
     assert updated_snapshot.change_category == SnapshotChangeCategory.FORWARD_ONLY
 
     updated_snapshot.change_category = None
     updated_snapshot.version = None
-    Plan(context_diff_mock, forward_only=True)
+    PlanBuilder(context_diff, forward_only=True).build()
     assert updated_snapshot.change_category == SnapshotChangeCategory.FORWARD_ONLY
 
 
@@ -761,31 +854,33 @@ def test_indirectly_modified_forward_only_model(make_snapshot, mocker: MockerFix
     )
     updated_snapshot_c.previous_versions = snapshot_c.all_versions
 
-    context_diff_mock = mocker.Mock()
-    context_diff_mock.snapshots = {
-        updated_snapshot_a.snapshot_id: updated_snapshot_a,
-        updated_snapshot_b.snapshot_id: updated_snapshot_b,
-        updated_snapshot_c.snapshot_id: updated_snapshot_c,
-    }
-    context_diff_mock.removed_snapshots = set()
-    context_diff_mock.added = set()
-    context_diff_mock.added_materialized_snapshot_ids = set()
-    context_diff_mock.modified_snapshots = {
-        updated_snapshot_a.name: (updated_snapshot_a, snapshot_a),
-        updated_snapshot_b.name: (updated_snapshot_b, snapshot_b),
-        updated_snapshot_c.name: (updated_snapshot_c, snapshot_c),
-    }
-    context_diff_mock.new_snapshots = {
-        updated_snapshot_a.snapshot_id: updated_snapshot_a,
-        updated_snapshot_b.snapshot_id: updated_snapshot_b,
-        updated_snapshot_c.snapshot_id: updated_snapshot_c,
-    }
-    context_diff_mock.has_snapshot_changes = True
-    context_diff_mock.environment = "test_dev"
-    context_diff_mock.previous_plan_id = "previous_plan_id"
-    context_diff_mock.directly_modified.side_effect = lambda name: name == '"a"'
+    context_diff = ContextDiff(
+        environment="test_environment",
+        is_new_environment=True,
+        is_unfinalized_environment=False,
+        create_from="prod",
+        added=set(),
+        removed_snapshots={},
+        modified_snapshots={
+            updated_snapshot_a.name: (updated_snapshot_a, snapshot_a),
+            updated_snapshot_b.name: (updated_snapshot_b, snapshot_b),
+            updated_snapshot_c.name: (updated_snapshot_c, snapshot_c),
+        },
+        snapshots={
+            updated_snapshot_a.snapshot_id: updated_snapshot_a,
+            updated_snapshot_b.snapshot_id: updated_snapshot_b,
+            updated_snapshot_c.snapshot_id: updated_snapshot_c,
+        },
+        new_snapshots={
+            updated_snapshot_a.snapshot_id: updated_snapshot_a,
+            updated_snapshot_b.snapshot_id: updated_snapshot_b,
+            updated_snapshot_c.snapshot_id: updated_snapshot_c,
+        },
+        previous_plan_id=None,
+        previously_promoted_snapshot_ids=set(),
+    )
 
-    plan = Plan(context_diff_mock, is_dev=True)
+    plan = PlanBuilder(context_diff, is_dev=True).build()
     assert plan.indirectly_modified == {
         updated_snapshot_a.snapshot_id: {
             updated_snapshot_b.snapshot_id,
@@ -793,8 +888,7 @@ def test_indirectly_modified_forward_only_model(make_snapshot, mocker: MockerFix
         }
     }
 
-    assert len(plan.directly_modified) == 1
-    assert plan.directly_modified[0].snapshot_id == updated_snapshot_a.snapshot_id
+    assert plan.directly_modified == {updated_snapshot_a.snapshot_id}
 
     assert updated_snapshot_a.change_category == SnapshotChangeCategory.BREAKING
     assert updated_snapshot_b.change_category == SnapshotChangeCategory.FORWARD_ONLY
@@ -818,23 +912,24 @@ def test_added_model_with_forward_only_parent(make_snapshot, mocker: MockerFixtu
 
     snapshot_b = make_snapshot(SqlModel(name="b", query=parse_one("select a, ds from a")))
 
-    context_diff_mock = mocker.Mock()
-    context_diff_mock.snapshots = {
-        snapshot_a.snapshot_id: snapshot_a,
-        snapshot_b.snapshot_id: snapshot_b,
-    }
-    context_diff_mock.removed_snapshots = set()
-    context_diff_mock.added = {snapshot_b.snapshot_id}
-    context_diff_mock.added_materialized_snapshot_ids = set()
-    context_diff_mock.modified_snapshots = {}
-    context_diff_mock.new_snapshots = {
-        snapshot_b.snapshot_id: snapshot_b,
-    }
-    context_diff_mock.has_snapshot_changes = True
-    context_diff_mock.environment = "test_dev"
-    context_diff_mock.previous_plan_id = "previous_plan_id"
+    context_diff = ContextDiff(
+        environment="test_environment",
+        is_new_environment=True,
+        is_unfinalized_environment=False,
+        create_from="prod",
+        added={snapshot_b.snapshot_id},
+        removed_snapshots={},
+        modified_snapshots={},
+        snapshots={
+            snapshot_a.snapshot_id: snapshot_a,
+            snapshot_b.snapshot_id: snapshot_b,
+        },
+        new_snapshots={snapshot_b.snapshot_id: snapshot_b},
+        previous_plan_id=None,
+        previously_promoted_snapshot_ids=set(),
+    )
 
-    Plan(context_diff_mock, is_dev=True)
+    PlanBuilder(context_diff, is_dev=True).build()
     assert snapshot_b.change_category == SnapshotChangeCategory.BREAKING
 
 
@@ -849,24 +944,27 @@ def test_added_forward_only_model(make_snapshot, mocker: MockerFixture):
 
     snapshot_b = make_snapshot(SqlModel(name="b", query=parse_one("select a, ds from a")))
 
-    context_diff_mock = mocker.Mock()
-    context_diff_mock.snapshots = {
-        snapshot_a.snapshot_id: snapshot_a,
-        snapshot_b.snapshot_id: snapshot_b,
-    }
-    context_diff_mock.removed_snapshots = set()
-    context_diff_mock.added = {snapshot_a.snapshot_id, snapshot_b.snapshot_id}
-    context_diff_mock.added_materialized_snapshot_ids = set()
-    context_diff_mock.modified_snapshots = {}
-    context_diff_mock.new_snapshots = {
-        snapshot_a.snapshot_id: snapshot_a,
-        snapshot_b.snapshot_id: snapshot_b,
-    }
-    context_diff_mock.has_snapshot_changes = True
-    context_diff_mock.environment = "test_dev"
-    context_diff_mock.previous_plan_id = "previous_plan_id"
+    context_diff = ContextDiff(
+        environment="test_environment",
+        is_new_environment=True,
+        is_unfinalized_environment=False,
+        create_from="prod",
+        added={snapshot_a.snapshot_id, snapshot_b.snapshot_id},
+        removed_snapshots={},
+        modified_snapshots={},
+        snapshots={
+            snapshot_a.snapshot_id: snapshot_a,
+            snapshot_b.snapshot_id: snapshot_b,
+        },
+        new_snapshots={
+            snapshot_a.snapshot_id: snapshot_a,
+            snapshot_b.snapshot_id: snapshot_b,
+        },
+        previous_plan_id=None,
+        previously_promoted_snapshot_ids=set(),
+    )
 
-    Plan(context_diff_mock)
+    PlanBuilder(context_diff).build()
     assert snapshot_a.change_category == SnapshotChangeCategory.BREAKING
     assert snapshot_b.change_category == SnapshotChangeCategory.BREAKING
 
@@ -881,28 +979,30 @@ def test_disable_restatement(make_snapshot, mocker: MockerFixture):
     )
     snapshot.categorize_as(SnapshotChangeCategory.BREAKING)
 
-    context_diff_mock = mocker.Mock()
-    context_diff_mock.snapshots = {snapshot.snapshot_id: snapshot}
-    context_diff_mock.removed_snapshots = set()
-    context_diff_mock.added = set()
-    context_diff_mock.added_materialized_snapshot_ids = set()
-    context_diff_mock.modified_snapshots = {}
-    context_diff_mock.new_snapshots = {}
-    context_diff_mock.has_snapshot_changes = False
-    context_diff_mock.is_new_environment = False
-    context_diff_mock.environment = "test_dev"
-    context_diff_mock.previous_plan_id = "previous_plan_id"
+    context_diff = ContextDiff(
+        environment="test_environment",
+        is_new_environment=False,
+        is_unfinalized_environment=False,
+        create_from="prod",
+        added=set(),
+        removed_snapshots={},
+        modified_snapshots={},
+        snapshots={snapshot.snapshot_id: snapshot},
+        new_snapshots={},
+        previous_plan_id=None,
+        previously_promoted_snapshot_ids=set(),
+    )
 
     with pytest.raises(PlanError, match="""Cannot restate from '"a"'.*"""):
-        Plan(context_diff_mock, restate_models=['"a"'])
+        PlanBuilder(context_diff, restate_models=['"a"']).build()
 
     # Effective from doesn't apply to snapshots for which restatements are disabled.
-    plan = Plan(context_diff_mock, forward_only=True, effective_from="2023-01-01")
+    plan = PlanBuilder(context_diff, forward_only=True, effective_from="2023-01-01").build()
     assert plan.effective_from == "2023-01-01"
     assert snapshot.effective_from is None
 
     # Restatements should still be supported when in dev.
-    plan = Plan(context_diff_mock, is_dev=True, restate_models=['"a"'])
+    plan = PlanBuilder(context_diff, is_dev=True, restate_models=['"a"']).build()
     assert plan.restatements == {
         snapshot.snapshot_id: (to_timestamp(plan.start), to_timestamp(to_date("today")))
     }
@@ -928,23 +1028,29 @@ def test_revert_to_previous_value(make_snapshot, mocker: MockerFixture):
     snapshot_b.categorize_as(SnapshotChangeCategory.FORWARD_ONLY)
     snapshot_b.add_interval("2022-01-01", now())
 
-    context_diff_mock = mocker.Mock()
-    context_diff_mock.snapshots = {
-        snapshot_a.snapshot_id: snapshot_a,
-        snapshot_b.snapshot_id: snapshot_b,
-    }
-    context_diff_mock.added = set()
-    context_diff_mock.removed_snapshots = set()
-    context_diff_mock.directly_modified.side_effect = lambda name: name == "a"
-    context_diff_mock.modified_snapshots = {
-        snapshot_a.name: (snapshot_a, old_snapshot_a),
-        snapshot_b.name: (snapshot_b, old_snapshot_b),
-    }
-    context_diff_mock.new_snapshots = {snapshot_a.snapshot_id: snapshot_a}
-    context_diff_mock.added_materialized_snapshot_ids = set()
+    context_diff = ContextDiff(
+        environment="test_environment",
+        is_new_environment=True,
+        is_unfinalized_environment=False,
+        create_from="prod",
+        added=set(),
+        removed_snapshots={},
+        modified_snapshots={
+            snapshot_a.name: (snapshot_a, old_snapshot_a),
+            snapshot_b.name: (snapshot_b, old_snapshot_b),
+        },
+        snapshots={
+            snapshot_a.snapshot_id: snapshot_a,
+            snapshot_b.snapshot_id: snapshot_b,
+        },
+        new_snapshots={snapshot_a.snapshot_id: snapshot_a},
+        previous_plan_id=None,
+        previously_promoted_snapshot_ids=set(),
+    )
 
-    plan = Plan(context_diff_mock)
-    plan.set_choice(snapshot_a, SnapshotChangeCategory.BREAKING)
+    plan_builder = PlanBuilder(context_diff)
+    plan_builder.set_choice(snapshot_a, SnapshotChangeCategory.BREAKING)
+    plan_builder.build()
     # Make sure it does not get assigned INDIRECT_BREAKING
     assert snapshot_b.change_category == SnapshotChangeCategory.FORWARD_ONLY
 
@@ -1113,11 +1219,10 @@ def test_add_restatements(
     mocker,
 ):
     dag = DAG(graph)
-    context_diff_mock = mocker.Mock()
     snapshots: t.Dict[str, Snapshot] = {}
     for snapshot_name in dag:
         depends_on = dag.upstream(snapshot_name)
-        snapshots[snapshot_name] = make_snapshot(
+        snapshot = make_snapshot(
             SqlModel(
                 name=snapshot_name,
                 kind=IncrementalByTimeRangeKind(time_column="ds"),
@@ -1135,25 +1240,31 @@ def test_add_restatements(
                 for upstream_snapshot_name in depends_on
             },
         )
-    context_diff_mock.snapshots = {
-        snapshot.snapshot_id: snapshot for snapshot in snapshots.values()
-    }
-    context_diff_mock.removed_snapshots = set()
-    context_diff_mock.added = set()
-    context_diff_mock.added_materialized_snapshot_ids = set()
-    context_diff_mock.modified_snapshots = {}
-    context_diff_mock.new_snapshots = {}
-    context_diff_mock.has_snapshot_changes = False
-    context_diff_mock.is_new_environment = False
-    context_diff_mock.environment = "test_dev"
-    context_diff_mock.previous_plan_id = "previous_plan_id"
-    plan = Plan(
-        context_diff_mock,
+        snapshot.categorize_as(SnapshotChangeCategory.BREAKING)
+        snapshots[snapshot_name] = snapshot
+
+    context_diff = ContextDiff(
+        environment="test_environment",
+        is_new_environment=False,
+        is_unfinalized_environment=False,
+        create_from="prod",
+        added=set(),
+        removed_snapshots={},
+        modified_snapshots={},
+        snapshots={snapshot.snapshot_id: snapshot for snapshot in snapshots.values()},
+        new_snapshots={},
+        previous_plan_id=None,
+        previously_promoted_snapshot_ids=set(),
+    )
+
+    plan = PlanBuilder(
+        context_diff,
         start=to_date(start),
         end=to_date(end),
         execution_time=to_date(execution_time),
         restate_models=restatement_names,
-    )
+    ).build()
+
     assert {s_id.name: interval for s_id, interval in plan.restatements.items()} == {
         name: (to_timestamp(to_date(start)), to_timestamp(to_date(end)))
         for name, (start, end) in expected.items()
@@ -1197,38 +1308,44 @@ def test_dev_plan_depends_past(make_snapshot, mocker: MockerFixture):
     assert snapshot_child.parents == (snapshot.snapshot_id,)
     assert unrelated_snapshot.model.depends_on == set()
 
-    context_diff_mock = mocker.Mock()
-    context_diff_mock.snapshots = {
-        snapshot.snapshot_id: snapshot,
-        snapshot_child.snapshot_id: snapshot_child,
-        unrelated_snapshot.snapshot_id: unrelated_snapshot,
-    }
-    context_diff_mock.added = set()
-    context_diff_mock.removed_snapshots = set()
-    context_diff_mock.modified_snapshots = {}
-    context_diff_mock.new_snapshots = {
-        snapshot.snapshot_id: snapshot,
-        snapshot_child.snapshot_id: snapshot_child,
-        unrelated_snapshot.snapshot_id: unrelated_snapshot,
-    }
-    context_diff_mock.environment = "dev"
-
-    dev_plan_start_aligned = Plan(
-        context_diff_mock, start="2023-01-01", end="2023-01-10", is_dev=True
+    context_diff = ContextDiff(
+        environment="test_environment",
+        is_new_environment=True,
+        is_unfinalized_environment=False,
+        create_from="prod",
+        added={snapshot.snapshot_id, snapshot_child.snapshot_id, unrelated_snapshot.snapshot_id},
+        removed_snapshots={},
+        modified_snapshots={},
+        snapshots={
+            snapshot.snapshot_id: snapshot,
+            snapshot_child.snapshot_id: snapshot_child,
+            unrelated_snapshot.snapshot_id: unrelated_snapshot,
+        },
+        new_snapshots={
+            snapshot.snapshot_id: snapshot,
+            snapshot_child.snapshot_id: snapshot_child,
+            unrelated_snapshot.snapshot_id: unrelated_snapshot,
+        },
+        previous_plan_id=None,
+        previously_promoted_snapshot_ids=set(),
     )
+
+    dev_plan_start_aligned = PlanBuilder(
+        context_diff, start="2023-01-01", end="2023-01-10", is_dev=True
+    ).build()
     assert len(dev_plan_start_aligned.new_snapshots) == 3
     assert sorted([x.name for x in dev_plan_start_aligned.new_snapshots]) == [
         '"a"',
         '"a_child"',
         '"b"',
     ]
-    dev_plan_start_ahead_of_model = Plan(
-        context_diff_mock, start="2023-01-02", end="2023-01-10", is_dev=True
-    )
+    dev_plan_start_ahead_of_model = PlanBuilder(
+        context_diff, start="2023-01-02", end="2023-01-10", is_dev=True
+    ).build()
     assert len(dev_plan_start_ahead_of_model.new_snapshots) == 1
     assert [x.name for x in dev_plan_start_ahead_of_model.new_snapshots] == ['"b"']
-    assert len(dev_plan_start_ahead_of_model.ignored_snapshot_ids) == 2
-    assert sorted(list(dev_plan_start_ahead_of_model.ignored_snapshot_ids)) == [
+    assert len(dev_plan_start_ahead_of_model.ignored) == 2
+    assert sorted(list(dev_plan_start_ahead_of_model.ignored)) == [
         snapshot.snapshot_id,
         snapshot_child.snapshot_id,
     ]
@@ -1245,7 +1362,9 @@ def test_restatement_intervals_after_updating_start(sushi_context: Context):
     assert restatement_interval[0] == to_timestamp(plan.start)
 
     new_start = yesterday_ds()
-    plan.start = new_start
+    plan = sushi_context.plan(
+        no_prompts=True, restate_models=["sushi.waiter_revenue_by_day"], start=new_start
+    )
     new_restatement_interval = plan.restatements[snapshot_id]
     assert new_restatement_interval[0] == to_timestamp(new_start)
     assert new_restatement_interval != restatement_interval
@@ -1261,24 +1380,30 @@ def test_models_selected_for_backfill(make_snapshot, mocker: MockerFixture):
     )
     snapshot_b.categorize_as(SnapshotChangeCategory.BREAKING)
 
-    context_diff_mock = mocker.Mock()
-    context_diff_mock.snapshots = {
-        snapshot_a.snapshot_id: snapshot_a,
-        snapshot_b.snapshot_id: snapshot_b,
-    }
-    context_diff_mock.added = set()
-    context_diff_mock.removed_snapshots = set()
-    context_diff_mock.modified_snapshots = {}
-    context_diff_mock.new_snapshots = {}
-    context_diff_mock.added_materialized_models = set()
+    context_diff = ContextDiff(
+        environment="test_environment",
+        is_new_environment=False,
+        is_unfinalized_environment=False,
+        create_from="prod",
+        added=set(),
+        removed_snapshots={},
+        modified_snapshots={},
+        snapshots={
+            snapshot_a.snapshot_id: snapshot_a,
+            snapshot_b.snapshot_id: snapshot_b,
+        },
+        new_snapshots={snapshot_b.snapshot_id: snapshot_b},
+        previous_plan_id=None,
+        previously_promoted_snapshot_ids=set(),
+    )
 
     with pytest.raises(
         PlanError,
         match="Selecting models to backfill is only supported for development environments",
     ):
-        Plan(context_diff_mock, backfill_models={'"a"'})
+        PlanBuilder(context_diff, backfill_models={'"a"'}).build()
 
-    plan = Plan(context_diff_mock)
+    plan = PlanBuilder(context_diff).build()
     assert plan.is_selected_for_backfill('"a"')
     assert plan.is_selected_for_backfill('"b"')
     assert plan.models_to_backfill is None
@@ -1287,13 +1412,13 @@ def test_models_selected_for_backfill(make_snapshot, mocker: MockerFixture):
         snapshot_b.snapshot_id,
     }
 
-    plan = Plan(context_diff_mock, is_dev=True, backfill_models={'"a"'})
+    plan = PlanBuilder(context_diff, is_dev=True, backfill_models={'"a"'}).build()
     assert plan.is_selected_for_backfill('"a"')
     assert not plan.is_selected_for_backfill('"b"')
     assert plan.models_to_backfill == {'"a"'}
     assert {i.snapshot_id for i in plan.missing_intervals} == {snapshot_a.snapshot_id}
 
-    plan = Plan(context_diff_mock, is_dev=True, backfill_models={'"b"'})
+    plan = PlanBuilder(context_diff, is_dev=True, backfill_models={'"b"'}).build()
     assert plan.is_selected_for_backfill('"a"')
     assert plan.is_selected_for_backfill('"b"')
     assert plan.models_to_backfill == {'"a"', '"b"'}

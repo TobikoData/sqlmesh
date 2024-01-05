@@ -86,8 +86,10 @@ class BuiltInPlanEvaluator(PlanEvaluator):
         self.console.start_plan_evaluation(plan)
 
         try:
-            snapshots = {s.snapshot_id: s for s in plan.snapshots}
-            all_names = {s.name for s in plan.snapshots if plan.is_selected_for_backfill(s.name)}
+            snapshots = plan.snapshots
+            all_names = {
+                s.name for s in snapshots.values() if plan.is_selected_for_backfill(s.name)
+            }
             deployability_index = DeployabilityIndex.create(snapshots)
             if plan.is_dev:
                 before_promote_snapshots = all_names
@@ -138,7 +140,7 @@ class BuiltInPlanEvaluator(PlanEvaluator):
 
         snapshots = plan.snapshots
         scheduler = Scheduler(
-            snapshots,
+            snapshots.values(),
             self.snapshot_evaluator,
             self.state_sync,
             default_catalog=self.default_catalog,
@@ -179,7 +181,7 @@ class BuiltInPlanEvaluator(PlanEvaluator):
         try:
             self.snapshot_evaluator.create(
                 plan.new_snapshots,
-                plan.snapshot_mapping,
+                plan.snapshots,
                 deployability_index=deployability_index,
                 on_complete=self.console.update_creation_progress,
             )
@@ -206,10 +208,10 @@ class BuiltInPlanEvaluator(PlanEvaluator):
 
         if not plan.is_dev:
             self.snapshot_evaluator.migrate(
-                [s for s in plan.snapshots if s.is_paused],
-                plan.snapshot_mapping,
+                [s for s in plan.snapshots.values() if s.is_paused],
+                plan.snapshots,
             )
-            self.state_sync.unpause_snapshots(promotion_result.added, plan.end)
+            self.state_sync.unpause_snapshots(promotion_result.added, plan.end_or_now)
 
         return promotion_result
 
@@ -262,7 +264,7 @@ class BuiltInPlanEvaluator(PlanEvaluator):
                 (plan.context_diff.snapshots[s_id], interval)
                 for s_id, interval in plan.restatements.items()
             ],
-            plan._execution_time,
+            plan.execution_time,
             remove_shared_versions=not plan.is_dev,
         )
 
@@ -290,7 +292,7 @@ class BaseAirflowPlanEvaluator(PlanEvaluator):
 
         if self.blocking:
             plan_application_dag_id = airflow_common.plan_application_dag_id(
-                plan.environment.name, plan_request_id
+                plan.environment_naming_info.name, plan_request_id
             )
 
             self.console.log_status_update(
