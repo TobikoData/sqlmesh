@@ -75,11 +75,11 @@ def get_environments() -> Response:
 @check_authentication
 def get_max_interval_end(name: str) -> Response:
     with util.scoped_state_sync() as state_sync:
-        model_fqns = None
+        models = None
         if "models" in request.args:
-            model_fqns = json.loads(request.args["models"])
+            models = json.loads(request.args["models"])
 
-        max_interval_end = state_sync.max_interval_end_for_environment(name, model_fqns=model_fqns)
+        max_interval_end = state_sync.max_interval_end_for_environment(name, models=models)
         response = common.MaxIntervalEndResponse(
             environment=name, max_interval_end=max_interval_end
         )

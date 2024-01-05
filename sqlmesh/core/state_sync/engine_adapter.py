@@ -612,14 +612,14 @@ class EngineAdapterStateSync(CommonStateSyncMixin, StateSync):
         return Snapshot.hydrate_with_intervals_by_version(snapshots, intervals)
 
     def max_interval_end_for_environment(
-        self, environment: str, model_fqns: t.Optional[t.Set[str]] = None
+        self, environment: str, models: t.Optional[t.Set[str]] = None
     ) -> t.Optional[int]:
         env = self._get_environment(environment)
         if not env:
             return None
 
         snapshots = (
-            [s for s in env.snapshots if s.name in model_fqns] if model_fqns else env.snapshots
+            [s for s in env.snapshots if s.name in models] if models is not None else env.snapshots
         )
         max_end = None
         for where in self._snapshot_name_version_filter(snapshots, "intervals"):

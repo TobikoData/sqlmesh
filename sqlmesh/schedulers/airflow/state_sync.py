@@ -68,19 +68,19 @@ class HttpStateSync(StateSync):
         return self._client.get_environments()
 
     def max_interval_end_for_environment(
-        self, environment: str, model_fqns: t.Optional[t.Set[str]] = None
+        self, environment: str, models: t.Optional[t.Set[str]] = None
     ) -> t.Optional[int]:
         """Returns the max interval end for the given environment.
 
         Args:
             environment: The environment.
-            model_fqns: The optional model FQNs to pick intervals from. If not provided all
+            models: The optional model FQNs to pick intervals from. If not provided all
                 models in the environment will be used.
 
         Returns:
             A timestamp or None if no interval or environment exists.
         """
-        return self._client.max_interval_end_for_environment(environment, model_fqns=model_fqns)
+        return self._client.max_interval_end_for_environment(environment, models=models)
 
     def get_snapshots(
         self,

@@ -1607,17 +1607,15 @@ def test_max_interval_end_for_environment(
     )
 
     assert state_sync.max_interval_end_for_environment(
-        environment_name, model_fqns={snapshot_a.name}
+        environment_name, models={snapshot_a.name}
     ) == to_timestamp("2023-01-03")
 
     assert state_sync.max_interval_end_for_environment(
-        environment_name, model_fqns={snapshot_b.name}
+        environment_name, models={snapshot_b.name}
     ) == to_timestamp("2023-01-02")
 
-    assert (
-        state_sync.max_interval_end_for_environment(environment_name, model_fqns={"missing"})
-        is None
-    )
+    assert state_sync.max_interval_end_for_environment(environment_name, models={"missing"}) is None
+    assert state_sync.max_interval_end_for_environment(environment_name, models=set()) is None
 
 
 def test_get_snapshots(mocker):

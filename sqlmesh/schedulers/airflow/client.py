@@ -272,11 +272,11 @@ class AirflowClient(BaseAirflowClient):
         return common.EnvironmentsResponse.parse_obj(response).environments
 
     def max_interval_end_for_environment(
-        self, environment: str, model_fqns: t.Optional[t.Collection[str]] = None
+        self, environment: str, models: t.Optional[t.Collection[str]] = None
     ) -> t.Optional[int]:
         url = f"{ENVIRONMENTS_PATH}/{environment}/max_interval_end"
-        if model_fqns is not None:
-            models_param = _json_query_param(list(model_fqns))
+        if models is not None:
+            models_param = _json_query_param(list(models))
             response = self._get(url, models=models_param)
         else:
             response = self._get(url)
