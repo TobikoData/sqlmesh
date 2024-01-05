@@ -740,7 +740,7 @@ class Context(BaseContext):
         return df
 
     def format(self, transpile: t.Optional[str] = None, newline: bool = False) -> None:
-        """Format all models in a given directory."""
+        """Format all SQL models."""
         for model in self._models.values():
             if not model._path.suffix == ".sql":
                 continue

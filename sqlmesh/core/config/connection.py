@@ -394,8 +394,10 @@ class DatabricksConnectionConfig(ConnectionConfig):
     @model_validator(mode="before")
     @model_validator_v1_args
     def _databricks_connect_validator(cls, values: t.Dict[str, t.Any]) -> t.Dict[str, t.Any]:
-        from sqlmesh import runtime_env
+        from sqlmesh import RuntimeEnv
         from sqlmesh.core.engine_adapter.databricks import DatabricksEngineAdapter
+
+        runtime_env = RuntimeEnv.get()
 
         if runtime_env.is_databricks:
             return values
@@ -447,9 +449,9 @@ class DatabricksConnectionConfig(ConnectionConfig):
 
     @property
     def use_spark_session_only(self) -> bool:
-        from sqlmesh import runtime_env
+        from sqlmesh import RuntimeEnv
 
-        return runtime_env.is_databricks or self.force_databricks_connect
+        return RuntimeEnv.get().is_databricks or self.force_databricks_connect
 
     @property
     def _connection_factory(self) -> t.Callable:
@@ -464,12 +466,12 @@ class DatabricksConnectionConfig(ConnectionConfig):
 
     @property
     def _static_connection_kwargs(self) -> t.Dict[str, t.Any]:
-        from sqlmesh import runtime_env
+        from sqlmesh import RuntimeEnv
 
         if not self.use_spark_session_only:
             return {}
 
-        if runtime_env.is_databricks:
+        if RuntimeEnv.get().is_databricks:
             from pyspark.sql import SparkSession
 
             return dict(
