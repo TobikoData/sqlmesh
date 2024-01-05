@@ -252,7 +252,8 @@ class PlanBuilder:
         restatements: t.Dict[SnapshotId, Interval] = {}
         dummy_interval = (sys.maxsize, -sys.maxsize)
         restate_models = self._restate_models
-        if not restate_models and self._is_dev and self._forward_only:
+        is_dev_forward_only = self._is_dev and self._forward_only
+        if not restate_models and is_dev_forward_only:
             # Add model names for new forward-only snapshots to the restatement list
             # in order to compute previews.
             restate_models = {
@@ -264,7 +265,7 @@ class PlanBuilder:
         # Add restate snapshots and their downstream snapshots
         for model_fqn in restate_models:
             snapshot = self._model_fqn_to_snapshot.get(model_fqn)
-            if not snapshot or not is_restateable_snapshot(snapshot):
+            if not snapshot or (not is_dev_forward_only and not is_restateable_snapshot(snapshot)):
                 raise PlanError(
                     f"Cannot restate from '{model_fqn}'. Either such model doesn't exist, no other materialized model references it, or restatement was disabled for this model."
                 )
