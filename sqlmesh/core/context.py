@@ -879,7 +879,11 @@ class Context(BaseContext):
 
         # If no end date is specified, use the max interval end from prod
         # to prevent unintended evaluation of the entire DAG.
-        default_end = self.state_sync.max_interval_end_for_environment(c.PROD) if not run else None
+        default_end = (
+            self.state_sync.max_interval_end_for_environment(c.PROD, model_fqns=backfill_models)
+            if not run
+            else None
+        )
         default_start = to_date(default_end) - timedelta(days=1) if default_end and is_dev else None
 
         plan = Plan(
