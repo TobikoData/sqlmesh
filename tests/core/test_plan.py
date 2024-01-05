@@ -520,6 +520,14 @@ def test_start_inference(make_snapshot, mocker: MockerFixture):
     snapshot_b.add_interval("2022-01-01", now())
 
     plan = PlanBuilder(context_diff).build()
+    assert len(plan.missing_intervals) == 1
+    assert plan.missing_intervals[0].snapshot_id == snapshot_a.snapshot_id
+    assert plan.start == to_timestamp("2022-01-01")
+
+    # Test inference from existing intervals
+    context_diff.snapshots = {snapshot_b.snapshot_id: snapshot_b}
+    plan = PlanBuilder(context_diff).build()
+    assert not plan.missing_intervals
     assert plan.start == to_datetime("2022-01-01")
 
 

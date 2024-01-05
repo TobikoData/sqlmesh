@@ -13,13 +13,12 @@ from sqlmesh.core.config import (
 )
 from sqlmesh.core.context_diff import ContextDiff
 from sqlmesh.core.environment import EnvironmentNamingInfo
-from sqlmesh.core.plan.definition import Plan, SnapshotMapping
+from sqlmesh.core.plan.definition import Plan, SnapshotMapping, earliest_interval_start
 from sqlmesh.core.snapshot import (
     DeployabilityIndex,
     Snapshot,
     SnapshotChangeCategory,
     categorize_change,
-    earliest_start_date,
 )
 from sqlmesh.core.snapshot.definition import Interval, SnapshotId, start_date
 from sqlmesh.utils import random_id
@@ -197,7 +196,6 @@ class PlanBuilder:
             for s in self._context_diff.snapshots.values()
             if s.snapshot_id not in ignored
         }
-        earliest_interval_start = self._earliest_interval_start(filtered_snapshots.values())
 
         deployability_index = (
             DeployabilityIndex.create(filtered_snapshots)
@@ -205,12 +203,14 @@ class PlanBuilder:
             else DeployabilityIndex.all_deployable()
         )
 
-        restatements = self._build_restatements(dag, earliest_interval_start)
+        restatements = self._build_restatements(
+            dag, earliest_interval_start(filtered_snapshots.values())
+        )
 
         plan = Plan(
             context_diff=self._context_diff,
             plan_id=self._plan_id,
-            start=self._start or earliest_interval_start,
+            provided_start=self._start,
             end=self._end,
             is_dev=self._is_dev,
             skip_backfill=self._skip_backfill,
@@ -605,13 +605,3 @@ class PlanBuilder:
             raise NoChangesPlanError(
                 "No changes were detected. Make a change or run with --include-unmodified to create a new environment without changes."
             )
-
-    @staticmethod
-    def _earliest_interval_start(snapshots: t.Collection[Snapshot]) -> TimeLike:
-        earliest_start = earliest_start_date(snapshots)
-        earliest_interval_starts = [s.intervals[0][0] for s in snapshots if s.intervals]
-        return (
-            min(earliest_start, to_datetime(min(earliest_interval_starts)))
-            if earliest_interval_starts
-            else earliest_start
-        )

@@ -161,7 +161,7 @@ def test_forward_only_plan_with_effective_date(context_fixture: Context, request
 
     prod_plan = context.plan(no_prompts=True, skip_tests=True)
     # Make sure that the previously set effective_from is respected
-    assert prod_plan.start == to_datetime("2023-01-01")
+    assert prod_plan.start == to_timestamp("2023-01-04")
     assert prod_plan.missing_intervals == [
         SnapshotIntervals(
             snapshot_id=top_waiters_snapshot.snapshot_id,
@@ -313,7 +313,7 @@ def test_plan_set_choice_is_reflected_in_missing_intervals(mocker: MockerFixture
         plan.context_diff.snapshots[top_waiters_snapshot.snapshot_id].change_category
         == SnapshotChangeCategory.INDIRECT_NON_BREAKING
     )
-    assert plan.start == to_datetime("2023-01-01")
+    assert plan.start == to_timestamp("2023-01-01")
     assert plan.missing_intervals == [
         SnapshotIntervals(
             snapshot_id=snapshot.snapshot_id,
@@ -497,7 +497,7 @@ def test_non_breaking_change_after_forward_only_in_dev(mocker: MockerFixture):
         plan.context_diff.snapshots[top_waiters_snapshot.snapshot_id].change_category
         == SnapshotChangeCategory.NON_BREAKING
     )
-    assert plan.start == to_datetime("2023-01-01")
+    assert plan.start == to_timestamp("2023-01-01")
     assert plan.missing_intervals == [
         SnapshotIntervals(
             snapshot_id=top_waiters_snapshot.snapshot_id,
@@ -526,7 +526,7 @@ def test_non_breaking_change_after_forward_only_in_dev(mocker: MockerFixture):
 
     # Deploy both changes to prod.
     plan = context.plan("prod", no_prompts=True, skip_tests=True)
-    assert plan.start == to_datetime("2023-01-01")
+    assert plan.start == to_timestamp("2023-01-01")
     assert plan.missing_intervals == [
         SnapshotIntervals(
             snapshot_id=top_waiters_snapshot.snapshot_id,
@@ -588,7 +588,7 @@ def test_indirect_non_breaking_change_after_forward_only_in_dev(mocker: MockerFi
         plan.context_diff.snapshots[top_waiters_snapshot.snapshot_id].change_category
         == SnapshotChangeCategory.NON_BREAKING
     )
-    assert plan.start == to_datetime("2023-01-01")
+    assert plan.start == to_timestamp("2023-01-01")
     assert plan.missing_intervals == [
         SnapshotIntervals(
             snapshot_id=top_waiters_snapshot.snapshot_id,
@@ -625,7 +625,7 @@ def test_indirect_non_breaking_change_after_forward_only_in_dev(mocker: MockerFi
         plan.context_diff.snapshots[top_waiters_snapshot.snapshot_id].change_category
         == SnapshotChangeCategory.INDIRECT_NON_BREAKING
     )
-    assert plan.start == to_datetime("2023-01-01")
+    assert plan.start == to_timestamp("2023-01-01")
     assert plan.missing_intervals == [
         SnapshotIntervals(
             snapshot_id=waiter_revenue_by_day_snapshot.snapshot_id,
@@ -647,7 +647,7 @@ def test_indirect_non_breaking_change_after_forward_only_in_dev(mocker: MockerFi
 
     # Deploy everything to prod.
     plan = context.plan("prod", no_prompts=True, skip_tests=True)
-    assert plan.start == to_datetime("2023-01-01")
+    assert plan.start == to_timestamp("2023-01-01")
     assert plan.missing_intervals == [
         SnapshotIntervals(
             snapshot_id=top_waiters_snapshot.snapshot_id,
@@ -713,7 +713,7 @@ def test_forward_only_precedence_over_indirect_non_breaking(mocker: MockerFixtur
         plan.context_diff.snapshots[top_waiter_snapshot.snapshot_id].change_category
         == SnapshotChangeCategory.FORWARD_ONLY
     )
-    assert plan.start == to_datetime("2023-01-01")
+    assert plan.start == to_timestamp("2023-01-01")
     assert plan.missing_intervals == [
         SnapshotIntervals(
             snapshot_id=non_breaking_snapshot.snapshot_id,
@@ -734,7 +734,7 @@ def test_forward_only_precedence_over_indirect_non_breaking(mocker: MockerFixtur
 
     # Deploy everything to prod.
     plan = context.plan("prod", no_prompts=True, skip_tests=True)
-    assert plan.start == to_datetime("2023-01-01")
+    assert plan.start == to_timestamp("2023-01-01")
     assert plan.missing_intervals == [
         SnapshotIntervals(
             snapshot_id=non_breaking_snapshot.snapshot_id,

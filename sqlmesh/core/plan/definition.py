@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import typing as t
 from dataclasses import dataclass
+from datetime import datetime
 from enum import Enum
 
 from sqlmesh.core.context_diff import ContextDiff
@@ -11,11 +12,12 @@ from sqlmesh.core.snapshot import (
     DeployabilityIndex,
     Intervals,
     Snapshot,
+    earliest_start_date,
     merge_intervals,
     missing_intervals,
 )
 from sqlmesh.core.snapshot.definition import Interval, SnapshotId, format_intervals
-from sqlmesh.utils.date import TimeLike, now, to_timestamp
+from sqlmesh.utils.date import TimeLike, now, to_datetime, to_timestamp
 from sqlmesh.utils.pydantic import PydanticModel
 
 SnapshotMapping = t.Dict[SnapshotId, t.Set[SnapshotId]]
@@ -24,7 +26,7 @@ SnapshotMapping = t.Dict[SnapshotId, t.Set[SnapshotId]]
 class Plan(PydanticModel, frozen=True):
     context_diff: ContextDiff
     plan_id: str
-    start: TimeLike
+    provided_start: t.Optional[TimeLike] = None
     end: t.Optional[TimeLike] = None
 
     is_dev: bool
@@ -52,6 +54,21 @@ class Plan(PydanticModel, frozen=True):
     _all_modified: t.Optional[t.Dict[SnapshotId, Snapshot]] = None
     _snapshots: t.Optional[t.Dict[SnapshotId, Snapshot]] = None
     _environment: t.Optional[Environment] = None
+    _start: t.Optional[TimeLike] = None
+    __earliest_interval_start: t.Optional[datetime] = None
+
+    @property
+    def start(self) -> TimeLike:
+        if self._start is None:
+            if self.provided_start is not None:
+                self._start = self.provided_start
+            else:
+                missing_intervals = self.missing_intervals
+                if missing_intervals:
+                    self._start = min(si.intervals[0][0] for si in missing_intervals)
+                else:
+                    self._start = self._earliest_interval_start
+        return t.cast(TimeLike, self._start)
 
     @property
     def end_or_now(self) -> TimeLike:
@@ -153,7 +170,7 @@ class Plan(PydanticModel, frozen=True):
             SnapshotIntervals(snapshot_id=snapshot.snapshot_id, intervals=missing)
             for snapshot, missing in missing_intervals(
                 [s for s in self.snapshots.values() if self.is_selected_for_backfill(s.name)],
-                start=self.start,
+                start=self.provided_start or self._earliest_interval_start,
                 end=self.end,
                 execution_time=self.execution_time,
                 restatements=self.restatements,
@@ -185,7 +202,7 @@ class Plan(PydanticModel, frozen=True):
 
             self._environment = Environment(
                 snapshots=snapshots,
-                start_at=self.start,
+                start_at=self.provided_start or self._earliest_interval_start,
                 end_at=self.end,
                 plan_id=self.plan_id,
                 previous_plan_id=self.previous_plan_id,
@@ -203,6 +220,12 @@ class Plan(PydanticModel, frozen=True):
     def is_selected_for_backfill(self, model_fqn: str) -> bool:
         """Returns True if a model with the given FQN should be backfilled as part of this plan."""
         return self.models_to_backfill is None or model_fqn in self.models_to_backfill
+
+    @property
+    def _earliest_interval_start(self) -> datetime:
+        if self.__earliest_interval_start is None:
+            self.__earliest_interval_start = earliest_interval_start(self.snapshots.values())
+        return self.__earliest_interval_start
 
 
 class PlanStatus(str, Enum):
@@ -235,3 +258,13 @@ class SnapshotIntervals:
 
     def format_intervals(self, unit: t.Optional[IntervalUnit] = None) -> str:
         return format_intervals(self.merged_intervals, unit)
+
+
+def earliest_interval_start(snapshots: t.Collection[Snapshot]) -> datetime:
+    earliest_start = earliest_start_date(snapshots)
+    earliest_interval_starts = [s.intervals[0][0] for s in snapshots if s.intervals]
+    return (
+        min(earliest_start, to_datetime(min(earliest_interval_starts)))
+        if earliest_interval_starts
+        else earliest_start
+    )
