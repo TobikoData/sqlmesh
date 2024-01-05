@@ -271,8 +271,15 @@ class AirflowClient(BaseAirflowClient):
         response = self._get(ENVIRONMENTS_PATH)
         return common.EnvironmentsResponse.parse_obj(response).environments
 
-    def max_interval_end_for_environment(self, environment: str) -> t.Optional[int]:
-        response = self._get(f"{ENVIRONMENTS_PATH}/{environment}/max_interval_end")
+    def max_interval_end_for_environment(
+        self, environment: str, models: t.Optional[t.Collection[str]] = None
+    ) -> t.Optional[int]:
+        url = f"{ENVIRONMENTS_PATH}/{environment}/max_interval_end"
+        if models is not None:
+            models_param = _json_query_param(list(models))
+            response = self._get(url, models=models_param)
+        else:
+            response = self._get(url)
         return common.MaxIntervalEndResponse.parse_obj(response).max_interval_end
 
     def invalidate_environment(self, environment: str) -> None:
@@ -336,7 +343,11 @@ def _list_to_json(models: t.Collection[T], batch_size: t.Optional[int] = None) -
         batches = [serialized[i : i + batch_size] for i in range(0, len(serialized), batch_size)]
     else:
         batches = [serialized]
-    return [json.dumps(batch, separators=(",", ":")) for batch in batches]
+    return [_json_query_param(batch) for batch in batches]
+
+
+def _json_query_param(value: t.Any) -> str:
+    return json.dumps(value, separators=(",", ":"))
 
 
 def raise_for_status(response: Response) -> None:

@@ -1564,19 +1564,29 @@ def test_cleanup_expired_views(
 def test_max_interval_end_for_environment(
     state_sync: EngineAdapterStateSync, make_snapshot: t.Callable
 ) -> None:
-    snapshot = make_snapshot(
+    snapshot_a = make_snapshot(
         SqlModel(
             name="a",
             cron="@daily",
             query=parse_one("select 1, ds"),
         ),
     )
-    snapshot.categorize_as(SnapshotChangeCategory.BREAKING)
+    snapshot_a.categorize_as(SnapshotChangeCategory.BREAKING)
 
-    state_sync.push_snapshots([snapshot])
+    snapshot_b = make_snapshot(
+        SqlModel(
+            name="b",
+            cron="@daily",
+            query=parse_one("select 2, ds"),
+        ),
+    )
+    snapshot_b.categorize_as(SnapshotChangeCategory.BREAKING)
 
-    state_sync.add_interval(snapshot, "2023-01-01", "2023-01-01")
-    state_sync.add_interval(snapshot, "2023-01-02", "2023-01-02")
+    state_sync.push_snapshots([snapshot_a, snapshot_b])
+
+    state_sync.add_interval(snapshot_a, "2023-01-01", "2023-01-01")
+    state_sync.add_interval(snapshot_a, "2023-01-02", "2023-01-02")
+    state_sync.add_interval(snapshot_b, "2023-01-01", "2023-01-01")
 
     environment_name = "test_max_interval_end_for_environment"
 
@@ -1585,7 +1595,7 @@ def test_max_interval_end_for_environment(
     state_sync.promote(
         Environment(
             name=environment_name,
-            snapshots=[snapshot.table_info],
+            snapshots=[snapshot_a.table_info, snapshot_b.table_info],
             start_at="2023-01-01",
             end_at="2023-01-02",
             plan_id="test_plan_id",
@@ -1595,6 +1605,17 @@ def test_max_interval_end_for_environment(
     assert state_sync.max_interval_end_for_environment(environment_name) == to_timestamp(
         "2023-01-03"
     )
+
+    assert state_sync.max_interval_end_for_environment(
+        environment_name, models={snapshot_a.name}
+    ) == to_timestamp("2023-01-03")
+
+    assert state_sync.max_interval_end_for_environment(
+        environment_name, models={snapshot_b.name}
+    ) == to_timestamp("2023-01-02")
+
+    assert state_sync.max_interval_end_for_environment(environment_name, models={"missing"}) is None
+    assert state_sync.max_interval_end_for_environment(environment_name, models=set()) is None
 
 
 def test_get_snapshots(mocker):

@@ -368,6 +368,27 @@ def test_max_interval_end_for_environment(mocker: MockerFixture, snapshot: Snaps
     )
 
 
+def test_max_interval_end_for_environment_with_models(mocker: MockerFixture, snapshot: Snapshot):
+    response = common.MaxIntervalEndResponse(
+        environment="test_environment", max_interval_end=to_timestamp("2023-01-01")
+    )
+
+    max_interval_end_response_mock = mocker.Mock()
+    max_interval_end_response_mock.status_code = 200
+    max_interval_end_response_mock.json.return_value = response.dict()
+    max_interval_end_mock = mocker.patch("requests.Session.get")
+    max_interval_end_mock.return_value = max_interval_end_response_mock
+
+    client = AirflowClient(airflow_url=common.AIRFLOW_LOCAL_URL, session=requests.Session())
+    result = client.max_interval_end_for_environment("test_environment", models={"a.b.c"})
+
+    assert result == response.max_interval_end
+
+    max_interval_end_mock.assert_called_once_with(
+        "http://localhost:8080/sqlmesh/api/v1/environments/test_environment/max_interval_end?models=%5B%22a.b.c%22%5D"
+    )
+
+
 def test_get_dag_run_state(mocker: MockerFixture):
     get_dag_run_state_mock = mocker.Mock()
     get_dag_run_state_mock.status_code = 200
