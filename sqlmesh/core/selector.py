@@ -91,6 +91,13 @@ class Selector:
         )
 
         dag: DAG[str] = DAG()
+        subdag = set()
+
+        for fqn in all_selected_models:
+            if fqn not in subdag:
+                subdag.add(fqn)
+                subdag.update(self._dag.downstream(fqn))
+
         models: UniqueKeyDict[str, Model] = UniqueKeyDict("models")
 
         all_model_fqns = set(self._models) | set(env_models)
@@ -105,9 +112,10 @@ class Selector:
 
             if model:
                 # model.copy() can't be used here due to a cached state that can be a part of a model instance.
-                model = type(model).parse_obj(model.dict(exclude={"mapping_schema"}))
+                if model.fqn in subdag:
+                    model = type(model).parse_obj(model.dict(exclude={"mapping_schema"}))
+                    dag.add(model.fqn, model.depends_on)
                 models[model.fqn] = model
-                dag.add(model.fqn, model.depends_on)
 
         update_model_schemas(dag, models, self._context_path)
 

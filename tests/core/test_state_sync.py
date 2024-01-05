@@ -1661,11 +1661,15 @@ def test_snapshot_batching(state_sync, mocker, make_snapshot):
                 make_snapshot(
                     SqlModel(name="a", query=parse_one("select 1")),
                 ).json(),
+                "a",
+                "1",
             ],
             [
                 make_snapshot(
                     SqlModel(name="a", query=parse_one("select 2")),
                 ).json(),
+                "a",
+                "2",
             ],
         ],
         [
@@ -1673,6 +1677,8 @@ def test_snapshot_batching(state_sync, mocker, make_snapshot):
                 make_snapshot(
                     SqlModel(name="a", query=parse_one("select 3")),
                 ).json(),
+                "a",
+                "3",
             ],
         ],
     ]

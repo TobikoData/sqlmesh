@@ -21,6 +21,7 @@ import logging
 import typing as t
 from collections import defaultdict
 from copy import deepcopy
+from pathlib import Path
 
 import pandas as pd
 from sqlglot import __version__ as SQLGLOT_VERSION
@@ -32,7 +33,7 @@ from sqlmesh.core.audit import ModelAudit
 from sqlmesh.core.console import Console, get_console
 from sqlmesh.core.engine_adapter import EngineAdapter
 from sqlmesh.core.environment import Environment
-from sqlmesh.core.model import ModelKindName, SeedModel
+from sqlmesh.core.model import ModelCache, ModelKindName, SeedModel
 from sqlmesh.core.snapshot import (
     Intervals,
     Node,
@@ -57,6 +58,7 @@ from sqlmesh.core.state_sync.common import CommonStateSyncMixin, transactional
 from sqlmesh.utils import major_minor, random_id
 from sqlmesh.utils.date import TimeLike, now_timestamp, time_like_to_str
 from sqlmesh.utils.errors import SQLMeshError
+from sqlmesh.utils.pydantic import parse_obj_as
 
 logger = logging.getLogger(__name__)
 
@@ -82,6 +84,8 @@ class EngineAdapterStateSync(CommonStateSyncMixin, StateSync):
     Args:
         engine_adapter: The EngineAdapter to use to store and fetch snapshots.
         schema: The schema to store state metadata in. If None or empty string then no schema is defined
+        console: The console to log information to.
+        context_path: The context path, used for caching snapshot models.
     """
 
     SNAPSHOT_BATCH_SIZE = 1000
@@ -91,10 +95,12 @@ class EngineAdapterStateSync(CommonStateSyncMixin, StateSync):
         engine_adapter: EngineAdapter,
         schema: t.Optional[str],
         console: t.Optional[Console] = None,
+        context_path: Path = Path(),
     ):
         # Make sure that if an empty string is provided that we treat it as None
         self.schema = schema or None
         self.engine_adapter = engine_adapter
+        self._context_path = context_path
         self.console = console or get_console()
         self.snapshots_table = exp.table_("_snapshots", db=self.schema)
         self.environments_table = exp.table_("_environments", db=self.schema)
@@ -388,12 +394,17 @@ class EngineAdapterStateSync(CommonStateSyncMixin, StateSync):
         """
         snapshots: t.Dict[SnapshotId, Snapshot] = {}
         duplicates: t.Dict[SnapshotId, Snapshot] = {}
+        model_cache = ModelCache(self._context_path / c.CACHE)
 
         for where in (
             [None] if snapshot_ids is None else self._snapshot_id_filter(snapshot_ids, "snapshots")
         ):
             query = (
-                exp.select(exp.column("snapshot", table="snapshots"))
+                exp.select(
+                    "snapshots.snapshot",
+                    "snapshots.name",
+                    "snapshots.identifier",
+                )
                 .from_(exp.to_table(self.snapshots_table).as_("snapshots"))
                 .where(where)
             )
@@ -414,7 +425,13 @@ class EngineAdapterStateSync(CommonStateSyncMixin, StateSync):
             for row in self.engine_adapter.fetchall(
                 query, ignore_unsupported_errors=True, quote_identifiers=True
             ):
-                snapshot = Snapshot.parse_raw(row[0])
+                payload = json.loads(row[0])
+
+                def loader() -> Node:
+                    return parse_obj_as(Node, payload["node"])  # type: ignore
+
+                payload["node"] = model_cache.get_or_load(f"{row[1]}_{row[2]}", loader=loader)  # type: ignore
+                snapshot = Snapshot(**payload)
                 snapshot_id = snapshot.snapshot_id
                 if snapshot_id in snapshots:
                     other = duplicates.get(snapshot_id, snapshots[snapshot_id])
@@ -425,8 +442,8 @@ class EngineAdapterStateSync(CommonStateSyncMixin, StateSync):
                 else:
                     snapshots[snapshot_id] = snapshot
 
-                if hydrate_seeds and isinstance(snapshot.node, SeedModel) and row[1]:
-                    snapshot.node = t.cast(SeedModel, snapshot.node).to_hydrated(row[1])
+                if hydrate_seeds and isinstance(snapshot.node, SeedModel) and row[-1]:
+                    snapshot.node = t.cast(SeedModel, snapshot.node).to_hydrated(row[-1])
 
         if snapshots and hydrate_intervals:
             _, intervals = self._get_snapshot_intervals(snapshots.values())

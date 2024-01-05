@@ -1697,16 +1697,16 @@ def test_model_cache(tmp_path: Path, mocker: MockerFixture):
 
     loader = mocker.Mock(return_value=model)
 
-    assert cache.get_or_load("test_model", "test_entry_a", loader).dict() == model.dict()
-    assert cache.get_or_load("test_model", "test_entry_a", loader).dict() == model.dict()
+    assert cache.get_or_load("test_model", "test_entry_a", loader=loader).dict() == model.dict()
+    assert cache.get_or_load("test_model", "test_entry_a", loader=loader).dict() == model.dict()
 
-    assert cache.get_or_load("test_model", "test_entry_b", loader).dict() == model.dict()
-    assert cache.get_or_load("test_model", "test_entry_b", loader).dict() == model.dict()
+    assert cache.get_or_load("test_model", "test_entry_b", loader=loader).dict() == model.dict()
+    assert cache.get_or_load("test_model", "test_entry_b", loader=loader).dict() == model.dict()
 
-    assert cache.get_or_load("test_model", "test_entry_a", loader).dict() == model.dict()
-    assert cache.get_or_load("test_model", "test_entry_a", loader).dict() == model.dict()
+    assert cache.get_or_load("test_model", "test_entry_a", loader=loader).dict() == model.dict()
+    assert cache.get_or_load("test_model", "test_entry_a", loader=loader).dict() == model.dict()
 
-    assert loader.call_count == 3
+    assert loader.call_count == 2
 
 
 def test_model_ctas_query():
