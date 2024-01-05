@@ -29,6 +29,8 @@ from sqlmesh.schedulers.airflow.plan import PlanDagState, create_plan_dag_spec
 from sqlmesh.utils.date import to_datetime, to_timestamp
 from sqlmesh.utils.errors import SQLMeshError
 
+pytestmark = pytest.mark.airflow
+
 
 @pytest.fixture
 def snapshot(make_snapshot, random_name) -> Snapshot:
@@ -59,7 +61,6 @@ def depends_on_past_snapshot(make_snapshot, random_name) -> Snapshot:
     return result
 
 
-@pytest.mark.airflow
 @pytest.mark.parametrize(
     "the_snapshot, expected_intervals, paused_forward_only",
     [
@@ -188,7 +189,6 @@ def test_create_plan_dag_spec(
     list(state_sync_mock.refresh_snapshot_intervals.call_args_list[0][0][0]) == [the_snapshot]
 
 
-@pytest.mark.airflow
 @pytest.mark.parametrize(
     "the_snapshot, expected_intervals",
     [
@@ -399,7 +399,6 @@ def test_select_models_for_backfill(mocker: MockerFixture, random_name, make_sna
     )
 
 
-@pytest.mark.airflow
 def test_create_plan_dag_spec_duplicated_snapshot(
     mocker: MockerFixture, snapshot: Snapshot, random_name
 ):
@@ -440,7 +439,6 @@ def test_create_plan_dag_spec_duplicated_snapshot(
     state_sync_mock.get_snapshots.assert_called_once()
 
 
-@pytest.mark.airflow
 @pytest.mark.parametrize("unbounded_end", [None, ""])
 def test_create_plan_dag_spec_unbounded_end(
     mocker: MockerFixture,

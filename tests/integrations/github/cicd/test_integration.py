@@ -7,6 +7,7 @@ import pathlib
 import typing as t
 from unittest import mock
 
+import pytest
 from freezegun import freeze_time
 from pytest_mock.plugin import MockerFixture
 from sqlglot import exp
@@ -24,6 +25,10 @@ from sqlmesh.integrations.github.cicd.controller import (
 from tests.integrations.github.cicd.fixtures import MockIssueComment
 
 pytest_plugins = ["tests.integrations.github.cicd.fixtures"]
+pytestmark = [
+    pytest.mark.integration,
+    pytest.mark.github,
+]
 
 
 def get_environment_objects(controller: GithubController, environment: str) -> t.List[DataObject]:

@@ -4,6 +4,7 @@ from datetime import date
 from unittest import mock
 
 import pandas as pd
+import pytest
 from pytest_mock.plugin import MockerFixture
 from sqlglot import expressions as exp
 from sqlglot import parse_one
@@ -16,6 +17,8 @@ from sqlmesh.core.engine_adapter.shared import (
 )
 from sqlmesh.utils.date import to_ds
 from tests.core.engine_adapter import to_sql_calls
+
+pytestmark = pytest.mark.mssql
 
 
 def test_columns(make_mocked_engine_adapter: t.Callable):

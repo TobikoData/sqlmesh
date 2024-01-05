@@ -6,6 +6,8 @@ from sqlmesh.dbt.model import ModelConfig
 from sqlmesh.dbt.test import TestConfig
 from sqlmesh.utils.errors import ConfigError
 
+pytestmark = pytest.mark.dbt
+
 
 def test_model_test_circular_references() -> None:
     upstream_model = ModelConfig(name="upstream")

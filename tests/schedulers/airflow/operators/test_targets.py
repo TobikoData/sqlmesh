@@ -18,6 +18,8 @@ from sqlmesh.engines import commands
 from sqlmesh.schedulers.airflow.operators import targets
 from sqlmesh.utils.date import to_datetime
 
+pytestmark = pytest.mark.airflow
+
 
 @pytest.fixture
 def model() -> Model:
@@ -27,7 +29,6 @@ def model() -> Model:
     )
 
 
-@pytest.mark.airflow
 def test_evaluation_target_execute(mocker: MockerFixture, make_snapshot: t.Callable, model: Model):
     interval_ds = to_datetime("2022-01-01")
     logical_ds = to_datetime("2022-01-02")
@@ -77,7 +78,6 @@ def test_evaluation_target_execute(mocker: MockerFixture, make_snapshot: t.Calla
     )
 
 
-@pytest.mark.airflow
 def test_evaluation_target_execute_seed_model(mocker: MockerFixture, make_snapshot: t.Callable):
     interval_ds = to_datetime("2022-01-01")
     logical_ds = to_datetime("2022-01-02")
@@ -139,7 +139,6 @@ def test_evaluation_target_execute_seed_model(mocker: MockerFixture, make_snapsh
     )
 
 
-@pytest.mark.airflow
 def test_cleanup_target_execute(mocker: MockerFixture, make_snapshot: t.Callable, model: Model):
     snapshot = make_snapshot(model)
     snapshot.categorize_as(SnapshotChangeCategory.BREAKING)
@@ -185,7 +184,6 @@ def test_cleanup_target_execute(mocker: MockerFixture, make_snapshot: t.Callable
     delete_xcom_mock.assert_called_once()
 
 
-@pytest.mark.airflow
 def test_cleanup_target_skip_execution(
     mocker: MockerFixture, make_snapshot: t.Callable, model: Model
 ):

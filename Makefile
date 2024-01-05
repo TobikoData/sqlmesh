@@ -3,7 +3,7 @@
 install-dev:
 	pip3 install -e ".[dev,web,slack]"
 
-install-engine-integration:
+install-engine-it:
 	pip3 install -e ".[dev,web,slack,mysql,postgres,databricks,redshift,bigquery,snowflake,trino,mssql]"
 
 install-pre-commit:
@@ -18,31 +18,8 @@ py-style:
 ui-style:
 	SKIP=autoflake,isort,black,mypy pre-commit run --all-files
 
-unit-test:
-	pytest -m "not integration"
-
 doc-test:
 	PYTEST_PLUGINS=tests.common_fixtures pytest --doctest-modules sqlmesh/core sqlmesh/utils
-
-core-it-test:
-	pytest -m "core_integration"
-
-core_engine_it_test:
-	pytest -m "engine_integration"
-
-core_engine_it_test_local_only:
-	pytest -m "engine_integration_local"
-
-core_engine_it_test_docker:
-	docker-compose -f ./tests/core/engine_adapter/docker-compose.yaml up -d
-
-engine_it_test: core_engine_it_test_docker core_engine_it_test
-
-it-test: core-it-test airflow-it-test-with-env
-
-it-test-docker: core-it-test airflow-it-test-docker-with-env
-
-test: unit-test doc-test it-test
 
 package:
 	pip3 install wheel && python3 setup.py sdist bdist_wheel
@@ -71,17 +48,6 @@ airflow-psql:
 airflow-spark-sql:
 	make -C ./examples/airflow spark-sql
 
-airflow-it-test:
-	export AIRFLOW__DATABASE__SQL_ALCHEMY_CONN=postgresql+psycopg2://airflow:airflow@localhost/airflow && \
-		pytest -m "airflow_integration"
-
-airflow-it-test-docker:
-	make -C ./examples/airflow it-test-docker
-
-airflow-it-test-with-env: develop airflow-clean airflow-init airflow-run airflow-it-test airflow-stop
-
-airflow-it-test-docker-with-env: develop airflow-clean airflow-init airflow-run airflow-it-test-docker airflow-stop
-
 docs-serve:
 	mkdocs serve
 
@@ -107,3 +73,95 @@ dev-publish: ui-build clean-build publish
 
 jupyter-example:
 	jupyter lab tests/integrations/jupyter/example_outputs.ipynb
+
+engine-up:
+	docker-compose -f ./tests/core/engine_adapter/docker-compose.yaml up -d
+
+engine-down:
+	docker-compose -f ./tests/core/engine_adapter/docker-compose.yaml down
+
+unit-test:
+	pytest -m "unit"
+
+it-test:
+	pytest -m "unit or integration"
+
+core-unit-test:
+	pytest -m "unit and not web and not github and not dbt and not airflow and not jupyter"
+
+core-it-test:
+	pytest -m "(unit or integration) and not web and not github and not dbt and not airflow and not jupyter"
+
+airflow-unit-test:
+	pytest -m "unit and airflow"
+
+airflow-test:
+	pytest -m "(unit or integration) and airflow"
+
+airflow-local-test:
+	export AIRFLOW__DATABASE__SQL_ALCHEMY_CONN=postgresql+psycopg2://airflow:airflow@localhost/airflow && \
+		pytest -m "docker and airflow"
+
+airflow-docker-test:
+	make -C ./examples/airflow docker-test
+
+airflow-local-test-with-env: develop airflow-clean airflow-init airflow-run airflow-local-test airflow-stop
+
+airflow-docker-test-with-env: develop airflow-clean airflow-init airflow-run airflow-docker-test airflow-stop
+
+engine-it-test:
+	pytest -m "(unit or integration) and engine"
+
+engine-docker-test:
+	pytest -m "docker and engine"
+
+engine-remote-test:
+	pytest -m "remote and engine"
+
+engine-test:
+	pytest -m "engine"
+
+dbt-test:
+	pytest -m "dbt"
+
+github-test:
+	pytest -m "github"
+
+jupyter-test:
+	pytest -m "jupyter"
+
+web-test:
+	pytest -m "web"
+
+bigquery-test:
+	pytest -m "bigquery"
+
+databricks-test:
+	pytest -m "databricks"
+
+duckdb-test:
+	pytest -m "duckdb"
+
+mssql-test:
+	pytest -m "mssql"
+
+mysql-test:
+	pytest -m "mysql"
+
+postgres-test:
+	pytest -m "postgres"
+
+redshift-test:
+	pytest -m "redshift"
+
+snowflake-test:
+	pytest -m "snowflake"
+
+spark-test:
+	pytest -m "spark"
+
+spark-pyspark-test:
+	pytest -m "spark_pyspark"
+
+trino-test:
+	pytest -m "trino"

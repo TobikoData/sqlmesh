@@ -10,6 +10,8 @@ from sqlmesh.core.config import (
 from sqlmesh.integrations.github.cicd.config import MergeMethod
 from tests.utils.test_filesystem import create_temp_file
 
+pytestmark = pytest.mark.github
+
 
 def test_load_yaml_config_default(tmp_path):
     create_temp_file(

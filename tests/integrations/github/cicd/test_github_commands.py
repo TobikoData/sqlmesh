@@ -4,6 +4,7 @@ import pathlib
 from unittest import TestCase, mock
 from unittest.result import TestResult
 
+import pytest
 from pytest_mock.plugin import MockerFixture
 
 from sqlmesh.core import constants as c
@@ -18,6 +19,10 @@ from sqlmesh.integrations.github.cicd.controller import (
 from sqlmesh.utils.errors import PlanError
 
 pytest_plugins = ["tests.integrations.github.cicd.fixtures"]
+pytestmark = [
+    pytest.mark.github,
+    pytest.mark.integration,
+]
 
 
 def test_run_all_success_with_approvers_approved(

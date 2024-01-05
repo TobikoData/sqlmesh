@@ -9,6 +9,11 @@ from sqlmesh.schedulers.airflow.client import AirflowClient
 from sqlmesh.utils.date import now, to_date, yesterday
 from tests.conftest import SushiDataValidator
 
+pytestmark = [
+    pytest.mark.airflow,
+    pytest.mark.docker,
+]
+
 
 @pytest.fixture(autouse=True)
 def wait_for_airflow(airflow_client: AirflowClient):
@@ -19,8 +24,6 @@ def wait_for_airflow(airflow_client: AirflowClient):
     get_receiver_dag()
 
 
-@pytest.mark.integration
-@pytest.mark.airflow_integration
 def test_sushi(mocker: MockerFixture, is_docker: bool):
     start = to_date(now() - timedelta(days=7))
     end = now()

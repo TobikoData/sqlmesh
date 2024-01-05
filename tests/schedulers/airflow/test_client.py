@@ -16,6 +16,8 @@ from sqlmesh.schedulers.airflow import common
 from sqlmesh.schedulers.airflow.client import AirflowClient, _list_to_json
 from sqlmesh.utils.date import to_timestamp
 
+pytestmark = pytest.mark.airflow
+
 
 @pytest.fixture
 def snapshot() -> Snapshot:

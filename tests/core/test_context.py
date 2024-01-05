@@ -79,6 +79,7 @@ def test_dag(sushi_context):
     }
 
 
+@pytest.mark.integration
 def test_render_sql_model(sushi_context, assert_exp_eq):
     assert_exp_eq(
         sushi_context.render(
@@ -156,6 +157,7 @@ def test_render_sql_model(sushi_context, assert_exp_eq):
     )
 
 
+@pytest.mark.integration
 def test_render_seed_model(sushi_context, assert_exp_eq):
     assert_exp_eq(
         sushi_context.render(
@@ -177,6 +179,7 @@ def test_render_seed_model(sushi_context, assert_exp_eq):
     )
 
 
+@pytest.mark.integration
 def test_diff(sushi_context: Context, mocker: MockerFixture):
     mock_console = mocker.Mock()
     sushi_context.console = mock_console
@@ -199,6 +202,7 @@ def test_diff(sushi_context: Context, mocker: MockerFixture):
     assert success
 
 
+@pytest.mark.integration
 def test_evaluate_limit():
     context = Context(config=Config())
 
@@ -287,6 +291,7 @@ def test():
     assert "test" in context._macros
 
 
+@pytest.mark.integration
 def test_plan_apply(sushi_context_pre_scheduling) -> None:
     logger = logging.getLogger("sqlmesh.core.renderer")
     with patch.object(logger, "warning") as mock_logger:
@@ -345,6 +350,7 @@ model_defaults:
         assert snowflake_connection.password == "XYZ"
 
 
+@pytest.mark.integration
 def test_physical_schema_override() -> None:
     def get_schemas(context: Context):
         return {
@@ -382,6 +388,7 @@ def test_physical_schema_override() -> None:
     )
 
 
+@pytest.mark.integration
 def test_janitor(sushi_context, mocker: MockerFixture) -> None:
     adapter_mock = mocker.MagicMock()
     state_sync_mock = mocker.MagicMock()
@@ -438,6 +445,7 @@ def test_janitor(sushi_context, mocker: MockerFixture) -> None:
     )
 
 
+@pytest.mark.integration
 def test_plan_default_end(sushi_context_pre_scheduling: Context):
     prod_plan = sushi_context_pre_scheduling.plan("prod", no_prompts=True)
     # Simulate that the prod is 3 days behind.
@@ -457,6 +465,7 @@ def test_plan_default_end(sushi_context_pre_scheduling: Context):
     assert forward_only_dev_plan._start == plan_end
 
 
+@pytest.mark.integration
 def test_schema_error_no_default(sushi_context_pre_scheduling) -> None:
     context = sushi_context_pre_scheduling
 
@@ -473,6 +482,7 @@ def test_schema_error_no_default(sushi_context_pre_scheduling) -> None:
         )
 
 
+@pytest.mark.integration
 def test_gateway_macro(sushi_context: Context) -> None:
     sushi_context.upsert_model(
         load_sql_based_model(
@@ -513,6 +523,7 @@ def test_gateway_macro(sushi_context: Context) -> None:
     )
 
 
+@pytest.mark.integration
 def test_unrestorable_snapshot(sushi_context: Context) -> None:
     model_v1 = load_sql_based_model(
         parse(

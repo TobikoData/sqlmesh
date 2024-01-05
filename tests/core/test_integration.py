@@ -38,6 +38,8 @@ from sqlmesh.core.snapshot import (
 from sqlmesh.utils.date import TimeLike, to_date, to_datetime, to_timestamp, to_ts
 from tests.conftest import DuckDBMetadata, SushiDataValidator, init_and_plan_context
 
+pytestmark = pytest.mark.integration
+
 
 @pytest.fixture(autouse=True)
 def mock_choices(mocker: MockerFixture):
@@ -52,8 +54,6 @@ def plan_choice(plan: Plan, choice: SnapshotChangeCategory) -> None:
 
 
 @freeze_time("2023-01-08 15:00:00")
-@pytest.mark.integration
-@pytest.mark.core_integration
 @pytest.mark.parametrize(
     "context_fixture",
     ["sushi_context", "sushi_no_default_catalog"],
@@ -193,8 +193,6 @@ def test_forward_only_plan_with_effective_date(context_fixture: Context, request
 
 
 @freeze_time("2023-01-08 15:00:00")
-@pytest.mark.integration
-@pytest.mark.core_integration
 def test_forward_only_model_regular_plan(mocker: MockerFixture):
     context, plan = init_and_plan_context("examples/sushi", mocker)
     context.apply(plan)
@@ -288,8 +286,6 @@ def test_forward_only_model_regular_plan(mocker: MockerFixture):
 
 
 @freeze_time("2023-01-08 15:00:00")
-@pytest.mark.integration
-@pytest.mark.core_integration
 def test_plan_set_choice_is_reflected_in_missing_intervals(mocker: MockerFixture):
     context, plan = init_and_plan_context("examples/sushi", mocker)
     context.apply(plan)
@@ -434,8 +430,6 @@ def test_plan_set_choice_is_reflected_in_missing_intervals(mocker: MockerFixture
 
 
 @freeze_time("2023-01-08 15:00:00")
-@pytest.mark.integration
-@pytest.mark.core_integration
 def test_non_breaking_change_after_forward_only_in_dev(mocker: MockerFixture):
     context, plan = init_and_plan_context("examples/sushi", mocker)
     context.apply(plan)
@@ -554,8 +548,6 @@ def test_non_breaking_change_after_forward_only_in_dev(mocker: MockerFixture):
 
 
 @freeze_time("2023-01-08 15:00:00")
-@pytest.mark.integration
-@pytest.mark.core_integration
 def test_indirect_non_breaking_change_after_forward_only_in_dev(mocker: MockerFixture):
     context, plan = init_and_plan_context("examples/sushi", mocker)
     context.apply(plan)
@@ -678,8 +670,6 @@ def test_indirect_non_breaking_change_after_forward_only_in_dev(mocker: MockerFi
 
 
 @freeze_time("2023-01-08 15:00:00")
-@pytest.mark.integration
-@pytest.mark.core_integration
 def test_forward_only_precedence_over_indirect_non_breaking(mocker: MockerFixture):
     context, plan = init_and_plan_context("examples/sushi", mocker)
     context.apply(plan)
@@ -753,8 +743,6 @@ def test_forward_only_precedence_over_indirect_non_breaking(mocker: MockerFixtur
 
 
 @freeze_time("2023-01-08 15:00:00")
-@pytest.mark.integration
-@pytest.mark.core_integration
 def test_select_models_for_backfill(mocker: MockerFixture):
     context, _ = init_and_plan_context("examples/sushi", mocker)
 
@@ -806,8 +794,6 @@ def test_select_models_for_backfill(mocker: MockerFixture):
     assert dev_df.empty
 
 
-@pytest.mark.integration
-@pytest.mark.core_integration
 @pytest.mark.parametrize(
     "context_fixture",
     ["sushi_context", "sushi_dbt_context", "sushi_test_dbt_context", "sushi_no_default_catalog"],
@@ -816,8 +802,6 @@ def test_model_add(context_fixture: Context, request):
     initial_add(request.getfixturevalue(context_fixture), "dev")
 
 
-@pytest.mark.integration
-@pytest.mark.core_integration
 def test_model_removed(sushi_context: Context):
     environment = "dev"
     initial_add(sushi_context, environment)
@@ -848,32 +832,24 @@ def test_model_removed(sushi_context: Context):
     )
 
 
-@pytest.mark.integration
-@pytest.mark.core_integration
 def test_non_breaking_change(sushi_context: Context):
     environment = "dev"
     initial_add(sushi_context, environment)
     validate_query_change(sushi_context, environment, SnapshotChangeCategory.NON_BREAKING, False)
 
 
-@pytest.mark.integration
-@pytest.mark.core_integration
 def test_breaking_change(sushi_context: Context):
     environment = "dev"
     initial_add(sushi_context, environment)
     validate_query_change(sushi_context, environment, SnapshotChangeCategory.BREAKING, False)
 
 
-@pytest.mark.integration
-@pytest.mark.core_integration
 def test_forward_only(sushi_context: Context):
     environment = "dev"
     initial_add(sushi_context, environment)
     validate_query_change(sushi_context, environment, SnapshotChangeCategory.FORWARD_ONLY, False)
 
 
-@pytest.mark.integration
-@pytest.mark.core_integration
 def test_logical_change(sushi_context: Context):
     environment = "dev"
     initial_add(sushi_context, environment)
@@ -961,8 +937,6 @@ def validate_query_change(
     )
 
 
-@pytest.mark.integration
-@pytest.mark.core_integration
 @pytest.mark.parametrize(
     "from_, to",
     [
@@ -1050,8 +1024,6 @@ def validate_model_kind_change(
     )
 
 
-@pytest.mark.integration
-@pytest.mark.core_integration
 def test_environment_isolation(sushi_context: Context):
     prod_snapshots = sushi_context.snapshots.values()
 
@@ -1088,8 +1060,6 @@ def test_environment_isolation(sushi_context: Context):
     )
 
 
-@pytest.mark.integration
-@pytest.mark.core_integration
 def test_environment_promotion(sushi_context: Context):
     initial_add(sushi_context, "dev")
 
@@ -1148,8 +1118,6 @@ def test_environment_promotion(sushi_context: Context):
     )
 
 
-@pytest.mark.integration
-@pytest.mark.core_integration
 def test_no_override(sushi_context: Context) -> None:
     change_data_type(
         sushi_context,
@@ -1185,8 +1153,6 @@ def test_no_override(sushi_context: Context) -> None:
     assert not waiter_revenue.is_new_version
 
 
-@pytest.mark.integration
-@pytest.mark.core_integration
 def test_rebase_remote_break(sushi_context: Context):
     setup_rebase(
         sushi_context,
@@ -1196,8 +1162,6 @@ def test_rebase_remote_break(sushi_context: Context):
     )
 
 
-@pytest.mark.integration
-@pytest.mark.core_integration
 def test_rebase_local_break(sushi_context: Context):
     setup_rebase(
         sushi_context,
@@ -1206,8 +1170,6 @@ def test_rebase_local_break(sushi_context: Context):
     )
 
 
-@pytest.mark.integration
-@pytest.mark.core_integration
 def test_rebase_no_break(sushi_context: Context):
     setup_rebase(
         sushi_context,
@@ -1216,8 +1178,6 @@ def test_rebase_no_break(sushi_context: Context):
     )
 
 
-@pytest.mark.integration
-@pytest.mark.core_integration
 def test_rebase_break(sushi_context: Context):
     setup_rebase(
         sushi_context,
@@ -1323,8 +1283,6 @@ def setup_rebase(
         )
 
 
-@pytest.mark.integration
-@pytest.mark.core_integration
 @pytest.mark.parametrize(
     "change_categories, expected",
     [
@@ -1382,8 +1340,6 @@ def test_revert(
     assert sushi_context.get_snapshot("sushi.items", raise_if_missing=True) == original_snapshot_id
 
 
-@pytest.mark.integration
-@pytest.mark.core_integration
 def test_revert_after_downstream_change(sushi_context: Context):
     environment = "prod"
     change_data_type(sushi_context, "sushi.items", DataType.Type.DOUBLE, DataType.Type.FLOAT)
@@ -1412,8 +1368,6 @@ def test_revert_after_downstream_change(sushi_context: Context):
     )
 
 
-@pytest.mark.integration
-@pytest.mark.core_integration
 def test_auto_categorization(sushi_context: Context):
     environment = "dev"
     for config in sushi_context.configs.values():
@@ -1449,8 +1403,6 @@ def test_auto_categorization(sushi_context: Context):
     )
 
 
-@pytest.mark.integration
-@pytest.mark.core_integration
 def test_multi(mocker):
     context = Context(paths=["examples/multi/repo_1", "examples/multi/repo_2"], gateway="memory")
     context._new_state_sync().reset(default_catalog=context.default_catalog)
@@ -1478,8 +1430,6 @@ def test_multi(mocker):
     validate_apply_basics(context, c.PROD, plan.snapshots)
 
 
-@pytest.mark.integration
-@pytest.mark.core_integration
 def test_incremental_time_self_reference(
     mocker: MockerFixture, sushi_context: Context, sushi_data_validator: SushiDataValidator
 ):
@@ -1550,8 +1500,6 @@ def test_incremental_time_self_reference(
     )
 
 
-@pytest.mark.integration
-@pytest.mark.core_integration
 def test_invalidating_environment(sushi_context: Context):
     apply_to_environment(sushi_context, "dev")
     start_environment = sushi_context.state_sync.get_environment("dev")
@@ -1571,8 +1519,6 @@ def test_invalidating_environment(sushi_context: Context):
     assert start_schemas - schemas_after_janitor == {"sushi__dev"}
 
 
-@pytest.mark.integration
-@pytest.mark.core_integration
 def test_environment_suffix_target_table(mocker: MockerFixture):
     context, plan = init_and_plan_context(
         "examples/sushi", mocker, config="environment_suffix_config"
@@ -1612,8 +1558,6 @@ def test_environment_suffix_target_table(mocker: MockerFixture):
     } == set()
 
 
-@pytest.mark.integration
-@pytest.mark.core_integration
 def test_environment_catalog_mapping(mocker: MockerFixture):
     environments_schemas = {"raw", "sushi"}
 
@@ -1676,8 +1620,6 @@ def test_environment_catalog_mapping(mocker: MockerFixture):
     assert len(non_default_tables) == 0
 
 
-@pytest.mark.integration
-@pytest.mark.core_integration
 @pytest.mark.parametrize(
     "context_fixture",
     ["sushi_context", "sushi_no_default_catalog"],
@@ -1711,8 +1653,6 @@ def test_ignored_snapshots(context_fixture: Context, request):
     assert exp.table_("order_items", "sushi__dev", catalog) in metadata.qualified_views
 
 
-@pytest.mark.integration
-@pytest.mark.core_integration
 def test_scd_type_2(tmp_path: pathlib.Path):
     def create_source_dataframe(values: t.List[t.Tuple[int, str, str]]) -> pd.DataFrame:
         return pd.DataFrame(

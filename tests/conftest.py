@@ -133,6 +133,17 @@ class SushiDataValidator:
             raise NotImplementedError(f"Unknown model_name: {model_name}")
 
 
+def pytest_collection_modifyitems(items, *args, **kwargs):
+    test_type_markers = {"unit", "integration", "docker", "remote"}
+    for item in items:
+        for marker in item.iter_markers():
+            if marker.name in test_type_markers:
+                break
+        else:
+            # if no test type marker is found, assume unit test
+            item.add_marker("unit")
+
+
 # Ignore all local config files
 @pytest.fixture(scope="session", autouse=True)
 def ignore_local_config_files():

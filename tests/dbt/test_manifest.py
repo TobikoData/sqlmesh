@@ -2,11 +2,15 @@ from __future__ import annotations
 
 from pathlib import Path
 
+import pytest
+
 from sqlmesh.dbt.basemodel import Dependencies
 from sqlmesh.dbt.context import DbtContext
 from sqlmesh.dbt.manifest import ManifestHelper
 from sqlmesh.dbt.profile import Profile
 from sqlmesh.utils.jinja import MacroReference
+
+pytestmark = pytest.mark.dbt
 
 
 def test_manifest_helper():
