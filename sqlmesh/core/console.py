@@ -986,7 +986,9 @@ class TerminalConsole(Console):
         auto_apply: bool,
         default_catalog: t.Optional[str],
     ) -> None:
-        choices = self._snapshot_change_choices(snapshot)
+        choices = self._snapshot_change_choices(
+            snapshot, plan_builder.environment_naming_info, default_catalog
+        )
         response = self._prompt(
             "\n".join([f"[{i+1}] {choice}" for i, choice in enumerate(choices.values())]),
             show_choices=False,
@@ -996,9 +998,13 @@ class TerminalConsole(Console):
         plan_builder.set_choice(snapshot, choice)
 
     def _snapshot_change_choices(
-        self, snapshot: Snapshot, use_rich_formatting: bool = True
+        self,
+        snapshot: Snapshot,
+        environment_naming_info: EnvironmentNamingInfo,
+        default_catalog: t.Optional[str],
+        use_rich_formatting: bool = True,
     ) -> t.Dict[SnapshotChangeCategory, str]:
-        direct = snapshot.name
+        direct = snapshot.display_name(environment_naming_info, default_catalog)
         if use_rich_formatting:
             direct = f"[direct]{direct}[/direct]"
         indirect = "indirectly modified children"
@@ -1233,13 +1239,18 @@ class NotebookMagicConsole(TerminalConsole):
     ) -> None:
         import ipywidgets as widgets
 
+        choice_mapping = self._snapshot_change_choices(
+            snapshot,
+            plan_builder.environment_naming_info,
+            default_catalog,
+            use_rich_formatting=False,
+        )
+        choices = list(choice_mapping)
+        plan_builder.set_choice(snapshot, choices[0])
+
         def radio_button_selected(change: t.Dict[str, t.Any]) -> None:
             plan_builder.set_choice(snapshot, choices[change["owner"].index])
             self._show_options_after_categorization(plan_builder, auto_apply, default_catalog)
-
-        choice_mapping = self._snapshot_change_choices(snapshot, use_rich_formatting=False)
-        choices = list(choice_mapping)
-        plan_builder.set_choice(snapshot, choices[0])
 
         radio = widgets.RadioButtons(
             options=choice_mapping.values(),

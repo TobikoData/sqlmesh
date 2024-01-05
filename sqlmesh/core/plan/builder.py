@@ -79,9 +79,6 @@ class PlanBuilder:
         default_start: t.Optional[TimeLike] = None,
         default_end: t.Optional[TimeLike] = None,
     ):
-        self.override_start = start is not None
-        self.override_end = end is not None
-
         self._context_diff = context_diff
         self._no_gaps = no_gaps
         self._skip_backfill = skip_backfill
@@ -102,14 +99,16 @@ class PlanBuilder:
         if not self._start and is_dev and forward_only:
             self._start = default_start or yesterday_ds()
 
-        self._environment_naming_info = EnvironmentNamingInfo.from_environment_catalog_mapping(
+        self._plan_id: str = random_id()
+        self._model_fqn_to_snapshot = {s.name: s for s in self._context_diff.snapshots.values()}
+
+        self.override_start = start is not None
+        self.override_end = end is not None
+        self.environment_naming_info = EnvironmentNamingInfo.from_environment_catalog_mapping(
             environment_catalog_mapping or {},
             name=self._context_diff.environment,
             suffix_target=environment_suffix_target,
         )
-
-        self._plan_id: str = random_id()
-        self._model_fqn_to_snapshot = {s.name: s for s in self._context_diff.snapshots.values()}
 
         self._latest_plan: t.Optional[Plan] = None
 
@@ -209,7 +208,7 @@ class PlanBuilder:
             forward_only=self._forward_only,
             include_unmodified=self._include_unmodified,
             environment_ttl=self._environment_ttl,
-            environment_naming_info=self._environment_naming_info,
+            environment_naming_info=self.environment_naming_info,
             directly_modified=directly_modified,
             indirectly_modified=indirectly_modified,
             ignored=ignored,
