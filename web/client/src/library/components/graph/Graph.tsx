@@ -7,45 +7,21 @@ import React, {
   memo,
   Fragment,
 } from 'react'
-import ReactFlow, {
-  Controls,
-  Background,
-  Handle,
-  Position,
-  BackgroundVariant,
-  type EdgeChange,
-  applyEdgeChanges,
-  applyNodeChanges,
-  type NodeChange,
-  useUpdateNodeInternals,
-  useReactFlow,
-  Panel,
-  type Edge,
-  type Node,
-} from 'reactflow'
+import { Handle, Position, useUpdateNodeInternals } from 'reactflow'
 import { Button } from '../button/Button'
 import 'reactflow/dist/base.css'
 import {
-  getEdges,
-  createGraphLayout,
-  toNodeOrEdgeId,
   mergeLineageWithColumns,
   mergeConnections,
-  getNodeMap,
-  getLineageIndex,
-  getActiveNodes,
-  getUpdatedEdges,
-  getUpdatedNodes,
   getModelNodeTypeTitle,
-  getModelAncestors,
 } from './help'
 import {
   debounceSync,
-  isArrayEmpty,
   isArrayNotEmpty,
   isFalse,
   isNil,
   isNotNil,
+  toID,
   truncate,
 } from '../../../utils'
 import { EnumSide, EnumSize, EnumVariant, type Side } from '~/types/enum'
@@ -78,9 +54,6 @@ import { CodeEditorDefault } from '@components/editor/EditorCode'
 import { EnumFileExtensions } from '@models/file'
 import { useSQLMeshModelExtensions } from '@components/editor/hooks'
 import { useApiColumnLineage } from '@api/index'
-import ModelNode from './ModelNode'
-import ListboxShow from '@components/listbox/ListboxShow'
-import SearchList from '@components/search/SearchList'
 
 export const EnumLineageNodeModelType = {
   ...ModelType,
@@ -230,7 +203,7 @@ const ModelNodeHandles = memo(function ModelNodeHandles({
       {hasLeft && (
         <Handle
           type="target"
-          id={toNodeOrEdgeId(EnumSide.Left, id)}
+          id={toID(EnumSide.Left, id)}
           position={Position.Left}
           isConnectable={false}
           className={clsx(
@@ -242,7 +215,7 @@ const ModelNodeHandles = memo(function ModelNodeHandles({
       {hasRight && (
         <Handle
           type="source"
-          id={toNodeOrEdgeId(EnumSide.Right, id)}
+          id={toID(EnumSide.Right, id)}
           position={Position.Right}
           isConnectable={false}
           className={clsx(
@@ -284,7 +257,7 @@ const ModelNodeHeaderHandles = memo(function ModelNodeHeaderHandles({
       {hasLeft && (
         <Handle
           type="target"
-          id={toNodeOrEdgeId(EnumSide.Left, id)}
+          id={toID(EnumSide.Left, id)}
           position={Position.Left}
           isConnectable={false}
           className="!bg-transparent -ml-2 text-neutral-100 border border-secondary-500 rounded-full overflow-hidden "
@@ -342,7 +315,7 @@ const ModelNodeHeaderHandles = memo(function ModelNodeHeaderHandles({
       {hasRight && (
         <Handle
           type="source"
-          id={toNodeOrEdgeId(EnumSide.Right, id)}
+          id={toID(EnumSide.Right, id)}
           position={Position.Right}
           isConnectable={false}
           className="!bg-transparent -mr-2 text-neutral-100 border border-secondary-500 rounded-full overflow-hidden"
@@ -603,14 +576,8 @@ const ModelColumns = memo(function ModelColumns({
           .map(edge =>
             [
               side === EnumSide.Left
-                ? [
-                    toNodeOrEdgeId(EnumSide.Left, id),
-                    toNodeOrEdgeId(EnumSide.Right, edge),
-                  ]
-                : [
-                    toNodeOrEdgeId(EnumSide.Left, edge),
-                    toNodeOrEdgeId(EnumSide.Right, id),
-                  ],
+                ? [toID(EnumSide.Left, id), toID(EnumSide.Right, edge)]
+                : [toID(EnumSide.Left, edge), toID(EnumSide.Right, id)],
             ].concat(walk(edge, side)),
           )
           .flat() as Array<[string, string]>
@@ -631,8 +598,8 @@ const ModelColumns = memo(function ModelColumns({
         >
           {columnsSelected.map(column => (
             <ModelColumn
-              key={toNodeOrEdgeId(nodeId, column.name)}
-              id={toNodeOrEdgeId(nodeId, column.name)}
+              key={toID(nodeId, column.name)}
+              id={toID(nodeId, column.name)}
               nodeId={nodeId}
               column={column}
               disabled={disabled}
@@ -640,10 +607,10 @@ const ModelColumns = memo(function ModelColumns({
               removeEdges={removeEdges}
               isActive={true}
               hasLeft={isArrayNotEmpty(
-                connections.get(toNodeOrEdgeId(nodeId, column.name))?.left,
+                connections.get(toID(nodeId, column.name))?.left,
               )}
               hasRight={isArrayNotEmpty(
-                connections.get(toNodeOrEdgeId(nodeId, column.name))?.right,
+                connections.get(toID(nodeId, column.name))?.right,
               )}
               selectManually={
                 isSelectManually(column.name)
@@ -690,8 +657,8 @@ const ModelColumns = memo(function ModelColumns({
       >
         {columnsRest.map((column, idx) => (
           <ModelColumn
-            key={toNodeOrEdgeId(nodeId, column.name)}
-            id={toNodeOrEdgeId(nodeId, column.name)}
+            key={toID(nodeId, column.name)}
+            id={toID(nodeId, column.name)}
             nodeId={nodeId}
             column={column}
             disabled={disabled}
@@ -746,225 +713,7 @@ const ModelColumns = memo(function ModelColumns({
   )
 })
 
-export { ModelColumnLineage, ModelColumns, ModelNodeHeaderHandles }
-
-function ModelColumnLineage({
-  className,
-}: {
-  className?: string
-}): JSX.Element {
-  const {
-    withColumns,
-    models,
-    lineage,
-    mainNode,
-    selectedEdges,
-    selectedNodes,
-    withConnected,
-    withImpacted,
-    withSecondary,
-    hasBackground,
-    activeEdges,
-    connectedNodes,
-    connections,
-    setWithColumns,
-    handleError,
-    setActiveNodes,
-  } = useLineageFlow()
-  const { setCenter } = useReactFlow()
-
-  const [isBuildingLayout, setIsBuildingLayout] = useState(false)
-
-  const nodeTypes = useMemo(() => ({ model: ModelNode }), [])
-  const nodesMap = useMemo(
-    () =>
-      getNodeMap({
-        lineage,
-        models,
-        withColumns,
-      }),
-    [lineage, models, withColumns],
-  )
-  const allEdges = useMemo(() => getEdges(lineage), [lineage])
-  const lineageIndex = useMemo(() => getLineageIndex(lineage), [lineage])
-
-  const [nodes, setNodes] = useState<Node[]>([])
-  const [edges, setEdges] = useState<Edge[]>([])
-
-  useEffect(() => {
-    const WITH_COLUMNS_LIMIT = 30
-
-    if (isArrayEmpty(allEdges) || isNil(mainNode)) return
-
-    setIsBuildingLayout(true)
-
-    const newActiveNodes = getActiveNodes(
-      allEdges,
-      activeEdges,
-      selectedEdges,
-      nodesMap,
-    )
-    const newNodes = getUpdatedNodes(
-      Object.values(nodesMap),
-      newActiveNodes,
-      mainNode,
-      connectedNodes,
-      selectedNodes,
-      connections,
-      withConnected,
-      withImpacted,
-      withSecondary,
-      withColumns,
-    )
-    const newEdges = getUpdatedEdges(
-      allEdges,
-      connections,
-      activeEdges,
-      newActiveNodes,
-      selectedEdges,
-      selectedNodes,
-      connectedNodes,
-      withConnected,
-      withImpacted,
-      withSecondary,
-    )
-    setTimeout(() => {
-      void createGraphLayout({
-        nodesMap,
-        nodes: newNodes,
-        edges: newEdges,
-      })
-        .then(layout => {
-          setEdges(layout.edges)
-          setNodes(layout.nodes)
-        })
-        .catch(error => {
-          handleError?.(error)
-        })
-        .finally(() => {
-          const node = nodesMap[mainNode]
-
-          setActiveNodes(newActiveNodes)
-
-          if (isNotNil(node)) {
-            setCenter(node.position.x, node.position.y, {
-              zoom: 0.5,
-              duration: 0,
-            })
-          }
-
-          if (
-            nodes.length !== newNodes.length &&
-            newNodes.length > WITH_COLUMNS_LIMIT
-          ) {
-            setWithColumns(false)
-          }
-
-          setIsBuildingLayout(false)
-        })
-    }, 100)
-  }, [lineageIndex, withColumns, activeEdges, selectedEdges])
-
-  useEffect(() => {
-    if (isNil(mainNode) || isArrayEmpty(nodes)) return
-
-    const newActiveNodes = getActiveNodes(
-      allEdges,
-      activeEdges,
-      selectedEdges,
-      nodesMap,
-    )
-    const newNodes = getUpdatedNodes(
-      nodes,
-      newActiveNodes,
-      mainNode,
-      connectedNodes,
-      selectedNodes,
-      connections,
-      withConnected,
-      withImpacted,
-      withSecondary,
-      withColumns,
-    )
-
-    const newEdges = getUpdatedEdges(
-      allEdges,
-      connections,
-      activeEdges,
-      newActiveNodes,
-      selectedEdges,
-      selectedNodes,
-      connectedNodes,
-      withConnected,
-      withImpacted,
-      withSecondary,
-    )
-
-    setEdges(newEdges)
-    setNodes(newNodes)
-    setActiveNodes(newActiveNodes)
-  }, [
-    connections,
-    nodesMap,
-    allEdges,
-    activeEdges,
-    selectedNodes,
-    selectedEdges,
-    connectedNodes,
-    withConnected,
-    withImpacted,
-    withSecondary,
-    withColumns,
-    mainNode,
-  ])
-
-  function onNodesChange(changes: NodeChange[]): void {
-    setNodes(applyNodeChanges(changes, nodes))
-  }
-
-  function onEdgesChange(changes: EdgeChange[]): void {
-    setEdges(applyEdgeChanges(changes, edges))
-  }
-
-  return (
-    <div className={clsx('px-1 w-full h-full relative', className)}>
-      {isBuildingLayout && (
-        <div className="absolute top-0 left-0 z-10 bg-theme flex justify-center items-center w-full h-full">
-          <Loading className="inline-block">
-            <Spinner className="w-3 h-3 border border-neutral-10 mr-4" />
-            <h3 className="text-md">Building Lineage...</h3>
-          </Loading>
-        </div>
-      )}
-      <ReactFlow
-        nodes={nodes}
-        edges={edges}
-        nodeTypes={nodeTypes}
-        onNodesChange={onNodesChange}
-        onEdgesChange={onEdgesChange}
-        nodeOrigin={[0.5, 0.5]}
-        minZoom={0.1}
-        maxZoom={1.5}
-        snapGrid={[16, 16]}
-        snapToGrid
-      >
-        <Panel
-          position="top-right"
-          className="bg-theme !m-0 w-full"
-        >
-          <GraphControls nodes={nodes} />
-        </Panel>
-        <Controls className="bg-light p-1 rounded-md !border-none !shadow-lg" />
-        <Background
-          variant={BackgroundVariant.Dots}
-          gap={32}
-          size={4}
-          className={clsx(hasBackground ? 'opacity-100' : 'opacity-0')}
-        />
-      </ReactFlow>
-    </div>
-  )
-}
+export { ModelColumns, ModelNodeHeaderHandles }
 
 function ColumnLoading({
   isFetching = false,
@@ -989,175 +738,5 @@ function ColumnLoading({
         <ExclamationCircleIcon className="w-4 h-4 text-danger-500 mr-1" />
       )}
     </>
-  )
-}
-
-function GraphControls({ nodes = [] }: { nodes: Node[] }): JSX.Element {
-  const {
-    models,
-    withColumns,
-    lineage,
-    mainNode,
-    selectedNodes,
-    withConnected,
-    withImpacted,
-    withSecondary,
-    hasBackground,
-    activeNodes,
-    connectedNodes,
-    highlightedNodes,
-    setSelectedNodes,
-    setWithColumns,
-    setWithConnected,
-    setWithImpacted,
-    setWithSecondary,
-    setHasBackground,
-  } = useLineageFlow()
-
-  const currentModels = useMemo(() => {
-    if (isNil(mainNode) || isNil(lineage)) return []
-
-    const ancestors = getModelAncestors(lineage, mainNode)
-
-    return Object.keys(lineage)
-      .map(model => ({
-        name: models.get(model)?.displayName ?? model,
-        description: `${
-          ancestors.includes(model) ? 'Upstream' : 'Downstream'
-        } | ${connectedNodes.has(model) ? 'Directly' : 'Indirectly'} Connected`,
-      }))
-      .filter(Boolean) as Array<{ name: string; description: string }>
-  }, [lineage, mainNode])
-
-  const model = isNil(mainNode) ? undefined : models.get(mainNode)
-  const countSelected = selectedNodes.size
-  const countImpact = connectedNodes.size - 1
-  const countSecondary = nodes.filter(n =>
-    isFalse(connectedNodes.has(n.id)),
-  ).length
-  const countActive =
-    activeNodes.size > 0 ? activeNodes.size : connectedNodes.size
-  const countHidden = nodes.filter(n => n.hidden).length
-  const countVisible = nodes.filter(n => isFalse(n.hidden)).length
-  const countDataSources = nodes.filter(
-    n =>
-      isFalse(n.hidden) &&
-      (n.data.type === EnumLineageNodeModelType.external ||
-        n.data.type === EnumLineageNodeModelType.seed),
-  ).length
-  const countCTEs = nodes.filter(
-    n => isFalse(n.hidden) && n.data.type === EnumLineageNodeModelType.cte,
-  ).length
-  const highlightedNodeModels = useMemo(
-    () => Object.values(highlightedNodes ?? {}).flat(),
-    [highlightedNodes],
-  )
-
-  function handleSelect(model: { name: string; description: string }): void {
-    if (highlightedNodeModels.includes(model.name) || mainNode === model.name)
-      return
-
-    setSelectedNodes(current => {
-      if (current.has(model.name)) {
-        current.delete(model.name)
-      } else {
-        current.add(model.name)
-      }
-
-      return new Set(current)
-    })
-  }
-
-  return (
-    <div className="pl-2 flex items-center text-xs text-neutral-400">
-      <div className="contents">
-        {isNotNil(model) && (
-          <span
-            title={model.displayName}
-            className="mr-2 w-full min-w-[10rem] whitespace-nowrap text-ellipsis overflow-hidden"
-          >
-            <b>Model:</b> {truncate(model.displayName, 50, 25)}
-          </span>
-        )}
-        {isNotNil(highlightedNodes) ?? (
-          <span className="mr-2 whitespace-nowrap">
-            <b>Highlighted:</b> {Object.keys(highlightedNodes ?? {}).length}
-          </span>
-        )}
-        {countSelected > 0 && (
-          <span className="mr-2 whitespace-nowrap">
-            <b>Selected:</b> {countSelected}
-          </span>
-        )}
-        {withImpacted && countSelected === 0 && countImpact > 0 && (
-          <span className="mr-2 whitespace-nowrap">
-            <b>Impact:</b> {countImpact}
-          </span>
-        )}
-        {withSecondary && countSelected === 0 && countSecondary > 0 && (
-          <span className="mr-2 whitespace-nowrap">
-            <b>Secondary:</b> {countSecondary}
-          </span>
-        )}
-        <span className="mr-2 whitespace-nowrap">
-          <b>Active:</b> {countActive}
-        </span>
-        {countVisible > 0 && countVisible !== countActive && (
-          <span className="mr-2 whitespace-nowrap">
-            <b>Visible:</b> {countVisible}
-          </span>
-        )}
-        {countHidden > 0 && (
-          <span className="mr-2 whitespace-nowrap">
-            <b>Hidden:</b> {countHidden}
-          </span>
-        )}
-        {countDataSources > 0 && (
-          <span className="mr-2 whitespace-nowrap">
-            <b>Data Sources</b>: {countDataSources}
-          </span>
-        )}
-        {countCTEs > 0 && (
-          <span className="mr-2 whitespace-nowrap">
-            <b>CTEs:</b> {countCTEs}
-          </span>
-        )}
-      </div>
-      <div className="flex w-full justify-end items-center">
-        <SearchList<{ name: string; description: string }>
-          list={currentModels}
-          placeholder="Find"
-          searchBy="name"
-          displayBy="name"
-          descriptionBy="description"
-          showIndex={false}
-          size={EnumSize.sm}
-          onSelect={handleSelect}
-          className="w-full min-w-[15rem] max-w-[20rem]"
-          isFullWidth={true}
-        />
-        <ListboxShow
-          options={{
-            Background: setHasBackground,
-            Columns:
-              activeNodes.size > 0 && selectedNodes.size === 0
-                ? undefined
-                : setWithColumns,
-            Connected: activeNodes.size > 0 ? undefined : setWithConnected,
-            Impact: activeNodes.size > 0 ? undefined : setWithImpacted,
-            Secondary: activeNodes.size > 0 ? undefined : setWithSecondary,
-          }}
-          value={
-            [
-              withColumns && 'Columns',
-              hasBackground && 'Background',
-              withConnected && 'Connected',
-              withImpacted && 'Impact',
-              withSecondary && 'Secondary',
-            ].filter(Boolean) as string[]
-          }
-        />
-      </div>
-    </div>
   )
 }

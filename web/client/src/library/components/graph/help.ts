@@ -1,10 +1,11 @@
-import ELK, { type ElkNode } from 'elkjs/lib/elk.bundled.js'
+import ELK, { type ElkNode } from 'elkjs/lib/elk-api'
 import {
   isArrayNotEmpty,
   isFalse,
   isNil,
   isNotNil,
   isObjectEmpty,
+  toID,
 } from '../../../utils'
 import { type LineageColumn, type Column } from '@api/client'
 import { Position, type Edge, type Node, type XYPosition } from 'reactflow'
@@ -13,6 +14,7 @@ import { type ActiveEdges, type Connections } from './context'
 import { EnumSide } from '~/types/enum'
 import { EnumLineageNodeModelType, type LineageNodeModelType } from './Graph'
 import { type ModelSQLMeshModel } from '@models/sqlmesh-model'
+import { type ConnectedNode } from '~/workers/lineage'
 
 export interface GraphNodeData {
   label: string
@@ -24,11 +26,8 @@ export {
   getNodeMap,
   getEdges,
   createGraphLayout,
-  toNodeOrEdgeId,
-  mergeLineageWithModels,
   mergeLineageWithColumns,
   mergeConnections,
-  getNodesBetween,
   getLineageIndex,
   getActiveNodes,
   getUpdatedNodes,
@@ -39,7 +38,7 @@ export {
   getModelAncestors,
 }
 
-async function createGraphLayout({
+function createGraphLayout({
   nodesMap,
   nodes = [],
   edges = [],
@@ -47,34 +46,49 @@ async function createGraphLayout({
   nodesMap: Record<string, Node>
   nodes: Node[]
   edges: Edge[]
-}): Promise<{ nodes: Node[]; edges: Edge[] }> {
+}): {
+  create: () => Promise<{ nodes: Node[]; edges: Edge[] }>
+  terminate: () => void
+} {
   // https://eclipse.dev/elk/reference/options.html
-
-  const elk = new ELK()
-  const layout = await elk.layout({
-    id: 'root',
-    layoutOptions: {
-      'elk.algorithm': 'layered',
-      'elk.layered.layering.strategy': 'NETWORK_SIMPLEX',
-      'elk.layered.crossingMinimization.strategy': 'INTERACTIVE',
-      'elk.direction': 'RIGHT',
-      'elk.layered.considerModelOrder.strategy': 'NODES_AND_EDGES',
-    },
-    children: nodes.map(node => ({
-      id: node.id,
-      width: node.data.width,
-      height: node.data.height,
-    })),
-    edges: edges.map(edge => ({
-      id: edge.id,
-      sources: [edge.source],
-      targets: [edge.target],
-    })),
+  const elk: any = new ELK({
+    workerUrl: '/node_modules/elkjs/lib/elk-worker.min.js',
   })
 
   return {
-    edges,
-    nodes: repositionNodes(layout.children, nodesMap),
+    terminate: () => elk.worker.worker.terminate(),
+    create: async () =>
+      new Promise((resolve, reject) => {
+        elk
+          .layout({
+            id: 'root',
+            layoutOptions: {
+              'elk.algorithm': 'layered',
+              'elk.layered.layering.strategy': 'NETWORK_SIMPLEX',
+              'elk.layered.crossingMinimization.strategy': 'INTERACTIVE',
+              'elk.direction': 'RIGHT',
+              // https://eclipse.dev/elk/reference/options/org-eclipse-elk-layered-considerModelOrder-strategy.html
+              'elk.layered.considerModelOrder.strategy': 'PREFER_NODES',
+            },
+            children: nodes.map(node => ({
+              id: node.id,
+              width: node.data.width,
+              height: node.data.height,
+            })),
+            edges: edges.map(edge => ({
+              id: edge.id,
+              sources: [edge.source],
+              targets: [edge.target],
+            })),
+          })
+          .then((layout: any) =>
+            resolve({
+              edges,
+              nodes: repositionNodes(layout.children, nodesMap),
+            }),
+          )
+          .catch(reject)
+      }),
   }
 }
 
@@ -100,12 +114,12 @@ function getEdges(lineage: Record<string, Lineage> = {}): Edge[] {
         if (isNil(sourceColumns)) continue
 
         for (const sourceColumnName of sourceColumns) {
-          const sourceHandler = toNodeOrEdgeId(
+          const sourceHandler = toID(
             EnumSide.Right,
             sourceModelName,
             sourceColumnName,
           )
-          const targetHandler = toNodeOrEdgeId(
+          const targetHandler = toID(
             EnumSide.Left,
             targetModelName,
             targetColumnName,
@@ -282,7 +296,7 @@ function createGraphEdge<TData = any>(
   data?: TData,
 ): Edge<TData> {
   const output: Edge = {
-    id: toNodeOrEdgeId(source, target, sourceHandle, targetHandle),
+    id: toID(source, target, sourceHandle, targetHandle),
     source,
     target,
     hidden,
@@ -302,29 +316,6 @@ function createGraphEdge<TData = any>(
   }
 
   return output
-}
-
-function toNodeOrEdgeId(...args: Array<string | undefined>): string {
-  return args.filter(Boolean).join('__')
-}
-
-function mergeLineageWithModels(
-  currentLineage: Record<string, Lineage> = {},
-  data: Record<string, string[]> = {},
-): Record<string, Lineage> {
-  return Object.entries(data).reduce(
-    (acc: Record<string, Lineage>, [key, models = []]) => {
-      key = encodeURI(key)
-
-      acc[key] = {
-        models: models.map(encodeURI),
-        columns: currentLineage?.[key]?.columns ?? undefined,
-      }
-
-      return acc
-    },
-    {},
-  )
 }
 
 function mergeLineageWithColumns(
@@ -412,7 +403,7 @@ function mergeConnections(
       // At this point our Node is model -> {modelName} and column -> {columnName}
       // It is a target (left handler)
       // but it can also be a source (right handler) for other connections
-      const modelColumnIdTarget = toNodeOrEdgeId(
+      const modelColumnIdTarget = toID(
         targetModelNameEncoded,
         targetColumnNameEncoded,
       )
@@ -430,7 +421,7 @@ function mergeConnections(
           const sourceColumnNameEncoded = encodeURI(sourceColumnName)
           // It is a source (right handler)
           // but it can also be a target (left handler) for other connections
-          const modelColumnIdSource = toNodeOrEdgeId(
+          const modelColumnIdSource = toID(
             sourceModelNameEncoded,
             sourceColumnNameEncoded,
           )
@@ -459,14 +450,14 @@ function mergeConnections(
           // And right bucket contains references to all targets (left handlers)
           connectionsModelSource.left.forEach(id => {
             activeEdges.push([
-              toNodeOrEdgeId(EnumSide.Left, modelColumnIdSource),
-              toNodeOrEdgeId(EnumSide.Right, id),
+              toID(EnumSide.Left, modelColumnIdSource),
+              toID(EnumSide.Right, id),
             ])
           })
           connectionsModelSource.right.forEach(id => {
             activeEdges.push([
-              toNodeOrEdgeId(EnumSide.Left, id),
-              toNodeOrEdgeId(EnumSide.Right, modelColumnIdSource),
+              toID(EnumSide.Left, id),
+              toID(EnumSide.Right, modelColumnIdSource),
             ])
           })
         })
@@ -478,29 +469,6 @@ function mergeConnections(
     connections,
     activeEdges,
   }
-}
-
-function getNodesBetween(
-  source: string,
-  target: string,
-  lineage: Record<string, Lineage> = {},
-): Array<{ source: string; target: string }> {
-  const models = lineage[source]?.models ?? []
-  const output: Array<{ source: string; target: string }> = []
-
-  if (models.includes(target)) {
-    output.push({ source: target, target: source })
-  }
-
-  models.forEach(node => {
-    const found = getNodesBetween(node, target, lineage)
-
-    if (isArrayNotEmpty(found)) {
-      output.push({ source: node, target: source }, ...found)
-    }
-  })
-
-  return output
 }
 
 function getLineageIndex(lineage: Record<string, Lineage> = {}): string {
@@ -547,7 +515,7 @@ function getModelAncestors(
 function getActiveNodes(
   edges: Edge[] = [],
   activeEdges: ActiveEdges,
-  selectedEdges: Set<string>,
+  selectedEdges: ConnectedNode[],
   nodesMap: Record<string, Node>,
 ): Set<string> {
   return new Set<string>(
@@ -579,7 +547,7 @@ function getActiveNodes(
           edge.sourceHandle,
         ])
 
-        if (isActiveEdge || selectedEdges.has(edge.id)) {
+        if (isActiveEdge || hasEdge(selectedEdges, edge.id)) {
           if (isNotNil(edge.source)) {
             acc.push(edge.source)
           }
@@ -599,7 +567,7 @@ function getUpdatedEdges(
   connections: Map<string, Connections>,
   activeEdges: ActiveEdges,
   activeNodes: Set<string>,
-  selectedEdges: Set<string>,
+  selectedEdges: ConnectedNode[],
   selectedNodes: Set<string>,
   connectedNodes: Set<string>,
   withConnected: boolean = false,
@@ -633,7 +601,7 @@ function getUpdatedEdges(
       const shouldHideImpacted = isImpactedEdge && withoutImpactedNodes
       const isVisibleEdge =
         selectedNodes.size > 0 &&
-        selectedEdges.has(edge.id) &&
+        hasEdge(selectedEdges, edge.id) &&
         activeNodes.has(edge.source) &&
         activeNodes.has(edge.target)
 
@@ -658,7 +626,7 @@ function getUpdatedEdges(
     const isConnectedTarget = connectedNodes.has(edge.target)
 
     if (
-      selectedEdges.has(edge.id) ||
+      hasEdge(selectedEdges, edge.id) ||
       (withConnected && isConnectedSource && isConnectedTarget)
     ) {
       strokeWidth = 4
@@ -764,4 +732,8 @@ function getModelNodeTypeTitle(type: LineageNodeModelType): string {
   if (type === EnumLineageNodeModelType.external) return 'EXTERNAL'
 
   return 'UNKNOWN'
+}
+
+function hasEdge(nodes: ConnectedNode[], edge: string): boolean {
+  return nodes.some(node => node.id === edge || hasEdge(node.edges, edge))
 }

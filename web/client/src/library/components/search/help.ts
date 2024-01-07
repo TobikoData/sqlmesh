@@ -10,6 +10,7 @@ function highlightMatch(source: string, match: string): string {
   )
 }
 
+// NOTE: This function is used to filter the list of models in the search bar
 function filterListBy<T extends Record<string, any> = Record<string, any>>(
   indices: Array<[T, string]> = [],
   search: string,
@@ -32,8 +33,8 @@ function filterListBy<T extends Record<string, any> = Record<string, any>>(
 
       acc.push([
         model,
-        `${min > 0 ? '... ' : EMPTY_STRING}${index.slice(min, max)}${
-          max < index.length ? ' ...' : EMPTY_STRING
+        `${min > 0 ? '...' : EMPTY_STRING}${index.slice(min, max)}${
+          max < index.length ? '...' : EMPTY_STRING
         }`,
       ])
     }
