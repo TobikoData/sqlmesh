@@ -81,9 +81,8 @@ class EngineAdapter:
     ESCAPE_JSON = False
     SUPPORTS_TRANSACTIONS = True
     SUPPORTS_INDEXES = False
-    COMMENT_CREATION = CommentCreation.IN_SCHEMA_DEF
+    COMMENT_CREATION = CommentCreation.IN_SCHEMA_DEF_CTAS
     SUPPORTS_VIEW_COMMENT = True
-    SUPPORTS_CTAS_SCHEMA_COMMENTS = True
     INSERT_OVERWRITE_STRATEGY = InsertOverwriteStrategy.DELETE_INSERT
     SUPPORTS_MATERIALIZED_VIEWS = False
     SUPPORTS_MATERIALIZED_VIEW_SCHEMA = False
@@ -478,11 +477,12 @@ class EngineAdapter:
         table: exp.Table,
         columns_to_types: t.Dict[str, exp.DataType],
         column_descriptions: t.Optional[t.Dict[str, str]] = None,
-        expressions: t.List[exp.PrimaryKey] = [],
+        expressions: t.Optional[t.List[exp.PrimaryKey]] = None,
     ) -> exp.Schema:
         """
         Build a schema expression for a table, columns, column comments, and additional schema properties.
         """
+        expressions = expressions or []
         return exp.Schema(
             this=table,
             expressions=[
@@ -523,14 +523,21 @@ class EngineAdapter:
     ) -> None:
         table = exp.to_table(table_name)
 
-        # Build a schema expression with column comments if the engine supports it and we have columns_to_types
+        # CTAS calls do not usually include a schema expression. However, most engines
+        # permit them in CTAS expressions, and they allow us to register all column comments
+        # in a single call rather than in a separate comment command call for each column.
+        #
+        # This block conditionally builds a schema expression with column comments if the engine
+        # supports it and we have columns_to_types. column_to_types is required because the
+        # schema expression must include at least column name, data type, and the comment -
+        # for example, `(colname INTEGER COMMENT 'comment')`.
+        #
+        # column_to_types will be available when loading from a DataFrame (by converting from
+        # pandas to SQL types), when a model is "annotated" by explicitly specifying column
+        # types, and for evaluation methods like all LogicalReplaceQueryMixin.replace_query()
+        # calls and all SCD Type 2 model calls.
         schema = None
-        if (
-            column_descriptions
-            and self.COMMENT_CREATION.is_in_schema_def
-            and self.SUPPORTS_CTAS_SCHEMA_COMMENTS
-            and columns_to_types
-        ):
+        if column_descriptions and self.COMMENT_CREATION.is_in_schema_def_ctas and columns_to_types:
             schema = self._build_schema_exp(table, columns_to_types, column_descriptions)
 
         with self.transaction(condition=len(source_queries) > 1):
@@ -551,15 +558,12 @@ class EngineAdapter:
                             table_name, query, columns_to_types or self.columns(table)
                         )
 
-        # Register comments with commands if the engine doesn't support comments in the schema
+        # Register comments with commands if the engine supports comments and we weren't able to
+        # register them with the CTAS call's schema expression.
         if (
             (table_description or column_descriptions)
             and self.COMMENT_CREATION.is_comment_command_only
-        ) or (
-            column_descriptions
-            and self.COMMENT_CREATION.is_in_schema_def
-            and (not self.SUPPORTS_CTAS_SCHEMA_COMMENTS or not columns_to_types)
-        ):
+        ) or (column_descriptions and not self.COMMENT_CREATION.is_unsupported and schema is None):
             self._create_comments(
                 table_name,
                 table_description,
@@ -598,17 +602,14 @@ class EngineAdapter:
         exists: bool = True,
         replace: bool = False,
         columns_to_types: t.Optional[t.Dict[str, exp.DataType]] = None,
-        table_description: t.Optional[str] = None,
         **kwargs: t.Any,
     ) -> exp.Create:
         exists = False if replace else exists
         if not isinstance(table_name_or_schema, exp.Schema):
             table_name_or_schema = exp.to_table(table_name_or_schema)
         properties = (
-            self._build_table_properties_exp(
-                **kwargs, columns_to_types=columns_to_types, table_description=table_description
-            )
-            if kwargs or table_description
+            self._build_table_properties_exp(**kwargs, columns_to_types=columns_to_types)
+            if kwargs
             else None
         )
         return exp.Create(
@@ -1694,9 +1695,10 @@ class EngineAdapter:
                         expression=exp.Literal.string(table_comment),
                     )
                 )
-            except:
+            except Exception:
                 logger.warning(
-                    f"Table comment for '{table.alias_or_name}' not registered - this may be due to limited permissions."
+                    f"Table comment for '{table.alias_or_name}' not registered - this may be due to limited permissions.",
+                    exc_info=True,
                 )
 
         if column_comments:
@@ -1709,9 +1711,10 @@ class EngineAdapter:
                             expression=exp.Literal.string(comment),
                         )
                     )
-                except:
+                except Exception:
                     logger.warning(
-                        f"Column comments for table '{table.alias_or_name}' not registered - this may be due to limited permissions."
+                        f"Column comments for table '{table.alias_or_name}' not registered - this may be due to limited permissions.",
+                        exc_info=True,
                     )
 
 

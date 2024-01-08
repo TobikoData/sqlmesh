@@ -11,7 +11,12 @@ from sqlmesh.core.engine_adapter.mixins import (
     NonTransactionalTruncateMixin,
     PandasNativeFetchDFSupportMixin,
 )
-from sqlmesh.core.engine_adapter.shared import DataObject, DataObjectType, set_catalog
+from sqlmesh.core.engine_adapter.shared import (
+    CommentCreation,
+    DataObject,
+    DataObjectType,
+    set_catalog,
+)
 
 if t.TYPE_CHECKING:
     from sqlmesh.core._typing import SchemaName, TableName
@@ -31,7 +36,7 @@ class MySQLEngineAdapter(
     ESCAPE_JSON = True
     SUPPORTS_INDEXES = True
     SUPPORTS_VIEW_COMMENT = False
-    SUPPORTS_CTAS_SCHEMA_COMMENTS = False
+    COMMENT_CREATION = CommentCreation.IN_SCHEMA_DEF_NO_CTAS
 
     def get_current_catalog(self) -> t.Optional[str]:
         """Returns the catalog name of the current connection."""
@@ -99,9 +104,10 @@ class MySQLEngineAdapter(
                 self.execute(
                     f"ALTER TABLE {table_sql} COMMENT = '{table_comment}'",
                 )
-            except:
+            except Exception:
                 logger.warning(
-                    f"Table comment for table '{table.alias_or_name}' not registered - this may be due to limited permissions."
+                    f"Table comment for table '{table.alias_or_name}' not registered - this may be due to limited permissions.",
+                    exc_info=True,
                 )
 
         if column_comments:
@@ -125,7 +131,8 @@ class MySQLEngineAdapter(
                     self.execute(
                         f"ALTER TABLE {table_sql} MODIFY {col_def.sql(dialect=self.dialect, identify=True)}",  # type: ignore
                     )
-            except:
+            except Exception:
                 logger.warning(
-                    f"Column comments for table '{table.alias_or_name}' not registered - this may be due to limited permissions."
+                    f"Column comments for table '{table.alias_or_name}' not registered - this may be due to limited permissions.",
+                    exc_info=True,
                 )

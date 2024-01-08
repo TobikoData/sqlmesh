@@ -53,17 +53,35 @@ class DataObjectType(str, Enum):
 
 
 class CommentCreation(Enum):
+    """
+    Enum for SQL engine comment support.
+
+    UNSUPPORTED = no comments at all
+    IN_SCHEMA_DEF_CTAS = comments can be registered in CREATE schema definitions, including CTAS calls
+    IN_SCHEMA_DEF_NO_CTAS = comments can be registered in CREATE schema definitions, excluding CTAS calls
+    COMMENT_COMMAND_ONLY = comments can only be registered via a post-creation command like `COMMENT` or `ALTER`
+    """
+
     UNSUPPORTED = 1
-    IN_SCHEMA_DEF = 2
-    COMMENT_COMMAND_ONLY = 3
+    IN_SCHEMA_DEF_CTAS = 2
+    IN_SCHEMA_DEF_NO_CTAS = 3
+    COMMENT_COMMAND_ONLY = 4
 
     @property
     def is_unsupported(self) -> bool:
         return self == CommentCreation.UNSUPPORTED
 
     @property
+    def is_in_schema_def_ctas(self) -> bool:
+        return self == CommentCreation.IN_SCHEMA_DEF_CTAS
+
+    @property
+    def is_in_schema_def_no_ctas(self) -> bool:
+        return self == CommentCreation.IN_SCHEMA_DEF_NO_CTAS
+
+    @property
     def is_in_schema_def(self) -> bool:
-        return self == CommentCreation.IN_SCHEMA_DEF
+        return self in (CommentCreation.IN_SCHEMA_DEF_CTAS, CommentCreation.IN_SCHEMA_DEF_NO_CTAS)
 
     @property
     def is_comment_command_only(self) -> bool:

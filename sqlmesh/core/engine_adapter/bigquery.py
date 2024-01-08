@@ -544,9 +544,10 @@ class BigQueryEngineAdapter(InsertOverwriteWithMergeMixin):
                 self.execute(
                     f"ALTER {table_kind} {table_sql} SET OPTIONS(description = '{table_comment}')",
                 )
-            except:
+            except Exception:
                 logger.warning(
-                    f"Table comment for '{table.alias_or_name}' not registered - this may be due to limited account permissions."
+                    f"Table comment for '{table.alias_or_name}' not registered - this may be due to limited account permissions.",
+                    exc_info=True,
                 )
 
         if column_comments:
@@ -555,9 +556,10 @@ class BigQueryEngineAdapter(InsertOverwriteWithMergeMixin):
                     self.execute(
                         f"ALTER TABLE {table_sql} ALTER COLUMN {exp.column(col).sql(dialect=self.dialect, identify=True)} SET OPTIONS(description = '{comment}')",
                     )
-                except:
+                except Exception:
                     logger.warning(
-                        f"Column comments for table '{table.alias_or_name}' not registered - this may be due to limited permissions."
+                        f"Column comments for table '{table.alias_or_name}' not registered - this may be due to limited permissions.",
+                        exc_info=True,
                     )
 
     def create_state_table(

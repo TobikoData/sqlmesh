@@ -251,7 +251,7 @@ class TestContext:
 
         if result:
             if self.dialect == "bigquery":
-                comment = result[0][1].replace('"', "")
+                comment = result[0][1].replace('"', "").replace("\\n", "\n")
             elif self.dialect in ["spark", "databricks"]:
                 comment = [x for x in result if x[0] == "Comment"][0][1]
             else:

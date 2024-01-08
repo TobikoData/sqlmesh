@@ -16,6 +16,7 @@ from sqlmesh.core.engine_adapter.mixins import (
 )
 from sqlmesh.core.engine_adapter.shared import (
     CatalogSupport,
+    CommentCreation,
     DataObject,
     DataObjectType,
     InsertOverwriteStrategy,
@@ -55,7 +56,7 @@ class SparkEngineAdapter(GetCurrentCatalogFromFunctionMixin, HiveMetastoreTableP
     INSERT_OVERWRITE_STRATEGY = InsertOverwriteStrategy.INSERT_OVERWRITE
     CATALOG_SUPPORT = CatalogSupport.FULL_SUPPORT
     SUPPORTS_ROW_LEVEL_OP = False
-    SUPPORTS_CTAS_SCHEMA_COMMENTS = False
+    COMMENT_CREATION = CommentCreation.IN_SCHEMA_DEF_NO_CTAS
 
     @property
     def spark(self) -> PySparkSession:
@@ -553,9 +554,10 @@ class SparkEngineAdapter(GetCurrentCatalogFromFunctionMixin, HiveMetastoreTableP
                         expression=exp.Literal.string(table_comment),
                     )
                 )
-            except:
+            except Exception:
                 logger.warning(
-                    f"Table comment for '{table.alias_or_name}' not registered - this may be due to limited account permissions."
+                    f"Table comment for '{table.alias_or_name}' not registered - this may be due to limited account permissions.",
+                    exc_info=True,
                 )
 
         if column_comments:
@@ -566,9 +568,10 @@ class SparkEngineAdapter(GetCurrentCatalogFromFunctionMixin, HiveMetastoreTableP
                     self.execute(
                         f"ALTER TABLE {table_sql} ALTER COLUMN {exp.column(col).sql(dialect=self.dialect, identify=True)} COMMENT '{comment}'",
                     )
-            except:
+            except Exception:
                 logger.warning(
-                    f"Column comments in table '{table.alias_or_name}' not registered - this may be due to limited permissions."
+                    f"Column comments in table '{table.alias_or_name}' not registered - this may be due to limited permissions.",
+                    exc_info=True,
                 )
 
 
