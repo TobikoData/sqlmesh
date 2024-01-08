@@ -107,8 +107,8 @@ def test_forward_only_dev(make_snapshot, mocker: MockerFixture):
     now_mock = mocker.patch("sqlmesh.core.snapshot.definition.now")
     now_mock.return_value = expected_end
 
-    now_ds_mock = mocker.patch("sqlmesh.core.plan.builder.now")
-    now_ds_mock.return_value = expected_end
+    mocker.patch("sqlmesh.core.plan.builder.now").return_value = expected_end
+    mocker.patch("sqlmesh.core.plan.definition.now").return_value = expected_end
 
     plan = PlanBuilder(context_diff, forward_only=True, is_dev=True).build()
 
@@ -116,10 +116,7 @@ def test_forward_only_dev(make_snapshot, mocker: MockerFixture):
         snapshot_a.snapshot_id: (to_timestamp(expected_start), expected_interval_end)
     }
     assert plan.start == to_date(expected_start)
-    assert plan.end is None
-
-    yesterday_ds_mock.assert_called_once()
-    now_ds_mock.call_count == 2
+    assert plan.end == expected_end
 
 
 def test_forward_only_plan_added_models(make_snapshot, mocker: MockerFixture):

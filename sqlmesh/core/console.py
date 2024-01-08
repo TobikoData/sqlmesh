@@ -1197,7 +1197,7 @@ class NotebookMagicConsole(TerminalConsole):
                         widgets.Label(f"End {backfill_or_preview} Date:", layout={"width": "8rem"}),
                         _date_picker(
                             plan_builder,
-                            to_date(plan_builder.build().end_or_now),
+                            to_date(plan_builder.build().end),
                             end_change_callback,
                         ),
                     ]
