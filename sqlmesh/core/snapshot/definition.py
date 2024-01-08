@@ -5,6 +5,7 @@ import typing as t
 from collections import defaultdict
 from datetime import datetime, timedelta
 from enum import IntEnum
+from functools import lru_cache
 
 from pydantic import Field
 from sqlglot import exp
@@ -16,7 +17,6 @@ from sqlmesh.core.model import Model, ModelKindMixin, ModelKindName, ViewKind
 from sqlmesh.core.model.definition import _Model
 from sqlmesh.core.node import IntervalUnit, NodeType
 from sqlmesh.utils import sanitize_name
-from sqlmesh.utils.cron import get_ts_range
 from sqlmesh.utils.dag import DAG
 from sqlmesh.utils.date import (
     TimeLike,
@@ -795,30 +795,10 @@ class Snapshot(PydanticModel, SnapshotInfoMixin):
             end_ts = min(end_ts, to_timestamp(interval_unit.cron_floor(upper_bound_ts)))
 
         lookback = self.model.lookback if self.is_model else 0
-        dates = get_ts_range(interval_unit.cron_expr, start_ts, end_ts, upper_bound_ts, lookback)
 
-        missing = []
-        for i in range(len(dates)):
-            if dates[i] >= end_ts:
-                break
-            current_ts = dates[i]
-            next_ts = (
-                dates[i + 1]
-                if i + 1 < len(dates)
-                else min(to_timestamp(interval_unit.cron_next(current_ts)), upper_bound_ts)
-            )
-            compare_ts = seq_get(dates, i + lookback) or dates[-1]
-
-            for low, high in intervals:
-                if compare_ts < low:
-                    missing.append((current_ts, next_ts))
-                    break
-                elif current_ts >= low and compare_ts < high:
-                    break
-            else:
-                missing.append((current_ts, next_ts))
-
-        return missing
+        return compute_missing_intervals(
+            interval_unit, tuple(intervals), start_ts, end_ts, upper_bound_ts, lookback
+        )
 
     def categorize_as(self, category: SnapshotChangeCategory) -> None:
         """Assigns the given category to this snapshot.
@@ -1480,6 +1460,75 @@ def missing_intervals(
         )
         if intervals:
             missing[snapshot] = intervals
+
+    return missing
+
+
+@lru_cache(maxsize=None)
+def compute_missing_intervals(
+    interval_unit: IntervalUnit,
+    intervals: t.Tuple[Interval, ...],
+    start_ts: int,
+    end_ts: int,
+    upper_bound_ts: int,
+    lookback: int,
+) -> Intervals:
+    """Computes all missing intervals between start and end given intervals.
+
+    Args:
+        interval_unit: The interval unit.
+        intervals: The intervals to check what's missing.
+        start_ts: Inclusive timestamp start.
+        end_ts: Exclusive timestamp end.
+        upper_bound_ts: The exclusive upper bound timestamp for lookback.
+        lookback: A lookback window.
+
+    Returns:
+        A list of all timestamps in this range.
+    """
+    croniter = interval_unit.croniter(start_ts)
+    timestamps = [start_ts]
+
+    # get all individual timestamps with the addition of extra lookback timestamps up to the execution date
+    # when a model has lookback, we need to check all the intervals between itself and its lookback exist.
+    while True:
+        ts = to_timestamp(croniter.get_next(estimate=True))
+
+        if ts < end_ts:
+            timestamps.append(ts)
+        else:
+            croniter.get_prev(estimate=True)
+            break
+
+    for _ in range(lookback):
+        ts = to_timestamp(croniter.get_next(estimate=True))
+        if ts < upper_bound_ts:
+            timestamps.append(ts)
+        else:
+            break
+
+    missing = []
+    for i in range(len(timestamps)):
+        if timestamps[i] >= end_ts:
+            break
+        current_ts = timestamps[i]
+        next_ts = (
+            timestamps[i + 1]
+            if i + 1 < len(timestamps)
+            else min(
+                to_timestamp(interval_unit.cron_next(current_ts, estimate=True)), upper_bound_ts
+            )
+        )
+        compare_ts = seq_get(timestamps, i + lookback) or timestamps[-1]
+
+        for low, high in intervals:
+            if compare_ts < low:
+                missing.append((current_ts, next_ts))
+                break
+            elif current_ts >= low and compare_ts < high:
+                break
+        else:
+            missing.append((current_ts, next_ts))
 
     return missing
 
