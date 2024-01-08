@@ -12,6 +12,7 @@ from pytest_mock.plugin import MockerFixture
 from sqlmesh.core.context import Context
 from sqlmesh.core.environment import Environment
 from sqlmesh.utils.errors import PlanError
+from web.server.api.endpoints.files import _get_file_with_content
 from web.server.main import api_console, app
 from web.server.settings import Settings, get_loaded_context, get_settings
 
@@ -130,14 +131,14 @@ config = Config(ignore_patterns=["*.txt"], model_defaults=ModelDefaultsConfig(di
 
 def test_write_file(project_tmp_path: Path) -> None:
     response = client.post("/api/files/foo.txt", json={"content": "bar"})
-    assert response.status_code == 200
-    assert response.json() == {
+    file = _get_file_with_content(project_tmp_path / "foo.txt", "foo.txt")
+    assert response.status_code == 204
+    assert file.dict() == {
         "name": "foo.txt",
         "path": "foo.txt",
         "extension": ".txt",
         "content": "bar",
     }
-    assert (project_tmp_path / "foo.txt").read_text() == "bar"
 
 
 def test_update_file(project_tmp_path: Path) -> None:
@@ -145,14 +146,14 @@ def test_update_file(project_tmp_path: Path) -> None:
     txt_file.write_text("bar")
 
     response = client.post("/api/files/foo.txt", json={"content": "baz"})
-    assert response.status_code == 200
-    assert response.json() == {
+    file = _get_file_with_content(project_tmp_path / "foo.txt", "foo.txt")
+    assert response.status_code == 204
+    assert file.dict() == {
         "name": "foo.txt",
         "path": "foo.txt",
         "extension": ".txt",
         "content": "baz",
     }
-    assert (project_tmp_path / "foo.txt").read_text() == "baz"
 
 
 def test_rename_file(project_tmp_path: Path) -> None:
@@ -160,15 +161,15 @@ def test_rename_file(project_tmp_path: Path) -> None:
     txt_file.write_text("bar")
 
     response = client.post("/api/files/foo.txt", json={"new_path": "baz.txt"})
-    assert response.status_code == 200
-    assert response.json() == {
+    file = _get_file_with_content(project_tmp_path / "baz.txt", "baz.txt")
+    assert response.status_code == 204
+    assert file.dict() == {
         "name": "baz.txt",
         "path": "baz.txt",
         "extension": ".txt",
         "content": "bar",
     }
     assert not txt_file.exists()
-    assert (project_tmp_path / "baz.txt").read_text() == "bar"
 
 
 def test_rename_file_and_keep_content(project_tmp_path: Path) -> None:
@@ -178,15 +179,15 @@ def test_rename_file_and_keep_content(project_tmp_path: Path) -> None:
     response = client.post(
         "/api/files/foo.txt", json={"content": "hello world", "new_path": "baz.txt"}
     )
-    assert response.status_code == 200
-    assert response.json() == {
+    file = _get_file_with_content(project_tmp_path / "baz.txt", "baz.txt")
+    assert response.status_code == 204
+    assert file.dict() == {
         "name": "baz.txt",
         "path": "baz.txt",
         "extension": ".txt",
         "content": "bar",
     }
     assert not txt_file.exists()
-    assert (project_tmp_path / "baz.txt").read_text() == "bar"
 
 
 def test_rename_file_not_found() -> None:
@@ -201,8 +202,9 @@ def test_rename_file_already_exists(project_tmp_path: Path) -> None:
     bar_file.write_text("bar")
 
     response = client.post("/api/files/foo.txt", json={"new_path": "bar.txt"})
-    assert response.status_code == 200
-    assert response.json() == {
+    file = _get_file_with_content(project_tmp_path / "bar.txt", "bar.txt")
+    assert response.status_code == 204
+    assert file.dict() == {
         "name": "bar.txt",
         "path": "bar.txt",
         "extension": ".txt",
@@ -224,13 +226,7 @@ def test_rename_file_to_existing_directory(project_tmp_path: Path) -> None:
 
 def test_write_file_empty_body() -> None:
     response = client.post("/api/files/foo.txt", json={})
-    assert response.status_code == 200
-    assert response.json() == {
-        "name": "foo.txt",
-        "path": "foo.txt",
-        "extension": ".txt",
-        "content": "",
-    }
+    assert response.status_code == 204
 
 
 def test_delete_file(project_tmp_path: Path) -> None:
@@ -395,6 +391,7 @@ def test_plan_test_failures(web_sushi_context: Context, mocker: MockerFixture) -
 
 @pytest.mark.asyncio
 async def test_cancel() -> None:
+    client.app.state.circuit_breaker = threading.Event()  # type: ignore
     async with AsyncClient(app=app, base_url="http://testserver") as _client:
         await _client.post("/api/plan", json={"environment": "dev"})
         response = await _client.post("/api/plan/cancel")
