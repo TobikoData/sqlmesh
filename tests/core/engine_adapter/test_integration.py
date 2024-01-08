@@ -111,7 +111,7 @@ class TestContext:
         for timestamp_column in self.timestamp_columns:
             if timestamp_column in data.columns and to_datetime:
                 value = pd.to_datetime(data[timestamp_column])
-                if self.dialect in {"bigquery", "databricks", "duckdb", "spark"}:
+                if self.dialect in {"bigquery", "duckdb"}:
                     value = value.astype("datetime64[us]")
                 data[timestamp_column] = value
         return data
