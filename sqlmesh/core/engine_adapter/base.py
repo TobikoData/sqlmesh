@@ -563,7 +563,7 @@ class EngineAdapter:
         if (
             (table_description or column_descriptions)
             and self.COMMENT_CREATION.is_comment_command_only
-        ) or (column_descriptions and not self.COMMENT_CREATION.is_unsupported and schema is None):
+        ) or (column_descriptions and self.COMMENT_CREATION.is_supported and schema is None):
             self._create_comments(
                 table_name,
                 table_description,
@@ -1674,6 +1674,24 @@ class EngineAdapter:
         table = exp.to_table(table_name)
         self.execute(f"TRUNCATE TABLE {table.sql(dialect=self.dialect, identify=True)}")
 
+    def _build_create_comment_table_exp(
+        self, table: exp.Table, table_comment: str, table_kind: str
+    ) -> exp.Comment | str:
+        return exp.Comment(
+            this=table,
+            kind=table_kind,
+            expression=exp.Literal.string(table_comment),
+        )
+
+    def _build_create_comment_column_exp(
+        self, table: exp.Table, column_name: str, column_comment: str
+    ) -> exp.Comment | str:
+        return exp.Comment(
+            this=exp.column(column_name, *reversed(table.parts)),  # type: ignore
+            kind="COLUMN",
+            expression=exp.Literal.string(column_comment),
+        )
+
     def _create_comments(
         self,
         table_name: TableName,
@@ -1688,13 +1706,7 @@ class EngineAdapter:
 
         if table_comment:
             try:
-                self.execute(
-                    exp.Comment(
-                        this=table,
-                        kind=table_kind,
-                        expression=exp.Literal.string(table_comment),
-                    )
-                )
+                self.execute(self._build_create_comment_table_exp(table, table_comment, table_kind))
             except Exception:
                 logger.warning(
                     f"Table comment for '{table.alias_or_name}' not registered - this may be due to limited permissions.",
@@ -1704,13 +1716,7 @@ class EngineAdapter:
         if column_comments:
             for col, comment in column_comments.items():
                 try:
-                    self.execute(
-                        exp.Comment(
-                            this=exp.column(col, *reversed(table.parts)),  # type: ignore
-                            kind="COLUMN",
-                            expression=exp.Literal.string(comment),
-                        )
-                    )
+                    self.execute(self._build_create_comment_column_exp(table, col, comment))
                 except Exception:
                     logger.warning(
                         f"Column comments for table '{table.alias_or_name}' not registered - this may be due to limited permissions.",

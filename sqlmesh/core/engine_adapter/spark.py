@@ -533,46 +533,13 @@ class SparkEngineAdapter(GetCurrentCatalogFromFunctionMixin, HiveMetastoreTableP
             table.set("db", self.get_current_database())
         return table
 
-    def _create_comments(
-        self,
-        table_name: TableName,
-        table_comment: t.Optional[str] = None,
-        column_comments: t.Optional[t.Dict[str, str]] = None,
-        table_kind: str = "TABLE",
-    ) -> None:
-        """
-        Executes commands to create table and column comments.
-        """
-        table = exp.to_table(table_name)
+    def _build_create_comment_column_exp(
+        self, table: exp.Table, column_name: str, column_comment: str
+    ) -> exp.Comment | str:
+        table_sql = table.sql(dialect=self.dialect, identify=True)
+        column_sql = exp.column(column_name).sql(dialect=self.dialect, identify=True)
 
-        if table_comment:
-            try:
-                self.execute(
-                    exp.Comment(
-                        this=table,
-                        kind=table_kind,
-                        expression=exp.Literal.string(table_comment),
-                    )
-                )
-            except Exception:
-                logger.warning(
-                    f"Table comment for '{table.alias_or_name}' not registered - this may be due to limited account permissions.",
-                    exc_info=True,
-                )
-
-        if column_comments:
-            table_sql = table.sql(dialect=self.dialect, identify=True)
-
-            try:
-                for col, comment in column_comments.items():
-                    self.execute(
-                        f"ALTER TABLE {table_sql} ALTER COLUMN {exp.column(col).sql(dialect=self.dialect, identify=True)} COMMENT '{comment}'",
-                    )
-            except Exception:
-                logger.warning(
-                    f"Column comments in table '{table.alias_or_name}' not registered - this may be due to limited permissions.",
-                    exc_info=True,
-                )
+        return f"ALTER TABLE {table_sql} ALTER COLUMN {column_sql} COMMENT '{column_comment}'"
 
 
 def _wap_branch_name(wap_id: str) -> str:

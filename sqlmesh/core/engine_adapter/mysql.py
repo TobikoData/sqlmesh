@@ -86,6 +86,13 @@ class MySQLEngineAdapter(
             for row in df.itertuples()
         ]
 
+    def _build_create_comment_table_exp(
+        self, table: exp.Table, table_comment: str, table_kind: str
+    ) -> exp.Comment | str:
+        table_sql = table.sql(dialect=self.dialect, identify=True)
+
+        return f"ALTER TABLE {table_sql} COMMENT = '{table_comment}'"
+
     def _create_comments(
         self,
         table_name: TableName,
@@ -101,9 +108,7 @@ class MySQLEngineAdapter(
 
         if table_comment:
             try:
-                self.execute(
-                    f"ALTER TABLE {table_sql} COMMENT = '{table_comment}'",
-                )
+                self.execute(self._build_create_comment_table_exp(table, table_comment, table_kind))
             except Exception:
                 logger.warning(
                     f"Table comment for table '{table.alias_or_name}' not registered - this may be due to limited permissions.",

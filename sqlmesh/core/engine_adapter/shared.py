@@ -80,12 +80,16 @@ class CommentCreation(Enum):
         return self == CommentCreation.IN_SCHEMA_DEF_NO_CTAS
 
     @property
-    def is_in_schema_def(self) -> bool:
-        return self in (CommentCreation.IN_SCHEMA_DEF_CTAS, CommentCreation.IN_SCHEMA_DEF_NO_CTAS)
-
-    @property
     def is_comment_command_only(self) -> bool:
         return self == CommentCreation.COMMENT_COMMAND_ONLY
+
+    @property
+    def is_supported(self) -> bool:
+        return self != CommentCreation.UNSUPPORTED
+
+    @property
+    def is_in_schema_def(self) -> bool:
+        return self in (CommentCreation.IN_SCHEMA_DEF_CTAS, CommentCreation.IN_SCHEMA_DEF_NO_CTAS)
 
 
 class DataObject(PydanticModel):
