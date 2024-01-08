@@ -91,8 +91,8 @@ class TestContext:
 
     @classmethod
     def _compare_dfs(cls, actual: pd.DataFrame, expected: pd.DataFrame) -> None:
-        actual.reset_index(drop=True, inplace=True)
-        expected.reset_index(drop=True, inplace=True)
+        actual = actual.reset_index(drop=True)
+        expected = expected.reset_index(drop=True)
         actual = actual.apply(lambda x: x.sort_values().values).reset_index(drop=True)
         expected = expected.apply(lambda x: x.sort_values().values).reset_index(drop=True)
         pd.testing.assert_frame_equal(actual, expected, check_dtype=False, check_index_type=False)
@@ -225,7 +225,7 @@ def config() -> Config:
             marks=[
                 pytest.mark.duckdb,
                 pytest.mark.engine,
-                pytest.mark.integration,
+                pytest.mark.slow,
             ],
         ),
         pytest.param(

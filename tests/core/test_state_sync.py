@@ -43,7 +43,7 @@ from sqlmesh.core.state_sync.base import (
 from sqlmesh.utils.date import now_timestamp, to_datetime, to_timestamp
 from sqlmesh.utils.errors import SQLMeshError
 
-pytestmark = pytest.mark.integration
+pytestmark = pytest.mark.slow
 
 
 @pytest.fixture

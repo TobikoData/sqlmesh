@@ -134,14 +134,14 @@ class SushiDataValidator:
 
 
 def pytest_collection_modifyitems(items, *args, **kwargs):
-    test_type_markers = {"unit", "integration", "docker", "remote"}
+    test_type_markers = {"fast", "slow", "docker", "remote"}
     for item in items:
         for marker in item.iter_markers():
             if marker.name in test_type_markers:
                 break
         else:
-            # if no test type marker is found, assume unit test
-            item.add_marker("unit")
+            # if no test type marker is found, assume fast test
+            item.add_marker("fast")
 
 
 # Ignore all local config files

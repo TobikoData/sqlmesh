@@ -162,7 +162,7 @@ def test_init(tmp_path, notebook, convert_all_html_output_to_text, get_all_html_
     ]
 
 
-@pytest.mark.integration
+@pytest.mark.slow
 def test_render(
     notebook, sushi_context, convert_all_html_output_to_text, convert_all_html_output_to_tags
 ):
@@ -190,7 +190,7 @@ LIMIT 10"""
     assert convert_all_html_output_to_tags(output) == [["pre"] + (["span"] * 93)]
 
 
-@pytest.mark.integration
+@pytest.mark.slow
 def test_render_no_format(
     notebook, sushi_context, convert_all_html_output_to_text, convert_all_html_output_to_tags
 ):
@@ -218,7 +218,7 @@ LIMIT 10"""
     assert convert_all_html_output_to_tags(output) == [["pre"] + (["span"] * 32)]
 
 
-@pytest.mark.integration
+@pytest.mark.slow
 @freeze_time(FREEZE_TIME)
 def test_evaluate(notebook, loaded_sushi_context):
     with capture_output() as output:
@@ -258,7 +258,7 @@ FROM table"""
     )
 
 
-@pytest.mark.integration
+@pytest.mark.slow
 def test_diff(sushi_context, notebook, convert_all_html_output_to_text, get_all_html_output):
     with capture_output():
         test_model_path = sushi_context.path / "models" / "test_model.sql"
@@ -313,7 +313,7 @@ def test_diff(sushi_context, notebook, convert_all_html_output_to_text, get_all_
     ]
 
 
-@pytest.mark.integration
+@pytest.mark.slow
 def test_plan(
     notebook, sushi_context, convert_all_html_output_to_text, convert_all_html_output_to_tags
 ):
@@ -345,7 +345,7 @@ def test_plan(
     ]
 
 
-@pytest.mark.integration
+@pytest.mark.slow
 @freeze_time("2023-01-03 00:00:00")
 def test_run_dag(
     notebook, loaded_sushi_context, convert_all_html_output_to_text, get_all_html_output
@@ -376,7 +376,7 @@ def test_run_dag(
     ]
 
 
-@pytest.mark.integration
+@pytest.mark.slow
 @freeze_time(FREEZE_TIME)
 def test_invalidate(
     notebook, loaded_sushi_context, convert_all_html_output_to_text, get_all_html_output
@@ -500,7 +500,7 @@ def test_run_test(notebook, sushi_context):
     assert not output.outputs
 
 
-@pytest.mark.integration
+@pytest.mark.slow
 def test_audit(notebook, loaded_sushi_context, convert_all_html_output_to_text):
     with capture_output() as output:
         notebook.run_line_magic(magic_name="audit", line="sushi.top_waiters")
@@ -601,7 +601,7 @@ def test_info(notebook, sushi_context, convert_all_html_output_to_text, get_all_
     ]
 
 
-@pytest.mark.integration
+@pytest.mark.slow
 def test_migrate(
     notebook, loaded_sushi_context, convert_all_html_output_to_text, get_all_html_output
 ):
@@ -636,7 +636,7 @@ def test_migrate(
 #
 
 
-@pytest.mark.integration
+@pytest.mark.slow
 def test_create_external_models(notebook, loaded_sushi_context):
     external_model_file = loaded_sushi_context.path / "schema.yaml"
     external_model_file.unlink()
@@ -659,7 +659,7 @@ def test_create_external_models(notebook, loaded_sushi_context):
     )
 
 
-@pytest.mark.integration
+@pytest.mark.slow
 @freeze_time(FREEZE_TIME)
 def test_table_diff(notebook, loaded_sushi_context, convert_all_html_output_to_text):
     with capture_output():

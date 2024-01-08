@@ -72,7 +72,7 @@ clean-build:
 dev-publish: ui-build clean-build publish
 
 jupyter-example:
-	jupyter lab tests/integrations/jupyter/example_outputs.ipynb
+	jupyter lab tests/slows/jupyter/example_outputs.ipynb
 
 engine-up:
 	docker-compose -f ./tests/core/engine_adapter/docker-compose.yaml up -d
@@ -80,23 +80,23 @@ engine-up:
 engine-down:
 	docker-compose -f ./tests/core/engine_adapter/docker-compose.yaml down
 
-unit-test:
-	pytest -m "unit"
+fast-test:
+	pytest -m "fast"
 
-it-test:
-	pytest -m "unit or integration"
+slow-test:
+	pytest -m "fast or slow"
 
-core-unit-test:
-	pytest -m "unit and not web and not github and not dbt and not airflow and not jupyter"
+core-fast-test:
+	pytest -m "fast and not web and not github and not dbt and not airflow and not jupyter"
 
-core-it-test:
-	pytest -m "(unit or integration) and not web and not github and not dbt and not airflow and not jupyter"
+core-slow-test:
+	pytest -m "(fast or slow) and not web and not github and not dbt and not airflow and not jupyter"
 
-airflow-unit-test:
-	pytest -m "unit and airflow"
+airflow-fast-test:
+	pytest -m "fast and airflow"
 
 airflow-test:
-	pytest -m "(unit or integration) and airflow"
+	pytest -m "(fast or slow) and airflow"
 
 airflow-local-test:
 	export AIRFLOW__DATABASE__SQL_ALCHEMY_CONN=postgresql+psycopg2://airflow:airflow@localhost/airflow && \
@@ -109,8 +109,8 @@ airflow-local-test-with-env: develop airflow-clean airflow-init airflow-run airf
 
 airflow-docker-test-with-env: develop airflow-clean airflow-init airflow-run airflow-docker-test airflow-stop
 
-engine-it-test:
-	pytest -m "(unit or integration) and engine"
+engine-slow-test:
+	pytest -m "(fast or slow) and engine"
 
 engine-docker-test:
 	pytest -m "docker and engine"

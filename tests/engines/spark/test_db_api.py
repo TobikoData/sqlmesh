@@ -5,7 +5,7 @@ from sqlmesh.engines.spark.db_api import errors
 from sqlmesh.engines.spark.db_api import spark_session as spark_session_db
 
 pytestmark = [
-    pytest.mark.integration,
+    pytest.mark.slow,
     pytest.mark.spark_pyspark,
 ]
 

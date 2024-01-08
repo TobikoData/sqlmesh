@@ -37,7 +37,7 @@ commands:
             - run: circleci-agent step halt
 
 jobs:
-  style_and_integration_tests:
+  style_and_slow_tests:
     parameters:
       python_version:
         type: string
@@ -57,13 +57,13 @@ jobs:
           name: Run linters and code style checks
           command: make py-style
       - run:
-          name: Run integration tests
-          command: make it-test
+          name: Run slow tests
+          command: make slow-test
       - run:
           name: Run doc tests
           command: make doc-test
 
-  style_and_integration_tests_pydantic_v1:
+  style_and_slow_tests_pydantic_v1:
     docker:
       - image: cimg/python:3.10
     resource_class: small
@@ -83,8 +83,8 @@ jobs:
           name: Run linters and code style checks
           command: make py-style
       - run:
-          name: Run integration tests
-          command: make it-test
+          name: Run slow tests
+          command: make slow-test
 
   ui_style:
     docker:
@@ -132,20 +132,6 @@ jobs:
           name: Run tests
           command: npm --prefix web/client run test
 
-  integration_tests:
-    docker:
-      - image: cimg/python:3.7
-    resource_class: small
-    steps:
-      - halt_unless_core
-      - checkout
-      - run:
-          name: Install dependencies
-          command: make install-dev
-      - run:
-          name: Run integration tests
-          command: make it-test
-
   airflow_docker_tests:
     machine:
       image: ubuntu-2204:2022.10.2
@@ -160,7 +146,7 @@ jobs:
           name: Install ruamel.yaml
           command: pip3 install ruamel.yaml==0.16.0
       - run:
-          name: Run Airflow integration tests
+          name: Run Airflow slow tests
           command: make airflow-docker-test-with-env
           no_output_timeout: 15m
       - run:
@@ -200,23 +186,23 @@ jobs:
 workflows:
   main_pr:
     jobs:
-      - style_and_integration_tests:
+      - style_and_slow_tests:
           matrix:
             parameters:
               python_version:
                 ["3.7", "3.8", "3.9", "3.10", "3.11"]
-      - style_and_integration_tests_pydantic_v1
+      - style_and_slow_tests_pydantic_v1
       - airflow_docker_tests:
           requires:
-            - style_and_integration_tests
+            - style_and_slow_tests
           filters:
             branches:
               only:
                 - main
       - engine_adapter_docker_tests:
-          context: engine_adapter_integration
+          context: engine_adapter_slow
           requires:
-            - style_and_integration_tests
+            - style_and_slow_tests
           filters:
             branches:
               only:

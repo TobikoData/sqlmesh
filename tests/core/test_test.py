@@ -16,7 +16,7 @@ from sqlmesh.core.test.definition import SqlModelTest
 from sqlmesh.utils.errors import ConfigError
 from sqlmesh.utils.yaml import load as load_yaml
 
-pytestmark = pytest.mark.integration
+pytestmark = pytest.mark.slow
 
 SUSHI_FOO_META = "MODEL (name sushi.foo, kind FULL)"
 

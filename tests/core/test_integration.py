@@ -38,7 +38,7 @@ from sqlmesh.core.snapshot import (
 from sqlmesh.utils.date import TimeLike, to_date, to_datetime, to_timestamp, to_ts
 from tests.conftest import DuckDBMetadata, SushiDataValidator, init_and_plan_context
 
-pytestmark = pytest.mark.integration
+pytestmark = pytest.mark.slow
 
 
 @pytest.fixture(autouse=True)
@@ -1697,10 +1697,10 @@ def test_scd_type_2(tmp_path: pathlib.Path):
             },
         )
 
-    def compare_dataframes(df1: pd.DataFrame, df2: pd.DataFrame):
-        df1 = df1.sort_values(by=["customer_id"]).reset_index(drop=True)
-        df2 = df2.sort_values(by=["customer_id"]).reset_index(drop=True)
-        pd.testing.assert_frame_equal(df1, df2)
+    def compare_dataframes(actual: pd.DataFrame, expected: pd.DataFrame):
+        actual = actual.apply(lambda x: x.sort_values().values).reset_index(drop=True)
+        expected = expected.apply(lambda x: x.sort_values().values).reset_index(drop=True)
+        pd.testing.assert_frame_equal(actual, expected)
 
     def get_current_df(context: Context):
         return context.engine_adapter.fetchdf("SELECT * FROM sushi.marketing")

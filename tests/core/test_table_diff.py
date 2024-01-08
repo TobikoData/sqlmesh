@@ -5,7 +5,7 @@ from sqlmesh.core.config import AutoCategorizationMode, CategorizerConfig
 from sqlmesh.core.model import SqlModel
 
 
-@pytest.mark.integration
+@pytest.mark.slow
 def test_data_diff(sushi_context_fixed_date):
     model = sushi_context_fixed_date.models['"memory"."sushi"."customer_revenue_by_day"']
 

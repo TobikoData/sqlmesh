@@ -26,7 +26,7 @@ from tests.integrations.github.cicd.fixtures import MockIssueComment
 
 pytest_plugins = ["tests.integrations.github.cicd.fixtures"]
 pytestmark = [
-    pytest.mark.integration,
+    pytest.mark.slow,
     pytest.mark.github,
 ]
 

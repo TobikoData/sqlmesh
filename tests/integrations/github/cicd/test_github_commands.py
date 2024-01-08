@@ -21,7 +21,7 @@ from sqlmesh.utils.errors import PlanError
 pytest_plugins = ["tests.integrations.github.cicd.fixtures"]
 pytestmark = [
     pytest.mark.github,
-    pytest.mark.integration,
+    pytest.mark.slow,
 ]
 
 
