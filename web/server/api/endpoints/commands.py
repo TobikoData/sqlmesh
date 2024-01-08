@@ -210,7 +210,7 @@ def _run_plan_apply(
 
     tracker_apply = models.PlanApplyStageTracker(environment=environment, plan_options=plan_options)
     tracker_apply.start = plan.start
-    tracker_apply.end = plan.end_or_now
+    tracker_apply.end = plan.end
     api_console.start_plan_tracker(tracker_apply)
     try:
         context.apply(plan, circuit_breaker)

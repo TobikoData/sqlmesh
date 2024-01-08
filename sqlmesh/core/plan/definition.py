@@ -27,7 +27,7 @@ class Plan(PydanticModel, frozen=True):
     context_diff: ContextDiff
     plan_id: str
     provided_start: t.Optional[TimeLike] = None
-    end: t.Optional[TimeLike] = None
+    provided_end: t.Optional[TimeLike] = None
 
     is_dev: bool
     skip_backfill: bool
@@ -56,6 +56,7 @@ class Plan(PydanticModel, frozen=True):
     _snapshots: t.Optional[t.Dict[SnapshotId, Snapshot]] = None
     _environment: t.Optional[Environment] = None
     _start: t.Optional[TimeLike] = None
+    _end: t.Optional[TimeLike] = None
     __earliest_interval_start: t.Optional[datetime] = None
 
     @property
@@ -72,8 +73,10 @@ class Plan(PydanticModel, frozen=True):
         return t.cast(TimeLike, self._start)
 
     @property
-    def end_or_now(self) -> TimeLike:
-        return self.end or now()
+    def end(self) -> TimeLike:
+        if self._end is None:
+            self._end = self.provided_end or now()
+        return self._end
 
     @property
     def previous_plan_id(self) -> t.Optional[str]:
@@ -172,7 +175,7 @@ class Plan(PydanticModel, frozen=True):
             for snapshot, missing in missing_intervals(
                 [s for s in self.snapshots.values() if self.is_selected_for_backfill(s.name)],
                 start=self.provided_start or self._earliest_interval_start,
-                end=self.end,
+                end=self.provided_end,
                 execution_time=self.execution_time,
                 restatements=self.restatements,
                 deployability_index=self.deployability_index,
@@ -204,7 +207,7 @@ class Plan(PydanticModel, frozen=True):
             self._environment = Environment(
                 snapshots=snapshots,
                 start_at=self.provided_start or self._earliest_interval_start,
-                end_at=self.end,
+                end_at=self.provided_end,
                 plan_id=self.plan_id,
                 previous_plan_id=self.previous_plan_id,
                 expiration_ts=expiration_ts,

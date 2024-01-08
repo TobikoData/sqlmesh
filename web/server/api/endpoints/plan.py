@@ -105,7 +105,7 @@ def get_plan_builder(
         )
         plan = plan_builder.build()
         tracker.start = plan.start
-        tracker.end = plan.end_or_now
+        tracker.end = plan.end
         tracker_stage_validate.stop(success=True)
         api_console.log_event_plan_overview()
     except Exception:
