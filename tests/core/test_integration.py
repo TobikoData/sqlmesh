@@ -1698,8 +1698,8 @@ def test_scd_type_2(tmp_path: pathlib.Path):
         )
 
     def compare_dataframes(actual: pd.DataFrame, expected: pd.DataFrame):
-        actual = actual.apply(lambda x: x.sort_values().values).reset_index(drop=True)
-        expected = expected.apply(lambda x: x.sort_values().values).reset_index(drop=True)
+        actual = actual.apply(lambda x: x.sort_values().values).reset_index(drop=True)  # type: ignore
+        expected = expected.apply(lambda x: x.sort_values().values).reset_index(drop=True)  # type: ignore
         pd.testing.assert_frame_equal(actual, expected)
 
     def get_current_df(context: Context):

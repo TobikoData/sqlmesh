@@ -11,7 +11,7 @@ from sqlmesh.core.engine_adapter import RedshiftEngineAdapter
 from sqlmesh.core.engine_adapter.redshift import parse_plan
 from tests.core.engine_adapter import to_sql_calls
 
-pytestmark = pytest.mark.redshift
+pytestmark = [pytest.mark.engine, pytest.mark.redshift]
 
 
 @pytest.fixture

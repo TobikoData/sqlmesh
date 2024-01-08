@@ -6,7 +6,7 @@ from pytest_mock.plugin import MockerFixture
 from sqlmesh.core.dialect import normalize_model_name
 from sqlmesh.core.engine_adapter import SnowflakeEngineAdapter
 
-pytestmark = pytest.mark.snowflake
+pytestmark = [pytest.mark.engine, pytest.mark.snowflake]
 
 
 def test_get_temp_table(mocker: MockerFixture, make_mocked_engine_adapter: t.Callable):

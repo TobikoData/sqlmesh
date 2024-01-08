@@ -7,7 +7,7 @@ from sqlglot import exp, parse_one
 
 from sqlmesh.core.engine_adapter.base_postgres import BasePostgresEngineAdapter
 
-pytestmark = [pytest.mark.postgres, pytest.mark.redshift]
+pytestmark = [pytest.mark.engine, pytest.mark.postgres, pytest.mark.redshift]
 
 
 def test_columns(make_mocked_engine_adapter: t.Callable):

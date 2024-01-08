@@ -16,7 +16,7 @@ from sqlmesh.core.engine_adapter.bigquery import select_partitions_expr
 from sqlmesh.core.node import IntervalUnit
 from sqlmesh.utils import AttributeDict
 
-pytestmark = pytest.mark.bigquery
+pytestmark = [pytest.mark.bigquery, pytest.mark.engine]
 
 
 def test_insert_overwrite_by_time_partition_query(

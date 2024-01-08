@@ -8,7 +8,7 @@ from sqlglot import parse_one
 from sqlmesh.core.engine_adapter import DatabricksEngineAdapter
 from tests.core.engine_adapter import to_sql_calls
 
-pytestmark = pytest.mark.databricks
+pytestmark = [pytest.mark.databricks, pytest.mark.engine]
 
 
 def test_replace_query(make_mocked_engine_adapter: t.Callable):
