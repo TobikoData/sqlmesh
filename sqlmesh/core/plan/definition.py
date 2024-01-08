@@ -56,6 +56,7 @@ class Plan(PydanticModel, frozen=True):
     _snapshots: t.Optional[t.Dict[SnapshotId, Snapshot]] = None
     _environment: t.Optional[Environment] = None
     _start: t.Optional[TimeLike] = None
+    _end: t.Optional[TimeLike] = None
     __earliest_interval_start: t.Optional[datetime] = None
 
     @property
@@ -73,7 +74,9 @@ class Plan(PydanticModel, frozen=True):
 
     @property
     def end(self) -> TimeLike:
-        return self.provided_end or now()
+        if self._end is None:
+            self._end = self.provided_end or now()
+        return self._end
 
     @property
     def previous_plan_id(self) -> t.Optional[str]:
