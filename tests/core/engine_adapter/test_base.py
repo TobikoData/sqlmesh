@@ -18,6 +18,8 @@ from sqlmesh.utils.date import to_ds
 from sqlmesh.utils.errors import UnsupportedCatalogOperationError
 from tests.core.engine_adapter import to_sql_calls
 
+pytestmark = pytest.mark.engine
+
 
 def test_create_view(make_mocked_engine_adapter: t.Callable):
     adapter = make_mocked_engine_adapter(EngineAdapter)

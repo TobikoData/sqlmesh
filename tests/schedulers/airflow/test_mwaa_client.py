@@ -1,9 +1,12 @@
 import base64
 import json
 
+import pytest
 from pytest_mock.plugin import MockerFixture
 
 from sqlmesh.schedulers.airflow.mwaa_client import MWAAClient
+
+pytestmark = pytest.mark.airflow
 
 
 def test_get_first_dag_run_id(mocker: MockerFixture):

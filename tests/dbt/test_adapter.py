@@ -16,6 +16,8 @@ from sqlmesh.dbt.project import Project
 from sqlmesh.dbt.target import SnowflakeConfig
 from sqlmesh.utils.errors import ConfigError
 
+pytestmark = pytest.mark.dbt
+
 
 def test_adapter_relation(sushi_test_project: Project, runtime_renderer: t.Callable):
     context = sushi_test_project.context

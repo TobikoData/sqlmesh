@@ -30,6 +30,8 @@ from sqlmesh.dbt.test import TestConfig
 from sqlmesh.utils.errors import ConfigError
 from sqlmesh.utils.yaml import load as yaml_load
 
+pytestmark = pytest.mark.dbt
+
 
 @pytest.mark.parametrize(
     "current, new, expected",
