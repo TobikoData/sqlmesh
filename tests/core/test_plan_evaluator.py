@@ -30,6 +30,7 @@ def sushi_plan(sushi_context: Context, mocker: MockerFixture) -> Plan:
     ).build()
 
 
+@pytest.mark.slow
 def test_builtin_evaluator_push(sushi_context: Context, make_snapshot):
     new_model = SqlModel(
         name="sushi.new_test_model",

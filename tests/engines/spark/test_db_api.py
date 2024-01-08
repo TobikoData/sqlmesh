@@ -4,8 +4,12 @@ from pyspark.sql import SparkSession
 from sqlmesh.engines.spark.db_api import errors
 from sqlmesh.engines.spark.db_api import spark_session as spark_session_db
 
+pytestmark = [
+    pytest.mark.slow,
+    pytest.mark.spark_pyspark,
+]
 
-@pytest.mark.spark
+
 def test_spark_session_cursor(spark_session: SparkSession):
     connection = spark_session_db.connection(spark_session)
     cursor = connection.cursor()
@@ -47,7 +51,6 @@ def test_spark_session_cursor(spark_session: SparkSession):
         cursor.fetchmany(size=-1)
 
 
-@pytest.mark.spark
 def test_spark_session_cursor_execute_parameters_not_supported(
     spark_session: SparkSession,
 ):

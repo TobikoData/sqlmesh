@@ -2,6 +2,7 @@
 import typing as t
 from unittest.mock import call
 
+import pytest
 from pytest_mock.plugin import MockerFixture
 from sqlglot import exp, parse_one
 
@@ -11,6 +12,8 @@ from sqlmesh.core.engine_adapter.mixins import (
     NonTransactionalTruncateMixin,
 )
 from tests.core.engine_adapter import to_sql_calls
+
+pytestmark = pytest.mark.engine
 
 
 def test_logical_replace_query_already_exists(

@@ -9,7 +9,6 @@ from datetime import timedelta
 
 import pandas as pd
 import pytest
-from pandas._libs import NaTType
 from sqlglot import exp, parse_one
 from sqlglot.optimizer.normalize_identifiers import normalize_identifiers
 
@@ -91,17 +90,12 @@ class TestContext:
         return self.engine_adapter.dialect
 
     @classmethod
-    def _compare_dfs(
-        cls, actual: t.Union[pd.DataFrame, exp.Expression, str], expected: pd.DataFrame
-    ) -> None:
-        def replace_nat_with_none(df):
-            return [
-                col if type(col) != NaTType else None
-                for row in sorted(list(df.itertuples(index=False, name=None)))
-                for col in row
-            ]
-
-        assert replace_nat_with_none(actual) == replace_nat_with_none(expected)
+    def _compare_dfs(cls, actual: pd.DataFrame, expected: pd.DataFrame) -> None:
+        actual = actual.reset_index(drop=True)
+        expected = expected.reset_index(drop=True)
+        actual = actual.apply(lambda x: x.sort_values().values).reset_index(drop=True)
+        expected = expected.apply(lambda x: x.sort_values().values).reset_index(drop=True)
+        pd.testing.assert_frame_equal(actual, expected, check_dtype=False, check_index_type=False)
 
     def get_metadata_results(self, schema: str = TEST_SCHEMA) -> MetadataResults:
         return MetadataResults.from_data_objects(
@@ -116,7 +110,10 @@ class TestContext:
     def _format_df(self, data: pd.DataFrame, to_datetime: bool = True) -> pd.DataFrame:
         for timestamp_column in self.timestamp_columns:
             if timestamp_column in data.columns and to_datetime:
-                data[timestamp_column] = pd.to_datetime(data[timestamp_column])
+                value = pd.to_datetime(data[timestamp_column])
+                if self.dialect in {"bigquery", "databricks", "duckdb", "spark"}:
+                    value = value.astype("datetime64[us]")
+                data[timestamp_column] = value
         return data
 
     def init(self):
@@ -170,7 +167,10 @@ class TestContext:
         )
 
     def get_current_data(self, table: exp.Table) -> pd.DataFrame:
-        return self.engine_adapter.fetchdf(exp.select("*").from_(table), quote_identifiers=True)
+        df = self.engine_adapter.fetchdf(exp.select("*").from_(table), quote_identifiers=True)
+        if self.dialect == "snowflake" and "id" in df.columns:
+            df["id"] = df["id"].astype("int")
+        return df
 
     def compare_with_current(self, table: exp.Table, expected: pd.DataFrame) -> None:
         self._compare_dfs(self.get_current_data(table), self.output_data(expected))
@@ -220,51 +220,86 @@ def config() -> Config:
 
 @pytest.fixture(
     params=[
-        "duckdb",
+        pytest.param(
+            "duckdb",
+            marks=[
+                pytest.mark.duckdb,
+                pytest.mark.engine,
+                pytest.mark.slow,
+            ],
+        ),
         pytest.param(
             "postgres",
             marks=[
-                pytest.mark.integration,
-                pytest.mark.engine_integration,
-                pytest.mark.engine_integration_local,
+                pytest.mark.docker,
+                pytest.mark.engine,
+                pytest.mark.postgres,
             ],
         ),
         pytest.param(
             "mysql",
             marks=[
-                pytest.mark.integration,
-                pytest.mark.engine_integration,
-                pytest.mark.engine_integration_local,
+                pytest.mark.docker,
+                pytest.mark.engine,
+                pytest.mark.mysql,
             ],
         ),
         pytest.param(
             "mssql",
             marks=[
-                pytest.mark.integration,
-                pytest.mark.engine_integration,
-                pytest.mark.engine_integration_local,
+                pytest.mark.docker,
+                pytest.mark.engine,
+                pytest.mark.mssql,
             ],
         ),
         pytest.param(
             "trino",
             marks=[
-                pytest.mark.integration,
-                pytest.mark.engine_integration,
-                pytest.mark.engine_integration_local,
+                pytest.mark.docker,
+                pytest.mark.engine,
+                pytest.mark.trino,
             ],
         ),
         pytest.param(
             "spark",
             marks=[
-                pytest.mark.integration,
-                pytest.mark.engine_integration,
-                pytest.mark.engine_integration_local,
+                pytest.mark.docker,
+                pytest.mark.engine,
+                pytest.mark.spark,
             ],
         ),
-        pytest.param("bigquery", marks=[pytest.mark.integration, pytest.mark.engine_integration]),
-        pytest.param("databricks", marks=[pytest.mark.integration, pytest.mark.engine_integration]),
-        pytest.param("redshift", marks=[pytest.mark.integration, pytest.mark.engine_integration]),
-        pytest.param("snowflake", marks=[pytest.mark.integration, pytest.mark.engine_integration]),
+        pytest.param(
+            "bigquery",
+            marks=[
+                pytest.mark.bigquery,
+                pytest.mark.engine,
+                pytest.mark.remote,
+            ],
+        ),
+        pytest.param(
+            "databricks",
+            marks=[
+                pytest.mark.databricks,
+                pytest.mark.engine,
+                pytest.mark.remote,
+            ],
+        ),
+        pytest.param(
+            "redshift",
+            marks=[
+                pytest.mark.engine,
+                pytest.mark.remote,
+                pytest.mark.redshift,
+            ],
+        ),
+        pytest.param(
+            "snowflake",
+            marks=[
+                pytest.mark.engine,
+                pytest.mark.remote,
+                pytest.mark.snowflake,
+            ],
+        ),
     ]
 )
 def engine_adapter(request, config) -> EngineAdapter:

@@ -1,6 +1,10 @@
 from __future__ import annotations
 
+import pytest
+
 from sqlmesh.schedulers.airflow import common
+
+pytestmark = pytest.mark.airflow
 
 
 def test_snapshot_dag_id():

@@ -39,6 +39,8 @@ from sqlmesh.dbt.target import BigQueryConfig, DuckDbConfig, SnowflakeConfig
 from sqlmesh.dbt.test import TestConfig
 from sqlmesh.utils.errors import ConfigError, MacroEvalError, SQLMeshError
 
+pytestmark = pytest.mark.dbt
+
 
 def test_model_name():
     context = DbtContext()

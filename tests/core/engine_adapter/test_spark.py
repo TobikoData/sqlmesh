@@ -14,6 +14,8 @@ from sqlmesh.core.engine_adapter import SparkEngineAdapter
 from sqlmesh.utils.errors import SQLMeshError
 from tests.core.engine_adapter import to_sql_calls
 
+pytestmark = [pytest.mark.engine, pytest.mark.spark]
+
 
 def test_create_table_properties(make_mocked_engine_adapter: t.Callable):
     adapter = make_mocked_engine_adapter(SparkEngineAdapter)

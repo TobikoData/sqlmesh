@@ -15,13 +15,17 @@ from sqlmesh.utils import random_id
 from sqlmesh.utils.date import yesterday
 from sqlmesh.utils.errors import SQLMeshError
 
+pytestmark = [
+    pytest.mark.airflow,
+    pytest.mark.docker,
+]
+
+
 DAG_CREATION_WAIT_INTERVAL = 3
 DAG_CREATION_RETRY_ATTEMPTS = 5
 DAG_RUN_POLL_INTERVAL = 1
 
 
-@pytest.mark.integration
-@pytest.mark.airflow_integration
 def test_system_dags(airflow_client: AirflowClient):
     @retry(wait=wait_fixed(2), stop=stop_after_attempt(15), reraise=True)
     def get_system_dags() -> t.List[t.Dict[str, t.Any]]:
@@ -33,8 +37,6 @@ def test_system_dags(airflow_client: AirflowClient):
     assert all(d["is_active"] for d in system_dags)
 
 
-@pytest.mark.integration
-@pytest.mark.airflow_integration
 def test_apply_plan_create_backfill_promote(
     airflow_client: AirflowClient, make_snapshot, random_name
 ):

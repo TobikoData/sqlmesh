@@ -101,9 +101,10 @@ setup(
             "tenacity==8.1.0",
             "types-croniter",
             "types-dateparser",
-            "typing-extensions",
+            "types-python-dateutil",
             "types-pytz",
             "types-requests==2.28.8",
+            "typing-extensions",
         ],
         "dbt": [
             "dbt-core<1.5.0",
