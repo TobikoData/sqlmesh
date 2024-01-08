@@ -201,7 +201,7 @@ class PlanBuilder:
             context_diff=self._context_diff,
             plan_id=self._plan_id,
             provided_start=self._start,
-            end=self._end,
+            provided_end=self._end,
             is_dev=self._is_dev,
             skip_backfill=self._skip_backfill,
             no_gaps=self._no_gaps,

@@ -211,7 +211,7 @@ class BuiltInPlanEvaluator(PlanEvaluator):
                 [s for s in plan.snapshots.values() if s.is_paused],
                 plan.snapshots,
             )
-            self.state_sync.unpause_snapshots(promotion_result.added, plan.end_or_now)
+            self.state_sync.unpause_snapshots(promotion_result.added, plan.end)
 
         return promotion_result
 
