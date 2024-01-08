@@ -7,47 +7,7 @@ from functools import lru_cache
 from croniter import croniter
 from sqlglot.helper import first
 
-from sqlmesh.utils.date import TimeLike, now, to_datetime, to_timestamp
-
-
-@lru_cache(maxsize=None)
-def get_ts_range(
-    cron: str, start_ts: int, end_ts: int, upper_bound_ts: int, lookback: int
-) -> t.List[int]:
-    """Computes all timestamps between start and end given a cron expression and lookback.
-
-    Args:
-        cron: The cron string.
-        start_ts: Inclusive timestamp start.
-        end_ts: Exclusive timestamp end.
-        upper_bound_ts: The exclusive upper bound timestamp for lookback.
-        lookback: A lookback window.
-
-    Returns:
-        A list of all timestamps in this range.
-    """
-    croniter = CroniterCache(cron, start_ts)
-    timestamps = [start_ts]
-
-    # get all individual timestamps with the addition of extra lookback timestamps up to the execution date
-    # when a model has lookback, we need to check all the intervals between itself and its lookback exist.
-    while True:
-        ts = to_timestamp(croniter.get_next(estimate=True))
-
-        if ts < end_ts:
-            timestamps.append(ts)
-        else:
-            croniter.get_prev(estimate=True)
-            break
-
-    for _ in range(lookback):
-        ts = to_timestamp(croniter.get_next(estimate=True))
-        if ts < upper_bound_ts:
-            timestamps.append(ts)
-        else:
-            break
-
-    return timestamps
+from sqlmesh.utils.date import TimeLike, now, to_datetime
 
 
 @lru_cache(maxsize=None)
