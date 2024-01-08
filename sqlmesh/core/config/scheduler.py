@@ -214,7 +214,7 @@ class CloudComposerSchedulerConfig(_BaseAirflowSchedulerConfig, BaseConfig, extr
     backfill_concurrent_tasks: int = 4
     ddl_concurrent_tasks: int = 4
 
-    max_snapshot_ids_per_request: t.Optional[int] = 40
+    max_snapshot_ids_per_request: t.Optional[int] = 20
     use_state_connection: bool = False
 
     type_: Literal["cloud_composer"] = Field(alias="type", default="cloud_composer")
