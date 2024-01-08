@@ -8,6 +8,8 @@ from sqlmesh.core.engine_adapter import PostgresEngineAdapter
 from sqlmesh.utils.errors import UnsupportedCatalogOperationError
 from tests.core.engine_adapter import to_sql_calls
 
+pytestmark = [pytest.mark.engine, pytest.mark.postgres]
+
 
 @pytest.mark.parametrize(
     "kwargs, expected",

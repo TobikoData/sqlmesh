@@ -13,8 +13,9 @@ from sqlmesh.schedulers.airflow.operators.hwm_sensor import (
 )
 from sqlmesh.utils.date import to_datetime
 
+pytestmark = pytest.mark.airflow
 
-@pytest.mark.airflow
+
 def test_no_current_hwm(mocker: MockerFixture, make_snapshot, random_name):
     this_snapshot = make_snapshot(SqlModel(name="this", query=parse_one("select 1, ds")))
     this_snapshot.categorize_as(SnapshotChangeCategory.BREAKING)
@@ -42,7 +43,6 @@ def test_no_current_hwm(mocker: MockerFixture, make_snapshot, random_name):
     get_snapshots_mock.assert_called_once_with([target_snapshot.table_info])
 
 
-@pytest.mark.airflow
 def test_current_hwm_below_target(mocker: MockerFixture, make_snapshot):
     this_snapshot = make_snapshot(
         SqlModel(name="this", query=parse_one("select 1, ds")), version="a"
@@ -82,7 +82,6 @@ def test_current_hwm_below_target(mocker: MockerFixture, make_snapshot):
     get_snapshots_mock.assert_called_once_with([target_snapshot_v1.table_info])
 
 
-@pytest.mark.airflow
 def test_current_hwm_above_target(mocker: MockerFixture, make_snapshot):
     this_snapshot = make_snapshot(
         SqlModel(name="this", query=parse_one("select 1, ds")), version="a"

@@ -195,6 +195,7 @@ def test_paused_forward_only_parent(make_snapshot, mocker: MockerFixture):
     assert snapshot_b.change_category == SnapshotChangeCategory.BREAKING
 
 
+@pytest.mark.slow
 @freeze_time()
 def test_restate_models(sushi_context_pre_scheduling: Context):
     plan = sushi_context_pre_scheduling.plan(
@@ -241,6 +242,7 @@ def test_restate_models(sushi_context_pre_scheduling: Context):
     assert not plan.requires_backfill
 
 
+@pytest.mark.slow
 @freeze_time()
 def test_restate_models_with_existing_missing_intervals(sushi_context: Context):
     yesterday_ts = to_timestamp(yesterday_ds())

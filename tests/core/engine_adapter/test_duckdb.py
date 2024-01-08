@@ -8,6 +8,8 @@ from sqlglot import parse_one
 from sqlmesh.core.engine_adapter import DuckDBEngineAdapter, EngineAdapter
 from tests.core.engine_adapter import to_sql_calls
 
+pytestmark = [pytest.mark.duckdb, pytest.mark.engine]
+
 
 @pytest.fixture
 def adapter(duck_conn):

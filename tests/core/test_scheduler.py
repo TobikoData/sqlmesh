@@ -26,6 +26,7 @@ def orders(sushi_context_fixed_date: Context) -> Snapshot:
     return sushi_context_fixed_date.get_snapshot("sushi.orders", raise_if_missing=True)
 
 
+@pytest.mark.slow
 def test_interval_params(scheduler: Scheduler, sushi_context_fixed_date: Context, orders: Snapshot):
     waiter_revenue = sushi_context_fixed_date.get_snapshot(
         "sushi.waiter_revenue_by_day", raise_if_missing=True
@@ -61,6 +62,7 @@ def test_interval_params_nonconsecutive(scheduler: Scheduler, orders: Snapshot):
     }
 
 
+@pytest.mark.slow
 def test_interval_params_missing(scheduler: Scheduler, sushi_context_fixed_date: Context):
     waiters = sushi_context_fixed_date.get_snapshot(
         "sushi.waiter_as_customer_by_day", raise_if_missing=True
@@ -75,6 +77,7 @@ def test_interval_params_missing(scheduler: Scheduler, sushi_context_fixed_date:
     ]
 
 
+@pytest.mark.slow
 def test_run(sushi_context_fixed_date: Context, scheduler: Scheduler):
     adapter = sushi_context_fixed_date.engine_adapter
     snapshot = sushi_context_fixed_date.get_snapshot("sushi.items", raise_if_missing=True)

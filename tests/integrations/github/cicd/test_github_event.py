@@ -1,4 +1,7 @@
+import pytest
+
 pytest_plugins = ["tests.integrations.github.cicd.fixtures"]
+pytestmark = pytest.mark.github
 
 
 def test_pull_request_review_submit_event(make_event_from_fixture):

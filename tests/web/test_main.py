@@ -15,6 +15,9 @@ from sqlmesh.utils.errors import PlanError
 from web.server.main import api_console, app
 from web.server.settings import Settings, get_loaded_context, get_settings
 
+pytestmark = pytest.mark.web
+
+
 client = TestClient(app)
 
 
