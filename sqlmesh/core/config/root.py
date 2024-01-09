@@ -220,4 +220,4 @@ class Config(BaseConfig):
 
     @property
     def fingerprint(self) -> str:
-        return str(zlib.crc32(pickle.dumps(self.dict(exclude={"loader"}))))
+        return str(zlib.crc32(pickle.dumps(self.dict(exclude={"loader", "notification_targets"}))))
