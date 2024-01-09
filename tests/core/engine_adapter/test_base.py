@@ -1355,8 +1355,11 @@ def test_drop_view(make_mocked_engine_adapter: t.Callable):
 
     adapter.drop_view("test_view")
     adapter.drop_view("test_view", materialized=True)
+    adapter.SUPPORTS_MATERIALIZED_VIEWS = True
+    adapter.drop_view("test_view", materialized=True)
 
     assert to_sql_calls(adapter) == [
+        'DROP VIEW IF EXISTS "test_view"',
         'DROP VIEW IF EXISTS "test_view"',
         'DROP MATERIALIZED VIEW IF EXISTS "test_view"',
     ]

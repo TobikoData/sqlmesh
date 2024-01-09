@@ -695,7 +695,7 @@ class EngineAdapter:
             exp.Drop(
                 this=exp.to_table(view_name),
                 exists=ignore_if_not_exists,
-                materialized=materialized,
+                materialized=materialized and self.SUPPORTS_MATERIALIZED_VIEWS,
                 cascade=cascade,
                 kind="VIEW",
             )
