@@ -36,7 +36,7 @@ from sqlmesh.core.snapshot import (
     SnapshotTableInfo,
 )
 from sqlmesh.utils.date import TimeLike, to_date, to_datetime, to_timestamp, to_ts
-from tests.conftest import DuckDBMetadata, SushiDataValidator, init_and_plan_context
+from tests.conftest import DuckDBMetadata, SushiDataValidator
 
 pytestmark = pytest.mark.slow
 
@@ -194,8 +194,8 @@ def test_forward_only_plan_with_effective_date(context_fixture: Context, request
 
 
 @freeze_time("2023-01-08 15:00:00")
-def test_forward_only_model_regular_plan(mocker: MockerFixture):
-    context, plan = init_and_plan_context("examples/sushi", mocker)
+def test_forward_only_model_regular_plan(init_and_plan_context: t.Callable):
+    context, plan = init_and_plan_context("examples/sushi")
     context.apply(plan)
 
     model_name = "sushi.waiter_revenue_by_day"
@@ -287,8 +287,8 @@ def test_forward_only_model_regular_plan(mocker: MockerFixture):
 
 
 @freeze_time("2023-01-08 15:00:00")
-def test_plan_set_choice_is_reflected_in_missing_intervals(mocker: MockerFixture):
-    context, plan = init_and_plan_context("examples/sushi", mocker)
+def test_plan_set_choice_is_reflected_in_missing_intervals(init_and_plan_context: t.Callable):
+    context, plan = init_and_plan_context("examples/sushi")
     context.apply(plan)
 
     model_name = "sushi.waiter_revenue_by_day"
@@ -432,8 +432,8 @@ def test_plan_set_choice_is_reflected_in_missing_intervals(mocker: MockerFixture
 
 
 @freeze_time("2023-01-08 15:00:00")
-def test_non_breaking_change_after_forward_only_in_dev(mocker: MockerFixture):
-    context, plan = init_and_plan_context("examples/sushi", mocker)
+def test_non_breaking_change_after_forward_only_in_dev(init_and_plan_context: t.Callable):
+    context, plan = init_and_plan_context("examples/sushi")
     context.apply(plan)
 
     model = context.get_model("sushi.waiter_revenue_by_day")
@@ -550,8 +550,8 @@ def test_non_breaking_change_after_forward_only_in_dev(mocker: MockerFixture):
 
 
 @freeze_time("2023-01-08 15:00:00")
-def test_indirect_non_breaking_change_after_forward_only_in_dev(mocker: MockerFixture):
-    context, plan = init_and_plan_context("examples/sushi", mocker)
+def test_indirect_non_breaking_change_after_forward_only_in_dev(init_and_plan_context: t.Callable):
+    context, plan = init_and_plan_context("examples/sushi")
     context.apply(plan)
 
     # Make sushi.orders a forward-only model.
@@ -672,8 +672,8 @@ def test_indirect_non_breaking_change_after_forward_only_in_dev(mocker: MockerFi
 
 
 @freeze_time("2023-01-08 15:00:00")
-def test_forward_only_precedence_over_indirect_non_breaking(mocker: MockerFixture):
-    context, plan = init_and_plan_context("examples/sushi", mocker)
+def test_forward_only_precedence_over_indirect_non_breaking(init_and_plan_context: t.Callable):
+    context, plan = init_and_plan_context("examples/sushi")
     context.apply(plan)
 
     # Make sushi.orders a forward-only model.
@@ -745,8 +745,8 @@ def test_forward_only_precedence_over_indirect_non_breaking(mocker: MockerFixtur
 
 
 @freeze_time("2023-01-08 15:00:00")
-def test_select_models_for_backfill(mocker: MockerFixture):
-    context, _ = init_and_plan_context("examples/sushi", mocker)
+def test_select_models_for_backfill(init_and_plan_context: t.Callable):
+    context, _ = init_and_plan_context("examples/sushi")
 
     expected_intervals = [
         (to_timestamp("2023-01-01"), to_timestamp("2023-01-02")),
@@ -1527,10 +1527,8 @@ def test_invalidating_environment(sushi_context: Context):
     assert start_schemas - schemas_after_janitor == {"sushi__dev"}
 
 
-def test_environment_suffix_target_table(mocker: MockerFixture):
-    context, plan = init_and_plan_context(
-        "examples/sushi", mocker, config="environment_suffix_config"
-    )
+def test_environment_suffix_target_table(init_and_plan_context: t.Callable):
+    context, plan = init_and_plan_context("examples/sushi", config="environment_suffix_config")
     context.apply(plan)
     metadata = DuckDBMetadata.from_context(context)
     environments_schemas = {"raw", "sushi"}
@@ -1566,7 +1564,7 @@ def test_environment_suffix_target_table(mocker: MockerFixture):
     } == set()
 
 
-def test_environment_catalog_mapping(mocker: MockerFixture):
+def test_environment_catalog_mapping(init_and_plan_context: t.Callable):
     environments_schemas = {"raw", "sushi"}
 
     def get_prod_dev_views(metadata: DuckDBMetadata) -> t.Tuple[t.Set[exp.Table], t.Set[exp.Table]]:
@@ -1586,7 +1584,7 @@ def test_environment_catalog_mapping(mocker: MockerFixture):
         return default_tables, non_default_tables
 
     context, plan = init_and_plan_context(
-        "examples/sushi", mocker, config="environment_catalog_mapping_config"
+        "examples/sushi", config="environment_catalog_mapping_config"
     )
     context.apply(plan)
     metadata = DuckDBMetadata.from_context(context)

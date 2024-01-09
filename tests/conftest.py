@@ -2,8 +2,9 @@ from __future__ import annotations
 
 import datetime
 import typing as t
+import uuid
 from pathlib import Path
-from shutil import rmtree
+from shutil import copytree, rmtree
 from tempfile import TemporaryDirectory
 from unittest import mock
 from unittest.mock import PropertyMock
@@ -180,15 +181,15 @@ def push_plan(context: Context, plan: Plan) -> None:
 
 
 @pytest.fixture()
-def sushi_context_pre_scheduling(mocker: MockerFixture) -> Context:
-    context, plan = init_and_plan_context("examples/sushi", mocker)
+def sushi_context_pre_scheduling(init_and_plan_context: t.Callable) -> Context:
+    context, plan = init_and_plan_context("examples/sushi")
     push_plan(context, plan)
     return context
 
 
 @pytest.fixture()
-def sushi_context_fixed_date(mocker: MockerFixture) -> Context:
-    context, plan = init_and_plan_context("examples/sushi", mocker)
+def sushi_context_fixed_date(init_and_plan_context: t.Callable) -> Context:
+    context, plan = init_and_plan_context("examples/sushi")
 
     for model in context.models.values():
         if model.start:
@@ -200,25 +201,25 @@ def sushi_context_fixed_date(mocker: MockerFixture) -> Context:
 
 
 @pytest.fixture()
-def sushi_context(mocker: MockerFixture) -> Context:
-    context, plan = init_and_plan_context("examples/sushi", mocker)
+def sushi_context(init_and_plan_context: t.Callable) -> Context:
+    context, plan = init_and_plan_context("examples/sushi")
     context.apply(plan)
     return context
 
 
 @pytest.fixture()
-def sushi_dbt_context(mocker: MockerFixture) -> Context:
-    context, plan = init_and_plan_context("examples/sushi_dbt", mocker)
+def sushi_dbt_context(init_and_plan_context: t.Callable) -> Context:
+    context, plan = init_and_plan_context("examples/sushi_dbt")
 
     context.apply(plan)
     return context
 
 
 @pytest.fixture()
-def sushi_test_dbt_context(mocker: MockerFixture) -> Context:
+def sushi_test_dbt_context(init_and_plan_context) -> Context:
     from tests.fixtures.dbt.sushi_test.seed_sources import init_raw_schema
 
-    context, plan = init_and_plan_context("tests/fixtures/dbt/sushi_test", mocker)
+    context, plan = init_and_plan_context("tests/fixtures/dbt/sushi_test")
     init_raw_schema(context.engine_adapter)
 
     context.apply(plan)
@@ -226,30 +227,31 @@ def sushi_test_dbt_context(mocker: MockerFixture) -> Context:
 
 
 @pytest.fixture()
-def sushi_no_default_catalog(mocker: MockerFixture) -> Context:
+def sushi_no_default_catalog(mocker: MockerFixture, init_and_plan_context: t.Callable) -> Context:
     mocker.patch(
         "sqlmesh.core.engine_adapter.base.EngineAdapter.default_catalog",
         PropertyMock(return_value=None),
     )
-    context, plan = init_and_plan_context("examples/sushi", mocker)
+    context, plan = init_and_plan_context("examples/sushi")
     assert context.default_catalog is None
     context.apply(plan)
     return context
 
 
-def init_and_plan_context(
-    paths: str | t.List[str],
-    mocker: MockerFixture,
-    config="test_config",
-) -> t.Tuple[Context, Plan]:
-    delete_cache(paths)
-    sushi_context = Context(paths=paths, config=config)
-    confirm = mocker.patch("sqlmesh.core.console.Confirm")
-    confirm.ask.return_value = False
+@pytest.fixture
+def init_and_plan_context(copy_to_temp_path, mocker) -> t.Callable:
+    def _make_function(
+        paths: str | t.List[str] | Path | t.List[Path], config="test_config"
+    ) -> t.Tuple[Context, Plan]:
+        sushi_context = Context(paths=[str(x) for x in copy_to_temp_path(paths)], config=config)
+        confirm = mocker.patch("sqlmesh.core.console.Confirm")
+        confirm.ask.return_value = False
 
-    plan = sushi_context.plan("prod")
+        plan = sushi_context.plan("prod")
 
-    return (sushi_context, plan)
+        return sushi_context, plan
+
+    return _make_function
 
 
 @pytest.fixture
@@ -309,6 +311,27 @@ def make_mocked_engine_adapter(mocker: MockerFixture) -> t.Callable:
         connection_mock.cursor.return_value = cursor_mock
         cursor_mock.connection.return_value = connection_mock
         return klass(lambda: connection_mock, dialect=dialect or klass.DIALECT)
+
+    return _make_function
+
+
+@pytest.fixture
+def copy_to_temp_path(tmp_path: Path) -> t.Callable:
+    def ignore(src, names):
+        if Path(src).name in {".cache", "__pycache__", "logs", "data", "target"}:
+            return names
+        return []
+
+    def _make_function(
+        paths: t.Union[t.Union[str, Path], t.Collection[t.Union[str, Path]]]
+    ) -> t.List[Path]:
+        paths = ensure_list(paths)
+        temp_dirs = []
+        for path in paths:
+            temp_dir = Path(tmp_path) / uuid.uuid4().hex
+            copytree(path, temp_dir, symlinks=True, ignore=ignore)
+            temp_dirs.append(temp_dir)
+        return temp_dirs
 
     return _make_function
 
