@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import inspect
 import typing as t
 from datetime import datetime
 from enum import Enum
@@ -229,7 +230,15 @@ class _Node(PydanticModel):
                 raise ConfigError(f"Invalid cron expression '{cron}'")
         return cron
 
-    @field_validator("owner", "description", "stamp", mode="before")
+    @field_validator("description", mode="before")
+    @classmethod
+    def _description_validator(cls, v: t.Any) -> t.Optional[str]:
+        maybe_str = str_or_exp_to_str(v)
+        if isinstance(maybe_str, str):
+            return " ".join(inspect.cleandoc(maybe_str).splitlines())
+        return maybe_str
+
+    @field_validator("owner", "stamp", mode="before")
     @classmethod
     def _string_expr_validator(cls, v: t.Any) -> t.Optional[str]:
         return str_or_exp_to_str(v)
