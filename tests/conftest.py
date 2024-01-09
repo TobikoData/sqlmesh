@@ -243,8 +243,7 @@ def init_and_plan_context(copy_to_temp_path, mocker) -> t.Callable:
     def _make_function(
         paths: str | t.List[str] | Path | t.List[Path], config="test_config"
     ) -> t.Tuple[Context, Plan]:
-        paths = [str(x) for x in ensure_list(paths)]
-        sushi_context = Context(paths=paths, config=config)
+        sushi_context = Context(paths=[str(x) for x in copy_to_temp_path(paths)], config=config)
         confirm = mocker.patch("sqlmesh.core.console.Confirm")
         confirm.ask.return_value = False
 
@@ -319,7 +318,7 @@ def make_mocked_engine_adapter(mocker: MockerFixture) -> t.Callable:
 @pytest.fixture
 def copy_to_temp_path(tmp_path: Path) -> t.Callable:
     def ignore(src, names):
-        if Path(src).name in {".cache", "__pycache__", "logs", "data"}:
+        if Path(src).name in {".cache", "__pycache__", "logs", "data", "target"}:
             return names
         return []
 
@@ -330,7 +329,7 @@ def copy_to_temp_path(tmp_path: Path) -> t.Callable:
         temp_dirs = []
         for path in paths:
             temp_dir = Path(tmp_path) / uuid.uuid4().hex
-            copytree(path, temp_dir, ignore=ignore)
+            copytree(path, temp_dir, symlinks=True, ignore=ignore)
             temp_dirs.append(temp_dir)
         return temp_dirs
 
