@@ -100,7 +100,7 @@ airflow-test:
 
 airflow-local-test:
 	export AIRFLOW__DATABASE__SQL_ALCHEMY_CONN=postgresql+psycopg2://airflow:airflow@localhost/airflow && \
-		pytest -m "docker and airflow"
+		pytest -n 1 -m "docker and airflow"
 
 airflow-docker-test:
 	make -C ./examples/airflow docker-test
