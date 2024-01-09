@@ -235,7 +235,7 @@ class _Node(PydanticModel):
     def _description_validator(cls, v: t.Any) -> t.Optional[str]:
         maybe_str = str_or_exp_to_str(v)
         if isinstance(maybe_str, str):
-            return " ".join(inspect.cleandoc(maybe_str).splitlines())
+            return inspect.cleandoc(maybe_str)
         return maybe_str
 
     @field_validator("owner", "stamp", mode="before")
