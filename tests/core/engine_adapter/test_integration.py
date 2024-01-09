@@ -10,12 +10,12 @@ from datetime import timedelta
 import pandas as pd
 import pytest
 from sqlglot import exp, parse_one
-from sqlglot.optimizer.normalize_identifiers import normalize_identifiers
 
 from sqlmesh import Config, Context, EngineAdapter
 from sqlmesh.core.config import load_config_from_paths
 from sqlmesh.core.dialect import normalize_model_name
 from sqlmesh.core.engine_adapter.shared import DataObject
+from sqlmesh.utils import random_id
 from sqlmesh.utils.date import now, to_date, to_ds, yesterday
 from sqlmesh.utils.errors import UnsupportedCatalogOperationError
 from sqlmesh.utils.pydantic import PydanticModel
@@ -38,6 +38,7 @@ class TestContext:
         self.test_type = test_type
         self.engine_adapter = engine_adapter
         self._columns_to_types = columns_to_types
+        self.test_id = random_id(short=True)
 
     @property
     def columns_to_types(self):
@@ -97,10 +98,12 @@ class TestContext:
         expected = expected.apply(lambda x: x.sort_values().values).reset_index(drop=True)
         pd.testing.assert_frame_equal(actual, expected, check_dtype=False, check_index_type=False)
 
-    def get_metadata_results(self, schema: str = TEST_SCHEMA) -> MetadataResults:
-        return MetadataResults.from_data_objects(
-            self.engine_adapter._get_data_objects(self.schema(schema))
-        )
+    def add_test_suffix(self, value: str) -> str:
+        return f"{value}_{self.test_id}"
+
+    def get_metadata_results(self, schema: t.Optional[str] = None) -> MetadataResults:
+        schema = schema if schema else self.schema(TEST_SCHEMA)
+        return MetadataResults.from_data_objects(self.engine_adapter._get_data_objects(schema))
 
     def _init_engine_adapter(self) -> None:
         schema = self.schema(TEST_SCHEMA)
@@ -142,6 +145,7 @@ class TestContext:
         return self._format_df(data)
 
     def table(self, table_name: str, schema: str = TEST_SCHEMA) -> exp.Table:
+        schema = self.add_test_suffix(schema)
         return exp.to_table(
             normalize_model_name(
                 ".".join([schema, table_name]),
@@ -151,16 +155,17 @@ class TestContext:
         )
 
     def schema(self, schema_name: str, catalog_name: t.Optional[str] = None) -> str:
-
         return exp.table_name(
             normalize_model_name(
-                ".".join(
-                    p
-                    for p in (catalog_name or self.engine_adapter.default_catalog, schema_name)
-                    if p
-                )
-                if "." not in schema_name
-                else schema_name,
+                self.add_test_suffix(
+                    ".".join(
+                        p
+                        for p in (catalog_name or self.engine_adapter.default_catalog, schema_name)
+                        if p
+                    )
+                    if "." not in schema_name
+                    else schema_name
+                ),
                 default_catalog=None,
                 dialect=self.dialect,
             )
@@ -537,9 +542,7 @@ def test_drop_schema(ctx: TestContext):
     if ctx.test_type != "query":
         pytest.skip("Drop Schema tests only need to run once so we skip anything not query")
     ctx.columns_to_types = {"one": "int"}
-    schema = normalize_identifiers(
-        exp.to_identifier(TEST_SCHEMA), dialect=ctx.engine_adapter.dialect
-    ).sql(dialect=ctx.engine_adapter.dialect)
+    schema = ctx.schema(TEST_SCHEMA)
     ctx.engine_adapter.drop_schema(schema, cascade=True)
     results = ctx.get_metadata_results()
     assert len(results.tables) == 0
@@ -549,7 +552,7 @@ def test_drop_schema(ctx: TestContext):
     view = ctx.table("test_view")
     view_query = exp.Select().select(exp.Literal.number(1).as_("one"))
     ctx.engine_adapter.create_view(view, view_query, ctx.columns_to_types)
-    results = ctx.get_metadata_results(schema)
+    results = ctx.get_metadata_results()
     assert len(results.tables) == 0
     assert len(results.views) == 1
 
