@@ -243,7 +243,7 @@ def init_and_plan_context(copy_to_temp_path, mocker) -> t.Callable:
     def _make_function(
         paths: str | t.List[str] | Path | t.List[Path], config="test_config"
     ) -> t.Tuple[Context, Plan]:
-        sushi_context = Context(paths=[str(x) for x in copy_to_temp_path(paths)], config=config)
+        sushi_context = Context(paths=copy_to_temp_path(paths), config=config)
         confirm = mocker.patch("sqlmesh.core.console.Confirm")
         confirm.ask.return_value = False
 

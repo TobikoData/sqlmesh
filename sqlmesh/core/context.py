@@ -256,7 +256,7 @@ class Context(BaseContext):
         engine_adapter: t.Optional[EngineAdapter] = None,
         notification_targets: t.Optional[t.List[NotificationTarget]] = None,
         state_sync: t.Optional[StateSync] = None,
-        paths: t.Union[str, t.Iterable[str]] = "",
+        paths: t.Union[str | Path, t.Iterable[str | Path]] = "",
         config: t.Optional[t.Union[Config, str, t.Dict[Path, Config]]] = None,
         gateway: t.Optional[str] = None,
         concurrent_tasks: t.Optional[int] = None,

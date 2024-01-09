@@ -451,7 +451,7 @@ def test_test_generation(tmp_path: Path) -> None:
         model_defaults=ModelDefaultsConfig(dialect="duckdb"),
     )
 
-    context = Context(paths=[str(tmp_path)], config=config)
+    context = Context(paths=tmp_path, config=config)
     context.plan(auto_apply=True)
 
     input_queries = {
