@@ -925,7 +925,10 @@ class EngineAdapterStateSync(CommonStateSyncMixin, StateSync):
 
             new_snapshot_id = new_snapshot.snapshot_id
 
-            if (
+            if new_snapshot_id in all_snapshots:
+                # Mapped to an existing snapshot.
+                new_snapshots[new_snapshot_id] = all_snapshots[new_snapshot_id]
+            elif (
                 new_snapshot_id not in new_snapshots
                 or new_snapshot.updated_ts > new_snapshots[new_snapshot_id].updated_ts
             ):
@@ -981,7 +984,10 @@ class EngineAdapterStateSync(CommonStateSyncMixin, StateSync):
             self._update_environment(environment)
 
         if updated_prod_environment:
-            self.unpause_snapshots(updated_prod_environment.snapshots, now_timestamp())
+            try:
+                self.unpause_snapshots(updated_prod_environment.snapshots, now_timestamp())
+            except Exception:
+                logger.warning("Failed to unpause migrated snapshots", exc_info=True)
 
     def _snapshot_id_filter(
         self, snapshot_ids: t.Iterable[SnapshotIdLike], alias: t.Optional[str] = None
