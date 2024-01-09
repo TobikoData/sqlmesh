@@ -94,6 +94,7 @@ setup(
             "pytest-asyncio<0.23.0",
             "pytest-lazy-fixture",
             "pytest-mock",
+            "pytest-xdist",
             "pyspark>=3.4.0",
             "pytz",
             "snowflake-connector-python[pandas,secure-local-storage]>=3.0.2",
