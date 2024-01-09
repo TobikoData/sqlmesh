@@ -1,6 +1,5 @@
 import logging
 import pathlib
-import shutil
 import sys
 import typing as t
 from unittest.mock import MagicMock
@@ -55,15 +54,8 @@ def notebook(mocker: MockerFixture, ip):
 
 
 @pytest.fixture
-def sushi_context(tmp_path, notebook) -> Context:
-    sushi_dir = tmp_path / "sushi"
-
-    def ignore(src, names):
-        if pathlib.Path(src).name in {".cache", "__pycache__", "logs", "data"}:
-            return names
-        return []
-
-    shutil.copytree(str(SUSHI_EXAMPLE_PATH), str(sushi_dir), ignore=ignore)
+def sushi_context(copy_to_temp_path, notebook) -> Context:
+    sushi_dir = copy_to_temp_path(SUSHI_EXAMPLE_PATH)[0]
     notebook.run_line_magic(magic_name="context", line=str(sushi_dir))
     return notebook.user_ns["context"]
 
