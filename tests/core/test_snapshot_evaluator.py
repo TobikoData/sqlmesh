@@ -251,7 +251,7 @@ def test_promote(mocker: MockerFixture, adapter_mock, make_snapshot):
             f"SELECT * FROM sqlmesh__test_schema.test_schema__test_model__{snapshot.version}"
         ),
         table_description=None,
-        column_descriptions={},
+        column_descriptions=None,
     )
 
 
@@ -280,7 +280,7 @@ def test_promote_default_catalog(adapter_mock, make_snapshot):
             f"SELECT * FROM test_catalog.sqlmesh__test_schema.test_schema__test_model__{snapshot.version}"
         ),
         table_description=None,
-        column_descriptions={},
+        column_descriptions=None,
     )
 
 
@@ -324,7 +324,7 @@ def test_promote_forward_only(mocker: MockerFixture, adapter_mock, make_snapshot
                     f"SELECT * FROM sqlmesh__test_schema.test_schema__test_model__{snapshot.fingerprint.to_version()}__temp"
                 ),
                 table_description=None,
-                column_descriptions={},
+                column_descriptions=None,
             ),
             call(
                 "test_schema__test_env.test_model",
@@ -332,7 +332,7 @@ def test_promote_forward_only(mocker: MockerFixture, adapter_mock, make_snapshot
                     "SELECT * FROM sqlmesh__test_schema.test_schema__test_model__test_version"
                 ),
                 table_description=None,
-                column_descriptions={},
+                column_descriptions=None,
             ),
         ]
     )
@@ -545,13 +545,19 @@ def test_create_materialized_view(mocker: MockerFixture, adapter_mock, make_snap
         materialized=True,
         table_properties={},
         table_description=None,
-        column_descriptions={},
     )
 
     adapter_mock.create_view.assert_has_calls(
         [
-            call(snapshot.table_name(is_deployable=False), model.render_query(), **common_kwargs),
-            call(snapshot.table_name(), model.render_query(), **common_kwargs),
+            call(
+                snapshot.table_name(is_deployable=False),
+                model.render_query(),
+                column_descriptions=None,
+                **common_kwargs,
+            ),
+            call(
+                snapshot.table_name(), model.render_query(), column_descriptions={}, **common_kwargs
+            ),
         ]
     )
 
@@ -588,13 +594,19 @@ def test_create_view_with_properties(mocker: MockerFixture, adapter_mock, make_s
             "key": exp.convert("value"),
         },
         table_description=None,
-        column_descriptions={},
     )
 
     adapter_mock.create_view.assert_has_calls(
         [
-            call(snapshot.table_name(is_deployable=False), model.render_query(), **common_kwargs),
-            call(snapshot.table_name(), model.render_query(), **common_kwargs),
+            call(
+                snapshot.table_name(is_deployable=False),
+                model.render_query(),
+                column_descriptions=None,
+                **common_kwargs,
+            ),
+            call(
+                snapshot.table_name(), model.render_query(), column_descriptions={}, **common_kwargs
+            ),
         ]
     )
 
@@ -622,7 +634,7 @@ def test_promote_model_info(mocker: MockerFixture, make_snapshot):
         "test_schema__test_env.test_model",
         parse_one(f"SELECT * FROM physical_schema.test_schema__test_model__{snapshot.version}"),
         table_description=None,
-        column_descriptions={},
+        column_descriptions=None,
     )
 
 

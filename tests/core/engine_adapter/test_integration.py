@@ -1323,14 +1323,15 @@ def test_sushi(ctx: TestContext):
         def validate_comments(
             schema_name: str,
             expected_comments_dict: t.Dict[str, t.Any] = comments,
-            is_view_schema: bool = False,
+            is_physical_layer: bool = True,
             check_no_col_comments: bool = False,
+            prod_schema_name: str = "sushi",
         ) -> None:
             physical_layer_objects = context.engine_adapter._get_data_objects(schema_name)
             physical_layer_models = {
-                x.name
-                if is_view_schema
-                else x.name.split("__")[1]: {
+                x.name.split("__")[1]
+                if is_physical_layer
+                else x.name: {
                     "table_name": x.name,
                     "is_view": x.type == DataObjectType.VIEW,
                 }
@@ -1344,10 +1345,16 @@ def test_sushi(ctx: TestContext):
                     "VIEW" if physical_layer_models[model_name]["is_view"] else "BASE TABLE"
                 )
 
-                if not (
+                # is this model in a physical layer or PROD environment?
+                is_physical_or_prod = is_physical_layer or (
+                    not is_physical_layer and schema_name == prod_schema_name
+                )
+                # is this model a VIEW and the engine doesn't support VIEW comments?
+                is_view_and_comments_unsupported = (
                     physical_layer_models[model_name]["is_view"]
                     and ctx.engine_adapter.COMMENT_CREATION_VIEW.is_unsupported
-                ):
+                )
+                if is_physical_or_prod and not is_view_and_comments_unsupported:
                     expected_tbl_comment = comments.get(model_name).get("table", None)
                     if expected_tbl_comment:
                         actual_tbl_comment = ctx.get_table_comment(
@@ -1377,8 +1384,8 @@ def test_sushi(ctx: TestContext):
                         expected_col_comments
                         and not ctx.dialect == "trino"
                         and not (
-                            physical_layer_models[model_name]["is_view"]
-                            and ctx.test_type == "query"
+                            ctx.test_type == "query"
+                            and physical_layer_models[model_name]["is_view"]
                             and not ctx.engine_adapter.COMMENT_CREATION_VIEW.supports_column_comment_commands
                         )
                     ):
@@ -1400,8 +1407,8 @@ def test_sushi(ctx: TestContext):
 
         # confirm physical layer comments are registered
         validate_comments("sqlmesh__sushi")
-        # confirm view layer comments are registered
-        validate_comments("sushi__test_prod", is_view_schema=True)
+        # confirm view layer comments are not registered
+        validate_comments("sushi__test_prod", is_physical_layer=False, check_no_col_comments=True)
 
     # Ensure that the plan has been applied successfully.
     no_change_plan = context.plan(
@@ -1426,9 +1433,11 @@ def test_sushi(ctx: TestContext):
         dialect=ctx.dialect,
     )
 
-    # confirm view layer comments are registered
+    # confirm view layer comments are registered in PROD
+    prod_plan = context.plan(skip_tests=True, no_prompts=True, auto_apply=True)
+
     if ctx.engine_adapter.COMMENT_CREATION_VIEW.is_supported:
-        validate_comments("sushi__test_dev", is_view_schema=True)
+        validate_comments("sushi", is_physical_layer=False)
 
 
 def test_dialects(ctx: TestContext):
