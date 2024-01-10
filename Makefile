@@ -81,22 +81,22 @@ engine-down:
 	docker-compose -f ./tests/core/engine_adapter/docker-compose.yaml down
 
 fast-test:
-	pytest -m "fast"
+	pytest -n auto -m "fast"
 
 slow-test:
-	pytest -m "fast or slow"
+	pytest -n auto -m "fast or slow"
 
 core-fast-test:
-	pytest -m "fast and not web and not github and not dbt and not airflow and not jupyter"
+	pytest -n auto -m "fast and not web and not github and not dbt and not airflow and not jupyter"
 
 core-slow-test:
-	pytest -m "(fast or slow) and not web and not github and not dbt and not airflow and not jupyter"
+	pytest -n auto -m "(fast or slow) and not web and not github and not dbt and not airflow and not jupyter"
 
 airflow-fast-test:
-	pytest -m "fast and airflow"
+	pytest -n auto -m "fast and airflow"
 
 airflow-test:
-	pytest -m "(fast or slow) and airflow"
+	pytest -n auto -m "(fast or slow) and airflow"
 
 airflow-local-test:
 	export AIRFLOW__DATABASE__SQL_ALCHEMY_CONN=postgresql+psycopg2://airflow:airflow@localhost/airflow && \
@@ -110,58 +110,58 @@ airflow-local-test-with-env: develop airflow-clean airflow-init airflow-run airf
 airflow-docker-test-with-env: develop airflow-clean airflow-init airflow-run airflow-docker-test airflow-stop
 
 engine-slow-test:
-	pytest -m "(fast or slow) and engine"
+	pytest -n auto -m "(fast or slow) and engine"
 
 engine-docker-test:
-	pytest -m "docker and engine"
+	pytest -n auto -m "docker and engine"
 
 engine-remote-test:
-	pytest -m "remote and engine"
+	pytest -n auto -m "remote and engine"
 
 engine-test:
-	pytest -m "engine"
+	pytest -n auto -m "engine"
 
 dbt-test:
-	pytest -m "dbt"
+	pytest -n auto -m "dbt"
 
 github-test:
-	pytest -m "github"
+	pytest -n auto -m "github"
 
 jupyter-test:
-	pytest -m "jupyter"
+	pytest -n auto -m "jupyter"
 
 web-test:
-	pytest -m "web"
+	pytest -n auto -m "web"
 
 bigquery-test:
-	pytest -m "bigquery"
+	pytest -n auto -m "bigquery"
 
 databricks-test:
-	pytest -m "databricks"
+	pytest -n auto -m "databricks"
 
 duckdb-test:
-	pytest -m "duckdb"
+	pytest -n auto -m "duckdb"
 
 mssql-test:
-	pytest -m "mssql"
+	pytest -n auto -m "mssql"
 
 mysql-test:
-	pytest -m "mysql"
+	pytest -n auto -m "mysql"
 
 postgres-test:
-	pytest -m "postgres"
+	pytest -n auto -m "postgres"
 
 redshift-test:
-	pytest -m "redshift"
+	pytest -n auto -m "redshift"
 
 snowflake-test:
-	pytest -m "snowflake"
+	pytest -n auto -m "snowflake"
 
 spark-test:
-	pytest -m "spark"
+	pytest -n auto -m "spark"
 
 spark-pyspark-test:
-	pytest -m "spark_pyspark"
+	pytest -n auto -m "spark_pyspark"
 
 trino-test:
-	pytest -m "trino"
+	pytest -n auto -m "trino"
