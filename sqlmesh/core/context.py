@@ -63,7 +63,7 @@ from sqlmesh.core.dialect import (
 from sqlmesh.core.engine_adapter import EngineAdapter
 from sqlmesh.core.environment import Environment, EnvironmentNamingInfo
 from sqlmesh.core.loader import Loader, update_model_schemas
-from sqlmesh.core.macros import ExecutableOrMacro
+from sqlmesh.core.macros import ExecutableOrMacro, macro
 from sqlmesh.core.metric import Metric, rewrite
 from sqlmesh.core.model import Model
 from sqlmesh.core.notification_target import (
@@ -1409,7 +1409,7 @@ class Context(BaseContext):
     def print_info(self) -> None:
         """Prints information about connections, models, macros, etc. to the console."""
         self.console.log_status_update(f"Models: {len(self.models)}")
-        self.console.log_status_update(f"Macros: {len(self._macros)}")
+        self.console.log_status_update(f"Macros: {len(self._macros) - len(macro.get_registry())}")
 
         self._try_connection("data warehouse", self._engine_adapter)
 

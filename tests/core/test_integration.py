@@ -1566,6 +1566,14 @@ def test_environment_suffix_target_table(init_and_plan_context: t.Callable):
 
 def test_environment_catalog_mapping(init_and_plan_context: t.Callable):
     environments_schemas = {"raw", "sushi"}
+    state_tables = {
+        "_versions",
+        "_seeds",
+        "_snapshots",
+        "_environments",
+        "_plan_dags",
+        "_intervals",
+    }
 
     def get_prod_dev_views(metadata: DuckDBMetadata) -> t.Tuple[t.Set[exp.Table], t.Set[exp.Table]]:
         views = metadata.qualified_views
@@ -1577,11 +1585,16 @@ def test_environment_catalog_mapping(init_and_plan_context: t.Callable):
 
     def get_default_catalog_and_non_tables(
         metadata: DuckDBMetadata, default_catalog: t.Optional[str]
-    ) -> t.Tuple[t.Set[exp.Table], t.Set[exp.Table]]:
+    ) -> t.Tuple[t.Set[exp.Table], t.Set[exp.Table], t.Set[exp.Table]]:
         tables = metadata.qualified_tables
-        default_tables = {x for x in tables if x.catalog == default_catalog}
+        user_default_tables = {
+            x for x in tables if x.catalog == default_catalog and x.db != "sqlmesh"
+        }
+        state_default_tables = {
+            x for x in tables if x.catalog == default_catalog and x.db == "sqlmesh"
+        }
         non_default_tables = {x for x in tables if x.catalog != default_catalog}
-        return default_tables, non_default_tables
+        return user_default_tables, state_default_tables, non_default_tables
 
     context, plan = init_and_plan_context(
         "examples/sushi", config="environment_catalog_mapping_config"
@@ -1589,41 +1602,52 @@ def test_environment_catalog_mapping(init_and_plan_context: t.Callable):
     context.apply(plan)
     metadata = DuckDBMetadata.from_context(context)
     prod_views, dev_views = get_prod_dev_views(metadata)
-    default_tables, non_default_tables = get_default_catalog_and_non_tables(
-        metadata, context.default_catalog
-    )
+    (
+        user_default_tables,
+        state_default_tables,
+        non_default_tables,
+    ) = get_default_catalog_and_non_tables(metadata, context.default_catalog)
     assert len(prod_views) == 12
     assert len(dev_views) == 0
-    assert len(default_tables) == 29
-    assert len(non_default_tables) == 0
+    assert len(user_default_tables) == 23
+    assert state_tables.issubset({x.name for x in state_default_tables})
     apply_to_environment(context, "dev")
     prod_views, dev_views = get_prod_dev_views(metadata)
-    default_tables, non_default_tables = get_default_catalog_and_non_tables(
-        metadata, context.default_catalog
-    )
+    (
+        user_default_tables,
+        state_default_tables,
+        non_default_tables,
+    ) = get_default_catalog_and_non_tables(metadata, context.default_catalog)
     assert len(prod_views) == 12
     assert len(dev_views) == 12
-    assert len(default_tables) == 29
+    assert len(user_default_tables) == 23
     assert len(non_default_tables) == 0
+    assert state_tables.issubset({x.name for x in state_default_tables})
     apply_to_environment(context, "prodnot")
     prod_views, dev_views = get_prod_dev_views(metadata)
-    default_tables, non_default_tables = get_default_catalog_and_non_tables(
-        metadata, context.default_catalog
-    )
+    (
+        user_default_tables,
+        state_default_tables,
+        non_default_tables,
+    ) = get_default_catalog_and_non_tables(metadata, context.default_catalog)
     assert len(prod_views) == 12
     assert len(dev_views) == 24
-    assert len(default_tables) == 29
+    assert len(user_default_tables) == 23
     assert len(non_default_tables) == 0
+    assert state_tables.issubset({x.name for x in state_default_tables})
     context.invalidate_environment("dev")
     context._run_janitor()
     prod_views, dev_views = get_prod_dev_views(metadata)
-    default_tables, non_default_tables = get_default_catalog_and_non_tables(
-        metadata, context.default_catalog
-    )
+    (
+        user_default_tables,
+        state_default_tables,
+        non_default_tables,
+    ) = get_default_catalog_and_non_tables(metadata, context.default_catalog)
     assert len(prod_views) == 12
     assert len(dev_views) == 12
-    assert len(default_tables) == 29
+    assert len(user_default_tables) == 23
     assert len(non_default_tables) == 0
+    assert state_tables.issubset({x.name for x in state_default_tables})
 
 
 @pytest.mark.parametrize(
