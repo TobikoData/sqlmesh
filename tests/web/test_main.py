@@ -39,7 +39,7 @@ config = Config(model_defaults=ModelDefaultsConfig(dialect=''))
 
 @pytest.fixture
 def project_context(project_tmp_path: Path) -> Context:
-    context = Context(paths=str(project_tmp_path), console=api_console)
+    context = Context(paths=project_tmp_path, console=api_console)
 
     def get_loaded_context_override() -> Context:
         return context

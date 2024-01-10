@@ -22,7 +22,7 @@ def test_format_files(tmp_path: pathlib.Path):
     )
 
     config = Config()
-    context = Context(paths=str(tmp_path), config=config)
+    context = Context(paths=tmp_path, config=config)
     context.load()
     assert isinstance(context.get_model("this.model"), SqlModel)
     assert isinstance(context.get_model("other.model"), SqlModel)

@@ -1743,7 +1743,7 @@ def test_scd_type_2(tmp_path: pathlib.Path):
         str(tmp_path / "models" / "marketing.sql"),
     )
 
-    context = Context(paths=[str(tmp_path)], config="test_config")
+    context = Context(paths=tmp_path, config="test_config")
     context.engine_adapter.create_schema("sushi")
     replace_source_table(
         context,
