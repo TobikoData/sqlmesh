@@ -181,7 +181,7 @@ class _Model(ModelMeta, frozen=True):
                 elif field_name == "name":
                     expressions.append(
                         exp.Property(
-                            this=field_info.alias or field_name,
+                            this=field_name,
                             value=exp.to_table(field_value, dialect=self.dialect),
                         )
                     )

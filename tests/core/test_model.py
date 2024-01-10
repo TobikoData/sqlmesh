@@ -2522,6 +2522,26 @@ def test_scd_type_2_overrides():
     assert not scd_type_2_model.kind.disable_restatement
 
 
+def test_model_dialect_name():
+    expressions = d.parse(
+        """
+        MODEL (
+            name `project-1`.`db`.`tbl1`,
+            dialect bigquery
+        );
+        SELECT 1;
+        """
+    )
+
+    model = load_sql_based_model(expressions)
+    assert model.fqn == '"project-1"."db"."tbl1"'
+
+    model = create_external_model(
+        "`project-1`.`db`.`tbl1`", columns={"x": "STRING"}, dialect="bigquery"
+    )
+    assert "name `project-1`.`db`.`tbl1`" in model.render_definition()[0].sql(dialect="bigquery")
+
+
 def test_model_allow_partials():
     expressions = d.parse(
         """
