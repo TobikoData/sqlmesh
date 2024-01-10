@@ -390,14 +390,18 @@ def test_comments(make_mocked_engine_adapter: t.Callable, mocker: MockerFixture)
     )
 
     adapter.create_view(
-        "test_table",
+        "test_view",
         parse_one("SELECT a, b FROM source_table"),
         table_description="test description",
     )
 
-    adapter._create_comments(
+    adapter._create_table_comment(
         "test_table",
         "test description",
+    )
+
+    adapter._create_column_comments(
+        "test_table",
         {"a": "a description"},
     )
 
@@ -405,7 +409,7 @@ def test_comments(make_mocked_engine_adapter: t.Callable, mocker: MockerFixture)
     assert sql_calls == [
         """CREATE TABLE IF NOT EXISTS "test_table" ("a" int COMMENT 'a description', "b" int) COMMENT='test description'""",
         """CREATE TABLE IF NOT EXISTS "test_table" ("a" int COMMENT 'a description', "b" int) COMMENT='test description' AS SELECT "a", "b" FROM "source_table\"""",
-        """CREATE OR REPLACE VIEW "test_table" COMMENT='test description' AS SELECT "a", "b" FROM "source_table\"""",
+        """CREATE OR REPLACE VIEW "test_view" COMMENT='test description' AS SELECT "a", "b" FROM "source_table\"""",
         """COMMENT ON TABLE "test_table" IS 'test description'""",
         """COMMENT ON COLUMN "test_table"."a" IS 'a description'""",
     ]

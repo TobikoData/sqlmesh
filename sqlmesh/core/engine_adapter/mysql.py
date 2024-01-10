@@ -12,7 +12,8 @@ from sqlmesh.core.engine_adapter.mixins import (
     PandasNativeFetchDFSupportMixin,
 )
 from sqlmesh.core.engine_adapter.shared import (
-    CommentCreation,
+    CommentCreationTable,
+    CommentCreationView,
     DataObject,
     DataObjectType,
     set_catalog,
@@ -35,8 +36,8 @@ class MySQLEngineAdapter(
     DIALECT = "mysql"
     ESCAPE_JSON = True
     SUPPORTS_INDEXES = True
-    SUPPORTS_VIEW_COMMENT = False
-    COMMENT_CREATION = CommentCreation.IN_SCHEMA_DEF_NO_CTAS
+    COMMENT_CREATION_TABLE = CommentCreationTable.IN_SCHEMA_DEF_NO_CTAS
+    COMMENT_CREATION_VIEW = CommentCreationView.UNSUPPORTED
 
     def get_current_catalog(self) -> t.Optional[str]:
         """Returns the catalog name of the current connection."""
@@ -93,51 +94,37 @@ class MySQLEngineAdapter(
 
         return f"ALTER TABLE {table_sql} COMMENT = '{table_comment}'"
 
-    def _create_comments(
+    def _create_column_comments(
         self,
         table_name: TableName,
-        table_comment: t.Optional[str] = None,
-        column_comments: t.Optional[t.Dict[str, str]] = None,
+        column_comments: t.Dict[str, str],
         table_kind: str = "TABLE",
     ) -> None:
-        """
-        Executes commands to create table and column comments.
-        """
         table = exp.to_table(table_name)
         table_sql = table.sql(dialect=self.dialect, identify=True)
 
-        if table_comment:
-            try:
-                self.execute(self._build_create_comment_table_exp(table, table_comment, table_kind))
-            except Exception:
-                logger.warning(
-                    f"Table comment for table '{table.alias_or_name}' not registered - this may be due to limited permissions.",
-                    exc_info=True,
-                )
+        try:
+            # MySQL ALTER TABLE MODIFY completely replaces the column (overwriting options and constraints).
+            # self.columns() only returns the column types so doesn't allow us to fully/correctly replace a column definition.
+            # To get the full column definition we retrieve and parse the table's CREATE TABLE statement.
+            create_table_exp = parse_one(
+                self.fetchone(f"SHOW CREATE TABLE {table_sql}")[1], dialect=self.dialect
+            )
+            col_def_exps = {
+                col_def.name: col_def.copy()
+                for col_def in create_table_exp.find(exp.Schema).find_all(exp.ColumnDef)  # type: ignore
+            }
 
-        if column_comments:
-            try:
-                # MySQL ALTER TABLE MODIFY completely replaces the column (overwriting options and constraints).
-                # self.columns() only returns the column types so doesn't allow us to fully/correctly replace a column definition.
-                # To get the full column definition we retrieve and parse the table's CREATE TABLE statement.
-                create_table_exp = parse_one(
-                    self.fetchone(f"SHOW CREATE TABLE {table_sql}")[1], dialect=self.dialect
+            for col in column_comments:
+                col_def = col_def_exps.get(col)
+                col_def.args["constraints"].extend(  # type: ignore
+                    self._build_col_comment_exp(col_def.alias_or_name, column_comments)  # type: ignore
                 )
-                col_def_exps = {
-                    col_def.name: col_def.copy()
-                    for col_def in create_table_exp.find(exp.Schema).find_all(exp.ColumnDef)  # type: ignore
-                }
-
-                for col in column_comments:
-                    col_def = col_def_exps.get(col)
-                    col_def.args["constraints"].extend(  # type: ignore
-                        self._build_col_comment_exp(col_def.alias_or_name, column_comments)  # type: ignore
-                    )
-                    self.execute(
-                        f"ALTER TABLE {table_sql} MODIFY {col_def.sql(dialect=self.dialect, identify=True)}",  # type: ignore
-                    )
-            except Exception:
-                logger.warning(
-                    f"Column comments for table '{table.alias_or_name}' not registered - this may be due to limited permissions.",
-                    exc_info=True,
+                self.execute(
+                    f"ALTER TABLE {table_sql} MODIFY {col_def.sql(dialect=self.dialect, identify=True)}",  # type: ignore
                 )
+        except Exception:
+            logger.warning(
+                f"Column comments for table '{table.alias_or_name}' not registered - this may be due to limited permissions.",
+                exc_info=True,
+            )

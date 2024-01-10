@@ -691,9 +691,13 @@ def test_create_table_iceberg(make_mocked_engine_adapter: t.Callable):
 def test_comments(make_mocked_engine_adapter: t.Callable, mocker: MockerFixture):
     adapter = make_mocked_engine_adapter(SparkEngineAdapter)
 
-    adapter._create_comments(
+    adapter._create_table_comment(
         "test_table",
         "test description",
+    )
+
+    adapter._create_column_comments(
+        "test_table",
         {"a": "a description"},
     )
 

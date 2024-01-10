@@ -14,6 +14,7 @@ from sqlmesh.core.engine_adapter.mixins import (
     NonTransactionalTruncateMixin,
 )
 from sqlmesh.core.engine_adapter.shared import (
+    CommentCreationView,
     DataObject,
     DataObjectType,
     SourceQuery,
@@ -37,6 +38,8 @@ class RedshiftEngineAdapter(
     ESCAPE_JSON = True
     COLUMNS_TABLE = "svv_columns"  # Includes late-binding views
     CURRENT_CATALOG_EXPRESSION = exp.func("current_database")
+    # Redshift doesn't support comments for VIEWs WITH NO SCHEMA BINDING (which we always use)
+    COMMENT_CREATION_VIEW = CommentCreationView.UNSUPPORTED
 
     @property
     def cursor(self) -> t.Any:
@@ -163,6 +166,7 @@ class RedshiftEngineAdapter(
         replace: bool = True,
         materialized: bool = False,
         table_description: t.Optional[str] = None,
+        column_descriptions: t.Optional[t.Dict[str, str]] = None,
         **create_kwargs: t.Any,
     ) -> None:
         """
@@ -177,6 +181,7 @@ class RedshiftEngineAdapter(
             replace,
             materialized,
             table_description=table_description,
+            column_descriptions=column_descriptions,
             no_schema_binding=True,
             **create_kwargs,
         )

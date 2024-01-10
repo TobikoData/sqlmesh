@@ -15,7 +15,8 @@ from sqlmesh.core.engine_adapter.mixins import (
 )
 from sqlmesh.core.engine_adapter.shared import (
     CatalogSupport,
-    CommentCreation,
+    CommentCreationTable,
+    CommentCreationView,
     DataObject,
     DataObjectType,
     InsertOverwriteStrategy,
@@ -47,7 +48,8 @@ class TrinoEngineAdapter(
     SUPPORTS_TRANSACTIONS = False
     SUPPORTS_ROW_LEVEL_OP = False
     CURRENT_CATALOG_EXPRESSION = exp.column("current_catalog")
-    COMMENT_CREATION = CommentCreation.IN_SCHEMA_DEF_NO_CTAS
+    COMMENT_CREATION_TABLE = CommentCreationTable.IN_SCHEMA_DEF_NO_CTAS
+    COMMENT_CREATION_VIEW = CommentCreationView.COMMENT_COMMAND_ONLY
 
     @property
     def connection(self) -> TrinoConnection:

@@ -10,7 +10,8 @@ from sqlmesh.core.engine_adapter.mixins import (
 )
 from sqlmesh.core.engine_adapter.shared import (
     CatalogSupport,
-    CommentCreation,
+    CommentCreationTable,
+    CommentCreationView,
     DataObject,
     DataObjectType,
     SourceQuery,
@@ -27,7 +28,8 @@ class DuckDBEngineAdapter(LogicalMergeMixin, GetCurrentCatalogFromFunctionMixin)
     DIALECT = "duckdb"
     SUPPORTS_TRANSACTIONS = False
     CATALOG_SUPPORT = CatalogSupport.FULL_SUPPORT
-    COMMENT_CREATION = CommentCreation.UNSUPPORTED
+    COMMENT_CREATION_TABLE = CommentCreationTable.UNSUPPORTED
+    COMMENT_CREATION_VIEW = CommentCreationView.UNSUPPORTED
 
     def set_current_catalog(self, catalog: str) -> None:
         """Sets the catalog name of the current connection."""

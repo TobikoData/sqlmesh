@@ -534,12 +534,12 @@ class BigQueryEngineAdapter(InsertOverwriteWithMergeMixin):
         return f"ALTER {table_kind} {table_sql} SET OPTIONS(description = '{table_comment}')"
 
     def _build_create_comment_column_exp(
-        self, table: exp.Table, column_name: str, column_comment: str
+        self, table: exp.Table, column_name: str, column_comment: str, table_kind: str = "TABLE"
     ) -> exp.Comment | str:
         table_sql = table.sql(dialect=self.dialect, identify=True)
         column_sql = exp.column(column_name).sql(dialect=self.dialect, identify=True)
 
-        return f"ALTER TABLE {table_sql} ALTER COLUMN {column_sql} SET OPTIONS(description = '{column_comment}')"
+        return f"ALTER {table_kind} {table_sql} ALTER COLUMN {column_sql} SET OPTIONS(description = '{column_comment}')"
 
     def create_state_table(
         self,

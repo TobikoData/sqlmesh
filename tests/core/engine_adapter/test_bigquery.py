@@ -568,9 +568,13 @@ def test_comments(make_mocked_engine_adapter: t.Callable, mocker: MockerFixture)
         table_description="test description",
     )
 
-    adapter._create_comments(
+    adapter._create_table_comment(
         "test_table",
         "test description",
+    )
+
+    adapter._create_column_comments(
+        "test_table",
         {"a": "a description"},
     )
 

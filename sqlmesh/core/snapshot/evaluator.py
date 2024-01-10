@@ -982,6 +982,7 @@ class PromotableStrategy(EvaluationStrategy):
             target_name,
             exp.select("*").from_(table_name, dialect=self.adapter.dialect),
             table_description=snapshot.model.description,
+            column_descriptions=snapshot.model.column_descriptions,
         )
 
     def demote(
@@ -1274,6 +1275,7 @@ class ViewStrategy(PromotableStrategy):
             materialized=self._is_materialized_view(model),
             table_properties=model.table_properties,
             table_description=model.description,
+            column_descriptions=model.column_descriptions,
         )
 
     def append(
@@ -1304,6 +1306,7 @@ class ViewStrategy(PromotableStrategy):
             materialized=self._is_materialized_view(model),
             table_properties=model.table_properties,
             table_description=model.description,
+            column_descriptions=model.column_descriptions,
         )
 
     def migrate(
@@ -1324,6 +1327,7 @@ class ViewStrategy(PromotableStrategy):
             materialized=self._is_materialized_view(model),
             table_properties=model.table_properties,
             table_description=model.description,
+            column_descriptions=model.column_descriptions,
         )
 
     def delete(self, name: str) -> None:

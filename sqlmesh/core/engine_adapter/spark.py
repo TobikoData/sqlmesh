@@ -16,7 +16,8 @@ from sqlmesh.core.engine_adapter.mixins import (
 )
 from sqlmesh.core.engine_adapter.shared import (
     CatalogSupport,
-    CommentCreation,
+    CommentCreationTable,
+    CommentCreationView,
     DataObject,
     DataObjectType,
     InsertOverwriteStrategy,
@@ -56,7 +57,8 @@ class SparkEngineAdapter(GetCurrentCatalogFromFunctionMixin, HiveMetastoreTableP
     INSERT_OVERWRITE_STRATEGY = InsertOverwriteStrategy.INSERT_OVERWRITE
     CATALOG_SUPPORT = CatalogSupport.FULL_SUPPORT
     SUPPORTS_ROW_LEVEL_OP = False
-    COMMENT_CREATION = CommentCreation.IN_SCHEMA_DEF_NO_CTAS
+    COMMENT_CREATION_TABLE = CommentCreationTable.IN_SCHEMA_DEF_NO_CTAS
+    COMMENT_CREATION_VIEW = CommentCreationView.IN_SCHEMA_DEF_NO_COMMANDS
 
     @property
     def spark(self) -> PySparkSession:
@@ -417,6 +419,7 @@ class SparkEngineAdapter(GetCurrentCatalogFromFunctionMixin, HiveMetastoreTableP
         replace: bool = True,
         materialized: bool = False,
         table_description: t.Optional[str] = None,
+        column_descriptions: t.Optional[t.Dict[str, str]] = None,
         **create_kwargs: t.Any,
     ) -> None:
         """Create a view with a query or dataframe.
@@ -431,6 +434,7 @@ class SparkEngineAdapter(GetCurrentCatalogFromFunctionMixin, HiveMetastoreTableP
             replace: Whether or not to replace an existing view - defaults to True.
             materialized: Whether or not the view should be materialized - defaults to False.
             table_description: Optional table description from MODEL DDL.
+            column_descriptions: Optional column descriptions from model query.
             create_kwargs: Additional kwargs to pass into the Create expression
         """
         pyspark_df = self.try_get_pyspark_df(query_or_df)
@@ -443,6 +447,7 @@ class SparkEngineAdapter(GetCurrentCatalogFromFunctionMixin, HiveMetastoreTableP
             replace,
             materialized,
             table_description,
+            column_descriptions,
             **create_kwargs,
         )
 
@@ -534,7 +539,7 @@ class SparkEngineAdapter(GetCurrentCatalogFromFunctionMixin, HiveMetastoreTableP
         return table
 
     def _build_create_comment_column_exp(
-        self, table: exp.Table, column_name: str, column_comment: str
+        self, table: exp.Table, column_name: str, column_comment: str, table_kind: str = "TABLE"
     ) -> exp.Comment | str:
         table_sql = table.sql(dialect=self.dialect, identify=True)
         column_sql = exp.column(column_name).sql(dialect=self.dialect, identify=True)

@@ -13,9 +13,13 @@ def test_comments(make_mocked_engine_adapter: t.Callable, mocker: MockerFixture)
     fetchone_mock = mocker.patch("sqlmesh.core.engine_adapter.mysql.MySQLEngineAdapter.fetchone")
     fetchone_mock.return_value = ["test_table", "CREATE TABLE test_table (a INT)"]
 
-    adapter._create_comments(
+    adapter._create_table_comment(
         "test_table",
         "test description",
+    )
+
+    adapter._create_column_comments(
+        "test_table",
         {"a": "a description"},
     )
 
