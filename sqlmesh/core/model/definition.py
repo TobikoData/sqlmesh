@@ -178,6 +178,13 @@ class _Model(ModelMeta, frozen=True):
                             value=field_value.to_expression(dialect=self.dialect),
                         )
                     )
+                elif field_name == "name":
+                    expressions.append(
+                        exp.Property(
+                            this=field_name,
+                            value=exp.to_table(field_value, dialect=self.dialect),
+                        )
+                    )
                 elif field_name not in ("column_descriptions_", "default_catalog"):
                     expressions.append(
                         exp.Property(
@@ -1928,7 +1935,6 @@ def _refs_to_sql(values: t.Any) -> exp.Expression:
 
 
 META_FIELD_CONVERTER: t.Dict[str, t.Callable] = {
-    "name": lambda value: exp.to_table(value),
     "start": lambda value: exp.Literal.string(value),
     "cron": lambda value: exp.Literal.string(value),
     "batch_size": lambda value: exp.Literal.number(value),
