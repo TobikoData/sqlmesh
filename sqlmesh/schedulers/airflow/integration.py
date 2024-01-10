@@ -125,8 +125,6 @@ class SQLMeshAirflow:
         with util.scoped_state_sync() as state_sync:
             stored_snapshots = state_sync.get_snapshots(None)
             plan_dag_specs = PlanDagState.from_state_sync(state_sync).get_dag_specs()
-            # TODO: Remove this once all DAG specs are moved into the internal state (after about 1 week)
-            plan_dag_specs += _get_plan_dag_specs_from_variables()
 
         dag_generator = self._create_dag_generator(stored_snapshots)
 
@@ -227,11 +225,6 @@ def _janitor_task(
         )
         logger.info("Deleting expired Plan Application DAGs: %s", plan_application_dag_ids)
         PlanDagState.from_state_sync(state_sync).delete_dag_specs(plan_application_dag_ids)
-        # TODO: Remove this once all DAG specs are moved into the internal state (after about 1 week)
-        util.delete_variables(
-            {common.plan_dag_spec_key_from_dag_id(dag_id) for dag_id in plan_application_dag_ids},
-            session=session,
-        )
         util.delete_dags(plan_application_dag_ids, session=session)
 
         state_sync.compact_intervals()
@@ -245,15 +238,3 @@ def _delete_orphaned_snapshot_dags(
     orphaned_snapshot_dag_ids = all_snapshot_dag_ids - active_snapshot_dag_ids
     logger.info("Deleting orphaned Snapshot DAGs: %s", orphaned_snapshot_dag_ids)
     util.delete_dags(orphaned_snapshot_dag_ids, session=session)
-
-
-@provide_session
-def _get_plan_dag_specs_from_variables(
-    session: Session = util.PROVIDED_SESSION,
-) -> t.List[common.PlanDagSpec]:
-    records = (
-        session.query(Variable)
-        .filter(Variable.key.like(f"{common.PLAN_DAG_SPEC_KEY_PREFIX}%"))
-        .all()
-    )
-    return [common.PlanDagSpec.parse_raw(r.val) for r in records]
