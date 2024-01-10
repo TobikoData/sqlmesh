@@ -450,7 +450,7 @@ class BigQueryEngineAdapter(InsertOverwriteWithMergeMixin):
 
     def _build_description_property_exp(self, description: str) -> exp.Property:
         return exp.Property(
-            this=exp.Identifier(this="description", quoted=True),
+            this=exp.to_identifier("description", quoted=True),
             value=exp.Literal.string(description),
         )
 
