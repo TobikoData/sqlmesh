@@ -261,7 +261,7 @@ def migrate(state_sync, default_catalog: t.Optional[str], **kwargs):  # type: ig
         # expression a null timestamp value in pandas that works across all engines
         if default_catalog:
             engine_adapter.execute(
-                exp.update(environments_table, {"finalized_ts": None}),
+                exp.update(environments_table, {"finalized_ts": None}, where="1=1"),
                 quote_identifiers=True,
             )
 
