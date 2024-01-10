@@ -16,9 +16,13 @@ Run linters and formatters:
 ```bash
 make style
 ```
-Run tests:
+Run faster tests for quicker local feedback:
 ```bash
-make test
+make fast-test
+```
+Run more comprehensive tests that run on each commit:
+```bash
+make slow-test
 ```
 Run docs server:
 ```bash
