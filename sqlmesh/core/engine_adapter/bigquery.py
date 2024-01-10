@@ -424,6 +424,30 @@ class BigQueryEngineAdapter(InsertOverwriteWithMergeMixin):
         self.execute(query, quote_identifiers=quote_identifiers)
         return self._query_job.to_dataframe()
 
+    def _create_column_comments(
+        self,
+        table_name: TableName,
+        column_comments: t.Dict[str, str],
+        table_kind: str = "TABLE",
+    ) -> None:
+        table = self._get_table(table_name)
+
+        # convert Table object to dict
+        table_def = table.to_api_repr()
+
+        # set the column descriptions
+        for i in range(len(table_def["schema"]["fields"])):
+            comment = column_comments.get(table_def["schema"]["fields"][i]["name"], None)
+            if comment:
+                table_def["schema"]["fields"][i]["description"] = comment
+
+        # convert dict back to a Table object
+        table = table.from_api_repr(table_def)
+
+        # update table schema
+        logger.info(f"Registering column comments for table {table_name}")
+        self._db_call(self.client.update_table, table=table, fields=["schema"])
+
     def _build_description_property_exp(self, description: str) -> exp.Property:
         return exp.Property(
             this=exp.Identifier(this="description", quoted=True),
