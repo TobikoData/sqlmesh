@@ -31,6 +31,7 @@ import pandas as pd
 from sqlglot import exp, select
 from sqlglot.executor import execute
 
+from sqlmesh.core import constants as c
 from sqlmesh.core.audit import Audit, AuditResult
 from sqlmesh.core.dialect import schema_
 from sqlmesh.core.engine_adapter import EngineAdapter
@@ -977,12 +978,13 @@ class PromotableStrategy(EvaluationStrategy):
         snapshot: Snapshot,
     ) -> None:
         target_name = view_name.for_environment(environment_naming_info)
+        is_prod = environment_naming_info.name.lower() == c.PROD
         logger.info("Updating view '%s' to point at table '%s'", target_name, table_name)
         self.adapter.create_view(
             target_name,
             exp.select("*").from_(table_name, dialect=self.adapter.dialect),
-            table_description=snapshot.model.description,
-            column_descriptions=snapshot.model.column_descriptions,
+            table_description=snapshot.model.description if is_prod else None,
+            column_descriptions=snapshot.model.column_descriptions if is_prod else None,
         )
 
     def demote(
@@ -1305,8 +1307,8 @@ class ViewStrategy(PromotableStrategy):
             model.render_query_or_raise(**render_kwargs),
             materialized=self._is_materialized_view(model),
             table_properties=model.table_properties,
-            table_description=model.description,
-            column_descriptions=model.column_descriptions,
+            table_description=model.description if is_table_deployable else None,
+            column_descriptions=model.column_descriptions if is_table_deployable else None,
         )
 
     def migrate(
