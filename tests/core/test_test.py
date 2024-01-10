@@ -496,3 +496,29 @@ def test_test_generation(tmp_path: Path) -> None:
     test = load_yaml(context.path / c.TESTS / "foo/bar.yaml")
     assert len(test) == 1
     assert "new_name" in test
+
+
+def test_source_func() -> None:
+    result = _create_test(
+        body=load_yaml(
+            """
+test_foo:
+    model: xyz
+    outputs:
+        query:
+            - month: 2023-01-01
+            - month: 2023-02-01
+            - month: 2023-03-01
+"""
+        ),
+        test_name="test_foo",
+        model=_create_model(
+            """
+            SELECT range::DATE AS month
+            FROM RANGE(DATE '2023-01-01', DATE '2023-04-01', INTERVAL 1 MONTH) AS r
+            """
+        ),
+        context=Context(config=Config(model_defaults=ModelDefaultsConfig(dialect="duckdb"))),
+    ).run()
+
+    assert result and result.wasSuccessful()

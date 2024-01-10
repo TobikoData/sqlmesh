@@ -891,7 +891,7 @@ def find_tables(
             normalize_model_name(table, default_catalog=default_catalog, dialect=dialect)
             for scope in traverse_scope(expression)
             for table in scope.tables
-            if table.name not in scope.cte_sources
+            if table.name and table.name not in scope.cte_sources
         }
     return expression.meta[TABLES_META]
 
