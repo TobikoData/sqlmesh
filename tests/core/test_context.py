@@ -285,7 +285,7 @@ def test():
     config = Config(
         ignore_patterns=["models/ignore/*.sql", "macro_ignore.py", ".ipynb_checkpoints/*"]
     )
-    context = Context(paths=str(tmp_path), config=config)
+    context = Context(paths=tmp_path, config=config)
 
     assert ['"memory"."db"."actual_test"'] == list(context.models)
     assert "test" in context._macros
