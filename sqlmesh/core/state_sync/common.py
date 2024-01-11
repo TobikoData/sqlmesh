@@ -46,7 +46,7 @@ def cleanup_expired_views(adapter: EngineAdapter, environments: t.List[Environme
         )
         for environment in expired_schema_environments
         for snapshot in environment.snapshots
-        if snapshot.is_model
+        if snapshot.is_model and not snapshot.is_symbolic
     }:
         schema = schema_(expired_schema, expired_catalog)
         try:
@@ -61,7 +61,7 @@ def cleanup_expired_views(adapter: EngineAdapter, environments: t.List[Environme
         snapshot.qualified_view_name.for_environment(environment.naming_info)
         for environment in expired_table_environments
         for snapshot in environment.snapshots
-        if snapshot.is_model
+        if snapshot.is_model and not snapshot.is_symbolic
     }:
         try:
             adapter.drop_view(expired_view, ignore_if_not_exists=True)
