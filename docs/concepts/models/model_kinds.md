@@ -581,6 +581,17 @@ GROUP BY
     id
 ```
 
+### All Configuration Options
+
+| Name                         | Description                                                                                                                                                                        | Type                      |
+|------------------------------|------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------|---------------------------|
+| unique_key                   | Unique key used for identifying rows between source and target                                                                                                                     | List of strings or string |
+| valid_from_name              | The name of the `valid_from` column to create in the target table. Default: `valid_from`                                                                                           | string                    |
+| valid_to_name                | The name of the `valid_to` column to create in the target table. Default: `valid_to`                                                                                               | string                    |
+| updated_at_name              | The name of the column containing a timestamp to check for new or updated records. Default: `updated_at`                                                                           | string                    |
+| updated_at_as_valid_from | By default, for new rows `valid_from` is set to `1970-01-01 00:00:00`. This changes the behavior to set it to the valid of `updated_at` when the row is inserted. Default: `false` | bool                      |
+
+
 ### Limitations
 * Currently SCD Type 2 requires an update column to be defined on the table you are sourcing your data from. Soon we will also be supporting checking column values in cases where an update column is not available.
 

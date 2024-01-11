@@ -44,6 +44,14 @@ class Materialization(str, Enum):
     VIEW = "view"
     INCREMENTAL = "incremental"
     EPHEMERAL = "ephemeral"
+    SNAPSHOT = "snapshot"
+
+
+class SnapshotStrategy(str, Enum):
+    """DBT snapshot strategies"""
+
+    TIMESTAMP = "timestamp"
+    CHECK = "check"
 
 
 class Hook(DbtConfig):

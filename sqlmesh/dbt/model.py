@@ -16,10 +16,11 @@ from sqlmesh.core.model import (
     IncrementalUnmanagedKind,
     Model,
     ModelKind,
+    SCDType2Kind,
     ViewKind,
     create_sql_model,
 )
-from sqlmesh.dbt.basemodel import BaseModelConfig, Materialization
+from sqlmesh.dbt.basemodel import BaseModelConfig, Materialization, SnapshotStrategy
 from sqlmesh.dbt.common import SqlStr, extract_jinja_config, sql_str_validator
 from sqlmesh.utils.errors import ConfigError
 from sqlmesh.utils.pydantic import field_validator
@@ -83,6 +84,12 @@ class ModelConfig(BaseModelConfig):
     unique_key: t.Optional[t.List[str]] = None
     partition_by: t.Optional[t.Union[t.List[str], t.Dict[str, t.Any]]] = None
 
+    # Snapshot (SCD Type 2) Fields
+    updated_at: t.Optional[str] = None
+    strategy: t.Optional[str] = None
+    invalidate_hard_deletes: bool = True
+    target_schema: t.Optional[str] = None
+
     # redshift
     bind: t.Optional[bool] = None
 
@@ -143,6 +150,14 @@ class ModelConfig(BaseModelConfig):
     @property
     def model_materialization(self) -> Materialization:
         return Materialization(self.materialized.lower())
+
+    @property
+    def snapshot_strategy(self) -> t.Optional[SnapshotStrategy]:
+        return SnapshotStrategy(self.strategy.lower()) if self.strategy else None
+
+    @property
+    def table_schema(self) -> str:
+        return self.target_schema or super().table_schema
 
     def model_kind(self, context: DbtContext) -> ModelKind:
         """
@@ -210,6 +225,14 @@ class ModelConfig(BaseModelConfig):
             )
         if materialization == Materialization.EPHEMERAL:
             return EmbeddedKind()
+        if materialization == Materialization.SNAPSHOT:
+            return SCDType2Kind(
+                unique_key=self.unique_key,
+                valid_from_name="dbt_valid_from",
+                valid_to_name="dbt_valid_to",
+                updated_at_name=self.updated_at,
+                updated_at_as_valid_from=True,
+            )
         raise ConfigError(f"{materialization.value} materialization not supported.")
 
     @property
