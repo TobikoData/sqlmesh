@@ -253,7 +253,8 @@ class TestContext:
             if self.dialect == "bigquery":
                 comment = result[0][1].replace('"', "").replace("\\n", "\n")
             elif self.dialect in ["spark", "databricks"]:
-                comment = [x for x in result if x[0] == "Comment"][0][1]
+                comment = [x for x in result if x[0] == "Comment"]
+                comment = comment[0][1] if comment else None
             else:
                 comment = result[0][1]
 
@@ -1324,26 +1325,23 @@ def test_sushi(ctx: TestContext):
             schema_name: str,
             expected_comments_dict: t.Dict[str, t.Any] = comments,
             is_physical_layer: bool = True,
-            check_no_col_comments: bool = False,
             prod_schema_name: str = "sushi",
         ) -> None:
-            physical_layer_objects = context.engine_adapter._get_data_objects(schema_name)
-            physical_layer_models = {
+            layer_objects = context.engine_adapter._get_data_objects(schema_name)
+            layer_models = {
                 x.name.split("__")[1]
                 if is_physical_layer
                 else x.name: {
                     "table_name": x.name,
                     "is_view": x.type == DataObjectType.VIEW,
                 }
-                for x in physical_layer_objects
+                for x in layer_objects
                 if not x.name.endswith("__temp")
             }
 
             for model_name, comment in comments.items():
-                physical_table_name = physical_layer_models[model_name]["table_name"]
-                table_kind = (
-                    "VIEW" if physical_layer_models[model_name]["is_view"] else "BASE TABLE"
-                )
+                layer_table_name = layer_models[model_name]["table_name"]
+                table_kind = "VIEW" if layer_models[model_name]["is_view"] else "BASE TABLE"
 
                 # is this model in a physical layer or PROD environment?
                 is_physical_or_prod = is_physical_layer or (
@@ -1351,7 +1349,7 @@ def test_sushi(ctx: TestContext):
                 )
                 # is this model a VIEW and the engine doesn't support VIEW comments?
                 is_view_and_comments_unsupported = (
-                    physical_layer_models[model_name]["is_view"]
+                    layer_models[model_name]["is_view"]
                     and ctx.engine_adapter.COMMENT_CREATION_VIEW.is_unsupported
                 )
                 if is_physical_or_prod and not is_view_and_comments_unsupported:
@@ -1359,7 +1357,7 @@ def test_sushi(ctx: TestContext):
                     if expected_tbl_comment:
                         actual_tbl_comment = ctx.get_table_comment(
                             schema_name,
-                            physical_table_name,
+                            layer_table_name,
                             table_kind=table_kind,
                             snowflake_capitalize_ids=False,
                         )
@@ -1385,30 +1383,87 @@ def test_sushi(ctx: TestContext):
                         and not ctx.dialect == "trino"
                         and not (
                             ctx.test_type == "query"
-                            and physical_layer_models[model_name]["is_view"]
+                            and layer_models[model_name]["is_view"]
                             and not ctx.engine_adapter.COMMENT_CREATION_VIEW.supports_column_comment_commands
                         )
                     ):
                         actual_col_comments = ctx.get_column_comments(
                             schema_name,
-                            physical_table_name,
+                            layer_table_name,
                             table_kind=table_kind,
                             snowflake_capitalize_ids=False,
                         )
-                        if check_no_col_comments:
-                            assert actual_col_comments == {}
-                        else:
-                            for column_name, expected_col_comment in expected_col_comments.items():
-                                expected_col_comment = expected_col_comments.get(column_name, None)
-                                actual_col_comment = actual_col_comments.get(column_name, None)
-                                assert expected_col_comment == actual_col_comment
+                        for column_name, expected_col_comment in expected_col_comments.items():
+                            expected_col_comment = expected_col_comments.get(column_name, None)
+                            actual_col_comment = actual_col_comments.get(column_name, None)
+                            assert expected_col_comment == actual_col_comment
+
+            return None
+
+        def validate_no_comments(
+            schema_name: str,
+            expected_comments_dict: t.Dict[str, t.Any] = comments,
+            is_physical_layer: bool = True,
+            table_name_suffix: str = "",
+            check_temp_tables: bool = False,
+            prod_schema_name: str = "sushi",
+        ) -> None:
+            layer_objects = context.engine_adapter._get_data_objects(schema_name)
+            layer_models = {
+                x.name.split("__")[1]
+                if is_physical_layer
+                else x.name: {
+                    "table_name": x.name,
+                    "is_view": x.type == DataObjectType.VIEW,
+                }
+                for x in layer_objects
+                if x.name.endswith(table_name_suffix)
+            }
+            if not check_temp_tables:
+                layer_models = {k: v for k, v in layer_models.items() if not k.endswith("__temp")}
+
+            for model_name, comment in comments.items():
+                layer_table_name = layer_models[model_name]["table_name"]
+                table_kind = "VIEW" if layer_models[model_name]["is_view"] else "BASE TABLE"
+
+                actual_tbl_comment = ctx.get_table_comment(
+                    schema_name,
+                    layer_table_name,
+                    table_kind=table_kind,
+                    snowflake_capitalize_ids=False,
+                )
+                # MySQL doesn't support view comments and always returns "VIEW" as the table comment
+                if ctx.dialect == "mysql" and layer_models[model_name]["is_view"]:
+                    assert actual_tbl_comment == "VIEW"
+                else:
+                    assert actual_tbl_comment is None or actual_tbl_comment == ""
+
+                # MySQL and Spark pass through the column comments from the underlying table to the view
+                # so always have view comments present
+                if not (
+                    ctx.dialect in ("mysql", "spark", "databricks")
+                    and layer_models[model_name]["is_view"]
+                ):
+                    expected_col_comments = comments.get(model_name).get("column", None)
+                    if expected_col_comments:
+                        actual_col_comments = ctx.get_column_comments(
+                            schema_name,
+                            layer_table_name,
+                            table_kind=table_kind,
+                            snowflake_capitalize_ids=False,
+                        )
+                        for column_name in expected_col_comments:
+                            actual_col_comment = actual_col_comments.get(column_name, None)
+                            assert actual_col_comment is None or actual_col_comment == ""
 
             return None
 
         # confirm physical layer comments are registered
         validate_comments("sqlmesh__sushi")
-        # confirm view layer comments are not registered
-        validate_comments("sushi__test_prod", is_physical_layer=False, check_no_col_comments=True)
+        # confirm physical temp table comments are not registered
+        validate_no_comments("sqlmesh__sushi", table_name_suffix="__temp", check_temp_tables=True)
+        # confirm view layer comments are not registered in non-PROD environment
+        validate_no_comments("sushi__test_prod", is_physical_layer=False)
 
     # Ensure that the plan has been applied successfully.
     no_change_plan = context.plan(
@@ -1434,9 +1489,9 @@ def test_sushi(ctx: TestContext):
     )
 
     # confirm view layer comments are registered in PROD
-    prod_plan = context.plan(skip_tests=True, no_prompts=True, auto_apply=True)
-
     if ctx.engine_adapter.COMMENT_CREATION_VIEW.is_supported:
+        prod_plan = context.plan(skip_tests=True, no_prompts=True, auto_apply=True)
+
         validate_comments("sushi", is_physical_layer=False)
 
 
