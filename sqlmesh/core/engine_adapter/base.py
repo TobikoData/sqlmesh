@@ -104,6 +104,7 @@ class EngineAdapter:
         cursor_init: t.Optional[t.Callable[[t.Any], None]] = None,
         default_catalog: t.Optional[str] = None,
         execute_log_level: int = logging.DEBUG,
+        register_comments: t.Optional[bool] = None,
         **kwargs: t.Any,
     ):
         self.dialect = dialect.lower() or self.DIALECT
@@ -114,6 +115,7 @@ class EngineAdapter:
         self._default_catalog = default_catalog
         self._execute_log_level = execute_log_level
         self._extra_config = kwargs
+        self.register_comments = register_comments
 
     def with_log_level(self, level: int) -> EngineAdapter:
         adapter = self.__class__(
@@ -122,6 +124,7 @@ class EngineAdapter:
             sql_gen_kwargs=self.sql_gen_kwargs,
             default_catalog=self._default_catalog,
             execute_log_level=level,
+            register_comments=self.register_comments,
             **self._extra_config,
         )
 
@@ -464,9 +467,17 @@ class EngineAdapter:
         )
 
         # Register comments with commands if the engine doesn't support comments in the schema or CREATE
-        if table_description and self.COMMENT_CREATION_TABLE.is_comment_command_only:
+        if (
+            table_description
+            and self.COMMENT_CREATION_TABLE.is_comment_command_only
+            and self.register_comments
+        ):
             self._create_table_comment(table_name, table_description)
-        if column_descriptions and self.COMMENT_CREATION_TABLE.is_comment_command_only:
+        if (
+            column_descriptions
+            and self.COMMENT_CREATION_TABLE.is_comment_command_only
+            and self.register_comments
+        ):
             self._create_column_comments(table_name, column_descriptions)
 
     def _build_schema_exp(
@@ -481,7 +492,7 @@ class EngineAdapter:
         Build a schema expression for a table, columns, column comments, and additional schema properties.
         """
         expressions = expressions or []
-        include_comments = (
+        engine_supports_schema_comments = (
             self.COMMENT_CREATION_VIEW.supports_schema_def
             if is_view
             else self.COMMENT_CREATION_TABLE.supports_schema_def
@@ -491,9 +502,11 @@ class EngineAdapter:
             expressions=[
                 exp.ColumnDef(
                     this=exp.to_identifier(column),
-                    kind=None if is_view else kind,
+                    kind=None if is_view else kind,  # don't include column data type for views
                     constraints=self._build_col_comment_exp(column, column_descriptions)
-                    if column_descriptions and include_comments
+                    if column_descriptions
+                    and engine_supports_schema_comments
+                    and self.register_comments
                     else None,
                 )
                 for column, kind in columns_to_types.items()
@@ -544,6 +557,7 @@ class EngineAdapter:
             column_descriptions
             and columns_to_types
             and self.COMMENT_CREATION_TABLE.is_in_schema_def_ctas
+            and self.register_comments
         ):
             schema = self._build_schema_exp(table, columns_to_types, column_descriptions)
 
@@ -567,9 +581,18 @@ class EngineAdapter:
 
         # Register comments with commands if the engine supports comments and we weren't able to
         # register them with the CTAS call's schema expression.
-        if table_description and self.COMMENT_CREATION_TABLE.is_comment_command_only:
+        if (
+            table_description
+            and self.COMMENT_CREATION_TABLE.is_comment_command_only
+            and self.register_comments
+        ):
             self._create_table_comment(table_name, table_description)
-        if column_descriptions and self.COMMENT_CREATION_TABLE.is_supported and schema is None:
+        if (
+            column_descriptions
+            and self.COMMENT_CREATION_TABLE.is_supported
+            and schema is None
+            and self.register_comments
+        ):
             self._create_column_comments(table_name, column_descriptions)
 
     def _create_table(
@@ -591,7 +614,7 @@ class EngineAdapter:
                 replace=replace,
                 columns_to_types=columns_to_types,
                 table_description=table_description
-                if self.COMMENT_CREATION_TABLE.supports_schema_def
+                if self.COMMENT_CREATION_TABLE.supports_schema_def and self.register_comments
                 else None,
                 **kwargs,
             )
@@ -764,7 +787,9 @@ class EngineAdapter:
 
         create_view_properties = self._build_view_properties_exp(
             create_kwargs.pop("table_properties", None),
-            table_description if self.COMMENT_CREATION_VIEW.supports_schema_def else None,
+            table_description
+            if self.COMMENT_CREATION_VIEW.supports_schema_def and self.register_comments
+            else None,
         )
         if create_view_properties:
             for view_property in create_view_properties.expressions:
@@ -785,14 +810,25 @@ class EngineAdapter:
             )
 
         # Register table comment with commands if the engine doesn't support doing it in CREATE
-        if table_description and self.COMMENT_CREATION_VIEW.is_comment_command_only:
+        if (
+            table_description
+            and self.COMMENT_CREATION_VIEW.is_comment_command_only
+            and self.register_comments
+        ):
             self._create_table_comment(view_name, table_description, "VIEW")
         # Register column comments with commands if the engine doesn't support doing it in
         # CREATE or we couldn't do it in the CREATE schema definition because we don't have
         # columns_to_types
-        if column_descriptions and (
-            self.COMMENT_CREATION_VIEW.is_comment_command_only
-            or (self.COMMENT_CREATION_VIEW.is_in_schema_def_and_commands and not columns_to_types)
+        if (
+            column_descriptions
+            and (
+                self.COMMENT_CREATION_VIEW.is_comment_command_only
+                or (
+                    self.COMMENT_CREATION_VIEW.is_in_schema_def_and_commands
+                    and not columns_to_types
+                )
+            )
+            and self.register_comments
         ):
             self._create_column_comments(view_name, column_descriptions, "VIEW")
 

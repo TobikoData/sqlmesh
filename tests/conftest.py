@@ -305,12 +305,18 @@ def sushi_fixed_date_data_validator(sushi_context_fixed_date: Context) -> SushiD
 
 @pytest.fixture
 def make_mocked_engine_adapter(mocker: MockerFixture) -> t.Callable:
-    def _make_function(klass: t.Type[T], dialect: t.Optional[str] = None) -> T:
+    def _make_function(
+        klass: t.Type[T], dialect: t.Optional[str] = None, register_comments: bool = True
+    ) -> T:
         connection_mock = mocker.NonCallableMock()
         cursor_mock = mocker.Mock()
         connection_mock.cursor.return_value = cursor_mock
         cursor_mock.connection.return_value = connection_mock
-        return klass(lambda: connection_mock, dialect=dialect or klass.DIALECT)
+        return klass(
+            lambda: connection_mock,
+            dialect=dialect or klass.DIALECT,
+            register_comments=register_comments,
+        )
 
     return _make_function
 
