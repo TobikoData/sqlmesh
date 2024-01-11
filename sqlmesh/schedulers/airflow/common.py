@@ -10,7 +10,6 @@ from sqlmesh.core.snapshot import (
     DeployabilityIndex,
     Snapshot,
     SnapshotId,
-    SnapshotIdLike,
     SnapshotInfoLike,
     SnapshotIntervals,
     SnapshotTableInfo,
@@ -19,7 +18,6 @@ from sqlmesh.core.snapshot.definition import Interval as SnapshotInterval
 from sqlmesh.core.user import User
 from sqlmesh.utils import sanitize_name
 from sqlmesh.utils.date import TimeLike
-from sqlmesh.utils.errors import SQLMeshError
 from sqlmesh.utils.pydantic import PydanticModel
 
 JANITOR_DAG_ID = "sqlmesh_janitor_dag"
@@ -30,11 +28,6 @@ SNAPSHOT_AIRFLOW_TAG = "sqlmesh_snapshot"
 PLAN_AIRFLOW_TAG = "sqlmesh_plan"
 
 SNAPSHOT_CLEANUP_COMMAND_XCOM_KEY = "snapshot_cleanup_command"
-
-PLAN_DAG_SPEC_KEY_PREFIX = "sqlmesh__plan_dag_spec"
-SNAPSHOT_PAYLOAD_KEY_PREFIX = "sqlmesh__snapshot_payload"
-SNAPSHOT_VERSION_KEY_PREFIX = "sqlmesh__snapshot_version_index"
-ENV_KEY_PREFIX = "sqlmesh__environment"
 
 DEFAULT_CATALOG_VARIABLE_NAME = "sqlmesh_default_catalog"
 
@@ -122,24 +115,6 @@ class MaxIntervalEndResponse(PydanticModel):
     max_interval_end: t.Optional[int] = None
 
 
-def snapshot_key(snapshot: SnapshotIdLike) -> str:
-    return snapshot_key_from_name_identifier(snapshot.name, snapshot.identifier)
-
-
-def snapshot_key_from_name_identifier(name: str, identifier: str) -> str:
-    return f"{SNAPSHOT_PAYLOAD_KEY_PREFIX}__{name}__{identifier}"
-
-
-def snapshot_version_key(name: str, version: t.Optional[str] = None) -> str:
-    if not version:
-        raise SQLMeshError("Version cannot be empty")
-    return f"{SNAPSHOT_VERSION_KEY_PREFIX}__{name}__{version}"
-
-
-def name_from_snapshot_version_key(key: str) -> str:
-    return key[len(f"{SNAPSHOT_VERSION_KEY_PREFIX}__") : key.rindex("__")]
-
-
 def dag_id_for_snapshot_info(info: SnapshotInfoLike) -> str:
     assert info.version
     return dag_id_for_name_version(info.name, info.version)
@@ -151,12 +126,3 @@ def dag_id_for_name_version(name: str, version: str) -> str:
 
 def plan_application_dag_id(environment: str, request_id: str) -> str:
     return f"sqlmesh_plan_application__{environment}__{request_id}"
-
-
-def plan_dag_spec_key(request_id: str) -> str:
-    return f"{PLAN_DAG_SPEC_KEY_PREFIX}__{request_id}"
-
-
-def plan_dag_spec_key_from_dag_id(dag_id: str) -> str:
-    request_id = dag_id[dag_id.rindex("__") + 2 :]
-    return plan_dag_spec_key(request_id)
