@@ -29,8 +29,8 @@ SQLMesh will place models with the explicit catalog "ephemeral", such as `epheme
             connection:
                 type: duckdb
                 catalogs:
-                  persistent: 'local.duckdb'
-                  ephemeral: ':memory:'
+                    persistent: 'local.duckdb'
+                    ephemeral: ':memory:'
     ```
 
 === "Python"
@@ -48,9 +48,9 @@ SQLMesh will place models with the explicit catalog "ephemeral", such as `epheme
         gateways={
             "my_gateway": GatewayConfig(
                 connection=DuckDBConnectionConfig(
-                  catalogs={
-                    "persistent": "local.duckdb"
-                    "ephemeral": ":memory:"
+                    catalogs={
+                        "persistent": "local.duckdb"
+                        "ephemeral": ":memory:"
                     }
                 )
             ),
