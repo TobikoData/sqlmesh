@@ -193,8 +193,21 @@ class ManifestHelper:
 
     def _load_models_and_seeds(self) -> None:
         for node in self._manifest.nodes.values():
-            if node.resource_type not in ("model", "seed"):
+            if node.resource_type not in ("model", "seed", "snapshot"):
                 continue
+
+            if node.resource_type == "snapshot":
+                config = _config(node)
+                if config.get("strategy", "timestamp") != "timestamp":
+                    logging.warning(
+                        f"{node.relation_name}: SQLMesh only supports timestamp snapshot strategy. Skipping model."
+                    )
+                    continue
+                if not config.get("invalidate_hard_deletes"):
+                    logging.warning(
+                        f"{node.relation_name}: SQLMesh only supports invalidate_hard_deletes. Skipping model."
+                    )
+                    continue
 
             macro_references = _macro_references(self._manifest, node)
             tests = (
@@ -203,7 +216,7 @@ class ManifestHelper:
             )
             node_config = _node_base_config(node)
 
-            if node.resource_type == "model":
+            if node.resource_type in {"model", "snapshot"}:
                 sql = node.raw_code if DBT_VERSION >= (1, 3) else node.raw_sql  # type: ignore
                 dependencies = Dependencies(
                     macros=macro_references, refs=_refs(node), sources=_sources(node)

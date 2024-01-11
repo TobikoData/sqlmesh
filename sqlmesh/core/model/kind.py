@@ -327,6 +327,7 @@ class SCDType2Kind(_ModelKind):
     valid_from_name: SQLGlotString = "valid_from"
     valid_to_name: SQLGlotString = "valid_to"
     updated_at_name: SQLGlotString = "updated_at"
+    updated_at_as_valid_from: SQLGlotBool = False
 
     forward_only: SQLGlotBool = True
     disable_restatement: SQLGlotBool = True

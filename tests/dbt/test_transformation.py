@@ -21,6 +21,7 @@ from sqlmesh.core.model import (
     IncrementalByTimeRangeKind,
     IncrementalByUniqueKeyKind,
     IncrementalUnmanagedKind,
+    SCDType2Kind,
     SqlModel,
     ViewKind,
 )
@@ -73,6 +74,15 @@ def test_model_kind():
     assert ModelConfig(materialized=Materialization.TABLE).model_kind(context) == FullKind()
     assert ModelConfig(materialized=Materialization.VIEW).model_kind(context) == ViewKind()
     assert ModelConfig(materialized=Materialization.EPHEMERAL).model_kind(context) == EmbeddedKind()
+    assert ModelConfig(
+        materialized=Materialization.SNAPSHOT, unique_key=["id"], updated_at="updated_at"
+    ).model_kind(context) == SCDType2Kind(
+        unique_key=["id"],
+        valid_from_name="dbt_valid_from",
+        valid_to_name="dbt_valid_to",
+        updated_at_as_valid_from=True,
+        updated_at_name="updated_at",
+    )
 
     assert ModelConfig(materialized=Materialization.INCREMENTAL, time_column="foo").model_kind(
         context

@@ -152,6 +152,17 @@ The [`lookback` parameter](../concepts/models/overview.md#lookback) is used to c
 
 It's important to note, that the `on_schema_change` setting is ignored by SQLMesh. Schema changes are only applied during the [plan](../concepts/plans.md) application (i.e. `sqlmesh plan`) and never during runtime (i.e. `sqlmesh run`). The target table's schema is **always** updated to match the model's query, as if the `on_schema_change` setting was set to `sync_all_columns`.
 
+## Snapshot support
+
+SQLMesh currently supports dbt snapshots with `timestamp` strategy and `invalidate_hard_deletes` set to `True`.
+Unsupported snapshots are skipped and a warning is logged indicating this happened.
+dbt Snapshot support is continuously being improved and full support should be achieved soon.
+
+dbt snapshots have one behavioral difference when running through the SQLMesh dbt adapter.
+If a row is a deleted from source and then added back later, the previously deleted row will keep it's original `valid_to` timestamp while in dbt this record is updated with the current time.
+SQLMesh views that previously deleted record as immutable, and the time where it didn't exist as an invalid time range, and therefore it is not updated.
+If you have a good use case for this behavior, please [join our slack community](https://tobikodata.com/slack) and share your use case with us.
+
 ## Tests
 SQLMesh uses dbt tests to perform SQLMesh [audits](../concepts/audits.md) (coming soon).
 
@@ -194,24 +205,20 @@ The project is now configured to use airflow. Going forward, this also means tha
 
 SQLMesh supports running dbt projects using the majority of dbt jinja methods, including:
 
-| Method      | Method          | Method       | Method
-| ------      | ------          | ------       | ------
-| adapter (*) | env_var         | project_name | target
-| as_bool     | exceptions      | ref          | this
-| as_native   | from_yaml       | return       | to_yaml
-| as_number   | is_incremental  | run_query    | var
-| as_text     | load_result     | schema       | zip
-| api         | log             | set          |
-| builtins    | modules         | source       |
-| config      | print           | statement    |
+| Method      | Method         | Method       | Method  |
+|-------------|----------------|--------------|---------|
+| adapter (*) | env_var        | project_name | target  |
+| as_bool     | exceptions     | ref          | this    |
+| as_native   | from_yaml      | return       | to_yaml |
+| as_number   | is_incremental | run_query    | var     |
+| as_text     | load_result    | schema       | zip     |
+| api         | log            | set          |         |
+| builtins    | modules        | source       |         |
+| config      | print          | statement    |         |
 
 \* `adapter.rename_relation` and `adapter.expand_target_column_types` are not currently supported.
 
-## Unsupported dbt features
-
-SQLMesh is continuously adding functionality to run dbt projects. This is a list of major dbt features that are currently unsupported, but it is not exhaustive:
-
-* dbt snapshots
+## Unsupported dbt jinja methods
 
 The dbt jinja methods that are not currently supported are:
 

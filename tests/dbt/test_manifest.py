@@ -13,7 +13,7 @@ from sqlmesh.utils.jinja import MacroReference
 pytestmark = pytest.mark.dbt
 
 
-def test_manifest_helper():
+def test_manifest_helper(caplog):
     project_path = Path("tests/fixtures/dbt/sushi_test")
     profile = Profile.load(DbtContext(project_path))
     helper = ManifestHelper(project_path, project_path, "sushi", profile.target)
@@ -29,6 +29,19 @@ def test_manifest_helper():
         sources={"streaming.orders"},
     )
     assert helper.models()["waiters"].materialized == "ephemeral"
+    assert (
+        '"memory"."snapshots"."items_no_hard_delete_snapshot": SQLMesh only supports invalidate_hard_deletes. Skipping model.'
+        in caplog.messages
+    )
+    assert (
+        '"memory"."snapshots"."items_check_snapshot": SQLMesh only supports timestamp snapshot strategy. Skipping model.'
+        in caplog.messages
+    )
+    assert helper.models()["items_snapshot"].materialized == "snapshot"
+    assert helper.models()["items_snapshot"].updated_at == "ds"
+    assert helper.models()["items_snapshot"].unique_key == ["id"]
+    assert helper.models()["items_snapshot"].strategy == "timestamp"
+    assert helper.models()["items_snapshot"].table_schema == "snapshots"
 
     waiter_as_customer_by_day_config = helper.models()["waiter_as_customer_by_day"]
     assert waiter_as_customer_by_day_config.dependencies == Dependencies(

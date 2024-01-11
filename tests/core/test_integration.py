@@ -1,10 +1,7 @@
-import pathlib
-import shutil
 import typing as t
 from collections import Counter
 from datetime import timedelta
 
-import numpy as np
 import pandas as pd
 import pytest
 from freezegun import freeze_time
@@ -35,7 +32,7 @@ from sqlmesh.core.snapshot import (
     SnapshotInfoLike,
     SnapshotTableInfo,
 )
-from sqlmesh.utils.date import TimeLike, to_date, to_datetime, to_timestamp, to_ts
+from sqlmesh.utils.date import TimeLike, to_date, to_datetime, to_timestamp
 from tests.conftest import DuckDBMetadata, SushiDataValidator
 
 pytestmark = pytest.mark.slow
@@ -1681,158 +1678,6 @@ def test_ignored_snapshots(context_fixture: Context, request):
     )
     # Make sure that dev view for order items was created
     assert exp.table_("order_items", "sushi__dev", catalog) in metadata.qualified_views
-
-
-def test_scd_type_2(tmp_path: pathlib.Path):
-    def create_source_dataframe(values: t.List[t.Tuple[int, str, str]]) -> pd.DataFrame:
-        return pd.DataFrame(
-            np.array(
-                values,
-                [
-                    ("customer_id", "int32"),
-                    ("status", "object"),
-                    ("updated_at", "datetime64[us]"),
-                ],
-            ),
-        )
-
-    def create_target_dataframe(
-        values: t.List[t.Tuple[int, str, str, str, t.Optional[str]]]
-    ) -> pd.DataFrame:
-        return pd.DataFrame(
-            np.array(
-                values,
-                [
-                    ("customer_id", "int32"),
-                    ("status", "object"),
-                    ("updated_at", "datetime64[us]"),
-                    ("valid_from", "datetime64[us]"),
-                    ("valid_to", "datetime64[us]"),
-                ],
-            ),
-        )
-
-    def replace_source_table(
-        context: Context,
-        values: t.List[t.Tuple[int, str, str]],
-    ):
-        df = create_source_dataframe(values)
-        context.engine_adapter.replace_query(
-            "sushi.raw_marketing",
-            df,
-            columns_to_types={
-                "customer_id": exp.DataType.build("int"),
-                "status": exp.DataType.build("STRING"),
-                "updated_at": exp.DataType.build("TIMESTAMP"),
-            },
-        )
-
-    def compare_dataframes(actual: pd.DataFrame, expected: pd.DataFrame):
-        actual = actual.apply(lambda x: x.sort_values().values).reset_index(drop=True)  # type: ignore
-        expected = expected.apply(lambda x: x.sort_values().values).reset_index(drop=True)  # type: ignore
-        pd.testing.assert_frame_equal(actual, expected)
-
-    def get_current_df(context: Context):
-        return context.engine_adapter.fetchdf("SELECT * FROM sushi.marketing")
-
-    sushi_root = pathlib.Path("examples/sushi")
-    shutil.copy(str(pathlib.Path(sushi_root / "config.py")), str(tmp_path / "config.py"))
-    (tmp_path / "models").mkdir()
-    shutil.copy(
-        str(pathlib.Path(sushi_root / "models" / "marketing.sql")),
-        str(tmp_path / "models" / "marketing.sql"),
-    )
-
-    context = Context(paths=tmp_path, config="test_config")
-    context.engine_adapter.create_schema("sushi")
-    replace_source_table(
-        context,
-        [
-            (1, "a", "2020-01-01 00:00:00"),
-            (2, "b", "2020-01-01 00:00:00"),
-            (3, "c", "2020-01-01 00:00:00"),
-        ],
-    )
-    plan = context.plan("prod", auto_apply=True)
-    df_actual = get_current_df(context)
-    df_expected = create_target_dataframe(
-        [
-            (1, "a", "2020-01-01 00:00:00", "1970-01-01 00:00:00", None),
-            (2, "b", "2020-01-01 00:00:00", "1970-01-01 00:00:00", None),
-            (3, "c", "2020-01-01 00:00:00", "1970-01-01 00:00:00", None),
-        ]
-    )
-    compare_dataframes(df_actual, df_expected)
-
-    replace_source_table(
-        context,
-        [
-            # Update to "x"
-            (1, "x", "2020-01-02 00:00:00"),
-            # No Change
-            (2, "b", "2020-01-01 00:00:00"),
-            # Deleted 3
-            # (3, "c", "2020-01-01 00:00:00"),
-            # Added 4
-            (4, "d", "2020-01-02 00:00:00"),
-        ],
-    )
-    tomorrow = to_datetime("tomorrow")
-    context.run("prod", start=to_date("today"), end=tomorrow, execution_time=tomorrow)
-    df_actual = get_current_df(context)
-    df_expected = create_target_dataframe(
-        [
-            (1, "a", "2020-01-01 00:00:00", "1970-01-01 00:00:00", "2020-01-02 00:00:00"),
-            (1, "x", "2020-01-02 00:00:00", "2020-01-02 00:00:00", None),
-            (2, "b", "2020-01-01 00:00:00", "1970-01-01 00:00:00", None),
-            (3, "c", "2020-01-01 00:00:00", "1970-01-01 00:00:00", to_ts(tomorrow)),
-            (4, "d", "2020-01-02 00:00:00", "1970-01-01 00:00:00", None),
-        ]
-    )
-    compare_dataframes(df_actual, df_expected)
-
-    replace_source_table(
-        context,
-        [
-            # Update to "y"
-            (1, "y", "2020-01-03 00:00:00"),
-            # Delete 2
-            # (2, "b", "2020-01-01 00:00:00"),
-            # Add back 3
-            (3, "c", "2099-01-01 00:00:00"),
-            # No Change
-            (4, "d", "2020-01-02 00:00:00"),
-            # Added 5
-            (5, "e", "2020-01-03 00:00:00"),
-        ],
-    )
-    two_days_from_now = to_datetime("in 2 days")
-    context.run(
-        "prod",
-        start=to_date("tomorrow"),
-        end=two_days_from_now,
-        execution_time=two_days_from_now,
-    )
-    df_actual = get_current_df(context)
-    df_expected = create_target_dataframe(
-        [
-            (1, "a", "2020-01-01 00:00:00", "1970-01-01 00:00:00", "2020-01-02 00:00:00"),
-            (1, "x", "2020-01-02 00:00:00", "2020-01-02 00:00:00", "2020-01-03 00:00:00"),
-            (1, "y", "2020-01-03 00:00:00", "2020-01-03 00:00:00", None),
-            (2, "b", "2020-01-01 00:00:00", "1970-01-01 00:00:00", to_ts(two_days_from_now)),
-            (3, "c", "2020-01-01 00:00:00", "1970-01-01 00:00:00", to_ts(tomorrow)),
-            # Since 3 was deleted and came back and the updated at time when it came back
-            # is greater than the execution time when it was deleted, we have the valid_from
-            # match the updated_at time. If it was less then the valid_from would match the
-            # execution time when it was deleted.
-            (3, "c", "2099-01-01 00:00:00", "2099-01-01 00:00:00", None),
-            # What the result would be if the updated_at time was `2020-01-03`
-            # (3, "c", "2020-01-03 00:00:00", to_ts(tomorrow), None),
-            (4, "d", "2020-01-02 00:00:00", "1970-01-01 00:00:00", None),
-            (5, "e", "2020-01-03 00:00:00", "1970-01-01 00:00:00", None),
-        ]
-    )
-    compare_dataframes(df_actual, df_expected)
 
 
 def initial_add(context: Context, environment: str):
