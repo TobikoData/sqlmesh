@@ -1,5 +1,11 @@
 const sqlglotWorker = new Worker(
-  new URL('./sqlglot/worker.ts', import.meta.url),
+  new URL('./sqlglot/sqlglot.ts', import.meta.url),
 )
 
-export { sqlglotWorker }
+function createLineageWorker(): Worker {
+  return new Worker(new URL('./lineage.ts', import.meta.url), {
+    type: 'module',
+  })
+}
+
+export { sqlglotWorker, createLineageWorker }

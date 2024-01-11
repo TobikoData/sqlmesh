@@ -56,10 +56,7 @@ export default function Content(): JSX.Element {
               />
             </div>
             <div className="flex flex-col h-full px-2">
-              <ModelLineage
-                key={model.id}
-                model={model}
-              />
+              <ModelLineage model={model} />
             </div>
           </SplitPane>
         </LineageFlowProvider>
