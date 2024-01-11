@@ -1,6 +1,6 @@
 import { isNil, isArrayNotEmpty, isNotNil } from '@utils/index'
 import clsx from 'clsx'
-import { useMemo, useCallback } from 'react'
+import { useMemo, useCallback, useState } from 'react'
 import {
   EnumLineageNodeModelType,
   ModelColumns,
@@ -69,6 +69,8 @@ export default function ModelNode({
     [highlightedNodes],
   )
 
+  const [isMouseOver, setIsMouseOver] = useState(false)
+
   const handleClick = useCallback(
     (e: React.MouseEvent) => {
       e.stopPropagation()
@@ -106,7 +108,7 @@ export default function ModelNode({
   const isModelExternal = data.type === EnumLineageNodeModelType.external
   const isModelSeed = data.type === EnumLineageNodeModelType.seed
   const isModelPython = data.type === EnumLineageNodeModelType.python
-  const showColumns = withColumns && isArrayNotEmpty(columns)
+  const showColumns = (withColumns && isArrayNotEmpty(columns)) || isMouseOver
   const isMainNode = mainNode === id || highlightedNodeModels.includes(id)
   const isActiveNode =
     selectedNodes.size > 0 || activeNodes.size > 0 || withConnected
@@ -117,6 +119,8 @@ export default function ModelNode({
 
   return (
     <div
+      onMouseEnter={() => setIsMouseOver(true)}
+      onMouseLeave={() => setIsMouseOver(false)}
       className={clsx(
         'text-xs font-semibold rounded-lg shadow-lg relative z-1',
         isCTE ? 'text-neutral-100' : 'text-secondary-500 dark:text-primary-100',

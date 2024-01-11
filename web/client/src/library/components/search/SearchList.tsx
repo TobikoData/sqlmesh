@@ -92,7 +92,7 @@ export default function SearchList<
 
   const indices: Array<[T, string]> = useMemo(
     () => list.map(item => [item, item[searchBy]]),
-    [list],
+    [list, searchBy],
   )
 
   const [search, setSearch] = useState<string>(EMPTY_STRING)
@@ -220,7 +220,7 @@ export default function SearchList<
             ) : (
               found.map(([item, index], idx) => (
                 <div
-                  key={index}
+                  key={item[searchBy]}
                   role="menuitem"
                   data-index={idx}
                   className={clsx(
