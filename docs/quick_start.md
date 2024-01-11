@@ -9,7 +9,7 @@ All you need to do is install SQLMesh on your machine - get started by ensuring 
 
 ## Video Quickstart
 
-This video walks through the quickstart installation, setup, and creating your first SQLMesh plan with the SQLMesh command-line interface in just 5 minutes!
+This video walks through the quickstart installation, setup, and creating your first plan with the SQLMesh command-line interface in just 5 minutes!
 
 <iframe width="560" height="315" src="https://www.youtube.com/embed/weJH3eM0rzc?si=C70me05Lv0zUlpIy" title="YouTube video player" frameborder="0" allow="accelerometer; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share" allowfullscreen></iframe>
 
