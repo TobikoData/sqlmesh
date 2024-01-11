@@ -416,32 +416,26 @@ def test_janitor(sushi_context, mocker: MockerFixture) -> None:
     sushi_context._state_sync = state_sync_mock
     sushi_context._run_janitor()
     # Assert that the schemas are dropped just twice for the schema based environment
+    # Make sure that external model schemas/tables are not dropped
     adapter_mock.drop_schema.assert_has_calls(
         [
-            call(
-                schema_("raw__test_environment", "memory"), cascade=True, ignore_if_not_exists=True
-            ),
             call(
                 schema_("sushi__test_environment", "memory"),
                 cascade=True,
                 ignore_if_not_exists=True,
             ),
-        ],
-        any_order=True,
+        ]
     )
     # Assert that the views are dropped for each snapshot just once and make sure that the name used is the
     # view name with the environment as a suffix
-    # TODO: It appears we try to drop views for external models which shouldn't hurt but we should fix this
-    assert adapter_mock.drop_view.call_count == 14
+    assert adapter_mock.drop_view.call_count == 12
     adapter_mock.drop_view.assert_has_calls(
         [
-            call("memory.raw.demographics__test_environment", ignore_if_not_exists=True),
             call(
                 "memory.sushi.waiter_as_customer_by_day__test_environment",
                 ignore_if_not_exists=True,
             ),
-        ],
-        any_order=True,
+        ]
     )
 
 

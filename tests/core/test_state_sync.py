@@ -17,11 +17,13 @@ from sqlmesh.core.environment import Environment
 from sqlmesh.core.model import (
     FullKind,
     IncrementalByTimeRangeKind,
+    ModelKindName,
     Seed,
     SeedKind,
     SeedModel,
     SqlModel,
 )
+from sqlmesh.core.model.definition import ExternalModel
 from sqlmesh.core.snapshot import (
     Snapshot,
     SnapshotChangeCategory,
@@ -1517,12 +1519,18 @@ def test_cleanup_expired_views(
     snapshot_a.categorize_as(SnapshotChangeCategory.BREAKING)
     snapshot_b = make_snapshot(SqlModel(name="catalog.schema.b", query=parse_one("select 1, ds")))
     snapshot_b.categorize_as(SnapshotChangeCategory.BREAKING)
+    # Make sure that we don't drop schemas from external models
+    snapshot_external_model = make_snapshot(
+        ExternalModel(name="catalog.external_schema.external_table", kind=ModelKindName.EXTERNAL)
+    )
+    snapshot_external_model.categorize_as(SnapshotChangeCategory.BREAKING)
     schema_environment = Environment(
         name="test_environment",
         suffix_target=EnvironmentSuffixTarget.SCHEMA,
         snapshots=[
             snapshot_a.table_info,
             snapshot_b.table_info,
+            snapshot_external_model.table_info,
         ],
         start_at="2022-01-01",
         end_at="2022-01-01",
@@ -1540,6 +1548,7 @@ def test_cleanup_expired_views(
         snapshots=[
             snapshot_c.table_info,
             snapshot_d.table_info,
+            snapshot_external_model.table_info,
         ],
         start_at="2022-01-01",
         end_at="2022-01-01",
