@@ -78,8 +78,6 @@ async def watch_project() -> None:
                     ServerSentEvent(event="errors", data=json.dumps(error))
                 )
 
-                continue
-
         api_console.queue.put_nowait(
             ServerSentEvent(
                 event="file",
