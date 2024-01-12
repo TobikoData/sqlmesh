@@ -50,8 +50,6 @@ class Plan(PydanticModel, frozen=True):
     execution_time: t.Optional[TimeLike] = None
 
     # Make sure to use @cached_property instead once we stop supporting 3.7.
-    _categorized: t.Optional[t.List[Snapshot]] = None
-    _uncategorized: t.Optional[t.List[Snapshot]] = None
     _all_modified: t.Optional[t.Dict[SnapshotId, Snapshot]] = None
     _snapshots: t.Optional[t.Dict[SnapshotId, Snapshot]] = None
     _environment: t.Optional[Environment] = None
@@ -112,24 +110,20 @@ class Plan(PydanticModel, frozen=True):
     @property
     def categorized(self) -> t.List[Snapshot]:
         """Returns the already categorized snapshots."""
-        if self._categorized is None:
-            self._categorized = [
-                self.context_diff.snapshots[s_id]
-                for s_id in sorted(self.directly_modified)
-                if self.context_diff.snapshots[s_id].version
-            ]
-        return self._categorized
+        return [
+            self.context_diff.snapshots[s_id]
+            for s_id in sorted(self.directly_modified)
+            if self.context_diff.snapshots[s_id].version
+        ]
 
     @property
     def uncategorized(self) -> t.List[Snapshot]:
         """Returns the uncategorized snapshots."""
-        if self._uncategorized is None:
-            self._uncategorized = [
-                self.context_diff.snapshots[s_id]
-                for s_id in sorted(self.directly_modified)
-                if not self.context_diff.snapshots[s_id].version
-            ]
-        return self._uncategorized
+        return [
+            self.context_diff.snapshots[s_id]
+            for s_id in sorted(self.directly_modified)
+            if not self.context_diff.snapshots[s_id].version
+        ]
 
     @property
     def snapshots(self) -> t.Dict[SnapshotId, Snapshot]:
