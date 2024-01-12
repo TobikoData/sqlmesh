@@ -24,12 +24,7 @@ from sqlmesh.core.notification_target import (
 )
 from sqlmesh.core.plan.definition import Plan
 from sqlmesh.core.scheduler import Scheduler
-from sqlmesh.core.snapshot import (
-    DeployabilityIndex,
-    Snapshot,
-    SnapshotEvaluator,
-    SnapshotId,
-)
+from sqlmesh.core.snapshot import DeployabilityIndex, Snapshot, SnapshotEvaluator
 from sqlmesh.core.state_sync import StateSync
 from sqlmesh.core.state_sync.base import PromotionResult
 from sqlmesh.core.user import User
@@ -75,8 +70,6 @@ class BuiltInPlanEvaluator(PlanEvaluator):
         self.backfill_concurrent_tasks = backfill_concurrent_tasks
         self.console = console or get_console()
         self.notification_target_manager = notification_target_manager
-
-        self.__all_snapshots: t.Dict[str, t.Dict[SnapshotId, Snapshot]] = {}
 
     def evaluate(
         self,
