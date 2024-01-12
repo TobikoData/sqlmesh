@@ -1,9 +1,9 @@
 const sqlglotWorker = new Worker(
-  new URL('./sqlglot/sqlglot.ts', import.meta.url),
+  new URL('./sqlglot/sqlglot.ts?worker', import.meta.url),
 )
 
 function createLineageWorker(): Worker {
-  return new Worker(new URL('./lineage.ts', import.meta.url), {
+  return new Worker(new URL('./lineage.ts?worker', import.meta.url), {
     type: 'module',
   })
 }
