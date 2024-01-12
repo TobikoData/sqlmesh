@@ -171,9 +171,9 @@ def _get_plan_changes(context: Context, plan: Plan) -> models.PlanChanges:
                     environment_naming_info,
                     default_catalog,
                 ),
-                node_type=models.ChangeDisplay.get_node_type(snapshots, snapshot_id),
+                node_type=snapshot_table_info.node_type,
             )
-            for snapshot_id in plan.context_diff.removed_snapshots
+            for snapshot_id, snapshot_table_info in plan.context_diff.removed_snapshots.items()
         ],
         modified=models.ModelsDiff.get_modified_snapshots(context, plan),
     )
