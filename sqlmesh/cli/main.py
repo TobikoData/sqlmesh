@@ -355,11 +355,17 @@ def invalidate(ctx: click.Context, environment: str) -> None:
 
 @cli.command("dag")
 @click.argument("file", required=True)
+@click.option(
+    "--select-model",
+    type=str,
+    multiple=True,
+    help="Select specific models to include in the dag.",
+)
 @click.pass_context
 @error_handler
-def dag(ctx: click.Context, file: str) -> None:
+def dag(ctx: click.Context, file: str, select_model: t.List[str]) -> None:
     """Render the DAG as an html file."""
-    rendered_dag_path = ctx.obj.render_dag(file)
+    rendered_dag_path = ctx.obj.render_dag(file, select_model)
     if rendered_dag_path:
         ctx.obj.console.log_success(f"Generated the dag to {rendered_dag_path}")
 

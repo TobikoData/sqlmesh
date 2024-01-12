@@ -93,7 +93,8 @@ Usage: sqlmesh dag [OPTIONS] FILE
   Render the DAG as an html file.
 
 Options:
-  --help  Show this message and exit.
+  --help               Show this message and exit.
+  --select-model TEXT  Select specific models to include in the dag.
 ```
 
 ## diff
