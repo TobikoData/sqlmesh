@@ -3,7 +3,7 @@ from __future__ import annotations
 import json
 import sys
 import typing as t
-from functools import wraps
+from functools import cached_property, wraps
 
 import pydantic
 from pydantic.fields import FieldInfo
@@ -103,6 +103,7 @@ class PydanticModel(pydantic.BaseModel):
             json_encoders = {exp.Expression: _expression_encoder}
             underscore_attrs_are_private = True
             smart_union = True
+            keep_untouched = (cached_property,)
 
     def dict(
         self,
