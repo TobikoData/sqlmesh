@@ -4,7 +4,7 @@ SQLMesh is a data transformation framework that brings the benefits of DevOps to
 
 For more information, check out the [website](https://sqlmesh.com) and [documentation](https://sqlmesh.readthedocs.io/en/stable/).
 
-## Geting Started
+## Getting Started
 Install SQLMesh through [pypi](https://pypi.org/project/sqlmesh/) by running:
 
 ```pip install sqlmesh```
