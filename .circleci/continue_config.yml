@@ -37,6 +37,20 @@ commands:
             - run: circleci-agent step halt
 
 jobs:
+  doc_tests:
+    docker:
+      - image: cimg/python:3.10
+    resource_class: small
+    steps:
+      - halt_unless_core
+      - checkout
+      - run:
+          name: Install dependencies
+          command: make install-dev install-doc
+      - run:
+          name: Run doc tests
+          command: make doc-test
+
   style_and_slow_tests:
     parameters:
       python_version:
@@ -61,9 +75,6 @@ jobs:
       - run:
           name: Run slow tests
           command: make slow-test
-      - run:
-          name: Run doc tests
-          command: make doc-test
 
   style_and_slow_tests_pydantic_v1:
     docker:
@@ -194,6 +205,7 @@ jobs:
 workflows:
   main_pr:
     jobs:
+      - doc_tests
       - style_and_slow_tests:
           matrix:
             parameters:

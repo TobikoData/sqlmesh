@@ -74,8 +74,6 @@ setup(
             "google-cloud-bigquery",
             "google-cloud-bigquery-storage",
             "isort==5.10.1",
-            "mkdocs-include-markdown-plugin==4.0.3",
-            "mkdocs-material==9.0.5",
             "mypy~=1.4.0",
             # Pendulum 3.0.0 contains a breaking change for Airflow.
             # To test if this is fixed with future versions, check if this line works:
@@ -84,7 +82,6 @@ setup(
             "pendulum<3.0.0",
             "pre-commit",
             "pandas-stubs",
-            "pdoc",
             "psycopg2-binary",
             "pyarrow>=10.0.1,<10.1.0",
             "PyGithub",
