@@ -497,12 +497,18 @@ class SQLMeshMagics(Magics):
 
     @magic_arguments()
     @argument("--file", "-f", type=str, help="An optional file path to write the HTML output to.")
+    @argument(
+        "--select-model",
+        type=str,
+        nargs="*",
+        help="Select specific models to include in the dag.",
+    )
     @line_magic
     @pass_sqlmesh_context
     def dag(self, context: Context, line: str) -> None:
         """Displays the HTML DAG."""
         args = parse_argstring(self.dag, line)
-        dag = context.get_dag()
+        dag = context.get_dag(args.select_model)
         if args.file:
             with open(args.file, "w") as file:
                 file.write(str(dag))
