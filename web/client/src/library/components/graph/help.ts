@@ -52,11 +52,14 @@ function createGraphLayout({
 } {
   // https://eclipse.dev/elk/reference/options.html
   const elk: any = new ELK({
-    workerUrl: '/node_modules/elkjs/lib/elk-worker.min.js',
+    workerUrl: new URL(
+      '/node_modules/elkjs/lib/elk-worker.min.js?worker',
+      import.meta.url,
+    ).href,
   })
 
   return {
-    terminate: () => elk.worker.worker.terminate(),
+    terminate: () => elk.worker.terminate(),
     create: async () =>
       new Promise((resolve, reject) => {
         elk
