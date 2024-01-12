@@ -92,7 +92,7 @@ jobs:
 
   ui_style:
     docker:
-      - image: cimg/python:3.7
+      - image: cimg/python:3.8
     resource_class: small
     steps:
       - halt_unless_client
@@ -198,7 +198,7 @@ workflows:
           matrix:
             parameters:
               python_version:
-                ["3.7", "3.8", "3.9", "3.10", "3.11"]
+                ["3.8", "3.9", "3.10", "3.11", "3.12"]
       - style_and_slow_tests_pydantic_v1
       - airflow_docker_tests:
           requires:

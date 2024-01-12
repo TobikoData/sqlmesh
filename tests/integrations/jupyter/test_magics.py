@@ -1,6 +1,5 @@
 import logging
 import pathlib
-import sys
 import typing as t
 from unittest.mock import MagicMock
 
@@ -25,15 +24,6 @@ SUCCESS_STYLE = "color: #008000; text-decoration-color: #008000"
 NEUTRAL_STYLE = "color: #008080; text-decoration-color: #008080"
 RICH_PRE_STYLE = "white-space:pre;overflow-x:auto;line-height:normal;font-family:Menlo,'DejaVu Sans Mono',consolas,'Courier New',monospace"
 FREEZE_TIME = "2023-01-01 00:00:00"
-
-# Remove once 3.7 support is dropped
-pytestmark = [
-    pytest.mark.jupyter,
-    pytest.mark.skipif(
-        sys.version_info < (3, 8),
-        reason="3.7 runs an old version of IPython and has issue with tests",
-    ),
-]
 
 
 @pytest.fixture(scope="session")

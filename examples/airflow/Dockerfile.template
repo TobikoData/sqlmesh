@@ -1,6 +1,6 @@
 FROM apache/spark-py:v3.4.0 AS spark
 
-FROM apache/airflow:$AIRFLOW_VERSION
+FROM apache/airflow:$AIRFLOW_VERSION-python3.8
 
 USER root
 

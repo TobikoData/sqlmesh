@@ -4,6 +4,7 @@ import typing as t
 from dataclasses import dataclass
 from datetime import datetime
 from enum import Enum
+from functools import cached_property
 
 from sqlmesh.core.context_diff import ContextDiff
 from sqlmesh.core.environment import Environment, EnvironmentNamingInfo
@@ -49,32 +50,20 @@ class Plan(PydanticModel, frozen=True):
     effective_from: t.Optional[TimeLike] = None
     execution_time: t.Optional[TimeLike] = None
 
-    # Make sure to use @cached_property instead once we stop supporting 3.7.
-    _all_modified: t.Optional[t.Dict[SnapshotId, Snapshot]] = None
-    _snapshots: t.Optional[t.Dict[SnapshotId, Snapshot]] = None
-    _environment: t.Optional[Environment] = None
-    _start: t.Optional[TimeLike] = None
-    _end: t.Optional[TimeLike] = None
-    __earliest_interval_start: t.Optional[datetime] = None
-
-    @property
+    @cached_property
     def start(self) -> TimeLike:
-        if self._start is None:
-            if self.provided_start is not None:
-                self._start = self.provided_start
-            else:
-                missing_intervals = self.missing_intervals
-                if missing_intervals:
-                    self._start = min(si.intervals[0][0] for si in missing_intervals)
-                else:
-                    self._start = self._earliest_interval_start
-        return t.cast(TimeLike, self._start)
+        if self.provided_start is not None:
+            return self.provided_start
 
-    @property
+        missing_intervals = self.missing_intervals
+        if missing_intervals:
+            return min(si.intervals[0][0] for si in missing_intervals)
+
+        return self._earliest_interval_start
+
+    @cached_property
     def end(self) -> TimeLike:
-        if self._end is None:
-            self._end = self.provided_end or now()
-        return self._end
+        return self.provided_end or now()
 
     @property
     def previous_plan_id(self) -> t.Optional[str]:
@@ -125,32 +114,23 @@ class Plan(PydanticModel, frozen=True):
             if not self.context_diff.snapshots[s_id].version
         ]
 
-    @property
+    @cached_property
     def snapshots(self) -> t.Dict[SnapshotId, Snapshot]:
-        if self._snapshots is None:
-            self._snapshots = {
-                s_id: s
-                for s_id, s in self.context_diff.snapshots.items()
-                if s_id not in self.ignored
-            }
-        return self._snapshots
+        return {
+            s_id: s for s_id, s in self.context_diff.snapshots.items() if s_id not in self.ignored
+        }
 
-    @property
+    @cached_property
     def modified_snapshots(self) -> t.Dict[SnapshotId, Snapshot]:
         """Returns the modified (either directly or indirectly) snapshots."""
-        if self._all_modified is None:
-            self._all_modified = {
-                **{
-                    s_id: self.context_diff.snapshots[s_id]
-                    for s_id in sorted(self.directly_modified)
-                },
-                **{
-                    s_id: self.context_diff.snapshots[s_id]
-                    for downstream_s_ids in self.indirectly_modified.values()
-                    for s_id in sorted(downstream_s_ids)
-                },
-            }
-        return self._all_modified
+        return {
+            **{s_id: self.context_diff.snapshots[s_id] for s_id in sorted(self.directly_modified)},
+            **{
+                s_id: self.context_diff.snapshots[s_id]
+                for downstream_s_ids in self.indirectly_modified.values()
+                for s_id in sorted(downstream_s_ids)
+            },
+        }
 
     @property
     def new_snapshots(self) -> t.List[Snapshot]:
@@ -179,36 +159,34 @@ class Plan(PydanticModel, frozen=True):
         ]
         return sorted(intervals, key=lambda i: i.snapshot_id)
 
-    @property
+    @cached_property
     def environment(self) -> Environment:
         """The environment of this plan."""
-        if self._environment is None:
-            expiration_ts = (
-                to_timestamp(self.environment_ttl, relative_base=now())
-                if self.is_dev and self.environment_ttl is not None
-                else None
-            )
+        expiration_ts = (
+            to_timestamp(self.environment_ttl, relative_base=now())
+            if self.is_dev and self.environment_ttl is not None
+            else None
+        )
 
-            snapshots = [s.table_info for s in self.snapshots.values()]
-            promoted_snapshot_ids = None
-            if self.is_dev and not self.include_unmodified:
-                promoted_snapshot_ids = [
-                    s.snapshot_id
-                    for s in snapshots
-                    if s.snapshot_id in self.context_diff.promotable_snapshot_ids
-                ]
+        snapshots = [s.table_info for s in self.snapshots.values()]
+        promoted_snapshot_ids = None
+        if self.is_dev and not self.include_unmodified:
+            promoted_snapshot_ids = [
+                s.snapshot_id
+                for s in snapshots
+                if s.snapshot_id in self.context_diff.promotable_snapshot_ids
+            ]
 
-            self._environment = Environment(
-                snapshots=snapshots,
-                start_at=self.provided_start or self._earliest_interval_start,
-                end_at=self.provided_end,
-                plan_id=self.plan_id,
-                previous_plan_id=self.previous_plan_id,
-                expiration_ts=expiration_ts,
-                promoted_snapshot_ids=promoted_snapshot_ids,
-                **self.environment_naming_info.dict(),
-            )
-        return self._environment
+        return Environment(
+            snapshots=snapshots,
+            start_at=self.provided_start or self._earliest_interval_start,
+            end_at=self.provided_end,
+            plan_id=self.plan_id,
+            previous_plan_id=self.previous_plan_id,
+            expiration_ts=expiration_ts,
+            promoted_snapshot_ids=promoted_snapshot_ids,
+            **self.environment_naming_info.dict(),
+        )
 
     def is_new_snapshot(self, snapshot: Snapshot) -> bool:
         """Returns True if the given snapshot is a new snapshot in this plan."""
@@ -219,11 +197,9 @@ class Plan(PydanticModel, frozen=True):
         """Returns True if a model with the given FQN should be backfilled as part of this plan."""
         return self.models_to_backfill is None or model_fqn in self.models_to_backfill
 
-    @property
+    @cached_property
     def _earliest_interval_start(self) -> datetime:
-        if self.__earliest_interval_start is None:
-            self.__earliest_interval_start = earliest_interval_start(self.snapshots.values())
-        return self.__earliest_interval_start
+        return earliest_interval_start(self.snapshots.values())
 
 
 class PlanStatus(str, Enum):

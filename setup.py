@@ -64,9 +64,7 @@ setup(
             "agate==1.6.3",
             "beautifulsoup4",
             "black==22.6.0",
-            "dbt-bigquery; python_version >= '3.8'",
-            # Remove once we drop support for Python 3.7
-            "dbt-bigquery==1.5.2; python_version < '3.8'",
+            "dbt-bigquery",
             "dbt-core",
             "dbt-duckdb>=1.4.2",
             "dbt-snowflake",
