@@ -28,6 +28,21 @@ from sqlmesh.utils.pydantic import (
 SUPPORTED_EXTENSIONS = {".py", ".sql", ".yaml", ".yml", ".csv"}
 
 
+class EventName(str, enum.Enum):
+    """An enumeration of possible SSE names."""
+
+    PING = "ping"
+    ERRORS = "errors"
+    WARNINGS = "warnings"
+    FILE = "file"
+    FORMAT_FILE = "format-file"
+    MODELS = "models"
+    TESTS = "tests"
+    PLAN_APPLY = "plan-apply"
+    PLAN_OVERVIEW = "plan-overview"
+    PLAN_CANCEL = "plan-cancel"
+
+
 class ModelType(str, enum.Enum):
     PYTHON = "python"
     SQL = "sql"
@@ -56,21 +71,12 @@ class ApplyType(str, enum.Enum):
     backfill = "backfill"
 
 
-class ConsoleEvent(str, enum.Enum):
-    """An enumeration of console events."""
-
-    plan_apply = "plan-apply"
-    plan_overview = "plan-overview"
-    plan_cancel = "plan-cancel"
-    tests = "tests"
-
-
 class Status(str, enum.Enum):
     """An enumeration of statuses."""
 
-    init = "init"
-    success = "success"
-    fail = "fail"
+    INIT = "init"
+    SUCCESS = "success"
+    FAIL = "fail"
 
 
 class PlanStage(str, enum.Enum):
@@ -454,7 +460,7 @@ class BackfillTask(ChangeDisplay):
 
 
 class TrackableMeta(BaseModel):
-    status: Status = Status.init
+    status: Status = Status.INIT
     start: int = Field(default_factory=now_timestamp)
     end: t.Optional[int] = None
     done: bool = False
@@ -474,9 +480,9 @@ class Trackable(BaseModel):
 
     def stop(self, success: bool = True) -> None:
         if success:
-            self.meta.status = Status.success
+            self.meta.status = Status.SUCCESS
         else:
-            self.meta.status = Status.fail
+            self.meta.status = Status.FAIL
 
         self.meta.end = now_timestamp()
         self.meta.done = bool(self.meta.start and self.meta.end)
@@ -552,3 +558,8 @@ class PlanApplyStageTracker(PlanStageTracker):
 
 class PlanCancelStageTracker(PlanStageTracker):
     cancel: t.Optional[PlanStageCancel] = None
+
+
+class FormatFileStatus(BaseModel):
+    path: str
+    status: Status = Status.SUCCESS

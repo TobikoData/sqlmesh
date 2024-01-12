@@ -213,23 +213,22 @@ class ApiConsole(TerminalConsole):
             self.log_event_plan_cancel()
             self.plan_cancel_stage_tracker = None
 
-    def _make_event(self, event: str, data: dict[str, t.Any]) -> ServerSentEvent:
-        if isinstance(event, models.ConsoleEvent):
-            event = event.value
-        return ServerSentEvent(
-            event=event,
-            data=json.dumps(jsonable_encoder(data, exclude_none=True)),
+    def log_event(
+        self, event: models.EventName, data: t.Union[t.Dict[str, t.Any], t.List[t.Any]]
+    ) -> None:
+        self.queue.put_nowait(
+            ServerSentEvent(
+                event=event.value,
+                data=json.dumps(jsonable_encoder(data, exclude_none=True)),
+            )
         )
-
-    def log_event(self, event: str, data: dict[str, t.Any]) -> None:
-        self.queue.put_nowait(self._make_event(event=event, data=data))
 
     def log_test_results(
         self, result: unittest.result.TestResult, output: str, target_dialect: str
     ) -> None:
         if result.wasSuccessful():
             self.log_event(
-                event="tests",
+                event=models.EventName.TESTS,
                 data=models.ReportTestsResult(
                     message=f"Successfully ran {str(result.testsRun)} tests against {target_dialect}"
                 ).dict(),
@@ -246,7 +245,7 @@ class ApiConsole(TerminalConsole):
                     )
                 )
         self.log_event(
-            event="tests",
+            event=models.EventName.TESTS,
             data=models.ReportTestsFailure(
                 message="Test Failure Summary",
                 total=result.testsRun,
@@ -261,13 +260,13 @@ class ApiConsole(TerminalConsole):
 
     def log_event_plan_apply(self) -> None:
         self.log_event(
-            event=models.ConsoleEvent.plan_apply,
+            event=models.EventName.PLAN_APPLY,
             data=self.plan_apply_stage_tracker.dict() if self.plan_apply_stage_tracker else {},
         )
 
     def log_event_plan_overview(self) -> None:
         self.log_event(
-            event=models.ConsoleEvent.plan_overview,
+            event=models.EventName.PLAN_OVERVIEW,
             data=self.plan_overview_stage_tracker.dict()
             if self.plan_overview_stage_tracker
             else {},
@@ -275,13 +274,13 @@ class ApiConsole(TerminalConsole):
 
     def log_event_plan_cancel(self) -> None:
         self.log_event(
-            event=models.ConsoleEvent.plan_cancel,
+            event=models.EventName.PLAN_CANCEL,
             data=self.plan_cancel_stage_tracker.dict() if self.plan_cancel_stage_tracker else {},
         )
 
     def log_exception(self) -> None:
         self.log_event(
-            event="errors",
+            event=models.EventName.ERRORS,
             data=ApiException(
                 message="Tasks failed to run",
                 origin="API -> console -> log_exception",

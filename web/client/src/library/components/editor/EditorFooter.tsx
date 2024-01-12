@@ -59,6 +59,14 @@ export default function EditorFooter({ tab }: { tab: EditorTab }): JSX.Element {
           <EditorIndicator.Light ok={tab.isSaved} />
         </EditorIndicator>
       )}
+      {tab.file.isSQL && (
+        <EditorIndicator
+          className="mr-2"
+          text="Formatted"
+        >
+          <EditorIndicator.Light ok={tab.file.isFormatted} />
+        </EditorIndicator>
+      )}
       <EditorIndicator
         className="mr-2"
         text="Language"
