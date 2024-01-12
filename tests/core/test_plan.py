@@ -1425,3 +1425,36 @@ def test_models_selected_for_backfill(make_snapshot, mocker: MockerFixture):
         snapshot_a.snapshot_id,
         snapshot_b.snapshot_id,
     }
+
+
+def test_categorized_uncategorized(make_snapshot, mocker: MockerFixture):
+    snapshot = make_snapshot(SqlModel(name="a", query=parse_one("select 1, ds")))
+    snapshot.categorize_as(SnapshotChangeCategory.BREAKING)
+
+    new_snapshot = make_snapshot(SqlModel(name="a", query=parse_one("select 2, ds")))
+
+    context_diff = ContextDiff(
+        environment="test_environment",
+        is_new_environment=True,
+        is_unfinalized_environment=False,
+        create_from="prod",
+        added=set(),
+        removed_snapshots={},
+        modified_snapshots={new_snapshot.name: (snapshot, new_snapshot)},
+        snapshots={new_snapshot.snapshot_id: new_snapshot},
+        new_snapshots={new_snapshot.snapshot_id: new_snapshot},
+        previous_plan_id=None,
+        previously_promoted_snapshot_ids=set(),
+    )
+
+    plan_builder = PlanBuilder(context_diff, auto_categorization_enabled=False)
+
+    plan = plan_builder.build()
+    assert plan.uncategorized == [new_snapshot]
+    assert not plan.categorized
+
+    plan_builder.set_choice(new_snapshot, SnapshotChangeCategory.NON_BREAKING)
+
+    plan = plan_builder.build()
+    assert not plan.uncategorized
+    assert plan.categorized == [new_snapshot]
