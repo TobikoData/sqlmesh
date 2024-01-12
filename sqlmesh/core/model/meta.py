@@ -40,7 +40,7 @@ from sqlmesh.utils.pydantic import (
 AuditReference = t.Tuple[str, t.Dict[str, exp.Expression]]
 
 
-class ModelMeta(_Node, extra="allow"):
+class ModelMeta(_Node):
     """Metadata for models which can be defined in SQL."""
 
     dialect: str = ""
