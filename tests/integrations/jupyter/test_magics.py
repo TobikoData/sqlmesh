@@ -25,6 +25,8 @@ NEUTRAL_STYLE = "color: #008080; text-decoration-color: #008080"
 RICH_PRE_STYLE = "white-space:pre;overflow-x:auto;line-height:normal;font-family:Menlo,'DejaVu Sans Mono',consolas,'Courier New',monospace"
 FREEZE_TIME = "2023-01-01 00:00:00"
 
+pytestmark = pytest.mark.jupyter
+
 
 @pytest.fixture(scope="session")
 def ip():
