@@ -4,6 +4,7 @@ import {
   type BodyInitiateApplyApiCommandsApplyPostCategories,
   type PlanDates,
   type PlanOptions,
+  SnapshotChangeCategory,
 } from '~/api/client'
 import { type ModelEnvironment } from '~/models/environment'
 import { isStringEmptyOrNil } from '~/utils'
@@ -117,7 +118,7 @@ export function useApplyPayload({
       change_categorization.values(),
     ).reduce<BodyInitiateApplyApiCommandsApplyPostCategoriesAnyOf>(
       (acc, { category, change }) => {
-        acc[change.name] = category.value
+        acc[change.name] = category?.value ?? SnapshotChangeCategory.NUMBER_1
 
         return acc
       },
