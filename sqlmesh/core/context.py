@@ -933,13 +933,7 @@ class Context(BaseContext):
         if include_unmodified is None:
             include_unmodified = self.config.include_unmodified
 
-        model_selector = Selector(
-            self.state_reader,
-            self._models,
-            context_path=self.path,
-            default_catalog=self.default_catalog,
-            dialect=self.config.dialect,
-        )
+        model_selector = self._new_selector()
 
         if backfill_models:
             backfill_models = model_selector.expand_model_selections(backfill_models)
@@ -1139,18 +1133,32 @@ class Context(BaseContext):
             self.console.show_row_diff(table_diff.row_diff(), show_sample=show_sample)
         return table_diff
 
-    def get_dag(self, **options: t.Any) -> GraphHTML:
-        """Gets an HTML object representation of the DAG."""
+    def get_dag(
+        self, select_models: t.Optional[t.Collection[str]] = None, **options: t.Any
+    ) -> GraphHTML:
+        """Gets an HTML object representation of the DAG.
+
+        Args:
+            select_models: A list of model selection strings that should be included in the dag.
+        Returns:
+            An html object that renders the dag.
+        """
+        dag = (
+            self.dag.prune(*self._new_selector().expand_model_selections(select_models))
+            if select_models
+            else self.dag
+        )
+
         nodes = {}
         edges: t.List[t.Dict] = []
 
-        for node, deps in self.dag.graph.items():
+        for node, deps in dag.graph.items():
             nodes[node] = {
                 "id": node,
                 "label": node.split(".")[-1],
                 "title": f"<span>{node}</span>",
             }
-            edges.extend({"from": node, "to": d} for d in deps)
+            edges.extend({"from": d, "to": node} for d in deps)
 
         return GraphHTML(
             nodes,
@@ -1173,15 +1181,16 @@ class Context(BaseContext):
             },
         )
 
-    def render_dag(self, path: str) -> None:
+    def render_dag(self, path: str, select_models: t.Optional[t.Collection[str]] = None) -> None:
         """Render the dag as HTML and save it to a file.
 
         Args:
             path: filename to save the dag html to
+            select_models: A list of model selection strings that should be included in the dag.
         """
 
         with open(path, "w", encoding="utf-8") as file:
-            file.write(str(self.get_dag()))
+            file.write(str(self.get_dag(select_models)))
 
     def create_test(
         self,
@@ -1643,6 +1652,15 @@ class Context(BaseContext):
 
     def _new_state_sync(self) -> StateSync:
         return self._provided_state_sync or self._scheduler.create_state_sync(self)
+
+    def _new_selector(self) -> Selector:
+        return Selector(
+            self.state_reader,
+            self._models,
+            context_path=self.path,
+            default_catalog=self.default_catalog,
+            dialect=self.config.dialect,
+        )
 
     def _register_notification_targets(self) -> None:
         event_notifications = collections.defaultdict(set)

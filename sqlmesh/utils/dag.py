@@ -56,7 +56,7 @@ class DAG(t.Generic[T]):
             nodes: The nodes of the new subdag.
 
         Returns:
-            A new dag consisting of the specified nodes.
+            A new dag consisting of the specified nodes and upstream.
         """
         queue = set(nodes)
         graph = {}
@@ -66,6 +66,23 @@ class DAG(t.Generic[T]):
             deps = self._dag.get(node, set())
             graph[node] = deps
             queue.update(deps)
+
+        return DAG(graph)
+
+    def prune(self, *nodes: T) -> DAG[T]:
+        """Create a dag keeping only the included nodes.
+
+        Args:
+            nodes: The nodes of the new pruned dag.
+
+        Returns:
+            A new dag consisting of the specified nodes.
+        """
+        graph = {}
+
+        for node, deps in self._dag.items():
+            if node in nodes:
+                graph[node] = {dep for dep in deps if dep in nodes}
 
         return DAG(graph)
 

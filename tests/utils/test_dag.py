@@ -92,3 +92,10 @@ def test_reversed_graph():
         "c": set(),
         "d": set(),
     }
+
+
+def test_prune():
+    assert DAG({"a": {"b", "d"}, "b": {"d", "e"}}).prune("a", "d").graph == {
+        "a": {"d"},
+        "d": set(),
+    }
