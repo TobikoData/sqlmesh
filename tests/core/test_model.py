@@ -1368,15 +1368,17 @@ def test_python_model(assert_exp_eq) -> None:
     m = model.get_registry()["my_model"].model(
         module_path=Path("."),
         path=Path("."),
+        dialect="duckdb",
     )
 
+    assert m.dialect == "duckdb"
     assert m.depends_on == {'"foo"', '"bar"."baz"'}
-    assert m.columns_to_types == {"COL": exp.DataType.build("int")}
+    assert m.columns_to_types == {"col": exp.DataType.build("int")}
     assert_exp_eq(
         m.ctas_query(),
         """
 SELECT
-  CAST(NULL AS INT) AS "COL"
+  CAST(NULL AS INT) AS "col"
 FROM (VALUES
   (1)) AS t(dummy)
 WHERE
