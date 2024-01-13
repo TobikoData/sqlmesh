@@ -3,6 +3,7 @@ from __future__ import annotations
 import pathlib
 import sys
 import typing as t
+from functools import cached_property
 from pathlib import Path
 
 from pydantic import Field
@@ -285,8 +286,6 @@ class StandaloneAudit(_Node, AuditMixin):
 
     source_type: Literal["audit"] = "audit"
 
-    _depends_on: t.Optional[t.Set[str]] = None
-
     # Validators
     _query_validator = expression_validator
     _bool_validator = bool_validator
@@ -303,19 +302,18 @@ class StandaloneAudit(_Node, AuditMixin):
             raise AuditConfigError(f"Standalone audits cannot be blocking: '{name}'.")
         return values
 
-    @property
+    @cached_property
     def depends_on(self) -> t.Set[str]:
-        if self._depends_on is None:
-            self._depends_on = self.depends_on_ or set()
+        depends_on = self.depends_on_ or set()
 
-            query = self.render_query(self)
-            if query is not None:
-                self._depends_on |= d.find_tables(
-                    query, default_catalog=self.default_catalog, dialect=self.dialect
-                )
+        query = self.render_query(self)
+        if query is not None:
+            depends_on |= d.find_tables(
+                query, default_catalog=self.default_catalog, dialect=self.dialect
+            )
 
-            self._depends_on -= {self.name}
-        return self._depends_on
+        depends_on -= {self.name}
+        return depends_on
 
     @property
     def python_env(self) -> t.Dict[str, Executable]:

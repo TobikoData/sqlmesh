@@ -323,10 +323,7 @@ def engine_adapter(request, config) -> EngineAdapter:
     # Clear our any local db files that may have been left over from previous runs
     if request.param == "duckdb":
         for raw_path in (connection_config.catalogs or {}).values():
-            # Once 3.7 support is dropped this can be changed to `pathlib.Path(path).unlink(missing_ok=True)`
-            path = pathlib.Path(raw_path)
-            if path.is_file():
-                path.unlink()
+            pathlib.Path(raw_path).unlink(missing_ok=True)
     return engine_adapter
 
 
