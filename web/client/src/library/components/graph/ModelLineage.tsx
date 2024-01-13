@@ -406,7 +406,8 @@ function GraphControls({ nodes = [] }: { nodes: Node[] }): JSX.Element {
 
     return Object.keys(lineage)
       .map(model => ({
-        name: models.get(model)?.displayName ?? decodeURI(model),
+        name: model,
+        displayName: models.get(model)?.displayName ?? decodeURI(model),
         description: `${
           ancestors.includes(model) ? 'Upstream' : 'Downstream'
         } | ${connectedNodes.has(model) ? 'Directly' : 'Indirectly'} Connected`,
@@ -512,8 +513,8 @@ function GraphControls({ nodes = [] }: { nodes: Node[] }): JSX.Element {
         <SearchList<{ name: string; description: string }>
           list={currentModels}
           placeholder="Find"
-          searchBy="name"
-          displayBy="name"
+          searchBy="displayName"
+          displayBy="displayName"
           descriptionBy="description"
           showIndex={false}
           size={EnumSize.sm}
