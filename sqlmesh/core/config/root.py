@@ -7,6 +7,7 @@ import zlib
 
 from pydantic import Field
 from sqlglot.helper import first
+from sqlglot.optimizer.normalize_identifiers import normalize_identifiers
 
 from sqlmesh.cicd.config import CICDBotConfig
 from sqlmesh.core import constants as c
@@ -141,6 +142,16 @@ class Config(BaseConfig):
         if "gateways" not in values and "gateway" in values:
             values["gateways"] = values.pop("gateway")
 
+        return values
+
+    @model_validator(mode="after")
+    @model_validator_v1_args
+    def _normalize_fields_after(cls, values: t.Dict[str, t.Any]) -> t.Dict[str, t.Any]:
+        dialect = values["model_defaults"].dialect
+        values["environment_catalog_mapping"] = {
+            k: normalize_identifiers(v, dialect=dialect).name
+            for k, v in values.get("environment_catalog_mapping", {}).items()
+        }
         return values
 
     def get_default_test_connection(
