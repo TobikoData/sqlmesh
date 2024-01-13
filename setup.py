@@ -64,9 +64,7 @@ setup(
             "agate==1.6.3",
             "beautifulsoup4",
             "black==22.6.0",
-            "dbt-bigquery; python_version >= '3.8'",
-            # Remove once we drop support for Python 3.7
-            "dbt-bigquery==1.5.2; python_version < '3.8'",
+            "dbt-bigquery",
             "dbt-core",
             "dbt-duckdb>=1.4.2",
             "dbt-snowflake",
@@ -76,8 +74,6 @@ setup(
             "google-cloud-bigquery",
             "google-cloud-bigquery-storage",
             "isort==5.10.1",
-            "mkdocs-include-markdown-plugin==4.0.3",
-            "mkdocs-material==9.0.5",
             "mypy~=1.4.0",
             # Pendulum 3.0.0 contains a breaking change for Airflow.
             # To test if this is fixed with future versions, check if this line works:
@@ -86,7 +82,6 @@ setup(
             "pendulum<3.0.0",
             "pre-commit",
             "pandas-stubs",
-            "pdoc",
             "psycopg2-binary",
             "pyarrow>=10.0.1,<10.1.0",
             "PyGithub",

@@ -7,6 +7,7 @@ import sys
 import types
 import typing as t
 from difflib import unified_diff
+from functools import cached_property
 from pathlib import Path
 
 import pandas as pd
@@ -116,10 +117,6 @@ class _Model(ModelMeta, frozen=True):
     python_env_: t.Optional[t.Dict[str, Executable]] = Field(default=None, alias="python_env")
     jinja_macros: JinjaMacroRegistry = JinjaMacroRegistry()
     mapping_schema: t.Dict[str, t.Any] = {}
-
-    _depends_on: t.Optional[t.Set[str]] = None
-    _depends_on_past: t.Optional[bool] = None
-    _column_descriptions: t.Optional[t.Dict[str, str]] = None
 
     _expressions_validator = expression_validator
 
@@ -616,20 +613,17 @@ class _Model(ModelMeta, frozen=True):
     def is_seed(self) -> bool:
         return False
 
-    @property
+    @cached_property
     def depends_on_past(self) -> bool:
-        if self._depends_on_past is None:
-            if self.kind.is_incremental_by_unique_key:
-                return True
+        if self.kind.is_incremental_by_unique_key:
+            return True
 
-            query = self.render_query(optimize=False)
-            if query is None:
-                return False
-            return self.fqn in d.find_tables(
-                query, default_catalog=self.default_catalog, dialect=self.dialect
-            )
-
-        return self._depends_on_past
+        query = self.render_query(optimize=False)
+        if query is None:
+            return False
+        return self.fqn in d.find_tables(
+            query, default_catalog=self.default_catalog, dialect=self.dialect
+        )
 
     @property
     def forward_only(self) -> bool:
@@ -952,7 +946,6 @@ class SqlModel(_SqlBasedModel):
     source_type: Literal["sql"] = "sql"
 
     _columns_to_types: t.Optional[t.Dict[str, exp.DataType]] = None
-    __query_renderer: t.Optional[QueryRenderer] = None
 
     def render_query(
         self,
@@ -991,19 +984,18 @@ class SqlModel(_SqlBasedModel):
     def is_sql(self) -> bool:
         return True
 
-    @property
+    @cached_property
     def depends_on(self) -> t.Set[str]:
-        if self._depends_on is None:
-            self._depends_on = self.depends_on_ or set()
+        depends_on = self.depends_on_ or set()
 
-            query = self.render_query(optimize=False)
-            if query is not None:
-                self._depends_on |= d.find_tables(
-                    query, default_catalog=self.default_catalog, dialect=self.dialect
-                )
+        query = self.render_query(optimize=False)
+        if query is not None:
+            depends_on |= d.find_tables(
+                query, default_catalog=self.default_catalog, dialect=self.dialect
+            )
 
-            self._depends_on -= {self.fqn}
-        return self._depends_on
+        depends_on -= {self.fqn}
+        return depends_on
 
     @property
     def columns_to_types(self) -> t.Optional[t.Dict[str, exp.DataType]]:
@@ -1025,22 +1017,20 @@ class SqlModel(_SqlBasedModel):
 
         return {**self._columns_to_types, **self.managed_columns}
 
-    @property
+    @cached_property
     def column_descriptions(self) -> t.Dict[str, str]:
         if self.column_descriptions_ is not None:
             return self.column_descriptions_
 
-        if self._column_descriptions is None:
-            query = self.render_query(optimize=False)
-            if query is None:
-                return {}
+        query = self.render_query(optimize=False)
+        if query is None:
+            return {}
 
-            self._column_descriptions = {
-                select.alias_or_name: "\n".join(comment.strip() for comment in select.comments)
-                for select in query.selects
-                if select.comments
-            }
-        return self._column_descriptions
+        return {
+            select.alias_or_name: "\n".join(comment.strip() for comment in select.comments)
+            for select in query.selects
+            if select.comments
+        }
 
     def update_schema(
         self,
@@ -1119,22 +1109,20 @@ class SqlModel(_SqlBasedModel):
 
         return False
 
-    @property
+    @cached_property
     def _query_renderer(self) -> QueryRenderer:
-        if self.__query_renderer is None:
-            self.__query_renderer = QueryRenderer(
-                self.query,
-                self.dialect,
-                self.macro_definitions,
-                schema=self.mapping_schema,
-                model_fqn=self.fqn,
-                path=self._path,
-                jinja_macro_registry=self.jinja_macros,
-                python_env=self.python_env,
-                only_execution_time=self.kind.only_execution_time,
-                default_catalog=self.default_catalog,
-            )
-        return self.__query_renderer
+        return QueryRenderer(
+            self.query,
+            self.dialect,
+            self.macro_definitions,
+            schema=self.mapping_schema,
+            model_fqn=self.fqn,
+            path=self._path,
+            jinja_macro_registry=self.jinja_macros,
+            python_env=self.python_env,
+            only_execution_time=self.kind.only_execution_time,
+            default_catalog=self.default_catalog,
+        )
 
     @property
     def _data_hash_values(self) -> t.List[str]:
@@ -1158,7 +1146,6 @@ class SeedModel(_SqlBasedModel):
     column_hashes_: t.Optional[t.Dict[str, str]] = Field(default=None, alias="column_hashes")
     is_hydrated: bool = True
     source_type: Literal["seed"] = "seed"
-    __reader: t.Optional[CsvSeedReader] = None
 
     def render(
         self,
@@ -1300,11 +1287,9 @@ class SeedModel(_SqlBasedModel):
         if not self.is_hydrated:
             raise SQLMeshError(f"Seed model '{self.name}' is not hydrated.")
 
-    @property
+    @cached_property
     def _reader(self) -> CsvSeedReader:
-        if self.__reader is None:
-            self.__reader = self.seed.reader(dialect=self.dialect, settings=self.kind.csv_settings)
-        return self.__reader
+        return self.seed.reader(dialect=self.dialect, settings=self.kind.csv_settings)
 
     @property
     def _data_hash_values(self) -> t.List[str]:

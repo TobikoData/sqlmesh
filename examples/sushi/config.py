@@ -43,8 +43,7 @@ local_config = Config(
     model_defaults=ModelDefaultsConfig(dialect="duckdb"),
 )
 
-# Due to a 3.7 mypy bug we ignore. Can remove once 3.7 support is dropped.
-airflow_config = Config(  # type: ignore
+airflow_config = Config(
     default_scheduler=AirflowSchedulerConfig(),
     gateways=GatewayConfig(
         connection=SparkConnectionConfig(
@@ -58,8 +57,7 @@ airflow_config = Config(  # type: ignore
 )
 
 
-# Due to a 3.7 mypy bug we ignore. Can remove once 3.7 support is dropped.
-airflow_config_docker = Config(  # type: ignore
+airflow_config_docker = Config(
     default_scheduler=AirflowSchedulerConfig(airflow_url="http://airflow-webserver:8080/"),
     gateways=GatewayConfig(connection=SparkConnectionConfig()),
     model_defaults=ModelDefaultsConfig(dialect="duckdb", storage_format="iceberg"),
