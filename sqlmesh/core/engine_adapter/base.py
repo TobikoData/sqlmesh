@@ -979,7 +979,7 @@ class EngineAdapter:
         if order_projections and query.named_selects != list(columns_to_types):
             if isinstance(query, exp.Subqueryable):
                 query = query.subquery(alias="_ordered_projections")
-            query = exp.select(*columns_to_types).from_(query)
+            query = self._select_columns(columns_to_types).from_(query)
         self.execute(exp.insert(query, table_name, columns=list(columns_to_types)))
 
     def insert_overwrite_by_partition(
@@ -1176,14 +1176,14 @@ class EngineAdapter:
                 # Historical Records that Do Not Change
                 .with_(
                     "static",
-                    exp.select(*columns_to_types)
+                    self._select_columns(columns_to_types)
                     .from_(target_table)
                     .where(f"{valid_to_name} IS NOT NULL"),
                 )
                 # Latest Records that can be updated
                 .with_(
                     "latest",
-                    exp.select(*columns_to_types)
+                    self._select_columns(columns_to_types)
                     .from_(target_table)
                     .where(f"{valid_to_name} IS NULL"),
                 )
@@ -1700,7 +1700,7 @@ class EngineAdapter:
         self,
         query: Query,
         where: t.Optional[exp.Expression],
-        columns_to_type: t.Dict[str, exp.DataType],
+        columns_to_types: t.Dict[str, exp.DataType],
     ) -> Query:
         if not where or not isinstance(query, exp.Subqueryable):
             return query
@@ -1708,7 +1708,7 @@ class EngineAdapter:
         query = t.cast(exp.Subqueryable, query.copy())
         with_ = query.args.pop("with", None)
         query = (
-            exp.select(*columns_to_type, copy=False)
+            self._select_columns(columns_to_types)
             .from_(query.subquery("_subquery", copy=False), copy=False)
             .where(where, copy=False)
         )
@@ -1770,6 +1770,9 @@ class EngineAdapter:
                     exc_info=True,
                 )
 
+    @classmethod
+    def _select_columns(cls, columns: t.Iterable[str]) -> exp.Select:
+        return exp.select(*(f'"{c}"' for c in columns))
 
 class EngineAdapterWithIndexSupport(EngineAdapter):
     SUPPORTS_INDEXES = True
