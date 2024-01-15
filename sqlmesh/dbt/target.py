@@ -223,6 +223,9 @@ class SnowflakeConfig(TargetConfig):
 
     # TODO add other forms of authentication
 
+    # oauth access token
+    token: t.Optional[str] = None
+
     # Optional
     warehouse: t.Optional[str] = None
     role: t.Optional[str] = None
@@ -272,6 +275,7 @@ class SnowflakeConfig(TargetConfig):
             database=self.database,
             role=self.role,
             concurrent_tasks=self.threads,
+            token=self.token,
             private_key=self.private_key,
             private_key_path=self.private_key_path,
             private_key_passphrase=self.private_key_passphrase,
