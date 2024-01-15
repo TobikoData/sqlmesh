@@ -326,27 +326,37 @@ model_defaults:
     [
         "mapping",
         "expected",
+        "dialect",
         "raise_error",
     ],
     [
         (
             "'^dev$': dev_catalog\n    '^other$': other_catalog",
             {re.compile("^dev$"): "dev_catalog", re.compile("^other$"): "other_catalog"},
+            "duckdb",
             "",
         ),
         (
             "'^(?!prod$)': dev",
             {re.compile("^(?!prod$)"): "dev"},
+            "duckdb",
             "",
         ),
         (
             "'^dev$': dev_catalog\n    '[': other_catalog",
             {},
+            "duckdb",
             "`\[` is not a valid regular expression.",
+        ),
+        (
+            "'^prod$': prod_catalog",
+            {re.compile("^prod$"): "PROD_CATALOG"},
+            "snowflake",
+            "",
         ),
     ],
 )
-def test_environment_catalog_mapping(tmp_path_factory, mapping, expected, raise_error):
+def test_environment_catalog_mapping(tmp_path_factory, mapping, expected, dialect, raise_error):
     config_path = tmp_path_factory.mktemp("yaml_config") / "config.yaml"
     with open(config_path, "w") as fd:
         fd.write(
@@ -357,7 +367,7 @@ gateways:
             type: duckdb
 
 model_defaults:
-    dialect: duckdb
+    dialect: {dialect}
 
 environment_catalog_mapping:
     {mapping}
