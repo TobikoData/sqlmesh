@@ -1,11 +1,9 @@
 from __future__ import annotations
 
 import abc
-import functools
 import linecache
 import logging
 import os
-import time
 import typing as t
 from collections import defaultdict
 from dataclasses import dataclass
@@ -41,32 +39,6 @@ if t.TYPE_CHECKING:
 
 
 logger = logging.getLogger(__name__)
-
-
-_LoadMethod = t.TypeVar("_LoadMethod", bound=t.Callable[..., t.Sized])
-
-
-def _log_load_perf(func: _LoadMethod) -> _LoadMethod:
-    """Decorator to track how long it takes in each loader function."""
-
-    @functools.wraps(func)
-    def wrapper(*args: t.Any, **kwargs: t.Any) -> t.Sized:
-        start = time.perf_counter()
-        loaded = 0
-        try:
-            rv = func(*args, **kwargs)
-            loaded = len(rv)
-            return rv
-        finally:
-            logger.debug(
-                f"%s executed method %s loading %d objects in %.4fs",
-                args[0].__class__.__name__,
-                func.__name__,
-                loaded,
-                time.perf_counter() - start,
-            )
-
-    return t.cast(_LoadMethod, wrapper)
 
 
 # TODO: consider moving this to context
@@ -207,7 +179,6 @@ class Loader(abc.ABC):
     def _load_metrics(self) -> UniqueKeyDict[str, MetricMeta]:
         return UniqueKeyDict("metrics")
 
-    @_log_load_perf
     def _load_external_models(self) -> UniqueKeyDict[str, Model]:
         models: UniqueKeyDict[str, Model] = UniqueKeyDict("models")
         for context_path, config in self._context.configs.items():
@@ -239,7 +210,6 @@ class Loader(abc.ABC):
 class SqlMeshLoader(Loader):
     """Loads macros and models for a context using the SQLMesh file formats"""
 
-    @_log_load_perf
     def _load_scripts(self) -> t.Tuple[MacroRegistry, JinjaMacroRegistry]:
         """Loads all user defined macros."""
         # Store a copy of the macro registry
@@ -283,7 +253,6 @@ class SqlMeshLoader(Loader):
 
         return macros, jinja_macros
 
-    @_log_load_perf
     def _load_models(
         self, macros: MacroRegistry, jinja_macros: JinjaMacroRegistry
     ) -> UniqueKeyDict[str, Model]:
@@ -297,7 +266,6 @@ class SqlMeshLoader(Loader):
 
         return models
 
-    @_log_load_perf
     def _load_sql_models(
         self, macros: MacroRegistry, jinja_macros: JinjaMacroRegistry
     ) -> UniqueKeyDict[str, Model]:
@@ -346,7 +314,6 @@ class SqlMeshLoader(Loader):
 
         return models
 
-    @_log_load_perf
     def _load_python_models(self) -> UniqueKeyDict[str, Model]:
         """Loads the python models into a Dict"""
         models: UniqueKeyDict[str, Model] = UniqueKeyDict("models")
@@ -378,7 +345,6 @@ class SqlMeshLoader(Loader):
 
         return models
 
-    @_log_load_perf
     def _load_audits(
         self, macros: MacroRegistry, jinja_macros: JinjaMacroRegistry
     ) -> UniqueKeyDict[str, Audit]:
@@ -402,7 +368,6 @@ class SqlMeshLoader(Loader):
                         audits_by_name[audit.name] = audit
         return audits_by_name
 
-    @_log_load_perf
     def _load_metrics(self) -> UniqueKeyDict[str, MetricMeta]:
         """Loads all metrics."""
         metrics: UniqueKeyDict[str, MetricMeta] = UniqueKeyDict("metrics")
