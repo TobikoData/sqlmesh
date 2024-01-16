@@ -1598,8 +1598,11 @@ def create_seed_model(
             from the macro registry.
     """
     seed_path = Path(seed_kind.path)
-    if not seed_path.is_absolute():
-        seed_path = path / seed_path if path.is_dir() else path.parents[0] / seed_path
+    base, *subdir = seed_path.parts
+    if base == "~":
+        seed_path = module_path.joinpath(*subdir)
+    elif not seed_path.is_absolute():
+        seed_path = path / seed_path if path.is_dir() else path.parent / seed_path
 
     seed = create_seed(seed_path)
 

@@ -648,6 +648,31 @@ def test_seed_csv_settings():
     assert model.kind.csv_settings == CsvSettings(quotechar="'", escapechar="\\")
 
 
+def test_seed_context_home():
+    expressions = d.parse(
+        """
+        MODEL (
+            name db.seed,
+            kind SEED (
+              path '~/seeds/waiter_names.csv',
+              batch_size 100,
+            )
+        );
+    """
+    )
+
+    model = load_sql_based_model(
+        expressions,
+        path=Path("./examples/sushi/models/test_model.sql"),
+        module_path=Path("./examples/sushi"),
+    )
+
+    assert isinstance(model.kind, SeedKind)
+    assert model.kind.path == "~/seeds/waiter_names.csv"
+    assert model.seed is not None
+    assert len(model.seed.content) > 0
+
+
 def test_seed_model_diff(tmp_path):
     model_a_csv_path = (tmp_path / "model_a.csv").absolute()
     model_b_csv_path = (tmp_path / "model_b.csv").absolute()
