@@ -231,8 +231,10 @@ class SnowflakeConnectionConfig(ConnectionConfig):
     def _validate_authenticator(
         cls, values: t.Dict[str, t.Optional[str]]
     ) -> t.Dict[str, t.Optional[str]]:
-        from snowflake.connector.network import (DEFAULT_AUTHENTICATOR,
-                                                 OAUTH_AUTHENTICATOR)
+        from snowflake.connector.network import (
+            DEFAULT_AUTHENTICATOR,
+            OAUTH_AUTHENTICATOR,
+        )
 
         auth = values.get("authenticator")
         auth = auth.upper() if auth else DEFAULT_AUTHENTICATOR
@@ -245,10 +247,7 @@ class SnowflakeConnectionConfig(ConnectionConfig):
             and (not user or not password)
         ):
             raise ConfigError("User and password must be provided if using default authentication")
-        if (
-            auth == OAUTH_AUTHENTICATOR
-            and not values.get("token")
-        ):
+        if auth == OAUTH_AUTHENTICATOR and not values.get("token"):
             raise ConfigError("Token must be provided if using oauth authentication")
         return values
 
