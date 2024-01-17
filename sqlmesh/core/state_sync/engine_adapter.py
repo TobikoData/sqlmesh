@@ -631,6 +631,9 @@ class EngineAdapterStateSync(CommonStateSyncMixin, StateSync):
     def max_interval_end_for_environment(
         self, environment: str, models: t.Optional[t.Set[str]] = None
     ) -> t.Optional[int]:
+        if models == set():
+            return None
+
         env = self._get_environment(environment)
         if not env:
             return None
@@ -638,22 +641,49 @@ class EngineAdapterStateSync(CommonStateSyncMixin, StateSync):
         snapshots = (
             [s for s in env.snapshots if s.name in models] if models is not None else env.snapshots
         )
-        max_end = None
-        for where in self._snapshot_name_version_filter(snapshots, "intervals"):
-            end = self.engine_adapter.fetchone(
-                exp.select(exp.func("MAX", exp.to_column("end_ts")))
-                .from_(exp.to_table(self.intervals_table).as_("intervals"))
-                .where(where, copy=False)
-                .where(exp.to_column("is_dev").not_(), copy=False),
-                quote_identifiers=True,
-            )[0]
+        snapshots = snapshots or env.snapshots
 
-            if max_end is None:
-                max_end = end
+        result_end = None
+        comparator = min if models else max
+
+        table_alias = "intervals"
+        name_col = exp.column("name", table=table_alias)
+        version_col = exp.column("version", table=table_alias)
+        intervals_table = exp.to_table(self.intervals_table).as_(table_alias)
+
+        for where in self._snapshot_name_version_filter(snapshots, table_alias):
+            if models:
+                # Models have been selected explicitly.
+                max_end_subquery = (
+                    exp.select(
+                        name_col,
+                        version_col,
+                        exp.func("MAX", exp.column("end_ts", table=table_alias)).as_("max_end_ts"),
+                    )
+                    .from_(intervals_table)
+                    .where(where, copy=False)
+                    .where(exp.to_column("is_dev").not_(), copy=False)
+                    .group_by(name_col, version_col, copy=False)
+                )
+                query = exp.select(exp.func("MIN", exp.column("max_end_ts"))).from_(
+                    max_end_subquery.subquery()
+                )
+            else:
+                query = (
+                    exp.select(exp.func("MAX", exp.column("end_ts", table=table_alias)))
+                    .from_(intervals_table)
+                    .where(where, copy=False)
+                    .where(exp.to_column("is_dev").not_(), copy=False)
+                )
+
+            end = self.engine_adapter.fetchone(query, quote_identifiers=True)[0]
+
+            if result_end is None:
+                result_end = end
             elif end is not None:
-                max_end = max(max_end, end)
+                result_end = comparator(result_end, end)
 
-        return max_end
+        return result_end
 
     def recycle(self) -> None:
         self.engine_adapter.recycle()

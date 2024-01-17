@@ -1597,7 +1597,9 @@ def test_max_interval_end_for_environment(
 
     state_sync.add_interval(snapshot_a, "2023-01-01", "2023-01-01")
     state_sync.add_interval(snapshot_a, "2023-01-02", "2023-01-02")
+    state_sync.add_interval(snapshot_a, "2023-01-03", "2023-01-03")
     state_sync.add_interval(snapshot_b, "2023-01-01", "2023-01-01")
+    state_sync.add_interval(snapshot_b, "2023-01-02", "2023-01-02")
 
     environment_name = "test_max_interval_end_for_environment"
 
@@ -1608,24 +1610,30 @@ def test_max_interval_end_for_environment(
             name=environment_name,
             snapshots=[snapshot_a.table_info, snapshot_b.table_info],
             start_at="2023-01-01",
-            end_at="2023-01-02",
+            end_at="2023-01-03",
             plan_id="test_plan_id",
         )
     )
 
     assert state_sync.max_interval_end_for_environment(environment_name) == to_timestamp(
-        "2023-01-03"
+        "2023-01-04"
     )
 
     assert state_sync.max_interval_end_for_environment(
         environment_name, models={snapshot_a.name}
-    ) == to_timestamp("2023-01-03")
+    ) == to_timestamp("2023-01-04")
 
     assert state_sync.max_interval_end_for_environment(
         environment_name, models={snapshot_b.name}
-    ) == to_timestamp("2023-01-02")
+    ) == to_timestamp("2023-01-03")
 
-    assert state_sync.max_interval_end_for_environment(environment_name, models={"missing"}) is None
+    assert state_sync.max_interval_end_for_environment(
+        environment_name, models={snapshot_a.name, snapshot_b.name}
+    ) == to_timestamp("2023-01-03")
+
+    assert state_sync.max_interval_end_for_environment(
+        environment_name, models={"missing"}
+    ) == to_timestamp("2023-01-03")
     assert state_sync.max_interval_end_for_environment(environment_name, models=set()) is None
 
 
