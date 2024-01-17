@@ -98,10 +98,10 @@ SELECT *
 FROM @this_model
 WHERE
   False
-  OR @IF(@min_v IS NOT NULL AND @inclusive, @column <= @min_v, False)
-  OR @IF(@min_v IS NOT NULL AND NOT @inclusive, @column < @min_v, False)
-  OR @IF(@max_v IS NOT NULL AND @inclusive, @column >= @max_v, False)
-  OR @IF(@max_v IS NOT NULL AND NOT @inclusive, @column > @max_v, False)
+  OR @IF(@min_v IS NOT NULL AND @inclusive, @column < @min_v, False)
+  OR @IF(@min_v IS NOT NULL AND NOT @inclusive, @column <= @min_v, False)
+  OR @IF(@max_v IS NOT NULL AND @inclusive, @column > @max_v, False)
+  OR @IF(@max_v IS NOT NULL AND NOT @inclusive, @column >= @max_v, False)
     """,
 )
 
@@ -377,10 +377,10 @@ SELECT *
 FROM @this_model
 WHERE
   False
-  OR @IF(@min_v IS NOT NULL AND @inclusive, LENGTH(@column) <= @min_v, False)
-  OR @IF(@min_v IS NOT NULL AND NOT @inclusive, LENGTH(@column) < @min_v, False)
-  OR @IF(@max_v IS NOT NULL AND @inclusive, LENGTH(@column) >= @max_v, False)
-  OR @IF(@max_v IS NOT NULL AND NOT @inclusive, LENGTH(@column) > @max_v, False)
+  OR @IF(@min_v IS NOT NULL AND @inclusive, LENGTH(@column) < @min_v, False)
+  OR @IF(@min_v IS NOT NULL AND NOT @inclusive, LENGTH(@column) <= @min_v, False)
+  OR @IF(@max_v IS NOT NULL AND @inclusive, LENGTH(@column) > @max_v, False)
+  OR @IF(@max_v IS NOT NULL AND NOT @inclusive, LENGTH(@column) >= @max_v, False)
     """,
 )
 
@@ -406,10 +406,10 @@ FROM (
 )
 WHERE
   False
-  OR @IF(@min_v IS NOT NULL AND @inclusive, stddev_@column <= @min_v, False)
-  OR @IF(@min_v IS NOT NULL AND NOT @inclusive, stddev_@column < @min_v, False)
-  OR @IF(@max_v IS NOT NULL AND @inclusive, stddev_@column >= @max_v, False)
-  OR @IF(@max_v IS NOT NULL AND NOT @inclusive, stddev_@column > @max_v, False)
+  OR @IF(@min_v IS NOT NULL AND @inclusive, stddev_@column < @min_v, False)
+  OR @IF(@min_v IS NOT NULL AND NOT @inclusive, stddev_@column <= @min_v, False)
+  OR @IF(@max_v IS NOT NULL AND @inclusive, stddev_@column > @max_v, False)
+  OR @IF(@max_v IS NOT NULL AND NOT @inclusive, stddev_@column >= @max_v, False)
     """,
 )
 
@@ -425,10 +425,10 @@ FROM (
 )
 WHERE
   False
-  OR @IF(@min_v IS NOT NULL AND @inclusive, mean_@column <= @min_v, False)
-  OR @IF(@min_v IS NOT NULL AND NOT @inclusive, mean_@column < @min_v, False)
-  OR @IF(@max_v IS NOT NULL AND @inclusive, mean_@column >= @max_v, False)
-  OR @IF(@max_v IS NOT NULL AND NOT @inclusive, mean_@column > @max_v, False)
+  OR @IF(@min_v IS NOT NULL AND @inclusive, mean_@column < @min_v, False)
+  OR @IF(@min_v IS NOT NULL AND NOT @inclusive, mean_@column <= @min_v, False)
+  OR @IF(@max_v IS NOT NULL AND @inclusive, mean_@column > @max_v, False)
+  OR @IF(@max_v IS NOT NULL AND NOT @inclusive, mean_@column >= @max_v, False)
     """,
 )
 

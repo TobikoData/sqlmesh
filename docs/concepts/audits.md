@@ -274,26 +274,26 @@ MODEL (
 ```
 
 #### accepted_range
-Ensures that a column's values are in a numeric range. Range is inclusive by default, such that values equal to the range boundaries do not pass the audit.
+Ensures that a column's values are in a numeric range. Range is inclusive by default, such that values equal to the range boundaries will pass the audit.
 
-This example asserts that all rows have a `price` greater than 0 and less than 100:
+This example asserts that all rows have a `price` greater than or equal 1 and less than or equal to 100:
 
 ```sql linenums="1"
 MODEL (
   name sushi.items,
   audits [
-    accepted_range(column=price, min_v=0, max_v=100)
+    accepted_range(column=price, min_v=1, max_v=100)
   ]
 );
 ```
 
-This example specifies the `inclusive=False` argument to assert that all rows have a `price` of 1 or more and 100 or less:
+This example specifies the `inclusive=false` argument to assert that all rows have a `price` greater than 0 and less than 100:
 
 ```sql linenums="1"
 MODEL (
   name sushi.items,
   audits [
-    accepted_range(column=price, min_v=1, max_v=100, inclusive=False)
+    accepted_range(column=price, min_v=0, max_v=100, inclusive=false)
   ]
 );
 ```
