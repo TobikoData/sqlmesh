@@ -1416,7 +1416,10 @@ def test_multi(mocker):
     context.apply(plan)
 
     context = Context(
-        paths=["examples/multi/repo_1"], engine_adapter=context.engine_adapter, gateway="memory"
+        paths=["examples/multi/repo_1"],
+        engine_adapter=context.engine_adapter,
+        state_sync=context.state_sync,
+        gateway="memory",
     )
     model = context.get_model("bronze.a")
     assert model.project == "repo_1"
@@ -1563,14 +1566,6 @@ def test_environment_suffix_target_table(init_and_plan_context: t.Callable):
 
 def test_environment_catalog_mapping(init_and_plan_context: t.Callable):
     environments_schemas = {"raw", "sushi"}
-    state_tables = {
-        "_versions",
-        "_seeds",
-        "_snapshots",
-        "_environments",
-        "_plan_dags",
-        "_intervals",
-    }
 
     def get_prod_dev_views(metadata: DuckDBMetadata) -> t.Tuple[t.Set[exp.Table], t.Set[exp.Table]]:
         views = metadata.qualified_views
@@ -1582,69 +1577,95 @@ def test_environment_catalog_mapping(init_and_plan_context: t.Callable):
 
     def get_default_catalog_and_non_tables(
         metadata: DuckDBMetadata, default_catalog: t.Optional[str]
-    ) -> t.Tuple[t.Set[exp.Table], t.Set[exp.Table], t.Set[exp.Table]]:
+    ) -> t.Tuple[t.Set[exp.Table], t.Set[exp.Table]]:
         tables = metadata.qualified_tables
         user_default_tables = {
             x for x in tables if x.catalog == default_catalog and x.db != "sqlmesh"
         }
-        state_default_tables = {
-            x for x in tables if x.catalog == default_catalog and x.db == "sqlmesh"
-        }
         non_default_tables = {x for x in tables if x.catalog != default_catalog}
-        return user_default_tables, state_default_tables, non_default_tables
+        return user_default_tables, non_default_tables
 
     context, plan = init_and_plan_context(
         "examples/sushi", config="environment_catalog_mapping_config"
     )
     context.apply(plan)
-    metadata = DuckDBMetadata.from_context(context)
+    metadata = DuckDBMetadata(context.engine_adapter)
+    state_metadata = DuckDBMetadata.from_context(context.state_sync.state_sync)
     prod_views, dev_views = get_prod_dev_views(metadata)
     (
         user_default_tables,
-        state_default_tables,
         non_default_tables,
     ) = get_default_catalog_and_non_tables(metadata, context.default_catalog)
     assert len(prod_views) == 12
     assert len(dev_views) == 0
     assert len(user_default_tables) == 23
-    assert state_tables.issubset({x.name for x in state_default_tables})
+    assert state_metadata.schemas == ["sqlmesh"]
+    assert [x.sql() for x in state_metadata.qualified_tables] == [
+        "physical.sqlmesh._environments",
+        "physical.sqlmesh._intervals",
+        "physical.sqlmesh._plan_dags",
+        "physical.sqlmesh._seeds",
+        "physical.sqlmesh._snapshots",
+        "physical.sqlmesh._versions",
+    ]
     apply_to_environment(context, "dev")
     prod_views, dev_views = get_prod_dev_views(metadata)
     (
         user_default_tables,
-        state_default_tables,
         non_default_tables,
     ) = get_default_catalog_and_non_tables(metadata, context.default_catalog)
     assert len(prod_views) == 12
     assert len(dev_views) == 12
     assert len(user_default_tables) == 23
     assert len(non_default_tables) == 0
-    assert state_tables.issubset({x.name for x in state_default_tables})
+    assert state_metadata.schemas == ["sqlmesh"]
+    assert [x.sql() for x in state_metadata.qualified_tables] == [
+        "physical.sqlmesh._environments",
+        "physical.sqlmesh._intervals",
+        "physical.sqlmesh._plan_dags",
+        "physical.sqlmesh._seeds",
+        "physical.sqlmesh._snapshots",
+        "physical.sqlmesh._versions",
+    ]
     apply_to_environment(context, "prodnot")
     prod_views, dev_views = get_prod_dev_views(metadata)
     (
         user_default_tables,
-        state_default_tables,
         non_default_tables,
     ) = get_default_catalog_and_non_tables(metadata, context.default_catalog)
     assert len(prod_views) == 12
     assert len(dev_views) == 24
     assert len(user_default_tables) == 23
     assert len(non_default_tables) == 0
-    assert state_tables.issubset({x.name for x in state_default_tables})
+    assert state_metadata.schemas == ["sqlmesh"]
+    assert [x.sql() for x in state_metadata.qualified_tables] == [
+        "physical.sqlmesh._environments",
+        "physical.sqlmesh._intervals",
+        "physical.sqlmesh._plan_dags",
+        "physical.sqlmesh._seeds",
+        "physical.sqlmesh._snapshots",
+        "physical.sqlmesh._versions",
+    ]
     context.invalidate_environment("dev")
     context._run_janitor()
     prod_views, dev_views = get_prod_dev_views(metadata)
     (
         user_default_tables,
-        state_default_tables,
         non_default_tables,
     ) = get_default_catalog_and_non_tables(metadata, context.default_catalog)
     assert len(prod_views) == 12
     assert len(dev_views) == 12
     assert len(user_default_tables) == 23
     assert len(non_default_tables) == 0
-    assert state_tables.issubset({x.name for x in state_default_tables})
+    assert state_metadata.schemas == ["sqlmesh"]
+    assert [x.sql() for x in state_metadata.qualified_tables] == [
+        "physical.sqlmesh._environments",
+        "physical.sqlmesh._intervals",
+        "physical.sqlmesh._plan_dags",
+        "physical.sqlmesh._seeds",
+        "physical.sqlmesh._snapshots",
+        "physical.sqlmesh._versions",
+    ]
 
 
 @pytest.mark.parametrize(

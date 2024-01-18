@@ -67,9 +67,7 @@ class _SchedulerConfig(abc.ABC):
 class _EngineAdapterStateSyncSchedulerConfig(_SchedulerConfig):
     def create_state_sync(self, context: Context) -> StateSync:
         state_connection = context.config.get_state_connection(context.gateway)
-        engine_adapter = (
-            state_connection.create_engine_adapter() if state_connection else context.engine_adapter
-        )
+        engine_adapter = (state_connection or context._connection_config).create_engine_adapter()
         if not engine_adapter.SUPPORTS_ROW_LEVEL_OP:
             raise ConfigError(
                 f"The {engine_adapter.DIALECT.upper()} engine cannot be used to store SQLMesh state - please specify a different `state_connection` engine."
