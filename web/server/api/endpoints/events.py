@@ -5,6 +5,7 @@ from fastapi import APIRouter, Request
 from sse_starlette.sse import EventSourceResponse, ServerSentEvent
 
 from sqlmesh.utils.date import now_timestamp
+from web.server.models import EventName
 
 router = APIRouter()
 
@@ -27,6 +28,6 @@ async def events(request: Request) -> EventSourceResponse:
         generator(),
         ping=15,
         ping_message_factory=lambda: ServerSentEvent(
-            event="ping", data={"timestamp": now_timestamp()}
+            event=EventName.PING.value, data={"timestamp": now_timestamp()}
         ),
     )
