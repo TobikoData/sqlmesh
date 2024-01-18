@@ -149,14 +149,6 @@ class CommentCreationView(Enum):
         )
 
     @property
-    def supports_table_comment_commands(self) -> bool:
-        return self in (
-            CommentCreationView.IN_SCHEMA_DEF_AND_COMMANDS,
-            CommentCreationView.IN_SCHEMA_DEF_NO_COLUMN_COMMAND,
-            CommentCreationView.COMMENT_COMMAND_ONLY,
-        )
-
-    @property
     def supports_column_comment_commands(self) -> bool:
         return self in (
             CommentCreationView.IN_SCHEMA_DEF_AND_COMMANDS,
