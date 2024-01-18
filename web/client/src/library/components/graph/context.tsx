@@ -227,8 +227,8 @@ export default function LineageFlowProvider({
   const selectedEdges = useMemo(
     () =>
       Array.from(selectedNodes)
-        .map(id => nodesConnections[id]!)
-        .flat(),
+        .flatMap(id => nodesConnections[id])
+        .filter(Boolean) as ConnectedNode[],
     [nodesConnections, selectedNodes],
   )
 

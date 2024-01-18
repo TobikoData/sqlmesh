@@ -139,24 +139,24 @@ See examples below for how to restate both based on model names and model tags.
 === "Names Only"
 
     ```bash
-    sqlmesh plan --restate-model db.model_a --restate-model tag:expensive
+    sqlmesh plan --restate-model "db.model_a" --restate-model "tag:expensive"
     ```
 
 === "Upstream"
 
     ```bash
     # All selected models (including upstream models) will also include their downstream models
-    sqlmesh plan --restate-model +db.model_a --restate-model tag:+expensive
+    sqlmesh plan --restate-model "+db.model_a" --restate-model "tag:+expensive"
     ```
 
 === "Wildcards"
 
     ```bash
-    sqlmesh plan --restate-model db* --restate-model tag:exp*
+    sqlmesh plan --restate-model "db*" --restate-model "tag:exp*"
     ```
 
 === "Upstream + Wildcards"
 
     ```bash
-    sqlmesh plan --restate-model +db* --restate-model tag:+exp*
+    sqlmesh plan --restate-model "+db*" --restate-model "tag:+exp*"
     ```

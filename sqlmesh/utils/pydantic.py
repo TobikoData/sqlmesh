@@ -3,7 +3,7 @@ from __future__ import annotations
 import json
 import sys
 import typing as t
-from functools import wraps
+from functools import cached_property, wraps
 
 import pydantic
 from pydantic.fields import FieldInfo
@@ -103,13 +103,21 @@ class PydanticModel(pydantic.BaseModel):
             json_encoders = {exp.Expression: _expression_encoder}
             underscore_attrs_are_private = True
             smart_union = True
+            keep_untouched = (cached_property,)
 
     def dict(
         self,
         **kwargs: t.Any,
     ) -> t.Dict[str, t.Any]:
         kwargs.update(DEFAULT_ARGS)
-        return super().model_dump(**kwargs) if PYDANTIC_MAJOR_VERSION >= 2 else super().dict(**kwargs)  # type: ignore
+        if PYDANTIC_MAJOR_VERSION >= 2:
+            return super().model_dump(**kwargs)  # type: ignore
+
+        include = kwargs.pop("include", None)
+        if include is None and self.__config__.extra != "allow":  # type: ignore
+            # Workaround to support @cached_property in Pydantic v1.
+            include = {f.name for f in self.all_field_infos().values()}  # type: ignore
+        return super().dict(include=include, **kwargs)  # type: ignore
 
     def json(
         self,
@@ -122,7 +130,12 @@ class PydanticModel(pydantic.BaseModel):
                 return json.dumps(super().model_dump(mode="json", **kwargs), sort_keys=True)  # type: ignore
             else:
                 return super().model_dump_json(**kwargs)  # type: ignore
-        return super().json(**kwargs)  # type: ignore
+
+        include = kwargs.pop("include", None)
+        if include is None and self.__config__.extra != "allow":  # type: ignore
+            # Workaround to support @cached_property in Pydantic v1.
+            include = {f.name for f in self.all_field_infos().values()}  # type: ignore
+        return super().json(include=include, **kwargs)  # type: ignore
 
     def copy(self: "Model", **kwargs: t.Any) -> "Model":
         return (

@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import typing as t
+from functools import cached_property
 
 from pydantic import Field
 from sqlglot import Dialect, exp
@@ -40,7 +41,7 @@ from sqlmesh.utils.pydantic import (
 AuditReference = t.Tuple[str, t.Dict[str, exp.Expression]]
 
 
-class ModelMeta(_Node, extra="allow"):
+class ModelMeta(_Node):
     """Metadata for models which can be defined in SQL."""
 
     dialect: str = ""
@@ -63,10 +64,6 @@ class ModelMeta(_Node, extra="allow"):
     session_properties_: t.Optional[exp.Tuple] = Field(default=None, alias="session_properties")
     allow_partials: bool = False
     signals: t.List[exp.Tuple] = []
-
-    _fqn: t.Optional[str] = None
-    _fully_qualified_table: t.Optional[exp.Table] = None
-    _table_properties: t.Dict[str, exp.Expression] = {}
 
     _bool_validator = bool_validator
     _model_kind_validator = model_kind_validator
@@ -324,13 +321,15 @@ class ModelMeta(_Node, extra="allow"):
         """The maximal number of units in a single task for a backfill."""
         return getattr(self.kind, "batch_size", None)
 
-    @property
+    @cached_property
     def table_properties(self) -> t.Dict[str, exp.Expression]:
         """A dictionary of table properties."""
-        if not self._table_properties and self.table_properties_:
+        if self.table_properties_:
+            table_properties = {}
             for expression in self.table_properties_.expressions:
-                self._table_properties[expression.this.name] = expression.expression
-        return self._table_properties
+                table_properties[expression.this.name] = expression.expression
+            return table_properties
+        return {}
 
     @property
     def session_properties(self) -> t.Dict[str, t.Union[exp.Expression | str | int | float | bool]]:
@@ -379,16 +378,12 @@ class ModelMeta(_Node, extra="allow"):
         """Returns the catalog of a model."""
         return self.fully_qualified_table.catalog
 
-    @property
+    @cached_property
     def fully_qualified_table(self) -> exp.Table:
-        if not self._fully_qualified_table:
-            self._fully_qualified_table = exp.to_table(self.fqn)
-        return self._fully_qualified_table
+        return exp.to_table(self.fqn)
 
-    @property
+    @cached_property
     def fqn(self) -> str:
-        if self._fqn is None:
-            self._fqn = normalize_model_name(
-                self.name, default_catalog=self.default_catalog, dialect=self.dialect
-            )
-        return self._fqn
+        return normalize_model_name(
+            self.name, default_catalog=self.default_catalog, dialect=self.dialect
+        )

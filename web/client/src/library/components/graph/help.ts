@@ -53,7 +53,7 @@ function createGraphLayout({
   // https://eclipse.dev/elk/reference/options.html
   const elk: any = new ELK({
     workerUrl: new URL(
-      '/node_modules/elkjs/lib/elk-worker.min.js?worker',
+      '/node_modules/elkjs/lib/elk-worker.min.js',
       import.meta.url,
     ).href,
   })

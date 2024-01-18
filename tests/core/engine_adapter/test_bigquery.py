@@ -508,8 +508,7 @@ def test_begin_end_session(mocker: MockerFixture):
 def _to_sql_calls(execute_mock: t.Any, identify: bool = True) -> t.List[str]:
     output = []
     for call in execute_mock.call_args_list:
-        # Python 3.7 support
-        value = call[0][0] if isinstance(call[0], tuple) else call[0]
+        value = call[0][0]
         sql = (
             value.sql(dialect="bigquery", identify=identify)
             if isinstance(value, exp.Expression)

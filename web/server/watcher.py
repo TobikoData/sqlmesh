@@ -40,29 +40,42 @@ async def watch_project() -> None:
         directories: t.Dict[str, models.Directory] = {}
 
         for change, path_str in entries:
-            path = Path(path_str)
-            relative_path = path.relative_to(settings.project_path)
-
-            should_load_context = should_load_context or any(is_relative_to(path, p) for p in paths)
-
-            if change == Change.modified and path.is_dir():
-                directory = _get_directory(path, settings, context)
-                directories[directory.path] = directory
-            elif change == Change.deleted or not path.exists():
-                changes.append(
-                    models.ArtifactChange(
-                        change=Change.deleted,
-                        path=str(relative_path),
-                    )
+            try:
+                path = Path(path_str)
+                relative_path = path.relative_to(settings.project_path)
+                should_load_context = should_load_context or any(
+                    is_relative_to(path, p) for p in paths
                 )
-            elif change == Change.modified and path.is_file():
-                changes.append(
-                    models.ArtifactChange(
-                        type=models.ArtifactType.file,
-                        change=change,
-                        path=str(relative_path),
-                        file=_get_file_with_content(relative_path, settings),
+
+                if change == Change.modified and path.is_dir():
+                    directory = _get_directory(path, settings, context)
+                    directories[directory.path] = directory
+                elif change == Change.deleted or not path.exists():
+                    changes.append(
+                        models.ArtifactChange(
+                            change=Change.deleted,
+                            path=str(relative_path),
+                        )
                     )
+                elif change == Change.modified and path.is_file():
+                    changes.append(
+                        models.ArtifactChange(
+                            type=models.ArtifactType.file,
+                            change=change,
+                            path=str(relative_path),
+                            file=_get_file_with_content(
+                                settings.project_path / relative_path, str(relative_path)
+                            ),
+                        )
+                    )
+            except Exception:
+                error = ApiException(
+                    message="Error updating file",
+                    origin=f"API -> watcher -> watch_project",
+                    trigger=path_str,
+                ).to_dict()
+                api_console.queue.put_nowait(
+                    ServerSentEvent(event="errors", data=json.dumps(error))
                 )
 
         api_console.queue.put_nowait(

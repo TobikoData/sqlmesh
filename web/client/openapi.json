@@ -264,7 +264,13 @@
             "description": "Successful Response",
             "content": {
               "application/json": {
-                "schema": { "$ref": "#/components/schemas/File" }
+                "schema": {
+                  "anyOf": [
+                    { "$ref": "#/components/schemas/File" },
+                    { "type": "null" }
+                  ],
+                  "title": "Response Write File Api Files  Path  Post"
+                }
               }
             }
           },

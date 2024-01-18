@@ -180,10 +180,8 @@ class ChangeDisplay(BaseModel):
         )
 
     @staticmethod
-    def get_node_type(
-        snapshots: t.Dict[SnapshotId, Snapshot], snapshot_id: SnapshotId
-    ) -> t.Optional[NodeType]:
-        return snapshots[snapshot_id].node_type if snapshot_id in snapshots else None
+    def get_node_type(snapshots: t.Dict[SnapshotId, Snapshot], snapshot_id: SnapshotId) -> NodeType:
+        return snapshots[snapshot_id].node_type
 
 
 class ChangeDirect(ChangeDisplay):
