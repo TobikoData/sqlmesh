@@ -53,7 +53,6 @@ from sqlmesh.utils.date import TimeLike, now
 from sqlmesh.utils.errors import AuditError, ConfigError, SQLMeshError
 
 if t.TYPE_CHECKING:
-    from sqlmesh.core.console import Console
     from sqlmesh.core.engine_adapter._typing import DF, QueryOrDF
     from sqlmesh.core.environment import EnvironmentNamingInfo
 
@@ -73,18 +72,9 @@ class SnapshotEvaluator:
             operations (table / view creation, deletion, etc). Default: 1.
     """
 
-    def __init__(
-        self,
-        adapter: EngineAdapter,
-        ddl_concurrent_tasks: int = 1,
-        console: t.Optional[Console] = None,
-    ):
+    def __init__(self, adapter: EngineAdapter, ddl_concurrent_tasks: int = 1):
         self.adapter = adapter
         self.ddl_concurrent_tasks = ddl_concurrent_tasks
-
-        from sqlmesh.core.console import get_console
-
-        self.console = console or get_console()
 
     def evaluate(
         self,
@@ -266,11 +256,16 @@ class SnapshotEvaluator:
                 self.ddl_concurrent_tasks,
             )
 
-    def cleanup(self, target_snapshots: t.Iterable[SnapshotTableCleanupTask]) -> None:
+    def cleanup(
+        self,
+        target_snapshots: t.Iterable[SnapshotTableCleanupTask],
+        on_complete: t.Optional[t.Callable[[str], None]] = None,
+    ) -> None:
         """Cleans up the given snapshots by removing its table
 
         Args:
             target_snapshots: Snapshots to cleanup.
+            on_complete: A callback to call on each successfully deleted database object.
         """
         snapshots_to_dev_table_only = {
             t.snapshot.snapshot_id: t.dev_table_only for t in target_snapshots
@@ -278,7 +273,9 @@ class SnapshotEvaluator:
         with self.concurrent_context():
             concurrent_apply_to_snapshots(
                 [t.snapshot for t in target_snapshots],
-                lambda s: self._cleanup_snapshot(s, snapshots_to_dev_table_only[s.snapshot_id]),
+                lambda s: self._cleanup_snapshot(
+                    s, snapshots_to_dev_table_only[s.snapshot_id], on_complete
+                ),
                 self.ddl_concurrent_tasks,
                 reverse_order=True,
             )
@@ -660,7 +657,12 @@ class SnapshotEvaluator:
         if on_complete is not None:
             on_complete(snapshot)
 
-    def _cleanup_snapshot(self, snapshot: SnapshotInfoLike, dev_table_only: bool) -> None:
+    def _cleanup_snapshot(
+        self,
+        snapshot: SnapshotInfoLike,
+        dev_table_only: bool,
+        on_complete: t.Optional[t.Callable[[str], None]],
+    ) -> None:
         snapshot = snapshot.table_info
 
         table_names = [snapshot.table_name(is_deployable=False)]
@@ -676,6 +678,9 @@ class SnapshotEvaluator:
                     f"Table '{table_name}' is not a part of the physical schema '{snapshot.physical_schema}' and so can't be dropped."
                 )
             evaluation_strategy.delete(table_name)
+
+            if on_complete is not None:
+                on_complete(table_name)
 
     def _wap_publish_snapshot(
         self,

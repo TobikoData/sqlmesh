@@ -288,10 +288,10 @@ class Context(BaseContext):
         self.pinned_environments = Environment.normalize_names(self.config.pinned_environments)
         self.auto_categorize_changes = self.config.auto_categorize_changes
 
-        connection_config = self.config.get_connection(self.gateway)
-        self.concurrent_tasks = concurrent_tasks or connection_config.concurrent_tasks
-        self.register_comments = register_comments or connection_config.register_comments
-        self._engine_adapter = engine_adapter or connection_config.create_engine_adapter()
+        self._connection_config = self.config.get_connection(self.gateway)
+        self.concurrent_tasks = concurrent_tasks or self._connection_config.concurrent_tasks
+        self.register_comments = register_comments or self._connection_config.register_comments
+        self._engine_adapter = engine_adapter or self._connection_config.create_engine_adapter()
 
         test_connection_config = self.config.get_test_connection(self.gateway, self.default_catalog)
         self._test_engine_adapter = test_connection_config.create_engine_adapter(
@@ -337,7 +337,6 @@ class Context(BaseContext):
             self._snapshot_evaluator = SnapshotEvaluator(
                 self.engine_adapter.with_log_level(logging.INFO),
                 ddl_concurrent_tasks=self.concurrent_tasks,
-                console=self.console,
             )
         return self._snapshot_evaluator
 
@@ -1641,9 +1640,11 @@ class Context(BaseContext):
 
     def _run_janitor(self) -> None:
         expired_environments = self.state_sync.delete_expired_environments()
-        cleanup_expired_views(self.engine_adapter, expired_environments)
+        cleanup_expired_views(self.engine_adapter, expired_environments, console=self.console)
         expired_snapshots = self.state_sync.delete_expired_snapshots()
-        self.snapshot_evaluator.cleanup(expired_snapshots)
+        self.snapshot_evaluator.cleanup(
+            expired_snapshots, on_complete=self.console.update_cleanup_progress
+        )
 
         self.state_sync.compact_intervals()
 

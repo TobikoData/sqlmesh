@@ -49,13 +49,17 @@ class DuckDBMetadata:
 
     @property
     def qualified_tables(self) -> t.List[exp.Table]:
-        return [
-            exp.to_table(x, dialect="duckdb")
-            for x in self._get_single_col(
-                f"SELECT table_catalog || '.' || table_schema || '.' || table_name as qualified_name FROM information_schema.tables WHERE table_type = 'BASE TABLE' AND {self._system_schema_filter('table_schema')}",
-                "qualified_name",
-            )
-        ]
+        return sorted(
+            [
+                exp.to_table(x, dialect="duckdb")
+                for x in self._get_single_col(
+                    f"SELECT table_catalog || '.' || table_schema || '.' || table_name as qualified_name FROM information_schema.tables WHERE table_type = 'BASE TABLE' AND {self._system_schema_filter('table_schema')}",
+                    "qualified_name",
+                    self.engine_adapter,
+                )
+            ],
+            key=lambda x: x.sql(),
+        )
 
     @property
     def views(self) -> t.List[exp.Table]:
@@ -67,26 +71,32 @@ class DuckDBMetadata:
 
     @property
     def qualified_views(self) -> t.List[exp.Table]:
-        return [
-            exp.to_table(x, dialect="duckdb")
-            for x in self._get_single_col(
-                f"SELECT table_catalog || '.' || table_schema || '.' || table_name as qualified_name FROM information_schema.tables WHERE table_type = 'VIEW' AND {self._system_schema_filter('table_schema')}",
-                "qualified_name",
-            )
-        ]
+        return sorted(
+            [
+                exp.to_table(x, dialect="duckdb")
+                for x in self._get_single_col(
+                    f"SELECT table_catalog || '.' || table_schema || '.' || table_name as qualified_name FROM information_schema.tables WHERE table_type = 'VIEW' AND {self._system_schema_filter('table_schema')}",
+                    "qualified_name",
+                    self.engine_adapter,
+                )
+            ],
+            key=lambda x: x.sql(),
+        )
 
     @property
     def schemas(self) -> t.List[str]:
         return self._get_single_col(
             f"SELECT schema_name FROM information_schema.schemata WHERE catalog_name = '{self.engine_adapter.get_current_catalog()}' and {self._system_schema_filter('schema_name')}",
             "schema_name",
+            self.engine_adapter,
         )
 
     def _system_schema_filter(self, col: str) -> str:
         return f"{col} not in ('information_schema', 'pg_catalog', 'main')"
 
-    def _get_single_col(self, query: str, col: str) -> t.List[t.Any]:
-        return list(self.engine_adapter.fetchdf(query)[col].to_dict().values())
+    @staticmethod
+    def _get_single_col(query: str, col: str, engine_adapter: EngineAdapter) -> t.List[t.Any]:
+        return list(engine_adapter.fetchdf(query)[col].to_dict().values())
 
 
 class SushiDataValidator:
