@@ -286,9 +286,9 @@ class Context(BaseContext):
         self.pinned_environments = Environment.normalize_names(self.config.pinned_environments)
         self.auto_categorize_changes = self.config.auto_categorize_changes
 
-        connection_config = self.config.get_connection(self.gateway)
-        self.concurrent_tasks = concurrent_tasks or connection_config.concurrent_tasks
-        self._engine_adapter = engine_adapter or connection_config.create_engine_adapter()
+        self._connection_config = self.config.get_connection(self.gateway)
+        self.concurrent_tasks = concurrent_tasks or self._connection_config.concurrent_tasks
+        self._engine_adapter = engine_adapter or self._connection_config.create_engine_adapter()
 
         test_connection_config = self.config.get_test_connection(self.gateway, self.default_catalog)
         self._test_engine_adapter = test_connection_config.create_engine_adapter()
