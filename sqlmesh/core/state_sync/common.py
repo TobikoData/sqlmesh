@@ -7,6 +7,7 @@ from collections import defaultdict
 from datetime import datetime
 from functools import wraps
 
+from sqlmesh.core.console import Console
 from sqlmesh.core.dialect import schema_
 from sqlmesh.core.environment import Environment
 from sqlmesh.core.snapshot import (
@@ -32,7 +33,9 @@ if t.TYPE_CHECKING:
 logger = logging.getLogger(__name__)
 
 
-def cleanup_expired_views(adapter: EngineAdapter, environments: t.List[Environment]) -> None:
+def cleanup_expired_views(
+    adapter: EngineAdapter, environments: t.List[Environment], console: t.Optional[Console] = None
+) -> None:
     expired_schema_environments = [
         environment for environment in environments if environment.suffix_target.is_schema
     ]
@@ -55,6 +58,8 @@ def cleanup_expired_views(adapter: EngineAdapter, environments: t.List[Environme
                 ignore_if_not_exists=True,
                 cascade=True,
             )
+            if console:
+                console.update_cleanup_progress(schema.sql(dialect=adapter.dialect))
         except Exception as e:
             logger.warning("Falied to drop the expired environment schema '%s': %s", schema, e)
     for expired_view in {
@@ -65,6 +70,8 @@ def cleanup_expired_views(adapter: EngineAdapter, environments: t.List[Environme
     }:
         try:
             adapter.drop_view(expired_view, ignore_if_not_exists=True)
+            if console:
+                console.update_cleanup_progress(expired_view)
         except Exception as e:
             logger.warning("Falied to drop the expired environment view '%s': %s", expired_view, e)
 

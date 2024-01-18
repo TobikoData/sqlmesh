@@ -108,6 +108,10 @@ class Console(abc.ABC):
         """Stop the snapshot creation progress."""
 
     @abc.abstractmethod
+    def update_cleanup_progress(self, object_name: str) -> None:
+        """Update the snapshot cleanup progress."""
+
+    @abc.abstractmethod
     def start_promotion_progress(
         self,
         total_tasks: int,
@@ -400,6 +404,10 @@ class TerminalConsole(Console):
 
         self.environment_naming_info = EnvironmentNamingInfo()
         self.default_catalog = None
+
+    def update_cleanup_progress(self, object_name: str) -> None:
+        """Update the snapshot cleanup progress."""
+        self._print(f"Deleted object {object_name}")
 
     def start_promotion_progress(
         self,
