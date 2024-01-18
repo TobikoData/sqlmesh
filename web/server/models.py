@@ -42,6 +42,7 @@ class EventName(str, enum.Enum):
     PLAN_OVERVIEW = "plan-overview"
     PLAN_CANCEL = "plan-cancel"
 
+
 class Modules(str, enum.Enum):
     EDITOR = "editor"
     DOCS = "docs"
