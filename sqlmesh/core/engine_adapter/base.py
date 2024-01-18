@@ -140,6 +140,10 @@ class EngineAdapter:
     def spark(self) -> t.Optional[PySparkSession]:
         return None
 
+    @property
+    def comments_enabled(self) -> t.Optional[bool]:
+        return self.register_comments and self.COMMENT_CREATION_TABLE.is_supported
+
     @classmethod
     def is_pandas_df(cls, value: t.Any) -> bool:
         return isinstance(value, pd.DataFrame)
@@ -470,13 +474,13 @@ class EngineAdapter:
         if (
             table_description
             and self.COMMENT_CREATION_TABLE.is_comment_command_only
-            and self.register_comments
+            and self.comments_enabled
         ):
             self._create_table_comment(table_name, table_description)
         if (
             column_descriptions
             and self.COMMENT_CREATION_TABLE.is_comment_command_only
-            and self.register_comments
+            and self.comments_enabled
         ):
             self._create_column_comments(table_name, column_descriptions)
 
@@ -506,7 +510,7 @@ class EngineAdapter:
                     constraints=self._build_col_comment_exp(column, column_descriptions)
                     if column_descriptions
                     and engine_supports_schema_comments
-                    and self.register_comments
+                    and self.comments_enabled
                     else None,
                 )
                 for column, kind in columns_to_types.items()
@@ -557,7 +561,7 @@ class EngineAdapter:
             column_descriptions
             and columns_to_types
             and self.COMMENT_CREATION_TABLE.is_in_schema_def_ctas
-            and self.register_comments
+            and self.comments_enabled
         ):
             schema = self._build_schema_exp(table, columns_to_types, column_descriptions)
 
@@ -584,15 +588,10 @@ class EngineAdapter:
         if (
             table_description
             and self.COMMENT_CREATION_TABLE.is_comment_command_only
-            and self.register_comments
+            and self.comments_enabled
         ):
             self._create_table_comment(table_name, table_description)
-        if (
-            column_descriptions
-            and self.COMMENT_CREATION_TABLE.is_supported
-            and schema is None
-            and self.register_comments
-        ):
+        if column_descriptions and schema is None and self.comments_enabled:
             self._create_column_comments(table_name, column_descriptions)
 
     def _create_table(
@@ -614,7 +613,7 @@ class EngineAdapter:
                 replace=replace,
                 columns_to_types=columns_to_types,
                 table_description=table_description
-                if self.COMMENT_CREATION_TABLE.supports_schema_def and self.register_comments
+                if self.COMMENT_CREATION_TABLE.supports_schema_def and self.comments_enabled
                 else None,
                 **kwargs,
             )
@@ -788,7 +787,7 @@ class EngineAdapter:
         create_view_properties = self._build_view_properties_exp(
             create_kwargs.pop("table_properties", None),
             table_description
-            if self.COMMENT_CREATION_VIEW.supports_schema_def and self.register_comments
+            if self.COMMENT_CREATION_VIEW.supports_schema_def and self.comments_enabled
             else None,
         )
         if create_view_properties:
@@ -813,7 +812,7 @@ class EngineAdapter:
         if (
             table_description
             and self.COMMENT_CREATION_VIEW.is_comment_command_only
-            and self.register_comments
+            and self.comments_enabled
         ):
             self._create_table_comment(view_name, table_description, "VIEW")
         # Register column comments with commands if the engine doesn't support doing it in
@@ -828,7 +827,7 @@ class EngineAdapter:
                     and not columns_to_types
                 )
             )
-            and self.register_comments
+            and self.comments_enabled
         ):
             self._create_column_comments(view_name, column_descriptions, "VIEW")
 
