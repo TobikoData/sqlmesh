@@ -71,7 +71,7 @@ SELECT
 
 Model files may contain SQL comments in a format supported in the model's SQL dialect. (Comments begin with `--` or are gated by `/*` and `*/` in most dialects.)
 
-Some SQL engines support registering comments as metadata associated with a table or view. They may support table-level comments (e.g., "Total revenue for each customer") and/or column-level comments (e.g., "Customer's unique ID").
+Some SQL engines support registering comments as metadata associated with a table or view. They may support table-level comments (e.g., "Revenue data for each customer") and/or column-level comments (e.g., "Customer's unique ID").
 
 SQLMesh will automatically register comments if the engine supports it and the [gateway's connection `register_comments` configuration](../../reference/configuration.md#connection) is `true` (`false` by default). Engines vary in their support for comments - see [tables below](#engine-comment-support).
 
@@ -83,7 +83,7 @@ If a comment is present on the same file line as a column definition in the mode
 
 For example, the physical table created for the following model definition would have:
 
-1. The value of its `MODEL` DDL `description` field, "Total revenue for each customer", registered as a table comment in the SQL engine
+1. The value of its `MODEL` DDL `description` field, "Revenue data for each customer", registered as a table comment in the SQL engine
 2. The comment on the same line as the `customer_id` column definition in the SQL query, "Customer's unique ID", registered as a column comment for the table's `customer_id` column
 
 ```sql linenums="1" hl_lines="7 11"
@@ -93,7 +93,7 @@ MODEL (
   owner toby,
   cron '@daily',
   grain customer_id,
-  description 'Total revenue for each customer'
+  description 'Revenue data for each customer'
 );
 
 SELECT

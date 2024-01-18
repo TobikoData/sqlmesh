@@ -414,6 +414,21 @@ def test_comments(make_mocked_engine_adapter: t.Callable, mocker: MockerFixture)
         """COMMENT ON COLUMN "test_table"."a" IS 'a description'""",
     ]
 
+    # verify comments aren't registered if the config flag is False
+    adapter_no_comments = make_mocked_engine_adapter(EngineAdapter, register_comments=False)
+
+    adapter_no_comments.create_table(
+        "test_table",
+        {"a": "int", "b": "int"},
+        table_description="test description",
+        column_descriptions={"a": "a description"},
+    )
+
+    sql_calls = to_sql_calls(adapter_no_comments)
+    assert sql_calls == [
+        """CREATE TABLE IF NOT EXISTS "test_table" ("a" int, "b" int)""",
+    ]
+
 
 @pytest.mark.parametrize(
     "schema_differ_config, current_table, target_table, expected_final_structure, expected",

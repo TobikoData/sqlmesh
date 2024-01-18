@@ -580,37 +580,6 @@ def test_comments(make_mocked_engine_adapter: t.Callable, mocker: MockerFixture)
         "ALTER TABLE `test_table` SET OPTIONS(description = 'test description')",
     ]
 
-    # get_table_mock = mocker.patch(
-    #     "sqlmesh.core.engine_adapter.bigquery.BigQueryEngineAdapter._get_table"
-    # )
-    # get_table_mock.return_value = AttributeDict(
-    #     {"project": "project", "dataset_id": "dataset", "table_id": "temp_table"}
-    # )
-
-    # to_api_repr_mock = mocker.patch(
-    #     "google.cloud.bigquery.table.Table.to_api_repr"
-    # )
-    # to_api_repr_mock.return_value = {"schema": {"fields": [{"name": "a", "description": "a description"}]}}
-
-    # retry_mock = mocker.patch(
-    #     "sqlmesh.core.engine_adapter.bigquery.BigQueryEngineAdapter._BigQueryEngineAdapter__retry"
-    # )
-    # retry_resp = mocker.MagicMock()
-    # retry_resp_call = mocker.MagicMock()
-    # retry_resp.return_value = retry_resp_call
-    # retry_resp_call.errors = None
-    # retry_mock.return_value = retry_resp
-
-    # db_call_mock = mocker.patch(
-    #     "sqlmesh.core.engine_adapter.bigquery.BigQueryEngineAdapter._db_call"
-    # )
-    # db_call_mock.return_value = AttributeDict({"errors": None})
-
-    # adapter._create_column_comments(
-    #     "test_table",
-    #     {"a": "a description"},
-    # )
-
 
 def test_select_partitions_expr():
     assert (
