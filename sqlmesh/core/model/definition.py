@@ -1598,9 +1598,9 @@ def create_seed_model(
             from the macro registry.
     """
     seed_path = Path(seed_kind.path)
-    base, *subdir = seed_path.parts
-    if base == "~":
-        seed_path = module_path.joinpath(*subdir)
+    base, *subdirs = seed_path.parts
+    if base.lower() == "$root":
+        seed_path = module_path.joinpath(*subdirs)
     elif not seed_path.is_absolute():
         seed_path = path / seed_path if path.is_dir() else path.parent / seed_path
 

@@ -654,7 +654,7 @@ def test_seed_context_home():
         MODEL (
             name db.seed,
             kind SEED (
-              path '~/seeds/waiter_names.csv',
+              path '$root/seeds/waiter_names.csv',
               batch_size 100,
             )
         );
@@ -668,7 +668,7 @@ def test_seed_context_home():
     )
 
     assert isinstance(model.kind, SeedKind)
-    assert model.kind.path == "~/seeds/waiter_names.csv"
+    assert model.kind.path == "$root/seeds/waiter_names.csv"
     assert model.seed is not None
     assert len(model.seed.content) > 0
 
