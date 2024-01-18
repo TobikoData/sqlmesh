@@ -494,21 +494,21 @@ def test_accepted_range_audit(model: Model):
     )
     assert (
         rendered_query.sql()
-        == 'SELECT * FROM (SELECT * FROM "db"."test_model" AS "test_model" WHERE "ds" BETWEEN \'1970-01-01\' AND \'1970-01-01\') AS "_q_0" WHERE FALSE OR "a" <= 0 OR FALSE OR FALSE OR FALSE'
+        == 'SELECT * FROM (SELECT * FROM "db"."test_model" AS "test_model" WHERE "ds" BETWEEN \'1970-01-01\' AND \'1970-01-01\') AS "_q_0" WHERE FALSE OR "a" < 0 OR FALSE OR FALSE OR FALSE'
     )
     rendered_query = builtin.accepted_range_audit.render_query(
         model, column=exp.to_column("a"), max_v=100, inclusive=exp.false()
     )
     assert (
         rendered_query.sql()
-        == 'SELECT * FROM (SELECT * FROM "db"."test_model" AS "test_model" WHERE "ds" BETWEEN \'1970-01-01\' AND \'1970-01-01\') AS "_q_0" WHERE FALSE OR FALSE OR FALSE OR FALSE OR "a" > 100'
+        == 'SELECT * FROM (SELECT * FROM "db"."test_model" AS "test_model" WHERE "ds" BETWEEN \'1970-01-01\' AND \'1970-01-01\') AS "_q_0" WHERE FALSE OR FALSE OR FALSE OR FALSE OR "a" >= 100'
     )
     rendered_query = builtin.accepted_range_audit.render_query(
         model, column=exp.to_column("a"), min_v=100, max_v=100
     )
     assert (
         rendered_query.sql()
-        == 'SELECT * FROM (SELECT * FROM "db"."test_model" AS "test_model" WHERE "ds" BETWEEN \'1970-01-01\' AND \'1970-01-01\') AS "_q_0" WHERE FALSE OR "a" <= 100 OR FALSE OR "a" >= 100 OR FALSE'
+        == 'SELECT * FROM (SELECT * FROM "db"."test_model" AS "test_model" WHERE "ds" BETWEEN \'1970-01-01\' AND \'1970-01-01\') AS "_q_0" WHERE FALSE OR "a" < 100 OR FALSE OR "a" > 100 OR FALSE'
     )
 
 
