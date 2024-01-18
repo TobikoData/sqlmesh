@@ -562,4 +562,4 @@ class PlanCancelStageTracker(PlanStageTracker):
 
 class FormatFileStatus(BaseModel):
     path: str
-    status: Status = Status.SUCCESS
+    status: Status = Status.INIT
