@@ -346,9 +346,9 @@ MODEL (
 ```
 
 #### string_length_between_audit
-Ensures that all rows of a column contain a string with number of characters in the specified range. Range is inclusive by default, such that values equal to the range boundaries do not pass the audit.
+Ensures that all rows of a column contain a string with number of characters in the specified range. Range is inclusive by default, such that values equal to the range boundaries will pass the audit.
 
-This example asserts that all `name` values have more than 5 and fewer than 50 characters:
+This example asserts that all `name` values have 5 or more and 50 or fewer characters:
 
 ```sql linenums="1"
 MODEL (
@@ -359,13 +359,13 @@ MODEL (
 );
 ```
 
-This example specifies the `inclusive=False` argument to assert that all rows have a `name` with 4 or more and 60 or fewer characters:
+This example specifies the `inclusive=false` argument to assert that all rows have a `name` with 5 or more and 59 or fewer characters:
 
 ```sql linenums="1"
 MODEL (
   name sushi.customers,
   audits [
-    string_length_between_audit(column=zip, min_v=4, max_v=60, inclusive=False)
+    string_length_between_audit(column=zip, min_v=4, max_v=60, inclusive=false)
     ]
 );
 ```
@@ -490,32 +490,32 @@ These audits concern the statistical distributions of numeric columns.
 NOTE: audit thresholds will likely require fine-tuning via trial and error for each column being audited.
 
 #### mean_in_range
-Ensures that a numeric column's mean is in the specified range. Range is inclusive by default, such that values equal to the range boundaries do not pass the audit.
+Ensures that a numeric column's mean is in the specified range. Range is inclusive by default, such that values equal to the range boundaries will pass the audit.
 
-This example asserts that the `age` column has a mean greater than 18 and less than 65:
+This example asserts that the `age` column has a mean of at least 21 and at most 50:
 
 ```sql linenums="1"
 MODEL (
   audits [
-    mean_in_range(column=age, min_v=18, max_v=65)
+    mean_in_range(column=age, min_v=21, max_v=50)
     ]
 );
 ```
 
-This example specifies the `inclusive=False` argument to assert that `age` has a mean of at least 21 and at most 50:
+This example specifies the `inclusive=false` argument to assert that `age` has a mean greater than 18 and less than 65:
 
 ```sql linenums="1"
 MODEL (
   audits [
-    mean_in_range(column=age, min_v=21, max_v=50, inclusive=False)
+    mean_in_range(column=age, min_v=18, max_v=65, inclusive=false)
     ]
 );
 ```
 
 #### stddev_in_range
-Ensures that a numeric column's standard deviation is in the specified range. Range is inclusive by default, such that values equal to the range boundaries do not pass the audit.
+Ensures that a numeric column's standard deviation is in the specified range. Range is inclusive by default, such that values equal to the range boundaries will pass the audit.
 
-This example asserts that the `age` column has a standard deviation greater than 2 and less than 5:
+This example asserts that the `age` column has a standard deviation of at least 2 and at most 5:
 
 ```sql linenums="1"
 MODEL (
@@ -525,12 +525,12 @@ MODEL (
 );
 ```
 
-This example specifies the `inclusive=False` argument to assert that `age` has a standard deviation of at least 3 and at most 6:
+This example specifies the `inclusive=false` argument to assert that `age` has a standard deviation greater than 3 and less than 6:
 
 ```sql linenums="1"
 MODEL (
   audits [
-    mean_in_range(column=age, min_v=3, max_v=6, inclusive=False)
+    mean_in_range(column=age, min_v=3, max_v=6, inclusive=false)
     ]
 );
 ```
