@@ -1,9 +1,6 @@
-import json
 import typing as t
 from pathlib import Path
 
-from fastapi.encoders import jsonable_encoder
-from sse_starlette.sse import ServerSentEvent
 from watchfiles import Change, DefaultFilter, awatch
 
 from sqlmesh.core import constants as c
@@ -74,22 +71,14 @@ async def watch_project() -> None:
                     origin=f"API -> watcher -> watch_project",
                     trigger=path_str,
                 ).to_dict()
-                api_console.queue.put_nowait(
-                    ServerSentEvent(event="errors", data=json.dumps(error))
-                )
+                api_console.log_event(event=models.EventName.ERRORS, data=error)
 
-        api_console.queue.put_nowait(
-            ServerSentEvent(
-                event="file",
-                data=json.dumps(
-                    jsonable_encoder(
-                        {
-                            "changes": changes,
-                            "directories": directories,
-                        }
-                    )
-                ),
-            )
+        api_console.log_event(
+            event=models.EventName.FILE,
+            data={
+                "changes": changes,
+                "directories": directories,
+            },
         )
 
         if should_load_context:
@@ -99,14 +88,10 @@ async def watch_project() -> None:
 def reload_context(context: Context) -> None:
     try:
         context.load()
-        api_console.queue.put_nowait(
-            ServerSentEvent(
-                event="models", data=json.dumps(jsonable_encoder(get_all_models(context)))
-            )
-        )
+        api_console.log_event(event=models.EventName.MODELS, data=get_all_models(context))
     except Exception:
         error = ApiException(
             message="Error refreshing the models while watching file changes",
             origin="API -> watcher -> reload_context",
         ).to_dict()
-        api_console.queue.put_nowait(ServerSentEvent(event="errors", data=json.dumps(error)))
+        api_console.log_event(event=models.EventName.ERRORS, data=error)

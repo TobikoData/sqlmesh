@@ -34,7 +34,7 @@ import { Button } from '@components/button/Button'
 import { Divider } from '@components/divider/Divider'
 import Container from '@components/container/Container'
 import { useStoreEditor, createLocalFile } from '@context/editor'
-import { ModelFile } from '@models/file'
+import { type FormatFileStatus, ModelFile } from '@models/file'
 import ModalConfirmation, {
   type Confirmation,
 } from '@components/modal/ModalConfirmation'
@@ -80,6 +80,7 @@ export default function PageIDE(): JSX.Element {
   const setPlanAction = useStorePlan(s => s.setPlanAction)
 
   const project = useStoreProject(s => s.project)
+  const files = useStoreProject(s => s.files)
   const setProject = useStoreProject(s => s.setProject)
   const setFiles = useStoreProject(s => s.setFiles)
   const refreshFiles = useStoreProject(s => s.refreshFiles)
@@ -214,6 +215,18 @@ export default function PageIDE(): JSX.Element {
       refreshFiles()
       setActiveRange()
     })
+    const channelFormatFile = channel<FormatFileStatus>(
+      'format-file',
+      formatFileStatus => {
+        const file = files.get(formatFileStatus.path)
+
+        if (isNotNil(file)) {
+          file.isFormatted = formatFileStatus.status === Status.success
+
+          refreshFiles()
+        }
+      },
+    )
 
     void getFiles().then(({ data }) => {
       if (isNil(data)) return
@@ -232,6 +245,7 @@ export default function PageIDE(): JSX.Element {
       updateModels(data as Model[])
     })
 
+    channelFormatFile.subscribe()
     channelModels.subscribe()
     channelErrors.subscribe()
     channelPlanOverview.subscribe()
@@ -246,6 +260,7 @@ export default function PageIDE(): JSX.Element {
       void cancelRequestEnvironments()
       void cancelRequestPlan()
 
+      channelFormatFile.unsubscribe()
       channelTests.unsubscribe()
       channelModels.unsubscribe()
       channelErrors.unsubscribe()
