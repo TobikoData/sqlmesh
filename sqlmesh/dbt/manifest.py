@@ -17,7 +17,7 @@ from dbt.parser.manifest import ManifestLoader
 from dbt.tracking import do_not_track
 
 from sqlmesh.dbt.basemodel import Dependencies
-from sqlmesh.dbt.builtin import BUILTIN_FILTERS, BUILTIN_GLOBALS
+from sqlmesh.dbt.builtin import BUILTIN_FILTERS, BUILTIN_GLOBALS, OVERRIDDEN_MACROS
 from sqlmesh.dbt.model import ModelConfig
 from sqlmesh.dbt.package import MacroConfig
 from sqlmesh.dbt.seed import SeedConfig
@@ -396,14 +396,24 @@ class ManifestHelper:
                 else:
                     # dbt doesn't include the package name for project macros
                     package_name = package if package != self._project_name else None
-                dependencies.macros.append(MacroReference(package=package_name, name=macro_name))
+                _macro_reference_if_not_overridden(
+                    package_name, macro_name, dependencies.macros.append
+                )
             else:
                 if call_name[0] != "adapter":
-                    dependencies.macros.append(
-                        MacroReference(package=call_name[0], name=call_name[1])
+                    _macro_reference_if_not_overridden(
+                        call_name[0], call_name[1], dependencies.macros.append
                     )
 
         return dependencies
+
+
+def _macro_reference_if_not_overridden(
+    package: t.Optional[str], name: str, if_not_overridden: t.Callable[[MacroReference], None]
+) -> None:
+    reference = MacroReference(package=package, name=name)
+    if reference not in OVERRIDDEN_MACROS:
+        if_not_overridden(reference)
 
 
 def _config(node: t.Union[ManifestNode, SourceDefinition]) -> t.Dict[str, t.Any]:
@@ -413,7 +423,7 @@ def _config(node: t.Union[ManifestNode, SourceDefinition]) -> t.Dict[str, t.Any]
 def _macro_references(
     manifest: Manifest, node: t.Union[ManifestNode, Macro]
 ) -> t.Set[MacroReference]:
-    result = set()
+    result: t.Set[MacroReference] = set()
     for macro_node_id in node.depends_on.macros:
         if not macro_node_id:
             continue
@@ -423,7 +433,7 @@ def _macro_references(
         macro_package = (
             macro_node.package_name if macro_node.package_name != node.package_name else None
         )
-        result.add(MacroReference(package=macro_package, name=macro_name))
+        _macro_reference_if_not_overridden(macro_package, macro_name, result.add)
     return result
 
 
