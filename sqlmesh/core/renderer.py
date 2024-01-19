@@ -106,7 +106,6 @@ class BaseExpressionRenderer:
                     cache_key[0] if not self._only_execution_time else None,
                     cache_key[1] if not self._only_execution_time else None,
                 ),
-                "default_catalog": self._default_catalog,
                 **kwargs,
             }
 
