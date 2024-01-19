@@ -200,6 +200,7 @@ class SnowflakeConnectionConfig(ConnectionConfig):
         concurrent_tasks: The maximum number of tasks that can use this connection concurrently.
         authenticator: The optional authenticator name. Defaults to username/password authentication ("snowflake").
                        Options: https://github.com/snowflakedb/snowflake-connector-python/blob/e937591356c067a77f34a0a42328907fda792c23/src/snowflake/connector/network.py#L178-L183
+        token: The optional oauth access token to use for authentication when authenticator is set to "oauth".
         private_key: The optional private key to use for authentication. Key can be Base64-encoded DER format (representing the key bytes), a plain-text PEM format, or bytes (Python config only). https://docs.snowflake.com/en/developer-guide/python-connector/python-connector-connect#using-key-pair-authentication-key-pair-rotation
         private_key_path: The optional path to the private key to use for authentication. This would be used instead of `private_key`.
         private_key_passphrase: The optional passphrase to use to decrypt `private_key` or `private_key_path`. Keys can be created without encryption so only provide this if needed.
@@ -212,6 +213,7 @@ class SnowflakeConnectionConfig(ConnectionConfig):
     database: t.Optional[str] = None
     role: t.Optional[str] = None
     authenticator: t.Optional[str] = None
+    token: t.Optional[str] = None
 
     # Private Key Auth
     private_key: t.Optional[t.Union[str, bytes]] = None
@@ -229,7 +231,10 @@ class SnowflakeConnectionConfig(ConnectionConfig):
     def _validate_authenticator(
         cls, values: t.Dict[str, t.Optional[str]]
     ) -> t.Dict[str, t.Optional[str]]:
-        from snowflake.connector.network import DEFAULT_AUTHENTICATOR
+        from snowflake.connector.network import (
+            DEFAULT_AUTHENTICATOR,
+            OAUTH_AUTHENTICATOR,
+        )
 
         auth = values.get("authenticator")
         auth = auth.upper() if auth else DEFAULT_AUTHENTICATOR
@@ -242,6 +247,8 @@ class SnowflakeConnectionConfig(ConnectionConfig):
             and (not user or not password)
         ):
             raise ConfigError("User and password must be provided if using default authentication")
+        if auth == OAUTH_AUTHENTICATOR and not values.get("token"):
+            raise ConfigError("Token must be provided if using oauth authentication")
         return values
 
     @classmethod
@@ -329,6 +336,7 @@ class SnowflakeConnectionConfig(ConnectionConfig):
             "database",
             "role",
             "authenticator",
+            "token",
             "private_key",
         }
 
