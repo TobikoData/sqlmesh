@@ -1384,7 +1384,7 @@ def test_models_selected_for_backfill(make_snapshot, mocker: MockerFixture):
         is_new_environment=False,
         is_unfinalized_environment=False,
         create_from="prod",
-        added=set(),
+        added={snapshot_b.snapshot_id},
         removed_snapshots={},
         modified_snapshots={},
         snapshots={
@@ -1416,6 +1416,7 @@ def test_models_selected_for_backfill(make_snapshot, mocker: MockerFixture):
     assert not plan.is_selected_for_backfill('"b"')
     assert plan.models_to_backfill == {'"a"'}
     assert {i.snapshot_id for i in plan.missing_intervals} == {snapshot_a.snapshot_id}
+    assert not plan.environment.promoted_snapshot_ids
 
     plan = PlanBuilder(context_diff, is_dev=True, backfill_models={'"b"'}).build()
     assert plan.is_selected_for_backfill('"a"')
@@ -1425,6 +1426,7 @@ def test_models_selected_for_backfill(make_snapshot, mocker: MockerFixture):
         snapshot_a.snapshot_id,
         snapshot_b.snapshot_id,
     }
+    assert plan.environment.promoted_snapshot_ids == [snapshot_b.snapshot_id]
 
 
 def test_categorized_uncategorized(make_snapshot, mocker: MockerFixture):
