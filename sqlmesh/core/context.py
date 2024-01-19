@@ -966,27 +966,32 @@ class Context(BaseContext):
             or (backfill_models is not None and not backfill_models),
         )
 
-        if backfill_models is not None:
-            # If the selected model is a newly added model, then we should narrow down the intervals
-            # that should be considered for the default plan end value by including its parents.
-            max_end_models = backfill_models.copy()
-            for name in backfill_models:
-                if name not in snapshots:
-                    continue
-                snapshot = snapshots[name]
-                snapshot_id = snapshot.snapshot_id
-                if snapshot_id in context_diff.added and snapshot_id in context_diff.new_snapshots:
-                    max_end_models |= {s.name for s in snapshot.parents}
-        else:
-            max_end_models = None
-
         # If no end date is specified, use the max interval end from prod
         # to prevent unintended evaluation of the entire DAG.
-        default_end = (
-            self.state_sync.max_interval_end_for_environment(c.PROD, models=max_end_models)
-            if not run
-            else None
-        )
+        if not run:
+            if backfill_models is not None:
+                # Only consider selected models for the default end value.
+                models_for_default_end = backfill_models.copy()
+                for name in backfill_models:
+                    if name not in snapshots:
+                        continue
+                    snapshot = snapshots[name]
+                    snapshot_id = snapshot.snapshot_id
+                    if (
+                        snapshot_id in context_diff.added
+                        and snapshot_id in context_diff.new_snapshots
+                    ):
+                        # If the selected model is a newly added model, then we should narrow down the intervals
+                        # that should be considered for the default plan end value by including its parents.
+                        models_for_default_end |= {s.name for s in snapshot.parents}
+                default_end = self.state_sync.greatest_common_interval_end(
+                    c.PROD, models_for_default_end
+                )
+            else:
+                default_end = self.state_sync.max_interval_end_for_environment(c.PROD)
+        else:
+            default_end = None
+
         default_start = to_date(default_end) - timedelta(days=1) if default_end and is_dev else None
 
         return PlanBuilder(
