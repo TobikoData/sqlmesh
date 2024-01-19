@@ -527,6 +527,11 @@ class QueryRenderer(BaseExpressionRenderer):
 
 @contextmanager
 def _normalize_and_quote(query: E, dialect: str, default_catalog: t.Optional[str]) -> t.Iterator[E]:
+    if isinstance(query, (exp.Command, exp.AlterTable)) and default_catalog:
+        for table in query.find_all(exp.Table):
+            if isinstance(table.this, exp.Identifier):
+                if not table.args.get("catalog") and table.args.get("db"):
+                    table.set("catalog", exp.parse_identifier(default_catalog, dialect=dialect))
     qualify_tables(query, catalog=default_catalog, dialect=dialect)
     normalize_identifiers(query, dialect=dialect)
     yield query
