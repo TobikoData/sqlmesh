@@ -106,6 +106,7 @@ class BaseExpressionRenderer:
                     cache_key[0] if not self._only_execution_time else None,
                     cache_key[1] if not self._only_execution_time else None,
                 ),
+                "default_catalog": self._default_catalog,
                 **kwargs,
             }
 
@@ -527,11 +528,6 @@ class QueryRenderer(BaseExpressionRenderer):
 
 @contextmanager
 def _normalize_and_quote(query: E, dialect: str, default_catalog: t.Optional[str]) -> t.Iterator[E]:
-    if isinstance(query, (exp.Command, exp.AlterTable)) and default_catalog:
-        for table in query.find_all(exp.Table):
-            if isinstance(table.this, exp.Identifier):
-                if not table.args.get("catalog") and table.args.get("db"):
-                    table.set("catalog", exp.parse_identifier(default_catalog, dialect=dialect))
     qualify_tables(query, catalog=default_catalog, dialect=dialect)
     normalize_identifiers(query, dialect=dialect)
     yield query
