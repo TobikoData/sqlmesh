@@ -23,10 +23,11 @@ export default function Content(): JSX.Element {
         />
       ) : (
         <div className="p-4 h-full w-full">
-          <div className="w-full h-full p-4 rounded-lg bg-danger-5">
+          <div className="w-full h-full p-4 rounded-lg bg-danger-5 text-danger-700">
             <DisplayError
               error={error}
               scope={error.key}
+              withSplitPane={true}
             />
           </div>
         </div>

@@ -32,7 +32,7 @@ export default function Content(): JSX.Element {
           description={
             isNil(environmentName)
               ? undefined
-              : `Model ${environmentName} Does Not Exist`
+              : `Environment ${environmentName} Does Not Exist`
           }
           message="Back To Docs"
         />

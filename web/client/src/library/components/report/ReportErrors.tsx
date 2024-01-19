@@ -3,12 +3,13 @@ import pluralize from 'pluralize'
 import clsx from 'clsx'
 import React, { useState, Fragment, useEffect } from 'react'
 import { useIDE, type ErrorIDE, type ErrorKey } from '../../pages/ide/context'
-import { isNotNil, toDate, toDateFormat } from '@utils/index'
+import { isNil, isNotNil, toDate, toDateFormat } from '@utils/index'
 import { MinusCircleIcon, PlusCircleIcon } from '@heroicons/react/24/solid'
 import { Divider } from '@components/divider/Divider'
 import { useStoreContext } from '@context/context'
 import { Button } from '@components/button/Button'
 import { EnumSize, EnumVariant } from '~/types/enum'
+import SplitPane from '@components/splitPane/SplitPane'
 
 export default function ReportErrors(): JSX.Element {
   const { errors, clearErrors } = useIDE()
@@ -97,9 +98,11 @@ export default function ReportErrors(): JSX.Element {
 export function DisplayError({
   error,
   scope,
+  withSplitPane = false,
 }: {
   scope: ErrorKey
   error: ErrorIDE
+  withSplitPane?: boolean
 }): JSX.Element {
   const { removeError } = useIDE()
 
@@ -107,63 +110,30 @@ export function DisplayError({
 
   return (
     <div className="flex flex-col w-full h-full overflow-hidden">
-      <div className="flex w-full">
-        <div className="w-[20rem]">
-          <div className="flex aline-center mb-2">
-            <small className="block mr-3">
-              <small className="py-0.5 px-2 bg-danger-500 text-danger-100 rounded-md text-xs">
-                {error.status ?? 'UI'}
-              </small>
-            </small>
-            <small className="block">{scope}</small>
-          </div>
-          <div className={clsx('text-sm px-2')}>
-            <small className="block text-xs font-mono">
-              {toDateFormat(
-                toDate(error.timestamp),
-                'yyyy-mm-dd hh-mm-ss',
-                false,
-              )}
-            </small>
-            <p>{error.message}</p>
-          </div>
-        </div>
-        <div className="w-full px-4">
-          {isNotNil(version) && (
-            <small className="block">
-              <b>Version</b>: {version}
-            </small>
-          )}
-          {error.type != null && (
-            <small className="block">
-              <b>Type</b>: {error.type}
-            </small>
-          )}
-          {error.origin != null && (
-            <small className="block mb-2">
-              <b>Origin</b>: {error.origin}
-            </small>
-          )}
-          {error.trigger != null && (
-            <small className="block mb-2">
-              <b>Trigger</b>: {error.trigger}
-            </small>
-          )}
-          <Divider className="!border-danger-10" />
-          <p className="text-sm my-4">{error.description}</p>
-        </div>
-      </div>
-      {isNotNil(error.traceback) && (
-        <>
-          <div className="w-full h-full mb-4 overflow-hidden">
+      {isNil(error.traceback) ? (
+        <DisplayErrorDetails
+          version={version}
+          scope={scope}
+          error={error}
+        />
+      ) : withSplitPane ? (
+        <SplitPane
+          direction="vertical"
+          sizes={[50, 50]}
+          minSize={100}
+          snapOffset={0}
+          className="flex flex-col w-full h-full overflow-hidden"
+        >
+          <DisplayErrorDetails
+            version={version}
+            scope={scope}
+            error={error}
+          />
+          {isNotNil(error.traceback) && (
             <Disclosure defaultOpen={true}>
               {({ open }) => (
-                <>
-                  <Disclosure.Button
-                    className={clsx(
-                      'flex items-center justify-between rounded-lg text-left w-full bg-neutral-10 px-3 mb-2',
-                    )}
-                  >
+                <div className="w-full h-full overflow-hidden">
+                  <Disclosure.Button className="flex items-center justify-between rounded-lg text-left w-full bg-neutral-10 px-3 my-2">
                     <div className="text-lg font-bold whitespace-nowrap w-full">
                       <h3 className="py-2">Traceback</h3>
                     </div>
@@ -175,16 +145,48 @@ export function DisplayError({
                       )}
                     </div>
                   </Disclosure.Button>
-                  <Disclosure.Panel className="w-full h-full px-2 pb-2 overflow-hidden">
+                  <Disclosure.Panel className="flex w-full h-full px-2 mb-2 overflow-hidden">
                     <pre className="font-mono w-full h-full bg-dark-lighter text-danger-500 rounded-lg p-4 overflow-scroll hover:scrollbar scrollbar--vertical scrollbar--horizontal text-sm">
                       <code>{error.traceback ?? error.message}</code>
                     </pre>
                   </Disclosure.Panel>
-                </>
+                </div>
               )}
             </Disclosure>
-          </div>
-          <Divider />
+          )}
+        </SplitPane>
+      ) : (
+        <>
+          <DisplayErrorDetails
+            version={version}
+            scope={scope}
+            error={error}
+          />
+          {isNotNil(error.traceback) && (
+            <Disclosure defaultOpen={true}>
+              {({ open }) => (
+                <div className="w-full h-full overflow-hidden">
+                  <Disclosure.Button className="flex items-center justify-between rounded-lg text-left w-full bg-neutral-10 px-3 my-2">
+                    <div className="text-lg font-bold whitespace-nowrap w-full">
+                      <h3 className="py-2">Traceback</h3>
+                    </div>
+                    <div>
+                      {open ? (
+                        <MinusCircleIcon className="h-6 w-6 text-danger-500" />
+                      ) : (
+                        <PlusCircleIcon className="h-6 w-6 text-danger-500" />
+                      )}
+                    </div>
+                  </Disclosure.Button>
+                  <Disclosure.Panel className="flex w-full h-full px-2 mb-2 overflow-hidden">
+                    <pre className="font-mono w-full h-full bg-dark-lighter text-danger-500 rounded-lg p-4 overflow-scroll hover:scrollbar scrollbar--vertical scrollbar--horizontal text-sm">
+                      <code>{error.traceback ?? error.message}</code>
+                    </pre>
+                  </Disclosure.Panel>
+                </div>
+              )}
+            </Disclosure>
+          )}
         </>
       )}
       <div className="flex justify-end mt-2">
@@ -199,6 +201,67 @@ export function DisplayError({
         >
           Dismiss
         </Button>
+      </div>
+    </div>
+  )
+}
+
+function DisplayErrorDetails({
+  error,
+  scope,
+  version,
+}: {
+  scope: ErrorKey
+  error: ErrorIDE
+  version?: string
+}): JSX.Element {
+  return (
+    <div className="flex w-full overflow-hidden mb-2">
+      <div className="w-[20rem] h-full">
+        <div className="flex aline-center mb-2">
+          <small className="block mr-3">
+            <small className="py-0.5 px-2 bg-danger-500 text-danger-100 rounded-md text-xs">
+              {error.status ?? 'UI'}
+            </small>
+          </small>
+          <small className="block">{scope}</small>
+        </div>
+        <div className={clsx('text-sm px-2')}>
+          <small className="block text-xs font-mono">
+            {toDateFormat(
+              toDate(error.timestamp),
+              'yyyy-mm-dd hh-mm-ss',
+              false,
+            )}
+          </small>
+          <p>{error.message}</p>
+        </div>
+      </div>
+      <div className="flex flex-col w-full px-4">
+        {isNotNil(version) && (
+          <small className="block">
+            <b>Version</b>: {version}
+          </small>
+        )}
+        {error.type != null && (
+          <small className="block">
+            <b>Type</b>: {error.type}
+          </small>
+        )}
+        {error.origin != null && (
+          <small className="block mb-2">
+            <b>Origin</b>: {error.origin}
+          </small>
+        )}
+        {error.trigger != null && (
+          <small className="block mb-2">
+            <b>Trigger</b>: {error.trigger}
+          </small>
+        )}
+        <Divider />
+        <div className="pt-4 h-full overflow-scroll hover:scrollbar scrollbar--vertical scrollbar--horizontal">
+          <p className="flex text-sm ">{error.description}</p>
+        </div>
       </div>
     </div>
   )

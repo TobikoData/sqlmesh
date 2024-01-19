@@ -2,6 +2,7 @@ import Container from '@components/container/Container'
 import { Link } from 'react-router-dom'
 import { ButtonLink } from '@components/button/Button'
 import { EnumVariant } from '~/types/enum'
+import { isNotNil } from '@utils/index'
 
 export default function NotFound({
   message,
@@ -19,7 +20,7 @@ export default function NotFound({
           <h1 className="text-[4rem] md:text-[6rem] lg:text-[9rem] text-secondary-10 dark:text-primary-10 mb-4">
             Not Found
           </h1>
-          {description != null && (
+          {isNotNil(description) && (
             <p className="mb-10 text-neutral-70 dark:text-primary-70 w-full bg-primary-10 py-5 rounded-md">
               {description}
             </p>
