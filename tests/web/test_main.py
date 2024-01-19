@@ -430,6 +430,19 @@ def test_fetchdf(web_sushi_context: Context) -> None:
     assert not df.empty
 
 
+def test_get_model(web_sushi_context: Context) -> None:
+    response = client.get("/api/models/sushi.customers")
+
+    assert response.status_code == 200
+
+    test_model = response.json()
+
+    assert test_model.get("name")
+    assert test_model.get("path")
+    assert test_model.get("dialect")
+    assert test_model.get("columns")
+
+
 # TODO: add better tests for this endpoint
 def test_get_models(web_sushi_context: Context) -> None:
     response = client.get("/api/models")
