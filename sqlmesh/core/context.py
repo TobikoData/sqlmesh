@@ -956,23 +956,45 @@ class Context(BaseContext):
                     f"Provided restated models do not match any models. No models will be included in plan. Provided: {', '.join(restate_models)}"
                 )
 
+        snapshots = self._snapshots(models_override)
+        context_diff = self._context_diff(
+            environment or c.PROD,
+            snapshots=snapshots,
+            create_from=create_from,
+            force_no_diff=(restate_models is not None and not expanded_restate_models)
+            or (backfill_models is not None and not backfill_models),
+        )
+
         # If no end date is specified, use the max interval end from prod
         # to prevent unintended evaluation of the entire DAG.
-        default_end = (
-            self.state_sync.max_interval_end_for_environment(c.PROD, models=backfill_models)
-            if not run
-            else None
-        )
+        if not run:
+            if backfill_models is not None:
+                # Only consider selected models for the default end value.
+                models_for_default_end = backfill_models.copy()
+                for name in backfill_models:
+                    if name not in snapshots:
+                        continue
+                    snapshot = snapshots[name]
+                    snapshot_id = snapshot.snapshot_id
+                    if (
+                        snapshot_id in context_diff.added
+                        and snapshot_id in context_diff.new_snapshots
+                    ):
+                        # If the selected model is a newly added model, then we should narrow down the intervals
+                        # that should be considered for the default plan end value by including its parents.
+                        models_for_default_end |= {s.name for s in snapshot.parents}
+                default_end = self.state_sync.greatest_common_interval_end(
+                    c.PROD, models_for_default_end
+                )
+            else:
+                default_end = self.state_sync.max_interval_end_for_environment(c.PROD)
+        else:
+            default_end = None
+
         default_start = to_date(default_end) - timedelta(days=1) if default_end and is_dev else None
 
         return PlanBuilder(
-            context_diff=self._context_diff(
-                environment or c.PROD,
-                snapshots=self._snapshots(models_override),
-                create_from=create_from,
-                force_no_diff=(restate_models is not None and not expanded_restate_models)
-                or (backfill_models is not None and not backfill_models),
-            ),
+            context_diff=context_diff,
             start=start,
             end=end,
             execution_time=execution_time,

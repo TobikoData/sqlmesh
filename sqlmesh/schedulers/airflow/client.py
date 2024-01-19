@@ -271,16 +271,18 @@ class AirflowClient(BaseAirflowClient):
         response = self._get(ENVIRONMENTS_PATH)
         return common.EnvironmentsResponse.parse_obj(response).environments
 
-    def max_interval_end_for_environment(
-        self, environment: str, models: t.Optional[t.Collection[str]] = None
+    def max_interval_end_for_environment(self, environment: str) -> t.Optional[int]:
+        response = self._get(f"{ENVIRONMENTS_PATH}/{environment}/max_interval_end")
+        return common.IntervalEndResponse.parse_obj(response).max_interval_end
+
+    def greatest_common_interval_end(
+        self, environment: str, models: t.Collection[str]
     ) -> t.Optional[int]:
-        url = f"{ENVIRONMENTS_PATH}/{environment}/max_interval_end"
-        if models is not None:
-            models_param = _json_query_param(list(models))
-            response = self._get(url, models=models_param)
-        else:
-            response = self._get(url)
-        return common.MaxIntervalEndResponse.parse_obj(response).max_interval_end
+        response = self._get(
+            f"{ENVIRONMENTS_PATH}/{environment}/greatest_common_interval_end",
+            models=_json_query_param(list(models)),
+        )
+        return common.IntervalEndResponse.parse_obj(response).max_interval_end
 
     def invalidate_environment(self, environment: str) -> None:
         response = self._session.delete(

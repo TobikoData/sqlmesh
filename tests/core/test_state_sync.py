@@ -1608,7 +1608,7 @@ def test_max_interval_end_for_environment(
             name=environment_name,
             snapshots=[snapshot_a.table_info, snapshot_b.table_info],
             start_at="2023-01-01",
-            end_at="2023-01-02",
+            end_at="2023-01-03",
             plan_id="test_plan_id",
         )
     )
@@ -1617,16 +1617,66 @@ def test_max_interval_end_for_environment(
         "2023-01-03"
     )
 
-    assert state_sync.max_interval_end_for_environment(
-        environment_name, models={snapshot_a.name}
+
+def test_greatest_common_interval_end(
+    state_sync: EngineAdapterStateSync, make_snapshot: t.Callable
+) -> None:
+    snapshot_a = make_snapshot(
+        SqlModel(
+            name="a",
+            cron="@daily",
+            query=parse_one("select 1, ds"),
+        ),
+    )
+    snapshot_a.categorize_as(SnapshotChangeCategory.BREAKING)
+
+    snapshot_b = make_snapshot(
+        SqlModel(
+            name="b",
+            cron="@daily",
+            query=parse_one("select 2, ds"),
+        ),
+    )
+    snapshot_b.categorize_as(SnapshotChangeCategory.BREAKING)
+
+    state_sync.push_snapshots([snapshot_a, snapshot_b])
+
+    state_sync.add_interval(snapshot_a, "2023-01-01", "2023-01-01")
+    state_sync.add_interval(snapshot_a, "2023-01-02", "2023-01-02")
+    state_sync.add_interval(snapshot_a, "2023-01-03", "2023-01-03")
+    state_sync.add_interval(snapshot_b, "2023-01-01", "2023-01-01")
+    state_sync.add_interval(snapshot_b, "2023-01-02", "2023-01-02")
+
+    environment_name = "test_max_interval_end_for_environment"
+
+    assert state_sync.greatest_common_interval_end(environment_name, {snapshot_a.name}) is None
+
+    state_sync.promote(
+        Environment(
+            name=environment_name,
+            snapshots=[snapshot_a.table_info, snapshot_b.table_info],
+            start_at="2023-01-01",
+            end_at="2023-01-03",
+            plan_id="test_plan_id",
+        )
+    )
+
+    assert state_sync.greatest_common_interval_end(
+        environment_name, {snapshot_a.name}
+    ) == to_timestamp("2023-01-04")
+
+    assert state_sync.greatest_common_interval_end(
+        environment_name, {snapshot_b.name}
     ) == to_timestamp("2023-01-03")
 
-    assert state_sync.max_interval_end_for_environment(
-        environment_name, models={snapshot_b.name}
-    ) == to_timestamp("2023-01-02")
+    assert state_sync.greatest_common_interval_end(
+        environment_name, {snapshot_a.name, snapshot_b.name}
+    ) == to_timestamp("2023-01-03")
 
-    assert state_sync.max_interval_end_for_environment(environment_name, models={"missing"}) is None
-    assert state_sync.max_interval_end_for_environment(environment_name, models=set()) is None
+    assert state_sync.greatest_common_interval_end(environment_name, {"missing"}) == to_timestamp(
+        "2023-01-03"
+    )
+    assert state_sync.greatest_common_interval_end(environment_name, set()) is None
 
 
 def test_get_snapshots(mocker):
