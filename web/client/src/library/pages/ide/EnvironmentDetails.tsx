@@ -30,34 +30,37 @@ export function EnvironmentStatus(): JSX.Element {
 
   return (
     <span className="flex align-center h-full w-full">
-      {environment.isProd ? (
-        <span className="block ml-1 px-2 first-child:ml-0 rounded-full bg-warning-10 text-warning-700  dark:text-warning-400 text-xs text-center">
-          Production
-        </span>
-      ) : environment.isDefault ? (
-        <span className="block ml-1 px-2 first-child:ml-0 rounded-full bg-neutral-10 text-xs text-center">
-          Default
-        </span>
-      ) : (
-        <></>
-      )}
-      {environment.isInitial && (
-        <span className="block ml-1 px-2 first-child:ml-0 rounded-full bg-success-10 text-success-500 text-xs text-center font-bold">
-          New
-        </span>
-      )}
-      {environment.isSyncronized && planOverview.isLatest && (
-        <span className="block ml-1 px-2 first-child:ml-0 rounded-full bg-neutral-10 text-xs text-center">
-          Latest
-        </span>
-      )}
-      {planOverview.isEmpty && (
+      {planOverview.isEmpty ? (
         <span
           title="Need to Re-Run Plan to get latest state"
           className="block ml-1 px-2 first-child:ml-0 rounded-full  bg-warning-10 text-warning-700  dark:text-warning-400 text-xs text-center"
         >
           Unknown
         </span>
+      ) : (
+        <>
+          {environment.isProd ? (
+            <span className="block ml-1 px-2 first-child:ml-0 rounded-full bg-warning-10 text-warning-700  dark:text-warning-400 text-xs text-center">
+              Production
+            </span>
+          ) : environment.isDefault ? (
+            <span className="block ml-1 px-2 first-child:ml-0 rounded-full bg-neutral-10 text-xs text-center">
+              Default
+            </span>
+          ) : (
+            <></>
+          )}
+          {environment.isInitial && (
+            <span className="block ml-1 px-2 first-child:ml-0 rounded-full bg-success-10 text-success-500 text-xs text-center font-bold">
+              New
+            </span>
+          )}
+          {environment.isSyncronized && planOverview.isLatest && (
+            <span className="block ml-1 px-2 first-child:ml-0 rounded-full bg-neutral-10 text-xs text-center">
+              Latest
+            </span>
+          )}
+        </>
       )}
     </span>
   )

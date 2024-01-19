@@ -23,15 +23,17 @@ import SplitPane from '@components/splitPane/SplitPane'
 import { useStoreContext } from '@context/context'
 import { useIDE } from '../ide/context'
 import { useStorePlan } from '@context/plan'
-import { useApiPlanRun } from '@api/index'
+import { useApiEnvironments, useApiModels, useApiPlanRun } from '@api/index'
 import { EnumSize } from '~/types/enum'
 import {
   EnvironmentStatus,
   PlanChanges,
   SelectEnvironemnt,
-} from '../ide/RunPlan'
+} from '../ide/EnvironmentDetails'
 import { Modules } from '@api/client'
 import { isFalse } from '@utils/index'
+import Spinner from '@components/logo/Spinner'
+import Loading from '@components/loading/Loading'
 
 export default function Page({
   sidebar,
@@ -61,9 +63,9 @@ export default function Page({
           <SelectModule />
         </div>
         <Divider />
-        <div className="w-full h-full">{sidebar}</div>
+        <div className="w-full h-full overflow-hidden">{sidebar}</div>
       </div>
-      <div className="w-full h-full">{content}</div>
+      <div className="w-full h-full overflow-hidden">{content}</div>
     </SplitPane>
   )
 }
@@ -73,34 +75,50 @@ function EnvironmentDetails(): JSX.Element {
   const modules = useStoreContext(s => s.modules)
 
   const planAction = useStorePlan(s => s.planAction)
+  const planOverview = useStorePlan(s => s.planOverview)
 
-  const { isFetching: isFetchingEnvironments } = useApiPlanRun(
-    environment.name,
-    {
-      planOptions: { skip_tests: true, include_unmodified: true },
-    },
-  )
+  const { isFetching: isFetchingModels } = useApiModels()
+  const { isFetching: isFetchingEnvironments } = useApiEnvironments()
+  const { isFetching: isFetchingPlanRun } = useApiPlanRun(environment.name, {
+    planOptions: { skip_tests: true, include_unmodified: true },
+  })
 
   const withPlanModule =
     modules.includes(Modules.plans) || modules.includes(Modules['plan-active'])
 
   return (
     <div className="h-8 flex w-full items-center justify-end py-0.5 text-neutral-500">
-      <SelectEnvironemnt
-        className="border-none h-6 !m-0"
-        size={EnumSize.sm}
-        showAddEnvironment={withPlanModule}
-        disabled={
-          isFetchingEnvironments ||
-          planAction.isProcessing ||
-          environment.isInitialProd
-        }
-      />
-      {withPlanModule && (
-        <div className="px-2 flex items-center">
-          <PlanChanges />
-          <EnvironmentStatus />
-        </div>
+      {isFetchingEnvironments ? (
+        <ActionStatus>Loading Environments...</ActionStatus>
+      ) : isFetchingModels ? (
+        <ActionStatus>Loading Models...</ActionStatus>
+      ) : (
+        <>
+          <SelectEnvironemnt
+            className="border-none h-6 !m-0"
+            size={EnumSize.sm}
+            showAddEnvironment={withPlanModule}
+            disabled={
+              isFetchingPlanRun ||
+              planAction.isProcessing ||
+              environment.isInitialProd
+            }
+          />
+          {planAction.isProcessing ? (
+            <ActionStatus>
+              {planAction.displayStatus(planOverview)}
+            </ActionStatus>
+          ) : (
+            <>
+              {withPlanModule && (
+                <div className="px-2 flex items-center">
+                  <PlanChanges />
+                  <EnvironmentStatus />
+                </div>
+              )}
+            </>
+          )}
+        </>
       )}
     </div>
   )
@@ -237,5 +255,18 @@ function ProjectName(): JSX.Element {
     <span className="flex items-center px-2 py-0.5 rounded-md font-bold text-neutral-600 dark:text-neutral-300 bg-neutral-5 text-sm text-ellipsis whitespace-nowrap">
       {project?.name}
     </span>
+  )
+}
+
+function ActionStatus({
+  children,
+}: {
+  children: React.ReactNode
+}): JSX.Element {
+  return (
+    <Loading className="inline-block">
+      <Spinner className="w-3 h-3 border border-neutral-10 mr-2" />
+      <span className="inline-block text-xs">{children}</span>
+    </Loading>
   )
 }
