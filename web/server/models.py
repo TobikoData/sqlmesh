@@ -47,7 +47,6 @@ class Modules(str, enum.Enum):
     EDITOR = "editor"
     DOCS = "docs"
     PLANS = "plans"
-    PLAN_ACTIVE = "plan-active"
     TESTS = "tests"
     AUDITS = "audits"
     ERRORS = "errors"

@@ -4,7 +4,7 @@ import NotFound from './library/pages/root/NotFound'
 import Loading from '@components/loading/Loading'
 import Spinner from '@components/logo/Spinner'
 import IDE from './library/pages/ide/IDE'
-import { isNil } from './utils'
+import { isArrayEmpty, isNil } from './utils'
 import { Modules } from '@api/client'
 
 const Editor = lazy(() => import('./library/pages/editor/Editor'))
@@ -32,22 +32,41 @@ export const EnumRoutes = {
 } as const
 
 const aliases: Record<string, string[]> = {
-  plan: [Modules.plans, Modules['plan-active']],
+  plan: [Modules.plans],
 }
 
-export const router = (filter: string[]): any =>
-  createBrowserRouter([
+export function getBrowserRouter(
+  filter: string[],
+): ReturnType<typeof createBrowserRouter> {
+  const modules = [
     {
-      path: '/',
-      element: <IDE />,
+      path: 'editor',
+      element: <Editor />,
+    },
+    {
+      path: 'docs',
+      element: <Docs />,
       children: [
         {
-          path: 'editor',
-          element: <Editor />,
+          index: true,
+          element: (
+            <Welcome
+              headline="Welcome to the documentation"
+              tagline="Here you can find all the information about the models and their fields."
+            />
+          ),
         },
         {
-          path: 'docs',
-          element: <Docs />,
+          path: '*',
+          element: (
+            <NotFound
+              link={EnumRoutes.IdeDocs}
+              message="Back To Docs"
+            />
+          ),
+        },
+        {
+          path: 'models',
           children: [
             {
               index: true,
@@ -68,71 +87,7 @@ export const router = (filter: string[]): any =>
               ),
             },
             {
-              path: 'models',
-              children: [
-                {
-                  index: true,
-                  element: (
-                    <Welcome
-                      headline="Welcome to the documentation"
-                      tagline="Here you can find all the information about the models and their fields."
-                    />
-                  ),
-                },
-                {
-                  path: '*',
-                  element: (
-                    <NotFound
-                      link={EnumRoutes.IdeDocs}
-                      message="Back To Docs"
-                    />
-                  ),
-                },
-                {
-                  path: ':modelName',
-                  element: (
-                    <Suspense
-                      fallback={
-                        <div className="flex justify-center items-center w-full h-full">
-                          <Loading className="inline-block">
-                            <Spinner className="w-3 h-3 border border-neutral-10 mr-4" />
-                            <h3 className="text-md">Loading Content...</h3>
-                          </Loading>
-                        </div>
-                      }
-                    >
-                      <DocsContent />
-                    </Suspense>
-                  ),
-                },
-              ],
-            },
-          ],
-        },
-        {
-          path: 'errors',
-          element: <Errors />,
-          children: [
-            {
-              index: true,
-              element: (
-                <Welcome
-                  headline="Welcome to errors report"
-                  tagline="Here you can see all the errors that occurred."
-                />
-              ),
-            },
-            {
-              path: '*',
-              element: (
-                <NotFound
-                  link={EnumRoutes.Errors}
-                  message="Back To Errors"
-                />
-              ),
-            },
-            {
-              path: ':id',
+              path: ':modelName',
               element: (
                 <Suspense
                   fallback={
@@ -144,15 +99,79 @@ export const router = (filter: string[]): any =>
                     </div>
                   }
                 >
-                  <ErrorContent />
+                  <DocsContent />
                 </Suspense>
               ),
             },
           ],
         },
+      ],
+    },
+    {
+      path: 'errors',
+      element: <Errors />,
+      children: [
         {
-          path: 'plan',
-          element: <Plan />,
+          index: true,
+          element: (
+            <Welcome
+              headline="Welcome to errors report"
+              tagline="Here you can see all the errors that occurred."
+            />
+          ),
+        },
+        {
+          path: '*',
+          element: (
+            <NotFound
+              link={EnumRoutes.Errors}
+              message="Back To Errors"
+            />
+          ),
+        },
+        {
+          path: ':id',
+          element: (
+            <Suspense
+              fallback={
+                <div className="flex justify-center items-center w-full h-full">
+                  <Loading className="inline-block">
+                    <Spinner className="w-3 h-3 border border-neutral-10 mr-4" />
+                    <h3 className="text-md">Loading Content...</h3>
+                  </Loading>
+                </div>
+              }
+            >
+              <ErrorContent />
+            </Suspense>
+          ),
+        },
+      ],
+    },
+    {
+      path: 'plan',
+      element: <Plan />,
+      children: [
+        {
+          index: true,
+          element: (
+            <Welcome
+              headline="Welcome to plan"
+              tagline="Here you can run the plan and apply the changes."
+            />
+          ),
+        },
+        {
+          path: '*',
+          element: (
+            <NotFound
+              link={EnumRoutes.Plan}
+              message="Back To Plan"
+            />
+          ),
+        },
+        {
+          path: 'environments',
           children: [
             {
               index: true,
@@ -173,108 +192,103 @@ export const router = (filter: string[]): any =>
               ),
             },
             {
-              path: 'environments',
-              children: [
-                {
-                  index: true,
-                  element: (
-                    <Welcome
-                      headline="Welcome to plan"
-                      tagline="Here you can run the plan and apply the changes."
-                    />
-                  ),
-                },
-                {
-                  path: '*',
-                  element: (
-                    <NotFound
-                      link={EnumRoutes.Plan}
-                      message="Back To Plan"
-                    />
-                  ),
-                },
-                {
-                  path: ':environmentName',
-                  element: (
-                    <Suspense
-                      fallback={
-                        <div className="flex justify-center items-center w-full h-full">
-                          <Loading className="inline-block">
-                            <Spinner className="w-3 h-3 border border-neutral-10 mr-4" />
-                            <h3 className="text-md">Loading Content...</h3>
-                          </Loading>
-                        </div>
-                      }
-                    >
-                      <PlanContent />
-                    </Suspense>
-                  ),
-                },
-              ],
-            },
-          ],
-        },
-        {
-          path: 'tests',
-          element: <Tests />,
-          children: [
-            {
-              index: true,
+              path: ':environmentName',
               element: (
-                <Welcome
-                  headline="Welcome to tests report"
-                  tagline="Here you can run tests and see the results."
-                />
-              ),
-            },
-            {
-              path: '*',
-              element: (
-                <NotFound
-                  link={EnumRoutes.Tests}
-                  message="Back To Tests"
-                />
+                <Suspense
+                  fallback={
+                    <div className="flex justify-center items-center w-full h-full">
+                      <Loading className="inline-block">
+                        <Spinner className="w-3 h-3 border border-neutral-10 mr-4" />
+                        <h3 className="text-md">Loading Content...</h3>
+                      </Loading>
+                    </div>
+                  }
+                >
+                  <PlanContent />
+                </Suspense>
               ),
             },
           ],
         },
-        {
-          path: 'audits',
-          element: <Audits />,
-          children: [
-            {
-              index: true,
-              element: (
-                <Welcome
-                  headline="Welcome to audits report"
-                  tagline="Here you can run audits and see the results."
-                />
-              ),
-            },
-            {
-              path: '*',
-              element: (
-                <NotFound
-                  link={EnumRoutes.Audits}
-                  message="Back To Audits"
-                />
-              ),
-            },
-          ],
-        },
-      ].filter(r =>
-        isNil(aliases[r.path])
-          ? filter.includes(r.path)
-          : aliases[r.path]?.some(a => filter.includes(a)),
-      ),
+      ],
     },
     {
-      path: '*',
-      element: (
-        <NotFound
-          link={EnumRoutes.Ide}
-          message="Back To Editor"
-        />
-      ),
+      path: 'tests',
+      element: <Tests />,
+      children: [
+        {
+          index: true,
+          element: (
+            <Welcome
+              headline="Welcome to tests report"
+              tagline="Here you can run tests and see the results."
+            />
+          ),
+        },
+        {
+          path: '*',
+          element: (
+            <NotFound
+              link={EnumRoutes.Tests}
+              message="Back To Tests"
+            />
+          ),
+        },
+      ],
     },
-  ])
+    {
+      path: 'audits',
+      element: <Audits />,
+      children: [
+        {
+          index: true,
+          element: (
+            <Welcome
+              headline="Welcome to audits report"
+              tagline="Here you can run audits and see the results."
+            />
+          ),
+        },
+        {
+          path: '*',
+          element: (
+            <NotFound
+              link={EnumRoutes.Audits}
+              message="Back To Audits"
+            />
+          ),
+        },
+      ],
+    },
+  ].filter(r =>
+    isNil(aliases[r.path])
+      ? filter.includes(r.path)
+      : aliases[r.path]?.some(a => filter.includes(a)),
+  )
+
+  return createBrowserRouter(
+    isArrayEmpty(modules)
+      ? [
+          {
+            path: '*',
+            element: <NotFound headline="Empty" />,
+          },
+        ]
+      : [
+          {
+            path: '/',
+            element: <IDE />,
+            children: modules,
+          },
+          {
+            path: '*',
+            element: (
+              <NotFound
+                link={EnumRoutes.Ide}
+                message="Back To Editor"
+              />
+            ),
+          },
+        ],
+  )
+}

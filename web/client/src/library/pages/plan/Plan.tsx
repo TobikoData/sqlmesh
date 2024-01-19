@@ -38,9 +38,6 @@ export default function PagePlan(): JSX.Element {
     navigate(`${EnumRoutes.Plan}/environments/${environment.name}`)
   }, [environment])
 
-  const withPlanModule =
-    modules.includes(Modules.plans) || modules.includes(Modules['plan-active'])
-
   return (
     <Page
       sidebar={
@@ -50,7 +47,7 @@ export default function PagePlan(): JSX.Element {
           to={`${EnumRoutes.Plan}/environments`}
           items={Array.from(environments)}
           disabled={
-            isFalse(withPlanModule) ||
+            isFalse(modules.includes(Modules.plans)) ||
             planAction.isProcessing ||
             environment.isInitialProd
           }

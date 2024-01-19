@@ -50,7 +50,7 @@ const environment =
 
 export const useStoreContext = create<ContextStore>((set, get) => ({
   version: undefined,
-  modules: ['docs', 'errors'],
+  modules: [],
   splitPaneSizes: [30, 70],
   showConfirmation: false,
   confirmations: [],

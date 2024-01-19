@@ -83,8 +83,7 @@ function EnvironmentDetails(): JSX.Element {
     planOptions: { skip_tests: true, include_unmodified: true },
   })
 
-  const withPlanModule =
-    modules.includes(Modules.plans) || modules.includes(Modules['plan-active'])
+  const withPlanModule = modules.includes(Modules.plans)
 
   return (
     <div className="h-8 flex w-full items-center justify-end py-0.5 text-neutral-500">
@@ -185,8 +184,7 @@ function SelectModule(): JSX.Element {
           iconActive={<ShieldCheckIcon className="w-4" />}
         />
       )}
-      {(modules.includes(Modules.plans) ||
-        modules.includes(Modules['plan-active'])) && (
+      {modules.includes(Modules.plans) && (
         <ModuleLink
           title="Plan"
           to={EnumRoutes.Plan}
