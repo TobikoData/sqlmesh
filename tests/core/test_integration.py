@@ -789,7 +789,12 @@ def test_select_models_for_backfill(init_and_plan_context: t.Callable):
     )
     assert len(dev_df) == 7
 
-    dev_df = context.engine_adapter.fetchdf("SELECT * FROM sushi__dev.customer_revenue_by_day")
+    with pytest.raises(Exception, match=".*does not exist.*"):
+        context.engine_adapter.fetchdf("SELECT * FROM sushi__dev.customer_revenue_by_day")
+
+    dev_df = context.engine_adapter.fetchdf(
+        exp.select("*").from_(context.get_snapshot("sushi.customer_revenue_by_day").table_name())
+    )
     assert dev_df.empty
 
 

@@ -12,6 +12,7 @@ another remote environment and determine if nodes have been added, removed, or m
 from __future__ import annotations
 
 import typing as t
+from functools import cached_property
 
 from sqlmesh.core.snapshot import (
     Snapshot,
@@ -56,8 +57,6 @@ class ContextDiff(PydanticModel):
     """Previous plan id."""
     previously_promoted_snapshot_ids: t.Set[SnapshotId]
     """Snapshot IDs that were promoted by the previous plan."""
-
-    _snapshots_by_name: t.Optional[t.Dict[str, Snapshot]] = None
 
     @classmethod
     def create(
@@ -273,11 +272,9 @@ class ContextDiff(PydanticModel):
     def current_modified_snapshot_ids(self) -> t.Set[SnapshotId]:
         return {current.snapshot_id for current, _ in self.modified_snapshots.values()}
 
-    @property
+    @cached_property
     def snapshots_by_name(self) -> t.Dict[str, Snapshot]:
-        if self._snapshots_by_name is None:
-            self._snapshots_by_name = {x.name: x for x in self.snapshots.values()}
-        return self._snapshots_by_name
+        return {x.name: x for x in self.snapshots.values()}
 
     def directly_modified(self, name: str) -> bool:
         """Returns whether or not a node was directly modified in this context.

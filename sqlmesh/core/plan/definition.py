@@ -168,13 +168,23 @@ class Plan(PydanticModel, frozen=True):
             else None
         )
 
+        snapshots_by_name = self.context_diff.snapshots_by_name
         snapshots = [s.table_info for s in self.snapshots.values()]
         promoted_snapshot_ids = None
         if self.is_dev and not self.include_unmodified:
+            promotable_snapshot_ids = self.context_diff.promotable_snapshot_ids.copy()
+            if self.models_to_backfill is not None:
+                # Only promote models that have been explicitly selected for backfill.
+                promotable_snapshot_ids &= {
+                    *self.context_diff.previously_promoted_snapshot_ids,
+                    *[
+                        snapshots_by_name[m].snapshot_id
+                        for m in self.models_to_backfill
+                        if m in snapshots_by_name
+                    ],
+                }
             promoted_snapshot_ids = [
-                s.snapshot_id
-                for s in snapshots
-                if s.snapshot_id in self.context_diff.promotable_snapshot_ids
+                s.snapshot_id for s in snapshots if s.snapshot_id in promotable_snapshot_ids
             ]
 
         return Environment(
