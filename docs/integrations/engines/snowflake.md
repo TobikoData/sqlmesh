@@ -20,7 +20,7 @@ pip install "sqlmesh[snowflake]"
 | `warehouse`              | The Snowflake warehouse name                                                                                                                                                   | string |    N     |
 | `database`               | The Snowflake database name                                                                                                                                                    | string |    N     |
 | `role`                   | The Snowflake role name                                                                                                                                                        | string |    N     |
-| `token`                  | The Snowflake oauth access token                                                                                                                                               | string |    N     |
+| `token`                  | The Snowflake OAuth 2.0 access token                                                                                                                                           | string |    N     |
 | `private_key`            | The optional private key to use for authentication. Key can be Base64-encoded DER format (representing the key bytes), a plain-text PEM format, or bytes (Python config only). | string |    N     |
 | `private_key_path`       | The optional path to the private key to use for authentication. This would be used instead of `private_key`.                                                                   | string |    N     |
 | `private_key_passphrase` | The optional passphrase to use to decrypt `private_key` (if in PEM format) or `private_key_path`. Keys can be created without encryption so only provide this if needed.       | string |    N     |
@@ -55,6 +55,41 @@ gateways:
             database: ************
             role: ************
 ```
+
+### Snowflake OAuth Authorization
+
+SQLMesh supports Snowflake OAuth authorization connections using the `oauth` authenticator method. For example:
+
+=== "YAML"
+
+    ```yaml linenums="1"
+    gateways:
+        snowflake:
+            connection:
+                type: snowflake
+                account: account
+                user: user
+                authenticator: oauth
+                token: eyJhbGciOiJSUzI1NiIsImtpZCI6ImFmZmM...
+    ```
+
+=== "Python"
+
+    ```python linenums="1"
+    config = Config(
+        model_defaults=ModelDefaultsConfig(dialect="snowflake"),
+        gateways={
+           "my_gateway": GatewayConfig(
+                connection=SnowflakeConnectionConfig(
+                    user="user",
+                    account="account",
+                    authenticator="oauth",
+                    token="eyJhbGciOiJSUzI1NiIsImtpZCI6ImFmZmM...",
+                ),
+            ),
+        }
+    )
+    ```
 
 ### Snowflake Private Key Authorization
 
