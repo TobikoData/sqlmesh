@@ -437,10 +437,14 @@ def test_get_model(web_sushi_context: Context) -> None:
 
     test_model = response.json()
 
-    assert test_model.get("name")
-    assert test_model.get("path")
-    assert test_model.get("dialect")
-    assert test_model.get("columns")
+    assert test_model.get("name") == "sushi.customers"
+    assert test_model.get("path") == "models/customers.sql"
+    assert test_model.get("dialect") == "duckdb"
+    assert test_model.get("columns") == [
+        {"name": "customer_id", "type": "INT"},
+        {"name": "status", "type": "TEXT"},
+        {"name": "zip", "type": "TEXT"},
+    ]
 
 
 # TODO: add better tests for this endpoint
