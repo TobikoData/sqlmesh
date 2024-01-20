@@ -1722,7 +1722,7 @@ class DebuggerTerminalConsole(TerminalConsole):
         self.console.log(msg, *args, **kwargs)
 
     def start_plan_evaluation(self, plan: Plan) -> None:
-        self._write("Starting plan...", plan)
+        self._write("Starting plan", plan.plan_id)
 
     def stop_plan_evaluation(self) -> None:
         self._write("Stopping plan")
@@ -1794,7 +1794,13 @@ class DebuggerTerminalConsole(TerminalConsole):
         no_diff: bool = True,
         ignored_snapshot_ids: t.Optional[t.Set[SnapshotId]] = None,
     ) -> None:
-        self._write("Model Difference Summary:", context_diff)
+        self._write("Model Difference Summary:")
+        for added in context_diff.new_snapshots:
+            self._write(f"  Added: {added}")
+        for removed in context_diff.removed_snapshots:
+            self._write(f"  Removed: {removed}")
+        for modified in context_diff.modified_snapshots:
+            self._write(f"  Modified: {modified}")
 
     def log_test_results(
         self, result: unittest.result.TestResult, output: str, target_dialect: str
