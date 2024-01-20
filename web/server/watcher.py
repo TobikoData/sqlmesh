@@ -7,7 +7,7 @@ from sqlmesh.core import constants as c
 from sqlmesh.core.context import Context
 from web.server import models
 from web.server.api.endpoints.files import _get_directory, _get_file_with_content
-from web.server.api.endpoints.models import get_all_models
+from web.server.api.endpoints.models import serialize_all_models
 from web.server.console import api_console
 from web.server.exceptions import ApiException
 from web.server.settings import get_context, get_settings
@@ -88,7 +88,7 @@ async def watch_project() -> None:
 def reload_context(context: Context) -> None:
     try:
         context.load()
-        api_console.log_event(event=models.EventName.MODELS, data=get_all_models(context))
+        api_console.log_event(event=models.EventName.MODELS, data=serialize_all_models(context))
     except Exception:
         error = ApiException(
             message="Error refreshing the models while watching file changes",
