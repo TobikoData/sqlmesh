@@ -396,13 +396,15 @@ const ModelColumn = memo(function ModelColumn({
     }
   }
 
+  const showHandles = withHandles && (hasLeft || hasRight)
+
   return (
     <div
       className={clsx(
         isActive
           ? 'bg-secondary-10 dark:bg-primary-900 text-secondary-500 dark:text-neutral-100'
           : 'text-neutral-600 dark:text-neutral-100 hover:bg-neutral-5',
-        withHandles ? 'p-0 mb-1' : 'px-2 rounded-md mb-1',
+        showHandles ? 'p-0 mb-1' : 'px-2 rounded-md mb-1',
         className,
       )}
       onClick={debounceSync(toggleColumnLineage, 500, true)}
@@ -413,7 +415,7 @@ const ModelColumn = memo(function ModelColumn({
           disabled ? 'cursor-not-allowed' : 'cursor-pointer',
         )}
       >
-        {withHandles ? (
+        {showHandles ? (
           <ModelNodeHandles
             id={id}
             nodeId={nodeId}
