@@ -20,7 +20,7 @@ from sqlmesh.dbt.target import TARGET_TYPE_TO_CONFIG_CLASS
 from sqlmesh.dbt.util import DBT_VERSION
 from sqlmesh.utils import AttributeDict, yaml
 from sqlmesh.utils.errors import ConfigError, MacroEvalError
-from sqlmesh.utils.jinja import JinjaMacroRegistry, MacroReturnVal
+from sqlmesh.utils.jinja import JinjaMacroRegistry, MacroReference, MacroReturnVal
 
 logger = logging.getLogger(__name__)
 
@@ -280,6 +280,8 @@ BUILTIN_FILTERS = {
     "as_number": as_number,
     "as_text": lambda v: "" if v is None else str(v),
 }
+
+OVERRIDDEN_MACROS = {MacroReference(package="dbt", name="is_incremental")}
 
 
 def create_builtin_globals(

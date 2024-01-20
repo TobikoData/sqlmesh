@@ -59,7 +59,6 @@ def test_manifest_helper(caplog):
             MacroReference(name="test_dependencies"),
             MacroReference(package="customers", name="duckdb__current_engine"),
             MacroReference(package="dbt", name="run_query"),
-            MacroReference(package="dbt", name="is_incremental"),
         },
         sources={"streaming.items", "streaming.orders", "streaming.order_items"},
         variables={"yet_another_var"},
@@ -76,7 +75,6 @@ def test_manifest_helper(caplog):
 
     assert set(helper.macros()["incremental_by_time"].info.depends_on) == {
         MacroReference(package=None, name="incremental_dates_by_time_type"),
-        MacroReference(package="dbt", name="is_incremental"),
     }
 
     assert helper.seeds()["waiter_names"].path == Path("seeds/waiter_names.csv")
