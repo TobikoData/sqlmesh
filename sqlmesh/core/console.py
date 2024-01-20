@@ -1741,7 +1741,7 @@ class DebuggerTerminalConsole(TerminalConsole):
     def update_snapshot_evaluation_progress(
         self, snapshot: Snapshot, batch_idx: int, duration_ms: t.Optional[int]
     ) -> None:
-        self._write(f"Evaluating {snapshot.name} - {batch_idx} - {duration_ms}")
+        self._write(f"Evaluating {snapshot.name} | batch={batch_idx} | duration={duration_ms}ms")
 
     def stop_evaluation_progress(self, success: bool = True) -> None:
         self._write(f"Stopping evaluation with success={success}")
