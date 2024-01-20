@@ -648,7 +648,7 @@ def test_seed_csv_settings():
     assert model.kind.csv_settings == CsvSettings(quotechar="'", escapechar="\\")
 
 
-def test_seed_context_home():
+def test_seed_marker_substitution():
     expressions = d.parse(
         """
         MODEL (
@@ -668,7 +668,7 @@ def test_seed_context_home():
     )
 
     assert isinstance(model.kind, SeedKind)
-    assert model.kind.path == "$root/seeds/waiter_names.csv"
+    assert model.kind.path == "examples/sushi/seeds/waiter_names.csv"
     assert model.seed is not None
     assert len(model.seed.content) > 0
 
