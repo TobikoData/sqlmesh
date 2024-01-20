@@ -13,6 +13,7 @@ import traceback
 import types
 import typing as t
 import uuid
+from collections import defaultdict
 from contextlib import contextmanager
 from copy import deepcopy
 from functools import lru_cache, reduce, wraps
@@ -25,6 +26,8 @@ logger = logging.getLogger(__name__)
 T = t.TypeVar("T")
 KEY = t.TypeVar("KEY", bound=t.Hashable)
 VALUE = t.TypeVar("VALUE")
+ITEM = t.TypeVar("ITEM")
+GROUP = t.TypeVar("GROUP")
 DECORATOR_RETURN_TYPE = t.TypeVar("DECORATOR_RETURN_TYPE")
 
 ALPHANUMERIC = string.ascii_lowercase + string.digits
@@ -292,3 +295,13 @@ NON_ALNUM = re.compile(r"[^a-zA-Z0-9_]")
 
 def sanitize_name(name: str) -> str:
     return NON_ALNUM.sub("_", name)
+
+
+def groupby(
+    items: t.Iterable[ITEM],
+    func: t.Callable[[ITEM], GROUP],
+) -> t.DefaultDict[GROUP, t.List[ITEM]]:
+    grouped = defaultdict(list)
+    for item in items:
+        grouped[func(item)].append(item)
+    return grouped
