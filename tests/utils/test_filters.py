@@ -1,4 +1,4 @@
-from sqlmesh.utils.filters import groupby
+from sqlmesh.utils import groupby
 
 
 def test_groupby() -> None:
