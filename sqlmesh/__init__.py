@@ -37,6 +37,7 @@ class RuntimeEnv(str, Enum):
     DATABRICKS = "databricks"
     GOOGLE_COLAB = "google_colab"  # Not currently officially supported
     JUPYTER = "jupyter"
+    DEBUGGER = "debugger"
 
     @classmethod
     def get(cls) -> RuntimeEnv:
@@ -56,6 +57,8 @@ class RuntimeEnv(str, Enum):
         except NameError:
             pass
 
+        if os.getenv("SQLMESH_PDB"):
+            return RuntimeEnv.DEBUGGER
         return RuntimeEnv.TERMINAL
 
     @property
