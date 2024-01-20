@@ -281,7 +281,10 @@ BUILTIN_FILTERS = {
     "as_text": lambda v: "" if v is None else str(v),
 }
 
-OVERRIDDEN_MACROS = {MacroReference(package="dbt", name="is_incremental")}
+OVERRIDDEN_MACROS = {
+    MacroReference(package="dbt", name="is_incremental"),
+    MacroReference(name="is_incremental"),
+}
 
 
 def create_builtin_globals(

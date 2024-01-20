@@ -41,7 +41,7 @@ SourceConfigs = t.Dict[str, SourceConfig]
 MacroConfigs = t.Dict[str, MacroConfig]
 
 
-BUILTIN_CALLS = {*BUILTIN_GLOBALS, *BUILTIN_FILTERS, "is_incremental"}
+BUILTIN_CALLS = {*BUILTIN_GLOBALS, *BUILTIN_FILTERS}
 
 
 class ManifestHelper:
