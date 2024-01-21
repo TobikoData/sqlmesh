@@ -21,7 +21,8 @@ from sqlmesh.core.model.common import (
 from sqlmesh.core.model.kind import (
     IncrementalByUniqueKeyKind,
     ModelKind,
-    SCDType2Kind,
+    SCDType2ByColumnKind,
+    SCDType2ByTimeKind,
     TimeColumn,
     ViewKind,
     _Incremental,
@@ -286,7 +287,9 @@ class ModelMeta(_Node):
 
     @property
     def unique_key(self) -> t.List[exp.Expression]:
-        if isinstance(self.kind, (IncrementalByUniqueKeyKind, SCDType2Kind)):
+        if isinstance(
+            self.kind, (IncrementalByUniqueKeyKind, SCDType2ByTimeKind, SCDType2ByColumnKind)
+        ):
             return self.kind.unique_key
         return []
 

@@ -16,10 +16,11 @@ from sqlmesh.core.model import (
     IncrementalUnmanagedKind,
     Model,
     ModelKind,
-    SCDType2Kind,
+    SCDType2ByColumnKind,
     ViewKind,
     create_sql_model,
 )
+from sqlmesh.core.model.kind import SCDType2ByTimeKind
 from sqlmesh.dbt.basemodel import BaseModelConfig, Materialization, SnapshotStrategy
 from sqlmesh.dbt.common import SqlStr, extract_jinja_config, sql_str_validator
 from sqlmesh.utils.errors import ConfigError
@@ -89,6 +90,7 @@ class ModelConfig(BaseModelConfig):
     strategy: t.Optional[str] = None
     invalidate_hard_deletes: bool = True
     target_schema: t.Optional[str] = None
+    check_cols: t.Optional[t.Union[t.List[str], str]] = None
 
     # redshift
     bind: t.Optional[bool] = None
@@ -111,6 +113,13 @@ class ModelConfig(BaseModelConfig):
     )
     @classmethod
     def _validate_list(cls, v: t.Union[str, t.List[str]]) -> t.List[str]:
+        return ensure_list(v)
+
+    @field_validator("check_cols", mode="before")
+    @classmethod
+    def _validate_check_cols(cls, v: t.Union[str, t.List[str]]) -> t.Union[str, t.List[str]]:
+        if isinstance(v, str) and v == "all":
+            return "*"
         return ensure_list(v)
 
     @field_validator("sql", mode="before")
@@ -226,18 +235,26 @@ class ModelConfig(BaseModelConfig):
         if materialization == Materialization.EPHEMERAL:
             return EmbeddedKind()
         if materialization == Materialization.SNAPSHOT:
-            return SCDType2Kind(
-                unique_key=self.unique_key,
-                valid_from_name="dbt_valid_from",
-                valid_to_name="dbt_valid_to",
-                updated_at_name=self.updated_at,
-                updated_at_as_valid_from=True,
-                time_data_type=(
-                    exp.DataType.build("TIMESTAMPTZ")
-                    if target.type == "bigquery"
-                    else exp.DataType.build("TIMESTAMP")
-                ),
-            )
+            if not self.snapshot_strategy:
+                raise ConfigError(
+                    f"{self.canonical_name(context)}: SQLMesh snapshot strategy is required for snapshot materialization."
+                )
+            shared_kwargs = {
+                "unique_key": self.unique_key,
+                "valid_from_name": "dbt_valid_from",
+                "valid_to_name": "dbt_valid_to",
+                "time_data_type": exp.DataType.build("TIMESTAMPTZ")
+                if target.type == "bigquery"
+                else exp.DataType.build("TIMESTAMP"),
+            }
+            if self.snapshot_strategy.is_check:
+                return SCDType2ByColumnKind(
+                    columns=self.check_cols, execution_time_as_valid_from=True, **shared_kwargs
+                )
+            else:
+                return SCDType2ByTimeKind(
+                    updated_at_name=self.updated_at, updated_at_as_valid_from=True, **shared_kwargs
+                )
         raise ConfigError(f"{materialization.value} materialization not supported.")
 
     @property

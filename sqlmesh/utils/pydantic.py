@@ -7,7 +7,10 @@ from functools import cached_property, wraps
 
 import pydantic
 from pydantic.fields import FieldInfo
-from sqlglot import exp
+from pydantic_core.core_schema import ValidationInfo
+from sqlglot import exp, parse_one
+from sqlglot.helper import ensure_list
+from sqlglot.optimizer.normalize_identifiers import normalize_identifiers
 
 from sqlmesh.core import dialect as d
 from sqlmesh.utils import str_to_bool
@@ -287,11 +290,40 @@ def positive_int_validator(v: t.Any) -> int:
     return v
 
 
+def list_of_expressions_validator(
+    v: t.Any, values: t.Union[t.Dict, ValidationInfo]
+) -> t.List[exp.Expression]:
+    values = values if isinstance(values, dict) else values.data
+    dialect = values.get("dialect")
+
+    if isinstance(v, (exp.Tuple, exp.Array)):
+        expressions: t.List[exp.Expression] = v.expressions
+    elif isinstance(v, exp.Expression):
+        expressions = [v]
+    else:
+        expressions = [
+            parse_one(entry, dialect=dialect) if isinstance(entry, str) else entry
+            for entry in ensure_list(v)
+        ]
+
+    results = []
+
+    for expr in expressions:
+        expr = normalize_identifiers(
+            exp.column(expr) if isinstance(expr, exp.Identifier) else expr, dialect=dialect
+        )
+        expr.meta["dialect"] = dialect
+        results.append(expr)
+
+    return results
+
+
 if t.TYPE_CHECKING:
     SQLGlotListOfStrings = t.List[str]
     SQLGlotString = str
     SQLGlotBool = bool
     SQLGlotPositiveInt = int
+    SQLGlotListOfExpressions = t.List[exp.Expression]
 elif PYDANTIC_MAJOR_VERSION >= 2:
     from pydantic.functional_validators import BeforeValidator  # type: ignore
 
@@ -299,6 +331,9 @@ elif PYDANTIC_MAJOR_VERSION >= 2:
     SQLGlotString = Annotated[str, BeforeValidator(validate_string)]
     SQLGlotBool = Annotated[bool, BeforeValidator(bool_validator)]
     SQLGlotPositiveInt = Annotated[int, BeforeValidator(positive_int_validator)]
+    SQLGlotListOfExpressions = Annotated[
+        t.List[exp.Expression], BeforeValidator(list_of_expressions_validator)
+    ]
 else:
 
     class PydanticTypeProxy(t.Generic[T]):
@@ -319,3 +354,6 @@ else:
 
     class SQLGlotPositiveInt(PydanticTypeProxy[int]):
         validate = positive_int_validator
+
+    class SQLGlotListOfExpressions(PydanticTypeProxy[t.List[exp.Expression]]):
+        validate = list_of_expressions_validator

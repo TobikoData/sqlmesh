@@ -40,7 +40,13 @@ from sqlmesh.core.dialect import schema_
 from sqlmesh.core.engine_adapter import EngineAdapter
 from sqlmesh.core.engine_adapter.shared import InsertOverwriteStrategy
 from sqlmesh.core.macros import RuntimeStage
-from sqlmesh.core.model import IncrementalUnmanagedKind, Model, SCDType2Kind, ViewKind
+from sqlmesh.core.model import (
+    IncrementalUnmanagedKind,
+    Model,
+    SCDType2ByColumnKind,
+    SCDType2ByTimeKind,
+    ViewKind,
+)
 from sqlmesh.core.snapshot import (
     DeployabilityIndex,
     QualifiedViewName,
@@ -1230,11 +1236,13 @@ class SCDType2Strategy(MaterializableStrategy):
         **render_kwargs: t.Any,
     ) -> None:
         model = snapshot.model
-        assert isinstance(model.kind, SCDType2Kind)
+        assert isinstance(model.kind, (SCDType2ByTimeKind, SCDType2ByColumnKind))
         if model.annotated:
             logger.info("Creating table '%s'", name)
             columns_to_types = model.columns_to_types_or_raise
-            columns_to_types[model.kind.updated_at_name] = model.kind.time_data_type
+            if model.kind.is_scd_type_2_by_time:
+                assert isinstance(model.kind, SCDType2ByTimeKind)
+                columns_to_types[model.kind.updated_at_name] = model.kind.time_data_type
             self.adapter.create_table(
                 name,
                 columns_to_types=columns_to_types,
@@ -1268,20 +1276,40 @@ class SCDType2Strategy(MaterializableStrategy):
         **kwargs: t.Any,
     ) -> None:
         model = snapshot.model
-        assert isinstance(model.kind, SCDType2Kind)
-        self.adapter.scd_type_2(
-            target_table=name,
-            source_table=query_or_df,
-            unique_key=model.unique_key,
-            valid_from_name=model.kind.valid_from_name,
-            valid_to_name=model.kind.valid_to_name,
-            updated_at_name=model.kind.updated_at_name,
-            updated_at_as_valid_from=model.kind.updated_at_as_valid_from,
-            columns_to_types=model.columns_to_types,
-            table_description=model.description,
-            column_descriptions=model.column_descriptions,
-            **kwargs,
-        )
+        if model.kind.is_scd_type_2_by_time:
+            assert isinstance(model.kind, SCDType2ByTimeKind)
+            self.adapter.scd_type_2_by_time(
+                target_table=name,
+                source_table=query_or_df,
+                unique_key=model.unique_key,
+                valid_from_name=model.kind.valid_from_name,
+                valid_to_name=model.kind.valid_to_name,
+                updated_at_name=model.kind.updated_at_name,
+                updated_at_as_valid_from=model.kind.updated_at_as_valid_from,
+                columns_to_types=model.columns_to_types,
+                table_description=model.description,
+                column_descriptions=model.column_descriptions,
+                **kwargs,
+            )
+        elif model.kind.is_scd_type_2_by_column:
+            assert isinstance(model.kind, SCDType2ByColumnKind)
+            self.adapter.scd_type_2_by_column(
+                target_table=name,
+                source_table=query_or_df,
+                unique_key=model.unique_key,
+                valid_from_name=model.kind.valid_from_name,
+                valid_to_name=model.kind.valid_to_name,
+                check_columns=model.kind.columns,
+                columns_to_types=model.columns_to_types,
+                execution_time_as_valid_from=model.kind.execution_time_as_valid_from,
+                table_description=model.description,
+                column_descriptions=model.column_descriptions,
+                **kwargs,
+            )
+        else:
+            raise SQLMeshError(
+                f"Unexpected SCD Type 2 kind: {model.kind}. This is not expected and please report this as a bug."
+            )
 
     def append(
         self,
@@ -1293,20 +1321,40 @@ class SCDType2Strategy(MaterializableStrategy):
         **kwargs: t.Any,
     ) -> None:
         model = snapshot.model
-        assert isinstance(model.kind, SCDType2Kind)
-        self.adapter.scd_type_2(
-            target_table=table_name,
-            source_table=query_or_df,
-            unique_key=model.unique_key,
-            valid_from_name=model.kind.valid_from_name,
-            valid_to_name=model.kind.valid_to_name,
-            updated_at_name=model.kind.updated_at_name,
-            updated_at_as_valid_from=model.kind.updated_at_as_valid_from,
-            columns_to_types=model.columns_to_types,
-            table_description=model.description,
-            column_descriptions=model.column_descriptions,
-            **kwargs,
-        )
+        if model.kind.is_scd_type_2_by_time:
+            assert isinstance(model.kind, SCDType2ByTimeKind)
+            self.adapter.scd_type_2_by_time(
+                target_table=table_name,
+                source_table=query_or_df,
+                unique_key=model.unique_key,
+                valid_from_name=model.kind.valid_from_name,
+                valid_to_name=model.kind.valid_to_name,
+                updated_at_name=model.kind.updated_at_name,
+                updated_at_as_valid_from=model.kind.updated_at_as_valid_from,
+                columns_to_types=model.columns_to_types,
+                table_description=model.description,
+                column_descriptions=model.column_descriptions,
+                **kwargs,
+            )
+        elif model.kind.is_scd_type_2_by_column:
+            assert isinstance(model.kind, SCDType2ByColumnKind)
+            self.adapter.scd_type_2_by_column(
+                target_table=table_name,
+                source_table=query_or_df,
+                unique_key=model.unique_key,
+                valid_from_name=model.kind.valid_from_name,
+                valid_to_name=model.kind.valid_to_name,
+                check_columns=model.kind.columns,
+                columns_to_types=model.columns_to_types,
+                execution_time_as_valid_from=model.kind.execution_time_as_valid_from,
+                table_description=model.description,
+                column_descriptions=model.column_descriptions,
+                **kwargs,
+            )
+        else:
+            raise SQLMeshError(
+                f"Unexpected SCD Type 2 kind: {model.kind}. This is not expected and please report this as a bug."
+            )
 
 
 class ViewStrategy(PromotableStrategy):
