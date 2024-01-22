@@ -5,5 +5,6 @@ MODEL (
     batch_size 5
   ),
   owner jen,
-  grain id
+  grain id,
+  description 'List of waiter names'
 )

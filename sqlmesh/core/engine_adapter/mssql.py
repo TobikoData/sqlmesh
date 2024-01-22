@@ -18,6 +18,8 @@ from sqlmesh.core.engine_adapter.mixins import (
 )
 from sqlmesh.core.engine_adapter.shared import (
     CatalogSupport,
+    CommentCreationTable,
+    CommentCreationView,
     DataObject,
     DataObjectType,
     SourceQuery,
@@ -42,6 +44,8 @@ class MSSQLEngineAdapter(
     SUPPORTS_MATERIALIZED_VIEWS = False
     CATALOG_SUPPORT = CatalogSupport.REQUIRES_SET_CATALOG
     CURRENT_CATALOG_EXPRESSION = exp.func("db_name")
+    COMMENT_CREATION_TABLE = CommentCreationTable.UNSUPPORTED
+    COMMENT_CREATION_VIEW = CommentCreationView.UNSUPPORTED
 
     def columns(
         self,

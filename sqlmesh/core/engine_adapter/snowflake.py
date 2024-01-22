@@ -10,6 +10,7 @@ from sqlmesh.core.dialect import to_schema
 from sqlmesh.core.engine_adapter.mixins import GetCurrentCatalogFromFunctionMixin
 from sqlmesh.core.engine_adapter.shared import (
     CatalogSupport,
+    CommentCreationView,
     DataObject,
     DataObjectType,
     SourceQuery,
@@ -36,6 +37,7 @@ class SnowflakeEngineAdapter(GetCurrentCatalogFromFunctionMixin):
     SUPPORTS_CLONING = True
     CATALOG_SUPPORT = CatalogSupport.FULL_SUPPORT
     CURRENT_CATALOG_EXPRESSION = exp.func("current_database")
+    COMMENT_CREATION_VIEW = CommentCreationView.IN_SCHEMA_DEF_NO_COLUMN_COMMAND
 
     def _df_to_source_queries(
         self,

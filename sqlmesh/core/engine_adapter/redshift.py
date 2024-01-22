@@ -14,6 +14,7 @@ from sqlmesh.core.engine_adapter.mixins import (
     NonTransactionalTruncateMixin,
 )
 from sqlmesh.core.engine_adapter.shared import (
+    CommentCreationView,
     DataObject,
     DataObjectType,
     SourceQuery,
@@ -37,6 +38,8 @@ class RedshiftEngineAdapter(
     ESCAPE_JSON = True
     COLUMNS_TABLE = "svv_columns"  # Includes late-binding views
     CURRENT_CATALOG_EXPRESSION = exp.func("current_database")
+    # Redshift doesn't support comments for VIEWs WITH NO SCHEMA BINDING (which we always use)
+    COMMENT_CREATION_VIEW = CommentCreationView.UNSUPPORTED
 
     @property
     def cursor(self) -> t.Any:
@@ -61,6 +64,8 @@ class RedshiftEngineAdapter(
         columns_to_types: t.Optional[t.Dict[str, exp.DataType]] = None,
         exists: bool = True,
         replace: bool = False,
+        table_description: t.Optional[str] = None,
+        column_descriptions: t.Optional[t.Dict[str, str]] = None,
         **kwargs: t.Any,
     ) -> None:
         """
@@ -71,29 +76,42 @@ class RedshiftEngineAdapter(
         """
         if not exists:
             return super()._create_table_from_source_queries(
-                table_name, source_queries, columns_to_types, exists, **kwargs
+                table_name,
+                source_queries,
+                columns_to_types,
+                exists,
+                table_description=table_description,
+                column_descriptions=column_descriptions,
+                **kwargs,
             )
         if self.table_exists(table_name):
             return
         super()._create_table_from_source_queries(
-            table_name, source_queries, exists=False, **kwargs
+            table_name,
+            source_queries,
+            exists=False,
+            table_description=table_description,
+            column_descriptions=column_descriptions,
+            **kwargs,
         )
 
-    def _create_table_exp(
+    def _build_create_table_exp(
         self,
         table_name_or_schema: t.Union[exp.Schema, TableName],
         expression: t.Optional[exp.Expression],
         exists: bool = True,
         replace: bool = False,
         columns_to_types: t.Optional[t.Dict[str, exp.DataType]] = None,
+        table_description: t.Optional[str] = None,
         **kwargs: t.Any,
     ) -> exp.Create:
-        statement = super()._create_table_exp(
+        statement = super()._build_create_table_exp(
             table_name_or_schema,
             expression=expression,
             exists=exists,
             replace=replace,
             columns_to_types=columns_to_types,
+            table_description=table_description,
             **kwargs,
         )
 
@@ -147,6 +165,8 @@ class RedshiftEngineAdapter(
         columns_to_types: t.Optional[t.Dict[str, exp.DataType]] = None,
         replace: bool = True,
         materialized: bool = False,
+        table_description: t.Optional[str] = None,
+        column_descriptions: t.Optional[t.Dict[str, str]] = None,
         **create_kwargs: t.Any,
     ) -> None:
         """
@@ -160,6 +180,8 @@ class RedshiftEngineAdapter(
             columns_to_types,
             replace,
             materialized,
+            table_description=table_description,
+            column_descriptions=column_descriptions,
             no_schema_binding=True,
             **create_kwargs,
         )
@@ -169,6 +191,8 @@ class RedshiftEngineAdapter(
         table_name: TableName,
         query_or_df: QueryOrDF,
         columns_to_types: t.Optional[t.Dict[str, exp.DataType]] = None,
+        table_description: t.Optional[str] = None,
+        column_descriptions: t.Optional[t.Dict[str, str]] = None,
         **kwargs: t.Any,
     ) -> None:
         """
@@ -180,7 +204,14 @@ class RedshiftEngineAdapter(
             `CREATE TABLE...`, `INSERT INTO...`, `RENAME TABLE...`, `RENAME TABLE...`, DROP TABLE...`  dance.
         """
         if not self.is_pandas_df(query_or_df) or not self.table_exists(table_name):
-            return super().replace_query(table_name, query_or_df, columns_to_types, **kwargs)
+            return super().replace_query(
+                table_name,
+                query_or_df,
+                columns_to_types,
+                table_description,
+                column_descriptions,
+                **kwargs,
+            )
         source_queries, columns_to_types = self._get_source_queries_and_columns_to_types(
             query_or_df, columns_to_types, target_table=table_name
         )
@@ -189,7 +220,14 @@ class RedshiftEngineAdapter(
         with self.transaction():
             temp_table = self._get_temp_table(target_table)
             old_table = self._get_temp_table(target_table)
-            self.create_table(temp_table, columns_to_types, exists=False, **kwargs)
+            self.create_table(
+                temp_table,
+                columns_to_types,
+                exists=False,
+                table_description=table_description,
+                column_descriptions=column_descriptions,
+                **kwargs,
+            )
             self._insert_append_source_queries(temp_table, source_queries, columns_to_types)
             self.rename_table(target_table, old_table)
             self.rename_table(temp_table, target_table)

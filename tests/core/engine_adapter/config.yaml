@@ -5,6 +5,7 @@ gateways:
       catalogs:
         memory: ':memory:'
         testing: 'testing.duckdb'
+      register_comments: true
   inttest_trino:
     connection:
       type: trino
@@ -14,6 +15,7 @@ gateways:
       catalog: datalake
       http_scheme: http
       retries: 20
+      register_comments: true
     state_connection:
       type: duckdb
   inttest_spark:
@@ -21,6 +23,7 @@ gateways:
       type: spark
       config:
         spark.remote: sc://localhost
+      register_comments: true
     state_connection:
       type: duckdb
   inttest_mssql:
@@ -29,6 +32,7 @@ gateways:
       host: localhost
       user: sa
       password: 1StrongPwd@@
+      register_comments: true
   inttest_postgres:
     connection:
       type: postgres
@@ -38,6 +42,7 @@ gateways:
       host: localhost
       port: 5432
       concurrent_tasks: 1
+      register_comments: true
   inttest_mysql:
     connection:
       type: mysql
@@ -46,6 +51,7 @@ gateways:
       password: mysql
       port: 3306
       charset: utf8
+      register_comments: true
 
 model_defaults:
     dialect: duckdb

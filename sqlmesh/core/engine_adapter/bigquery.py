@@ -424,7 +424,37 @@ class BigQueryEngineAdapter(InsertOverwriteWithMergeMixin):
         self.execute(query, quote_identifiers=quote_identifiers)
         return self._query_job.to_dataframe()
 
-    def _create_table_properties(
+    def _create_column_comments(
+        self,
+        table_name: TableName,
+        column_comments: t.Dict[str, str],
+        table_kind: str = "TABLE",
+    ) -> None:
+        table = self._get_table(table_name)
+
+        # convert Table object to dict
+        table_def = table.to_api_repr()
+
+        # set the column descriptions
+        for i in range(len(table_def["schema"]["fields"])):
+            comment = column_comments.get(table_def["schema"]["fields"][i]["name"], None)
+            if comment:
+                table_def["schema"]["fields"][i]["description"] = comment
+
+        # convert dict back to a Table object
+        table = table.from_api_repr(table_def)
+
+        # update table schema
+        logger.info(f"Registering column comments for table {table_name}")
+        self._db_call(self.client.update_table, table=table, fields=["schema"])
+
+    def _build_description_property_exp(self, description: str) -> exp.Property:
+        return exp.Property(
+            this=exp.to_identifier("description", quoted=True),
+            value=exp.Literal.string(description),
+        )
+
+    def _build_table_properties_exp(
         self,
         storage_format: t.Optional[str] = None,
         partitioned_by: t.Optional[t.List[exp.Expression]] = None,
@@ -432,6 +462,7 @@ class BigQueryEngineAdapter(InsertOverwriteWithMergeMixin):
         clustered_by: t.Optional[t.List[str]] = None,
         table_properties: t.Optional[t.Dict[str, exp.Expression]] = None,
         columns_to_types: t.Optional[t.Dict[str, exp.DataType]] = None,
+        table_description: t.Optional[str] = None,
     ) -> t.Optional[exp.Properties]:
         properties: t.List[exp.Expression] = []
 
@@ -475,12 +506,64 @@ class BigQueryEngineAdapter(InsertOverwriteWithMergeMixin):
         if clustered_by:
             properties.append(exp.Cluster(expressions=[exp.column(col) for col in clustered_by]))
 
-        for key, value in (table_properties or {}).items():
-            properties.append(exp.Property(this=key, value=value))
+        if table_description:
+            properties.append(
+                self._build_description_property_exp(table_description),
+            )
+
+        properties.extend(self._table_properties_to_expressions(table_properties))
 
         if properties:
             return exp.Properties(expressions=properties)
         return None
+
+    def _build_col_comment_exp(
+        self, col_name: str, column_descriptions: t.Dict[str, str]
+    ) -> t.List[exp.ColumnConstraint]:
+        comment = column_descriptions.get(col_name, None)
+        if comment:
+            return [
+                exp.ColumnConstraint(
+                    kind=exp.Properties(
+                        expressions=[
+                            self._build_description_property_exp(comment),
+                        ]
+                    )
+                )
+            ]
+        return []
+
+    def _build_view_properties_exp(
+        self,
+        table_properties: t.Optional[t.Dict[str, exp.Expression]] = None,
+        table_description: t.Optional[str] = None,
+    ) -> t.Optional[exp.Properties]:
+        """Creates a SQLGlot table properties expression for view"""
+        properties: t.List[exp.Expression] = []
+
+        if table_description:
+            properties.append(
+                self._build_description_property_exp(table_description),
+            )
+
+        if properties:
+            return exp.Properties(expressions=properties)
+        return None
+
+    def _build_create_comment_table_exp(
+        self, table: exp.Table, table_comment: str, table_kind: str
+    ) -> exp.Comment | str:
+        table_sql = table.sql(dialect=self.dialect, identify=True)
+
+        return f"ALTER {table_kind} {table_sql} SET OPTIONS(description = '{table_comment}')"
+
+    def _build_create_comment_column_exp(
+        self, table: exp.Table, column_name: str, column_comment: str, table_kind: str = "TABLE"
+    ) -> exp.Comment | str:
+        table_sql = table.sql(dialect=self.dialect, identify=True)
+        column_sql = exp.column(column_name).sql(dialect=self.dialect, identify=True)
+
+        return f"ALTER {table_kind} {table_sql} ALTER COLUMN {column_sql} SET OPTIONS(description = '{column_comment}')"
 
     def create_state_table(
         self,

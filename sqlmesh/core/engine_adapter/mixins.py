@@ -109,6 +109,8 @@ class LogicalReplaceQueryMixin(EngineAdapter):
         table_name: TableName,
         query_or_df: QueryOrDF,
         columns_to_types: t.Optional[t.Dict[str, exp.DataType]] = None,
+        table_description: t.Optional[str] = None,
+        column_descriptions: t.Optional[t.Dict[str, str]] = None,
         **kwargs: t.Any,
     ) -> None:
         """
@@ -117,7 +119,15 @@ class LogicalReplaceQueryMixin(EngineAdapter):
         """
 
         if not self.table_exists(table_name):
-            return self.ctas(table_name, query_or_df, columns_to_types, exists=False, **kwargs)
+            return self.ctas(
+                table_name,
+                query_or_df,
+                columns_to_types,
+                exists=False,
+                table_description=table_description,
+                column_descriptions=column_descriptions,
+                **kwargs,
+            )
         with self.transaction():
             # TODO: remove quote_identifiers when sqlglot has an expression to represent TRUNCATE
             source_queries, columns_to_types = self._get_source_queries_and_columns_to_types(
@@ -200,17 +210,7 @@ class InsertOverwriteWithMergeMixin(EngineAdapter):
 
 
 class HiveMetastoreTablePropertiesMixin(EngineAdapter):
-    @classmethod
-    def __table_properties_to_expressions(
-        cls, table_properties: t.Optional[t.Dict[str, exp.Expression]] = None
-    ) -> t.List[exp.Property]:
-        if not table_properties:
-            return []
-        return [
-            exp.Property(this=key, value=value.copy()) for key, value in table_properties.items()
-        ]
-
-    def _create_table_properties(
+    def _build_table_properties_exp(
         self,
         storage_format: t.Optional[str] = None,
         partitioned_by: t.Optional[t.List[exp.Expression]] = None,
@@ -218,6 +218,7 @@ class HiveMetastoreTablePropertiesMixin(EngineAdapter):
         clustered_by: t.Optional[t.List[str]] = None,
         table_properties: t.Optional[t.Dict[str, exp.Expression]] = None,
         columns_to_types: t.Optional[t.Dict[str, exp.DataType]] = None,
+        table_description: t.Optional[str] = None,
     ) -> t.Optional[exp.Properties]:
         properties: t.List[exp.Expression] = []
 
@@ -236,20 +237,31 @@ class HiveMetastoreTablePropertiesMixin(EngineAdapter):
                 )
             )
 
-        properties.extend(self.__table_properties_to_expressions(table_properties))
+        if table_description:
+            properties.append(exp.SchemaCommentProperty(this=exp.Literal.string(table_description)))
+
+        properties.extend(self._table_properties_to_expressions(table_properties))
 
         if properties:
             return exp.Properties(expressions=properties)
         return None
 
-    def _create_view_properties(
+    def _build_view_properties_exp(
         self,
         table_properties: t.Optional[t.Dict[str, exp.Expression]] = None,
+        table_description: t.Optional[str] = None,
     ) -> t.Optional[exp.Properties]:
         """Creates a SQLGlot table properties expression for view"""
-        if not table_properties:
-            return None
-        return exp.Properties(expressions=self.__table_properties_to_expressions(table_properties))
+        properties: t.List[exp.Expression] = []
+
+        if table_description:
+            properties.append(exp.SchemaCommentProperty(this=exp.Literal.string(table_description)))
+
+        properties.extend(self._table_properties_to_expressions(table_properties))
+
+        if properties:
+            return exp.Properties(expressions=properties)
+        return None
 
 
 class GetCurrentCatalogFromFunctionMixin(EngineAdapter):
