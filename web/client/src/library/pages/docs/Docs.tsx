@@ -18,13 +18,17 @@ export default function PageDocs(): JSX.Element {
   const { modelName } = useParams()
 
   const models = useStoreContext(s => s.models)
+  const lastSelectedModel = useStoreContext(s => s.lastSelectedModel)
+  const setLastSelectedModel = useStoreContext(s => s.setLastSelectedModel)
 
   const filtered = useMemo(() => Array.from(new Set(models.values())), [models])
 
   useEffect(() => {
     if (models.size === 0) return
 
-    const model = isNil(modelName) ? undefined : models.get(modelName)
+    const model = isNil(modelName) ? lastSelectedModel : models.get(modelName)
+
+    setLastSelectedModel(model)
 
     navigate(
       isNil(model)
