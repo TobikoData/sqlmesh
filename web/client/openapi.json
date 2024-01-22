@@ -612,7 +612,7 @@
     "/api/models": {
       "get": {
         "summary": "Get Models",
-        "description": "Get a mapping of model names to model metadata",
+        "description": "Get a list of models",
         "operationId": "get_models_api_models_get",
         "responses": {
           "200": {
@@ -629,6 +629,39 @@
                   ],
                   "title": "Response Get Models Api Models Get"
                 }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/models/{name}": {
+      "get": {
+        "summary": "Get Model",
+        "description": "Get a single model",
+        "operationId": "get_model_api_models__name__get",
+        "parameters": [
+          {
+            "name": "name",
+            "in": "path",
+            "required": true,
+            "schema": { "type": "string", "title": "Name" }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/Model" }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/HTTPValidationError" }
               }
             }
           }
@@ -1456,15 +1489,7 @@
       },
       "Modules": {
         "type": "string",
-        "enum": [
-          "editor",
-          "docs",
-          "plans",
-          "plan-active",
-          "tests",
-          "audits",
-          "errors"
-        ],
+        "enum": ["editor", "docs", "plans", "tests", "audits", "errors"],
         "title": "Modules"
       },
       "NodeType": {
