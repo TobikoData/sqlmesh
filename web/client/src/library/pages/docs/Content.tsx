@@ -16,10 +16,15 @@ export default function Content(): JSX.Element {
   const navigate = useNavigate()
 
   const models = useStoreContext(s => s.models)
-  const model = isNil(modelName) ? undefined : models.get(encodeURI(modelName))
+  const lastSelectedModel = useStoreContext(s => s.lastSelectedModel)
+  const setLastSelectedModel = useStoreContext(s => s.setLastSelectedModel)
 
   const files = useStoreProject(s => s.files)
   const setSelectedFile = useStoreProject(s => s.setSelectedFile)
+
+  const model = isNil(modelName)
+    ? lastSelectedModel
+    : models.get(encodeURI(modelName))
 
   useEffect(() => {
     if (isNotNil(model)) {
@@ -29,6 +34,8 @@ export default function Content(): JSX.Element {
 
       setSelectedFile(file)
     }
+
+    setLastSelectedModel(model)
   }, [model])
 
   function handleClickModel(modelName: string): void {
