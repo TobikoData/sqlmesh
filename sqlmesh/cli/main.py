@@ -47,6 +47,11 @@ def _sqlmesh_version() -> str:
     is_flag=True,
     help="Enable debug mode.",
 )
+@click.option(
+    "--log-to-stdout",
+    is_flag=True,
+    help="Display logs in stdout.",
+)
 @click.pass_context
 @error_handler
 def cli(
@@ -56,6 +61,7 @@ def cli(
     gateway: t.Optional[str] = None,
     ignore_warnings: bool = False,
     debug: bool = False,
+    log_to_stdout: bool = False,
 ) -> None:
     """SQLMesh command line tool."""
     if "--help" in sys.argv:
@@ -73,7 +79,7 @@ def cli(
 
     configs = load_configs(config, paths)
     log_limit = list(configs.values())[0].log_limit
-    configure_logging(debug, ignore_warnings, log_limit=log_limit)
+    configure_logging(debug, ignore_warnings, log_to_stdout, log_limit=log_limit)
 
     try:
         context = Context(
