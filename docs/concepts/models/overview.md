@@ -123,37 +123,22 @@ In the former method, column comments are embedded in the `CREATE` schema defini
 
 In the latter method, separate commands are required for every comment. This may result in many commands: one for the table comment and one for each column comment. In some scenarios, SQLMesh is not able to use the former `CREATE` method and must issue separate commands. Because SQLMesh must use different methods in different situations and engines vary in their support of the methods, comments may not be registered for all objects.
 
-This table describes comment support for `TABLE` objects by registration method:
+This table lists each engine's support for `TABLE` and `VIEW` object comments:
 
-| Engine       | Comments supported | Schema definition supported | Comment command supported |
-| ------------ | ------------------ | --------------------------- | ------------------------- |
-| BigQuery     | Y                  | Y                           | Y                         |
-| Databricks   | Y                  | Y                           | Y                         |
-| DuckDB       | N                  | N/A                         | N/A                       |
-| MySQL        | Y                  | Y                           | Y                         |
-| MSSQL        | N                  | N/A                         | N/A                       |
-| Postgres     | Y                  | N                           | Y                         |
-| GCP Postgres | Y                  | N                           | Y                         |
-| Redshift     | Y                  | Y                           | Y                         |
-| Snowflake    | Y                  | Y                           | Y                         |
-| Spark        | Y                  | Y                           | Y                         |
-| Trino        | Y                  | Y                           | Y                         |
+| Engine       | `TABLE` comments | `VIEW` comments |
+| ------------ | ---------------- | --------------- |
+| BigQuery     | Y                | Y               |
+| Databricks   | Y                | Y               |
+| DuckDB       | N                | N               |
+| MySQL        | Y                | Y               |
+| MSSQL        | N                | N               |
+| Postgres     | Y                | Y               |
+| GCP Postgres | Y                | Y               |
+| Redshift     | Y                | N               |
+| Snowflake    | Y                | Y               |
+| Spark        | Y                | Y               |
+| Trino        | Y                | Y               |
 
-This table describes comment support for `VIEW` objects by registration method:
-
-| Engine       | Comments supported                           | Schema definition supported | Comment command supported |
-| ------------ | -------------------------------------------- | --------------------------- | ------------------------- |
-| BigQuery     | Y                                            | Y                           | Y                         |
-| Databricks   | Automatic pass-through from underlying table | N/A                         | N/A                       |
-| DuckDB       | N                                            | N/A                         | N/A                       |
-| MySQL        | Automatic pass-through from underlying table | N/A                         | N/A                       |
-| MSSQL        | N                                            | N/A                         | N/A                       |
-| Postgres     | Y                                            | N                           | Y                         |
-| GCP Postgres | Y                                            | N                           | Y                         |
-| Redshift     | N                                            | N/A                         | N/A                       |
-| Snowflake    | Y                                            | Y                           | N                         |
-| Spark        | Automatic pass-through from underlying table | N/A                         | N/A                       |
-| Trino        | Y                                            | N                           | Y                         |
 
 ## Model properties
 The `MODEL` DDL statement takes various properties, which are used for both metadata and controlling behavior.

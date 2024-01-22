@@ -72,7 +72,7 @@ class ConnectionConfig(abc.ABC, BaseConfig):
         """A function that is called to initialize the cursor"""
         return None
 
-    def create_engine_adapter(self, register_comments: bool = False) -> EngineAdapter:
+    def create_engine_adapter(self, register_comments_override: bool = False) -> EngineAdapter:
         """Returns a new instance of the Engine Adapter."""
         return self._engine_adapter(
             lambda: self._connection_factory(
@@ -85,7 +85,7 @@ class ConnectionConfig(abc.ABC, BaseConfig):
             cursor_kwargs=self._cursor_kwargs,
             default_catalog=self.get_catalog(),
             cursor_init=self._cursor_init,
-            register_comments=register_comments or self.register_comments,
+            register_comments=register_comments_override or self.register_comments,
             **self._extra_engine_config,
         )
 

@@ -292,7 +292,7 @@ class Context(BaseContext):
 
         test_connection_config = self.config.get_test_connection(self.gateway, self.default_catalog)
         self._test_engine_adapter = test_connection_config.create_engine_adapter(
-            register_comments=False
+            register_comments_override=False
         )
 
         self._snapshot_evaluator: t.Optional[SnapshotEvaluator] = None
