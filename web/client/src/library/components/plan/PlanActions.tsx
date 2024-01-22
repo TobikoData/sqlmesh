@@ -3,7 +3,6 @@ import useActiveFocus from '~/hooks/useActiveFocus'
 import { EnumVariant } from '~/types/enum'
 import { includes, isFalse } from '~/utils'
 import { Button } from '../button/Button'
-import PlanActionsDescription from './PlanActionsDescription'
 import { EnumPlanAction, ModelPlanAction } from '@models/plan-action'
 import { useStorePlan } from '@context/plan'
 
@@ -48,7 +47,6 @@ export default function PlanActions({
 
   return (
     <>
-      {isFalse(planAction.isDone) && <PlanActionsDescription />}
       <div className="flex justify-between px-4 pb-2">
         <div className="flex w-full items-center">
           {(planAction.isRun || planAction.isRunning) && (

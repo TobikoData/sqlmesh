@@ -1,4 +1,4 @@
-import { isNil, isTrue } from '~/utils'
+import { isFalse, isNil, isTrue } from '~/utils'
 import { useStorePlan } from '~/context/plan'
 import { useApiPlanRun, useApiPlanApply, useApiCancelPlan } from '~/api'
 import PlanHeader from './PlanHeader'
@@ -14,6 +14,8 @@ import { EnumPlanAction, ModelPlanAction } from '@models/plan-action'
 import { useStoreProject } from '@context/project'
 import { useIDE } from '~/library/pages/ide/context'
 import { useStoreContext } from '@context/context'
+import { Transition } from '@headlessui/react'
+import PlanActionsDescription from './PlanActionsDescription'
 
 function Plan(): JSX.Element {
   const dispatch = usePlanDispatch()
@@ -102,13 +104,47 @@ function Plan(): JSX.Element {
     <div className="flex flex-col w-full h-full overflow-hidden">
       <PlanHeader />
       <div className="w-full h-full px-4 overflow-y-scroll hover:scrollbar scrollbar--vertical">
-        <PlanOptions />
-        {planAction.isCancelling ? (
-          <CancellingPlanApply />
-        ) : (
-          <PlanApplyStageTracker />
-        )}
+        <Transition
+          appear
+          show
+          enter="transition ease duration-700 transform"
+          enterFrom="opacity-0 -translate-y-full"
+          enterTo="opacity-100 translate-y-0"
+          leave="transition ease duration-1000 transform"
+          leaveFrom="opacity-100 translate-y-0"
+          leaveTo="opacity-0 -translate-y-full"
+        >
+          <PlanOptions />
+        </Transition>
+        <Transition
+          appear
+          show
+          enter="transition ease duration-700 transform"
+          enterFrom="opacity-0 scale-95"
+          enterTo="opacity-100 scale-100"
+          leave="transition ease duration-1000 transform"
+          leaveFrom="opacity-100 scale-100"
+          leaveTo="opacity-0 scale-95"
+        >
+          {planAction.isCancelling ? (
+            <CancellingPlanApply />
+          ) : (
+            <PlanApplyStageTracker />
+          )}
+        </Transition>
       </div>
+      <Transition
+        appear
+        show={isFalse(planAction.isDone)}
+        enter="transition ease duration-1000 transform"
+        enterFrom="opacity-0 translate-y-full"
+        enterTo="opacity-100 translate-y-0"
+        leave="transition ease duration-500 transform"
+        leaveFrom="opacity-100 translate-y-0"
+        leaveTo="opacity-0 translate-y-full"
+      >
+        <PlanActionsDescription />
+      </Transition>
       <PlanActions
         apply={apply}
         run={run}
