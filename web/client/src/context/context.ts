@@ -15,9 +15,11 @@ interface ContextStore {
   confirmations: Confirmation[]
   environment: ModelEnvironment
   environments: Set<ModelEnvironment>
+  lastSelectedModel?: ModelSQLMeshModel
   models: Map<string, ModelSQLMeshModel>
   modules: string[]
   splitPaneSizes: number[]
+  setLastSelectedModel: (model?: ModelSQLMeshModel) => void
   setSplitPaneSizes: (splitPaneSizes: number[]) => void
   setModules: (modules: string[]) => void
   setVersion: (version?: string) => void
@@ -59,6 +61,12 @@ export const useStoreContext = create<ContextStore>((set, get) => ({
   initialStartDate: undefined,
   initialEndDate: undefined,
   models: new Map(),
+  lastSelectedModel: undefined,
+  setLastSelectedModel(model) {
+    set(() => ({
+      lastSelectedModel: model,
+    }))
+  },
   setModules(modules) {
     set(() => ({
       modules,

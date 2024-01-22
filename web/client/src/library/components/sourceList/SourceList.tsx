@@ -160,7 +160,7 @@ export function SourceListItem({
       to={to}
       className={({ isActive }) =>
         clsx(
-          'block overflow-hidden px-2 py-1 rounded-md w-full text-sm font-bold',
+          'block overflow-hidden px-2 py-1 rounded-md w-full text-sm font-semibold',
           disabled && 'opacity-50 pointer-events-none',
           isActive
             ? variant === EnumVariant.Primary

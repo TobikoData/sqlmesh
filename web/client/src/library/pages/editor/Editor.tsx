@@ -1,4 +1,4 @@
-import { Suspense, lazy, useCallback } from 'react'
+import { Suspense, lazy, useCallback, useEffect } from 'react'
 import { useStoreContext } from '@context/context'
 import { useStoreProject } from '@context/project'
 import { EnumErrorKey, useIDE, type ErrorIDE } from '../ide/context'
@@ -16,9 +16,13 @@ const LineageFlowProvider = lazy(() => import('@components/graph/context'))
 
 export default function PageEditor(): JSX.Element {
   const { addError } = useIDE()
+
   const models = useStoreContext(s => s.models)
+  const lastSelectedModel = useStoreContext(s => s.lastSelectedModel)
+  const setLastSelectedModel = useStoreContext(s => s.setLastSelectedModel)
 
   const files = useStoreProject(s => s.files)
+  const selectedFile = useStoreProject(s => s.selectedFile)
   const setSelectedFile = useStoreProject(s => s.setSelectedFile)
 
   const handleClickModel = useCallback(
@@ -27,7 +31,7 @@ export default function PageEditor(): JSX.Element {
 
       if (isNil(model)) return
 
-      setSelectedFile(files.get(model.path))
+      setLastSelectedModel(model)
     },
     [files, models],
   )
@@ -35,6 +39,22 @@ export default function PageEditor(): JSX.Element {
   const handleError = useCallback(function handleError(error: ErrorIDE): void {
     addError(EnumErrorKey.ColumnLineage, error)
   }, [])
+
+  useEffect(() => {
+    if (isNil(lastSelectedModel)) return
+
+    const file = files.get(lastSelectedModel.path)
+
+    if (isNil(file)) return
+
+    setSelectedFile(file)
+  }, [lastSelectedModel])
+
+  useEffect(() => {
+    if (isNil(selectedFile)) return
+
+    setLastSelectedModel(models.get(selectedFile.path))
+  }, [selectedFile])
 
   return (
     <Page
