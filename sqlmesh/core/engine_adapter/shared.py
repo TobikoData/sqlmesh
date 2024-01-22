@@ -52,6 +52,110 @@ class DataObjectType(str, Enum):
         return DataObjectType.UNKNOWN
 
 
+class CommentCreationTable(Enum):
+    """
+    Enum for SQL engine TABLE comment support.
+
+    UNSUPPORTED = no comments at all
+    IN_SCHEMA_DEF_CTAS = comments can be registered in CREATE schema definitions, including CTAS calls
+    IN_SCHEMA_DEF_NO_CTAS = comments can be registered in CREATE schema definitions, excluding CTAS calls
+    COMMENT_COMMAND_ONLY = comments can only be registered via a post-creation command like `COMMENT` or `ALTER`
+    """
+
+    UNSUPPORTED = 1
+    IN_SCHEMA_DEF_CTAS = 2
+    IN_SCHEMA_DEF_NO_CTAS = 3
+    COMMENT_COMMAND_ONLY = 4
+
+    @property
+    def is_unsupported(self) -> bool:
+        return self == CommentCreationTable.UNSUPPORTED
+
+    @property
+    def is_in_schema_def_ctas(self) -> bool:
+        return self == CommentCreationTable.IN_SCHEMA_DEF_CTAS
+
+    @property
+    def is_in_schema_def_no_ctas(self) -> bool:
+        return self == CommentCreationTable.IN_SCHEMA_DEF_NO_CTAS
+
+    @property
+    def is_comment_command_only(self) -> bool:
+        return self == CommentCreationTable.COMMENT_COMMAND_ONLY
+
+    @property
+    def is_supported(self) -> bool:
+        return self != CommentCreationTable.UNSUPPORTED
+
+    @property
+    def supports_schema_def(self) -> bool:
+        return self in (
+            CommentCreationTable.IN_SCHEMA_DEF_CTAS,
+            CommentCreationTable.IN_SCHEMA_DEF_NO_CTAS,
+        )
+
+
+class CommentCreationView(Enum):
+    """
+    Enum for SQL engine VIEW comment support.
+
+    UNSUPPORTED = no comments at all
+    IN_SCHEMA_DEF_AND_COMMANDS = all comments can be registered in CREATE VIEW schema definitions
+                                   and in post-creation commands
+    IN_SCHEMA_DEF_NO_COMMANDS = all comments can be registered in CREATE VIEW schema definitions,
+                                  but not in post-creation commands
+    IN_SCHEMA_DEF_NO_COLUMN_COMMAND = all comments can be registered in CREATE VIEW schema definitions,
+                                        view comments can be registered in post-creation commands,
+                                        column comments cannot be registered in post-creation commands
+    COMMENT_COMMAND_ONLY = comments can only be registered via a post-creation command like `COMMENT` or `ALTER`
+    """
+
+    UNSUPPORTED = 1
+    IN_SCHEMA_DEF_AND_COMMANDS = 2
+    IN_SCHEMA_DEF_NO_COMMANDS = 3
+    IN_SCHEMA_DEF_NO_COLUMN_COMMAND = 4
+    COMMENT_COMMAND_ONLY = 5
+
+    @property
+    def is_unsupported(self) -> bool:
+        return self == CommentCreationView.UNSUPPORTED
+
+    @property
+    def is_in_schema_def_and_commands(self) -> bool:
+        return self == CommentCreationView.IN_SCHEMA_DEF_AND_COMMANDS
+
+    @property
+    def is_in_schema_def_no_commands(self) -> bool:
+        return self == CommentCreationView.IN_SCHEMA_DEF_NO_COMMANDS
+
+    @property
+    def is_in_schema_def_no_column_command(self) -> bool:
+        return self == CommentCreationView.IN_SCHEMA_DEF_NO_COLUMN_COMMAND
+
+    @property
+    def is_comment_command_only(self) -> bool:
+        return self == CommentCreationView.COMMENT_COMMAND_ONLY
+
+    @property
+    def is_supported(self) -> bool:
+        return self != CommentCreationView.UNSUPPORTED
+
+    @property
+    def supports_schema_def(self) -> bool:
+        return self in (
+            CommentCreationView.IN_SCHEMA_DEF_AND_COMMANDS,
+            CommentCreationView.IN_SCHEMA_DEF_NO_COMMANDS,
+            CommentCreationView.IN_SCHEMA_DEF_NO_COLUMN_COMMAND,
+        )
+
+    @property
+    def supports_column_comment_commands(self) -> bool:
+        return self in (
+            CommentCreationView.IN_SCHEMA_DEF_AND_COMMANDS,
+            CommentCreationView.COMMENT_COMMAND_ONLY,
+        )
+
+
 class DataObject(PydanticModel):
     catalog: t.Optional[str] = None
     schema_name: str = Field(alias="schema")

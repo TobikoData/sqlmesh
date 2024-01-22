@@ -7,6 +7,8 @@ from sqlglot import exp
 from sqlmesh.core.engine_adapter import EngineAdapter
 from sqlmesh.core.engine_adapter.shared import (
     CatalogSupport,
+    CommentCreationTable,
+    CommentCreationView,
     DataObject,
     DataObjectType,
 )
@@ -21,6 +23,8 @@ class BasePostgresEngineAdapter(EngineAdapter):
     DEFAULT_BATCH_SIZE = 400
     COLUMNS_TABLE = "information_schema.columns"
     CATALOG_SUPPORT = CatalogSupport.SINGLE_CATALOG_ONLY
+    COMMENT_CREATION_TABLE = CommentCreationTable.COMMENT_COMMAND_ONLY
+    COMMENT_CREATION_VIEW = CommentCreationView.COMMENT_COMMAND_ONLY
 
     def columns(
         self, table_name: TableName, include_pseudo_columns: bool = False
@@ -74,6 +78,8 @@ class BasePostgresEngineAdapter(EngineAdapter):
         columns_to_types: t.Optional[t.Dict[str, exp.DataType]] = None,
         replace: bool = True,
         materialized: bool = False,
+        table_description: t.Optional[str] = None,
+        column_descriptions: t.Optional[t.Dict[str, str]] = None,
         **create_kwargs: t.Any,
     ) -> None:
         """
@@ -92,6 +98,8 @@ class BasePostgresEngineAdapter(EngineAdapter):
                 columns_to_types=columns_to_types,
                 replace=False,
                 materialized=materialized,
+                table_description=table_description,
+                column_descriptions=column_descriptions,
                 **create_kwargs,
             )
 

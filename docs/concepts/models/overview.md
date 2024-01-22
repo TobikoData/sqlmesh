@@ -67,6 +67,79 @@ SELECT
   SUM(x) as x, -- explicitly x
 ```
 
+### Model description and comments
+
+Model files may contain SQL comments in a format supported in the model's SQL dialect. (Comments begin with `--` or are gated by `/*` and `*/` in most dialects.)
+
+Some SQL engines support registering comments as metadata associated with a table or view. They may support table-level comments (e.g., "Revenue data for each customer") and/or column-level comments (e.g., "Customer's unique ID").
+
+SQLMesh will automatically register comments if the engine supports it and the [gateway's connection `register_comments` configuration](../../reference/configuration.md#connection) is `true` (`true` by default for all engines other than Snowflake). Engines vary in their support for comments - see [tables below](#engine-comment-support).
+
+#### Model comments
+
+SQLMesh will register a comment specified before the `MODEL` DDL block as the table comment in the underlying SQL engine. If the [`MODEL` DDL `description` field](#description) is also specified, SQLMesh will register it with the engine instead.
+
+If a comment is present on the same file line as a column definition in the model's SQL query, SQLMesh will automatically register the comment as a column comment in the underlying SQL engine.
+
+For example, the physical table created for the following model definition would have:
+
+1. The value of its `MODEL` DDL `description` field, "Revenue data for each customer", registered as a table comment in the SQL engine
+2. The comment on the same line as the `customer_id` column definition in the SQL query, "Customer's unique ID", registered as a column comment for the table's `customer_id` column
+
+```sql linenums="1" hl_lines="7 11"
+-- The MODEL DDL 'description' field is present, so this comment will not be registered with the SQL engine
+MODEL (
+  name sushi.customer_total_revenue,
+  owner toby,
+  cron '@daily',
+  grain customer_id,
+  description 'Revenue data for each customer'
+);
+
+SELECT
+  o.customer_id::TEXT, -- Customer's unique ID
+  -- This comment is between column definition lines so will not be registered with the SQL engine
+  SUM(o.amount)::DOUBLE AS revenue
+FROM sushi.orders AS o
+GROUP BY o.customer_id;
+```
+
+#### Comment registration by object type
+
+Only some tables/views have comments registered:
+
+- Temporary tables are not registered
+- Non-temporary tables and views in the physical layer (i.e., the schema named `sqlmesh__[project schema name]`) are registered
+- Views in non-prod environments are not registered
+- Views in the `prod` environment are registered
+
+Some engines automatically pass comments from physical tables through to views that select from them. In those engines, views may display comments even if SQLMesh did not explicitly register them.
+
+#### Engine comment support
+
+Engines vary in their support for comments and their method(s) of registering comments. Engines may support one or both registration methods: in the `CREATE` command that creates the object or with specific post-creation commands.
+
+In the former method, column comments are embedded in the `CREATE` schema definition - for example: `CREATE TABLE my_table (my_col INTEGER COMMENT 'comment on my_col') COMMENT 'comment on my_table'`. This means that all table and column comments can be registered in a single command.
+
+In the latter method, separate commands are required for every comment. This may result in many commands: one for the table comment and one for each column comment. In some scenarios, SQLMesh is not able to use the former `CREATE` method and must issue separate commands. Because SQLMesh must use different methods in different situations and engines vary in their support of the methods, comments may not be registered for all objects.
+
+This table lists each engine's support for `TABLE` and `VIEW` object comments:
+
+| Engine       | `TABLE` comments | `VIEW` comments |
+| ------------ | ---------------- | --------------- |
+| BigQuery     | Y                | Y               |
+| Databricks   | Y                | Y               |
+| DuckDB       | N                | N               |
+| MySQL        | Y                | Y               |
+| MSSQL        | N                | N               |
+| Postgres     | Y                | Y               |
+| GCP Postgres | Y                | Y               |
+| Redshift     | Y                | N               |
+| Snowflake    | Y                | Y               |
+| Spark        | Y                | Y               |
+| Trino        | Y                | Y               |
+
+
 ## Model properties
 The `MODEL` DDL statement takes various properties, which are used for both metadata and controlling behavior.
 
@@ -121,6 +194,9 @@ Name is ***required*** and must be ***unique***.
 - By default, SQLMesh [infers a model's column names and types](#conventions) from its SQL query. Disable that behavior by manually specifying all column names and data types in the model's `columns` property.
 - **WARNING**: SQLMesh may exhibit unexpected behavior if the `columns` property includes columns not returned by the query, omits columns returned by the query, or specifies data types other than the ones returned by the query.
 - NOTE: Specifying column names and data types is required for [Python models](../models/python_models.md) that return DataFrames.
+
+### description
+- Optional description of the model. Automatically registered as a table description/comment with the underlying SQL engine (if supported by the engine).
 
 ### table_properties
 - A key-value of arbitrary table properties specific to the target engine. For example:

@@ -4,10 +4,11 @@ MODEL (
   owner jen,
   cron '@daily',
   grain customer_id,
+  description 'Sushi marketing data'
 );
 
 SELECT
-    customer_id::INT AS customer_id,
+    customer_id::INT AS customer_id, -- customer_id uniquely identifies customers
     status::TEXT AS status,
     updated_at::TIMESTAMP AS updated_at
 FROM

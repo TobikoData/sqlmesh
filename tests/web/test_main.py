@@ -441,7 +441,11 @@ def test_get_model(web_sushi_context: Context) -> None:
     assert test_model.get("path") == "models/customers.sql"
     assert test_model.get("dialect") == "duckdb"
     assert test_model.get("columns") == [
-        {"name": "customer_id", "type": "INT"},
+        {
+            "name": "customer_id",
+            "type": "INT",
+            "description": "customer_id uniquely identifies customers",
+        },
         {"name": "status", "type": "TEXT"},
         {"name": "zip", "type": "TEXT"},
     ]

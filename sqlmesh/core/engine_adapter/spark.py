@@ -16,6 +16,8 @@ from sqlmesh.core.engine_adapter.mixins import (
 )
 from sqlmesh.core.engine_adapter.shared import (
     CatalogSupport,
+    CommentCreationTable,
+    CommentCreationView,
     DataObject,
     DataObjectType,
     InsertOverwriteStrategy,
@@ -55,6 +57,8 @@ class SparkEngineAdapter(GetCurrentCatalogFromFunctionMixin, HiveMetastoreTableP
     INSERT_OVERWRITE_STRATEGY = InsertOverwriteStrategy.INSERT_OVERWRITE
     CATALOG_SUPPORT = CatalogSupport.FULL_SUPPORT
     SUPPORTS_ROW_LEVEL_OP = False
+    COMMENT_CREATION_TABLE = CommentCreationTable.IN_SCHEMA_DEF_NO_CTAS
+    COMMENT_CREATION_VIEW = CommentCreationView.IN_SCHEMA_DEF_NO_COMMANDS
 
     @property
     def spark(self) -> PySparkSession:
@@ -362,6 +366,8 @@ class SparkEngineAdapter(GetCurrentCatalogFromFunctionMixin, HiveMetastoreTableP
         table_name: TableName,
         query_or_df: QueryOrDF,
         columns_to_types: t.Optional[t.Dict[str, exp.DataType]] = None,
+        table_description: t.Optional[str] = None,
+        column_descriptions: t.Optional[t.Dict[str, str]] = None,
         **kwargs: t.Any,
     ) -> None:
         # Note: Some storage formats (like Delta and Iceberg) support REPLACE TABLE but since we don't
@@ -412,6 +418,8 @@ class SparkEngineAdapter(GetCurrentCatalogFromFunctionMixin, HiveMetastoreTableP
         columns_to_types: t.Optional[t.Dict[str, exp.DataType]] = None,
         replace: bool = True,
         materialized: bool = False,
+        table_description: t.Optional[str] = None,
+        column_descriptions: t.Optional[t.Dict[str, str]] = None,
         **create_kwargs: t.Any,
     ) -> None:
         """Create a view with a query or dataframe.
@@ -423,14 +431,24 @@ class SparkEngineAdapter(GetCurrentCatalogFromFunctionMixin, HiveMetastoreTableP
             view_name: The view name.
             query_or_df: A query or dataframe.
             columns_to_types: Columns to use in the view statement.
-            replace: Whether or not to replace an existing view defaults to True.
+            replace: Whether or not to replace an existing view - defaults to True.
+            materialized: Whether or not the view should be materialized - defaults to False.
+            table_description: Optional table description from MODEL DDL.
+            column_descriptions: Optional column descriptions from model query.
             create_kwargs: Additional kwargs to pass into the Create expression
         """
         pyspark_df = self.try_get_pyspark_df(query_or_df)
         if pyspark_df:
             query_or_df = pyspark_df.toPandas()
         super().create_view(
-            view_name, query_or_df, columns_to_types, replace, materialized, **create_kwargs
+            view_name,
+            query_or_df,
+            columns_to_types,
+            replace,
+            materialized,
+            table_description,
+            column_descriptions,
+            **create_kwargs,
         )
 
     def _create_table(
@@ -440,6 +458,8 @@ class SparkEngineAdapter(GetCurrentCatalogFromFunctionMixin, HiveMetastoreTableP
         exists: bool = True,
         replace: bool = False,
         columns_to_types: t.Optional[t.Dict[str, exp.DataType]] = None,
+        table_description: t.Optional[str] = None,
+        column_descriptions: t.Optional[t.Dict[str, str]] = None,
         **kwargs: t.Any,
     ) -> None:
         super()._create_table(
@@ -448,6 +468,8 @@ class SparkEngineAdapter(GetCurrentCatalogFromFunctionMixin, HiveMetastoreTableP
             exists=exists,
             replace=replace,
             columns_to_types=columns_to_types,
+            table_description=table_description,
+            column_descriptions=column_descriptions,
             **kwargs,
         )
         table_name = (
@@ -515,6 +537,14 @@ class SparkEngineAdapter(GetCurrentCatalogFromFunctionMixin, HiveMetastoreTableP
         if not table.db:
             table.set("db", self.get_current_database())
         return table
+
+    def _build_create_comment_column_exp(
+        self, table: exp.Table, column_name: str, column_comment: str, table_kind: str = "TABLE"
+    ) -> exp.Comment | str:
+        table_sql = table.sql(dialect=self.dialect, identify=True)
+        column_sql = exp.column(column_name).sql(dialect=self.dialect, identify=True)
+
+        return f"ALTER TABLE {table_sql} ALTER COLUMN {column_sql} COMMENT '{column_comment}'"
 
 
 def _wap_branch_name(wap_id: str) -> str:

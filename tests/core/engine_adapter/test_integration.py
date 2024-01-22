@@ -14,7 +14,7 @@ from sqlglot import exp, parse_one
 from sqlmesh import Config, Context, EngineAdapter
 from sqlmesh.core.config import load_config_from_paths
 from sqlmesh.core.dialect import normalize_model_name
-from sqlmesh.core.engine_adapter.shared import DataObject
+from sqlmesh.core.engine_adapter.shared import DataObject, DataObjectType
 from sqlmesh.utils import random_id
 from sqlmesh.utils.date import now, to_date, to_ds, yesterday
 from sqlmesh.utils.errors import UnsupportedCatalogOperationError
@@ -179,6 +179,172 @@ class TestContext:
 
     def compare_with_current(self, table: exp.Table, expected: pd.DataFrame) -> None:
         self._compare_dfs(self.get_current_data(table), self.output_data(expected))
+
+    def get_table_comment(
+        self,
+        schema_name: str,
+        table_name: str,
+        table_kind: str = "BASE TABLE",
+        snowflake_capitalize_ids: bool = True,
+    ) -> str:
+        if self.dialect in ["postgres", "redshift"]:
+            query = f"""
+                SELECT
+                    pgc.relname,
+                    pg_catalog.obj_description(pgc.oid, 'pg_class')
+                FROM pg_catalog.pg_class pgc
+                INNER JOIN pg_catalog.pg_namespace n
+                ON pgc.relnamespace = n.oid
+                WHERE
+                    n.nspname = '{schema_name}'
+                    AND pgc.relname = '{table_name}'
+                    AND pgc.relkind = '{'v' if table_kind == "VIEW" else 'r'}'
+                ;
+            """
+        elif self.dialect in ["mysql", "snowflake"]:
+            # Snowflake treats all identifiers as uppercase unless they are lowercase and quoted.
+            # They are lowercase and quoted in sushi but not in the inline tests.
+            if self.dialect == "snowflake" and snowflake_capitalize_ids:
+                schema_name = schema_name.upper()
+                table_name = table_name.upper()
+
+            comment_field_name = {
+                "mysql": "table_comment",
+                "snowflake": "comment",
+            }
+
+            query = f"""
+                SELECT
+                    table_name,
+                    {comment_field_name[self.dialect]}
+                FROM INFORMATION_SCHEMA.TABLES
+                WHERE
+                    table_schema='{schema_name}'
+                    AND table_name='{table_name}'
+                    AND table_type='{table_kind}'
+            """
+        elif self.dialect == "bigquery":
+            query = f"""
+                SELECT
+                    table_name,
+                    option_value
+                FROM `region-us.INFORMATION_SCHEMA.TABLE_OPTIONS`
+                WHERE
+                    table_schema='{schema_name}'
+                    AND table_name='{table_name}'
+                    AND option_name = 'description'
+            """
+        elif self.dialect in ["spark", "databricks"]:
+            query = f"DESCRIBE TABLE EXTENDED {schema_name}.{table_name}"
+        elif self.dialect == "trino":
+            query = f"""
+                SELECT
+                    table_name,
+                    comment
+                FROM system.metadata.table_comments
+                WHERE
+                    schema_name = '{schema_name}'
+                    AND table_name = '{table_name}'
+            """
+
+        result = self.engine_adapter.fetchall(query)
+
+        if result:
+            if self.dialect == "bigquery":
+                comment = result[0][1].replace('"', "").replace("\\n", "\n")
+            elif self.dialect in ["spark", "databricks"]:
+                comment = [x for x in result if x[0] == "Comment"]
+                comment = comment[0][1] if comment else None
+            else:
+                comment = result[0][1]
+
+            return comment
+
+        return None
+
+    def get_column_comments(
+        self,
+        schema_name: str,
+        table_name: str,
+        table_kind: str = "BASE TABLE",
+        snowflake_capitalize_ids: bool = True,
+    ) -> t.Dict[str, str]:
+        comment_index = 1
+        if self.dialect in ["postgres", "redshift"]:
+            query = f"""
+                SELECT
+                    cols.column_name,
+                    pg_catalog.col_description(pgc.oid, cols.ordinal_position::int) AS column_comment
+                FROM pg_catalog.pg_class pgc
+                INNER JOIN pg_catalog.pg_namespace n
+                ON
+                    pgc.relnamespace = n.oid
+                INNER JOIN information_schema.columns cols
+                ON
+                    pgc.relname = cols.table_name
+                    AND n.nspname = cols.table_schema
+                WHERE
+                    n.nspname = '{schema_name}'
+                    AND pgc.relname = '{table_name}'
+                    AND pgc.relkind = '{'v' if table_kind == "VIEW" else 'r'}'
+                ;
+            """
+        elif self.dialect in ["mysql", "snowflake"]:
+            # Snowflake treats all identifiers as uppercase unless they are lowercase and quoted.
+            # They are lowercase and quoted in sushi but not in the inline tests.
+            if self.dialect == "snowflake" and snowflake_capitalize_ids:
+                schema_name = schema_name.upper()
+                table_name = table_name.upper()
+
+            comment_field_name = {
+                "mysql": "column_comment",
+                "snowflake": "comment",
+            }
+
+            query = f"""
+                SELECT
+                    column_name,
+                    {comment_field_name[self.dialect]}
+                FROM
+                    information_schema.columns
+                WHERE
+                    table_schema = '{schema_name}'
+                    AND table_name = '{table_name}'
+                ;
+            """
+        elif self.dialect == "bigquery":
+            query = f"""
+                SELECT
+                    column_name,
+                    description
+                FROM
+                    `region-us.INFORMATION_SCHEMA.COLUMN_FIELD_PATHS`
+                WHERE
+                    table_schema = '{schema_name}'
+                    AND table_name = '{table_name}'
+                ;
+            """
+        elif self.dialect in ["spark", "databricks"]:
+            query = f"DESCRIBE TABLE {schema_name}.{table_name}"
+            comment_index = 2
+        elif self.dialect == "trino":
+            query = f"SHOW COLUMNS FROM {schema_name}.{table_name}"
+            comment_index = 3
+
+        result = self.engine_adapter.fetchall(query)
+
+        comments = {}
+        if result:
+            if self.dialect in ["spark", "databricks"]:
+                result = list(set([x for x in result if not x[0].startswith("#")]))
+
+            comments = {
+                x[0]: x[comment_index]
+                for x in result
+                if x[comment_index] is not None and x[comment_index].strip() != ""
+            }
+
+        return comments
 
 
 class MetadataResults(PydanticModel):
@@ -458,6 +624,28 @@ def test_temp_table(ctx: TestContext):
     assert len(results.views) == len(results.tables) == len(results.non_temp_tables) == 0
 
 
+def test_create_table(ctx: TestContext):
+    table = ctx.table("test_table")
+    ctx.init()
+    ctx.engine_adapter.create_table(
+        table,
+        {"id": exp.DataType.build("int")},
+        table_description="test table description",
+        column_descriptions={"id": "test id column description"},
+    )
+    results = ctx.get_metadata_results()
+    assert len(results.tables) == 1
+    assert len(results.views) == 0
+    assert len(results.materialized_views) == 0
+    assert results.tables[0] == table.name
+
+    if ctx.engine_adapter.COMMENT_CREATION_TABLE.is_supported:
+        table_description = ctx.get_table_comment(table.db, "test_table")
+        column_comments = ctx.get_column_comments(table.db, "test_table")
+        assert table_description == "test table description"
+        assert column_comments == {"id": "test id column description"}
+
+
 def test_ctas(ctx: TestContext):
     ctx.init()
     table = ctx.table("test_table")
@@ -468,13 +656,33 @@ def test_ctas(ctx: TestContext):
             {"id": 3, "ds": "2022-01-03"},
         ]
     )
-    ctx.engine_adapter.ctas(table, ctx.input_data(input_data))
+    ctx.engine_adapter.ctas(
+        table,
+        ctx.input_data(input_data),
+        table_description="test table description",
+        column_descriptions={"id": "test id column description"},
+    )
     results = ctx.get_metadata_results()
     assert len(results.views) == 0
     assert len(results.materialized_views) == 0
     assert len(results.tables) == len(results.non_temp_tables) == 1
     assert results.non_temp_tables[0] == table.name
     ctx.compare_with_current(table, input_data)
+
+    if ctx.engine_adapter.COMMENT_CREATION_TABLE.is_supported:
+        table_description = ctx.get_table_comment(table.db, "test_table")
+        column_comments = ctx.get_column_comments(table.db, "test_table")
+
+        # Trino on Hive COMMENT permissions are separate from standard SQL object permissions.
+        # Trino has a bug where CREATE SQL permissions are not passed to COMMENT permissions,
+        # which generates permissions errors when COMMENT commands are issued.
+        #
+        # The errors are thrown for both table and comments, but apparently the
+        # table comments are actually registered with the engine. Column comments are not.
+        assert table_description == "test table description"
+        assert column_comments == (
+            {} if ctx.dialect == "trino" else {"id": "test id column description"}
+        )
 
 
 def test_create_view(ctx: TestContext):
@@ -487,13 +695,46 @@ def test_create_view(ctx: TestContext):
     )
     view = ctx.table("test_view")
     ctx.init()
-    ctx.engine_adapter.create_view(view, ctx.input_data(input_data))
+    ctx.engine_adapter.create_view(
+        view,
+        ctx.input_data(input_data),
+        table_description="test view description",
+        column_descriptions={"id": "test id column description"},
+    )
     results = ctx.get_metadata_results()
     assert len(results.tables) == 0
     assert len(results.views) == 1
     assert len(results.materialized_views) == 0
     assert results.views[0] == view.name
     ctx.compare_with_current(view, input_data)
+
+    if ctx.engine_adapter.COMMENT_CREATION_VIEW.is_supported:
+        table_description = ctx.get_table_comment(view.db, "test_view", table_kind="VIEW")
+        column_comments = ctx.get_column_comments(view.db, "test_view", table_kind="VIEW")
+
+        # Trino:
+        #   Trino on Hive COMMENT permissions are separate from standard SQL object permissions.
+        #   Trino has a bug where CREATE SQL permissions are not passed to COMMENT permissions,
+        #   which generates permissions errors when COMMENT commands are issued.
+        #
+        #   The errors are thrown for both table and comments, but apparently the
+        #   table comments are actually registered with the engine. Column comments are not.
+        #
+        # Query:
+        #   In the query test, columns_to_types are not available when the view is created. Since we
+        #   can only register column comments in the CREATE VIEW schema expression with columns_to_types
+        #   available, the column comments must be registered via post-creation commands. Some engines,
+        #   such as Spark and Snowflake, do not support view column comments via post-creation commands.
+        assert table_description == "test view description"
+        assert column_comments == (
+            {}
+            if ctx.dialect == "trino"
+            or (
+                ctx.test_type == "query"
+                and not ctx.engine_adapter.COMMENT_CREATION_VIEW.supports_column_comment_commands
+            )
+            else {"id": "test id column description"}
+        )
 
 
 def test_materialized_view(ctx: TestContext):
@@ -1026,6 +1267,201 @@ def test_sushi(ctx: TestContext):
         dialect=ctx.dialect,
     )
 
+    # Ensure table and column comments were correctly registered with engine
+    if ctx.engine_adapter.COMMENT_CREATION_TABLE.is_supported:
+        comments = {
+            "customer_revenue_by_day": {
+                "table": "Table of revenue from customers by day.",
+                "column": {
+                    "customer_id": "Customer id",
+                    "revenue": "Revenue from orders made by this customer",
+                    "event_date": "Date",
+                },
+            },
+            "customer_revenue_lifetime": {
+                "table": """Table of lifetime customer revenue.
+    Date is available to get lifetime value up to a certain date.
+    Use latest date to get current lifetime value.""",
+                "column": {
+                    "customer_id": "Customer id",
+                    "revenue": "Lifetime revenue from this customer",
+                    "event_date": "End date of the lifetime calculation",
+                },
+            },
+            "customers": {
+                "table": "Sushi customer data",
+                "column": {"customer_id": "customer_id uniquely identifies customers"},
+            },
+            "marketing": {
+                "table": "Sushi marketing data",
+                "column": {"customer_id": "customer_id uniquely identifies customers"},
+            },
+            "orders": {
+                "table": "Table of sushi orders.",
+            },
+            "raw_marketing": {
+                "table": "Table of marketing status.",
+            },
+            "top_waiters": {
+                "table": "View of top waiters.",
+            },
+            "waiter_names": {
+                "table": "List of waiter names",
+            },
+            "waiter_revenue_by_day": {
+                "table": "Table of revenue generated by waiters by day.",
+                "column": {
+                    "waiter_id": "Waiter id",
+                    "revenue": "Revenue from orders taken by this waiter",
+                    "event_date": "Date",
+                },
+            },
+        }
+
+        def validate_comments(
+            schema_name: str,
+            expected_comments_dict: t.Dict[str, t.Any] = comments,
+            is_physical_layer: bool = True,
+            prod_schema_name: str = "sushi",
+        ) -> None:
+            layer_objects = context.engine_adapter._get_data_objects(schema_name)
+            layer_models = {
+                x.name.split("__")[1]
+                if is_physical_layer
+                else x.name: {
+                    "table_name": x.name,
+                    "is_view": x.type == DataObjectType.VIEW,
+                }
+                for x in layer_objects
+                if not x.name.endswith("__temp")
+            }
+
+            for model_name, comment in comments.items():
+                layer_table_name = layer_models[model_name]["table_name"]
+                table_kind = "VIEW" if layer_models[model_name]["is_view"] else "BASE TABLE"
+
+                # is this model in a physical layer or PROD environment?
+                is_physical_or_prod = is_physical_layer or (
+                    not is_physical_layer and schema_name == prod_schema_name
+                )
+                # is this model a VIEW and the engine doesn't support VIEW comments?
+                is_view_and_comments_unsupported = (
+                    layer_models[model_name]["is_view"]
+                    and ctx.engine_adapter.COMMENT_CREATION_VIEW.is_unsupported
+                )
+                if is_physical_or_prod and not is_view_and_comments_unsupported:
+                    expected_tbl_comment = comments.get(model_name).get("table", None)
+                    if expected_tbl_comment:
+                        actual_tbl_comment = ctx.get_table_comment(
+                            schema_name,
+                            layer_table_name,
+                            table_kind=table_kind,
+                            snowflake_capitalize_ids=False,
+                        )
+                        assert expected_tbl_comment == actual_tbl_comment
+
+                    expected_col_comments = comments.get(model_name).get("column", None)
+
+                    # Trino:
+                    #   Trino on Hive COMMENT permissions are separate from standard SQL object permissions.
+                    #   Trino has a bug where CREATE SQL permissions are not passed to COMMENT permissions,
+                    #   which generates permissions errors when COMMENT commands are issued.
+                    #
+                    #   The errors are thrown for both table and comments, but apparently the
+                    #   table comments are actually registered with the engine. Column comments are not.
+                    #
+                    # Query:
+                    #   In the query test, columns_to_types are not available when views are created. Since we
+                    #   can only register column comments in the CREATE VIEW schema expression with columns_to_types
+                    #   available, the column comments must be registered via post-creation commands. Some engines,
+                    #   such as Spark and Snowflake, do not support view column comments via post-creation commands.
+                    if (
+                        expected_col_comments
+                        and not ctx.dialect == "trino"
+                        and not (
+                            ctx.test_type == "query"
+                            and layer_models[model_name]["is_view"]
+                            and not ctx.engine_adapter.COMMENT_CREATION_VIEW.supports_column_comment_commands
+                        )
+                    ):
+                        actual_col_comments = ctx.get_column_comments(
+                            schema_name,
+                            layer_table_name,
+                            table_kind=table_kind,
+                            snowflake_capitalize_ids=False,
+                        )
+                        for column_name, expected_col_comment in expected_col_comments.items():
+                            expected_col_comment = expected_col_comments.get(column_name, None)
+                            actual_col_comment = actual_col_comments.get(column_name, None)
+                            assert expected_col_comment == actual_col_comment
+
+            return None
+
+        def validate_no_comments(
+            schema_name: str,
+            expected_comments_dict: t.Dict[str, t.Any] = comments,
+            is_physical_layer: bool = True,
+            table_name_suffix: str = "",
+            check_temp_tables: bool = False,
+            prod_schema_name: str = "sushi",
+        ) -> None:
+            layer_objects = context.engine_adapter._get_data_objects(schema_name)
+            layer_models = {
+                x.name.split("__")[1]
+                if is_physical_layer
+                else x.name: {
+                    "table_name": x.name,
+                    "is_view": x.type == DataObjectType.VIEW,
+                }
+                for x in layer_objects
+                if x.name.endswith(table_name_suffix)
+            }
+            if not check_temp_tables:
+                layer_models = {k: v for k, v in layer_models.items() if not k.endswith("__temp")}
+
+            for model_name, comment in comments.items():
+                layer_table_name = layer_models[model_name]["table_name"]
+                table_kind = "VIEW" if layer_models[model_name]["is_view"] else "BASE TABLE"
+
+                actual_tbl_comment = ctx.get_table_comment(
+                    schema_name,
+                    layer_table_name,
+                    table_kind=table_kind,
+                    snowflake_capitalize_ids=False,
+                )
+                # MySQL doesn't support view comments and always returns "VIEW" as the table comment
+                if ctx.dialect == "mysql" and layer_models[model_name]["is_view"]:
+                    assert actual_tbl_comment == "VIEW"
+                else:
+                    assert actual_tbl_comment is None or actual_tbl_comment == ""
+
+                # MySQL and Spark pass through the column comments from the underlying table to the view
+                # so always have view comments present
+                if not (
+                    ctx.dialect in ("mysql", "spark", "databricks")
+                    and layer_models[model_name]["is_view"]
+                ):
+                    expected_col_comments = comments.get(model_name).get("column", None)
+                    if expected_col_comments:
+                        actual_col_comments = ctx.get_column_comments(
+                            schema_name,
+                            layer_table_name,
+                            table_kind=table_kind,
+                            snowflake_capitalize_ids=False,
+                        )
+                        for column_name in expected_col_comments:
+                            actual_col_comment = actual_col_comments.get(column_name, None)
+                            assert actual_col_comment is None or actual_col_comment == ""
+
+            return None
+
+        # confirm physical layer comments are registered
+        validate_comments("sqlmesh__sushi")
+        # confirm physical temp table comments are not registered
+        validate_no_comments("sqlmesh__sushi", table_name_suffix="__temp", check_temp_tables=True)
+        # confirm view layer comments are not registered in non-PROD environment
+        validate_no_comments("sushi__test_prod", is_physical_layer=False)
+
     # Ensure that the plan has been applied successfully.
     no_change_plan = context.plan(
         environment="test_dev",
@@ -1048,6 +1484,12 @@ def test_sushi(ctx: TestContext):
         env_name="test_dev",
         dialect=ctx.dialect,
     )
+
+    # confirm view layer comments are registered in PROD
+    if ctx.engine_adapter.COMMENT_CREATION_VIEW.is_supported:
+        prod_plan = context.plan(skip_tests=True, no_prompts=True, auto_apply=True)
+
+        validate_comments("sushi", is_physical_layer=False)
 
 
 def test_dialects(ctx: TestContext):
