@@ -43,6 +43,15 @@ class EventName(str, enum.Enum):
     PLAN_CANCEL = "plan-cancel"
 
 
+class Modules(str, enum.Enum):
+    EDITOR = "editor"
+    DOCS = "docs"
+    PLANS = "plans"
+    TESTS = "tests"
+    AUDITS = "audits"
+    ERRORS = "errors"
+
+
 class ModelType(str, enum.Enum):
     PYTHON = "python"
     SQL = "sql"
@@ -119,6 +128,7 @@ class Directory(BaseModel):
 class Meta(BaseModel):
     version: str
     has_running_task: bool = False
+    modules: t.List[Modules] = []
 
 
 class Reference(BaseModel):

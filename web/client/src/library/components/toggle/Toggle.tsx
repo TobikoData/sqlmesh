@@ -22,7 +22,7 @@ export default function Toggle({
   return (
     <Switch.Group
       as="div"
-      className="flex items-center m-1"
+      className="m-1"
     >
       <Switch
         checked={disabled ? false : enabled}

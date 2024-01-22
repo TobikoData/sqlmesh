@@ -61,7 +61,7 @@ const FileExplorer = function FileExplorer({
     <div
       tabIndex={0}
       className={clsx(
-        'flex flex-col h-full overflow-hidden text-sm text-neutral-500 dark:text-neutral-400 font-regular select-none',
+        'flex flex-col w-full h-full overflow-hidden text-sm text-neutral-500 dark:text-neutral-400 font-regular select-none',
         className,
       )}
       onKeyDown={handleKeyDown}
@@ -75,17 +75,10 @@ const FileExplorer = function FileExplorer({
         </div>
       ) : (
         <>
-          <SearchList<ModelFile>
-            list={project.allFiles}
-            searchBy="path"
-            displayBy="name"
-            size={EnumSize.sm}
-            onSelect={setSelectedFile}
-          />
           <FileExplorer.ContextMenu
             key={project.id}
             trigger={
-              <FileExplorer.ContextMenuTrigger className="h-full pb-2">
+              <FileExplorer.ContextMenuTrigger className="h-full">
                 <DndProvider backend={HTML5Backend}>
                   <div className="w-full relative h-full p-2 overflow-hidden overflow-y-auto hover:scrollbar scrollbar--vertical">
                     <DragLayer />
@@ -122,6 +115,14 @@ const FileExplorer = function FileExplorer({
               <div className="ml-auto pl-5"></div>
             </ContextMenu.Item>
           </FileExplorer.ContextMenu>
+          <SearchList<ModelFile>
+            list={project.allFiles}
+            searchBy="path"
+            displayBy="name"
+            size={EnumSize.sm}
+            onSelect={setSelectedFile}
+            direction="bottom"
+          />
         </>
       )}
     </div>

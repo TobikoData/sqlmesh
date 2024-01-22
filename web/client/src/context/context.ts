@@ -16,6 +16,10 @@ interface ContextStore {
   environment: ModelEnvironment
   environments: Set<ModelEnvironment>
   models: Map<string, ModelSQLMeshModel>
+  modules: string[]
+  splitPaneSizes: number[]
+  setSplitPaneSizes: (splitPaneSizes: number[]) => void
+  setModules: (modules: string[]) => void
   setVersion: (version?: string) => void
   setShowConfirmation: (showConfirmation: boolean) => void
   addConfirmation: (confirmation: Confirmation) => void
@@ -46,6 +50,8 @@ const environment =
 
 export const useStoreContext = create<ContextStore>((set, get) => ({
   version: undefined,
+  modules: [],
+  splitPaneSizes: [30, 70],
   showConfirmation: false,
   confirmations: [],
   environment,
@@ -53,8 +59,18 @@ export const useStoreContext = create<ContextStore>((set, get) => ({
   initialStartDate: undefined,
   initialEndDate: undefined,
   models: new Map(),
+  setModules(modules) {
+    set(() => ({
+      modules,
+    }))
+  },
   isModel(nameOrPath) {
     return get().models.has(nameOrPath)
+  },
+  setSplitPaneSizes(splitPaneSizes) {
+    set(() => ({
+      splitPaneSizes,
+    }))
   },
   setVersion(version) {
     set(() => ({

@@ -60,7 +60,7 @@ export default function SearchList<
   T extends Record<string, any> = Record<string, any>,
 >({
   list,
-  size = EnumSize.sm,
+  size = EnumSize.md,
   searchBy,
   displayBy,
   descriptionBy,
@@ -68,8 +68,9 @@ export default function SearchList<
   to,
   placeholder = 'Search',
   autoFocus = false,
-  isFullWidth = false,
   showIndex = true,
+  isFullWidth = false,
+  direction = 'bottom',
   className,
 }: {
   list: T[]
@@ -82,8 +83,9 @@ export default function SearchList<
   showIndex?: boolean
   to?: (item: T) => string
   size?: Size
-  isFullWidth?: boolean
+  direction?: 'top' | 'bottom'
   className?: string
+  isFullWidth?: boolean
 }): JSX.Element {
   const navigate = useNavigate()
 
@@ -170,6 +172,7 @@ export default function SearchList<
             className={clsx(
               'absolute z-50 transform cursor-pointer rounded-lg bg-theme border-2 border-neutral-200',
               'p-2 bg-theme dark:bg-theme-lighter overflow-auto hover:scrollbar scrollbar--vertical scrollbar--horizontal shadow-2xl',
+              direction === 'top' ? 'top-0' : 'bottom-10',
               size === EnumSize.sm && 'mt-7 max-h-[30vh]',
               size === EnumSize.md && 'mt-9 max-h-[40vh]',
               size === EnumSize.lg && 'mt-12 max-h-[50vh]',

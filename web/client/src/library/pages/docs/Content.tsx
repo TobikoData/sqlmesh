@@ -7,7 +7,9 @@ import NotFound from '../root/NotFound'
 import { EnumRoutes } from '~/routes'
 import LineageFlowProvider from '@components/graph/context'
 import { type ErrorIDE } from '../ide/context'
-import { isNil } from '@utils/index'
+import { isNil, isNotNil } from '@utils/index'
+import { useEffect } from 'react'
+import { useStoreProject } from '@context/project'
 
 export default function Content(): JSX.Element {
   const { modelName } = useParams()
@@ -15,6 +17,19 @@ export default function Content(): JSX.Element {
 
   const models = useStoreContext(s => s.models)
   const model = isNil(modelName) ? undefined : models.get(encodeURI(modelName))
+
+  const files = useStoreProject(s => s.files)
+  const setSelectedFile = useStoreProject(s => s.setSelectedFile)
+
+  useEffect(() => {
+    if (isNotNil(model)) {
+      const file = files.get(model.path)
+
+      if (isNil(file)) return
+
+      setSelectedFile(file)
+    }
+  }, [model])
 
   function handleClickModel(modelName: string): void {
     const model = models.get(modelName)
@@ -33,8 +48,8 @@ export default function Content(): JSX.Element {
       {isNil(model) ? (
         <NotFound
           link={EnumRoutes.IdeDocs}
-          descritpion={
-            modelName == null ? undefined : `Model ${modelName} Does Not Exist`
+          description={
+            isNil(modelName) ? undefined : `Model ${modelName} Does Not Exist`
           }
           message="Back To Docs"
         />
@@ -49,7 +64,7 @@ export default function Content(): JSX.Element {
             minSize={0}
             snapOffset={0}
           >
-            <div className="flex flex-col h-full dark:bg-theme-lighter round">
+            <div className="flex flex-col h-full round">
               <Documentation
                 model={model}
                 withQuery={model.isModelSQL}
