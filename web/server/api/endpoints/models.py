@@ -46,8 +46,14 @@ def get_model(
     return serialize_model(model, context.path, render_query=True)
 
 
-def serialize_all_models(context: Context) -> t.List[models.Model]:
-    return [serialize_model(model, context.path) for model in context.models.values()]
+def serialize_all_models(
+    context: Context, render_queries: t.Optional[t.List[str]] = None
+) -> t.List[models.Model]:
+    render_queries = render_queries or []
+    return [
+        serialize_model(model, context.path, model.name in render_queries)
+        for model in context.models.values()
+    ]
 
 
 def serialize_model(
