@@ -209,7 +209,6 @@ function ModelColumnLineage(): JSX.Element {
       withConnected,
       withImpacted,
       withSecondary,
-      withColumns,
     )
     const newEdges = getUpdatedEdges(
       allEdges,
@@ -253,8 +252,6 @@ function ModelColumnLineage(): JSX.Element {
             setIsBuildingLayout(false)
           }, 100)
         }
-
-        setActiveNodes(newActiveNodes)
       })
 
     return () => {
@@ -264,17 +261,6 @@ function ModelColumnLineage(): JSX.Element {
       setNodes([])
     }
   }, [lineageIndex, withColumns])
-
-  useEffect(() => {
-    const newActiveNodes = getActiveNodes(
-      allEdges,
-      activeEdges,
-      selectedEdges,
-      nodesMap,
-    )
-
-    setActiveNodes(newActiveNodes)
-  }, [nodesMap, activeEdges, selectedEdges])
 
   useEffect(() => {
     if (isNil(mainNode) || isArrayEmpty(nodes)) return
@@ -295,7 +281,6 @@ function ModelColumnLineage(): JSX.Element {
       withConnected,
       withImpacted,
       withSecondary,
-      withColumns,
     )
 
     const newEdges = getUpdatedEdges(

@@ -19,6 +19,7 @@ import { type ConnectedNode } from '~/workers/lineage'
 export interface GraphNodeData {
   label: string
   type: LineageNodeModelType
+  withColumns: boolean
   [key: string]: any
 }
 
@@ -180,6 +181,7 @@ function getNodeMap({
     const model = models.get(modelName)
     const node = createGraphNode(modelName, {
       label: model?.displayName ?? modelName,
+      withColumns,
       type: isNotNil(model)
         ? (model.type as LineageNodeModelType)
         : // If model name present in lineage but not in global models
@@ -205,7 +207,6 @@ function getNodeMap({
     node.data.height = withColumns
       ? maxHeight + NODE_BALANCE_SPACE * 2
       : NODE_BALANCE_SPACE
-    node.data.withColumns = withColumns
 
     if (isArrayNotEmpty(lineage[node.id]?.models)) {
       node.targetPosition = Position.Left
@@ -664,10 +665,9 @@ function getUpdatedNodes(
   connectedNodes: Set<string>,
   selectedNodes: Set<string>,
   connections: Map<string, Connections>,
-  withConnected: boolean = true,
-  withImpacted: boolean = true,
-  withSecondary: boolean = true,
-  withColumns: boolean = true,
+  withConnected: boolean,
+  withImpacted: boolean,
+  withSecondary: boolean,
 ): Node[] {
   return nodes.map(node => {
     node.hidden = true
@@ -687,7 +687,7 @@ function getUpdatedNodes(
       node.hidden = isFalse(isActiveNode)
     }
 
-    if (node.data.type === EnumLineageNodeModelType.cte && withColumns) {
+    if (node.data.type === EnumLineageNodeModelType.cte) {
       node.hidden = isFalse(activeNodes.has(node.id))
     }
 
