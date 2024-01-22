@@ -75,14 +75,19 @@ def get_environments() -> Response:
 @check_authentication
 def get_max_interval_end(name: str) -> Response:
     with util.scoped_state_sync() as state_sync:
-        models = None
-        if "models" in request.args:
-            models = json.loads(request.args["models"])
+        max_interval_end = state_sync.max_interval_end_for_environment(name)
+        response = common.IntervalEndResponse(environment=name, max_interval_end=max_interval_end)
+        return _success(response)
 
-        max_interval_end = state_sync.max_interval_end_for_environment(name, models=models)
-        response = common.MaxIntervalEndResponse(
-            environment=name, max_interval_end=max_interval_end
-        )
+
+@sqlmesh_api_v1.route("/environments/<name>/greatest_common_interval_end")
+@csrf.exempt
+@check_authentication
+def get_greatest_common_interval_end(name: str) -> Response:
+    with util.scoped_state_sync() as state_sync:
+        models = json.loads(request.args["models"]) if "models" in request.args else []
+        max_interval_end = state_sync.greatest_common_interval_end(name, set(models))
+        response = common.IntervalEndResponse(environment=name, max_interval_end=max_interval_end)
         return _success(response)
 
 

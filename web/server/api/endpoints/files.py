@@ -1,12 +1,10 @@
 from __future__ import annotations
 
-import json
 import os
 import typing as t
 from pathlib import Path
 
 from fastapi import APIRouter, Body, Depends, HTTPException, Response
-from sse_starlette import ServerSentEvent
 from starlette.status import HTTP_204_NO_CONTENT, HTTP_404_NOT_FOUND
 
 from sqlmesh.core import constants as c
@@ -69,6 +67,9 @@ async def write_file(
         replace_file(settings.project_path / path, settings.project_path / path_or_new_path)
     else:
         full_path = settings.project_path / path
+        format_file_status = models.FormatFileStatus(
+            status=models.Status.INIT, path=path_or_new_path
+        )
         if content and Path(path_or_new_path).suffix == ".sql":
             path_to_model_mapping = await get_path_to_model_mapping(settings=settings)
             model = path_to_model_mapping.get(Path(full_path))
@@ -78,16 +79,16 @@ async def write_file(
             try:
                 expressions = parse(content, default_dialect=default_dialect)
                 content = format_model_expressions(expressions, dialect)
+                format_file_status.status = models.Status.SUCCESS
             except Exception:
+                format_file_status.status = models.Status.FAIL
                 error = ApiException(
                     message="Unable to format SQL file",
                     origin="API -> files -> write_file",
                 ).to_dict()
-                api_console.queue.put_nowait(
-                    ServerSentEvent(event="errors", data=json.dumps(error))
-                )
-
-        full_path.write_text(content)
+                api_console.log_event(event=models.EventName.WARNINGS, data=error)
+        api_console.log_event(event=models.EventName.FORMAT_FILE, data=format_file_status.dict())
+        full_path.write_text(content, encoding="utf-8")
 
     response.status_code = HTTP_204_NO_CONTENT
 

@@ -1,7 +1,12 @@
-import { type File } from '../api/client'
+import { type Status, type File } from '../api/client'
 import { type ModelDirectory } from './directory'
 import { type InitialArtifact, ModelArtifact } from './artifact'
 import { isFalse, isNil, isStringEmptyOrNil, toUniqueName } from '@utils/index'
+
+export interface FormatFileStatus {
+  path: string
+  status: Status
+}
 
 export const EnumFileExtensions = {
   SQL: '.sql',
@@ -16,6 +21,7 @@ export type FileExtensions =
   (typeof EnumFileExtensions)[keyof typeof EnumFileExtensions]
 
 export interface InitialFile extends InitialArtifact, File {
+  isFormatted?: boolean
   content: string
   extension: string
 }
@@ -25,6 +31,8 @@ export class ModelFile extends ModelArtifact<InitialFile> {
 
   content: string
   extension: FileExtensions
+  // Undefined means we don't know if it's formatted or not.
+  isFormatted?: boolean
 
   constructor(initial?: File | ModelFile, parent?: ModelDirectory) {
     super(
@@ -42,6 +50,7 @@ export class ModelFile extends ModelArtifact<InitialFile> {
       ((initial?.extension ?? this.initial.extension) as FileExtensions) ?? ''
     this._content = this.content =
       initial?.content ?? this.initial.content ?? ''
+    this.isFormatted = (initial as ModelFile)?.isFormatted
   }
 
   get isSynced(): boolean {
@@ -54,6 +63,10 @@ export class ModelFile extends ModelArtifact<InitialFile> {
 
   get isChanged(): boolean {
     return this.content !== this._content
+  }
+
+  get isSQL(): boolean {
+    return this.extension === EnumFileExtensions.SQL
   }
 
   get fingerprint(): string {

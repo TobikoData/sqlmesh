@@ -110,7 +110,7 @@ class InvalidateEnvironmentResponse(PydanticModel):
     name: str
 
 
-class MaxIntervalEndResponse(PydanticModel):
+class IntervalEndResponse(PydanticModel):
     environment: str
     max_interval_end: t.Optional[int] = None
 

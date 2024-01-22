@@ -93,3 +93,4 @@ Other macro variables:
     * 'loading' - The project is currently being loaded into SQLMesh's runtime context.
     * 'creating' - The model tables are being created.
     * 'evaluating' - The models' logic is being evaluated.
+* @gateway - A string value that represents the name of the selected [gateway](../../guides/connections.md).
