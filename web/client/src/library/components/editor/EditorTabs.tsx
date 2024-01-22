@@ -12,6 +12,7 @@ import { useStoreContext } from '@context/context'
 
 export default function EditorTabs(): JSX.Element {
   const selectedFile = useStoreProject(s => s.selectedFile)
+  const setSelectedFile = useStoreProject(s => s.setSelectedFile)
 
   const tab = useStoreEditor(s => s.tab)
   const tabs = useStoreEditor(s => s.tabs)
@@ -63,12 +64,9 @@ export default function EditorTabs(): JSX.Element {
   }, [selectedFile])
 
   useEffect(() => {
-    setTimeout(() => {
-      tab?.el?.scrollIntoView({
-        behavior: 'smooth',
-        inline: 'center',
-      })
-    }, 100)
+    if (isNil(selectedFile)) {
+      setSelectedFile(tab?.file)
+    }
   }, [tab?.id])
 
   function addTabAndSelect(): void {
@@ -76,6 +74,7 @@ export default function EditorTabs(): JSX.Element {
 
     addTab(tab)
     selectTab(tab)
+    setSelectedFile(tab.file)
   }
 
   return (
@@ -114,17 +113,29 @@ export default function EditorTabs(): JSX.Element {
 
 function Tab({ tab, title }: { tab: EditorTab; title: string }): JSX.Element {
   const elTab = useRef<HTMLLIElement>(null)
+
   const addConfirmation = useStoreContext(s => s.addConfirmation)
+
+  const setSelectedFile = useStoreProject(s => s.setSelectedFile)
 
   const activeTab = useStoreEditor(s => s.tab)
   const selectTab = useStoreEditor(s => s.selectTab)
   const closeTab = useStoreEditor(s => s.closeTab)
 
   useEffect(() => {
-    if (elTab.current == null) return
+    if (isNil(tab)) return
 
-    tab.el = elTab.current
-  }, [elTab])
+    tab.el = elTab.current ?? undefined
+
+    if (activeTab?.id === tab.id) {
+      setTimeout(() => {
+        tab?.el?.scrollIntoView({
+          behavior: 'smooth',
+          inline: 'center',
+        })
+      }, 300)
+    }
+  }, [elTab, tab, activeTab])
 
   function closeEditorTabWithConfirmation(): void {
     if (tab.file.isChanged) {
@@ -155,6 +166,7 @@ function Tab({ tab, title }: { tab: EditorTab; title: string }): JSX.Element {
         e.stopPropagation()
 
         selectTab(tab)
+        setSelectedFile(tab.file)
       }}
     >
       <span

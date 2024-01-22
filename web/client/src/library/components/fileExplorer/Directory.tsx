@@ -410,7 +410,7 @@ function DirectoryDisplay({
       >
         {truncate(directory.name, 50, 20)}
       </span>
-      <span className="inline-block text-xs rounded-full px-2 bg-primary-10 ml-2">
+      <span className="inline-block text-xs rounded-full px-2 bg-neutral-10 ml-2">
         {directory.directories.length + directory.files.length}
       </span>
     </div>

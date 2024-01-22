@@ -16,6 +16,7 @@ export type ButtonVariant = Subset<
   | typeof EnumVariant.Warning
   | typeof EnumVariant.Alternative
   | typeof EnumVariant.Neutral
+  | typeof EnumVariant.Info
 >
 
 export type ButtonSize = Subset<

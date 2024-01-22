@@ -11,7 +11,7 @@ import { getEmptyImage } from 'react-dnd-html5-backend'
 import { useLongPress } from '@uidotdev/usehooks'
 import { type ModelArtifact } from '@models/artifact'
 import { useStoreEditor } from '@context/editor'
-import { debounceSync, truncate } from '@utils/index'
+import { truncate } from '@utils/index'
 
 function File({
   file,
@@ -133,12 +133,12 @@ function File({
           className,
         )}
         style={style}
-        onDoubleClick={debounceSync(e => {
+        onDoubleClick={e => {
           e.stopPropagation()
 
           openFileInNewTab()
-        }, 100)}
-        handleSelect={debounceSync(handleSelect, 200)}
+        }}
+        handleSelect={handleSelect}
       >
         <File.Icons />
         {artifactRename === file ? (

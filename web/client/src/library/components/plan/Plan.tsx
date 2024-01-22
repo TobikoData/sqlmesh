@@ -6,24 +6,20 @@ import PlanActions from './PlanActions'
 import PlanOptions from './PlanOptions'
 import { EnumPlanActions, usePlanDispatch } from './context'
 import { useApplyPayload, usePlanPayload } from './hooks'
-import { EnumErrorKey, useIDE } from '~/library/pages/ide/context'
 import Loading from '@components/loading/Loading'
 import Spinner from '@components/logo/Spinner'
 import { EnumVariant } from '~/types/enum'
 import PlanApplyStageTracker from './PlanApplyStageTracker'
-import { type ModelEnvironment } from '@models/environment'
 import { EnumPlanAction, ModelPlanAction } from '@models/plan-action'
 import { useStoreProject } from '@context/project'
+import { useIDE } from '~/library/pages/ide/context'
+import { useStoreContext } from '@context/context'
 
-function Plan({
-  environment,
-  onClose,
-}: {
-  environment: ModelEnvironment
-  onClose: () => void
-}): JSX.Element {
+function Plan(): JSX.Element {
   const dispatch = usePlanDispatch()
-  const { removeError, clearErrors } = useIDE()
+  const { clearErrors } = useIDE()
+
+  const environment = useStoreContext(s => s.environment)
 
   const planOverviewTracker = useStorePlan(s => s.planOverview)
   const planApplyTracker = useStorePlan(s => s.planApply)
@@ -61,13 +57,6 @@ function Plan({
     clearErrors()
 
     setPlanAction(new ModelPlanAction({ value: EnumPlanAction.Run }))
-  }
-
-  function close(): void {
-    removeError(EnumErrorKey.RunPlan)
-    removeError(EnumErrorKey.ApplyPlan)
-    cleanUp()
-    onClose()
   }
 
   function cancel(): void {
@@ -121,11 +110,9 @@ function Plan({
         )}
       </div>
       <PlanActions
-        planAction={planAction}
         apply={apply}
         run={run}
         cancel={cancel}
-        close={close}
         reset={reset}
       />
     </div>

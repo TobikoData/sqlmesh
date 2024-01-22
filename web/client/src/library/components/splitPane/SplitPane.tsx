@@ -8,8 +8,9 @@ export default function SplitPane({
   minSize,
   maxSize,
   direction,
-  expandToMin,
+  expandToMin = false,
   snapOffset,
+  onDragEnd,
 }: SplitProps): JSX.Element {
   return (
     <Split
@@ -17,11 +18,12 @@ export default function SplitPane({
       sizes={sizes}
       expandToMin={expandToMin}
       gutterAlign="center"
-      gutterSize={3}
+      gutterSize={2}
       direction={direction}
       minSize={minSize}
       maxSize={maxSize}
       snapOffset={snapOffset}
+      onDragEnd={onDragEnd}
     >
       {children}
     </Split>

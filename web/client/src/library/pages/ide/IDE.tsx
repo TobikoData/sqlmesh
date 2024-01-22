@@ -1,4 +1,4 @@
-import React, { useEffect, lazy } from 'react'
+import React, { useEffect } from 'react'
 import {
   useApiModels,
   useApiFiles,
@@ -7,7 +7,6 @@ import {
   useApiPlanApply,
   useApiCancelPlan,
 } from '../../../api'
-import { useStorePlan } from '../../../context/plan'
 import { useChannelEvents } from '../../../api/channels'
 import {
   isArrayEmpty,
@@ -17,9 +16,7 @@ import {
   isTrue,
 } from '~/utils'
 import { useStoreContext } from '~/context/context'
-import { ArrowLongRightIcon } from '@heroicons/react/24/solid'
-import { EnumSize, EnumVariant } from '~/types/enum'
-import { Link, Outlet, useLocation, useNavigate } from 'react-router-dom'
+import { Outlet, useLocation, useNavigate } from 'react-router-dom'
 import { EnumRoutes } from '~/routes'
 import { type Tests, useStoreProject } from '@context/project'
 import { EnumErrorKey, type ErrorIDE, useIDE } from './context'
@@ -31,7 +28,6 @@ import {
   Status,
 } from '@api/client'
 import { Button } from '@components/button/Button'
-import { Divider } from '@components/divider/Divider'
 import Container from '@components/container/Container'
 import { useStoreEditor, createLocalFile } from '@context/editor'
 import { type FormatFileStatus, ModelFile } from '@models/file'
@@ -47,14 +43,7 @@ import { type PlanOverviewTracker } from '@models/tracker-plan-overview'
 import { type PlanApplyTracker } from '@models/tracker-plan-apply'
 import { type PlanCancelTracker } from '@models/tracker-plan-cancel'
 import { ModelPlanAction } from '@models/plan-action'
-import Loading from '@components/loading/Loading'
-import Spinner from '@components/logo/Spinner'
-
-const ReportErrors = lazy(
-  async () => await import('../../components/report/ReportErrors'),
-)
-const RunPlan = lazy(async () => await import('./RunPlan'))
-const PlanSidebar = lazy(async () => await import('./PlanSidebar'))
+import { useStorePlan } from '@context/plan'
 
 export default function PageIDE(): JSX.Element {
   const location = useLocation()
@@ -63,6 +52,7 @@ export default function PageIDE(): JSX.Element {
   const { removeError, addError } = useIDE()
 
   const models = useStoreContext(s => s.models)
+  const modules = useStoreContext(s => s.modules)
   const showConfirmation = useStoreContext(s => s.showConfirmation)
   const setShowConfirmation = useStoreContext(s => s.setShowConfirmation)
   const confirmations = useStoreContext(s => s.confirmations)
@@ -79,8 +69,8 @@ export default function PageIDE(): JSX.Element {
   const setPlanCancel = useStorePlan(s => s.setPlanCancel)
   const setPlanAction = useStorePlan(s => s.setPlanAction)
 
-  const project = useStoreProject(s => s.project)
   const files = useStoreProject(s => s.files)
+  const selectedFile = useStoreProject(s => s.selectedFile)
   const setProject = useStoreProject(s => s.setProject)
   const setFiles = useStoreProject(s => s.setFiles)
   const refreshFiles = useStoreProject(s => s.refreshFiles)
@@ -100,17 +90,10 @@ export default function PageIDE(): JSX.Element {
 
   // We need to fetch from IDE level to make sure
   // all pages have access to models and files
-  const {
-    refetch: getModels,
-    isFetching: isFetchingModels,
-    cancel: cancelRequestModels,
-  } = useApiModels()
+  const { refetch: getModels, cancel: cancelRequestModels } = useApiModels()
   const { refetch: getFiles, cancel: cancelRequestFiles } = useApiFiles()
-  const {
-    refetch: getEnvironments,
-    isFetching: isFetchingEnvironments,
-    cancel: cancelRequestEnvironments,
-  } = useApiEnvironments()
+  const { refetch: getEnvironments, cancel: cancelRequestEnvironments } =
+    useApiEnvironments()
   const { isFetching: isFetchingPlanApply } = useApiPlanApply(environment.name)
   const { isFetching: isFetchingPlanCancel } = useApiCancelPlan()
   const {
@@ -273,7 +256,9 @@ export default function PageIDE(): JSX.Element {
 
   useEffect(() => {
     if (location.pathname === EnumRoutes.Ide) {
-      navigate(EnumRoutes.IdeEditor)
+      navigate(
+        modules.includes('editor') ? EnumRoutes.IdeEditor : EnumRoutes.IdeDocs,
+      )
     }
   }, [location])
 
@@ -401,7 +386,7 @@ export default function PageIDE(): JSX.Element {
 
     addTabs(tabs)
 
-    if (isNotNil(tab)) {
+    if (isNotNil(tab) && isNil(selectedFile)) {
       selectTab(tab)
     }
   }
@@ -412,47 +397,10 @@ export default function PageIDE(): JSX.Element {
     setShowConfirmation(false)
   }
 
-  const isActivePageEditor = location.pathname === EnumRoutes.IdeEditor
   const confirmation = confirmations[0]
 
   return (
     <Container.Page>
-      <PlanSidebar />
-      <div className="w-full flex justify-between items-center min-h-[2rem] z-50">
-        <div className="px-3 flex items-center whitespace-nowrap">
-          <h3 className="font-bold text-primary-500">
-            <span className="inline-block">/</span>
-            {project?.name}
-          </h3>
-          <ArrowLongRightIcon className="w-8 mx-4 text-neutral-50" />
-          <Button
-            size={EnumSize.sm}
-            variant={EnumVariant.Neutral}
-          >
-            {isActivePageEditor ? (
-              <Link to={EnumRoutes.IdeDocs}>Docs</Link>
-            ) : (
-              <Link to={EnumRoutes.IdeEditor}>Editor</Link>
-            )}
-          </Button>
-        </div>
-        <div className="px-3 flex items-center min-w-[10rem] justify-end">
-          {isFetchingEnvironments || isFetchingModels ? (
-            <div className="flex justify-center items-center w-full h-full">
-              <Loading className="inline-block">
-                <Spinner className="w-3 h-3 border border-neutral-10 mr-2" />
-                <h3 className="text-xs">
-                  Loading {isFetchingModels ? 'Models' : 'Environments'}...
-                </h3>
-              </Loading>
-            </div>
-          ) : (
-            <RunPlan />
-          )}
-          <ReportErrors />
-        </div>
-      </div>
-      <Divider />
       <Outlet />
       <ModalConfirmation
         show={showConfirmation}

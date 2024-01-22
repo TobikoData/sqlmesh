@@ -5,29 +5,22 @@ import { includes, isFalse } from '~/utils'
 import { Button } from '../button/Button'
 import PlanActionsDescription from './PlanActionsDescription'
 import { EnumPlanAction, ModelPlanAction } from '@models/plan-action'
+import { useStorePlan } from '@context/plan'
 
 export default function PlanActions({
   run,
   apply,
   cancel,
   reset,
-  close,
-  planAction,
 }: {
   apply: () => void
   run: () => void
   cancel: () => void
-  close: () => void
   reset: () => void
-  planAction: ModelPlanAction
 }): JSX.Element {
+  const planAction = useStorePlan(s => s.planAction)
+
   const setFocus = useActiveFocus<HTMLButtonElement>()
-
-  function handleClose(e: MouseEvent): void {
-    e.stopPropagation()
-
-    close()
-  }
 
   function handleReset(e: MouseEvent): void {
     e.stopPropagation()
@@ -131,21 +124,6 @@ export default function PlanActions({
               )}
             </Button>
           )}
-          <Button
-            onClick={handleClose}
-            variant={
-              planAction.isDone ? EnumVariant.Primary : EnumVariant.Neutral
-            }
-            ref={
-              planAction.isDone || planAction.isApplying ? setFocus : undefined
-            }
-          >
-            {ModelPlanAction.getActionDisplayName(
-              planAction,
-              [EnumPlanAction.Done],
-              'Close',
-            )}
-          </Button>
         </div>
       </div>
     </>
