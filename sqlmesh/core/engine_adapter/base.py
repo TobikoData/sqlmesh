@@ -104,7 +104,7 @@ class EngineAdapter:
         cursor_init: t.Optional[t.Callable[[t.Any], None]] = None,
         default_catalog: t.Optional[str] = None,
         execute_log_level: int = logging.DEBUG,
-        register_comments: t.Optional[bool] = None,
+        register_comments: bool = False,
         **kwargs: t.Any,
     ):
         self.dialect = dialect.lower() or self.DIALECT
@@ -141,7 +141,7 @@ class EngineAdapter:
         return None
 
     @property
-    def comments_enabled(self) -> t.Optional[bool]:
+    def comments_enabled(self) -> bool:
         return self.register_comments and self.COMMENT_CREATION_TABLE.is_supported
 
     @classmethod

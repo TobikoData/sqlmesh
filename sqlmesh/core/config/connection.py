@@ -35,7 +35,7 @@ else:
 
 class ConnectionConfig(abc.ABC, BaseConfig):
     concurrent_tasks: int
-    register_comments: bool = False
+    register_comments: bool
 
     @property
     @abc.abstractmethod
@@ -72,7 +72,7 @@ class ConnectionConfig(abc.ABC, BaseConfig):
         """A function that is called to initialize the cursor"""
         return None
 
-    def create_engine_adapter(self, register_comments: t.Optional[bool] = None) -> EngineAdapter:
+    def create_engine_adapter(self, register_comments: bool = False) -> EngineAdapter:
         """Returns a new instance of the Engine Adapter."""
         return self._engine_adapter(
             lambda: self._connection_factory(
@@ -109,6 +109,7 @@ class DuckDBConnectionConfig(ConnectionConfig):
         extensions: A list of autoloadable extensions to load.
         connector_config: A dictionary of configuration to pass into the duckdb connector.
         concurrent_tasks: The maximum number of tasks that can use this connection concurrently.
+        register_comments: Whether or not to register model comments with the SQL engine.
     """
 
     database: t.Optional[str] = None
@@ -117,6 +118,7 @@ class DuckDBConnectionConfig(ConnectionConfig):
     connector_config: t.Dict[str, t.Any] = {}
 
     concurrent_tasks: Literal[1] = 1
+    register_comments: bool = True
 
     type_: Literal["duckdb"] = Field(alias="type", default="duckdb")
 
@@ -206,6 +208,7 @@ class SnowflakeConnectionConfig(ConnectionConfig):
         private_key: The optional private key to use for authentication. Key can be Base64-encoded DER format (representing the key bytes), a plain-text PEM format, or bytes (Python config only). https://docs.snowflake.com/en/developer-guide/python-connector/python-connector-connect#using-key-pair-authentication-key-pair-rotation
         private_key_path: The optional path to the private key to use for authentication. This would be used instead of `private_key`.
         private_key_passphrase: The optional passphrase to use to decrypt `private_key` or `private_key_path`. Keys can be created without encryption so only provide this if needed.
+        register_comments: Whether or not to register model comments with the SQL engine.
     """
 
     account: str
@@ -223,6 +226,7 @@ class SnowflakeConnectionConfig(ConnectionConfig):
     private_key_passphrase: t.Optional[str] = None
 
     concurrent_tasks: int = 4
+    register_comments: bool = False
 
     type_: Literal["snowflake"] = Field(alias="type", default="snowflake")
 
@@ -395,6 +399,7 @@ class DatabricksConnectionConfig(ConnectionConfig):
     disable_databricks_connect: bool = False
 
     concurrent_tasks: int = 1
+    register_comments: bool = True
 
     type_: Literal["databricks"] = Field(alias="type", default="databricks")
 
@@ -557,6 +562,7 @@ class BigQueryConnectionConfig(ConnectionConfig):
     maximum_bytes_billed: t.Optional[int] = None
 
     concurrent_tasks: int = 1
+    register_comments: bool = True
 
     type_: Literal["bigquery"] = Field(alias="type", default="bigquery")
 
@@ -655,6 +661,7 @@ class GCPPostgresConnectionConfig(ConnectionConfig):
     driver: str = "pg8000"
     type_: Literal["gcp_postgres"] = Field(alias="type", default="gcp_postgres")
     concurrent_tasks: int = 4
+    register_comments: bool = True
 
     @model_validator(mode="before")
     @model_validator_v1_args
@@ -754,6 +761,7 @@ class RedshiftConnectionConfig(ConnectionConfig):
     serverless_work_group: t.Optional[str] = None
 
     concurrent_tasks: int = 4
+    register_comments: bool = True
 
     type_: Literal["redshift"] = Field(alias="type", default="redshift")
 
@@ -806,6 +814,7 @@ class PostgresConnectionConfig(ConnectionConfig):
     sslmode: t.Optional[str] = None
 
     concurrent_tasks: int = 4
+    register_comments: bool = True
 
     type_: Literal["postgres"] = Field(alias="type", default="postgres")
 
@@ -843,6 +852,7 @@ class MySQLConnectionConfig(ConnectionConfig):
     ssl_disabled: t.Optional[bool] = None
 
     concurrent_tasks: int = 4
+    register_comments: bool = True
 
     type_: Literal["mysql"] = Field(alias="type", default="mysql")
 
@@ -894,6 +904,7 @@ class MSSQLConnectionConfig(ConnectionConfig):
     tds_version: t.Optional[str] = None
 
     concurrent_tasks: int = 4
+    register_comments: bool = True
 
     type_: Literal["mssql"] = Field(alias="type", default="mssql")
 
@@ -935,6 +946,7 @@ class SparkConnectionConfig(ConnectionConfig):
     config: t.Dict[str, t.Any] = {}
 
     concurrent_tasks: int = 4
+    register_comments: bool = True
 
     type_: Literal["spark"] = Field(alias="type", default="spark")
 
@@ -1046,6 +1058,7 @@ class TrinoConnectionConfig(ConnectionConfig):
     cert: t.Optional[str] = None
 
     concurrent_tasks: int = 4
+    register_comments: bool = True
 
     type_: Literal["trino"] = Field(alias="type", default="trino")
 

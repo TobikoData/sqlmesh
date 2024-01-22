@@ -249,7 +249,6 @@ class Context(BaseContext):
         load: Whether or not to automatically load all models and macros (default True).
         console: The rich instance used for printing out CLI command results.
         users: A list of users to make known to SQLMesh.
-        register_comments: Whether or not to register model comments with the SQL engine (default False).
     """
 
     def __init__(
@@ -265,7 +264,6 @@ class Context(BaseContext):
         load: bool = True,
         console: t.Optional[Console] = None,
         users: t.Optional[t.List[User]] = None,
-        register_comments: t.Optional[bool] = None,
     ):
         self.console = console or get_console()
         self.configs = config if isinstance(config, dict) else load_configs(config, paths)
@@ -290,7 +288,6 @@ class Context(BaseContext):
 
         self._connection_config = self.config.get_connection(self.gateway)
         self.concurrent_tasks = concurrent_tasks or self._connection_config.concurrent_tasks
-        self.register_comments = register_comments or self._connection_config.register_comments
         self._engine_adapter = engine_adapter or self._connection_config.create_engine_adapter()
 
         test_connection_config = self.config.get_test_connection(self.gateway, self.default_catalog)
