@@ -19,7 +19,14 @@ def get_api_meta(
     api_console.log_event_plan_cancel()
     api_console.log_event_plan_overview()
     api_console.log_event_plan_apply()
+
     return models.Meta(
         version=_sqlmesh_version(),
         has_running_task=hasattr(request.app.state, "task") and not request.app.state.task.done(),
+        modules=[
+            models.Modules.EDITOR,
+            models.Modules.DOCS,
+            models.Modules.ERRORS,
+            models.Modules.PLANS,
+        ],
     )

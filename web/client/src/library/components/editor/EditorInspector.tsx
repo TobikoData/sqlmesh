@@ -106,7 +106,7 @@ function InspectorModel({
         <Tab.Panel
           unmount={false}
           className={clsx(
-            'text-xs w-full h-full ring-white ring-opacity-60 ring-offset-2 ring-offset-blue-400 focus:outline-none focus:ring-2 p-2',
+            'text-xs w-full h-full ring-white ring-opacity-60 ring-offset-2 ring-offset-blue-400 focus:outline-none focus:ring-2 px-2',
           )}
         >
           <ModelColumns
@@ -122,7 +122,7 @@ function InspectorModel({
         </Tab.Panel>
         <Tab.Panel
           unmount={false}
-          className="text-xs w-full h-full ring-white ring-opacity-60 ring-offset-2 ring-offset-blue-400 focus:outline-none focus:ring-2 p-2"
+          className="text-xs w-full h-full ring-white ring-opacity-60 ring-offset-2 ring-offset-blue-400 focus:outline-none focus:ring-2"
         >
           <CodeEditorDefault
             type={EnumFileExtensions.SQL}

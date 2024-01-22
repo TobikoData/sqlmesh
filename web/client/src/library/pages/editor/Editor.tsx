@@ -2,9 +2,10 @@ import { Suspense, lazy, useCallback } from 'react'
 import { useStoreContext } from '@context/context'
 import { useStoreProject } from '@context/project'
 import { EnumErrorKey, useIDE, type ErrorIDE } from '../ide/context'
-import SplitPane from '@components/splitPane/SplitPane'
 import Loading from '@components/loading/Loading'
 import Spinner from '@components/logo/Spinner'
+import Page from '../root/Page'
+import { isNil } from '@utils/index'
 
 const FileExplorer = lazy(() => import('@components/fileExplorer/FileExplorer'))
 const FileExplorerProvider = lazy(
@@ -24,7 +25,7 @@ export default function PageEditor(): JSX.Element {
     function handleClickModel(modelName: string): void {
       const model = models.get(modelName)
 
-      if (model == null) return
+      if (isNil(model)) return
 
       setSelectedFile(files.get(model.path))
     },
@@ -36,13 +37,8 @@ export default function PageEditor(): JSX.Element {
   }, [])
 
   return (
-    <SplitPane
-      sizes={[20, 80]}
-      minSize={[8, 8]}
-      snapOffset={0}
-      className="flex w-full h-full overflow-hidden z-10"
-    >
-      <div className="h-full">
+    <Page
+      sidebar={
         <Suspense
           fallback={
             <div className="flex justify-center items-center w-full h-full">
@@ -57,8 +53,8 @@ export default function PageEditor(): JSX.Element {
             <FileExplorer />
           </FileExplorerProvider>
         </Suspense>
-      </div>
-      <div className="h-full">
+      }
+      content={
         <Suspense
           fallback={
             <div className="flex justify-center items-center w-full h-full">
@@ -76,7 +72,7 @@ export default function PageEditor(): JSX.Element {
             <Editor />
           </LineageFlowProvider>
         </Suspense>
-      </div>
-    </SplitPane>
+      }
+    />
   )
 }

@@ -181,7 +181,7 @@ export default function FileExplorerProvider({
         .finally(() => {
           setIsLoading(false)
 
-          if (tab != null && artifact.hasFile(tab.file)) {
+          if (isNotNil(tab) && artifact.hasFile(tab.file)) {
             setSelectedFile(tab.file)
           }
 

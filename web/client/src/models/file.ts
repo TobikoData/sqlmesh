@@ -53,6 +53,10 @@ export class ModelFile extends ModelArtifact<InitialFile> {
     this.isFormatted = (initial as ModelFile)?.isFormatted
   }
 
+  get basename(): string {
+    return this.name.replace(this.extension, '')
+  }
+
   get isSynced(): boolean {
     return isFalse(isStringEmptyOrNil(this._content))
   }

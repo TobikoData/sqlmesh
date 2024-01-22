@@ -1,4 +1,4 @@
-import { isNil, isArrayNotEmpty, isNotNil } from '@utils/index'
+import { isNil, isArrayNotEmpty, isNotNil, toID } from '@utils/index'
 import clsx from 'clsx'
 import { useMemo, useCallback, useState } from 'react'
 import {
@@ -22,10 +22,11 @@ export default function ModelNode({
   data,
   sourcePosition,
   targetPosition,
-}: NodeProps & { data: GraphNodeData }): JSX.Element {
+}: NodeProps): JSX.Element {
+  const nodeData: GraphNodeData = data ?? {}
   const {
+    connections,
     models,
-    withColumns,
     handleClickModel,
     lineage = {},
     selectedNodes,
@@ -99,20 +100,30 @@ export default function ModelNode({
     [setSelectedNodes, highlightedNodeModels],
   )
 
+  const hasSelectedColumns = columns.some(({ name }) =>
+    connections.get(toID(id, name)),
+  )
   const highlighted = Object.keys(highlightedNodes ?? {}).find(key =>
     highlightedNodes[key]!.includes(id),
   )
   const splat = highlightedNodes?.['*']
-  const isInteractive = mainNode !== id && isNotNil(handleClickModel)
-  const isCTE = data.type === EnumLineageNodeModelType.cte
-  const isModelExternal = data.type === EnumLineageNodeModelType.external
-  const isModelSeed = data.type === EnumLineageNodeModelType.seed
-  const isModelPython = data.type === EnumLineageNodeModelType.python
-  const showColumns = (withColumns && isArrayNotEmpty(columns)) || isMouseOver
   const isMainNode = mainNode === id || highlightedNodeModels.includes(id)
+  const isSelected = selectedNodes.has(id)
+  const isInteractive = mainNode !== id && isNotNil(handleClickModel)
+  const isCTE = nodeData.type === EnumLineageNodeModelType.cte
+  const isModelExternal = nodeData.type === EnumLineageNodeModelType.external
+  const isModelSeed = nodeData.type === EnumLineageNodeModelType.seed
+  const isModelPython = nodeData.type === EnumLineageNodeModelType.python
+  const showColumns =
+    (hasSelectedColumns ||
+      nodeData.withColumns ||
+      isMouseOver ||
+      isSelected ||
+      isMainNode) &&
+    isArrayNotEmpty(columns)
   const isActiveNode =
     selectedNodes.size > 0 || activeNodes.size > 0 || withConnected
-      ? selectedNodes.has(id) ||
+      ? isSelected ||
         activeNodes.has(id) ||
         (withConnected && connectedNodes.has(id))
       : connectedNodes.has(id)
@@ -126,8 +137,7 @@ export default function ModelNode({
         isCTE ? 'text-neutral-100' : 'text-secondary-500 dark:text-primary-100',
         (isModelExternal || isModelSeed) &&
           'border-4 border-accent-500 ring-8 ring-accent-200',
-        selectedNodes.has(id) &&
-          'border-4 border-secondary-500 ring-8 ring-secondary-200',
+        isSelected && 'border-4 border-secondary-500 ring-8 ring-secondary-200',
         isMainNode && 'ring-8 ring-brand-200',
         isNil(highlighted) ? splat : highlighted,
         isActiveNode || isMainNode
@@ -135,14 +145,16 @@ export default function ModelNode({
           : 'opacity-40 hover:opacity-100',
       )}
       style={{
-        maxWidth: isNil(data.width) ? 'auto' : `${data.width as number}px`,
+        maxWidth: isNil(nodeData.width)
+          ? 'auto'
+          : `${nodeData.width as number}px`,
       }}
     >
       <ModelNodeHeaderHandles
         id={id}
-        type={data.type}
-        label={data.label}
-        isSelected={selectedNodes.has(id)}
+        type={nodeData.type}
+        label={nodeData.label}
+        isSelected={isSelected}
         isDraggable={true}
         className={clsx(
           showColumns ? 'rounded-t-md' : 'rounded-lg',
@@ -162,7 +174,7 @@ export default function ModelNode({
         }
         count={columns.length}
       />
-      {showColumns && isArrayNotEmpty(columns) && (
+      {showColumns && (
         <>
           <ModelColumns
             className="max-h-[15rem]"
