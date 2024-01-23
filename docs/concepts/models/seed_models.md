@@ -28,7 +28,7 @@ MODEL (
   )
 );
 ```
-The `path` attribute contains the path to the seed's CSV file **relative** to the path of the model's `.sql` file.
+The `path` attribute contains the path to the seed's CSV file **relative** to the path of the model's `.sql` file. If you want to specify a path relative to the root of the SQLMesh project, use the `$root` marker (see [Markers](#markers)).
 
 The physical table with the seed CSV's content is created using column types inferred by Pandas. Alternatively, you can manually specify the dataset schema as part of the `MODEL` definition:
 ```sql linenums="1" hl_lines="6 7 8 9"
@@ -44,6 +44,21 @@ MODEL (
 );
 ```
 **Note:** The dataset schema provided in the definition takes precedence over column names defined in the header of the CSV file. This means that the order in which columns are provided in the `MODEL` definition must match the order of columns in the CSV file.
+
+### Markers
+
+The `$root` marker can be used in the `path` attribute to indicate that the CSV file path is relative to the root of the SQLMesh project:
+
+```sql linenums="1" hl_lines="3-5"
+MODEL (
+  name test_db.national_holidays,
+  kind SEED (
+    path '$root/seeds/national_holidays.csv'
+  )
+);
+```
+
+This is useful when you want to keep all seed CSV files in a top-level directory such as `seeds/` but don't want to keep track of or manage a bunch of relative paths.
 
 ## Example
 
