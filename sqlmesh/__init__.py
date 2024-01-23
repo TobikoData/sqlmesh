@@ -57,7 +57,7 @@ class RuntimeEnv(str, Enum):
         except NameError:
             pass
 
-        if os.getenv("SQLMESH_PDB"):
+        if debug_mode_enabled():
             return RuntimeEnv.DEBUGGER
         return RuntimeEnv.TERMINAL
 
