@@ -89,26 +89,15 @@ def test_select_models(mocker: MockerFixture, make_snapshot, default_catalog: t.
 
     _assert_models_equal(
         selector.select_models(["db.added_model"], env_name),
-        {
-            added_model.fqn: added_model,
-            modified_model_v1.fqn: modified_model_v1.copy(
-                update={"mapping_schema": added_model_schema}
-            ),
-            removed_model.fqn: removed_model,
-        },
+        {added_model.fqn: added_model},
     )
     _assert_models_equal(
         selector.select_models(["db.modified_model"], "missing_env", fallback_env_name=env_name),
-        {
-            modified_model_v2.fqn: modified_model_v2,
-            removed_model.fqn: removed_model,
-        },
+        {modified_model_v2.fqn: modified_model_v2},
     )
     _assert_models_equal(
         selector.select_models(["db.removed_model"], env_name),
-        {
-            modified_model_v1.fqn: modified_model_v1,
-        },
+        {},
     )
     _assert_models_equal(
         selector.select_models(
@@ -119,7 +108,6 @@ def test_select_models(mocker: MockerFixture, make_snapshot, default_catalog: t.
             modified_model_v2.fqn: modified_model_v2.copy(
                 update={"mapping_schema": added_model_schema}
             ),
-            removed_model.fqn: removed_model,
         },
     )
     _assert_models_equal(
@@ -129,7 +117,6 @@ def test_select_models(mocker: MockerFixture, make_snapshot, default_catalog: t.
             modified_model_v2.fqn: modified_model_v2.copy(
                 update={"mapping_schema": added_model_schema}
             ),
-            removed_model.fqn: removed_model,
         },
     )
     _assert_models_equal(
@@ -139,7 +126,6 @@ def test_select_models(mocker: MockerFixture, make_snapshot, default_catalog: t.
             modified_model_v2.fqn: modified_model_v2.copy(
                 update={"mapping_schema": added_model_schema}
             ),
-            removed_model.fqn: removed_model,
         },
     )
     _assert_models_equal(
@@ -159,7 +145,6 @@ def test_select_models(mocker: MockerFixture, make_snapshot, default_catalog: t.
             modified_model_v2.fqn: modified_model_v2.copy(
                 update={"mapping_schema": added_model_schema}
             ),
-            removed_model.fqn: removed_model,
         },
     )
     _assert_models_equal(
@@ -169,7 +154,6 @@ def test_select_models(mocker: MockerFixture, make_snapshot, default_catalog: t.
             modified_model_v2.fqn: modified_model_v2.copy(
                 update={"mapping_schema": added_model_schema}
             ),
-            removed_model.fqn: removed_model,
         },
     )
     _assert_models_equal(
@@ -179,7 +163,6 @@ def test_select_models(mocker: MockerFixture, make_snapshot, default_catalog: t.
             modified_model_v2.fqn: modified_model_v2.copy(
                 update={"mapping_schema": added_model_schema}
             ),
-            removed_model.fqn: removed_model,
         },
     )
 

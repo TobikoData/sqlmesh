@@ -742,6 +742,67 @@ def test_forward_only_precedence_over_indirect_non_breaking(init_and_plan_contex
 
 
 @freeze_time("2023-01-08 15:00:00")
+def test_select_models(init_and_plan_context: t.Callable):
+    context, plan = init_and_plan_context("examples/sushi")
+    context.apply(plan)
+
+    # Modify 2 models.
+    model = context.get_model("sushi.waiter_revenue_by_day")
+    context.upsert_model(add_projection_to_model(t.cast(SqlModel, model)))
+    model = context.get_model("sushi.customer_revenue_by_day")
+    context.upsert_model(add_projection_to_model(t.cast(SqlModel, model)))
+
+    expected_intervals = [
+        (to_timestamp("2023-01-01"), to_timestamp("2023-01-02")),
+        (to_timestamp("2023-01-02"), to_timestamp("2023-01-03")),
+        (to_timestamp("2023-01-03"), to_timestamp("2023-01-04")),
+        (to_timestamp("2023-01-04"), to_timestamp("2023-01-05")),
+        (to_timestamp("2023-01-05"), to_timestamp("2023-01-06")),
+        (to_timestamp("2023-01-06"), to_timestamp("2023-01-07")),
+        (to_timestamp("2023-01-07"), to_timestamp("2023-01-08")),
+    ]
+
+    # Select one of the modified models.
+    plan = context.plan(
+        "dev", select_models=["*waiter_revenue_by_day"], no_prompts=True, skip_tests=True
+    )
+
+    assert plan.missing_intervals == [
+        SnapshotIntervals(
+            snapshot_id=context.get_snapshot(
+                "sushi.waiter_revenue_by_day", raise_if_missing=True
+            ).snapshot_id,
+            intervals=expected_intervals,
+        ),
+    ]
+    assert plan.directly_modified == {
+        context.get_snapshot("sushi.waiter_revenue_by_day").snapshot_id
+    }
+    assert not plan.indirectly_modified
+    assert not plan.context_diff.removed_snapshots
+    assert not plan.context_diff.added
+
+    context.apply(plan)
+
+    dev_df = context.engine_adapter.fetchdf(
+        "SELECT DISTINCT event_date FROM sushi__dev.waiter_revenue_by_day ORDER BY event_date"
+    )
+    assert len(dev_df) == 7
+
+    # Make sure that we only create a view for the selected model.
+    schema_objects = context.engine_adapter._get_data_objects("sushi__dev")
+    assert len(schema_objects) == 1
+    assert schema_objects[0].name == "waiter_revenue_by_day"
+
+    # Validate the other modified model.
+    assert not context.get_snapshot("sushi.customer_revenue_by_day").change_category
+    assert not context.get_snapshot("sushi.customer_revenue_by_day").version
+
+    assert not context.get_snapshot("sushi.top_waiters").change_category
+    assert not context.get_snapshot("sushi.top_waiters").version
+
+
+@freeze_time("2023-01-08 15:00:00")
 def test_select_models_for_backfill(init_and_plan_context: t.Callable):
     context, _ = init_and_plan_context("examples/sushi")
 
@@ -789,8 +850,13 @@ def test_select_models_for_backfill(init_and_plan_context: t.Callable):
     )
     assert len(dev_df) == 7
 
-    with pytest.raises(Exception, match=".*does not exist.*"):
-        context.engine_adapter.fetchdf("SELECT * FROM sushi__dev.customer_revenue_by_day")
+    schema_objects = context.engine_adapter._get_data_objects("sushi__dev")
+    assert {o.name for o in schema_objects} == {
+        "items",
+        "order_items",
+        "orders",
+        "waiter_revenue_by_day",
+    }
 
     dev_df = context.engine_adapter.fetchdf(
         exp.select("*").from_(context.get_snapshot("sushi.customer_revenue_by_day").table_name())

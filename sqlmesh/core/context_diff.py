@@ -65,6 +65,7 @@ class ContextDiff(PydanticModel):
         snapshots: t.Dict[str, Snapshot],
         create_from: str,
         state_reader: StateReader,
+        ignored_models: t.Optional[t.Set[str]] = None,
     ) -> ContextDiff:
         """Create a ContextDiff object.
 
@@ -74,10 +75,13 @@ class ContextDiff(PydanticModel):
             create_from: The environment to create the target environment from if it
                 doesn't exist.
             state_reader: StateReader to access the remote environment to diff.
+            ignored_models: The FQNs of models that should be excluded from the diff.
 
         Returns:
             The ContextDiff object.
         """
+        ignored_models = ignored_models or set()
+        snapshots = {n: s for n, s in snapshots.items() if n not in ignored_models}
         environment = environment.lower()
         env = state_reader.get_environment(environment)
 
@@ -89,7 +93,9 @@ class ContextDiff(PydanticModel):
             is_new_environment = False
             previously_promoted_snapshot_ids = {s.snapshot_id for s in env.promoted_snapshots}
 
-        environment_snapshot_infos = env.snapshots if env else []
+        environment_snapshot_infos = (
+            [s for s in env.snapshots if s.name not in ignored_models] if env else []
+        )
         remote_snapshot_name_to_info = {
             snapshot_info.name: snapshot_info for snapshot_info in environment_snapshot_infos
         }

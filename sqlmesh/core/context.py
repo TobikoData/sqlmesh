@@ -965,6 +965,7 @@ class Context(BaseContext):
             create_from=create_from,
             force_no_diff=(restate_models is not None and not expanded_restate_models)
             or (backfill_models is not None and not backfill_models),
+            ignored_models=set(self._models) - set(models_override) if models_override else None,
         )
 
         # If no end date is specified, use the max interval end from prod
@@ -1644,6 +1645,7 @@ class Context(BaseContext):
         self,
         environment: str,
         snapshots: t.Optional[t.Dict[str, Snapshot]] = None,
+        ignored_models: t.Optional[t.Set[str]] = None,
         create_from: t.Optional[str] = None,
         force_no_diff: bool = False,
     ) -> ContextDiff:
@@ -1655,6 +1657,7 @@ class Context(BaseContext):
             snapshots=snapshots or self.snapshots,
             create_from=create_from or c.PROD,
             state_reader=self.state_reader,
+            ignored_models=ignored_models,
         )
 
     def _run_janitor(self) -> None:

@@ -41,15 +41,6 @@ class Selector:
         else:
             self._dag = dag
 
-    @property
-    def _models_by_tag(self) -> t.Dict[str, t.Set[str]]:
-        if self.__models_by_tag is None:
-            self.__models_by_tag = defaultdict(set)
-            for model in self._models.values():
-                for tag in model.tags:
-                    self.__models_by_tag[tag.lower()].add(model.fqn)
-        return self.__models_by_tag
-
     def select_models(
         self,
         model_selections: t.Iterable[str],
@@ -89,18 +80,18 @@ class Selector:
         all_selected_models = self.expand_model_selections(
             model_selections, models={**self._models, **env_models}
         )
+        all_model_fqns = set(self._models) | set(env_models)
 
         dag: DAG[str] = DAG()
-        subdag = set()
+        models: t.Dict[str, Model] = {}
+        schema_update_subdag: DAG[str] = DAG()
+        schema_update_candidates: t.Set[str] = set()
 
         for fqn in all_selected_models:
-            if fqn not in subdag:
-                subdag.add(fqn)
-                subdag.update(self._dag.downstream(fqn))
+            if fqn not in schema_update_candidates:
+                schema_update_candidates.add(fqn)
+                schema_update_candidates.update(self._dag.downstream(fqn))
 
-        models: UniqueKeyDict[str, Model] = UniqueKeyDict("models")
-
-        all_model_fqns = set(self._models) | set(env_models)
         for fqn in all_model_fqns:
             model: t.Optional[Model] = None
             if fqn not in all_selected_models and fqn in env_models:
@@ -111,73 +102,20 @@ class Selector:
                 model = self._models[fqn]
 
             if model:
-                # model.copy() can't be used here due to a cached state that can be a part of a model instance.
-                if model.fqn in subdag:
+                if model.fqn in schema_update_candidates:
+                    # model.copy() can't be used here due to a cached state that can be a part of a model instance.
                     model = type(model).parse_obj(model.dict(exclude={"mapping_schema"}))
-                    dag.add(model.fqn, model.depends_on)
+                    schema_update_subdag.add(model.fqn, model.depends_on)
                 models[model.fqn] = model
+                dag.add(model.fqn, model.depends_on)
 
-        update_model_schemas(dag, models, self._context_path)
-
-        return models
-
-    @staticmethod
-    def _get_value_and_dependency_inclusion(value: str) -> t.Tuple[str, bool, bool]:
-        include_upstream = False
-        include_downstream = False
-        if value[0] == "+":
-            value = value[1:]
-            include_upstream = True
-        if value[-1] == "+":
-            value = value[:-1]
-            include_downstream = True
-        return value, include_upstream, include_downstream
-
-    def _get_models(
-        self, model_name: str, include_upstream: bool, include_downstream: bool
-    ) -> t.Set[str]:
-        result = {model_name}
-        if include_upstream:
-            result.update(self._dag.upstream(model_name))
-        if include_downstream:
-            result.update(self._dag.downstream(model_name))
-        return result
-
-    def _expand_model_tag(self, tag_selection: str) -> t.Set[str]:
-        """
-        Expands a set of model tags into a set of model names.
-        The tag matching is case-insensitive and supports wildcards and + prefix and suffix to
-        include upstream and downstream models.
-
-        Args:
-            tag_selection: A tag to match models against.
-
-        Returns:
-            A set of model names.
-        """
-        result = set()
-        matched_tags = set()
-        (
-            selection,
-            include_upstream,
-            include_downstream,
-        ) = self._get_value_and_dependency_inclusion(tag_selection.lower())
-
-        if "*" in selection:
-            for model_tag in self._models_by_tag:
-                if fnmatch.fnmatchcase(model_tag, selection):
-                    matched_tags.add(model_tag)
-        elif selection in self._models_by_tag:
-            matched_tags.add(selection)
-
-        if not matched_tags:
-            logger.warning(f"Expression 'tag:{tag_selection}' doesn't match any models.")
-
-        for tag in matched_tags:
-            for model in self._models_by_tag[tag]:
-                result.update(self._get_models(model, include_upstream, include_downstream))
-
-        return result
+        # Only return selected models and their upstream.
+        unique_models = UniqueKeyDict(
+            "models",
+            {k: v for k, v in models.items() if k in dag.subdag(*all_selected_models).graph},
+        )
+        update_model_schemas(schema_update_subdag, unique_models, self._context_path)
+        return unique_models
 
     def expand_model_selections(
         self, model_selections: t.Iterable[str], models: t.Optional[t.Dict[str, Model]] = None
@@ -225,3 +163,70 @@ class Selector:
                 results.update(self._get_models(model_fqn, include_upstream, include_downstream))
 
         return results
+
+    @property
+    def _models_by_tag(self) -> t.Dict[str, t.Set[str]]:
+        if self.__models_by_tag is None:
+            self.__models_by_tag = defaultdict(set)
+            for model in self._models.values():
+                for tag in model.tags:
+                    self.__models_by_tag[tag.lower()].add(model.fqn)
+        return self.__models_by_tag
+
+    def _get_models(
+        self, model_name: str, include_upstream: bool, include_downstream: bool
+    ) -> t.Set[str]:
+        result = {model_name}
+        if include_upstream:
+            result.update(self._dag.upstream(model_name))
+        if include_downstream:
+            result.update(self._dag.downstream(model_name))
+        return result
+
+    def _expand_model_tag(self, tag_selection: str) -> t.Set[str]:
+        """
+        Expands a set of model tags into a set of model names.
+        The tag matching is case-insensitive and supports wildcards and + prefix and suffix to
+        include upstream and downstream models.
+
+        Args:
+            tag_selection: A tag to match models against.
+
+        Returns:
+            A set of model names.
+        """
+        result = set()
+        matched_tags = set()
+        (
+            selection,
+            include_upstream,
+            include_downstream,
+        ) = self._get_value_and_dependency_inclusion(tag_selection.lower())
+
+        if "*" in selection:
+            for model_tag in self._models_by_tag:
+                if fnmatch.fnmatchcase(model_tag, selection):
+                    matched_tags.add(model_tag)
+        elif selection in self._models_by_tag:
+            matched_tags.add(selection)
+
+        if not matched_tags:
+            logger.warning(f"Expression 'tag:{tag_selection}' doesn't match any models.")
+
+        for tag in matched_tags:
+            for model in self._models_by_tag[tag]:
+                result.update(self._get_models(model, include_upstream, include_downstream))
+
+        return result
+
+    @staticmethod
+    def _get_value_and_dependency_inclusion(value: str) -> t.Tuple[str, bool, bool]:
+        include_upstream = False
+        include_downstream = False
+        if value[0] == "+":
+            value = value[1:]
+            include_upstream = True
+        if value[-1] == "+":
+            value = value[:-1]
+            include_downstream = True
+        return value, include_upstream, include_downstream
