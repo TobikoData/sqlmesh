@@ -47,9 +47,9 @@ def get_model(
 
 
 def serialize_all_models(
-    context: Context, render_queries: t.Optional[t.List[str]] = None
+    context: Context, render_queries: t.Optional[t.Set[str]] = None
 ) -> t.List[models.Model]:
-    render_queries = render_queries or []
+    render_queries = render_queries or set()
     return [
         serialize_model(model, context.path, model.name in render_queries)
         for model in context.models.values()

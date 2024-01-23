@@ -92,7 +92,7 @@ def reload_context_and_update_models(context: Context, change_path: Path) -> Non
         maybe_model = path_to_model_mapping.get(change_path)
         api_console.log_event(
             event=models.EventName.MODELS,
-            data=serialize_all_models(context, [maybe_model.name] if maybe_model else []),
+            data=serialize_all_models(context, {maybe_model.name} if maybe_model else set()),
         )
     except Exception:
         error = ApiException(
