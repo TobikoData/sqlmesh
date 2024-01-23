@@ -310,7 +310,8 @@ FROM table
 
 This syntax works regardless of whether the array values are quoted or not.
 
-NOTE: SQLMesh macros do not currently support placing array values anywhere other than the end of a column name. For example, `column_@x` is supported as in the example above, but neither `@x_column` nor `my_@x_column` is allowed.
+
+NOTE: SQLMesh macros support placing macro values at the end of a column name simply using `column_@x`. However if you wish to substitute the variable anywhere else in the identifier, you need to use the more explicit substitution syntax `@{}`. This avoids ambiguity. These are valid `@{x}_column` or `my_@{x}_column`.
 
 #### @IF
 
