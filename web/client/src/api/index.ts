@@ -47,6 +47,8 @@ import {
   type PlanOverviewStageTracker,
   type PlanApplyStageTracker,
   type BodyInitiateApplyApiCommandsApplyPostCategories,
+  type Model,
+  getModelApiModelsNameGet,
 } from './client'
 import {
   useIDE,
@@ -112,6 +114,24 @@ export function useApiModels(
       ...options,
       errorKey: EnumErrorKey.Models,
       trigger: 'API -> useApiModels',
+    },
+  )
+}
+
+export function useApiModel(
+  modelName: string,
+  options?: ApiOptions,
+): UseQueryWithTimeoutOptions<Model> {
+  return useQueryWithTimeout(
+    {
+      queryKey: ['/api/models', modelName],
+      queryFn: async ({ signal }) =>
+        await getModelApiModelsNameGet(modelName, { signal }),
+    },
+    {
+      ...options,
+      errorKey: EnumErrorKey.Models,
+      trigger: 'API -> useApiModel',
     },
   )
 }
