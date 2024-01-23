@@ -121,7 +121,10 @@ const Documentation = function Documentation({
       )}
       {(withCode || withQuery) && (
         <Section headline="SQL">
-          <CodeEditorRemoteFile path={model.path}>
+          <CodeEditorRemoteFile
+            key={model.path}
+            path={model.path}
+          >
             {({ file }) => (
               <Tab.Group defaultIndex={withQuery ? 1 : 0}>
                 <TabList
