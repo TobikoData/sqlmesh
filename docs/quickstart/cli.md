@@ -253,9 +253,14 @@ Line 15 asks you whether to proceed with executing the model backfills described
 
 ```bash linenums="1"
 Apply - Backfill Tables [y/n]: y
-       sqlmesh_example.seed_model ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ 100.0% • 1/1 • 0:00:00
-sqlmesh_example.incremental_model ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ 100.0% • 1/1 • 0:00:00
-       sqlmesh_example.full_model ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ 100.0% • 1/1 • 0:00:00
+Creating new model versions ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ 100.0% • 3/3 • 0:00:00
+
+All model versions have been created successfully
+
+[1/1] sqlmesh_example.seed_model evaluated in 0.01s
+[1/1] sqlmesh_example.incremental_model evaluated in 0.01s
+[1/1] sqlmesh_example.full_model evaluated in 0.02s
+Evaluating models ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ 100.0% • 3/3 • 0:00:00
 
 All model batches have been executed successfully
 
@@ -264,7 +269,17 @@ Virtually Updating 'prod' ━━━━━━━━━━━━━━━━━━
 The target environment has been updated successfully
 ```
 
-Lines 2-4 show the completion percentage and run time for each model (very fast in this simple example). Line 8 shows that the `prod` environment now points to the tables created during model execution.
+SQLMesh performs three actions when applying the plan:
+
+- Creating and storing new versions of the models
+- Evaluating/running the models
+- Virtually updating the plan's target environment
+
+Line 2 provides a progress bar and elapsed time for the first step of creating new model versions (very fast in this simple project). Line 4 reports that the first step has completed.
+
+Lines 6-8 show the run time for each model in the project. Line 9 provides a progress bar and total elapsed time for the second step of evaluating the models. Line 11 reports that the second step has completed.
+
+Line 13 provides a progress bar and total elapsed time for the third step of virtually updating the plan's target environment. Line 15 reports that the third step has completed and the `prod` environment now points to the tables created during model execution.
 
 You've now created a new production environment with all of history backfilled.
 
@@ -310,15 +325,16 @@ Successfully Ran 1 tests against duckdb
 ----------------------------------------------------------------------
 New environment `dev` will be created from `prod`
 Summary of differences against `dev`:
+Models:
 ├── Directly Modified:
-│   └── sqlmesh_example.incremental_model
+│   └── sqlmesh_example__dev.incremental_model
 └── Indirectly Modified:
-    └── sqlmesh_example.full_model
+    └── sqlmesh_example__dev.full_model
 ---
 
 +++
 
-@@ -1,6 +1,7 @@
+@@ -10,6 +10,7 @@
 
  SELECT
    id,
@@ -327,19 +343,19 @@ Summary of differences against `dev`:
    ds
  FROM sqlmesh_example.seed_model
  WHERE
-Directly Modified: sqlmesh_example.incremental_model (Non-breaking)
+Directly Modified: sqlmesh_example__dev.incremental_model (Non-breaking)
 └── Indirectly Modified Children:
-    └── sqlmesh_example.full_model
+    └── sqlmesh_example__dev.full_model (Indirect Non-breaking)
 Models needing backfill (missing dates):
-└── sqlmesh_example__dev.incremental_model: 2020-01-01 - 2023-07-16
+└── sqlmesh_example__dev.incremental_model: 2020-01-01 - 2024-01-22
 Enter the backfill start date (eg. '1 year', '2020-01-01') or blank to backfill from the beginning of history:
 ```
 
 Line 5 of the output states that a new environment `dev` will be created from the existing `prod` environment.
 
-Lines 6-10 summarize the differences between the modified model and the `prod` environment, detecting that we directly modified `incremental_model` and that `full_model` was indirectly modified because it selects from the incremental model.
+Lines 6-11 summarize the differences between the modified model and the `prod` environment, detecting that we directly modified `incremental_model` and that `full_model` was indirectly modified because it selects from the incremental model. Note that the model schemas are `sqlmesh_example__dev`, indicating that they are being created in the `dev` environment.
 
-On line 24, we see that SQLMesh automatically classified the change as `Non-breaking` because understood that the change was additive (added a column not used by `full_model`) and did not invalidate any data already in `prod`.
+On line 25, we see that SQLMesh automatically classified the change as `Non-breaking` because it understood that the change was additive (added a column not used by `full_model`) and did not invalidate any data already in `prod`.
 
 Hit `Enter` at the prompt to backfill data from our start date `2020-01-01`. Another prompt will appear asking for a backfill end date; hit `Enter` to backfill until now. Finally, enter `y` and press `Enter` to apply the plan and execute the backfill:
 
@@ -347,11 +363,13 @@ Hit `Enter` at the prompt to backfill data from our start date `2020-01-01`. Ano
 Enter the backfill start date (eg. '1 year', '2020-01-01') or blank to backfill from the beginning of history:
 Enter the backfill end date (eg. '1 month ago', '2020-01-01') or blank to backfill up until now:
 Apply - Backfill Tables [y/n]: y
-Creating new model versions for 'dev' ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ 100.0% • 2/2 • 0:00:00
+Creating new model versions ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ 100.0% • 2/2 • 0:00:00
 
 All model versions have been created successfully
 
-sqlmesh_example__dev.incremental_model ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ 100.0% • 1/1 • 0:00:00
+[1/1] sqlmesh_example__dev.incremental_model evaluated in 0.01s
+Evaluating models ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ 100.0% • 1/1 • 0:00:00
+
 
 All model batches have been executed successfully
 
@@ -360,7 +378,7 @@ Virtually Updating 'dev' ━━━━━━━━━━━━━━━━━━�
 The target environment has been updated successfully
 ```
 
-Line 8 of the output shows that SQLMesh applied the change to `sqlmesh_example__dev.incremental_model`. In the model schema, the suffix "`__dev`" indicates that it is in the `dev` environment.
+Line 8 of the output shows that SQLMesh applied the change and evaluated `sqlmesh_example__dev.incremental_model`.
 
 SQLMesh did not need to backfill anything for the `full_model` since the change was `Non-breaking`.
 
@@ -384,7 +402,7 @@ $ sqlmesh fetchdf "select * from sqlmesh_example__dev.incremental_model"
 
 You can see that `new_column` was added to the dataset. The production table was not modified; you can validate this by querying the production table using `sqlmesh fetchdf "select * from sqlmesh_example.incremental_model"`.
 
-Note that nothing has been appended to the schema namespace `sqlmesh_example` because `prod` is the default environment.
+Note that nothing has been appended to the schema namespace `sqlmesh_example` in this query because `prod` is the default environment.
 
 ```bash
 $ sqlmesh fetchdf "select * from sqlmesh_example.incremental_model"
@@ -414,6 +432,7 @@ $ sqlmesh plan
 Successfully Ran 1 tests against duckdb
 ----------------------------------------------------------------------
 Summary of differences against `prod`:
+Models:
 ├── Directly Modified:
 │   └── sqlmesh_example.incremental_model
 └── Indirectly Modified:
@@ -422,7 +441,7 @@ Summary of differences against `prod`:
 
 +++
 
-@@ -1,6 +1,7 @@
+@@ -10,6 +10,7 @@
 
  SELECT
    id,
@@ -433,7 +452,7 @@ Summary of differences against `prod`:
  WHERE
 Directly Modified: sqlmesh_example.incremental_model (Non-breaking)
 └── Indirectly Modified Children:
-    └── sqlmesh_example.full_model
+    └── sqlmesh_example.full_model (Indirect Non-breaking)
 Apply - Virtual Update [y/n]: y
 Virtually Updating 'prod' ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ 100.0% • 0:00:00
 
