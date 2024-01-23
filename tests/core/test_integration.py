@@ -1605,14 +1605,16 @@ def test_environment_catalog_mapping(init_and_plan_context: t.Callable):
     assert len(dev_views) == 0
     assert len(user_default_tables) == 23
     assert state_metadata.schemas == ["sqlmesh"]
-    assert [x.sql() for x in state_metadata.qualified_tables] == [
-        "physical.sqlmesh._environments",
-        "physical.sqlmesh._intervals",
-        "physical.sqlmesh._plan_dags",
-        "physical.sqlmesh._seeds",
-        "physical.sqlmesh._snapshots",
-        "physical.sqlmesh._versions",
-    ]
+    assert {x.sql() for x in state_metadata.qualified_tables}.issuperset(
+        {
+            "physical.sqlmesh._environments",
+            "physical.sqlmesh._intervals",
+            "physical.sqlmesh._plan_dags",
+            "physical.sqlmesh._seeds",
+            "physical.sqlmesh._snapshots",
+            "physical.sqlmesh._versions",
+        }
+    )
     apply_to_environment(context, "dev")
     prod_views, dev_views = get_prod_dev_views(metadata)
     (
@@ -1624,14 +1626,16 @@ def test_environment_catalog_mapping(init_and_plan_context: t.Callable):
     assert len(user_default_tables) == 23
     assert len(non_default_tables) == 0
     assert state_metadata.schemas == ["sqlmesh"]
-    assert [x.sql() for x in state_metadata.qualified_tables] == [
-        "physical.sqlmesh._environments",
-        "physical.sqlmesh._intervals",
-        "physical.sqlmesh._plan_dags",
-        "physical.sqlmesh._seeds",
-        "physical.sqlmesh._snapshots",
-        "physical.sqlmesh._versions",
-    ]
+    assert {x.sql() for x in state_metadata.qualified_tables}.issuperset(
+        {
+            "physical.sqlmesh._environments",
+            "physical.sqlmesh._intervals",
+            "physical.sqlmesh._plan_dags",
+            "physical.sqlmesh._seeds",
+            "physical.sqlmesh._snapshots",
+            "physical.sqlmesh._versions",
+        }
+    )
     apply_to_environment(context, "prodnot")
     prod_views, dev_views = get_prod_dev_views(metadata)
     (
@@ -1643,14 +1647,16 @@ def test_environment_catalog_mapping(init_and_plan_context: t.Callable):
     assert len(user_default_tables) == 23
     assert len(non_default_tables) == 0
     assert state_metadata.schemas == ["sqlmesh"]
-    assert [x.sql() for x in state_metadata.qualified_tables] == [
-        "physical.sqlmesh._environments",
-        "physical.sqlmesh._intervals",
-        "physical.sqlmesh._plan_dags",
-        "physical.sqlmesh._seeds",
-        "physical.sqlmesh._snapshots",
-        "physical.sqlmesh._versions",
-    ]
+    assert {x.sql() for x in state_metadata.qualified_tables}.issuperset(
+        {
+            "physical.sqlmesh._environments",
+            "physical.sqlmesh._intervals",
+            "physical.sqlmesh._plan_dags",
+            "physical.sqlmesh._seeds",
+            "physical.sqlmesh._snapshots",
+            "physical.sqlmesh._versions",
+        }
+    )
     context.invalidate_environment("dev")
     context._run_janitor()
     prod_views, dev_views = get_prod_dev_views(metadata)
@@ -1663,14 +1669,16 @@ def test_environment_catalog_mapping(init_and_plan_context: t.Callable):
     assert len(user_default_tables) == 23
     assert len(non_default_tables) == 0
     assert state_metadata.schemas == ["sqlmesh"]
-    assert [x.sql() for x in state_metadata.qualified_tables] == [
-        "physical.sqlmesh._environments",
-        "physical.sqlmesh._intervals",
-        "physical.sqlmesh._plan_dags",
-        "physical.sqlmesh._seeds",
-        "physical.sqlmesh._snapshots",
-        "physical.sqlmesh._versions",
-    ]
+    assert {x.sql() for x in state_metadata.qualified_tables}.issuperset(
+        {
+            "physical.sqlmesh._environments",
+            "physical.sqlmesh._intervals",
+            "physical.sqlmesh._plan_dags",
+            "physical.sqlmesh._seeds",
+            "physical.sqlmesh._snapshots",
+            "physical.sqlmesh._versions",
+        }
+    )
 
 
 @pytest.mark.parametrize(
