@@ -118,7 +118,7 @@ class DuckDBConnectionConfig(ConnectionConfig):
     connector_config: t.Dict[str, t.Any] = {}
 
     concurrent_tasks: Literal[1] = 1
-    register_comments: bool = True
+    register_comments: bool = False
 
     type_: Literal["duckdb"] = Field(alias="type", default="duckdb")
 
@@ -399,7 +399,7 @@ class DatabricksConnectionConfig(ConnectionConfig):
     disable_databricks_connect: bool = False
 
     concurrent_tasks: int = 1
-    register_comments: bool = True
+    register_comments: bool = False
 
     type_: Literal["databricks"] = Field(alias="type", default="databricks")
 
@@ -562,7 +562,7 @@ class BigQueryConnectionConfig(ConnectionConfig):
     maximum_bytes_billed: t.Optional[int] = None
 
     concurrent_tasks: int = 1
-    register_comments: bool = True
+    register_comments: bool = False
 
     type_: Literal["bigquery"] = Field(alias="type", default="bigquery")
 
@@ -661,7 +661,7 @@ class GCPPostgresConnectionConfig(ConnectionConfig):
     driver: str = "pg8000"
     type_: Literal["gcp_postgres"] = Field(alias="type", default="gcp_postgres")
     concurrent_tasks: int = 4
-    register_comments: bool = True
+    register_comments: bool = False
 
     @model_validator(mode="before")
     @model_validator_v1_args
@@ -761,7 +761,7 @@ class RedshiftConnectionConfig(ConnectionConfig):
     serverless_work_group: t.Optional[str] = None
 
     concurrent_tasks: int = 4
-    register_comments: bool = True
+    register_comments: bool = False
 
     type_: Literal["redshift"] = Field(alias="type", default="redshift")
 
@@ -814,7 +814,7 @@ class PostgresConnectionConfig(ConnectionConfig):
     sslmode: t.Optional[str] = None
 
     concurrent_tasks: int = 4
-    register_comments: bool = True
+    register_comments: bool = False
 
     type_: Literal["postgres"] = Field(alias="type", default="postgres")
 
@@ -852,7 +852,7 @@ class MySQLConnectionConfig(ConnectionConfig):
     ssl_disabled: t.Optional[bool] = None
 
     concurrent_tasks: int = 4
-    register_comments: bool = True
+    register_comments: bool = False
 
     type_: Literal["mysql"] = Field(alias="type", default="mysql")
 
@@ -904,7 +904,7 @@ class MSSQLConnectionConfig(ConnectionConfig):
     tds_version: t.Optional[str] = None
 
     concurrent_tasks: int = 4
-    register_comments: bool = True
+    register_comments: bool = False
 
     type_: Literal["mssql"] = Field(alias="type", default="mssql")
 
@@ -946,7 +946,7 @@ class SparkConnectionConfig(ConnectionConfig):
     config: t.Dict[str, t.Any] = {}
 
     concurrent_tasks: int = 4
-    register_comments: bool = True
+    register_comments: bool = False
 
     type_: Literal["spark"] = Field(alias="type", default="spark")
 
@@ -1058,7 +1058,7 @@ class TrinoConnectionConfig(ConnectionConfig):
     cert: t.Optional[str] = None
 
     concurrent_tasks: int = 4
-    register_comments: bool = True
+    register_comments: bool = False
 
     type_: Literal["trino"] = Field(alias="type", default="trino")
 

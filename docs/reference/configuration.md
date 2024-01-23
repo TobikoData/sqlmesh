@@ -114,7 +114,7 @@ Most parameters are specific to the connection engine `type` - see [below](#engi
 | ------------------- | --------------------------------------------------------------------------------------------------------------------------- | :--: | :------: |
 | `type`              | The engine type name, listed in engine-specific configuration pages below.                                                  | str  |    Y     |
 | `concurrent_tasks`  | The maximum number of concurrent tasks that will be run by SQLMesh. (Default: 4 for engines that support concurrent tasks.) | int  |    N     |
-| `register_comments` | Whether SQLMesh should register model comments with the SQL engine (if the engine supports it).                             | bool |    N     |
+| `register_comments` | Whether SQLMesh should register model comments with the SQL engine (if the engine supports it). (Default: false.)                            | bool |    N     |
 
 #### Engine-specific
 

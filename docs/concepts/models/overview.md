@@ -73,7 +73,7 @@ Model files may contain SQL comments in a format supported in the model's SQL di
 
 Some SQL engines support registering comments as metadata associated with a table or view. They may support table-level comments (e.g., "Revenue data for each customer") and/or column-level comments (e.g., "Customer's unique ID").
 
-SQLMesh will automatically register comments if the engine supports it and the [gateway's connection `register_comments` configuration](../../reference/configuration.md#connection) is `true` (`true` by default for all engines other than Snowflake). Engines vary in their support for comments - see [tables below](#engine-comment-support).
+SQLMesh will automatically register comments if the engine supports it and the [gateway's connection `register_comments` configuration](../../reference/configuration.md#connection) is `true` (`false` by default). Engines vary in their support for comments - see [tables below](#engine-comment-support).
 
 #### Model comments
 
