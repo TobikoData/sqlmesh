@@ -1,4 +1,4 @@
-import { Disclosure } from '@headlessui/react'
+import { Disclosure, Transition } from '@headlessui/react'
 import {
   MinusCircleIcon,
   PlusCircleIcon,
@@ -6,7 +6,7 @@ import {
 } from '@heroicons/react/24/solid'
 import { CheckIcon } from '@heroicons/react/20/solid'
 import clsx from 'clsx'
-import { useEffect, useMemo, useRef } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import { useStorePlan } from '../../../context/plan'
 import {
   isArrayNotEmpty,
@@ -45,120 +45,158 @@ export default function PlanApplyStageTracker(): JSX.Element {
   const planOverview = useStorePlan(s => s.planOverview)
   const planAction = useStorePlan(s => s.planAction)
 
-  const { hasChanges, hasBackfills, plan_options } = getPlanOverviewDetails(
-    planApply,
-    planOverview,
-  )
+  const { plan_options } = getPlanOverviewDetails(planApply, planOverview)
 
   const hasTestsDetails = isNotNil(tests) && Boolean(tests.total)
   const showTestsMessage =
     isNotNil(tests) && Boolean(tests.message) && isFalse(hasTestsDetails)
 
-  return planAction.isRun ? (
-    <></>
-  ) : (
-    <div className="mt-8 mb-4">
-      {planAction.isRunning || isTrue(hasChanges) ? (
-        <StageChanges isOpen={true} />
-      ) : (
-        <Banner
-          className="flex items-center mb-1"
-          size={EnumSize.sm}
-          hasBackground={false}
+  return (
+    <Transition
+      show={isFalse(planAction.isRun)}
+      enter="transition ease duration-500 transform"
+      enterFrom="opacity-0 scale-95"
+      enterTo="opacity-100 scale-100"
+      leave="transition ease duration-500 transform"
+      leaveFrom="opacity-100 scale-100"
+      leaveTo="opacity-0 scale-95"
+    >
+      <div className="mt-8 mb-4">
+        <StageChanges isOpen={isFalse(planAction.isApplying)} />
+        <StageBackfills isOpen={isFalse(planAction.isApplying)} />
+        {isTrue(plan_options?.skip_tests) ? (
+          <Banner
+            className="flex items-center mb-1"
+            size={EnumSize.sm}
+            hasBackground={false}
+          >
+            <CheckIcon className="w-5 mr-2" />
+            <Banner.Label className="mr-2 text-sm">Tests Skipped</Banner.Label>
+          </Banner>
+        ) : hasTestsDetails ? (
+          <StageTestsFailed
+            isOpen={true}
+            report={tests}
+          />
+        ) : showTestsMessage ? (
+          <StageTestsCompleted report={tests} />
+        ) : (
+          <Banner
+            className="flex items-center mb-1"
+            size={EnumSize.sm}
+            hasBackground={false}
+          >
+            <CheckIcon className="w-5 mr-2" />
+            <Banner.Label className="mr-2 text-sm">No Tests</Banner.Label>
+          </Banner>
+        )}
+        <StageValidate />
+        <StageVirtualUpdate />
+        <StageEvaluate
+          start={planApply.evaluationStart}
+          end={planApply.evaluationEnd}
         >
-          <CheckIcon className="w-5 mr-2" />
-          <Banner.Label className="mr-2 text-sm">No Changes</Banner.Label>
-        </Banner>
-      )}
-      {planAction.isRunning || isTrue(hasBackfills) ? (
-        <StageBackfills isOpen={true} />
-      ) : (
-        <Banner
-          className="flex items-center mb-1"
-          size={EnumSize.sm}
-          hasBackground={false}
-        >
-          <CheckIcon className="w-5 mr-2" />
-          <Banner.Label className="mr-2 text-sm">No Backfills</Banner.Label>
-        </Banner>
-      )}
-      {isTrue(plan_options?.skip_tests) ? (
-        <Banner
-          className="flex items-center mb-1"
-          size={EnumSize.sm}
-          hasBackground={false}
-        >
-          <CheckIcon className="w-5 mr-2" />
-          <Banner.Label className="mr-2 text-sm">Tests Skipped</Banner.Label>
-        </Banner>
-      ) : (
-        <>
-          {showTestsMessage && <StageTestsCompleted report={tests} />}
-          {hasTestsDetails && (
-            <StageTestsFailed
-              isOpen={true}
-              report={tests}
-            />
-          )}
-        </>
-      )}
-      <StageValidate />
-      <StageVirtualUpdate />
-      <StageEvaluate
-        start={planApply.evaluationStart}
-        end={planApply.evaluationEnd}
-      >
-        <StageCreation />
-        <StageRestate />
-        <StageBackfill />
-        <StagePromote />
-      </StageEvaluate>
-    </div>
+          <StageCreation />
+          <StageRestate />
+          <StageBackfill />
+          <StagePromote />
+        </StageEvaluate>
+      </div>
+    </Transition>
   )
 }
 
 function StageChanges({ isOpen = false }: { isOpen?: boolean }): JSX.Element {
   const planApply = useStorePlan(s => s.planApply)
   const planOverview = useStorePlan(s => s.planOverview)
+  const planAction = useStorePlan(s => s.planAction)
 
-  const { meta, stageChanges } = getPlanOverviewDetails(planApply, planOverview)
+  const { meta, stageChanges, hasChanges } = getPlanOverviewDetails(
+    planApply,
+    planOverview,
+  )
 
-  return (
-    <Stage
-      meta={stageChanges?.meta ?? meta ?? { status: Status.init }}
-      states={['Changes', 'Failed Getting Changes', 'Getting Changes...']}
-      isOpen={isOpen}
-      panel={<PlanChanges />}
-    />
+  const showChanges = planAction.isRunning || isTrue(hasChanges)
+
+  return showChanges ? (
+    <Transition
+      show={showChanges}
+      enter="transition ease duration-700 transform"
+      enterFrom="opacity-0 scale-95"
+      enterTo="opacity-100 scale-100"
+      leave="transition ease duration-1000 transform"
+      leaveFrom="opacity-100 scale-100"
+      leaveTo="opacity-0 scale-95"
+    >
+      <Stage
+        meta={stageChanges?.meta ?? meta ?? { status: Status.init }}
+        states={['Changes', 'Failed Getting Changes', 'Getting Changes...']}
+        isOpen={isOpen}
+        panel={<PlanChanges />}
+      />
+    </Transition>
+  ) : (
+    <Banner
+      className="flex items-center mb-1"
+      size={EnumSize.sm}
+      hasBackground={false}
+    >
+      <CheckIcon className="w-5 mr-2" />
+      <Banner.Label className="mr-2 text-sm">No Changes</Banner.Label>
+    </Banner>
   )
 }
 
 function StageBackfills({ isOpen }: { isOpen?: boolean }): JSX.Element {
   const planApply = useStorePlan(s => s.planApply)
   const planOverview = useStorePlan(s => s.planOverview)
+  const planAction = useStorePlan(s => s.planAction)
 
-  const { meta, stageBackfills, backfills } = getPlanOverviewDetails(
-    planApply,
-    planOverview,
-  )
+  const { meta, stageBackfills, backfills, hasBackfills } =
+    getPlanOverviewDetails(planApply, planOverview)
 
-  return (
-    <Stage
-      meta={stageBackfills?.meta ?? meta ?? { status: Status.init }}
-      states={['Backfills', 'Failed Getting Backfills', 'Getting Backfills...']}
-      isOpen={isOpen}
-      panel={
-        <PlanChangePreview
-          headline={`Models ${backfills.length}`}
-          type={EnumPlanChangeType.Default}
-        >
-          <PlanChangePreview.Default
+  const showBackfills = planAction.isRunning || isTrue(hasBackfills)
+
+  return showBackfills ? (
+    <Transition
+      show={showBackfills}
+      enter="transition ease duration-700 transform"
+      enterFrom="opacity-0 scale-95"
+      enterTo="opacity-100 scale-100"
+      leave="transition ease duration-1000 transform"
+      leaveFrom="opacity-100 scale-100"
+      leaveTo="opacity-0 scale-95"
+    >
+      <Stage
+        meta={stageBackfills?.meta ?? meta ?? { status: Status.init }}
+        states={[
+          'Backfills',
+          'Failed Getting Backfills',
+          'Getting Backfills...',
+        ]}
+        isOpen={isOpen}
+        panel={
+          <PlanChangePreview
+            headline={`Models ${backfills.length}`}
             type={EnumPlanChangeType.Default}
-            changes={backfills}
-          />
-        </PlanChangePreview>
-      }
-    />
+          >
+            <PlanChangePreview.Default
+              type={EnumPlanChangeType.Default}
+              changes={backfills}
+            />
+          </PlanChangePreview>
+        }
+      />
+    </Transition>
+  ) : (
+    <Banner
+      className="flex items-center mb-1"
+      size={EnumSize.sm}
+      hasBackground={false}
+    >
+      <CheckIcon className="w-5 mr-2" />
+      <Banner.Label className="mr-2 text-sm">No Backfills</Banner.Label>
+    </Banner>
   )
 }
 
@@ -234,48 +272,47 @@ function StageEvaluate({
 
   const hasFailedTests = isNotNil(tests) && Boolean(tests.failures)
 
-  useEffect(() => {
-    requestAnimationFrame(() => {
-      elStageEvaluate.current?.scrollIntoView({
-        behavior: 'smooth',
-        block: 'start',
-      })
-    })
-  }, [])
-
-  return hasFailedTests || planApply.shouldShowEvaluation ? (
-    <div
-      ref={elStageEvaluate}
-      className="pt-6 pb-2"
+  return (
+    <Transition
+      show={hasFailedTests || planApply.shouldShowEvaluation}
+      enter="transition ease duration-500 transform delay-[1000ms]"
+      enterFrom="opacity-0 scale-95"
+      enterTo="opacity-100 scale-100"
+      leave="transition ease duration-500 transform"
+      leaveFrom="opacity-100 scale-100"
+      leaveTo="opacity-0 scale-95"
     >
-      {isNotNil(start) && (
-        <>
-          <small className="text-neutral-500 block px-4 mb-1">
-            Evaluation started at{' '}
-            <b>{toDateFormat(new Date(start), 'yyyy-mm-dd hh-mm-ss')}</b>
-          </small>
-          <Divider />
-          <small className="text-neutral-500 block px-4 mt-1">
-            Given a plan, it pushes snapshots into the state and then kicks off
-            the backfill process for all affected snapshots. Once backfill is
-            done, snapshots that are part of the plan are promoted in the
-            environment targeted by this plan.
-          </small>
-        </>
-      )}
-      <div className="py-2">{children}</div>
-      {isNotNil(end) && (
-        <>
-          <Divider />
-          <small className="text-neutral-500 block px-4 mt-1">
-            Evaluation stopped at{' '}
-            <b>{toDateFormat(new Date(end), 'yyyy-mm-dd hh-mm-ss')}</b>
-          </small>
-        </>
-      )}
-    </div>
-  ) : (
-    <></>
+      <div
+        ref={elStageEvaluate}
+        className="pt-6 pb-2"
+      >
+        {isNotNil(start) && (
+          <>
+            <small className="text-neutral-500 block px-4 mb-1">
+              Evaluation started at{' '}
+              <b>{toDateFormat(new Date(start), 'yyyy-mm-dd hh-mm-ss')}</b>
+            </small>
+            <Divider />
+            <small className="text-neutral-500 block px-4 mt-1">
+              Given a plan, it pushes snapshots into the state and then kicks
+              off the backfill process for all affected snapshots. Once backfill
+              is done, snapshots that are part of the plan are promoted in the
+              environment targeted by this plan.
+            </small>
+          </>
+        )}
+        <div className="py-2">{children}</div>
+        {isNotNil(end) && (
+          <>
+            <Divider />
+            <small className="text-neutral-500 block px-4 mt-1">
+              Evaluation stopped at{' '}
+              <b>{toDateFormat(new Date(end), 'yyyy-mm-dd hh-mm-ss')}</b>
+            </small>
+          </>
+        )}
+      </div>
+    </Transition>
   )
 }
 
@@ -359,12 +396,12 @@ function StageBackfill(): JSX.Element {
   const stageBackfill = planApply.stageBackfill
 
   useEffect(() => {
-    requestAnimationFrame(() => {
+    setTimeout(() => {
       elStageBackfill.current?.scrollIntoView({
         behavior: 'smooth',
         block: 'start',
       })
-    })
+    }, 1000)
   }, [])
 
   const { change_categorization } = usePlan()
@@ -463,23 +500,12 @@ function StageBackfill(): JSX.Element {
 }
 
 function StagePromote(): JSX.Element {
-  const elStagePromote = useRef<HTMLDivElement>(null)
-
   const planApply = useStorePlan(s => s.planApply)
-
-  useEffect(() => {
-    requestAnimationFrame(() => {
-      elStagePromote.current?.scrollIntoView({
-        behavior: 'smooth',
-        block: 'start',
-      })
-    })
-  }, [])
 
   if (isNil(planApply.stagePromote)) return <></>
 
   return (
-    <div ref={elStagePromote}>
+    <div>
       <Stage
         meta={planApply.stagePromote?.meta}
         states={[
@@ -647,6 +673,10 @@ function Stage({
   const planOverview = useStorePlan(s => s.planOverview)
   const planApply = useStorePlan(s => s.planApply)
 
+  const hasChildren = isNotNil(panel) || isNotNil(children)
+
+  const [open, setOpen] = useState(false)
+
   useEffect(() => {
     if (isNil(elTrigger.current)) return
 
@@ -656,6 +686,10 @@ function Stage({
       }
     }
   }, [elTrigger, planOverview, planApply, shouldCollapse])
+
+  useEffect(() => {
+    setOpen(isOpen && meta?.status !== Status.init && hasChildren)
+  }, [meta, hasChildren, isOpen])
 
   if (isNil(meta)) return <></>
 
@@ -673,91 +707,125 @@ function Stage({
       ? titleFail
       : titleDefault
 
-  const hasChildren = isNotNil(panel) || isNotNil(children)
-
   return (
-    <Disclosure defaultOpen={isOpen}>
-      {({ open }) => (
-        <>
-          <Banner
-            className="mb-1"
-            variant={variant}
-            size={EnumSize.sm}
-            hasBackground={false}
-            hasBackgroundOnHover={hasChildren}
+    <Transition
+      appear
+      show
+      enter="transition-all ease-in duration-500 delay-[200ms]"
+      enterFrom="opacity-0 translate-y-6"
+      enterTo="opacity-100 translate-y-0"
+      leave="transition-all ease-out duration-200"
+      leaveFrom="opacity-100"
+      leaveTo="opacity-0"
+    >
+      <Disclosure>
+        <Banner
+          className="mb-1"
+          variant={variant}
+          size={EnumSize.sm}
+          hasBackground={false}
+          hasBackgroundOnHover={hasChildren}
+        >
+          <Disclosure.Button
+            ref={elTrigger}
+            className={clsx(
+              'w-full flex flex-col',
+              open && '--is-open',
+              isFalse(hasChildren) && 'cursor-default',
+            )}
+            onClick={() => setOpen(oldState => !oldState)}
           >
-            <Disclosure.Button
-              ref={elTrigger}
-              className={clsx(
-                'w-full flex items-center',
-                open && '--is-open',
-                isFalse(hasChildren) && 'cursor-default',
-              )}
-            >
-              {isNil(trigger) ? (
-                <>
-                  {meta.status === Status.init ? (
-                    <Loading
-                      text={text}
-                      hasSpinner
-                      size={EnumSize.sm}
-                      variant={EnumVariant.Primary}
-                      className="w-full"
-                    />
+            {isNil(trigger) ? (
+              <>
+                <Transition
+                  show={meta.status === Status.init}
+                  className="flex items-center h-full"
+                  enter="transition-all ease-in-out duration-500"
+                  enterFrom="opacity-0 translate-y-6"
+                  enterTo="opacity-100 translate-y-0"
+                  leave="transition-all ease-in-out duration-200"
+                  leaveFrom="opacity-100"
+                  leaveTo="opacity-0"
+                >
+                  <Loading
+                    text={text}
+                    hasSpinner
+                    size={EnumSize.sm}
+                    variant={EnumVariant.Primary}
+                    className="w-full"
+                  />
+                </Transition>
+                <Transition
+                  show={meta.status !== Status.init}
+                  className="flex items-center h-full"
+                  enter="transition-all ease-in-out duration-400 delay-[300ms]"
+                  enterFrom="opacity-0 translate-y-6"
+                  enterTo="opacity-100 translate-y-0"
+                  leave="transition-all ease-in-out duration-200"
+                  leaveFrom="opacity-100"
+                  leaveTo="opacity-0"
+                >
+                  {showDetails ? (
+                    <>
+                      {open ? (
+                        <MinusCircleIcon className="w-6 mr-2" />
+                      ) : (
+                        <PlusCircleIcon className="w-6 mr-2" />
+                      )}
+                    </>
                   ) : (
                     <>
-                      {showDetails ? (
-                        <>
-                          {open ? (
-                            <MinusCircleIcon className="w-5 mr-2" />
-                          ) : (
-                            <PlusCircleIcon className="w-5 mr-2" />
-                          )}
-                        </>
-                      ) : (
-                        <>
-                          {meta.status === Status.success && (
-                            <CheckIcon className="w-5 mr-2" />
-                          )}
-                          {meta.status === Status.fail && (
-                            <ExclamationCircleIcon className="w-5 mr-2" />
-                          )}
-                        </>
+                      {meta.status === Status.success && (
+                        <CheckIcon className="w-6 mr-2" />
                       )}
-                      <Banner.Label className="mr-2 text-sm w-full">
-                        <Title
-                          text={text}
-                          size={EnumSize.sm}
-                          variant={variant}
-                        />
-                      </Banner.Label>
+                      {meta.status === Status.fail && (
+                        <ExclamationCircleIcon className="w-6 mr-2" />
+                      )}
                     </>
                   )}
-                </>
-              ) : (
-                trigger
-              )}
-            </Disclosure.Button>
-          </Banner>
-          {hasChildren && (
-            <Disclosure.Panel className="px-2 text-xs mb-2">
-              {isNotNil(children) && (
-                <div
-                  className={clsx(
-                    'p-4 rounded-md',
-                    variant === EnumVariant.Danger
-                      ? 'bg-danger-5 text-danger-500'
-                      : 'bg-neutral-5',
-                  )}
-                >
-                  {children}
-                </div>
-              )}
-              {meta.status !== Status.fail && panel}
-            </Disclosure.Panel>
-          )}
-        </>
-      )}
-    </Disclosure>
+                  <Banner.Label className="mr-2 text-sm w-full">
+                    <Title
+                      text={text}
+                      size={EnumSize.sm}
+                      variant={variant}
+                    />
+                  </Banner.Label>
+                </Transition>
+              </>
+            ) : (
+              trigger
+            )}
+          </Disclosure.Button>
+        </Banner>
+        <Transition
+          show={open}
+          enter="transition-all ease-in-out duration-300 delay-[200ms]"
+          enterFrom="opacity-0 translate-y-6"
+          enterTo="opacity-100 translate-y-0"
+          leave="transition-all ease-in-out duration-200"
+          leaveFrom="opacity-100"
+          leaveTo="opacity-0"
+        >
+          <Disclosure.Panel
+            static
+            className="px-2 text-xs mb-2"
+          >
+            {isNotNil(children) && (
+              <div
+                className={clsx(
+                  'p-4 rounded-md',
+                  variant === EnumVariant.Danger
+                    ? 'bg-danger-5 text-danger-500'
+                    : 'bg-neutral-5',
+                )}
+              >
+                {children}
+              </div>
+            )}
+            {meta.status !== Status.fail && panel}
+          </Disclosure.Panel>
+        </Transition>
+      </Disclosure>
+    </Transition>
   )
 }
