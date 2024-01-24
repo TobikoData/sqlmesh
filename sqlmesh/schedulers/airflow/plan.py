@@ -142,7 +142,11 @@ def create_plan_dag_spec(
     ]
 
     no_gaps_snapshot_names = (
-        {s.name for s in all_snapshots.values() if deployability_index_for_creation.is_representative(s)}
+        {
+            s.name
+            for s in all_snapshots.values()
+            if deployability_index_for_creation.is_representative(s)
+        }
         if request.no_gaps and not request.is_dev
         else None
         if request.no_gaps
