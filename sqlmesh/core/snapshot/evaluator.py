@@ -1201,8 +1201,6 @@ class SCDType2Strategy(MaterializableStrategy):
                 partition_interval_unit=model.interval_unit,
                 clustered_by=model.clustered_by,
                 table_properties=model.table_properties,
-                table_description=model.description if is_table_deployable else None,
-                column_descriptions=model.column_descriptions if is_table_deployable else None,
             )
         else:
             # We assume that the data type for `updated_at_name` matches the data type that is defined for
