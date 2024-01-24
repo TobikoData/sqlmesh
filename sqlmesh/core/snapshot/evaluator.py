@@ -1190,6 +1190,43 @@ class FullRefreshStrategy(MaterializableStrategy):
 
 
 class SCDType2Strategy(MaterializableStrategy):
+    def create(
+        self,
+        snapshot: Snapshot,
+        name: str,
+        is_table_deployable: bool,
+        is_snapshot_deployable: bool,
+        **render_kwargs: t.Any,
+    ) -> None:
+        model = snapshot.model
+        assert isinstance(model.kind, SCDType2Kind)
+        if model.annotated:
+            logger.info("Creating table '%s'", name)
+            columns_to_types = model.columns_to_types_or_raise
+            columns_to_types[model.kind.updated_at_name] = model.kind.time_data_type
+            self.adapter.create_table(
+                name,
+                columns_to_types=columns_to_types,
+                storage_format=model.storage_format,
+                partitioned_by=model.partitioned_by,
+                partition_interval_unit=model.interval_unit,
+                clustered_by=model.clustered_by,
+                table_properties=model.table_properties,
+                table_description=model.description if is_table_deployable else None,
+                column_descriptions=model.column_descriptions if is_table_deployable else None,
+            )
+        else:
+            # We assume that the data type for `updated_at_name` matches the data type that is defined for
+            # `time_data_type`. If that isn't the case, then the user might get an error about not being able
+            # to do comparisons across different data types
+            super().create(
+                snapshot,
+                name,
+                is_table_deployable,
+                is_snapshot_deployable,
+                **render_kwargs,
+            )
+
     def insert(
         self,
         snapshot: Snapshot,

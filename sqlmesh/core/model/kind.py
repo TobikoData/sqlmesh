@@ -5,6 +5,7 @@ import typing as t
 from enum import Enum
 
 from pydantic import Field
+from pydantic_core.core_schema import ValidationInfo
 from sqlglot import exp
 from sqlglot.time import format_time
 
@@ -328,6 +329,7 @@ class SCDType2Kind(_ModelKind):
     valid_to_name: SQLGlotString = "valid_to"
     updated_at_name: SQLGlotString = "updated_at"
     updated_at_as_valid_from: SQLGlotBool = False
+    time_data_type: exp.DataType = exp.DataType.build("TIMESTAMP")
 
     forward_only: SQLGlotBool = True
     disable_restatement: SQLGlotBool = True
@@ -336,8 +338,8 @@ class SCDType2Kind(_ModelKind):
     @property
     def managed_columns(self) -> t.Dict[str, exp.DataType]:
         return {
-            self.valid_from_name: exp.DataType.build("TIMESTAMP"),
-            self.valid_to_name: exp.DataType.build("TIMESTAMP"),
+            self.valid_from_name: self.time_data_type,
+            self.valid_to_name: self.time_data_type,
         }
 
 
@@ -384,17 +386,26 @@ def model_kind_type_from_name(name: t.Optional[str]) -> t.Type[ModelKind]:
     return t.cast(t.Type[ModelKind], klass)
 
 
-def _model_kind_validator(v: t.Any) -> ModelKind:
+def _model_kind_validator(v: t.Any, values: t.Union[t.Dict, ValidationInfo]) -> ModelKind:
+    values = values if isinstance(values, dict) else values.data
+    dialect = values.get("dialect")
+
     if isinstance(v, _ModelKind):
         return t.cast(ModelKind, v)
 
-    if isinstance(v, d.ModelKind):
-        name = v.this
-        props = {prop.name: prop.args.get("value") for prop in v.expressions}
+    if isinstance(v, (d.ModelKind, dict)):
+        props = (
+            {prop.name: prop.args.get("value") for prop in v.expressions}
+            if isinstance(v, d.ModelKind)
+            else v
+        )
+        time_data_type = props.pop("time_data_type", None)
+        if time_data_type:
+            if isinstance(time_data_type, exp.Expression):
+                time_data_type = time_data_type.name
+            props["time_data_type"] = exp.DataType.build(time_data_type, dialect=dialect)
+        name = v.this if isinstance(v, d.ModelKind) else props.get("name")
         return model_kind_type_from_name(name)(**props)
-
-    if isinstance(v, dict):
-        return model_kind_type_from_name(v.get("name"))(**v)
 
     name = (v.name if isinstance(v, exp.Expression) else str(v)).upper()
     return model_kind_type_from_name(name)()  # type: ignore

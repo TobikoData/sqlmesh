@@ -175,6 +175,23 @@ def test_model_kind():
         ).model_kind(context)
 
 
+def test_model_kind_snapshot_bigquery():
+    context = DbtContext()
+    context.project_name = "Test"
+    context.target = BigQueryConfig(name="target", schema="foo", project="bar")
+
+    assert ModelConfig(
+        materialized=Materialization.SNAPSHOT, unique_key=["id"], updated_at="updated_at"
+    ).model_kind(context) == SCDType2Kind(
+        unique_key=["id"],
+        valid_from_name="dbt_valid_from",
+        valid_to_name="dbt_valid_to",
+        updated_at_as_valid_from=True,
+        updated_at_name="updated_at",
+        time_data_type=exp.DataType.build("TIMESTAMPTZ"),
+    )
+
+
 def test_model_columns():
     model = ModelConfig(
         alias="test",

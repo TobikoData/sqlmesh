@@ -149,7 +149,9 @@ class EngineAdapter:
         return isinstance(value, pd.DataFrame)
 
     @classmethod
-    def _to_utc_timestamp(cls, col: t.Union[str, exp.Literal, exp.Column, exp.Null]) -> exp.Cast:
+    def _to_utc_timestamp(
+        cls, col: t.Union[str, exp.Literal, exp.Column, exp.Null], time_data_type: exp.DataType
+    ) -> exp.Cast:
         def ensure_utc_exp(
             ts: t.Union[str, exp.Literal, exp.Column, exp.Null]
         ) -> t.Union[exp.Literal, exp.Column, exp.Null]:
@@ -163,7 +165,7 @@ class EngineAdapter:
                 datetime.fromisoformat(ts).astimezone(timezone.utc).strftime("%Y-%m-%d %H:%M:%S")
             )
 
-        return exp.cast(ensure_utc_exp(col), "TIMESTAMP")
+        return exp.cast(exp.cast(ensure_utc_exp(col), "TIMESTAMP"), time_data_type)
 
     @classmethod
     def _casted_columns(cls, columns_to_types: t.Dict[str, exp.DataType]) -> t.List[exp.Alias]:
@@ -1152,17 +1154,22 @@ class EngineAdapter:
         unmanaged_columns = [
             col for col in columns_to_types if col not in {valid_from_name, valid_to_name}
         ]
+        time_data_type = columns_to_types[valid_from_name]
+        select_source_columns: t.List[t.Union[str, exp.Alias]] = [
+            col for col in unmanaged_columns if col != updated_at_name
+        ]
+        select_source_columns.append(exp.cast(updated_at_name, time_data_type).as_(updated_at_name))
         valid_from_start = (
             updated_at_name
             if updated_at_as_valid_from
-            else self._to_utc_timestamp("1970-01-01 00:00:00+00:00")
+            else self._to_utc_timestamp("1970-01-01 00:00:00+00:00", time_data_type)
         )
         with source_queries[0] as source_query:
             query = (
                 exp.Select()  # type: ignore
                 .with_(
                     "source",
-                    exp.select(exp.true().as_("_exists"), *unmanaged_columns)
+                    exp.select(exp.true().as_("_exists"), *select_source_columns)
                     .distinct(*unique_key)
                     .from_(source_query.subquery("raw_source")),  # type: ignore
                 )
@@ -1286,7 +1293,7 @@ class EngineAdapter:
                             WHEN {updated_at_name} > t_{updated_at_name}
                             THEN {updated_at_name}
                             WHEN joined._exists IS NULL
-                            THEN {self._to_utc_timestamp(to_ts(execution_time))}
+                            THEN {self._to_utc_timestamp(to_ts(execution_time), time_data_type)}
                             ELSE t_{valid_to_name}
                         END AS {valid_to_name}""",
                     )
@@ -1310,7 +1317,7 @@ class EngineAdapter:
                     exp.select(
                         *unmanaged_columns,
                         f"{updated_at_name} as {valid_from_name}",
-                        f"{self._to_utc_timestamp(exp.null())} as {valid_to_name}",
+                        f"{self._to_utc_timestamp(exp.null(), time_data_type)} as {valid_to_name}",
                     )
                     .from_("joined")
                     .where(f"{updated_at_name} > t_{updated_at_name}"),

@@ -1009,6 +1009,7 @@ def test_create_scd_type_2(mocker: MockerFixture, adapter_mock, make_snapshot):
                 name test_schema.test_model,
                 kind SCD_TYPE_2 (
                     unique_key [id, name],
+                    time_data_type TIMESTAMPTZ
                 )
             );
 
@@ -1026,10 +1027,10 @@ def test_create_scd_type_2(mocker: MockerFixture, adapter_mock, make_snapshot):
         columns_to_types={
             "id": exp.DataType.build("INT"),
             "name": exp.DataType.build("STRING"),
-            "updated_at": exp.DataType.build("TIMESTAMP"),
+            "updated_at": exp.DataType.build("TIMESTAMPTZ"),
             # Make sure that the call includes these extra columns
-            "valid_from": exp.DataType.build("TIMESTAMP"),
-            "valid_to": exp.DataType.build("TIMESTAMP"),
+            "valid_from": exp.DataType.build("TIMESTAMPTZ"),
+            "valid_to": exp.DataType.build("TIMESTAMPTZ"),
         },
         storage_format=None,
         partitioned_by=[],
@@ -1058,6 +1059,7 @@ def test_create_ctas_scd_type_2(mocker: MockerFixture, adapter_mock, make_snapsh
                 name test_schema.test_model,
                 kind SCD_TYPE_2 (
                     unique_key id,
+                    time_data_type TIMESTAMPTZ
                 )
             );
 
@@ -1072,7 +1074,7 @@ def test_create_ctas_scd_type_2(mocker: MockerFixture, adapter_mock, make_snapsh
     evaluator.create([snapshot], {})
 
     query = parse_one(
-        """SELECT *, CAST(NULL AS TIMESTAMP) AS valid_from, CAST(NULL AS TIMESTAMP) AS valid_to FROM "tbl" AS "tbl" WHERE FALSE LIMIT 0"""
+        """SELECT *, CAST(NULL AS TIMESTAMPTZ) AS valid_from, CAST(NULL AS TIMESTAMPTZ) AS valid_to FROM "tbl" AS "tbl" WHERE FALSE LIMIT 0"""
     )
 
     # Verify that managed columns are included in CTAS with types
