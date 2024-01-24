@@ -114,9 +114,9 @@ def create_plan_dag_spec(
         for s, interval in intervals_to_remove:
             all_snapshots[s.snapshot_id].remove_interval(interval)
 
-    initial_deployability_index = DeployabilityIndex.create(all_snapshots)
-    deployability_index = (
-        initial_deployability_index if request.is_dev else DeployabilityIndex.all_deployable()
+    deployability_index_for_creation = DeployabilityIndex.create(all_snapshots)
+    deployability_index_for_evaluation = (
+        deployability_index_for_creation if request.is_dev else DeployabilityIndex.all_deployable()
     )
 
     if not request.skip_backfill:
@@ -125,7 +125,7 @@ def create_plan_dag_spec(
             start=request.environment.start_at,
             end=end,
             execution_time=now(),
-            deployability_index=deployability_index,
+            deployability_index=deployability_index_for_evaluation,
             restatements=request.restatements,
             ignore_cron=True,
         )
@@ -136,13 +136,13 @@ def create_plan_dag_spec(
         common.BackfillIntervalsPerSnapshot(
             snapshot_id=s.snapshot_id,
             intervals=intervals,
-            before_promote=request.is_dev or initial_deployability_index.is_representative(s),
+            before_promote=request.is_dev or deployability_index_for_creation.is_representative(s),
         )
         for s, intervals in backfill_batches.items()
     ]
 
     no_gaps_snapshot_names = (
-        {s.name for s in all_snapshots.values() if initial_deployability_index.is_representative(s)}
+        {s.name for s in all_snapshots.values() if deployability_index_for_creation.is_representative(s)}
         if request.no_gaps and not request.is_dev
         else None
         if request.no_gaps
@@ -170,7 +170,8 @@ def create_plan_dag_spec(
         forward_only=request.forward_only,
         environment_expiration_ts=request.environment.expiration_ts,
         dag_start_ts=to_timestamp(now_dt),
-        deployability_index=deployability_index,
+        deployability_index=deployability_index_for_evaluation,
+        deployability_index_for_creation=deployability_index_for_creation,
         no_gaps_snapshot_names=no_gaps_snapshot_names,
     )
 
