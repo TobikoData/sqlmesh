@@ -9,12 +9,15 @@ from sqlglot import exp
 from sqlglot.lineage import Node, lineage
 
 from sqlmesh.core.context import Context
+from sqlmesh.utils.errors import SQLMeshError
 from web.server.exceptions import ApiException
 from web.server.models import LineageColumn
 from web.server.settings import get_loaded_context
 
 if t.TYPE_CHECKING:
     from sqlglot.dialects.dialect import DialectType
+
+    from sqlmesh.core.model import Model
 
 router = APIRouter()
 
@@ -56,6 +59,22 @@ def _process_downstream(downstream: t.List[Node], dialect: DialectType) -> t.Dic
     return graph
 
 
+def render_query(model: Model) -> exp.Subqueryable:
+    """Render a model's query, adding in managed columns"""
+    query = model.render_query_or_raise()
+    if model.managed_columns:
+        query.select(
+            *[
+                exp.alias_(exp.cast(exp.Null(), to=col_type), col)
+                for col, col_type in model.managed_columns.items()
+                if col not in query.named_selects
+            ],
+            append=True,
+            copy=False,
+        )
+    return query
+
+
 @router.get("/{model_name:str}/{column_name:str}")
 async def column_lineage(
     column_name: str,
@@ -69,13 +88,14 @@ async def column_lineage(
         sources: t.Dict[str, str | exp.Subqueryable] = {}
         for m in context.dag.upstream(model.fqn):
             if m in context.models:
-                query = context.models[m].render_query()
-                if query:
-                    sources[m] = query
+                try:
+                    sources[m] = render_query(context.models[m])
+                except SQLMeshError:
+                    continue
 
         node = lineage(
             column=column_name,
-            sql=model.render_query_or_raise(),
+            sql=render_query(model),
             sources=sources,
             dialect=dialect,
         )

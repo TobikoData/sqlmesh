@@ -596,6 +596,36 @@ FROM (
     }
 
 
+def test_get_lineage_managed_columns(web_sushi_context: Context) -> None:
+    # Get lineage with upstream managed columns
+    response = client.get("/api/lineage/sushi.customers/customer_id")
+    assert response.status_code == 200
+    assert "valid_from" in response.text
+    assert "valid_to" in response.text
+
+    # Get lineage of managed column
+    response = client.get("/api/lineage/sushi.marketing/valid_from")
+    assert response.status_code == 200
+    assert response.json() == {
+        '"memory"."sushi"."marketing"': {
+            "valid_from": {
+                "source": """SELECT
+  CAST(NULL AS TIMESTAMP) AS valid_from
+FROM (
+  SELECT
+    CAST(NULL AS INT) AS customer_id,
+    CAST(NULL AS TEXT) AS status,
+    CAST(NULL AS TIMESTAMP) AS updated_at
+  FROM (VALUES
+    (1)) AS t(dummy)
+) AS raw_marketing /* source: memory.sushi.raw_marketing */""",
+                "expression": "CAST(NULL AS TIMESTAMP) AS valid_from",
+                "models": {},
+            }
+        }
+    }
+
+
 def test_table_diff(web_sushi_context: Context) -> None:
     web_sushi_context.plan(
         "dev",
