@@ -1781,7 +1781,8 @@ def test_capture_console_errors(
         """:x: Failed to create or update PR Environment `hello_world_2`.
 **Errors:**
 ```
-FAILED processing snapshot Snapshot<name: "memory"."sushi"."waiter_revenue_by_day","""
+FAILED processing snapshot "memory"."sushi"."waiter_revenue_by_day"
+"""
     )
 
     assert "SQLMesh - Prod Plan Preview" in controller._check_run_mapping
