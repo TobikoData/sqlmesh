@@ -29,7 +29,7 @@ WITH order_total AS (
 SELECT
   o.customer_id::INT AS customer_id, /* Customer id */
   SUM(ot.total)::DOUBLE AS revenue, /* Revenue from orders made by this customer */
-  MAX('USA') AS "country code", /* Customer country code, used for testing spaces */
+  MAX(0) AS "country code", /* Customer country code, used for testing spaces */
   o.event_date::DATE AS event_date /* Date */
 FROM sushi.orders AS o
 LEFT JOIN order_total AS ot
