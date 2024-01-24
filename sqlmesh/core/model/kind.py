@@ -387,7 +387,6 @@ def model_kind_type_from_name(name: t.Optional[str]) -> t.Type[ModelKind]:
 
 @field_validator_v1_args
 def _model_kind_validator(v: t.Any, values: t.Dict[str, t.Any]) -> ModelKind:
-    values = values if isinstance(values, dict) else values.data
     dialect = values.get("dialect")
 
     if isinstance(v, _ModelKind):
