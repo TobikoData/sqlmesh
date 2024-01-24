@@ -400,9 +400,9 @@ def _model_kind_validator(v: t.Any, values: t.Union[t.Dict, ValidationInfo]) -> 
             else v
         )
         time_data_type = props.pop("time_data_type", None)
+        if isinstance(time_data_type, exp.Expression):
+            time_data_type = time_data_type.name
         if time_data_type:
-            if isinstance(time_data_type, exp.Expression):
-                time_data_type = time_data_type.name
             props["time_data_type"] = exp.DataType.build(time_data_type, dialect=dialect)
         name = v.this if isinstance(v, d.ModelKind) else props.get("name")
         return model_kind_type_from_name(name)(**props)
