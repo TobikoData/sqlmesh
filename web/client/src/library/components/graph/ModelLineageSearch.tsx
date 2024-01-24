@@ -33,15 +33,6 @@ export default function ModelLineageSearch({
     setShowSearchInput(false)
   }
 
-  /**
-   * when clicking the show search input button
-   * - hide the show search input button
-   * - show the search list
-   *   - position absolute
-   *   - solid color bg, overlaying the old one
-   *   - close/cancel button on the right, outside the input
-   */
-
   return (
     <div
       className={clsx(
