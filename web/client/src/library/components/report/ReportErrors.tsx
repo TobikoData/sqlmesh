@@ -38,10 +38,10 @@ export default function ReportErrors(): JSX.Element {
         <>
           <span
             className={clsx(
-              'block ml-1 px-2 first-child:ml-0 rounded-full border whitespace-nowrap dark:text-neutral-100 text-xs text-center',
+              'block ml-1 px-3 py-1 first-child:ml-0 rounded-full whitespace-nowrap font-bold text-xs text-center',
               hasError
-                ? 'border-danger-500 text-danger-100 bg-danger-500 cursor-pointer'
-                : 'border-neutral-500 cursor-default text-neutral-700',
+                ? 'border-danger-10 text-danger-500 bg-danger-10 cursor-pointer'
+                : 'border-neutral-10 cursor-default text-neutral-500 bg-neutral-10 dark:text-neutral-300',
             )}
           >
             {hasError ? (

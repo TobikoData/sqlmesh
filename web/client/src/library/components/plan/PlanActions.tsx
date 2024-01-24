@@ -1,10 +1,12 @@
 import { type MouseEvent } from 'react'
 import useActiveFocus from '~/hooks/useActiveFocus'
-import { EnumVariant } from '~/types/enum'
+import { EnumSize, EnumVariant } from '~/types/enum'
 import { includes, isFalse } from '~/utils'
 import { Button } from '../button/Button'
 import { EnumPlanAction, ModelPlanAction } from '@models/plan-action'
 import { useStorePlan } from '@context/plan'
+import { useStoreContext } from '@context/context'
+import { AddEnvironment, SelectEnvironemnt } from '~/library/pages/root/Page'
 
 export default function PlanActions({
   run,
@@ -17,6 +19,11 @@ export default function PlanActions({
   cancel: () => void
   reset: () => void
 }): JSX.Element {
+  const environment = useStoreContext(s => s.environment)
+  const environments = useStoreContext(s => s.environments)
+  const addConfirmation = useStoreContext(s => s.addConfirmation)
+  const setShowConfirmation = useStoreContext(s => s.setShowConfirmation)
+
   const planAction = useStorePlan(s => s.planAction)
 
   const setFocus = useActiveFocus<HTMLButtonElement>()
@@ -36,7 +43,45 @@ export default function PlanActions({
   function handleApply(e: MouseEvent): void {
     e.stopPropagation()
 
-    apply()
+    if (environment.isProd && isFalse(environment.isInitial)) {
+      addConfirmation({
+        headline: 'Applying Plan Directly On Prod Environment!',
+        description: `Are you sure you want to apply your changes directly on prod? Safer choice will be to select or add new environment first.`,
+        yesText: `Yes, Run ${environment.name}`,
+        noText: 'No, Cancel',
+        action() {
+          apply()
+        },
+        children: (
+          <div className="mt-5 pt-4">
+            <h4 className="mb-2">{`${
+              environments.size > 1 ? 'Select or ' : ''
+            }Add Environment`}</h4>
+            <div className="flex items-center relative">
+              {environments.size > 1 && (
+                <SelectEnvironemnt
+                  className="mr-2"
+                  showAddEnvironment={false}
+                  onSelect={() => {
+                    setShowConfirmation(false)
+                  }}
+                  size={EnumSize.md}
+                />
+              )}
+              <AddEnvironment
+                className="w-full"
+                size={EnumSize.md}
+                onAdd={() => {
+                  setShowConfirmation(false)
+                }}
+              />
+            </div>
+          </div>
+        ),
+      })
+    } else {
+      apply()
+    }
   }
 
   function handleRun(e: MouseEvent): void {

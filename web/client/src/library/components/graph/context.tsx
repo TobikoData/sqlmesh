@@ -73,7 +73,7 @@ export const LineageFlowContext = createContext<LineageFlow>({
   withConnected: false,
   withImpacted: true,
   withSecondary: false,
-  hasBackground: false,
+  hasBackground: true,
   mainNode: undefined,
   activeEdges: new Map(),
   activeNodes: new Set(),
@@ -134,7 +134,7 @@ export default function LineageFlowProvider({
   const [selectedNodes, setSelectedNodes] = useState<SelectedNodes>(new Set())
   const [activeNodes, setActiveNodes] = useState<ActiveNodes>(new Set())
   const [highlightedNodes, setHighlightedNodes] = useState<HighlightedNodes>({})
-  const [hasBackground, setHasBackground] = useState(false)
+  const [hasBackground, setHasBackground] = useState(true)
   const [withImpacted, setWithImpacted] = useState(true)
   const [withSecondary, setWithSecondary] = useState(false)
 

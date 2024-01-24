@@ -78,7 +78,7 @@
     --color-secondary-900: hsla(226, 100%, 24%, 1);
 
     /* Accent */
-    --color-secondary-5: hsla(264, 100%, 98%, 0.05);
+    --color-accent-5: hsla(264, 100%, 98%, 0.05);
     --color-accent-100: hsla(264, 100%, 98%, 1);
     --color-accent-200: hsla(260, 100%, 90%, 1);
     --color-accent-300: hsla(260, 100%, 80%, 1);

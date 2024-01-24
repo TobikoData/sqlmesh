@@ -1489,7 +1489,16 @@
       },
       "Modules": {
         "type": "string",
-        "enum": ["editor", "docs", "plans", "tests", "audits", "errors"],
+        "enum": [
+          "editor",
+          "docs",
+          "plans",
+          "plan-progress",
+          "tests",
+          "audits",
+          "errors",
+          "environments"
+        ],
         "title": "Modules"
       },
       "NodeType": {

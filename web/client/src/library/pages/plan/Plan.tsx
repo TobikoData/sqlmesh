@@ -51,13 +51,20 @@ export default function PagePlan(): JSX.Element {
             planAction.isProcessing ||
             environment.isInitialProd
           }
-          listItem={({ to, name, description, text, disabled = false }) => (
+          listItem={({
+            to,
+            name,
+            description,
+            text,
+            disabled = false,
+            item,
+          }) => (
             <SourceListItem
               to={to}
               name={name}
               text={text}
               description={description}
-              disabled={disabled}
+              disabled={disabled || item.isProd}
             />
           )}
         />

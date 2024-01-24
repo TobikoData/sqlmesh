@@ -352,7 +352,7 @@ function ModelColumnLineage(): JSX.Element {
         </Panel>
         <Controls className="bg-light p-1 rounded-md !border-none !shadow-lg" />
         <Background
-          variant={BackgroundVariant.Dots}
+          variant={BackgroundVariant.Cross}
           gap={32}
           size={4}
           className={clsx(hasBackground ? 'opacity-100' : 'opacity-0')}

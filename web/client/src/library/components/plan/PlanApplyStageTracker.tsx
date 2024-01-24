@@ -688,8 +688,8 @@ function Stage({
   }, [elTrigger, planOverview, planApply, shouldCollapse])
 
   useEffect(() => {
-    setOpen(isOpen && meta?.status !== Status.init && hasChildren)
-  }, [meta, hasChildren, isOpen])
+    setOpen(isOpen || (meta?.status !== Status.init && hasChildren))
+  }, [meta?.status, hasChildren, isOpen])
 
   if (isNil(meta)) return <></>
 

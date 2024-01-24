@@ -26,6 +26,7 @@ import {
   type Environments,
   type EnvironmentsEnvironments,
   Status,
+  Modules,
 } from '@api/client'
 import { Button } from '@components/button/Button'
 import Container from '@components/container/Container'
@@ -64,6 +65,7 @@ export default function PageIDE(): JSX.Element {
   const planOverview = useStorePlan(s => s.planOverview)
   const planApply = useStorePlan(s => s.planApply)
   const planCancel = useStorePlan(s => s.planCancel)
+  const planAction = useStorePlan(s => s.planAction)
   const setPlanOverview = useStorePlan(s => s.setPlanOverview)
   const setPlanApply = useStorePlan(s => s.setPlanApply)
   const setPlanCancel = useStorePlan(s => s.setPlanCancel)
@@ -95,7 +97,8 @@ export default function PageIDE(): JSX.Element {
   const { refetch: getEnvironments, cancel: cancelRequestEnvironments } =
     useApiEnvironments()
   const { isFetching: isFetchingPlanApply } = useApiPlanApply(environment.name)
-  const { isFetching: isFetchingPlanCancel } = useApiCancelPlan()
+  const { refetch: cancelPlanOrPlanApply, isFetching: isFetchingPlanCancel } =
+    useApiCancelPlan()
   const {
     refetch: planRun,
     cancel: cancelRequestPlan,
@@ -257,7 +260,9 @@ export default function PageIDE(): JSX.Element {
   useEffect(() => {
     if (location.pathname === EnumRoutes.Ide) {
       navigate(
-        modules.includes('editor') ? EnumRoutes.IdeEditor : EnumRoutes.IdeDocs,
+        modules.includes(Modules.editor)
+          ? EnumRoutes.IdeEditor
+          : EnumRoutes.IdeDocs,
       )
     }
   }, [location])
@@ -268,6 +273,8 @@ export default function PageIDE(): JSX.Element {
 
   useEffect(() => {
     if (models.size > 0) {
+      planApply.reset()
+
       void planRun()
     }
   }, [models])
@@ -318,6 +325,12 @@ export default function PageIDE(): JSX.Element {
   }
 
   function displayErrors(data: ErrorIDE): void {
+    if (planAction.isApplying || planAction.isRunning) {
+      void cancelPlanOrPlanApply()
+    }
+
+    console.log(data)
+
     addError(EnumErrorKey.General, data)
   }
 

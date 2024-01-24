@@ -135,17 +135,19 @@ function InspectorModel({
             limit={10}
           />
         </Tab.Panel>
-        <Tab.Panel
-          unmount={false}
-          className="text-xs w-full h-full ring-white ring-opacity-60 ring-offset-2 ring-offset-blue-400 focus:outline-none focus:ring-2"
-        >
-          <CodeEditorDefault
-            type={EnumFileExtensions.SQL}
-            content={model.sql ?? ''}
-            extensions={modelExtensions}
-            className="text-xs"
-          />
-        </Tab.Panel>
+        {model.isModelSQL && (
+          <Tab.Panel
+            unmount={false}
+            className="text-xs w-full h-full ring-white ring-opacity-60 ring-offset-2 ring-offset-blue-400 focus:outline-none focus:ring-2"
+          >
+            <CodeEditorDefault
+              type={EnumFileExtensions.SQL}
+              content={model.sql ?? ''}
+              extensions={modelExtensions}
+              className="text-xs"
+            />
+          </Tab.Panel>
+        )}
         {list.length > 1 && environment.isRemote && (
           <Tab.Panel
             unmount={false}
@@ -316,6 +318,7 @@ function FormActionsModel({
   tab: EditorTab
   model: ModelSQLMeshModel
 }): JSX.Element {
+  const environment = useStoreContext(s => s.environment)
   const isModel = useStoreContext(s => s.isModel)
 
   const setPreviewQuery = useStoreEditor(s => s.setPreviewQuery)
@@ -487,7 +490,11 @@ function FormActionsModel({
             <Button
               size={EnumSize.sm}
               variant={EnumVariant.Alternative}
-              disabled={isFalse(shouldEvaluate) || isFetching}
+              disabled={
+                isFalse(shouldEvaluate) ||
+                isFetching ||
+                environment.isInitialProd
+              }
               onClick={e => {
                 e.stopPropagation()
 

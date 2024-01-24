@@ -10,6 +10,14 @@ import { type ErrorIDE } from '../ide/context'
 import { isNil, isNotNil } from '@utils/index'
 import { useEffect } from 'react'
 import { useStoreProject } from '@context/project'
+import {
+  CodeEditorRemoteFile,
+  CodeEditorDefault,
+} from '@components/editor/EditorCode'
+import TabList from '@components/tab/Tab'
+import { Tab } from '@headlessui/react'
+import { EnumFileExtensions } from '@models/file'
+import { useSQLMeshModelExtensions } from '@components/editor/hooks'
 
 export default function Content(): JSX.Element {
   const { modelName } = useParams()
@@ -37,6 +45,12 @@ export default function Content(): JSX.Element {
 
     setLastSelectedModel(model)
   }, [model])
+
+  const modelExtensions = isNil(model)
+    ? []
+    : useSQLMeshModelExtensions(model.path, model => {
+        handleClickModel?.(model.name)
+      })
 
   function handleClickModel(modelName: string): void {
     const model = models.get(modelName)
@@ -67,18 +81,72 @@ export default function Content(): JSX.Element {
         >
           <SplitPane
             className="flex h-full w-full"
-            sizes={[50, 50]}
+            sizes={[65, 35]}
             minSize={0}
             snapOffset={0}
           >
-            <div className="flex flex-col h-full round">
+            <div className="flex flex-col h-full">
+              <SplitPane
+                direction="vertical"
+                sizes={[50, 50]}
+                minSize={100}
+                snapOffset={0}
+                className="flex flex-col w-full h-full overflow-hidden"
+              >
+                <div className="flex flex-col h-full">
+                  <CodeEditorRemoteFile
+                    key={model.path}
+                    path={model.path}
+                  >
+                    {({ file }) => (
+                      <Tab.Group defaultIndex={model.isModelSQL ? 1 : 0}>
+                        <TabList
+                          list={
+                            [
+                              'Source Code',
+                              model.isModelSQL && 'Compiled Query',
+                            ].filter(Boolean) as string[]
+                          }
+                          className="!justify-center"
+                        />
+                        <Tab.Panels className="h-full w-full overflow-hidden text-xs">
+                          <Tab.Panel
+                            unmount={false}
+                            className="w-full h-full"
+                          >
+                            <CodeEditorDefault
+                              content={file.content}
+                              type={file.extension}
+                              extensions={modelExtensions}
+                            />
+                          </Tab.Panel>
+                          {model.isModelSQL && (
+                            <Tab.Panel
+                              unmount={false}
+                              className="w-full h-full"
+                            >
+                              <CodeEditorDefault
+                                type={EnumFileExtensions.SQL}
+                                content={model.sql ?? ''}
+                                extensions={modelExtensions}
+                              />
+                            </Tab.Panel>
+                          )}
+                        </Tab.Panels>
+                      </Tab.Group>
+                    )}
+                  </CodeEditorRemoteFile>
+                </div>
+                <div className="flex flex-col h-full px-2">
+                  <ModelLineage model={model} />
+                </div>
+              </SplitPane>
+            </div>
+            <div className="flex flex-col h-full">
               <Documentation
                 model={model}
                 withQuery={model.isModelSQL}
               />
-            </div>
-            <div className="flex flex-col h-full px-2">
-              <ModelLineage model={model} />
             </div>
           </SplitPane>
         </LineageFlowProvider>

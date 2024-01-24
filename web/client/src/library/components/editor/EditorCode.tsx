@@ -23,6 +23,7 @@ import { python } from '@codemirror/lang-python'
 import { StreamLanguage } from '@codemirror/language'
 import { yaml } from '@codemirror/legacy-modes/mode/yaml'
 import { type FileContent } from '@api/client'
+import './Editor.css'
 
 export { CodeEditorDefault, CodeEditorRemoteFile }
 

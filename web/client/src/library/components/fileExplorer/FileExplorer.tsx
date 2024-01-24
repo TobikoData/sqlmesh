@@ -276,12 +276,12 @@ function FileExplorerArtifactContainer({
         inActiveRange(artifact) &&
           activeRange.length > 1 &&
           activeRange.indexOf(artifact) < activeRange.length - 1
-          ? 'border-b border-brand-400'
+          ? 'border-b border-primary-400'
           : 'border-b border-transparent',
         inActiveRange(artifact)
-          ? 'text-brand-100 !bg-brand-500 dark:bg-brand-700 dark:text-brand-100'
+          ? 'bg-primary-10 dark:bg-primary-20'
           : isSelected &&
-              'rounded-md bg-neutral-200 text-neutral-600 dark:bg-dark-lighter dark:text-primary-500',
+              'rounded-md bg-neutral-10 text-neutral-600 dark:bg-dark-lighter dark:text-primary-500',
       )}
       style={style}
       onClick={handleSelect}
