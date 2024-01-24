@@ -51,7 +51,7 @@ class DuckDBEngineAdapter(LogicalMergeMixin, GetCurrentCatalogFromFunctionMixin)
         self.cursor.sql(f"CREATE TABLE {temp_table} AS {temp_table_sql}")
         return [
             SourceQuery(
-                query_factory=lambda: exp.select(*columns_to_types).from_(temp_table),  # type: ignore
+                query_factory=lambda: self._select_columns(columns_to_types).from_(temp_table),  # type: ignore
                 cleanup_func=lambda: self.drop_table(temp_table),
             )
         ]

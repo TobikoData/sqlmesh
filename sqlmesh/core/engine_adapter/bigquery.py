@@ -119,7 +119,7 @@ class BigQueryEngineAdapter(InsertOverwriteWithMergeMixin):
             result = self.__load_pandas_to_table(temp_bq_table, df, columns_to_types, replace=False)
             if result.errors:
                 raise SQLMeshError(result.errors)
-            return exp.select(*columns_to_types).from_(temp_table)
+            return self._select_columns(columns_to_types).from_(temp_table)
 
         return [
             SourceQuery(

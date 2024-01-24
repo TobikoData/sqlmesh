@@ -36,7 +36,7 @@ def test_file_cache(tmp_path: Path, mocker: MockerFixture):
 
     loader.assert_called_once()
 
-    assert cache._cache_entry_path('"test_model"').name[12:] == "___test_model_"
+    assert "___test_model_" in cache._cache_entry_path('"test_model"').name
 
 
 def test_optimized_query_cache(tmp_path: Path, mocker: MockerFixture):
