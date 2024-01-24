@@ -45,7 +45,7 @@ def test_data_diff(sushi_context_fixed_date):
     modified_model["query"] = (
         exp.select("*")
         .from_(model.query.subquery())
-        .union("select -1, 9999.00, '2023-01-31', 1, 1")
+        .union("select -1, 9999.00, 'CAD', '2023-01-31', 1, 1")
     )
     modified_sqlmodel = SqlModel(**modified_model)
     sushi_context_fixed_date.upsert_model(modified_sqlmodel)
@@ -83,7 +83,7 @@ def test_data_diff(sushi_context_fixed_date):
     assert row_diff.join_count == 17
     assert row_diff.s_only_count == 0
     assert row_diff.t_only_count == 1
-    assert row_diff.sample.shape == (1, 10)
+    assert row_diff.sample.shape == (1, 12)
     assert row_diff.joined_sample.shape == (0, 2)
-    assert row_diff.s_sample.shape == (0, 5)
-    assert row_diff.t_sample.shape == (1, 5)
+    assert row_diff.s_sample.shape == (0, 6)
+    assert row_diff.t_sample.shape == (1, 6)

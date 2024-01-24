@@ -170,7 +170,7 @@ class EngineAdapter:
     @classmethod
     def _casted_columns(cls, columns_to_types: t.Dict[str, exp.DataType]) -> t.List[exp.Alias]:
         return [
-            exp.alias_(exp.cast(column, to=kind), column, copy=False)
+            exp.alias_(exp.cast(exp.column(column), to=kind), column, copy=False)
             for column, kind in columns_to_types.items()
         ]
 
@@ -1772,7 +1772,8 @@ class EngineAdapter:
 
     @classmethod
     def _select_columns(cls, columns: t.Iterable[str]) -> exp.Select:
-        return exp.select(*(f'"{c}"' for c in columns))
+        return exp.select(*(exp.column(c, quoted=True) for c in columns))
+
 
 class EngineAdapterWithIndexSupport(EngineAdapter):
     SUPPORTS_INDEXES = True
