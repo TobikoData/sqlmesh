@@ -5,7 +5,6 @@ import typing as t
 from enum import Enum
 
 from pydantic import Field
-from pydantic_core.core_schema import ValidationInfo
 from sqlglot import exp
 from sqlglot.time import format_time
 
@@ -386,7 +385,7 @@ def model_kind_type_from_name(name: t.Optional[str]) -> t.Type[ModelKind]:
     return t.cast(t.Type[ModelKind], klass)
 
 
-def _model_kind_validator(v: t.Any, values: t.Union[t.Dict, ValidationInfo]) -> ModelKind:
+def _model_kind_validator(v: t.Any, values: t.Any) -> ModelKind:
     values = values if isinstance(values, dict) else values.data
     dialect = values.get("dialect")
 
