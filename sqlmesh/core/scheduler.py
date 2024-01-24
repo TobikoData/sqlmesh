@@ -38,7 +38,9 @@ logger = logging.getLogger(__name__)
 Interval = t.Tuple[datetime, datetime]
 Batch = t.List[Interval]
 SnapshotToBatches = t.Dict[Snapshot, Batch]
-SchedulingUnit = t.Tuple[Snapshot, t.Tuple[Interval, int]]
+# we store snapshot name instead of snapshots/snapshotids because pydantic
+# is extremely slow to hash. snapshot names should be unique within a dag run
+SchedulingUnit = t.Tuple[str, t.Tuple[Interval, int]]
 
 
 class Scheduler:
@@ -250,23 +252,20 @@ class Scheduler:
 
         dag = self._dag(batches)
 
-        visited = set()
-        for snapshot, _ in dag.sorted:
-            if snapshot in visited:
-                continue
-            visited.add(snapshot)
-
         self.console.start_evaluation_progress(
             {snapshot: len(intervals) for snapshot, intervals in batches.items()},
             environment_naming_info,
             self.default_catalog,
         )
 
+        snapshots_by_name = {snapshot.name: snapshot for snapshot in self.snapshots.values()}
+
         def evaluate_node(node: SchedulingUnit) -> None:
             if circuit_breaker and circuit_breaker():
                 raise CircuitBreakerError()
 
-            snapshot, ((start, end), batch_idx) = node
+            snapshot_name, ((start, end), batch_idx) = node
+            snapshot = snapshots_by_name[snapshot_name]
 
             self.console.start_snapshot_evaluation_progress(snapshot)
 
@@ -334,7 +333,7 @@ class Scheduler:
             if not intervals:
                 continue
             upstream_dependencies = [
-                (self.snapshots[p_sid], (interval, i))
+                (p_sid.name, (interval, i))
                 for p_sid in snapshot.parents
                 if p_sid in self.snapshots
                 for i, interval in enumerate(
@@ -348,11 +347,10 @@ class Scheduler:
                 )
             ]
             for i, interval in enumerate(intervals):
-                dag.add((snapshot, (interval, i)), upstream_dependencies)
-                if snapshot.depends_on_past:
+                dag.add((snapshot.name, (interval, i)), upstream_dependencies)
+                if snapshot.depends_on_past and i > 0:
                     dag.add(
-                        (snapshot, (interval, i)),
-                        [(snapshot, (_interval, _i)) for _i, _interval in enumerate(intervals[:i])],
+                        (snapshot.name, (interval, i)), [(snapshot.name, (intervals[i - 1], i - 1))]
                     )
         return dag
 
