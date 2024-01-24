@@ -58,7 +58,7 @@ class LogicalMergeMixin(EngineAdapter):
             )
             self.execute(
                 exp.insert(
-                    exp.select(*columns_to_types)
+                    self._select_columns(columns_to_types)
                     .distinct(*unique_key)
                     .from_(temp_table)
                     .subquery(),
@@ -83,7 +83,7 @@ class LogicalReplaceQueryMixin(EngineAdapter):
         Overwrites the target table from the temp table. This is used when the target table is self-referencing.
         """
         with engine_adapter.temp_table(
-            exp.select(*columns_to_types).from_(target_table),
+            cls._select_columns(columns_to_types).from_(target_table),
             target_table,
             columns_to_types,
             **kwargs,

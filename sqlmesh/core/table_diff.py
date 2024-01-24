@@ -194,6 +194,9 @@ class TableDiff:
                 if t == self.target_schema.get(c)
             ]
 
+            def name(e: exp.Expression) -> str:
+                return e.args["alias"].sql(identify=True)
+
             query = (
                 exp.select(
                     *s_selects.values(),
@@ -236,7 +239,7 @@ class TableDiff:
                     exp.func("SUM", "s_exists").as_("s_count"),
                     exp.func("SUM", "t_exists").as_("t_count"),
                     exp.func("SUM", "rows_joined").as_("join_count"),
-                    *(exp.func("SUM", c.alias).as_(c.alias) for c in comparisons),
+                    *(exp.func("SUM", name(c)).as_(c.alias) for c in comparisons),
                 ).from_(table)
                 stats_df = self.adapter.fetchdf(summary_query)
                 stats_df["s_only_count"] = stats_df["s_count"] - stats_df["join_count"]
@@ -248,7 +251,7 @@ class TableDiff:
                         *(
                             exp.func(
                                 "ROUND",
-                                100 * (exp.func("SUM", c.alias) / exp.func("COUNT", c.alias)),
+                                100 * (exp.func("SUM", name(c)) / exp.func("COUNT", name(c))),
                                 1,
                             ).as_(c.alias)
                             for c in comparisons
@@ -270,14 +273,14 @@ class TableDiff:
                 sample_query = (
                     exp.select(
                         *(sample_filter_cols),
-                        *(c.alias for c in s_selects.values()),
-                        *(c.alias for c in t_selects.values()),
+                        *(name(c) for c in s_selects.values()),
+                        *(name(c) for c in t_selects.values()),
                     )
                     .from_(table)
                     .where(exp.or_(*(exp.column(c.alias).eq(0) for c in comparisons)))
                     .order_by(
-                        *(s_selects[c.name].alias for c in s_index),
-                        *(t_selects[c.name].alias for c in t_index),
+                        *(name(s_selects[c.name]) for c in s_index),
+                        *(name(t_selects[c.name]) for c in t_index),
                     )
                     .limit(self.limit)
                 )
