@@ -1712,6 +1712,127 @@ class DatabricksMagicConsole(CaptureTerminalConsole):
         print(f"Migration {'succeeded' if success else 'failed'}")
 
 
+class DebuggerTerminalConsole(TerminalConsole):
+    """A terminal console to use while debugging with no fluff, progress bars, etc."""
+
+    def __init__(self, console: t.Optional[RichConsole], *args: t.Any, **kwargs: t.Any) -> None:
+        self.console: RichConsole = console or srich.console
+
+    def _write(self, msg: t.Any, *args: t.Any, **kwargs: t.Any) -> None:
+        self.console.log(msg, *args, **kwargs)
+
+    def start_plan_evaluation(self, plan: Plan) -> None:
+        self._write("Starting plan", plan.plan_id)
+
+    def stop_plan_evaluation(self) -> None:
+        self._write("Stopping plan")
+
+    def start_evaluation_progress(
+        self,
+        batches: t.Dict[Snapshot, int],
+        environment_naming_info: EnvironmentNamingInfo,
+        default_catalog: t.Optional[str],
+    ) -> None:
+        self._write(f"Starting evaluation for {len(batches)} snapshots")
+
+    def start_snapshot_evaluation_progress(self, snapshot: Snapshot) -> None:
+        self._write(f"Evaluating {snapshot.name}")
+
+    def update_snapshot_evaluation_progress(
+        self, snapshot: Snapshot, batch_idx: int, duration_ms: t.Optional[int]
+    ) -> None:
+        self._write(f"Evaluating {snapshot.name} | batch={batch_idx} | duration={duration_ms}ms")
+
+    def stop_evaluation_progress(self, success: bool = True) -> None:
+        self._write(f"Stopping evaluation with success={success}")
+
+    def start_creation_progress(
+        self,
+        total_tasks: int,
+        environment_naming_info: EnvironmentNamingInfo,
+        default_catalog: t.Optional[str],
+    ) -> None:
+        self._write(f"Starting creation for {total_tasks} snapshots")
+
+    def update_creation_progress(self, snapshot: SnapshotInfoLike) -> None:
+        self._write(f"Creating {snapshot.name}")
+
+    def stop_creation_progress(self, success: bool = True) -> None:
+        self._write(f"Stopping creation with success={success}")
+
+    def update_cleanup_progress(self, object_name: str) -> None:
+        self._write(f"Cleaning up {object_name}")
+
+    def start_promotion_progress(
+        self,
+        total_tasks: int,
+        environment_naming_info: EnvironmentNamingInfo,
+        default_catalog: t.Optional[str],
+    ) -> None:
+        self._write(f"Starting promotion for {total_tasks} snapshots")
+
+    def update_promotion_progress(self, snapshot: SnapshotInfoLike, promoted: bool) -> None:
+        self._write(f"Promoting {snapshot.name}")
+
+    def stop_promotion_progress(self, success: bool = True) -> None:
+        self._write(f"Stopping promotion with success={success}")
+
+    def start_migration_progress(self, total_tasks: int) -> None:
+        self._write(f"Starting migration for {total_tasks} snapshots")
+
+    def update_migration_progress(self, num_tasks: int) -> None:
+        self._write(f"Migration {num_tasks}")
+
+    def stop_migration_progress(self, success: bool = True) -> None:
+        self._write(f"Stopping migration with success={success}")
+
+    def show_model_difference_summary(
+        self,
+        context_diff: ContextDiff,
+        environment_naming_info: EnvironmentNamingInfo,
+        default_catalog: t.Optional[str],
+        no_diff: bool = True,
+        ignored_snapshot_ids: t.Optional[t.Set[SnapshotId]] = None,
+    ) -> None:
+        self._write("Model Difference Summary:")
+        for added in context_diff.new_snapshots:
+            self._write(f"  Added: {added}")
+        for removed in context_diff.removed_snapshots:
+            self._write(f"  Removed: {removed}")
+        for modified in context_diff.modified_snapshots:
+            self._write(f"  Modified: {modified}")
+
+    def log_test_results(
+        self, result: unittest.result.TestResult, output: str, target_dialect: str
+    ) -> None:
+        self._write("Test Results:", result)
+
+    def show_sql(self, sql: str) -> None:
+        self._write(sql)
+
+    def log_status_update(self, message: str) -> None:
+        self._write(message, style="bold blue")
+
+    def log_error(self, message: str) -> None:
+        self._write(message, style="bold red")
+
+    def log_success(self, message: str) -> None:
+        self._write(message, style="bold green")
+
+    def loading_start(self, message: t.Optional[str] = None) -> uuid.UUID:
+        self._write(message)
+        return uuid.uuid4()
+
+    def loading_stop(self, id: uuid.UUID) -> None:
+        self._write("Done")
+
+    def show_schema_diff(self, schema_diff: SchemaDiff) -> None:
+        self._write(schema_diff)
+
+    def show_row_diff(self, row_diff: RowDiff, show_sample: bool = True) -> None:
+        self._write(row_diff)
+
+
 def get_console(**kwargs: t.Any) -> TerminalConsole | DatabricksMagicConsole | NotebookMagicConsole:
     """
     Returns the console that is appropriate for the current runtime environment.
@@ -1728,6 +1849,7 @@ def get_console(**kwargs: t.Any) -> TerminalConsole | DatabricksMagicConsole | N
         RuntimeEnv.JUPYTER: NotebookMagicConsole,
         RuntimeEnv.TERMINAL: TerminalConsole,
         RuntimeEnv.GOOGLE_COLAB: NotebookMagicConsole,
+        RuntimeEnv.DEBUGGER: DebuggerTerminalConsole,
     }
     rich_console_kwargs: t.Dict[str, t.Any] = {"theme": srich.theme}
     if runtime_env.is_jupyter or runtime_env.is_google_colab:
