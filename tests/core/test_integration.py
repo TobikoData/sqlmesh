@@ -284,6 +284,60 @@ def test_forward_only_model_regular_plan(init_and_plan_context: t.Callable):
 
 
 @freeze_time("2023-01-08 15:00:00")
+def test_forward_only_parent_created_in_dev_child_created_in_prod(
+    init_and_plan_context: t.Callable,
+):
+    context, plan = init_and_plan_context("examples/sushi")
+    context.apply(plan)
+
+    waiter_revenue_by_day_model = context.get_model("sushi.waiter_revenue_by_day")
+    waiter_revenue_by_day_model = add_projection_to_model(
+        t.cast(SqlModel, waiter_revenue_by_day_model)
+    )
+    forward_only_kind = waiter_revenue_by_day_model.kind.copy(update={"forward_only": True})
+    waiter_revenue_by_day_model = waiter_revenue_by_day_model.copy(
+        update={"kind": forward_only_kind}
+    )
+    context.upsert_model(waiter_revenue_by_day_model)
+
+    waiter_revenue_by_day_snapshot = context.get_snapshot(
+        waiter_revenue_by_day_model, raise_if_missing=True
+    )
+    top_waiters_snapshot = context.get_snapshot("sushi.top_waiters", raise_if_missing=True)
+
+    plan = context.plan("dev", no_prompts=True, skip_tests=True)
+    assert len(plan.new_snapshots) == 2
+    assert (
+        plan.context_diff.snapshots[waiter_revenue_by_day_snapshot.snapshot_id].change_category
+        == SnapshotChangeCategory.FORWARD_ONLY
+    )
+    assert (
+        plan.context_diff.snapshots[top_waiters_snapshot.snapshot_id].change_category
+        == SnapshotChangeCategory.FORWARD_ONLY
+    )
+    assert plan.start == to_datetime("2023-01-01")
+    assert not plan.missing_intervals
+
+    context.apply(plan)
+
+    # Update the child to refer to a newly added column.
+    top_waiters_model = context.get_model("sushi.top_waiters")
+    top_waiters_model = add_projection_to_model(t.cast(SqlModel, top_waiters_model), literal=False)
+    context.upsert_model(top_waiters_model)
+
+    top_waiters_snapshot = context.get_snapshot("sushi.top_waiters", raise_if_missing=True)
+
+    plan = context.plan("prod", no_prompts=True, skip_tests=True)
+    assert len(plan.new_snapshots) == 1
+    assert (
+        plan.context_diff.snapshots[top_waiters_snapshot.snapshot_id].change_category
+        == SnapshotChangeCategory.NON_BREAKING
+    )
+
+    context.apply(plan)
+
+
+@freeze_time("2023-01-08 15:00:00")
 def test_plan_set_choice_is_reflected_in_missing_intervals(init_and_plan_context: t.Callable):
     context, plan = init_and_plan_context("examples/sushi")
     context.apply(plan)

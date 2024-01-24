@@ -991,11 +991,6 @@ def test_forward_only_snapshot_for_added_model(mocker: MockerFixture, adapter_mo
                 column_descriptions=None,
                 **common_create_args,
             ),
-            call(
-                f"sqlmesh__test_schema.test_schema__test_model__{snapshot.version}",
-                column_descriptions={},
-                **common_create_args,
-            ),
         ]
     )
 

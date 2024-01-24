@@ -172,7 +172,7 @@ class SnapshotDagGenerator:
             (create_start_task, create_end_task) = self._create_creation_tasks(
                 plan_dag_spec.new_snapshots,
                 plan_dag_spec.ddl_concurrent_tasks,
-                plan_dag_spec.deployability_index,
+                plan_dag_spec.deployability_index_for_creation,
             )
 
             (

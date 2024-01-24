@@ -83,7 +83,8 @@ class BuiltInPlanEvaluator(PlanEvaluator):
             all_names = {
                 s.name for s in snapshots.values() if plan.is_selected_for_backfill(s.name)
             }
-            deployability_index = DeployabilityIndex.create(snapshots)
+            deployability_index_for_evaluation = DeployabilityIndex.create(snapshots)
+            deployability_index_for_creation = deployability_index_for_evaluation
             if plan.is_dev:
                 before_promote_snapshots = all_names
                 after_promote_snapshots = set()
@@ -91,24 +92,30 @@ class BuiltInPlanEvaluator(PlanEvaluator):
                 before_promote_snapshots = {
                     s.name
                     for s in snapshots.values()
-                    if deployability_index.is_representative(s)
+                    if deployability_index_for_evaluation.is_representative(s)
                     and plan.is_selected_for_backfill(s.name)
                 }
                 after_promote_snapshots = all_names - before_promote_snapshots
-                deployability_index = DeployabilityIndex.all_deployable()
+                deployability_index_for_evaluation = DeployabilityIndex.all_deployable()
 
             update_intervals_for_new_snapshots(plan.new_snapshots, self.state_sync)
 
-            self._push(plan, deployability_index)
+            self._push(plan, deployability_index_for_creation)
             self._restate(plan)
             self._backfill(
-                plan, before_promote_snapshots, deployability_index, circuit_breaker=circuit_breaker
+                plan,
+                before_promote_snapshots,
+                deployability_index_for_evaluation,
+                circuit_breaker=circuit_breaker,
             )
             promotion_result = self._promote(plan, before_promote_snapshots)
             self._backfill(
-                plan, after_promote_snapshots, deployability_index, circuit_breaker=circuit_breaker
+                plan,
+                after_promote_snapshots,
+                deployability_index_for_evaluation,
+                circuit_breaker=circuit_breaker,
             )
-            self._update_views(plan, promotion_result, deployability_index)
+            self._update_views(plan, promotion_result, deployability_index_for_evaluation)
 
             if not plan.requires_backfill:
                 self.console.log_success("Virtual Update executed successfully")
