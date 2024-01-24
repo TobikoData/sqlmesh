@@ -123,6 +123,8 @@ function EditorMain({ tab }: { tab: EditorTab }): JSX.Element {
     },
   )
 
+  const [isOpenInspector, setIsOpenInspector] = useState(false)
+
   const customSQLKeymaps = useMemo(() => {
     return [
       ...defaultKeymapsEditorTab,
@@ -170,28 +172,10 @@ function EditorMain({ tab }: { tab: EditorTab }): JSX.Element {
     [tab.id],
   )
 
-  const sizesCodeEditorAndInspector = useMemo(() => {
-    const model = models.get(tab?.file.path)
-    const showInspector =
-      ((isNotNil(model) && isModel(tab.file.path)) || tab.file.isLocal) &&
-      isFalse(isStringEmptyOrNil(tab.file.content))
-
-    return showInspector ? [75, 25] : [100, 0]
-  }, [tab, models])
-
-  const sizesCodeEditorAndPreview = useMemo(() => {
-    const model = models.get(tab.file.path)
-    const showLineage =
-      isFalse(tab.file.isEmpty) && isNotNil(model) && isModel(tab.file.path)
-    const showPreview =
-      (tab.file.isLocal && [previewTable, previewDiff].some(Boolean)) ||
-      showLineage
-
-    return showPreview ? [70, 30] : [100, 0]
-  }, [tab, models, previewTable, previewDiff])
-
   useEffect(() => {
     engine.addEventListener('message', handleEngineWorkerMessage)
+
+    setIsOpenInspector(false)
 
     return () => {
       engine.removeEventListener('message', handleEngineWorkerMessage)
@@ -234,6 +218,30 @@ function EditorMain({ tab }: { tab: EditorTab }): JSX.Element {
     })
   }
 
+  function getPaneSizesPreview(): number[] {
+    const model = models.get(tab.file.path)
+    const showLineage =
+      isFalse(tab.file.isEmpty) && isNotNil(model) && isModel(tab.file.path)
+    const showPreview =
+      (tab.file.isLocal && [previewTable, previewDiff].some(Boolean)) ||
+      showLineage
+
+    return showPreview ? [70, 30] : [100, 0]
+  }
+
+  function getPaneSizesInspector(): number[] {
+    const model = models.get(tab?.file.path)
+    const showInspector =
+      isOpenInspector &&
+      ((isNotNil(model) && isModel(tab.file.path)) || tab.file.isLocal) &&
+      isFalse(isStringEmptyOrNil(tab.file.content))
+
+    return showInspector ? [70, 30] : [100, 0]
+  }
+
+  const EDITOR_PANE_MIN_WIDTH = 36
+  const INSPECTOR_PANE_WIDTH_THRESHOLD = 2
+
   return (
     <SplitPane
       key={direction}
@@ -241,9 +249,9 @@ function EditorMain({ tab }: { tab: EditorTab }): JSX.Element {
         'w-full h-full overflow-hidden',
         direction === 'vertical' ? 'flex flex-col' : 'flex',
       )}
-      sizes={sizesCodeEditorAndPreview}
+      sizes={getPaneSizesPreview()}
       direction={direction}
-      minSize={0}
+      minSize={[320, 0]}
       snapOffset={0}
     >
       <div
@@ -255,9 +263,18 @@ function EditorMain({ tab }: { tab: EditorTab }): JSX.Element {
         <SplitPane
           key={tab.id}
           className="flex h-full overflow-hidden"
-          sizes={sizesCodeEditorAndInspector}
-          minSize={0}
-          snapOffset={0}
+          sizes={getPaneSizesInspector()}
+          minSize={[320, EDITOR_PANE_MIN_WIDTH]}
+          snapOffset={EDITOR_PANE_MIN_WIDTH}
+          handleDrag={(sizes, el) => {
+            const containerWidth = el.parent.getBoundingClientRect().width
+            const inspectorPaneWidth = (containerWidth * (sizes[1] ?? 0)) / 100
+
+            setIsOpenInspector(
+              inspectorPaneWidth >=
+                EDITOR_PANE_MIN_WIDTH + INSPECTOR_PANE_WIDTH_THRESHOLD,
+            )
+          }}
         >
           <div className="flex flex-col h-full">
             {tab.file.isLocal && (
@@ -286,7 +303,11 @@ function EditorMain({ tab }: { tab: EditorTab }): JSX.Element {
             )}
           </div>
           <div className="flex flex-col h-full">
-            <EditorInspector tab={tab} />
+            <EditorInspector
+              tab={tab}
+              toggle={() => setIsOpenInspector(s => !s)}
+              isOpen={isOpenInspector}
+            />
           </div>
         </SplitPane>
         <Divider />

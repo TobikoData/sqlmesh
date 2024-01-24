@@ -1,6 +1,12 @@
 import { type Table } from 'apache-arrow'
 import clsx from 'clsx'
-import React, { useCallback, useEffect, useMemo, useState } from 'react'
+import React, {
+  useCallback,
+  useEffect,
+  useMemo,
+  useState,
+  type MouseEvent,
+} from 'react'
 import { type RenderInput, type EvaluateInput } from '~/api/client'
 import { useStoreContext } from '~/context/context'
 import { EnumSize, EnumVariant } from '~/types/enum'
@@ -8,6 +14,7 @@ import { isFalse, isNotNil, toDate, toDateFormat } from '~/utils'
 import { Button } from '../button/Button'
 import { Divider } from '../divider/Divider'
 import Input from '../input/Input'
+import { Bars3Icon } from '@heroicons/react/24/solid'
 import { type EditorTab, useStoreEditor } from '~/context/editor'
 import { Tab } from '@headlessui/react'
 import Banner from '@components/banner/Banner'
@@ -34,8 +41,12 @@ const LIMIT_DIFF = 50
 
 export default function EditorInspector({
   tab,
+  isOpen = true,
+  toggle,
 }: {
   tab: EditorTab
+  isOpen?: boolean
+  toggle?: () => void
 }): JSX.Element {
   const models = useStoreContext(s => s.models)
   const isModel = useStoreContext(s => s.isModel)
@@ -52,10 +63,16 @@ export default function EditorInspector({
           <InspectorModel
             tab={tab}
             model={model}
+            isOpen={isOpen}
+            toggle={toggle}
           />
         )
       ) : (
-        <InspectorSql tab={tab} />
+        <InspectorSql
+          tab={tab}
+          isOpen={isOpen}
+          toggle={toggle}
+        />
       )}
     </div>
   )
@@ -64,9 +81,13 @@ export default function EditorInspector({
 function InspectorModel({
   tab,
   model,
+  isOpen = true,
+  toggle,
 }: {
   tab: EditorTab
   model: ModelSQLMeshModel
+  isOpen?: boolean
+  toggle?: () => void
 }): JSX.Element {
   const { handleClickModel } = useLineageFlow()
 
@@ -95,47 +116,67 @@ function InspectorModel({
   })
   return (
     <Tab.Group>
-      <TabList
-        list={
-          [
-            'Actions',
-            'Columns',
-            model.isModelSQL && 'Query',
-            list.length > 1 && environment.isRemote && 'Diff',
-          ].filter(Boolean) as string[]
-        }
-      />
-      <Tab.Panels className="h-full w-full overflow-hidden">
-        <Tab.Panel
-          unmount={false}
+      <div className="flex w-full items-center">
+        <Button
           className={clsx(
-            'flex flex-col w-full h-full relative overflow-hidden',
-            'ring-white ring-opacity-60 ring-offset-2 ring-offset-blue-400 focus:outline-none focus:ring-2',
+            'h-7 w-7 mx-1 border-none',
+            isOpen && '!text-secondary-500',
           )}
+          variant={EnumVariant.Alternative}
+          size={EnumSize.sm}
+          onClick={(e: MouseEvent) => {
+            e.stopPropagation()
+
+            toggle?.()
+          }}
         >
-          <FormActionsModel
-            tab={tab}
-            model={model}
+          <Bars3Icon className="min-w-5 min-h-5" />
+        </Button>
+        {isOpen && (
+          <TabList
+            className="flex justify-center items-center"
+            list={
+              [
+                'Evaluate',
+                'Columns',
+                model.isModelSQL && 'Query',
+                list.length > 1 && environment.isRemote && 'Diff',
+              ].filter(Boolean) as string[]
+            }
           />
-        </Tab.Panel>
-        <Tab.Panel
-          unmount={false}
-          className={clsx(
-            'text-xs w-full h-full ring-white ring-opacity-60 ring-offset-2 ring-offset-blue-400 focus:outline-none focus:ring-2 px-2',
-          )}
-        >
-          <ModelColumns
-            className="max-h-[15rem]"
-            nodeId={model.name}
-            columns={model.columns}
-            disabled={model.isModelPython}
-            withHandles={false}
-            withSource={false}
-            withDescription={true}
-            limit={10}
-          />
-        </Tab.Panel>
-        {model.isModelSQL && (
+        )}
+      </div>
+      {isOpen && (
+        <Tab.Panels className="h-full w-full overflow-hidden">
+          <Tab.Panel
+            unmount={false}
+            className={clsx(
+              'flex flex-col w-full h-full relative overflow-hidden',
+              'ring-white ring-opacity-60 ring-offset-2 ring-offset-blue-400 focus:outline-none focus:ring-2',
+            )}
+          >
+            <FormActionsModel
+              tab={tab}
+              model={model}
+            />
+          </Tab.Panel>
+          <Tab.Panel
+            unmount={false}
+            className={clsx(
+              'text-xs w-full h-full ring-white ring-opacity-60 ring-offset-2 ring-offset-blue-400 focus:outline-none focus:ring-2 px-2',
+            )}
+          >
+            <ModelColumns
+              className="max-h-[15rem]"
+              nodeId={model.name}
+              columns={model.columns}
+              disabled={model.isModelPython}
+              withHandles={false}
+              withSource={false}
+              withDescription={true}
+              limit={10}
+            />
+          </Tab.Panel>
           <Tab.Panel
             unmount={false}
             className="text-xs w-full h-full ring-white ring-opacity-60 ring-offset-2 ring-offset-blue-400 focus:outline-none focus:ring-2"
@@ -147,8 +188,64 @@ function InspectorModel({
               className="text-xs"
             />
           </Tab.Panel>
+          {list.length > 1 && environment.isRemote && (
+            <Tab.Panel
+              unmount={false}
+              className={clsx(
+                'flex flex-col w-full h-full relative overflow-hidden',
+                'ring-white ring-opacity-60 ring-offset-2 ring-offset-blue-400 focus:outline-none focus:ring-2',
+              )}
+            >
+              <FormDiffModel
+                tab={tab}
+                model={model}
+                list={list.filter(({ value }) => environment.name !== value)}
+                target={{ text: environment.name, value: environment.name }}
+              />
+            </Tab.Panel>
+          )}
+        </Tab.Panels>
+      )}
+    </Tab.Group>
+  )
+}
+
+function InspectorSql({
+  tab,
+  isOpen = true,
+  toggle,
+}: {
+  tab: EditorTab
+  isOpen?: boolean
+  toggle?: () => void
+}): JSX.Element {
+  return (
+    <Tab.Group>
+      <div className="flex w-full items-center">
+        <Button
+          className={clsx(
+            'h-7 w-7 mx-1 border-none',
+            isOpen && '!text-secondary-500',
+          )}
+          variant={EnumVariant.Alternative}
+          size={EnumSize.sm}
+          onClick={(e: MouseEvent) => {
+            e.stopPropagation()
+
+            toggle?.()
+          }}
+        >
+          <Bars3Icon className="min-w-5 min-h-5" />
+        </Button>
+        {isOpen && (
+          <TabList
+            className="flex justify-center items-center"
+            list={['Run Query', 'Diff']}
+          />
         )}
-        {list.length > 1 && environment.isRemote && (
+      </div>
+      {isOpen && (
+        <Tab.Panels className="h-full w-full overflow-hidden">
           <Tab.Panel
             unmount={false}
             className={clsx(
@@ -156,43 +253,19 @@ function InspectorModel({
               'ring-white ring-opacity-60 ring-offset-2 ring-offset-blue-400 focus:outline-none focus:ring-2',
             )}
           >
-            <FormDiffModel
-              tab={tab}
-              model={model}
-              list={list.filter(({ value }) => environment.name !== value)}
-              target={{ text: environment.name, value: environment.name }}
-            />
+            <FormActionsCustomSQL tab={tab} />
           </Tab.Panel>
-        )}
-      </Tab.Panels>
-    </Tab.Group>
-  )
-}
-
-function InspectorSql({ tab }: { tab: EditorTab }): JSX.Element {
-  return (
-    <Tab.Group>
-      <TabList list={['Actions', 'Diff']} />
-      <Tab.Panels className="h-full w-full overflow-hidden">
-        <Tab.Panel
-          unmount={false}
-          className={clsx(
-            'flex flex-col w-full h-full relative overflow-hidden',
-            'ring-white ring-opacity-60 ring-offset-2 ring-offset-blue-400 focus:outline-none focus:ring-2',
-          )}
-        >
-          <FormActionsCustomSQL tab={tab} />
-        </Tab.Panel>
-        <Tab.Panel
-          unmount={false}
-          className={clsx(
-            'flex flex-col w-full h-full relative overflow-hidden',
-            'ring-white ring-opacity-60 ring-offset-2 ring-offset-blue-400 focus:outline-none focus:ring-2',
-          )}
-        >
-          <FormDiff />
-        </Tab.Panel>
-      </Tab.Panels>
+          <Tab.Panel
+            unmount={false}
+            className={clsx(
+              'flex flex-col w-full h-full relative overflow-hidden',
+              'ring-white ring-opacity-60 ring-offset-2 ring-offset-blue-400 focus:outline-none focus:ring-2',
+            )}
+          >
+            <FormDiff />
+          </Tab.Panel>
+        </Tab.Panels>
+      )}
     </Tab.Group>
   )
 }
@@ -378,10 +451,11 @@ function FormActionsModel({
               </Banner>
             </FormFieldset>
           )}
-          <fieldset className="my-3 px-3 w-full">
+          <fieldset className="px-2 w-full text-neutral-500">
             <Input
               className="w-full mx-0"
               label="Start Date"
+              size={EnumSize.sm}
             >
               {({ className }) => (
                 <Input.Textfield
@@ -402,6 +476,7 @@ function FormActionsModel({
             <Input
               className="w-full mx-0"
               label="End Date"
+              size={EnumSize.sm}
             >
               {({ className }) => (
                 <Input.Textfield
@@ -422,6 +497,7 @@ function FormActionsModel({
             <Input
               className="w-full mx-0"
               label="Execution Time"
+              size={EnumSize.sm}
             >
               {({ className }) => (
                 <Input.Textfield
@@ -443,6 +519,7 @@ function FormActionsModel({
               <Input
                 className="w-full mx-0"
                 label="Limit"
+                size={EnumSize.sm}
               >
                 {({ className }) => (
                   <Input.Textfield
@@ -568,11 +645,12 @@ function FormDiffModel({
     <>
       <InspectorForm>
         <form className="w-full">
-          <fieldset className="my-3 px-3 w-full">
+          <fieldset className="px-2 w-full text-neutral-500">
             <Input
               className="w-full mx-0"
               label="Source"
               disabled={list.length < 2}
+              size={EnumSize.sm}
             >
               {({ disabled, className }) => (
                 <Input.Selector
@@ -587,6 +665,7 @@ function FormDiffModel({
             <Input
               className="w-full mx-0"
               label="Limit"
+              size={EnumSize.sm}
             >
               {({ className }) => (
                 <Input.Textfield
@@ -605,6 +684,7 @@ function FormDiffModel({
             <Input
               className="w-full mx-0"
               label="ON"
+              size={EnumSize.sm}
             >
               {({ className }) => (
                 <Input.Textfield
@@ -622,6 +702,7 @@ function FormDiffModel({
             <Input
               className="w-full mx-0"
               label="WHERE"
+              size={EnumSize.sm}
             >
               {({ className }) => (
                 <Input.Textfield
@@ -733,10 +814,11 @@ function FormDiff(): JSX.Element {
     <>
       <InspectorForm>
         <form className="w-full">
-          <fieldset className="my-3 px-3 w-full">
+          <fieldset className="px-2 w-full text-neutral-500">
             <Input
               className="w-full mx-0"
               label="Source"
+              size={EnumSize.sm}
             >
               {({ className }) => (
                 <Input.Textfield
@@ -754,6 +836,7 @@ function FormDiff(): JSX.Element {
             <Input
               className="w-full mx-0"
               label="Target"
+              size={EnumSize.sm}
             >
               {({ className }) => (
                 <Input.Textfield
@@ -771,6 +854,7 @@ function FormDiff(): JSX.Element {
             <Input
               className="w-full mx-0"
               label="Limit"
+              size={EnumSize.sm}
             >
               {({ className }) => (
                 <Input.Textfield
@@ -789,6 +873,7 @@ function FormDiff(): JSX.Element {
             <Input
               className="w-full mx-0"
               label="ON"
+              size={EnumSize.sm}
             >
               {({ className }) => (
                 <Input.Textfield
@@ -806,6 +891,7 @@ function FormDiff(): JSX.Element {
             <Input
               className="w-full mx-0"
               label="WHERE"
+              size={EnumSize.sm}
             >
               {({ className }) => (
                 <Input.Textfield
