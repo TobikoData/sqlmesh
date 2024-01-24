@@ -178,4 +178,5 @@ module.exports = {
       serif: ['Publico', 'serif'],
     },
   },
+  plugins: [require('@tailwindcss/container-queries')],
 }

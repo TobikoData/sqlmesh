@@ -111,7 +111,14 @@ export default function EditorPreview({
                   )
                 }}
               >
-                <ViewColumnsIcon className="text-primary-500 w-5" />
+                <ViewColumnsIcon
+                  aria-label={
+                    direction === 'horizontal'
+                      ? 'Use vertical layout'
+                      : 'Use horizontal layout'
+                  }
+                  className="text-primary-500 w-5"
+                />
               </Button>
             </div>
           </TabList>

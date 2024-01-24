@@ -137,7 +137,7 @@ export default function SearchList<
         }
       }}
     >
-      <Popover className="relative flex">
+      <Popover className="relative flex w-full">
         <Popover.Button
           ref={elTrigger}
           as={SearchListInput}
