@@ -548,6 +548,84 @@ WHERE
     }
 
 
+def test_get_lineage_external_model(project_context: Context) -> None:
+    project_tmp_path = project_context.path
+    models_dir = project_tmp_path / "models"
+    models_dir.mkdir()
+    foo_sql_file = models_dir / "foo.sql"
+    foo_sql_file.write_text("MODEL (name foo); SELECT id FROM bar;")
+    bar_sql_file = models_dir / "bar.sql"
+    bar_sql_file.write_text("MODEL (name bar); SELECT * FROM baz;")
+    baz_sql_file = models_dir / "baz.sql"
+    baz_sql_file.write_text("MODEL (name baz); SELECT * FROM external_table;")
+    project_context.load()
+
+    response = client.get("/api/lineage/foo/id")
+    assert response.status_code == 200, response.json()
+    assert response.json() == {
+        '"foo"': {
+            "id": {
+                "source": """SELECT
+  bar.id AS id
+FROM (
+  SELECT
+    *
+  FROM (
+    SELECT
+      *
+    FROM external_table AS external_table
+  ) AS baz /* source: baz */
+) AS bar /* source: bar */""",
+                "expression": "bar.id AS id",
+                "models": {'"bar"': ["id"]},
+            }
+        },
+        '"bar"': {
+            "id": {
+                "source": """SELECT
+  *
+FROM (
+  SELECT
+    *
+  FROM external_table AS external_table
+) AS baz /* source: baz */""",
+                "expression": "*",
+                "models": {},
+            }
+        },
+    }
+
+
+def test_get_lineage_managed_columns(web_sushi_context: Context) -> None:
+    # Get lineage with upstream managed columns
+    response = client.get("/api/lineage/sushi.customers/customer_id")
+    assert response.status_code == 200
+    assert "valid_from" in response.text
+    assert "valid_to" in response.text
+
+    # Get lineage of managed column
+    response = client.get("/api/lineage/sushi.marketing/valid_from")
+    assert response.status_code == 200
+    assert response.json() == {
+        '"memory"."sushi"."marketing"': {
+            "valid_from": {
+                "source": """SELECT
+  CAST(NULL AS TIMESTAMP) AS valid_from
+FROM (
+  SELECT
+    CAST(NULL AS INT) AS customer_id,
+    CAST(NULL AS TEXT) AS status,
+    CAST(NULL AS TIMESTAMP) AS updated_at
+  FROM (VALUES
+    (1)) AS t(dummy)
+) AS raw_marketing /* source: memory.sushi.raw_marketing */""",
+                "expression": "CAST(NULL AS TIMESTAMP) AS valid_from",
+                "models": {},
+            }
+        }
+    }
+
+
 def test_table_diff(web_sushi_context: Context) -> None:
     web_sushi_context.plan(
         "dev",
