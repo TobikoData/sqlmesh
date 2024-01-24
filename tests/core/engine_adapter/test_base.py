@@ -910,7 +910,7 @@ WITH "source" AS (
     "id",
     "name",
     "price",
-    "test_updated_at"
+    CAST("test_updated_at" AS TIMESTAMP) AS "test_updated_at"
   FROM (
     SELECT
       "id",
@@ -1008,14 +1008,14 @@ WITH "source" AS (
         ELSE "test_updated_at"
       END
       WHEN "t_test_valid_from" IS NULL
-      THEN CAST('1970-01-01 00:00:00' AS TIMESTAMP)
+      THEN CAST(CAST('1970-01-01 00:00:00' AS TIMESTAMP) AS TIMESTAMP)
       ELSE "t_test_valid_from"
     END AS "test_valid_from",
     CASE
       WHEN "test_updated_at" > "t_test_updated_at"
       THEN "test_updated_at"
       WHEN "joined"."_exists" IS NULL
-      THEN CAST('2020-01-01 00:00:00' AS TIMESTAMP)
+      THEN CAST(CAST('2020-01-01 00:00:00' AS TIMESTAMP) AS TIMESTAMP)
       ELSE "t_test_valid_to"
     END AS "test_valid_to"
   FROM "joined"
@@ -1028,7 +1028,7 @@ WITH "source" AS (
     "price",
     "test_updated_at",
     "test_updated_at" AS "test_valid_from",
-    CAST(NULL AS TIMESTAMP) AS "test_valid_to"
+    CAST(CAST(NULL AS TIMESTAMP) AS TIMESTAMP) AS "test_valid_to"
   FROM "joined"
   WHERE
     "test_updated_at" > "t_test_updated_at"
@@ -1073,9 +1073,9 @@ def test_merge_scd_type_2_pandas(make_mocked_engine_adapter: t.Callable):
             "id2": exp.DataType.Type.INT,
             "name": exp.DataType.Type.VARCHAR,
             "price": exp.DataType.Type.DOUBLE,
-            "test_updated_at": exp.DataType.Type.TIMESTAMP,
-            "test_valid_from": exp.DataType.Type.TIMESTAMP,
-            "test_valid_to": exp.DataType.Type.TIMESTAMP,
+            "test_updated_at": exp.DataType.Type.TIMESTAMPTZ,
+            "test_valid_from": exp.DataType.Type.TIMESTAMPTZ,
+            "test_valid_to": exp.DataType.Type.TIMESTAMPTZ,
         },
         execution_time=datetime(2020, 1, 1, 0, 0, 0),
     )
@@ -1092,16 +1092,16 @@ WITH "source" AS (
     "id2",
     "name",
     "price",
-    "test_updated_at"
+    CAST("test_updated_at" AS TIMESTAMPTZ) AS "test_updated_at"
   FROM (
     SELECT
       CAST("id1" AS INT) AS "id1",
       CAST("id2" AS INT) AS "id2",
       CAST("name" AS VARCHAR) AS "name",
       CAST("price" AS DOUBLE) AS "price",
-      CAST("test_updated_at" AS TIMESTAMP) AS "test_updated_at",
-      CAST("test_valid_from" AS TIMESTAMP) AS "test_valid_from",
-      CAST("test_valid_to" AS TIMESTAMP) AS "test_valid_to"
+      CAST("test_updated_at" AS TIMESTAMPTZ) AS "test_updated_at",
+      CAST("test_valid_from" AS TIMESTAMPTZ) AS "test_valid_from",
+      CAST("test_valid_to" AS TIMESTAMPTZ) AS "test_valid_to"
     FROM (VALUES
       (1, 4, 'muffins', 4.0, '2020-01-01 10:00:00'),
       (2, 5, 'chips', 5.0, '2020-01-02 15:00:00'),
@@ -1206,14 +1206,14 @@ WITH "source" AS (
         ELSE "test_updated_at"
       END
       WHEN "t_test_valid_from" IS NULL
-      THEN CAST('1970-01-01 00:00:00' AS TIMESTAMP)
+      THEN CAST(CAST('1970-01-01 00:00:00' AS TIMESTAMP) AS TIMESTAMPTZ)
       ELSE "t_test_valid_from"
     END AS "test_valid_from",
     CASE
       WHEN "test_updated_at" > "t_test_updated_at"
       THEN "test_updated_at"
       WHEN "joined"."_exists" IS NULL
-      THEN CAST('2020-01-01 00:00:00' AS TIMESTAMP)
+      THEN CAST(CAST('2020-01-01 00:00:00' AS TIMESTAMP) AS TIMESTAMPTZ)
       ELSE "t_test_valid_to"
     END AS "test_valid_to"
   FROM "joined"
@@ -1228,7 +1228,7 @@ WITH "source" AS (
     "price",
     "test_updated_at",
     "test_updated_at" AS "test_valid_from",
-    CAST(NULL AS TIMESTAMP) AS "test_valid_to"
+    CAST(CAST(NULL AS TIMESTAMP) AS TIMESTAMPTZ) AS "test_valid_to"
   FROM "joined"
   WHERE
     "test_updated_at" > "t_test_updated_at"
