@@ -71,7 +71,7 @@ async def watch_project() -> None:
                     origin=f"API -> watcher -> watch_project",
                     trigger=path_str,
                 ).to_dict()
-                api_console.log_event(event=models.EventName.ERRORS, data=error)
+                api_console.log_event(event=models.EventName.WARNINGS, data=error)
 
         api_console.log_event(
             event=models.EventName.FILE,
