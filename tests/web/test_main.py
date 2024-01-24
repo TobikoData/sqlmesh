@@ -548,6 +548,54 @@ WHERE
     }
 
 
+def test_get_lineage_external_model(project_context: Context) -> None:
+    project_tmp_path = project_context.path
+    models_dir = project_tmp_path / "models"
+    models_dir.mkdir()
+    foo_sql_file = models_dir / "foo.sql"
+    foo_sql_file.write_text("MODEL (name foo); SELECT id FROM bar;")
+    bar_sql_file = models_dir / "bar.sql"
+    bar_sql_file.write_text("MODEL (name bar); SELECT * FROM baz;")
+    baz_sql_file = models_dir / "baz.sql"
+    baz_sql_file.write_text("MODEL (name baz); SELECT * FROM external_table;")
+    project_context.load()
+
+    response = client.get("/api/lineage/foo/id")
+    assert response.status_code == 200, response.json()
+    assert response.json() == {
+        '"foo"': {
+            "id": {
+                "source": """SELECT
+  bar.id AS id
+FROM (
+  SELECT
+    *
+  FROM (
+    SELECT
+      *
+    FROM external_table AS external_table
+  ) AS baz /* source: baz */
+) AS bar /* source: bar */""",
+                "expression": "bar.id AS id",
+                "models": {'"bar"': ["id"]},
+            }
+        },
+        '"bar"': {
+            "id": {
+                "source": """SELECT
+  *
+FROM (
+  SELECT
+    *
+  FROM external_table AS external_table
+) AS baz /* source: baz */""",
+                "expression": "*",
+                "models": {},
+            }
+        },
+    }
+
+
 def test_table_diff(web_sushi_context: Context) -> None:
     web_sushi_context.plan(
         "dev",
