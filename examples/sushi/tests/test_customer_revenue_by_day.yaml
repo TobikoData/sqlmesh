@@ -56,7 +56,7 @@ test_customer_revenue_by_day:
     query:
       - customer_id: 1
         revenue: 26.1
-        country code: USA
+        country code: 0
         event_date: 2022-01-01
   vars:
     start: 2022-01-01
