@@ -14,6 +14,7 @@ async function loadPyodideAndPackages(): Promise<{
   const micropip = scope.pyodide.pyimport('micropip')
 
   await micropip.install('sqlglot')
+  await micropip.install('typing-extensions')
 
   const file = await (
     await fetch(new URL('./sqlglot.py', import.meta.url))
