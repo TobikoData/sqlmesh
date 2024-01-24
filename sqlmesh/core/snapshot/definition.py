@@ -1062,7 +1062,7 @@ class DeployabilityIndex(PydanticModel, frozen=True):
 
     indexed_ids: t.FrozenSet[str]
     is_opposite_index: bool = False
-    representative_shared_version_ids: t.Optional[t.FrozenSet[str]] = None
+    representative_shared_version_ids: t.FrozenSet[str] = frozenset()
 
     @field_validator("indexed_ids", "representative_shared_version_ids", mode="before")
     @classmethod
@@ -1109,10 +1109,7 @@ class DeployabilityIndex(PydanticModel, frozen=True):
             True if the snapshot is representative, False otherwise.
         """
         snapshot_id = self._snapshot_id_key(snapshot.snapshot_id)
-        representative = (
-            self.representative_shared_version_ids is not None
-            and snapshot_id in self.representative_shared_version_ids
-        )
+        representative = snapshot_id in self.representative_shared_version_ids
         return representative or self.is_deployable(snapshot)
 
     def with_non_deployable(self, snapshot: SnapshotIdLike) -> DeployabilityIndex:
