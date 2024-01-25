@@ -57,6 +57,11 @@ export default function Header(): JSX.Element {
           onClick={() => {
             toggleColorScheme?.()
           }}
+          aria-label={
+            mode === EnumColorScheme.Light
+              ? 'Use Dark Theme'
+              : 'Use Light Theme'
+          }
         >
           <IconMoonOrSun className="h-4 w-4 text-primary-500" />
         </button>

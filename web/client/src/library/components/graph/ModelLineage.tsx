@@ -1,5 +1,5 @@
 import { useApiModelLineage } from '@api/index'
-import { useEffect, useMemo, useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import { type ModelSQLMeshModel } from '@models/sqlmesh-model'
 import { type HighlightedNodes, useLineageFlow } from './context'
 import ReactFlow, {
@@ -19,12 +19,9 @@ import ReactFlow, {
 import Loading from '@components/loading/Loading'
 import Spinner from '@components/logo/Spinner'
 import { createLineageWorker } from '~/workers'
-import { isArrayEmpty, isFalse, isNil, isNotNil, truncate } from '@utils/index'
+import { isArrayEmpty, isNil, isNotNil } from '@utils/index'
 import ListboxShow from '@components/listbox/ListboxShow'
-import SearchList from '@components/search/SearchList'
 import clsx from 'clsx'
-import { EnumSize } from '~/types/enum'
-import { EnumLineageNodeModelType } from './Graph'
 import ModelNode from './ModelNode'
 import {
   getNodeMap,
@@ -36,6 +33,9 @@ import {
   createGraphLayout,
   getModelAncestors,
 } from './help'
+import ModelLineageSearch from './ModelLineageSearch'
+import { Popover } from '@headlessui/react'
+import ModelLineageDetails from './ModelLineageDetails'
 
 const WITH_COLUMNS_LIMIT = 30
 
@@ -347,7 +347,7 @@ function ModelColumnLineage(): JSX.Element {
       >
         <Panel
           position="top-right"
-          className="bg-theme !m-0 w-full"
+          className="bg-theme !m-0 w-full !z-10"
         >
           <GraphControls nodes={nodes} />
         </Panel>
@@ -385,6 +385,8 @@ function GraphControls({ nodes = [] }: { nodes: Node[] }): JSX.Element {
     setHasBackground,
   } = useLineageFlow()
 
+  const lineageInfoTrigger = useRef<HTMLButtonElement>(null)
+
   const currentModels = useMemo(() => {
     if (isNil(mainNode) || isNil(lineage)) return []
 
@@ -401,25 +403,6 @@ function GraphControls({ nodes = [] }: { nodes: Node[] }): JSX.Element {
       .filter(Boolean) as Array<{ name: string; description: string }>
   }, [lineage, mainNode])
 
-  const model = isNil(mainNode) ? undefined : models.get(mainNode)
-  const countSelected = selectedNodes.size
-  const countImpact = connectedNodes.size - 1
-  const countSecondary = nodes.filter(n =>
-    isFalse(connectedNodes.has(n.id)),
-  ).length
-  const countActive =
-    activeNodes.size > 0 ? activeNodes.size : connectedNodes.size
-  const countHidden = nodes.filter(n => n.hidden).length
-  const countVisible = nodes.filter(n => isFalse(n.hidden)).length
-  const countDataSources = nodes.filter(
-    n =>
-      isFalse(n.hidden) &&
-      (n.data.type === EnumLineageNodeModelType.external ||
-        n.data.type === EnumLineageNodeModelType.seed),
-  ).length
-  const countCTEs = nodes.filter(
-    n => isFalse(n.hidden) && n.data.type === EnumLineageNodeModelType.cte,
-  ).length
   const highlightedNodeModels = useMemo(
     () => Object.values(highlightedNodes ?? {}).flat(),
     [highlightedNodes],
@@ -441,72 +424,30 @@ function GraphControls({ nodes = [] }: { nodes: Node[] }): JSX.Element {
   }
 
   return (
-    <div className="pl-2 flex items-center text-xs text-neutral-400">
+    <div className="px-2 flex items-center text-xs text-neutral-400 @container">
       <div className="contents">
-        {isNotNil(model) && (
-          <span
-            title={model.displayName}
-            className="mr-2 w-full min-w-[10rem] whitespace-nowrap text-ellipsis overflow-hidden"
+        <Popover
+          className="flex @lg:hidden bg-none border-none py-1"
+          aria-label="Show lineage node details"
+        >
+          <Popover.Button
+            ref={lineageInfoTrigger}
+            className="flex items-center relative w-full cursor-pointer bg-primary-10 text-xs rounded-full text-primary-500 py-1 px-3 text-center focus:outline-none focus-visible:border-accent-500 focus-visible:ring-2 focus-visible:ring-light focus-visible:ring-opacity-75 focus-visible:ring-offset-2 focus-visible:ring-offset-brand-300 border-1 border-transparent"
           >
-            <b>Model:</b> {truncate(model.displayName, 50, 25)}
-          </span>
-        )}
-        {isNotNil(highlightedNodes) ?? (
-          <span className="mr-2 whitespace-nowrap">
-            <b>Highlighted:</b> {Object.keys(highlightedNodes ?? {}).length}
-          </span>
-        )}
-        {countSelected > 0 && (
-          <span className="mr-2 whitespace-nowrap">
-            <b>Selected:</b> {countSelected}
-          </span>
-        )}
-        {withImpacted && countSelected === 0 && countImpact > 0 && (
-          <span className="mr-2 whitespace-nowrap">
-            <b>Impact:</b> {countImpact}
-          </span>
-        )}
-        {withSecondary && countSelected === 0 && countSecondary > 0 && (
-          <span className="mr-2 whitespace-nowrap">
-            <b>Secondary:</b> {countSecondary}
-          </span>
-        )}
-        <span className="mr-2 whitespace-nowrap">
-          <b>Active:</b> {countActive}
-        </span>
-        {countVisible > 0 && countVisible !== countActive && (
-          <span className="mr-2 whitespace-nowrap">
-            <b>Visible:</b> {countVisible}
-          </span>
-        )}
-        {countHidden > 0 && (
-          <span className="mr-2 whitespace-nowrap">
-            <b>Hidden:</b> {countHidden}
-          </span>
-        )}
-        {countDataSources > 0 && (
-          <span className="mr-2 whitespace-nowrap">
-            <b>Data Sources</b>: {countDataSources}
-          </span>
-        )}
-        {countCTEs > 0 && (
-          <span className="mr-2 whitespace-nowrap">
-            <b>CTEs:</b> {countCTEs}
-          </span>
-        )}
+            Details
+          </Popover.Button>
+          <Popover.Panel className="absolute left-2 right-2 flex-col z-50 mt-8 transform flex px-4 py-3 bg-theme-lighter shadow-xl focus:ring-2 ring-opacity-5 rounded-lg">
+            <ModelLineageDetails nodes={nodes} />
+          </Popover.Panel>
+        </Popover>
+        <div className="hidden @lg:contents w-full">
+          <ModelLineageDetails nodes={nodes} />
+        </div>
       </div>
       <div className="flex w-full justify-end items-center">
-        <SearchList<{ name: string; description: string }>
-          list={currentModels}
-          placeholder="Find"
-          searchBy="displayName"
-          displayBy="displayName"
-          descriptionBy="description"
-          showIndex={false}
-          size={EnumSize.sm}
-          onSelect={handleSelect}
-          className="w-full min-w-[15rem] max-w-[20rem]"
-          isFullWidth={true}
+        <ModelLineageSearch
+          currentModels={currentModels}
+          handleSelect={handleSelect}
         />
         <ListboxShow
           options={{

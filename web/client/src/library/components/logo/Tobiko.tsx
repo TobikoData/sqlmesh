@@ -10,8 +10,10 @@ function LogoTobiko({ style, className }: PropsLogoTobiko): JSX.Element {
       viewBox="0 0 236 72"
       fill="none"
       xmlns="http://www.w3.org/2000/svg"
+      role="img"
+      aria-labelledby="tobikoDataTitle"
     >
-      <title>Tobiko Data logo</title>
+      <title id="tobikoDataTitle">Tobiko Data logo</title>
       <path
         fillRule="evenodd"
         clipRule="evenodd"

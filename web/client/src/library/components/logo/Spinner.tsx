@@ -17,6 +17,8 @@ function Spinner({
       className={clsx('animate-spin bg-transparent rounded-full', className)}
       viewBox="0 0 64 64"
       xmlns="http://www.w3.org/2000/svg"
+      aria-label="Loading"
+      role="img"
     >
       <path
         fillRule="evenodd"
