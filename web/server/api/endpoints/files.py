@@ -166,8 +166,20 @@ def _get_directory(
 
 def _get_file_with_content(file_path: Path, relative_path: str) -> models.File:
     """Get a file, including its contents."""
+    try:
+        content = file_path.read_text()
+    except FileNotFoundError as e:
+        raise e
+    except Exception:
+        error = ApiException(
+            message="Unable to get file content",
+            origin="API -> files -> _get_file_with_content",
+        ).to_dict()
+        api_console.log_event(event=models.EventName.WARNINGS, data=error)
+        content = None
+
     return models.File(
         name=file_path.name,
         path=relative_path,
-        content=file_path.read_text(),
+        content=content,
     )
