@@ -435,7 +435,7 @@ function GraphControls({ nodes = [] }: { nodes: Node[] }): JSX.Element {
           >
             Details
           </Popover.Button>
-          <Popover.Panel className="absolute left-4 right-4 flex-col z-50 mt-8 transform flex px-4 py-3 bg-theme-lighter shadow-xl focus:ring-2 ring-opacity-5 rounded-lg">
+          <Popover.Panel className="absolute left-2 right-2 flex-col z-50 mt-8 transform flex px-4 py-3 bg-theme-lighter shadow-xl focus:ring-2 ring-opacity-5 rounded-lg">
             <ModelLineageDetails nodes={nodes} />
           </Popover.Panel>
         </Popover>
