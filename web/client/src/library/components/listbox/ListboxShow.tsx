@@ -1,7 +1,7 @@
 import { Fragment, useEffect, useState } from 'react'
 import { Listbox, Transition } from '@headlessui/react'
 import { ChevronDownIcon, CheckIcon } from '@heroicons/react/24/solid'
-import { FunnelIcon } from '@heroicons/react/20/solid'
+import { FunnelIcon } from '@heroicons/react/24/outline'
 import { isFalse } from '@utils/index'
 import clsx from 'clsx'
 
@@ -35,7 +35,7 @@ export default function ListboxShow({
       multiple
     >
       <div className="relative flex">
-        <Listbox.Button className="flex items-center relative w-full cursor-default bg-primary-10 text-xs rounded-full text-primary-500 py-1 px-2 text-center focus:outline-none focus-visible:border-accent-500 focus-visible:ring-2 focus-visible:ring-light focus-visible:ring-opacity-75 focus-visible:ring-offset-2 focus-visible:ring-offset-brand-300">
+        <Listbox.Button className="flex items-center relative w-full cursor-default bg-primary-10 text-xs rounded-full text-primary-500 py-1 px-2 text-center focus:outline-none focus-visible:border-accent-500 focus-visible:ring-2 focus-visible:ring-light focus-visible:ring-opacity-75 focus-visible:ring-offset-2 focus-visible:ring-offset-brand-300 cursor-pointer">
           <span className="flex truncate items-center">
             <FunnelIcon className="h-3 w-3 mr-0 sm:mr-1" />{' '}
             <span className="sr-only sm:not-sr-only">Show</span>

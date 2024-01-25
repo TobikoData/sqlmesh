@@ -1,6 +1,5 @@
 import { useApiModelLineage } from '@api/index'
 import { useEffect, useMemo, useRef, useState } from 'react'
-import { InformationCircleIcon } from '@heroicons/react/24/solid'
 import { type ModelSQLMeshModel } from '@models/sqlmesh-model'
 import { type HighlightedNodes, useLineageFlow } from './context'
 import ReactFlow, {
@@ -20,10 +19,9 @@ import ReactFlow, {
 import Loading from '@components/loading/Loading'
 import Spinner from '@components/logo/Spinner'
 import { createLineageWorker } from '~/workers'
-import { isArrayEmpty, isFalse, isNil, isNotNil, truncate } from '@utils/index'
+import { isArrayEmpty, isNil, isNotNil } from '@utils/index'
 import ListboxShow from '@components/listbox/ListboxShow'
 import clsx from 'clsx'
-import { EnumLineageNodeModelType } from './Graph'
 import ModelNode from './ModelNode'
 import {
   getNodeMap,
@@ -37,7 +35,7 @@ import {
 } from './help'
 import ModelLineageSearch from './ModelLineageSearch'
 import { Popover } from '@headlessui/react'
-import ModelLineageInformation from './ModelLineageInformation'
+import ModelLineageDetails from './ModelLineageDetails'
 
 const WITH_COLUMNS_LIMIT = 30
 
@@ -428,18 +426,21 @@ function GraphControls({ nodes = [] }: { nodes: Node[] }): JSX.Element {
     <div className="px-2 flex items-center text-xs text-neutral-400 @container">
       <div className="contents">
         <Popover
-          className="flex @lg:hidden bg-none border-none px-2 py-1"
-          aria-label="Show lineage node information"
+          className="flex @lg:hidden bg-none border-none py-1"
+          aria-label="Show lineage node details"
         >
-          <Popover.Button ref={lineageInfoTrigger}>
-            <InformationCircleIcon className="w-6 h-6 text-primary-500" />
+          <Popover.Button
+            ref={lineageInfoTrigger}
+            className="flex items-center relative w-full cursor-pointer bg-primary-10 text-xs rounded-full text-primary-500 py-1 px-3 text-center focus:outline-none focus-visible:border-accent-500 focus-visible:ring-2 focus-visible:ring-light focus-visible:ring-opacity-75 focus-visible:ring-offset-2 focus-visible:ring-offset-brand-300 border-1 border-transparent"
+          >
+            Details
           </Popover.Button>
-          <Popover.Panel className="absolute left-4 right-4 flex-wrap z-50 mt-8 transform flex p-2 bg-theme-lighter shadow-xl focus:ring-2 ring-opacity-5 rounded-lg">
-            <ModelLineageInformation nodes={nodes} />
+          <Popover.Panel className="absolute left-4 right-4 flex-col z-50 mt-8 transform flex px-4 py-3 bg-theme-lighter shadow-xl focus:ring-2 ring-opacity-5 rounded-lg">
+            <ModelLineageDetails nodes={nodes} />
           </Popover.Panel>
         </Popover>
         <div className="hidden @lg:contents w-full">
-          <ModelLineageInformation nodes={nodes} />
+          <ModelLineageDetails nodes={nodes} />
         </div>
       </div>
       <div className="flex w-full justify-end items-center">

@@ -4,7 +4,7 @@ import { MagnifyingGlassIcon, XCircleIcon } from '@heroicons/react/24/solid'
 import SearchList from '@components/search/SearchList'
 import { EnumSize, EnumVariant } from '~/types/enum'
 
-import { Button } from '../button/Button'
+import { Button, EnumButtonShape } from '../button/Button'
 
 interface ModelLineageSearchProps {
   currentModels: Array<{ name: string; description: string }>
@@ -43,8 +43,9 @@ export default function ModelLineageSearch({
       )}
     >
       <Button
+        shape={EnumButtonShape.Circle}
         className={clsx(
-          'flex @[40rem]:hidden border-none !py-1 !rounded-full',
+          'flex @[40rem]:hidden !py-1 border-transparent',
           showSearchInput ? 'hidden' : 'flex',
         )}
         variant={EnumVariant.Alternative}

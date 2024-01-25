@@ -3,7 +3,7 @@ import { useLineageFlow } from './context'
 import { type Node } from 'reactflow'
 import { EnumLineageNodeModelType } from './Graph'
 
-export default function ModelLineageInformation({
+export default function ModelLineageDetails({
   nodes = [],
 }: {
   nodes: Node[]
