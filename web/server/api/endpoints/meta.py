@@ -12,7 +12,7 @@ router = APIRouter()
 
 
 class Mode(str, enum.Enum):
-    DEFAULT = "default"  # Allow all modules
+    ALL = "all"  # Allow all modules
     DOCS = "docs"  # Only docs module
     READ_ONLY = (
         "read-only"  # Allow docs, errors, environments and plan progress but not apply plans
@@ -35,7 +35,7 @@ mode_to_modules = {
         models.Modules.PLAN_PROGRESS,
         models.Modules.ENVIRONMENTS,
     ],
-    Mode.DEFAULT: [
+    Mode.ALL: [
         models.Modules.EDITOR,
         models.Modules.DOCS,
         models.Modules.ERRORS,
@@ -62,5 +62,5 @@ def get_api_meta(
     return models.Meta(
         version=_sqlmesh_version(),
         has_running_task=hasattr(request.app.state, "task") and not request.app.state.task.done(),
-        modules=mode_to_modules[Mode.DEFAULT],
+        modules=mode_to_modules[Mode.ALL],
     )
