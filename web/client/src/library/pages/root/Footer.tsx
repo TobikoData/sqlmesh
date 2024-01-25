@@ -1,23 +1,22 @@
 import { useStoreContext } from '@context/context'
-import { isArrayNotEmpty, isNotNil } from '@utils/index'
+import { isNotNil } from '@utils/index'
 
 export default function Footer(): JSX.Element {
   const version = useStoreContext(s => s.version)
-  const modules = useStoreContext(s => s.modules)
 
   return (
     <footer className="px-2 py-1 text-xs flex justify-between">
       <span>
         {isNotNil(version) && (
           <>
-            <span>SQLMesh Version: </span>
-            <span className="font-black inline-block mr-4">{version}</span>
+            <span className="hidden sm:inline">SQLMesh: </span>
+            <span
+              title="SQLMesh Version"
+              className="font-black inline-block mr-4"
+            >
+              {version}
+            </span>
           </>
-        )}
-        {isArrayNotEmpty(modules) && (
-          <span className="capitalize inline-block mr-4">
-            Modules: {modules.join(', ')}
-          </span>
         )}
       </span>
       <small className="text-xs">

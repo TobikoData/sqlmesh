@@ -195,7 +195,7 @@ const Directory = function Directory({
     <div className={clsx('h-full', isDragging && 'opacity-50')}>
       <div
         ref={drop}
-        className={clsx(isOver && isFalse(isDragging) && 'bg-brand-5')}
+        className={clsx(isOver && isFalse(isDragging) && 'bg-primary-5')}
       >
         {directory.withParent && (
           <div
@@ -352,7 +352,7 @@ const Directory = function Directory({
         )}
         {((isOver && isFalse(isDragging)) || isOpen || !directory.withParent) &&
           directory.withDirectories && (
-            <ul className={clsx(inActiveRange(directory) && 'bg-brand-5')}>
+            <ul className={clsx(inActiveRange(directory) && 'bg-primary-5')}>
               {directory.directories.map(dir => (
                 <li
                   key={dir.id}
@@ -373,7 +373,7 @@ const Directory = function Directory({
           )}
         {((isOver && isFalse(isDragging)) || isOpen || !directory.withParent) &&
           directory.withFiles && (
-            <ul className={clsx(inActiveRange(directory) && 'bg-brand-5')}>
+            <ul className={clsx(inActiveRange(directory) && 'bg-primary-5')}>
               {directory.files.map(file => (
                 <li
                   key={file.id}

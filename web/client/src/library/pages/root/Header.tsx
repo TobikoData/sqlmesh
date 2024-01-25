@@ -10,18 +10,18 @@ export default function Header(): JSX.Element {
   const IconMoonOrSun = mode === EnumColorScheme.Light ? MoonIcon : SunIcon
 
   return (
-    <header className="min-h-[2.5rem] px-2 flex justify-between items-center">
+    <header className="min-h-[2rem] px-2 flex justify-between items-center">
       <div className="flex h-full items-center">
         <a
           href="/"
           title="Home"
         >
           <LogoSqlMesh
-            style={{ height: '32px' }}
+            style={{ height: '24px' }}
             mode={mode}
           />
         </a>
-        <span className="inline-block mx-2 text-xs font-bold">by</span>
+        <span className="inline-block mx-1 text-xs font-bold">by</span>
         <a
           href="https://tobikodata.com/"
           target="_blank"
@@ -29,7 +29,7 @@ export default function Header(): JSX.Element {
           title="Tobiko Data website"
         >
           <LogoTobiko
-            style={{ height: '24px' }}
+            style={{ height: '20px' }}
             mode={mode}
           />
         </a>
@@ -42,7 +42,7 @@ export default function Header(): JSX.Element {
                 href="http://sqlmesh.readthedocs.io/en/stable/"
                 target="_blank"
                 rel="noopener noreferrer"
-                className="hover:underline"
+                className="hover:underline text-xs"
               >
                 Documentation
               </a>
@@ -51,7 +51,7 @@ export default function Header(): JSX.Element {
         </nav>
         <button
           className={clsx(
-            'p-2 cursor-pointer rounded-full hover:bg-theme-darker',
+            'p-1 cursor-pointer rounded-full hover:bg-theme-darker',
             'dark:hover:bg-theme-lighter',
           )}
           onClick={() => {

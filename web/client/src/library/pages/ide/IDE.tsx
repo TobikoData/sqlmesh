@@ -10,6 +10,7 @@ import {
 import { useChannelEvents } from '../../../api/channels'
 import {
   isArrayEmpty,
+  isFalse,
   isNil,
   isNotNil,
   isObjectNotEmpty,
@@ -26,6 +27,7 @@ import {
   type Environments,
   type EnvironmentsEnvironments,
   Status,
+  Modules,
 } from '@api/client'
 import { Button } from '@components/button/Button'
 import Container from '@components/container/Container'
@@ -42,7 +44,7 @@ import {
 import { type PlanOverviewTracker } from '@models/tracker-plan-overview'
 import { type PlanApplyTracker } from '@models/tracker-plan-apply'
 import { type PlanCancelTracker } from '@models/tracker-plan-cancel'
-import { ModelPlanAction } from '@models/plan-action'
+import { EnumPlanAction, ModelPlanAction } from '@models/plan-action'
 import { useStorePlan } from '@context/plan'
 
 export default function PageIDE(): JSX.Element {
@@ -64,6 +66,7 @@ export default function PageIDE(): JSX.Element {
   const planOverview = useStorePlan(s => s.planOverview)
   const planApply = useStorePlan(s => s.planApply)
   const planCancel = useStorePlan(s => s.planCancel)
+  const planAction = useStorePlan(s => s.planAction)
   const setPlanOverview = useStorePlan(s => s.setPlanOverview)
   const setPlanApply = useStorePlan(s => s.setPlanApply)
   const setPlanCancel = useStorePlan(s => s.setPlanCancel)
@@ -95,7 +98,8 @@ export default function PageIDE(): JSX.Element {
   const { refetch: getEnvironments, cancel: cancelRequestEnvironments } =
     useApiEnvironments()
   const { isFetching: isFetchingPlanApply } = useApiPlanApply(environment.name)
-  const { isFetching: isFetchingPlanCancel } = useApiCancelPlan()
+  const { refetch: cancelPlanOrPlanApply, isFetching: isFetchingPlanCancel } =
+    useApiCancelPlan()
   const {
     refetch: planRun,
     cancel: cancelRequestPlan,
@@ -257,7 +261,10 @@ export default function PageIDE(): JSX.Element {
   useEffect(() => {
     if (location.pathname === EnumRoutes.Ide) {
       navigate(
-        modules.includes('editor') ? EnumRoutes.IdeEditor : EnumRoutes.IdeDocs,
+        modules.includes(Modules.editor)
+          ? EnumRoutes.IdeEditor
+          : EnumRoutes.IdeDocs,
+        { replace: true },
       )
     }
   }, [location])
@@ -267,18 +274,16 @@ export default function PageIDE(): JSX.Element {
   }, [confirmations])
 
   useEffect(() => {
-    if (models.size > 0) {
-      void planRun()
-    }
-  }, [models])
-
-  useEffect(() => {
-    if (models.size > 0) {
+    if (
+      models.size > 0 &&
+      isFalse(planAction.isProcessing) &&
+      isFalse(planAction.isRunningTask)
+    ) {
       planApply.reset()
 
       void planRun()
     }
-  }, [environment])
+  }, [models, environment])
 
   useEffect(() => {
     planOverview.isFetching = isFetchingPlanRun
@@ -305,9 +310,11 @@ export default function PageIDE(): JSX.Element {
       planCancel,
     })
 
-    if (isNotNil(value)) {
-      setPlanAction(new ModelPlanAction({ value }))
-    }
+    // This inconsistency can happen when we receive flag from the backend
+    // that some task is runninng but not yet recived SSE event with data
+    if (value === EnumPlanAction.Done && planAction.isRunningTask) return
+
+    setPlanAction(new ModelPlanAction({ value }))
   }, [planOverview, planApply, planCancel])
 
   function updateModels(models?: Model[]): void {
@@ -318,6 +325,10 @@ export default function PageIDE(): JSX.Element {
   }
 
   function displayErrors(data: ErrorIDE): void {
+    if (planAction.isApplying || planAction.isRunning) {
+      void cancelPlanOrPlanApply()
+    }
+
     addError(EnumErrorKey.General, data)
   }
 

@@ -1,5 +1,5 @@
 import { useParams } from 'react-router-dom'
-import { isNil, isNotNil } from '@utils/index'
+import { isNil } from '@utils/index'
 import PlanProvider from '@components/plan/context'
 import { useStoreContext } from '@context/context'
 import Plan from '@components/plan/Plan'
@@ -15,14 +15,17 @@ export default function Content(): JSX.Element {
   const setEnvironment = useStoreContext(s => s.setEnvironment)
 
   useEffect(() => {
+    if (environment.isInitialProd || environmentName === environment.name)
+      return
+
     const found = Array.from(environments).find(
-      environment => environment.name === environmentName,
+      env => env.name === environmentName,
     )
 
-    if (isNotNil(found) && environment.name !== found.name) {
-      setEnvironment(found)
-    }
-  }, [environmentName, environments])
+    if (isNil(found)) return
+
+    setEnvironment(found)
+  }, [environmentName])
 
   return (
     <PlanProvider>

@@ -5,18 +5,21 @@ import { useState } from 'react'
 import { NavLink } from 'react-router-dom'
 import { EnumSize, EnumVariant, type Variant } from '~/types/enum'
 
-interface ListItem {
+interface ListItem<
+  TListItem extends Record<string, any> = Record<string, any>,
+> {
   id: string
   to: string
   name: string
+  item: TListItem
   description?: string
   text?: string
   disabled?: boolean
 }
 
 export default function SourceList<
-  TItem = Record<string, string>,
-  TType = Record<string, string>,
+  TItem extends Record<string, any> = Record<string, string>,
+  TType extends Record<string, string> = Record<string, string>,
 >({
   listItem,
   items = [],
@@ -28,7 +31,7 @@ export default function SourceList<
   disabled = false,
   className,
 }: {
-  listItem: (listItem: ListItem) => React.ReactNode
+  listItem: (listItem: ListItem<TItem>) => React.ReactNode
   by: string
   to: string
   items?: TItem[]
@@ -44,14 +47,12 @@ export default function SourceList<
     filter === ''
       ? items
       : items.filter(item => {
-          const id = (item as Record<string, string>)[by] ?? ''
-          const description = isNil(byDescription)
-            ? ''
-            : (item as Record<string, string>)?.[byDescription] ?? ''
-          const name = isNil(byName)
-            ? ''
-            : (item as Record<string, string>)?.[byName] ?? ''
-          const type = String((types as Record<string, string>)?.[id] ?? '')
+          const id = item[by] ?? ''
+          const description = String(
+            isNil(byDescription) ? '' : item?.[byDescription] ?? '',
+          )
+          const name = String(isNil(byName) ? '' : item?.[byName] ?? '')
+          const type = String(types?.[id] ?? '')
 
           return (
             name.includes(filter) ||
@@ -99,6 +100,7 @@ export default function SourceList<
                 description,
                 text: (types as Record<string, string>)?.[id],
                 disabled,
+                item,
               })}
             </li>
           )
