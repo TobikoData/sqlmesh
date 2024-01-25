@@ -32,7 +32,7 @@ export const EnumRoutes = {
 } as const
 
 const aliases: Record<string, string[]> = {
-  plan: [Modules.plans],
+  plan: [Modules.plans, Modules['plan-progress']],
 }
 
 export function getBrowserRouter(

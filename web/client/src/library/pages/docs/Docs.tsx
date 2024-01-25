@@ -34,6 +34,7 @@ export default function PageDocs(): JSX.Element {
       isNil(model)
         ? `${EnumRoutes.IdeDocsModels}`
         : `${EnumRoutes.IdeDocsModels}/${model.name}`,
+      { replace: true },
     )
   }, [models])
 

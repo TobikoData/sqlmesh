@@ -16,6 +16,7 @@ import {
   isNil,
   toDateFormat,
   isFalse,
+  isArrayEmpty,
 } from '../../../utils'
 import { EnumPlanChangeType, usePlan } from './context'
 import { getPlanOverviewDetails } from './help'
@@ -430,24 +431,42 @@ function StageBackfill(): JSX.Element {
 
   const tasks = useMemo(
     () =>
-      planApply.backfills.reduce(
-        (acc: Record<string, ModelSQLMeshChangeDisplay>, model) => {
-          const taskBackfill = planApply.tasks[model.name] ?? model
+      isArrayEmpty(planApply.backfills)
+        ? Object.entries(planApply.tasks).reduce(
+            (acc: Record<string, ModelSQLMeshChangeDisplay>, [name, task]) => {
+              const choices = categories[name]
+              const shouldExclude = isNil(choices)
+                ? false
+                : choices.every(Boolean)
 
-          taskBackfill.interval = model.interval ?? []
+              if (shouldExclude) return acc
 
-          const choices = categories[model.name]
-          const shouldExclude = isNil(choices) ? false : choices.every(Boolean)
+              acc[name] = task
 
-          if (shouldExclude) return acc
+              return acc
+            },
+            {},
+          )
+        : planApply.backfills.reduce(
+            (acc: Record<string, ModelSQLMeshChangeDisplay>, model) => {
+              const taskBackfill = planApply.tasks[model.name] ?? model
 
-          acc[model.name] = taskBackfill
+              taskBackfill.interval = model.interval ?? []
 
-          return acc
-        },
-        {},
-      ),
-    [planApply.backfills, categories],
+              const choices = categories[model.name]
+              const shouldExclude = isNil(choices)
+                ? false
+                : choices.every(Boolean)
+
+              if (shouldExclude) return acc
+
+              acc[model.name] = taskBackfill
+
+              return acc
+            },
+            {},
+          ),
+    [planApply.backfills, planApply.tasks, categories],
   )
 
   if (isNil(stageBackfill) || isNil(environment)) return <></>
@@ -688,8 +707,8 @@ function Stage({
   }, [elTrigger, planOverview, planApply, shouldCollapse])
 
   useEffect(() => {
-    setOpen(isOpen && meta?.status !== Status.init && hasChildren)
-  }, [meta, hasChildren, isOpen])
+    setOpen(isOpen || (meta?.status !== Status.init && hasChildren))
+  }, [meta?.status, hasChildren, isOpen])
 
   if (isNil(meta)) return <></>
 

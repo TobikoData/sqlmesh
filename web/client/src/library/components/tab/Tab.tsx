@@ -11,14 +11,14 @@ export default function TabList({
   className?: string
 }): JSX.Element {
   return (
-    <Tab.List className="w-full whitespace-nowrap px-2 py-0.5 flex justify-between items-center bg-primary-10 dark:bg-secondary-10">
+    <Tab.List className="w-full whitespace-nowrap px-2 py-0.5 flex justify-between items-center">
       <div
         className={clsx(
           'flex w-full overflow-hidden overflow-x-auto py-1 hover:scrollbar scrollbar--horizontal',
           className,
         )}
       >
-        <div className="flex items-center bg-secondary-10 dark:bg-primary-10 cursor-pointer rounded-full p-1 overflow-hidden">
+        <div className="flex items-center bg-secondary-5 dark:bg-primary-5 cursor-pointer rounded-full p-1 overflow-hidden">
           {list.map(item => (
             <Tab
               key={item}
