@@ -30,10 +30,6 @@ import TabList from '@components/tab/Tab'
 import { getTableDataFromArrowStreamResult } from '@components/table/help'
 import Spinner from '@components/logo/Spinner'
 import { ModelColumns } from '@components/graph/Graph'
-import { CodeEditorDefault } from './EditorCode'
-import { EnumFileExtensions } from '@models/file'
-import { useSQLMeshModelExtensions } from './hooks'
-import { useLineageFlow } from '@components/graph/context'
 
 const DAY = 24 * 60 * 60 * 1000
 const LIMIT = 1000
@@ -89,8 +85,6 @@ function InspectorModel({
   isOpen?: boolean
   toggle?: () => void
 }): JSX.Element {
-  const { handleClickModel } = useLineageFlow()
-
   const environment = useStoreContext(s => s.environment)
   const environments = useStoreContext(s => s.environments)
   const list = Array.from(environments)
@@ -111,9 +105,6 @@ function InspectorModel({
     }
   }, [model.name])
 
-  const modelExtensions = useSQLMeshModelExtensions(model.path, model => {
-    handleClickModel?.(model.name)
-  })
   return (
     <Tab.Group>
       <div className="flex w-full items-center">
@@ -139,7 +130,6 @@ function InspectorModel({
               [
                 'Evaluate',
                 'Columns',
-                model.isModelSQL && 'Query',
                 list.length > 1 && environment.isRemote && 'Diff',
               ].filter(Boolean) as string[]
             }
@@ -175,17 +165,6 @@ function InspectorModel({
               withSource={false}
               withDescription={true}
               limit={10}
-            />
-          </Tab.Panel>
-          <Tab.Panel
-            unmount={false}
-            className="text-xs w-full h-full ring-white ring-opacity-60 ring-offset-2 ring-offset-blue-400 focus:outline-none focus:ring-2"
-          >
-            <CodeEditorDefault
-              type={EnumFileExtensions.SQL}
-              content={model.sql ?? ''}
-              extensions={modelExtensions}
-              className="text-xs"
             />
           </Tab.Panel>
           {list.length > 1 && environment.isRemote && (

@@ -26,6 +26,7 @@ import { getTableDataFromArrowStreamResult } from '@components/table/help'
 import { type Table } from 'apache-arrow'
 import { type KeyBinding } from '@codemirror/view'
 import { useStoreContext } from '@context/context'
+import { useIDE } from '~/library/pages/ide/context'
 
 function Editor(): JSX.Element {
   const tab = useStoreEditor(s => s.tab)
@@ -94,6 +95,7 @@ function EditorLoading(): JSX.Element {
 }
 
 function EditorMain({ tab }: { tab: EditorTab }): JSX.Element {
+  const { errors } = useIDE()
   const models = useStoreContext(s => s.models)
   const isModel = useStoreContext(s => s.isModel)
 
@@ -224,7 +226,8 @@ function EditorMain({ tab }: { tab: EditorTab }): JSX.Element {
       isFalse(tab.file.isEmpty) && isNotNil(model) && isModel(tab.file.path)
     const showPreview =
       (tab.file.isLocal && [previewTable, previewDiff].some(Boolean)) ||
-      showLineage
+      showLineage ||
+      errors.size > 0
 
     return showPreview ? [70, 30] : [100, 0]
   }
