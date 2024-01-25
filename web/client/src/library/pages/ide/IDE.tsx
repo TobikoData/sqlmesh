@@ -10,6 +10,7 @@ import {
 import { useChannelEvents } from '../../../api/channels'
 import {
   isArrayEmpty,
+  isFalse,
   isNil,
   isNotNil,
   isObjectNotEmpty,
@@ -43,7 +44,7 @@ import {
 import { type PlanOverviewTracker } from '@models/tracker-plan-overview'
 import { type PlanApplyTracker } from '@models/tracker-plan-apply'
 import { type PlanCancelTracker } from '@models/tracker-plan-cancel'
-import { ModelPlanAction } from '@models/plan-action'
+import { EnumPlanAction, ModelPlanAction } from '@models/plan-action'
 import { useStorePlan } from '@context/plan'
 
 export default function PageIDE(): JSX.Element {
@@ -272,7 +273,11 @@ export default function PageIDE(): JSX.Element {
   }, [confirmations])
 
   useEffect(() => {
-    if (models.size > 0) {
+    if (
+      models.size > 0 &&
+      isFalse(planAction.isProcessing) &&
+      isFalse(planAction.isRunningTask)
+    ) {
       planApply.reset()
 
       void planRun()
@@ -280,7 +285,11 @@ export default function PageIDE(): JSX.Element {
   }, [models])
 
   useEffect(() => {
-    if (models.size > 0) {
+    if (
+      models.size > 0 &&
+      isFalse(planAction.isProcessing) &&
+      isFalse(planAction.isRunningTask)
+    ) {
       planApply.reset()
 
       void planRun()
@@ -312,9 +321,11 @@ export default function PageIDE(): JSX.Element {
       planCancel,
     })
 
-    if (isNotNil(value)) {
-      setPlanAction(new ModelPlanAction({ value }))
-    }
+    // This inconsistency can happen when we recived flag from the backend
+    // that some task is runninng but not yet recived SSE event with data
+    if (value === EnumPlanAction.Done && planAction.isRunningTask) return
+
+    setPlanAction(new ModelPlanAction({ value }))
   }, [planOverview, planApply, planCancel])
 
   function updateModels(models?: Model[]): void {
@@ -328,8 +339,6 @@ export default function PageIDE(): JSX.Element {
     if (planAction.isApplying || planAction.isRunning) {
       void cancelPlanOrPlanApply()
     }
-
-    console.log(data)
 
     addError(EnumErrorKey.General, data)
   }

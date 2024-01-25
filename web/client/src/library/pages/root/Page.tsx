@@ -496,7 +496,7 @@ export function SelectEnvironemnt({
             leaveFrom="opacity-100"
             leaveTo="opacity-0"
           >
-            <div className="absolute top-10 right-1 min-w-[20rem] max-w-[25vw] overflow-hidden shadow-xl bg-theme border-2 border-neutral-10 rounded-md flex flex-col z-10">
+            <div className="absolute top-10 right-1 min-w-[20rem] max-w-[25vw] overflow-hidden shadow-xl bg-theme border-2 border-neutral-100 dark:border-neutral-800 rounded-md flex flex-col z-10">
               <Menu.Items className="overflow-auto max-h-80 pb-2 hover:scrollbar scrollbar--vertical">
                 {Array.from(environments).map(env => (
                   <Menu.Item
@@ -710,7 +710,7 @@ function ChangesPreview({
         <>
           <span
             className={clsx(
-              'transition-all min-w-5 text-center mx-0.5 px-1 rounded-full text-[10px] font-black text-neutral-100 cursor-default border border-inherit',
+              'transition-all flex min-w-[1rem] h-4 text-center mx-0.5 px-1 rounded-full text-[10px] font-black text-neutral-100 cursor-default border border-inherit',
               type === EnumPlanChangeType.Add &&
                 'bg-success-500 border-success-500',
               type === EnumPlanChangeType.Remove &&

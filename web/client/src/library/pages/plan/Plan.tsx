@@ -64,7 +64,7 @@ export default function PagePlan(): JSX.Element {
               name={name}
               text={text}
               description={description}
-              disabled={disabled || item.isProd}
+              disabled={disabled}
             />
           )}
         />
