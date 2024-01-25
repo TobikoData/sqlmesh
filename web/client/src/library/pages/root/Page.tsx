@@ -101,16 +101,16 @@ export default function Page({
           {modules.includes(Modules.environments) && (
             <>
               <div className="min-w-[10rem] px-2 h-8 w-full flex items-center">
-                <div className="flex w-full">
+                <div className="flex">
                   <button
                     onClick={() => navigate(-1)}
-                    className="text-neutral-500 text-xs hover:bg-neutral-5 px-1 py-1 rounded-full"
+                    className="inline-block text-neutral-500 text-xs hover:bg-neutral-5 px-1 py-1 rounded-full"
                   >
                     <ChevronLeftIcon className="min-w-4 h-4" />
                   </button>
                   <button
                     onClick={() => navigate(1)}
-                    className="text-neutral-500 text-xs hover:bg-neutral-5 px-1 py-1 rounded-full"
+                    className="inline-block text-neutral-500 text-xs hover:bg-neutral-5 px-1 py-1 rounded-full"
                   >
                     <ChevronRightIcon className="min-w-4 h-4" />
                   </button>

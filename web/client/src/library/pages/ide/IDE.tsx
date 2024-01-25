@@ -283,19 +283,7 @@ export default function PageIDE(): JSX.Element {
 
       void planRun()
     }
-  }, [models])
-
-  useEffect(() => {
-    if (
-      models.size > 0 &&
-      isFalse(planAction.isProcessing) &&
-      isFalse(planAction.isRunningTask)
-    ) {
-      planApply.reset()
-
-      void planRun()
-    }
-  }, [environment])
+  }, [models, environment])
 
   useEffect(() => {
     planOverview.isFetching = isFetchingPlanRun
@@ -322,7 +310,7 @@ export default function PageIDE(): JSX.Element {
       planCancel,
     })
 
-    // This inconsistency can happen when we recived flag from the backend
+    // This inconsistency can happen when we receive flag from the backend
     // that some task is runninng but not yet recived SSE event with data
     if (value === EnumPlanAction.Done && planAction.isRunningTask) return
 
