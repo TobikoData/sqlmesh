@@ -265,6 +265,8 @@ class Scheduler:
                 raise CircuitBreakerError()
 
             snapshot_name, ((start, end), batch_idx) = node
+            if batch_idx == -1:
+                return
             snapshot = snapshots_by_name[snapshot_name]
 
             self.console.start_snapshot_evaluation_progress(snapshot)
@@ -323,35 +325,38 @@ class Scheduler:
             A DAG of snapshot intervals to be evaluated.
         """
 
-        intervals_per_snapshot_version = {
-            (snapshot.name, snapshot.version_get_or_generate()): intervals
-            for snapshot, intervals in batches.items()
+        intervals_per_snapshot = {
+            snapshot.name: intervals for snapshot, intervals in batches.items()
         }
 
         dag = DAG[SchedulingUnit]()
+        terminal_node = ((to_datetime(0), to_datetime(0)), -1)
+
         for snapshot, intervals in batches.items():
             if not intervals:
                 continue
-            upstream_dependencies = [
-                (p_sid.name, (interval, i))
-                for p_sid in snapshot.parents
-                if p_sid in self.snapshots
-                for i, interval in enumerate(
-                    intervals_per_snapshot_version.get(
-                        (
-                            self.snapshots[p_sid].name,
-                            self.snapshots[p_sid].version_get_or_generate(),
-                        ),
-                        [],
-                    )
-                )
-            ]
+
+            upstream_dependencies = []
+
+            for p_sid in snapshot.parents:
+                if p_sid in self.snapshots:
+                    p_intervals = intervals_per_snapshot.get(p_sid.name, [])
+
+                    if len(p_intervals) > 1:
+                        upstream_dependencies.append((p_sid.name, terminal_node))
+                    else:
+                        for (i, interval) in enumerate(p_intervals):
+                            upstream_dependencies.append((p_sid.name, (interval, i)))
+
             for i, interval in enumerate(intervals):
-                dag.add((snapshot.name, (interval, i)), upstream_dependencies)
+                node = (snapshot.name, (interval, i))
+                dag.add(node, upstream_dependencies)
+
+                if len(intervals) > 1:
+                    dag.add((snapshot.name, terminal_node), [node])
+
                 if snapshot.depends_on_past and i > 0:
-                    dag.add(
-                        (snapshot.name, (interval, i)), [(snapshot.name, (intervals[i - 1], i - 1))]
-                    )
+                    dag.add(node, [(snapshot.name, (intervals[i - 1], i - 1))])
         return dag
 
 
