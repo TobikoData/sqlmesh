@@ -409,13 +409,15 @@ function PlanChanges(): JSX.Element {
           className="-mr-2 group-hover:mr-0 z-[1]"
         />
       )}
-      {isArrayNotEmpty(planOverview.backfills) && (
+      {isArrayNotEmpty(planOverview.backfills) ? (
         <ChangesPreview
           headline="Backfills"
           type={EnumPlanChangeType.Default}
           changes={planOverview.backfills}
           className="ml-4 group-hover:ml-2 z-[6]"
         />
+      ) : (
+        <div className="ml-2 group-hover:ml-2 z-[6]"></div>
       )}
     </span>
   )
