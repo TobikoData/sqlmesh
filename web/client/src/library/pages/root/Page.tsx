@@ -5,6 +5,8 @@ import {
   ShieldCheckIcon,
   ExclamationTriangleIcon,
   PlayCircleIcon,
+  ChevronRightIcon,
+  ChevronLeftIcon,
 } from '@heroicons/react/20/solid'
 import clsx from 'clsx'
 import {
@@ -19,7 +21,7 @@ import {
   MinusCircleIcon,
   StarIcon,
 } from '@heroicons/react/24/outline'
-import { NavLink } from 'react-router-dom'
+import { NavLink, useNavigate } from 'react-router-dom'
 import { EnumRoutes } from '~/routes'
 import { Divider } from '@components/divider/Divider'
 import SplitPane from '@components/splitPane/SplitPane'
@@ -67,10 +69,13 @@ export default function Page({
   sidebar: React.ReactNode
   content: React.ReactNode
 }): JSX.Element {
+  const navigate = useNavigate()
+
   const splitPaneSizes = useStoreContext(s => s.splitPaneSizes)
   const setSplitPaneSizes = useStoreContext(s => s.setSplitPaneSizes)
 
   const modules = useStoreContext(s => s.modules)
+
   return (
     <>
       <SplitPane
@@ -95,7 +100,21 @@ export default function Page({
         <div className="flex flex-col w-full h-full overflow-hidden">
           {modules.includes(Modules.environments) && (
             <>
-              <div className="min-w-[10rem] px-2 h-8 w-full">
+              <div className="min-w-[10rem] px-2 h-8 w-full flex items-center">
+                <div className="flex w-full">
+                  <button
+                    onClick={() => navigate(-1)}
+                    className="text-neutral-500 text-xs hover:bg-neutral-5 px-1 py-1 rounded-full"
+                  >
+                    <ChevronLeftIcon className="min-w-4 h-4" />
+                  </button>
+                  <button
+                    onClick={() => navigate(1)}
+                    className="text-neutral-500 text-xs hover:bg-neutral-5 px-1 py-1 rounded-full"
+                  >
+                    <ChevronRightIcon className="min-w-4 h-4" />
+                  </button>
+                </div>
                 <EnvironmentDetails />
               </div>
               <Divider />

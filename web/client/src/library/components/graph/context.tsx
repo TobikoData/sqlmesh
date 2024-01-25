@@ -109,12 +109,14 @@ export default function LineageFlowProvider({
   handleError,
   handleClickModel,
   children,
-  withColumns = false,
+  showColumns = false,
+  showConnected = false,
 }: {
   children: React.ReactNode
   handleClickModel?: (modelName: string) => void
   handleError?: (error: ErrorIDE) => void
-  withColumns?: boolean
+  showColumns?: boolean
+  showConnected?: boolean
 }): JSX.Element {
   const models = useStoreContext(s => s.models)
 
@@ -122,7 +124,7 @@ export default function LineageFlowProvider({
   const [nodesConnections, setNodeConnections] = useState<
     Record<string, ConnectedNode>
   >({})
-  const [hasColumns, setWithColumns] = useState(withColumns)
+  const [withColumns, setWithColumns] = useState(showColumns)
   const [mainNode, setMainNode] = useState<string>()
   const [manuallySelectedColumn, setManuallySelectedColumn] =
     useState<[ModelSQLMeshModel, Column]>()
@@ -130,7 +132,7 @@ export default function LineageFlowProvider({
   const [connections, setConnections] = useState<Map<string, Connections>>(
     new Map(),
   )
-  const [withConnected, setWithConnected] = useState(false)
+  const [withConnected, setWithConnected] = useState(showConnected)
   const [selectedNodes, setSelectedNodes] = useState<SelectedNodes>(new Set())
   const [activeNodes, setActiveNodes] = useState<ActiveNodes>(new Set())
   const [highlightedNodes, setHighlightedNodes] = useState<HighlightedNodes>({})
@@ -249,7 +251,7 @@ export default function LineageFlowProvider({
         lineage,
         models,
         manuallySelectedColumn,
-        withColumns: hasColumns,
+        withColumns,
         withConnected,
         withImpacted,
         withSecondary,

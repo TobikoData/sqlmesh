@@ -77,7 +77,9 @@ export default function ModelLineage({
 
         const modelsCount = Object.keys(data).length
 
-        setWithColumns(modelsCount <= WITH_COLUMNS_LIMIT)
+        if (modelsCount > WITH_COLUMNS_LIMIT) {
+          setWithColumns(false)
+        }
 
         lineageWorker.postMessage({
           topic: 'lineage',
@@ -110,7 +112,6 @@ export default function ModelLineage({
       setNodeConnections({})
       setMainNode(undefined)
       setHighlightedNodes({})
-      setWithColumns(false)
     }
   }, [model])
 

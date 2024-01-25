@@ -76,6 +76,7 @@ export default function Content(): JSX.Element {
         />
       ) : (
         <LineageFlowProvider
+          showColumns={true}
           handleClickModel={handleClickModel}
           handleError={handleError}
         >

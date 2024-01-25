@@ -24,18 +24,22 @@ export default function PagePlan(): JSX.Element {
       const pathname = `${EnumRoutes.Plan}/environments/${planApply.environment}`
 
       if (location.pathname !== pathname) {
-        navigate(pathname)
+        navigate(pathname, { replace: true })
       }
     } else if (
       location.pathname === EnumRoutes.Plan ||
       location.pathname === `${EnumRoutes.Plan}/environments`
     ) {
-      navigate(`${EnumRoutes.Plan}/environments/${environment.name}`)
+      navigate(`${EnumRoutes.Plan}/environments/${environment.name}`, {
+        replace: true,
+      })
     }
   }, [location, planApply.isRunning])
 
   useEffect(() => {
-    navigate(`${EnumRoutes.Plan}/environments/${environment.name}`)
+    navigate(`${EnumRoutes.Plan}/environments/${environment.name}`, {
+      replace: true,
+    })
   }, [environment])
 
   return (

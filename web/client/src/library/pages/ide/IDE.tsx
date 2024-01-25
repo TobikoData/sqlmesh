@@ -264,6 +264,7 @@ export default function PageIDE(): JSX.Element {
         modules.includes(Modules.editor)
           ? EnumRoutes.IdeEditor
           : EnumRoutes.IdeDocs,
+        { replace: true },
       )
     }
   }, [location])
