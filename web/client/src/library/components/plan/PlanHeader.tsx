@@ -3,7 +3,6 @@ import { useStoreContext } from '~/context/context'
 import { EnumVariant } from '~/types/enum'
 import { Disclosure } from '@headlessui/react'
 import { MinusCircleIcon, PlusCircleIcon } from '@heroicons/react/24/solid'
-import ReportErrors from '@components/report/ReportErrors'
 import { useStorePlan } from '@context/plan'
 import { isFalse } from '@utils/index'
 
@@ -13,16 +12,7 @@ export default function PlanHeader(): JSX.Element {
   const planApply = useStorePlan(s => s.planApply)
 
   return (
-    <div className="flex flex-col p-4 w-full">
-      <div className="flex justify-between items-center">
-        <h4 className="flex items-center text-xl pb-2 font-bold whitespace-nowrap">
-          <span>Target Environment: </span>
-          <span className="block ml-2 px-2 py-1 font-sm rounded-md bg-primary-10 text-primary-500">
-            {environment.name}
-          </span>
-        </h4>
-        <ReportErrors />
-      </div>
+    <div className="flex flex-col px-4 py-2 w-full">
       {environment.isInitialProd && isFalse(planApply.isFinished) && (
         <Banner variant={EnumVariant.Warning}>
           <Disclosure defaultOpen={false}>

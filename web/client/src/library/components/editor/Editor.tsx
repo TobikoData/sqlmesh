@@ -12,7 +12,6 @@ import {
 import EditorFooter from './EditorFooter'
 import EditorTabs from './EditorTabs'
 import EditorInspector from './EditorInspector'
-import './Editor.css'
 import EditorPreview from './EditorPreview'
 import { type EditorTab, useStoreEditor } from '~/context/editor'
 import clsx from 'clsx'

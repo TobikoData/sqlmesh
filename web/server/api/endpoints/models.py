@@ -50,10 +50,13 @@ def serialize_all_models(
     context: Context, render_queries: t.Optional[t.Set[str]] = None
 ) -> t.List[models.Model]:
     render_queries = render_queries or set()
-    return [
-        serialize_model(model, context.path, model.name in render_queries)
-        for model in context.models.values()
-    ]
+    return sorted(
+        [
+            serialize_model(model, context.path, model.name in render_queries)
+            for model in context.models.values()
+        ],
+        key=lambda model: model.name,
+    )
 
 
 def serialize_model(

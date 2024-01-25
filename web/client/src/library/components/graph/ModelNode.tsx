@@ -1,4 +1,4 @@
-import { isNil, isArrayNotEmpty, isNotNil, toID } from '@utils/index'
+import { isNil, isArrayNotEmpty, isNotNil, toID, isFalse } from '@utils/index'
 import clsx from 'clsx'
 import { useMemo, useCallback, useState } from 'react'
 import {
@@ -66,7 +66,7 @@ export default function ModelNode({
   }, [id, models, lineage])
 
   const highlightedNodeModels = useMemo(
-    () => Object.values(highlightedNodes ?? {}).flat(),
+    () => Object.values(highlightedNodes).flat(),
     [highlightedNodes],
   )
 
@@ -103,11 +103,13 @@ export default function ModelNode({
   const hasSelectedColumns = columns.some(({ name }) =>
     connections.get(toID(id, name)),
   )
+  const hasHighlightedNodes = Object.keys(highlightedNodes).length > 0
   const highlighted = Object.keys(highlightedNodes ?? {}).find(key =>
     highlightedNodes[key]!.includes(id),
   )
   const splat = highlightedNodes?.['*']
-  const isMainNode = mainNode === id || highlightedNodeModels.includes(id)
+  const isMainNode = mainNode === id
+  const isHighlightedNode = highlightedNodeModels.includes(id)
   const isSelected = selectedNodes.has(id)
   const isInteractive = mainNode !== id && isNotNil(handleClickModel)
   const isCTE = nodeData.type === EnumLineageNodeModelType.cte
@@ -120,7 +122,8 @@ export default function ModelNode({
       isMouseOver ||
       isSelected ||
       isMainNode) &&
-    isArrayNotEmpty(columns)
+    isArrayNotEmpty(columns) &&
+    isFalse(hasHighlightedNodes)
   const isActiveNode =
     selectedNodes.size > 0 || activeNodes.size > 0 || withConnected
       ? isSelected ||
@@ -138,9 +141,12 @@ export default function ModelNode({
         (isModelExternal || isModelSeed) &&
           'border-4 border-accent-500 ring-8 ring-accent-200',
         isSelected && 'border-4 border-secondary-500 ring-8 ring-secondary-200',
-        isMainNode && 'ring-8 ring-brand-200',
-        isNil(highlighted) ? splat : highlighted,
-        isActiveNode || isMainNode
+        isNil(highlighted)
+          ? isMainNode
+            ? 'ring-8 ring-brand-200'
+            : splat
+          : highlighted,
+        (hasHighlightedNodes ? isHighlightedNode : isActiveNode) || isMainNode
           ? 'opacity-100'
           : 'opacity-40 hover:opacity-100',
       )}
@@ -157,7 +163,7 @@ export default function ModelNode({
         isSelected={isSelected}
         isDraggable={true}
         className={clsx(
-          showColumns ? 'rounded-t-md' : 'rounded-lg',
+          'rounded-md',
           isCTE
             ? 'bg-accent-500'
             : isMainNode

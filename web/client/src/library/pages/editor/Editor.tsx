@@ -86,6 +86,7 @@ export default function PageEditor(): JSX.Element {
           }
         >
           <LineageFlowProvider
+            showColumns={true}
             handleClickModel={handleClickModel}
             handleError={handleError}
           >

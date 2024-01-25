@@ -22,9 +22,9 @@ export default function PageErrors(): JSX.Element {
       const id = list[0]?.id
 
       if (isNil(id)) {
-        navigate(EnumRoutes.Errors)
+        navigate(EnumRoutes.Errors, { replace: true })
       } else {
-        navigate(EnumRoutes.Errors + '/' + id)
+        navigate(EnumRoutes.Errors + '/' + id, { replace: true })
       }
     }
   }, [list])

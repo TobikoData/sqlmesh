@@ -10,7 +10,7 @@ import { useApiMeta } from './api'
 import { useStoreContext } from '@context/context'
 import { useStorePlan } from '@context/plan'
 import { EnumPlanAction, ModelPlanAction } from '@models/plan-action'
-import { isNil, isNotNil } from './utils'
+import { isNil, isTrue } from './utils'
 
 export default function App(): JSX.Element {
   const version = useStoreContext(s => s.version)
@@ -29,7 +29,8 @@ export default function App(): JSX.Element {
     void getMeta().then(({ data }) => {
       setVersion(data?.version)
       setModules(Array.from(new Set(modules.concat(data?.modules ?? []))))
-      if (isNotNil(data) && Boolean(data.has_running_task)) {
+
+      if (isTrue(data?.has_running_task)) {
         setPlanAction(
           new ModelPlanAction({ value: EnumPlanAction.RunningTask }),
         )

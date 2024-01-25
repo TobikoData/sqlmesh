@@ -7,7 +7,7 @@ import {
   type EnvironmentName,
   ModelEnvironment,
 } from '~/models/environment'
-import { isNil, isStringEmptyOrNil } from '~/utils'
+import { isNil, isStringEmptyOrNil, isTrue } from '~/utils'
 
 interface ContextStore {
   version?: string
@@ -53,7 +53,7 @@ const environment =
 export const useStoreContext = create<ContextStore>((set, get) => ({
   version: undefined,
   modules: [],
-  splitPaneSizes: [30, 70],
+  splitPaneSizes: [20, 80],
   showConfirmation: false,
   confirmations: [],
   environment,
@@ -269,7 +269,7 @@ export const useStoreContext = create<ContextStore>((set, get) => ({
       })
 
       const currentEnv = storedEnv ?? defaultEnv ?? s.environment
-      const environment = isStringEmptyOrNil(prodEnv?.id) ? prodEnv : currentEnv
+      const environment = isTrue(prodEnv?.isInitial) ? prodEnv : currentEnv
 
       ModelEnvironment.save({ environments, environment })
       ModelEnvironment.sort(environments)

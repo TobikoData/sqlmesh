@@ -44,12 +44,14 @@ class EventName(str, enum.Enum):
 
 
 class Modules(str, enum.Enum):
-    EDITOR = "editor"
-    DOCS = "docs"
-    PLANS = "plans"
-    TESTS = "tests"
-    AUDITS = "audits"
-    ERRORS = "errors"
+    EDITOR = "editor"  # include file editor and file explorer
+    DOCS = "docs"  # include docs
+    PLANS = "plans"  # include ability to run/apply plans
+    PLAN_PROGRESS = "plan-progress"  # include ability to see plan progress
+    TESTS = "tests"  # include ability to run tests
+    AUDITS = "audits"  # include ability to run audits
+    ERRORS = "errors"  # include ability to see errors
+    ENVIRONMENTS = "environments"  # include ability to see environments
 
 
 class ModelType(str, enum.Enum):

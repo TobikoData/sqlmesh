@@ -181,14 +181,17 @@ function PlanChangePreviewDirect({
 
                       return (
                         <div className="h-[16rem] bg-theme-lighter rounded-xl p-2">
-                          <LineageFlowProvider withColumns={false}>
+                          <LineageFlowProvider
+                            showColumns={false}
+                            showConnected={true}
+                          >
                             <ModelLineage
                               model={model}
                               highlightedNodes={{
-                                'border-4 border-secondary-500': [model.name],
                                 'border-4 border-warning-500':
                                   change.indirect?.map(c => c.name) ?? [],
-                                '*': ['opacity-50 hover:opacity-100'],
+                                'border-4 border-secondary-500': [change.name],
+                                '*': [],
                               }}
                             />
                           </LineageFlowProvider>

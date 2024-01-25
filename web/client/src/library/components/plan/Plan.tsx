@@ -16,12 +16,14 @@ import { useIDE } from '~/library/pages/ide/context'
 import { useStoreContext } from '@context/context'
 import { Transition } from '@headlessui/react'
 import PlanActionsDescription from './PlanActionsDescription'
+import { Modules } from '@api/client'
 
 function Plan(): JSX.Element {
   const dispatch = usePlanDispatch()
   const { clearErrors } = useIDE()
 
   const environment = useStoreContext(s => s.environment)
+  const modules = useStoreContext(s => s.modules)
 
   const planOverviewTracker = useStorePlan(s => s.planOverview)
   const planApplyTracker = useStorePlan(s => s.planApply)
@@ -133,24 +135,28 @@ function Plan(): JSX.Element {
           )}
         </Transition>
       </div>
-      <Transition
-        appear
-        show={isFalse(planAction.isDone)}
-        enter="transition ease duration-1000 transform"
-        enterFrom="opacity-0 translate-y-full"
-        enterTo="opacity-100 translate-y-0"
-        leave="transition ease duration-500 transform"
-        leaveFrom="opacity-100 translate-y-0"
-        leaveTo="opacity-0 translate-y-full"
-      >
-        <PlanActionsDescription />
-      </Transition>
-      <PlanActions
-        apply={apply}
-        run={run}
-        cancel={cancel}
-        reset={reset}
-      />
+      {modules.includes(Modules.plans) && (
+        <>
+          <Transition
+            appear
+            show={isFalse(planAction.isDone)}
+            enter="transition ease duration-1000 transform"
+            enterFrom="opacity-0 translate-y-full"
+            enterTo="opacity-100 translate-y-0"
+            leave="transition ease duration-500 transform"
+            leaveFrom="opacity-100 translate-y-0"
+            leaveTo="opacity-0 translate-y-full"
+          >
+            <PlanActionsDescription />
+          </Transition>
+          <PlanActions
+            apply={apply}
+            run={run}
+            cancel={cancel}
+            reset={reset}
+          />
+        </>
+      )}
     </div>
   )
 }
