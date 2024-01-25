@@ -168,6 +168,8 @@ def _get_file_with_content(file_path: Path, relative_path: str) -> models.File:
     """Get a file, including its contents."""
     try:
         content = file_path.read_text()
+    except FileNotFoundError as e:
+        raise e
     except Exception:
         error = ApiException(
             message="Unable to get file content",
