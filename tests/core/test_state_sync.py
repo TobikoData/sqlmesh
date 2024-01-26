@@ -909,8 +909,8 @@ def test_delete_expired_snapshots_promoted(
     env.snapshots = []
     state_sync.promote(env)
 
-    now_mock = mocker.patch("sqlmesh.core.state_sync.common.now")
-    now_mock.return_value = to_datetime(now_timestamp() + 11000)
+    now_timestamp_mock = mocker.patch("sqlmesh.core.state_sync.engine_adapter.now_timestamp")
+    now_timestamp_mock.return_value = now_timestamp() + 11000
 
     assert state_sync.delete_expired_snapshots() == [
         SnapshotTableCleanupTask(snapshot=snapshot.table_info, dev_table_only=False)

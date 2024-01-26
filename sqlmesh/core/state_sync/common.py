@@ -3,7 +3,6 @@ from __future__ import annotations
 import abc
 import logging
 import typing as t
-from collections import defaultdict
 from datetime import datetime
 from functools import wraps
 
@@ -16,15 +15,10 @@ from sqlmesh.core.snapshot import (
     SnapshotIdLike,
     SnapshotInfoLike,
     SnapshotNameVersionLike,
-    SnapshotTableCleanupTask,
     start_date,
 )
-from sqlmesh.core.state_sync.base import (
-    PromotionResult,
-    SnapshotTableCleanupTask,
-    StateSync,
-)
-from sqlmesh.utils.date import TimeLike, now, now_timestamp, to_datetime, to_timestamp
+from sqlmesh.core.state_sync.base import PromotionResult, StateSync
+from sqlmesh.utils.date import TimeLike, now, now_timestamp, to_timestamp
 from sqlmesh.utils.errors import SQLMeshError
 
 if t.TYPE_CHECKING:
@@ -226,55 +220,6 @@ class CommonStateSyncMixin(StateSync):
 
         environment.finalized_ts = now_timestamp()
         self._update_environment(environment)
-
-    @transactional()
-    def delete_expired_snapshots(self) -> t.List[SnapshotTableCleanupTask]:
-        current_time = now(minute_floor=False)
-
-        snapshots = self._get_snapshots(hydrate_intervals=False)
-
-        snapshots_by_version = defaultdict(set)
-        snapshots_by_temp_version = defaultdict(set)
-        for s in snapshots.values():
-            snapshots_by_version[(s.name, s.version)].add(s.snapshot_id)
-            snapshots_by_temp_version[(s.name, s.temp_version_get_or_generate())].add(s.snapshot_id)
-
-        promoted_snapshot_ids = {
-            snapshot.snapshot_id
-            for environment in self.get_environments()
-            for snapshot in environment.snapshots
-        }
-
-        def _is_snapshot_used(snapshot: Snapshot) -> bool:
-            return (
-                snapshot.snapshot_id in promoted_snapshot_ids
-                or to_datetime(snapshot.ttl, relative_base=to_datetime(snapshot.updated_ts))
-                > current_time
-            )
-
-        expired_snapshots = [s for s in snapshots.values() if not _is_snapshot_used(s)]
-
-        if expired_snapshots:
-            self.delete_snapshots(expired_snapshots)
-
-        cleanup_targets = []
-        for snapshot in expired_snapshots:
-            shared_version_snapshots = snapshots_by_version[(snapshot.name, snapshot.version)]
-            shared_version_snapshots.discard(snapshot.snapshot_id)
-
-            shared_temp_version_snapshots = snapshots_by_temp_version[
-                (snapshot.name, snapshot.temp_version_get_or_generate())
-            ]
-            shared_temp_version_snapshots.discard(snapshot.snapshot_id)
-
-            if not shared_temp_version_snapshots:
-                cleanup_targets.append(
-                    SnapshotTableCleanupTask(
-                        snapshot=snapshot.table_info, dev_table_only=bool(shared_version_snapshots)
-                    )
-                )
-
-        return cleanup_targets
 
     @transactional()
     def unpause_snapshots(
