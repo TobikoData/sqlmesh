@@ -238,14 +238,14 @@ class SnapshotEvaluator:
             if not snapshot.is_model or snapshot.is_symbolic:
                 continue
             table = exp.to_table(snapshot.table_name(False), dialect=snapshot.model.dialect)
-            snapshots_with_table_names.append((snapshot, table.name.lower()))
+            snapshots_with_table_names.append((snapshot, table.name))
             tables_by_schema[d.schema_(table.db, catalog=table.catalog)].add(table.name)
 
         existing_objects: t.Set[str] = set()
         for schema, object_names in tables_by_schema.items():
             logger.info("Listing data objects in schema %s", schema.sql())
             objs = self.adapter.list_data_objects(schema, object_names)
-            existing_objects.update(obj.name.lower() for obj in objs)
+            existing_objects.update(obj.name for obj in objs)
 
         snapshots_to_create = []
         for snapshot, table_name in snapshots_with_table_names:

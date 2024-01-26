@@ -136,8 +136,6 @@ class SnowflakeEngineAdapter(GetCurrentCatalogFromFunctionMixin):
             .where(exp.column("TABLE_SCHEMA").eq(schema.db))
         )
         if object_names:
-            # FIXME: Find a way to properly normalize object names.
-            object_names = {n.upper() for n in object_names}
             query = query.where(exp.column("TABLE_NAME").isin(*object_names))
         try:
             df = self.fetchdf(query, quote_identifiers=True)
