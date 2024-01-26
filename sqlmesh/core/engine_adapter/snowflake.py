@@ -109,7 +109,6 @@ class SnowflakeEngineAdapter(GetCurrentCatalogFromFunctionMixin):
         """
         Returns all the data objects that exist in the given schema and optionally catalog.
         """
-        from snowflake.connector.errors import ProgrammingError
 
         schema = to_schema(schema_name)
         catalog_name = schema.catalog or self.get_current_catalog()
@@ -137,12 +136,8 @@ class SnowflakeEngineAdapter(GetCurrentCatalogFromFunctionMixin):
         )
         if object_names:
             query = query.where(exp.column("TABLE_NAME").isin(*object_names))
-        try:
-            df = self.fetchdf(query, quote_identifiers=True)
-        except ProgrammingError as e:
-            if "Object does not exist" in str(e):
-                return []
-            raise e
+
+        df = self.fetchdf(query, quote_identifiers=True)
         if df.empty:
             return []
         return [

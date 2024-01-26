@@ -370,7 +370,7 @@ def test_get_data_objects_catalog(make_mocked_engine_adapter: t.Callable, mocker
     )
     adapter.cursor.fetchall.return_value = [("test_catalog", "test_table", "test_schema", "TABLE")]
     adapter.cursor.description = [["catalog_name"], ["name"], ["schema_name"], ["type"]]
-    result = adapter._get_data_objects("test_catalog.test_schema")
+    result = adapter.get_data_objects("test_catalog.test_schema")
 
     assert result == [
         DataObject(

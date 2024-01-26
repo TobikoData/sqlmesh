@@ -849,7 +849,7 @@ def test_select_models(init_and_plan_context: t.Callable):
     assert len(dev_df) == 7
 
     # Make sure that we only create a view for the selected model.
-    schema_objects = context.engine_adapter._get_data_objects("sushi__dev")
+    schema_objects = context.engine_adapter.get_data_objects("sushi__dev")
     assert len(schema_objects) == 1
     assert schema_objects[0].name == "waiter_revenue_by_day"
 
@@ -924,7 +924,7 @@ def test_select_models_for_backfill(init_and_plan_context: t.Callable):
     )
     assert len(dev_df) == 7
 
-    schema_objects = context.engine_adapter._get_data_objects("sushi__dev")
+    schema_objects = context.engine_adapter.get_data_objects("sushi__dev")
     assert {o.name for o in schema_objects} == {
         "items",
         "order_items",

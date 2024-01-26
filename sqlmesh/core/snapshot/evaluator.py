@@ -244,7 +244,7 @@ class SnapshotEvaluator:
         existing_objects: t.Set[str] = set()
         for schema, object_names in tables_by_schema.items():
             logger.info("Listing data objects in schema %s", schema.sql())
-            objs = self.adapter.list_data_objects(schema, object_names)
+            objs = self.adapter.get_data_objects(schema, object_names)
             existing_objects.update(obj.name for obj in objs)
 
         snapshots_to_create = []

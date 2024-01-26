@@ -1406,7 +1406,7 @@ class EngineAdapter:
                 )
         self.execute(exp.rename_table(old_table_name, new_table_name))
 
-    def list_data_objects(
+    def get_data_objects(
         self, schema_name: SchemaName, object_names: t.Optional[t.Set[str]] = None
     ) -> t.List[DataObject]:
         """Lists all data objects in the target schema.
@@ -1419,6 +1419,8 @@ class EngineAdapter:
             A list of data objects in the target schema.
         """
         if object_names is not None:
+            if not object_names:
+                return []
             object_names_list = list(object_names)
             batches = [
                 object_names_list[i : i + self.DATA_OBJECT_FILTER_BATCH_SIZE]

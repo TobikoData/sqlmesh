@@ -103,7 +103,7 @@ class TestContext:
 
     def get_metadata_results(self, schema: t.Optional[str] = None) -> MetadataResults:
         schema = schema if schema else self.schema(TEST_SCHEMA)
-        return MetadataResults.from_data_objects(self.engine_adapter._get_data_objects(schema))
+        return MetadataResults.from_data_objects(self.engine_adapter.get_data_objects(schema))
 
     def _init_engine_adapter(self) -> None:
         schema = self.schema(TEST_SCHEMA)
@@ -1175,6 +1175,80 @@ def test_scd_type_2(ctx: TestContext):
     )
 
 
+def test_get_data_objects(ctx: TestContext):
+    table = ctx.table("test_table")
+    view = ctx.table("test_view")
+    ctx.init()
+    ctx.engine_adapter.create_table(
+        table,
+        {"id": exp.DataType.build("int")},
+        table_description="test table description",
+        column_descriptions={"id": "test id column description"},
+    )
+    ctx.engine_adapter.create_view(
+        view,
+        ctx.input_data(pd.DataFrame([{"id": 1, "ds": "2022-01-01"}])),
+        table_description="test view description",
+        column_descriptions={"id": "test id column description"},
+    )
+
+    schema = ctx.schema(TEST_SCHEMA)
+
+    assert sorted(ctx.engine_adapter.get_data_objects(schema), key=lambda o: o.name) == [
+        DataObject(
+            name=table.name,
+            schema=table.db,
+            catalog=table.catalog or None,
+            type=DataObjectType.TABLE,
+        ),
+        DataObject(
+            name=view.name,
+            schema=view.db,
+            catalog=view.catalog or None,
+            type=DataObjectType.VIEW,
+        ),
+    ]
+
+    assert sorted(
+        ctx.engine_adapter.get_data_objects(schema, {table.name, view.name}),
+        key=lambda o: o.name,
+    ) == [
+        DataObject(
+            name=table.name,
+            schema=table.db,
+            catalog=table.catalog or None,
+            type=DataObjectType.TABLE,
+        ),
+        DataObject(
+            name=view.name,
+            schema=view.db,
+            catalog=view.catalog or None,
+            type=DataObjectType.VIEW,
+        ),
+    ]
+
+    assert ctx.engine_adapter.get_data_objects(schema, {table.name}) == [
+        DataObject(
+            name=table.name,
+            schema=table.db,
+            catalog=table.catalog or None,
+            type=DataObjectType.TABLE,
+        ),
+    ]
+
+    assert ctx.engine_adapter.get_data_objects(schema, {view.name}) == [
+        DataObject(
+            name=view.name,
+            schema=view.db,
+            catalog=view.catalog or None,
+            type=DataObjectType.VIEW,
+        ),
+    ]
+
+    assert ctx.engine_adapter.get_data_objects(schema, {}) == []
+    assert ctx.engine_adapter.get_data_objects("missing_schema") == []
+
+
 def test_truncate_table(ctx: TestContext):
     if ctx.test_type != "query":
         pytest.skip("Truncate table test does not change based on input data type")
@@ -1324,7 +1398,7 @@ def test_sushi(ctx: TestContext):
             is_physical_layer: bool = True,
             prod_schema_name: str = "sushi",
         ) -> None:
-            layer_objects = context.engine_adapter._get_data_objects(schema_name)
+            layer_objects = context.engine_adapter.get_data_objects(schema_name)
             layer_models = {
                 x.name.split("__")[1]
                 if is_physical_layer
@@ -1405,7 +1479,7 @@ def test_sushi(ctx: TestContext):
             check_temp_tables: bool = False,
             prod_schema_name: str = "sushi",
         ) -> None:
-            layer_objects = context.engine_adapter._get_data_objects(schema_name)
+            layer_objects = context.engine_adapter.get_data_objects(schema_name)
             layer_models = {
                 x.name.split("__")[1]
                 if is_physical_layer
