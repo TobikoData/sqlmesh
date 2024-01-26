@@ -153,7 +153,6 @@ class BuiltInPlanEvaluator(PlanEvaluator):
             plan.start,
             plan.end,
             restatements=plan.restatements,
-            ignore_cron=True,
             selected_snapshots=selected_snapshots,
             deployability_index=deployability_index,
             circuit_breaker=circuit_breaker,

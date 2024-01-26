@@ -127,7 +127,6 @@ def create_plan_dag_spec(
             execution_time=now(),
             deployability_index=deployability_index_for_evaluation,
             restatements=request.restatements,
-            ignore_cron=True,
         )
     else:
         backfill_batches = {}
