@@ -57,12 +57,15 @@ from sqlmesh.core.snapshot.definition import (
 )
 from sqlmesh.core.state_sync.base import MIGRATIONS, SCHEMA_VERSION, StateSync, Versions
 from sqlmesh.core.state_sync.common import CommonStateSyncMixin, transactional
-from sqlmesh.utils import major_minor, random_id
+from sqlmesh.utils import major_minor, random_id, unique
 from sqlmesh.utils.date import TimeLike, now_timestamp, time_like_to_str
 from sqlmesh.utils.errors import SQLMeshError
 from sqlmesh.utils.pydantic import parse_obj_as
 
 logger = logging.getLogger(__name__)
+
+
+T = t.TypeVar("T")
 
 
 if t.TYPE_CHECKING:
@@ -274,14 +277,8 @@ class EngineAdapterStateSync(CommonStateSyncMixin, StateSync):
             )
             for name, identifier, version in self.engine_adapter.fetchall(expired_query)
         }
-
-        snapshots = self._get_snapshots_with_same_version(set(expired_candidates.values()))
-
-        snapshots_by_version = defaultdict(set)
-        snapshots_by_temp_version = defaultdict(set)
-        for s in snapshots:
-            snapshots_by_version[(s.name, s.version)].add(s.snapshot_id)
-            snapshots_by_temp_version[(s.name, s.temp_version_get_or_generate())].add(s.snapshot_id)
+        if not expired_candidates:
+            return []
 
         promoted_snapshot_ids = {
             snapshot.snapshot_id
@@ -295,27 +292,41 @@ class EngineAdapterStateSync(CommonStateSyncMixin, StateSync):
                 or snapshot.snapshot_id not in expired_candidates
             )
 
-        expired_snapshots = [s for s in snapshots if not _is_snapshot_used(s)]
-
-        if expired_snapshots:
-            self.delete_snapshots(expired_snapshots)
-
+        unique_expired_versions = unique(expired_candidates.values())
+        version_batches = self._snapshot_batches(unique_expired_versions)
         cleanup_targets = []
-        for snapshot in expired_snapshots:
-            shared_version_snapshots = snapshots_by_version[(snapshot.name, snapshot.version)]
-            shared_version_snapshots.discard(snapshot.snapshot_id)
+        for versions_batch in version_batches:
+            snapshots = self._get_snapshots_with_same_version(versions_batch)
 
-            shared_temp_version_snapshots = snapshots_by_temp_version[
-                (snapshot.name, snapshot.temp_version_get_or_generate())
-            ]
-            shared_temp_version_snapshots.discard(snapshot.snapshot_id)
-
-            if not shared_temp_version_snapshots:
-                cleanup_targets.append(
-                    SnapshotTableCleanupTask(
-                        snapshot=snapshot.table_info, dev_table_only=bool(shared_version_snapshots)
-                    )
+            snapshots_by_version = defaultdict(set)
+            snapshots_by_temp_version = defaultdict(set)
+            for s in snapshots:
+                snapshots_by_version[(s.name, s.version)].add(s.snapshot_id)
+                snapshots_by_temp_version[(s.name, s.temp_version_get_or_generate())].add(
+                    s.snapshot_id
                 )
+
+            expired_snapshots = [s for s in snapshots if not _is_snapshot_used(s)]
+
+            if expired_snapshots:
+                self.delete_snapshots(expired_snapshots)
+
+            for snapshot in expired_snapshots:
+                shared_version_snapshots = snapshots_by_version[(snapshot.name, snapshot.version)]
+                shared_version_snapshots.discard(snapshot.snapshot_id)
+
+                shared_temp_version_snapshots = snapshots_by_temp_version[
+                    (snapshot.name, snapshot.temp_version_get_or_generate())
+                ]
+                shared_temp_version_snapshots.discard(snapshot.snapshot_id)
+
+                if not shared_temp_version_snapshots:
+                    cleanup_targets.append(
+                        SnapshotTableCleanupTask(
+                            snapshot=snapshot.table_info,
+                            dev_table_only=bool(shared_version_snapshots),
+                        )
+                    )
 
         return cleanup_targets
 
@@ -1096,11 +1107,7 @@ class EngineAdapterStateSync(CommonStateSyncMixin, StateSync):
         name_identifiers = sorted(
             {(snapshot_id.name, snapshot_id.identifier) for snapshot_id in snapshot_ids}
         )
-
-        batches = [
-            name_identifiers[i : i + self.SNAPSHOT_BATCH_SIZE]
-            for i in range(0, len(name_identifiers), self.SNAPSHOT_BATCH_SIZE)
-        ]
+        batches = self._snapshot_batches(name_identifiers)
 
         if not name_identifiers:
             yield exp.false()
@@ -1131,11 +1138,7 @@ class EngineAdapterStateSync(CommonStateSyncMixin, StateSync):
         self, snapshot_name_versions: t.Iterable[SnapshotNameVersionLike], alias: str = "snapshots"
     ) -> t.Iterator[exp.Condition]:
         name_versions = sorted({(s.name, s.version) for s in snapshot_name_versions})
-
-        batches = [
-            name_versions[i : i + self.SNAPSHOT_BATCH_SIZE]
-            for i in range(0, len(name_versions), self.SNAPSHOT_BATCH_SIZE)
-        ]
+        batches = self._snapshot_batches(name_versions)
 
         if not name_versions:
             return exp.false()
@@ -1161,6 +1164,11 @@ class EngineAdapterStateSync(CommonStateSyncMixin, StateSync):
                         for name, version in versions
                     ]
                 )
+
+    def _snapshot_batches(self, l: t.List[T]) -> t.List[t.List[T]]:
+        return [
+            l[i : i + self.SNAPSHOT_BATCH_SIZE] for i in range(0, len(l), self.SNAPSHOT_BATCH_SIZE)
+        ]
 
     @contextlib.contextmanager
     def _transaction(self) -> t.Iterator[None]:

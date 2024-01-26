@@ -876,6 +876,43 @@ def test_delete_expired_snapshots(state_sync: EngineAdapterStateSync, make_snaps
     assert not state_sync.get_snapshots(None)
 
 
+def test_delete_expired_snapshots_batching(
+    state_sync: EngineAdapterStateSync, make_snapshot: t.Callable
+):
+    state_sync.SNAPSHOT_BATCH_SIZE = 1
+    now_ts = now_timestamp()
+
+    snapshot_a = make_snapshot(
+        SqlModel(
+            name="a",
+            query=parse_one("select a, ds"),
+        ),
+    )
+    snapshot_a.ttl = "in 10 seconds"
+    snapshot_a.categorize_as(SnapshotChangeCategory.BREAKING)
+    snapshot_a.updated_ts = now_ts - 15000
+
+    snapshot_b = make_snapshot(
+        SqlModel(
+            name="b",
+            query=parse_one("select a, b, ds"),
+        ),
+    )
+    snapshot_b.ttl = "in 10 seconds"
+    snapshot_b.categorize_as(SnapshotChangeCategory.BREAKING)
+    snapshot_b.updated_ts = now_ts - 11000
+
+    state_sync.push_snapshots([snapshot_a, snapshot_b])
+    assert set(state_sync.get_snapshots(None)) == {snapshot_a.snapshot_id, snapshot_b.snapshot_id}
+
+    assert state_sync.delete_expired_snapshots() == [
+        SnapshotTableCleanupTask(snapshot=snapshot_a.table_info, dev_table_only=False),
+        SnapshotTableCleanupTask(snapshot=snapshot_b.table_info, dev_table_only=False),
+    ]
+
+    assert not state_sync.get_snapshots(None)
+
+
 def test_delete_expired_snapshots_promoted(
     state_sync: EngineAdapterStateSync, make_snapshot: t.Callable, mocker: MockerFixture
 ):
@@ -1188,6 +1225,13 @@ def test_migrate(state_sync: EngineAdapterStateSync, mocker: MockerFixture) -> N
         schema_version=SCHEMA_VERSION,
         sqlglot_version=SQLGLOT_VERSION,
         sqlmesh_version=SQLMESH_VERSION,
+    )
+
+    assert (
+        state_sync.engine_adapter.fetchone(
+            "SELECT COUNT(*) FROM sqlmesh._snapshots WHERE expiration_ts IS NULL"
+        )[0]
+        == 0
     )
 
 
