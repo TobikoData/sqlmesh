@@ -114,7 +114,7 @@ class TestContext:
         for timestamp_column in self.timestamp_columns:
             if timestamp_column in data.columns and to_datetime:
                 value = pd.to_datetime(data[timestamp_column])
-                if self.dialect in {"bigquery", "duckdb"}:
+                if self.dialect == "duckdb":
                     value = value.astype("datetime64[us]")
                 data[timestamp_column] = value
         return data
@@ -853,6 +853,59 @@ def test_replace_query(ctx: TestContext):
         ctx.compare_with_current(table, replace_data)
 
 
+def test_replace_query_batched(ctx: TestContext):
+    ctx.engine_adapter.DEFAULT_BATCH_SIZE = 1
+    ctx.init()
+    table = ctx.table("test_table")
+    # Initial Load
+    input_data = pd.DataFrame(
+        [
+            {"id": 1, "ds": "2022-01-01"},
+            {"id": 2, "ds": "2022-01-02"},
+            {"id": 3, "ds": "2022-01-03"},
+        ]
+    )
+    ctx.engine_adapter.create_table(table, ctx.columns_to_types)
+    ctx.engine_adapter.replace_query(
+        table,
+        ctx.input_data(input_data),
+        # Spark based engines do a create table -> insert overwrite instead of replace. If columns to types aren't
+        # provided then it checks the table itself for types. This is fine within SQLMesh since we always know the tables
+        # exist prior to evaluation but when running these tests that isn't the case. As a result we just pass in
+        # columns_to_types for these two engines so we can still test inference on the other ones
+        columns_to_types=ctx.columns_to_types if ctx.dialect in ["spark", "databricks"] else None,
+    )
+    results = ctx.get_metadata_results()
+    assert len(results.views) == 0
+    assert len(results.materialized_views) == 0
+    assert len(results.tables) == len(results.non_temp_tables) == 1
+    assert results.non_temp_tables[0] == table.name
+    ctx.compare_with_current(table, input_data)
+
+    # Replace that we only need to run once
+    if type == "df":
+        replace_data = pd.DataFrame(
+            [
+                {"id": 4, "ds": "2022-01-04"},
+                {"id": 5, "ds": "2022-01-05"},
+                {"id": 6, "ds": "2022-01-06"},
+            ]
+        )
+        ctx.engine_adapter.replace_query(
+            table,
+            ctx.input_data(replace_data),
+            columns_to_types=ctx.columns_to_types
+            if ctx.dialect in ["spark", "databricks"]
+            else None,
+        )
+        results = ctx.get_metadata_results()
+        assert len(results.views) == 0
+        assert len(results.materialized_views) == 0
+        assert len(results.tables) == len(results.non_temp_tables) == 1
+        assert results.non_temp_tables[0] == table.name
+        ctx.compare_with_current(table, replace_data)
+
+
 def test_insert_append(ctx: TestContext):
     ctx.init()
     table = ctx.table("test_table")
@@ -1033,7 +1086,7 @@ def test_merge(ctx: TestContext):
 
 
 def test_scd_type_2(ctx: TestContext):
-    time_type = "datetime" if ctx.dialect == "bigquery" else "timestamp"
+    time_type = "timestamp"
 
     ctx.columns_to_types = {
         "id": "int",

@@ -8,7 +8,6 @@ from sqlglot import exp, parse_one
 from sqlmesh.core.dialect import to_schema
 from sqlmesh.core.engine_adapter.mixins import (
     LogicalMergeMixin,
-    LogicalReplaceQueryMixin,
     NonTransactionalTruncateMixin,
     PandasNativeFetchDFSupportMixin,
 )
@@ -29,7 +28,6 @@ logger = logging.getLogger(__name__)
 @set_catalog()
 class MySQLEngineAdapter(
     LogicalMergeMixin,
-    LogicalReplaceQueryMixin,
     PandasNativeFetchDFSupportMixin,
     NonTransactionalTruncateMixin,
 ):
@@ -39,6 +37,7 @@ class MySQLEngineAdapter(
     SUPPORTS_INDEXES = True
     COMMENT_CREATION_TABLE = CommentCreationTable.IN_SCHEMA_DEF_NO_CTAS
     COMMENT_CREATION_VIEW = CommentCreationView.UNSUPPORTED
+    SUPPORTS_REPLACE_TABLE = False
 
     def get_current_catalog(self) -> t.Optional[str]:
         """Returns the catalog name of the current connection."""

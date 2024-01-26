@@ -8,82 +8,11 @@ from sqlglot import exp, parse_one
 
 from sqlmesh.core.engine_adapter.mixins import (
     LogicalMergeMixin,
-    LogicalReplaceQueryMixin,
     NonTransactionalTruncateMixin,
 )
 from tests.core.engine_adapter import to_sql_calls
 
 pytestmark = pytest.mark.engine
-
-
-def test_logical_replace_query_already_exists(
-    make_mocked_engine_adapter: t.Callable, mocker: MockerFixture
-):
-    adapter = make_mocked_engine_adapter(LogicalReplaceQueryMixin, "postgres")
-    adapter.cursor.fetchone.return_value = (1,)
-
-    mocker.patch(
-        "sqlmesh.core.engine_adapter.postgres.LogicalReplaceQueryMixin.table_exists",
-        return_value=True,
-    )
-    mocker.patch(
-        "sqlmesh.core.engine_adapter.postgres.LogicalReplaceQueryMixin.columns",
-        return_value={"col": exp.DataType(this=exp.DataType.Type.INT)},
-    )
-
-    adapter.replace_query("db.table", parse_one("SELECT col FROM db.other_table"))
-
-    assert to_sql_calls(adapter) == [
-        'TRUNCATE TABLE "db"."table"',
-        'INSERT INTO "db"."table" ("col") SELECT "col" FROM "db"."other_table"',
-    ]
-
-
-def test_logical_replace_query_does_not_exist(
-    make_mocked_engine_adapter: t.Callable, mocker: MockerFixture
-):
-    adapter = make_mocked_engine_adapter(LogicalReplaceQueryMixin, "postgres")
-    adapter.cursor.fetchone.return_value = (1,)
-    mocker.patch(
-        "sqlmesh.core.engine_adapter.postgres.LogicalReplaceQueryMixin.table_exists",
-        return_value=False,
-    )
-
-    adapter.replace_query("db.table", parse_one("SELECT col FROM db.other_table"))
-    adapter.cursor.execute.assert_called_once_with(
-        'CREATE TABLE "db"."table" AS SELECT "col" FROM "db"."other_table"'
-    )
-
-
-def test_logical_replace_self_reference(
-    make_mocked_engine_adapter: t.Callable, mocker: MockerFixture, make_temp_table_name: t.Callable
-):
-    adapter = make_mocked_engine_adapter(LogicalReplaceQueryMixin, "postgres")
-    adapter.cursor.fetchone.return_value = (1,)
-
-    temp_table_mock = mocker.patch("sqlmesh.core.engine_adapter.EngineAdapter._get_temp_table")
-    table_name = "db.table"
-    temp_table_id = "abcdefgh"
-    temp_table_mock.return_value = make_temp_table_name(table_name, temp_table_id)
-
-    mocker.patch(
-        "sqlmesh.core.engine_adapter.postgres.LogicalReplaceQueryMixin.table_exists",
-        return_value=True,
-    )
-    mocker.patch(
-        "sqlmesh.core.engine_adapter.postgres.LogicalReplaceQueryMixin.columns",
-        return_value={"col": exp.DataType(this=exp.DataType.Type.INT)},
-    )
-
-    adapter.replace_query(table_name, parse_one(f"SELECT col + 1 AS col FROM {table_name}"))
-
-    assert to_sql_calls(adapter) == [
-        f'CREATE SCHEMA IF NOT EXISTS "db"',
-        f'CREATE TABLE IF NOT EXISTS "db"."__temp_table_{temp_table_id}" AS SELECT "col" FROM "db"."table"',
-        'TRUNCATE TABLE "db"."table"',
-        f'INSERT INTO "db"."table" ("col") SELECT "col" + 1 AS "col" FROM "db"."__temp_table_{temp_table_id}"',
-        f'DROP TABLE IF EXISTS "db"."__temp_table_{temp_table_id}"',
-    ]
 
 
 def test_logical_merge(make_mocked_engine_adapter: t.Callable, mocker: MockerFixture):

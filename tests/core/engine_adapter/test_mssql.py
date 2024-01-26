@@ -93,16 +93,22 @@ def test_table_exists(make_mocked_engine_adapter: t.Callable):
     assert not resp
 
 
-def test_insert_overwrite_by_time_partition_supports_insert_overwrite_pandas(
+def test_insert_overwrite_by_time_partition_supports_insert_overwrite_pandas_not_exists(
     make_mocked_engine_adapter: t.Callable, mocker: MockerFixture, make_temp_table_name: t.Callable
 ):
-    adapter = make_mocked_engine_adapter(MSSQLEngineAdapter)
-    adapter.INSERT_OVERWRITE_STRATEGY = InsertOverwriteStrategy.INSERT_OVERWRITE
+    mocker.patch(
+        "sqlmesh.core.engine_adapter.mssql.MSSQLEngineAdapter.table_exists",
+        return_value=False,
+    )
 
-    temp_table_mock = mocker.patch("sqlmesh.core.engine_adapter.EngineAdapter._get_temp_table")
+    adapter = make_mocked_engine_adapter(MSSQLEngineAdapter)
+
     table_name = "test_table"
     temp_table_id = "abcdefgh"
-    temp_table_mock.return_value = make_temp_table_name(table_name, temp_table_id)
+    mocker.patch(
+        "sqlmesh.core.engine_adapter.EngineAdapter._get_temp_table",
+        return_value=make_temp_table_name(table_name, temp_table_id),
+    )
 
     df = pd.DataFrame({"a": [1, 2], "ds": ["2022-01-01", "2022-01-02"]})
     adapter.insert_overwrite_by_time_partition(
@@ -124,9 +130,47 @@ def test_insert_overwrite_by_time_partition_supports_insert_overwrite_pandas(
     ]
 
 
+def test_insert_overwrite_by_time_partition_supports_insert_overwrite_pandas_exists(
+    make_mocked_engine_adapter: t.Callable, mocker: MockerFixture, make_temp_table_name: t.Callable
+):
+    mocker.patch(
+        "sqlmesh.core.engine_adapter.mssql.MSSQLEngineAdapter.table_exists",
+        return_value=True,
+    )
+
+    adapter = make_mocked_engine_adapter(MSSQLEngineAdapter)
+
+    table_name = "test_table"
+    temp_table_id = "abcdefgh"
+    mocker.patch(
+        "sqlmesh.core.engine_adapter.EngineAdapter._get_temp_table",
+        return_value=make_temp_table_name(table_name, temp_table_id),
+    )
+
+    df = pd.DataFrame({"a": [1, 2], "ds": ["2022-01-01", "2022-01-02"]})
+    adapter.insert_overwrite_by_time_partition(
+        table_name,
+        df,
+        start="2022-01-01",
+        end="2022-01-02",
+        time_formatter=lambda x, _: exp.Literal.string(to_ds(x)),
+        time_column="ds",
+        columns_to_types={"a": exp.DataType.build("INT"), "ds": exp.DataType.build("STRING")},
+    )
+    assert to_sql_calls(adapter) == [
+        f"""MERGE INTO [test_table] AS [__MERGE_TARGET__] USING (SELECT [a] AS [a], [ds] AS [ds] FROM (SELECT CAST([a] AS INTEGER) AS [a], CAST([ds] AS VARCHAR(MAX)) AS [ds] FROM [__temp_test_table_{temp_table_id}]) AS [_subquery] WHERE [ds] BETWEEN '2022-01-01' AND '2022-01-02') AS [__MERGE_SOURCE__] ON (1 = 0) WHEN NOT MATCHED BY SOURCE AND [ds] BETWEEN '2022-01-01' AND '2022-01-02' THEN DELETE WHEN NOT MATCHED THEN INSERT ([a], [ds]) VALUES ([a], [ds]);""",
+        f"DROP TABLE IF EXISTS [__temp_test_table_{temp_table_id}];",
+    ]
+
+
 def test_insert_overwrite_by_time_partition_replace_where_pandas(
     make_mocked_engine_adapter: t.Callable, mocker: MockerFixture, make_temp_table_name: t.Callable
 ):
+    mocker.patch(
+        "sqlmesh.core.engine_adapter.mssql.MSSQLEngineAdapter.table_exists",
+        return_value=False,
+    )
+
     adapter = make_mocked_engine_adapter(MSSQLEngineAdapter)
     adapter.INSERT_OVERWRITE_STRATEGY = InsertOverwriteStrategy.REPLACE_WHERE
 
@@ -159,6 +203,11 @@ def test_insert_overwrite_by_time_partition_replace_where_pandas(
 def test_insert_append_pandas(
     make_mocked_engine_adapter: t.Callable, mocker: MockerFixture, make_temp_table_name: t.Callable
 ):
+    mocker.patch(
+        "sqlmesh.core.engine_adapter.mssql.MSSQLEngineAdapter.table_exists",
+        return_value=False,
+    )
+
     adapter = make_mocked_engine_adapter(MSSQLEngineAdapter)
 
     temp_table_mock = mocker.patch("sqlmesh.core.engine_adapter.EngineAdapter._get_temp_table")
@@ -222,6 +271,11 @@ def test_create_table_properties(make_mocked_engine_adapter: t.Callable):
 def test_merge_pandas(
     make_mocked_engine_adapter: t.Callable, mocker: MockerFixture, make_temp_table_name: t.Callable
 ):
+    mocker.patch(
+        "sqlmesh.core.engine_adapter.mssql.MSSQLEngineAdapter.table_exists",
+        return_value=False,
+    )
+
     adapter = make_mocked_engine_adapter(MSSQLEngineAdapter)
 
     temp_table_mock = mocker.patch("sqlmesh.core.engine_adapter.EngineAdapter._get_temp_table")
@@ -281,14 +335,20 @@ def test_replace_query(make_mocked_engine_adapter: t.Callable):
 
     assert to_sql_calls(adapter) == [
         """SELECT 1 FROM [information_schema].[tables] WHERE [table_name] = 'test_table';""",
-        "TRUNCATE TABLE [test_table]",
-        "INSERT INTO [test_table] ([a]) SELECT [a] FROM [tbl];",
+        "MERGE INTO [test_table] AS [__MERGE_TARGET__] USING (SELECT [a] AS [a] FROM [tbl]) AS [__MERGE_SOURCE__] ON (1 = 0) WHEN NOT MATCHED BY SOURCE THEN DELETE WHEN NOT MATCHED THEN INSERT ([a]) VALUES ([a]);",
     ]
 
 
 def test_replace_query_pandas(
     make_mocked_engine_adapter: t.Callable, mocker: MockerFixture, make_temp_table_name: t.Callable
 ):
+    temp_table_exists_counter = 0
+
+    mocker.patch(
+        "sqlmesh.core.engine_adapter.mssql.MSSQLEngineAdapter.table_exists",
+        return_value=False,
+    )
+
     adapter = make_mocked_engine_adapter(MSSQLEngineAdapter)
     adapter.cursor.fetchone.return_value = (1,)
 
@@ -296,6 +356,20 @@ def test_replace_query_pandas(
     table_name = "test_table"
     temp_table_id = "abcdefgh"
     temp_table_mock.return_value = make_temp_table_name(table_name, temp_table_id)
+    temp_table_name = temp_table_mock.return_value.sql()
+
+    def temp_table_exists(table: exp.Table) -> bool:
+        nonlocal temp_table_exists_counter
+        nonlocal temp_table_name
+        temp_table_exists_counter += 1
+        if table.sql() == temp_table_name and temp_table_exists_counter == 1:
+            return False
+        return True
+
+    mocker.patch(
+        "sqlmesh.core.engine_adapter.mssql.MSSQLEngineAdapter.table_exists",
+        side_effect=temp_table_exists,
+    )
 
     df = pd.DataFrame({"a": [1, 2, 3], "b": [4, 5, 6]})
     adapter.replace_query(
@@ -307,11 +381,9 @@ def test_replace_query_pandas(
     )
 
     assert to_sql_calls(adapter) == [
-        """SELECT 1 FROM [information_schema].[tables] WHERE [table_name] = 'test_table';""",
-        f"""IF NOT EXISTS (SELECT * FROM information_schema.tables WHERE table_name = '__temp_test_table_{temp_table_id}') EXEC('CREATE TABLE [__temp_test_table_{temp_table_id}] ([a] INTEGER, [b] INTEGER)');""",
-        "TRUNCATE TABLE [test_table]",
-        f"INSERT INTO [test_table] ([a], [b]) SELECT CAST([a] AS INTEGER) AS [a], CAST([b] AS INTEGER) AS [b] FROM [__temp_test_table_{temp_table_id}];",
-        f"DROP TABLE IF EXISTS [__temp_test_table_{temp_table_id}];",
+        f"""IF NOT EXISTS (SELECT * FROM information_schema.tables WHERE table_name = '{temp_table_name}') EXEC('CREATE TABLE [{temp_table_name}] ([a] INTEGER, [b] INTEGER)');""",
+        f"MERGE INTO [test_table] AS [__MERGE_TARGET__] USING (SELECT CAST([a] AS INTEGER) AS [a], CAST([b] AS INTEGER) AS [b] FROM [__temp_test_table_abcdefgh]) AS [__MERGE_SOURCE__] ON (1 = 0) WHEN NOT MATCHED BY SOURCE THEN DELETE WHEN NOT MATCHED THEN INSERT ([a], [b]) VALUES ([a], [b]);",
+        f"DROP TABLE IF EXISTS [{temp_table_name}];",
     ]
 
 

@@ -14,7 +14,6 @@ from sqlmesh.core.engine_adapter.base import EngineAdapterWithIndexSupport
 from sqlmesh.core.engine_adapter.mixins import (
     GetCurrentCatalogFromFunctionMixin,
     InsertOverwriteWithMergeMixin,
-    LogicalReplaceQueryMixin,
     PandasNativeFetchDFSupportMixin,
 )
 from sqlmesh.core.engine_adapter.shared import (
@@ -35,7 +34,6 @@ if t.TYPE_CHECKING:
 @set_catalog()
 class MSSQLEngineAdapter(
     EngineAdapterWithIndexSupport,
-    LogicalReplaceQueryMixin,
     PandasNativeFetchDFSupportMixin,
     InsertOverwriteWithMergeMixin,
     GetCurrentCatalogFromFunctionMixin,
@@ -47,6 +45,7 @@ class MSSQLEngineAdapter(
     CURRENT_CATALOG_EXPRESSION = exp.func("db_name")
     COMMENT_CREATION_TABLE = CommentCreationTable.UNSUPPORTED
     COMMENT_CREATION_VIEW = CommentCreationView.UNSUPPORTED
+    SUPPORTS_REPLACE_TABLE = False
 
     def columns(
         self,
@@ -169,14 +168,16 @@ class MSSQLEngineAdapter(
         temp_table = self._get_temp_table(target_table or "pandas")
 
         def query_factory() -> Query:
-            columns_to_types_create = columns_to_types.copy()
-
-            self._convert_df_datetime(df, columns_to_types_create)
-
-            self.create_table(temp_table, columns_to_types_create)
-            rows: t.List[t.Tuple[t.Any, ...]] = list(df.itertuples(index=False, name=None))  # type: ignore
-            conn = self._connection_pool.get()
-            conn.bulk_copy(temp_table.sql(dialect=self.dialect), rows)
+            # It is possible for the factory to be called multiple times and if so then the temp table will already
+            # be created so we skip creating again. This means we are assuming the first call is the same result
+            # as later calls.
+            if not self.table_exists(temp_table):
+                columns_to_types_create = columns_to_types.copy()
+                self._convert_df_datetime(df, columns_to_types_create)
+                self.create_table(temp_table, columns_to_types_create)
+                rows: t.List[t.Tuple[t.Any, ...]] = list(df.itertuples(index=False, name=None))  # type: ignore
+                conn = self._connection_pool.get()
+                conn.bulk_copy(temp_table.sql(dialect=self.dialect), rows)
             return exp.select(*self._casted_columns(columns_to_types)).from_(temp_table)  # type: ignore
 
         return [
