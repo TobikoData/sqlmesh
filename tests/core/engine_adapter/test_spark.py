@@ -58,7 +58,13 @@ def test_create_table_properties(make_mocked_engine_adapter: t.Callable):
         )
 
 
-def test_replace_query_table_properties(make_mocked_engine_adapter: t.Callable):
+def test_replace_query_table_properties_not_exists(
+    mocker: MockerFixture, make_mocked_engine_adapter: t.Callable
+):
+    mocker.patch(
+        "sqlmesh.core.engine_adapter.spark.SparkEngineAdapter.table_exists",
+        return_value=False,
+    )
     adapter = make_mocked_engine_adapter(SparkEngineAdapter)
 
     columns_to_types = {
@@ -75,13 +81,38 @@ def test_replace_query_table_properties(make_mocked_engine_adapter: t.Callable):
         table_properties={"a": exp.convert(1)},
     )
 
-    adapter.cursor.execute.assert_has_calls(
-        [
-            call(
-                "INSERT OVERWRITE TABLE `test_table` (`cola`, `colb`, `colc`) SELECT `cola`, `colb`, `colc` FROM (SELECT 1 AS `cola`, '2' AS `colb`, '3' AS `colc`) AS `_subquery` WHERE TRUE"
-            ),
-        ]
+    assert to_sql_calls(adapter) == [
+        "CREATE TABLE IF NOT EXISTS `test_table` USING ICEBERG PARTITIONED BY (`colb`) TBLPROPERTIES ('a'=1) AS SELECT 1 AS `cola`, '2' AS `colb`, '3' AS `colc`",
+        "INSERT INTO `test_table` SELECT * FROM `test_table`",
+    ]
+
+
+def test_replace_query_table_properties_exists(
+    mocker: MockerFixture, make_mocked_engine_adapter: t.Callable
+):
+    mocker.patch(
+        "sqlmesh.core.engine_adapter.spark.SparkEngineAdapter.table_exists",
+        return_value=True,
     )
+    adapter = make_mocked_engine_adapter(SparkEngineAdapter)
+
+    columns_to_types = {
+        "cola": exp.DataType.build("INT"),
+        "colb": exp.DataType.build("TEXT"),
+        "colc": exp.DataType.build("TEXT"),
+    }
+    adapter.replace_query(
+        "test_table",
+        parse_one("SELECT 1 AS cola, '2' AS colb, '3' AS colc"),
+        columns_to_types=columns_to_types,
+        partitioned_by=[exp.to_column("colb")],
+        storage_format="ICEBERG",
+        table_properties={"a": exp.convert(1)},
+    )
+
+    assert to_sql_calls(adapter) == [
+        "INSERT OVERWRITE TABLE `test_table` (`cola`, `colb`, `colc`) SELECT 1 AS `cola`, '2' AS `colb`, '3' AS `colc`",
+    ]
 
 
 def test_create_view_properties(make_mocked_engine_adapter: t.Callable):
@@ -134,45 +165,100 @@ def test_alter_table(make_mocked_engine_adapter: t.Callable):
     )
 
 
-def test_replace_query(make_mocked_engine_adapter: t.Callable):
+def test_replace_query_not_exists(mocker: MockerFixture, make_mocked_engine_adapter: t.Callable):
+    mocker.patch(
+        "sqlmesh.core.engine_adapter.spark.SparkEngineAdapter.table_exists",
+        return_value=False,
+    )
     adapter = make_mocked_engine_adapter(SparkEngineAdapter)
     adapter.replace_query("test_table", parse_one("SELECT a FROM tbl"), {"a": "int"})
 
     assert to_sql_calls(adapter) == [
-        "INSERT OVERWRITE TABLE `test_table` (`a`) SELECT `a` FROM (SELECT `a` FROM `tbl`) AS `_subquery` WHERE TRUE",
+        "CREATE TABLE IF NOT EXISTS `test_table` AS SELECT `a` FROM `tbl`",
     ]
 
 
-def test_replace_query_pandas(make_mocked_engine_adapter: t.Callable, mocker: MockerFixture):
+def test_replace_query_exists(mocker: MockerFixture, make_mocked_engine_adapter: t.Callable):
+    mocker.patch(
+        "sqlmesh.core.engine_adapter.spark.SparkEngineAdapter.table_exists",
+        return_value=True,
+    )
     adapter = make_mocked_engine_adapter(SparkEngineAdapter)
+    adapter.replace_query("test_table", parse_one("SELECT a FROM tbl"), {"a": "int"})
+
+    assert to_sql_calls(adapter) == [
+        "INSERT OVERWRITE TABLE `test_table` (`a`) SELECT `a` FROM `tbl`",
+    ]
+
+
+def test_replace_query_pandas_not_exists(
+    make_mocked_engine_adapter: t.Callable, mocker: MockerFixture
+):
+    mocker.patch(
+        "sqlmesh.core.engine_adapter.spark.SparkEngineAdapter.table_exists",
+        return_value=False,
+    )
     mocker.patch("sqlmesh.core.engine_adapter.spark.SparkEngineAdapter._use_spark_session", False)
+    mocker.patch(
+        "sqlmesh.core.engine_adapter.spark.SparkEngineAdapter._ensure_fqn", side_effect=lambda x: x
+    )
+    adapter = make_mocked_engine_adapter(SparkEngineAdapter)
     df = pd.DataFrame({"a": [1, 2, 3], "b": [4, 5, 6]})
     adapter.replace_query(
         "test_table", df, {"a": exp.DataType.build("int"), "b": exp.DataType.build("int")}
     )
 
     assert to_sql_calls(adapter) == [
-        "INSERT OVERWRITE TABLE `test_table` (`a`, `b`) SELECT `a`, `b` FROM (SELECT CAST(`a` AS INT) AS `a`, CAST(`b` AS INT) AS `b` FROM VALUES (1, 4), (2, 5), (3, 6) AS `t`(`a`, `b`)) AS `_subquery` WHERE TRUE",
+        "CREATE TABLE IF NOT EXISTS `test_table` AS SELECT CAST(`a` AS INT) AS `a`, CAST(`b` AS INT) AS `b` FROM VALUES (1, 4), (2, 5), (3, 6) AS `t`(`a`, `b`)",
     ]
 
 
-def test_replace_query_self_ref(
-    make_mocked_engine_adapter: t.Callable, mocker: MockerFixture, make_temp_table_name: t.Callable
-):
-    adapter = make_mocked_engine_adapter(SparkEngineAdapter)
-    adapter.cursor.fetchone.return_value = (1,)
-    adapter.spark.catalog.currentCatalog.return_value = "spark_catalog"
-    adapter.spark.catalog.currentDatabase.return_value = "default"
-
-    temp_table_mock = mocker.patch("sqlmesh.core.engine_adapter.EngineAdapter._get_temp_table")
-    table_name = "db.table"
-    temp_table_id = "abcdefgh"
-    temp_table_mock.return_value = make_temp_table_name(table_name, temp_table_id)
-
+def test_replace_query_pandas_exists(make_mocked_engine_adapter: t.Callable, mocker: MockerFixture):
     mocker.patch(
-        "sqlmesh.core.engine_adapter.spark.LogicalReplaceQueryMixin.table_exists",
+        "sqlmesh.core.engine_adapter.spark.SparkEngineAdapter.table_exists",
         return_value=True,
     )
+    mocker.patch("sqlmesh.core.engine_adapter.spark.SparkEngineAdapter._use_spark_session", False)
+    mocker.patch(
+        "sqlmesh.core.engine_adapter.spark.SparkEngineAdapter._ensure_fqn", side_effect=lambda x: x
+    )
+    adapter = make_mocked_engine_adapter(SparkEngineAdapter)
+    df = pd.DataFrame({"a": [1, 2, 3], "b": [4, 5, 6]})
+    adapter.replace_query(
+        "test_table", df, {"a": exp.DataType.build("int"), "b": exp.DataType.build("int")}
+    )
+
+    assert to_sql_calls(adapter) == [
+        "INSERT OVERWRITE TABLE `test_table` (`a`, `b`) SELECT CAST(`a` AS INT) AS `a`, CAST(`b` AS INT) AS `b` FROM VALUES (1, 4), (2, 5), (3, 6) AS `t`(`a`, `b`)",
+    ]
+
+
+def test_replace_query_self_ref_not_exists(
+    make_mocked_engine_adapter: t.Callable, mocker: MockerFixture, make_temp_table_name: t.Callable
+):
+    mocker.patch(
+        "sqlmesh.core.engine_adapter.spark.SparkEngineAdapter.table_exists",
+        return_value=False,
+    )
+    mocker.patch(
+        "sqlmesh.core.engine_adapter.spark.SparkEngineAdapter.get_current_catalog",
+        lambda self: "spark_catalog",
+    )
+    mocker.patch(
+        "sqlmesh.core.engine_adapter.spark.SparkEngineAdapter.get_current_database",
+        side_effect=lambda: "default",
+    )
+
+    adapter = make_mocked_engine_adapter(SparkEngineAdapter)
+    adapter.cursor.fetchone.return_value = (1,)
+
+    table_name = "db.table"
+    temp_table_id = "abcdefgh"
+    mocker.patch(
+        "sqlmesh.core.engine_adapter.EngineAdapter._get_temp_table",
+        side_effect=lambda *args, **kwargs: make_temp_table_name(table_name, temp_table_id),
+    )
+
     mocker.patch(
         "sqlmesh.core.engine_adapter.spark.SparkEngineAdapter.columns",
         return_value={"col": exp.DataType(this=exp.DataType.Type.INT)},
@@ -181,10 +267,53 @@ def test_replace_query_self_ref(
     adapter.replace_query(table_name, parse_one(f"SELECT col + 1 AS col FROM {table_name}"))
 
     assert to_sql_calls(adapter) == [
+        "CREATE TABLE IF NOT EXISTS `db`.`table` (`col` INT)",
+        # This second query doesn't do anything but we can't just run this because we need the table
+        # to exist since it is self-referencing
+        "CREATE TABLE IF NOT EXISTS `db`.`table` AS SELECT `col` + 1 AS `col` FROM `db`.`table`",
+    ]
+
+
+def test_replace_query_self_ref_exists(
+    make_mocked_engine_adapter: t.Callable, mocker: MockerFixture, make_temp_table_name: t.Callable
+):
+    mocker.patch(
+        "sqlmesh.core.engine_adapter.spark.SparkEngineAdapter.table_exists",
+        return_value=True,
+    )
+    mocker.patch(
+        "sqlmesh.core.engine_adapter.spark.SparkEngineAdapter.get_current_catalog",
+        return_value="spark_catalog",
+    )
+    mocker.patch(
+        "sqlmesh.core.engine_adapter.spark.SparkEngineAdapter.get_current_database",
+        return_value="default",
+    )
+
+    adapter = make_mocked_engine_adapter(SparkEngineAdapter)
+    adapter.cursor.fetchone.return_value = (1,)
+
+    table_name = "db.table"
+    temp_table_id = "abcdefgh"
+    mocker.patch(
+        "sqlmesh.core.engine_adapter.EngineAdapter._get_temp_table",
+        return_value=make_temp_table_name(table_name, temp_table_id),
+    )
+
+    mocker.patch(
+        "sqlmesh.core.engine_adapter.spark.SparkEngineAdapter.columns",
+        return_value={"col": exp.DataType(this=exp.DataType.Type.INT)},
+    )
+
+    adapter.replace_query(table_name, parse_one(f"SELECT col + 1 AS col FROM {table_name}"))
+
+    assert to_sql_calls(adapter) == [
+        "CREATE TABLE IF NOT EXISTS `db`.`table` (`col` INT)",
+        # This is something temp_table does and isn't really needed. The contract with `replace_query` is that
+        # the schema for the table already exists
         "CREATE SCHEMA IF NOT EXISTS `db`",
         f"CREATE TABLE IF NOT EXISTS `db`.`temp_table_{temp_table_id}` AS SELECT `col` FROM `db`.`table`",
-        "TRUNCATE TABLE `db`.`table`",
-        f"INSERT INTO `db`.`table` (`col`) SELECT `col` + 1 AS `col` FROM `db`.`temp_table_{temp_table_id}`",
+        f"INSERT OVERWRITE TABLE `db`.`table` (`col`) SELECT `col` + 1 AS `col` FROM `db`.`temp_table_abcdefgh`",
         f"DROP TABLE IF EXISTS `db`.`temp_table_{temp_table_id}`",
     ]
 
@@ -430,20 +559,21 @@ def test_scd_type_2(
         valid_to_name="test_valid_to",
         updated_at_name="test_updated_at",
         columns_to_types={
-            "id": exp.DataType.Type.INT,
-            "name": exp.DataType.Type.VARCHAR,
-            "price": exp.DataType.Type.DOUBLE,
-            "test_updated_at": exp.DataType.Type.TIMESTAMP,
-            "test_valid_from": exp.DataType.Type.TIMESTAMP,
-            "test_valid_to": exp.DataType.Type.TIMESTAMP,
+            "id": exp.DataType.build("INT"),
+            "name": exp.DataType.build("VARCHAR"),
+            "price": exp.DataType.build("DOUBLE"),
+            "test_updated_at": exp.DataType.build("TIMESTAMP"),
+            "test_valid_from": exp.DataType.build("TIMESTAMP"),
+            "test_valid_to": exp.DataType.build("TIMESTAMP"),
         },
         execution_time=datetime(2020, 1, 1, 0, 0, 0),
     )
 
     assert to_sql_calls(adapter) == [
+        "CREATE TABLE IF NOT EXISTS `db`.`target` (`id` INT, `name` STRING, `price` DOUBLE, `test_updated_at` TIMESTAMP, `test_valid_from` TIMESTAMP, `test_valid_to` TIMESTAMP)",
+        "DESCRIBE `db`.`target`",
         "CREATE SCHEMA IF NOT EXISTS `db`",
         "CREATE TABLE IF NOT EXISTS `db`.`temp_target_abcdefgh` AS SELECT `id`, `name`, `price`, `test_updated_at`, `test_valid_from`, `test_valid_to` FROM `db`.`target`",
-        "TRUNCATE TABLE `db`.`target`",
         parse_one(
             """WITH `source` AS (
   SELECT
@@ -585,7 +715,7 @@ def test_scd_type_2(
   WHERE
     `test_updated_at` > `t_test_updated_at`
 )
-INSERT INTO `db`.`target` (
+INSERT OVERWRITE TABLE `db`.`target` (
   `id`,
   `name`,
   `price`,
@@ -594,25 +724,16 @@ INSERT INTO `db`.`target` (
   `test_valid_to`
 )
 SELECT
-  `id`,
-  `name`,
-  `price`,
-  `test_updated_at`,
-  `test_valid_from`,
-  `test_valid_to`
-FROM (
-  SELECT
-    *
-  FROM `static`
-  UNION ALL
-  SELECT
-    *
-  FROM `updated_rows`
-  UNION ALL
-  SELECT
-    *
-  FROM `inserted_rows`
-) AS `_ordered_projections`
+  *
+FROM `static`
+UNION ALL
+SELECT
+  *
+FROM `updated_rows`
+UNION ALL
+SELECT
+  *
+FROM `inserted_rows`
         """,
             dialect="spark",
         ).sql(dialect="spark"),

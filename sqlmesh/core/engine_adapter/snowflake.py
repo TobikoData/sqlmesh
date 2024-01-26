@@ -52,31 +52,32 @@ class SnowflakeEngineAdapter(GetCurrentCatalogFromFunctionMixin):
         def query_factory() -> Query:
             from snowflake.connector.pandas_tools import write_pandas
 
-            # Workaround for https://github.com/snowflakedb/snowflake-connector-python/issues/1034
-            #
-            # The above issue has already been fixed upstream, but we keep the following
-            # line anyway in order to support a wider range of Snowflake versions.
-            self.cursor.execute(f'USE SCHEMA "{temp_table.db}"')
+            if not self.table_exists(temp_table):
+                # Workaround for https://github.com/snowflakedb/snowflake-connector-python/issues/1034
+                #
+                # The above issue has already been fixed upstream, but we keep the following
+                # line anyway in order to support a wider range of Snowflake versions.
+                self.cursor.execute(f'USE SCHEMA "{temp_table.db}"')
 
-            # See: https://stackoverflow.com/a/75627721
-            for column, kind in columns_to_types.items():
-                if is_datetime64_any_dtype(df.dtypes[column]):
-                    if kind.is_type("date"):  # type: ignore
-                        df[column] = pd.to_datetime(df[column]).dt.date  # type: ignore
-                    elif getattr(df.dtypes[column], "tz", None) is not None:  # type: ignore
-                        df[column] = pd.to_datetime(df[column]).dt.strftime("%Y-%m-%d %H:%M:%S.%f%z")  # type: ignore
-                    # https://github.com/snowflakedb/snowflake-connector-python/issues/1677
-                    else:  # type: ignore
-                        df[column] = pd.to_datetime(df[column]).dt.strftime("%Y-%m-%d %H:%M:%S.%f")  # type: ignore
-            self.create_table(temp_table, columns_to_types, exists=False)
-            write_pandas(
-                self._connection_pool.get(),
-                df,
-                temp_table.name,
-                schema=temp_table.db or None,
-                database=temp_table.catalog or None,
-                chunk_size=self.DEFAULT_BATCH_SIZE,
-            )
+                # See: https://stackoverflow.com/a/75627721
+                for column, kind in columns_to_types.items():
+                    if is_datetime64_any_dtype(df.dtypes[column]):
+                        if kind.is_type("date"):  # type: ignore
+                            df[column] = pd.to_datetime(df[column]).dt.date  # type: ignore
+                        elif getattr(df.dtypes[column], "tz", None) is not None:  # type: ignore
+                            df[column] = pd.to_datetime(df[column]).dt.strftime("%Y-%m-%d %H:%M:%S.%f%z")  # type: ignore
+                        # https://github.com/snowflakedb/snowflake-connector-python/issues/1677
+                        else:  # type: ignore
+                            df[column] = pd.to_datetime(df[column]).dt.strftime("%Y-%m-%d %H:%M:%S.%f")  # type: ignore
+                self.create_table(temp_table, columns_to_types, exists=False)
+                write_pandas(
+                    self._connection_pool.get(),
+                    df,
+                    temp_table.name,
+                    schema=temp_table.db or None,
+                    database=temp_table.catalog or None,
+                    chunk_size=self.DEFAULT_BATCH_SIZE,
+                )
             return exp.select(*self._casted_columns(columns_to_types)).from_(temp_table)
 
         return [

@@ -113,12 +113,15 @@ class BigQueryEngineAdapter(InsertOverwriteWithMergeMixin):
         )
 
         def query_factory() -> Query:
-            # Make mypy happy
-            assert isinstance(df, pd.DataFrame)
-            self._db_call(self.client.create_table, table=temp_bq_table, exists_ok=False)
-            result = self.__load_pandas_to_table(temp_bq_table, df, columns_to_types, replace=False)
-            if result.errors:
-                raise SQLMeshError(result.errors)
+            if not self.table_exists(temp_table):
+                # Make mypy happy
+                assert isinstance(df, pd.DataFrame)
+                self._db_call(self.client.create_table, table=temp_bq_table, exists_ok=False)
+                result = self.__load_pandas_to_table(
+                    temp_bq_table, df, columns_to_types, replace=False
+                )
+                if result.errors:
+                    raise SQLMeshError(result.errors)
             return self._select_columns(columns_to_types).from_(temp_table)
 
         return [

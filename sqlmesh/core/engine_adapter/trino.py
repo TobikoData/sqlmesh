@@ -10,7 +10,6 @@ from sqlmesh.core.dialect import schema_, to_schema
 from sqlmesh.core.engine_adapter.mixins import (
     GetCurrentCatalogFromFunctionMixin,
     HiveMetastoreTablePropertiesMixin,
-    LogicalReplaceQueryMixin,
     PandasNativeFetchDFSupportMixin,
 )
 from sqlmesh.core.engine_adapter.shared import (
@@ -34,7 +33,6 @@ if t.TYPE_CHECKING:
 @set_catalog()
 class TrinoEngineAdapter(
     PandasNativeFetchDFSupportMixin,
-    LogicalReplaceQueryMixin,
     HiveMetastoreTablePropertiesMixin,
     GetCurrentCatalogFromFunctionMixin,
 ):
@@ -50,6 +48,7 @@ class TrinoEngineAdapter(
     CURRENT_CATALOG_EXPRESSION = exp.column("current_catalog")
     COMMENT_CREATION_TABLE = CommentCreationTable.IN_SCHEMA_DEF_NO_CTAS
     COMMENT_CREATION_VIEW = CommentCreationView.COMMENT_COMMAND_ONLY
+    SUPPORTS_REPLACE_TABLE = False
 
     @property
     def connection(self) -> TrinoConnection:
@@ -65,14 +64,26 @@ class TrinoEngineAdapter(
         source_queries: t.List[SourceQuery],
         columns_to_types: t.Optional[t.Dict[str, exp.DataType]] = None,
         where: t.Optional[exp.Condition] = None,
+        insert_overwrite_strategy_override: t.Optional[InsertOverwriteStrategy] = None,
     ) -> None:
-        self.execute(
-            f"SET SESSION {self.get_current_catalog()}.insert_existing_partitions_behavior='OVERWRITE'"
-        )
-        super()._insert_overwrite_by_condition(table_name, source_queries, columns_to_types, where)
-        self.execute(
-            f"SET SESSION {self.get_current_catalog()}.insert_existing_partitions_behavior='APPEND'"
-        )
+        if where:
+            self.execute(
+                f"SET SESSION {self.get_current_catalog()}.insert_existing_partitions_behavior='OVERWRITE'"
+            )
+            super()._insert_overwrite_by_condition(
+                table_name, source_queries, columns_to_types, where
+            )
+            self.execute(
+                f"SET SESSION {self.get_current_catalog()}.insert_existing_partitions_behavior='APPEND'"
+            )
+        else:
+            super()._insert_overwrite_by_condition(
+                table_name,
+                source_queries,
+                columns_to_types,
+                where,
+                insert_overwrite_strategy_override=InsertOverwriteStrategy.DELETE_INSERT,
+            )
 
     def _truncate_table(self, table_name: TableName) -> None:
         table = exp.to_table(table_name)

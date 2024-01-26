@@ -93,6 +93,7 @@ class EngineAdapter:
     CATALOG_SUPPORT = CatalogSupport.UNSUPPORTED
     SUPPORTS_ROW_LEVEL_OP = True
     HAS_VIEW_BINDING = False
+    SUPPORTS_REPLACE_TABLE = True
 
     def __init__(
         self,
@@ -304,15 +305,59 @@ class EngineAdapter:
         source_queries, columns_to_types = self._get_source_queries_and_columns_to_types(
             query_or_df, columns_to_types, target_table=table_name
         )
-        return self._create_table_from_source_queries(
-            table,
-            source_queries,
-            columns_to_types,
-            replace=True,
-            table_description=table_description,
-            column_descriptions=column_descriptions,
-            **kwargs,
+        columns_to_types = columns_to_types or self.columns(table)
+        query = source_queries[0].query_factory()
+        target_table = exp.to_table(table_name)
+        self_referencing = any(
+            quote_identifiers(table) == quote_identifiers(target_table)
+            for table in query.find_all(exp.Table)
         )
+        # If a query references itself then it must have a table created regardless of approach used.
+        if self_referencing:
+            self._create_table_from_columns(
+                table_name,
+                columns_to_types,
+                exists=True,
+                table_description=table_description,
+                column_descriptions=column_descriptions,
+            )
+        # All engines support `CREATE TABLE AS` so we use that if the table doesn't already exist and we
+        # use `CREATE OR REPLACE TABLE AS` if the engine supports it
+        if self.SUPPORTS_REPLACE_TABLE or not self.table_exists(table):
+            return self._create_table_from_source_queries(
+                table,
+                source_queries,
+                columns_to_types,
+                replace=self.SUPPORTS_REPLACE_TABLE,
+                table_description=table_description,
+                column_descriptions=column_descriptions,
+                **kwargs,
+            )
+        else:
+            if self_referencing:
+                with self.temp_table(
+                    self._select_columns(columns_to_types).from_(target_table),
+                    name=target_table,
+                    columns_to_types=columns_to_types,
+                    **kwargs,
+                ) as temp_table:
+                    for source_query in source_queries:
+                        source_query.add_transform(
+                            lambda node: temp_table  # type: ignore
+                            if isinstance(node, exp.Table)
+                            and quote_identifiers(node) == quote_identifiers(target_table)
+                            else node
+                        )
+                    return self._insert_overwrite_by_condition(
+                        table_name,
+                        source_queries,
+                        columns_to_types,
+                    )
+            return self._insert_overwrite_by_condition(
+                table_name,
+                source_queries,
+                columns_to_types,
+            )
 
     def create_index(
         self,
@@ -1047,25 +1092,23 @@ class EngineAdapter:
         source_queries: t.List[SourceQuery],
         columns_to_types: t.Optional[t.Dict[str, exp.DataType]] = None,
         where: t.Optional[exp.Condition] = None,
+        insert_overwrite_strategy_override: t.Optional[InsertOverwriteStrategy] = None,
     ) -> None:
         table = exp.to_table(table_name)
-        if self.INSERT_OVERWRITE_STRATEGY.requires_condition and not where:
-            raise SQLMeshError(
-                "Where condition is required when doing a delete/insert or replace/where for insert/overwrite"
-            )
+        insert_overwrite_strategy = (
+            insert_overwrite_strategy_override or self.INSERT_OVERWRITE_STRATEGY
+        )
+        if insert_overwrite_strategy.requires_condition and not where:
+            where = exp.true()
         with self.transaction(
-            condition=len(source_queries) > 0 or self.INSERT_OVERWRITE_STRATEGY.is_delete_insert
+            condition=len(source_queries) > 0 or insert_overwrite_strategy.is_delete_insert
         ):
             columns_to_types = columns_to_types or self.columns(table_name)
             for i, source_query in enumerate(source_queries):
                 with source_query as query:
                     query = self._add_where_to_query(query, where, columns_to_types)
-                    if i > 0 or self.INSERT_OVERWRITE_STRATEGY.is_delete_insert:
+                    if i > 0 or insert_overwrite_strategy.is_delete_insert:
                         if i == 0:
-                            if not where:
-                                raise SQLMeshError(
-                                    "Where condition is required when doing a delete/insert"
-                                )
                             assert where is not None
                             self.delete_from(table_name, where=where)
                         self._insert_append_query(
@@ -1080,11 +1123,11 @@ class EngineAdapter:
                             table,
                             # Change once Databricks supports REPLACE WHERE with columns
                             columns=list(columns_to_types)
-                            if not self.INSERT_OVERWRITE_STRATEGY.is_replace_where
+                            if not insert_overwrite_strategy.is_replace_where
                             else None,
-                            overwrite=self.INSERT_OVERWRITE_STRATEGY.is_insert_overwrite,
+                            overwrite=insert_overwrite_strategy.is_insert_overwrite,
                         )
-                        if self.INSERT_OVERWRITE_STRATEGY.is_replace_where:
+                        if insert_overwrite_strategy.is_replace_where:
                             insert_exp.set("where", where)
                         self.execute(insert_exp)
 

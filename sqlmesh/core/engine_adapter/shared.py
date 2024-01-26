@@ -223,13 +223,21 @@ class SourceQuery:
         self,
         query_factory: t.Callable[[], Query],
         cleanup_func: t.Optional[t.Callable[[], None]] = None,
+        transforms: t.Optional[t.List[t.Callable[[Query], Query]]] = None,
         **kwargs: t.Any,
     ) -> None:
         self.query_factory = query_factory
         self.cleanup_func = cleanup_func
+        self._transforms = transforms or []
+
+    def add_transform(self, transform: t.Callable[[Query], Query]) -> None:
+        self._transforms.append(transform)
 
     def __enter__(self) -> Query:
-        return self.query_factory()
+        query = self.query_factory()
+        for transform in self._transforms:
+            query = query.transform(transform)
+        return query
 
     def __exit__(
         self,

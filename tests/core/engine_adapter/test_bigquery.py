@@ -131,6 +131,20 @@ def test_insert_overwrite_by_time_partition_pandas(
 ):
     adapter = make_mocked_engine_adapter(BigQueryEngineAdapter)
 
+    temp_table_exists_counter = 0
+
+    def temp_table_exists(table: exp.Table) -> bool:
+        nonlocal temp_table_exists_counter
+        temp_table_exists_counter += 1
+        if table.sql() == "project.dataset.temp_table" and temp_table_exists_counter == 1:
+            return False
+        return True
+
+    mocker.patch(
+        "sqlmesh.core.engine_adapter.bigquery.BigQueryEngineAdapter.table_exists",
+        side_effect=temp_table_exists,
+    )
+
     get_temp_bq_table = mocker.Mock()
     get_temp_bq_table.return_value = AttributeDict(
         {"project": "project", "dataset_id": "dataset", "table_id": "temp_table"}
@@ -213,11 +227,25 @@ def test_replace_query(make_mocked_engine_adapter: t.Callable, mocker: MockerFix
 def test_replace_query_pandas(make_mocked_engine_adapter: t.Callable, mocker: MockerFixture):
     adapter = make_mocked_engine_adapter(BigQueryEngineAdapter)
 
-    get_bq_table = mocker.Mock()
-    get_bq_table.return_value = AttributeDict(
+    get_bq_table_value = AttributeDict(
         {"project": "project", "dataset_id": "dataset", "table_id": "temp_table"}
     )
+    get_bq_table = mocker.Mock()
+    get_bq_table.return_value = get_bq_table_value
     adapter._BigQueryEngineAdapter__get_bq_table = get_bq_table
+    temp_table_exists_counter = 0
+
+    def temp_table_exists(table: exp.Table) -> bool:
+        nonlocal temp_table_exists_counter
+        temp_table_exists_counter += 1
+        if table.sql() == "project.dataset.temp_table" and temp_table_exists_counter == 1:
+            return False
+        return True
+
+    mocker.patch(
+        "sqlmesh.core.engine_adapter.bigquery.BigQueryEngineAdapter.table_exists",
+        side_effect=temp_table_exists,
+    )
     db_call_mock = mocker.patch(
         "sqlmesh.core.engine_adapter.bigquery.BigQueryEngineAdapter._db_call"
     )
@@ -244,11 +272,8 @@ def test_replace_query_pandas(make_mocked_engine_adapter: t.Callable, mocker: Mo
     assert retry_resp.call_count == 1
     create_table = db_call_mock.call_args_list[0]
     load_table = retry_resp.call_args_list[0]
-    if sys.version_info < (3, 8):
-        create_table.kwargs = create_table[1]
-        load_table.kwargs = load_table[1]
     assert create_table.kwargs == {
-        "table": get_bq_table.return_value,
+        "table": get_bq_table_value,
         "exists_ok": False,
     }
     assert sorted(load_table.kwargs) == [
@@ -257,7 +282,7 @@ def test_replace_query_pandas(make_mocked_engine_adapter: t.Callable, mocker: Mo
         "table",
     ]
     assert load_table.kwargs["df"].equals(df)
-    assert load_table.kwargs["table"] == get_bq_table.return_value
+    assert load_table.kwargs["table"] == get_bq_table_value
     assert load_table.kwargs["job_config"].write_disposition is None
     assert load_table.kwargs["job_config"].schema == [
         bigquery.SchemaField("a", "INT64"),
@@ -415,7 +440,28 @@ def test_merge(make_mocked_engine_adapter: t.Callable, mocker: MockerFixture):
         "WHEN NOT MATCHED THEN INSERT (id, ts, val) VALUES (__MERGE_SOURCE__.id, __MERGE_SOURCE__.ts, __MERGE_SOURCE__.val)"
     ]
 
-    execute_mock.reset_mock()
+
+def test_merge_pandas(make_mocked_engine_adapter: t.Callable, mocker: MockerFixture):
+    adapter = make_mocked_engine_adapter(BigQueryEngineAdapter)
+
+    temp_table_exists_counter = 0
+
+    def temp_table_exists(table: exp.Table) -> bool:
+        nonlocal temp_table_exists_counter
+        temp_table_exists_counter += 1
+        if table.sql() == "project.dataset.temp_table" and temp_table_exists_counter == 1:
+            return False
+        return True
+
+    mocker.patch(
+        "sqlmesh.core.engine_adapter.bigquery.BigQueryEngineAdapter.table_exists",
+        side_effect=temp_table_exists,
+    )
+
+    execute_mock = mocker.patch(
+        "sqlmesh.core.engine_adapter.bigquery.BigQueryEngineAdapter.execute"
+    )
+
     get_temp_bq_table = mocker.Mock()
     get_temp_bq_table.return_value = AttributeDict(
         {"project": "project", "dataset_id": "dataset", "table_id": "temp_table"}
@@ -456,9 +502,6 @@ def test_merge(make_mocked_engine_adapter: t.Callable, mocker: MockerFixture):
     assert db_call_mock.call_count == 1
     create_temp_table = db_call_mock.call_args_list[0]
     load_temp_table = retry_resp.call_args_list[0]
-    if sys.version_info < (3, 8):
-        create_temp_table.kwargs = create_temp_table[1]
-        load_temp_table.kwargs = load_temp_table[1]
     assert create_temp_table.kwargs == {
         "exists_ok": False,
         "table": get_temp_bq_table.return_value,
