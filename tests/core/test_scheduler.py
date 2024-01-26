@@ -127,7 +127,6 @@ def test_incremental_by_unique_key_kind_dag(mocker: MockerFixture, make_snapshot
     batches = scheduler.batches(start, end, end)
     dag = scheduler._dag(batches)
     assert dag.graph == {
-        # Depends on no one
         (
             unique_by_key_snapshot.name,
             ((to_datetime("2023-01-01"), to_datetime("2023-01-07")), 0),
@@ -200,6 +199,26 @@ def test_incremental_time_self_reference_dag(mocker: MockerFixture, make_snapsho
                 ((to_datetime("2023-01-04"), to_datetime("2023-01-05")), 2),
             ),
         },
+        (incremental_self_snapshot.name, ((to_datetime(0), to_datetime(0)), -1),): set(
+            [
+                (
+                    incremental_self_snapshot.name,
+                    ((to_datetime("2023-01-01"), to_datetime("2023-01-02")), 0),
+                ),
+                (
+                    incremental_self_snapshot.name,
+                    ((to_datetime("2023-01-03"), to_datetime("2023-01-04")), 1),
+                ),
+                (
+                    incremental_self_snapshot.name,
+                    ((to_datetime("2023-01-04"), to_datetime("2023-01-05")), 2),
+                ),
+                (
+                    incremental_self_snapshot.name,
+                    ((to_datetime("2023-01-06"), to_datetime("2023-01-07")), 3),
+                ),
+            ]
+        ),
     }
 
 
