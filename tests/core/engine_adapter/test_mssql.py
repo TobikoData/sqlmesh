@@ -335,7 +335,7 @@ def test_replace_query(make_mocked_engine_adapter: t.Callable):
 
     assert to_sql_calls(adapter) == [
         """SELECT 1 FROM [information_schema].[tables] WHERE [table_name] = 'test_table';""",
-        "MERGE INTO [test_table] AS [__MERGE_TARGET__] USING (SELECT [a] AS [a] FROM (SELECT [a] AS [a] FROM [tbl]) AS [_subquery] WHERE (1 = 1)) AS [__MERGE_SOURCE__] ON (1 = 0) WHEN NOT MATCHED BY SOURCE AND (1 = 1) THEN DELETE WHEN NOT MATCHED THEN INSERT ([a]) VALUES ([a]);",
+        "MERGE INTO [test_table] AS [__MERGE_TARGET__] USING (SELECT [a] AS [a] FROM [tbl]) AS [__MERGE_SOURCE__] ON (1 = 0) WHEN NOT MATCHED BY SOURCE THEN DELETE WHEN NOT MATCHED THEN INSERT ([a]) VALUES ([a]);",
     ]
 
 
@@ -382,7 +382,7 @@ def test_replace_query_pandas(
 
     assert to_sql_calls(adapter) == [
         f"""IF NOT EXISTS (SELECT * FROM information_schema.tables WHERE table_name = '{temp_table_name}') EXEC('CREATE TABLE [{temp_table_name}] ([a] INTEGER, [b] INTEGER)');""",
-        f"MERGE INTO [test_table] AS [__MERGE_TARGET__] USING (SELECT [a] AS [a], [b] AS [b] FROM (SELECT CAST([a] AS INTEGER) AS [a], CAST([b] AS INTEGER) AS [b] FROM [{temp_table_name}]) AS [_subquery] WHERE (1 = 1)) AS [__MERGE_SOURCE__] ON (1 = 0) WHEN NOT MATCHED BY SOURCE AND (1 = 1) THEN DELETE WHEN NOT MATCHED THEN INSERT ([a], [b]) VALUES ([a], [b]);",
+        f"MERGE INTO [test_table] AS [__MERGE_TARGET__] USING (SELECT CAST([a] AS INTEGER) AS [a], CAST([b] AS INTEGER) AS [b] FROM [__temp_test_table_abcdefgh]) AS [__MERGE_SOURCE__] ON (1 = 0) WHEN NOT MATCHED BY SOURCE THEN DELETE WHEN NOT MATCHED THEN INSERT ([a], [b]) VALUES ([a], [b]);",
         f"DROP TABLE IF EXISTS [{temp_table_name}];",
     ]
 

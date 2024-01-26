@@ -213,10 +213,6 @@ class InsertOverwriteStrategy(Enum):
     def is_into_is_overwrite(self) -> bool:
         return self == InsertOverwriteStrategy.INTO_IS_OVERWRITE
 
-    @property
-    def requires_condition(self) -> bool:
-        return self.is_replace_where or self.is_delete_insert
-
 
 class SourceQuery:
     def __init__(

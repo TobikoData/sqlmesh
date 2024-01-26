@@ -1097,8 +1097,6 @@ class EngineAdapter:
         insert_overwrite_strategy = (
             insert_overwrite_strategy_override or self.INSERT_OVERWRITE_STRATEGY
         )
-        if insert_overwrite_strategy.requires_condition and not where:
-            where = exp.true()
         with self.transaction(
             condition=len(source_queries) > 0 or insert_overwrite_strategy.is_delete_insert
         ):
@@ -1108,8 +1106,7 @@ class EngineAdapter:
                     query = self._add_where_to_query(query, where, columns_to_types)
                     if i > 0 or insert_overwrite_strategy.is_delete_insert:
                         if i == 0:
-                            assert where is not None
-                            self.delete_from(table_name, where=where)
+                            self.delete_from(table_name, where=where or exp.true())
                         self._insert_append_query(
                             table_name,
                             query,

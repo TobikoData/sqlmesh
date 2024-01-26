@@ -99,8 +99,6 @@ class InsertOverwriteWithMergeMixin(EngineAdapter):
         predicate being `False`.
         """
         columns_to_types = columns_to_types or self.columns(table_name)
-        if not where:
-            where = exp.true()
         for source_query in source_queries:
             with source_query as query:
                 query = self._add_where_to_query(query, where, columns_to_types)
