@@ -80,7 +80,7 @@ def adapter_mock(mocker: MockerFixture):
     adapter_mock.dialect = "duckdb"
     adapter_mock.HAS_VIEW_BINDING = False
     adapter_mock.wap_supported.return_value = False
-    adapter_mock.list_data_objects.return_value = []
+    adapter_mock.get_data_objects.return_value = []
     return adapter_mock
 
 
@@ -541,7 +541,7 @@ def test_create_object_exists(mocker: MockerFixture, adapter_mock, make_snapshot
     snapshot = make_snapshot(model)
     snapshot.categorize_as(SnapshotChangeCategory.BREAKING)
 
-    adapter_mock.list_data_objects.return_value = [
+    adapter_mock.get_data_objects.return_value = [
         DataObject(
             name=f"test_schema__test_model__{snapshot.version}__temp",
             schema="sqlmesh__test_schema",
@@ -552,7 +552,7 @@ def test_create_object_exists(mocker: MockerFixture, adapter_mock, make_snapshot
 
     evaluator.create([snapshot], {})
     adapter_mock.create_view.assert_not_called()
-    adapter_mock.list_data_objects.assert_called_once_with(
+    adapter_mock.get_data_objects.assert_called_once_with(
         schema_("sqlmesh__test_schema"), {f"test_schema__test_model__{snapshot.version}__temp"}
     )
 
