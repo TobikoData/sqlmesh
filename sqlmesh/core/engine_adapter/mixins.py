@@ -4,16 +4,15 @@ import logging
 import typing as t
 
 from sqlglot import exp
-from sqlglot.optimizer.qualify_columns import quote_identifiers
 
 from sqlmesh.core.engine_adapter.base import EngineAdapter
-from sqlmesh.core.engine_adapter.shared import SourceQuery
+from sqlmesh.core.engine_adapter.shared import InsertOverwriteStrategy, SourceQuery
 from sqlmesh.core.node import IntervalUnit
 from sqlmesh.utils.errors import SQLMeshError
 
 if t.TYPE_CHECKING:
     from sqlmesh.core._typing import TableName
-    from sqlmesh.core.engine_adapter._typing import DF, Query
+    from sqlmesh.core.engine_adapter._typing import DF
     from sqlmesh.core.engine_adapter.base import QueryOrDF
 
 logger = logging.getLogger(__name__)
@@ -69,90 +68,6 @@ class LogicalMergeMixin(EngineAdapter):
             self.drop_table(temp_table)
 
 
-class LogicalReplaceQueryMixin(EngineAdapter):
-    @classmethod
-    def overwrite_target_from_temp(
-        cls,
-        engine_adapter: EngineAdapter,
-        query: Query,
-        columns_to_types: t.Dict[str, exp.DataType],
-        target_table: TableName,
-        **kwargs: t.Any,
-    ) -> None:
-        """
-        Overwrites the target table from the temp table. This is used when the target table is self-referencing.
-        """
-        with engine_adapter.temp_table(
-            cls._select_columns(columns_to_types).from_(target_table),
-            target_table,
-            columns_to_types,
-            **kwargs,
-        ) as temp_table:
-
-            def replace_table(
-                node: exp.Expression, curr_table: exp.Table, new_table: exp.Table
-            ) -> exp.Expression:
-                if isinstance(node, exp.Table) and quote_identifiers(node) == quote_identifiers(
-                    curr_table
-                ):
-                    return new_table
-                return node
-
-            temp_query = query.transform(
-                replace_table, curr_table=target_table, new_table=temp_table
-            )
-            engine_adapter._truncate_table(target_table)
-            return engine_adapter._insert_append_query(target_table, temp_query, columns_to_types)
-
-    def replace_query(
-        self,
-        table_name: TableName,
-        query_or_df: QueryOrDF,
-        columns_to_types: t.Optional[t.Dict[str, exp.DataType]] = None,
-        table_description: t.Optional[str] = None,
-        column_descriptions: t.Optional[t.Dict[str, str]] = None,
-        **kwargs: t.Any,
-    ) -> None:
-        """
-        Some engines do not support replace table and also enforce binding views. Therefore we can't swap out tables
-        under views and we also can't drop them. Therefore we need to truncate and insert within a transaction.
-        """
-
-        if not self.table_exists(table_name):
-            return self.ctas(
-                table_name,
-                query_or_df,
-                columns_to_types,
-                exists=False,
-                table_description=table_description,
-                column_descriptions=column_descriptions,
-                **kwargs,
-            )
-        with self.transaction():
-            # TODO: remove quote_identifiers when sqlglot has an expression to represent TRUNCATE
-            source_queries, columns_to_types = self._get_source_queries_and_columns_to_types(
-                query_or_df, columns_to_types, table_name
-            )
-            columns_to_types = columns_to_types or self.columns(table_name)
-            if len(source_queries) != 1:
-                raise SQLMeshError(
-                    f"Replace query for {table_name} must have exactly one source query."
-                )
-            with source_queries[0] as query:
-                target_table = exp.to_table(table_name)
-                # Check if self-referencing
-                self_referencing = any(
-                    quote_identifiers(table) == quote_identifiers(target_table)
-                    for table in query.find_all(exp.Table)
-                )
-                if self_referencing:
-                    return self.overwrite_target_from_temp(
-                        self, query, columns_to_types, target_table
-                    )
-                self._truncate_table(table_name)
-                return self._insert_append_query(table_name, query, columns_to_types)
-
-
 class PandasNativeFetchDFSupportMixin(EngineAdapter):
     def _fetch_native_df(
         self, query: t.Union[exp.Expression, str], quote_identifiers: bool = False
@@ -176,6 +91,7 @@ class InsertOverwriteWithMergeMixin(EngineAdapter):
         source_queries: t.List[SourceQuery],
         columns_to_types: t.Optional[t.Dict[str, exp.DataType]] = None,
         where: t.Optional[exp.Condition] = None,
+        insert_overwrite_strategy_override: t.Optional[InsertOverwriteStrategy] = None,
     ) -> None:
         """
         Some engines do not support `INSERT OVERWRITE` but instead support

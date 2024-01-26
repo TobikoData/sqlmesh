@@ -11,7 +11,6 @@ from sqlmesh.core.engine_adapter.base_postgres import BasePostgresEngineAdapter
 from sqlmesh.core.engine_adapter.mixins import (
     GetCurrentCatalogFromFunctionMixin,
     LogicalMergeMixin,
-    LogicalReplaceQueryMixin,
     NonTransactionalTruncateMixin,
 )
 from sqlmesh.core.engine_adapter.shared import (
@@ -30,7 +29,6 @@ if t.TYPE_CHECKING:
 @set_catalog()
 class RedshiftEngineAdapter(
     BasePostgresEngineAdapter,
-    LogicalReplaceQueryMixin,
     LogicalMergeMixin,
     GetCurrentCatalogFromFunctionMixin,
     NonTransactionalTruncateMixin,
@@ -41,6 +39,7 @@ class RedshiftEngineAdapter(
     CURRENT_CATALOG_EXPRESSION = exp.func("current_database")
     # Redshift doesn't support comments for VIEWs WITH NO SCHEMA BINDING (which we always use)
     COMMENT_CREATION_VIEW = CommentCreationView.UNSUPPORTED
+    SUPPORTS_REPLACE_TABLE = False
 
     @property
     def cursor(self) -> t.Any:

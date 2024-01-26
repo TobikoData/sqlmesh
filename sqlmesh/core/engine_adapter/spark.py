@@ -6,13 +6,11 @@ from functools import partial
 
 import pandas as pd
 from sqlglot import exp
-from sqlglot.optimizer.qualify_columns import quote_identifiers
 
 from sqlmesh.core.dialect import to_schema
 from sqlmesh.core.engine_adapter.mixins import (
     GetCurrentCatalogFromFunctionMixin,
     HiveMetastoreTablePropertiesMixin,
-    LogicalReplaceQueryMixin,
 )
 from sqlmesh.core.engine_adapter.shared import (
     CatalogSupport,
@@ -59,6 +57,9 @@ class SparkEngineAdapter(GetCurrentCatalogFromFunctionMixin, HiveMetastoreTableP
     SUPPORTS_ROW_LEVEL_OP = False
     COMMENT_CREATION_TABLE = CommentCreationTable.IN_SCHEMA_DEF_NO_CTAS
     COMMENT_CREATION_VIEW = CommentCreationView.IN_SCHEMA_DEF_NO_COMMANDS
+    # Note: Some formats (like Delta and Iceberg) support REPLACE TABLE but since we don't
+    # currently check for storage formats we say we don't support REPLACE TABLE
+    SUPPORTS_REPLACE_TABLE = False
 
     @property
     def spark(self) -> PySparkSession:
@@ -363,44 +364,6 @@ class SparkEngineAdapter(GetCurrentCatalogFromFunctionMixin, HiveMetastoreTableP
         cascade: bool = False,
     ) -> None:
         super().drop_schema(schema_name, ignore_if_not_exists=ignore_if_not_exists, cascade=cascade)
-
-    def replace_query(
-        self,
-        table_name: TableName,
-        query_or_df: QueryOrDF,
-        columns_to_types: t.Optional[t.Dict[str, exp.DataType]] = None,
-        table_description: t.Optional[str] = None,
-        column_descriptions: t.Optional[t.Dict[str, str]] = None,
-        **kwargs: t.Any,
-    ) -> None:
-        # Note: Some storage formats (like Delta and Iceberg) support REPLACE TABLE but since we don't
-        # currently check for storage formats we will just do an insert/overwrite.
-        source_queries, columns_to_types = self._get_source_queries_and_columns_to_types(
-            query_or_df, columns_to_types, target_table=table_name
-        )
-        columns_to_types = columns_to_types or self.columns(table_name)
-        if not columns_to_types:
-            raise SQLMeshError("Cannot replace table without columns to types")
-
-        # Self-referential queries: cannot insert overwrite a SELECT from itself, so
-        # use LogicalReplaceQuery (which creates a temp table and SELECTs from it)
-        if len(source_queries) > 1:
-            raise SQLMeshError("Cannot replace table with a batched dataframe")
-        with source_queries[0] as query:
-            target_table = exp.to_table(table_name)
-            self_referencing = any(
-                quote_identifiers(table) == quote_identifiers(target_table)
-                for table in query.find_all(exp.Table)
-            )
-
-            if self_referencing:
-                return LogicalReplaceQueryMixin.overwrite_target_from_temp(
-                    self, query, columns_to_types, target_table, **kwargs
-                )
-
-        return self._insert_overwrite_by_condition(
-            table_name, source_queries, columns_to_types, where=exp.true()
-        )
 
     def create_state_table(
         self,
