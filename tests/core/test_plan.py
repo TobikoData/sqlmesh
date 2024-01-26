@@ -8,9 +8,10 @@ from sqlglot import parse_one
 
 from sqlmesh.core.context import Context
 from sqlmesh.core.context_diff import ContextDiff
+from sqlmesh.core.environment import EnvironmentNamingInfo
 from sqlmesh.core.model import IncrementalByTimeRangeKind, SeedKind, SeedModel, SqlModel
 from sqlmesh.core.model.seed import Seed
-from sqlmesh.core.plan import PlanBuilder, SnapshotIntervals
+from sqlmesh.core.plan import Plan, PlanBuilder, SnapshotIntervals
 from sqlmesh.core.snapshot import (
     DeployabilityIndex,
     Snapshot,
@@ -190,6 +191,55 @@ def test_paused_forward_only_parent(make_snapshot, mocker: MockerFixture):
 
     PlanBuilder(context_diff, forward_only=False).build()
     assert snapshot_b.change_category == SnapshotChangeCategory.BREAKING
+
+
+def test_missing_intervals_lookback(make_snapshot, mocker: MockerFixture):
+    snapshot_a = make_snapshot(
+        SqlModel(
+            name="a",
+            query=parse_one("select 1, '2022-01-01' ds"),
+            kind=IncrementalByTimeRangeKind(time_column="ds", lookback=2),
+        )
+    )
+    snapshot_a.intervals = [(to_timestamp("2022-01-01"), to_timestamp("2022-01-05"))]
+    snapshot_a.categorize_as(SnapshotChangeCategory.BREAKING)
+
+    context_diff = ContextDiff(
+        environment="test_environment",
+        is_new_environment=True,
+        is_unfinalized_environment=False,
+        create_from="prod",
+        added=set(),
+        modified_snapshots={},
+        removed_snapshots={},
+        snapshots={
+            snapshot_a.snapshot_id: snapshot_a,
+        },
+        new_snapshots={snapshot_a.snapshot_id: snapshot_a},
+        previous_plan_id=None,
+        previously_promoted_snapshot_ids=set(),
+    )
+
+    plan = Plan(
+        context_diff=context_diff,
+        plan_id="",
+        provided_start="2022-01-01",
+        provided_end="2022-01-04",
+        execution_time="2022-01-05 12:00",
+        is_dev=True,
+        skip_backfill=False,
+        no_gaps=False,
+        forward_only=False,
+        include_unmodified=True,
+        environment_naming_info=EnvironmentNamingInfo(),
+        directly_modified={snapshot_a.snapshot_id},
+        indirectly_modified={},
+        ignored=set(),
+        deployability_index=DeployabilityIndex.all_deployable(),
+        restatements={},
+    )
+
+    assert not plan.missing_intervals
 
 
 @pytest.mark.slow
