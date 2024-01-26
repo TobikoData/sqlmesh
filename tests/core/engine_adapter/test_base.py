@@ -1489,3 +1489,20 @@ def test_get_temp_table(mocker: MockerFixture, make_mocked_engine_adapter: t.Cal
     )
 
     assert value.sql() == '"catalog"."db"."__temp_test_table_abcdefgh"'
+
+
+def test_get_data_objects_batching(mocker: MockerFixture, make_mocked_engine_adapter: t.Callable):
+    adapter = make_mocked_engine_adapter(EngineAdapter)
+    adapter._get_data_objects = mocker.Mock(return_value=[])
+
+    names = {f"name_{i}" for i in range(adapter.DATA_OBJECT_FILTER_BATCH_SIZE + 1)}
+    adapter.get_data_objects("test_schema", names)
+
+    calls = adapter._get_data_objects.call_args_list
+    assert len(calls) == 2
+
+    assert calls[0][0][0] == "test_schema"
+    assert calls[1][0][0] == "test_schema"
+
+    assert len(calls[0][0][1]) == adapter.DATA_OBJECT_FILTER_BATCH_SIZE
+    assert len(calls[1][0][1]) == 1

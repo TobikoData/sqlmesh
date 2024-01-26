@@ -620,28 +620,60 @@ class BigQueryEngineAdapter(InsertOverwriteWithMergeMixin):
         self.cursor._set_rowcount(query_results)
         self.cursor._set_description(query_results.schema)
 
-    def _get_data_objects(self, schema_name: SchemaName) -> t.List[DataObject]:
+    def _get_data_objects(
+        self, schema_name: SchemaName, object_names: t.Optional[t.Set[str]] = None
+    ) -> t.List[DataObject]:
         """
         Returns all the data objects that exist in the given schema and optionally catalog.
         """
-        from google.api_core.exceptions import NotFound
-        from google.cloud.bigquery import DatasetReference
 
+        # The BigQuery Client's list_tables method does not support filtering by table name, so we have to
+        # resort to using SQL instead.
         schema = to_schema(schema_name)
-        catalog_name = schema.catalog or self.get_current_catalog()
-        dataset_ref = DatasetReference(project=catalog_name, dataset_id=schema.db)
+        catalog = schema.catalog or self.get_current_catalog()
+        schema_sql = schema.sql(dialect=self.dialect)
+        query = exp.select(
+            exp.column("table_catalog").as_("catalog"),
+            exp.column("table_name").as_("name"),
+            exp.column("table_schema").as_("schema_name"),
+            exp.case()
+            .when(exp.column("table_type").eq("BASE TABLE"), exp.Literal.string("TABLE"))
+            .when(exp.column("table_type").eq("CLONE"), exp.Literal.string("TABLE"))
+            .when(exp.column("table_type").eq("EXTERNAL"), exp.Literal.string("TABLE"))
+            .when(exp.column("table_type").eq("SNAPSHOT"), exp.Literal.string("TABLE"))
+            .when(exp.column("table_type").eq("VIEW"), exp.Literal.string("VIEW"))
+            .when(
+                exp.column("table_type").eq("MATERIALIZED VIEW"),
+                exp.Literal.string("MATERIALIZED_VIEW"),
+            )
+            .else_(exp.column("table_type"))
+            .as_("type"),
+        ).from_(
+            exp.to_table(
+                f"`{catalog}`.`{schema.db}`.INFORMATION_SCHEMA.TABLES", dialect=self.dialect
+            )
+        )
+        if object_names:
+            query = query.where(exp.column("table_name").isin(*object_names))
+
         try:
-            return [
-                DataObject(
-                    catalog=table.project,
-                    schema=table.dataset_id,
-                    name=table.table_id,
-                    type=DataObjectType.from_str(table.table_type),
-                )
-                for table in self._db_call(self.client.list_tables, dataset=dataset_ref)
-            ]
-        except NotFound:
+            df = self.fetchdf(query, quote_identifiers=True)
+        except Exception as e:
+            if "Not found" in str(e):
+                return []
+            raise
+
+        if df.empty:
             return []
+        return [
+            DataObject(
+                catalog=row.catalog,  # type: ignore
+                schema=row.schema_name,  # type: ignore
+                name=row.name,  # type: ignore
+                type=DataObjectType.from_str(row.type),  # type: ignore
+            )
+            for row in df.itertuples()
+        ]
 
     @property
     def _query_data(self) -> t.Any:

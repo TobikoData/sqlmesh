@@ -253,7 +253,7 @@ Line 15 asks you whether to proceed with executing the model backfills described
 
 ```bash linenums="1"
 Apply - Backfill Tables [y/n]: y
-Creating new model versions ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ 100.0% • 3/3 • 0:00:00
+Creating physical tables ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ 100.0% • 3/3 • 0:00:00
 
 All model versions have been created successfully
 
@@ -363,7 +363,7 @@ Hit `Enter` at the prompt to backfill data from our start date `2020-01-01`. Ano
 Enter the backfill start date (eg. '1 year', '2020-01-01') or blank to backfill from the beginning of history:
 Enter the backfill end date (eg. '1 month ago', '2020-01-01') or blank to backfill up until now:
 Apply - Backfill Tables [y/n]: y
-Creating new model versions ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ 100.0% • 2/2 • 0:00:00
+Creating physical tables ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ 100.0% • 2/2 • 0:00:00
 
 All model versions have been created successfully
 

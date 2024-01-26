@@ -365,7 +365,7 @@ class TerminalConsole(Console):
         """Indicates that a new creation progress has begun."""
         if self.creation_progress is None:
             self.creation_progress = Progress(
-                TextColumn("[bold blue]Creating new model versions", justify="right"),
+                TextColumn("[bold blue]Creating physical tables", justify="right"),
                 BarColumn(bar_width=40),
                 "[progress.percentage]{task.percentage:>3.1f}%",
                 "•",
@@ -377,7 +377,7 @@ class TerminalConsole(Console):
 
             self.creation_progress.start()
             self.creation_task = self.creation_progress.add_task(
-                "Creating new model versions...",
+                "Creating physical tables...",
                 total=total_tasks,
             )
 

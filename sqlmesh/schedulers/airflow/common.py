@@ -85,6 +85,7 @@ class PlanDagSpec(PydanticModel):
     deployability_index: DeployabilityIndex = DeployabilityIndex.all_deployable()
     deployability_index_for_creation: DeployabilityIndex = DeployabilityIndex.all_deployable()
     no_gaps_snapshot_names: t.Optional[t.Set[str]] = None
+    models_to_backfill: t.Optional[t.Set[str]] = None
 
 
 class EnvironmentsResponse(PydanticModel):

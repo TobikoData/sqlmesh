@@ -4,6 +4,7 @@ import typing as t
 
 from sqlglot import exp
 
+from sqlmesh.core.dialect import to_schema
 from sqlmesh.core.engine_adapter import EngineAdapter
 from sqlmesh.core.engine_adapter.shared import (
     CatalogSupport,
@@ -103,41 +104,44 @@ class BasePostgresEngineAdapter(EngineAdapter):
                 **create_kwargs,
             )
 
-    def _get_data_objects(self, schema_name: SchemaName) -> t.List[DataObject]:
+    def _get_data_objects(
+        self, schema_name: SchemaName, object_names: t.Optional[t.Set[str]] = None
+    ) -> t.List[DataObject]:
         """
         Returns all the data objects that exist in the given schema and optionally catalog.
         """
-        catalog_name = f"'{self.get_current_catalog()}'"
-        query = f"""
-            SELECT
-                {catalog_name} AS catalog_name,
-                tablename AS name,
-                schemaname AS schema_name,
-                'TABLE' AS type
-            FROM pg_tables
-            WHERE schemaname ILIKE '{schema_name}'
-            UNION ALL
-            SELECT
-                {catalog_name} AS catalog_name,
-                viewname AS name,
-                schemaname AS schema_name,
-                'VIEW' AS type
-            FROM pg_views
-            WHERE schemaname ILIKE '{schema_name}'
-            UNION ALL
-            SELECT
-                {catalog_name} AS catalog_name,
-                matviewname AS name,
-                schemaname AS schema_name,
-                'MATERIALIZED_VIEW' AS type
-            FROM
-                pg_matviews
-            WHERE schemaname ILIKE '{schema_name}'
-        """
+        catalog = self.get_current_catalog()
+        table_query = exp.select(
+            exp.column("schemaname").as_("schema_name"),
+            exp.column("tablename").as_("name"),
+            exp.Literal.string("TABLE").as_("type"),
+        ).from_("pg_tables")
+        view_query = exp.select(
+            exp.column("schemaname").as_("schema_name"),
+            exp.column("viewname").as_("name"),
+            exp.Literal.string("VIEW").as_("type"),
+        ).from_("pg_views")
+        materialized_view_query = exp.select(
+            exp.column("schemaname").as_("schema_name"),
+            exp.column("matviewname").as_("name"),
+            exp.Literal.string("MATERIALIZED_VIEW").as_("type"),
+        ).from_("pg_matviews")
+        subquery = exp.union(
+            table_query,
+            exp.union(view_query, materialized_view_query, distinct=False),
+            distinct=False,
+        )
+        query = (
+            exp.select("*")
+            .from_(subquery.subquery(alias="objs"))
+            .where(exp.column("schema_name").eq(to_schema(schema_name).db))
+        )
+        if object_names:
+            query = query.where(exp.column("name").isin(*object_names))
         df = self.fetchdf(query)
         return [
             DataObject(
-                catalog=row.catalog_name, schema=row.schema_name, name=row.name, type=DataObjectType.from_str(row.type)  # type: ignore
+                catalog=catalog, schema=row.schema_name, name=row.name, type=DataObjectType.from_str(row.type)  # type: ignore
             )
             for row in df.itertuples()
         ]

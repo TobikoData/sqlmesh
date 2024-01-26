@@ -370,7 +370,7 @@ def test_get_data_objects_catalog(make_mocked_engine_adapter: t.Callable, mocker
     )
     adapter.cursor.fetchall.return_value = [("test_catalog", "test_table", "test_schema", "TABLE")]
     adapter.cursor.description = [["catalog_name"], ["name"], ["schema_name"], ["type"]]
-    result = adapter._get_data_objects("test_catalog.test_schema")
+    result = adapter.get_data_objects("test_catalog.test_schema")
 
     assert result == [
         DataObject(
@@ -383,15 +383,7 @@ def test_get_data_objects_catalog(make_mocked_engine_adapter: t.Callable, mocker
 
     assert to_sql_calls(adapter) == [
         "USE [test_catalog];",
-        """
-            SELECT
-                'test_catalog' AS catalog_name,
-                TABLE_NAME AS name,
-                TABLE_SCHEMA AS schema_name,
-                CASE WHEN table_type = 'BASE TABLE' THEN 'TABLE' ELSE table_type END AS type
-            FROM INFORMATION_SCHEMA.TABLES
-            WHERE TABLE_SCHEMA LIKE '%test_schema%'
-        """,
+        "SELECT TABLE_NAME AS name, TABLE_SCHEMA AS schema_name, CASE WHEN TABLE_TYPE = 'BASE TABLE' THEN 'TABLE' ELSE TABLE_TYPE END AS type FROM INFORMATION_SCHEMA.TABLES WHERE TABLE_SCHEMA = 'test_schema';",
         "USE [other_catalog];",
     ]
 

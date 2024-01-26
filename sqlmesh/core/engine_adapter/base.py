@@ -79,6 +79,7 @@ class EngineAdapter:
 
     DIALECT = ""
     DEFAULT_BATCH_SIZE = 10000
+    DATA_OBJECT_FILTER_BATCH_SIZE = 1000
     ESCAPE_JSON = False
     SUPPORTS_TRANSACTIONS = True
     SUPPORTS_INDEXES = False
@@ -1405,6 +1406,31 @@ class EngineAdapter:
                 )
         self.execute(exp.rename_table(old_table_name, new_table_name))
 
+    def get_data_objects(
+        self, schema_name: SchemaName, object_names: t.Optional[t.Set[str]] = None
+    ) -> t.List[DataObject]:
+        """Lists all data objects in the target schema.
+
+        Args:
+            schema_name: The name of the schema to list data objects from.
+            object_names: If provided, only return data objects with these names.
+
+        Returns:
+            A list of data objects in the target schema.
+        """
+        if object_names is not None:
+            if not object_names:
+                return []
+            object_names_list = list(object_names)
+            batches = [
+                object_names_list[i : i + self.DATA_OBJECT_FILTER_BATCH_SIZE]
+                for i in range(0, len(object_names_list), self.DATA_OBJECT_FILTER_BATCH_SIZE)
+            ]
+            return [
+                obj for batch in batches for obj in self._get_data_objects(schema_name, set(batch))
+            ]
+        return self._get_data_objects(schema_name)
+
     def fetchone(
         self,
         query: t.Union[exp.Expression, str],
@@ -1675,7 +1701,9 @@ class EngineAdapter:
 
         return expression.sql(**sql_gen_kwargs)  # type: ignore
 
-    def _get_data_objects(self, schema_name: SchemaName) -> t.List[DataObject]:
+    def _get_data_objects(
+        self, schema_name: SchemaName, object_names: t.Optional[t.Set[str]] = None
+    ) -> t.List[DataObject]:
         """
         Returns all the data objects that exist in the given schema and optionally catalog.
         """

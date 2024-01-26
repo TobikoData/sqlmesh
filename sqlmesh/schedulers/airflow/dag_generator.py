@@ -150,6 +150,19 @@ class SnapshotDagGenerator:
 
         environment = plan_dag_spec_to_environment(plan_dag_spec)
 
+        snapshot_ids_to_create = {s.snapshot_id for s in plan_dag_spec.promoted_snapshots} | {
+            s.snapshot_id for s in plan_dag_spec.backfill_intervals_per_snapshot
+        }
+        snapshots_to_create = [
+            all_snapshots[s_id]
+            for s_id in snapshot_ids_to_create
+            if s_id in all_snapshots
+            and (
+                plan_dag_spec.models_to_backfill is None
+                or s_id.name in plan_dag_spec.models_to_backfill
+            )
+        ]
+
         with DAG(
             dag_id=dag_id,
             schedule_interval="@once",
@@ -170,6 +183,7 @@ class SnapshotDagGenerator:
             end_task = EmptyOperator(task_id="plan_application_end")
 
             (create_start_task, create_end_task) = self._create_creation_tasks(
+                snapshots_to_create,
                 plan_dag_spec.new_snapshots,
                 plan_dag_spec.ddl_concurrent_tasks,
                 plan_dag_spec.deployability_index_for_creation,
@@ -258,6 +272,7 @@ class SnapshotDagGenerator:
 
     def _create_creation_tasks(
         self,
+        snapshots_to_create: t.List[Snapshot],
         new_snapshots: t.List[Snapshot],
         ddl_concurrent_tasks: int,
         deployability_index: DeployabilityIndex,
@@ -270,7 +285,7 @@ class SnapshotDagGenerator:
             return (start_task, end_task)
 
         creation_task = self._create_snapshot_create_tables_operator(
-            new_snapshots,
+            snapshots_to_create,
             ddl_concurrent_tasks,
             deployability_index,
             "snapshot_creation__create_tables",

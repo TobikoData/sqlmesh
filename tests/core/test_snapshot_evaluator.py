@@ -10,7 +10,11 @@ from sqlmesh.core.audit import ModelAudit, StandaloneAudit
 from sqlmesh.core.dialect import schema_, to_schema
 from sqlmesh.core.engine_adapter import EngineAdapter, create_engine_adapter
 from sqlmesh.core.engine_adapter.base import MERGE_SOURCE_ALIAS, MERGE_TARGET_ALIAS
-from sqlmesh.core.engine_adapter.shared import InsertOverwriteStrategy
+from sqlmesh.core.engine_adapter.shared import (
+    DataObject,
+    DataObjectType,
+    InsertOverwriteStrategy,
+)
 from sqlmesh.core.environment import EnvironmentNamingInfo
 from sqlmesh.core.macros import RuntimeStage, macro
 from sqlmesh.core.model import (
@@ -76,6 +80,7 @@ def adapter_mock(mocker: MockerFixture):
     adapter_mock.dialect = "duckdb"
     adapter_mock.HAS_VIEW_BINDING = False
     adapter_mock.wap_supported.return_value = False
+    adapter_mock.get_data_objects.return_value = []
     return adapter_mock
 
 
@@ -516,6 +521,40 @@ def test_evaluate_incremental_unmanaged(
             model.render_query(),
             columns_to_types=model.columns_to_types,
         )
+
+
+def test_create_object_exists(mocker: MockerFixture, adapter_mock, make_snapshot):
+
+    model = load_sql_based_model(
+        parse(  # type: ignore
+            """
+            MODEL (
+                name test_schema.test_model,
+                kind VIEW
+            );
+
+            SELECT a::int FROM tbl;
+            """
+        ),
+    )
+
+    snapshot = make_snapshot(model)
+    snapshot.categorize_as(SnapshotChangeCategory.BREAKING)
+
+    adapter_mock.get_data_objects.return_value = [
+        DataObject(
+            name=f"test_schema__test_model__{snapshot.version}__temp",
+            schema="sqlmesh__test_schema",
+            type=DataObjectType.VIEW,
+        ),
+    ]
+    evaluator = SnapshotEvaluator(adapter_mock)
+
+    evaluator.create([snapshot], {})
+    adapter_mock.create_view.assert_not_called()
+    adapter_mock.get_data_objects.assert_called_once_with(
+        schema_("sqlmesh__test_schema"), {f"test_schema__test_model__{snapshot.version}__temp"}
+    )
 
 
 def test_create_materialized_view(mocker: MockerFixture, adapter_mock, make_snapshot):

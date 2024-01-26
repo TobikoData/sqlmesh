@@ -24,6 +24,7 @@ from __future__ import annotations
 import abc
 import logging
 import typing as t
+from collections import defaultdict
 from contextlib import contextmanager
 from functools import reduce
 
@@ -32,6 +33,7 @@ from sqlglot import exp, select
 from sqlglot.executor import execute
 
 from sqlmesh.core import constants as c
+from sqlmesh.core import dialect as d
 from sqlmesh.core.audit import Audit, AuditResult
 from sqlmesh.core.dialect import schema_
 from sqlmesh.core.engine_adapter import EngineAdapter
@@ -230,12 +232,35 @@ class SnapshotEvaluator:
             deployability_index: Determines snapshots that are deployable in the context of this creation.
             on_complete: A callback to call on each successfully created snapshot.
         """
-        self._create_schemas(
-            [s.table_name() for s in target_snapshots if s.is_model and not s.is_symbolic]
-        )
+        snapshots_with_table_names: t.List[t.Tuple[Snapshot, str]] = []
+        tables_by_schema = defaultdict(set)
+        for snapshot in target_snapshots:
+            if not snapshot.is_model or snapshot.is_symbolic:
+                continue
+            table = exp.to_table(snapshot.table_name(False), dialect=snapshot.model.dialect)
+            snapshots_with_table_names.append((snapshot, table.name))
+            tables_by_schema[d.schema_(table.db, catalog=table.catalog)].add(table.name)
+
+        existing_objects: t.Set[str] = set()
+        for schema, object_names in tables_by_schema.items():
+            logger.info("Listing data objects in schema %s", schema.sql())
+            objs = self.adapter.get_data_objects(schema, object_names)
+            existing_objects.update(obj.name for obj in objs)
+
+        snapshots_to_create = []
+        for snapshot, table_name in snapshots_with_table_names:
+            if table_name not in existing_objects:
+                snapshots_to_create.append(snapshot)
+            elif on_complete:
+                on_complete(snapshot)
+
+        if not snapshots_to_create:
+            return
+
+        self._create_schemas(tables_by_schema)
         with self.concurrent_context():
             concurrent_apply_to_snapshots(
-                target_snapshots,
+                snapshots_to_create,
                 lambda s: self._create_snapshot(s, snapshots, deployability_index, on_complete),
                 self.ddl_concurrent_tasks,
             )

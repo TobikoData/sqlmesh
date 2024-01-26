@@ -56,33 +56,46 @@ class DuckDBEngineAdapter(LogicalMergeMixin, GetCurrentCatalogFromFunctionMixin)
             )
         ]
 
-    def _get_data_objects(self, schema_name: SchemaName) -> t.List[DataObject]:
+    def _get_data_objects(
+        self, schema_name: SchemaName, object_names: t.Optional[t.Set[str]] = None
+    ) -> t.List[DataObject]:
         """
         Returns all the data objects that exist in the given schema and optionally catalog.
         """
-        current_catalog = self.get_current_catalog()
+        catalog = self.get_current_catalog()
 
         if isinstance(schema_name, exp.Table):
             # Ensures we don't generate identifier quotes
             schema_name = ".".join(part.name for part in schema_name.parts)
 
-        query = f"""
-            SELECT
-              '{current_catalog}' as catalog,
-              table_name as name,
-              table_schema as schema,
-              CASE table_type
-                WHEN 'BASE TABLE' THEN 'table'
-                WHEN 'VIEW' THEN 'view'
-                WHEN 'LOCAL TEMPORARY' THEN 'table'
-                END as type
-            FROM information_schema.tables
-            WHERE table_schema = '{ schema_name }'
-        """
+        query = (
+            exp.select(
+                exp.column("table_name").as_("name"),
+                exp.column("table_schema").as_("schema"),
+                exp.case(exp.column("table_type"))
+                .when(
+                    exp.Literal.string("BASE TABLE"),
+                    exp.Literal.string("table"),
+                )
+                .when(
+                    exp.Literal.string("VIEW"),
+                    exp.Literal.string("view"),
+                )
+                .when(
+                    exp.Literal.string("LOCAL TEMPORARY"),
+                    exp.Literal.string("table"),
+                )
+                .as_("type"),
+            )
+            .from_(exp.to_table("information_schema.tables"))
+            .where(exp.column("table_schema").eq(schema_name))
+        )
+        if object_names:
+            query = query.where(exp.column("table_name").isin(*object_names))
         df = self.fetchdf(query)
         return [
             DataObject(
-                catalog=row.catalog,  # type: ignore
+                catalog=catalog,  # type: ignore
                 schema=row.schema,  # type: ignore
                 name=row.name,  # type: ignore
                 type=DataObjectType.from_str(row.type),  # type: ignore
