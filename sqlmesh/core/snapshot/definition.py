@@ -1036,6 +1036,10 @@ class Snapshot(PydanticModel, SnapshotInfoMixin):
             return None
         return t.cast(Model, self.node).fully_qualified_table
 
+    @property
+    def expiration_ts(self) -> int:
+        return to_timestamp(self.ttl, relative_base=to_datetime(self.updated_ts))
+
     def _ensure_categorized(self) -> None:
         if not self.change_category:
             raise SQLMeshError(f"Snapshot {self.snapshot_id} has not been categorized yet.")
