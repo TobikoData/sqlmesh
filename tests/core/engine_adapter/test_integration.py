@@ -114,7 +114,7 @@ class TestContext:
         for timestamp_column in self.timestamp_columns:
             if timestamp_column in data.columns and to_datetime:
                 value = pd.to_datetime(data[timestamp_column])
-                if self.dialect in {"bigquery", "duckdb"}:
+                if self.dialect == "duckdb":
                     value = value.astype("datetime64[us]")
                 data[timestamp_column] = value
         return data
@@ -1086,7 +1086,7 @@ def test_merge(ctx: TestContext):
 
 
 def test_scd_type_2(ctx: TestContext):
-    time_type = "datetime" if ctx.dialect == "bigquery" else "timestamp"
+    time_type = "timestamp"
 
     ctx.columns_to_types = {
         "id": "int",

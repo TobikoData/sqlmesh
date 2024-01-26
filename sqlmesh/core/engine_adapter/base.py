@@ -301,13 +301,12 @@ class EngineAdapter:
                 Expected to be ordered to match the order of values in the dataframe.
             kwargs: Optional create table properties.
         """
-        table = exp.to_table(table_name)
-        source_queries, columns_to_types = self._get_source_queries_and_columns_to_types(
-            query_or_df, columns_to_types, target_table=table_name
-        )
-        columns_to_types = columns_to_types or self.columns(table)
-        query = source_queries[0].query_factory()
         target_table = exp.to_table(table_name)
+        source_queries, columns_to_types = self._get_source_queries_and_columns_to_types(
+            query_or_df, columns_to_types, target_table=target_table
+        )
+        columns_to_types = columns_to_types or self.columns(target_table)
+        query = source_queries[0].query_factory()
         self_referencing = any(
             quote_identifiers(table) == quote_identifiers(target_table)
             for table in query.find_all(exp.Table)
@@ -315,7 +314,7 @@ class EngineAdapter:
         # If a query references itself then it must have a table created regardless of approach used.
         if self_referencing:
             self._create_table_from_columns(
-                table_name,
+                target_table,
                 columns_to_types,
                 exists=True,
                 table_description=table_description,
@@ -323,9 +322,9 @@ class EngineAdapter:
             )
         # All engines support `CREATE TABLE AS` so we use that if the table doesn't already exist and we
         # use `CREATE OR REPLACE TABLE AS` if the engine supports it
-        if self.SUPPORTS_REPLACE_TABLE or not self.table_exists(table):
+        if self.SUPPORTS_REPLACE_TABLE or not self.table_exists(target_table):
             return self._create_table_from_source_queries(
-                table,
+                target_table,
                 source_queries,
                 columns_to_types,
                 replace=self.SUPPORTS_REPLACE_TABLE,
@@ -349,12 +348,12 @@ class EngineAdapter:
                             else node
                         )
                     return self._insert_overwrite_by_condition(
-                        table_name,
+                        target_table,
                         source_queries,
                         columns_to_types,
                     )
             return self._insert_overwrite_by_condition(
-                table_name,
+                target_table,
                 source_queries,
                 columns_to_types,
             )
