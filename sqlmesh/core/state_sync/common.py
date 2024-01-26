@@ -15,6 +15,7 @@ from sqlmesh.core.snapshot import (
     SnapshotIdLike,
     SnapshotInfoLike,
     SnapshotNameVersionLike,
+    SnapshotTableInfo,
     start_date,
 )
 from sqlmesh.core.state_sync.base import PromotionResult, StateSync
@@ -128,31 +129,29 @@ class CommonStateSyncMixin(StateSync):
 
         existing_environment = self._get_environment(environment.name, lock_for_update=True)
 
-        environment_suffix_target_changed = False
-        environment_catalog_changed = False
-        removed_environment_naming_info = environment.naming_info
+        existing_table_infos = (
+            {table_info.name: table_info for table_info in existing_environment.promoted_snapshots}
+            if existing_environment
+            else {}
+        )
+        table_infos = {table_info.name: table_info for table_info in environment.promoted_snapshots}
+        views_that_changed_location: t.Set[SnapshotTableInfo] = set()
         if existing_environment:
+            views_that_changed_location = {
+                existing_table_info
+                for name, existing_table_info in existing_table_infos.items()
+                if name in table_infos
+                and existing_table_info.qualified_view_name.for_environment(
+                    existing_environment.naming_info
+                )
+                != table_infos[name].qualified_view_name.for_environment(environment.naming_info)
+            }
             if environment.previous_plan_id != existing_environment.plan_id:
                 raise SQLMeshError(
                     f"Plan '{environment.plan_id}' is no longer valid for the target environment '{environment.name}'. "
                     f"Expected previous plan ID: '{environment.previous_plan_id}', actual previous plan ID: '{existing_environment.plan_id}'. "
                     "Please recreate the plan and try again"
                 )
-
-            environment_suffix_target_changed = (
-                environment.suffix_target != existing_environment.suffix_target
-            )
-            if environment_suffix_target_changed:
-                removed_environment_naming_info.suffix_target = existing_environment.suffix_target
-
-            environment_catalog_changed = (
-                environment.catalog_name_override != existing_environment.catalog_name_override
-            )
-            if environment_catalog_changed:
-                removed_environment_naming_info.catalog_name_override = (
-                    existing_environment.catalog_name_override
-                )
-
             if no_gaps_snapshot_names != set():
                 snapshots = self._get_snapshots(environment.snapshots).values()
                 self._ensure_no_gaps(
@@ -160,62 +159,32 @@ class CommonStateSyncMixin(StateSync):
                     existing_environment,
                     no_gaps_snapshot_names,
                 )
-
-            existing_table_infos = {
-                table_info.name: table_info
-                for table_info in existing_environment.promoted_snapshots
-            }
-
             demoted_snapshots = set(existing_environment.snapshots) - set(environment.snapshots)
             for demoted_snapshot in self._get_snapshots(demoted_snapshots).values():
                 # Update the updated_at attribute.
                 self._update_snapshot(demoted_snapshot)
-        else:
-            existing_table_infos = {}
 
         missing_models = set(existing_table_infos) - {
             snapshot.name for snapshot in environment.promoted_snapshots
         }
 
-        table_infos = set(environment.promoted_snapshots)
-        if (
-            existing_environment
-            and existing_environment.finalized_ts
-            and not environment_suffix_target_changed
-            and not environment_catalog_changed
-        ):
+        added_table_infos = set(table_infos.values())
+        if existing_environment and existing_environment.finalized_ts:
             # Only promote new snapshots.
-            table_infos -= set(existing_environment.promoted_snapshots)
+            added_table_infos -= set(existing_environment.promoted_snapshots)
 
         self._update_environment(environment)
 
-        removed = [existing_table_infos[name] for name in missing_models]
-        if environment_catalog_changed:
-            removed = list(
-                {
-                    table_info
-                    for table_info in existing_table_infos.values()
-                    # Can remove the `table_info.fully_qualified_table.catalog is not None` once we make sure that
-                    # `default` schema is included in the fully qualified table and therefore all fully qualified
-                    # tables have a catalog.
-                    if (
-                        table_info.fully_qualified_table.catalog is not None
-                        and table_info.fully_qualified_table.catalog
-                        != environment.catalog_name_override
-                    )
-                    or (
-                        existing_environment
-                        and existing_environment.catalog_name_override is not None
-                    )
-                }.union(removed)
-            )
-        elif environment_suffix_target_changed:
-            removed = list(existing_table_infos.values())
+        removed = {existing_table_infos[name] for name in missing_models}.union(
+            views_that_changed_location
+        )
 
         return PromotionResult(
-            added=sorted(table_infos),
-            removed=removed,
-            removed_environment_naming_info=removed_environment_naming_info if removed else None,
+            added=sorted(added_table_infos),
+            removed=list(removed),
+            removed_environment_naming_info=existing_environment.naming_info
+            if removed and existing_environment
+            else None,
         )
 
     @transactional()

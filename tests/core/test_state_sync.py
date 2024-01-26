@@ -473,13 +473,11 @@ def test_promote_snapshots(state_sync: EngineAdapterStateSync, make_snapshot: t.
         [snapshot_a, snapshot_b_old, snapshot_c],
         "prod",
     )
-    assert set(promotion_result.added) == set(
-        [
-            snapshot_a.table_info,
-            snapshot_b_old.table_info,
-            snapshot_c.table_info,
-        ]
-    )
+    assert set(promotion_result.added) == {
+        snapshot_a.table_info,
+        snapshot_b_old.table_info,
+        snapshot_c.table_info,
+    }
     assert not promotion_result.removed
     assert not promotion_result.removed_environment_naming_info
 
@@ -550,7 +548,7 @@ def test_promote_snapshots_suffix_change(
         environment_suffix_target=EnvironmentSuffixTarget.TABLE,
     )
 
-    assert set(promotion_result.added) == set([snapshot_a.table_info, snapshot_b.table_info])
+    assert set(promotion_result.added) == {snapshot_a.table_info, snapshot_b.table_info}
     assert not promotion_result.removed
     assert not promotion_result.removed_environment_naming_info
 
@@ -572,12 +570,44 @@ def test_promote_snapshots_suffix_change(
     )
 
     # We still only add the snapshots that are included in the promotion
-    assert set(promotion_result.added) == set([snapshot_b.table_info, snapshot_c.table_info])
-    # We also remove b because of the suffix target change. The new one will be created in the new suffix target
-    assert set(promotion_result.removed) == set([snapshot_a.table_info, snapshot_b.table_info])
+    assert set(promotion_result.added) == {snapshot_b.table_info, snapshot_c.table_info}
+    # B does not get removed because the suffix target change doesn't affect it due to running in prod.
+    assert set(promotion_result.removed) == {snapshot_a.table_info}
     # Make sure the removed suffix target is correctly seen as table
-    assert promotion_result.removed_environment_naming_info
+    assert promotion_result.removed_environment_naming_info is not None
     assert promotion_result.removed_environment_naming_info.suffix_target.is_table
+
+    promotion_result = promote_snapshots(
+        state_sync,
+        [snapshot_b, snapshot_c],
+        "dev",
+        environment_suffix_target=EnvironmentSuffixTarget.SCHEMA,
+    )
+
+    # We still only add the snapshots that are included in the promotion
+    assert set(promotion_result.added) == {snapshot_b.table_info, snapshot_c.table_info}
+    assert len(promotion_result.removed) == 0
+    assert promotion_result.removed_environment_naming_info is None
+
+    promotion_result = promote_snapshots(
+        state_sync,
+        [snapshot_b, snapshot_c],
+        "dev",
+        environment_suffix_target=EnvironmentSuffixTarget.TABLE,
+    )
+
+    # All snapshots are promoted due to suffix target change
+    assert set(promotion_result.added) == {
+        snapshot_b.table_info,
+        snapshot_c.table_info,
+    }
+    # All snapshots are removed due to suffix target change
+    assert set(promotion_result.removed) == {
+        snapshot_b.table_info,
+        snapshot_c.table_info,
+    }
+    assert promotion_result.removed_environment_naming_info is not None
+    assert promotion_result.removed_environment_naming_info.suffix_target.is_schema
 
 
 def test_promote_snapshots_catalog_name_override_change(
@@ -620,9 +650,11 @@ def test_promote_snapshots_catalog_name_override_change(
         environment_catalog_mapping={},
     )
 
-    assert set(promotion_result.added) == set(
-        [snapshot_a.table_info, snapshot_b.table_info, snapshot_c.table_info]
-    )
+    assert set(promotion_result.added) == {
+        snapshot_a.table_info,
+        snapshot_b.table_info,
+        snapshot_c.table_info,
+    }
     assert not promotion_result.removed
     assert not promotion_result.removed_environment_naming_info
 
@@ -655,9 +687,7 @@ def test_promote_snapshots_catalog_name_override_change(
     # B is not removed because it's catalog did not change and therefore removing would actually result
     # in dropping what we just added.
     # A is removed because it was explicitly removed from the promotion.
-    assert sorted([x.json() for x in promotion_result.removed]) == sorted(
-        [snapshot_a.table_info.json(), snapshot_c.table_info.json()]
-    )
+    assert set(promotion_result.removed) == {snapshot_a.table_info, snapshot_c.table_info}
     # Make sure the removed suffix target correctly has the old catalog name set
     assert promotion_result.removed_environment_naming_info
     assert promotion_result.removed_environment_naming_info.catalog_name_override is None
@@ -681,9 +711,11 @@ def test_promote_snapshots_catalog_name_override_change(
     # Note that C has a catalog set in the model definition of `catalog2` which is what we moved to so you might think
     # it shouldn't be removed, but its actual catalog was `catalog1` because of the previous override so therefore
     # it should be removed from `catalog1`.
-    assert sorted([x.json() for x in promotion_result.removed]) == sorted(
-        [snapshot_b.table_info.json(), snapshot_c.table_info.json(), snapshot_d.table_info.json()]
-    )
+    assert set(promotion_result.removed) == {
+        snapshot_b.table_info,
+        snapshot_c.table_info,
+        snapshot_d.table_info,
+    }
     # Make sure the removed suffix target correctly has the old catalog name set
     assert promotion_result.removed_environment_naming_info
     assert promotion_result.removed_environment_naming_info.catalog_name_override == "catalog1"
