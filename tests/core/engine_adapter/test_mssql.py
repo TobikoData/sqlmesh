@@ -383,15 +383,7 @@ def test_get_data_objects_catalog(make_mocked_engine_adapter: t.Callable, mocker
 
     assert to_sql_calls(adapter) == [
         "USE [test_catalog];",
-        """
-            SELECT
-                'test_catalog' AS catalog_name,
-                TABLE_NAME AS name,
-                TABLE_SCHEMA AS schema_name,
-                CASE WHEN table_type = 'BASE TABLE' THEN 'TABLE' ELSE table_type END AS type
-            FROM INFORMATION_SCHEMA.TABLES
-            WHERE TABLE_SCHEMA LIKE '%test_schema%'
-        """,
+        "SELECT TABLE_NAME AS name, TABLE_SCHEMA AS schema_name, CASE WHEN TABLE_TYPE = 'BASE TABLE' THEN 'TABLE' ELSE TABLE_TYPE END AS type FROM INFORMATION_SCHEMA.TABLES WHERE TABLE_SCHEMA LIKE '%test_schema%';",
         "USE [other_catalog];",
     ]
 

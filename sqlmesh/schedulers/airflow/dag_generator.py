@@ -150,6 +150,16 @@ class SnapshotDagGenerator:
 
         environment = plan_dag_spec_to_environment(plan_dag_spec)
 
+        snapshots_to_create = [
+            all_snapshots[s.snapshot_id]
+            for s in environment.snapshots
+            if s.snapshot_id in all_snapshots
+            and (
+                plan_dag_spec.models_to_backfill is None
+                or s.name in plan_dag_spec.models_to_backfill
+            )
+        ]
+
         with DAG(
             dag_id=dag_id,
             schedule_interval="@once",
@@ -170,7 +180,7 @@ class SnapshotDagGenerator:
             end_task = EmptyOperator(task_id="plan_application_end")
 
             (create_start_task, create_end_task) = self._create_creation_tasks(
-                plan_dag_spec.new_snapshots,
+                snapshots_to_create,
                 plan_dag_spec.ddl_concurrent_tasks,
                 plan_dag_spec.deployability_index_for_creation,
             )

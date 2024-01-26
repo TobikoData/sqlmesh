@@ -185,24 +185,31 @@ class MSSQLEngineAdapter(
             )
         ]
 
-    def _get_data_objects(self, schema_name: SchemaName) -> t.List[DataObject]:
+    def _get_data_objects(
+        self, schema_name: SchemaName, object_names: t.Optional[t.Set[str]] = None
+    ) -> t.List[DataObject]:
         """
         Returns all the data objects that exist in the given schema and catalog.
         """
-        catalog_name = self.get_current_catalog()
-        query = f"""
-            SELECT
-                '{catalog_name}' AS catalog_name,
-                TABLE_NAME AS name,
-                TABLE_SCHEMA AS schema_name,
-                CASE WHEN table_type = 'BASE TABLE' THEN 'TABLE' ELSE table_type END AS type
-            FROM INFORMATION_SCHEMA.TABLES
-            WHERE TABLE_SCHEMA LIKE '%{schema_name}%'
-        """
+        catalog = self.get_current_catalog()
+        query = (
+            exp.select(
+                exp.column("TABLE_NAME").as_("name"),
+                exp.column("TABLE_SCHEMA").as_("schema_name"),
+                exp.case()
+                .when(exp.column("TABLE_TYPE").eq("BASE TABLE"), exp.Literal.string("TABLE"))
+                .else_(exp.column("TABLE_TYPE"))
+                .as_("type"),
+            )
+            .from_(exp.table_("TABLES", db="INFORMATION_SCHEMA"))
+            .where(exp.column("TABLE_SCHEMA").like(f"%{schema_name}%"))
+        )
+        if object_names:
+            query = query.where(exp.column("TABLE_NAME").isin(*object_names))
         dataframe: pd.DataFrame = self.fetchdf(query)
         return [
             DataObject(
-                catalog=row.catalog_name,  # type: ignore
+                catalog=catalog,  # type: ignore
                 schema=row.schema_name,  # type: ignore
                 name=row.name,  # type: ignore
                 type=DataObjectType.from_str(row.type),  # type: ignore

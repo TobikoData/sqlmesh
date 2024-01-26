@@ -796,6 +796,87 @@ def test_forward_only_precedence_over_indirect_non_breaking(init_and_plan_contex
 
 
 @freeze_time("2023-01-08 15:00:00")
+def test_select_models(init_and_plan_context: t.Callable):
+    context, plan = init_and_plan_context("examples/sushi")
+    context.apply(plan)
+
+    # Modify 2 models.
+    model = context.get_model("sushi.waiter_revenue_by_day")
+    kwargs = {
+        **model.dict(),
+        # Make a breaking change.
+        "query": model.query.order_by("waiter_id"),  # type: ignore
+    }
+    context.upsert_model(SqlModel.parse_obj(kwargs))
+
+    model = context.get_model("sushi.customer_revenue_by_day")
+    context.upsert_model(add_projection_to_model(t.cast(SqlModel, model)))
+
+    expected_intervals = [
+        (to_timestamp("2023-01-01"), to_timestamp("2023-01-02")),
+        (to_timestamp("2023-01-02"), to_timestamp("2023-01-03")),
+        (to_timestamp("2023-01-03"), to_timestamp("2023-01-04")),
+        (to_timestamp("2023-01-04"), to_timestamp("2023-01-05")),
+        (to_timestamp("2023-01-05"), to_timestamp("2023-01-06")),
+        (to_timestamp("2023-01-06"), to_timestamp("2023-01-07")),
+        (to_timestamp("2023-01-07"), to_timestamp("2023-01-08")),
+    ]
+
+    waiter_revenue_by_day_snapshot_id = context.get_snapshot(
+        "sushi.waiter_revenue_by_day", raise_if_missing=True
+    ).snapshot_id
+
+    # Select one of the modified models.
+    plan_builder = context.plan_builder(
+        "dev", select_models=["*waiter_revenue_by_day"], skip_tests=True
+    )
+    snapshot = plan_builder._context_diff.snapshots[waiter_revenue_by_day_snapshot_id]
+    plan_builder.set_choice(snapshot, SnapshotChangeCategory.BREAKING)
+    plan = plan_builder.build()
+
+    assert plan.missing_intervals == [
+        SnapshotIntervals(
+            snapshot_id=waiter_revenue_by_day_snapshot_id,
+            intervals=expected_intervals,
+        ),
+    ]
+
+    context.apply(plan)
+
+    dev_df = context.engine_adapter.fetchdf(
+        "SELECT DISTINCT event_date FROM sushi__dev.waiter_revenue_by_day ORDER BY event_date"
+    )
+    assert len(dev_df) == 7
+
+    # Make sure that we only create a view for the selected model.
+    schema_objects = context.engine_adapter._get_data_objects("sushi__dev")
+    assert len(schema_objects) == 1
+    assert schema_objects[0].name == "waiter_revenue_by_day"
+
+    # Validate the other modified model.
+    assert not context.get_snapshot("sushi.customer_revenue_by_day").change_category
+    assert not context.get_snapshot("sushi.customer_revenue_by_day").version
+
+    # Validate the downstream model.
+    assert not context.engine_adapter.table_exists(
+        context.get_snapshot("sushi.top_waiters").table_name()
+    )
+    assert not context.engine_adapter.table_exists(
+        context.get_snapshot("sushi.top_waiters").table_name(False)
+    )
+
+    # Make sure that tables are created when deploying to prod.
+    plan = context.plan("prod", skip_tests=True)
+    context.apply(plan)
+    assert context.engine_adapter.table_exists(
+        context.get_snapshot("sushi.top_waiters").table_name()
+    )
+    assert context.engine_adapter.table_exists(
+        context.get_snapshot("sushi.top_waiters").table_name(False)
+    )
+
+
+@freeze_time("2023-01-08 15:00:00")
 def test_select_models_for_backfill(init_and_plan_context: t.Callable):
     context, _ = init_and_plan_context("examples/sushi")
 
@@ -843,13 +924,24 @@ def test_select_models_for_backfill(init_and_plan_context: t.Callable):
     )
     assert len(dev_df) == 7
 
-    with pytest.raises(Exception, match=".*does not exist.*"):
-        context.engine_adapter.fetchdf("SELECT * FROM sushi__dev.customer_revenue_by_day")
+    schema_objects = context.engine_adapter._get_data_objects("sushi__dev")
+    assert {o.name for o in schema_objects} == {
+        "items",
+        "order_items",
+        "orders",
+        "waiter_revenue_by_day",
+    }
 
-    dev_df = context.engine_adapter.fetchdf(
-        exp.select("*").from_(context.get_snapshot("sushi.customer_revenue_by_day").table_name())
+    assert not context.engine_adapter.table_exists(
+        context.get_snapshot("sushi.customer_revenue_by_day").table_name()
     )
-    assert dev_df.empty
+
+    # Make sure that tables are created when deploying to prod.
+    plan = context.plan("prod")
+    context.apply(plan)
+    assert context.engine_adapter.table_exists(
+        context.get_snapshot("sushi.customer_revenue_by_day").table_name()
+    )
 
 
 @pytest.mark.parametrize(

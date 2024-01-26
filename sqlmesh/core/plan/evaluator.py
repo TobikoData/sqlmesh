@@ -170,17 +170,22 @@ class BuiltInPlanEvaluator(PlanEvaluator):
             plan: The plan to source snapshots from.
             deployability_index: Indicates which snapshots are deployable in the context of this creation.
         """
-        new_model_snapshot_count = len([s for s in plan.new_snapshots if s.is_model])
+        snapshots_to_create = [
+            s
+            for s in plan.snapshots.values()
+            if s.is_model and not s.is_symbolic and plan.is_selected_for_backfill(s.name)
+        ]
+        snapshots_to_create_count = len(snapshots_to_create)
 
-        if new_model_snapshot_count > 0:
+        if snapshots_to_create_count > 0:
             self.console.start_creation_progress(
-                new_model_snapshot_count, plan.environment_naming_info, self.default_catalog
+                snapshots_to_create_count, plan.environment_naming_info, self.default_catalog
             )
 
         completed = False
         try:
             self.snapshot_evaluator.create(
-                plan.new_snapshots,
+                snapshots_to_create,
                 plan.snapshots,
                 deployability_index=deployability_index,
                 on_complete=self.console.update_creation_progress,

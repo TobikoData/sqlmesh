@@ -62,27 +62,37 @@ class MySQLEngineAdapter(
         # MySQL doesn't support CASCADE clause and drops schemas unconditionally.
         super().drop_schema(schema_name, ignore_if_not_exists=ignore_if_not_exists, cascade=False)
 
-    def _get_data_objects(self, schema_name: SchemaName) -> t.List[DataObject]:
+    def _get_data_objects(
+        self, schema_name: SchemaName, object_names: t.Optional[t.Set[str]] = None
+    ) -> t.List[DataObject]:
         """
         Returns all the data objects that exist in the given schema and optionally catalog.
         """
-        query = f"""
-            SELECT
-                null AS catalog_name,
-                table_name AS name,
-                table_schema AS schema_name,
-                CASE
-                    WHEN table_type = 'BASE TABLE' THEN 'table'
-                    WHEN table_type = 'VIEW' THEN 'view'
-                    ELSE table_type
-                END AS type
-            FROM information_schema.tables
-            WHERE table_schema = '{schema_name}'
-        """
+        query = (
+            exp.select(
+                exp.column("table_name").as_("name"),
+                exp.column("table_schema").as_("schema_name"),
+                exp.case()
+                .when(
+                    exp.column("table_type").eq("BASE TABLE"),
+                    exp.Literal.string("table"),
+                )
+                .when(
+                    exp.column("table_type").eq("VIEW"),
+                    exp.Literal.string("view"),
+                )
+                .else_("table_type")
+                .as_("type"),
+            )
+            .from_(exp.table_("tables", db="information_schema"))
+            .where(exp.column("table_schema").eq(schema_name))
+        )
+        if object_names:
+            query = query.where(exp.column("table_name").isin(*object_names))
         df = self.fetchdf(query)
         return [
             DataObject(
-                catalog=row.catalog_name, schema=row.schema_name, name=row.name, type=DataObjectType.from_str(row.type)  # type: ignore
+                schema=row.schema_name, name=row.name, type=DataObjectType.from_str(row.type)  # type: ignore
             )
             for row in df.itertuples()
         ]

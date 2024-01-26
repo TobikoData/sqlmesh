@@ -399,6 +399,7 @@ def test_select_models_for_backfill(mocker: MockerFixture, random_name, make_sna
         dag_start_ts=to_timestamp("2023-01-01"),
         deployability_index=DeployabilityIndex.all_deployable(),
         no_gaps_snapshot_names={'"a"', '"b"'},
+        models_to_backfill={snapshot_b.name},
     )
 
 

@@ -103,15 +103,44 @@ class SnowflakeEngineAdapter(GetCurrentCatalogFromFunctionMixin):
             columns = self.cursor._result_set.batches[0].column_names
             return pd.DataFrame([dict(zip(columns, row)) for row in rows])
 
-    def _get_data_objects(self, schema_name: SchemaName) -> t.List[DataObject]:
+    def _get_data_objects(
+        self, schema_name: SchemaName, object_names: t.Optional[t.Set[str]] = None
+    ) -> t.List[DataObject]:
         """
         Returns all the data objects that exist in the given schema and optionally catalog.
         """
         from snowflake.connector.errors import ProgrammingError
 
-        sql = f'SHOW TERSE OBJECTS IN "{to_schema(schema_name).sql(dialect=self.dialect)}"'
+        schema = to_schema(schema_name)
+        catalog_name = schema.catalog or self.get_current_catalog()
+        schema_sql = schema.sql(dialect=self.dialect)
+        query = (
+            exp.select(
+                exp.column("TABLE_CATALOG").as_("catalog"),
+                exp.column("TABLE_NAME").as_("name"),
+                exp.column("TABLE_SCHEMA").as_("schema_name"),
+                exp.case()
+                .when(exp.column("TABLE_TYPE").eq("BASE TABLE"), exp.Literal.string("TABLE"))
+                .when(exp.column("TABLE_TYPE").eq("TEMPORARY TABLE"), exp.Literal.string("TABLE"))
+                .when(exp.column("TABLE_TYPE").eq("EXTERNAL TABLE"), exp.Literal.string("TABLE"))
+                .when(exp.column("TABLE_TYPE").eq("EVENT TABLE"), exp.Literal.string("TABLE"))
+                .when(exp.column("TABLE_TYPE").eq("VIEW"), exp.Literal.string("VIEW"))
+                .when(
+                    exp.column("TABLE_TABLE").eq("MATERIALIZED VIEW"),
+                    exp.Literal.string("MATERIALIZED_VIEW"),
+                )
+                .else_(exp.column("TABLE_TYPE"))
+                .as_("type"),
+            )
+            .from_(exp.table_("TABLES", db="INFORMATION_SCHEMA", catalog=catalog_name))
+            .where(exp.column("TABLE_SCHEMA").eq(schema.db))
+        )
+        if object_names:
+            # FIXME: Find a way to properly normalize object names.
+            object_names = {n.upper() for n in object_names}
+            query = query.where(exp.column("TABLE_NAME").isin(*object_names))
         try:
-            df = self.fetchdf(sql, quote_identifiers=True)
+            df = self.fetchdf(query, quote_identifiers=True)
         except ProgrammingError as e:
             if "Object does not exist" in str(e):
                 return []
@@ -120,12 +149,12 @@ class SnowflakeEngineAdapter(GetCurrentCatalogFromFunctionMixin):
             return []
         return [
             DataObject(
-                catalog=row.database_name,  # type: ignore
+                catalog=row.catalog,  # type: ignore
                 schema=row.schema_name,  # type: ignore
                 name=row.name,  # type: ignore
-                type=DataObjectType.from_str(row.kind),  # type: ignore
+                type=DataObjectType.from_str(row.type),  # type: ignore
             )
-            for row in df[["database_name", "schema_name", "name", "kind"]].itertuples()
+            for row in df.itertuples()
         ]
 
     def set_current_catalog(self, catalog: str) -> None:

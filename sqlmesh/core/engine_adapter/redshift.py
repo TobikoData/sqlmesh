@@ -233,43 +233,52 @@ class RedshiftEngineAdapter(
             self.rename_table(temp_table, target_table)
             self.drop_table(old_table)
 
-    def _get_data_objects(self, schema_name: SchemaName) -> t.List[DataObject]:
+    def _get_data_objects(
+        self, schema_name: SchemaName, object_names: t.Optional[t.Set[str]] = None
+    ) -> t.List[DataObject]:
         """
         Returns all the data objects that exist in the given schema and optionally catalog.
         """
-        catalog_name = self.get_current_catalog()
-        query = f"""
-            SELECT
-                '{catalog_name}' AS catalog_name,
-                tablename AS name,
-                schemaname AS schema_name,
-                'TABLE' AS type
-            FROM pg_tables
-            WHERE schemaname ILIKE '{schema_name}'
-            UNION ALL
-            SELECT
-                '{catalog_name}' AS catalog_name,
-                viewname AS name,
-                schemaname AS schema_name,
-                'VIEW' AS type
-            FROM pg_views
-            WHERE schemaname ILIKE '{schema_name}'
-            AND definition not ilike '%create materialized view%'
-            UNION ALL
-            SELECT
-                '{catalog_name}' AS catalog_name,
-                viewname AS name,
-                schemaname AS schema_name,
-                'MATERIALIZED_VIEW' AS type
-            FROM
-                pg_views
-            WHERE schemaname ILIKE '{schema_name}'
-            AND definition ilike '%create materialized view%'
-        """
+        catalog = self.get_current_catalog()
+        table_query = exp.select(
+            exp.column("schemaname").as_("schema_name"),
+            exp.column("tablename").as_("name"),
+            exp.Literal.string("TABLE").as_("type"),
+        ).from_("pg_tables")
+        view_query = (
+            exp.select(
+                exp.column("schemaname").as_("schema_name"),
+                exp.column("viewname").as_("name"),
+                exp.Literal.string("VIEW").as_("type"),
+            )
+            .from_("pg_views")
+            .where(exp.column("definition").ilike("%create materialized view%").not_())
+        )
+        materialized_view_query = (
+            exp.select(
+                exp.column("schemaname").as_("schema_name"),
+                exp.column("viewname").as_("name"),
+                exp.Literal.string("MATERIALIZED_VIEW").as_("type"),
+            )
+            .from_("pg_views")
+            .where(exp.column("definition").ilike("%create materialized view%"))
+        )
+        subquery = exp.union(
+            table_query,
+            exp.union(view_query, materialized_view_query, distinct=False),
+            distinct=False,
+        )
+        query = (
+            exp.select("*")
+            .from_(subquery.subquery(alias="objs"))
+            .where(exp.column("schema_name").ilike(schema_name))
+        )
+        if object_names:
+            query = query.where(exp.column("name").isin(*object_names))
         df = self.fetchdf(query)
         return [
             DataObject(
-                catalog=row.catalog_name, schema=row.schema_name, name=row.name, type=DataObjectType.from_str(row.type)  # type: ignore
+                catalog=catalog, schema=row.schema_name, name=row.name, type=DataObjectType.from_str(row.type)  # type: ignore
             )
             for row in df.itertuples()
         ]
