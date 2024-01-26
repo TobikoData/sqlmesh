@@ -96,6 +96,7 @@ function EditorLoading(): JSX.Element {
 
 function EditorMain({ tab }: { tab: EditorTab }): JSX.Element {
   const { errors } = useIDE()
+  const environment = useStoreContext(s => s.environment)
   const models = useStoreContext(s => s.models)
   const isModel = useStoreContext(s => s.isModel)
 
@@ -206,6 +207,10 @@ function EditorMain({ tab }: { tab: EditorTab }): JSX.Element {
     setPreviewTable(undefined)
     setPreviewDiff(undefined)
   }, [tab.id, tab.file.fingerprint])
+
+  useEffect(() => {
+    setPreviewDiff(undefined)
+  }, [environment])
 
   const { refetch: getFetchdf } = useApiFetchdf({
     sql: tab.file.content,
