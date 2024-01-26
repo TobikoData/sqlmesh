@@ -99,17 +99,7 @@ class DatabricksEngineAdapter(SparkEngineAdapter):
             ).getOrCreate()
             catalog = self._extra_config.get("catalog")
             if catalog:
-                from py4j.protocol import Py4JError
-                from pyspark.errors.exceptions.connect import SparkConnectGrpcException
-
-                try:
-                    # Note: Spark 3.4+ Only API
-                    super().set_current_catalog(catalog)
-                # If `setCurrentCatalog` should work for both non-unity and Unity single user
-                # clusters. If it fails then we try `USE CATALOG` which is Unity only but works
-                # across all clusters
-                except (Py4JError, SparkConnectGrpcException):
-                    self.set_current_catalog(catalog)
+                self.set_current_catalog(catalog)
             self._spark.conf.set("spark.sql.sources.partitionOverwriteMode", "dynamic")
         return self._spark
 
@@ -141,14 +131,37 @@ class DatabricksEngineAdapter(SparkEngineAdapter):
             return df.toPandas()
         return df
 
+    def get_current_catalog(self) -> t.Optional[str]:
+        from py4j.protocol import Py4JError
+        from pyspark.errors.exceptions.connect import SparkConnectGrpcException
+
+        # Update the Dataframe API is we have a spark session
+        if self._use_spark_session:
+            try:
+                # Note: Spark 3.4+ Only API
+                return super().get_current_catalog()
+            except (Py4JError, SparkConnectGrpcException):
+                pass
+        result = self.fetchone(exp.select(self.CURRENT_CATALOG_EXPRESSION))
+        if result:
+            return result[0]
+        return None
+
     def set_current_catalog(self, catalog_name: str) -> None:
+        from py4j.protocol import Py4JError
+        from pyspark.errors.exceptions.connect import SparkConnectGrpcException
+
         # Since Databricks splits commands across the Dataframe API and the SQL Connector
         # (depending if databricks-connect is installed and a Dataframe is used) we need to ensure both
         # are set to the same catalog since they maintain their default catalog seperately
         self.execute(exp.Use(this=exp.to_identifier(catalog_name), kind="CATALOG"))
         # Update the Dataframe API is we have a spark session
         if self._use_spark_session:
-            super().set_current_catalog(catalog_name)
+            try:
+                # Note: Spark 3.4+ Only API
+                super().set_current_catalog(catalog_name)
+            except (Py4JError, SparkConnectGrpcException):
+                pass
 
     def clone_table(
         self,
