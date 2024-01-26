@@ -18,7 +18,7 @@ from sqlalchemy.orm import Session
 from sqlmesh.core import constants as c
 from sqlmesh.core.config import parse_connection_config
 from sqlmesh.core.engine_adapter import create_engine_adapter
-from sqlmesh.core.state_sync import EngineAdapterStateSync, StateSync
+from sqlmesh.core.state_sync import CachingStateSync, EngineAdapterStateSync, StateSync
 from sqlmesh.schedulers.airflow import common
 from sqlmesh.utils.date import now
 from sqlmesh.utils.errors import SQLMeshError
@@ -63,7 +63,7 @@ def scoped_state_sync() -> t.Iterator[StateSync]:
         )
 
     try:
-        yield EngineAdapterStateSync(engine_adapter, state_schema)
+        yield CachingStateSync(EngineAdapterStateSync(engine_adapter, state_schema))  # type: ignore
     finally:
         engine_adapter.close()
 

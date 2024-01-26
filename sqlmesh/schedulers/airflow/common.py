@@ -3,7 +3,7 @@ from __future__ import annotations
 import typing as t
 
 from sqlmesh.core import constants as c
-from sqlmesh.core.environment import Environment, EnvironmentNamingInfo
+from sqlmesh.core.environment import Environment
 from sqlmesh.core.notification_target import NotificationTarget
 from sqlmesh.core.scheduler import Interval
 from sqlmesh.core.snapshot import (
@@ -63,24 +63,18 @@ class BackfillIntervalsPerSnapshot(PydanticModel):
 
 class PlanDagSpec(PydanticModel):
     request_id: str
-    environment_naming_info: EnvironmentNamingInfo
+    environment: Environment
     new_snapshots: t.List[Snapshot]
     backfill_intervals_per_snapshot: t.List[BackfillIntervalsPerSnapshot]
-    promoted_snapshots: t.List[SnapshotTableInfo]
     demoted_snapshots: t.List[SnapshotTableInfo]
-    start: TimeLike
-    end: t.Optional[TimeLike] = None
     unpaused_dt: t.Optional[TimeLike] = None
     no_gaps: bool
-    plan_id: str
-    previous_plan_id: t.Optional[str] = None
     notification_targets: t.List[NotificationTarget]
     backfill_concurrent_tasks: int
     ddl_concurrent_tasks: int
     users: t.List[User]
     is_dev: bool
     forward_only: t.Optional[bool] = None
-    environment_expiration_ts: t.Optional[int] = None
     dag_start_ts: t.Optional[int] = None
     deployability_index: DeployabilityIndex = DeployabilityIndex.all_deployable()
     deployability_index_for_creation: DeployabilityIndex = DeployabilityIndex.all_deployable()

@@ -12,6 +12,7 @@ from airflow.utils.session import provide_session
 from sqlalchemy.orm import Session
 
 from sqlmesh.core import constants as c
+from sqlmesh.core.state_sync import StateReader
 from sqlmesh.engines import commands
 from sqlmesh.schedulers.airflow import common, util
 from sqlmesh.schedulers.airflow.dag_generator import SnapshotDagGenerator
@@ -19,7 +20,7 @@ from sqlmesh.schedulers.airflow.operators import targets
 from sqlmesh.schedulers.airflow.plan import PlanDagState
 
 if t.TYPE_CHECKING:
-    from sqlmesh.core.snapshot import Snapshot, SnapshotId
+    pass
 
 logger = logging.getLogger(__name__)
 
@@ -123,29 +124,27 @@ class SQLMeshAirflow:
         """
         self.set_default_catalog(self._default_catalog)
         with util.scoped_state_sync() as state_sync:
-            stored_snapshots = state_sync.get_snapshots(None)
+            dag_generator = self._create_dag_generator(state_sync)
+
+            if self._generate_cadence_dags:
+                prod_env = state_sync.get_environment(c.PROD)
+                cadence_dags = (
+                    dag_generator.generate_cadence_dags(prod_env.snapshots) if prod_env else []
+                )
+                _delete_orphaned_snapshot_dags({d.dag_id for d in cadence_dags})
+            else:
+                cadence_dags = []
+
             plan_dag_specs = PlanDagState.from_state_sync(state_sync).get_dag_specs()
+            plan_application_dags = [
+                dag_generator.generate_plan_application_dag(s) for s in plan_dag_specs
+            ]
 
-        dag_generator = self._create_dag_generator(stored_snapshots)
+            system_dags = [
+                self._create_janitor_dag(),
+            ]
 
-        if self._generate_cadence_dags:
-            prod_env = state_sync.get_environment(c.PROD)
-            cadence_dags = (
-                dag_generator.generate_cadence_dags(prod_env.snapshots) if prod_env else []
-            )
-            _delete_orphaned_snapshot_dags({d.dag_id for d in cadence_dags})
-        else:
-            cadence_dags = []
-
-        plan_application_dags = [
-            dag_generator.generate_plan_application_dag(s) for s in plan_dag_specs
-        ]
-
-        system_dags = [
-            self._create_janitor_dag(),
-        ]
-
-        return system_dags + cadence_dags + plan_application_dags
+            return system_dags + cadence_dags + plan_application_dags
 
     def _create_janitor_dag(self) -> DAG:
         dag = self._create_system_dag(common.JANITOR_DAG_ID, self._janitor_interval)
@@ -182,16 +181,14 @@ class SQLMeshAirflow:
             tags=[common.SQLMESH_AIRFLOW_TAG],
         )
 
-    def _create_dag_generator(
-        self, snapshots: t.Dict[SnapshotId, Snapshot]
-    ) -> SnapshotDagGenerator:
+    def _create_dag_generator(self, state_reader: StateReader) -> SnapshotDagGenerator:
         return SnapshotDagGenerator(
             self._engine_operator,
             self._engine_operator_args,
             self._ddl_engine_operator,
             self._ddl_engine_operator_args,
             self._external_table_sensor_factory,
-            snapshots,
+            state_reader,
         )
 
 
