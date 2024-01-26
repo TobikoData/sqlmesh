@@ -6,6 +6,7 @@ import pandas as pd
 from sqlglot import exp
 from sqlglot.errors import ErrorLevel
 
+from sqlmesh.core.dialect import to_schema
 from sqlmesh.core.engine_adapter.base_postgres import BasePostgresEngineAdapter
 from sqlmesh.core.engine_adapter.mixins import (
     GetCurrentCatalogFromFunctionMixin,
@@ -271,7 +272,7 @@ class RedshiftEngineAdapter(
         query = (
             exp.select("*")
             .from_(subquery.subquery(alias="objs"))
-            .where(exp.column("schema_name").ilike(schema_name))
+            .where(exp.column("schema_name").eq(to_schema(schema_name).db))
         )
         if object_names:
             query = query.where(exp.column("name").isin(*object_names))

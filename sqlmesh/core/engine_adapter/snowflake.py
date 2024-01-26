@@ -126,7 +126,7 @@ class SnowflakeEngineAdapter(GetCurrentCatalogFromFunctionMixin):
                 .when(exp.column("TABLE_TYPE").eq("EVENT TABLE"), exp.Literal.string("TABLE"))
                 .when(exp.column("TABLE_TYPE").eq("VIEW"), exp.Literal.string("VIEW"))
                 .when(
-                    exp.column("TABLE_TABLE").eq("MATERIALIZED VIEW"),
+                    exp.column("TABLE_TYPE").eq("MATERIALIZED VIEW"),
                     exp.Literal.string("MATERIALIZED_VIEW"),
                 )
                 .else_(exp.column("TABLE_TYPE"))

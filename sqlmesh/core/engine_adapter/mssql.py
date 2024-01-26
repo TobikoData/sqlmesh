@@ -9,6 +9,7 @@ import pandas as pd
 from pandas.api.types import is_datetime64_any_dtype  # type: ignore
 from sqlglot import exp
 
+from sqlmesh.core.dialect import to_schema
 from sqlmesh.core.engine_adapter.base import EngineAdapterWithIndexSupport
 from sqlmesh.core.engine_adapter.mixins import (
     GetCurrentCatalogFromFunctionMixin,
@@ -202,7 +203,7 @@ class MSSQLEngineAdapter(
                 .as_("type"),
             )
             .from_(exp.table_("TABLES", db="INFORMATION_SCHEMA"))
-            .where(exp.column("TABLE_SCHEMA").like(f"%{schema_name}%"))
+            .where(exp.column("TABLE_SCHEMA").eq(to_schema(schema_name).db))
         )
         if object_names:
             query = query.where(exp.column("TABLE_NAME").isin(*object_names))

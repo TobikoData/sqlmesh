@@ -643,7 +643,7 @@ class BigQueryEngineAdapter(InsertOverwriteWithMergeMixin):
             .when(exp.column("table_type").eq("SNAPSHOT"), exp.Literal.string("TABLE"))
             .when(exp.column("table_type").eq("VIEW"), exp.Literal.string("VIEW"))
             .when(
-                exp.column("table_table").eq("MATERIALIZED VIEW"),
+                exp.column("table_type").eq("MATERIALIZED VIEW"),
                 exp.Literal.string("MATERIALIZED_VIEW"),
             )
             .else_(exp.column("table_type"))

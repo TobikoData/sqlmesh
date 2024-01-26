@@ -5,6 +5,7 @@ import typing as t
 
 from sqlglot import exp, parse_one
 
+from sqlmesh.core.dialect import to_schema
 from sqlmesh.core.engine_adapter.mixins import (
     LogicalMergeMixin,
     LogicalReplaceQueryMixin,
@@ -85,7 +86,7 @@ class MySQLEngineAdapter(
                 .as_("type"),
             )
             .from_(exp.table_("tables", db="information_schema"))
-            .where(exp.column("table_schema").eq(schema_name))
+            .where(exp.column("table_schema").eq(to_schema(schema_name).db))
         )
         if object_names:
             query = query.where(exp.column("table_name").isin(*object_names))
