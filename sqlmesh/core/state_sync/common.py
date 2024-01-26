@@ -189,11 +189,28 @@ class CommonStateSyncMixin(StateSync):
 
         self._update_environment(environment)
 
-        removed = (
-            list(existing_table_infos.values())
-            if environment_suffix_target_changed or environment_catalog_changed
-            else [existing_table_infos[name] for name in missing_models]
-        )
+        removed = [existing_table_infos[name] for name in missing_models]
+        if environment_catalog_changed:
+            removed = list(
+                {
+                    table_info
+                    for table_info in existing_table_infos.values()
+                    # Can remove the `table_info.fully_qualified_table.catalog is not None` once we make sure that
+                    # `default` schema is included in the fully qualified table and therefore all fully qualified
+                    # tables have a catalog.
+                    if (
+                        table_info.fully_qualified_table.catalog is not None
+                        and table_info.fully_qualified_table.catalog
+                        != environment.catalog_name_override
+                    )
+                    or (
+                        existing_environment
+                        and existing_environment.catalog_name_override is not None
+                    )
+                }.union(removed)
+            )
+        elif environment_suffix_target_changed:
+            removed = list(existing_table_infos.values())
 
         return PromotionResult(
             added=sorted(table_infos),
