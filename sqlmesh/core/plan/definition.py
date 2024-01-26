@@ -153,7 +153,6 @@ class Plan(PydanticModel, frozen=True):
                 execution_time=self.execution_time,
                 restatements=self.restatements,
                 deployability_index=self.deployability_index,
-                ignore_cron=True,
             ).items()
             if snapshot.is_model and missing
         ]
