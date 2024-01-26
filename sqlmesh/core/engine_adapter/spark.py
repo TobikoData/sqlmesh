@@ -302,9 +302,12 @@ class SparkEngineAdapter(GetCurrentCatalogFromFunctionMixin, HiveMetastoreTableP
             self._fetch_native_df(query, quote_identifiers=quote_identifiers)
         )
 
-    def _get_data_objects(self, schema_name: SchemaName) -> t.List[DataObject]:
+    def _get_data_objects(
+        self, schema_name: SchemaName, object_names: t.Optional[t.Set[str]] = None
+    ) -> t.List[DataObject]:
         schema_name = to_schema(schema_name).sql(dialect=self.dialect)
-        sql = f"SHOW TABLE EXTENDED IN {schema_name} LIKE '*'"
+        pattern = "*" if object_names is None else "|".join(object_names)
+        sql = f"SHOW TABLE EXTENDED IN {schema_name} LIKE '{pattern}'"
         try:
             results = (
                 self.fetch_pyspark_df(sql).collect()

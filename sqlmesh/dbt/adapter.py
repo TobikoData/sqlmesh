@@ -237,7 +237,7 @@ class RuntimeAdapter(BaseAdapter):
                 if do.type.is_unknown
                 else RelationType(do.type.lower().replace("_", "")),
             )
-            for do in self.engine_adapter._get_data_objects(schema)
+            for do in self.engine_adapter.get_data_objects(schema)
         ]
         return relations
 

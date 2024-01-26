@@ -79,33 +79,60 @@ class TrinoEngineAdapter(
         # Some trino connectors don't support truncate so we use delete.
         self.execute(f"DELETE FROM {table.sql(dialect=self.dialect, identify=True)}")
 
-    def _get_data_objects(self, schema_name: SchemaName) -> t.List[DataObject]:
+    def _get_data_objects(
+        self, schema_name: SchemaName, object_names: t.Optional[t.Set[str]] = None
+    ) -> t.List[DataObject]:
         """
         Returns all the data objects that exist in the given schema and optionally catalog.
         """
         schema_name = to_schema(schema_name)
         schema = schema_name.db
         catalog = schema_name.catalog or self.get_current_catalog()
-        query = f"""
-            SELECT
-                t.table_catalog AS catalog,
-                t.table_name AS name,
-                t.table_schema AS schema,
-                CASE
-                    WHEN mv.name is not null THEN 'materialized_view'
-                    WHEN t.table_type = 'BASE TABLE' THEN 'table'
-                    ELSE t.table_type
-                END AS type
-            FROM {catalog}.information_schema.tables t
-            LEFT JOIN system.metadata.materialized_views mv
-                ON mv.catalog_name = t.table_catalog
-                AND mv.schema_name = t.table_schema
-                AND mv.name = t.table_name
-            WHERE
-                t.table_schema = '{schema}'
-                AND (mv.catalog_name is null OR mv.catalog_name =  '{catalog}')
-                AND (mv.schema_name is null OR mv.schema_name =  '{schema}')
-        """
+        query = (
+            exp.select(
+                exp.column("table_catalog", table="t").as_("catalog"),
+                exp.column("table_schema", table="t").as_("schema"),
+                exp.column("table_name", table="t").as_("name"),
+                exp.case()
+                .when(
+                    exp.column("name", table="mv").is_(exp.null()).not_(),
+                    exp.Literal.string("materialized_view"),
+                )
+                .when(
+                    exp.column("table_type", table="t").eq("BASE TABLE"),
+                    exp.Literal.string("table"),
+                )
+                .else_(exp.column("table_type", table="t"))
+                .as_("type"),
+            )
+            .from_(exp.to_table(f"{catalog}.information_schema.tables", alias="t"))
+            .join(
+                exp.to_table("system.metadata.materialized_views", alias="mv"),
+                on=exp.and_(
+                    exp.column("catalog_name", table="mv").eq(
+                        exp.column("table_catalog", table="t")
+                    ),
+                    exp.column("schema_name", table="mv").eq(exp.column("table_schema", table="t")),
+                    exp.column("name", table="mv").eq(exp.column("table_name", table="t")),
+                ),
+                join_type="left",
+            )
+            .where(
+                exp.and_(
+                    exp.column("table_schema", table="t").eq(schema),
+                    exp.or_(
+                        exp.column("catalog_name", table="mv").is_(exp.null()),
+                        exp.column("catalog_name", table="mv").eq(catalog),
+                    ),
+                    exp.or_(
+                        exp.column("schema_name", table="mv").is_(exp.null()),
+                        exp.column("schema_name", table="mv").eq(schema),
+                    ),
+                )
+            )
+        )
+        if object_names:
+            query = query.where(exp.column("table_name", table="t").isin(*object_names))
         df = self.fetchdf(query)
         return [
             DataObject(

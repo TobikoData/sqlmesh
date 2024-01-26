@@ -32,7 +32,7 @@ pytestmark = [
 
 
 def get_environment_objects(controller: GithubController, environment: str) -> t.List[DataObject]:
-    return controller._context.engine_adapter._get_data_objects(f"sushi__{environment}")
+    return controller._context.engine_adapter.get_data_objects(f"sushi__{environment}")
 
 
 def get_num_days_loaded(controller: GithubController, environment: str, model: str) -> int:
