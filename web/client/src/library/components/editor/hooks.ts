@@ -4,7 +4,7 @@ import { useLineageFlow } from '@components/graph/context'
 import { useStoreEditor } from '@context/editor'
 import { type ModelSQLMeshModel } from '@models/sqlmesh-model'
 import { type Column } from '~/api/client'
-import { isFalse, isNil, isNotNil } from '@utils/index'
+import { isFalse, isNil, isNotNil, isObjectEmpty } from '@utils/index'
 import { useMemo, useState } from 'react'
 import { events, HoverTooltip, SQLMeshModel } from './extensions'
 import { findModel, findColumn } from './extensions/help'
@@ -69,14 +69,19 @@ function useSQLMeshModelExtensions(
   const [isActionMode, setIsActionMode] = useState(false)
 
   const extensions = useMemo(() => {
-    const columns = isNil(lineage)
-      ? new Set<string>()
-      : new Set(
-          Object.keys(lineage)
-            .map(modelName => models.get(modelName)?.columns.map(c => c.name))
-            .flat()
-            .filter(Boolean) as string[],
-        )
+    const columns =
+      isNil(lineage) || isObjectEmpty(lineage)
+        ? new Set<string>(
+            Array.from(new Set(models.values()))
+              .map(m => m.columns.map(c => c.name))
+              .flat(),
+          )
+        : new Set(
+            Object.keys(lineage)
+              .map(modelName => models.get(modelName)?.columns.map(c => c.name))
+              .flat()
+              .filter(Boolean) as string[],
+          )
 
     function handleEventModelClick(event: MouseEvent): void {
       if (event.metaKey) {
@@ -116,7 +121,7 @@ function useSQLMeshModelExtensions(
       }),
       isNotNil(handleModelClick) && events({ click: handleEventModelClick }),
       isNotNil(handleModelColumn) && events({ click: handleEventlColumnClick }),
-      isNotNil(model) && SQLMeshModel(models, model, columns, isActionMode),
+      SQLMeshModel(models, columns, isActionMode, model),
     ].filter(Boolean) as Extension[]
   }, [handleModelClick, handleModelColumn, model, models, files, isActionMode])
 
