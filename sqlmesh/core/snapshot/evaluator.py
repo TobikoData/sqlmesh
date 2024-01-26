@@ -254,6 +254,9 @@ class SnapshotEvaluator:
             elif on_complete:
                 on_complete(snapshot)
 
+        if not snapshots_to_create:
+            return
+
         self._create_schemas(tables_by_schema)
         with self.concurrent_context():
             concurrent_apply_to_snapshots(
