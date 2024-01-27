@@ -106,13 +106,14 @@ export class ModelPlanAction<
   }
 
   displayStatus(planOverview: ModelPlanOverviewTracker): string {
-    if (this.isRunningTask) return 'Running Task...'
+    if (this.isCancelling) return 'Cancelling Plan...'
     if (this.isApplying) return 'Applying Plan...'
     if (this.isRunning && isNil(planOverview.hasChanges))
       return 'Getting Changes...'
     if (this.isRunning && isNil(planOverview.hasBackfills))
       return 'Getting Backfills...'
     if (this.isRunning) return 'Checking Plan...'
+    if (this.isRunningTask) return 'Running Task...'
 
     return 'Plan'
   }
@@ -177,10 +178,13 @@ export class ModelPlanAction<
     const isRunningPlan = planOverview.isRunning
     const isRunningApply = planApply.isRunning
     const isRunningCancel = planCancel.isRunning
+    const isFinished =
+      (planApply.isFinished && planOverview.isFinished) || planCancel.isFinished
 
-    if (isRunningPlan) return EnumPlanAction.Running
     if (isRunningCancel) return EnumPlanAction.Cancelling
     if (isRunningApply) return EnumPlanAction.Applying
+    if (isRunningPlan) return EnumPlanAction.Running
+    if (isFinished) return EnumPlanAction.Done
     if (planOverview.isVirtualUpdate) return EnumPlanAction.ApplyVirtual
     if (planOverview.isMetadataUpdate) return EnumPlanAction.ApplyMetadata
     if (planOverview.isBackfillUpdate) return EnumPlanAction.ApplyBackfill

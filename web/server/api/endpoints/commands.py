@@ -198,19 +198,19 @@ def _run_plan_apply(
 ) -> None:
     """Run plan apply"""
     plan_options = plan_options or models.PlanOptions()
-
+    tracker_apply = models.PlanApplyStageTracker(environment=environment, plan_options=plan_options)
+    api_console.start_plan_tracker(tracker_apply)
     plan_builder = get_plan_builder(context, plan_options, environment, plan_dates)
     plan = plan_builder.build()
+    tracker_apply.start = plan.start
+    tracker_apply.end = plan.end
+    api_console.start_plan_tracker(tracker_apply)
 
     if categories is not None:
         for new, _ in plan.context_diff.modified_snapshots.values():
             if plan.is_new_snapshot(new) and new.name in categories:
                 plan_builder.set_choice(new, categories[new.name])
         plan = plan_builder.build()
-
-    tracker_apply = models.PlanApplyStageTracker(environment=environment, plan_options=plan_options)
-    tracker_apply.start = plan.start
-    tracker_apply.end = plan.end
     api_console.start_plan_tracker(tracker_apply)
     try:
         context.apply(plan, circuit_breaker)

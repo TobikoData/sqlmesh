@@ -58,9 +58,10 @@ import {
 import { Menu, Transition, Popover } from '@headlessui/react'
 import { type ModelEnvironment } from '@models/environment'
 import { type ModelSQLMeshChangeDisplay } from '@models/sqlmesh-change-display'
-import { Fragment, useState, type MouseEvent } from 'react'
+import { Fragment, useState, type MouseEvent, useEffect } from 'react'
 import Input from '@components/input/Input'
 import ReportErrors from '@components/report/ReportErrors'
+import { ModelPlanOverviewTracker } from '@models/tracker-plan-overview'
 
 export default function Page({
   sidebar,
@@ -154,81 +155,73 @@ function EnvironmentDetails(): JSX.Element {
       ) : (
         <>
           {withPlanModule && (
-            <>
-              {planAction.isProcessing ? (
-                <ModuleLink
-                  title={planAction.displayStatus(planOverview)}
-                  to={EnumRoutes.Plan}
-                  icon={
-                    <Spinner
-                      variant={EnumVariant.Success}
-                      className="w-3"
-                    />
-                  }
-                  iconActive={
-                    <Spinner
-                      variant={EnumVariant.Success}
-                      className="w-3"
-                    />
-                  }
-                  before={
-                    <p className="block mx-1 text-xs text-success-100 font-bold">
-                      {planAction.displayStatus(planOverview)}
-                    </p>
-                  }
-                  className="px-2 py-1 bg-success-500"
-                  classActive="bg-success-500"
-                />
-              ) : (
-                <ModuleLink
-                  title="Plan"
-                  to={EnumRoutes.Plan}
-                  icon={
-                    <OutlinePlayCircleIcon
-                      className={clsx(
-                        'w-5',
-                        planOverview.isFailed
-                          ? 'text-danger-500 dark:text-danger-100'
-                          : 'text-success-100',
-                      )}
-                    />
-                  }
-                  iconActive={
-                    <PlayCircleIcon
-                      className={clsx(
-                        'w-5',
-                        planOverview.isFailed
-                          ? 'text-danger-500 dark:text-danger-100'
-                          : 'text-success-100',
-                      )}
-                    />
-                  }
-                  before={
-                    <p
-                      className={clsx(
-                        'block mx-1 text-xs font-bold',
-                        planOverview.isFailed
-                          ? 'text-danger-500 dark:text-danger-100'
-                          : 'text-success-100',
-                      )}
-                    >
-                      Plan
-                    </p>
-                  }
+            <ModuleLink
+              title={
+                planAction.isProcessing
+                  ? planAction.displayStatus(planOverview)
+                  : 'Plan'
+              }
+              to={EnumRoutes.Plan}
+              icon={
+                planAction.isProcessing ? (
+                  <Spinner
+                    variant={EnumVariant.Success}
+                    className="w-3 py-1"
+                  />
+                ) : (
+                  <OutlinePlayCircleIcon
+                    className={clsx(
+                      'w-5',
+                      planOverview.isFailed
+                        ? 'text-danger-500 dark:text-danger-100'
+                        : 'text-success-100',
+                    )}
+                  />
+                )
+              }
+              iconActive={
+                planAction.isProcessing ? (
+                  <Spinner
+                    variant={EnumVariant.Success}
+                    className="w-3 py-1"
+                  />
+                ) : (
+                  <PlayCircleIcon
+                    className={clsx(
+                      'w-5',
+                      planOverview.isFailed
+                        ? 'text-danger-500 dark:text-danger-100'
+                        : 'text-success-100',
+                    )}
+                  />
+                )
+              }
+              before={
+                <p
                   className={clsx(
-                    'px-2',
+                    'block mx-1 text-xs font-bold',
                     planOverview.isFailed
-                      ? 'bg-danger-10 dark:bg-danger-500'
-                      : 'bg-success-500',
+                      ? 'text-danger-500 dark:text-danger-100'
+                      : 'text-success-100',
                   )}
-                  classActive={clsx(
-                    planOverview.isFailed
-                      ? 'bg-danger-10 dark:bg-danger-500'
-                      : 'bg-success-500',
-                  )}
-                />
+                >
+                  {planAction.isProcessing
+                    ? planAction.displayStatus(planOverview)
+                    : 'Plan'}
+                </p>
+              }
+              className={clsx(
+                'px-2',
+                planOverview.isFailed
+                  ? 'bg-danger-10 dark:bg-danger-500'
+                  : 'bg-success-500',
               )}
-            </>
+              classActive={clsx(
+                planOverview.isFailed
+                  ? 'bg-danger-10 dark:bg-danger-500'
+                  : 'bg-success-500',
+              )}
+            />
           )}
           <SelectEnvironemnt
             className="border-none h-6 "
@@ -240,8 +233,9 @@ function EnvironmentDetails(): JSX.Element {
               environment.isInitialProd
             }
           />
-          {isFalse(planOverview.isLatest) &&
-            isTrue(planOverview.hasChanges) && <PlanChanges />}
+          {[Modules['plan-progress'], Modules.plans].some(m =>
+            modules.includes(m),
+          ) && <PlanChanges />}
           {modules.includes(Modules.errors) && <ReportErrors />}
         </>
       )}
@@ -383,61 +377,78 @@ function ActionStatus({
 function PlanChanges(): JSX.Element {
   const planOverview = useStorePlan(s => s.planOverview)
 
-  return (
+  const [planOverviewTracker, setPlanOverviewTracker] =
+    useState<ModelPlanOverviewTracker>(planOverview)
+
+  useEffect(() => {
+    if (isFalse(planOverview.isEmpty) && planOverview.isFinished) {
+      setPlanOverviewTracker(new ModelPlanOverviewTracker(planOverview))
+    }
+  }, [planOverview])
+
+  const shouldShow =
+    (isFalse(planOverview.isLatest) || planOverview.isFetching) &&
+    planOverviewTracker.hasUpdates
+
+  return shouldShow ? (
     <span className="flex group items-center bg-neutral-10 px-1 py-1 rounded-full">
-      {isTrue(planOverview.hasChanges) && (
+      {isTrue(planOverviewTracker.hasChanges) && (
         <p className="flex text-xs ml-2 mr-2 dark:text-neutral-300">Changes</p>
       )}
-      {isArrayNotEmpty(planOverview.added) && (
+      {isArrayNotEmpty(planOverviewTracker.added) && (
         <ChangesPreview
           headline="Added"
           type={EnumPlanChangeType.Add}
-          changes={planOverview.added}
+          changes={planOverviewTracker.added}
           className="-mr-2 group-hover:mr-0 z-[5]"
         />
       )}
-      {isArrayNotEmpty(planOverview.direct) && (
+      {isArrayNotEmpty(planOverviewTracker.direct) && (
         <ChangesPreview
           headline="Directly Modified"
           type={EnumPlanChangeType.Direct}
-          changes={planOverview.direct}
+          changes={planOverviewTracker.direct}
           className="-mr-2 group-hover:mr-0 z-[4]"
         />
       )}
-      {isArrayNotEmpty(planOverview.indirect) && (
+      {isArrayNotEmpty(planOverviewTracker.indirect) && (
         <ChangesPreview
           headline="Indirectly Modified"
           type={EnumPlanChangeType.Indirect}
-          changes={planOverview.indirect}
+          changes={planOverviewTracker.indirect}
           className="-mr-2 group-hover:mr-0 z-[3]"
         />
       )}
-      {isArrayNotEmpty(planOverview.metadata) && (
+      {isArrayNotEmpty(planOverviewTracker.metadata) && (
         <ChangesPreview
           headline="Metadata"
           type={EnumPlanChangeType.Metadata}
-          changes={planOverview.metadata}
+          changes={planOverviewTracker.metadata}
           className="-mr-2 group-hover:mr-0 z-[2]"
         />
       )}
-      {isArrayNotEmpty(planOverview.removed) && (
+      {isArrayNotEmpty(planOverviewTracker.removed) && (
         <ChangesPreview
           headline="Removed"
           type={EnumPlanChangeType.Remove}
-          changes={planOverview.removed}
+          changes={planOverviewTracker.removed}
           className="-mr-2 group-hover:mr-0 z-[1]"
         />
       )}
-      {isArrayNotEmpty(planOverview.backfills) ? (
+      {isArrayNotEmpty(planOverviewTracker.backfills) ? (
         <ChangesPreview
           headline="Backfills"
           type={EnumPlanChangeType.Default}
-          changes={planOverview.backfills}
+          changes={planOverviewTracker.backfills}
           className="ml-4 group-hover:ml-2 z-[6]"
         />
       ) : (
         <div className="ml-2 group-hover:ml-2 z-[6]"></div>
       )}
+    </span>
+  ) : (
+    <span className="block ml-1 px-3 py-1 first-child:ml-0 rounded-full whitespace-nowrap font-bold text-xs text-center bg-neutral-5 dark:bg-neutral-20 cursor-default text-neutral-500  dark:text-neutral-300">
+      No Changes
     </span>
   )
 }

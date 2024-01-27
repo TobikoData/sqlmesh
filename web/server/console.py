@@ -201,13 +201,14 @@ class ApiConsole(TerminalConsole):
             self.plan_apply_stage_tracker.stop(success=success)
             self.log_event_plan_apply()
             self.plan_apply_stage_tracker = None
+            self.plan_overview_stage_tracker = None
         elif (
             isinstance(tracker, models.PlanOverviewStageTracker)
             and self.plan_overview_stage_tracker
         ):
             self.plan_overview_stage_tracker.stop(success=success)
             self.log_event_plan_overview()
-            self.plan_overview_stage_tracker = None
+            self.plan_apply_stage_tracker = None
         elif isinstance(tracker, models.PlanCancelStageTracker) and self.plan_cancel_stage_tracker:
             self.plan_cancel_stage_tracker.stop(success=success)
             self.log_event_plan_cancel()
