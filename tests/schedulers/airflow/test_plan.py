@@ -10,7 +10,7 @@ from sqlglot import parse_one
 
 from sqlmesh.core.config import EnvironmentSuffixTarget
 from sqlmesh.core.context import Context
-from sqlmesh.core.environment import Environment, EnvironmentNamingInfo
+from sqlmesh.core.environment import Environment
 from sqlmesh.core.model import (
     IncrementalByTimeRangeKind,
     ModelKindName,
@@ -152,11 +152,7 @@ def test_create_plan_dag_spec(
         plan_spec = create_plan_dag_spec(plan_request, state_sync_mock)
     assert plan_spec == common.PlanDagSpec(
         request_id="test_request_id",
-        environment_naming_info=EnvironmentNamingInfo(
-            name=environment_name,
-            suffix_target=EnvironmentSuffixTarget.TABLE,
-            catalog_name_override="test_catalog",
-        ),
+        environment=new_environment,
         new_snapshots=[the_snapshot],
         backfill_intervals_per_snapshot=[
             common.BackfillIntervalsPerSnapshot(
@@ -165,14 +161,9 @@ def test_create_plan_dag_spec(
                 before_promote=not paused_forward_only,
             )
         ],
-        promoted_snapshots=[the_snapshot.table_info],
         demoted_snapshots=[deleted_snapshot],
-        start="2022-01-01",
-        end="2022-01-04",
         unpaused_dt="2022-01-04",
         no_gaps=True,
-        plan_id="test_plan_id",
-        previous_plan_id=None,
         notification_targets=[],
         backfill_concurrent_tasks=1,
         ddl_concurrent_tasks=1,
@@ -267,9 +258,7 @@ def test_restatement(
 
     assert plan_spec == common.PlanDagSpec(
         request_id="test_request_id",
-        environment_naming_info=EnvironmentNamingInfo(
-            name=environment_name, suffix_target=EnvironmentSuffixTarget.SCHEMA
-        ),
+        environment=new_environment,
         new_snapshots=[],
         backfill_intervals_per_snapshot=[
             common.BackfillIntervalsPerSnapshot(
@@ -277,14 +266,9 @@ def test_restatement(
                 intervals=expected_intervals,
             )
         ],
-        promoted_snapshots=[the_snapshot.table_info],
         demoted_snapshots=[],
-        start="2022-01-01",
-        end="2022-01-07",
         unpaused_dt=None,
         no_gaps=True,
-        plan_id="test_plan_id",
-        previous_plan_id=None,
         notification_targets=[],
         backfill_concurrent_tasks=1,
         ddl_concurrent_tasks=1,
@@ -371,9 +355,7 @@ def test_select_models_for_backfill(mocker: MockerFixture, random_name, make_sna
 
     assert plan_spec == common.PlanDagSpec(
         request_id="test_request_id",
-        environment_naming_info=EnvironmentNamingInfo(
-            name=environment_name, suffix_target=EnvironmentSuffixTarget.TABLE
-        ),
+        environment=new_environment,
         new_snapshots=[snapshot_a, snapshot_b],
         backfill_intervals_per_snapshot=[
             common.BackfillIntervalsPerSnapshot(
@@ -382,14 +364,9 @@ def test_select_models_for_backfill(mocker: MockerFixture, random_name, make_sna
                 before_promote=True,
             )
         ],
-        promoted_snapshots=[snapshot_a.table_info, snapshot_b.table_info],
         demoted_snapshots=[],
-        start="2022-01-01",
-        end="2022-01-04",
         unpaused_dt="2022-01-04",
         no_gaps=True,
-        plan_id="test_plan_id",
-        previous_plan_id=None,
         notification_targets=[],
         backfill_concurrent_tasks=1,
         ddl_concurrent_tasks=1,
@@ -497,21 +474,21 @@ def test_create_plan_dag_spec_unbounded_end(
 
 def test_plan_dag_state(snapshot: Snapshot, sushi_context: Context, random_name):
     environment_name = random_name()
+    environment = Environment(
+        name=environment_name,
+        snapshots=[snapshot.table_info],
+        start_at=to_timestamp("2022-01-01"),
+        end_at=None,
+        plan_id="test_plan_id",
+    )
     plan_dag_spec = common.PlanDagSpec(
         request_id="test_request_id",
-        environment_naming_info=EnvironmentNamingInfo(
-            name=environment_name, suffix_target=EnvironmentSuffixTarget.SCHEMA
-        ),
+        environment=environment,
         new_snapshots=[],
         backfill_intervals_per_snapshot=[],
-        promoted_snapshots=[snapshot.table_info],
         demoted_snapshots=[],
-        start=to_timestamp("2022-01-02"),
-        end=None,
         unpaused_dt=None,
         no_gaps=True,
-        plan_id="test_plan_id",
-        previous_plan_id=None,
         notification_targets=[],
         backfill_concurrent_tasks=1,
         ddl_concurrent_tasks=1,
