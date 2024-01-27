@@ -34,7 +34,6 @@ def test_create_table_properties(make_mocked_engine_adapter: t.Callable):
     )
 
     assert to_sql_calls(adapter) == [
-        "DESCRIBE `test_table`",
         "CREATE TABLE IF NOT EXISTS `test_table` (`cola` INT, `colb` STRING, `colc` STRING) USING PARQUET PARTITIONED BY (`colb`)",
     ]
 
@@ -47,7 +46,6 @@ def test_create_table_properties(make_mocked_engine_adapter: t.Callable):
     )
 
     assert to_sql_calls(adapter) == [
-        "DESCRIBE `test_table`",
         "CREATE TABLE IF NOT EXISTS `test_table` (`cola` INT, `colb` STRING, `colc` STRING) USING PARQUET PARTITIONED BY (`cola`, `colb`)",
     ]
 
@@ -332,7 +330,6 @@ def test_create_table_table_options(make_mocked_engine_adapter: t.Callable):
     )
 
     assert to_sql_calls(adapter) == [
-        "DESCRIBE `test_table`",
         "CREATE TABLE IF NOT EXISTS `test_table` (`a` int, `b` int) TBLPROPERTIES ('test.conf.key'='value')",
     ]
 
@@ -343,7 +340,6 @@ def test_create_state_table(make_mocked_engine_adapter: t.Callable):
     adapter.create_state_table("test_table", {"a": "int", "b": "int"}, primary_key=["a"])
 
     assert to_sql_calls(adapter) == [
-        "DESCRIBE `test_table`",
         "CREATE TABLE IF NOT EXISTS `test_table` (`a` int, `b` int) PARTITIONED BY (`a`)",
     ]
 
@@ -574,11 +570,9 @@ def test_scd_type_2(
     )
 
     assert to_sql_calls(adapter) == [
-        "DESCRIBE `db`.`target`",
         "CREATE TABLE IF NOT EXISTS `db`.`target` (`id` INT, `name` STRING, `price` DOUBLE, `test_updated_at` TIMESTAMP, `test_valid_from` TIMESTAMP, `test_valid_to` TIMESTAMP)",
         "DESCRIBE `db`.`target`",
         "CREATE SCHEMA IF NOT EXISTS `db`",
-        "DESCRIBE `db`.`temp_target_abcdefgh`",
         "CREATE TABLE IF NOT EXISTS `db`.`temp_target_abcdefgh` AS SELECT `id`, `name`, `price`, `test_updated_at`, `test_valid_from`, `test_valid_to` FROM `db`.`target`",
         parse_one(
             """WITH `source` AS (

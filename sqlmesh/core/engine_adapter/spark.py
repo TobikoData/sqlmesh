@@ -443,7 +443,12 @@ class SparkEngineAdapter(GetCurrentCatalogFromFunctionMixin, HiveMetastoreTableP
             if wap_id.startswith(f"{self.BRANCH_PREFIX}{self.WAP_PREFIX}"):
                 table_name.set("this", table_name.this.this)
 
-        already_exists = False if not exists else self.table_exists(table_name)
+        wap_supported = (
+            kwargs.get("storage_format") or ""
+        ).lower() == "iceberg" or self.wap_supported(table_name)
+        do_dummy_insert = (
+            False if not wap_supported or not exists else not self.table_exists(table_name)
+        )
         super()._create_table(
             table_name_or_schema,
             expression,
@@ -459,11 +464,7 @@ class SparkEngineAdapter(GetCurrentCatalogFromFunctionMixin, HiveMetastoreTableP
             if isinstance(table_name_or_schema, exp.Schema)
             else exp.to_table(table_name_or_schema)
         )
-        if (
-            not already_exists
-            and (kwargs.get("storage_format") or "").lower() == "iceberg"
-            or self.wap_supported(table_name)
-        ):
+        if do_dummy_insert:
             # Performing a dummy insert to create a dummy snapshot for Iceberg tables
             # to workaround https://github.com/apache/iceberg/issues/8849.
             dummy_insert = exp.insert(exp.select("*").from_(table_name), table_name)
