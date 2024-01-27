@@ -33,9 +33,10 @@ def test_create_table_properties(make_mocked_engine_adapter: t.Callable):
         storage_format="parquet",
     )
 
-    adapter.cursor.execute.assert_called_once_with(
-        "CREATE TABLE IF NOT EXISTS `test_table` (`cola` INT, `colb` STRING, `colc` STRING) USING PARQUET PARTITIONED BY (`colb`)"
-    )
+    assert to_sql_calls(adapter) == [
+        "DESCRIBE `test_table`",
+        "CREATE TABLE IF NOT EXISTS `test_table` (`cola` INT, `colb` STRING, `colc` STRING) USING PARQUET PARTITIONED BY (`colb`)",
+    ]
 
     adapter.cursor.reset_mock()
     adapter.create_table(
@@ -45,9 +46,10 @@ def test_create_table_properties(make_mocked_engine_adapter: t.Callable):
         storage_format="parquet",
     )
 
-    adapter.cursor.execute.assert_called_once_with(
-        "CREATE TABLE IF NOT EXISTS `test_table` (`cola` INT, `colb` STRING, `colc` STRING) USING PARQUET PARTITIONED BY (`cola`, `colb`)"
-    )
+    assert to_sql_calls(adapter) == [
+        "DESCRIBE `test_table`",
+        "CREATE TABLE IF NOT EXISTS `test_table` (`cola` INT, `colb` STRING, `colc` STRING) USING PARQUET PARTITIONED BY (`cola`, `colb`)",
+    ]
 
     with pytest.raises(SQLMeshError):
         adapter.create_table(
@@ -256,7 +258,7 @@ def test_replace_query_self_ref_not_exists(
     temp_table_id = "abcdefgh"
     mocker.patch(
         "sqlmesh.core.engine_adapter.EngineAdapter._get_temp_table",
-        side_effect=lambda *args, **kwargs: make_temp_table_name(table_name, temp_table_id),
+        return_value=make_temp_table_name(table_name, temp_table_id),
     )
 
     mocker.patch(
@@ -329,9 +331,10 @@ def test_create_table_table_options(make_mocked_engine_adapter: t.Callable):
         },
     )
 
-    adapter.cursor.execute.assert_called_once_with(
-        "CREATE TABLE IF NOT EXISTS `test_table` (`a` int, `b` int) TBLPROPERTIES ('test.conf.key'='value')"
-    )
+    assert to_sql_calls(adapter) == [
+        "DESCRIBE `test_table`",
+        "CREATE TABLE IF NOT EXISTS `test_table` (`a` int, `b` int) TBLPROPERTIES ('test.conf.key'='value')",
+    ]
 
 
 def test_create_state_table(make_mocked_engine_adapter: t.Callable):
@@ -339,9 +342,10 @@ def test_create_state_table(make_mocked_engine_adapter: t.Callable):
 
     adapter.create_state_table("test_table", {"a": "int", "b": "int"}, primary_key=["a"])
 
-    adapter.cursor.execute.assert_called_once_with(
-        "CREATE TABLE IF NOT EXISTS `test_table` (`a` int, `b` int) PARTITIONED BY (`a`)"
-    )
+    assert to_sql_calls(adapter) == [
+        "DESCRIBE `test_table`",
+        "CREATE TABLE IF NOT EXISTS `test_table` (`a` int, `b` int) PARTITIONED BY (`a`)",
+    ]
 
 
 test_primitive_params = [
@@ -570,9 +574,11 @@ def test_scd_type_2(
     )
 
     assert to_sql_calls(adapter) == [
+        "DESCRIBE `db`.`target`",
         "CREATE TABLE IF NOT EXISTS `db`.`target` (`id` INT, `name` STRING, `price` DOUBLE, `test_updated_at` TIMESTAMP, `test_valid_from` TIMESTAMP, `test_valid_to` TIMESTAMP)",
         "DESCRIBE `db`.`target`",
         "CREATE SCHEMA IF NOT EXISTS `db`",
+        "DESCRIBE `db`.`temp_target_abcdefgh`",
         "CREATE TABLE IF NOT EXISTS `db`.`temp_target_abcdefgh` AS SELECT `id`, `name`, `price`, `test_updated_at`, `test_valid_from`, `test_valid_to` FROM `db`.`target`",
         parse_one(
             """WITH `source` AS (
@@ -783,7 +789,12 @@ def test_wap_publish(make_mocked_engine_adapter: t.Callable, mocker: MockerFixtu
     )
 
 
-def test_create_table_iceberg(make_mocked_engine_adapter: t.Callable):
+def test_create_table_iceberg(mocker: MockerFixture, make_mocked_engine_adapter: t.Callable):
+    mocker.patch(
+        "sqlmesh.core.engine_adapter.spark.SparkEngineAdapter.table_exists",
+        return_value=False,
+    )
+
     adapter = make_mocked_engine_adapter(SparkEngineAdapter)
 
     columns_to_types = {
@@ -799,17 +810,13 @@ def test_create_table_iceberg(make_mocked_engine_adapter: t.Callable):
         storage_format="ICEBERG",
     )
 
-    adapter.cursor.execute.assert_has_calls(
-        [
-            call(
-                "CREATE TABLE IF NOT EXISTS `test_table` (`cola` INT, `colb` STRING, `colc` STRING) USING ICEBERG PARTITIONED BY (`colb`)"
-            ),
-            call("INSERT INTO `test_table` SELECT * FROM `test_table`"),
-        ]
-    )
+    assert to_sql_calls(adapter) == [
+        "CREATE TABLE IF NOT EXISTS `test_table` (`cola` INT, `colb` STRING, `colc` STRING) USING ICEBERG PARTITIONED BY (`colb`)",
+        "INSERT INTO `test_table` SELECT * FROM `test_table`",
+    ]
 
 
-def test_comments(make_mocked_engine_adapter: t.Callable, mocker: MockerFixture):
+def test_comments(make_mocked_engine_adapter: t.Callable):
     adapter = make_mocked_engine_adapter(SparkEngineAdapter)
 
     adapter._create_table_comment(
@@ -826,4 +833,55 @@ def test_comments(make_mocked_engine_adapter: t.Callable, mocker: MockerFixture)
     assert sql_calls == [
         "COMMENT ON TABLE `test_table` IS 'test description'",
         "ALTER TABLE `test_table` ALTER COLUMN `a` COMMENT 'a description'",
+    ]
+
+
+def test_create_table_with_wap(make_mocked_engine_adapter: t.Callable, mocker: MockerFixture):
+    mocker.patch(
+        "sqlmesh.core.engine_adapter.spark.SparkEngineAdapter.table_exists",
+        return_value=False,
+    )
+    adapter = make_mocked_engine_adapter(SparkEngineAdapter)
+
+    adapter.create_table(
+        "catalog.schema.table.branch_wap_12345",
+        {"a": "int"},
+        storage_format="ICEBERG",
+    )
+
+    sql_calls = to_sql_calls(adapter)
+    assert sql_calls == [
+        "CREATE TABLE IF NOT EXISTS `catalog`.`schema`.`table` (`a` int) USING ICEBERG",
+        "INSERT INTO `catalog`.`schema`.`table` SELECT * FROM `catalog`.`schema`.`table`",
+    ]
+
+
+def test_replace_query_with_wap_self_reference(
+    make_mocked_engine_adapter: t.Callable, mocker: MockerFixture, make_temp_table_name
+):
+    mocker.patch(
+        "sqlmesh.core.engine_adapter.spark.SparkEngineAdapter.table_exists",
+        return_value=True,
+    )
+    mocker.patch(
+        "sqlmesh.core.engine_adapter.base.random_id",
+        return_value="abcdefgh",
+    )
+
+    adapter = make_mocked_engine_adapter(SparkEngineAdapter)
+
+    adapter.replace_query(
+        "catalog.schema.table.branch_wap_12345",
+        parse_one("SELECT 1 as a FROM catalog.schema.table.branch_wap_12345"),
+        columns_to_types={"a": "int"},
+        storage_format="ICEBERG",
+    )
+
+    sql_calls = to_sql_calls(adapter)
+    assert sql_calls == [
+        "CREATE TABLE IF NOT EXISTS `catalog`.`schema`.`table` (`a` int)",
+        "CREATE SCHEMA IF NOT EXISTS `schema`",
+        "CREATE TABLE IF NOT EXISTS `catalog`.`schema`.`temp_branch_wap_12345_abcdefgh` USING ICEBERG AS SELECT `a` FROM `catalog`.`schema`.`table`.`branch_wap_12345`",
+        "INSERT OVERWRITE TABLE `catalog`.`schema`.`table`.`branch_wap_12345` (`a`) SELECT 1 AS `a` FROM `catalog`.`schema`.`temp_branch_wap_12345_abcdefgh`",
+        "DROP TABLE IF EXISTS `catalog`.`schema`.`temp_branch_wap_12345_abcdefgh`",
     ]

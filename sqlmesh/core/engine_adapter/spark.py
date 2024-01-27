@@ -61,6 +61,9 @@ class SparkEngineAdapter(GetCurrentCatalogFromFunctionMixin, HiveMetastoreTableP
     # currently check for storage formats we say we don't support REPLACE TABLE
     SUPPORTS_REPLACE_TABLE = False
 
+    WAP_PREFIX = "wap_"
+    BRANCH_PREFIX = "branch_"
+
     @property
     def spark(self) -> PySparkSession:
         return self._connection_pool.get().spark
@@ -428,6 +431,19 @@ class SparkEngineAdapter(GetCurrentCatalogFromFunctionMixin, HiveMetastoreTableP
         column_descriptions: t.Optional[t.Dict[str, str]] = None,
         **kwargs: t.Any,
     ) -> None:
+        table_name = (
+            table_name_or_schema.this
+            if isinstance(table_name_or_schema, exp.Schema)
+            else exp.to_table(table_name_or_schema)
+        )
+        # Spark doesn't support creating a wap table DDL. Therefore we check if this is a wap table and if it is,
+        # this is not a replace, and the table already exists then we can safely just return. Otherwise we let it error.
+        if not expression and isinstance(table_name.this, exp.Dot):
+            wap_id = table_name.this.parts[-1].name
+            if wap_id.startswith(f"{self.BRANCH_PREFIX}{self.WAP_PREFIX}"):
+                table_name.set("this", table_name.this.this)
+
+        already_exists = False if not exists else self.table_exists(table_name)
         super()._create_table(
             table_name_or_schema,
             expression,
@@ -443,8 +459,10 @@ class SparkEngineAdapter(GetCurrentCatalogFromFunctionMixin, HiveMetastoreTableP
             if isinstance(table_name_or_schema, exp.Schema)
             else exp.to_table(table_name_or_schema)
         )
-        if (kwargs.get("storage_format") or "").lower() == "iceberg" or self.wap_supported(
-            table_name
+        if (
+            not already_exists
+            and (kwargs.get("storage_format") or "").lower() == "iceberg"
+            or self.wap_supported(table_name)
         ):
             # Performing a dummy insert to create a dummy snapshot for Iceberg tables
             # to workaround https://github.com/apache/iceberg/issues/8849.
@@ -459,20 +477,20 @@ class SparkEngineAdapter(GetCurrentCatalogFromFunctionMixin, HiveMetastoreTableP
         )
 
     def wap_table_name(self, table_name: TableName, wap_id: str) -> str:
-        branch_name = _wap_branch_name(wap_id)
+        branch_name = self._wap_branch_name(wap_id)
         fqn = self._ensure_fqn(table_name)
-        return exp.Dot.build([fqn, exp.to_identifier(f"branch_{branch_name}")]).sql(
+        return exp.Dot.build([fqn, exp.to_identifier(f"{self.BRANCH_PREFIX}{branch_name}")]).sql(
             dialect=self.dialect
         )
 
     def wap_prepare(self, table_name: TableName, wap_id: str) -> str:
-        branch_name = _wap_branch_name(wap_id)
+        branch_name = self._wap_branch_name(wap_id)
         fqn = self._ensure_fqn(table_name)
         self.execute(f"ALTER TABLE {fqn.sql(dialect=self.dialect)} CREATE BRANCH {branch_name}")
         return self.wap_table_name(table_name, wap_id)
 
     def wap_publish(self, table_name: TableName, wap_id: str) -> None:
-        branch_name = _wap_branch_name(wap_id)
+        branch_name = self._wap_branch_name(wap_id)
         fqn = self._ensure_fqn(table_name)
 
         get_snapshot_id_query = (
@@ -512,6 +530,6 @@ class SparkEngineAdapter(GetCurrentCatalogFromFunctionMixin, HiveMetastoreTableP
 
         return f"ALTER TABLE {table_sql} ALTER COLUMN {column_sql} COMMENT '{column_comment}'"
 
-
-def _wap_branch_name(wap_id: str) -> str:
-    return f"wap_{wap_id}"
+    @classmethod
+    def _wap_branch_name(cls, wap_id: str) -> str:
+        return f"{cls.WAP_PREFIX}{wap_id}"
