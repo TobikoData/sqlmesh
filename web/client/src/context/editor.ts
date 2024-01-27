@@ -42,7 +42,7 @@ interface EditorStore {
   closeTab: (file: ModelFile) => void
   createTab: (file?: ModelFile) => EditorTab
   setDialects: (dialects: Dialect[]) => void
-  refreshTab: () => void
+  refreshTab: (tab?: EditorTab) => void
   setPreviewQuery: (previewQuery?: string) => void
   setPreviewTable: (previewTable?: [TableColumn[], TableRow[]]) => void
   setPreviewDiff: (previewDiff?: any) => void
@@ -152,9 +152,7 @@ export const useStoreEditor = create<EditorStore>((set, get) => ({
       storedTabs: tabs,
     }))
   },
-  refreshTab() {
-    const tab = get().tab
-
+  refreshTab(tab) {
     if (isNil(tab)) return
 
     get().selectTab({ ...tab })
