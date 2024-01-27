@@ -20,6 +20,7 @@ from sqlmesh.core.snapshot import (
     SnapshotIdLike,
     SnapshotTableInfo,
 )
+from sqlmesh.core.state_sync import StateReader
 from sqlmesh.schedulers.airflow import common, util
 from sqlmesh.schedulers.airflow.operators import targets
 from sqlmesh.schedulers.airflow.operators.hwm_sensor import (
@@ -70,27 +71,29 @@ class SnapshotDagGenerator:
         external_table_sensor_factory: t.Optional[
             t.Callable[[t.Dict[str, t.Any]], BaseSensorOperator]
         ],
-        snapshots: t.Dict[SnapshotId, Snapshot],
+        state_reader: StateReader,
     ):
         self._engine_operator = engine_operator
         self._engine_operator_args = engine_operator_args or {}
         self._ddl_engine_operator = ddl_engine_operator
         self._ddl_engine_operator_args = ddl_engine_operator_args or {}
         self._external_table_sensor_factory = external_table_sensor_factory
-        self._snapshots = snapshots
+        self._state_reader = state_reader
 
     def generate_cadence_dags(self, snapshots: t.Iterable[SnapshotIdLike]) -> t.List[DAG]:
         dags = []
-        for s in snapshots:
-            snapshot = self._snapshots[s.snapshot_id]
+        snapshots = self._state_reader.get_snapshots(snapshots)
+        for snapshot in snapshots.values():
             if snapshot.unpaused_ts and not snapshot.is_symbolic and not snapshot.is_seed:
-                dags.append(self._create_cadence_dag_for_snapshot(snapshot))
+                dags.append(self._create_cadence_dag_for_snapshot(snapshot, snapshots))
         return dags
 
     def generate_plan_application_dag(self, spec: common.PlanDagSpec) -> DAG:
         return self._create_plan_application_dag(spec)
 
-    def _create_cadence_dag_for_snapshot(self, snapshot: Snapshot) -> DAG:
+    def _create_cadence_dag_for_snapshot(
+        self, snapshot: Snapshot, snapshots: t.Dict[SnapshotId, Snapshot]
+    ) -> DAG:
         dag_id = common.dag_id_for_snapshot_info(snapshot.table_info)
         logger.info(
             "Generating the cadence DAG '%s' for snapshot %s",
@@ -121,10 +124,10 @@ class SnapshotDagGenerator:
                 "email_on_failure": True,
             },
         ) as dag:
-            hwm_sensor_tasks = self._create_hwm_sensors(snapshot=snapshot)
+            hwm_sensor_tasks = self._create_hwm_sensors(snapshot, snapshots)
 
             evaluator_task = self._create_snapshot_evaluation_operator(
-                snapshots=self._snapshots,
+                snapshots=snapshots,
                 snapshot=snapshot,
                 task_id="snapshot_evaluator",
             )
@@ -135,31 +138,28 @@ class SnapshotDagGenerator:
 
     def _create_plan_application_dag(self, plan_dag_spec: common.PlanDagSpec) -> DAG:
         dag_id = common.plan_application_dag_id(
-            plan_dag_spec.environment_naming_info.name, plan_dag_spec.request_id
+            plan_dag_spec.environment.name, plan_dag_spec.request_id
         )
         logger.info(
             "Generating the plan application DAG '%s' for environment '%s'",
             dag_id,
-            plan_dag_spec.environment_naming_info.name,
+            plan_dag_spec.environment.name,
         )
+
+        environment = plan_dag_spec.environment
 
         all_snapshots = {
             **{s.snapshot_id: s for s in plan_dag_spec.new_snapshots},
-            **self._snapshots,
+            **self._state_reader.get_snapshots(environment.snapshots),
         }
 
-        environment = plan_dag_spec_to_environment(plan_dag_spec)
-
-        snapshot_ids_to_create = {s.snapshot_id for s in plan_dag_spec.promoted_snapshots} | {
-            s.snapshot_id for s in plan_dag_spec.backfill_intervals_per_snapshot
-        }
         snapshots_to_create = [
-            all_snapshots[s_id]
-            for s_id in snapshot_ids_to_create
-            if s_id in all_snapshots
+            all_snapshots[snapshot.snapshot_id]
+            for snapshot in environment.snapshots
+            if snapshot.snapshot_id in all_snapshots
             and (
                 plan_dag_spec.models_to_backfill is None
-                or s_id.name in plan_dag_spec.models_to_backfill
+                or snapshot.name in plan_dag_spec.models_to_backfill
             )
         ]
 
@@ -176,7 +176,7 @@ class SnapshotDagGenerator:
             tags=[
                 common.SQLMESH_AIRFLOW_TAG,
                 common.PLAN_AIRFLOW_TAG,
-                plan_dag_spec.environment_naming_info.name,
+                plan_dag_spec.environment.name,
             ],
         ) as dag:
             start_task = EmptyOperator(task_id="plan_application_start")
@@ -196,7 +196,7 @@ class SnapshotDagGenerator:
                 [i for i in plan_dag_spec.backfill_intervals_per_snapshot if i.before_promote],
                 all_snapshots,
                 plan_dag_spec.deployability_index,
-                plan_dag_spec.plan_id,
+                plan_dag_spec.environment.plan_id,
                 "before_promote",
             )
 
@@ -207,7 +207,7 @@ class SnapshotDagGenerator:
                 [i for i in plan_dag_spec.backfill_intervals_per_snapshot if not i.before_promote],
                 all_snapshots,
                 plan_dag_spec.deployability_index,
-                plan_dag_spec.plan_id,
+                plan_dag_spec.environment.plan_id,
                 "after_promote",
             )
 
@@ -280,26 +280,28 @@ class SnapshotDagGenerator:
         start_task = EmptyOperator(task_id="snapshot_creation_start")
         end_task = EmptyOperator(task_id="snapshot_creation_end", trigger_rule="none_failed")
 
-        if not new_snapshots:
-            start_task >> end_task
-            return (start_task, end_task)
+        current_task: BaseOperator = start_task
 
-        creation_task = self._create_snapshot_create_tables_operator(
-            snapshots_to_create,
-            ddl_concurrent_tasks,
-            deployability_index,
-            "snapshot_creation__create_tables",
-        )
+        if snapshots_to_create:
+            creation_task = self._create_snapshot_create_tables_operator(
+                snapshots_to_create,
+                ddl_concurrent_tasks,
+                deployability_index,
+                "snapshot_creation__create_tables",
+            )
+            current_task >> creation_task
+            current_task = creation_task
 
-        update_state_task = PythonOperator(
-            task_id="snapshot_creation__update_state",
-            python_callable=creation_update_state_task,
-            op_kwargs={"new_snapshots": new_snapshots},
-        )
+        if new_snapshots:
+            update_state_task = PythonOperator(
+                task_id="snapshot_creation__update_state",
+                python_callable=creation_update_state_task,
+                op_kwargs={"new_snapshots": new_snapshots},
+            )
+            current_task >> update_state_task
+            current_task = update_state_task
 
-        start_task >> creation_task
-        creation_task >> update_state_task
-        update_state_task >> end_task
+        current_task >> end_task
 
         return (start_task, end_task)
 
@@ -323,12 +325,12 @@ class SnapshotDagGenerator:
         start_task = update_state_task
         end_task = update_state_task
 
-        if request.promoted_snapshots:
+        if request.environment.promoted_snapshots:
             if not request.is_dev and request.unpaused_dt:
                 migrate_tables_task = self._create_snapshot_migrate_tables_operator(
                     [
                         snapshots[s.snapshot_id]
-                        for s in request.promoted_snapshots
+                        for s in request.environment.promoted_snapshots
                         if snapshots[s.snapshot_id].is_paused
                     ],
                     request.ddl_concurrent_tasks,
@@ -357,10 +359,12 @@ class SnapshotDagGenerator:
         create_views_task = None
         delete_views_task = None
 
-        if request.promoted_snapshots:
+        environment_naming_info = request.environment.naming_info
+
+        if request.environment.promoted_snapshots:
             create_views_task = self._create_snapshot_promotion_operator(
-                [snapshots[x.snapshot_id] for x in request.promoted_snapshots],
-                request.environment_naming_info,
+                [snapshots[x.snapshot_id] for x in request.environment.promoted_snapshots],
+                environment_naming_info,
                 request.ddl_concurrent_tasks,
                 request.deployability_index,
                 "snapshot_promotion_create_views",
@@ -369,7 +373,7 @@ class SnapshotDagGenerator:
         if request.demoted_snapshots:
             delete_views_task = self._create_snapshot_demotion_operator(
                 request.demoted_snapshots,
-                request.environment_naming_info,
+                environment_naming_info,
                 request.ddl_concurrent_tasks,
                 "snapshot_promotion_delete_views",
             )
@@ -585,10 +589,12 @@ class SnapshotDagGenerator:
             task_id=task_id,
         )
 
-    def _create_hwm_sensors(self, snapshot: Snapshot) -> t.List[BaseSensorOperator]:
+    def _create_hwm_sensors(
+        self, snapshot: Snapshot, snapshots: t.Dict[SnapshotId, Snapshot]
+    ) -> t.List[BaseSensorOperator]:
         output: t.List[BaseSensorOperator] = []
         for upstream_snapshot_id in snapshot.parents:
-            upstream_snapshot = self._snapshots[upstream_snapshot_id]
+            upstream_snapshot = snapshots[upstream_snapshot_id]
             if not upstream_snapshot.is_symbolic and not upstream_snapshot.is_seed:
                 output.append(
                     HighWaterMarkSensor(
@@ -646,17 +652,3 @@ def promotion_unpause_snapshots_task(
 def promotion_finalize_task(environment: Environment) -> None:
     with util.scoped_state_sync() as state_sync:
         state_sync.finalize(environment)
-
-
-def plan_dag_spec_to_environment(plan_dag_spec: common.PlanDagSpec) -> Environment:
-    return Environment(
-        name=plan_dag_spec.environment_naming_info.name,
-        snapshots=plan_dag_spec.promoted_snapshots,
-        start_at=plan_dag_spec.start,
-        end_at=plan_dag_spec.end,
-        plan_id=plan_dag_spec.plan_id,
-        previous_plan_id=plan_dag_spec.previous_plan_id,
-        expiration_ts=plan_dag_spec.environment_expiration_ts,
-        suffix_target=plan_dag_spec.environment_naming_info.suffix_target,
-        catalog_name_override=plan_dag_spec.environment_naming_info.catalog_name_override,
-    )

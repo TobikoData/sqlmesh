@@ -48,7 +48,7 @@ class PlanDagState:
                 {
                     "request_id": spec.request_id,
                     "dag_id": common.plan_application_dag_id(
-                        spec.environment_naming_info.name, spec.request_id
+                        spec.environment.name, spec.request_id
                     ),
                     "dag_spec": spec.json(),
                 }
@@ -154,24 +154,18 @@ def create_plan_dag_spec(
 
     return common.PlanDagSpec(
         request_id=request.request_id,
-        environment_naming_info=request.environment.naming_info,
+        environment=request.environment,
         new_snapshots=request.new_snapshots,
         backfill_intervals_per_snapshot=backfill_intervals_per_snapshot,
-        promoted_snapshots=request.environment.promoted_snapshots,
         demoted_snapshots=_get_demoted_snapshots(request.environment, state_sync),
-        start=request.environment.start_at,
-        end=request.environment.end_at,
         unpaused_dt=unpaused_dt,
         no_gaps=request.no_gaps,
-        plan_id=request.environment.plan_id,
-        previous_plan_id=request.environment.previous_plan_id,
         notification_targets=request.notification_targets,
         backfill_concurrent_tasks=request.backfill_concurrent_tasks,
         ddl_concurrent_tasks=request.ddl_concurrent_tasks,
         users=request.users,
         is_dev=request.is_dev,
         forward_only=request.forward_only,
-        environment_expiration_ts=request.environment.expiration_ts,
         dag_start_ts=to_timestamp(now_dt),
         deployability_index=deployability_index_for_evaluation,
         deployability_index_for_creation=deployability_index_for_creation,

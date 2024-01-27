@@ -45,9 +45,7 @@ def test_evaluation_target_execute(mocker: MockerFixture, make_snapshot: t.Calla
     )
     evaluator_evaluate_mock.return_value = None
 
-    add_interval_mock = mocker.patch(
-        "sqlmesh.core.state_sync.engine_adapter.EngineAdapterStateSync.add_interval"
-    )
+    add_interval_mock = mocker.patch("sqlmesh.core.state_sync.cache.CachingStateSync.add_interval")
 
     variable_get_mock = mocker.patch("sqlmesh.schedulers.airflow.operators.targets.Variable.get")
 
@@ -109,12 +107,10 @@ def test_evaluation_target_execute_seed_model(mocker: MockerFixture, make_snapsh
     )
     evaluator_evaluate_mock.return_value = None
 
-    add_interval_mock = mocker.patch(
-        "sqlmesh.core.state_sync.engine_adapter.EngineAdapterStateSync.add_interval"
-    )
+    add_interval_mock = mocker.patch("sqlmesh.core.state_sync.cache.CachingStateSync.add_interval")
 
     get_snapshots_mock = mocker.patch(
-        "sqlmesh.core.state_sync.engine_adapter.EngineAdapterStateSync.get_snapshots"
+        "sqlmesh.core.state_sync.cache.CachingStateSync.get_snapshots"
     )
     get_snapshots_mock.return_value = {snapshot.snapshot_id: snapshot}
 

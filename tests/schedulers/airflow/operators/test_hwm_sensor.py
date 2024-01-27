@@ -30,7 +30,7 @@ def test_no_current_hwm(mocker: MockerFixture, make_snapshot, random_name):
     )
 
     get_snapshots_mock = mocker.patch(
-        "sqlmesh.core.state_sync.engine_adapter.EngineAdapterStateSync.get_snapshots"
+        "sqlmesh.core.state_sync.cache.CachingStateSync.get_snapshots"
     )
     get_snapshots_mock.return_value = {target_snapshot.snapshot_id: target_snapshot}
 
@@ -68,7 +68,7 @@ def test_current_hwm_below_target(mocker: MockerFixture, make_snapshot):
     )
 
     get_snapshots_mock = mocker.patch(
-        "sqlmesh.core.state_sync.engine_adapter.EngineAdapterStateSync.get_snapshots"
+        "sqlmesh.core.state_sync.cache.CachingStateSync.get_snapshots"
     )
     get_snapshots_mock.return_value = {target_snapshot_v1.snapshot_id: target_snapshot_v1}
 
@@ -101,7 +101,7 @@ def test_current_hwm_above_target(mocker: MockerFixture, make_snapshot):
     )
 
     get_snapshots_mock = mocker.patch(
-        "sqlmesh.core.state_sync.engine_adapter.EngineAdapterStateSync.get_snapshots"
+        "sqlmesh.core.state_sync.cache.CachingStateSync.get_snapshots"
     )
     get_snapshots_mock.return_value = {target_snapshot_v1.snapshot_id: target_snapshot_v1}
 
