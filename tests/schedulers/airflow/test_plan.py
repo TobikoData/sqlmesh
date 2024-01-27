@@ -26,7 +26,7 @@ from sqlmesh.core.snapshot import (
 )
 from sqlmesh.schedulers.airflow import common
 from sqlmesh.schedulers.airflow.plan import PlanDagState, create_plan_dag_spec
-from sqlmesh.utils.date import to_date, to_datetime, to_timestamp
+from sqlmesh.utils.date import to_datetime, to_timestamp
 from sqlmesh.utils.errors import SQLMeshError
 
 pytestmark = pytest.mark.airflow
@@ -477,7 +477,7 @@ def test_plan_dag_state(snapshot: Snapshot, sushi_context: Context, random_name)
     environment = Environment(
         name=environment_name,
         snapshots=[snapshot.table_info],
-        start_at=to_date("2022-01-01"),
+        start_at=to_timestamp("2022-01-01"),
         end_at=None,
         plan_id="test_plan_id",
     )
