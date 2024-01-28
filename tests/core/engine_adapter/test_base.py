@@ -1458,8 +1458,9 @@ WITH "source" AS (
     CASE
       WHEN "joined"."_exists" IS NULL
       OR (
-        NOT "t_id" IS NULL
-        AND NOT "id" IS NULL
+        (
+          NOT "t_id" IS NULL AND NOT "id" IS NULL
+        )
         AND (
           "name" <> "t_name"
           OR (
@@ -1493,10 +1494,23 @@ WITH "source" AS (
   FROM "joined"
   WHERE
     (
-      "name" <> "t_name" AND NOT "t_name" IS NULL AND NOT "name" IS NULL
+      NOT "t_id" IS NULL AND NOT "id" IS NULL
     )
-    OR (
-      "price" <> "t_price" AND NOT "t_price" IS NULL AND NOT "price" IS NULL
+    AND (
+      "name" <> "t_name"
+      OR (
+        "t_name" IS NULL AND NOT "name" IS NULL
+      )
+      OR (
+        NOT "t_name" IS NULL AND "name" IS NULL
+      )
+      OR "price" <> "t_price"
+      OR (
+        "t_price" IS NULL AND NOT "price" IS NULL
+      )
+      OR (
+        NOT "t_price" IS NULL AND "price" IS NULL
+      )
     )
 )
 SELECT
@@ -1630,8 +1644,9 @@ WITH "source" AS (
     CASE
       WHEN "joined"."_exists" IS NULL
       OR (
-        NOT "t_id" IS NULL
-        AND NOT "id" IS NULL
+        (
+          NOT "t_id" IS NULL AND NOT "id" IS NULL
+        )
         AND (
           "id" <> "t_id"
           OR (
@@ -1672,13 +1687,30 @@ WITH "source" AS (
   FROM "joined"
   WHERE
     (
-      "id" <> "t_id" AND NOT "t_id" IS NULL AND NOT "id" IS NULL
+      NOT "t_id" IS NULL AND NOT "id" IS NULL
     )
-    OR (
-      "name" <> "t_name" AND NOT "t_name" IS NULL AND NOT "name" IS NULL
-    )
-    OR (
-      "price" <> "t_price" AND NOT "t_price" IS NULL AND NOT "price" IS NULL
+    AND (
+      "id" <> "t_id"
+      OR (
+        "t_id" IS NULL AND NOT "id" IS NULL
+      )
+      OR (
+        NOT "t_id" IS NULL AND "id" IS NULL
+      )
+      OR "name" <> "t_name"
+      OR (
+        "t_name" IS NULL AND NOT "name" IS NULL
+      )
+      OR (
+        NOT "t_name" IS NULL AND "name" IS NULL
+      )
+      OR "price" <> "t_price"
+      OR (
+        "t_price" IS NULL AND NOT "price" IS NULL
+      )
+      OR (
+        NOT "t_price" IS NULL AND "price" IS NULL
+      )
     )
 )
 SELECT

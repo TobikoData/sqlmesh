@@ -20,7 +20,8 @@ from sqlmesh.utils import random_id
 from sqlmesh.utils.date import now, to_date, to_ds, yesterday
 from sqlmesh.utils.errors import UnsupportedCatalogOperationError
 from sqlmesh.utils.pydantic import PydanticModel
-from tests.conftest import SushiDataValidator, compare_dataframes
+from tests.conftest import SushiDataValidator
+from tests.utils.pandas import compare_dataframes
 
 if t.TYPE_CHECKING:
     from sqlmesh.core.engine_adapter._typing import Query

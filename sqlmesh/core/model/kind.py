@@ -355,12 +355,6 @@ class SCDType2ByTimeKind(_SCDType2Kind):
     updated_at_as_valid_from: SQLGlotBool = False
 
 
-# Legacy alias to original SCD Type 2 Kind that existed prior to adding by column support
-# Only used in discriminator for Pydantic
-class SCDType2Kind(SCDType2ByTimeKind):
-    name: Literal[ModelKindName.SCD_TYPE_2] = ModelKindName.SCD_TYPE_2_BY_TIME  # type: ignore
-
-
 class SCDType2ByColumnKind(_SCDType2Kind):
     name: Literal[ModelKindName.SCD_TYPE_2_BY_COLUMN] = ModelKindName.SCD_TYPE_2_BY_COLUMN
     columns: SQLGlotListOfExpressions
@@ -385,7 +379,6 @@ ModelKind = Annotated[
         IncrementalUnmanagedKind,
         SeedKind,
         ViewKind,
-        SCDType2Kind,
         SCDType2ByTimeKind,
         SCDType2ByColumnKind,
     ],

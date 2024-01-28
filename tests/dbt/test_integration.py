@@ -15,7 +15,7 @@ from sqlmesh.core.config.connection import DuckDBConnectionConfig
 from sqlmesh.core.engine_adapter import DuckDBEngineAdapter
 from sqlmesh.utils.pandas import columns_to_types_from_df
 from sqlmesh.utils.yaml import YAML
-from tests.conftest import compare_dataframes, create_df
+from tests.utils.pandas import compare_dataframes, create_df
 
 pytestmark = [pytest.mark.dbt, pytest.mark.slow]
 

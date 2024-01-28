@@ -1321,59 +1321,84 @@ class EngineAdapter:
             )
         insert_valid_from_start = execution_ts if check_columns else updated_at_name
         if check_columns:
-            updated_row_filter = " OR ".join(
-                [
-                    f"({col} != t_{col} AND t_{col} IS NOT NULL AND {col} IS NOT NULL)"
-                    for col in check_columns
-                ]
+            row_check_conditions = []
+            for col in check_columns:
+                t_col = col.copy()
+                if isinstance(col, exp.Column):
+                    t_col.this.set("this", f"t_{col.name}")
+                else:
+                    t_col.set("this", f"t_{col.name}")
+                row_check_conditions.extend(
+                    [
+                        col.neq(t_col),
+                        exp.and_(t_col.is_(exp.Null()), col.is_(exp.Null()).not_()),
+                        exp.and_(t_col.is_(exp.Null()).not_(), col.is_(exp.Null())),
+                    ]
+                )
+            row_value_check = exp.or_(*row_check_conditions)
+            unique_key_conditions = []
+            for col in unique_key:
+                t_col = col.copy()
+                if isinstance(col, exp.Column):
+                    t_col.this.set("this", f"t_{col.name}")
+                else:
+                    t_col.set("this", f"t_{col.name}")
+                unique_key_conditions.extend(
+                    [t_col.is_(exp.Null()).not_(), col.is_(exp.Null()).not_()]
+                )
+            unique_key_check = exp.and_(*unique_key_conditions)
+            # unique_key_check is saying "if the row is updated"
+            # row_value_check is saying "if the row has changed"
+            updated_row_filter = exp.and_(unique_key_check, row_value_check)
+            # updated_row_filter = f"{unique_key_check} AND ({row_value_check})"
+            # joined._exists IS NULL is saying "if the row is deleted"
+            valid_to_case_stmt = (
+                exp.Case()
+                .when(
+                    exp.or_(
+                        exp.column("_exists", "joined").is_(exp.Null()),
+                        updated_row_filter,
+                    ),
+                    execution_ts,
+                )
+                .else_(exp.to_column(f"t_{valid_to_name}"))
+                .as_(valid_to_name)
             )
-            row_value_check = " OR ".join(
-                [
-                    f"""
-                {col} != t_{col} 
-                OR (t_{col} IS NULL AND {col} IS NOT NULL) 
-                OR (t_{col} IS NOT NULL and {col} IS NULL)
-                """
-                    for col in check_columns
-                ]
-            )
-            unique_key_check = " AND ".join(
-                [f"t_{col} IS NOT NULL AND {col} IS NOT NULL" for col in unique_key]
-            )
-
-            valid_to_case_stmt = f"""
-            CASE 
-                WHEN joined._exists IS NULL OR ({unique_key_check} AND ({row_value_check}))
-                THEN {execution_ts}
-                ELSE t_{valid_to_name}
-            END AS {valid_to_name}
-            """
-            valid_from_case_stmt = (
-                f"""COALESCE(t_{valid_from_name}, {update_valid_from_start}) AS {valid_from_name}"""
-            )
+            valid_from_case_stmt = exp.func(
+                "COALESCE",
+                exp.column(f"t_{valid_from_name}"),
+                update_valid_from_start,
+            ).as_(valid_from_name)
         else:
-            updated_row_filter = f"{updated_at_name} > t_{updated_at_name}"
-            valid_to_case_stmt = f"""
-            CASE
-                WHEN {updated_at_name} > t_{updated_at_name}
-                THEN {updated_at_name}
-                WHEN joined._exists IS NULL
-                THEN {execution_ts}
-                ELSE t_{valid_to_name}
-            END AS {valid_to_name}"""
-            valid_from_case_stmt = f"""
-            CASE
-                WHEN t_{valid_from_name} IS NULL
-                     AND latest_deleted._exists IS NOT NULL
-                THEN CASE
-                        WHEN latest_deleted.{valid_to_name} > {updated_at_name}
-                        THEN latest_deleted.{valid_to_name}
-                        ELSE {updated_at_name}
-                     END
-                WHEN t_{valid_from_name} IS NULL
-                THEN {update_valid_from_start}
-                ELSE t_{valid_from_name}
-            END AS {valid_from_name}"""
+            assert updated_at_name is not None
+            updated_row_filter = exp.to_column(updated_at_name) > exp.to_column(
+                f"t_{updated_at_name}"
+            )
+            valid_to_case_stmt = (
+                exp.Case()
+                .when(updated_row_filter, exp.to_column(updated_at_name))
+                .when(exp.column("_exists", "joined").is_(exp.Null()), execution_ts)
+                .else_(exp.to_column(f"t_{valid_to_name}"))
+            ).as_(valid_to_name)
+            valid_from_case_stmt = (
+                exp.Case()
+                .when(
+                    exp.and_(
+                        exp.to_column(f"t_{valid_from_name}").is_(exp.Null()),
+                        exp.column("_exists", "latest_deleted").is_(exp.Null()).not_(),
+                    ),
+                    exp.Case()
+                    .when(
+                        exp.column(valid_to_name, "latest_deleted") > exp.column(updated_at_name),
+                        exp.column(valid_to_name, "latest_deleted"),
+                    )
+                    .else_(exp.column(updated_at_name)),
+                )
+                .when(
+                    exp.to_column(f"t_{valid_from_name}").is_(exp.Null()), update_valid_from_start
+                )
+                .else_(exp.to_column(f"t_{valid_from_name}"))
+            ).as_(valid_from_name)
         with source_queries[0] as source_query:
             query = (
                 exp.Select()  # type: ignore
