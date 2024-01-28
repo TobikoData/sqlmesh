@@ -85,7 +85,8 @@ setup(
             "psycopg2-binary",
             "pyarrow>=10.0.1,<10.1.0",
             "PyGithub",
-            "pytest",
+            # 8.0.0 broke compatability with lazy-fixture
+            "pytest<8.0.0",
             "pytest-asyncio<0.23.0",
             "pytest-lazy-fixture",
             "pytest-mock",
