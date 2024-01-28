@@ -80,13 +80,14 @@ class ModelKindMixin:
     @property
     def is_scd_type_2(self) -> bool:
         return self.model_kind_name in {
+            ModelKindName.SCD_TYPE_2,
             ModelKindName.SCD_TYPE_2_BY_TIME,
             ModelKindName.SCD_TYPE_2_BY_COLUMN,
         }
 
     @property
     def is_scd_type_2_by_time(self) -> bool:
-        return self.model_kind_name == ModelKindName.SCD_TYPE_2_BY_TIME
+        return self.model_kind_name in {ModelKindName.SCD_TYPE_2, ModelKindName.SCD_TYPE_2_BY_TIME}
 
     @property
     def is_scd_type_2_by_column(self) -> bool:
@@ -350,7 +351,9 @@ class _SCDType2Kind(_ModelKind):
 
 
 class SCDType2ByTimeKind(_SCDType2Kind):
-    name: Literal[ModelKindName.SCD_TYPE_2_BY_TIME] = ModelKindName.SCD_TYPE_2_BY_TIME
+    name: Literal[
+        ModelKindName.SCD_TYPE_2, ModelKindName.SCD_TYPE_2_BY_TIME
+    ] = ModelKindName.SCD_TYPE_2_BY_TIME
     updated_at_name: SQLGlotString = "updated_at"
     updated_at_as_valid_from: SQLGlotBool = False
 
@@ -426,10 +429,14 @@ def _model_kind_validator(cls: t.Type, v: t.Any, values: t.Dict[str, t.Any]) -> 
         if time_data_type:
             props["time_data_type"] = exp.DataType.build(time_data_type, dialect=dialect)
         name = v.this if isinstance(v, d.ModelKind) else props.get("name")
+        # We want to ensure whatever name is provided to construct the class is the same name that will be
+        # found inside the class itself. Ex: Pass in `SCD_TYPE_2` then we want to ensure we get `SCD_TYPE_2` as
+        # the kind name instead of `SCD_TYPE_2_BY_TIME`.
+        props["name"] = name
         return model_kind_type_from_name(name)(**props)
 
     name = (v.name if isinstance(v, exp.Expression) else str(v)).upper()
-    return model_kind_type_from_name(name)()  # type: ignore
+    return model_kind_type_from_name(name)(name=name)  # type: ignore
 
 
 model_kind_validator = field_validator("kind", mode="before")(_model_kind_validator)

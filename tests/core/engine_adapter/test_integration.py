@@ -1218,7 +1218,7 @@ def test_scd_type_2_by_time(ctx: TestContext):
     ctx.engine_adapter.scd_type_2_by_time(
         table,
         ctx.input_data(current_data, input_schema),
-        unique_key=[exp.to_identifier("id")],
+        unique_key=[exp.to_column("id")],
         valid_from_name="valid_from",
         valid_to_name="valid_to",
         updated_at_name="updated_at",
@@ -1302,7 +1302,7 @@ def test_scd_type_2_by_column(ctx: TestContext):
     ctx.engine_adapter.scd_type_2_by_column(
         table,
         ctx.input_data(input_data, input_schema),
-        unique_key=[exp.to_identifier("id")],
+        unique_key=[exp.to_column("id")],
         check_columns=[exp.to_column("name"), exp.to_column("status")],
         valid_from_name="valid_from",
         valid_to_name="valid_to",
@@ -1371,7 +1371,7 @@ def test_scd_type_2_by_column(ctx: TestContext):
     ctx.engine_adapter.scd_type_2_by_column(
         table,
         ctx.input_data(current_data, input_schema),
-        unique_key=[exp.to_identifier("id")],
+        unique_key=[exp.to_column("id")],
         check_columns=[exp.to_column("name"), exp.to_column("status")],
         valid_from_name="valid_from",
         valid_to_name="valid_to",
