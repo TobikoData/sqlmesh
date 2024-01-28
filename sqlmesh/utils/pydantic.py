@@ -23,7 +23,9 @@ if t.TYPE_CHECKING:
 
 T = t.TypeVar("T")
 DEFAULT_ARGS = {"exclude_none": True, "by_alias": True}
-PYDANTIC_MAJOR_VERSION = int(pydantic.__version__.split(".")[0])
+PYDANTIC_MAJOR_VERSION, PYDANTIC_MINOR_VERSION = [int(p) for p in pydantic.__version__.split(".")][
+    :2
+]
 
 
 if PYDANTIC_MAJOR_VERSION >= 2:
@@ -104,6 +106,8 @@ class PydanticModel(pydantic.BaseModel):
             underscore_attrs_are_private = True
             smart_union = True
             keep_untouched = (cached_property,)
+
+    _hash_func_mapping: t.ClassVar[t.Dict[t.Type[t.Any], t.Callable[[t.Any], int]]] = {}
 
     def dict(
         self,
@@ -190,6 +194,27 @@ class PydanticModel(pydantic.BaseModel):
             for field_name, field_info in cls.all_field_infos().items()  # type: ignore
             if predicate(field_info)
         }
+
+    def __eq__(self, other: t.Any) -> bool:
+        if (PYDANTIC_MAJOR_VERSION, PYDANTIC_MINOR_VERSION) < (2, 6):
+            if isinstance(other, pydantic.BaseModel):
+                return self.dict() == other.dict()
+            else:
+                return self.dict() == other
+        return super().__eq__(other)
+
+    def __hash__(self) -> int:
+        if (PYDANTIC_MAJOR_VERSION, PYDANTIC_MINOR_VERSION) < (2, 6):
+            obj = {k: v for k, v in self.__dict__.items() if k in self.all_field_infos()}
+            return hash(self.__class__) + hash(tuple(obj.values()))
+
+        from pydantic._internal._model_construction import (  # type: ignore
+            make_hash_func,
+        )
+
+        if self.__class__ not in PydanticModel._hash_func_mapping:
+            PydanticModel._hash_func_mapping[self.__class__] = make_hash_func(self.__class__)
+        return PydanticModel._hash_func_mapping[self.__class__](self)
 
     def __str__(self) -> str:
         args = []
