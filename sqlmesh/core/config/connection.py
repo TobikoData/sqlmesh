@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import abc
 import base64
+import logging
 import os
 import pathlib
 import sys
@@ -31,6 +32,9 @@ if sys.version_info >= (3, 9):
     from typing import Literal
 else:
     from typing_extensions import Literal
+
+
+logger = logging.getLogger(__name__)
 
 
 class ConnectionConfig(abc.ABC, BaseConfig):
@@ -122,6 +126,8 @@ class DuckDBConnectionConfig(ConnectionConfig):
 
     type_: Literal["duckdb"] = Field(alias="type", default="duckdb")
 
+    _data_file_to_adapter: t.ClassVar[t.Dict[str, EngineAdapter]] = {}
+
     @model_validator(mode="before")
     @model_validator_v1_args
     def _validate_database_catalogs(
@@ -181,6 +187,29 @@ class DuckDBConnectionConfig(ConnectionConfig):
                     cursor.execute(f'USE "{alias}"')
 
         return init
+
+    def create_engine_adapter(self, register_comments_override: bool = False) -> EngineAdapter:
+        """Checks if another engine adapter has already been created that shares a catalog that points to the same data
+        file. If so, it uses that same adapter instead of creating a new one. As a result, any additional configuration
+        associated with the new adapter will be ignored."""
+        data_files = set((self.catalogs or {}).values())
+        if self.database:
+            data_files.add(self.database)
+        data_files.discard(":memory:")
+        for data_file in data_files:
+            if adapter := DuckDBConnectionConfig._data_file_to_adapter.get(data_file):
+                logger.info(
+                    f"Using existing DuckDB adapter due to overlapping data file: {data_file}"
+                )
+                return adapter
+        if data_files:
+            logger.info(f"Creating new DuckDB adapter for data files: {data_files}")
+        else:
+            logger.info("Creating new DuckDB adapter for in-memory database")
+        adapter = super().create_engine_adapter(register_comments_override)
+        for data_file in data_files:
+            DuckDBConnectionConfig._data_file_to_adapter[data_file] = adapter
+        return adapter
 
     def get_catalog(self) -> t.Optional[str]:
         if self.database:
