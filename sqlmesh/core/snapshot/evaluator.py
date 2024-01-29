@@ -1055,7 +1055,6 @@ class MaterializableStrategy(PromotableStrategy):
         if model.annotated:
             self.adapter.create_table(
                 name,
-                exists=False,
                 columns_to_types=model.columns_to_types_or_raise,
                 storage_format=model.storage_format,
                 partitioned_by=model.partitioned_by,
@@ -1077,7 +1076,6 @@ class MaterializableStrategy(PromotableStrategy):
                 name,
                 ctas_query,
                 model.columns_to_types,
-                exists=False,
                 storage_format=model.storage_format,
                 partitioned_by=model.partitioned_by,
                 partition_interval_unit=model.interval_unit,
@@ -1233,7 +1231,6 @@ class SCDType2Strategy(MaterializableStrategy):
             columns_to_types[model.kind.updated_at_name] = model.kind.time_data_type
             self.adapter.create_table(
                 name,
-                exists=False,
                 columns_to_types=columns_to_types,
                 storage_format=model.storage_format,
                 partitioned_by=model.partitioned_by,
