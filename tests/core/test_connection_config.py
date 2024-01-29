@@ -366,3 +366,145 @@ def test_duckdb(make_config):
     )
     assert isinstance(config, DuckDBConnectionConfig)
     assert config._static_connection_kwargs == {"config": {"foo": "bar"}}
+
+
+@pytest.mark.parametrize(
+    "kwargs1, kwargs2, shared_adapter",
+    [
+        (
+            {
+                "database": "test.duckdb",
+            },
+            {
+                "database": "test.duckdb",
+            },
+            True,
+        ),
+        (
+            {},
+            {},
+            False,
+        ),
+        (
+            {
+                "database": "test1.duckdb",
+            },
+            {
+                "database": "test2.duckdb",
+            },
+            False,
+        ),
+        (
+            {
+                "database": ":memory:",
+            },
+            {
+                "database": ":memory:",
+            },
+            False,
+        ),
+        (
+            {
+                "database": ":memory:",
+            },
+            {
+                "database": "test.duckdb",
+            },
+            False,
+        ),
+        (
+            {
+                "catalogs": {
+                    "test": "test.duckdb",
+                }
+            },
+            {
+                "catalogs": {
+                    "test": "test.duckdb",
+                }
+            },
+            True,
+        ),
+        (
+            {
+                "catalogs": {
+                    "test": ":memory:",
+                }
+            },
+            {
+                "catalogs": {
+                    "test": ":memory:",
+                }
+            },
+            False,
+        ),
+        (
+            {
+                "catalogs": {
+                    "test1": ":memory:",
+                    "test2": "test2.duckdb",
+                }
+            },
+            {
+                "catalogs": {
+                    "test1": ":memory:",
+                    "test2": "test2.duckdb",
+                }
+            },
+            True,
+        ),
+        (
+            {
+                "catalogs": {
+                    "test1": ":memory:",
+                    "test2": "test2.duckdb",
+                }
+            },
+            {
+                "catalogs": {
+                    "test1": "test2.duckdb",
+                    "test2": ":memory:",
+                }
+            },
+            True,
+        ),
+        (
+            {
+                "catalogs": {
+                    "test1": "test1.duckdb",
+                    "test2": "test2.duckdb",
+                    "test3": "test3.duckdb",
+                }
+            },
+            {
+                "catalogs": {
+                    "test1": "test1_miss.duckdb",
+                    "test2": "test2_miss.duckdb",
+                    "test3": "test3.duckdb",
+                }
+            },
+            True,
+        ),
+    ],
+)
+def test_duckdb_shared(make_config, caplog, kwargs1, kwargs2, shared_adapter):
+    config1 = make_config(
+        type="duckdb",
+        **kwargs1,
+    )
+    config2 = make_config(
+        type="duckdb",
+        **kwargs2,
+    )
+    assert isinstance(config1, DuckDBConnectionConfig)
+    assert isinstance(config2, DuckDBConnectionConfig)
+    adapter1 = config1.create_engine_adapter()
+    adapter2 = config2.create_engine_adapter()
+    if shared_adapter:
+        assert id(adapter1) == id(adapter2)
+        assert "Creating new DuckDB adapter" in caplog.messages[0]
+        assert "Using existing DuckDB adapter" in caplog.messages[1]
+    else:
+        assert id(adapter1) != id(adapter2)
+        assert "Creating new DuckDB adapter" in caplog.messages[0]
+        assert "Creating new DuckDB adapter" in caplog.messages[1]
