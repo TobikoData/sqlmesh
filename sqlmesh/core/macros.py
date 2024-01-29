@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import inspect
 import typing as t
 from enum import Enum
 from functools import reduce, wraps
@@ -369,38 +370,31 @@ class macro(registry_decorator):
 
     registry_name = "macros"
 
-    def __init__(
-        self,
-        name: str = "",
-        arg_types: t.Optional[
-            t.Sequence[t.Union[t.Type[exp.Expression], t.Type[int], t.Type[float], t.Type[str]]]
-        ] = None,
-    ) -> None:
+    def __init__(self, name: str = "", coerce_args: bool = False) -> None:
         super().__init__(name)
-        self.arg_types = arg_types
+        self.coerce_args = coerce_args
 
     def __call__(
         self,
         func: t.Callable[..., DECORATOR_RETURN_TYPE],
     ) -> t.Callable[..., DECORATOR_RETURN_TYPE]:
         @wraps(func)
-        def _coerce_types(*args: t.Any, **kwargs: t.Any) -> DECORATOR_RETURN_TYPE:
-            if self.arg_types:
-                coerced_args = [args[0]]
-                for arg, arg_type in zip(args[1:], self.arg_types):
-                    if isinstance(arg, arg_type):
-                        coerced_args.append(arg)
-                    elif issubclass(arg_type, exp.Expression):
-                        coerced_args.append(parse_one(arg.sql(), into=arg_type))
-                    elif arg_type in (int, float, str) and isinstance(arg, exp.Literal):
-                        coerced_args.append(arg_type(arg.this))
-                    else:
-                        raise TypeError(f"Could not parse {arg} into {arg_type}")
+        def _typed_func(*args: t.Any, **kwargs: t.Any) -> DECORATOR_RETURN_TYPE:
+            spec = inspect.getfullargspec(func)
+            kwargs = inspect.getcallargs(func, *args, **kwargs)
+            for param, value in kwargs.items():
+                coercible_type = spec.annotations[param]
+                if isinstance(value, coercible_type):
+                    continue
+                elif issubclass(coercible_type, exp.Expression):
+                    kwargs[param] = parse_one(value.sql(), into=coercible_type)
+                elif coercible_type in (int, float, str) and isinstance(value, exp.Literal):
+                    kwargs[param] = coercible_type(value.this)
+                else:
+                    raise TypeError(f"Could not parse {value} into {coercible_type}")
+            return func(**kwargs)
 
-                args = tuple(coerced_args)
-            return func(*args, **kwargs)
-
-        wrapper = super().__call__(_coerce_types)
+        wrapper = super().__call__(_typed_func if self.coerce_args else func)
 
         # This is useful to identify macros at runtime
         setattr(wrapper, "__sqlmesh_macro__", True)
