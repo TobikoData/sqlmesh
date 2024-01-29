@@ -320,13 +320,16 @@ def plan(
     select_models = kwargs.pop("select_model") or None
     backfill_models = kwargs.pop("backfill_model") or None
     context.console.verbose = verbose
-    context.plan(
-        environment,
-        restate_models=restate_models,
-        select_models=select_models,
-        backfill_models=backfill_models,
-        **kwargs,
-    )
+    try:
+        context.plan(
+            environment,
+            restate_models=restate_models,
+            select_models=select_models,
+            backfill_models=backfill_models,
+            **kwargs,
+        )
+    finally:
+        context.close()
 
 
 @cli.command("run")
@@ -344,7 +347,10 @@ def plan(
 def run(ctx: click.Context, environment: t.Optional[str] = None, **kwargs: t.Any) -> None:
     """Evaluate missing intervals for the target environment."""
     context = ctx.obj
-    success = context.run(environment, **kwargs)
+    try:
+        success = context.run(environment, **kwargs)
+    finally:
+        context.close()
     if not success:
         raise click.ClickException("Run DAG Failed. See output for details.")
 
@@ -356,7 +362,10 @@ def run(ctx: click.Context, environment: t.Optional[str] = None, **kwargs: t.Any
 def invalidate(ctx: click.Context, environment: str) -> None:
     """Invalidate the target environment, forcing its removal during the next run of the janitor process."""
     context = ctx.obj
-    context.invalidate_environment(environment)
+    try:
+        context.invalidate_environment(environment)
+    finally:
+        context.close()
 
 
 @cli.command("dag")
@@ -550,7 +559,10 @@ def ui(
 @error_handler
 def migrate(ctx: click.Context) -> None:
     """Migrate SQLMesh to the current running version."""
-    ctx.obj.migrate()
+    try:
+        ctx.obj.migrate()
+    finally:
+        ctx.obj.close()
 
 
 @cli.command("rollback")
@@ -558,7 +570,10 @@ def migrate(ctx: click.Context) -> None:
 @error_handler
 def rollback(obj: Context) -> None:
     """Rollback SQLMesh to the previous migration."""
-    obj.rollback()
+    try:
+        obj.rollback()
+    finally:
+        obj.close()
 
 
 @cli.command("create_external_models")
