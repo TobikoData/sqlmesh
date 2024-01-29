@@ -16,6 +16,7 @@ from pytest_mock.plugin import MockerFixture
 from sqlglot import exp, maybe_parse, parse_one
 from sqlglot.helper import ensure_list
 
+from sqlmesh.core.config import DuckDBConnectionConfig
 from sqlmesh.core.context import Context
 from sqlmesh.core.engine_adapter.base import EngineAdapter
 from sqlmesh.core.macros import macro
@@ -174,6 +175,12 @@ def rescope_global_models(request):
     existing_registry = model.get_registry().copy()
     yield
     model.set_registry(existing_registry)
+
+
+@pytest.fixture(scope="function", autouse=True)
+def rescope_duckdb_classvar(request):
+    DuckDBConnectionConfig._data_file_to_adapter = {}
+    yield
 
 
 @pytest.fixture
