@@ -27,6 +27,15 @@ def macro_evaluator() -> MacroEvaluator:
     def noop(evaluator: MacroEvaluator):
         return None
 
+    @macro("add_ints", arg_types=(int, int))
+    def add_lits(evaluator: MacroEvaluator, x: int, y: int) -> int:
+        return x + y
+
+    @macro("prefix_db", arg_types=(exp.Table, str))
+    def prefix_db(evaluator: MacroEvaluator, table: exp.Table, prefix: str) -> exp.Table:
+        table.set("db", prefix + table.db)
+        return table
+
     return MacroEvaluator(
         "hive",
         {"test": Executable(name="test", payload=f"def test(_):\n    return 'test'")},
@@ -290,6 +299,16 @@ def test_ast_correctness(macro_evaluator):
         (
             """select @if('a' = 'b', c), d""",
             "SELECT d",
+            {},
+        ),
+        (
+            """@add_ints(50, '50')""",
+            "100",
+            {},
+        ),
+        (
+            """@prefix_db(my.schema.table, 'dev_')""",
+            "my.dev_schema.table",
             {},
         ),
     ],

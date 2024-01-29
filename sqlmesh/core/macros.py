@@ -2,12 +2,12 @@ from __future__ import annotations
 
 import typing as t
 from enum import Enum
-from functools import reduce
+from functools import reduce, wraps
 from string import Template
 
 import sqlglot
 from jinja2 import Environment
-from sqlglot import Generator, exp
+from sqlglot import Generator, exp, parse_one
 from sqlglot.executor.env import ENV
 from sqlglot.executor.python import Python
 from sqlglot.helper import csv, ensure_collection
@@ -369,10 +369,38 @@ class macro(registry_decorator):
 
     registry_name = "macros"
 
+    def __init__(
+        self,
+        name: str = "",
+        arg_types: t.Optional[
+            t.Sequence[t.Union[t.Type[exp.Expression], t.Type[int], t.Type[float], t.Type[str]]]
+        ] = None,
+    ) -> None:
+        super().__init__(name)
+        self.arg_types = arg_types
+
     def __call__(
-        self, func: t.Callable[..., DECORATOR_RETURN_TYPE]
+        self,
+        func: t.Callable[..., DECORATOR_RETURN_TYPE],
     ) -> t.Callable[..., DECORATOR_RETURN_TYPE]:
-        wrapper = super().__call__(func)
+        @wraps(func)
+        def _coerce_types(*args: t.Any, **kwargs: t.Any) -> DECORATOR_RETURN_TYPE:
+            if self.arg_types:
+                coerced_args = [args[0]]
+                for arg, arg_type in zip(args[1:], self.arg_types):
+                    if isinstance(arg, arg_type):
+                        coerced_args.append(arg)
+                    elif issubclass(arg_type, exp.Expression):
+                        coerced_args.append(parse_one(arg.sql(), into=arg_type))
+                    elif arg_type in (int, float, str) and isinstance(arg, exp.Literal):
+                        coerced_args.append(arg_type(arg.this))
+                    else:
+                        raise TypeError(f"Could not parse {arg} into {arg_type}")
+
+                args = tuple(coerced_args)
+            return func(*args, **kwargs)
+
+        wrapper = super().__call__(_coerce_types)
 
         # This is useful to identify macros at runtime
         setattr(wrapper, "__sqlmesh_macro__", True)
