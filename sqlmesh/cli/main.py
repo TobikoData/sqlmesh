@@ -550,10 +550,7 @@ def ui(
 @error_handler
 def migrate(ctx: click.Context) -> None:
     """Migrate SQLMesh to the current running version."""
-    try:
-        ctx.obj.migrate()
-    finally:
-        ctx.obj.close()
+    ctx.obj.migrate()
 
 
 @cli.command("rollback")
@@ -561,10 +558,7 @@ def migrate(ctx: click.Context) -> None:
 @error_handler
 def rollback(obj: Context) -> None:
     """Rollback SQLMesh to the previous migration."""
-    try:
-        obj.rollback()
-    finally:
-        obj.close()
+    obj.rollback()
 
 
 @cli.command("create_external_models")
