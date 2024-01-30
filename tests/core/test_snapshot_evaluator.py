@@ -523,8 +523,49 @@ def test_evaluate_incremental_unmanaged(
         )
 
 
-def test_create_object_exists(mocker: MockerFixture, adapter_mock, make_snapshot):
+def test_create_tables_exists(mocker: MockerFixture, adapter_mock, make_snapshot):
+    model = load_sql_based_model(
+        parse(  # type: ignore
+            """
+            MODEL (
+                name test_schema.test_model,
+                kind VIEW
+            );
 
+            SELECT a::int FROM tbl;
+            """
+        ),
+    )
+
+    snapshot = make_snapshot(model)
+    snapshot.categorize_as(SnapshotChangeCategory.BREAKING)
+
+    adapter_mock.get_data_objects.return_value = [
+        DataObject(
+            name=f"test_schema__test_model__{snapshot.version}__temp",
+            schema="sqlmesh__test_schema",
+            type=DataObjectType.VIEW,
+        ),
+        DataObject(
+            name=f"test_schema__test_model__{snapshot.version}",
+            schema="sqlmesh__test_schema",
+            type=DataObjectType.VIEW,
+        ),
+    ]
+    evaluator = SnapshotEvaluator(adapter_mock)
+
+    evaluator.create([snapshot], {})
+    adapter_mock.create_view.assert_not_called()
+    adapter_mock.get_data_objects.assert_called_once_with(
+        schema_("sqlmesh__test_schema"),
+        {
+            f"test_schema__test_model__{snapshot.version}__temp",
+            f"test_schema__test_model__{snapshot.version}",
+        },
+    )
+
+
+def test_create_only_dev_table_exists(mocker: MockerFixture, adapter_mock, make_snapshot):
     model = load_sql_based_model(
         parse(  # type: ignore
             """
@@ -551,9 +592,31 @@ def test_create_object_exists(mocker: MockerFixture, adapter_mock, make_snapshot
     evaluator = SnapshotEvaluator(adapter_mock)
 
     evaluator.create([snapshot], {})
-    adapter_mock.create_view.assert_not_called()
+
+    common_kwargs = dict(
+        materialized=False,
+        table_properties={},
+        table_description=None,
+    )
+    rendered_query = model.render_query()
+    adapter_mock.create_view.assert_has_calls(
+        [
+            call(
+                snapshot.table_name(False),
+                rendered_query,
+                column_descriptions=None,
+                **common_kwargs,
+            ),
+            call(snapshot.table_name(), rendered_query, column_descriptions={}, **common_kwargs),
+        ]
+    )
+
     adapter_mock.get_data_objects.assert_called_once_with(
-        schema_("sqlmesh__test_schema"), {f"test_schema__test_model__{snapshot.version}__temp"}
+        schema_("sqlmesh__test_schema"),
+        {
+            f"test_schema__test_model__{snapshot.version}__temp",
+            f"test_schema__test_model__{snapshot.version}",
+        },
     )
 
 
