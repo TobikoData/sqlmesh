@@ -9,6 +9,7 @@ from sqlglot import exp
 from sqlglot.lineage import Node, lineage
 
 from sqlmesh.core.context import Context
+from sqlmesh.core.dialect import normalize_model_name
 from sqlmesh.utils.errors import SQLMeshError
 from web.server.exceptions import ApiException
 from web.server.models import LineageColumn
@@ -29,7 +30,7 @@ def _get_table(node: Node, dialect: t.Optional[DialectType] = None) -> t.Optiona
         table = node.expression
 
     try:
-        return exp.table_name(table, identify=True, dialect=dialect)
+        return normalize_model_name(table, None, dialect=dialect)
     except sqlglot.errors.ParseError:
         # Cannot extract table from node. One reason this can happen is node is
         # '*' because a model selects * from an external model for which we do
