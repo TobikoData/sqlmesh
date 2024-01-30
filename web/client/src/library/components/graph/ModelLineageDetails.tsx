@@ -8,29 +8,15 @@ export default function ModelLineageDetails({
 }: {
   nodes: Node[]
 }): JSX.Element {
-  const {
-    models,
-    mainNode,
-    selectedNodes,
-    withImpacted,
-    withSecondary,
-    activeNodes,
-    connectedNodes,
-    highlightedNodes,
-  } = useLineageFlow()
+  const { models, mainNode, selectedNodes, withImpacted, connectedNodes } =
+    useLineageFlow()
 
   const model = isNil(mainNode) ? undefined : models.get(mainNode)
 
   const countSelected = selectedNodes.size
   const countImpact = connectedNodes.size - 1
-  const countSecondary = nodes.filter(n =>
-    isFalse(connectedNodes.has(n.id)),
-  ).length
-  const countActive =
-    activeNodes.size > 0 ? activeNodes.size : connectedNodes.size
   const countHidden = nodes.filter(n => n.hidden).length
-  const countVisible = nodes.filter(n => isFalse(n.hidden)).length
-  const countDataSources = nodes.filter(
+  const countSources = nodes.filter(
     n =>
       isFalse(n.hidden) &&
       (n.data.type === EnumLineageNodeModelType.external ||
@@ -39,7 +25,6 @@ export default function ModelLineageDetails({
   const countCTEs = nodes.filter(
     n => isFalse(n.hidden) && n.data.type === EnumLineageNodeModelType.cte,
   ).length
-
   return (
     <>
       {isNotNil(model) && (
@@ -50,47 +35,36 @@ export default function ModelLineageDetails({
           {truncate(model.displayName, 50, 25)}
         </span>
       )}
-      {isNotNil(highlightedNodes) ?? (
+      <span className="mr-2 whitespace-nowrap block">
+        <b>All:</b> {nodes.length}
+      </span>
+      {countSources > 0 && (
         <span className="mr-2 whitespace-nowrap block">
-          <b>Highlighted:</b> {Object.keys(highlightedNodes ?? {}).length}
-        </span>
-      )}
-      {countSelected > 0 && (
-        <span className="mr-2 whitespace-nowrap block">
-          <b>Selected:</b> {countSelected}
+          <b>Sources</b>: {countSources}
         </span>
       )}
       {withImpacted && countSelected === 0 && countImpact > 0 && (
         <span className="mr-2 whitespace-nowrap block">
-          <b>Impact:</b> {countImpact}
-        </span>
-      )}
-      {withSecondary && countSelected === 0 && countSecondary > 0 && (
-        <span className="mr-2 whitespace-nowrap block">
-          <b>Secondary:</b> {countSecondary}
-        </span>
-      )}
-      <span className="mr-2 whitespace-nowrap block">
-        <b>Active:</b> {countActive}
-      </span>
-      {countVisible > 0 && countVisible !== countActive && (
-        <span className="mr-2 whitespace-nowrap block">
-          <b>Visible:</b> {countVisible}
-        </span>
-      )}
-      {countHidden > 0 && (
-        <span className="mr-2 whitespace-nowrap block">
-          <b>Hidden:</b> {countHidden}
-        </span>
-      )}
-      {countDataSources > 0 && (
-        <span className="mr-2 whitespace-nowrap block">
-          <b>Data Sources</b>: {countDataSources}
+          <b>Upstream/Downstream:</b> {countImpact}
         </span>
       )}
       {countCTEs > 0 && (
         <span className="mr-2 whitespace-nowrap block">
           <b>CTEs:</b> {countCTEs}
+        </span>
+      )}
+      {(countSelected > 0 || countHidden > 0) && (
+        <span className="bg-neutral-5 px-2 py-0.5 flex rounded-full">
+          {countHidden > 0 && (
+            <span className="mr-2 whitespace-nowrap block">
+              <b>Hidden:</b> {countHidden}
+            </span>
+          )}
+          {countSelected > 0 && (
+            <span className="whitespace-nowrap block">
+              <b>Selected:</b> {countSelected}
+            </span>
+          )}
         </span>
       )}
     </>

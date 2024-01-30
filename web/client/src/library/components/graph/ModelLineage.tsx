@@ -2,6 +2,7 @@ import { useApiModelLineage } from '@api/index'
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { type ModelSQLMeshModel } from '@models/sqlmesh-model'
 import { type HighlightedNodes, useLineageFlow } from './context'
+import { ChevronDownIcon } from '@heroicons/react/24/solid'
 import ReactFlow, {
   Controls,
   Background,
@@ -418,6 +419,10 @@ function GraphControls({ nodes = [] }: { nodes: Node[] }): JSX.Element {
             className="flex items-center relative w-full cursor-pointer bg-primary-10 text-xs rounded-full text-primary-500 py-1 px-3 text-center focus:outline-none focus-visible:border-accent-500 focus-visible:ring-2 focus-visible:ring-light focus-visible:ring-opacity-75 focus-visible:ring-offset-2 focus-visible:ring-offset-brand-300 border-1 border-transparent"
           >
             Details
+            <ChevronDownIcon
+              className="ml-2 h-4 w-4"
+              aria-hidden="true"
+            />
           </Popover.Button>
           <Popover.Panel className="absolute left-2 right-2 flex-col z-50 mt-8 transform flex px-4 py-3 bg-theme-lighter shadow-xl focus:ring-2 ring-opacity-5 rounded-lg">
             <ModelLineageDetails nodes={nodes} />
@@ -438,7 +443,7 @@ function GraphControls({ nodes = [] }: { nodes: Node[] }): JSX.Element {
                 : setWithColumns,
             Connected: activeNodes.size > 0 ? undefined : setWithConnected,
             Impact: activeNodes.size > 0 ? undefined : setWithImpacted,
-            Secondary: activeNodes.size > 0 ? undefined : setWithSecondary,
+            All: activeNodes.size > 0 ? undefined : setWithSecondary,
           }}
           value={
             [
@@ -446,7 +451,7 @@ function GraphControls({ nodes = [] }: { nodes: Node[] }): JSX.Element {
               hasBackground && 'Background',
               withConnected && 'Connected',
               withImpacted && 'Impact',
-              withSecondary && 'Secondary',
+              withSecondary && 'All',
             ].filter(Boolean) as string[]
           }
         />
