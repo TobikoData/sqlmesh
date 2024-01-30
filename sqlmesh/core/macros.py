@@ -383,7 +383,11 @@ class macro(registry_decorator):
             spec = inspect.getfullargspec(func)
             kwargs = inspect.getcallargs(func, *args, **kwargs)
             for param, value in kwargs.items():
-                coercible_type = spec.annotations[param]
+                coercible_type = spec.annotations.get(param)
+                if coercible_type is None:
+                    raise TypeError(
+                        f"Macro argument '{param}' must have a type annotation if `coerce_args=True`."
+                    )
                 if isinstance(value, coercible_type):
                     continue
                 elif issubclass(coercible_type, exp.Expression):
