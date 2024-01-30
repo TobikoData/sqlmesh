@@ -304,6 +304,7 @@ class SlackApiNotificationTarget(BaseSlackNotificationTarget):
             raise ConfigError("Missing Slack channel for notification")
 
         self.client.chat_postMessage(
+            channel=self.channel,
             blocks=composed["blocks"],
             attachments=composed["attachments"],  # type: ignore
         )
