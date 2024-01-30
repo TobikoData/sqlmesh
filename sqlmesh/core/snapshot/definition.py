@@ -5,7 +5,7 @@ import typing as t
 from collections import defaultdict
 from datetime import datetime, timedelta
 from enum import IntEnum
-from functools import lru_cache
+from functools import cached_property, lru_cache
 
 from pydantic import Field
 from sqlglot import exp
@@ -258,7 +258,7 @@ class SnapshotInfoMixin(ModelKindMixin):
     def is_new_version(self) -> bool:
         raise NotImplementedError
 
-    @property
+    @cached_property
     def fully_qualified_table(self) -> t.Optional[exp.Table]:
         raise NotImplementedError
 
@@ -351,8 +351,6 @@ class SnapshotTableInfo(PydanticModel, SnapshotInfoMixin, frozen=True):
     # This can be removed from this model once Pydantic 1 support is dropped (must remain in `Snapshot` though)
     base_table_name_override: t.Optional[str] = None
 
-    _fully_qualified_table: t.Optional[exp.Table] = None
-
     def __lt__(self, other: SnapshotTableInfo) -> bool:
         return self.name < other.name
 
@@ -368,11 +366,9 @@ class SnapshotTableInfo(PydanticModel, SnapshotInfoMixin, frozen=True):
     def physical_schema(self) -> str:
         return self.physical_schema_
 
-    @property
+    @cached_property
     def fully_qualified_table(self) -> exp.Table:
-        if not self._fully_qualified_table:
-            self._fully_qualified_table = exp.to_table(self.name)
-        return self._fully_qualified_table
+        return exp.to_table(self.name)
 
     @property
     def table_info(self) -> SnapshotTableInfo:
@@ -1030,7 +1026,7 @@ class Snapshot(PydanticModel, SnapshotInfoMixin):
         """Is restatement disabled for the node"""
         return self.is_model and self.model.disable_restatement
 
-    @property
+    @cached_property
     def fully_qualified_table(self) -> t.Optional[exp.Table]:
         if not self.is_model:
             return None
