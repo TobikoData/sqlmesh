@@ -1376,6 +1376,24 @@ def test_sushi(ctx: TestContext):
     start = to_date(now() - timedelta(days=7))
     end = now()
 
+    # Databricks requires the table property `delta.columnMapping.mode = 'name'` for
+    # spaces in column names. Other engines error if it is set in the model definition,
+    # so we set it here.
+    if ctx.dialect == "databricks":
+        cust_rev_by_day_key = [key for key in context._models if "customer_revenue_by_day" in key][
+            0
+        ]
+
+        cust_rev_by_day_model_tbl_props = context._models[cust_rev_by_day_key].copy(
+            update={
+                "table_properties": {
+                    "delta.columnMapping.mode": exp.Literal(this="name", is_string=True)
+                }
+            }
+        )
+
+        context._models.update({cust_rev_by_day_key: cust_rev_by_day_model_tbl_props})
+
     context.plan(
         environment="test_prod",
         start=start,
