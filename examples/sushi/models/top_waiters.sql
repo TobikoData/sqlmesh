@@ -3,7 +3,7 @@ MODEL (
   name sushi.top_waiters,
   owner jen,
   audits (
-    unique_values(columns=[waiter_id])
+    unique_values(columns=(waiter_id))
   ),
   grain waiter_id
 );

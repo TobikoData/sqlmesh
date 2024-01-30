@@ -7,8 +7,8 @@ MODEL (
   owner jen,
   cron '@daily',
   audits (
-    not_null(columns = [waiter_id]),
-    forall(criteria = [LENGTH(waiter_name) > 0])
+    not_null(columns = (waiter_id)),
+    forall(criteria = (LENGTH(waiter_name) > 0))
   )
 );
 

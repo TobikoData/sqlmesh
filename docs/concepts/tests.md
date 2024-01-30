@@ -68,7 +68,7 @@ MODEL (
   kind FULL,
   cron '@daily',
   grain item_id,
-  audits [assert_positive_order_ids],
+  audits (assert_positive_order_ids),
 );
 
 SELECT
@@ -199,7 +199,7 @@ MODEL (
     ),
     start '2020-01-01',
     cron '@daily',
-    grain [id, ds]
+    grain (id, ds)
 );
 
 SELECT

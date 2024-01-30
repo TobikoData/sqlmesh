@@ -18,7 +18,7 @@ MODEL (
     revenue DOUBLE,
     event_date DATE
   ),
-  grain [customer_id, event_date],
+  grain (customer_id, event_date),
 );
 
 WITH order_total AS (
