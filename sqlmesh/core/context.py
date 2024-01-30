@@ -740,7 +740,9 @@ class Context(BaseContext):
 
         return df
 
-    def format(self, transpile: t.Optional[str] = None, newline: bool = False) -> None:
+    def format(
+        self, transpile: t.Optional[str] = None, newline: bool = False, **kwargs: t.Any
+    ) -> None:
         """Format all SQL models."""
         for model in self._models.values():
             if not model._path.suffix == ".sql":
@@ -759,7 +761,9 @@ class Context(BaseContext):
                                 )
                             )
                 file.seek(0)
-                file.write(format_model_expressions(expressions, transpile or model.dialect))
+                file.write(
+                    format_model_expressions(expressions, transpile or model.dialect, **kwargs)
+                )
                 if newline:
                     file.write("\n")
                 file.truncate()

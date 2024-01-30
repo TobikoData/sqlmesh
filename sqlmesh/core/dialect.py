@@ -132,7 +132,6 @@ def _parse_id_var(
     any_token: bool = True,
     tokens: t.Optional[t.Collection[TokenType]] = None,
 ) -> t.Optional[exp.Expression]:
-
     if self._prev and self._prev.text == SQLMESH_MACRO_PREFIX and self._match(TokenType.L_BRACE):
         identifier = self.__parse_id_var(any_token=any_token, tokens=tokens)  # type: ignore
         if not self._match(TokenType.R_BRACE):
@@ -505,13 +504,14 @@ def _override(klass: t.Type[Tokenizer | Parser], func: t.Callable) -> None:
 
 
 def format_model_expressions(
-    expressions: t.List[exp.Expression], dialect: t.Optional[str] = None
+    expressions: t.List[exp.Expression], dialect: t.Optional[str] = None, **kwargs: t.Any
 ) -> str:
     """Format a model's expressions into a standardized format.
 
     Args:
         expressions: The model's expressions, must be at least model def + query.
         dialect: The dialect to render the expressions as.
+        **kwargs: Additional keyword arguments to pass to the sql generator.
 
     Returns:
         A string representing the formatted model.
@@ -538,8 +538,8 @@ def format_model_expressions(
 
     return ";\n\n".join(
         [
-            *(statement.sql(pretty=True, dialect=dialect) for statement in statements),
-            query.sql(pretty=True, dialect=dialect),
+            *(statement.sql(pretty=True, dialect=dialect, **kwargs) for statement in statements),
+            query.sql(pretty=True, dialect=dialect, **kwargs),
         ]
     ).strip()
 
