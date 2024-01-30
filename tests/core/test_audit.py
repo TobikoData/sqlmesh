@@ -37,6 +37,7 @@ def model_default_catalog() -> Model:
 def test_load(assert_exp_eq):
     expressions = parse(
         """
+        -- Audit comment
         Audit (
             name my_audit,
             dialect spark,

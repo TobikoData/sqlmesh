@@ -485,8 +485,6 @@ def load_audit(
         raise
 
     meta_fields = {p.name: p.args.get("value") for p in meta.expressions if p}
-    if meta.comments:
-        meta_fields["description"] = "\n".join(comment.strip() for comment in meta.comments)
 
     standalone_field = meta_fields.pop("standalone", None)
     if standalone_field and not isinstance(standalone_field, exp.Boolean):
