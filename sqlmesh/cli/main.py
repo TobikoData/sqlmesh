@@ -320,16 +320,13 @@ def plan(
     select_models = kwargs.pop("select_model") or None
     backfill_models = kwargs.pop("backfill_model") or None
     context.console.verbose = verbose
-    try:
-        context.plan(
-            environment,
-            restate_models=restate_models,
-            select_models=select_models,
-            backfill_models=backfill_models,
-            **kwargs,
-        )
-    finally:
-        context.close()
+    context.plan(
+        environment,
+        restate_models=restate_models,
+        select_models=select_models,
+        backfill_models=backfill_models,
+        **kwargs,
+    )
 
 
 @cli.command("run")
@@ -347,10 +344,7 @@ def plan(
 def run(ctx: click.Context, environment: t.Optional[str] = None, **kwargs: t.Any) -> None:
     """Evaluate missing intervals for the target environment."""
     context = ctx.obj
-    try:
-        success = context.run(environment, **kwargs)
-    finally:
-        context.close()
+    success = context.run(environment, **kwargs)
     if not success:
         raise click.ClickException("Run DAG Failed. See output for details.")
 
@@ -362,10 +356,7 @@ def run(ctx: click.Context, environment: t.Optional[str] = None, **kwargs: t.Any
 def invalidate(ctx: click.Context, environment: str) -> None:
     """Invalidate the target environment, forcing its removal during the next run of the janitor process."""
     context = ctx.obj
-    try:
-        context.invalidate_environment(environment)
-    finally:
-        context.close()
+    context.invalidate_environment(environment)
 
 
 @cli.command("dag")
