@@ -38,7 +38,7 @@ export default function ModelLineageSearch({
       className={clsx(
         'w-full',
         showSearchInput
-          ? 'block absolute left-0 right-0 z-10 pr-10 bg-dark'
+          ? 'block absolute top-0 left-0 right-0 z-10 pr-10 bg-light dark:bg-dark @[40rem]:items-end @[40rem]:justify-end @[40rem]:flex @[40rem]:static @[40rem]:pr-0'
           : 'items-end justify-end flex',
       )}
     >
