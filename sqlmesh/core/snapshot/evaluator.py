@@ -232,14 +232,17 @@ class SnapshotEvaluator:
             deployability_index: Determines snapshots that are deployable in the context of this creation.
             on_complete: A callback to call on each successfully created snapshot.
         """
-        snapshots_with_table_names: t.List[t.Tuple[Snapshot, str]] = []
+        snapshots_with_table_names = defaultdict(set)
         tables_by_schema = defaultdict(set)
         for snapshot in target_snapshots:
             if not snapshot.is_model or snapshot.is_symbolic:
                 continue
-            table = exp.to_table(snapshot.table_name(False), dialect=snapshot.model.dialect)
-            snapshots_with_table_names.append((snapshot, table.name))
-            tables_by_schema[d.schema_(table.db, catalog=table.catalog)].add(table.name)
+            for is_deployable in (True, False):
+                table = exp.to_table(
+                    snapshot.table_name(is_deployable), dialect=snapshot.model.dialect
+                )
+                snapshots_with_table_names[snapshot].add(table.name)
+                tables_by_schema[d.schema_(table.db, catalog=table.catalog)].add(table.name)
 
         existing_objects: t.Set[str] = set()
         for schema, object_names in tables_by_schema.items():
@@ -248,8 +251,8 @@ class SnapshotEvaluator:
             existing_objects.update(obj.name for obj in objs)
 
         snapshots_to_create = []
-        for snapshot, table_name in snapshots_with_table_names:
-            if table_name not in existing_objects:
+        for snapshot, table_names in snapshots_with_table_names.items():
+            if table_names - existing_objects:
                 snapshots_to_create.append(snapshot)
             elif on_complete:
                 on_complete(snapshot)
