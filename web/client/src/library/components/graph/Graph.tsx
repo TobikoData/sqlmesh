@@ -234,6 +234,7 @@ const ModelNodeHeaderHandles = memo(function ModelNodeHeaderHandles({
   hasRight = false,
   isSelected = false,
   isDraggable = false,
+  hasSelectedColumns = false,
   label,
   type,
   count,
@@ -249,6 +250,7 @@ const ModelNodeHeaderHandles = memo(function ModelNodeHeaderHandles({
   className?: string
   isSelected?: boolean
   isDraggable?: boolean
+  hasSelectedColumns?: boolean
   handleClick?: (e: MouseEvent) => void
   handleSelect?: (e: MouseEvent) => void
 }): JSX.Element {
@@ -260,6 +262,7 @@ const ModelNodeHeaderHandles = memo(function ModelNodeHeaderHandles({
           id={toID(EnumSide.Left, id)}
           position={Position.Left}
           isConnectable={false}
+          hidden={hasSelectedColumns}
           className="!bg-transparent -ml-2 text-neutral-100 border border-secondary-500 rounded-full overflow-hidden "
         >
           <ArrowRightCircleIcon className="w-5 bg-secondary-500 dark:bg-primary-900 text-secondary-100" />
@@ -318,6 +321,7 @@ const ModelNodeHeaderHandles = memo(function ModelNodeHeaderHandles({
           id={toID(EnumSide.Right, id)}
           position={Position.Right}
           isConnectable={false}
+          hidden={hasSelectedColumns}
           className="!bg-transparent -mr-2 text-neutral-100 border border-secondary-500 rounded-full overflow-hidden"
         >
           <ArrowRightCircleIcon className="w-5 bg-secondary-500 dark:bg-primary-900 text-secondary-100" />

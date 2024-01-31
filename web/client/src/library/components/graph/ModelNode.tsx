@@ -167,11 +167,12 @@ export default function ModelNode({
           isCTE
             ? 'bg-accent-500'
             : isMainNode
-            ? 'bg-brand-500 text-brand-100 font-black'
-            : 'bg-secondary-100 dark:bg-primary-900',
+              ? 'bg-brand-500 text-brand-100 font-black'
+              : 'bg-secondary-100 dark:bg-primary-900',
         )}
         hasLeft={targetPosition === Position.Left}
         hasRight={sourcePosition === Position.Right}
+        hasSelectedColumns={hasSelectedColumns}
         handleClick={isInteractive ? handleClick : undefined}
         handleSelect={
           mainNode === id || isCTE || highlightedNodeModels.includes(id)
@@ -197,8 +198,8 @@ export default function ModelNode({
               isCTE
                 ? 'bg-accent-500'
                 : isMainNode
-                ? 'bg-brand-500'
-                : 'bg-secondary-100 dark:bg-primary-900',
+                  ? 'bg-brand-500'
+                  : 'bg-secondary-100 dark:bg-primary-900',
             )}
           ></div>
         </>

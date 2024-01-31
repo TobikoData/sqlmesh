@@ -64,7 +64,7 @@ export default function ModelLineage({
     cancel,
   } = useApiModelLineage(model.name)
 
-  const [isMegringModels, setIsMergingModels] = useState(false)
+  const [isMergingModels, setIsMergingModels] = useState(false)
 
   useEffect(() => {
     const lineageWorker = createLineageWorker()
@@ -133,7 +133,7 @@ export default function ModelLineage({
 
   return (
     <div className="relative h-full w-full">
-      {(isFetching || isMegringModels) && (
+      {(isFetching || isMergingModels) && (
         <div className="absolute top-0 left-0 z-10 w-full h-full bg-theme flex justify-center items-center">
           <Loading className="inline-block">
             <Spinner className="w-3 h-3 border border-neutral-10 mr-4" />
