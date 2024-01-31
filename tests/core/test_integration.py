@@ -828,7 +828,7 @@ def test_select_models(init_and_plan_context: t.Callable):
 
     # Select one of the modified models.
     plan_builder = context.plan_builder(
-        "dev", select_models=["*waiter_revenue_by_day"], skip_tests=True
+        "dev", select_models=["+*waiter_revenue_by_day"], skip_tests=True
     )
     snapshot = plan_builder._context_diff.snapshots[waiter_revenue_by_day_snapshot_id]
     plan_builder.set_choice(snapshot, SnapshotChangeCategory.BREAKING)
