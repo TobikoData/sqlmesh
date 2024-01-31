@@ -15,6 +15,8 @@ from sqlmesh.utils.errors import ConfigError
 from sqlmesh.utils.pydantic import (
     PydanticModel,
     SQLGlotBool,
+    SQLGlotListOfColumns,
+    SQLGlotListOfColumnsOrStar,
     SQLGlotListOfExpressions,
     SQLGlotPositiveInt,
     SQLGlotString,
@@ -334,7 +336,7 @@ class FullKind(_ModelKind):
 
 
 class _SCDType2Kind(_ModelKind):
-    unique_key: SQLGlotListOfExpressions
+    unique_key: SQLGlotListOfColumns
     valid_from_name: SQLGlotString = "valid_from"
     valid_to_name: SQLGlotString = "valid_to"
     time_data_type: exp.DataType = exp.DataType.build("TIMESTAMP")
@@ -360,7 +362,7 @@ class SCDType2ByTimeKind(_SCDType2Kind):
 
 class SCDType2ByColumnKind(_SCDType2Kind):
     name: Literal[ModelKindName.SCD_TYPE_2_BY_COLUMN] = ModelKindName.SCD_TYPE_2_BY_COLUMN
-    columns: SQLGlotListOfExpressions
+    columns: SQLGlotListOfColumnsOrStar
     execution_time_as_valid_from: SQLGlotBool = False
 
 

@@ -1218,11 +1218,11 @@ class EngineAdapter:
         self,
         target_table: TableName,
         source_table: QueryOrDF,
-        unique_key: t.Sequence[exp.Expression],
+        unique_key: t.Sequence[exp.Column],
         valid_from_name: str,
         valid_to_name: str,
         execution_time: TimeLike,
-        check_columns: t.Sequence[exp.Expression],
+        check_columns: t.Union[exp.Star, t.Sequence[exp.Column]],
         execution_time_as_valid_from: bool = False,
         columns_to_types: t.Optional[t.Dict[str, exp.DataType]] = None,
         table_description: t.Optional[str] = None,
@@ -1247,12 +1247,12 @@ class EngineAdapter:
         self,
         target_table: TableName,
         source_table: QueryOrDF,
-        unique_key: t.Sequence[exp.Expression],
+        unique_key: t.Union[t.Sequence[exp.Expression], t.Sequence[exp.Column]],
         valid_from_name: str,
         valid_to_name: str,
         execution_time: TimeLike,
         updated_at_name: t.Optional[str] = None,
-        check_columns: t.Optional[t.Sequence[exp.Expression]] = None,
+        check_columns: t.Optional[t.Union[exp.Star, t.Sequence[exp.Column]]] = None,
         updated_at_as_valid_from: bool = False,
         execution_time_as_valid_from: bool = False,
         columns_to_types: t.Optional[t.Dict[str, exp.DataType]] = None,
@@ -1303,7 +1303,7 @@ class EngineAdapter:
         # they are equal or not, the extra check is not a problem and we gain simplified logic here.
         # If we want to change this, then we just need to check the expressions in unique_key and pull out the
         # column names and then remove them from the unmanaged_columns
-        if check_columns and check_columns[0] == exp.Star():
+        if check_columns and check_columns == exp.Star():
             check_columns = [exp.to_column(col) for col in unmanaged_columns]
         execution_ts = self._to_utc_timestamp(to_ts(execution_time), time_data_type)
         update_valid_from_start: t.Union[str, exp.Expression]
@@ -1323,7 +1323,7 @@ class EngineAdapter:
         if check_columns:
             row_check_conditions = []
             for col in check_columns:
-                t_col = exp.to_column(col.copy())
+                t_col = col.copy()
                 t_col.this.set("this", f"t_{col.name}")
                 row_check_conditions.extend(
                     [
@@ -1335,7 +1335,7 @@ class EngineAdapter:
             row_value_check = exp.or_(*row_check_conditions)
             unique_key_conditions = []
             for col in unique_key:
-                t_col = exp.to_column(col.copy())
+                t_col = col.copy()
                 t_col.this.set("this", f"t_{col.name}")
                 unique_key_conditions.extend(
                     [t_col.is_(exp.Null()).not_(), col.is_(exp.Null()).not_()]

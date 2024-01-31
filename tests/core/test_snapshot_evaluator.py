@@ -1393,7 +1393,7 @@ def test_insert_into_scd_type_2_by_column(adapter_mock, make_snapshot):
             "valid_to": exp.DataType.build("TIMESTAMP"),
         },
         unique_key=[exp.to_column("id")],
-        check_columns=[exp.Star()],
+        check_columns=exp.Star(),
         valid_from_name="valid_from",
         valid_to_name="valid_to",
         start="2020-01-01",

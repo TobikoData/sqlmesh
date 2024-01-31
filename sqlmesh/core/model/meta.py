@@ -287,9 +287,14 @@ class ModelMeta(_Node):
 
     @property
     def unique_key(self) -> t.List[exp.Expression]:
-        if isinstance(
-            self.kind, (IncrementalByUniqueKeyKind, SCDType2ByTimeKind, SCDType2ByColumnKind)
-        ):
+        if isinstance(self.kind, IncrementalByUniqueKeyKind):
+            return self.kind.unique_key
+        return []
+
+    @property
+    def unique_key_columns(self) -> t.List[exp.Column]:
+        if self.kind.is_scd_type_2:
+            assert isinstance(self.kind, (SCDType2ByTimeKind, SCDType2ByColumnKind))
             return self.kind.unique_key
         return []
 

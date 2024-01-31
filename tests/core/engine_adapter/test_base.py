@@ -1538,7 +1538,7 @@ def test_scd_type_2_by_column_star_check(make_mocked_engine_adapter: t.Callable)
         unique_key=[exp.column("id")],
         valid_from_name="test_valid_from",
         valid_to_name="test_valid_to",
-        check_columns=[exp.Star()],
+        check_columns=exp.Star(),
         columns_to_types={
             "id": exp.DataType.build("INT"),
             "name": exp.DataType.build("VARCHAR"),

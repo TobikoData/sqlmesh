@@ -1281,7 +1281,7 @@ class SCDType2Strategy(MaterializableStrategy):
             self.adapter.scd_type_2_by_time(
                 target_table=name,
                 source_table=query_or_df,
-                unique_key=model.unique_key,
+                unique_key=model.unique_key_columns,
                 valid_from_name=model.kind.valid_from_name,
                 valid_to_name=model.kind.valid_to_name,
                 updated_at_name=model.kind.updated_at_name,
@@ -1296,7 +1296,7 @@ class SCDType2Strategy(MaterializableStrategy):
             self.adapter.scd_type_2_by_column(
                 target_table=name,
                 source_table=query_or_df,
-                unique_key=model.unique_key,
+                unique_key=model.unique_key_columns,
                 valid_from_name=model.kind.valid_from_name,
                 valid_to_name=model.kind.valid_to_name,
                 check_columns=model.kind.columns,
@@ -1326,7 +1326,7 @@ class SCDType2Strategy(MaterializableStrategy):
             self.adapter.scd_type_2_by_time(
                 target_table=table_name,
                 source_table=query_or_df,
-                unique_key=model.unique_key,
+                unique_key=model.unique_key_columns,
                 valid_from_name=model.kind.valid_from_name,
                 valid_to_name=model.kind.valid_to_name,
                 updated_at_name=model.kind.updated_at_name,
@@ -1341,7 +1341,7 @@ class SCDType2Strategy(MaterializableStrategy):
             self.adapter.scd_type_2_by_column(
                 target_table=table_name,
                 source_table=query_or_df,
-                unique_key=model.unique_key,
+                unique_key=model.unique_key_columns,
                 valid_from_name=model.kind.valid_from_name,
                 valid_to_name=model.kind.valid_to_name,
                 check_columns=model.kind.columns,
