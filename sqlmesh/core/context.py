@@ -760,7 +760,7 @@ class Context(BaseContext):
                                     value=exp.Literal.string(transpile or model.dialect),
                                 )
                             )
-                format_options = self.config_for_node(model).format_options.copy(update=kwargs)
+                format_options = self.config_for_node(model).format.copy(update=kwargs)
                 file.seek(0)
                 file.write(
                     format_model_expressions(

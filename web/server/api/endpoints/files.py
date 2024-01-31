@@ -78,10 +78,8 @@ async def write_file(
             dialect = model.dialect if model and model.is_sql else default_dialect
             try:
                 expressions = parse(content, default_dialect=default_dialect)
-                content = format_model_expressions(
-                    expressions, dialect, **config.format_options.dict()
-                )
-                if config.format_options.append_newline:
+                content = format_model_expressions(expressions, dialect, **config.format.dict())
+                if config.format.append_newline:
                     content += "\n"
                 format_file_status.status = models.Status.SUCCESS
             except Exception:
