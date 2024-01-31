@@ -16,3 +16,9 @@ def test_columns_to_types_all_known() -> None:
         )
         == False
     )
+    assert (
+        columns_to_types_all_known(
+            {"a": expressions.DataType.build("NULL"), "b": expressions.DataType.build("INT")}
+        )
+        == False
+    )
