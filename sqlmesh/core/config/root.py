@@ -23,7 +23,7 @@ from sqlmesh.core.config.gateway import GatewayConfig
 from sqlmesh.core.config.model import ModelDefaultsConfig
 from sqlmesh.core.config.run import RunConfig
 from sqlmesh.core.config.scheduler import BuiltInSchedulerConfig, SchedulerConfig
-from sqlmesh.core.config.ui import UIConfig
+from sqlmesh.core.config.ui import FormatOptions, UIConfig
 from sqlmesh.core.loader import Loader, SqlMeshLoader
 from sqlmesh.core.notification_target import NotificationTarget
 from sqlmesh.core.user import User
@@ -65,6 +65,8 @@ class Config(BaseConfig):
         environment_suffix_target: Indicates whether to append the environment name to the schema or table name.
         default_target_environment: The name of the environment that will be the default target for the `sqlmesh plan` and `sqlmesh run` commands.
         log_limit: The default number of logs to keep.
+        ui: UI configuration such as format on save
+        format_options: The default formatting options for SQL code.
     """
 
     gateways: t.Dict[str, GatewayConfig] = {"": GatewayConfig()}
@@ -99,6 +101,7 @@ class Config(BaseConfig):
     cicd_bot: t.Optional[CICDBotConfig] = None
     run: RunConfig = RunConfig()
     ui: UIConfig = UIConfig()
+    format_options: FormatOptions = FormatOptions()
 
     _FIELD_UPDATE_STRATEGY: t.ClassVar[t.Dict[str, UpdateStrategy]] = {
         "gateways": UpdateStrategy.KEY_UPDATE,

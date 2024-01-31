@@ -79,9 +79,9 @@ async def write_file(
             try:
                 expressions = parse(content, default_dialect=default_dialect)
                 content = format_model_expressions(
-                    expressions, dialect, **config.ui.format_options.dict(exclude={"newline"})
+                    expressions, dialect, **config.format_options.dict()
                 )
-                if config.ui.format_options.newline:
+                if config.format_options.append_newline:
                     content += "\n"
                 format_file_status.status = models.Status.SUCCESS
             except Exception:
