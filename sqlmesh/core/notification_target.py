@@ -217,7 +217,38 @@ class ConsoleNotificationTarget(BaseNotificationTarget):
             self.console.log_status_update(msg)
 
 
-class SlackWebhookNotificationTarget(BaseNotificationTarget):
+class BaseSlackNotificationTarget(BaseNotificationTarget):
+    def send(self, notification_status: NotificationStatus, msg: str, **kwargs: t.Any) -> None:
+        status_emoji = {
+            NotificationStatus.PROGRESS: slack.SlackAlertIcon.START,
+            NotificationStatus.SUCCESS: slack.SlackAlertIcon.SUCCESS,
+            NotificationStatus.FAILURE: slack.SlackAlertIcon.FAILURE,
+            NotificationStatus.WARNING: slack.SlackAlertIcon.WARNING,
+            NotificationStatus.INFO: slack.SlackAlertIcon.INFO,
+        }
+        composed = slack.message().add_primary_blocks(
+            slack.header_block(f"{status_emoji[notification_status]} SQLMesh Notification"),
+            slack.context_block(
+                f"*Status:* {notification_status.value}",
+                f"*Command:* {slack.stringify_list(sys.argv)}",
+            ),
+            slack.divider_block(),
+            slack.text_section_block(msg),
+            slack.context_block(f"*Python Version:* {sys.version}"),
+        )
+        self._send_slack_message(
+            composed=composed.slack_message,
+        )
+
+    def _send_slack_message(self, composed: slack.TSlackMessage) -> None:
+        """Send a composed message Slack.
+
+        Args:
+            composed: the formatted message to send to Slack
+        """
+
+
+class SlackWebhookNotificationTarget(BaseSlackNotificationTarget):
     url: t.Optional[str] = None
     type_: Literal["slack_webhook"] = Field(alias="type", default="slack_webhook")
     _client: t.Optional[WebhookClient] = None
@@ -238,27 +269,10 @@ class SlackWebhookNotificationTarget(BaseNotificationTarget):
             self._client = WebhookClient(url=self.url)
         return self._client
 
-    def send(self, notification_status: NotificationStatus, msg: str, **kwargs: t.Any) -> None:
-        status_emoji = {
-            NotificationStatus.PROGRESS: slack.SlackAlertIcon.START,
-            NotificationStatus.SUCCESS: slack.SlackAlertIcon.SUCCESS,
-            NotificationStatus.FAILURE: slack.SlackAlertIcon.FAILURE,
-            NotificationStatus.WARNING: slack.SlackAlertIcon.WARNING,
-            NotificationStatus.INFO: slack.SlackAlertIcon.INFO,
-        }
-        composed = slack.message().add_primary_blocks(
-            slack.header_block(f"{status_emoji[notification_status]} SQLMesh Notification"),
-            slack.context_block(
-                f"*Status:* {notification_status.value}",
-                f"*Command:* {slack.stringify_list(sys.argv)}",
-            ),
-            slack.divider_block(),
-            slack.text_section_block(msg),
-            slack.context_block(f"*Python Version:* {sys.version}"),
-        )
+    def _send_slack_message(self, composed: slack.TSlackMessage) -> None:
         self.client.send(
-            blocks=composed.slack_message["blocks"],
-            attachments=composed.slack_message["attachments"],  # type: ignore
+            blocks=composed["blocks"],
+            attachments=composed["attachments"],  # type: ignore
         )
 
     @property
@@ -266,7 +280,7 @@ class SlackWebhookNotificationTarget(BaseNotificationTarget):
         return bool(self.url)
 
 
-class SlackApiNotificationTarget(BaseNotificationTarget):
+class SlackApiNotificationTarget(BaseSlackNotificationTarget):
     token: t.Optional[str] = None
     channel: t.Optional[str] = None
     type_: Literal["slack_api"] = Field(alias="type", default="slack_api")
@@ -285,11 +299,15 @@ class SlackApiNotificationTarget(BaseNotificationTarget):
             self._client = WebClient(token=self.token)
         return self._client
 
-    def send(self, notification_status: NotificationStatus, msg: str, **kwargs: t.Any) -> None:
+    def _send_slack_message(self, composed: slack.TSlackMessage) -> None:
         if not self.channel:
             raise ConfigError("Missing Slack channel for notification")
 
-        self.client.chat_postMessage(channel=self.channel, text=msg)
+        self.client.chat_postMessage(
+            channel=self.channel,
+            blocks=composed["blocks"],
+            attachments=composed["attachments"],  # type: ignore
+        )
 
     @property
     def is_configured(self) -> bool:
