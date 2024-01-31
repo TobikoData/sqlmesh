@@ -39,7 +39,7 @@ from sqlmesh.core.engine_adapter.shared import (
 )
 from sqlmesh.core.model.kind import TimeColumn
 from sqlmesh.core.schema_diff import SchemaDiffer
-from sqlmesh.utils import double_escape, random_id
+from sqlmesh.utils import columns_to_types_all_known, double_escape, random_id
 from sqlmesh.utils.connection_pool import create_connection_pool
 from sqlmesh.utils.date import TimeLike, make_inclusive, to_ts
 from sqlmesh.utils.errors import SQLMeshError, UnsupportedCatalogOperationError
@@ -604,18 +604,14 @@ class EngineAdapter:
         # types, and for evaluation methods like `LogicalReplaceQueryMixin.replace_query()`
         # calls and SCD Type 2 model calls.
         schema = None
-        columns_to_types_all_known = columns_to_types and all(
-            not column_type.is_type(exp.DataType.Type.UNKNOWN, exp.DataType.Type.NULL)
-            for column_type in columns_to_types.values()
-        )
+        columns_to_types_known = columns_to_types and columns_to_types_all_known(columns_to_types)
         if (
             column_descriptions
-            and columns_to_types
-            and columns_to_types_all_known
+            and columns_to_types_known
             and self.COMMENT_CREATION_TABLE.is_in_schema_def_ctas
             and self.comments_enabled
         ):
-            schema = self._build_schema_exp(table, columns_to_types, column_descriptions)
+            schema = self._build_schema_exp(table, columns_to_types, column_descriptions)  # type: ignore
 
         with self.transaction(condition=len(source_queries) > 1):
             for i, source_query in enumerate(source_queries):
