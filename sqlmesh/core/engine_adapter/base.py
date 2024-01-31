@@ -604,9 +604,14 @@ class EngineAdapter:
         # types, and for evaluation methods like `LogicalReplaceQueryMixin.replace_query()`
         # calls and SCD Type 2 model calls.
         schema = None
+        columns_to_types_all_known = columns_to_types and all(
+            not column_type.is_type(exp.DataType.Type.UNKNOWN, exp.DataType.Type.NULL)
+            for column_type in columns_to_types.values()
+        )
         if (
             column_descriptions
             and columns_to_types
+            and columns_to_types_all_known
             and self.COMMENT_CREATION_TABLE.is_in_schema_def_ctas
             and self.comments_enabled
         ):
