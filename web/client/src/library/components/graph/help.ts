@@ -365,16 +365,14 @@ function mergeLineageWithColumns(
         const newLineageModelColumnModel =
           newLineageModelColumn.models[sourceColumnName]!
 
-        currentLineageModelColumnModels[sourceColumnNameEncoded] = (
-          isNil(currentLineageModelColumnModel)
-            ? newLineageModelColumnModel
-            : Array.from(
-                new Set(
-                  currentLineageModelColumnModel.concat(
-                    newLineageModelColumnModel,
-                  ),
+        currentLineageModelColumnModels[sourceColumnNameEncoded] = Array.from(
+          new Set(
+            isNil(currentLineageModelColumnModel)
+              ? newLineageModelColumnModel
+              : currentLineageModelColumnModel.concat(
+                  newLineageModelColumnModel,
                 ),
-              )
+          ),
         ).map(encodeURI)
       }
     }

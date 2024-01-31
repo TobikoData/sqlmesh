@@ -20,12 +20,11 @@ import ReactFlow, {
 import Loading from '@components/loading/Loading'
 import Spinner from '@components/logo/Spinner'
 import { createLineageWorker } from '~/workers'
-import { isArrayEmpty, isNil, isNotNil } from '@utils/index'
+import { isArrayEmpty, isFalse, isNil, isNotNil } from '@utils/index'
 import ListboxShow from '@components/listbox/ListboxShow'
 import clsx from 'clsx'
 import ModelNode from './ModelNode'
 import {
-  getNodeMap,
   getEdges,
   getLineageIndex,
   getActiveNodes,
@@ -155,7 +154,6 @@ export default function ModelLineage({
 function ModelColumnLineage(): JSX.Element {
   const {
     withColumns,
-    models,
     lineage,
     mainNode,
     selectedEdges,
@@ -167,6 +165,7 @@ function ModelColumnLineage(): JSX.Element {
     activeEdges,
     connectedNodes,
     connections,
+    nodesMap,
     handleError,
     setActiveNodes,
   } = useLineageFlow()
@@ -176,15 +175,7 @@ function ModelColumnLineage(): JSX.Element {
   const [isBuildingLayout, setIsBuildingLayout] = useState(false)
 
   const nodeTypes = useMemo(() => ({ model: ModelNode }), [])
-  const nodesMap = useMemo(
-    () =>
-      getNodeMap({
-        lineage,
-        models,
-        withColumns,
-      }),
-    [lineage, models, withColumns],
-  )
+
   const allEdges = useMemo(() => getEdges(lineage), [lineage])
   const lineageIndex = useMemo(() => getLineageIndex(lineage), [lineage])
 
@@ -263,7 +254,7 @@ function ModelColumnLineage(): JSX.Element {
       setEdges([])
       setNodes([])
     }
-  }, [lineageIndex, withColumns])
+  }, [activeEdges, lineageIndex, withColumns])
 
   useEffect(() => {
     if (isNil(mainNode) || isArrayEmpty(nodes)) return
@@ -442,7 +433,8 @@ function GraphControls({ nodes = [] }: { nodes: Node[] }): JSX.Element {
                 ? undefined
                 : setWithColumns,
             Connected: activeNodes.size > 0 ? undefined : setWithConnected,
-            Impact: activeNodes.size > 0 ? undefined : setWithImpacted,
+            'Upstream/Downstream':
+              activeNodes.size > 0 ? undefined : setWithImpacted,
             All: activeNodes.size > 0 ? undefined : setWithSecondary,
           }}
           value={
@@ -450,7 +442,7 @@ function GraphControls({ nodes = [] }: { nodes: Node[] }): JSX.Element {
               withColumns && 'Columns',
               hasBackground && 'Background',
               withConnected && 'Connected',
-              withImpacted && 'Impact',
+              withImpacted && 'Upstream/Downstream',
               withSecondary && 'All',
             ].filter(Boolean) as string[]
           }

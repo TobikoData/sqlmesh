@@ -388,11 +388,9 @@ const ModelColumn = memo(function ModelColumn({
     } else {
       setIsEmpty(false)
 
-      void getColumnLineage().then(({ data }) => {
-        if (isNil(data)) return
-
-        updateColumnLineage(data)
-      })
+      void getColumnLineage().then(({ data }) =>
+        updateColumnLineage(data ?? {}),
+      )
     }
   }
 
