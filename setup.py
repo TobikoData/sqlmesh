@@ -43,7 +43,7 @@ setup(
         "ipywidgets",
         "jinja2",
         "pandas",
-        "pydantic<2.6.0",
+        "pydantic",
         "requests",
         "rich[jupyter]",
         "ruamel.yaml",
@@ -84,6 +84,11 @@ setup(
             "pandas-stubs",
             "psycopg2-binary",
             "pyarrow>=10.0.1,<10.1.0",
+            # All Airflow releases require flast-appbuilder==4.3.10 and
+            # 4.3.10 requires email-validator==1.3.1
+            # https://github.com/apache/airflow/blob/main/pyproject.toml#L685
+            # https://github.com/dpgaspar/Flask-AppBuilder/blob/master/requirements.txt#L25
+            "pydantic<2.6.0",
             "PyGithub",
             # 8.0.0 broke compatability with lazy-fixture
             "pytest<8.0.0",
