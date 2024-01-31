@@ -20,6 +20,11 @@ export default function ModelLineageDetails({
     setSelectedNodes,
     withImpacted,
     connectedNodes,
+    lineageCache,
+    setActiveEdges,
+    setConnections,
+    setLineage,
+    setLineageCache,
   } = useLineageFlow()
 
   const model = isNil(mainNode) ? undefined : models.get(mainNode)
@@ -69,15 +74,40 @@ export default function ModelLineageDetails({
         <span className="mr-2 whitespace-nowrap block">
           <b>All:</b> {nodes.length}
         </span>
+        {countHidden > 0 && (
+          <span className="whitespace-nowrap block mr-2">
+            <b>Hidden:</b> {countHidden}
+          </span>
+        )}
+        {countSelected > 0 && (
+          <span className="mr-2 whitespace-nowrap block">
+            <b>Selected:</b> {countSelected}
+          </span>
+        )}
         {showActive && (
           <span className="mr-2 whitespace-nowrap block">
             <b>Active:</b> {countActive}
           </span>
         )}
-        {countHidden > 0 && (
-          <span className="whitespace-nowrap block">
-            <b>Hidden:</b> {countHidden}
-          </span>
+        {(showActive || countSelected > 0) && (
+          <Button
+            size={EnumSize.xs}
+            variant={EnumVariant.Neutral}
+            format={EnumButtonFormat.Ghost}
+            className="!m-0 px-1"
+            onClick={() => {
+              setActiveEdges(new Map())
+              setConnections(new Map())
+              setSelectedNodes(new Set())
+
+              if (isNotNil(lineageCache)) {
+                setLineage(lineageCache)
+                setLineageCache(undefined)
+              }
+            }}
+          >
+            Reset
+          </Button>
         )}
       </span>
       {countSources > 0 && (
@@ -96,22 +126,6 @@ export default function ModelLineageDetails({
       {countCTEs > 0 && (
         <span className="mr-2 whitespace-nowrap block">
           <b>CTEs:</b> {countCTEs}
-        </span>
-      )}
-      {countSelected > 0 && (
-        <span className="bg-neutral-5 px-2 py-0.5 flex rounded-full items-center">
-          <span className="mr-2 whitespace-nowrap block">
-            <b>Selected:</b> {countSelected}
-          </span>
-          <Button
-            size={EnumSize.xs}
-            variant={EnumVariant.Neutral}
-            format={EnumButtonFormat.Ghost}
-            className="!m-0 px-1"
-            onClick={() => setSelectedNodes(new Set())}
-          >
-            Clear
-          </Button>
         </span>
       )}
     </>

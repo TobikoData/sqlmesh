@@ -1,4 +1,5 @@
 import { useApiModelLineage } from '@api/index'
+import pluralize from 'pluralize'
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { type ModelSQLMeshModel } from '@models/sqlmesh-model'
 import { type HighlightedNodes, useLineageFlow } from './context'
@@ -56,6 +57,7 @@ export default function ModelLineage({
     setWithColumns,
     setHighlightedNodes,
     setNodeConnections,
+    setLineageCache,
   } = useLineageFlow()
 
   const {
@@ -99,6 +101,7 @@ export default function ModelLineage({
         setActiveEdges(new Map())
         setConnections(new Map())
         setSelectedNodes(new Set())
+        setLineageCache(undefined)
         setMainNode(model.fqn)
       })
 
@@ -229,6 +232,7 @@ function ModelColumnLineage(): JSX.Element {
         setNodes(layout.nodes)
       })
       .catch(error => {
+        console.error(error)
         handleError?.(error)
         setEdges([])
         setNodes([])
@@ -241,11 +245,11 @@ function ModelColumnLineage(): JSX.Element {
             zoom: 0.5,
             duration: 0,
           })
-
-          setTimeout(() => {
-            setIsBuildingLayout(false)
-          }, 100)
         }
+
+        setTimeout(() => {
+          setIsBuildingLayout(false)
+        }, 100)
       })
 
     return () => {
@@ -254,7 +258,7 @@ function ModelColumnLineage(): JSX.Element {
       setEdges([])
       setNodes([])
     }
-  }, [activeEdges, lineageIndex, withColumns])
+  }, [activeEdges, nodesMap, lineageIndex])
 
   useEffect(() => {
     if (isNil(mainNode) || isArrayEmpty(nodes)) return
@@ -319,8 +323,9 @@ function ModelColumnLineage(): JSX.Element {
   return (
     <>
       {isBuildingLayout && (
-        <div className="absolute top-0 left-0 z-10 bg-theme flex justify-center items-center w-full h-full">
-          <Loading className="inline-block">
+        <div className="absolute top-0 left-0 z-10 flex justify-center items-center w-full h-full">
+          <span className="absolute w-full h-full z-10 bg-transparent-20 backdrop-blur-lg"></span>
+          <Loading className="inline-block z-10">
             <Spinner className="w-3 h-3 border border-neutral-10 mr-4" />
             <h3 className="text-md whitespace-nowrap">Building Lineage...</h3>
           </Loading>

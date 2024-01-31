@@ -26,7 +26,8 @@ export type SelectedNodes = Set<string>
 export type HighlightedNodes = Record<string, string[]>
 
 interface LineageFlow {
-  lineage?: Record<string, Lineage>
+  lineage: Record<string, Lineage>
+  lineageCache?: Record<string, Lineage>
   mainNode?: string
   connectedNodes: Set<string>
   activeEdges: ActiveEdges
@@ -58,6 +59,9 @@ interface LineageFlow {
   removeActiveEdges: (edges: Array<[string, string]>) => void
   setActiveEdges: React.Dispatch<React.SetStateAction<ActiveEdges>>
   setLineage: React.Dispatch<React.SetStateAction<Record<string, Lineage>>>
+  setLineageCache: React.Dispatch<
+    React.SetStateAction<Optional<Record<string, Lineage>>>
+  >
   handleClickModel?: (modelName: string) => void
   handleError?: (error: ErrorIDE) => void
   setManuallySelectedColumn: React.Dispatch<
@@ -70,6 +74,7 @@ interface LineageFlow {
 export const LineageFlowContext = createContext<LineageFlow>({
   selectedEdges: [],
   lineage: {},
+  lineageCache: undefined,
   withColumns: false,
   withConnected: false,
   withImpacted: true,
@@ -99,6 +104,7 @@ export const LineageFlowContext = createContext<LineageFlow>({
   setManuallySelectedColumn: () => {},
   handleError: () => {},
   setLineage: () => {},
+  setLineageCache: () => {},
   isActiveColumn: () => false,
   setConnections: () => {},
   setSelectedNodes: () => {},
@@ -123,6 +129,9 @@ export default function LineageFlowProvider({
   const models = useStoreContext(s => s.models)
 
   const [lineage, setLineage] = useState<Record<string, Lineage>>({})
+  const [lineageCache, setLineageCache] = useState<
+    Record<string, Lineage> | undefined
+  >(undefined)
   const [nodesConnections, setNodeConnections] = useState<
     Record<string, ConnectedNode>
   >({})
@@ -261,6 +270,8 @@ export default function LineageFlowProvider({
         mainNode,
         connections,
         lineage,
+        lineageCache,
+        setLineageCache,
         models,
         manuallySelectedColumn,
         withColumns,

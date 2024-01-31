@@ -155,9 +155,13 @@
     --color-dark: hsl(226, 24%, 8%);
     --color-dark-lighter: hsl(226, 32%, 16%);
 
+    --color-dark-transparent-20: hsla(226, 24%, 8%, 0.2);
+
     --color-light-darker: hsl(0, 0%, 92%);
     --color-light: hsl(0, 0%, 100%);
     --color-light-lighter: hsl(0, 0%, 98%);
+
+    --color-light-transparent-20: hsla(0, 0%, 100%, 0.2);
 
     /* General */
     --unit: 16px;
@@ -220,6 +224,8 @@ html[mode='dark'] {
   --color-graph-edge-main: var(--color-neutral-80);
   --color-graph-edge-selected: var(--color-secondary-500);
   --color-graph-edge-direct: var(--color-secondary-20);
+
+  --color-transparent-20: var(--color-dark-transparent-20);
 }
 
 html[mode='light'] {
@@ -246,6 +252,8 @@ html[mode='light'] {
   --color-graph-edge-main: var(--color-neutral-200);
   --color-graph-edge-selected: var(--color-secondary-500);
   --color-graph-edge-direct: var(--color-secondary-20);
+
+  --color-transparent-20: var(--color-light-transparent-20);
 }
 
 html {
