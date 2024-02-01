@@ -390,17 +390,17 @@ class macro(registry_decorator):
     registry_name = "macros"
 
     def __call__(
-        self,
-        func: t.Callable[..., DECORATOR_RETURN_TYPE],
+        self, func: t.Callable[..., DECORATOR_RETURN_TYPE]
     ) -> t.Callable[..., DECORATOR_RETURN_TYPE]:
         spec = inspect.getfullargspec(func)
         annotations = t.get_type_hints(func)
 
         @wraps(func)
-        def _typed_func(*args_: t.Any, **kwargs_: t.Any) -> DECORATOR_RETURN_TYPE:
+        def _typed_func(
+            evaluator: MacroEvaluator, *args_: t.Any, **kwargs_: t.Any
+        ) -> DECORATOR_RETURN_TYPE:
             """Coerce arguments where possible to the user-defined type annotations."""
-            evaluator: MacroEvaluator = args_[0]
-            kwargs = inspect.getcallargs(func, *args_, **kwargs_)
+            kwargs = inspect.getcallargs(func, evaluator, *args_, **kwargs_)
             for param, value in kwargs.items():
                 coercible_type = annotations.get(param)
                 if not coercible_type:
@@ -411,7 +411,9 @@ class macro(registry_decorator):
                 args.extend(kwargs.pop(spec.varargs, []))
             return func(*args, **kwargs)
 
-        wrapper = super().__call__(_typed_func if spec.annotations else func)
+        if spec.annotations:
+            func = _typed_func
+        wrapper = super().__call__(func)
 
         # This is useful to identify macros at runtime
         setattr(wrapper, "__sqlmesh_macro__", True)
@@ -471,8 +473,7 @@ def _norm_var_arg_lambda(
             {
                 expression.name: arg
                 for expression, arg in zip(
-                    func.expressions,
-                    args.expressions if isinstance(args, exp.Tuple) else [args],
+                    func.expressions, args.expressions if isinstance(args, exp.Tuple) else [args]
                 )
             },
         )
