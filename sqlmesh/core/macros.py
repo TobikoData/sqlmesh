@@ -377,10 +377,10 @@ class MacroEvaluator:
                 return expr.this
             if typ is str and isinstance(expr, exp.Expression):
                 return expr.sql(self.dialect)
-            raise SQLMeshError(f"Failed to coerce expression '{expr}' to type '{typ}'.")
+            raise SQLMeshError(f"No coercion strategy for expression '{expr}' to type '{typ}'.")
         except Exception:
             logger.warning(
-                "Coercion of expression '%s' to type '%s' failed.",
+                "Coercion of expression '%s' to type '%s' failed. Using non coerced expression.",
                 expr,
                 typ,
                 exc_info=True,
