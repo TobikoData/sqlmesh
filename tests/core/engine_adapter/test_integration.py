@@ -456,6 +456,14 @@ def config() -> Config:
             ],
         ),
         pytest.param(
+            "motherduck",
+            marks=[
+                pytest.mark.motherduck,
+                pytest.mark.engine,
+                pytest.mark.remote,
+            ],
+        ),
+        pytest.param(
             "redshift",
             marks=[
                 pytest.mark.engine,
@@ -526,6 +534,12 @@ def test_catalog_operations(ctx: TestContext):
         ctx.engine_adapter.cursor.connection.autocommit(False)
     elif ctx.dialect == "snowflake":
         ctx.engine_adapter.execute(f'CREATE DATABASE IF NOT EXISTS "{catalog_name}"')
+    elif ctx.dialect == "duckdb":
+        try:
+            # Only applies to MotherDuck
+            ctx.engine_adapter.execute(f'CREATE DATABASE IF NOT EXISTS "{catalog_name}"')
+        except Exception:
+            pass
     current_catalog = ctx.engine_adapter.get_current_catalog()
     ctx.engine_adapter.set_current_catalog(catalog_name)
     assert ctx.engine_adapter.get_current_catalog() == catalog_name
@@ -588,6 +602,12 @@ def test_drop_schema_catalog(ctx: TestContext):
         ctx.engine_adapter.cursor.connection.autocommit(False)
     elif ctx.dialect == "snowflake":
         ctx.engine_adapter.execute(f'CREATE DATABASE IF NOT EXISTS "{catalog_name}"')
+    elif ctx.dialect == "duckdb":
+        try:
+            # Only applies to MotherDuck
+            ctx.engine_adapter.execute(f'CREATE DATABASE IF NOT EXISTS "{catalog_name}"')
+        except Exception:
+            pass
     elif ctx.dialect == "bigquery":
         catalog_name = "tobiko-test"
 

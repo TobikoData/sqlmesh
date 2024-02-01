@@ -14,6 +14,7 @@ SQLMesh supports the following execution engines for running SQLMesh projects:
 * [BigQuery](./engines/bigquery.md)
 * [Databricks](./engines/databricks.md)
 * [DuckDB](./engines/duckdb.md)
+* [MotherDuck](./engines/motherduck.md)
 * [MySQL](./engines/mysql.md)
 * [MSSQL](./engines/mssql.md)
 * [Postgres](./engines/postgres.md)
