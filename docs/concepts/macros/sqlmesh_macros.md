@@ -60,7 +60,7 @@ MODEL (
   name sqlmesh_example.full_model,
   kind FULL,
   cron '@daily',
-  audits [assert_positive_order_ids],
+  audits (assert_positive_order_ids),
 );
 
 SELECT
@@ -78,7 +78,7 @@ MODEL (
   name sqlmesh_example.full_model,
   kind FULL,
   cron '@daily',
-  audits [assert_positive_order_ids],
+  audits (assert_positive_order_ids),
 ); -- NOTE: semi-colon at end of MODEL statement
 
 @DEF(size, 1); -- NOTE: semi-colon at end of @DEF operator
@@ -401,7 +401,7 @@ MODEL (
   kind FULL,
   cron '@daily',
   grain item_id,
-  audits [assert_positive_order_ids],
+  audits (assert_positive_order_ids),
 );
 
 SELECT
@@ -545,7 +545,7 @@ MODEL (
   name sqlmesh_example.full_model,
   kind FULL,
   cron '@daily',
-  audits [assert_positive_order_ids],
+  audits (assert_positive_order_ids),
 );
 
 @DEF(size, 1);
@@ -582,7 +582,7 @@ MODEL (
   name sqlmesh_example.full_model,
   kind FULL,
   cron '@daily',
-  audits [assert_positive_order_ids],
+  audits (assert_positive_order_ids),
 );
 
 @DEF(size, 1);
@@ -605,7 +605,7 @@ MODEL (
   name sqlmesh_example.full_model,
   kind FULL,
   cron '@daily',
-  audits [assert_positive_order_ids],
+  audits (assert_positive_order_ids),
 );
 
 @DEF(left_number, 1);
