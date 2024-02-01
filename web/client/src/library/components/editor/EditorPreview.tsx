@@ -185,9 +185,7 @@ export default function EditorPreview({
             {errors.size > 0 && (
               <Tab.Panel
                 unmount={false}
-                className={clsx(
-                  'w-full h-full ring-white ring-opacity-60 ring-offset-2 ring-offset-blue-400 focus:outline-none focus:ring-2 py-2',
-                )}
+                className="w-full h-full ring-white ring-opacity-60 ring-offset-2 ring-offset-blue-400 focus:outline-none focus:ring-2 py-2"
               >
                 <ul className="w-full h-full p-2 overflow-auto hover:scrollbar scrollbar--vertical scrollbar--horizontal">
                   {Array.from(errors)
