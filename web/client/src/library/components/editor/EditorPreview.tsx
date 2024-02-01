@@ -15,6 +15,8 @@ import TabList from '@components/tab/Tab'
 import { useSQLMeshModelExtensions } from './hooks'
 import Table from '@components/table/Table'
 import { useStoreContext } from '@context/context'
+import { useIDE } from '~/library/pages/ide/context'
+import { DisplayError } from '@components/report/ReportErrors'
 
 const ModelLineage = lazy(
   async () => await import('@components/graph/ModelLineage'),
@@ -26,6 +28,7 @@ export const EnumEditorPreviewTabs = {
   Console: 'Logs',
   Lineage: 'Lineage',
   Diff: 'Diff',
+  Errors: 'Errors',
 } as const
 
 export type EditorPreviewTabs = KeyOf<typeof EnumEditorPreviewTabs>
@@ -37,6 +40,7 @@ export default function EditorPreview({
   tab: EditorTab
   className?: string
 }): JSX.Element {
+  const { errors } = useIDE()
   const navigate = useNavigate()
 
   const models = useStoreContext(s => s.models)
@@ -65,19 +69,22 @@ export default function EditorPreview({
         isNotNil(previewQuery) && EnumEditorPreviewTabs.Query,
         showLineage && EnumEditorPreviewTabs.Lineage,
         isNotNil(previewDiff) && EnumEditorPreviewTabs.Diff,
+        errors.size > 0 && EnumEditorPreviewTabs.Errors,
       ].filter(Boolean) as string[],
-    [tab.id, previewTable, previewQuery, previewDiff, showLineage],
+    [tab.id, previewTable, previewQuery, previewDiff, showLineage, errors],
   )
 
   useEffect(() => {
-    if (isNotNil(previewDiff)) {
+    if (errors.size > 0) {
+      setActiveTabIndex(tabs.indexOf(EnumEditorPreviewTabs.Errors))
+    } else if (isNotNil(previewDiff)) {
       setActiveTabIndex(tabs.indexOf(EnumEditorPreviewTabs.Diff))
     } else if (isNotNil(previewTable)) {
       setActiveTabIndex(tabs.indexOf(EnumEditorPreviewTabs.Table))
     } else if (showLineage) {
       setActiveTabIndex(tabs.indexOf(EnumEditorPreviewTabs.Lineage))
     }
-  }, [tabs, previewTable, previewQuery, previewDiff, showLineage])
+  }, [tabs, previewTable, previewQuery, previewDiff, showLineage, errors])
 
   return (
     <div
@@ -173,6 +180,28 @@ export default function EditorPreview({
                   key={tab.id}
                   diff={previewDiff}
                 />
+              </Tab.Panel>
+            )}
+            {errors.size > 0 && (
+              <Tab.Panel
+                unmount={false}
+                className="w-full h-full ring-white ring-opacity-60 ring-offset-2 ring-offset-blue-400 focus:outline-none focus:ring-2 py-2"
+              >
+                <ul className="w-full h-full p-2 overflow-auto hover:scrollbar scrollbar--vertical scrollbar--horizontal">
+                  {Array.from(errors)
+                    .reverse()
+                    .map(error => (
+                      <li
+                        key={error.id}
+                        className="bg-danger-10 mb-4 last:m-0 p-2 rounded-md"
+                      >
+                        <DisplayError
+                          scope={error.key}
+                          error={error}
+                        />
+                      </li>
+                    ))}
+                </ul>
               </Tab.Panel>
             )}
           </Tab.Panels>
