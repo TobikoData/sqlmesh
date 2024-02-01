@@ -360,6 +360,8 @@ class MacroEvaluator:
             if typ is None:
                 return expr
             base = t.get_origin(typ) or typ
+            if isinstance(expr, base):
+                return expr
             if t.get_origin(typ) is t.Union:
                 for t_ in t.get_args(typ):
                     try:
@@ -367,8 +369,6 @@ class MacroEvaluator:
                     except Exception:
                         pass
                 raise SQLMeshError(f"Failed to coerce expression '{expr}' to type '{typ}'.")
-            if isinstance(expr, base):
-                return expr
             if issubclass(base, exp.Expression):
                 d = Dialect.get_or_raise(self.dialect)
                 into = base if base in d.parser().EXPRESSION_PARSERS else None
