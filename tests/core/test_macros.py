@@ -27,11 +27,11 @@ def macro_evaluator() -> MacroEvaluator:
     def noop(evaluator: MacroEvaluator):
         return None
 
-    @macro("add_ints", coerce_args=True)
-    def add_lits(evaluator: MacroEvaluator, x: int, y: int) -> int:
-        return x + y
+    @macro("BITSHIFT_SQUARE")
+    def bitshift_square(evaluator: MacroEvaluator, x: int, y: int) -> int:
+        return (x >> y) ** 2
 
-    @macro("prefix_db", coerce_args=True)
+    @macro("PREFIX_DB")
     def prefix_db(evaluator: MacroEvaluator, table: exp.Table, prefix: str) -> exp.Table:
         table.set("db", prefix + table.db)
         return table
@@ -302,12 +302,12 @@ def test_ast_correctness(macro_evaluator):
             {},
         ),
         (
-            """@add_ints(50, '50')""",
-            "100",
+            """@BITSHIFT_SQUARE(50, '3')""",
+            "36",
             {},
         ),
         (
-            """@prefix_db(my.schema.table, 'dev_')""",
+            """@PREFIX_DB(my.schema.table, 'dev_')""",
             "my.dev_schema.table",
             {},
         ),

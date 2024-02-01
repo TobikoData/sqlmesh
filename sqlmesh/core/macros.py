@@ -350,6 +350,25 @@ class MacroEvaluator:
             )
         return self.locals["engine_adapter"]
 
+    def _coerce(self, expr: exp.Expression, typ: t.Type) -> t.Any:
+        """Coerces the given expression to the specified type on a best-effort basis."""
+        try:
+            if typ is None:
+                return expr
+            if isinstance(expr, typ):
+                return expr
+            elif issubclass(typ, exp.Expression):
+                return parse_one(expr.sql(self.dialect), into=typ, read=self.dialect)
+            elif typ in (int, float, str) and isinstance(expr, exp.Literal):
+                return typ(expr.this)
+            elif typ is bool and isinstance(expr, exp.Boolean):
+                return expr.this
+            elif typ is str and isinstance(expr, exp.Expression):
+                return expr.sql(self.dialect)
+            return expr
+        except Exception:
+            return expr
+
 
 class macro(registry_decorator):
     """Specifies a function is a macro and registers it the global MACROS registry.
@@ -370,35 +389,31 @@ class macro(registry_decorator):
 
     registry_name = "macros"
 
-    def __init__(self, name: str = "", coerce_args: bool = False) -> None:
-        super().__init__(name)
-        self.coerce_args = coerce_args
-
     def __call__(
         self,
         func: t.Callable[..., DECORATOR_RETURN_TYPE],
     ) -> t.Callable[..., DECORATOR_RETURN_TYPE]:
+        spec = inspect.getfullargspec(func)
+
         @wraps(func)
         def _typed_func(*args: t.Any, **kwargs: t.Any) -> DECORATOR_RETURN_TYPE:
-            spec = inspect.getfullargspec(func)
-            kwargs = inspect.getcallargs(func, *args, **kwargs)
-            for param, value in kwargs.items():
+            """Coerce arguments where possible to the user-defined type annotations."""
+            evaluator: MacroEvaluator = args[0]
+            argmap = inspect.getcallargs(func, *args, **kwargs)
+            for param, value in argmap.items():
                 coercible_type = spec.annotations.get(param)
-                if coercible_type is None:
-                    raise TypeError(
-                        f"Macro argument '{param}' must have a type annotation if `coerce_args=True`."
-                    )
-                if isinstance(value, coercible_type):
+                if not coercible_type:
                     continue
-                elif issubclass(coercible_type, exp.Expression):
-                    kwargs[param] = parse_one(value.sql(), into=coercible_type)
-                elif coercible_type in (int, float, str) and isinstance(value, exp.Literal):
-                    kwargs[param] = coercible_type(value.this)
+                if isinstance(coercible_type, str):
+                    continue
+                argmap[param] = evaluator._coerce(value, coercible_type)
+                if (ix := spec.args.index(param)) > -1:
+                    args = args[:ix] + (argmap[param],) + args[ix + 1 :]
                 else:
-                    raise TypeError(f"Could not parse {value} into {coercible_type}")
-            return func(**kwargs)
+                    kwargs[param] = argmap[param]
+            return func(*args, **kwargs)
 
-        wrapper = super().__call__(_typed_func if self.coerce_args else func)
+        wrapper = super().__call__(_typed_func if spec.annotations else func)
 
         # This is useful to identify macros at runtime
         setattr(wrapper, "__sqlmesh_macro__", True)
@@ -458,7 +473,8 @@ def _norm_var_arg_lambda(
             {
                 expression.name: arg
                 for expression, arg in zip(
-                    func.expressions, args.expressions if isinstance(args, exp.Tuple) else [args]
+                    func.expressions,
+                    args.expressions if isinstance(args, exp.Tuple) else [args],
                 )
             },
         )
