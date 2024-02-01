@@ -33,7 +33,7 @@ from sqlmesh.core.model.kind import (
 from sqlmesh.core.model.meta import ModelMeta
 from sqlmesh.core.model.seed import CsvSeedReader, Seed, create_seed
 from sqlmesh.core.renderer import ExpressionRenderer, QueryRenderer
-from sqlmesh.utils import str_to_bool
+from sqlmesh.utils import columns_to_types_all_known, str_to_bool
 from sqlmesh.utils.date import TimeLike, make_inclusive, to_datetime, to_ds, to_ts
 from sqlmesh.utils.errors import ConfigError, SQLMeshError, raise_config_error
 from sqlmesh.utils.hashing import hash_data
@@ -575,10 +575,7 @@ class _Model(ModelMeta, frozen=True):
         }
         if not columns_to_types:
             return False
-        return all(
-            not column_type.is_type(exp.DataType.Type.UNKNOWN, exp.DataType.Type.NULL)
-            for column_type in columns_to_types.values()
-        )
+        return columns_to_types_all_known(columns_to_types)
 
     @property
     def sorted_python_env(self) -> t.List[t.Tuple[str, Executable]]:
