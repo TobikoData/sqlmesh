@@ -228,10 +228,7 @@ class BaseSlackNotificationTarget(BaseNotificationTarget):
         }
         composed = slack.message().add_primary_blocks(
             slack.header_block(f"{status_emoji[notification_status]} SQLMesh Notification"),
-            slack.context_block(
-                f"*Status:* {notification_status.value}",
-                f"*Command:* {slack.stringify_list(sys.argv)}",
-            ),
+            slack.context_block(f"*Status:* {notification_status.value}"),
             slack.divider_block(),
             slack.text_section_block(msg),
             slack.context_block(f"*Python Version:* {sys.version}"),
