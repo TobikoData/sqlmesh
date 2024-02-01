@@ -357,13 +357,13 @@ class MacroEvaluator:
                 return expr
             if isinstance(expr, typ):
                 return expr
-            elif issubclass(typ, exp.Expression):
-                return parse_one(expr.sql(self.dialect), into=typ, read=self.dialect)
-            elif typ in (int, float, str) and isinstance(expr, exp.Literal):
+            if issubclass(typ, exp.Expression):
+                return parse_one(expr.sql(), into=typ)
+            if typ in (int, float, str) and isinstance(expr, exp.Literal):
                 return typ(expr.this)
-            elif typ is bool and isinstance(expr, exp.Boolean):
+            if typ is bool and isinstance(expr, exp.Boolean):
                 return expr.this
-            elif typ is str and isinstance(expr, exp.Expression):
+            if typ is str and isinstance(expr, exp.Expression):
                 return expr.sql(self.dialect)
             return expr
         except Exception:
@@ -394,23 +394,21 @@ class macro(registry_decorator):
         func: t.Callable[..., DECORATOR_RETURN_TYPE],
     ) -> t.Callable[..., DECORATOR_RETURN_TYPE]:
         spec = inspect.getfullargspec(func)
+        annotations = t.get_type_hints(func)
 
         @wraps(func)
-        def _typed_func(*args: t.Any, **kwargs: t.Any) -> DECORATOR_RETURN_TYPE:
+        def _typed_func(*args_: t.Any, **kwargs_: t.Any) -> DECORATOR_RETURN_TYPE:
             """Coerce arguments where possible to the user-defined type annotations."""
-            evaluator: MacroEvaluator = args[0]
-            argmap = inspect.getcallargs(func, *args, **kwargs)
-            for param, value in argmap.items():
-                coercible_type = spec.annotations.get(param)
+            evaluator: MacroEvaluator = args_[0]
+            kwargs = inspect.getcallargs(func, *args_, **kwargs_)
+            for param, value in kwargs.items():
+                coercible_type = annotations.get(param)
                 if not coercible_type:
                     continue
-                if isinstance(coercible_type, str):
-                    continue
-                argmap[param] = evaluator._coerce(value, coercible_type)
-                if (ix := spec.args.index(param)) > -1:
-                    args = args[:ix] + (argmap[param],) + args[ix + 1 :]
-                else:
-                    kwargs[param] = argmap[param]
+                kwargs[param] = evaluator._coerce(value, coercible_type)
+            args = [kwargs.pop(k) for k in spec.args if k in kwargs]
+            if spec.varargs:
+                args.extend(kwargs.pop(spec.varargs, []))
             return func(*args, **kwargs)
 
         wrapper = super().__call__(_typed_func if spec.annotations else func)
