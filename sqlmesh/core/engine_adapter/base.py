@@ -1021,10 +1021,8 @@ class EngineAdapter:
     ) -> None:
         if contains_json:
             query = self._escape_json(query)
-        if order_projections and query.named_selects != list(columns_to_types):
-            if isinstance(query, exp.Subqueryable):
-                query = query.subquery(alias="_ordered_projections")
-            query = self._select_columns(columns_to_types).from_(query)
+        if order_projections:
+            query = self._order_projections_and_filter(query, columns_to_types)
         self.execute(exp.insert(query, table_name, columns=list(columns_to_types)))
 
     def insert_overwrite_by_partition(
@@ -1104,7 +1102,7 @@ class EngineAdapter:
             columns_to_types = columns_to_types or self.columns(table_name)
             for i, source_query in enumerate(source_queries):
                 with source_query as query:
-                    query = self._add_where_to_query(query, where, columns_to_types)
+                    query = self._order_projections_and_filter(query, columns_to_types, where=where)
                     if i > 0 or insert_overwrite_strategy.is_delete_insert:
                         if i == 0:
                             self.delete_from(table_name, where=where or exp.true())
@@ -1763,22 +1761,24 @@ class EngineAdapter:
 
         return table
 
-    def _add_where_to_query(
+    def _order_projections_and_filter(
         self,
         query: Query,
-        where: t.Optional[exp.Expression],
         columns_to_types: t.Dict[str, exp.DataType],
+        where: t.Optional[exp.Expression] = None,
     ) -> Query:
-        if not where or not isinstance(query, exp.Subqueryable):
+        if not isinstance(query, exp.Subqueryable) or (
+            not where and query.named_selects == list(columns_to_types)
+        ):
             return query
 
         query = t.cast(exp.Subqueryable, query.copy())
         with_ = query.args.pop("with", None)
-        query = (
-            self._select_columns(columns_to_types)
-            .from_(query.subquery("_subquery", copy=False), copy=False)
-            .where(where, copy=False)
+        query = self._select_columns(columns_to_types).from_(
+            query.subquery("_subquery", copy=False), copy=False
         )
+        if where:
+            query = query.where(where, copy=False)
 
         if with_:
             query.set("with", with_)

@@ -268,6 +268,30 @@ def test_insert_overwrite_by_time_partition_replace_where_pandas(
     ]
 
 
+def test_insert_overwrite_no_where(make_mocked_engine_adapter: t.Callable):
+    adapter = make_mocked_engine_adapter(EngineAdapter)
+
+    source_queries, columns_to_types = adapter._get_source_queries_and_columns_to_types(
+        parse_one("SELECT b, a FROM tbl"),
+        {"a": exp.DataType.build("INT"), "b": exp.DataType.build("STRING")},
+        target_table="test_table",
+    )
+
+    adapter._insert_overwrite_by_condition(
+        "test_table",
+        source_queries,
+        columns_to_types=columns_to_types,
+    )
+
+    adapter.cursor.begin.assert_called_once()
+    adapter.cursor.commit.assert_called_once()
+
+    assert to_sql_calls(adapter) == [
+        """DELETE FROM "test_table" WHERE TRUE""",
+        """INSERT INTO "test_table" ("a", "b") SELECT "a", "b" FROM (SELECT "b", "a" FROM "tbl") AS "_subquery" """.strip(),
+    ]
+
+
 def test_insert_append_query(make_mocked_engine_adapter: t.Callable):
     adapter = make_mocked_engine_adapter(EngineAdapter)
 
@@ -292,7 +316,7 @@ def test_insert_append_query_select_star(make_mocked_engine_adapter: t.Callable)
     )
 
     assert to_sql_calls(adapter) == [
-        'INSERT INTO "test_table" ("a", "b") SELECT "a", "b" FROM (SELECT 1 AS "a", * FROM "tbl") AS "_ordered_projections"',
+        'INSERT INTO "test_table" ("a", "b") SELECT "a", "b" FROM (SELECT 1 AS "a", * FROM "tbl") AS "_subquery"',
     ]
 
 
