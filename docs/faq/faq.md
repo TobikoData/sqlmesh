@@ -103,9 +103,14 @@
 
     A SQLMesh [`audit`](../concepts/audits.md) validates that transformed *data* meet some criteria. For example, an `audit` might verify that a column contains no `NULL` values or has no duplicated values. SQLMesh automatically runs audits when a `sqlmesh plan` is executed and the plan is applied or when `sqlmesh run` is executed.
 
+??? question "How does a model know when to run?"
+    A SQLMesh model determines when to run based on its [`cron`](#cron-question) parameter and how much time has elapsed since its previous run.
+
+    Models are not aware of upstream data updates and do not run based on what has happened in an upstream data source.
+
 <a id="cron-question"></a>
 ??? question "What is the model `cron` parameter?"
-    SQLMesh does not fully refresh models when a project is run. Instead, you specify how frequently each model should run with its [`cron` parameter](../concepts/models/overview.md#cron) (defaults to daily).
+    SQLMesh does not fully refresh models every time a project is run. Instead, you specify how frequently each model should run with its [`cron` parameter](../concepts/models/overview.md#cron) (defaults to daily).
 
     When you execute `sqlmesh run`, SQLMesh compares each model's `cron` value to its record of when the model was last run. If enough time has elapsed it will run the model, otherwise it does nothing.
 
@@ -137,14 +142,6 @@
 
     You can retroactively apply the forward-only plan's changes to existing data in the production environment with [`plan`'s `--effective-from` option](../reference/cli.md#plan).
 
-??? question "How does an `EXTERNAL` model know when to update?"
-    SQLMesh model queries sometimes reference "external" tables that are created and managed outside the SQLMesh project. For example, a model might ingest data from a third party's read-only data system.
-
-    SQLMesh stores information about the columns contained in an external table as an `EXTERNAL` model. `EXTERNAL` models consist solely of an external table's column information and contain no query for SQLMesh to run.
-
-    SQLMesh will not take any actions based on an `EXTERNAL` model - its actions are solely determined by the model whose query selects from the `EXTERNAL` model. The querying model's [`kind`](../concepts/models/model_kinds.md), [`cron`](../concepts/models/overview.md#cron), and previously loaded time intervals determine when SQLMesh will query the `EXTERNAL` model.
-
-    Learn more about `EXTERNAL` models [here](../concepts/models/external_models.md).
 
 ## Databases/Engines
 
