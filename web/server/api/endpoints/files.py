@@ -68,7 +68,7 @@ async def write_file(
     else:
         full_path = settings.project_path / path
         config = context.config_for_path(Path(path_or_new_path))
-        if config.format.ui.enabled and content and Path(path_or_new_path).suffix == ".sql":
+        if config.ui.format_on_save and content and Path(path_or_new_path).suffix == ".sql":
             format_file_status = models.FormatFileStatus(
                 status=models.Status.INIT, path=path_or_new_path
             )
