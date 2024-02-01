@@ -359,24 +359,50 @@ class MacroEvaluator:
         try:
             if typ is None:
                 return expr
-            if isinstance(expr, typ):
+            base = t.get_origin(typ) or typ
+            if t.get_origin(typ) is t.Union:
+                for t_ in t.get_args(typ):
+                    try:
+                        return self._coerce(expr, t_)
+                    except Exception:
+                        pass
+                raise SQLMeshError(f"Failed to coerce expression '{expr}' to type '{typ}'.")
+            if isinstance(expr, base):
                 return expr
-            if issubclass(typ, exp.Expression):
+            if issubclass(base, exp.Expression):
                 d = Dialect.get_or_raise(self.dialect)
-                into = typ if typ in d.parser().EXPRESSION_PARSERS else None
+                into = base if base in d.parser().EXPRESSION_PARSERS else None
                 coerced = parse_one(
                     expr.this if isinstance(expr, exp.Literal) else expr.sql(), into=into
                 )
-                if isinstance(coerced, typ):
+                if isinstance(coerced, base):
                     return coerced
                 else:
                     raise SQLMeshError(f"Failed to coerce expression '{expr}' to type '{typ}'.")
-            if typ in (int, float, str) and isinstance(expr, exp.Literal):
-                return typ(expr.this)
-            if typ is bool and isinstance(expr, exp.Boolean):
+            if base in (int, float, str) and isinstance(expr, exp.Literal):
+                return base(expr.this)
+            if base is bool and isinstance(expr, exp.Boolean):
                 return expr.this
-            if typ is str and isinstance(expr, exp.Expression):
+            if base is str and isinstance(expr, exp.Expression):
                 return expr.sql(self.dialect)
+            if base is tuple and isinstance(expr, (exp.Tuple, exp.Array)):
+                generic = t.get_args(typ)
+                if not generic:
+                    return tuple(expr.expressions)
+                if generic[-1] is ...:
+                    return tuple(self._coerce(expr, generic[0]) for expr in expr.expressions)
+                elif len(generic) == len(expr.expressions):
+                    return tuple(
+                        self._coerce(expr, generic[i]) for i, expr in enumerate(expr.expressions)
+                    )
+                raise SQLMeshError(
+                    f"Failed to coerce expression '{expr}' to type '{typ}'. Expected {len(generic)} items."
+                )
+            if base is list and isinstance(expr, (exp.Array, exp.Tuple)):
+                generic = t.get_args(typ)
+                if not generic:
+                    return expr.expressions
+                return [self._coerce(expr, generic[0]) for expr in expr.expressions]
             raise SQLMeshError(f"No coercion strategy for expression '{expr}' to type '{typ}'.")
         except Exception:
             logger.warning(
