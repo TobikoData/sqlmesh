@@ -65,7 +65,7 @@ EXAMPLE_FULL_MODEL_DEF = f"""MODEL (
   kind FULL,
   cron '@daily',
   grain item_id,
-  audits [assert_positive_order_ids],
+  audits (assert_positive_order_ids),
 );
 
 SELECT
@@ -84,7 +84,7 @@ EXAMPLE_INCREMENTAL_MODEL_DEF = f"""MODEL (
     ),
     start '2020-01-01',
     cron '@daily',
-    grain [id, ds]
+    grain (id, ds)
 );
 
 SELECT
@@ -107,7 +107,7 @@ EXAMPLE_SEED_MODEL_DEF = f"""MODEL (
         item_id INTEGER,
         ds TEXT
     ),
-    grain [id, ds]
+    grain (id, ds)
 );
 """
 
