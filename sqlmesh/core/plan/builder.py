@@ -338,7 +338,11 @@ class PlanBuilder:
         return {
             self._context_diff.snapshots[s_id].name
             for s_id in dag.subdag(
-                *[self._model_fqn_to_snapshot[m].snapshot_id for m in self._backfill_models]
+                *[
+                    self._model_fqn_to_snapshot[m].snapshot_id
+                    for m in self._backfill_models
+                    if m in self._model_fqn_to_snapshot
+                ]
             ).sorted
         }
 
