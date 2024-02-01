@@ -122,6 +122,7 @@ This example stops all notifications other than those for `User1`:
                     notification_target_2(...),
                 ],
             ),
+        ]
     )
     ```
 

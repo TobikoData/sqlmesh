@@ -80,7 +80,7 @@ export default function EditorTabs(): JSX.Element {
   return (
     <div className="flex items-center">
       <Button
-        className="h-6 m-0 ml-1 mr-3 bg-primary-10  hover:bg-secondary-10 active:bg-secondary-10 border-none"
+        className="h-6 m-0 ml-1 mr-2 border-none"
         variant={EnumVariant.Alternative}
         size={EnumSize.sm}
         onClick={(e: MouseEvent) => {
@@ -89,7 +89,7 @@ export default function EditorTabs(): JSX.Element {
           addTabAndSelect()
         }}
       >
-        <PlusIcon className="inline-block w-3 h-4 text-secondary-500 dark:text-primary-500" />
+        <PlusIcon className="inline-block w-3 h-4" />
       </Button>
       <ul className="w-full whitespace-nowrap min-h-[2rem] max-h-[2rem] overflow-hidden overflow-x-auto hover:scrollbar scrollbar--horizontal">
         {tabsLocal.map((tab, idx) => (

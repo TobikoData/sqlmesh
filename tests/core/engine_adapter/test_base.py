@@ -268,6 +268,30 @@ def test_insert_overwrite_by_time_partition_replace_where_pandas(
     ]
 
 
+def test_insert_overwrite_no_where(make_mocked_engine_adapter: t.Callable):
+    adapter = make_mocked_engine_adapter(EngineAdapter)
+
+    source_queries, columns_to_types = adapter._get_source_queries_and_columns_to_types(
+        parse_one("SELECT b, a FROM tbl"),
+        {"a": exp.DataType.build("INT"), "b": exp.DataType.build("STRING")},
+        target_table="test_table",
+    )
+
+    adapter._insert_overwrite_by_condition(
+        "test_table",
+        source_queries,
+        columns_to_types=columns_to_types,
+    )
+
+    adapter.cursor.begin.assert_called_once()
+    adapter.cursor.commit.assert_called_once()
+
+    assert to_sql_calls(adapter) == [
+        """DELETE FROM "test_table" WHERE TRUE""",
+        """INSERT INTO "test_table" ("a", "b") SELECT "a", "b" FROM (SELECT "b", "a" FROM "tbl") AS "_subquery" """.strip(),
+    ]
+
+
 def test_insert_append_query(make_mocked_engine_adapter: t.Callable):
     adapter = make_mocked_engine_adapter(EngineAdapter)
 
@@ -292,7 +316,7 @@ def test_insert_append_query_select_star(make_mocked_engine_adapter: t.Callable)
     )
 
     assert to_sql_calls(adapter) == [
-        'INSERT INTO "test_table" ("a", "b") SELECT "a", "b" FROM (SELECT 1 AS "a", * FROM "tbl") AS "_ordered_projections"',
+        'INSERT INTO "test_table" ("a", "b") SELECT "a", "b" FROM (SELECT 1 AS "a", * FROM "tbl") AS "_subquery"',
     ]
 
 
@@ -376,7 +400,7 @@ def test_comments(make_mocked_engine_adapter: t.Callable, mocker: MockerFixture)
 
     adapter.create_table(
         "test_table",
-        {"a": "int", "b": "int"},
+        {"a": exp.DataType.build("INT"), "b": exp.DataType.build("INT")},
         table_description="test description",
         column_descriptions={"a": "a description"},
     )
@@ -384,7 +408,16 @@ def test_comments(make_mocked_engine_adapter: t.Callable, mocker: MockerFixture)
     adapter.ctas(
         "test_table",
         parse_one("SELECT a, b FROM source_table"),
-        {"a": "int", "b": "int"},
+        {"a": exp.DataType.build("INT"), "b": exp.DataType.build("INT")},
+        table_description="test description",
+        column_descriptions={"a": "a description"},
+    )
+
+    # CTAS call should not include schema definition if UNKNOWN data type present
+    adapter.ctas(
+        "test_table",
+        parse_one("SELECT a, b FROM source_table"),
+        {"a": exp.DataType.build("UNKNOWN"), "b": exp.DataType.build("INT")},
         table_description="test description",
         column_descriptions={"a": "a description"},
     )
@@ -407,8 +440,10 @@ def test_comments(make_mocked_engine_adapter: t.Callable, mocker: MockerFixture)
 
     sql_calls = to_sql_calls(adapter)
     assert sql_calls == [
-        """CREATE TABLE IF NOT EXISTS "test_table" ("a" int COMMENT 'a description', "b" int) COMMENT='test description'""",
-        """CREATE TABLE IF NOT EXISTS "test_table" ("a" int COMMENT 'a description', "b" int) COMMENT='test description' AS SELECT "a", "b" FROM "source_table\"""",
+        """CREATE TABLE IF NOT EXISTS "test_table" ("a" INT COMMENT 'a description', "b" INT) COMMENT='test description'""",
+        """CREATE TABLE IF NOT EXISTS "test_table" ("a" INT COMMENT 'a description', "b" INT) COMMENT='test description' AS SELECT "a", "b" FROM "source_table\"""",
+        """CREATE TABLE IF NOT EXISTS "test_table" COMMENT='test description' AS SELECT "a", "b" FROM "source_table\"""",
+        """COMMENT ON COLUMN "test_table"."a" IS 'a description'""",
         """CREATE OR REPLACE VIEW "test_view" COMMENT='test description' AS SELECT "a", "b" FROM "source_table\"""",
         """COMMENT ON TABLE "test_table" IS 'test description'""",
         """COMMENT ON COLUMN "test_table"."a" IS 'a description'""",
@@ -1310,7 +1345,9 @@ FROM "inserted_rows"
 
 def test_replace_query(make_mocked_engine_adapter: t.Callable):
     adapter = make_mocked_engine_adapter(EngineAdapter)
-    adapter.replace_query("test_table", parse_one("SELECT a FROM tbl"), {"a": "int"})
+    adapter.replace_query(
+        "test_table", parse_one("SELECT a FROM tbl"), {"a": exp.DataType.build("INT")}
+    )
 
     # TODO: Shouldn't we enforce that `a` is casted to an int?
     assert to_sql_calls(adapter) == [
@@ -1323,7 +1360,9 @@ def test_replace_query_pandas(make_mocked_engine_adapter: t.Callable):
     adapter.DEFAULT_BATCH_SIZE = 1
 
     df = pd.DataFrame({"a": [1, 2, 3], "b": [4, 5, 6]})
-    adapter.replace_query("test_table", df, {"a": "int", "b": "int"})
+    adapter.replace_query(
+        "test_table", df, {"a": exp.DataType.build("INT"), "b": exp.DataType.build("INT")}
+    )
 
     assert to_sql_calls(adapter) == [
         'CREATE OR REPLACE TABLE "test_table" AS SELECT CAST("a" AS INT) AS "a", CAST("b" AS INT) AS "b" FROM (VALUES (1, 4)) AS "t"("a", "b")',

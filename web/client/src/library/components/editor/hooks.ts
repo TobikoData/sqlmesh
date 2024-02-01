@@ -9,51 +9,48 @@ import { useMemo, useState } from 'react'
 import { events, HoverTooltip, SQLMeshModel } from './extensions'
 import { findModel, findColumn } from './extensions/help'
 import { useStoreProject } from '@context/project'
-import {
-  type ExtensionSQLMeshDialect,
-  SQLMeshDialect,
-  SQLMeshDialectCleanUp,
-} from './extensions/SQLMeshDialect'
+import { useStoreContext } from '@context/context'
 
-export {
-  useDefaultKeymapsEditorTab,
-  useSQLMeshModelExtensions,
-  useSQLMeshDialect,
-}
+export { useDefaultKeymapsEditorTab, useSQLMeshModelExtensions }
 
 function useDefaultKeymapsEditorTab(): KeyBinding[] {
   const tab = useStoreEditor(s => s.tab)
-
-  if (isNil(tab)) return []
-
   const selectTab = useStoreEditor(s => s.selectTab)
-  const createTab = useStoreEditor(s => s.createTab)
   const closeTab = useStoreEditor(s => s.closeTab)
+  const createTab = useStoreEditor(s => s.createTab)
   const addTab = useStoreEditor(s => s.addTab)
 
-  return [
-    {
-      key: 'Mod-Alt-[',
-      preventDefault: true,
-      run() {
-        const newTab = createTab()
+  const file = tab?.file
 
-        addTab(newTab)
-        selectTab(newTab)
+  const keymaps = useMemo(() => {
+    return isNil(file)
+      ? []
+      : [
+          {
+            key: 'Mod-Alt-[',
+            preventDefault: true,
+            run() {
+              const newTab = createTab()
 
-        return true
-      },
-    },
-    {
-      key: 'Mod-Alt-]',
-      preventDefault: true,
-      run() {
-        closeTab(tab.file)
+              addTab(newTab)
+              selectTab(newTab)
 
-        return true
-      },
-    },
-  ]
+              return true
+            },
+          },
+          {
+            key: 'Mod-Alt-]',
+            preventDefault: true,
+            run() {
+              closeTab(file)
+
+              return true
+            },
+          },
+        ]
+  }, [file, selectTab, closeTab, createTab, addTab])
+
+  return keymaps
 }
 
 function useSQLMeshModelExtensions(
@@ -61,22 +58,25 @@ function useSQLMeshModelExtensions(
   handleModelClick?: (model: ModelSQLMeshModel) => void,
   handleModelColumn?: (model: ModelSQLMeshModel, column: Column) => void,
 ): Extension[] {
-  const { models, lineage } = useLineageFlow()
+  const { lineage } = useLineageFlow()
+
+  const models = useStoreContext(s => s.models)
+
   const files = useStoreProject(s => s.files)
-  const model = path == null ? undefined : models.get(path)
+
+  const model = isNil(path) ? undefined : models.get(path)
 
   const [isActionMode, setIsActionMode] = useState(false)
 
   const extensions = useMemo(() => {
-    const columns =
-      lineage == null
-        ? new Set<string>()
-        : new Set(
-            Object.keys(lineage)
-              .map(modelName => models.get(modelName)?.columns.map(c => c.name))
-              .flat()
-              .filter(Boolean) as string[],
-          )
+    const columns = isNil(lineage)
+      ? new Set<string>()
+      : new Set(
+          Object.keys(lineage)
+            .map(modelName => models.get(modelName)?.columns.map(c => c.name))
+            .flat()
+            .filter(Boolean) as string[],
+        )
 
     function handleEventModelClick(event: MouseEvent): void {
       if (event.metaKey) {
@@ -118,11 +118,7 @@ function useSQLMeshModelExtensions(
       isNotNil(handleModelColumn) && events({ click: handleEventlColumnClick }),
       isNotNil(model) && SQLMeshModel(models, model, columns, isActionMode),
     ].filter(Boolean) as Extension[]
-  }, [model, models, files, handleModelClick, handleModelColumn, isActionMode])
+  }, [handleModelClick, handleModelColumn, model, models, files, isActionMode])
 
   return extensions
-}
-
-function useSQLMeshDialect(): [ExtensionSQLMeshDialect, Callback] {
-  return [SQLMeshDialect, SQLMeshDialectCleanUp]
 }

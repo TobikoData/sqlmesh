@@ -39,7 +39,7 @@ from sqlmesh.core.engine_adapter.shared import (
 )
 from sqlmesh.core.model.kind import TimeColumn
 from sqlmesh.core.schema_diff import SchemaDiffer
-from sqlmesh.utils import double_escape, random_id
+from sqlmesh.utils import columns_to_types_all_known, double_escape, random_id
 from sqlmesh.utils.connection_pool import create_connection_pool
 from sqlmesh.utils.date import TimeLike, make_inclusive, to_ts
 from sqlmesh.utils.errors import SQLMeshError, UnsupportedCatalogOperationError
@@ -604,13 +604,14 @@ class EngineAdapter:
         # types, and for evaluation methods like `LogicalReplaceQueryMixin.replace_query()`
         # calls and SCD Type 2 model calls.
         schema = None
+        columns_to_types_known = columns_to_types and columns_to_types_all_known(columns_to_types)
         if (
             column_descriptions
-            and columns_to_types
+            and columns_to_types_known
             and self.COMMENT_CREATION_TABLE.is_in_schema_def_ctas
             and self.comments_enabled
         ):
-            schema = self._build_schema_exp(table, columns_to_types, column_descriptions)
+            schema = self._build_schema_exp(table, columns_to_types, column_descriptions)  # type: ignore
 
         with self.transaction(condition=len(source_queries) > 1):
             for i, source_query in enumerate(source_queries):
@@ -1021,10 +1022,8 @@ class EngineAdapter:
     ) -> None:
         if contains_json:
             query = self._escape_json(query)
-        if order_projections and query.named_selects != list(columns_to_types):
-            if isinstance(query, exp.Subqueryable):
-                query = query.subquery(alias="_ordered_projections")
-            query = self._select_columns(columns_to_types).from_(query)
+        if order_projections:
+            query = self._order_projections_and_filter(query, columns_to_types)
         self.execute(exp.insert(query, table_name, columns=list(columns_to_types)))
 
     def insert_overwrite_by_partition(
@@ -1104,7 +1103,7 @@ class EngineAdapter:
             columns_to_types = columns_to_types or self.columns(table_name)
             for i, source_query in enumerate(source_queries):
                 with source_query as query:
-                    query = self._add_where_to_query(query, where, columns_to_types)
+                    query = self._order_projections_and_filter(query, columns_to_types, where=where)
                     if i > 0 or insert_overwrite_strategy.is_delete_insert:
                         if i == 0:
                             self.delete_from(table_name, where=where or exp.true())
@@ -1763,22 +1762,24 @@ class EngineAdapter:
 
         return table
 
-    def _add_where_to_query(
+    def _order_projections_and_filter(
         self,
         query: Query,
-        where: t.Optional[exp.Expression],
         columns_to_types: t.Dict[str, exp.DataType],
+        where: t.Optional[exp.Expression] = None,
     ) -> Query:
-        if not where or not isinstance(query, exp.Subqueryable):
+        if not isinstance(query, exp.Subqueryable) or (
+            not where and query.named_selects == list(columns_to_types)
+        ):
             return query
 
         query = t.cast(exp.Subqueryable, query.copy())
         with_ = query.args.pop("with", None)
-        query = (
-            self._select_columns(columns_to_types)
-            .from_(query.subquery("_subquery", copy=False), copy=False)
-            .where(where, copy=False)
+        query = self._select_columns(columns_to_types).from_(
+            query.subquery("_subquery", copy=False), copy=False
         )
+        if where:
+            query = query.where(where, copy=False)
 
         if with_:
             query.set("with", with_)

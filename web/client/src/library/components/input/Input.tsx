@@ -58,7 +58,7 @@ function Input({
         className,
       )}
     >
-      {isNotNil(label) && <InputLabel>{label}</InputLabel>}
+      {isNotNil(label) && <InputLabel size={size}>{label}</InputLabel>}
       {typeof children === 'function'
         ? children({ disabled, required, autoFocus, size, className: cn })
         : children}
@@ -71,16 +71,21 @@ function InputLabel({
   htmlFor,
   className,
   children,
+  size = EnumSize.md,
 }: {
   htmlFor?: string
   className?: string
   children: React.ReactNode
+  size?: Size
 }): JSX.Element {
   return (
     <label
       htmlFor={htmlFor}
       className={clsx(
-        'block mb-1 px-3 text-sm font-bold whitespace-nowrap',
+        'block mb-1 px-2 text-sm whitespace-nowrap',
+        size === EnumSize.sm && 'text-xs',
+        size === EnumSize.md && 'text-sm',
+        size === EnumSize.lg && 'text-md',
         className,
       )}
     >

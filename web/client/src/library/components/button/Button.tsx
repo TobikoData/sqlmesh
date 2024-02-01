@@ -63,7 +63,7 @@ const VARIANT = new Map<ButtonVariant, string>([
   ],
   [
     'alternative',
-    'border-primary-500 bg-primary-10 hover:bg-primary-20 active:bg-primary-200 text-primary-500',
+    'border-neutral-300 bg-neutral-5 hover:bg-neutral-20 active:bg-neutral-200 text-neutral-600',
   ],
   [
     'secondary',

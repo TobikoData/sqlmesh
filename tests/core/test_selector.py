@@ -349,6 +349,36 @@ def test_expand_model_tags(mocker: MockerFixture, make_snapshot, tags, tag_selec
     assert selector.expand_model_selections(tag_selections) == output
 
 
+def test_select_models_with_external_parent(mocker: MockerFixture):
+    default_catalog = "test_catalog"
+    added_model = SqlModel(
+        name="db.added_model",
+        query=d.parse_one("SELECT 1 AS a FROM external"),
+        default_catalog=default_catalog,
+        tags=["tag1"],
+    )
+
+    env_name = "test_env"
+
+    state_reader_mock = mocker.Mock()
+    state_reader_mock.get_environment.return_value = Environment(
+        name=env_name,
+        snapshots=[],
+        start_at="2023-01-01",
+        end_at="2023-02-01",
+        plan_id="test_plan_id",
+    )
+    state_reader_mock.get_snapshots.return_value = {}
+
+    local_models: UniqueKeyDict[str, Model] = UniqueKeyDict("models")
+    local_models[added_model.fqn] = added_model
+
+    selector = Selector(state_reader_mock, local_models, default_catalog=default_catalog)
+
+    expanded_selections = selector.expand_model_selections(["+*added_model*"])
+    assert expanded_selections == {added_model.fqn}
+
+
 def _assert_models_equal(actual: t.Dict[str, Model], expected: t.Dict[str, Model]) -> None:
     assert set(actual) == set(expected)
     for name, model in actual.items():

@@ -143,20 +143,6 @@ Options:
   --help  Show this message and exit.
 ```
 
-## ide
-```
-Usage: sqlmesh ide [OPTIONS]
-
-  Start a browser-based SQLMesh IDE.
-
-  WARNING: soft-deprecated, please use `sqlmesh ui` instead.
-
-Options:
-  --host TEXT     Bind socket to this host. Default: 127.0.0.1
-  --port INTEGER  Bind socket to this port. Default: 8000
-  --help          Show this message and exit.
-```
-
 ## info
 ```
 Usage: sqlmesh info [OPTIONS]
@@ -180,6 +166,17 @@ Options:
   -t, --template TEXT  Project template. Supported values: airflow, dbt,
                        default, empty.
   --help               Show this message and exit.
+```
+
+## invalidate
+```
+Usage: sqlmesh invalidate [OPTIONS] ENVIRONMENT
+
+  Invalidate the target environment, forcing its removal during the next run
+  of the janitor process.
+
+Options:
+  --help  Show this message and exit.
 ```
 
 ## migrate
@@ -277,6 +274,20 @@ Options:
   --help             Show this message and exit.
 ```
 
+## rewrite
+```
+Usage: sqlmesh rewrite [OPTIONS] SQL
+
+  Rewrite a SQL expression with semantic references into an executable query.
+
+  https://sqlmesh.readthedocs.io/en/latest/concepts/metrics/overview/
+
+Options:
+  --read TEXT   The input dialect of the sql string.
+  --write TEXT  The output dialect of the sql string.
+  --help        Show this message and exit.
+```
+
 ## rollback
 ```
 Usage: sqlmesh rollback [OPTIONS]
@@ -313,20 +324,6 @@ Options:
   --where TEXT     An optional where statement to filter results.
   --limit INTEGER  The limit of the sample dataframe.
   --help           Show this message and exit.
-```
-
-## rewrite
-```
-Usage: sqlmesh rewrite [OPTIONS] SQL
-
-  Rewrite a SQL expression with semantic references into an executable query.
-
-  https://sqlmesh.readthedocs.io/en/latest/concepts/metrics/overview/
-
-Options:
-  --read TEXT   The input dialect of the sql string.
-  --write TEXT  The output dialect of the sql string.
-  --help        Show this message and exit.
 ```
 
 ## test

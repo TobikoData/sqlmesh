@@ -41,7 +41,7 @@ export default function EditorFooter({ tab }: { tab: EditorTab }): JSX.Element {
   function updateTabDialect(dialect: string): void {
     tab.dialect = dialect
 
-    refreshTab()
+    refreshTab(tab)
 
     engine.postMessage({
       topic: 'dialect',

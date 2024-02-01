@@ -218,7 +218,9 @@ def test_replace_query(make_mocked_engine_adapter: t.Callable, mocker: MockerFix
     execute_mock = mocker.patch(
         "sqlmesh.core.engine_adapter.bigquery.BigQueryEngineAdapter.execute"
     )
-    adapter.replace_query("test_table", parse_one("SELECT a FROM tbl"), {"a": "int"})
+    adapter.replace_query(
+        "test_table", parse_one("SELECT a FROM tbl"), {"a": exp.DataType.build("INT")}
+    )
 
     sql_calls = _to_sql_calls(execute_mock)
     assert sql_calls == ["CREATE OR REPLACE TABLE `test_table` AS SELECT `a` FROM `tbl`"]
@@ -591,7 +593,7 @@ def test_comments(make_mocked_engine_adapter: t.Callable, mocker: MockerFixture)
 
     adapter.create_table(
         "test_table",
-        {"a": "int", "b": "int"},
+        {"a": exp.DataType.build("INT"), "b": exp.DataType.build("INT")},
         table_description="test description",
         column_descriptions={"a": "a description"},
     )
@@ -599,7 +601,7 @@ def test_comments(make_mocked_engine_adapter: t.Callable, mocker: MockerFixture)
     adapter.ctas(
         "test_table",
         parse_one("SELECT a, b FROM source_table"),
-        {"a": "int", "b": "int"},
+        {"a": exp.DataType.build("INT"), "b": exp.DataType.build("INT")},
         table_description="test description",
         column_descriptions={"a": "a description"},
     )
@@ -617,8 +619,8 @@ def test_comments(make_mocked_engine_adapter: t.Callable, mocker: MockerFixture)
 
     sql_calls = _to_sql_calls(execute_mock)
     assert sql_calls == [
-        "CREATE TABLE IF NOT EXISTS `test_table` (`a` int OPTIONS (description='a description'), `b` int) OPTIONS (description='test description')",
-        "CREATE TABLE IF NOT EXISTS `test_table` (`a` int OPTIONS (description='a description'), `b` int) OPTIONS (description='test description') AS SELECT `a`, `b` FROM `source_table`",
+        "CREATE TABLE IF NOT EXISTS `test_table` (`a` INT64 OPTIONS (description='a description'), `b` INT64) OPTIONS (description='test description')",
+        "CREATE TABLE IF NOT EXISTS `test_table` (`a` INT64 OPTIONS (description='a description'), `b` INT64) OPTIONS (description='test description') AS SELECT `a`, `b` FROM `source_table`",
         "CREATE OR REPLACE VIEW `test_table` OPTIONS (description='test description') AS SELECT `a`, `b` FROM `source_table`",
         "ALTER TABLE `test_table` SET OPTIONS(description = 'test description')",
     ]

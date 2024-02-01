@@ -238,7 +238,7 @@ The pane contains multiple pieces of information about the plan:
             item_id INTEGER,
             ds VARCHAR
         ),
-        grain [id, ds]
+        grain (id, ds)
     );
     ```
 
@@ -256,7 +256,7 @@ The pane contains multiple pieces of information about the plan:
         ),
         start '2020-01-01',
         cron '@daily',
-        grain [id, ds]
+        grain (id, ds)
     );
 
     SELECT
@@ -277,7 +277,7 @@ The pane contains multiple pieces of information about the plan:
         kind FULL,
         cron '@daily',
         grain item_id,
-        audits [assert_positive_order_ids],
+        audits (assert_positive_order_ids),
     );
 
     SELECT
