@@ -409,7 +409,11 @@ class macro(registry_decorator):
                 args.extend(kwargs.pop(spec.varargs, []))
             return func(*args, **kwargs)
 
-        annotated = t.get_type_hints(func).keys() - {"return"}
+        try:
+            annotated = any(t.get_type_hints(func).keys() - {"return"})
+        except TypeError:
+            annotated = False
+
         wrapper = super().__call__(
             func if not annotated else t.cast(t.Callable[..., DECORATOR_RETURN_TYPE], _typed_func)
         )
