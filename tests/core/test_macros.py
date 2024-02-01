@@ -54,6 +54,14 @@ def macro_evaluator() -> MacroEvaluator:
                 query.select(exp.Literal.string(name).as_("source"), copy=False)
         return with_
 
+    @macro()
+    def suffix_idents(evaluator: MacroEvaluator, items: t.List[str], suffix: str):
+        return [item + suffix for item in items]
+
+    @macro()
+    def suffix_idents_2(evaluator: MacroEvaluator, items: t.Tuple[str, ...], suffix: str):
+        return [item + suffix for item in items]
+
     return MacroEvaluator(
         "hive",
         {"test": Executable(name="test", payload=f"def test(_):\n    return 'test'")},
@@ -352,6 +360,16 @@ def test_ast_correctness(macro_evaluator):
         (
             """@CTE_TAG_NAME('WITH step1 AS (SELECT 1) SELECT * FROM step1')""",
             "WITH step1 AS (SELECT 1, 'step1' AS source) SELECT * FROM step1",
+            {},
+        ),
+        (
+            """SELECT @SUFFIX_IDENTS(['a', 'b', 'c'], 'z')""",
+            "SELECT az, bz, cz",
+            {},
+        ),
+        (
+            """SELECT @SUFFIX_IDENTS_2(['a', 'b', 'c'], 'z')""",
+            "SELECT az, bz, cz",
             {},
         ),
     ],
