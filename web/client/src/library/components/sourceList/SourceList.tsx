@@ -1,8 +1,9 @@
 import Input from '@components/input/Input'
-import { isArrayEmpty, isNil, isNotNil } from '@utils/index'
+import { useVirtualizer } from '@tanstack/react-virtual'
+import { isArrayEmpty, isNil, isNotNil, isOnScreen } from '@utils/index'
 import clsx from 'clsx'
-import { useState } from 'react'
-import { NavLink } from 'react-router-dom'
+import { useEffect, useMemo, useRef, useState } from 'react'
+import { NavLink, useLocation } from 'react-router-dom'
 import { EnumSize, EnumVariant, type Variant } from '~/types/enum'
 
 interface ListItem<
@@ -43,6 +44,10 @@ export default function SourceList<
 }): JSX.Element {
   const [filter, setFilter] = useState('')
 
+  const { pathname } = useLocation()
+
+  const scrollableAreaRef = useRef<HTMLDivElement>(null)
+
   const filtered =
     filter === ''
       ? items
@@ -61,51 +66,91 @@ export default function SourceList<
           )
         })
 
+  const activeItemIndex = useMemo((): number => {
+    return filtered.findIndex(filteredItem => {
+      return `${to}/${filteredItem[by]}` === pathname
+    })
+  }, [filtered])
+
+  const rowVirtualizer = useVirtualizer({
+    count: filtered.length,
+    getScrollElement: () => scrollableAreaRef.current,
+    estimateSize: () => 28,
+  })
+
+  useEffect(() => {
+    console.log({ activeItemIndex })
+    if (activeItemIndex > -1) {
+      console.log('scrolling to the index')
+      rowVirtualizer.scrollToIndex(activeItemIndex, {
+        align: 'center',
+      })
+    }
+  }, [activeItemIndex])
+
   return (
     <div className={clsx('flex flex-col w-full h-full', className)}>
-      <ul className="p-2 h-full overflow-auto hover:scrollbar scrollbar--horizontal scrollbar--vertical">
-        {isArrayEmpty(filtered) && (
-          <li
-            key="not-found"
-            className="p-2"
-            onClick={() => {
-              setFilter('')
-            }}
-          >
-            No Results Found
-          </li>
-        )}
-        {filtered.map(item => {
-          const id = (item as Record<string, string>)[by]!
-          const name = isNil(byName)
-            ? ''
-            : (item as Record<string, string>)?.[byName] ?? ''
-          const description = isNil(byDescription)
-            ? undefined
-            : (item as Record<string, string>)?.[byDescription] ?? undefined
-
-          return (
+      <div
+        className="p-2 h-full overflow-auto hover:scrollbar scrollbar--horizontal scrollbar--vertical"
+        ref={scrollableAreaRef}
+      >
+        <div
+          className="relative"
+          style={{ height: `${rowVirtualizer.getTotalSize()}px` }}
+        >
+          {isArrayEmpty(filtered) && (
             <li
-              key={id}
-              className={clsx(
-                'text-sm font-normal',
-                disabled && 'cursor-not-allowed',
-              )}
-              tabIndex={id === filter ? -1 : 0}
+              key="not-found"
+              className="p-2"
+              onClick={() => {
+                setFilter('')
+              }}
             >
-              {listItem?.({
-                id,
-                to: `${to}/${id}`,
-                name,
-                description,
-                text: (types as Record<string, string>)?.[id],
-                disabled,
-                item,
-              })}
+              No Results Found
             </li>
-          )
-        })}
-      </ul>
+          )}
+          {rowVirtualizer.getVirtualItems().map(virtualItem => {
+            const id = (filtered[virtualItem.index] as Record<string, string>)[
+              by
+            ]!
+            const name = isNil(byName)
+              ? ''
+              : (filtered[virtualItem.index] as Record<string, string>)?.[
+                  byName
+                ] ?? ''
+            const description = isNil(byDescription)
+              ? undefined
+              : (filtered[virtualItem.index] as Record<string, string>)?.[
+                  byDescription
+                ] ?? undefined
+
+            return (
+              <div
+                key={virtualItem.key}
+                className={clsx(
+                  'text-sm font-normal absolute top-0 left-0 w-full',
+                  disabled && 'cursor-not-allowed',
+                )}
+                style={{
+                  height: `${virtualItem.size}px`,
+                  transform: `translateY(${virtualItem.start}px)`,
+                }}
+                tabIndex={id === filter ? -1 : 0}
+              >
+                {listItem?.({
+                  id,
+                  to: `${to}/${id}`,
+                  name,
+                  description,
+                  text: (types as Record<string, string>)?.[id],
+                  disabled,
+                  item: filtered[virtualItem.index]!,
+                })}
+              </div>
+            )
+          })}
+        </div>
+      </div>
       <div className="p-2 w-full flex justify-between">
         <Input
           className="w-full !m-0"
@@ -168,8 +213,8 @@ export function SourceListItem({
             ? variant === EnumVariant.Primary
               ? 'text-primary-500 bg-primary-10'
               : variant === EnumVariant.Danger
-              ? 'text-danger-500 bg-danger-5'
-              : 'text-neutral-500 bg-neutral-10'
+                ? 'text-danger-500 bg-danger-5'
+                : 'text-neutral-500 bg-neutral-10'
             : 'hover:bg-neutral-10 text-neutral-400 dark:text-neutral-300',
         )
       }
