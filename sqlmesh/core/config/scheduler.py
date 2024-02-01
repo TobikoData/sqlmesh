@@ -108,6 +108,8 @@ class _BaseAirflowSchedulerConfig(_EngineAdapterStateSyncSchedulerConfig):
 
     use_state_connection: bool
 
+    default_catalog_override: t.Optional[str]
+
     @abc.abstractmethod
     def get_client(self, console: t.Optional[Console] = None) -> AirflowClient:
         """Constructs the Airflow Client instance."""
@@ -139,7 +141,9 @@ class _BaseAirflowSchedulerConfig(_EngineAdapterStateSyncSchedulerConfig):
         )
 
     def get_default_catalog(self, context: Context) -> t.Optional[str]:
-        return self.get_client(context.console).default_catalog
+        # The default catalog must still be set on the Airflow side.
+        default_catalog = self.get_client(context.console).default_catalog
+        return self.default_catalog_override or default_catalog
 
 
 class AirflowSchedulerConfig(_BaseAirflowSchedulerConfig, BaseConfig):
@@ -157,6 +161,8 @@ class AirflowSchedulerConfig(_BaseAirflowSchedulerConfig, BaseConfig):
         ddl_concurrent_tasks: The number of concurrent tasks used for DDL operations (table / view creation, deletion, etc).
         max_snapshot_ids_per_request: The maximum number of snapshot IDs that can be sent in a single HTTP GET request to the Airflow Webserver.
         use_state_connection: Whether to use the `state_connection` configuration to access the SQLMesh state.
+        default_catalog_override: Overrides the default catalog value for this project. If specified, this value takes precedence
+            over the default catalog value set on the Airflow side.
     """
 
     airflow_url: str = "http://localhost:8080/"
@@ -171,6 +177,8 @@ class AirflowSchedulerConfig(_BaseAirflowSchedulerConfig, BaseConfig):
 
     max_snapshot_ids_per_request: t.Optional[int] = None
     use_state_connection: bool = False
+
+    default_catalog_override: t.Optional[str] = None
 
     type_: Literal["airflow"] = Field(alias="type", default="airflow")
 
@@ -202,6 +210,8 @@ class CloudComposerSchedulerConfig(_BaseAirflowSchedulerConfig, BaseConfig, extr
         ddl_concurrent_tasks: The number of concurrent tasks used for DDL operations (table / view creation, deletion, etc).
         max_snapshot_ids_per_request: The maximum number of snapshot IDs that can be sent in a single HTTP GET request to the Airflow Webserver.
         use_state_connection: Whether to use the `state_connection` configuration to access the SQLMesh state.
+        default_catalog_override: Overrides the default catalog value for this project. If specified, this value takes precedence
+            over the default catalog value set on the Airflow side.
     """
 
     airflow_url: str
@@ -214,6 +224,8 @@ class CloudComposerSchedulerConfig(_BaseAirflowSchedulerConfig, BaseConfig, extr
 
     max_snapshot_ids_per_request: t.Optional[int] = 20
     use_state_connection: bool = False
+
+    default_catalog_override: t.Optional[str] = None
 
     type_: Literal["cloud_composer"] = Field(alias="type", default="cloud_composer")
 
@@ -266,6 +278,8 @@ class MWAASchedulerConfig(_EngineAdapterStateSyncSchedulerConfig, BaseConfig):
             whether a DAG has been created.
         backfill_concurrent_tasks: The number of concurrent tasks used for model backfilling during plan application.
         ddl_concurrent_tasks: The number of concurrent tasks used for DDL operations (table / view creation, deletion, etc).
+        default_catalog_override: Overrides the default catalog value for this project. If specified, this value takes precedence
+            over the default catalog value set on the Airflow side.
     """
 
     environment: str
@@ -275,6 +289,8 @@ class MWAASchedulerConfig(_EngineAdapterStateSyncSchedulerConfig, BaseConfig):
 
     backfill_concurrent_tasks: int = 4
     ddl_concurrent_tasks: int = 4
+
+    default_catalog_override: t.Optional[str] = None
 
     type_: Literal["mwaa"] = Field(alias="type", default="mwaa")
 
@@ -298,7 +314,9 @@ class MWAASchedulerConfig(_EngineAdapterStateSyncSchedulerConfig, BaseConfig):
         )
 
     def get_default_catalog(self, context: Context) -> t.Optional[str]:
-        return self.get_client(context.console).default_catalog
+        # The default catalog must still be set on the Airflow side.
+        default_catalog = self.get_client(context.console).default_catalog
+        return self.default_catalog_override or default_catalog
 
 
 SchedulerConfig = Annotated[
