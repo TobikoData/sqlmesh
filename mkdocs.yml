@@ -64,8 +64,9 @@ nav:
       - integrations/engines/bigquery.md
       - integrations/engines/databricks.md
       - integrations/engines/duckdb.md
-      - integrations/engines/mysql.md
+      - integrations/engines/motherduck.md
       - integrations/engines/mssql.md
+      - integrations/engines/mysql.md
       - integrations/engines/postgres.md
       - integrations/engines/gcp-postgres.md
       - integrations/engines/redshift.md
