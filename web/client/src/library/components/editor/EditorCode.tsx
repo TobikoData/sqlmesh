@@ -6,6 +6,7 @@ import { useApiFileByPath, useMutationApiSaveFile } from '~/api'
 import { debounceSync, isNil, isNotNil } from '~/utils'
 import { useStoreContext } from '~/context/context'
 import { useStoreEditor } from '~/context/editor'
+import { completionStatus, acceptCompletion } from '@codemirror/autocomplete'
 import {
   ModelFile,
   type FileExtensions,
@@ -14,7 +15,6 @@ import {
 import clsx from 'clsx'
 import Loading from '@components/loading/Loading'
 import Spinner from '@components/logo/Spinner'
-import { useSQLMeshDialect } from './hooks'
 import { useStoreProject } from '@context/project'
 import { useQueryClient } from '@tanstack/react-query'
 import { EnumColorScheme, useColorScheme } from '@context/theme'
@@ -22,8 +22,12 @@ import { dracula, tomorrow } from 'thememirror'
 import { python } from '@codemirror/lang-python'
 import { StreamLanguage } from '@codemirror/language'
 import { yaml } from '@codemirror/legacy-modes/mode/yaml'
-import { type FileContent } from '@api/client'
 import './Editor.css'
+import {
+  SQLMeshDialect,
+  SQLMeshDialectCleanUp,
+} from './extensions/SQLMeshDialect'
+import { indentMore } from '@codemirror/commands'
 
 export { CodeEditorDefault, CodeEditorRemoteFile }
 
@@ -32,19 +36,18 @@ function CodeEditorDefault({
   dialect = '',
   content = '',
   className,
-  keymaps = [],
-  extensions = [],
+  keymaps,
+  extensions,
   onChange,
 }: {
   type: FileExtensions
   dialect?: string
   className?: string
-  content?: FileContent
+  content: string
   keymaps?: KeyBinding[]
   extensions?: Extension[]
   onChange?: (value: string) => void
 }): JSX.Element {
-  const [SQLMeshDialect, SQLMeshDialectCleanUp] = useSQLMeshDialect()
   const { mode } = useColorScheme()
 
   const extensionsDefault = useMemo(() => {
@@ -58,12 +61,22 @@ function CodeEditorDefault({
 
   const models = useStoreContext(s => s.models)
   const engine = useStoreEditor(s => s.engine)
+  const [value, setValue] = useState(content)
+
   const dialects = useStoreEditor(s => s.dialects)
 
   const [dialectOptions, setDialectOptions] = useState<{
     types: string
     keywords: string
   }>()
+
+  const debouncedChange = useCallback(
+    debounceSync(function handleChange(value): void {
+      setValue(value)
+      onChange?.(value)
+    }, 500),
+    [],
+  )
 
   const handleEngineWorkerMessage = useCallback((e: MessageEvent): void => {
     if (e.data.topic === 'dialect') {
@@ -77,7 +90,23 @@ function CodeEditorDefault({
   )
 
   const extensionKeymap = useMemo(
-    () => keymap.of([...keymaps].flat()),
+    () =>
+      keymap.of(
+        [
+          ...(keymaps ?? []),
+          [
+            {
+              key: 'Tab',
+              preventDefault: true,
+              run(e: any) {
+                console.log('dialect', 'Tab', completionStatus(e.state))
+                if (isNil(completionStatus(e.state))) return indentMore(e)
+                return acceptCompletion(e)
+              },
+            },
+          ],
+        ].flat(),
+      ),
     [keymaps],
   )
 
@@ -85,9 +114,9 @@ function CodeEditorDefault({
     return [
       ...extensionsDefault,
       extensions,
-      extensionKeymap,
       type === EnumFileExtensions.SQL &&
         SQLMeshDialect(models, dialectOptions, dialectsTitles),
+      extensionKeymap,
     ]
       .filter(Boolean)
       .flat() as Extension[]
@@ -126,22 +155,16 @@ function CodeEditorDefault({
     })
   }, [dialect])
 
-  useEffect(() => {
-    engine.postMessage({
-      topic: 'validate',
-      payload: content,
-    })
-  }, [content])
-
   return (
     <div className={clsx('flex w-full h-full', className)}>
       <CodeMirror
         height="100%"
         width="100%"
         className={clsx('flex w-full h-full font-mono text-xs', className)}
-        value={content ?? ''}
+        value={value}
+        indentWithTab={false}
         extensions={extensionsAll}
-        onChange={onChange}
+        onChange={debouncedChange}
         readOnly={isNil(onChange)}
       />
     </div>
@@ -151,13 +174,16 @@ function CodeEditorDefault({
 function CodeEditorRemoteFile({
   path,
   children,
+  keymaps,
 }: {
   path: string
+  keymaps?: KeyBinding[]
   children: (options: { file: ModelFile; keymaps: KeyBinding[] }) => JSX.Element
 }): JSX.Element {
   const client = useQueryClient()
 
   const files = useStoreProject(s => s.files)
+  const setFiles = useStoreProject(s => s.setFiles)
 
   const {
     refetch: getFileContent,
@@ -176,27 +202,28 @@ function CodeEditorRemoteFile({
           body: { content: file?.content },
         })
       },
-      1000,
+      500,
       true,
     ),
     [path],
   )
 
-  const keymaps = useMemo(
-    () => [
-      {
-        mac: 'Cmd-s',
-        win: 'Ctrl-s',
-        linux: 'Ctrl-s',
-        preventDefault: true,
-        run() {
-          debouncedSaveChange()
+  const extensionKeymap = useMemo(
+    () =>
+      (keymaps ?? []).concat([
+        {
+          mac: 'Cmd-s',
+          win: 'Ctrl-s',
+          linux: 'Ctrl-s',
+          preventDefault: true,
+          run() {
+            debouncedSaveChange()
 
-          return true
+            return true
+          },
         },
-      },
-    ],
-    [debouncedSaveChange],
+      ]),
+    [keymaps, debouncedSaveChange],
   )
 
   useEffect(() => {
@@ -209,6 +236,8 @@ function CodeEditorRemoteFile({
         setFile(new ModelFile(data))
       } else {
         file.update(data)
+
+        setFiles(Array.from(files.values()))
       }
     })
 
@@ -229,6 +258,6 @@ function CodeEditorRemoteFile({
       <h3 className="text-xl">File Not Found</h3>
     </div>
   ) : (
-    children({ file, keymaps })
+    children({ file, keymaps: extensionKeymap })
   )
 }

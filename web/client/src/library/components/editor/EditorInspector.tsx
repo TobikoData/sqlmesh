@@ -46,6 +46,7 @@ export default function EditorInspector({
 }): JSX.Element {
   const models = useStoreContext(s => s.models)
   const isModel = useStoreContext(s => s.isModel)
+
   const model = useMemo(() => models.get(tab.file.path), [tab, models])
 
   return (
