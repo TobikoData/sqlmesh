@@ -317,7 +317,7 @@ def test_create_table_date_partition(
     )
     adapter.create_table(
         "test_table",
-        {"a": "int", "b": "int"},
+        {"a": exp.DataType.build("int"), "b": exp.DataType.build("int")},
         partitioned_by=partition_by_cols,
         partition_interval_unit=IntervalUnit.DAY,
         clustered_by=["b"],
@@ -325,7 +325,7 @@ def test_create_table_date_partition(
 
     sql_calls = _to_sql_calls(execute_mock)
     assert sql_calls == [
-        f"CREATE TABLE IF NOT EXISTS `test_table` (`a` int, `b` int) PARTITION BY {partition_by_statement} CLUSTER BY `b`"
+        f"CREATE TABLE IF NOT EXISTS `test_table` (`a` INT64, `b` INT64) PARTITION BY {partition_by_statement} CLUSTER BY `b`"
     ]
 
 
@@ -572,7 +572,7 @@ def test_create_table_table_options(make_mocked_engine_adapter: t.Callable, mock
 
     adapter.create_table(
         "test_table",
-        {"a": "int", "b": "int"},
+        {"a": exp.DataType.build("int"), "b": exp.DataType.build("int")},
         table_properties={
             "partition_expiration_days": exp.convert(7),
         },
@@ -580,7 +580,7 @@ def test_create_table_table_options(make_mocked_engine_adapter: t.Callable, mock
 
     sql_calls = _to_sql_calls(execute_mock)
     assert sql_calls == [
-        "CREATE TABLE IF NOT EXISTS `test_table` (`a` int, `b` int) OPTIONS (partition_expiration_days=7)"
+        "CREATE TABLE IF NOT EXISTS `test_table` (`a` INT64, `b` INT64) OPTIONS (partition_expiration_days=7)"
     ]
 
 
