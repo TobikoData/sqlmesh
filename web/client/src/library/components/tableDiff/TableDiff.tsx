@@ -2,6 +2,7 @@ import clsx from 'clsx'
 import React, { useState } from 'react'
 import {
   EMPTY_TABLE_CELL,
+  SOURCE_PREFIX,
   TARGET_PREFIX,
   getCellContent,
   getCellContentSource,
@@ -83,7 +84,7 @@ export default function TableDiff({ diff }: { diff: any }): JSX.Element {
           </div>
         </>
       )}
-      <div className="overflow-auto h-full rounded-lg hover:scrollbar scrollbar--horizontal scrollbar--vertical">
+      <div className="overflow-auto h-full hover:scrollbar scrollbar--horizontal scrollbar--vertical">
         <table
           cellPadding={0}
           cellSpacing={0}
@@ -101,8 +102,10 @@ export default function TableDiff({ diff }: { diff: any }): JSX.Element {
                       ? 'border-t-2 border-l-2 border-r-2 border-success-500'
                       : header in diff.schema_diff.removed
                       ? 'border-t-2 border-l-2 border-r-2 border-danger-500'
+                      : grain.includes(header)
+                      ? 'border-brand-500 border-l-2 border-t-2 border-r-2'
                       : 'border-r border-b border-neutral-100 dark:border-neutral-700 last:border-r-0',
-                    grain.includes(header) ? 'bg-brand-10' : 'bg-primary-10',
+                    grain.includes(header) ? 'bg-brand-10' : 'bg-neutral-5',
                   )}
                 >
                   <div className="flex justify-between">
@@ -153,7 +156,7 @@ export default function TableDiff({ diff }: { diff: any }): JSX.Element {
                         >
                           <div
                             className={clsx(
-                              'px-2 py-1 whitespace-nowrap font-bold',
+                              'px-2 py-1 whitespace-nowrap font-bold rounded-md ',
                               isAddedRow(diff, rowKey, diff.on) &&
                                 'bg-success-10 text-success-500',
                               isDeletedRow(diff, rowKey, diff.on) &&
@@ -165,17 +168,23 @@ export default function TableDiff({ diff }: { diff: any }): JSX.Element {
                         </td>
                         <td
                           key={`${rowKey}-${header}-target`}
-                          className="p-1 border-r border-b border-neutral-100 dark:border-neutral-700 last:border-r-0"
+                          className={clsx(
+                            'p-1 border-r border-b border-neutral-100 dark:border-neutral-700 last:border-r-0',
+                            isAddedRow(diff, rowKey, diff.on) &&
+                              'bg-success-10 text-success-500',
+                            isDeletedRow(diff, rowKey, diff.on) &&
+                              'bg-danger-5 text-danger-500',
+                          )}
                         >
                           <div
                             className={clsx(
                               'px-2 py-1 whitespace-nowrap font-bold rounded-md',
-                              isAddedRow(diff, rowKey, diff.on) &&
-                                'bg-success-10 text-success-500',
-                              isDeletedRow(diff, rowKey, diff.on) &&
-                                'bg-danger-5 text-danger-500',
                               isModified(diff, header, rowKey) &&
                                 'bg-primary-10 text-primary-500',
+                              isAddedRow(diff, rowKey, diff.on) &&
+                                '!bg-success-10 !text-success-500',
+                              isDeletedRow(diff, rowKey, diff.on) &&
+                                '!bg-danger-5 !text-danger-500',
                             )}
                           >
                             {getCellContentTarget(diff, header, rowKey)}
@@ -188,32 +197,42 @@ export default function TableDiff({ diff }: { diff: any }): JSX.Element {
                         className={clsx(
                           'p-1',
                           header in diff.schema_diff.added
-                            ? 'border-l-2 border-r-2 border-success-500 text-success-500 font-bold'
+                            ? 'bg-success-10 border-l-2 border-r-2 border-success-500 text-success-500 font-bold'
                             : header in diff.schema_diff.removed
-                            ? 'border-l-2 border-r-2 border-danger-500 !text-danger-500 font-bold'
+                            ? 'bg-danger-5 border-l-2 border-r-2 border-danger-500 !text-danger-500 font-bold'
+                            : grain.includes(header)
+                            ? 'border-brand-500 border-l-2 border-r-2'
                             : 'border-r border-b border-neutral-100 dark:border-neutral-700 last:border-r-0',
                           isDeletedRow(diff, rowKey, diff.on) &&
-                            'bg-danger-5 !text-danger-500 font-bold',
+                            '!bg-danger-5 text-danger-500 font-bold',
                           isAddedRow(diff, rowKey, diff.on) &&
                             'bg-success-10 text-success-500 font-bold',
-                          grain.includes(header) && 'bg-brand-10',
                         )}
                       >
                         <div
                           className={clsx(
                             'px-2 py-1 whitespace-nowrap rounded-md',
-                            isDeletedRow(diff, rowKey, diff.on) &&
-                              'bg-danger-5 !text-danger-500 font-bold',
-                            isAddedRow(diff, rowKey, diff.on) &&
+                            (header in diff.schema_diff.added ||
+                              isAddedRow(diff, rowKey, diff.on)) &&
                               'bg-success-10 text-success-500 font-bold',
+                            (header in diff.schema_diff.removed ||
+                              isDeletedRow(diff, rowKey, diff.on)) &&
+                              '!bg-danger-5 !text-danger-500 font-bold',
                           )}
                         >
                           {getCellContent(
                             diff,
-                            TARGET_PREFIX,
+                            SOURCE_PREFIX,
                             header,
                             rowKey,
-                          ) ?? EMPTY_TABLE_CELL}
+                          ) ??
+                            getCellContent(
+                              diff,
+                              TARGET_PREFIX,
+                              header,
+                              rowKey,
+                            ) ??
+                            EMPTY_TABLE_CELL}
                         </div>
                       </td>
                     ),
@@ -240,7 +259,7 @@ export default function TableDiff({ diff }: { diff: any }): JSX.Element {
                           'text-left whitespace-nowrap px-2 py-1 border-r border-t border-neutral-100 dark:border-neutral-700 last:border-r-0',
                           grain.includes(header)
                             ? 'bg-brand-10'
-                            : 'bg-primary-10',
+                            : 'bg-neutral-10',
                         )}
                       >
                         Source
@@ -266,10 +285,12 @@ export default function TableDiff({ diff }: { diff: any }): JSX.Element {
                           ? 'border-b-2 border-l-2 border-r-2 border-success-500'
                           : header in diff.schema_diff.removed
                           ? 'border-b-2 border-l-2 border-r-2 border-danger-500'
+                          : grain.includes(header)
+                          ? 'border-brand-500 border-l-2 border-b-2 border-r-2'
                           : 'border-r border-t border-neutral-100 dark:border-neutral-700 last:border-r-0',
                         grain.includes(header)
                           ? 'bg-brand-10'
-                          : 'bg-primary-10',
+                          : 'bg-neutral-10',
                       )}
                     >
                       {(header in diff.schema_diff.removed ||

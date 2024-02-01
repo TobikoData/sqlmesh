@@ -641,6 +641,19 @@ function FormDiffModel({
             </Input>
             <Input
               className="w-full mx-0"
+              label="Target"
+              disabled={true}
+            >
+              {({ disabled, className }) => (
+                <Input.Textfield
+                  className={clsx(className, 'w-full')}
+                  disabled={disabled}
+                  value={target.value}
+                />
+              )}
+            </Input>
+            <Input
+              className="w-full mx-0"
               label="Limit"
               size={EnumSize.sm}
             >
@@ -699,18 +712,7 @@ function FormDiffModel({
       </InspectorForm>
       <Divider />
       <InspectorActions>
-        <div className="flex w-full justify-between items-center px-2">
-          <span className="text-xs text-neutral-400 font-medium">
-            Compare current model using
-            <span className="inline-block px-2 bg-brand-10 mx-1 text-brand-600 rounded-md">
-              {target.value}
-            </span>{' '}
-            as <b>Target</b> and{' '}
-            <span className="inline-block px-2 bg-brand-10 mx-1 text-brand-600 rounded-md">
-              {selectedSource}
-            </span>{' '}
-            as <b>Source</b>
-          </span>
+        <div className="flex w-full justify-end items-center px-2">
           {isFetching ? (
             <div className="flex items-center">
               <Spinner className="w-3" />
