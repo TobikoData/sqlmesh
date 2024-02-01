@@ -68,7 +68,7 @@ async def write_file(
     else:
         full_path = settings.project_path / path
         config = context.config_for_path(Path(path_or_new_path))
-        if config.ui.format_on_save and content and Path(path_or_new_path).suffix == ".sql":
+        if config.format.ui.enabled and content and Path(path_or_new_path).suffix == ".sql":
             format_file_status = models.FormatFileStatus(
                 status=models.Status.INIT, path=path_or_new_path
             )
@@ -78,7 +78,9 @@ async def write_file(
             dialect = model.dialect if model and model.is_sql else default_dialect
             try:
                 expressions = parse(content, default_dialect=default_dialect)
-                content = format_model_expressions(expressions, dialect, **config.format.dict())
+                content = format_model_expressions(
+                    expressions, dialect, **config.format.generator_options
+                )
                 if config.format.append_newline:
                     content += "\n"
                 format_file_status.status = models.Status.SUCCESS

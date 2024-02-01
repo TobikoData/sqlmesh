@@ -760,14 +760,13 @@ class Context(BaseContext):
                                     value=exp.Literal.string(transpile or model.dialect),
                                 )
                             )
-                format_options = self.config_for_node(model).format.copy(update=kwargs)
+                format = self.config_for_node(model).format
+                opts = {**format.generator_options, **kwargs}
                 file.seek(0)
                 file.write(
-                    format_model_expressions(
-                        expressions, transpile or model.dialect, **format_options.dict()
-                    )
+                    format_model_expressions(expressions, transpile or model.dialect, **opts)
                 )
-                if append_newline or format_options.append_newline:
+                if append_newline or format.append_newline:
                     file.write("\n")
                 file.truncate()
 
