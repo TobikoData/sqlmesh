@@ -724,16 +724,25 @@ INSERT OVERWRITE TABLE `db`.`target` (
   `test_valid_to`
 )
 SELECT
-  *
-FROM `static`
-UNION ALL
-SELECT
-  *
-FROM `updated_rows`
-UNION ALL
-SELECT
-  *
-FROM `inserted_rows`
+  `id`,
+  `name`,
+  `price`,
+  `test_updated_at`,
+  `test_valid_from`,
+  `test_valid_to`
+FROM (
+  SELECT
+    *
+  FROM `static`
+  UNION ALL
+  SELECT
+    *
+  FROM `updated_rows`
+  UNION ALL
+  SELECT
+    *
+  FROM `inserted_rows`
+) AS `_subquery`
         """,
             dialect="spark",
         ).sql(dialect="spark"),

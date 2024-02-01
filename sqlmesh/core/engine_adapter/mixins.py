@@ -101,7 +101,7 @@ class InsertOverwriteWithMergeMixin(EngineAdapter):
         columns_to_types = columns_to_types or self.columns(table_name)
         for source_query in source_queries:
             with source_query as query:
-                query = self._add_where_to_query(query, where, columns_to_types)
+                query = self._order_projections_and_filter(query, columns_to_types, where=where)
                 columns = [exp.to_column(col) for col in columns_to_types]
                 when_not_matched_by_source = exp.When(
                     matched=False,
