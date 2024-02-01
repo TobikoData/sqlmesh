@@ -103,9 +103,14 @@
 
     A SQLMesh [`audit`](../concepts/audits.md) validates that transformed *data* meet some criteria. For example, an `audit` might verify that a column contains no `NULL` values or has no duplicated values. SQLMesh automatically runs audits when a `sqlmesh plan` is executed and the plan is applied or when `sqlmesh run` is executed.
 
+??? question "How does a model know when to run?"
+    A SQLMesh model determines when to run based on its [`cron`](#cron-question) parameter and how much time has elapsed since its previous run.
+
+    Models are not aware of upstream data updates and do not run based on what has happened in an upstream data source.
+
 <a id="cron-question"></a>
 ??? question "What is the model `cron` parameter?"
-    SQLMesh does not fully refresh models when a project is run. Instead, you specify how frequently each model should run with its [`cron` parameter](../concepts/models/overview.md#cron) (defaults to daily).
+    SQLMesh does not fully refresh models every time a project is run. Instead, you specify how frequently each model should run with its [`cron` parameter](../concepts/models/overview.md#cron) (defaults to daily).
 
     When you execute `sqlmesh run`, SQLMesh compares each model's `cron` value to its record of when the model was last run. If enough time has elapsed it will run the model, otherwise it does nothing.
 
@@ -136,6 +141,7 @@
     When a forward-only plan is applied to the `prod` environment, none of the plan's changed models will have new physical tables created for them. Instead, physical tables from previous model versions are reused. All changes made as part of a forward-only plan automatically get a forward-only category assigned to them - they can't be mixed together with regular breaking/non-breaking changes.
 
     You can retroactively apply the forward-only plan's changes to existing data in the production environment with [`plan`'s `--effective-from` option](../reference/cli.md#plan).
+
 
 ## Databases/Engines
 
