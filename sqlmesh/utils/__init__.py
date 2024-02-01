@@ -19,6 +19,7 @@ from copy import deepcopy
 from functools import lru_cache, reduce, wraps
 from pathlib import Path
 
+from sqlglot import exp
 from sqlglot.dialects.dialect import Dialects
 
 logger = logging.getLogger(__name__)
@@ -305,3 +306,13 @@ def groupby(
     for item in items:
         grouped[func(item)].append(item)
     return grouped
+
+
+def columns_to_types_all_known(columns_to_types: t.Dict[str, exp.DataType]) -> bool:
+    """
+    Checks that all column types are known and not NULL.
+    """
+    return all(
+        not column_type.is_type(exp.DataType.Type.UNKNOWN, exp.DataType.Type.NULL)
+        for column_type in columns_to_types.values()
+    )
