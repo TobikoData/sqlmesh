@@ -134,11 +134,16 @@ class Selector:
         return value, include_upstream, include_downstream
 
     def _get_models(
-        self, model_name: str, include_upstream: bool, include_downstream: bool
+        self,
+        model_name: str,
+        include_upstream: bool,
+        include_downstream: bool,
+        models: t.Optional[t.Dict[str, Model]] = None,
     ) -> t.Set[str]:
         result = {model_name}
         if include_upstream:
-            result.update(self._dag.upstream(model_name))
+            models = models or self._models
+            result.update([u for u in self._dag.upstream(model_name) if u in models])
         if include_downstream:
             result.update(self._dag.downstream(model_name))
         return result
@@ -222,6 +227,8 @@ class Selector:
                 logger.warning(f"Expression '{selection}' doesn't match any models.")
 
             for model_fqn in matched_models:
-                results.update(self._get_models(model_fqn, include_upstream, include_downstream))
+                results.update(
+                    self._get_models(model_fqn, include_upstream, include_downstream, models=models)
+                )
 
         return results
