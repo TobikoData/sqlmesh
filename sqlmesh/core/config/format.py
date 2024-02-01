@@ -9,7 +9,7 @@ class UIFormatterConfig(BaseConfig):
     """The UI formatter configuration for SQLMesh.
 
     Args:
-        enabled: Whether to enable the UI formatter or not.
+        enabled: Whether to enable the UI auto formatter or not.
     """
 
     enabled: bool = True
@@ -19,28 +19,28 @@ class FormatConfig(BaseConfig):
     """The format configuration for SQL code.
 
     Args:
-        append_newline: Whether to append a newline to the end of the file or not.
         normalize: Whether to normalize the SQL code or not.
         pad: The number of spaces to use for padding.
         indent: The number of spaces to use for indentation.
-        normalize_functions: The functions to normalize.
+        normalize_functions: Whether or not to normalize all function names. Possible values are: 'upper', 'lower'
         leading_comma: Whether to use leading commas or not.
-        max_text_width: The maximum text width.
+        max_text_width: The maximum text width in a segment before creating new lines.
+        append_newline: Whether to append a newline to the end of the file or not.
         ui: The UI formatter configuration.
     """
 
-    append_newline: bool = False
     normalize: bool = False
     pad: int = 2
     indent: int = 2
     normalize_functions: t.Optional[str] = None
     leading_comma: bool = False
     max_text_width: int = 80
+    append_newline: bool = False
     ui: UIFormatterConfig = UIFormatterConfig()
 
     @property
     def generator_options(self) -> t.Dict[str, t.Any]:
-        """The generator options for the SQL code formatter.
+        """Options which can be passed through to the SQLGlot Generator class.
 
         Returns:
             The generator options.

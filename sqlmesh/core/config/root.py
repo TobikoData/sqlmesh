@@ -65,8 +65,7 @@ class Config(BaseConfig):
         environment_suffix_target: Indicates whether to append the environment name to the schema or table name.
         default_target_environment: The name of the environment that will be the default target for the `sqlmesh plan` and `sqlmesh run` commands.
         log_limit: The default number of logs to keep.
-        ui: UI configuration such as format on save
-        format: The default formatting options for SQL code.
+        format: The formatting options for SQL code.
     """
 
     gateways: t.Dict[str, GatewayConfig] = {"": GatewayConfig()}
