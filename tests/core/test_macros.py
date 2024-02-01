@@ -27,14 +27,32 @@ def macro_evaluator() -> MacroEvaluator:
     def noop(evaluator: MacroEvaluator):
         return None
 
-    @macro("BITSHIFT_SQUARE")
+    @macro()
     def bitshift_square(evaluator: MacroEvaluator, x: int, y: int) -> int:
         return (x >> y) ** 2
 
-    @macro("PREFIX_DB")
+    @macro()
     def prefix_db(evaluator: MacroEvaluator, table: exp.Table, prefix: str) -> exp.Table:
         table.set("db", prefix + table.db)
         return table
+
+    @macro()
+    def repeated(evaluator: MacroEvaluator, expr: str, times: int = 2, multi: bool = False):
+        if multi is True:
+            return (expr,) * times
+        return expr * times
+
+    @macro()
+    def split(evaluator: MacroEvaluator, string: str, sep: str = ","):
+        return string.split(sep)
+
+    @macro()
+    def cte_tag_name(evaluator: MacroEvaluator, with_: exp.Select):
+        for cte in with_.find_all(exp.CTE):
+            name = cte.alias_or_name
+            for query in cte.find_all(exp.Select):
+                query.select(exp.Literal.string(name).as_("source"), copy=False)
+        return with_
 
     return MacroEvaluator(
         "hive",
@@ -309,6 +327,31 @@ def test_ast_correctness(macro_evaluator):
         (
             """@PREFIX_DB(my.schema.table, 'dev_')""",
             "my.dev_schema.table",
+            {},
+        ),
+        (
+            """select @REPEATED(test, 3)""",
+            "SELECT testtesttest",
+            {},
+        ),
+        (
+            """select @REPEATED(test, 3, true)""",
+            "SELECT test, test, test",
+            {},
+        ),
+        (
+            """select @SPLIT('a,b,c')""",
+            "SELECT a, b, c",
+            {},
+        ),
+        (
+            """@CTE_TAG_NAME(WITH step1 AS (SELECT 1) SELECT * FROM step1)""",
+            "WITH step1 AS (SELECT 1, 'step1' AS source) SELECT * FROM step1",
+            {},
+        ),
+        (
+            """@CTE_TAG_NAME('WITH step1 AS (SELECT 1) SELECT * FROM step1')""",
+            "WITH step1 AS (SELECT 1, 'step1' AS source) SELECT * FROM step1",
             {},
         ),
     ],

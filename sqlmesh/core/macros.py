@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import inspect
+import logging
 import typing as t
 from enum import Enum
 from functools import reduce, wraps
@@ -16,6 +17,7 @@ from sqlglot.schema import MappingSchema
 
 from sqlmesh.core.dialect import (
     SQLMESH_MACRO_PREFIX,
+    Dialect,
     MacroDef,
     MacroFunc,
     MacroSQL,
@@ -33,6 +35,8 @@ if t.TYPE_CHECKING:
     from sqlmesh.core._typing import TableName
     from sqlmesh.core.engine_adapter import EngineAdapter
     from sqlmesh.core.snapshot import Snapshot
+
+logger = logging.getLogger(__name__)
 
 
 class RuntimeStage(Enum):
@@ -358,15 +362,29 @@ class MacroEvaluator:
             if isinstance(expr, typ):
                 return expr
             if issubclass(typ, exp.Expression):
-                return parse_one(expr.sql(), into=typ)
+                d = Dialect.get_or_raise(self.dialect)
+                into = typ if typ in d.parser().EXPRESSION_PARSERS else None
+                coerced = parse_one(
+                    expr.this if isinstance(expr, exp.Literal) else expr.sql(), into=into
+                )
+                if isinstance(coerced, typ):
+                    return coerced
+                else:
+                    raise SQLMeshError(f"Failed to coerce expression '{expr}' to type '{typ}'.")
             if typ in (int, float, str) and isinstance(expr, exp.Literal):
                 return typ(expr.this)
             if typ is bool and isinstance(expr, exp.Boolean):
                 return expr.this
             if typ is str and isinstance(expr, exp.Expression):
                 return expr.sql(self.dialect)
-            return expr
+            raise SQLMeshError(f"Failed to coerce expression '{expr}' to type '{typ}'.")
         except Exception:
+            logger.warning(
+                "Coercion of expression '%s' to type '%s' failed.",
+                expr,
+                typ,
+                exc_info=True,
+            )
             return expr
 
 
