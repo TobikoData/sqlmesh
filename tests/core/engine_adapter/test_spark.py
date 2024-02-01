@@ -171,7 +171,9 @@ def test_replace_query_not_exists(mocker: MockerFixture, make_mocked_engine_adap
         return_value=False,
     )
     adapter = make_mocked_engine_adapter(SparkEngineAdapter)
-    adapter.replace_query("test_table", parse_one("SELECT a FROM tbl"), {"a": "int"})
+    adapter.replace_query(
+        "test_table", parse_one("SELECT a FROM tbl"), {"a": exp.DataType.build("INT")}
+    )
 
     assert to_sql_calls(adapter) == [
         "CREATE TABLE IF NOT EXISTS `test_table` AS SELECT `a` FROM `tbl`",
@@ -876,13 +878,13 @@ def test_replace_query_with_wap_self_reference(
     adapter.replace_query(
         "catalog.schema.table.branch_wap_12345",
         parse_one("SELECT 1 as a FROM catalog.schema.table.branch_wap_12345"),
-        columns_to_types={"a": "int"},
+        columns_to_types={"a": exp.DataType.build("INT")},
         storage_format="ICEBERG",
     )
 
     sql_calls = to_sql_calls(adapter)
     assert sql_calls == [
-        "CREATE TABLE IF NOT EXISTS `catalog`.`schema`.`table` (`a` int)",
+        "CREATE TABLE IF NOT EXISTS `catalog`.`schema`.`table` (`a` INT)",
         "CREATE SCHEMA IF NOT EXISTS `schema`",
         "CREATE TABLE IF NOT EXISTS `catalog`.`schema`.`temp_branch_wap_12345_abcdefgh` USING ICEBERG AS SELECT `a` FROM `catalog`.`schema`.`table`.`branch_wap_12345`",
         "INSERT OVERWRITE TABLE `catalog`.`schema`.`table`.`branch_wap_12345` (`a`) SELECT 1 AS `a` FROM `catalog`.`schema`.`temp_branch_wap_12345_abcdefgh`",
