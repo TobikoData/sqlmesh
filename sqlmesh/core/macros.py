@@ -392,14 +392,12 @@ class macro(registry_decorator):
     def __call__(
         self, func: t.Callable[..., DECORATOR_RETURN_TYPE]
     ) -> t.Callable[..., DECORATOR_RETURN_TYPE]:
-        spec = inspect.getfullargspec(func)
-        annotations = t.get_type_hints(func)
-
         @wraps(func)
         def _typed_func(
             evaluator: MacroEvaluator, *args_: t.Any, **kwargs_: t.Any
         ) -> DECORATOR_RETURN_TYPE:
-            """Coerce arguments where possible to the user-defined type annotations."""
+            spec = inspect.getfullargspec(func)
+            annotations = t.get_type_hints(func)
             kwargs = inspect.getcallargs(func, evaluator, *args_, **kwargs_)
             for param, value in kwargs.items():
                 coercible_type = annotations.get(param)
@@ -411,9 +409,10 @@ class macro(registry_decorator):
                 args.extend(kwargs.pop(spec.varargs, []))
             return func(*args, **kwargs)
 
-        if spec.annotations:
-            func = _typed_func
-        wrapper = super().__call__(func)
+        annotated = t.get_type_hints(func).keys() - {"return"}
+        wrapper = super().__call__(
+            func if not annotated else t.cast(t.Callable[..., DECORATOR_RETURN_TYPE], _typed_func)
+        )
 
         # This is useful to identify macros at runtime
         setattr(wrapper, "__sqlmesh_macro__", True)
