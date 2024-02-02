@@ -11,9 +11,10 @@ import {
   truncate,
 } from '@utils/index'
 import clsx from 'clsx'
-import { type ModelSQLMeshModel } from '@models/sqlmesh-model'
+import { ModelSQLMeshModel } from '@models/sqlmesh-model'
 import { ModelColumns } from '@components/graph/Graph'
 import { useApiModel } from '@api/index'
+import { useStoreContext } from '@context/context'
 
 const Documentation = function Documentation({
   model,
@@ -30,6 +31,8 @@ const Documentation = function Documentation({
   withDescription?: boolean
   withColumns?: boolean
 }): JSX.Element {
+  const setLastSelectedModel = useStoreContext(s => s.setLastSelectedModel)
+
   const { refetch: getModel, cancel: cancelRequestModel } = useApiModel(
     model.name,
   )
@@ -37,6 +40,8 @@ const Documentation = function Documentation({
   useEffect(() => {
     void getModel().then(({ data }) => {
       model.update(data)
+
+      setLastSelectedModel(new ModelSQLMeshModel(model))
     })
 
     return () => {
@@ -100,7 +105,7 @@ const Documentation = function Documentation({
             className="max-h-[15rem]"
             nodeId={model.name}
             columns={model.columns}
-            disabled={model?.isModelPython}
+            disabled={model.isModelPython}
             withHandles={false}
             withSource={false}
             withDescription={true}

@@ -1,12 +1,13 @@
 import { type MouseEvent } from 'react'
 import useActiveFocus from '~/hooks/useActiveFocus'
 import { EnumSize, EnumVariant } from '~/types/enum'
-import { includes, isFalse } from '~/utils'
+import { isFalse } from '~/utils'
 import { Button } from '../button/Button'
 import { EnumPlanAction, ModelPlanAction } from '@models/plan-action'
 import { useStorePlan } from '@context/plan'
 import { useStoreContext } from '@context/context'
 import { AddEnvironment, SelectEnvironemnt } from '~/library/pages/root/Page'
+import { Transition } from '@headlessui/react'
 
 export default function PlanActions({
   run,
@@ -25,6 +26,7 @@ export default function PlanActions({
   const setShowConfirmation = useStoreContext(s => s.setShowConfirmation)
 
   const planAction = useStorePlan(s => s.planAction)
+  const planCancel = useStorePlan(s => s.planCancel)
 
   const setFocus = useActiveFocus<HTMLButtonElement>()
 
@@ -90,83 +92,112 @@ export default function PlanActions({
     run()
   }
 
+  const showPlanAction =
+    isFalse(planAction.isCancelling) &&
+    isFalse(planAction.isDone) &&
+    (planAction.isProcessing ? isFalse(planCancel.isSuccessed) : true)
+
   return (
     <>
-      <div className="flex justify-between px-4 pb-2">
+      <div className="flex justify-between pt-2 pl-4 pr-2 pb-2">
         <div className="flex w-full items-center">
-          {(planAction.isRun || planAction.isRunning) && (
-            <Button
-              disabled={planAction.isRunning}
-              onClick={handleRun}
-              ref={setFocus}
-              variant={EnumVariant.Primary}
-              autoFocus
-            >
-              <span>
-                {ModelPlanAction.getActionDisplayName(planAction, [
-                  EnumPlanAction.RunningTask,
-                  EnumPlanAction.Running,
-                  EnumPlanAction.Run,
-                ])}
-              </span>
-            </Button>
-          )}
-          {(planAction.isApply || planAction.isApplying) && (
-            <Button
-              onClick={handleApply}
-              disabled={planAction.isApplying}
-              ref={setFocus}
-              variant={EnumVariant.Primary}
-            >
-              {ModelPlanAction.getActionDisplayName(
-                planAction,
-                [
-                  EnumPlanAction.Applying,
-                  EnumPlanAction.ApplyBackfill,
-                  EnumPlanAction.ApplyVirtual,
-                  EnumPlanAction.ApplyChangesAndBackfill,
-                  EnumPlanAction.ApplyMetadata,
-                ],
-                'Apply',
-              )}
-            </Button>
-          )}
-          {planAction.isProcessing && (
-            <Button
-              onClick={handleCancel}
-              variant={EnumVariant.Danger}
-              className="justify-self-end"
-              disabled={planAction.isCancelling}
-            >
-              {ModelPlanAction.getActionDisplayName(
-                planAction,
-                [EnumPlanAction.Cancelling],
-                'Cancel',
-              )}
-            </Button>
-          )}
+          <Transition
+            appear
+            show={showPlanAction}
+            enter="transition ease duration-300 transform"
+            enterFrom="opacity-0 scale-95"
+            enterTo="opacity-100 scale-100"
+            leave="transition ease duration-300 transform"
+            leaveFrom="opacity-100 scale-100"
+            leaveTo="opacity-0 scale-95"
+            className="trasition-all duration-300 ease-in-out"
+          >
+            {showPlanAction && (
+              <Button
+                disabled={
+                  planAction.isProcessing ||
+                  planCancel.isSuccessed ||
+                  planAction.isDone
+                }
+                onClick={
+                  planAction.isRun
+                    ? handleRun
+                    : planCancel.isSuccessed
+                    ? undefined
+                    : handleApply
+                }
+                ref={setFocus}
+                variant={
+                  planCancel.isSuccessed
+                    ? EnumVariant.Danger
+                    : EnumVariant.Primary
+                }
+                autoFocus
+                className="trasition-all duration-300 ease-in-out"
+              >
+                <span>
+                  {ModelPlanAction.getActionDisplayName(
+                    planAction,
+                    planCancel.isSuccessed
+                      ? []
+                      : [
+                          EnumPlanAction.RunningTask,
+                          EnumPlanAction.Running,
+                          EnumPlanAction.Run,
+                          EnumPlanAction.Applying,
+                          EnumPlanAction.ApplyBackfill,
+                          EnumPlanAction.ApplyVirtual,
+                          EnumPlanAction.ApplyChangesAndBackfill,
+                          EnumPlanAction.ApplyMetadata,
+                        ],
+                    planCancel.isSuccessed ? 'Canceled' : 'Done',
+                  )}
+                </span>
+              </Button>
+            )}
+          </Transition>
         </div>
         <div className="flex items-center">
-          {[planAction.isProcessing, planAction.isRun].every(isFalse) && (
+          <Transition
+            appear
+            show={planAction.isProcessing || isFalse(planAction.isRun)}
+            enter="transition ease duration-300 transform"
+            enterFrom="opacity-0 scale-95"
+            enterTo="opacity-100 scale-100"
+            leave="transition ease duration-300 transform"
+            leaveFrom="opacity-100 scale-100"
+            leaveTo="opacity-0 scale-95"
+            className="trasition-all duration-300 ease-in-out"
+          >
             <Button
-              onClick={handleReset}
-              variant={EnumVariant.Neutral}
-              disabled={includes(
-                [
-                  EnumPlanAction.Running,
-                  EnumPlanAction.Applying,
-                  EnumPlanAction.Cancelling,
-                ],
-                planAction.value,
-              )}
+              onClick={
+                planAction.isRunning || planAction.isApplying
+                  ? handleCancel
+                  : handleReset
+              }
+              variant={
+                planAction.isProcessing
+                  ? EnumVariant.Danger
+                  : EnumVariant.Neutral
+              }
+              disabled={
+                planAction.isCancelling ||
+                (planAction.isProcessing && planCancel.isSuccessed)
+              }
             >
               {ModelPlanAction.getActionDisplayName(
                 planAction,
-                [],
-                'Start Over',
+                planAction.isProcessing && isFalse(planCancel.isSuccessed)
+                  ? [EnumPlanAction.Cancelling]
+                  : [],
+                planAction.isProcessing
+                  ? planCancel.isSuccessed
+                    ? 'Finishing Cancellation...'
+                    : 'Cancel'
+                  : 'Start Over',
               )}
             </Button>
-          )}
+          </Transition>
         </div>
       </div>
     </>

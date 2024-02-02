@@ -22,7 +22,6 @@ import { type ModelSQLMeshModel } from '@models/sqlmesh-model'
 import {
   useApiEvaluate,
   useApiFetchdf,
-  useApiModel,
   useApiRender,
   useApiTableDiff,
 } from '@api/index'
@@ -91,20 +90,6 @@ function InspectorModel({
   const list = Array.from(environments)
     .filter(({ isRemote }) => isRemote)
     .map(({ name }) => ({ text: name, value: name }))
-
-  const { refetch: getModel, cancel: cancelRequestModel } = useApiModel(
-    model.name,
-  )
-
-  useEffect(() => {
-    void getModel().then(({ data }) => {
-      model.update(data)
-    })
-
-    return () => {
-      cancelRequestModel()
-    }
-  }, [model.name])
 
   return (
     <Tab.Group>

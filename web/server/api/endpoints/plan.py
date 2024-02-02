@@ -62,16 +62,17 @@ async def cancel_plan(
             origin="API -> plan -> cancel_plan",
         )
 
+    tracker = models.PlanCancelStageTracker()
+    api_console.start_plan_tracker(tracker)
+    tracker_stage_cancel = models.PlanStageCancel()
+    tracker.add_stage(stage=models.PlanStage.cancel, data=tracker_stage_cancel)
     request.app.state.circuit_breaker.set()
     request.app.state.task.cancel()
     try:
         await request.app.state.task
     except asyncio.CancelledError:
         pass
-    tracker = models.PlanCancelStageTracker()
-    api_console.start_plan_tracker(tracker)
-    tracker_stage_cancel = models.PlanStageCancel()
-    tracker.add_stage(stage=models.PlanStage.cancel, data=tracker_stage_cancel)
+
     tracker_stage_cancel.stop(success=True)
     api_console.stop_plan_tracker(tracker)
     response.status_code = HTTP_204_NO_CONTENT

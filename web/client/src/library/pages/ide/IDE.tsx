@@ -2,33 +2,18 @@ import React, { useEffect } from 'react'
 import {
   useApiModels,
   useApiFiles,
-  useApiEnvironments,
   useApiPlanRun,
   useApiPlanApply,
   useApiCancelPlan,
 } from '../../../api'
 import { useChannelEvents } from '../../../api/channels'
-import {
-  isArrayEmpty,
-  isFalse,
-  isNil,
-  isNotNil,
-  isObjectNotEmpty,
-  isTrue,
-} from '~/utils'
+import { includes, isArrayEmpty, isFalse, isNil, isNotNil } from '~/utils'
 import { useStoreContext } from '~/context/context'
 import { Outlet, useLocation, useNavigate } from 'react-router-dom'
 import { EnumRoutes } from '~/routes'
 import { type Tests, useStoreProject } from '@context/project'
 import { EnumErrorKey, type ErrorIDE, useIDE } from './context'
-import {
-  type Directory,
-  type Model,
-  type Environments,
-  type EnvironmentsEnvironments,
-  Status,
-  Modules,
-} from '@api/client'
+import { type Directory, type Model, Status, Modules } from '@api/client'
 import { Button } from '@components/button/Button'
 import Container from '@components/container/Container'
 import { useStoreEditor, createLocalFile } from '@context/editor'
@@ -41,11 +26,10 @@ import {
   EnumFileExplorerChange,
   type FileExplorerChange,
 } from '@components/fileExplorer/context'
-import { type PlanOverviewTracker } from '@models/tracker-plan-overview'
-import { type PlanApplyTracker } from '@models/tracker-plan-apply'
-import { type PlanCancelTracker } from '@models/tracker-plan-cancel'
 import { EnumPlanAction, ModelPlanAction } from '@models/plan-action'
 import { useStorePlan } from '@context/plan'
+
+let planActionUpdateTimeoutId: Optional<number>
 
 export default function PageIDE(): JSX.Element {
   const location = useLocation()
@@ -60,8 +44,8 @@ export default function PageIDE(): JSX.Element {
   const confirmations = useStoreContext(s => s.confirmations)
   const removeConfirmation = useStoreContext(s => s.removeConfirmation)
   const environment = useStoreContext(s => s.environment)
+
   const setModels = useStoreContext(s => s.setModels)
-  const addRemoteEnvironments = useStoreContext(s => s.addRemoteEnvironments)
 
   const planOverview = useStorePlan(s => s.planOverview)
   const planApply = useStorePlan(s => s.planApply)
@@ -95,8 +79,7 @@ export default function PageIDE(): JSX.Element {
   // all pages have access to models and files
   const { refetch: getModels, cancel: cancelRequestModels } = useApiModels()
   const { refetch: getFiles, cancel: cancelRequestFiles } = useApiFiles()
-  const { refetch: getEnvironments, cancel: cancelRequestEnvironments } =
-    useApiEnvironments()
+
   const { isFetching: isFetchingPlanApply } = useApiPlanApply(environment.name)
   const { refetch: cancelPlanOrPlanApply, isFetching: isFetchingPlanCancel } =
     useApiCancelPlan()
@@ -115,15 +98,7 @@ export default function PageIDE(): JSX.Element {
     const channelModels = channel<Model[]>('models', updateModels)
     const channelTests = channel<Tests>('tests', updateTests)
     const channelErrors = channel<ErrorIDE>('errors', displayErrors)
-    const channelPlanOverview = channel<any>(
-      'plan-overview',
-      updatePlanOverviewTracker,
-    )
-    const channelPlanApply = channel<any>('plan-apply', updatePlanApplyTracker)
-    const channelPlanCancel = channel<any>(
-      'plan-cancel',
-      updatePlanCancelTracker,
-    )
+
     const channelFile = channel<{
       changes: Array<{
         change: FileExplorerChange
@@ -226,8 +201,6 @@ export default function PageIDE(): JSX.Element {
       setProject(project)
     })
 
-    void getEnvironments().then(({ data }) => updateEnviroments(data))
-
     void getModels().then(({ data }) => {
       updateModels(data as Model[])
     })
@@ -235,26 +208,19 @@ export default function PageIDE(): JSX.Element {
     channelFormatFile.subscribe()
     channelModels.subscribe()
     channelErrors.subscribe()
-    channelPlanOverview.subscribe()
-    channelPlanApply.subscribe()
     channelFile.subscribe()
-    channelPlanCancel.subscribe()
     channelTests.subscribe()
 
     return () => {
       void cancelRequestModels()
       void cancelRequestFiles()
-      void cancelRequestEnvironments()
       void cancelRequestPlan()
 
       channelFormatFile.unsubscribe()
       channelTests.unsubscribe()
       channelModels.unsubscribe()
       channelErrors.unsubscribe()
-      channelPlanOverview.unsubscribe()
-      channelPlanApply.unsubscribe()
       channelFile.unsubscribe()
-      channelPlanCancel.unsubscribe()
     }
   }, [])
 
@@ -280,30 +246,35 @@ export default function PageIDE(): JSX.Element {
       isFalse(planAction.isRunningTask)
     ) {
       planApply.reset()
+      planCancel.reset()
 
       void planRun()
     }
   }, [models, environment])
 
   useEffect(() => {
-    planOverview.isFetching = isFetchingPlanRun
+    if (isFetchingPlanRun) {
+      planOverview.isFetching = true
 
-    setPlanOverview(planOverview)
-  }, [isFetchingPlanRun])
+      setPlanOverview(planOverview)
+    }
+
+    if (isFetchingPlanApply) {
+      planApply.isFetching = true
+
+      setPlanApply(planApply)
+    }
+
+    if (isFetchingPlanCancel) {
+      planCancel.isFetching = true
+
+      setPlanCancel(planCancel)
+    }
+  }, [isFetchingPlanRun, isFetchingPlanApply, isFetchingPlanCancel])
 
   useEffect(() => {
-    planOverview.isFetching = isFetchingPlanApply
+    clearTimeout(planActionUpdateTimeoutId)
 
-    setPlanApply(planApply)
-  }, [isFetchingPlanApply])
-
-  useEffect(() => {
-    planOverview.isFetching = isFetchingPlanCancel
-
-    setPlanCancel(planCancel)
-  }, [isFetchingPlanCancel])
-
-  useEffect(() => {
     const value = ModelPlanAction.getPlanAction({
       planOverview,
       planApply,
@@ -312,9 +283,31 @@ export default function PageIDE(): JSX.Element {
 
     // This inconsistency can happen when we receive flag from the backend
     // that some task is runninng but not yet recived SSE event with data
-    if (value === EnumPlanAction.Done && planAction.isRunningTask) return
+    if (
+      (value === EnumPlanAction.Done && planAction.isRunningTask) ||
+      value === planAction.value
+    )
+      return
 
-    setPlanAction(new ModelPlanAction({ value }))
+    // Delaying the update of the plan action to avoid flickering
+    planActionUpdateTimeoutId = setTimeout(
+      () => {
+        setPlanAction(new ModelPlanAction({ value }))
+
+        planActionUpdateTimeoutId = undefined
+      },
+      includes(
+        [
+          EnumPlanAction.Running,
+          EnumPlanAction.RunningTask,
+          EnumPlanAction.Cancelling,
+          EnumPlanAction.Applying,
+        ],
+        value,
+      )
+        ? 0
+        : 500,
+    ) as unknown as number
   }, [planOverview, planApply, planCancel])
 
   function updateModels(models?: Model[]): void {
@@ -334,48 +327,6 @@ export default function PageIDE(): JSX.Element {
 
   function updateTests(tests?: Tests): void {
     setTests(tests)
-  }
-
-  function updatePlanOverviewTracker(data: PlanOverviewTracker): void {
-    planOverview.update(data)
-
-    setPlanOverview(planOverview)
-  }
-
-  function updatePlanCancelTracker(data: PlanCancelTracker): void {
-    planCancel.update(data)
-
-    setPlanCancel(planCancel)
-  }
-
-  function updatePlanApplyTracker(data: PlanApplyTracker): void {
-    planApply.update(data, planOverview)
-
-    const isFinished =
-      isTrue(data.meta?.done) && data.meta?.status !== Status.init
-
-    if (isFinished) {
-      void getEnvironments().then(({ data }) => {
-        void planRun()
-
-        updateEnviroments(data)
-      })
-    }
-
-    setPlanApply(planApply)
-  }
-
-  function updateEnviroments(data: Optional<Environments>): void {
-    const { environments, default_target_environment, pinned_environments } =
-      data ?? {}
-
-    if (isObjectNotEmpty<EnvironmentsEnvironments>(environments)) {
-      addRemoteEnvironments(
-        Object.values(environments),
-        default_target_environment,
-        pinned_environments,
-      )
-    }
   }
 
   function restoreEditorTabsFromSaved(files: ModelFile[]): void {
