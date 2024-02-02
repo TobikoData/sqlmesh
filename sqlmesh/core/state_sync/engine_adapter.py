@@ -276,7 +276,9 @@ class EngineAdapterStateSync(CommonStateSyncMixin, StateSync):
             SnapshotId(name=name, identifier=identifier): SnapshotNameVersion(
                 name=name, version=version
             )
-            for name, identifier, version in self.engine_adapter.fetchall(expired_query)
+            for name, identifier, version in self.engine_adapter.fetchall(
+                expired_query, quote_identifiers=True
+            )
         }
         if not expired_candidates:
             return []
