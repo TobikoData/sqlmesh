@@ -133,7 +133,7 @@ async def column_lineage(
             origin="API -> lineage -> column_lineage",
         )
 
-    graph: t.Dict[str, t.Dict[str, LineageColumn]] = {}
+    graph: t.Dict[str, t.Dict[str, LineageColumn]] = collections.defaultdict(dict)
 
     for i, node in enumerate(node.walk()):
         if i == 0:
@@ -148,13 +148,11 @@ async def column_lineage(
             continue
 
         # At this point node_name should be fqn/normalized/quoted
-        graph[table] = {
-            column_name: LineageColumn(
-                expression=node.expression.sql(pretty=True, dialect=dialect),
-                source=_get_node_source(node=node, dialect=dialect),
-                models=_process_downstream(node.downstream, parent_table=table, dialect=dialect),
-            )
-        }
+        graph[table][column_name] = LineageColumn(
+            expression=node.expression.sql(pretty=True, dialect=dialect),
+            source=_get_node_source(node=node, dialect=dialect),
+            models=_process_downstream(node.downstream, parent_table=table, dialect=dialect),
+        )
 
     return graph
 
