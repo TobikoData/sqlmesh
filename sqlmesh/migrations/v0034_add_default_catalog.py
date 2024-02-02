@@ -41,9 +41,9 @@ def normalize_mapping_schema(mapping_schema: t.Dict, dialect: str) -> t.Dict:
     normalized_mapping_schema = {}
     for key, value in mapping_schema.items():
         if isinstance(value, dict):
-            normalized_mapping_schema[
-                normalize_model_name(key, None, dialect)
-            ] = normalize_mapping_schema(value, dialect)
+            normalized_mapping_schema[normalize_model_name(key, None, dialect)] = (
+                normalize_mapping_schema(value, dialect)
+            )
         else:
             normalized_mapping_schema[key] = value
     return normalized_mapping_schema
@@ -331,7 +331,11 @@ def migrate(state_sync, default_catalog: t.Optional[str], **kwargs):  # type: ig
         )
 
     new_seeds = []
-    for (name, identifier, content,) in engine_adapter.fetchall(
+    for (
+        name,
+        identifier,
+        content,
+    ) in engine_adapter.fetchall(
         exp.select(
             "name",
             "identifier",

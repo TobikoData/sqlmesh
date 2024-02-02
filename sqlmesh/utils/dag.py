@@ -5,6 +5,7 @@ A DAG, or directed acyclic graph, is a graph where the edges are directional and
 all the edges pointing in the same direction. SQLMesh uses a DAG to keep track of a project's models. This
 allows SQLMesh to easily determine a model's lineage and to identify upstream and downstream dependencies.
 """
+
 from __future__ import annotations
 
 import typing as t

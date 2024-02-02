@@ -1,4 +1,5 @@
 """Remove dbt is_incremental macro"""
+
 import json
 
 import pandas as pd

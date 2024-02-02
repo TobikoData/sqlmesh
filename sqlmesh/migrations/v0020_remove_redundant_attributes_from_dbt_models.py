@@ -1,4 +1,5 @@
 """Remove redundant attributes from dbt models."""
+
 import json
 
 import pandas as pd

@@ -199,7 +199,10 @@ def test_incremental_time_self_reference_dag(mocker: MockerFixture, make_snapsho
                 ((to_datetime("2023-01-04"), to_datetime("2023-01-05")), 2),
             ),
         },
-        (incremental_self_snapshot.name, ((to_datetime(0), to_datetime(0)), -1),): set(
+        (
+            incremental_self_snapshot.name,
+            ((to_datetime(0), to_datetime(0)), -1),
+        ): set(
             [
                 (
                     incremental_self_snapshot.name,

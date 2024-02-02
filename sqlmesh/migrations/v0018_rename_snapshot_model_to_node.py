@@ -1,4 +1,5 @@
 """Replace snapshot model field with node."""
+
 import json
 
 import pandas as pd

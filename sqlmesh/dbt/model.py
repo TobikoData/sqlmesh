@@ -232,9 +232,11 @@ class ModelConfig(BaseModelConfig):
                 valid_to_name="dbt_valid_to",
                 updated_at_name=self.updated_at,
                 updated_at_as_valid_from=True,
-                time_data_type=exp.DataType.build("TIMESTAMPTZ")
-                if target.type == "bigquery"
-                else exp.DataType.build("TIMESTAMP"),
+                time_data_type=(
+                    exp.DataType.build("TIMESTAMPTZ")
+                    if target.type == "bigquery"
+                    else exp.DataType.build("TIMESTAMP")
+                ),
             )
         raise ConfigError(f"{materialization.value} materialization not supported.")
 

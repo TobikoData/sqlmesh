@@ -268,9 +268,9 @@ class ApiConsole(TerminalConsole):
     def log_event_plan_overview(self) -> None:
         self.log_event(
             event=models.EventName.PLAN_OVERVIEW,
-            data=self.plan_overview_stage_tracker.dict()
-            if self.plan_overview_stage_tracker
-            else {},
+            data=(
+                self.plan_overview_stage_tracker.dict() if self.plan_overview_stage_tracker else {}
+            ),
         )
 
     def log_event_plan_cancel(self) -> None:

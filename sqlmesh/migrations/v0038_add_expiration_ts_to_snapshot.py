@@ -1,4 +1,5 @@
 """Add the expiration_ts column to the snapshots table."""
+
 import json
 
 import pandas as pd

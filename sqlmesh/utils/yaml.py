@@ -47,13 +47,11 @@ def load(
 
 
 @t.overload
-def dump(value: t.Any, stream: io.IOBase) -> None:
-    ...
+def dump(value: t.Any, stream: io.IOBase) -> None: ...
 
 
 @t.overload
-def dump(value: t.Any) -> str:
-    ...
+def dump(value: t.Any) -> str: ...
 
 
 def dump(value: t.Any, stream: t.Optional[io.IOBase] = None) -> t.Optional[str]:

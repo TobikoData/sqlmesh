@@ -182,9 +182,9 @@ class CommonStateSyncMixin(StateSync):
         return PromotionResult(
             added=sorted(added_table_infos),
             removed=list(removed),
-            removed_environment_naming_info=existing_environment.naming_info
-            if removed and existing_environment
-            else None,
+            removed_environment_naming_info=(
+                existing_environment.naming_info if removed and existing_environment else None
+            ),
         )
 
     @transactional()

@@ -172,9 +172,11 @@ def test_create_plan_dag_spec(
         forward_only=True,
         dag_start_ts=to_timestamp("2023-01-01"),
         no_gaps_snapshot_names=expected_no_gaps_snapshot_names,
-        deployability_index_for_creation=DeployabilityIndex.all_deployable()
-        if not paused_forward_only
-        else DeployabilityIndex.none_deployable(),
+        deployability_index_for_creation=(
+            DeployabilityIndex.all_deployable()
+            if not paused_forward_only
+            else DeployabilityIndex.none_deployable()
+        ),
     )
 
     state_sync_mock.get_snapshots.assert_called_once()

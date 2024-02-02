@@ -1072,9 +1072,11 @@ class DeployabilityIndex(PydanticModel, frozen=True):
         # Transforming into strings because the serialization of sets of objects / lists is broken in Pydantic.
         return frozenset(
             {
-                cls._snapshot_id_key(snapshot_id)
-                if isinstance(snapshot_id, SnapshotId)
-                else snapshot_id
+                (
+                    cls._snapshot_id_key(snapshot_id)
+                    if isinstance(snapshot_id, SnapshotId)
+                    else snapshot_id
+                )
                 for snapshot_id in v
             }
         )
@@ -1241,9 +1243,11 @@ def display_name(
         return snapshot_info_like.name
     view_name = exp.to_table(snapshot_info_like.name)
     qvn = QualifiedViewName(
-        catalog=view_name.catalog
-        if view_name.catalog and view_name.catalog != default_catalog
-        else None,
+        catalog=(
+            view_name.catalog
+            if view_name.catalog and view_name.catalog != default_catalog
+            else None
+        ),
         schema_name=view_name.db or None,
         table=view_name.name,
     )

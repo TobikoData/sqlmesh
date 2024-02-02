@@ -139,9 +139,9 @@ class SQLMeshSparkSubmitOperator(BaseOperator):
             "default_catalog": self._target.default_catalog,
             "command_type": command_type.value if command_type else None,
             "ddl_concurrent_tasks": ddl_concurrent_tasks,
-            "payload_path": command_payload_file_path.split("/")[-1]
-            if command_payload_file_path
-            else None,
+            "payload_path": (
+                command_payload_file_path.split("/")[-1] if command_payload_file_path else None
+            ),
         }
         return SparkSubmitHook(
             conf=spark_conf,

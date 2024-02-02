@@ -1,4 +1,5 @@
 """Remove dialect from seeds."""
+
 import json
 
 import pandas as pd

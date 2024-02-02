@@ -1,4 +1,5 @@
 """Fix snapshots of added models with forward only parents."""
+
 import json
 import typing as t
 
