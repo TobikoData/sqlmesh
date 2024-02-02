@@ -9,7 +9,7 @@ import EditorInspector from './EditorInspector'
 import EditorPreview from './EditorPreview'
 import { type EditorTab, useStoreEditor } from '~/context/editor'
 import clsx from 'clsx'
-import { EnumFileExtensions } from '@models/file'
+import { EnumFileExtensions, ModelFile } from '@models/file'
 import { useLineageFlow } from '@components/graph/context'
 import { CodeEditorRemoteFile, CodeEditorDefault } from './EditorCode'
 import { useDefaultKeymapsEditorTab, useSQLMeshModelExtensions } from './hooks'
@@ -19,6 +19,7 @@ import { type Table } from 'apache-arrow'
 import { type KeyBinding } from '@codemirror/view'
 import { useStoreContext } from '@context/context'
 import { useIDE } from '~/library/pages/ide/context'
+import { ModelDirectory } from '@models/directory'
 
 function Editor(): JSX.Element {
   const tab = useStoreEditor(s => s.tab)
@@ -49,8 +50,10 @@ function EditorMain({ tab }: { tab: EditorTab }): JSX.Element {
   const isModel = useStoreContext(s => s.isModel)
 
   const files = useStoreProject(s => s.files)
+  const selectedFile = useStoreProject(s => s.selectedFile)
   const setSelectedFile = useStoreProject(s => s.setSelectedFile)
 
+  const tabs = useStoreEditor(s => s.tabs)
   const direction = useStoreEditor(s => s.direction)
   const engine = useStoreEditor(s => s.engine)
   const previewTable = useStoreEditor(s => s.previewTable)
@@ -60,6 +63,10 @@ function EditorMain({ tab }: { tab: EditorTab }): JSX.Element {
   const setPreviewTable = useStoreEditor(s => s.setPreviewTable)
   const setPreviewDiff = useStoreEditor(s => s.setPreviewDiff)
   const setDialects = useStoreEditor(s => s.setDialects)
+  const replaceTab = useStoreEditor(s => s.replaceTab)
+  const createTab = useStoreEditor(s => s.createTab)
+  const selectTab = useStoreEditor(s => s.selectTab)
+  const addTab = useStoreEditor(s => s.addTab)
 
   const { setManuallySelectedColumn } = useLineageFlow()
 
@@ -94,7 +101,12 @@ function EditorMain({ tab }: { tab: EditorTab }): JSX.Element {
   const handleEngineWorkerMessage = useCallback(
     (e: MessageEvent): void => {
       if (e.data.topic === 'dialects') {
+        const model = models.get(tab.file.path)
+
+        tab.dialect = model?.dialect ?? ''
+
         setDialects(e.data.payload)
+        refreshTab(tab)
       }
 
       if (e.data.topic === 'format') {
@@ -113,7 +125,7 @@ function EditorMain({ tab }: { tab: EditorTab }): JSX.Element {
       tab.file.content = value
       tab.isSaved = isFalse(tab.file.isChanged)
 
-      setTimeout(() => refreshTab(tab), 200)
+      refreshTab(tab)
     },
     [tab.id],
   )
@@ -123,24 +135,45 @@ function EditorMain({ tab }: { tab: EditorTab }): JSX.Element {
 
     setIsOpenInspector(false)
 
+    if (isNil(selectedFile)) {
+      setSelectedFile(tab?.file)
+    }
+
     return () => {
       engine.removeEventListener('message', handleEngineWorkerMessage)
     }
-  }, [handleEngineWorkerMessage])
-
-  useEffect(() => {
-    const model = models.get(tab.file.path)
-
-    tab.dialect = model?.dialect ?? ''
-
-    refreshTab(tab)
-  }, [tab.id, models, files])
+  }, [tab.id])
 
   useEffect(() => {
     setPreviewQuery(undefined)
     setPreviewTable(undefined)
     setPreviewDiff(undefined)
   }, [tab.id, tab.file.fingerprint])
+
+  useEffect(() => {
+    if (
+      isNil(selectedFile) ||
+      tab?.file === selectedFile ||
+      selectedFile instanceof ModelDirectory
+    )
+      return
+
+    const newTab = createTab(selectedFile)
+    const shouldReplaceTab =
+      isNotNil(tab) &&
+      tab.file instanceof ModelFile &&
+      isFalse(tab.file.isChanged) &&
+      tab.file.isRemote &&
+      isFalse(tabs.has(selectedFile))
+
+    if (shouldReplaceTab) {
+      replaceTab(tab, newTab)
+    } else {
+      addTab(newTab)
+    }
+
+    selectTab(newTab)
+  }, [selectedFile])
 
   useEffect(() => {
     setPreviewDiff(undefined)
