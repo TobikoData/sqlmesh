@@ -29,7 +29,7 @@ class CachingStateSync(DelegatingStateSync):
         ttl: The number of seconds a snapshot should be cached.
     """
 
-    def __init__(self, state_sync: StateSync, ttl: int = 30):
+    def __init__(self, state_sync: StateSync, ttl: int = 120):
         super().__init__(state_sync)
         # The cache can contain a snapshot or False or None.
         # False means that the snapshot does not exist in the state sync but has been requested before
