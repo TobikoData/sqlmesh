@@ -213,7 +213,7 @@ def test_select_models_missing_env(mocker: MockerFixture, make_snapshot):
 
 
 @pytest.mark.parametrize(
-    "tags, tag_selections, output",
+    "model_defs, selections, output",
     [
         # Direct matching only
         (
@@ -335,18 +335,42 @@ def test_select_models_missing_env(mocker: MockerFixture, make_snapshot):
             ["tag:tag1", "model2"],
             {'"model1"', '"model2"'},
         ),
+        # Intersection of tags and model names
+        (
+            [
+                ("model1", "tag1", None),
+                ("model2", "tag1", {"model1"}),
+                ("model3", "tag2", {"model1"}),
+                ("model4", "tag1", None),
+            ],
+            ["tag:tag1 & model1+"],
+            {'"model1"', '"model2"'},
+        ),
+        # Intersection of tags and model names (order doesn't matter)
+        (
+            [
+                ("model1", "tag1", None),
+                ("model2", "tag1", {"model1"}),
+                ("model3", "tag2", {"model1"}),
+                ("model4", "tag1", None),
+            ],
+            ["model1+ & tag:tag1"],
+            {'"model1"', '"model2"'},
+        ),
     ],
 )
-def test_expand_model_tags(mocker: MockerFixture, make_snapshot, tags, tag_selections, output):
+def test_expand_model_selections(
+    mocker: MockerFixture, make_snapshot, model_defs, selections, output
+):
     models: UniqueKeyDict[str, Model] = UniqueKeyDict("models")
-    for model_name, tag, depends_on in tags:
+    for model_name, tag, depends_on in model_defs:
         model = SqlModel(
             name=model_name, query=d.parse_one("SELECT 1 AS a"), depends_on=depends_on, tags=[tag]
         )
         models[model.fqn] = model
 
     selector = Selector(mocker.Mock(), models)
-    assert selector.expand_model_selections(tag_selections) == output
+    assert selector.expand_model_selections(selections) == output
 
 
 def test_select_models_with_external_parent(mocker: MockerFixture):
