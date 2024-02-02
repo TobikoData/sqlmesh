@@ -495,6 +495,17 @@ class EngineAdapter:
             kwargs: Optional create table properties.
         """
         table = exp.to_table(table_name)
+
+        if not columns_to_types_all_known(columns_to_types):
+            # It is ok if the columns types are not known if the table already exists and IF NOT EXISTS is set
+            if exists and self.table_exists(table_name):
+                return
+            raise SQLMeshError(
+                "Cannot create a table without knowing the column types. "
+                "Try casting the columns to an expected type or defining the columns in the model metadata. "
+                f"Columns to types: {columns_to_types}"
+            )
+
         primary_key_expression = (
             [exp.PrimaryKey(expressions=[exp.to_column(k) for k in primary_key])]
             if primary_key and self.SUPPORTS_INDEXES
