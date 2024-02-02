@@ -81,9 +81,9 @@ export default function SourceList<
   useEffect(() => {
     console.log({ activeItemIndex })
     if (activeItemIndex > -1) {
-      console.log('scrolling to the index')
       rowVirtualizer.scrollToIndex(activeItemIndex, {
         align: 'center',
+        behavior: 'smooth',
       })
     }
   }, [activeItemIndex])
