@@ -1,4 +1,5 @@
 """Remove pre- / post- hooks from existing snapshots."""
+
 import json
 
 import pandas as pd

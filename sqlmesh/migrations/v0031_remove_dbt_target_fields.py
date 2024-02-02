@@ -1,4 +1,5 @@
 """Remove dbt target fields from snapshots outside of limited list of approved fields"""
+
 import json
 
 import pandas as pd

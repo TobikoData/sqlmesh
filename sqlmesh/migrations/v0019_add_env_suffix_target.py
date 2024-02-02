@@ -1,4 +1,5 @@
 """Add support for environment suffix target."""
+
 from sqlglot import exp
 
 

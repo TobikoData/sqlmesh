@@ -345,7 +345,7 @@ class Scheduler:
                     if len(p_intervals) > 1:
                         upstream_dependencies.append((p_sid.name, terminal_node))
                     else:
-                        for (i, interval) in enumerate(p_intervals):
+                        for i, interval in enumerate(p_intervals):
                             upstream_dependencies.append((p_sid.name, (interval, i)))
 
             for i, interval in enumerate(intervals):

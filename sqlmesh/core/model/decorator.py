@@ -32,16 +32,18 @@ class model(registry_decorator):
         # Make sure that argument values are expressions in order to pass validation in ModelMeta.
         calls = self.kwargs.pop("audits", [])
         self.kwargs["audits"] = [
-            (call, {})
-            if isinstance(call, str)
-            else (
-                call[0],
-                {
-                    arg_key: exp.convert(
-                        tuple(arg_value) if isinstance(arg_value, list) else arg_value
-                    )
-                    for arg_key, arg_value in call[1].items()
-                },
+            (
+                (call, {})
+                if isinstance(call, str)
+                else (
+                    call[0],
+                    {
+                        arg_key: exp.convert(
+                            tuple(arg_value) if isinstance(arg_value, list) else arg_value
+                        )
+                        for arg_key, arg_value in call[1].items()
+                    },
+                )
             )
             for call in calls
         ]
@@ -50,9 +52,11 @@ class model(registry_decorator):
             raise ConfigError("`default_catalog` cannot be set on a per-model basis.")
 
         self.columns = {
-            column_name: column_type
-            if isinstance(column_type, exp.DataType)
-            else exp.DataType.build(str(column_type))
+            column_name: (
+                column_type
+                if isinstance(column_type, exp.DataType)
+                else exp.DataType.build(str(column_type))
+            )
             for column_name, column_type in self.kwargs.pop("columns", {}).items()
         }
 

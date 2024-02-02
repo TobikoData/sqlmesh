@@ -13,6 +13,7 @@ At a high level, when a plan is evaluated, SQLMesh will:
 
 Refer to `sqlmesh.core.plan`.
 """
+
 import abc
 import logging
 import typing as t

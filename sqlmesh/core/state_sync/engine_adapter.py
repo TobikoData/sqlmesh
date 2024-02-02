@@ -13,6 +13,7 @@ implies, it only allows for read-only operations on snapshots and environment st
 The provided `sqlmesh.core.state_sync.EngineAdapterStateSync` leverages an existing engine
 adapter to read and write state to the underlying data store.
 """
+
 from __future__ import annotations
 
 import contextlib
@@ -1080,9 +1081,11 @@ class EngineAdapterStateSync(CommonStateSyncMixin, StateSync):
         updated_environments = []
         for environment in environments:
             snapshots = [
-                new_snapshots[snapshot_id_mapping[info.snapshot_id]].table_info
-                if info.snapshot_id in snapshot_id_mapping
-                else info
+                (
+                    new_snapshots[snapshot_id_mapping[info.snapshot_id]].table_info
+                    if info.snapshot_id in snapshot_id_mapping
+                    else info
+                )
                 for info in environment.snapshots
             ]
 
@@ -1244,11 +1247,11 @@ def _environment_to_df(environment: Environment) -> pd.DataFrame:
                 "previous_plan_id": environment.previous_plan_id,
                 "expiration_ts": environment.expiration_ts,
                 "finalized_ts": environment.finalized_ts,
-                "promoted_snapshot_ids": json.dumps(
-                    [s.dict() for s in environment.promoted_snapshot_ids]
-                )
-                if environment.promoted_snapshot_ids is not None
-                else None,
+                "promoted_snapshot_ids": (
+                    json.dumps([s.dict() for s in environment.promoted_snapshot_ids])
+                    if environment.promoted_snapshot_ids is not None
+                    else None
+                ),
                 "suffix_target": environment.suffix_target.value,
                 "catalog_name_override": environment.catalog_name_override,
             }

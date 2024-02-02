@@ -30,6 +30,7 @@ context = Context(path="example")
 context.test()
 ```
 """
+
 from __future__ import annotations
 
 import abc
@@ -518,16 +519,14 @@ class Context(BaseContext):
     @t.overload
     def get_model(
         self, model_or_snapshot: ModelOrSnapshot, raise_if_missing: Literal[True] = True
-    ) -> Model:
-        ...
+    ) -> Model: ...
 
     @t.overload
     def get_model(
         self,
         model_or_snapshot: ModelOrSnapshot,
         raise_if_missing: Literal[False] = False,
-    ) -> t.Optional[Model]:
-        ...
+    ) -> t.Optional[Model]: ...
 
     def get_model(
         self, model_or_snapshot: ModelOrSnapshot, raise_if_missing: bool = False
@@ -557,20 +556,17 @@ class Context(BaseContext):
         return model
 
     @t.overload
-    def get_snapshot(self, node_or_snapshot: NodeOrSnapshot) -> t.Optional[Snapshot]:
-        ...
+    def get_snapshot(self, node_or_snapshot: NodeOrSnapshot) -> t.Optional[Snapshot]: ...
 
     @t.overload
     def get_snapshot(
         self, node_or_snapshot: NodeOrSnapshot, raise_if_missing: Literal[True]
-    ) -> Snapshot:
-        ...
+    ) -> Snapshot: ...
 
     @t.overload
     def get_snapshot(
         self, node_or_snapshot: NodeOrSnapshot, raise_if_missing: Literal[False]
-    ) -> t.Optional[Snapshot]:
-        ...
+    ) -> t.Optional[Snapshot]: ...
 
     def get_snapshot(
         self, node_or_snapshot: NodeOrSnapshot, raise_if_missing: bool = False
@@ -1562,13 +1558,15 @@ class Context(BaseContext):
         If a snapshot has not been versioned yet, its view name will be returned.
         """
         return {
-            fqn: snapshot.table_name()
-            if snapshot.version
-            else snapshot.qualified_view_name.for_environment(
-                EnvironmentNamingInfo.from_environment_catalog_mapping(
-                    self.config.environment_catalog_mapping,
-                    name=c.PROD,
-                    suffix_target=self.config.environment_suffix_target,
+            fqn: (
+                snapshot.table_name()
+                if snapshot.version
+                else snapshot.qualified_view_name.for_environment(
+                    EnvironmentNamingInfo.from_environment_catalog_mapping(
+                        self.config.environment_catalog_mapping,
+                        name=c.PROD,
+                        suffix_target=self.config.environment_suffix_target,
+                    )
                 )
             )
             for fqn, snapshot in self.snapshots.items()

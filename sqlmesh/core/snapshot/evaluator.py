@@ -19,6 +19,7 @@ has been evaluated to check for data quality issues.
 
 For more information about audits, see `sqlmesh.core.audit`.
 """
+
 from __future__ import annotations
 
 import abc
@@ -545,9 +546,11 @@ class SnapshotEvaluator:
                 and snapshot.is_incremental_by_time_range
             ):
                 query_or_df = reduce(
-                    lambda a, b: pd.concat([a, b], ignore_index=True)  # type: ignore
-                    if self.adapter.is_pandas_df(a)
-                    else a.union_all(b),  # type: ignore
+                    lambda a, b: (
+                        pd.concat([a, b], ignore_index=True)  # type: ignore
+                        if self.adapter.is_pandas_df(a)
+                        else a.union_all(b)  # type: ignore
+                    ),  # type: ignore
                     queries_or_dfs,
                 )
                 apply(query_or_df, index=0)
