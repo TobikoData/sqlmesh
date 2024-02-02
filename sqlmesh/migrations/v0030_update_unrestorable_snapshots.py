@@ -1,4 +1,5 @@
 """Update unrestorable snapshots."""
+
 import json
 import typing as t
 from collections import defaultdict

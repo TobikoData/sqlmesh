@@ -83,9 +83,11 @@ def make_controller(mocker: MockerFixture) -> t.Callable:
         return GithubController(
             paths=["examples/sushi"],
             token="abc",
-            event=GithubEvent.from_path(event_path)
-            if isinstance(event_path, str)
-            else GithubEvent.from_obj(event_path),
+            event=(
+                GithubEvent.from_path(event_path)
+                if isinstance(event_path, str)
+                else GithubEvent.from_obj(event_path)
+            ),
             client=client,
         )
 

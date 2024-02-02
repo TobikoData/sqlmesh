@@ -1421,9 +1421,9 @@ def load_sql_based_model(
 
     meta_fields: t.Dict[str, t.Any] = {
         "dialect": dialect,
-        "description": "\n".join(comment.strip() for comment in meta.comments)
-        if meta.comments
-        else None,
+        "description": (
+            "\n".join(comment.strip() for comment in meta.comments) if meta.comments else None
+        ),
         **{prop.name.lower(): prop.args.get("value") for prop in meta.expressions},
         **kwargs,
     }

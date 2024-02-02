@@ -108,13 +108,13 @@ for airflow_component in ["airflow-scheduler", "airflow-worker"]:
             raise RuntimeError(
                 "Tried to use Databricks Airflow Engine operator but did not define `DATABRICKS_SERVER_HOSTNAME`, `DATABRICKS_TOKEN`, `DATABRICKS_HTTP_PATH`"
             )
-        environment_variables[
-            "AIRFLOW_CONN_DATABRICKS_DEFAULT"
-        ] = "databricks://${DATABRICKS_SERVER_HOSTNAME}?token=${DATABRICKS_TOKEN}&http_path=${DATABRICKS_HTTP_PATH}"
+        environment_variables["AIRFLOW_CONN_DATABRICKS_DEFAULT"] = (
+            "databricks://${DATABRICKS_SERVER_HOSTNAME}?token=${DATABRICKS_TOKEN}&http_path=${DATABRICKS_HTTP_PATH}"
+        )
     if os.getenv("DEMO_GITHUB_PAT"):
-        environment_variables[
-            "AIRFLOW_CONN_GITHUB_DEFAULT"
-        ] = '{"conn_type": "github", "password": "${DEMO_GITHUB_PAT}"}'
+        environment_variables["AIRFLOW_CONN_GITHUB_DEFAULT"] = (
+            '{"conn_type": "github", "password": "${DEMO_GITHUB_PAT}"}'
+        )
     docker_compose["services"][airflow_component]["environment"].update(environment_variables)
 
 

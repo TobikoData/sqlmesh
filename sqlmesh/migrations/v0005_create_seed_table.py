@@ -1,4 +1,5 @@
 """Create a dedicated table to store the content of seeds."""
+
 from sqlglot import exp
 
 from sqlmesh.utils.migration import index_text_type

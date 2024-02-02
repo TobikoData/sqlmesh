@@ -8,8 +8,9 @@ class ModelTextTestResult(unittest.TextTestResult):
     def addFailure(
         self,
         test: unittest.TestCase,
-        err: tuple[type[BaseException], BaseException, types.TracebackType]
-        | tuple[None, None, None],
+        err: (
+            tuple[type[BaseException], BaseException, types.TracebackType] | tuple[None, None, None]
+        ),
     ) -> None:
         """Called when the test case test signals a failure.
 

@@ -1,4 +1,5 @@
 """Use LONGTEXT type for blob fields in MySQL."""
+
 from sqlglot import exp
 
 

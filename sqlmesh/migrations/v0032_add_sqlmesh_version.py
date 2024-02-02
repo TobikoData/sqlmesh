@@ -1,4 +1,5 @@
 """Add new 'sqlmesh_version' column to the version state table."""
+
 from sqlglot import exp
 
 

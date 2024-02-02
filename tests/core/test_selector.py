@@ -339,7 +339,7 @@ def test_select_models_missing_env(mocker: MockerFixture, make_snapshot):
 )
 def test_expand_model_tags(mocker: MockerFixture, make_snapshot, tags, tag_selections, output):
     models: UniqueKeyDict[str, Model] = UniqueKeyDict("models")
-    for (model_name, tag, depends_on) in tags:
+    for model_name, tag, depends_on in tags:
         model = SqlModel(
             name=model_name, query=d.parse_one("SELECT 1 AS a"), depends_on=depends_on, tags=[tag]
         )

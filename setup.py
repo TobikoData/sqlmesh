@@ -63,7 +63,7 @@ setup(
             "autoflake==1.7.7",
             "agate==1.6.3",
             "beautifulsoup4",
-            "black==22.6.0",
+            "black==24.1.1",
             "dbt-bigquery",
             "dbt-core",
             "dbt-duckdb>=1.4.2",
@@ -74,7 +74,7 @@ setup(
             "google-cloud-bigquery",
             "google-cloud-bigquery-storage",
             "isort==5.10.1",
-            "mypy~=1.4.0",
+            "mypy~=1.8.0",
             # Pendulum 3.0.0 contains a breaking change for Airflow.
             # To test if this is fixed with future versions, check if this line works:
             # https://github.com/apache/airflow/blob/main/airflow/settings.py#L59

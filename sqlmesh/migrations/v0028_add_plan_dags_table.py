@@ -1,4 +1,5 @@
 """Creates the '_plan_dags' table if Airflow is used."""
+
 from sqlglot import exp
 
 from sqlmesh.utils.migration import index_text_type

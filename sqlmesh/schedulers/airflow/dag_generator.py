@@ -316,9 +316,9 @@ class SnapshotDagGenerator:
             python_callable=promotion_update_state_task,
             op_kwargs={
                 "environment": environment,
-                "no_gaps_snapshot_names": request.no_gaps_snapshot_names
-                if request.no_gaps
-                else set(),
+                "no_gaps_snapshot_names": (
+                    request.no_gaps_snapshot_names if request.no_gaps else set()
+                ),
             },
         )
 

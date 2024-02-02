@@ -1,4 +1,5 @@
 """Add the kind_name column to the snapshots table."""
+
 import json
 
 import pandas as pd

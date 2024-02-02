@@ -119,9 +119,9 @@ class SnapshotEvaluationTarget(BaseTarget[commands.EvaluateCommandPayload], Pyda
     """
 
     command_type: commands.CommandType = commands.CommandType.EVALUATE
-    command_handler: t.Callable[
-        [SnapshotEvaluator, commands.EvaluateCommandPayload], None
-    ] = commands.evaluate
+    command_handler: t.Callable[[SnapshotEvaluator, commands.EvaluateCommandPayload], None] = (
+        commands.evaluate
+    )
     ddl_concurrent_tasks: int = 1
 
     snapshot: Snapshot
@@ -196,9 +196,9 @@ class SnapshotPromotionTarget(BaseTarget[commands.PromoteCommandPayload], Pydant
     """
 
     command_type: commands.CommandType = commands.CommandType.PROMOTE
-    command_handler: t.Callable[
-        [SnapshotEvaluator, commands.PromoteCommandPayload], None
-    ] = commands.promote
+    command_handler: t.Callable[[SnapshotEvaluator, commands.PromoteCommandPayload], None] = (
+        commands.promote
+    )
 
     snapshots: t.List[Snapshot]
     environment_naming_info: EnvironmentNamingInfo
@@ -224,9 +224,9 @@ class SnapshotDemotionTarget(BaseTarget[commands.DemoteCommandPayload], Pydantic
     """
 
     command_type: commands.CommandType = commands.CommandType.DEMOTE
-    command_handler: t.Callable[
-        [SnapshotEvaluator, commands.DemoteCommandPayload], None
-    ] = commands.demote
+    command_handler: t.Callable[[SnapshotEvaluator, commands.DemoteCommandPayload], None] = (
+        commands.demote
+    )
 
     snapshots: t.List[SnapshotTableInfo]
     environment_naming_info: EnvironmentNamingInfo
@@ -243,9 +243,9 @@ class SnapshotCleanupTarget(BaseTarget[commands.CleanupCommandPayload], Pydantic
     """The target which contains attributes necessary to perform table cleanup of expired snapshots"""
 
     command_type: commands.CommandType = commands.CommandType.CLEANUP
-    command_handler: t.Callable[
-        [SnapshotEvaluator, commands.CleanupCommandPayload], None
-    ] = commands.cleanup
+    command_handler: t.Callable[[SnapshotEvaluator, commands.CleanupCommandPayload], None] = (
+        commands.cleanup
+    )
     ddl_concurrent_tasks: int = 1
 
     @provide_session
@@ -275,9 +275,9 @@ class SnapshotCreateTablesTarget(BaseTarget[commands.CreateTablesCommandPayload]
     """The target which creates physical tables for the given set of new snapshots."""
 
     command_type: commands.CommandType = commands.CommandType.CREATE_TABLES
-    command_handler: t.Callable[
-        [SnapshotEvaluator, commands.CreateTablesCommandPayload], None
-    ] = commands.create_tables
+    command_handler: t.Callable[[SnapshotEvaluator, commands.CreateTablesCommandPayload], None] = (
+        commands.create_tables
+    )
 
     new_snapshots: t.List[Snapshot]
     ddl_concurrent_tasks: int
@@ -302,9 +302,9 @@ class SnapshotMigrateTablesTarget(BaseTarget[commands.MigrateTablesCommandPayloa
     """
 
     command_type: commands.CommandType = commands.CommandType.MIGRATE_TABLES
-    command_handler: t.Callable[
-        [SnapshotEvaluator, commands.MigrateTablesCommandPayload], None
-    ] = commands.migrate_tables
+    command_handler: t.Callable[[SnapshotEvaluator, commands.MigrateTablesCommandPayload], None] = (
+        commands.migrate_tables
+    )
 
     snapshots: t.List[Snapshot]
     ddl_concurrent_tasks: int

@@ -2,6 +2,7 @@
 These integration tests are for testing integrating with SQLMesh and not integrating with Github.
 Therefore Github calls are still mocked but context is fully evaluated.
 """
+
 import os
 import pathlib
 import typing as t

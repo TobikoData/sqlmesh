@@ -266,9 +266,11 @@ def set_catalog(override_mapping: t.Optional[t.Dict[str, CatalogSupport]] = None
 
             obj, container, key = t.cast(
                 t.Tuple[t.Union[str, exp.Table], t.Union[t.Dict, t.List], t.Union[int, str]],
-                (kwargs.get(target_name), kwargs, target_name)
-                if kwargs.get(target_name)
-                else (list_args[target_pos], list_args, target_pos),
+                (
+                    (kwargs.get(target_name), kwargs, target_name)
+                    if kwargs.get(target_name)
+                    else (list_args[target_pos], list_args, target_pos)
+                ),
             )
             to_expression_func = t.cast(
                 t.Callable[[t.Union[str, exp.Table]], exp.Table],

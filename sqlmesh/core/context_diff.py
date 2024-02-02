@@ -9,6 +9,7 @@ The SQLMesh CLI diff command uses ContextDiff to determine what to visualize.
 When creating a ContextDiff object, SQLMesh will compare the snapshots from one environment with those of
 another remote environment and determine if nodes have been added, removed, or modified.
 """
+
 from __future__ import annotations
 
 import typing as t
