@@ -1371,9 +1371,10 @@ class Context(BaseContext):
                 f"\nFailure in audit {error.audit.name} ({error.audit._path})."
             )
             self.console.log_status_update(f"Got {error.count} results, expected 0.")
-            self.console.show_sql(
-                f"{error.query.sql(dialect=self.snapshot_evaluator.adapter.dialect)}"
-            )
+            if error.query:
+                self.console.show_sql(
+                    f"{error.query.sql(dialect=self.snapshot_evaluator.adapter.dialect)}"
+                )
 
         self.console.log_status_update("Done.")
 
