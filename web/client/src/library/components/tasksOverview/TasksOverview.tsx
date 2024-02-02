@@ -14,6 +14,7 @@ import { type EnvironmentName } from '~/models/environment'
 import { EnumPlanChangeType, type PlanChangeType } from '../plan/context'
 import Title from '@components/title/Title'
 import { type ModelSQLMeshChangeDisplay } from '@models/sqlmesh-change-display'
+import { Transition } from '@headlessui/react'
 
 const TasksOverview = function TasksOverview({
   children,
@@ -159,8 +160,17 @@ function TasksDetails({
 }): JSX.Element {
   return (
     <>
-      {isArrayNotEmpty(queue) && (
-        <div className="p-4 mt-6 shadow-lg rounded-lg">
+      <Transition
+        show={isArrayNotEmpty(queue)}
+        enter="transition ease duration-300 transform"
+        enterFrom="opacity-0 scale-95"
+        enterTo="opacity-100 scale-100"
+        leave="transition ease duration-300 transform"
+        leaveFrom="opacity-100 scale-100"
+        leaveTo="opacity-0 scale-95"
+        className="trasition-all duration-300 ease-in-out"
+      >
+        <div className="px-4 pt-3 pb-2 mt-4 shadow-lg rounded-lg">
           <Title text="Currently in proccess" />
           <Tasks models={queue}>
             {task => (
@@ -228,7 +238,7 @@ function TasksDetails({
             )}
           </Tasks>
         </div>
-      )}
+      </Transition>
       <TasksBlock className={className}>
         <Tasks models={models}>
           {task => (
@@ -343,7 +353,7 @@ function Tasks({
   return (
     <ul
       className={clsx(
-        'rounded-lg py-4 overflow-auto text-prose hover:scrollbar scrollbar--vertical scrollbar--horizontal',
+        'rounded-lg pt-4 overflow-auto text-prose hover:scrollbar scrollbar--vertical scrollbar--horizontal',
         className,
       )}
     >

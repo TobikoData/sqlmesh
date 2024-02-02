@@ -40,8 +40,8 @@ export default function ReportErrors(): JSX.Element {
             className={clsx(
               'block ml-1 px-3 py-1 first-child:ml-0 rounded-full whitespace-nowrap font-bold text-xs text-center',
               hasError
-                ? 'border-danger-10 text-danger-500 bg-danger-10 cursor-pointer'
-                : 'border-neutral-10 cursor-default text-neutral-500 bg-neutral-10 dark:text-neutral-300',
+                ? 'text-danger-500 bg-danger-10 dark:bg-danger-20 cursor-pointer'
+                : 'bg-neutral-5 dark:bg-neutral-20 cursor-default text-neutral-500 dark:text-neutral-300',
             )}
           >
             {hasError ? (
