@@ -192,7 +192,7 @@ export default function PlanActions({
                   : [],
                 planAction.isProcessing
                   ? planCancel.isSuccessed
-                    ? 'Finishing Cancelation...'
+                    ? 'Finishing Cancellation...'
                     : 'Cancel'
                   : 'Start Over',
               )}

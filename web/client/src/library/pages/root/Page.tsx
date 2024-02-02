@@ -447,7 +447,7 @@ function PlanChanges(): JSX.Element {
       )}
     </span>
   ) : (
-    <span className="block ml-1 px-3 py-1 first-child:ml-0 rounded-full whitespace-nowrap font-bold text-xs text-center bg-neutral-5 dark:bg-neutral-20 cursor-default text-neutral-500  dark:text-neutral-300">
+    <span className="block ml-1 px-3 py-1 first-child:ml-0 rounded-full whitespace-nowrap font-bold text-xs text-center bg-neutral-5 dark:bg-neutral-20 cursor-default text-neutral-500 dark:text-neutral-300">
       No Changes
     </span>
   )

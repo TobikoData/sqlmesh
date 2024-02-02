@@ -60,7 +60,7 @@ export default function EditorTabs(): JSX.Element {
       addTab(newTab)
     }
 
-    setTimeout(() => selectTab(newTab))
+    selectTab(newTab)
   }, [selectedFile])
 
   useEffect(() => {
