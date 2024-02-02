@@ -23,11 +23,29 @@ if t.TYPE_CHECKING:
 router = APIRouter()
 
 
-def _get_table(node: Node, dialect: t.Optional[DialectType] = None) -> t.Optional[str]:
+def _get_table(node: Node, dialect: t.Optional[DialectType] = None) -> str:
     """Get a node's table/source"""
-    table: t.Union[exp.Table, str] = node.alias or node.name
-    if isinstance(node.expression, exp.Table):
+    # Default to node name
+    table: t.Union[exp.Table, str] = node.name
+    if node.alias:
+        # Use node alias if available
+        table = node.alias
+    elif isinstance(node.expression, exp.Table):
         table = node.expression
+    elif isinstance(node.expression, exp.Alias):
+        # Extract source table from alias
+        sources_from_comments = [
+            comment[len("source :") :]
+            for comment in node.source.args["from"].this.comments or []
+            if comment.startswith("source: ")
+        ]
+        if sources_from_comments:
+            table = sources_from_comments[0]
+        else:
+            for source_table in node.source.find_all(exp.Table):
+                for column in node.expression.this.find_all(exp.Column):
+                    if source_table.alias == column.table:
+                        table = source_table
 
     try:
         return normalize_model_name(table, None, dialect=dialect)
@@ -35,7 +53,13 @@ def _get_table(node: Node, dialect: t.Optional[DialectType] = None) -> t.Optiona
         # Cannot extract table from node. One reason this can happen is node is
         # '*' because a model selects * from an external model for which we do
         # not know the schema.
-        return None
+        return ""
+
+
+def _get_column(node: Node, dialect: t.Optional[DialectType] = None) -> str:
+    if isinstance(node.expression, exp.Alias) and isinstance(node.expression.this, exp.Column):
+        return node.expression.this.alias_or_name
+    return exp.to_column(node.name).name
 
 
 def _get_node_source(node: Node, dialect: DialectType) -> str:
@@ -47,16 +71,19 @@ def _get_node_source(node: Node, dialect: DialectType) -> str:
     return source
 
 
-def _process_downstream(downstream: t.List[Node], dialect: DialectType) -> t.Dict[str, t.List[str]]:
+def _process_downstream(
+    downstream: t.List[Node], parent_table: str, dialect: DialectType
+) -> t.Dict[str, t.List[str]]:
     """Aggregate a list of downstream nodes by table/source"""
     graph = collections.defaultdict(list)
     for node in downstream:
         table = _get_table(node, dialect=dialect)
-        if table is None:
+        if not table or table == parent_table:
             continue
 
-        column = exp.to_column(node.name).name
-        graph[table].append(column)
+        column = _get_column(node)
+        if column:
+            graph[table].append(column)
     return graph
 
 
@@ -107,25 +134,25 @@ async def column_lineage(
         )
 
     graph: t.Dict[str, t.Dict[str, LineageColumn]] = {}
-    node_name = model.fqn
 
     for i, node in enumerate(node.walk()):
-        if i > 0:
+        if i == 0:
+            table = model.fqn
+        else:
             table = _get_table(node, dialect)
-            if table is None:
-                continue
-            node_name = table
+        if not table:
+            continue
 
-            column_name = exp.to_column(node.name).name
-        if column_name in graph.get(node_name, []):
+        column_name = _get_column(node, dialect)
+        if column_name in graph.get(table, []):
             continue
 
         # At this point node_name should be fqn/normalized/quoted
-        graph[node_name] = {
+        graph[table] = {
             column_name: LineageColumn(
                 expression=node.expression.sql(pretty=True, dialect=dialect),
                 source=_get_node_source(node=node, dialect=dialect),
-                models=_process_downstream(node.downstream, dialect=dialect),
+                models=_process_downstream(node.downstream, parent_table=table, dialect=dialect),
             )
         }
 
