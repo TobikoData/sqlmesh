@@ -23,7 +23,9 @@ if t.TYPE_CHECKING:
 router = APIRouter()
 
 
-def _get_table(node: Node, dialect: t.Optional[DialectType] = None) -> str:
+def _get_table(
+    node: Node, default_catalog: t.Optional[str], dialect: t.Optional[DialectType] = None
+) -> str:
     """Get a node's table/source"""
     # Default to node name
     table: t.Union[exp.Table, str] = node.name
@@ -48,7 +50,7 @@ def _get_table(node: Node, dialect: t.Optional[DialectType] = None) -> str:
                         table = source_table
 
     try:
-        return normalize_model_name(table, None, dialect=dialect)
+        return normalize_model_name(table, default_catalog=default_catalog, dialect=dialect)
     except sqlglot.errors.ParseError:
         # Cannot extract table from node. One reason this can happen is node is
         # '*' because a model selects * from an external model for which we do
@@ -72,12 +74,15 @@ def _get_node_source(node: Node, dialect: DialectType) -> str:
 
 
 def _process_downstream(
-    downstream: t.List[Node], parent_table: str, dialect: DialectType
+    downstream: t.List[Node],
+    parent_table: str,
+    dialect: DialectType,
+    default_catalog: t.Optional[str],
 ) -> t.Dict[str, t.List[str]]:
     """Aggregate a list of downstream nodes by table/source"""
     graph = collections.defaultdict(list)
     for node in downstream:
-        table = _get_table(node, dialect=dialect)
+        table = _get_table(node, default_catalog=default_catalog, dialect=dialect)
         if not table or table == parent_table:
             continue
 
@@ -139,7 +144,7 @@ async def column_lineage(
         if i == 0:
             table = model.fqn
         else:
-            table = _get_table(node, dialect)
+            table = _get_table(node, default_catalog=context.default_catalog, dialect=dialect)
         if not table:
             continue
 
@@ -151,7 +156,12 @@ async def column_lineage(
         graph[table][column_name] = LineageColumn(
             expression=node.expression.sql(pretty=True, dialect=dialect),
             source=_get_node_source(node=node, dialect=dialect),
-            models=_process_downstream(node.downstream, parent_table=table, dialect=dialect),
+            models=_process_downstream(
+                node.downstream,
+                parent_table=table,
+                dialect=dialect,
+                default_catalog=context.default_catalog,
+            ),
         )
 
     return graph
