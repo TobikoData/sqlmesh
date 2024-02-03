@@ -73,10 +73,16 @@ export default function SourceList<
     estimateSize: () => 28,
   })
 
-  const scrollToItem = (itemIndex: number): void => {
+  const scrollToItem = ({
+    itemIndex,
+    isSmoothScroll = true,
+  }: {
+    itemIndex: number
+    isSmoothScroll?: boolean
+  }): void => {
     rowVirtualizer.scrollToIndex(itemIndex, {
       align: 'center',
-      behavior: 'smooth',
+      behavior: isSmoothScroll ? 'smooth' : 'auto',
     })
   }
 
@@ -120,7 +126,7 @@ export default function SourceList<
       (rowVirtualizer.range.startIndex > filteredItemIndex ||
         rowVirtualizer.range.endIndex < filteredItemIndex)
     ) {
-      scrollToItem(filteredItemIndex)
+      scrollToItem({ itemIndex: filteredItemIndex, isSmoothScroll: false })
     }
   }, [activeItemIndex])
 
@@ -129,7 +135,7 @@ export default function SourceList<
       {shouldShowReturnButton && (
         <Button
           className="absolute right-0 top-0 z-10 text-ellipsis !block overflow-hidden no-wrap max-w-[90%]"
-          onClick={() => scrollToItem(filteredItemIndex)}
+          onClick={() => scrollToItem({ itemIndex: filteredItemIndex })}
           size="sm"
           variant="neutral"
         >
@@ -259,8 +265,8 @@ export function SourceListItem({
             ? variant === EnumVariant.Primary
               ? 'text-primary-500 bg-primary-10'
               : variant === EnumVariant.Danger
-              ? 'text-danger-500 bg-danger-5'
-              : 'text-neutral-500 bg-neutral-10'
+                ? 'text-danger-500 bg-danger-5'
+                : 'text-neutral-500 bg-neutral-10'
             : 'hover:bg-neutral-10 text-neutral-400 dark:text-neutral-300',
         )
       }
