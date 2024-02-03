@@ -28,7 +28,7 @@ def _get_table(
 ) -> str:
     """Get a node's table/source"""
     # Default to node name
-    table: t.Union[exp.Table, str] = node.name
+    table: t.Union[exp.Table, str] = ""
     if node.alias:
         # Use node alias if available
         table = node.alias
@@ -45,7 +45,7 @@ def _get_table(
             table = sources_from_comments[0]
         else:
             for source_table in node.source.find_all(exp.Table):
-                for column in node.expression.this.find_all(exp.Column):
+                for column in node.expression.find_all(exp.Column):
                     if source_table.alias == column.table:
                         table = source_table
 
