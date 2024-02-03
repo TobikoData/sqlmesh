@@ -1,10 +1,11 @@
 import Input from '@components/input/Input'
 import { useVirtualizer } from '@tanstack/react-virtual'
-import { isArrayEmpty, isNil, isNotNil, isOnScreen } from '@utils/index'
+import { isArrayEmpty, isNil, isNotNil } from '@utils/index'
 import clsx from 'clsx'
 import { useEffect, useMemo, useRef, useState } from 'react'
-import { NavLink, useLocation } from 'react-router-dom'
+import { NavLink } from 'react-router-dom'
 import { EnumSize, EnumVariant, type Variant } from '~/types/enum'
+import { Button } from '../button/Button'
 
 interface ListItem<
   TListItem extends Record<string, any> = Record<string, any>,
@@ -26,6 +27,7 @@ export default function SourceList<
   items = [],
   types,
   by = 'id',
+  activeItemIndex,
   byName,
   byDescription,
   to,
@@ -37,14 +39,13 @@ export default function SourceList<
   to: string
   items?: TItem[]
   types?: TType
+  activeItemIndex: number
   byName?: string
   disabled?: boolean
   byDescription?: string
   className?: string
 }): JSX.Element {
   const [filter, setFilter] = useState('')
-
-  const { pathname } = useLocation()
 
   const scrollableAreaRef = useRef<HTMLDivElement>(null)
 
@@ -66,30 +67,75 @@ export default function SourceList<
           )
         })
 
-  const activeItemIndex = useMemo((): number => {
-    return filtered.findIndex(filteredItem => {
-      return `${to}/${filteredItem[by]}` === pathname
-    })
-  }, [filtered])
-
   const rowVirtualizer = useVirtualizer({
     count: filtered.length,
     getScrollElement: () => scrollableAreaRef.current,
     estimateSize: () => 28,
   })
 
+  const scrollToItem = (itemIndex: number): void => {
+    rowVirtualizer.scrollToIndex(itemIndex, {
+      align: 'center',
+      behavior: 'smooth',
+    })
+  }
+
+  // the index of the active item in the filtered list
+  const filteredItemIndex = useMemo(() => {
+    const activeItem = items[activeItemIndex]
+    const filteredIndex = filtered.findIndex(
+      filteredItem => filteredItem.name === activeItem?.name,
+    )
+    return filteredIndex
+  }, [filtered, activeItemIndex])
+
+  /**
+   * The return button should appear when the
+   * active item is available in the list (not
+   * filtered out) and it is not in the visible
+   * range of the virtualized list
+   */
+  const shouldShowReturnButton = useMemo(() => {
+    if (filteredItemIndex > -1) {
+      // active item is in the currently filtered list
+      const range = rowVirtualizer.range
+
+      // check if it's outside the visible range
+      if (
+        isNotNil(range) &&
+        (range.startIndex > filteredItemIndex ||
+          range?.endIndex < filteredItemIndex)
+      ) {
+        return true
+      }
+    }
+    return false
+  }, [filteredItemIndex, rowVirtualizer.range])
+
+  // scroll to the active item when the activeItemIndex changes
   useEffect(() => {
-    console.log({ activeItemIndex })
-    if (activeItemIndex > -1) {
-      rowVirtualizer.scrollToIndex(activeItemIndex, {
-        align: 'center',
-        behavior: 'smooth',
-      })
+    if (
+      filteredItemIndex > -1 &&
+      isNotNil(rowVirtualizer.range) &&
+      (rowVirtualizer.range.startIndex > filteredItemIndex ||
+        rowVirtualizer.range.endIndex < filteredItemIndex)
+    ) {
+      scrollToItem(filteredItemIndex)
     }
   }, [activeItemIndex])
 
   return (
-    <div className={clsx('flex flex-col w-full h-full', className)}>
+    <div className={clsx('flex flex-col w-full h-full relative', className)}>
+      {shouldShowReturnButton && (
+        <Button
+          className="absolute right-0 top-0 z-10 text-ellipsis !block overflow-hidden no-wrap max-w-[90%]"
+          onClick={() => scrollToItem(filteredItemIndex)}
+          size="sm"
+          variant="neutral"
+        >
+          Scroll to {items[activeItemIndex]?.name}
+        </Button>
+      )}
       <div
         className="p-2 h-full overflow-auto hover:scrollbar scrollbar--horizontal scrollbar--vertical"
         ref={scrollableAreaRef}
