@@ -15,6 +15,12 @@ export default function PageErrors(): JSX.Element {
 
   const list = useMemo(() => Array.from(errors).reverse(), [errors])
 
+  const activeItemIndex = useMemo((): number => {
+    return list.findIndex(item => {
+      return `${EnumRoutes.Errors}/${item.id}` === location.pathname
+    })
+  }, [location.pathname, list])
+
   useEffect(() => {
     if (isArrayEmpty(list)) {
       setTimeout(() => navigate(EnumRoutes.Ide))
@@ -58,6 +64,7 @@ export default function PageErrors(): JSX.Element {
             byDescription="message"
             to={EnumRoutes.Errors}
             items={list}
+            activeItemIndex={activeItemIndex}
             types={list.reduce(
               (acc: Record<string, string>, it) =>
                 Object.assign(acc, { [it.id]: it.status }),

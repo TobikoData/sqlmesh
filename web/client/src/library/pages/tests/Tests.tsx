@@ -6,6 +6,7 @@ import { EnumSize, EnumVariant } from '~/types/enum'
 import { EnumRoutes } from '~/routes'
 import { Button } from '@components/button/Button'
 import { Divider } from '@components/divider/Divider'
+import { useMemo } from 'react'
 
 export default function PageTests(): JSX.Element {
   const files = useStoreProject(s => s.files)
@@ -13,6 +14,12 @@ export default function PageTests(): JSX.Element {
   const items = Array.from(files.values()).filter(it =>
     it.path.endsWith('tests'),
   )
+
+  const activeItemIndex = useMemo((): number => {
+    return items.findIndex(item => {
+      return `${EnumRoutes.Tests}/${item.basename}` === location.pathname
+    })
+  }, [location.pathname, items])
 
   return (
     <Page
@@ -23,6 +30,7 @@ export default function PageTests(): JSX.Element {
             byName="basename"
             to={EnumRoutes.Tests}
             items={items}
+            activeItemIndex={activeItemIndex}
             listItem={({ to, name, description, text, disabled = false }) => (
               <SourceListItem
                 to={to}

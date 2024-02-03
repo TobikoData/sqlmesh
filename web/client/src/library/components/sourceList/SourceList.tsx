@@ -27,7 +27,7 @@ export default function SourceList<
   items = [],
   types,
   by = 'id',
-  activeItemIndex,
+  activeItemIndex = -1,
   byName,
   byDescription,
   to,
@@ -39,7 +39,7 @@ export default function SourceList<
   to: string
   items?: TItem[]
   types?: TType
-  activeItemIndex: number
+  activeItemIndex?: number
   byName?: string
   disabled?: boolean
   byDescription?: string

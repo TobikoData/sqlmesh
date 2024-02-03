@@ -3,7 +3,7 @@ import { useStoreContext } from '@context/context'
 import SourceList, { SourceListItem } from '@components/sourceList/SourceList'
 import { EnumRoutes } from '~/routes'
 import { Outlet, useLocation, useNavigate } from 'react-router-dom'
-import { useEffect } from 'react'
+import { useEffect, useMemo } from 'react'
 import { useStorePlan } from '@context/plan'
 import { isFalse, isNotNil } from '@utils/index'
 import { Modules } from '@api/client'
@@ -18,6 +18,14 @@ export default function PagePlan(): JSX.Element {
 
   const planAction = useStorePlan(s => s.planAction)
   const planApply = useStorePlan(s => s.planApply)
+
+  const environmentsArray = Array.from(environments)
+
+  const activeItemIndex = useMemo((): number => {
+    return environmentsArray.findIndex(env => {
+      return `${EnumRoutes.Plan}/environments/${env.name}` === location.pathname
+    })
+  }, [location.pathname, environments])
 
   useEffect(() => {
     if (planApply.isRunning && isNotNil(planApply.environment)) {
@@ -49,12 +57,13 @@ export default function PagePlan(): JSX.Element {
           by="name"
           byName="name"
           to={`${EnumRoutes.Plan}/environments`}
-          items={Array.from(environments)}
+          items={environmentsArray}
           disabled={
             isFalse(modules.includes(Modules.plans)) ||
             planAction.isProcessing ||
             environment.isInitialProd
           }
+          activeItemIndex={activeItemIndex}
           listItem={({
             to,
             name,
