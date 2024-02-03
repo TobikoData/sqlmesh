@@ -265,8 +265,8 @@ export function SourceListItem({
             ? variant === EnumVariant.Primary
               ? 'text-primary-500 bg-primary-10'
               : variant === EnumVariant.Danger
-                ? 'text-danger-500 bg-danger-5'
-                : 'text-neutral-500 bg-neutral-10'
+              ? 'text-danger-500 bg-danger-5'
+              : 'text-neutral-500 bg-neutral-10'
             : 'hover:bg-neutral-10 text-neutral-400 dark:text-neutral-300',
         )
       }
