@@ -59,8 +59,8 @@ def _get_table(
 
 
 def _get_column(node: Node, dialect: t.Optional[DialectType] = None) -> str:
-    if isinstance(node.expression, exp.Alias) and isinstance(node.expression.this, exp.Column):
-        return node.expression.this.alias_or_name
+    if isinstance(node.expression, exp.Alias):
+        return node.expression.alias_or_name
     return exp.to_column(node.name).name
 
 
@@ -145,10 +145,10 @@ async def column_lineage(
             table = model.fqn
         else:
             table = _get_table(node, default_catalog=context.default_catalog, dialect=dialect)
+            column_name = _get_column(node, dialect)
         if not table:
             continue
 
-        column_name = _get_column(node, dialect)
         if column_name in graph.get(table, []):
             continue
 
