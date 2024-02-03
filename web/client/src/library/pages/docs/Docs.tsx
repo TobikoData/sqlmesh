@@ -40,8 +40,6 @@ export default function PageDocs(): JSX.Element {
 
   const list = Array.from(new Set(models.values()))
 
-  console.log(list, 'list')
-
   const activeItemIndex = useMemo((): number => {
     return list.findIndex(listItem => {
       return `/docs/models/${listItem.name}` === pathname
