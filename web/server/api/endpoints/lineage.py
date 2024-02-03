@@ -80,7 +80,7 @@ def _process_downstream(
     default_catalog: t.Optional[str],
 ) -> t.Dict[str, t.List[str]]:
     """Aggregate a list of downstream nodes by table/source"""
-    graph = collections.defaultdict(list)
+    graph = collections.defaultdict(set)
     for node in downstream:
         table = _get_table(node, default_catalog=default_catalog, dialect=dialect)
         if not table or table == parent_table:
@@ -88,7 +88,7 @@ def _process_downstream(
 
         column = _get_column(node)
         if column:
-            graph[table].append(column)
+            graph[table].add(column)
     return graph
 
 
