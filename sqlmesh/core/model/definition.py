@@ -1170,7 +1170,9 @@ class SeedModel(_SqlBasedModel):
             for column in date_or_time_columns:
                 df[column] = pd.to_datetime(df[column])
             df[bool_columns] = df[bool_columns].apply(lambda i: str_to_bool(str(i)))
-            df[string_columns] = df[string_columns].astype(str)
+            df[string_columns] = df[string_columns].mask(
+                cond=lambda x: x.notna(), other=df[string_columns].astype(str)  # type: ignore
+            )
             yield df
 
     def text_diff(self, other: Node) -> str:
