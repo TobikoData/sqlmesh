@@ -232,7 +232,6 @@ function ModelColumnLineage(): JSX.Element {
         setNodes(layout.nodes)
       })
       .catch(error => {
-        console.error(error)
         handleError?.(error)
         setEdges([])
         setNodes([])
