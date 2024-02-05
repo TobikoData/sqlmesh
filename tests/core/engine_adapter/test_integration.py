@@ -7,6 +7,7 @@ import sys
 import typing as t
 from datetime import timedelta
 
+import numpy as np
 import pandas as pd
 import pytest
 from sqlglot import exp, parse_one
@@ -174,7 +175,7 @@ class TestContext:
     def get_current_data(self, table: exp.Table) -> pd.DataFrame:
         df = self.engine_adapter.fetchdf(exp.select("*").from_(table), quote_identifiers=True)
         if self.dialect == "snowflake" and "id" in df.columns:
-            df["id"] = df["id"].astype("int")
+            df["id"] = df["id"].apply(lambda x: x if pd.isna(x) else int(x))
         return df
 
     def compare_with_current(self, table: exp.Table, expected: pd.DataFrame) -> None:
@@ -818,6 +819,34 @@ def test_drop_schema(ctx: TestContext):
     results = ctx.get_metadata_results()
     assert len(results.tables) == 0
     assert len(results.views) == 0
+
+
+def test_nan_roundtrip(ctx: TestContext):
+    if ctx.test_type != "df":
+        pytest.skip("NaN roundtrip test only relevant for dataframes.")
+    ctx.engine_adapter.DEFAULT_BATCH_SIZE = sys.maxsize
+    ctx.init()
+    table = ctx.table("test_table")
+    # Initial Load
+    input_data = pd.DataFrame(
+        [
+            {"id": 1, "ds": "2022-01-01"},
+            {"id": 2, "ds": "2022-01-02"},
+            {"id": np.nan, "ds": np.nan},
+        ]
+    )
+    ctx.engine_adapter.create_table(table, ctx.columns_to_types)
+    ctx.engine_adapter.replace_query(
+        table,
+        ctx.input_data(input_data),
+        columns_to_types=ctx.columns_to_types,
+    )
+    results = ctx.get_metadata_results()
+    assert not results.views
+    assert not results.materialized_views
+    assert len(results.tables) == len(results.non_temp_tables) == 1
+    assert results.non_temp_tables[0] == table.name
+    ctx.compare_with_current(table, input_data)
 
 
 def test_replace_query(ctx: TestContext):
