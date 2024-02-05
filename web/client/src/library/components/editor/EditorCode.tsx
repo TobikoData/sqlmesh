@@ -122,9 +122,7 @@ function CodeEditorDefault({
     () =>
       Array.from(
         new Set(
-          allModels
-            .map(model => model.columns.map(column => column.name))
-            .flat(),
+          allModels.flatMap(model => model.columns.map(column => column.name)),
         ),
       ).map(name => ({
         label: name,

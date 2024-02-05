@@ -72,14 +72,15 @@ function useSQLMeshModelExtensions(
     const columns =
       isNil(lineage) || isObjectEmpty(lineage)
         ? new Set<string>(
-            Array.from(new Set(models.values()))
-              .map(m => m.columns.map(c => c.name))
-              .flat(),
+            Array.from(new Set(models.values())).flatMap(m =>
+              m.columns.map(c => c.name),
+            ),
           )
         : new Set(
             Object.keys(lineage)
-              .map(modelName => models.get(modelName)?.columns.map(c => c.name))
-              .flat()
+              .flatMap(
+                modelName => models.get(modelName)?.columns.map(c => c.name),
+              )
               .filter(Boolean) as string[],
           )
 
