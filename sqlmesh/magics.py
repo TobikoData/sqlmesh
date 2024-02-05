@@ -618,26 +618,26 @@ class SQLMeshMagics(Magics):
         help="Transpile project models to the specified dialect.",
     )
     @argument(
-        "--newline",
+        "--append-newline",
         action="store_true",
-        help="The output dialect of the sql string.",
+        help="Whether or not to append a newline to the end of the file.",
+        default=None,
     )
     @argument(
         "--normalize",
         action="store_true",
         help="Whether or not to normalize identifiers to lowercase.",
+        default=None,
     )
     @argument(
         "--pad",
         type=int,
         help="Determines the pad size in a formatted string.",
-        default=2,
     )
     @argument(
         "--indent",
         type=int,
         help="Determines the indentation size in a formatted string.",
-        default=2,
     )
     @argument(
         "--normalize-functions",
@@ -648,19 +648,19 @@ class SQLMeshMagics(Magics):
         "--leading-comma",
         action="store_true",
         help="Determines whether or not the comma is leading or trailing in select expressions. Default is trailing.",
+        default=None,
     )
     @argument(
         "--max-text-width",
         type=int,
         help="The max number of characters in a segment before creating new lines in pretty mode.",
-        default=80,
     )
     @line_magic
     @pass_sqlmesh_context
     def format(self, context: Context, line: str) -> None:
         """Format all SQL models."""
         args = parse_argstring(self.format, line)
-        context.format(**vars(args))
+        context.format(**{k: v for k, v in vars(args).items() if v is not None})
 
     @magic_arguments()
     @argument("environment", type=str, help="The environment to diff local state against.")

@@ -67,18 +67,22 @@ async def write_file(
         replace_file(settings.project_path / path, settings.project_path / path_or_new_path)
     else:
         full_path = settings.project_path / path
-        format_file_status = models.FormatFileStatus(
-            status=models.Status.INIT, path=path_or_new_path
-        )
-        if content and Path(path_or_new_path).suffix == ".sql":
+        config = context.config_for_path(Path(path_or_new_path))
+        if config.ui.format_on_save and content and Path(path_or_new_path).suffix == ".sql":
+            format_file_status = models.FormatFileStatus(
+                status=models.Status.INIT, path=path_or_new_path
+            )
             path_to_model_mapping = await get_path_to_model_mapping(settings=settings)
             model = path_to_model_mapping.get(Path(full_path))
-            default_dialect = context.config_for_path(Path(path_or_new_path)).dialect
+            default_dialect = config.dialect
             dialect = model.dialect if model and model.is_sql else default_dialect
-
             try:
                 expressions = parse(content, default_dialect=default_dialect)
-                content = format_model_expressions(expressions, dialect)
+                content = format_model_expressions(
+                    expressions, dialect, **config.format.generator_options
+                )
+                if config.format.append_newline:
+                    content += "\n"
                 format_file_status.status = models.Status.SUCCESS
             except Exception:
                 format_file_status.status = models.Status.FAIL
@@ -87,7 +91,9 @@ async def write_file(
                     origin="API -> files -> write_file",
                 ).to_dict()
                 api_console.log_event(event=models.EventName.WARNINGS, data=error)
-        api_console.log_event(event=models.EventName.FORMAT_FILE, data=format_file_status.dict())
+            api_console.log_event(
+                event=models.EventName.FORMAT_FILE, data=format_file_status.dict()
+            )
         full_path.write_text(content, encoding="utf-8")
 
     response.status_code = HTTP_204_NO_CONTENT

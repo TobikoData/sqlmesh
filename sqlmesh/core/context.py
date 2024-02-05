@@ -737,7 +737,10 @@ class Context(BaseContext):
         return df
 
     def format(
-        self, transpile: t.Optional[str] = None, newline: bool = False, **kwargs: t.Any
+        self,
+        transpile: t.Optional[str] = None,
+        append_newline: t.Optional[bool] = None,
+        **kwargs: t.Any,
     ) -> None:
         """Format all SQL models."""
         for model in self._models.values():
@@ -756,11 +759,15 @@ class Context(BaseContext):
                                     value=exp.Literal.string(transpile or model.dialect),
                                 )
                             )
+                format = self.config_for_node(model).format
+                opts = {**format.generator_options, **kwargs}
                 file.seek(0)
                 file.write(
-                    format_model_expressions(expressions, transpile or model.dialect, **kwargs)
+                    format_model_expressions(expressions, transpile or model.dialect, **opts)
                 )
-                if newline:
+                if append_newline is None:
+                    append_newline = format.append_newline
+                if append_newline:
                     file.write("\n")
                 file.truncate()
 

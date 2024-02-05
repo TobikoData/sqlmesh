@@ -19,10 +19,12 @@ from sqlmesh.core.config.connection import (
     DuckDBConnectionConfig,
     connection_config_validator,
 )
+from sqlmesh.core.config.format import FormatConfig
 from sqlmesh.core.config.gateway import GatewayConfig
 from sqlmesh.core.config.model import ModelDefaultsConfig
 from sqlmesh.core.config.run import RunConfig
 from sqlmesh.core.config.scheduler import BuiltInSchedulerConfig, SchedulerConfig
+from sqlmesh.core.config.ui import UIConfig
 from sqlmesh.core.loader import Loader, SqlMeshLoader
 from sqlmesh.core.notification_target import NotificationTarget
 from sqlmesh.core.user import User
@@ -64,6 +66,8 @@ class Config(BaseConfig):
         environment_suffix_target: Indicates whether to append the environment name to the schema or table name.
         default_target_environment: The name of the environment that will be the default target for the `sqlmesh plan` and `sqlmesh run` commands.
         log_limit: The default number of logs to keep.
+        format: The formatting options for SQL code.
+        ui: The UI configuration for SQLMesh.
     """
 
     gateways: t.Dict[str, GatewayConfig] = {"": GatewayConfig()}
@@ -97,6 +101,8 @@ class Config(BaseConfig):
     log_limit: int = c.DEFAULT_LOG_LIMIT
     cicd_bot: t.Optional[CICDBotConfig] = None
     run: RunConfig = RunConfig()
+    format: FormatConfig = FormatConfig()
+    ui: UIConfig = UIConfig()
 
     _FIELD_UPDATE_STRATEGY: t.ClassVar[t.Dict[str, UpdateStrategy]] = {
         "gateways": UpdateStrategy.KEY_UPDATE,
@@ -108,6 +114,8 @@ class Config(BaseConfig):
         "pinned_environments": UpdateStrategy.EXTEND,
         "physical_schema_override": UpdateStrategy.KEY_UPDATE,
         "run": UpdateStrategy.NESTED_UPDATE,
+        "format": UpdateStrategy.NESTED_UPDATE,
+        "ui": UpdateStrategy.NESTED_UPDATE,
         "loader_kwargs": UpdateStrategy.KEY_UPDATE,
     }
 
