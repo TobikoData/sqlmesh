@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import typing as t
 
+import numpy as np
 import pandas as pd
 from pandas.api.types import is_datetime64_any_dtype  # type: ignore
 from sqlglot import exp
@@ -174,7 +175,7 @@ class MSSQLEngineAdapter(
                 columns_to_types_create = columns_to_types.copy()
                 self._convert_df_datetime(df, columns_to_types_create)
                 self.create_table(temp_table, columns_to_types_create)
-                rows: t.List[t.Tuple[t.Any, ...]] = list(df.itertuples(index=False, name=None))  # type: ignore
+                rows: t.List[t.Tuple[t.Any, ...]] = list(df.replace({np.nan: None}).itertuples(index=False, name=None))  # type: ignore
                 conn = self._connection_pool.get()
                 conn.bulk_copy(temp_table.sql(dialect=self.dialect), rows)
             return exp.select(*self._casted_columns(columns_to_types)).from_(temp_table)  # type: ignore
