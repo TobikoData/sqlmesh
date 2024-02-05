@@ -842,8 +842,8 @@ def test_nan_roundtrip(ctx: TestContext):
         columns_to_types=ctx.columns_to_types,
     )
     results = ctx.get_metadata_results()
-    assert len(results.views) == 0
-    assert len(results.materialized_views) == 0
+    assert not results.views
+    assert not results.materialized_views
     assert len(results.tables) == len(results.non_temp_tables) == 1
     assert results.non_temp_tables[0] == table.name
     ctx.compare_with_current(table, input_data)

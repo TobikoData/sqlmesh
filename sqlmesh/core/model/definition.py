@@ -1171,7 +1171,7 @@ class SeedModel(_SqlBasedModel):
                 df[column] = pd.to_datetime(df[column])
             df[bool_columns] = df[bool_columns].apply(lambda i: str_to_bool(str(i)))
             df[string_columns] = df[string_columns].mask(
-                lambda x: x.notna(), df[string_columns].astype(str)  # type: ignore
+                cond=lambda x: x.notna(), other=df[string_columns].astype(str)  # type: ignore
             )
             yield df
 
