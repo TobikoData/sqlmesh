@@ -356,29 +356,38 @@ class MacroEvaluator:
 
     def _coerce(self, expr: exp.Expression, typ: t.Type) -> t.Any:
         """Coerces the given expression to the specified type on a best-effort basis."""
+        base_err_msg = f"Failed to coerce expression '{expr}' to type '{typ}'."
         try:
             if typ is None:
                 return expr
             base = t.get_origin(typ) or typ
             if isinstance(expr, base):
                 return expr
-            if t.get_origin(typ) is t.Union:
-                for t_ in t.get_args(typ):
+            if base is t.Union:
+                for branch in t.get_args(typ):
                     try:
-                        return self._coerce(expr, t_)
+                        return self._coerce(expr, branch)
                     except Exception:
                         pass
-                raise SQLMeshError(f"Failed to coerce expression '{expr}' to type '{typ}'.")
+                raise SQLMeshError(base_err_msg)
             if issubclass(base, exp.Expression):
                 d = Dialect.get_or_raise(self.dialect)
                 into = base if base in d.parser().EXPRESSION_PARSERS else None
-                coerced = parse_one(
-                    expr.this if isinstance(expr, exp.Literal) else expr.sql(), into=into
-                )
+                if into is None:
+                    if isinstance(expr, exp.Literal):
+                        coerced = parse_one(expr.this)
+                    else:
+                        raise SQLMeshError(
+                            f"{base_err_msg} Coercion to {base} requires a literal expression."
+                        )
+                else:
+                    coerced = parse_one(
+                        expr.this if isinstance(expr, exp.Literal) else expr.sql(), into=into
+                    )
                 if isinstance(coerced, base):
                     return coerced
                 else:
-                    raise SQLMeshError(f"Failed to coerce expression '{expr}' to type '{typ}'.")
+                    raise SQLMeshError(base_err_msg)
             if base in (int, float, str) and isinstance(expr, exp.Literal):
                 return base(expr.this)
             if base is bool and isinstance(expr, exp.Boolean):
@@ -395,15 +404,13 @@ class MacroEvaluator:
                     return tuple(
                         self._coerce(expr, generic[i]) for i, expr in enumerate(expr.expressions)
                     )
-                raise SQLMeshError(
-                    f"Failed to coerce expression '{expr}' to type '{typ}'. Expected {len(generic)} items."
-                )
+                raise SQLMeshError(f"{base_err_msg} Expected {len(generic)} items.")
             if base is list and isinstance(expr, (exp.Array, exp.Tuple)):
                 generic = t.get_args(typ)
                 if not generic:
                     return expr.expressions
                 return [self._coerce(expr, generic[0]) for expr in expr.expressions]
-            raise SQLMeshError(f"No coercion strategy for expression '{expr}' to type '{typ}'.")
+            raise SQLMeshError(base_err_msg)
         except Exception:
             logger.warning(
                 "Coercion of expression '%s' to type '%s' failed. Using non coerced expression.",
