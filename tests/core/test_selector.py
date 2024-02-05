@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import typing as t
+from pathlib import Path
 from unittest.mock import call
 
 import pytest
@@ -371,6 +372,51 @@ def test_expand_model_selections(
 
     selector = Selector(mocker.Mock(), models)
     assert selector.expand_model_selections(selections) == output
+
+
+@pytest.mark.parametrize(
+    "expressions, expected_fqns",
+    [
+        (["git:main"], {'"test_model_a"', '"test_model_c"'}),
+        (["git:main & +*model_c"], {'"test_model_c"'}),
+    ],
+)
+def test_expand_git_selection(
+    mocker: MockerFixture, expressions: t.List[str], expected_fqns: t.Set[str]
+):
+    models: UniqueKeyDict[str, Model] = UniqueKeyDict("models")
+
+    model_a = SqlModel(name="test_model_a", query=d.parse_one("SELECT 1 AS a"))
+    model_a._path = Path("/path/to/test_model_a.sql")
+    models[model_a.fqn] = model_a
+
+    model_b = SqlModel(name="test_model_b", query=d.parse_one("SELECT 2 AS b"))
+    model_b._path = Path("/path/to/test_model_b.sql")
+    models[model_b.fqn] = model_b
+
+    model_c = SqlModel(name="test_model_c", query=d.parse_one("SELECT 3 AS c"))
+    model_c._path = Path("/path/to/test_model_c.sql")
+    models[model_c.fqn] = model_c
+
+    model_d = SqlModel(
+        name="test_model_d",
+        query=d.parse_one("SELECT c FROM test_model_c"),
+        depends_on={"test_model_c"},
+    )
+    model_d._path = Path("/path/to/test_model_d.sql")
+    models[model_d.fqn] = model_d
+
+    git_client_mock = mocker.Mock()
+    git_client_mock.list_untracked_files.return_value = []
+    git_client_mock.list_changed_files.return_value = [model_a._path, model_c._path]
+
+    selector = Selector(mocker.Mock(), models)
+    selector._git_client = git_client_mock
+
+    assert selector.expand_model_selections(expressions) == expected_fqns
+
+    git_client_mock.list_changed_files.assert_called_once_with(target_branch="main")
+    git_client_mock.list_untracked_files.assert_called_once()
 
 
 def test_select_models_with_external_parent(mocker: MockerFixture):
