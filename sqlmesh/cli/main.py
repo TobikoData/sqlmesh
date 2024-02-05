@@ -201,27 +201,26 @@ def evaluate(
     help="Transpile project models to the specified dialect.",
 )
 @click.option(
-    "--newline",
+    "--append-newline",
     is_flag=True,
-    help="Include a new line at the end of each file.",
+    help="Include a newline at the end of each file.",
+    default=None,
 )
 @click.option(
     "--normalize",
     is_flag=True,
     help="Whether or not to normalize identifiers to lowercase.",
-    default=False,
+    default=None,
 )
 @click.option(
     "--pad",
     type=int,
     help="Determines the pad size in a formatted string.",
-    default=2,
 )
 @click.option(
     "--indent",
     type=int,
     help="Determines the indentation size in a formatted string.",
-    default=2,
 )
 @click.option(
     "--normalize-functions",
@@ -232,21 +231,18 @@ def evaluate(
     "--leading-comma",
     is_flag=True,
     help="Determines whether or not the comma is leading or trailing in select expressions. Default is trailing.",
-    default=False,
+    default=None,
 )
 @click.option(
     "--max-text-width",
     type=int,
     help="The max number of characters in a segment before creating new lines in pretty mode.",
-    default=80,
 )
 @click.pass_context
 @error_handler
-def format(
-    ctx: click.Context, transpile: t.Optional[str] = None, newline: bool = False, **kwargs: t.Any
-) -> None:
+def format(ctx: click.Context, **kwargs: t.Any) -> None:
     """Format all SQL models."""
-    ctx.obj.format(transpile, newline, **{k: v for k, v in kwargs.items() if v is not None})
+    ctx.obj.format(**{k: v for k, v in kwargs.items() if v is not None})
 
 
 @cli.command("diff")
