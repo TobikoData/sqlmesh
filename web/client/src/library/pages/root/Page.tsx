@@ -39,6 +39,7 @@ import { Modules } from '@api/client'
 import {
   isArrayNotEmpty,
   isFalse,
+  isNotNil,
   isStringEmptyOrNil,
   isTrue,
 } from '@utils/index'
@@ -67,7 +68,7 @@ export default function Page({
   sidebar,
   content,
 }: {
-  sidebar: React.ReactNode
+  sidebar?: React.ReactNode
   content: React.ReactNode
 }): JSX.Element {
   const navigate = useNavigate()
@@ -78,53 +79,54 @@ export default function Page({
   const modules = useStoreContext(s => s.modules)
 
   return (
-    <>
-      <SplitPane
-        sizes={splitPaneSizes}
-        minSize={32}
-        snapOffset={0}
-        className="flex w-full h-full overflow-hidden"
-        onDragEnd={setSplitPaneSizes}
-      >
-        <div className="flex flex-col h-full overflow-hidden">
-          {modules.length > 1 && (
-            <>
-              <div className="flex min-w-[10rem] px-2 h-8 w-full">
-                <SelectModule />
+    <div className="flex overflow-hidden w-full h-full">
+      {modules.length > 1 && (
+        <>
+          <SelectModule className="overflow-hidden py-1 px-2 flex flex-col items-center" />
+          <Divider orientation="vertical" />
+        </>
+      )}
+      <div className="flex flex-col overflow-hidden w-full h-full">
+        {modules.includes(Modules.environments) && (
+          <>
+            <div className="min-w-[10rem] px-2 h-8 w-full flex items-center">
+              <div className="flex">
+                <button
+                  onClick={() => navigate(-1)}
+                  className="inline-block text-neutral-500 text-xs hover:bg-neutral-5 px-1 py-1 rounded-full"
+                >
+                  <ChevronLeftIcon className="min-w-4 h-4" />
+                </button>
+                <button
+                  onClick={() => navigate(1)}
+                  className="inline-block text-neutral-500 text-xs hover:bg-neutral-5 px-1 py-1 rounded-full"
+                >
+                  <ChevronRightIcon className="min-w-4 h-4" />
+                </button>
               </div>
-              <Divider />
-            </>
-          )}
-
-          <div className="w-full h-full overflow-hidden">{sidebar}</div>
-        </div>
-        <div className="flex flex-col w-full h-full overflow-hidden">
-          {modules.includes(Modules.environments) && (
-            <>
-              <div className="min-w-[10rem] px-2 h-8 w-full flex items-center">
-                <div className="flex">
-                  <button
-                    onClick={() => navigate(-1)}
-                    className="inline-block text-neutral-500 text-xs hover:bg-neutral-5 px-1 py-1 rounded-full"
-                  >
-                    <ChevronLeftIcon className="min-w-4 h-4" />
-                  </button>
-                  <button
-                    onClick={() => navigate(1)}
-                    className="inline-block text-neutral-500 text-xs hover:bg-neutral-5 px-1 py-1 rounded-full"
-                  >
-                    <ChevronRightIcon className="min-w-4 h-4" />
-                  </button>
-                </div>
-                <EnvironmentDetails />
-              </div>
-              <Divider />
-            </>
-          )}
-          <div className="w-full h-full overflow-hidden">{content}</div>
-        </div>
-      </SplitPane>
-    </>
+              <EnvironmentDetails />
+            </div>
+            <Divider />
+          </>
+        )}
+        {isNotNil(sidebar) ? (
+          <SplitPane
+            sizes={splitPaneSizes}
+            minSize={[0, 0]}
+            snapOffset={0}
+            className="flex w-full h-full overflow-hidden"
+            onDragEnd={setSplitPaneSizes}
+          >
+            <div className="w-full h-full overflow-hidden">{sidebar}</div>
+            <div className="w-full h-full overflow-hidden">{content}</div>
+          </SplitPane>
+        ) : (
+          <div className="flex w-full h-full overflow-hidden justify-center">
+            {content}
+          </div>
+        )}
+      </div>
+    </div>
   )
 }
 
@@ -211,7 +213,7 @@ function EnvironmentDetails(): JSX.Element {
                 </p>
               }
               className={clsx(
-                'px-2',
+                'px-2 rounded-full py-0.5 mr-1',
                 planOverview.isFailed
                   ? 'bg-danger-10 dark:bg-danger-500'
                   : 'bg-success-500',
@@ -243,65 +245,88 @@ function EnvironmentDetails(): JSX.Element {
   )
 }
 
-function SelectModule(): JSX.Element {
+function SelectModule({ className }: { className?: string }): JSX.Element {
   const { errors } = useIDE()
 
   const models = useStoreContext(s => s.models)
   const modules = useStoreContext(s => s.modules)
 
   const modelsCount = Array.from(new Set(models.values())).length
+  const withPlanModule =
+    modules.includes(Modules.plans) ||
+    modules.includes(Modules['plan-progress'])
 
   return (
-    <div className="h-8 flex w-full items-center justify-center px-1 py-0.5 text-neutral-500">
+    <div className={className}>
       {modules.includes(Modules.editor) && (
         <ModuleLink
           title="File Explorer"
           to={EnumRoutes.Editor}
-          className="text-primary-500"
-          classActive="px-2 bg-primary-10 text-primary-500"
-          icon={<OutlineFolderIcon className="w-4" />}
-          iconActive={<FolderIcon className="w-4" />}
+          className="px-2 py-1 hover:bg-neutral-5 dark:hover:bg-neutral-10 text-primary-500 rounded-xl my-1"
+          classActive="bg-primary-10 text-primary-500"
+          icon={<OutlineFolderIcon className="min-w-6 w-6" />}
+          iconActive={<FolderIcon className="min-w-6 w-6" />}
         />
       )}
       {modules.includes(Modules.docs) && (
         <ModuleLink
           title="Docs"
           to={EnumRoutes.Docs}
-          icon={<OutlineDocumentTextIcon className="w-4" />}
-          iconActive={<DocumentTextIcon className="w-4" />}
+          icon={<OutlineDocumentTextIcon className="min-w-6 w-6" />}
+          iconActive={<DocumentTextIcon className="min-w-6 w-6" />}
+          className="relative rounded-xl my-1 px-2 py-1 hover:bg-neutral-5 dark:hover:bg-neutral-10 text-neutral-600 dark:text-neutral-300"
         >
-          <span className="block ml-1 text-xs">{modelsCount}</span>
+          <span className="flex text-center text-[9px] min-w-4 absolute bottom-0 right-0 font-bold px-1 py-0.5 rounded-full bg-primary-500 text-primary-100">
+            {modelsCount}
+          </span>
         </ModuleLink>
       )}
       {modules.includes(Modules.errors) && (
         <ModuleLink
           title="Errors"
           to={EnumRoutes.Errors}
-          className={errors.size > 0 ? 'text-danger-500' : ''}
+          className={clsx(
+            'relative px-2 py-1 rounded-xl my-1 py-0.5 hover:bg-neutral-5 dark:hover:bg-neutral-10',
+            errors.size > 0 ? 'text-danger-500' : 'text-neutral-600',
+          )}
           classActive="px-2 bg-danger-10 text-danger-500"
-          icon={<OutlineExclamationTriangleIcon className="w-4" />}
-          iconActive={<ExclamationTriangleIcon className="w-4" />}
+          icon={<OutlineExclamationTriangleIcon className="w-6" />}
+          iconActive={<ExclamationTriangleIcon className="w-6" />}
           disabled={errors.size === 0}
         >
           {errors.size > 0 && (
-            <span className="block ml-1 text-xs">{errors.size}</span>
+            <span className="flex text-center text-[9px] min-w-4 absolute bottom-0 right-0 font-bold px-1 py-0.5 rounded-full bg-danger-500 text-danger-100">
+              {errors.size}
+            </span>
           )}
         </ModuleLink>
+      )}
+      {withPlanModule && (
+        <ModuleLink
+          title="Plan"
+          to={EnumRoutes.Plan}
+          className="px-2 py-1 hover:bg-neutral-5 dark:hover:bg-neutral-10 text-success-500 rounded-xl my-1"
+          classActive="bg-success-10 text-success-500"
+          icon={<OutlinePlayCircleIcon className="w-6" />}
+          iconActive={<PlayCircleIcon className="w-6" />}
+        />
       )}
       {modules.includes(Modules.tests) && (
         <ModuleLink
           title="Tests"
           to={EnumRoutes.Tests}
-          icon={<OutlineDocumentCheckIcon className="w-4" />}
-          iconActive={<DocumentCheckIcon className="w-4" />}
+          icon={<OutlineDocumentCheckIcon className="w-6" />}
+          iconActive={<DocumentCheckIcon className="w-6" />}
+          className="rounded-xl my-1 px-2 py-1 hover:bg-neutral-5 dark:hover:bg-neutral-10"
         />
       )}
       {modules.includes(Modules.audits) && (
         <ModuleLink
           title="Audits"
           to={EnumRoutes.Audits}
-          icon={<OutlineShieldCheckIcon className="w-4" />}
-          iconActive={<ShieldCheckIcon className="w-4" />}
+          icon={<OutlineShieldCheckIcon className="w-6" />}
+          iconActive={<ShieldCheckIcon className="w-6" />}
+          className="rounded-xl my-1 px-2 py-1 hover:bg-neutral-5 dark:hover:bg-neutral-10"
         />
       )}
     </div>
@@ -335,7 +360,7 @@ function ModuleLink({
       to={to}
       className={({ isActive }) =>
         clsx(
-          'mx-1 py-0.5 flex items-center rounded-full',
+          'flex items-center',
           disabled && 'opacity-50 cursor-not-allowed',
           isActive && isFalse(disabled) && classActive,
           className,
@@ -391,7 +416,7 @@ function PlanChanges(): JSX.Element {
     planOverviewTracker.hasUpdates
 
   return shouldShow ? (
-    <span className="flex group items-center bg-neutral-10 px-1 py-1 rounded-full">
+    <span className="flex group items-center bg-neutral-5 dark:bg-neutral-20 px-1 py-1 rounded-full">
       {isTrue(planOverviewTracker.hasChanges) && (
         <p className="flex text-xs ml-2 mr-2 dark:text-neutral-300">Changes</p>
       )}
@@ -496,7 +521,10 @@ export function SelectEnvironemnt({
             variant={EnumVariant.Info}
             size={size}
             disabled={disabled}
-            className={clsx(className, 'bg-neutral-10')}
+            className={clsx(
+              className,
+              'bg-neutral-5 hover:bg-neutral-10 dark:bg-neutral-20',
+            )}
           >
             <span
               className={clsx(

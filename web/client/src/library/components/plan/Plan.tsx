@@ -106,9 +106,9 @@ function Plan(): JSX.Element {
   }
 
   return (
-    <div className="flex flex-col w-full h-full">
+    <div className="flex flex-col w-full h-full max-w-[60rem]">
       {environment.isProd && <PlanHeader />}
-      <div className="w-full h-full flex flex-col pt-2 pl-4 pr-2 overflow-y-scroll hover:scrollbar scrollbar--vertical">
+      <div className="relative w-full h-full flex flex-col pt-2 pl-4 pr-2 overflow-y-scroll hover:scrollbar scrollbar--vertical">
         <PlanOptions />
         <PlanApplyStageTracker />
       </div>
