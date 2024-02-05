@@ -374,10 +374,81 @@ def test_ast_correctness(macro_evaluator):
         ),
     ],
 )
-def test_macro_functions(macro_evaluator, assert_exp_eq, sql, expected, args):
+def test_macro_functions(macro_evaluator: MacroEvaluator, assert_exp_eq, sql, expected, args):
     macro_evaluator.locals = args or {}
     assert_exp_eq(macro_evaluator.transform(parse_one(sql)), expected)
 
 
-def test_macro_returns_none(macro_evaluator):
+def test_macro_returns_none(macro_evaluator: MacroEvaluator):
     assert macro_evaluator.transform(parse_one("@NOOP()")) is None
+
+
+def test_macro_coercion(macro_evaluator: MacroEvaluator, assert_exp_eq):
+    coerce = macro_evaluator._coerce
+    assert coerce(exp.Literal.number(1), int) == 1
+    assert coerce(exp.Literal.number(1.1), float) == 1.1
+    assert coerce(exp.Literal.string("Hi mom"), str) == "Hi mom"
+    assert coerce(exp.true(), bool) is True
+
+    # Coercing a string literal to a column should return a column with the same name
+    assert_exp_eq(coerce(exp.Literal.string("order"), exp.Column), exp.column("order"))
+    # Not possible to coerce this Cast inputted as a string literal to an exp.Column -- so it should just return the input
+    assert_exp_eq(
+        coerce(exp.Literal.string("order::date"), exp.Column), exp.Literal.string("order::date")
+    )
+    # This however, is correctly coercible
+    assert_exp_eq(
+        coerce(exp.Literal.string("order::date"), exp.Cast), exp.cast(exp.column("order"), "DATE")
+    )
+
+    # Here we resolve ambiguity via the user type hint
+    assert_exp_eq(coerce(exp.Literal.string("order"), exp.Identifier), exp.to_identifier("order"))
+    assert_exp_eq(coerce(exp.Literal.string("order"), exp.Table), exp.table_("order"))
+
+    # Resolve a union type hint by choosing the first one that works
+    assert_exp_eq(
+        coerce(exp.Literal.string("order::date"), t.Union[exp.Column, exp.Cast]),
+        exp.cast(exp.column("order"), "DATE"),
+    )
+
+    # Simply ask for a string, and always get a string
+    assert coerce(exp.column("order"), str) == "order"
+    assert (
+        coerce(parse_one("SELECT x FROM UNNEST(y) AS x WHERE 1 = 1"), str)
+        == "SELECT x FROM UNNEST(y) AS x WHERE 1 = 1"
+    )
+
+    # From a string literal to a Select should parse the string literal, and the inverse operation works as well
+    assert_exp_eq(
+        coerce(exp.Literal.string("SELECT 1 FROM a"), exp.Select), parse_one("SELECT 1 FROM a")
+    )
+    assert coerce(parse_one("SELECT 1 FROM a"), str) == "SELECT 1 FROM a"
+
+    # Get a list of exp directly instead of an exp.Array
+    assert coerce(parse_one("[1, 2, 3]"), list) == [
+        exp.Literal.number(1),
+        exp.Literal.number(2),
+        exp.Literal.number(3),
+    ]
+
+    # Generics work as well
+    assert coerce(parse_one("[1, 2, 3]"), t.List[int]) == [1, 2, 3]
+    assert coerce(parse_one("[1, 2, 3]"), t.Tuple[int, int, float]) == (1, 2, 3.0)
+    assert coerce(parse_one("[1, 2, 3]"), t.Tuple[int, ...]) == (1, 2, 3)
+    assert coerce(parse_one("[1, 2, 3]"), t.Tuple[int, str, float]) == (1, "2", 3.0)
+
+    # Using exp.Expression will always return the input expression
+    assert coerce(parse_one("order", into=exp.Column), exp.Expression) == exp.column("order")
+    assert coerce(exp.Literal.string("OK"), exp.Expression) == exp.Literal.string("OK")
+
+    # Strict flag allows raising errors and is used when recursively coercing expressions
+    # otherwise, in general, we want to be lenient and just warn the user when something is not possible
+    with pytest.raises(SQLMeshError):
+        coerce(exp.Literal.string("order"), exp.Select, strict=True)
+
+    with pytest.raises(SQLMeshError):
+        _ = coerce(
+            exp.Literal.string("order::date"),
+            t.Union[exp.Column, exp.Identifier],
+            strict=True,
+        )
