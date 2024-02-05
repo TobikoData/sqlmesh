@@ -861,9 +861,9 @@ def test_replace_query(ctx: TestContext):
         ctx.engine_adapter.replace_query(
             table,
             ctx.input_data(replace_data),
-            columns_to_types=ctx.columns_to_types
-            if ctx.dialect in ["spark", "databricks"]
-            else None,
+            columns_to_types=(
+                ctx.columns_to_types if ctx.dialect in ["spark", "databricks"] else None
+            ),
         )
         results = ctx.get_metadata_results()
         assert len(results.views) == 0
@@ -914,9 +914,9 @@ def test_replace_query_batched(ctx: TestContext):
         ctx.engine_adapter.replace_query(
             table,
             ctx.input_data(replace_data),
-            columns_to_types=ctx.columns_to_types
-            if ctx.dialect in ["spark", "databricks"]
-            else None,
+            columns_to_types=(
+                ctx.columns_to_types if ctx.dialect in ["spark", "databricks"] else None
+            ),
         )
         results = ctx.get_metadata_results()
         assert len(results.views) == 0
@@ -1491,9 +1491,7 @@ def test_sushi(ctx: TestContext):
         ) -> None:
             layer_objects = context.engine_adapter.get_data_objects(schema_name)
             layer_models = {
-                x.name.split("__")[1]
-                if is_physical_layer
-                else x.name: {
+                x.name.split("__")[1] if is_physical_layer else x.name: {
                     "table_name": x.name,
                     "is_view": x.type == DataObjectType.VIEW,
                 }
@@ -1572,9 +1570,7 @@ def test_sushi(ctx: TestContext):
         ) -> None:
             layer_objects = context.engine_adapter.get_data_objects(schema_name)
             layer_models = {
-                x.name.split("__")[1]
-                if is_physical_layer
-                else x.name: {
+                x.name.split("__")[1] if is_physical_layer else x.name: {
                     "table_name": x.name,
                     "is_view": x.type == DataObjectType.VIEW,
                 }

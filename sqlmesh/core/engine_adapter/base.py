@@ -6,6 +6,7 @@ generalize its functionality to different engines that have Python Database API 
 connections. Rather than executing queries directly against your data stores, SQLMesh components such as
 the SnapshotEvaluator delegate them to engine adapters so these components can be engine-agnostic.
 """
+
 from __future__ import annotations
 
 import contextlib
@@ -247,14 +248,12 @@ class EngineAdapter:
     @t.overload
     def _columns_to_types(
         self, query_or_df: DF, columns_to_types: t.Optional[t.Dict[str, exp.DataType]] = None
-    ) -> t.Dict[str, exp.DataType]:
-        ...
+    ) -> t.Dict[str, exp.DataType]: ...
 
     @t.overload
     def _columns_to_types(
         self, query_or_df: Query, columns_to_types: t.Optional[t.Dict[str, exp.DataType]] = None
-    ) -> t.Optional[t.Dict[str, exp.DataType]]:
-        ...
+    ) -> t.Optional[t.Dict[str, exp.DataType]]: ...
 
     def _columns_to_types(
         self, query_or_df: QueryOrDF, columns_to_types: t.Optional[t.Dict[str, exp.DataType]] = None
@@ -343,10 +342,12 @@ class EngineAdapter:
                 ) as temp_table:
                     for source_query in source_queries:
                         source_query.add_transform(
-                            lambda node: temp_table  # type: ignore
-                            if isinstance(node, exp.Table)
-                            and quote_identifiers(node) == quote_identifiers(target_table)
-                            else node
+                            lambda node: (  # type: ignore
+                                temp_table  # type: ignore
+                                if isinstance(node, exp.Table)
+                                and quote_identifiers(node) == quote_identifiers(target_table)
+                                else node
+                            )
                         )
                     return self._insert_overwrite_by_condition(
                         target_table,
@@ -495,6 +496,17 @@ class EngineAdapter:
             kwargs: Optional create table properties.
         """
         table = exp.to_table(table_name)
+
+        if not columns_to_types_all_known(columns_to_types):
+            # It is ok if the columns types are not known if the table already exists and IF NOT EXISTS is set
+            if exists and self.table_exists(table_name):
+                return
+            raise SQLMeshError(
+                "Cannot create a table without knowing the column types. "
+                "Try casting the columns to an expected type or defining the columns in the model metadata. "
+                f"Columns to types: {columns_to_types}"
+            )
+
         primary_key_expression = (
             [exp.PrimaryKey(expressions=[exp.to_column(k) for k in primary_key])]
             if primary_key and self.SUPPORTS_INDEXES
@@ -554,11 +566,13 @@ class EngineAdapter:
                 exp.ColumnDef(
                     this=exp.to_identifier(column),
                     kind=None if is_view else kind,  # don't include column data type for views
-                    constraints=self._build_col_comment_exp(column, column_descriptions)
-                    if column_descriptions
-                    and engine_supports_schema_comments
-                    and self.comments_enabled
-                    else None,
+                    constraints=(
+                        self._build_col_comment_exp(column, column_descriptions)
+                        if column_descriptions
+                        and engine_supports_schema_comments
+                        and self.comments_enabled
+                        else None
+                    ),
                 )
                 for column, kind in columns_to_types.items()
             ]
@@ -660,9 +674,11 @@ class EngineAdapter:
                 exists=exists,
                 replace=replace,
                 columns_to_types=columns_to_types,
-                table_description=table_description
-                if self.COMMENT_CREATION_TABLE.supports_schema_def and self.comments_enabled
-                else None,
+                table_description=(
+                    table_description
+                    if self.COMMENT_CREATION_TABLE.supports_schema_def and self.comments_enabled
+                    else None
+                ),
                 **kwargs,
             )
         )
@@ -834,9 +850,11 @@ class EngineAdapter:
 
         create_view_properties = self._build_view_properties_exp(
             create_kwargs.pop("table_properties", None),
-            table_description
-            if self.COMMENT_CREATION_VIEW.supports_schema_def and self.comments_enabled
-            else None,
+            (
+                table_description
+                if self.COMMENT_CREATION_VIEW.supports_schema_def and self.comments_enabled
+                else None
+            ),
         )
         if create_view_properties:
             for view_property in create_view_properties.expressions:
@@ -975,13 +993,11 @@ class EngineAdapter:
 
     @t.overload
     @classmethod
-    def _escape_json(cls, value: Query) -> Query:
-        ...
+    def _escape_json(cls, value: Query) -> Query: ...
 
     @t.overload
     @classmethod
-    def _escape_json(cls, value: str) -> str:
-        ...
+    def _escape_json(cls, value: str) -> str: ...
 
     @classmethod
     def _escape_json(cls, value: Query | str) -> Query | str:
@@ -993,9 +1009,11 @@ class EngineAdapter:
             if isinstance(value, str):
                 return double_escape(value)
             return value.transform(
-                lambda e: exp.Literal.string(double_escape(e.name))
-                if isinstance(e, exp.Literal) and e.args["is_string"]
-                else e
+                lambda e: (
+                    exp.Literal.string(double_escape(e.name))
+                    if isinstance(e, exp.Literal) and e.args["is_string"]
+                    else e
+                )
             )
         return value
 
@@ -1118,9 +1136,11 @@ class EngineAdapter:
                             query,
                             table,
                             # Change once Databricks supports REPLACE WHERE with columns
-                            columns=list(columns_to_types)
-                            if not insert_overwrite_strategy.is_replace_where
-                            else None,
+                            columns=(
+                                list(columns_to_types)
+                                if not insert_overwrite_strategy.is_replace_where
+                                else None
+                            ),
                             overwrite=insert_overwrite_strategy.is_insert_overwrite,
                         )
                         if insert_overwrite_strategy.is_replace_where:
@@ -1136,9 +1156,11 @@ class EngineAdapter:
     ) -> None:
         if contains_json and properties:
             properties = {
-                k: self._escape_json(v)
-                if isinstance(v, (str, exp.Subqueryable, exp.DerivedTable))
-                else v
+                k: (
+                    self._escape_json(v)
+                    if isinstance(v, (str, exp.Subqueryable, exp.DerivedTable))
+                    else v
+                )
                 for k, v in properties.items()
             }
         self.execute(exp.update(table_name, properties, where=where))
@@ -1620,9 +1642,11 @@ class EngineAdapter:
             for e in ensure_list(expressions):
                 sql = t.cast(
                     str,
-                    self._to_sql(e, quote=quote_identifiers, **to_sql_kwargs)
-                    if isinstance(e, exp.Expression)
-                    else e,
+                    (
+                        self._to_sql(e, quote=quote_identifiers, **to_sql_kwargs)
+                        if isinstance(e, exp.Expression)
+                        else e
+                    ),
                 )
                 self._log_sql(sql)
                 self._execute(sql, **kwargs)

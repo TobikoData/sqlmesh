@@ -31,9 +31,11 @@ def load_metric_ddl(
     metric = MetricMeta(
         **{
             "dialect": dialect,
-            "description": "\n".join(comment.strip() for comment in expression.comments)
-            if expression.comments
-            else None,
+            "description": (
+                "\n".join(comment.strip() for comment in expression.comments)
+                if expression.comments
+                else None
+            ),
             **{prop.name.lower(): prop.args.get("value") for prop in expression.expressions},
             **kwargs,
         }
@@ -156,9 +158,11 @@ class Metric(MetricMeta, frozen=True):
         """
         return {
             t.cast(exp.Expression, agg.parent).transform(
-                lambda node: exp.column(node.this, table=remove_namespace(node))
-                if isinstance(node, exp.Column) and node.table
-                else node
+                lambda node: (
+                    exp.column(node.this, table=remove_namespace(node))
+                    if isinstance(node, exp.Column) and node.table
+                    else node
+                )
             ): _get_measure_and_dim_tables(agg)
             for agg in self.expanded.find_all(exp.AggFunc)
         }

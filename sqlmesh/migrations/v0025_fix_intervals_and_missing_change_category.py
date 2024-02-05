@@ -1,4 +1,5 @@
 """Normalize intervals and fix missing change category."""
+
 import json
 import zlib
 

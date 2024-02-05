@@ -38,13 +38,11 @@ class EnvironmentNamingInfo(PydanticModel):
 
     @t.overload
     @classmethod
-    def normalize_name(cls, v: str) -> str:
-        ...
+    def normalize_name(cls, v: str) -> str: ...
 
     @t.overload
     @classmethod
-    def normalize_name(cls, v: Environment) -> Environment:
-        ...
+    def normalize_name(cls, v: Environment) -> Environment: ...
 
     @classmethod
     def normalize_name(cls, v: str | Environment) -> str | Environment:

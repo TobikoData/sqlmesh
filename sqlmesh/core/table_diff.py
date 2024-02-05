@@ -299,19 +299,23 @@ class TableDiff:
                 }
                 if self.source != self.source_alias and self.target != self.target_alias:
                     joined_renamed_cols = {
-                        c: n.replace(
-                            "s__", f"{self.source_alias.upper() if self.source_alias else ''}__"
+                        c: (
+                            n.replace(
+                                "s__", f"{self.source_alias.upper() if self.source_alias else ''}__"
+                            )
+                            if n.startswith("s__")
+                            else n
                         )
-                        if n.startswith("s__")
-                        else n
                         for c, n in joined_renamed_cols.items()
                     }
                     joined_renamed_cols = {
-                        c: n.replace(
-                            "t__", f"{self.target_alias.upper() if self.target_alias else ''}__"
+                        c: (
+                            n.replace(
+                                "t__", f"{self.target_alias.upper() if self.target_alias else ''}__"
+                            )
+                            if n.startswith("t__")
+                            else n
                         )
-                        if n.startswith("t__")
-                        else n
                         for c, n in joined_renamed_cols.items()
                     }
                 joined_sample = sample[sample["rows_joined"] == 1][joined_sample_cols]

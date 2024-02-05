@@ -1,4 +1,5 @@
 """Create a dedicated table to store snapshot intervals."""
+
 from sqlglot import exp
 
 from sqlmesh.utils.migration import index_text_type

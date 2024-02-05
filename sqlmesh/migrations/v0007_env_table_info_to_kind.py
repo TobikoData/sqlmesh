@@ -1,4 +1,5 @@
 """Change environments because snapshot table info now stores model kind name."""
+
 import json
 import zlib
 

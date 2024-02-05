@@ -15,7 +15,7 @@ from sqlmesh.core.engine_adapter import EngineAdapter, EngineAdapterWithIndexSup
 from sqlmesh.core.engine_adapter.shared import InsertOverwriteStrategy
 from sqlmesh.core.schema_diff import SchemaDiffer, TableAlterOperation
 from sqlmesh.utils.date import to_ds
-from sqlmesh.utils.errors import UnsupportedCatalogOperationError
+from sqlmesh.utils.errors import SQLMeshError, UnsupportedCatalogOperationError
 from tests.core.engine_adapter import to_sql_calls
 
 pytestmark = pytest.mark.engine
@@ -454,14 +454,14 @@ def test_comments(make_mocked_engine_adapter: t.Callable, mocker: MockerFixture)
 
     adapter_no_comments.create_table(
         "test_table",
-        {"a": "int", "b": "int"},
+        {"a": exp.DataType.build("int"), "b": exp.DataType.build("int")},
         table_description="test description",
         column_descriptions={"a": "a description"},
     )
 
     sql_calls = to_sql_calls(adapter_no_comments)
     assert sql_calls == [
-        """CREATE TABLE IF NOT EXISTS "test_table" ("a" int, "b" int)""",
+        """CREATE TABLE IF NOT EXISTS "test_table" ("a" INT, "b" INT)""",
     ]
 
 
@@ -1368,6 +1368,70 @@ def test_replace_query_pandas(make_mocked_engine_adapter: t.Callable):
         'CREATE OR REPLACE TABLE "test_table" AS SELECT CAST("a" AS INT) AS "a", CAST("b" AS INT) AS "b" FROM (VALUES (1, 4)) AS "t"("a", "b")',
         'INSERT INTO "test_table" ("a", "b") SELECT CAST("a" AS INT) AS "a", CAST("b" AS INT) AS "b" FROM (VALUES (2, 5)) AS "t"("a", "b")',
         'INSERT INTO "test_table" ("a", "b") SELECT CAST("a" AS INT) AS "a", CAST("b" AS INT) AS "b" FROM (VALUES (3, 6)) AS "t"("a", "b")',
+    ]
+
+
+def test_replace_query_self_referencing_not_exists_unknown(
+    make_mocked_engine_adapter: t.Callable, mocker: MockerFixture
+):
+    adapter = make_mocked_engine_adapter(EngineAdapter)
+
+    mocker.patch(
+        "sqlmesh.core.engine_adapter.base.EngineAdapter.table_exists",
+        return_value=False,
+    )
+
+    with pytest.raises(
+        SQLMeshError,
+        match="Cannot create a table without knowing the column types.*",
+    ):
+        adapter.replace_query(
+            "test",
+            parse_one("SELECT a FROM test"),
+            columns_to_types={"a": exp.DataType.build("UNKNOWN")},
+        )
+
+
+def test_replace_query_self_referencing_exists(
+    make_mocked_engine_adapter: t.Callable, mocker: MockerFixture
+):
+    adapter = make_mocked_engine_adapter(EngineAdapter)
+
+    mocker.patch(
+        "sqlmesh.core.engine_adapter.base.EngineAdapter.table_exists",
+        return_value=True,
+    )
+
+    adapter.replace_query(
+        "test",
+        parse_one("SELECT a FROM test"),
+        columns_to_types={"a": exp.DataType.build("UNKNOWN")},
+    )
+
+    assert to_sql_calls(adapter) == [
+        'CREATE OR REPLACE TABLE "test" AS SELECT "a" FROM "test"',
+    ]
+
+
+def test_replace_query_self_referencing_not_exists_known(
+    make_mocked_engine_adapter: t.Callable, mocker: MockerFixture
+):
+    adapter = make_mocked_engine_adapter(EngineAdapter)
+
+    mocker.patch(
+        "sqlmesh.core.engine_adapter.base.EngineAdapter.table_exists",
+        return_value=False,
+    )
+
+    adapter.replace_query(
+        "test",
+        parse_one("SELECT a FROM test"),
+        columns_to_types={"a": exp.DataType.build("INT")},
+    )
+
+    assert to_sql_calls(adapter) == [
+        'CREATE TABLE IF NOT EXISTS "test" ("a" INT)',
+        'CREATE OR REPLACE TABLE "test" AS SELECT "a" FROM "test"',
     ]
 
 

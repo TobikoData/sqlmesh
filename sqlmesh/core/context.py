@@ -30,6 +30,7 @@ context = Context(path="example")
 context.test()
 ```
 """
+
 from __future__ import annotations
 
 import abc
@@ -518,16 +519,14 @@ class Context(BaseContext):
     @t.overload
     def get_model(
         self, model_or_snapshot: ModelOrSnapshot, raise_if_missing: Literal[True] = True
-    ) -> Model:
-        ...
+    ) -> Model: ...
 
     @t.overload
     def get_model(
         self,
         model_or_snapshot: ModelOrSnapshot,
         raise_if_missing: Literal[False] = False,
-    ) -> t.Optional[Model]:
-        ...
+    ) -> t.Optional[Model]: ...
 
     def get_model(
         self, model_or_snapshot: ModelOrSnapshot, raise_if_missing: bool = False
@@ -557,20 +556,17 @@ class Context(BaseContext):
         return model
 
     @t.overload
-    def get_snapshot(self, node_or_snapshot: NodeOrSnapshot) -> t.Optional[Snapshot]:
-        ...
+    def get_snapshot(self, node_or_snapshot: NodeOrSnapshot) -> t.Optional[Snapshot]: ...
 
     @t.overload
     def get_snapshot(
         self, node_or_snapshot: NodeOrSnapshot, raise_if_missing: Literal[True]
-    ) -> Snapshot:
-        ...
+    ) -> Snapshot: ...
 
     @t.overload
     def get_snapshot(
         self, node_or_snapshot: NodeOrSnapshot, raise_if_missing: Literal[False]
-    ) -> t.Optional[Snapshot]:
-        ...
+    ) -> t.Optional[Snapshot]: ...
 
     def get_snapshot(
         self, node_or_snapshot: NodeOrSnapshot, raise_if_missing: bool = False
@@ -741,7 +737,10 @@ class Context(BaseContext):
         return df
 
     def format(
-        self, transpile: t.Optional[str] = None, newline: bool = False, **kwargs: t.Any
+        self,
+        transpile: t.Optional[str] = None,
+        append_newline: t.Optional[bool] = None,
+        **kwargs: t.Any,
     ) -> None:
         """Format all SQL models."""
         for model in self._models.values():
@@ -760,11 +759,15 @@ class Context(BaseContext):
                                     value=exp.Literal.string(transpile or model.dialect),
                                 )
                             )
+                format = self.config_for_node(model).format
+                opts = {**format.generator_options, **kwargs}
                 file.seek(0)
                 file.write(
-                    format_model_expressions(expressions, transpile or model.dialect, **kwargs)
+                    format_model_expressions(expressions, transpile or model.dialect, **opts)
                 )
-                if newline:
+                if append_newline is None:
+                    append_newline = format.append_newline
+                if append_newline:
                     file.write("\n")
                 file.truncate()
 
@@ -1371,7 +1374,10 @@ class Context(BaseContext):
                 f"\nFailure in audit {error.audit.name} ({error.audit._path})."
             )
             self.console.log_status_update(f"Got {error.count} results, expected 0.")
-            self.console.show_sql(f"{error.query}")
+            if error.query:
+                self.console.show_sql(
+                    f"{error.query.sql(dialect=self.snapshot_evaluator.adapter.dialect)}"
+                )
 
         self.console.log_status_update("Done.")
 
@@ -1559,13 +1565,15 @@ class Context(BaseContext):
         If a snapshot has not been versioned yet, its view name will be returned.
         """
         return {
-            fqn: snapshot.table_name()
-            if snapshot.version
-            else snapshot.qualified_view_name.for_environment(
-                EnvironmentNamingInfo.from_environment_catalog_mapping(
-                    self.config.environment_catalog_mapping,
-                    name=c.PROD,
-                    suffix_target=self.config.environment_suffix_target,
+            fqn: (
+                snapshot.table_name()
+                if snapshot.version
+                else snapshot.qualified_view_name.for_environment(
+                    EnvironmentNamingInfo.from_environment_catalog_mapping(
+                        self.config.environment_catalog_mapping,
+                        name=c.PROD,
+                        suffix_target=self.config.environment_suffix_target,
+                    )
                 )
             )
             for fqn, snapshot in self.snapshots.items()

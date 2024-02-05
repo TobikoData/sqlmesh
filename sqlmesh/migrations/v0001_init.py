@@ -3,6 +3,7 @@
 If a migration alters the payload of any pydantic models, you should not actually use them because
 the running model may not be able to load them. Make sure that these migration files are standalone.
 """
+
 from sqlglot import exp
 
 from sqlmesh.utils.migration import index_text_type

@@ -1,4 +1,5 @@
 """Add support for environment finalization."""
+
 from sqlglot import exp
 
 

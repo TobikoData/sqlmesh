@@ -1,4 +1,5 @@
 """Replace snapshot model_kind_name enum with value."""
+
 import json
 
 import pandas as pd

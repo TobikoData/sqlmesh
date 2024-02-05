@@ -44,7 +44,7 @@ export default function Content(): JSX.Element {
     }
 
     setLastSelectedModel(model)
-  }, [model])
+  }, [model, model?.sql])
 
   const modelExtensions = isNil(model)
     ? []
@@ -100,7 +100,7 @@ export default function Content(): JSX.Element {
                     path={model.path}
                   >
                     {({ file }) => (
-                      <Tab.Group defaultIndex={model.isModelSQL ? 1 : 0}>
+                      <Tab.Group>
                         <TabList
                           list={
                             [
@@ -122,10 +122,7 @@ export default function Content(): JSX.Element {
                             />
                           </Tab.Panel>
                           {model.isModelSQL && (
-                            <Tab.Panel
-                              unmount={false}
-                              className="w-full h-full"
-                            >
+                            <Tab.Panel className="w-full h-full">
                               <CodeEditorDefault
                                 type={EnumFileExtensions.SQL}
                                 content={model.sql ?? ''}

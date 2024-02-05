@@ -1,4 +1,5 @@
 """Generate mapping schema data types using the corresponding model's dialect."""
+
 import json
 
 import pandas as pd

@@ -1,4 +1,5 @@
 """Fix table properties that have extra quoting due to a bug."""
+
 import json
 
 import pandas as pd
