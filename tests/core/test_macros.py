@@ -392,11 +392,11 @@ def test_macro_coercion(macro_evaluator: MacroEvaluator, assert_exp_eq):
 
     # Coercing a string literal to a column should return a column with the same name
     assert_exp_eq(coerce(exp.Literal.string("order"), exp.Column), exp.column("order"))
-    # Not possible to coerce this Cast inputted as a string literal to an exp.Column -- so it should just return the input
+    # Not possible to coerce this string literal Cast to an exp.Column node -- so it should just return the input
     assert_exp_eq(
         coerce(exp.Literal.string("order::date"), exp.Column), exp.Literal.string("order::date")
     )
-    # This however, is correctly coercible
+    # This however, is correctly coercible since it's a cast
     assert_exp_eq(
         coerce(exp.Literal.string("order::date"), exp.Cast), exp.cast(exp.column("order"), "DATE")
     )
@@ -431,11 +431,14 @@ def test_macro_coercion(macro_evaluator: MacroEvaluator, assert_exp_eq):
         exp.Literal.number(3),
     ]
 
-    # Generics work as well
+    # Generics work as well, recursively resolving inner types
     assert coerce(parse_one("[1, 2, 3]"), t.List[int]) == [1, 2, 3]
     assert coerce(parse_one("[1, 2, 3]"), t.Tuple[int, int, float]) == (1, 2, 3.0)
     assert coerce(parse_one("[1, 2, 3]"), t.Tuple[int, ...]) == (1, 2, 3)
     assert coerce(parse_one("[1, 2, 3]"), t.Tuple[int, str, float]) == (1, "2", 3.0)
+    assert coerce(
+        parse_one("[1, 2, [3]]"), t.Tuple[int, str, t.Union[float, t.Tuple[float, ...]]]
+    ) == (1, "2", (3.0,))
 
     # Using exp.Expression will always return the input expression
     assert coerce(parse_one("order", into=exp.Column), exp.Expression) == exp.column("order")
