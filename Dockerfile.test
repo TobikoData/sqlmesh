@@ -1,0 +1,47 @@
+FROM mcr.microsoft.com/playwright:v1.42.1-jammy 
+
+ENV NODE_ENV=testing
+
+WORKDIR /sqlmesh
+
+COPY . .
+
+RUN apt-get update && \
+    apt-get -y install \
+    libnss3 \
+    libatk-bridge2.0-0 \
+    libdrm-dev \
+    libxkbcommon-dev \
+    libgbm-dev \
+    libasound-dev \
+    libatspi2.0-0 \
+    libxshmfence-dev \
+    python3.11 \
+    python3-pip && \
+    update-alternatives --install /usr/bin/python python /usr/bin/python3.11 1 && \
+    update-alternatives --install /usr/bin/pip pip /usr/bin/pip3 1
+RUN pip3 install -e .[dev,web]
+RUN python3 setup.py develop
+RUN python3 /sqlmesh/web/server/openapi.py
+RUN mkdir -p /sqlmesh/examples/basic
+RUN sqlmesh -p /sqlmesh/examples/basic init postgres
+RUN npm install -g npm@latest && \
+    npm --prefix /sqlmesh/web/client install --no-audit --no-fund --no-package-lock && \
+    npm --prefix /sqlmesh/web/client run generate:api && \
+    npm --prefix /sqlmesh/web/client run build
+
+CMD for BROWSER in $BROWSERS; do \
+        for PROJECT in $PROJECTS; do \
+            echo "Testing $PROJECT in $BROWSER browser"; \
+            mkdir -p /sqlmesh/examples/$BROWSER/$PROJECT/client && \
+            mkdir -p /sqlmesh/examples/$BROWSER/$PROJECT/$PROJECT && \
+            cp -R /sqlmesh/examples/$PROJECT/. /sqlmesh/examples/$BROWSER/$PROJECT/$PROJECT && \
+            cp -R /sqlmesh/web/client/. /sqlmesh/examples/$BROWSER/$PROJECT/client && \
+            cd /sqlmesh/examples/$BROWSER/$PROJECT/$PROJECT && \
+            (sqlmesh ui --port $PORT --host 0.0.0.0 &) && \
+            sleep 10 && \
+            cd /sqlmesh/examples/$BROWSER/$PROJECT/client && \
+            UI_TEST_URL=http://0.0.0.0:$PORT UI_TEST_BROWSER=$BROWSER npm run test:playwright -- ./tests/demo/demo.$PROJECT.spec; \
+            PORT=$((PORT + 1)); \
+        done; \
+    done;

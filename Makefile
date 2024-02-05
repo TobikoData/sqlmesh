@@ -78,6 +78,9 @@ ui-down:
 ui-build:
 	docker-compose -f docker-compose.yml -f docker-compose.build.yml run app
 
+ui-test-examples:
+	docker-compose -f docker-compose.tests.yml up --build -d
+
 clean-build:
 	rm -rf build/ && rm -rf dist/ && rm -rf *.egg-info
 

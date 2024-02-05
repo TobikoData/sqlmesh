@@ -42,7 +42,11 @@ export default defineConfig({
             },
             '/docs': {
               target: 'http://app:8001',
-              rewrite: path => '/',
+              rewrite: () => '/',
+            },
+            '/editor': {
+              target: 'http://app:8001',
+              rewrite: () => '/',
             },
             '/data': {
               target: 'http://app:8001',

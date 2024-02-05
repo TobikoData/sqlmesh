@@ -120,7 +120,10 @@ export default function EnvironmentDetails(): JSX.Element {
   }, [planOverview, planApply, planCancel])
 
   return (
-    <div className="min-h-8 max-h-8 flex w-full items-center justify-end text-neutral-500">
+    <div
+      data-testid="environment-details"
+      className="min-h-8 max-h-8 flex w-full items-center justify-end text-neutral-500"
+    >
       {isFetchingEnvironments ? (
         <LoadingStatus>Loading Environments...</LoadingStatus>
       ) : (

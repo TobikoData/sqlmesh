@@ -42,6 +42,7 @@ function PlanChangePreview({
 }): JSX.Element {
   return (
     <div
+      title={headline}
       className={clsx(
         'flex flex-col rounded-md p-4 text-xs',
         type === EnumPlanChangeType.Add && 'bg-success-5',
@@ -129,17 +130,18 @@ function PlanChangePreviewDirect({
   disabled?: boolean
 }): JSX.Element {
   const dispatch = usePlanDispatch()
-  const { categories, change_categorization } = usePlan()
+  const { categories } = usePlan()
 
   const models = useStoreContext(s => s.models)
 
   useEffect(() => {
+    console.log('changes', changes)
     dispatch(
       changes.map(change => ({
         type: EnumPlanActions.Category,
-        category:
-          change_categorization.get(change.name)?.category ??
-          categories.find(({ value }) => value === change.change_category),
+        category: categories.find(
+          ({ value }) => value === change.change_category,
+        ),
         change,
       })),
     )

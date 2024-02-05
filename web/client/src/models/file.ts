@@ -74,7 +74,7 @@ export class ModelFile extends ModelArtifact<InitialFile> {
   }
 
   get fingerprint(): string {
-    return this._content + this.name + this.path
+    return this._content + this.content + this.name + this.path
   }
 
   removeChanges(): void {

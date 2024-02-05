@@ -24,6 +24,7 @@ export default function Modal({
         as="div"
         className="relative z-50"
         onClose={onClose}
+        data-testid="modal"
       >
         <div className="fixed inset-0 bg-overlay opacity-90" />
         <div className="fixed inset-0 overflow-y-auto">

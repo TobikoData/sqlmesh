@@ -42,7 +42,7 @@ export default function EditorTabs(): JSX.Element {
     })
 
     return [local, remote]
-  }, [tabs])
+  }, [tabs, files])
 
   useEffect(() => {
     if (
@@ -91,7 +91,10 @@ export default function EditorTabs(): JSX.Element {
   }
 
   return (
-    <div className="flex items-center">
+    <div
+      data-testid="editor-tabs"
+      className="flex items-center mx-1"
+    >
       <Button
         className="h-6 m-0 ml-1 mr-2 border-none"
         variant={EnumVariant.Alternative}
@@ -104,27 +107,41 @@ export default function EditorTabs(): JSX.Element {
       >
         <PlusIcon className="inline-block w-3 h-4" />
       </Button>
-      <ul className="w-full whitespace-nowrap min-h-[2rem] max-h-[2rem] overflow-hidden overflow-x-auto hover:scrollbar scrollbar--horizontal">
+      <div
+        role="list"
+        className="flex w-full whitespace-nowrap min-h-[2rem] max-h-[2rem] overflow-y-hidden overflow-x-auto hover:scrollbar scrollbar--horizontal"
+      >
         {tabsLocal.map((tab, idx) => (
           <Tab
             key={tab.id}
             tab={tab}
-            title={`Custom SQL ${idx + 1}`}
+            text={`Custom SQL ${idx + 1}`}
           />
         ))}
         {tabsRemote.map(tab => (
           <Tab
-            key={tab.id}
+            key={tab.file.fingerprint}
             tab={tab}
-            title={tab.file.name}
+            text={tab.file.name}
+            title={tab.file.path}
           />
         ))}
-      </ul>
+      </div>
     </div>
   )
 }
 
-function Tab({ tab, title }: { tab: EditorTab; title: string }): JSX.Element {
+function Tab({
+  tab,
+  text,
+  title,
+  className,
+}: {
+  tab: EditorTab
+  text: string
+  title?: string
+  className?: string
+}): JSX.Element {
   const elTab = useRef<HTMLLIElement>(null)
 
   const addConfirmation = useStoreContext(s => s.addConfirmation)
@@ -168,21 +185,25 @@ function Tab({ tab, title }: { tab: EditorTab; title: string }): JSX.Element {
   }
 
   const isActive = tab.file.id === activeTab?.file.id
+  const isChanged = tab.file.isChanged
 
   return (
-    <li
-      ref={elTab}
+    <div
+      role="listitem"
+      title={title ?? text}
       className={clsx(
-        'inline-block py-1 pr-2 last-child:pr-0 overflow-hidden text-center overflow-ellipsis cursor-pointer',
+        'flex py-1 pr-2 last-child:pr-0 overflow-hidden text-center overflow-ellipsis cursor-pointer',
+        className,
       )}
-      onClick={(e: MouseEvent) => {
-        e.stopPropagation()
-
-        selectTab(tab)
-        setSelectedFile(tab.file)
-      }}
     >
       <span
+        ref={elTab}
+        onClick={(e: MouseEvent) => {
+          e.stopPropagation()
+
+          selectTab(tab)
+          setSelectedFile(tab.file)
+        }}
         className={clsx(
           'flex border-2 justify-between items-center pl-1 pr-1 py-[0.125rem] min-w-[8rem] rounded-md group border-transparent border-r border-r-theme-darker dark:border-r-theme-lighter',
           isActive
@@ -190,22 +211,26 @@ function Tab({ tab, title }: { tab: EditorTab; title: string }): JSX.Element {
             : 'bg-trasparent hover:bg-theme-darker dark:hover:bg-theme-lighter',
         )}
       >
-        <small className="text-xs">{title}</small>
+        <small className="text-xs">{text}</small>
         <small
+          title={isFalse(isChanged) ? 'saved' : 'unsaved'}
           className={clsx(
             'group-hover:hidden text-xs inline-block ml-3 mr-1 w-2 h-2 rounded-full',
-            tab.file.isChanged ? 'bg-warning-500' : 'bg-transparent',
+            isChanged ? 'bg-warning-500' : 'bg-transparent',
           )}
         ></small>
-        <XCircleIcon
-          className="hidden group-hover:inline-block text-neutral-600 dark:text-neutral-100 w-4 h-4 ml-2 mr-0 cursor-pointer"
+        <Button
+          variant={EnumVariant.Info}
+          className="hidden group-hover:flex text-neutral-600 dark:text-neutral-100 !m-0 !p-0 !ml-2 border-none cursor-pointer"
           onClick={(e: MouseEvent) => {
             e.stopPropagation()
 
             closeEditorTabWithConfirmation()
           }}
-        />
+        >
+          <XCircleIcon className="w-4 h-4" />
+        </Button>
       </span>
-    </li>
+    </div>
   )
 }

@@ -122,7 +122,7 @@ export default function PageDocs(): JSX.Element {
                     key={model.path}
                     path={model.path}
                   >
-                    {({ file }) => (
+                    {({ content, type }) => (
                       <Tab.Group>
                         <TabList
                           list={
@@ -139,8 +139,8 @@ export default function PageDocs(): JSX.Element {
                             className="w-full h-full"
                           >
                             <CodeEditorDefault
-                              content={file.content}
-                              type={file.extension}
+                              content={content}
+                              type={type}
                               extensions={modelExtensions}
                             />
                           </Tab.Panel>

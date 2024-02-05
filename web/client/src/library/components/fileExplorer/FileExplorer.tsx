@@ -59,6 +59,8 @@ const FileExplorer = function FileExplorer({
 
   return (
     <div
+      data-testid="file-explorer"
+      role="tree"
       tabIndex={0}
       className={clsx(
         'flex flex-col w-full h-full overflow-hidden text-sm text-neutral-500 dark:text-neutral-400 font-regular select-none',
@@ -242,14 +244,17 @@ function FileExplorerArtifactContainer({
   style,
   handleSelect,
   onDoubleClick,
+  ariaExpanded,
 }: {
   artifact: ModelArtifact
   children: React.ReactNode
   isSelected?: boolean
   className?: string
   style?: React.CSSProperties
+  isOpen?: boolean
   handleSelect?: (e: React.MouseEvent | React.KeyboardEvent) => void
   onDoubleClick?: (e: React.MouseEvent) => void
+  ariaExpanded?: boolean
 }): JSX.Element {
   const {
     setArtifactRename,
@@ -263,6 +268,9 @@ function FileExplorerArtifactContainer({
 
   return (
     <span
+      role="treeitem"
+      aria-expanded={ariaExpanded}
+      title={artifact.path}
       tabIndex={0}
       className={clsx(
         'w-full flex items-center group/file px-2',

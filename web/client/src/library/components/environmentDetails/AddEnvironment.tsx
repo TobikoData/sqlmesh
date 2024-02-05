@@ -49,7 +49,10 @@ export function AddEnvironment({
     isStringEmptyOrNil(newEnvironment) || isExistingEnvironment(newEnvironment)
 
   return (
-    <div className={clsx('flex w-full items-center bg-secondary-5', className)}>
+    <div
+      data-testid="add-environment"
+      className={clsx('flex w-full items-center bg-secondary-5', className)}
+    >
       <Input
         className="my-0 mx-0 mr-4 min-w-[10rem] w-full"
         size={size}

@@ -1,18 +1,45 @@
 import { defineConfig, devices } from '@playwright/test'
 
-/**
- * Read environment variables from file.
- * https://github.com/motdotla/dotenv
- */
-// require('dotenv').config();
-
-const URL = 'http://127.0.0.1:8005'
+const URL = process.env.UI_TEST_URL ?? 'http://127.0.0.1:8005'
+const PROXY =
+  process.env.UI_TEST_URL == null && process.env.CI == null
+    ? { server: 'http://api:8000' }
+    : undefined
+const WEB_SERVER =
+  process.env.UI_TEST_URL == null
+    ? {
+        command: 'npm run build && npm run preview',
+        url: URL,
+        reuseExistingServer: process.env.CI == null,
+        timeout: 120000, // Two minutes
+      }
+    : undefined
+const UI_TEST_BROWSER = process.env.UI_TEST_BROWSER ?? 'chromium'
+const BROWSERS: any = {
+  chromium: {
+    name: 'chromium',
+    use: { ...devices['Desktop Chrome'] },
+  },
+  firefox: {
+    name: 'firefox',
+    use: { ...devices['Desktop Firefox'] },
+  },
+  webkit: {
+    name: 'webkit',
+    use: { ...devices['Desktop Safari'] },
+  },
+}
+const BROWSER = BROWSERS[UI_TEST_BROWSER]
+const PROJECTS =
+  process.env.UI_TEST_BROWSER == null || BROWSER == null
+    ? Object.values(BROWSERS)
+    : [BROWSER]
 
 /**
  * See https://playwright.dev/docs/test-configuration.
  */
 export default defineConfig({
-  testDir: './tests',
+  testDir: 'tests',
   /* Run tests in files in parallel */
   fullyParallel: true,
   /* Fail the build on CI if you accidentally left test.only in the source code. */
@@ -30,29 +57,13 @@ export default defineConfig({
 
     /* Collect trace when retrying the failed test. See https://playwright.dev/docs/trace-viewer */
     trace: 'on-first-retry',
+
+    proxy: PROXY,
   },
 
   /* Configure projects for major browsers */
-  projects: [
-    {
-      name: 'chromium',
-      use: { ...devices['Desktop Chrome'] },
-    },
-    {
-      name: 'firefox',
-      use: { ...devices['Desktop Firefox'] },
-    },
-    {
-      name: 'webkit',
-      use: { ...devices['Desktop Safari'] },
-    },
-  ],
+  projects: PROJECTS,
 
   /* Run your local dev server before starting the tests */
-  webServer: {
-    command: 'npm run build && npm run preview',
-    url: URL,
-    reuseExistingServer: process.env.CI == null,
-    timeout: 120000, // Two minutes
-  },
+  webServer: WEB_SERVER,
 })

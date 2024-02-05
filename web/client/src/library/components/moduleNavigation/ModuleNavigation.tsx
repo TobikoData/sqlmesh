@@ -35,7 +35,10 @@ export default function ModuleNavigation({
   const modelsCount = Array.from(new Set(models.values())).length
 
   return (
-    <div className={className}>
+    <div
+      data-testid="module-navigation"
+      className={className}
+    >
       {modules.hasEditor && (
         <ModuleLink
           title="File Explorer"

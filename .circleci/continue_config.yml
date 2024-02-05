@@ -153,6 +153,180 @@ jobs:
           name: Run tests
           command: npm --prefix web/client run test
 
+  ui_test_examples:
+    docker:
+      - image: mcr.microsoft.com/playwright:v1.42.1-jammy
+    resource_class: medium
+    steps:
+      - halt_unless_client
+      - checkout
+      - run:
+          name: Install packages
+          command: |
+            apt-get update && \
+            apt-get -y install \
+            libnss3 \
+            libatk-bridge2.0-0 \
+            libdrm-dev \
+            libxkbcommon-dev \
+            libgbm-dev \
+            libasound-dev \
+            libatspi2.0-0 \
+            libxshmfence-dev
+      - run:
+          name: Install python
+          command: |
+            apt-get -y install \
+            python3.11 \
+            python3-pip && \
+            update-alternatives --install /usr/bin/python python /usr/bin/python3.11 1 && \
+            update-alternatives --install /usr/bin/pip pip /usr/bin/pip3 1
+      - run:
+          name: Install python packages
+          command: pip3 install -e .[dev,web]
+      - run:
+          name: Set up develop build
+          command: python3 setup.py develop
+      - run:
+          name: Generate OpenAPI
+          command: python3 web/server/openapi.py
+      - run:
+          name: Setup basic example
+          command: mkdir -p examples/basic && sqlmesh -p examples/basic init postgres
+      - run:
+          name: Install npm packages
+          command: |
+            npm install -g npm@latest && \
+            npm --prefix web/client install --no-audit --no-fund --no-package-lock && \
+            npm --prefix web/client run generate:api && \
+            npm --prefix web/client run build
+      - run:
+          name: Set up projects
+          command: |
+            PROJECTS="basic wursthall sushi"; \
+            BROWSERS="chromium firefox webkit"; \
+            PORT=8001; \
+            CURRENT_DIR=$(pwd); \
+            for BROWSER in $BROWSERS; do \
+              rm -rf $CURRENT_DIR/examples/$BROWSER; \
+              for PROJECT in $PROJECTS; do \
+                  echo "Creating $PROJECT for $BROWSER browser"; \
+                  mkdir -p $CURRENT_DIR/examples/$BROWSER/$PROJECT/client; \
+                  mkdir -p $CURRENT_DIR/examples/$BROWSER/$PROJECT/$PROJECT; \
+                  cp -R $CURRENT_DIR/examples/$PROJECT/. $CURRENT_DIR/examples/$BROWSER/$PROJECT/$PROJECT; \
+                  cp -R $CURRENT_DIR/web/client/. $CURRENT_DIR/examples/$BROWSER/$PROJECT/client; \
+              done; \
+            done
+      - run:
+          name: Run test for basic on chromium
+          command: |
+            PROJECT="basic"; \
+            BROWSER="chromium"; \
+            PORT=8031; \
+            CURRENT_DIR=$(pwd); \
+            cd $CURRENT_DIR/examples/$BROWSER/$PROJECT/$PROJECT && \
+            (sqlmesh ui --port $PORT --host 0.0.0.0 &) && \
+            sleep 10 && \
+            cd $CURRENT_DIR/examples/$BROWSER/$PROJECT/client && \
+            UI_TEST_URL=http://0.0.0.0:$PORT UI_TEST_BROWSER=$BROWSER npm run test:playwright -- ./tests/demo/demo.$PROJECT.spec;
+      - run:
+          name: Run test for basic on firefox
+          command: |
+            PROJECT="basic"; \
+            BROWSER="firefox"; \
+            PORT=8032; \
+            CURRENT_DIR=$(pwd); \
+            cd $CURRENT_DIR/examples/$BROWSER/$PROJECT/$PROJECT && \
+            (sqlmesh ui --port $PORT --host 0.0.0.0 &) && \
+            sleep 10 && \
+            cd $CURRENT_DIR/examples/$BROWSER/$PROJECT/client && \
+            UI_TEST_URL=http://0.0.0.0:$PORT UI_TEST_BROWSER=$BROWSER npm run test:playwright -- ./tests/demo/demo.$PROJECT.spec;
+      - run:
+          name: Run test for basic on webkit
+          command: |
+            PROJECT="basic"; \
+            BROWSER="webkit"; \
+            PORT=8033; \
+            CURRENT_DIR=$(pwd); \
+            cd $CURRENT_DIR/examples/$BROWSER/$PROJECT/$PROJECT && \
+            (sqlmesh ui --port $PORT --host 0.0.0.0 &) && \
+            sleep 10 && \
+            cd $CURRENT_DIR/examples/$BROWSER/$PROJECT/client && \
+            UI_TEST_URL=http://0.0.0.0:$PORT UI_TEST_BROWSER=$BROWSER npm run test:playwright -- ./tests/demo/demo.$PROJECT.spec;
+      - run:
+          name: Run test for sushi on chromium
+          command: |
+            PROJECT="sushi"; \
+            BROWSER="chromium"; \
+            PORT=8011; \
+            CURRENT_DIR=$(pwd); \
+            cd $CURRENT_DIR/examples/$BROWSER/$PROJECT/$PROJECT && \
+            (sqlmesh ui --port $PORT --host 0.0.0.0 &) && \
+            sleep 10 && \
+            cd $CURRENT_DIR/examples/$BROWSER/$PROJECT/client && \
+            UI_TEST_URL=http://0.0.0.0:$PORT UI_TEST_BROWSER=$BROWSER npm run test:playwright -- ./tests/demo/demo.$PROJECT.spec;
+      - run:
+          name: Run test for sushi on firefox
+          command: |
+            PROJECT="sushi"; \
+            BROWSER="firefox"; \
+            PORT=8012; \
+            CURRENT_DIR=$(pwd); \
+            cd $CURRENT_DIR/examples/$BROWSER/$PROJECT/$PROJECT && \
+            (sqlmesh ui --port $PORT --host 0.0.0.0 &) && \
+            sleep 10 && \
+            cd $CURRENT_DIR/examples/$BROWSER/$PROJECT/client && \
+            UI_TEST_URL=http://0.0.0.0:$PORT UI_TEST_BROWSER=$BROWSER npm run test:playwright -- ./tests/demo/demo.$PROJECT.spec;
+      - run:
+          name: Run test for sushi on webkit
+          command: |
+            PROJECT="sushi"; \
+            BROWSER="webkit"; \
+            PORT=8013; \
+            CURRENT_DIR=$(pwd); \
+            cd $CURRENT_DIR/examples/$BROWSER/$PROJECT/$PROJECT && \
+            (sqlmesh ui --port $PORT --host 0.0.0.0 &) && \
+            sleep 10 && \
+            cd $CURRENT_DIR/examples/$BROWSER/$PROJECT/client && \
+            UI_TEST_URL=http://0.0.0.0:$PORT UI_TEST_BROWSER=$BROWSER npm run test:playwright -- ./tests/demo/demo.$PROJECT.spec;
+      - run:
+          name: Run test for wursthall on chromium
+          command: |
+            PROJECT="wursthall"; \
+            BROWSER="chromium"; \
+            PORT=8021; \
+            CURRENT_DIR=$(pwd); \
+            cd $CURRENT_DIR/examples/$BROWSER/$PROJECT/$PROJECT && \
+            (sqlmesh ui --port $PORT --host 0.0.0.0 &) && \
+            sleep 10 && \
+            cd $CURRENT_DIR/examples/$BROWSER/$PROJECT/client && \
+            UI_TEST_URL=http://0.0.0.0:$PORT UI_TEST_BROWSER=$BROWSER npm run test:playwright -- ./tests/demo/demo.$PROJECT.spec;
+      - run:
+          name: Run test for wursthall on webkit
+          command: |
+            PROJECT="wursthall"; \
+            BROWSER="webkit"; \
+            PORT=8023; \
+            CURRENT_DIR=$(pwd); \
+            cd $CURRENT_DIR/examples/$BROWSER/$PROJECT/$PROJECT && \
+            (sqlmesh ui --port $PORT --host 0.0.0.0 &) && \
+            sleep 10 && \
+            cd $CURRENT_DIR/examples/$BROWSER/$PROJECT/client && \
+            UI_TEST_URL=http://0.0.0.0:$PORT UI_TEST_BROWSER=$BROWSER npm run test:playwright -- ./tests/demo/demo.$PROJECT.spec;
+      - run:
+          name: Run test for wursthall on firefox
+          command: |
+            PROJECT="wursthall"; \
+            BROWSER="firefox"; \
+            PORT=8022; \
+            CURRENT_DIR=$(pwd); \
+            cd $CURRENT_DIR/examples/$BROWSER/$PROJECT/$PROJECT && \
+            (sqlmesh ui --port $PORT --host 0.0.0.0 &) && \
+            sleep 10 && \
+            cd $CURRENT_DIR/examples/$BROWSER/$PROJECT/client && \
+            UI_TEST_URL=http://0.0.0.0:$PORT UI_TEST_BROWSER=$BROWSER npm run test:playwright -- ./tests/demo/demo.$PROJECT.spec;            
+
+
   airflow_docker_tests:
     machine:
       image: ubuntu-2204:2022.10.2
@@ -235,3 +409,4 @@ workflows:
                 - main
       - ui_style
       - ui_test
+      - ui_test_examples

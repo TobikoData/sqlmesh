@@ -1,38 +1,19 @@
 version: "3.11"
 services:
-  generate-openapi-spec:
-    image: tobiko-api
-    container_name: generate-openapi-spec
-    working_dir: /sqlmesh
+  openapi-spec:
+    image: openapi-spec
+    container_name: openapi-spec
     build:
       context: .
       dockerfile: Dockerfile.api
+    working_dir: /sqlmesh
     command: python web/server/openapi.py
     volumes:
       - .:/sqlmesh
 
-  app:
-    image: tobiko-app
-    container_name: tobiko-app
-    build:
-      context: .
-      dockerfile: Dockerfile.app
-    command: npm run dev -- --host 0.0.0.0 --port 8001
-    working_dir: /app
-    ports:
-      - 8001:8001
-    volumes:
-      - ./web/client:/app
-      - /app/node_modules
-    tty: true
-    networks:
-      - tobiko-development
-    depends_on:
-      - generate-openapi-spec
-
   api:
-    image: tobiko-api
-    container_name: tobiko-api
+    image: sqlmesh-ui-api
+    container_name: sqlmesh-ui-api
     working_dir: /home
     build:
       context: .
@@ -40,14 +21,37 @@ services:
     command: python -m uvicorn web.server.main:app --host 0.0.0.0 --port 8000 --reload --reload-dir /sqlmesh/web/server --reload-dir /sqlmesh/sqlmesh --timeout-keep-alive 300 --timeout-graceful-shutdown 1
     ports:
       - 8000:8000
+    tty: true
     volumes:
       - .:/sqlmesh
-    networks:
-      - tobiko-development
     environment:
       - PYTHONPATH=/sqlmesh
       - PROJECT_PATH=/sqlmesh/examples/sushi
       - UI_MODE=ide
+    networks:
+      - tobiko-development
+    depends_on:
+      - openapi-spec
+
+  app:
+    image: sqlmesh-ui-app
+    container_name: sqlmesh-ui-app
+    build:
+      context: .
+      dockerfile: Dockerfile.app
+    command: npm run dev -- --host 0.0.0.0 --port 8001
+    working_dir: /app
+    ports:
+      - 8001:8001
+    tty: true
+    volumes:
+      - ./web/client:/app
+      - /app/node_modules
+    networks:
+      - tobiko-development
+    depends_on:
+      - api
+      - openapi-spec
 
 networks:
   tobiko-development:

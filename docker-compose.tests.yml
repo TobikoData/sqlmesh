@@ -1,0 +1,12 @@
+version: "3.11"
+services:
+  test-sqlmesh-example:
+    image: test-sqlmesh-base
+    container_name: test-sqlmesh-example
+    build:
+      context: .
+      dockerfile: Dockerfile.test
+    environment:
+      - PROJECTS=basic wursthall sushi
+      - BROWSERS=chromium firefox webkit
+      - PORT=8001

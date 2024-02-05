@@ -28,7 +28,10 @@ function Editor(): JSX.Element {
   const tab = useStoreEditor(s => s.tab)
 
   return (
-    <div className="w-full h-full flex flex-col overflow-hidden">
+    <div
+      data-testid="editor"
+      className="w-full h-full flex flex-col overflow-hidden"
+    >
       <EditorTabs />
       <Divider />
       {isNil(tab) ? <EditorEmpty /> : <EditorMain tab={tab} />}
@@ -251,7 +254,10 @@ function EditorMain({ tab }: { tab: EditorTab }): JSX.Element {
             )
           }}
         >
-          <div className="flex flex-col h-full">
+          <div
+            data-testid="code-editor"
+            className="flex flex-col h-full"
+          >
             {tab.file.isLocal && (
               <CodeEditorDefault
                 type={EnumFileExtensions.SQL}
@@ -267,13 +273,13 @@ function EditorMain({ tab }: { tab: EditorTab }): JSX.Element {
                 keymaps={defaultKeymapsEditorTab}
                 path={tab.file.path}
               >
-                {({ file, keymaps }) => (
+                {({ keymaps, content, type }) => (
                   <CodeEditorDefault
-                    type={file.extension}
+                    type={type}
                     dialect={tab.dialect}
                     extensions={modelExtensions}
                     keymaps={keymaps}
-                    content={file.content}
+                    content={content}
                     onChange={updateFileContent}
                   />
                 )}
