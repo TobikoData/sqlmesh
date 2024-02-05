@@ -12,6 +12,7 @@ from sqlmesh.core.config import (
     GatewayConfig,
     ModelDefaultsConfig,
 )
+from sqlmesh.core.config.feature_flag import DbtFeatureFlag, FeatureFlag
 from sqlmesh.core.config.loader import (
     load_config_from_env,
     load_config_from_paths,
@@ -256,10 +257,12 @@ def test_load_config_from_env():
         {
             "SQLMESH__GATEWAY__CONNECTION__TYPE": "duckdb",
             "SQLMESH__GATEWAY__CONNECTION__DATABASE": "test_db",
+            "SQLMESH__FEATURE_FLAGS__DBT__SCD_TYPE_2_SUPPORT": "false",
         },
     ):
         assert Config.parse_obj(load_config_from_env()) == Config(
-            gateways=GatewayConfig(connection=DuckDBConnectionConfig(database="test_db"))
+            gateways=GatewayConfig(connection=DuckDBConnectionConfig(database="test_db")),
+            feature_flags=FeatureFlag(dbt=DbtFeatureFlag(scd_type_2_support=False)),
         )
 
 
@@ -383,3 +386,31 @@ environment_catalog_mapping:
             load_config_from_paths(project_paths=[config_path]).environment_catalog_mapping
             == expected
         )
+
+
+def test_load_feature_flag(tmp_path_factory):
+    config_path = tmp_path_factory.mktemp("yaml_config") / "config.yaml"
+    with open(config_path, "w") as fd:
+        fd.write(
+            """
+gateways:
+    duckdb_gateway:
+        connection:
+            type: duckdb
+model_defaults:
+    dialect: bigquery
+feature_flags:
+    dbt:
+        scd_type_2_support: false
+        """
+        )
+
+    assert load_config_from_paths(
+        project_paths=[config_path],
+    ) == Config(
+        gateways={
+            "duckdb_gateway": GatewayConfig(connection=DuckDBConnectionConfig()),
+        },
+        model_defaults=ModelDefaultsConfig(dialect="bigquery"),
+        feature_flags=FeatureFlag(dbt=DbtFeatureFlag(scd_type_2_support=False)),
+    )
