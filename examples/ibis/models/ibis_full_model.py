@@ -1,14 +1,10 @@
 import ibis
 
-from sqlmesh.core.model import model
 from sqlmesh.core.macros import MacroEvaluator
+from sqlmesh.core.model import model
 
-@model(
-    "ibis.ibis_full_model",
-    is_sql=True,
-    kind="FULL",
-    audits=["assert_positive_order_ids"]
-)
+
+@model("ibis.ibis_full_model", is_sql=True, kind="FULL", audits=["assert_positive_order_ids"])
 def entrypoint(evaluator: MacroEvaluator) -> str:
     # connect to database
     con = ibis.duckdb.connect(database="data/local.duckdb")
@@ -20,6 +16,4 @@ def entrypoint(evaluator: MacroEvaluator) -> str:
     count = incremental_model_ordered.id.nunique()
     query = incremental_model_ordered.group_by("item_id").aggregate(num_orders=count)
 
-    return (
-        ibis.to_sql(query)
-    )
+    return ibis.to_sql(query)
