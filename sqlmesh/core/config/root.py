@@ -19,6 +19,7 @@ from sqlmesh.core.config.connection import (
     DuckDBConnectionConfig,
     connection_config_validator,
 )
+from sqlmesh.core.config.feature_flag import FeatureFlag
 from sqlmesh.core.config.format import FormatConfig
 from sqlmesh.core.config.gateway import GatewayConfig
 from sqlmesh.core.config.model import ModelDefaultsConfig
@@ -68,6 +69,7 @@ class Config(BaseConfig):
         log_limit: The default number of logs to keep.
         format: The formatting options for SQL code.
         ui: The UI configuration for SQLMesh.
+        feature_flags: Feature flags to enable/disable certain features.
     """
 
     gateways: t.Dict[str, GatewayConfig] = {"": GatewayConfig()}
@@ -103,6 +105,7 @@ class Config(BaseConfig):
     run: RunConfig = RunConfig()
     format: FormatConfig = FormatConfig()
     ui: UIConfig = UIConfig()
+    feature_flags: FeatureFlag = FeatureFlag()
 
     _FIELD_UPDATE_STRATEGY: t.ClassVar[t.Dict[str, UpdateStrategy]] = {
         "gateways": UpdateStrategy.KEY_UPDATE,
