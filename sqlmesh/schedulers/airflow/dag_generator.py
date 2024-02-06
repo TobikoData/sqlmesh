@@ -30,6 +30,7 @@ from sqlmesh.schedulers.airflow.operators.hwm_sensor import (
 from sqlmesh.schedulers.airflow.operators.notification import (
     BaseNotificationOperatorProvider,
 )
+from sqlmesh.schedulers.airflow.util import truncate_task_id_if_needed
 from sqlmesh.utils import sanitize_name
 from sqlmesh.utils.date import TimeLike, to_datetime, yesterday_timestamp
 from sqlmesh.utils.errors import SQLMeshError
@@ -59,6 +60,8 @@ DAG_DEFAULT_ARGS = {
         )
     ),
 }
+
+AIRFLOW_TAG_CHARACTER_LIMIT = 100
 
 
 class SnapshotDagGenerator:
@@ -116,7 +119,7 @@ class SnapshotDagGenerator:
             tags=[
                 common.SQLMESH_AIRFLOW_TAG,
                 common.SNAPSHOT_AIRFLOW_TAG,
-                snapshot.name,
+                snapshot.name[-AIRFLOW_TAG_CHARACTER_LIMIT:],
             ],
             default_args={
                 **DAG_DEFAULT_ARGS,
@@ -124,7 +127,7 @@ class SnapshotDagGenerator:
                 "email_on_failure": True,
             },
         ) as dag:
-            hwm_sensor_tasks = self._create_hwm_sensors(snapshot, snapshots)
+            hwm_sensor_tasks = self._create_hwm_sensors(snapshot, snapshots, dag_id)
 
             evaluator_task = self._create_snapshot_evaluation_operator(
                 snapshots=snapshots,
@@ -197,6 +200,7 @@ class SnapshotDagGenerator:
                 all_snapshots,
                 plan_dag_spec.deployability_index,
                 plan_dag_spec.environment.plan_id,
+                dag_id,
                 "before_promote",
             )
 
@@ -208,6 +212,7 @@ class SnapshotDagGenerator:
                 all_snapshots,
                 plan_dag_spec.deployability_index,
                 plan_dag_spec.environment.plan_id,
+                dag_id,
                 "after_promote",
             )
 
@@ -400,6 +405,7 @@ class SnapshotDagGenerator:
         snapshots: t.Dict[SnapshotId, Snapshot],
         deployability_index: DeployabilityIndex,
         plan_id: str,
+        dag_id: str,
         task_id_suffix: str,
     ) -> t.Tuple[BaseOperator, BaseOperator]:
         snapshot_to_tasks = {}
@@ -416,18 +422,28 @@ class SnapshotDagGenerator:
             snapshot_intervals_chain: t.List[t.Union[BaseOperator, t.List[BaseOperator]]] = []
 
             snapshot_start_task = EmptyOperator(
-                task_id=f"snapshot_backfill__{sanitized_snapshot_name}__{snapshot.identifier}__start"
+                task_id=truncate_task_id_if_needed(
+                    dag_id,
+                    f"snapshot_backfill__{sanitized_snapshot_name}__{snapshot.identifier}__start",
+                )
             )
             snapshot_end_task = EmptyOperator(
-                task_id=f"snapshot_backfill__{sanitized_snapshot_name}__{snapshot.identifier}__end"
+                task_id=truncate_task_id_if_needed(
+                    dag_id,
+                    f"snapshot_backfill__{sanitized_snapshot_name}__{snapshot.identifier}__end",
+                )
             )
 
             task_id_prefix = f"snapshot_backfill__{sanitized_snapshot_name}__{snapshot.identifier}"
             for start, end in intervals_per_snapshot.intervals:
+                task_id = truncate_task_id_if_needed(
+                    dag_id,
+                    f"{task_id_prefix}__{start.strftime(TASK_ID_DATE_FORMAT)}__{end.strftime(TASK_ID_DATE_FORMAT)}",
+                )
                 evaluation_task = self._create_snapshot_evaluation_operator(
                     snapshots=snapshots,
                     snapshot=snapshot,
-                    task_id=f"{task_id_prefix}__{start.strftime(TASK_ID_DATE_FORMAT)}__{end.strftime(TASK_ID_DATE_FORMAT)}",
+                    task_id=task_id,
                     start=start,
                     end=end,
                     deployability_index=deployability_index,
@@ -465,8 +481,12 @@ class SnapshotDagGenerator:
                 snapshot_end_task,
             )
 
-        backfill_start_task = EmptyOperator(task_id=f"snapshot_backfill_{task_id_suffix}_start")
-        backfill_end_task = EmptyOperator(task_id=f"snapshot_backfill_{task_id_suffix}_end")
+        backfill_start_task = EmptyOperator(
+            task_id=truncate_task_id_if_needed(dag_id, f"snapshot_backfill_{task_id_suffix}_start")
+        )
+        backfill_end_task = EmptyOperator(
+            task_id=truncate_task_id_if_needed(dag_id, f"snapshot_backfill_{task_id_suffix}_end")
+        )
 
         if not snapshot_to_tasks:
             backfill_start_task >> backfill_end_task
@@ -590,23 +610,27 @@ class SnapshotDagGenerator:
         )
 
     def _create_hwm_sensors(
-        self, snapshot: Snapshot, snapshots: t.Dict[SnapshotId, Snapshot]
+        self, snapshot: Snapshot, snapshots: t.Dict[SnapshotId, Snapshot], dag_id: str
     ) -> t.List[BaseSensorOperator]:
         output: t.List[BaseSensorOperator] = []
         for upstream_snapshot_id in snapshot.parents:
             upstream_snapshot = snapshots[upstream_snapshot_id]
             if not upstream_snapshot.is_symbolic and not upstream_snapshot.is_seed:
+                task_id = truncate_task_id_if_needed(
+                    dag_id,
+                    f"{sanitize_name(upstream_snapshot.name)}_{upstream_snapshot.version}_hwms",
+                )
                 output.append(
                     HighWaterMarkSensor(
                         target_snapshot_info=upstream_snapshot.table_info,
                         this_snapshot=snapshot,
-                        task_id=f"{sanitize_name(upstream_snapshot.name)}_{upstream_snapshot.version}_high_water_mark_sensor",
+                        task_id=task_id,
                     )
                 )
 
-        external_sesnor = self._create_hwm_external_sensor(snapshot)
-        if external_sesnor:
-            output.append(external_sesnor)
+        external_sensor = self._create_hwm_external_sensor(snapshot)
+        if external_sensor:
+            output.append(external_sensor)
 
         return output
 

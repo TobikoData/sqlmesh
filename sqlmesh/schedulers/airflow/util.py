@@ -33,6 +33,8 @@ PROVIDED_SESSION: Session = t.cast(Session, None)
 
 
 SQLMESH_STATE_CONN_ID = "sqlmesh_state_db"
+STATSD_METRIC_NAME_MAX_LENGTH = 250
+STATSD_METRIC_PREFIX_LENGTH = len("ti.start.")
 
 
 @contextlib.contextmanager
@@ -169,3 +171,25 @@ def discover_engine_operator(name: str, sql_only: bool = False) -> t.Type[BaseOp
         raise SQLMeshError(f"Failed to automatically discover an operator for '{name}'.'")
 
     raise ValueError(f"Unsupported engine name '{name}'.")
+
+
+def truncate_task_id_if_needed(
+    dag_id: str,
+    task_id: str,
+    max_length: int = (STATSD_METRIC_NAME_MAX_LENGTH - STATSD_METRIC_PREFIX_LENGTH),
+    dag_task_sep: str = ".",
+) -> str:
+    task_id_max_length = max_length - len(dag_id) - len(dag_task_sep)
+    if task_id_max_length <= 0:
+        raise SQLMeshError(
+            f"The dag id '{dag_id}' is too long for statsd and therefore task_id cannot be truncated"
+        )
+    truncated_task_id = task_id[-task_id_max_length:]
+    if task_id != truncated_task_id:
+        logger.info(
+            "The dag id '%s' and task id '%s' is too long for statsd and therefore task_id will be truncated to '%s'",
+            dag_id,
+            task_id,
+            truncated_task_id,
+        )
+    return truncated_task_id
