@@ -1,10 +1,9 @@
 import typing as t
 from datetime import datetime
 
-from constants import DB_PATH
-
 import ibis  # type: ignore
 import pandas as pd
+from constants import DB_PATH  # type: ignore
 
 from sqlmesh import ExecutionContext, model
 from sqlmesh.core.model import FullKind
@@ -20,7 +19,8 @@ from sqlmesh.core.model import FullKind
     audits=["assert_positive_order_ids"],
 )
 
-# This model uses ibis to generate a query which is then run by sqlmesh.
+# This model uses ibis to generate and run a query.
+
 
 def execute(
     context: ExecutionContext,
