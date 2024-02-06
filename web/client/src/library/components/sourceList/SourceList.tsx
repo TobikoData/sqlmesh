@@ -1,9 +1,11 @@
 import Input from '@components/input/Input'
+import { type Virtualizer, useVirtualizer } from '@tanstack/react-virtual'
 import { isArrayEmpty, isNil, isNotNil } from '@utils/index'
 import clsx from 'clsx'
-import { useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import { NavLink } from 'react-router-dom'
 import { EnumSize, EnumVariant, type Variant } from '~/types/enum'
+import { Button } from '../button/Button'
 
 interface ListItem<
   TListItem extends Record<string, any> = Record<string, any>,
@@ -25,6 +27,7 @@ export default function SourceList<
   items = [],
   types,
   by = 'id',
+  isActive,
   byName,
   byDescription,
   to,
@@ -36,6 +39,7 @@ export default function SourceList<
   to: string
   items?: TItem[]
   types?: TType
+  isActive?: (id: string) => boolean
   byName?: string
   disabled?: boolean
   byDescription?: string
@@ -43,69 +47,158 @@ export default function SourceList<
 }): JSX.Element {
   const [filter, setFilter] = useState('')
 
-  const filtered =
-    filter === ''
-      ? items
-      : items.filter(item => {
-          const id = item[by] ?? ''
-          const description = String(
-            isNil(byDescription) ? '' : item?.[byDescription] ?? '',
-          )
-          const name = String(isNil(byName) ? '' : item?.[byName] ?? '')
-          const type = String(types?.[id] ?? '')
+  const scrollableAreaRef = useRef<HTMLDivElement>(null)
 
-          return (
-            name.includes(filter) ||
-            description.includes(filter) ||
-            type.includes(filter)
-          )
-        })
+  const [activeItemIndex, filtered] = useMemo(() => {
+    let activeIndex = -1
+    const filteredList: TItem[] = []
+    items.forEach((item, index) => {
+      const id = item[by] ?? ''
+      const description = String(
+        isNil(byDescription) ? '' : item?.[byDescription] ?? '',
+      )
+      const name = String(isNil(byName) ? '' : item?.[byName] ?? '')
+      const type = String(types?.[id] ?? '')
+      if (
+        name.includes(filter) ||
+        description.includes(filter) ||
+        type.includes(filter)
+      ) {
+        filteredList.push(item)
+        if (isNotNil(isActive) && isActive(item[by])) {
+          activeIndex = index
+        }
+      }
+    })
+
+    return [activeIndex, filteredList]
+  }, [items, filter])
+
+  const rowVirtualizer = useVirtualizer({
+    count: filtered.length,
+    getScrollElement: () => scrollableAreaRef.current,
+    estimateSize: () => 28,
+  })
+
+  const scrollToItem = ({
+    itemIndex,
+    isSmoothScroll = true,
+  }: {
+    itemIndex: number
+    isSmoothScroll?: boolean
+  }): void => {
+    rowVirtualizer.scrollToIndex(itemIndex, {
+      align: 'center',
+      behavior: isSmoothScroll ? 'smooth' : 'auto',
+    })
+  }
+
+  const isOutsideVisibleRange = ({
+    itemIndex,
+    range,
+  }: {
+    itemIndex: number
+    range: Virtualizer<HTMLDivElement, Element>['range']
+  }): boolean =>
+    isNotNil(range) &&
+    (range.startIndex > itemIndex || range?.endIndex < itemIndex)
+
+  /**
+   * The return button should appear when the
+   * active item is available in the list (not
+   * filtered out) and it is not in the visible
+   * range of the virtualized list
+   */
+  const shouldShowReturnButton =
+    activeItemIndex > -1 &&
+    isOutsideVisibleRange({
+      range: rowVirtualizer.range,
+      itemIndex: activeItemIndex,
+    })
+
+  // scroll to the active item when the activeItemIndex changes
+  useEffect(() => {
+    if (
+      activeItemIndex > -1 &&
+      isOutsideVisibleRange({
+        range: rowVirtualizer.range,
+        itemIndex: activeItemIndex,
+      })
+    ) {
+      scrollToItem({ itemIndex: activeItemIndex, isSmoothScroll: false })
+    }
+  }, [activeItemIndex])
 
   return (
-    <div className={clsx('flex flex-col w-full h-full', className)}>
-      <ul className="p-2 h-full overflow-auto hover:scrollbar scrollbar--horizontal scrollbar--vertical">
-        {isArrayEmpty(filtered) && (
-          <li
-            key="not-found"
-            className="p-2"
-            onClick={() => {
-              setFilter('')
-            }}
-          >
-            No Results Found
-          </li>
-        )}
-        {filtered.map(item => {
-          const id = (item as Record<string, string>)[by]!
-          const name = isNil(byName)
-            ? ''
-            : (item as Record<string, string>)?.[byName] ?? ''
-          const description = isNil(byDescription)
-            ? undefined
-            : (item as Record<string, string>)?.[byDescription] ?? undefined
-
-          return (
+    <div className={clsx('flex flex-col w-full h-full relative', className)}>
+      {shouldShowReturnButton && (
+        <Button
+          className="absolute left-[50%] translate-x-[-50%] top-0 z-10 text-ellipsis !block overflow-hidden no-wrap max-w-[90%] opacity-50 hover:opacity-100"
+          onClick={() => scrollToItem({ itemIndex: activeItemIndex })}
+          size="sm"
+          variant="neutral"
+        >
+          Scroll to selected
+        </Button>
+      )}
+      <div
+        className="p-2 h-full overflow-auto hover:scrollbar scrollbar--horizontal scrollbar--vertical"
+        ref={scrollableAreaRef}
+      >
+        <ul
+          className="relative"
+          style={{ height: `${rowVirtualizer.getTotalSize()}px` }}
+        >
+          {isArrayEmpty(filtered) && (
             <li
-              key={id}
-              className={clsx(
-                'text-sm font-normal',
-                disabled && 'cursor-not-allowed',
-              )}
-              tabIndex={id === filter ? -1 : 0}
+              key="not-found"
+              className="p-2"
             >
-              {listItem?.({
-                id,
-                to: `${to}/${id}`,
-                name,
-                description,
-                text: (types as Record<string, string>)?.[id],
-                disabled,
-                item,
-              })}
+              No Results Found
             </li>
-          )
-        })}
-      </ul>
+          )}
+          {rowVirtualizer.getVirtualItems().map(virtualItem => {
+            const id = (filtered[virtualItem.index] as Record<string, string>)[
+              by
+            ]!
+            const name = isNil(byName)
+              ? ''
+              : (filtered[virtualItem.index] as Record<string, string>)?.[
+                  byName
+                ] ?? ''
+            const description = isNil(byDescription)
+              ? undefined
+              : (filtered[virtualItem.index] as Record<string, string>)?.[
+                  byDescription
+                ] ?? undefined
+
+            return (
+              <li
+                key={virtualItem.key}
+                className={clsx(
+                  'text-sm font-normal absolute top-0 left-0 w-full',
+                  disabled && 'cursor-not-allowed',
+                )}
+                style={{
+                  height: `${virtualItem.size}px`,
+                  transform: `translateY(${virtualItem.start}px)`,
+                }}
+                tabIndex={id === filter ? -1 : 0}
+              >
+                {listItem?.({
+                  id,
+                  to: `${to}/${id}`,
+                  name,
+                  description,
+                  text: (types as Record<string, string>)?.[id],
+                  disabled,
+                  item: filtered[virtualItem.index]!,
+                })}
+              </li>
+            )
+          })}
+        </ul>
+      </div>
       <div className="p-2 w-full flex justify-between">
         <Input
           className="w-full !m-0"
@@ -116,6 +209,7 @@ export default function SourceList<
               className={clsx(className, 'w-full')}
               value={filter}
               placeholder="Filter items"
+              type="search"
               onInput={(e: React.ChangeEvent<HTMLInputElement>) => {
                 setFilter(e.target.value)
               }}
