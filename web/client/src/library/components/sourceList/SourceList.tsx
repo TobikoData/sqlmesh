@@ -49,13 +49,7 @@ export default function SourceList<
 
   const scrollableAreaRef = useRef<HTMLDivElement>(null)
 
-  const getActiveIndex = (itemsList: TItem[]): number =>
-    itemsList.findIndex(item => isNotNil(isActive) && isActive(item[by]))
-
   const [activeItemIndex, filtered] = useMemo(() => {
-    if (filter === '') {
-      return [getActiveIndex(items), items]
-    }
     let activeIndex = -1
     const filteredList: TItem[] = []
     items.forEach((item, index) => {
@@ -76,24 +70,9 @@ export default function SourceList<
         }
       }
     })
-    // const filteredList = items.filter(item => {
-    //   const id = item[by] ?? ''
-    //   const description = String(
-    //     isNil(byDescription) ? '' : item?.[byDescription] ?? '',
-    //   )
-    //   const name = String(isNil(byName) ? '' : item?.[byName] ?? '')
-    //   const type = String(types?.[id] ?? '')
 
-    //   return (
-    //     name.includes(filter) ||
-    //     description.includes(filter) ||
-    //     type.includes(filter)
-    //   )
-    // })
     return [activeIndex, filteredList]
   }, [items, filter])
-
-  console.log({ activeItemIndex, filtered })
 
   const rowVirtualizer = useVirtualizer({
     count: filtered.length,

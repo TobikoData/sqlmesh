@@ -16,10 +16,6 @@ export default function PageErrors(): JSX.Element {
 
   const list = useMemo(() => Array.from(errors).reverse(), [errors])
 
-  const isActive = (id: string): boolean => {
-    return `${EnumRoutes.Errors}/${id}` === pathname
-  }
-
   useEffect(() => {
     if (isArrayEmpty(list)) {
       setTimeout(() => navigate(EnumRoutes.Ide))
@@ -63,7 +59,7 @@ export default function PageErrors(): JSX.Element {
             byDescription="message"
             to={EnumRoutes.Errors}
             items={list}
-            isActive={isActive}
+            isActive={id => `${EnumRoutes.Errors}/${id}` === pathname}
             types={list.reduce(
               (acc: Record<string, string>, it) =>
                 Object.assign(acc, { [it.id]: it.status }),

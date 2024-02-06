@@ -40,10 +40,6 @@ export default function PageDocs(): JSX.Element {
 
   const list = Array.from(new Set(models.values()))
 
-  const isActive = (id: string): boolean => {
-    return `${EnumRoutes.IdeDocsModels}/${id}` === pathname
-  }
-
   return (
     <Page
       sidebar={
@@ -52,7 +48,7 @@ export default function PageDocs(): JSX.Element {
           byName="displayName"
           to={EnumRoutes.IdeDocsModels}
           items={list}
-          isActive={isActive}
+          isActive={id => `${EnumRoutes.IdeDocsModels}/${id}` === pathname}
           types={list.reduce(
             (acc: Record<string, string>, it) =>
               Object.assign(acc, {

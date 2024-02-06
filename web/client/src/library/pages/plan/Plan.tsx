@@ -21,10 +21,6 @@ export default function PagePlan(): JSX.Element {
 
   const environmentsArray = Array.from(environments)
 
-  const isActive = (id: string): boolean => {
-    return `${EnumRoutes.Plan}/environments/${id}` === location.pathname
-  }
-
   useEffect(() => {
     if (planApply.isRunning && isNotNil(planApply.environment)) {
       const pathname = `${EnumRoutes.Plan}/environments/${planApply.environment}`
@@ -61,7 +57,9 @@ export default function PagePlan(): JSX.Element {
             planAction.isProcessing ||
             environment.isInitialProd
           }
-          isActive={isActive}
+          isActive={id =>
+            `${EnumRoutes.Plan}/environments/${id}` === location.pathname
+          }
           listItem={({
             to,
             name,

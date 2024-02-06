@@ -15,10 +15,6 @@ export default function PageTests(): JSX.Element {
     it.path.endsWith('tests'),
   )
 
-  const isActive = (id: string): boolean => {
-    return `${EnumRoutes.Tests}/${id}` === pathname
-  }
-
   return (
     <Page
       sidebar={
@@ -28,7 +24,7 @@ export default function PageTests(): JSX.Element {
             byName="basename"
             to={EnumRoutes.Tests}
             items={items}
-            isActive={isActive}
+            isActive={id => `${EnumRoutes.Tests}/${id}` === pathname}
             listItem={({ to, name, description, text, disabled = false }) => (
               <SourceListItem
                 to={to}

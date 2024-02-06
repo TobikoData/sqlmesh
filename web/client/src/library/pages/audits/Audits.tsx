@@ -15,10 +15,6 @@ export default function PageAudits(): JSX.Element {
     it.path.endsWith('audits'),
   )
 
-  const isActive = (id: string): boolean => {
-    return `${EnumRoutes.Audits}/${id}` === pathname
-  }
-
   return (
     <Page
       sidebar={
@@ -28,7 +24,7 @@ export default function PageAudits(): JSX.Element {
             byName="basename"
             to={EnumRoutes.Audits}
             items={items}
-            isActive={isActive}
+            isActive={id => `${EnumRoutes.Audits}/${id}` === pathname}
             className="h-full"
             listItem={({ to, name, description, text, disabled = false }) => (
               <SourceListItem
