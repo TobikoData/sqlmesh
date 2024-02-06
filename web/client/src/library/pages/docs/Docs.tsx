@@ -40,11 +40,9 @@ export default function PageDocs(): JSX.Element {
 
   const list = Array.from(new Set(models.values()))
 
-  const activeItemIndex = useMemo((): number => {
-    return list.findIndex(listItem => {
-      return `/docs/models/${listItem.name}` === pathname
-    })
-  }, [pathname, list])
+  const isActive = (id: string): boolean => {
+    return `${EnumRoutes.IdeDocsModels}/${id}` === pathname
+  }
 
   return (
     <Page
@@ -54,7 +52,7 @@ export default function PageDocs(): JSX.Element {
           byName="displayName"
           to={EnumRoutes.IdeDocsModels}
           items={list}
-          activeItemIndex={activeItemIndex}
+          isActive={isActive}
           types={list.reduce(
             (acc: Record<string, string>, it) =>
               Object.assign(acc, {

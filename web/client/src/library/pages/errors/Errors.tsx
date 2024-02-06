@@ -2,24 +2,23 @@ import { useIDE } from '../ide/context'
 import Page from '../root/Page'
 import SourceList, { SourceListItem } from '@components/sourceList/SourceList'
 import { EnumRoutes } from '~/routes'
-import { Outlet, useNavigate } from 'react-router-dom'
+import { Outlet, useLocation, useNavigate } from 'react-router-dom'
 import { EnumSize, EnumVariant } from '~/types/enum'
 import { useEffect, useMemo } from 'react'
 import { isArrayEmpty, isNil, isNotNil } from '@utils/index'
 import { Button } from '@components/button/Button'
 
 export default function PageErrors(): JSX.Element {
+  const { pathname } = useLocation()
   const navigate = useNavigate()
 
   const { errors, removeError, clearErrors } = useIDE()
 
   const list = useMemo(() => Array.from(errors).reverse(), [errors])
 
-  const activeItemIndex = useMemo((): number => {
-    return list.findIndex(item => {
-      return `${EnumRoutes.Errors}/${item.id}` === location.pathname
-    })
-  }, [location.pathname, list])
+  const isActive = (id: string): boolean => {
+    return `${EnumRoutes.Errors}/${id}` === pathname
+  }
 
   useEffect(() => {
     if (isArrayEmpty(list)) {
@@ -64,7 +63,7 @@ export default function PageErrors(): JSX.Element {
             byDescription="message"
             to={EnumRoutes.Errors}
             items={list}
-            activeItemIndex={activeItemIndex}
+            isActive={isActive}
             types={list.reduce(
               (acc: Record<string, string>, it) =>
                 Object.assign(acc, { [it.id]: it.status }),

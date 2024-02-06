@@ -6,7 +6,6 @@ import { EnumSize, EnumVariant } from '~/types/enum'
 import { EnumRoutes } from '~/routes'
 import { Button } from '@components/button/Button'
 import { Divider } from '@components/divider/Divider'
-import { useMemo } from 'react'
 
 export default function PageAudits(): JSX.Element {
   const { pathname } = useLocation()
@@ -16,11 +15,9 @@ export default function PageAudits(): JSX.Element {
     it.path.endsWith('audits'),
   )
 
-  const activeItemIndex = useMemo((): number => {
-    return items.findIndex(item => {
-      return `${EnumRoutes.Audits}/${item.basename}` === pathname
-    })
-  }, [pathname, items])
+  const isActive = (id: string): boolean => {
+    return `${EnumRoutes.Audits}/${id}` === pathname
+  }
 
   return (
     <Page
@@ -31,7 +28,7 @@ export default function PageAudits(): JSX.Element {
             byName="basename"
             to={EnumRoutes.Audits}
             items={items}
-            activeItemIndex={activeItemIndex}
+            isActive={isActive}
             className="h-full"
             listItem={({ to, name, description, text, disabled = false }) => (
               <SourceListItem
