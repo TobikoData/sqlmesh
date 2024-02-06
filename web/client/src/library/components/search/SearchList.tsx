@@ -70,8 +70,10 @@ export default function SearchList<
   autoFocus = false,
   showIndex = true,
   isFullWidth = false,
+  isLoading = false,
   direction = 'bottom',
   className,
+  onInput,
 }: {
   list: T[]
   searchBy: string
@@ -86,6 +88,8 @@ export default function SearchList<
   direction?: 'top' | 'bottom'
   className?: string
   isFullWidth?: boolean
+  isLoading?: boolean
+  onInput?: (value: string) => void
 }): JSX.Element {
   const navigate = useNavigate()
 
@@ -147,7 +151,10 @@ export default function SearchList<
           value={search}
           placeholder={placeholder}
           onInput={(e: React.ChangeEvent<HTMLInputElement>) => {
-            setSearch(e.target.value.trim())
+            const value = e.target.value.trim()
+
+            setSearch(value)
+            onInput?.(value)
           }}
           onKeyDown={(e: React.KeyboardEvent) => {
             if (e.key === 'ArrowDown' || e.key === 'ArrowUp') {
@@ -218,7 +225,7 @@ export default function SearchList<
                   size === EnumSize.lg && 'p-3',
                 )}
               >
-                No Results Found
+                {isLoading ? 'Loading...' : 'No Results Found'}
               </div>
             ) : (
               found.map(([item, index], idx) => (

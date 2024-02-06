@@ -17,33 +17,31 @@ const scope = self as any
 
 scope.onmessage = async (e: MessageEvent) => {
   if (e.data.topic === 'lineage') {
-    const lineage = mergeLineageWithModels(
-      e.data.payload.currentLineage,
-      e.data.payload.newLineage,
-    )
-    getNodesConnections(e.data.payload.mainNode, lineage)
-      .then(nodesConnections => {
-        scope.postMessage({
-          topic: 'lineage',
-          payload: {
-            lineage,
-            nodesConnections,
-          },
-        })
+    try {
+      const { currentLineage, newLineage, mainNode } = e.data.payload
+      const lineage = await mergeLineageWithModels(currentLineage, newLineage)
+      const nodesConnections = await getNodesConnections(mainNode, lineage)
+
+      scope.postMessage({
+        topic: 'lineage',
+        payload: {
+          lineage,
+          nodesConnections,
+        },
       })
-      .catch(error => {
-        scope.postMessage({
-          topic: 'error',
-          error,
-        })
+    } catch (error) {
+      scope.postMessage({
+        topic: 'error',
+        error,
       })
+    }
   }
 }
 
-function mergeLineageWithModels(
+async function mergeLineageWithModels(
   currentLineage: Record<string, Lineage> = {},
   data: Record<string, string[]> = {},
-): Record<string, Lineage> {
+): Promise<Record<string, Lineage>> {
   return Object.entries(data).reduce(
     (acc: Record<string, Lineage>, [key, models = []]) => {
       key = encodeURI(key)

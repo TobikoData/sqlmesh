@@ -77,10 +77,10 @@ export default function App(): JSX.Element {
         setPlanAction(
           new ModelPlanAction({ value: EnumPlanAction.RunningTask }),
         )
+      } else {
+        void getEnvironments().then(({ data }) => updateEnviroments(data))
       }
     })
-
-    void getEnvironments().then(({ data }) => updateEnviroments(data))
 
     return () => {
       channelPlanOverview.unsubscribe()
