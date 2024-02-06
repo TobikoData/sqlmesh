@@ -11,13 +11,17 @@ class GitClient:
         self._work_dir = Path(repo)
 
     def list_untracked_files(self) -> t.List[Path]:
-        return self._execute_list_output(["ls-files", "--others", "--exclude-standard"])
+        return self._execute_list_output(
+            ["ls-files", "--others", "--exclude-standard"], self._work_dir
+        )
 
     def list_changed_files(self, target_branch: str = "main") -> t.List[Path]:
-        return self._execute_list_output(["diff", "--name-only", "--diff-filter=d", target_branch])
+        return self._execute_list_output(
+            ["diff", "--name-only", "--diff-filter=d", target_branch], self._git_root
+        )
 
-    def _execute_list_output(self, commands: t.List[str]) -> t.List[Path]:
-        return [(self._git_root / o).absolute() for o in self._execute(commands).split("\n") if o]
+    def _execute_list_output(self, commands: t.List[str], base_path: Path) -> t.List[Path]:
+        return [(base_path / o).absolute() for o in self._execute(commands).split("\n") if o]
 
     def _execute(self, commands: t.List[str]) -> str:
         result = subprocess.run(["git"] + commands, cwd=self._work_dir, stdout=subprocess.PIPE)
