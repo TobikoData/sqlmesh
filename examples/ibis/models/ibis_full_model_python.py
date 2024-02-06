@@ -1,6 +1,8 @@
 import typing as t
 from datetime import datetime
 
+from constants import DB_PATH
+
 import ibis  # type: ignore
 import pandas as pd
 
@@ -17,6 +19,9 @@ from sqlmesh.core.model import FullKind
     },
     audits=["assert_positive_order_ids"],
 )
+
+# This model uses ibis to generate a query which is then run by sqlmesh.
+
 def execute(
     context: ExecutionContext,
     start: datetime,
@@ -25,7 +30,7 @@ def execute(
     **kwargs: t.Any,
 ) -> pd.DataFrame:
     # connect ibis to database
-    con = ibis.duckdb.connect(database="data/local.duckdb")
+    con = ibis.duckdb.connect(DB_PATH)
 
     # retrieve table
     incremental_model = con.table("incremental_model", schema="ibis")
@@ -35,7 +40,4 @@ def execute(
     aggregate = incremental_model.group_by("item_id").aggregate(num_orders=count)
     query = aggregate.order_by("item_id")
 
-    # convert ibis table into dataframe
-    df = query.to_pandas()
-
-    return df
+    return query.to_pandas()

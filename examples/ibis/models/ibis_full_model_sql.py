@@ -6,6 +6,9 @@ from sqlmesh.core.model import model
 
 
 @model("ibis.ibis_full_model_sql", is_sql=True, kind="FULL", audits=["assert_positive_order_ids"])
+
+# This model uses ibis to generate a SQL string.  
+
 def entrypoint(evaluator: MacroEvaluator) -> str:
     # create table reference
     incremental_model = UnboundTable(
