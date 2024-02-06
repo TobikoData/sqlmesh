@@ -154,8 +154,7 @@ export default function SourceList<
         <div
           className="relative w-full"
           style={{
-            height:
-              totalSize > 0 ? `${rowVirtualizer.getTotalSize()}px` : '100%',
+            height: totalSize > 0 ? `${totalSize}px` : '100%',
           }}
         >
           <ul
