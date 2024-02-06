@@ -109,13 +109,40 @@ function CodeEditorDefault({
       ),
     [keymaps],
   )
+  const allModels = useMemo(() => Array.from(models.values()), [models])
+  const allModelsNames = useMemo(
+    () =>
+      allModels.map(model => ({
+        label: model.name,
+        type: 'model',
+      })),
+    [allModels],
+  )
+  const allColumnsNames = useMemo(
+    () =>
+      Array.from(
+        new Set(
+          allModels.flatMap(model => model.columns.map(column => column.name)),
+        ),
+      ).map(name => ({
+        label: name,
+        type: 'column',
+      })),
+    [allModels],
+  )
 
   const extensionsAll = useMemo(() => {
     return [
       ...extensionsDefault,
       extensions,
       type === EnumFileExtensions.SQL &&
-        SQLMeshDialect(models, dialectOptions, dialectsTitles),
+        SQLMeshDialect(
+          models,
+          allModelsNames,
+          allColumnsNames,
+          dialectOptions,
+          dialectsTitles,
+        ),
       extensionKeymap,
     ]
       .filter(Boolean)
@@ -128,6 +155,8 @@ function CodeEditorDefault({
     extensionsDefault,
     extensions,
     extensionKeymap,
+    allModelsNames,
+    allColumnsNames,
   ])
 
   useEffect(() => {

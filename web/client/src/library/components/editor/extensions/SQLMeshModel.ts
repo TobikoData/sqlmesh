@@ -11,9 +11,9 @@ import { getDecorations } from './help'
 
 export default function SQLMeshModel(
   models: Map<string, ModelSQLMeshModel>,
-  model: ModelSQLMeshModel,
   columns: Set<string>,
   isActionMode: boolean,
+  model?: ModelSQLMeshModel,
 ): Extension {
   return ViewPlugin.fromClass(
     class SQLMeshModelView {
@@ -22,9 +22,9 @@ export default function SQLMeshModel(
         this.decorations = getDecorations(
           models,
           view,
-          model,
           columns,
           isActionMode,
+          model,
         )
       }
 
@@ -32,9 +32,9 @@ export default function SQLMeshModel(
         this.decorations = getDecorations(
           models,
           viewUpdate.view,
-          model,
           columns,
           isActionMode,
+          model,
         )
       }
     },

@@ -20,6 +20,8 @@ import { type KeyBinding } from '@codemirror/view'
 import { useStoreContext } from '@context/context'
 import { useIDE } from '~/library/pages/ide/context'
 import { ModelDirectory } from '@models/directory'
+import { type ModelSQLMeshModel } from '@models/sqlmesh-model'
+import { type Column } from '@api/client'
 
 function Editor(): JSX.Element {
   const tab = useStoreEditor(s => s.tab)
@@ -70,15 +72,23 @@ function EditorMain({ tab }: { tab: EditorTab }): JSX.Element {
 
   const { setManuallySelectedColumn } = useLineageFlow()
 
+  const handleModelClick = useCallback(
+    function (model: ModelSQLMeshModel) {
+      setSelectedFile(files.get(model.path))
+    },
+    [files],
+  )
+  const handleModelColumn = useCallback(function (
+    model: ModelSQLMeshModel,
+    column: Column,
+  ) {
+    setManuallySelectedColumn([model, column])
+  }, [])
   const defaultKeymapsEditorTab = useDefaultKeymapsEditorTab()
   const modelExtensions = useSQLMeshModelExtensions(
     tab.file.path,
-    model => {
-      setSelectedFile(files.get(model.path))
-    },
-    (model, column) => {
-      setManuallySelectedColumn([model, column])
-    },
+    handleModelClick,
+    handleModelColumn,
   )
 
   const [isOpenInspector, setIsOpenInspector] = useState(false)
@@ -258,6 +268,7 @@ function EditorMain({ tab }: { tab: EditorTab }): JSX.Element {
                 dialect={tab.dialect}
                 keymaps={customSQLKeymaps}
                 content={tab.file.content}
+                extensions={modelExtensions}
                 onChange={updateFileContent}
               />
             )}
