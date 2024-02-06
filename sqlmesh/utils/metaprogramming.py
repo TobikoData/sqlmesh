@@ -215,8 +215,6 @@ def normalize_source(obj: t.Any) -> str:
             # remove function return type annotation
             if isinstance(node, ast.FunctionDef):
                 node.returns = None
-        elif isinstance(node, ast.arg):
-            node.annotation = None
 
     return to_source(root_node).strip()
 

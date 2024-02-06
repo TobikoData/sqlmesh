@@ -358,7 +358,7 @@ class MacroEvaluator:
         """Coerces the given expression to the specified type on a best-effort basis."""
         base_err_msg = f"Failed to coerce expression '{expr}' to type '{typ}'."
         try:
-            if typ is None:
+            if typ is None or typ is t.Any:
                 return expr
             base = t.get_origin(typ) or typ
             # We need to handle t.Union first since we cannot use isinstance with it

@@ -140,19 +140,19 @@ def test_func_globals() -> None:
 def test_normalize_source() -> None:
     assert (
         normalize_source(main_func)
-        == """def main_func(y):
+        == """def main_func(y: int):
     sqlglot.parse_one('1')
     MyClass()
     DataClass(x=y)
 
-    def closure(z):
+    def closure(z: int):
         return z + Z
     return closure(y) + other_func(Y)"""
     )
 
     assert (
         normalize_source(other_func)
-        == """def other_func(a):
+        == """def other_func(a: int):
     import sqlglot
     sqlglot.parse_one('1')
     pd.DataFrame([{'x': 1}])
@@ -179,12 +179,12 @@ def test_serialize_env() -> None:
             name="main_func",
             alias="MAIN",
             path="test_metaprogramming.py",
-            payload="""def main_func(y):
+            payload="""def main_func(y: int):
     sqlglot.parse_one('1')
     MyClass()
     DataClass(x=y)
 
-    def closure(z):
+    def closure(z: int):
         return z + Z
     return closure(y) + other_func(Y)""",
         ),
@@ -236,7 +236,7 @@ class DataClass:
         "other_func": Executable(
             name="other_func",
             path="test_metaprogramming.py",
-            payload="""def other_func(a):
+            payload="""def other_func(a: int):
     import sqlglot
     sqlglot.parse_one('1')
     pd.DataFrame([{'x': 1}])
