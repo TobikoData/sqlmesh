@@ -61,6 +61,9 @@ export default function EditorPreview({
   const model = models.get(tab.file.path)
   const showLineage =
     isFalse(tab.file.isEmpty) && isNotNil(model) && isModel(tab.file.path)
+  const showErrors =
+    errors.size > 0 &&
+    ([previewTable, previewDiff].some(isNotNil) || showLineage)
 
   const tabs: string[] = useMemo(
     () =>
@@ -69,13 +72,21 @@ export default function EditorPreview({
         isNotNil(previewQuery) && EnumEditorPreviewTabs.Query,
         showLineage && EnumEditorPreviewTabs.Lineage,
         isNotNil(previewDiff) && EnumEditorPreviewTabs.Diff,
-        errors.size > 0 && EnumEditorPreviewTabs.Errors,
+        showErrors && EnumEditorPreviewTabs.Errors,
       ].filter(Boolean) as string[],
-    [tab.id, previewTable, previewQuery, previewDiff, showLineage, errors],
+    [
+      tab.id,
+      previewTable,
+      previewQuery,
+      previewDiff,
+      showLineage,
+      errors,
+      showErrors,
+    ],
   )
 
   useEffect(() => {
-    if (errors.size > 0) {
+    if (showErrors) {
       setActiveTabIndex(tabs.indexOf(EnumEditorPreviewTabs.Errors))
     } else if (isNotNil(previewDiff)) {
       setActiveTabIndex(tabs.indexOf(EnumEditorPreviewTabs.Diff))
@@ -84,7 +95,15 @@ export default function EditorPreview({
     } else if (showLineage) {
       setActiveTabIndex(tabs.indexOf(EnumEditorPreviewTabs.Lineage))
     }
-  }, [tabs, previewTable, previewQuery, previewDiff, showLineage, errors])
+  }, [
+    tabs,
+    previewTable,
+    previewQuery,
+    previewDiff,
+    showLineage,
+    errors,
+    showErrors,
+  ])
 
   return (
     <div
@@ -182,7 +201,7 @@ export default function EditorPreview({
                 />
               </Tab.Panel>
             )}
-            {errors.size > 0 && (
+            {showErrors && (
               <Tab.Panel
                 unmount={false}
                 className="w-full h-full ring-white ring-opacity-60 ring-offset-2 ring-offset-blue-400 focus:outline-none focus:ring-2 py-2"
