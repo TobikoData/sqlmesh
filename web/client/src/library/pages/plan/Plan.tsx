@@ -19,6 +19,8 @@ export default function PagePlan(): JSX.Element {
   const planAction = useStorePlan(s => s.planAction)
   const planApply = useStorePlan(s => s.planApply)
 
+  const environmentsArray = Array.from(environments)
+
   useEffect(() => {
     if (planApply.isRunning && isNotNil(planApply.environment)) {
       const pathname = `${EnumRoutes.Plan}/environments/${planApply.environment}`
@@ -49,11 +51,14 @@ export default function PagePlan(): JSX.Element {
           by="name"
           byName="name"
           to={`${EnumRoutes.Plan}/environments`}
-          items={Array.from(environments)}
+          items={environmentsArray}
           disabled={
             isFalse(modules.includes(Modules.plans)) ||
             planAction.isProcessing ||
             environment.isInitialProd
+          }
+          isActive={id =>
+            `${EnumRoutes.Plan}/environments/${id}` === location.pathname
           }
           listItem={({
             to,

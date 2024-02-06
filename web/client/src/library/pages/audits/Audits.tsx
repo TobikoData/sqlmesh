@@ -1,4 +1,4 @@
-import { Outlet } from 'react-router-dom'
+import { Outlet, useLocation } from 'react-router-dom'
 import Page from '../root/Page'
 import { useStoreProject } from '@context/project'
 import SourceList, { SourceListItem } from '@components/sourceList/SourceList'
@@ -8,6 +8,7 @@ import { Button } from '@components/button/Button'
 import { Divider } from '@components/divider/Divider'
 
 export default function PageAudits(): JSX.Element {
+  const { pathname } = useLocation()
   const files = useStoreProject(s => s.files)
 
   const items = Array.from(files.values()).filter(it =>
@@ -23,6 +24,7 @@ export default function PageAudits(): JSX.Element {
             byName="basename"
             to={EnumRoutes.Audits}
             items={items}
+            isActive={id => `${EnumRoutes.Audits}/${id}` === pathname}
             className="h-full"
             listItem={({ to, name, description, text, disabled = false }) => (
               <SourceListItem

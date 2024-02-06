@@ -13,7 +13,7 @@ import { type LineageNodeModelType } from '@components/graph/Graph'
 import { getModelNodeTypeTitle } from '@components/graph/help'
 
 export default function PageDocs(): JSX.Element {
-  const location = useLocation()
+  const { pathname } = useLocation()
   const navigate = useNavigate()
   const { modelName } = useParams()
 
@@ -44,11 +44,11 @@ export default function PageDocs(): JSX.Element {
     <Page
       sidebar={
         <SourceList
-          key={location.pathname}
           by="displayName"
           byName="displayName"
           to={EnumRoutes.IdeDocsModels}
           items={list}
+          isActive={id => `${EnumRoutes.IdeDocsModels}/${id}` === pathname}
           types={list.reduce(
             (acc: Record<string, string>, it) =>
               Object.assign(acc, {
