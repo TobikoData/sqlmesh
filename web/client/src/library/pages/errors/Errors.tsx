@@ -1,4 +1,4 @@
-import { useIDE } from '../ide/context'
+import { type ErrorIDE, useIDE } from '../ide/context'
 import Page from '../root/Page'
 import SourceList, { SourceListItem } from '@components/sourceList/SourceList'
 import { EnumRoutes } from '~/routes'
@@ -41,7 +41,7 @@ export default function PageErrors(): JSX.Element {
   return (
     <Page
       sidebar={
-        <>
+        <div className="flex flex-col h-full w-full">
           {errors.size > 0 && (
             <div className="flex justify-end m-1">
               <Button
@@ -53,10 +53,10 @@ export default function PageErrors(): JSX.Element {
               </Button>
             </div>
           )}
-          <SourceList
-            by="id"
-            byName="key"
-            byDescription="message"
+          <SourceList<ErrorIDE>
+            keyId="id"
+            keyName="key"
+            keyDescription="message"
             to={EnumRoutes.Errors}
             items={list}
             isActive={id => `${EnumRoutes.Errors}/${id}` === pathname}
@@ -84,7 +84,7 @@ export default function PageErrors(): JSX.Element {
               />
             )}
           />
-        </>
+        </div>
       }
       content={<Outlet />}
     />

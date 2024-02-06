@@ -6,6 +6,7 @@ import { EnumSize, EnumVariant } from '~/types/enum'
 import { EnumRoutes } from '~/routes'
 import { Button } from '@components/button/Button'
 import { Divider } from '@components/divider/Divider'
+import { type ModelFile } from '@models/file'
 
 export default function PageTests(): JSX.Element {
   const { pathname } = useLocation()
@@ -19,9 +20,9 @@ export default function PageTests(): JSX.Element {
     <Page
       sidebar={
         <div className="flex flex-col w-full h-full">
-          <SourceList
-            by="basename"
-            byName="basename"
+          <SourceList<ModelFile>
+            keyId="basename"
+            keyName="basename"
             to={EnumRoutes.Tests}
             items={items}
             isActive={id => `${EnumRoutes.Tests}/${id}` === pathname}
