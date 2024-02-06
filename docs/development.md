@@ -24,6 +24,10 @@ Run more comprehensive tests that run on each commit:
 ```bash
 make slow-test
 ```
+Run Airflow tests that will run when PR is merged to main:
+```bash
+make airflow-docker-test-with-env
+```
 Run docs server:
 ```bash
 make docs-serve
