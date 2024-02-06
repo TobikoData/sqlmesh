@@ -43,9 +43,9 @@ export default function PageDocs(): JSX.Element {
   return (
     <Page
       sidebar={
-        <SourceList
-          by="displayName"
-          byName="displayName"
+        <SourceList<ModelSQLMeshModel>
+          keyId="displayName"
+          keyName="displayName"
           to={EnumRoutes.IdeDocsModels}
           items={list}
           isActive={id => `${EnumRoutes.IdeDocsModels}/${id}` === pathname}

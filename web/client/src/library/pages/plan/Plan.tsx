@@ -7,6 +7,7 @@ import { useEffect } from 'react'
 import { useStorePlan } from '@context/plan'
 import { isFalse, isNotNil } from '@utils/index'
 import { Modules } from '@api/client'
+import { type ModelEnvironment } from '@models/environment'
 
 export default function PagePlan(): JSX.Element {
   const navigate = useNavigate()
@@ -47,9 +48,9 @@ export default function PagePlan(): JSX.Element {
   return (
     <Page
       sidebar={
-        <SourceList
-          by="name"
-          byName="name"
+        <SourceList<ModelEnvironment>
+          keyId="name"
+          keyName="name"
           to={`${EnumRoutes.Plan}/environments`}
           items={environmentsArray}
           disabled={
@@ -60,14 +61,7 @@ export default function PagePlan(): JSX.Element {
           isActive={id =>
             `${EnumRoutes.Plan}/environments/${id}` === location.pathname
           }
-          listItem={({
-            to,
-            name,
-            description,
-            text,
-            disabled = false,
-            item,
-          }) => (
+          listItem={({ to, name, description, text, disabled = false }) => (
             <SourceListItem
               to={to}
               name={name}
