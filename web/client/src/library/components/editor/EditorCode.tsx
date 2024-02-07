@@ -6,7 +6,11 @@ import { useApiFileByPath, useMutationApiSaveFile } from '~/api'
 import { debounceSync, isNil, isNotNil } from '~/utils'
 import { useStoreContext } from '~/context/context'
 import { useStoreEditor } from '~/context/editor'
-import { completionStatus, acceptCompletion } from '@codemirror/autocomplete'
+import {
+  completionStatus,
+  acceptCompletion,
+  autocompletion,
+} from '@codemirror/autocomplete'
 import {
   ModelFile,
   type FileExtensions,
@@ -50,20 +54,12 @@ function CodeEditorDefault({
 }): JSX.Element {
   const { mode } = useColorScheme()
 
-  const extensionsDefault = useMemo(() => {
-    return [
-      mode === EnumColorScheme.Dark ? dracula : tomorrow,
-      type === EnumFileExtensions.PY && python(),
-      type === EnumFileExtensions.YAML && StreamLanguage.define(yaml),
-      type === EnumFileExtensions.YML && StreamLanguage.define(yaml),
-    ].filter(Boolean) as Extension[]
-  }, [type, mode])
-
   const models = useStoreContext(s => s.models)
-  const engine = useStoreEditor(s => s.engine)
-  const [value, setValue] = useState(content)
 
+  const engine = useStoreEditor(s => s.engine)
   const dialects = useStoreEditor(s => s.dialects)
+
+  const [value, setValue] = useState(content)
 
   const [dialectOptions, setDialectOptions] = useState<{
     types: string
@@ -84,11 +80,22 @@ function CodeEditorDefault({
     }
   }, [])
 
+  const extensionsDefault = useMemo(() => {
+    return [
+      autocompletion({
+        selectOnOpen: false,
+        maxRenderedOptions: 50,
+      }),
+      mode === EnumColorScheme.Dark ? dracula : tomorrow,
+      type === EnumFileExtensions.PY && python(),
+      type === EnumFileExtensions.YAML && StreamLanguage.define(yaml),
+      type === EnumFileExtensions.YML && StreamLanguage.define(yaml),
+    ].filter(Boolean) as Extension[]
+  }, [type, mode])
   const dialectsTitles = useMemo(
     () => dialects.map(d => d.dialect_title),
     [dialects],
   )
-
   const extensionKeymap = useMemo(
     () =>
       keymap.of(
@@ -99,9 +106,9 @@ function CodeEditorDefault({
               key: 'Tab',
               preventDefault: true,
               run(e: any) {
-                console.log('dialect', 'Tab', completionStatus(e.state))
-                if (isNil(completionStatus(e.state))) return indentMore(e)
-                return acceptCompletion(e)
+                return isNil(completionStatus(e.state))
+                  ? indentMore(e)
+                  : acceptCompletion(e)
               },
             },
           ],
@@ -130,7 +137,6 @@ function CodeEditorDefault({
       })),
     [allModels],
   )
-
   const extensionsAll = useMemo(() => {
     return [
       ...extensionsDefault,
@@ -184,6 +190,10 @@ function CodeEditorDefault({
     })
   }, [dialect])
 
+  useEffect(() => {
+    setValue(content)
+  }, [content])
+
   return (
     <div className={clsx('flex w-full h-full', className)}>
       <CodeMirror
@@ -195,6 +205,9 @@ function CodeEditorDefault({
         extensions={extensionsAll}
         onChange={debouncedChange}
         readOnly={isNil(onChange)}
+        basicSetup={{
+          autocompletion: false,
+        }}
       />
     </div>
   )
