@@ -14,6 +14,7 @@ from sqlglot.optimizer.normalize_identifiers import normalize_identifiers
 
 from sqlmesh.core import dialect as d
 from sqlmesh.utils import str_to_bool
+from sqlmesh.utils.errors import SQLMeshError
 
 if sys.version_info >= (3, 9):
     from typing import Annotated
@@ -290,12 +291,10 @@ def positive_int_validator(v: t.Any) -> int:
     return v
 
 
-def _get_expressions(
+def _get_fields(
     v: t.Any,
     values: t.Union[t.Dict, ValidationInfo],
-    coerce_func: t.Optional[t.Callable[[t.Any], t.Any]] = None,
 ) -> t.List[exp.Expression]:
-    coerce_func = coerce_func or (lambda x: x)
     values = values if isinstance(values, dict) else values.data
     dialect = values.get("dialect")
 
@@ -313,7 +312,7 @@ def _get_expressions(
 
     for expr in expressions:
         expr = normalize_identifiers(
-            exp.column(expr) if isinstance(expr, exp.Identifier) else coerce_func(expr),
+            exp.column(expr) if isinstance(expr, exp.Identifier) else expr,
             dialect=dialect,
         )
         expr.meta["dialect"] = dialect
@@ -322,24 +321,26 @@ def _get_expressions(
     return results
 
 
-def list_of_expressions_validator(
+def list_of_fields_validator(
     v: t.Any, values: t.Union[t.Dict, ValidationInfo]
 ) -> t.List[exp.Expression]:
-    return _get_expressions(v, values)
+    return _get_fields(v, values)
 
 
 def list_of_columns_validator(
     v: t.Any, values: t.Union[t.Dict, ValidationInfo]
 ) -> t.List[exp.Column]:
-    return t.cast(t.List[exp.Column], _get_expressions(v, values, exp.to_column))
+    expressions = _get_fields(v, values)
+    for expression in expressions:
+        if not isinstance(expression, exp.Column):
+            raise SQLMeshError(f"Invalid column {expression}. Value must be a column")
+    return t.cast(t.List[exp.Column], expressions)
 
 
 def list_of_columns_or_star_validator(
     v: t.Any, values: t.Union[t.Dict, ValidationInfo]
 ) -> t.Union[exp.Star, t.List[exp.Column]]:
-    expressions = _get_expressions(
-        v, values, lambda x: x if isinstance(x, exp.Star) else exp.to_column(x)
-    )
+    expressions = _get_fields(v, values)
     if len(expressions) == 1 and isinstance(expressions[0], exp.Star):
         return t.cast(exp.Star, expressions[0])
     return t.cast(t.List[exp.Column], expressions)
@@ -350,7 +351,7 @@ if t.TYPE_CHECKING:
     SQLGlotString = str
     SQLGlotBool = bool
     SQLGlotPositiveInt = int
-    SQLGlotListOfExpressions = t.List[exp.Expression]
+    SQLGlotListOfFields = t.List[exp.Expression]
     SQLGlotListOfColumns = t.List[exp.Column]
     SQLGlotListOfColumnsOrStar = t.Union[t.List[exp.Column], exp.Star]
 elif PYDANTIC_MAJOR_VERSION >= 2:
@@ -360,8 +361,8 @@ elif PYDANTIC_MAJOR_VERSION >= 2:
     SQLGlotString = Annotated[str, BeforeValidator(validate_string)]
     SQLGlotBool = Annotated[bool, BeforeValidator(bool_validator)]
     SQLGlotPositiveInt = Annotated[int, BeforeValidator(positive_int_validator)]
-    SQLGlotListOfExpressions = Annotated[
-        t.List[exp.Expression], BeforeValidator(list_of_expressions_validator)
+    SQLGlotListOfFields = Annotated[
+        t.List[exp.Expression], BeforeValidator(list_of_fields_validator)
     ]
     SQLGlotListOfColumns = Annotated[t.List[exp.Column], BeforeValidator(list_of_columns_validator)]
     SQLGlotListOfColumnsOrStar = Annotated[
@@ -388,8 +389,8 @@ else:
     class SQLGlotPositiveInt(PydanticTypeProxy[int]):
         validate = positive_int_validator
 
-    class SQLGlotListOfExpressions(PydanticTypeProxy[t.List[exp.Expression]]):
-        validate = list_of_expressions_validator
+    class SQLGlotListOfFields(PydanticTypeProxy[t.List[exp.Expression]]):
+        validate = list_of_fields_validator
 
     class SQLGlotListOfColumns(PydanticTypeProxy[t.List[exp.Column]]):
         validate = list_of_columns_validator

@@ -1304,7 +1304,7 @@ class EngineAdapter:
         # If we want to change this, then we just need to check the expressions in unique_key and pull out the
         # column names and then remove them from the unmanaged_columns
         if check_columns and check_columns == exp.Star():
-            check_columns = [exp.to_column(col) for col in unmanaged_columns]
+            check_columns = [exp.column(col) for col in unmanaged_columns]
         execution_ts = self._to_utc_timestamp(to_ts(execution_time), time_data_type)
         update_valid_from_start: t.Union[str, exp.Expression]
         if updated_at_as_valid_from:
@@ -1319,7 +1319,7 @@ class EngineAdapter:
             update_valid_from_start = self._to_utc_timestamp(
                 "1970-01-01 00:00:00+00:00", time_data_type
             )
-        insert_valid_from_start = execution_ts if check_columns else updated_at_name
+        insert_valid_from_start = execution_ts if check_columns else exp.to_column(updated_at_name)  # type: ignore
         if check_columns:
             row_check_conditions = []
             for col in check_columns:
@@ -1525,8 +1525,8 @@ class EngineAdapter:
                     "inserted_rows",
                     exp.select(
                         *unmanaged_columns,
-                        f"{insert_valid_from_start} as {valid_from_name}",
-                        f"{self._to_utc_timestamp(exp.null(), time_data_type)} as {valid_to_name}",
+                        insert_valid_from_start.as_(valid_from_name),
+                        self._to_utc_timestamp(exp.null(), time_data_type).as_(valid_to_name),
                     )
                     .from_("joined")
                     .where(updated_row_filter),

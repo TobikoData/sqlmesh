@@ -243,9 +243,11 @@ class ModelConfig(BaseModelConfig):
                 "unique_key": self.unique_key,
                 "valid_from_name": "dbt_valid_from",
                 "valid_to_name": "dbt_valid_to",
-                "time_data_type": exp.DataType.build("TIMESTAMPTZ")
-                if target.type == "bigquery"
-                else exp.DataType.build("TIMESTAMP"),
+                "time_data_type": (
+                    exp.DataType.build("TIMESTAMPTZ")
+                    if target.type == "bigquery"
+                    else exp.DataType.build("TIMESTAMP")
+                ),
             }
             if self.snapshot_strategy.is_check:
                 return SCDType2ByColumnKind(

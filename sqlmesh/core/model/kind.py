@@ -17,7 +17,7 @@ from sqlmesh.utils.pydantic import (
     SQLGlotBool,
     SQLGlotListOfColumns,
     SQLGlotListOfColumnsOrStar,
-    SQLGlotListOfExpressions,
+    SQLGlotListOfFields,
     SQLGlotPositiveInt,
     SQLGlotString,
     field_validator,
@@ -239,7 +239,7 @@ class IncrementalByTimeRangeKind(_Incremental):
 
 class IncrementalByUniqueKeyKind(_Incremental):
     name: Literal[ModelKindName.INCREMENTAL_BY_UNIQUE_KEY] = ModelKindName.INCREMENTAL_BY_UNIQUE_KEY
-    unique_key: SQLGlotListOfExpressions
+    unique_key: SQLGlotListOfFields
     when_matched: t.Optional[exp.When] = None
 
     @field_validator("when_matched", mode="before")
@@ -353,9 +353,9 @@ class _SCDType2Kind(_ModelKind):
 
 
 class SCDType2ByTimeKind(_SCDType2Kind):
-    name: Literal[
-        ModelKindName.SCD_TYPE_2, ModelKindName.SCD_TYPE_2_BY_TIME
-    ] = ModelKindName.SCD_TYPE_2_BY_TIME
+    name: Literal[ModelKindName.SCD_TYPE_2, ModelKindName.SCD_TYPE_2_BY_TIME] = (
+        ModelKindName.SCD_TYPE_2_BY_TIME
+    )
     updated_at_name: SQLGlotString = "updated_at"
     updated_at_as_valid_from: SQLGlotBool = False
 
