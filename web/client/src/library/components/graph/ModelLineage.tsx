@@ -31,7 +31,6 @@ import {
   getUpdatedNodes,
   getUpdatedEdges,
   createGraphLayout,
-  getModelAncestors,
 } from './help'
 import ModelLineageSearch from './ModelLineageSearch'
 import { Popover } from '@headlessui/react'
@@ -121,10 +120,11 @@ export default function ModelLineage({
 
   function handleLineageWorkerMessage(e: MessageEvent): void {
     if (e.data.topic === 'lineage') {
-      setLineage(e.data.payload.lineage)
-      setNodeConnections(e.data.payload.nodesConnections)
       setIsMergingModels(false)
+      setNodeConnections(e.data.payload.nodesConnections)
+      setLineage(e.data.payload.lineage)
     }
+
     if (e.data.topic === 'error') {
       handleError?.(e.data.error)
       setIsMergingModels(false)
@@ -137,7 +137,7 @@ export default function ModelLineage({
         <div className="absolute top-0 left-0 z-10 w-full h-full bg-theme flex justify-center items-center">
           <Loading className="inline-block">
             <Spinner className="w-3 h-3 border border-neutral-10 mr-4" />
-            <h3 className="text-md">
+            <h3 className="text-md whitespace-nowrap">
               {isFetching ? "Loading Model's Lineage..." : "Merging Model's..."}
             </h3>
           </Loading>
@@ -329,7 +329,7 @@ function ModelColumnLineage(): JSX.Element {
         <div className="absolute top-0 left-0 z-10 bg-theme flex justify-center items-center w-full h-full">
           <Loading className="inline-block">
             <Spinner className="w-3 h-3 border border-neutral-10 mr-4" />
-            <h3 className="text-md">Building Lineage...</h3>
+            <h3 className="text-md whitespace-nowrap">Building Lineage...</h3>
           </Loading>
         </div>
       )}
@@ -365,9 +365,7 @@ function ModelColumnLineage(): JSX.Element {
 
 function GraphControls({ nodes = [] }: { nodes: Node[] }): JSX.Element {
   const {
-    models,
     withColumns,
-    lineage,
     mainNode,
     selectedNodes,
     withConnected,
@@ -375,7 +373,6 @@ function GraphControls({ nodes = [] }: { nodes: Node[] }): JSX.Element {
     withSecondary,
     hasBackground,
     activeNodes,
-    connectedNodes,
     highlightedNodes,
     setSelectedNodes,
     setWithColumns,
@@ -386,22 +383,6 @@ function GraphControls({ nodes = [] }: { nodes: Node[] }): JSX.Element {
   } = useLineageFlow()
 
   const lineageInfoTrigger = useRef<HTMLButtonElement>(null)
-
-  const currentModels = useMemo(() => {
-    if (isNil(mainNode) || isNil(lineage)) return []
-
-    const ancestors = getModelAncestors(lineage, mainNode)
-
-    return Object.keys(lineage)
-      .map(model => ({
-        name: model,
-        displayName: models.get(model)?.displayName ?? decodeURI(model),
-        description: `${
-          ancestors.includes(model) ? 'Upstream' : 'Downstream'
-        } | ${connectedNodes.has(model) ? 'Directly' : 'Indirectly'} Connected`,
-      }))
-      .filter(Boolean) as Array<{ name: string; description: string }>
-  }, [lineage, mainNode])
 
   const highlightedNodeModels = useMemo(
     () => Object.values(highlightedNodes ?? {}).flat(),
@@ -445,10 +426,7 @@ function GraphControls({ nodes = [] }: { nodes: Node[] }): JSX.Element {
         </div>
       </div>
       <div className="flex w-full justify-end items-center">
-        <ModelLineageSearch
-          currentModels={currentModels}
-          handleSelect={handleSelect}
-        />
+        <ModelLineageSearch handleSelect={handleSelect} />
         <ListboxShow
           options={{
             Background: setHasBackground,
