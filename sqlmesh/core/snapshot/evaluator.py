@@ -1240,8 +1240,7 @@ class SCDType2Strategy(MaterializableStrategy):
         if model.annotated:
             logger.info("Creating table '%s'", name)
             columns_to_types = model.columns_to_types_or_raise
-            if model.kind.is_scd_type_2_by_time:
-                assert isinstance(model.kind, SCDType2ByTimeKind)
+            if isinstance(model.kind, SCDType2ByTimeKind):
                 columns_to_types[model.kind.updated_at_name] = model.kind.time_data_type
             self.adapter.create_table(
                 name,
@@ -1276,8 +1275,7 @@ class SCDType2Strategy(MaterializableStrategy):
         **kwargs: t.Any,
     ) -> None:
         model = snapshot.model
-        if model.kind.is_scd_type_2_by_time:
-            assert isinstance(model.kind, SCDType2ByTimeKind)
+        if isinstance(model.kind, SCDType2ByTimeKind):
             self.adapter.scd_type_2_by_time(
                 target_table=name,
                 source_table=query_or_df,
@@ -1291,8 +1289,7 @@ class SCDType2Strategy(MaterializableStrategy):
                 column_descriptions=model.column_descriptions,
                 **kwargs,
             )
-        elif model.kind.is_scd_type_2_by_column:
-            assert isinstance(model.kind, SCDType2ByColumnKind)
+        elif isinstance(model.kind, SCDType2ByColumnKind):
             self.adapter.scd_type_2_by_column(
                 target_table=name,
                 source_table=query_or_df,
@@ -1321,8 +1318,7 @@ class SCDType2Strategy(MaterializableStrategy):
         **kwargs: t.Any,
     ) -> None:
         model = snapshot.model
-        if model.kind.is_scd_type_2_by_time:
-            assert isinstance(model.kind, SCDType2ByTimeKind)
+        if isinstance(model.kind, SCDType2ByTimeKind):
             self.adapter.scd_type_2_by_time(
                 target_table=table_name,
                 source_table=query_or_df,
@@ -1336,8 +1332,7 @@ class SCDType2Strategy(MaterializableStrategy):
                 column_descriptions=model.column_descriptions,
                 **kwargs,
             )
-        elif model.kind.is_scd_type_2_by_column:
-            assert isinstance(model.kind, SCDType2ByColumnKind)
+        elif isinstance(model.kind, SCDType2ByColumnKind):
             self.adapter.scd_type_2_by_column(
                 target_table=table_name,
                 source_table=query_or_df,
