@@ -2,7 +2,7 @@ import { getLanguageByExtension, showIndicatorDialects } from './help'
 import EditorIndicator from './EditorIndicator'
 import { type EditorTab, useStoreEditor } from '~/context/editor'
 import { useEffect } from 'react'
-import { isNil, isNotNil, isStringEmptyOrNil } from '~/utils'
+import { isFalse, isNil, isNotNil, isStringEmptyOrNil } from '~/utils'
 import Input from '@components/input/Input'
 import { EnumSize } from '~/types/enum'
 import { useStoreContext } from '@context/context'
@@ -56,7 +56,7 @@ export default function EditorFooter({ tab }: { tab: EditorTab }): JSX.Element {
           className="mr-2"
           text="Saved"
         >
-          <EditorIndicator.Light ok={tab.isSaved} />
+          <EditorIndicator.Light ok={isFalse(tab.file.isChanged)} />
         </EditorIndicator>
       )}
       {tab.file.isSQL && (

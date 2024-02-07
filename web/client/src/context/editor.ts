@@ -59,7 +59,6 @@ export interface EditorTab {
   id: string
   file: ModelFile
   isValid: boolean
-  isSaved: boolean
   dialect?: string
   dialectOptions?: {
     keywords: string
@@ -248,7 +247,6 @@ function createTab(file: ModelFile = createLocalFile()): EditorTab {
     id: uid(),
     file,
     isValid: true,
-    isSaved: true,
   }
 }
 

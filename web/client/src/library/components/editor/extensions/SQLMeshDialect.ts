@@ -27,7 +27,8 @@ export const SQLMeshDialect: ExtensionSQLMeshDialect = function SQLMeshDialect(
   options = { types: '', keywords: '' },
   dialects,
 ): LanguageSupport {
-  const SQLKeywords = options.keywords + ' coalesce sum count avg min max cast'
+  const SQLKeywords =
+    options.keywords + ' coalesce sum count avg min max cast round'
   const SQLTypes = options.types + ' string'
   const SQLMeshModelDictionary = getSQLMeshModelKeywords(dialects)
   const SQLMeshKeywords =
@@ -57,21 +58,29 @@ export const SQLMeshDialect: ExtensionSQLMeshDialect = function SQLMeshDialect(
         const dot = ctx.matchBefore(/[A-Za-z0-9_.]*\.(\w+)?\s*$/i)
 
         if (isNotNil(dot)) {
-          let options = allColumnsNames
           const blocks = dot.text.split('.')
           const text = blocks.pop()
           const maybeModelName = blocks.join('.')
           const maybeModel = models.get(maybeModelName) ?? models.get(dot.text)
+          let options = allColumnsNames
+          let from = isStringEmptyOrNil(text)
+            ? dot.to
+            : dot.to - dot.text.length
 
           if (isNotNil(maybeModel)) {
             options = maybeModel.columns.map(column => ({
               label: column.name,
               type: 'column',
             }))
+          } else {
+            if (maybeSuggestion(allModelsNames, dot.text)) {
+              options = allModelsNames.filter(n => n.label.startsWith(dot.text))
+              from = dot.from
+            }
           }
 
           return {
-            from: isStringEmptyOrNil(text) ? dot.to : dot.to - dot.text.length,
+            from,
             to: dot.to,
             options,
           }
@@ -130,8 +139,10 @@ export const SQLMeshDialect: ExtensionSQLMeshDialect = function SQLMeshDialect(
           suggestions.push(...allColumnsNames)
         }
 
-        const wordLastChar = word.text.slice(-1)
-        const isUpperCase = wordLastChar === wordLastChar.toUpperCase()
+        const wordLastChar = getFirstChar(word.text)
+        const isUpperCase =
+          isStringEmptyOrNil(wordLastChar) &&
+          wordLastChar === wordLastChar.toUpperCase()
 
         if (isUpperCase) {
           suggestions = suggestions.map(suggestion => ({
@@ -253,6 +264,16 @@ function matchWordWithSpacesAfter(
 function maybeSuggestion(suggestions: Completion[], word: string): boolean {
   return (
     word.length > 1 &&
-    suggestions.some(suggestion => suggestion.label.includes(word))
+    suggestions.some(suggestion =>
+      suggestion.label.toLowerCase().includes(word.toLowerCase()),
+    )
   )
+}
+
+function getFirstChar(word: string): string {
+  for (const char of word) {
+    if (/[a-zA-Z]/.test(char)) return char
+  }
+
+  return ''
 }
