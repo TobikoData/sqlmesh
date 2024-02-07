@@ -176,7 +176,11 @@ Usage: sqlmesh invalidate [OPTIONS] ENVIRONMENT
   of the janitor process.
 
 Options:
-  --help  Show this message and exit.
+  -s, --sync  Wait for the environment to be deleted before returning. If not
+              specified, the environment will be deleted asynchronously by the
+              janitor process. This option requires a connection to the data
+              warehouse.
+  --help      Show this message and exit.
 ```
 
 ## migrate
