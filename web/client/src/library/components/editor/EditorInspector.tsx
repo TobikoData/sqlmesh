@@ -96,10 +96,12 @@ function InspectorModel({
       <div className="flex w-full items-center">
         <Button
           className={clsx(
-            'h-7 w-7 mx-1 border-none',
-            isOpen && '!text-secondary-500',
+            'h-6 w-6 mx-1 border-none bg-neutral-10 dark:bg-neutral-20',
+            isOpen
+              ? 'text-secondary-500 text-secondary-300'
+              : 'text-neutral-500 dark:text-neutral-300',
           )}
-          variant={EnumVariant.Alternative}
+          variant={EnumVariant.Info}
           size={EnumSize.sm}
           onClick={(e: MouseEvent) => {
             e.stopPropagation()
@@ -107,7 +109,7 @@ function InspectorModel({
             toggle?.()
           }}
         >
-          <Bars3Icon className="min-w-5 min-h-5" />
+          <Bars3Icon className="min-w-4 min-h-4" />
         </Button>
         {isOpen && (
           <TabList
@@ -187,10 +189,12 @@ function InspectorSql({
       <div className="flex w-full items-center">
         <Button
           className={clsx(
-            'h-7 w-7 mx-1 border-none',
-            isOpen && '!text-secondary-500',
+            'h-6 w-6 mx-1 border-none bg-neutral-10 dark:bg-neutral-20',
+            isOpen
+              ? 'text-secondary-500 text-secondary-300'
+              : 'text-neutral-500 dark:text-neutral-300',
           )}
-          variant={EnumVariant.Alternative}
+          variant={EnumVariant.Info}
           size={EnumSize.sm}
           onClick={(e: MouseEvent) => {
             e.stopPropagation()
@@ -198,7 +202,7 @@ function InspectorSql({
             toggle?.()
           }}
         >
-          <Bars3Icon className="min-w-5 min-h-5" />
+          <Bars3Icon className="min-w-4 min-h-4" />
         </Button>
         {isOpen && (
           <TabList
