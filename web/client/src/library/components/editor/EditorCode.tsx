@@ -6,7 +6,11 @@ import { useApiFileByPath, useMutationApiSaveFile } from '~/api'
 import { debounceSync, isNil, isNotNil } from '~/utils'
 import { useStoreContext } from '~/context/context'
 import { useStoreEditor } from '~/context/editor'
-import { completionStatus, acceptCompletion } from '@codemirror/autocomplete'
+import {
+  completionStatus,
+  acceptCompletion,
+  autocompletion,
+} from '@codemirror/autocomplete'
 import {
   ModelFile,
   type FileExtensions,
@@ -52,6 +56,10 @@ function CodeEditorDefault({
 
   const extensionsDefault = useMemo(() => {
     return [
+      autocompletion({
+        selectOnOpen: false,
+        maxRenderedOptions: 50,
+      }),
       mode === EnumColorScheme.Dark ? dracula : tomorrow,
       type === EnumFileExtensions.PY && python(),
       type === EnumFileExtensions.YAML && StreamLanguage.define(yaml),
@@ -99,9 +107,9 @@ function CodeEditorDefault({
               key: 'Tab',
               preventDefault: true,
               run(e: any) {
-                console.log('dialect', 'Tab', completionStatus(e.state))
-                if (isNil(completionStatus(e.state))) return indentMore(e)
-                return acceptCompletion(e)
+                return isNil(completionStatus(e.state))
+                  ? indentMore(e)
+                  : acceptCompletion(e)
               },
             },
           ],
@@ -195,6 +203,9 @@ function CodeEditorDefault({
         extensions={extensionsAll}
         onChange={debouncedChange}
         readOnly={isNil(onChange)}
+        basicSetup={{
+          autocompletion: false,
+        }}
       />
     </div>
   )

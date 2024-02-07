@@ -27,7 +27,8 @@ export const SQLMeshDialect: ExtensionSQLMeshDialect = function SQLMeshDialect(
   options = { types: '', keywords: '' },
   dialects,
 ): LanguageSupport {
-  const SQLKeywords = options.keywords + ' coalesce sum count avg min max cast'
+  const SQLKeywords =
+    options.keywords + ' coalesce sum count avg min max cast round'
   const SQLTypes = options.types + ' string'
   const SQLMeshModelDictionary = getSQLMeshModelKeywords(dialects)
   const SQLMeshKeywords =
@@ -130,8 +131,10 @@ export const SQLMeshDialect: ExtensionSQLMeshDialect = function SQLMeshDialect(
           suggestions.push(...allColumnsNames)
         }
 
-        const wordLastChar = word.text.slice(-1)
-        const isUpperCase = wordLastChar === wordLastChar.toUpperCase()
+        const wordLastChar = getFirstChar(word.text)
+        const isUpperCase =
+          isStringEmptyOrNil(wordLastChar) &&
+          wordLastChar === wordLastChar.toUpperCase()
 
         if (isUpperCase) {
           suggestions = suggestions.map(suggestion => ({
@@ -253,6 +256,16 @@ function matchWordWithSpacesAfter(
 function maybeSuggestion(suggestions: Completion[], word: string): boolean {
   return (
     word.length > 1 &&
-    suggestions.some(suggestion => suggestion.label.includes(word))
+    suggestions.some(suggestion =>
+      suggestion.label.toLowerCase().includes(word.toLowerCase()),
+    )
   )
+}
+
+function getFirstChar(word: string): string {
+  for (const char of word) {
+    if (/[a-zA-Z]/.test(char)) return char
+  }
+
+  return ''
 }
