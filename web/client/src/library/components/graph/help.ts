@@ -502,18 +502,18 @@ function getLineageIndex(lineage: Record<string, Lineage> = {}): string {
 function getModelAncestors(
   lineage: Record<string, Lineage> = {},
   name: string,
-): string[] {
+  output = new Set<string>(),
+): Set<string> {
   const model = lineage[name]
+  const models = model?.models ?? []
 
-  if (isNil(model) || isNil(model.models)) return []
+  for (const modelName of models) {
+    if (output.has(modelName)) continue
 
-  const models = new Set(model.models)
+    getModelAncestors(lineage, modelName, output).add(modelName)
+  }
 
-  model.models.forEach(modelName => {
-    getModelAncestors(lineage, modelName).forEach(m => models.add(m))
-  })
-
-  return Array.from(models)
+  return output
 }
 
 function getActiveNodes(
