@@ -453,7 +453,9 @@ class SchemaDiffer(PydanticModel):
         root_struct: exp.DataType,
         new_kwarg: exp.ColumnDef,
     ) -> t.List[TableAlterOperation]:
-        current_type = exp.DataType.build(current_type)
+        # We don't copy on purpose here because current_type may need to be mutated inside
+        # _get_operations (struct.expressions.pop and struct.expressions.insert)
+        current_type = exp.DataType.build(current_type, copy=False)
         if self.support_nested_operations:
             if new_type.this == current_type.this == exp.DataType.Type.STRUCT:
                 return self._get_operations(
