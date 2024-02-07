@@ -8,6 +8,7 @@ import { useStorePlan } from '@context/plan'
 import { useStoreContext } from '@context/context'
 import { AddEnvironment, SelectEnvironemnt } from '~/library/pages/root/Page'
 import { Transition } from '@headlessui/react'
+import { useNavigate } from 'react-router-dom'
 
 export default function PlanActions({
   run,
@@ -20,6 +21,8 @@ export default function PlanActions({
   cancel: () => void
   reset: () => void
 }): JSX.Element {
+  const navigate = useNavigate()
+
   const environment = useStoreContext(s => s.environment)
   const environments = useStoreContext(s => s.environments)
   const addConfirmation = useStoreContext(s => s.addConfirmation)
@@ -40,6 +43,12 @@ export default function PlanActions({
     e.stopPropagation()
 
     cancel()
+  }
+
+  function handleGoBack(e: MouseEvent): void {
+    e.stopPropagation()
+
+    navigate(-1)
   }
 
   function handleApply(e: MouseEvent): void {
@@ -173,6 +182,8 @@ export default function PlanActions({
               onClick={
                 planAction.isRunning || planAction.isApplying
                   ? handleCancel
+                  : planAction.isDone
+                  ? handleGoBack
                   : handleReset
               }
               variant={
@@ -194,6 +205,8 @@ export default function PlanActions({
                   ? planCancel.isSuccessed
                     ? 'Finishing Cancellation...'
                     : 'Cancel'
+                  : planAction.isDone
+                  ? 'Go Back'
                   : 'Start Over',
               )}
             </Button>
