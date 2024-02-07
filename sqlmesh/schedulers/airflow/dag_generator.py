@@ -60,6 +60,8 @@ DAG_DEFAULT_ARGS = {
     ),
 }
 
+AIRFLOW_TAG_CHARACTER_LIMIT = 100
+
 
 class SnapshotDagGenerator:
     def __init__(
@@ -116,7 +118,7 @@ class SnapshotDagGenerator:
             tags=[
                 common.SQLMESH_AIRFLOW_TAG,
                 common.SNAPSHOT_AIRFLOW_TAG,
-                snapshot.name,
+                snapshot.model.name[-AIRFLOW_TAG_CHARACTER_LIMIT:],
             ],
             default_args={
                 **DAG_DEFAULT_ARGS,
@@ -411,18 +413,18 @@ class SnapshotDagGenerator:
                 continue
 
             snapshot = snapshots[sid]
-            sanitized_snapshot_name = sanitize_name(snapshot.name)
+            sanitized_model_name = sanitize_name(snapshot.model.name)
 
             snapshot_intervals_chain: t.List[t.Union[BaseOperator, t.List[BaseOperator]]] = []
 
             snapshot_start_task = EmptyOperator(
-                task_id=f"snapshot_backfill__{sanitized_snapshot_name}__{snapshot.identifier}__start"
+                task_id=f"snapshot_backfill__{sanitized_model_name}__{snapshot.identifier}__start"
             )
             snapshot_end_task = EmptyOperator(
-                task_id=f"snapshot_backfill__{sanitized_snapshot_name}__{snapshot.identifier}__end"
+                task_id=f"snapshot_backfill__{sanitized_model_name}__{snapshot.identifier}__end"
             )
 
-            task_id_prefix = f"snapshot_backfill__{sanitized_snapshot_name}__{snapshot.identifier}"
+            task_id_prefix = f"snapshot_backfill__{sanitized_model_name}__{snapshot.identifier}"
             for start, end in intervals_per_snapshot.intervals:
                 evaluation_task = self._create_snapshot_evaluation_operator(
                     snapshots=snapshots,
@@ -600,7 +602,7 @@ class SnapshotDagGenerator:
                     HighWaterMarkSensor(
                         target_snapshot_info=upstream_snapshot.table_info,
                         this_snapshot=snapshot,
-                        task_id=f"{sanitize_name(upstream_snapshot.name)}_{upstream_snapshot.version}_high_water_mark_sensor",
+                        task_id=f"{sanitize_name(upstream_snapshot.model.name)}_{upstream_snapshot.version}_high_water_mark_sensor",
                     )
                 )
 
