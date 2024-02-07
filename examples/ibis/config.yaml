@@ -1,0 +1,8 @@
+gateways:
+    my_gateway:
+        connection:
+            type: duckdb
+            catalogs:
+                local: 'data/local.duckdb'
+model_defaults:
+    dialect: 'duckdb'
