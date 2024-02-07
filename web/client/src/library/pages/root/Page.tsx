@@ -81,7 +81,7 @@ export default function Page({
     <>
       <SplitPane
         sizes={splitPaneSizes}
-        minSize={[0, 0]}
+        minSize={32}
         snapOffset={0}
         className="flex w-full h-full overflow-hidden"
         onDragEnd={setSplitPaneSizes}

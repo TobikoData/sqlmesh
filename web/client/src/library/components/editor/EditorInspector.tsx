@@ -96,7 +96,7 @@ function InspectorModel({
       <div className="flex w-full items-center">
         <Button
           className={clsx(
-            'h-7 w-7 mx-1 border-none',
+            'h-6 w-6 mx-1 border-none',
             isOpen && '!text-secondary-500',
           )}
           variant={EnumVariant.Alternative}
@@ -107,7 +107,7 @@ function InspectorModel({
             toggle?.()
           }}
         >
-          <Bars3Icon className="min-w-5 min-h-5" />
+          <Bars3Icon className="min-w-4 min-h-4" />
         </Button>
         {isOpen && (
           <TabList
