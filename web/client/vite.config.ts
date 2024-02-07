@@ -44,6 +44,14 @@ export default defineConfig({
               target: 'http://app:8001',
               rewrite: path => '/',
             },
+            '/data': {
+              target: 'http://app:8001',
+              rewrite: path => '/',
+            },
+            '/lineage': {
+              target: 'http://app:8001',
+              rewrite: path => '/',
+            },
           },
         },
   preview: {

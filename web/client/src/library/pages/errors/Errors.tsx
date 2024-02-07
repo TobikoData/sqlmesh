@@ -1,4 +1,7 @@
-import { type ErrorIDE, useIDE } from '../ide/context'
+import {
+  type ErrorIDE,
+  useNotificationCenter,
+} from '../root/context/notificationCenter'
 import Page from '../root/Page'
 import SourceList, { SourceListItem } from '@components/sourceList/SourceList'
 import { EnumRoutes } from '~/routes'
@@ -12,13 +15,13 @@ export default function PageErrors(): JSX.Element {
   const { pathname } = useLocation()
   const navigate = useNavigate()
 
-  const { errors, removeError, clearErrors } = useIDE()
+  const { errors, removeError, clearErrors } = useNotificationCenter()
 
   const list = useMemo(() => Array.from(errors).reverse(), [errors])
 
   useEffect(() => {
     if (isArrayEmpty(list)) {
-      setTimeout(() => navigate(EnumRoutes.Ide))
+      setTimeout(() => navigate(EnumRoutes.Home))
     } else {
       const id = list[0]?.id
 

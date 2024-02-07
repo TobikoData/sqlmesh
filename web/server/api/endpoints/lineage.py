@@ -126,7 +126,7 @@ async def column_lineage(
         )
     except Exception:
         raise ApiException(
-            message="Unable to get a column lineage",
+            message="Unable to get column lineage",
             origin="API -> lineage -> column_lineage",
         )
 
@@ -185,7 +185,7 @@ async def model_lineage(
         model_name = context.get_model(model_name).fqn
     except Exception:
         raise ApiException(
-            message="Unable to get a model lineage",
+            message="Unable to get model lineage",
             origin="API -> lineage -> model_lineage",
         )
 

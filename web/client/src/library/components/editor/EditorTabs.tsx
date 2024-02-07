@@ -11,6 +11,12 @@ import { ModelDirectory } from '@models/directory'
 import { ModelFile } from '@models/file'
 
 export default function EditorTabs(): JSX.Element {
+  const modules = useStoreContext(s => s.modules)
+  const models = useStoreContext(s => s.models)
+  const lastSelectedModel = useStoreContext(s => s.lastSelectedModel)
+  const setLastSelectedModel = useStoreContext(s => s.setLastSelectedModel)
+
+  const files = useStoreProject(s => s.files)
   const selectedFile = useStoreProject(s => s.selectedFile)
   const setSelectedFile = useStoreProject(s => s.setSelectedFile)
 
@@ -42,9 +48,12 @@ export default function EditorTabs(): JSX.Element {
     if (
       isNil(selectedFile) ||
       tab?.file === selectedFile ||
-      selectedFile instanceof ModelDirectory
+      selectedFile instanceof ModelDirectory ||
+      isFalse(modules.hasFiles)
     )
       return
+
+    setLastSelectedModel(models.get(selectedFile.path))
 
     const newTab = createTab(selectedFile)
     const shouldReplaceTab =
@@ -62,6 +71,16 @@ export default function EditorTabs(): JSX.Element {
 
     selectTab(newTab)
   }, [selectedFile])
+
+  useEffect(() => {
+    if (isNil(lastSelectedModel)) return
+
+    const file = files.get(lastSelectedModel.path)
+
+    if (isNil(file)) return
+
+    setSelectedFile(file)
+  }, [lastSelectedModel])
 
   function addTabAndSelect(): void {
     const tab = createTab()

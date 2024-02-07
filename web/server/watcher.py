@@ -73,13 +73,14 @@ async def watch_project() -> None:
                 ).to_dict()
                 api_console.log_event(event=models.EventName.WARNINGS, data=error)
 
-        api_console.log_event(
-            event=models.EventName.FILE,
-            data={
-                "changes": changes,
-                "directories": directories,
-            },
-        )
+        if settings.modules.intersection({models.Modules.FILES, models.Modules.DOCS}):
+            api_console.log_event(
+                event=models.EventName.FILE,
+                data={
+                    "changes": changes,
+                    "directories": directories,
+                },
+            )
 
         if should_load_context:
             await run_in_executor(reload_context_and_update_models, context, path)

@@ -77,7 +77,7 @@ export class ModelPlanTracker<
     )
   }
 
-  get isSuccessed(): boolean {
+  get isSuccessful(): boolean {
     return this.isFinished && this.current?.meta?.status === Status.success
   }
 

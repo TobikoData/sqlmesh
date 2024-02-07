@@ -2,6 +2,7 @@
   background-color: var(--color-brand);
   background-repeat: no-repeat;
   background-position: 50%;
+  z-index: 1;
 }
 
 .gutter:hover {

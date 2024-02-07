@@ -1,7 +1,11 @@
-import { Suspense, lazy, useCallback, useEffect } from 'react'
+import { Suspense, lazy, useCallback } from 'react'
 import { useStoreContext } from '@context/context'
 import { useStoreProject } from '@context/project'
-import { EnumErrorKey, useIDE, type ErrorIDE } from '../ide/context'
+import {
+  EnumErrorKey,
+  useNotificationCenter,
+  type ErrorIDE,
+} from '../root/context/notificationCenter'
 import Loading from '@components/loading/Loading'
 import Spinner from '@components/logo/Spinner'
 import Page from '../root/Page'
@@ -15,15 +19,13 @@ const Editor = lazy(() => import('@components/editor/Editor'))
 const LineageFlowProvider = lazy(() => import('@components/graph/context'))
 
 export default function PageEditor(): JSX.Element {
-  const { addError } = useIDE()
+  const { addError } = useNotificationCenter()
 
+  const modules = useStoreContext(s => s.modules)
   const models = useStoreContext(s => s.models)
-  const lastSelectedModel = useStoreContext(s => s.lastSelectedModel)
   const setLastSelectedModel = useStoreContext(s => s.setLastSelectedModel)
 
   const files = useStoreProject(s => s.files)
-  const selectedFile = useStoreProject(s => s.selectedFile)
-  const setSelectedFile = useStoreProject(s => s.setSelectedFile)
 
   const handleClickModel = useCallback(
     function handleClickModel(modelName: string): void {
@@ -40,39 +42,25 @@ export default function PageEditor(): JSX.Element {
     addError(EnumErrorKey.ColumnLineage, error)
   }, [])
 
-  useEffect(() => {
-    if (isNil(lastSelectedModel)) return
-
-    const file = files.get(lastSelectedModel.path)
-
-    if (isNil(file)) return
-
-    setSelectedFile(file)
-  }, [lastSelectedModel])
-
-  useEffect(() => {
-    if (isNil(selectedFile)) return
-
-    setLastSelectedModel(models.get(selectedFile.path))
-  }, [selectedFile])
-
   return (
     <Page
       sidebar={
-        <Suspense
-          fallback={
-            <div className="flex justify-center items-center w-full h-full">
-              <Loading className="inline-block">
-                <Spinner className="w-3 h-3 border border-neutral-10 mr-4" />
-                <h3 className="text-md">Getting Files...</h3>
-              </Loading>
-            </div>
-          }
-        >
-          <FileExplorerProvider>
-            <FileExplorer />
-          </FileExplorerProvider>
-        </Suspense>
+        modules.hasFiles ? (
+          <Suspense
+            fallback={
+              <div className="flex justify-center items-center w-full h-full">
+                <Loading className="inline-block">
+                  <Spinner className="w-3 h-3 border border-neutral-10 mr-4" />
+                  <h3 className="text-md">Getting Files...</h3>
+                </Loading>
+              </div>
+            }
+          >
+            <FileExplorerProvider>
+              <FileExplorer />
+            </FileExplorerProvider>
+          </Suspense>
+        ) : undefined
       }
       content={
         <Suspense

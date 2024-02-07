@@ -1,3 +1,5 @@
+import clsx from 'clsx'
+
 const Container = function Container({
   children,
 }: {
@@ -6,9 +8,20 @@ const Container = function Container({
   return <>{children}</>
 }
 
-function Page({ children }: { children: React.ReactNode }): JSX.Element {
+function Page({
+  children,
+  layout = 'vertical',
+}: {
+  children: React.ReactNode
+  layout?: string
+}): JSX.Element {
   return (
-    <div className="font-sans w-full h-full flex flex-col overflow-hidden">
+    <div
+      className={clsx(
+        'font-sans w-full h-full flex overflow-hidden',
+        layout === 'horizontal' ? 'flex-row' : 'flex-col',
+      )}
+    >
       {children}
     </div>
   )

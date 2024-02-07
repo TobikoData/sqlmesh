@@ -6,9 +6,10 @@ import { Button } from '../button/Button'
 import { EnumPlanAction, ModelPlanAction } from '@models/plan-action'
 import { useStorePlan } from '@context/plan'
 import { useStoreContext } from '@context/context'
-import { AddEnvironment, SelectEnvironemnt } from '~/library/pages/root/Page'
 import { Transition } from '@headlessui/react'
 import { useNavigate } from 'react-router-dom'
+import { SelectEnvironment } from '@components/environmentDetails/SelectEnvironment'
+import { AddEnvironment } from '@components/environmentDetails/AddEnvironment'
 
 export default function PlanActions({
   run,
@@ -23,12 +24,15 @@ export default function PlanActions({
 }): JSX.Element {
   const navigate = useNavigate()
 
+  const modules = useStoreContext(s => s.modules)
   const environment = useStoreContext(s => s.environment)
   const environments = useStoreContext(s => s.environments)
   const addConfirmation = useStoreContext(s => s.addConfirmation)
   const setShowConfirmation = useStoreContext(s => s.setShowConfirmation)
 
   const planAction = useStorePlan(s => s.planAction)
+  const planOverview = useStorePlan(s => s.planOverview)
+  const planApply = useStorePlan(s => s.planApply)
   const planCancel = useStorePlan(s => s.planCancel)
 
   const setFocus = useActiveFocus<HTMLButtonElement>()
@@ -70,7 +74,7 @@ export default function PlanActions({
             }Add Environment`}</h4>
             <div className="flex items-center relative">
               {environments.size > 1 && (
-                <SelectEnvironemnt
+                <SelectEnvironment
                   className="mr-2"
                   showAddEnvironment={false}
                   onSelect={() => {
@@ -101,10 +105,23 @@ export default function PlanActions({
     run()
   }
 
-  const showPlanAction =
+  const isFailedOrCanceled =
+    planOverview.isFailed || planApply.isFailed || planCancel.isSuccessful
+  const showPlanActionButton =
     isFalse(planAction.isCancelling) &&
     isFalse(planAction.isDone) &&
-    (planAction.isProcessing ? isFalse(planCancel.isSuccessed) : true)
+    (planAction.isProcessing ? isFalse(planCancel.isSuccessful) : true) &&
+    isFalse(isFailedOrCanceled)
+  const showCancelButton =
+    planAction.isApplying ||
+    planCancel.isCancelling ||
+    (planApply.isRunning && planOverview.isFinished)
+  const showResetButton =
+    isFailedOrCanceled ||
+    (isFalse(planAction.isProcessing) &&
+      isFalse(planAction.isRun) &&
+      isFalse(planAction.isDone))
+  const showBackButton = modules.showHistoryNavigation
 
   return (
     <>
@@ -112,7 +129,7 @@ export default function PlanActions({
         <div className="flex w-full items-center">
           <Transition
             appear
-            show={showPlanAction}
+            show={showPlanActionButton}
             enter="transition ease duration-300 transform"
             enterFrom="opacity-0 scale-95"
             enterTo="opacity-100 scale-100"
@@ -121,23 +138,23 @@ export default function PlanActions({
             leaveTo="opacity-0 scale-95"
             className="trasition-all duration-300 ease-in-out"
           >
-            {showPlanAction && (
+            {showPlanActionButton && (
               <Button
                 disabled={
                   planAction.isProcessing ||
-                  planCancel.isSuccessed ||
+                  planCancel.isSuccessful ||
                   planAction.isDone
                 }
                 onClick={
                   planAction.isRun
                     ? handleRun
-                    : planCancel.isSuccessed
+                    : planCancel.isSuccessful
                     ? undefined
                     : handleApply
                 }
                 ref={setFocus}
                 variant={
-                  planCancel.isSuccessed
+                  planCancel.isSuccessful
                     ? EnumVariant.Danger
                     : EnumVariant.Primary
                 }
@@ -147,7 +164,7 @@ export default function PlanActions({
                 <span>
                   {ModelPlanAction.getActionDisplayName(
                     planAction,
-                    planCancel.isSuccessed
+                    planCancel.isSuccessful
                       ? []
                       : [
                           EnumPlanAction.RunningTask,
@@ -159,7 +176,7 @@ export default function PlanActions({
                           EnumPlanAction.ApplyChangesAndBackfill,
                           EnumPlanAction.ApplyMetadata,
                         ],
-                    planCancel.isSuccessed ? 'Canceled' : 'Done',
+                    planCancel.isSuccessful ? 'Canceled' : 'Done',
                   )}
                 </span>
               </Button>
@@ -167,48 +184,46 @@ export default function PlanActions({
           </Transition>
         </div>
         <div className="flex items-center">
-          <Transition
-            appear
-            show={planAction.isProcessing || isFalse(planAction.isRun)}
-            enter="transition ease duration-300 transform"
-            enterFrom="opacity-0 scale-95"
-            enterTo="opacity-100 scale-100"
-            leave="transition ease duration-300 transform"
-            leaveFrom="opacity-100 scale-100"
-            leaveTo="opacity-0 scale-95"
-            className="trasition-all duration-300 ease-in-out"
-          >
+          {showCancelButton && (
             <Button
-              onClick={
-                planAction.isRunning || planAction.isApplying
-                  ? handleCancel
-                  : planAction.isDone
-                  ? handleGoBack
-                  : handleReset
-              }
-              variant={
-                planAction.isProcessing ? EnumVariant.Danger : EnumVariant.Info
-              }
+              onClick={handleCancel}
+              variant={EnumVariant.Danger}
               disabled={
                 planAction.isCancelling ||
-                (planAction.isProcessing && planCancel.isSuccessed)
+                (planAction.isProcessing && planCancel.isSuccessful)
               }
             >
               {ModelPlanAction.getActionDisplayName(
                 planAction,
-                planAction.isProcessing && isFalse(planCancel.isSuccessed)
+                planAction.isProcessing && isFalse(planCancel.isSuccessful)
                   ? [EnumPlanAction.Cancelling]
                   : [],
-                planAction.isProcessing
-                  ? planCancel.isSuccessed
-                    ? 'Finishing Cancellation...'
-                    : 'Cancel'
-                  : planAction.isDone
-                  ? 'Go Back'
-                  : 'Start Over',
+                planCancel.isSuccessful
+                  ? 'Finishing Cancellation...'
+                  : 'Cancel',
               )}
             </Button>
-          </Transition>
+          )}
+          {showResetButton && (
+            <Button
+              onClick={handleReset}
+              variant={EnumVariant.Info}
+              disabled={
+                planAction.isCancelling ||
+                (planAction.isProcessing && planCancel.isSuccessful)
+              }
+            >
+              Start Over
+            </Button>
+          )}
+          {showBackButton && (
+            <Button
+              onClick={handleGoBack}
+              variant={EnumVariant.Info}
+            >
+              Go Back
+            </Button>
+          )}
         </div>
       </div>
     </>

@@ -348,7 +348,7 @@ function FormActionsCustomSQL({ tab }: { tab: EditorTab }): JSX.Element {
   )
 }
 
-export function FormActionsModel({
+function FormActionsModel({
   model,
 }: {
   model: ModelSQLMeshModel

@@ -28,6 +28,13 @@ from sqlmesh.utils.pydantic import (
 SUPPORTED_EXTENSIONS = {".py", ".sql", ".yaml", ".yml", ".csv"}
 
 
+class Mode(str, enum.Enum):
+    IDE = "ide"  # Allow all modules
+    DOCS = "docs"  # Only docs module
+    DEFAULT = "default"  # Allow docs and plan
+    PLAN = "plan"  # Allow plan
+
+
 class EventName(str, enum.Enum):
     """An enumeration of possible SSE names."""
 
@@ -44,14 +51,15 @@ class EventName(str, enum.Enum):
 
 
 class Modules(str, enum.Enum):
-    EDITOR = "editor"  # include file editor and file explorer
+    EDITOR = "editor"  # include ability to edit files and run queries
+    FILES = "files"  # include projects files
     DOCS = "docs"  # include docs
     PLANS = "plans"  # include ability to run/apply plans
-    PLAN_PROGRESS = "plan-progress"  # include ability to see plan progress
     TESTS = "tests"  # include ability to run tests
     AUDITS = "audits"  # include ability to run audits
     ERRORS = "errors"  # include ability to see errors
-    ENVIRONMENTS = "environments"  # include ability to see environments
+    DATA = "data"  # include ability to query data
+    LINEAGE = "lineage"  # include lineage
 
 
 class ModelType(str, enum.Enum):
@@ -130,7 +138,6 @@ class Directory(BaseModel):
 class Meta(BaseModel):
     version: str
     has_running_task: bool = False
-    modules: t.List[Modules] = []
 
 
 class Reference(BaseModel):

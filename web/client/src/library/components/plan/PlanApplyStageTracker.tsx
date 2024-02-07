@@ -56,8 +56,8 @@ export default function PlanApplyStageTracker(): JSX.Element {
   const hasTestsDetails = isNotNil(tests) && Boolean(tests.total)
   const showTestsMessage =
     isNotNil(tests) && Boolean(tests.message) && isFalse(hasTestsDetails)
-
-  const hasFailedTests = isNotNil(tests) && Boolean(tests.failures)
+  const hasFailedTests =
+    isNotNil(tests) && (Boolean(tests.failures) || Boolean(tests.errors))
   const showChangesAndBackfills =
     isFalse(planAction.isProcessing) &&
     isFalse(planAction.isDone) &&
@@ -75,8 +75,6 @@ export default function PlanApplyStageTracker(): JSX.Element {
       leaveTo="opacity-0 scale-95"
       className="my-2"
     >
-      <StageChanges isOpen={showChangesAndBackfills} />
-      <StageBackfills isOpen={showChangesAndBackfills} />
       {isTrue(plan_options?.skip_tests) ? (
         <Banner
           className="flex items-center mb-1"
@@ -103,21 +101,27 @@ export default function PlanApplyStageTracker(): JSX.Element {
           <Banner.Label className="mr-2 text-sm">No Tests</Banner.Label>
         </Banner>
       )}
-      <StageVirtualUpdate />
-      {(hasFailedTests || planApply.shouldShowEvaluation) && (
-        <StageEvaluate
-          start={planApply.evaluationStart}
-          end={
-            planApply.isFinished
-              ? planApply.evaluationEnd ?? planCancel.meta?.end
-              : undefined
-          }
-        >
-          <StageCreation />
-          <StageRestate />
-          <StageBackfill />
-          <StagePromote />
-        </StageEvaluate>
+      {isFalse(hasFailedTests) && (
+        <>
+          <StageChanges isOpen={showChangesAndBackfills} />
+          <StageBackfills isOpen={showChangesAndBackfills} />
+          <StageVirtualUpdate />
+          {planApply.shouldShowEvaluation && (
+            <StageEvaluate
+              start={planApply.evaluationStart}
+              end={
+                planApply.isFinished
+                  ? planApply.evaluationEnd ?? planCancel.meta?.end
+                  : undefined
+              }
+            >
+              <StageCreation />
+              <StageRestate />
+              <StageBackfill />
+              <StagePromote />
+            </StageEvaluate>
+          )}
+        </>
       )}
     </Transition>
   )
