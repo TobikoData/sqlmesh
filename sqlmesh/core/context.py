@@ -1063,14 +1063,20 @@ class Context(BaseContext):
             NotificationEvent.APPLY_END, environment=plan.environment_naming_info.name
         )
 
-    def invalidate_environment(self, name: str) -> None:
+    def invalidate_environment(self, name: str, sync: bool = False) -> None:
         """Invalidates the target environment by setting its expiration timestamp to now.
 
         Args:
             name: The name of the environment to invalidate.
+            sync: If True, the call blocks until the environment is deleted. Otherwise, the environment will
+                be deleted asynchronously by the janitor process.
         """
         self.state_sync.invalidate_environment(name)
-        self.console.log_success(f"Environment '{name}' has been invalidated.")
+        if sync:
+            self._cleanup_environments()
+            self.console.log_success(f"Environment '{name}' has been deleted.")
+        else:
+            self.console.log_success(f"Environment '{name}' has been invalidated.")
 
     def diff(self, environment: t.Optional[str] = None, detailed: bool = False) -> None:
         """Show a diff of the current context with a given environment.
@@ -1670,14 +1676,17 @@ class Context(BaseContext):
         )
 
     def _run_janitor(self) -> None:
-        expired_environments = self.state_sync.delete_expired_environments()
-        cleanup_expired_views(self.engine_adapter, expired_environments, console=self.console)
+        self._cleanup_environments()
         expired_snapshots = self.state_sync.delete_expired_snapshots()
         self.snapshot_evaluator.cleanup(
             expired_snapshots, on_complete=self.console.update_cleanup_progress
         )
 
         self.state_sync.compact_intervals()
+
+    def _cleanup_environments(self) -> None:
+        expired_environments = self.state_sync.delete_expired_environments()
+        cleanup_expired_views(self.engine_adapter, expired_environments, console=self.console)
 
     def _try_connection(self, connection_name: str, engine_adapter: EngineAdapter) -> None:
         connection_name = connection_name.capitalize()
