@@ -17,11 +17,8 @@ from sqlmesh.core.model import FullKind
         "num_orders": "int",
     },
     audits=["assert_positive_order_ids"],
+    description="This model uses ibis to generate and run a query",
 )
-
-# This model uses ibis to generate and run a query.
-
-
 def execute(
     context: ExecutionContext,
     start: datetime,
