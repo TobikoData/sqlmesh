@@ -432,8 +432,9 @@ def _model_kind_validator(cls: t.Type, v: t.Any, values: t.Dict[str, t.Any]) -> 
             props["time_data_type"] = exp.DataType.build(time_data_type, dialect=dialect)
         name = v.this if isinstance(v, d.ModelKind) else props.get("name")
         # We want to ensure whatever name is provided to construct the class is the same name that will be
-        # found inside the class itself. Ex: Pass in `SCD_TYPE_2` then we want to ensure we get `SCD_TYPE_2` as
-        # the kind name instead of `SCD_TYPE_2_BY_TIME`.
+        # found inside the class itself in order to avoid a change during plan/apply for legacy aliases.
+        # Ex: Pass in `SCD_TYPE_2` then we want to ensure we get `SCD_TYPE_2` as the kind name
+        # instead of `SCD_TYPE_2_BY_TIME`.
         props["name"] = name
         return model_kind_type_from_name(name)(**props)
 

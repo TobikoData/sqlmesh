@@ -1306,25 +1306,24 @@ class EngineAdapter:
         if check_columns and check_columns == exp.Star():
             check_columns = [exp.column(col) for col in unmanaged_columns]
         execution_ts = self._to_utc_timestamp(to_ts(execution_time), time_data_type)
-        update_valid_from_start: t.Union[str, exp.Expression]
         if updated_at_as_valid_from:
             if not updated_at_name:
                 raise SQLMeshError(
                     "Cannot use `updated_at_as_valid_from` without `updated_at_name` for SCD Type 2"
                 )
-            update_valid_from_start = updated_at_name
+            update_valid_from_start: t.Union[str, exp.Expression] = updated_at_name
         elif execution_time_as_valid_from:
             update_valid_from_start = execution_ts
         else:
             update_valid_from_start = self._to_utc_timestamp(
                 "1970-01-01 00:00:00+00:00", time_data_type
             )
-        insert_valid_from_start = execution_ts if check_columns else exp.to_column(updated_at_name)  # type: ignore
+        insert_valid_from_start = execution_ts if check_columns else exp.column(updated_at_name)  # type: ignore
         if check_columns:
             row_check_conditions = []
             for col in check_columns:
                 t_col = col.copy()
-                t_col.this.set("this", f"t_{col.name}")
+                t_col.set("this", exp.to_identifier(f"t_{col.name}"))
                 row_check_conditions.extend(
                     [
                         col.neq(t_col),
@@ -1336,7 +1335,7 @@ class EngineAdapter:
             unique_key_conditions = []
             for col in unique_key:
                 t_col = col.copy()
-                t_col.this.set("this", f"t_{col.name}")
+                t_col.set("this", exp.to_identifier(f"t_{col.name}"))
                 unique_key_conditions.extend(
                     [t_col.is_(exp.Null()).not_(), col.is_(exp.Null()).not_()]
                 )
@@ -1354,7 +1353,7 @@ class EngineAdapter:
                     ),
                     execution_ts,
                 )
-                .else_(exp.to_column(f"t_{valid_to_name}"))
+                .else_(exp.column(f"t_{valid_to_name}"))
                 .as_(valid_to_name)
             )
             valid_from_case_stmt = exp.func(
@@ -1364,20 +1363,18 @@ class EngineAdapter:
             ).as_(valid_from_name)
         else:
             assert updated_at_name is not None
-            updated_row_filter = exp.to_column(updated_at_name) > exp.to_column(
-                f"t_{updated_at_name}"
-            )
+            updated_row_filter = exp.column(updated_at_name) > exp.column(f"t_{updated_at_name}")
             valid_to_case_stmt = (
                 exp.Case()
-                .when(updated_row_filter, exp.to_column(updated_at_name))
+                .when(updated_row_filter, exp.column(updated_at_name))
                 .when(exp.column("_exists", "joined").is_(exp.Null()), execution_ts)
-                .else_(exp.to_column(f"t_{valid_to_name}"))
+                .else_(exp.column(f"t_{valid_to_name}"))
             ).as_(valid_to_name)
             valid_from_case_stmt = (
                 exp.Case()
                 .when(
                     exp.and_(
-                        exp.to_column(f"t_{valid_from_name}").is_(exp.Null()),
+                        exp.column(f"t_{valid_from_name}").is_(exp.Null()),
                         exp.column("_exists", "latest_deleted").is_(exp.Null()).not_(),
                     ),
                     exp.Case()
@@ -1387,10 +1384,8 @@ class EngineAdapter:
                     )
                     .else_(exp.column(updated_at_name)),
                 )
-                .when(
-                    exp.to_column(f"t_{valid_from_name}").is_(exp.Null()), update_valid_from_start
-                )
-                .else_(exp.to_column(f"t_{valid_from_name}"))
+                .when(exp.column(f"t_{valid_from_name}").is_(exp.Null()), update_valid_from_start)
+                .else_(exp.column(f"t_{valid_from_name}"))
             ).as_(valid_from_name)
         with source_queries[0] as source_query:
             query = (

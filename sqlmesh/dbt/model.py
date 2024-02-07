@@ -118,7 +118,7 @@ class ModelConfig(BaseModelConfig):
     @field_validator("check_cols", mode="before")
     @classmethod
     def _validate_check_cols(cls, v: t.Union[str, t.List[str]]) -> t.Union[str, t.List[str]]:
-        if isinstance(v, str) and v == "all":
+        if isinstance(v, str) and v.lower() == "all":
             return "*"
         return ensure_list(v)
 
@@ -253,10 +253,9 @@ class ModelConfig(BaseModelConfig):
                 return SCDType2ByColumnKind(
                     columns=self.check_cols, execution_time_as_valid_from=True, **shared_kwargs
                 )
-            else:
-                return SCDType2ByTimeKind(
-                    updated_at_name=self.updated_at, updated_at_as_valid_from=True, **shared_kwargs
-                )
+            return SCDType2ByTimeKind(
+                updated_at_name=self.updated_at, updated_at_as_valid_from=True, **shared_kwargs
+            )
         raise ConfigError(f"{materialization.value} materialization not supported.")
 
     @property
