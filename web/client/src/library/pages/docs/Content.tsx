@@ -90,7 +90,7 @@ export default function Content(): JSX.Element {
               <SplitPane
                 direction="vertical"
                 sizes={[50, 50]}
-                minSize={100}
+                minSize={0}
                 snapOffset={0}
                 className="flex flex-col w-full h-full overflow-hidden"
               >
