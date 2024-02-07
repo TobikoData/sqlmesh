@@ -384,12 +384,18 @@ def run(ctx: click.Context, environment: t.Optional[str] = None, **kwargs: t.Any
 
 @cli.command("invalidate")
 @click.argument("environment", required=True)
+@click.option(
+    "--sync",
+    "-s",
+    is_flag=True,
+    help="Wait for the environment to be deleted before returning. If not specified, the environment will be deleted asynchronously by the janitor process. This option requires a connection to the data warehouse.",
+)
 @click.pass_context
 @error_handler
-def invalidate(ctx: click.Context, environment: str) -> None:
+def invalidate(ctx: click.Context, environment: str, **kwargs: t.Any) -> None:
     """Invalidate the target environment, forcing its removal during the next run of the janitor process."""
     context = ctx.obj
-    context.invalidate_environment(environment)
+    context.invalidate_environment(environment, **kwargs)
 
 
 @cli.command("dag")
