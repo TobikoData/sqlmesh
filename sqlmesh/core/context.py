@@ -285,7 +285,7 @@ class Context(BaseContext):
         self._scheduler = self.config.get_scheduler(self.gateway)
         self.environment_ttl = self.config.environment_ttl
         self.pinned_environments = Environment.normalize_names(self.config.pinned_environments)
-        self.auto_categorize_changes = self.config.auto_categorize_changes
+        self.auto_categorize_changes = self.config.plan.auto_categorize_changes
 
         self._connection_config = self.config.get_connection(self.gateway)
         self.concurrent_tasks = concurrent_tasks or self._connection_config.concurrent_tasks
@@ -783,16 +783,17 @@ class Context(BaseContext):
         restate_models: t.Optional[t.Iterable[str]] = None,
         no_gaps: bool = False,
         skip_backfill: bool = False,
-        forward_only: bool = False,
-        no_prompts: bool = False,
-        auto_apply: bool = False,
+        forward_only: t.Optional[bool] = None,
+        no_prompts: t.Optional[bool] = None,
+        auto_apply: t.Optional[bool] = None,
         no_auto_categorization: t.Optional[bool] = None,
         effective_from: t.Optional[TimeLike] = None,
         include_unmodified: t.Optional[bool] = None,
         select_models: t.Optional[t.Collection[str]] = None,
         backfill_models: t.Optional[t.Collection[str]] = None,
         categorizer_config: t.Optional[CategorizerConfig] = None,
-        no_diff: bool = False,
+        enable_preview: t.Optional[bool] = None,
+        no_diff: t.Optional[bool] = None,
         run: bool = False,
     ) -> Plan:
         """Interactively creates a plan.
@@ -832,6 +833,7 @@ class Context(BaseContext):
             include_unmodified: Indicates whether to include unmodified models in the target development environment.
             select_models: A list of model selection strings to filter the models that should be included into this plan.
             backfill_models: A list of model selection strings to filter the models for which the data should be backfilled.
+            enable_preview: Indicates whether to enable preview for forward-only models in development environments.
             no_diff: Hide text differences for changed models.
             run: Whether to run latest intervals as part of the plan application.
 
@@ -855,11 +857,16 @@ class Context(BaseContext):
             select_models=select_models,
             backfill_models=backfill_models,
             categorizer_config=categorizer_config,
+            enable_preview=enable_preview,
             run=run,
         )
 
         self.console.plan(
-            plan_builder, auto_apply, self.default_catalog, no_diff=no_diff, no_prompts=no_prompts
+            plan_builder,
+            auto_apply if auto_apply is not None else self.config.plan.auto_apply,
+            self.default_catalog,
+            no_diff=no_diff if no_diff is not None else self.config.plan.no_diff,
+            no_prompts=no_prompts if no_prompts is not None else self.config.plan.no_prompts,
         )
 
         return plan_builder.build()
@@ -876,13 +883,14 @@ class Context(BaseContext):
         restate_models: t.Optional[t.Iterable[str]] = None,
         no_gaps: bool = False,
         skip_backfill: bool = False,
-        forward_only: bool = False,
+        forward_only: t.Optional[bool] = None,
         no_auto_categorization: t.Optional[bool] = None,
         effective_from: t.Optional[TimeLike] = None,
         include_unmodified: t.Optional[bool] = None,
         select_models: t.Optional[t.Collection[str]] = None,
         backfill_models: t.Optional[t.Collection[str]] = None,
         categorizer_config: t.Optional[CategorizerConfig] = None,
+        enable_preview: t.Optional[bool] = None,
         run: bool = False,
     ) -> PlanBuilder:
         """Creates a plan builder.
@@ -915,6 +923,7 @@ class Context(BaseContext):
             include_unmodified: Indicates whether to include unmodified models in the target development environment.
             select_models: A list of model selection strings to filter the models that should be included into this plan.
             backfill_models: A list of model selection strings to filter the models for which the data should be backfilled.
+            enable_preview: Indicates whether to enable preview for forward-only models in development environments.
             run: Whether to run latest intervals as part of the plan application.
 
         Returns:
@@ -937,9 +946,6 @@ class Context(BaseContext):
         environment_ttl = (
             self.environment_ttl if environment not in self.pinned_environments else None
         )
-
-        if include_unmodified is None:
-            include_unmodified = self.config.include_unmodified
 
         model_selector = self._new_selector()
 
@@ -1013,16 +1019,25 @@ class Context(BaseContext):
             no_gaps=no_gaps,
             skip_backfill=skip_backfill,
             is_dev=is_dev,
-            forward_only=forward_only,
+            forward_only=(
+                forward_only if forward_only is not None else self.config.plan.forward_only
+            ),
             environment_ttl=environment_ttl,
             environment_suffix_target=self.config.environment_suffix_target,
             environment_catalog_mapping=self.config.environment_catalog_mapping,
             categorizer_config=categorizer_config or self.auto_categorize_changes,
             auto_categorization_enabled=not no_auto_categorization,
             effective_from=effective_from,
-            include_unmodified=include_unmodified,
+            include_unmodified=(
+                include_unmodified
+                if include_unmodified is not None
+                else self.config.plan.include_unmodified
+            ),
             default_start=default_start,
             default_end=default_end,
+            enable_preview=(
+                enable_preview if enable_preview is not None else self.config.plan.enable_preview
+            ),
         )
 
     def apply(

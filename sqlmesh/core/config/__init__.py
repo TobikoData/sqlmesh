@@ -22,6 +22,7 @@ from sqlmesh.core.config.loader import (
     load_configs,
 )
 from sqlmesh.core.config.model import ModelDefaultsConfig
+from sqlmesh.core.config.plan import PlanConfig
 from sqlmesh.core.config.root import Config
 from sqlmesh.core.config.run import RunConfig
 from sqlmesh.core.config.scheduler import (

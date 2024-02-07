@@ -9,6 +9,7 @@ from sqlmesh.core.config import (
     EnvironmentSuffixTarget,
     GatewayConfig,
     ModelDefaultsConfig,
+    PlanConfig,
     SparkConnectionConfig,
 )
 from sqlmesh.core.notification_target import (
@@ -33,7 +34,7 @@ config = Config(
 test_config = Config(
     gateways={"in_memory": GatewayConfig(connection=DuckDBConnectionConfig())},
     default_gateway="in_memory",
-    auto_categorize_changes=CategorizerConfig(sql=AutoCategorizationMode.SEMI),
+    plan=PlanConfig(auto_categorize_changes=CategorizerConfig(sql=AutoCategorizationMode.SEMI)),
     model_defaults=ModelDefaultsConfig(dialect="duckdb"),
 )
 

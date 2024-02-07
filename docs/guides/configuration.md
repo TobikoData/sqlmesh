@@ -327,7 +327,7 @@ If no match is found, the catalog defined in the model or the default catalog de
 
 SQLMesh compares the current state of project files to an environment when `sqlmesh plan` is run. It detects changes to models, which can be classified as breaking or non-breaking.
 
-SQLMesh can  attempt to automatically [categorize](../concepts/plans.md#change-categories) the changes it detects. The `auto_categorize_changes` option determines whether SQLMesh should attempt automatic change categorization. This option is in the [environments](../reference/configuration.md#environments) section of the configuration reference page.
+SQLMesh can  attempt to automatically [categorize](../concepts/plans.md#change-categories) the changes it detects. The `plan.auto_categorize_changes` option determines whether SQLMesh should attempt automatic change categorization. This option is in the [environments](../reference/configuration.md#environments) section of the configuration reference page.
 
 Supported values:
 
@@ -340,11 +340,12 @@ Example showing default values:
 === "YAML"
 
     ```yaml linenums="1"
-    auto_categorize_changes:
-        external: full
-        python: off
-        sql: full
-        seed: full
+    plan:
+        auto_categorize_changes:
+            external: full
+            python: off
+            sql: full
+            seed: full
     ```
 
 === "Python"
@@ -357,15 +358,18 @@ Example showing default values:
         ModelDefaultsConfig,
         AutoCategorizationMode,
         CategorizerConfig,
+        PlanConfig,
     )
 
     config = Config(
         model_defaults=ModelDefaultsConfig(dialect=<dialect>),
-        auto_categorize_changes=CategorizerConfig(
-            external=AutoCategorizationMode.FULL,
-            python=AutoCategorizationMode.OFF,
-            sql=AutoCategorizationMode.FULL,
-            seed=AutoCategorizationMode.FULL,
+        plan=PlanConfig(
+            auto_categorize_changes=CategorizerConfig(
+                external=AutoCategorizationMode.FULL,
+                python=AutoCategorizationMode.OFF,
+                sql=AutoCategorizationMode.FULL,
+                seed=AutoCategorizationMode.FULL,
+            )
         ),
     )
     ```
