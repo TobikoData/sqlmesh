@@ -356,8 +356,10 @@ def _parse_types(
 # MacroVar, it'll render into @<path>, so it won't break staged file path references.
 #
 # See: https://docs.snowflake.com/en/user-guide/querying-stage
-def _parse_table_parts(self: Parser, schema: bool = False) -> exp.Table:
-    table = self.__parse_table_parts(schema=schema)  # type: ignore
+def _parse_table_parts(
+    self: Parser, schema: bool = False, is_db_reference: bool = False
+) -> exp.Table:
+    table = self.__parse_table_parts(schema=schema, is_db_reference=is_db_reference)  # type: ignore
     table_arg = table.this
 
     if isinstance(table_arg, exp.Var) and table_arg.name.startswith(SQLMESH_MACRO_PREFIX):
