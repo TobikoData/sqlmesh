@@ -2,9 +2,12 @@ import re
 
 import pytest
 from click.testing import CliRunner
+from freezegun import freeze_time
 
 from sqlmesh.cli.example_project import init_example_project
 from sqlmesh.cli.main import cli
+
+FREEZE_TIME = "2023-01-01 00:00:00"
 
 
 @pytest.fixture(scope="session")
@@ -119,6 +122,12 @@ def assert_plan_success(result, new_env="prod", from_env="prod") -> None:
 
 def assert_virtual_update(result) -> None:
     assert "Virtual Update executed successfully" in result.output
+
+
+def test_version(runner):
+    result = runner.invoke(cli, ["--version"])
+    assert result.exit_code == 0
+    assert re.fullmatch("\d+\.\d+\.\d+(\..*)?\n?", result.output)
 
 
 def test_plan_no_config(runner, tmp_path):
@@ -451,6 +460,7 @@ def test_run_no_prod(runner, tmp_path):
     assert "Error: Environment 'prod' was not found." in result.output
 
 
+@freeze_time(FREEZE_TIME)
 def test_run_dev(runner, tmp_path):
     create_example_project(tmp_path)
 
@@ -463,6 +473,7 @@ def test_run_dev(runner, tmp_path):
     assert_model_batches_executed(result)
 
 
+@freeze_time(FREEZE_TIME)
 def test_run_cron_not_elapsed(runner, tmp_path):
     create_example_project(tmp_path)
 
@@ -477,3 +488,18 @@ def test_run_cron_not_elapsed(runner, tmp_path):
     # Regex matches 1 or more INFO messages - example message:
     #     [2024-02-06 15:26:15,856] {connection.py:242} INFO - Creating new DuckDB adapter for in-memory database\n
     assert result.output == "" or re.fullmatch("^(\[.*? INFO.*?\n)+$", result.output)
+
+
+def test_run_cron_elapsed(runner, tmp_path):
+    create_example_project(tmp_path)
+
+    # Create and backfill `prod` environment
+    with freeze_time("2023-01-01 23:59:00"):
+        runner.invoke(cli, ["--paths", tmp_path, "plan", "--no-prompts", "--auto-apply"])
+
+    # Run `prod` environment with daily cron elapsed
+    with freeze_time("2023-01-02 00:01:00"):
+        result = runner.invoke(cli, ["--paths", tmp_path, "run"])
+
+    assert result.exit_code == 0
+    assert_model_batches_executed(result)
