@@ -1,4 +1,5 @@
 import re
+from os import path
 
 import pytest
 from click.testing import CliRunner
@@ -87,6 +88,12 @@ GROUP BY item_id
         )
 
 
+def init_prod_and_backfill(runner, temp_dir) -> None:
+    result = runner.invoke(cli, ["--paths", temp_dir, "plan", "--auto-apply"])
+    assert_plan_success(result)
+    assert path.exists(temp_dir / "db.db")
+
+
 def assert_duckdb_test(result) -> None:
     assert "Successfully Ran 1 tests against duckdb" in result.output
 
@@ -125,9 +132,11 @@ def assert_virtual_update(result) -> None:
 
 
 def test_version(runner):
+    from sqlmesh import __version__ as SQLMESH_VERSION
+
     result = runner.invoke(cli, ["--version"])
     assert result.exit_code == 0
-    assert re.fullmatch("\d+\.\d+\.\d+(\..*)?\n?", result.output)
+    assert SQLMESH_VERSION in result.output
 
 
 def test_plan_no_config(runner, tmp_path):
@@ -141,7 +150,8 @@ def test_plan(runner, tmp_path):
     create_example_project(tmp_path)
 
     # Example project models have start dates, so there are no date prompts
-    # for the `prod` environment. User input `y` is required to apply the plan.
+    # for the `prod` environment.
+    # Input: `y` to apply and backfill
     result = runner.invoke(cli, ["--paths", tmp_path, "plan"], input="y\n")
     assert_plan_success(result)
 
@@ -149,7 +159,8 @@ def test_plan(runner, tmp_path):
 def test_plan_skip_tests(runner, tmp_path):
     create_example_project(tmp_path)
 
-    # Successful test run message should not appear if `--skip-tests` is passed and plan is applied
+    # Successful test run message should not appear with `--skip-tests`
+    # Input: `y` to apply and backfill
     result = runner.invoke(cli, ["--paths", tmp_path, "plan", "--skip-tests"], input="y\n")
     assert result.exit_code == 0
     assert "Successfully Ran 1 tests against duckdb" not in result.output
@@ -159,11 +170,10 @@ def test_plan_skip_tests(runner, tmp_path):
 
 def test_plan_restate_model(runner, tmp_path):
     create_example_project(tmp_path)
-
-    # Create prod and backfill
-    result = runner.invoke(cli, ["--paths", tmp_path, "plan", "--auto-apply"])
+    init_prod_and_backfill(runner, tmp_path)
 
     # plan with no changes and full_model restated
+    # Input: enter for backfill start date prompt, enter for end date prompt, `y` to apply and backfill
     result = runner.invoke(
         cli,
         ["--paths", tmp_path, "plan", "--restate-model", "sqlmesh_example.full_model"],
@@ -188,6 +198,7 @@ def test_plan_skip_backfill(runner, tmp_path):
     )
 
     # plan executes virtual update without executing model batches
+    # Input: `y` to perform virtual update
     result = runner.invoke(
         cli, ["--paths", tmp_path, "plan", "--skip-backfill", "--no-gaps"], input="y\n"
     )
@@ -199,25 +210,29 @@ def test_plan_skip_backfill(runner, tmp_path):
 def test_plan_auto_apply(runner, tmp_path):
     create_example_project(tmp_path)
 
-    # plan for `prod` runs end-to-end with no user input if `--auto-apply` is passed
+    # plan for `prod` runs end-to-end with no user input with `--auto-apply`
     result = runner.invoke(cli, ["--paths", tmp_path, "plan", "--auto-apply"])
     assert_plan_success(result)
+
+    # confirm verbose output not present
+    assert "sqlmesh_example.seed_model created" not in result.output
+    assert "sqlmesh_example.seed_model promoted" not in result.output
 
 
 def test_plan_verbose(runner, tmp_path):
     create_example_project(tmp_path)
 
+    # Input: `y` to apply and backfill
     result = runner.invoke(cli, ["--paths", tmp_path, "plan", "--verbose"], input="y\n")
     assert_plan_success(result)
     assert "sqlmesh_example.seed_model created" in result.output
-    assert "sqlmesh_example.seed_model evaluated in" in result.output
     assert "sqlmesh_example.seed_model promoted" in result.output
 
 
 def test_plan_dev(runner, tmp_path):
     create_example_project(tmp_path)
 
-    # plan for non-prod environment has both start/end and apply prompts
+    # Input: enter for backfill start date prompt, enter for end date prompt, `y` to apply and backfill
     result = runner.invoke(cli, ["--paths", tmp_path, "plan", "dev"], input="\n\ny\n")
     assert_plan_success(result, "dev")
 
@@ -225,6 +240,7 @@ def test_plan_dev(runner, tmp_path):
 def test_plan_dev_start_date(runner, tmp_path):
     create_example_project(tmp_path)
 
+    # Input: enter for backfill end date prompt, `y` to apply and backfill
     result = runner.invoke(
         cli, ["--paths", tmp_path, "plan", "dev", "--start", "2023-01-01"], input="\ny\n"
     )
@@ -236,6 +252,7 @@ def test_plan_dev_start_date(runner, tmp_path):
 def test_plan_dev_end_date(runner, tmp_path):
     create_example_project(tmp_path)
 
+    # Input: enter for backfill start date prompt, `y` to apply and backfill
     result = runner.invoke(
         cli, ["--paths", tmp_path, "plan", "dev", "--end", "2023-01-01"], input="\ny\n"
     )
@@ -251,6 +268,7 @@ def test_plan_dev_create_from(runner, tmp_path):
     runner.invoke(cli, ["--paths", tmp_path, "plan", "dev", "--no-prompts", "--auto-apply"])
 
     # create dev2 environment from dev environment
+    # Input: `y` to apply and virtual update
     result = runner.invoke(
         cli,
         ["--paths", tmp_path, "plan", "dev2", "--create-from", "dev", "--include-unmodified"],
@@ -266,7 +284,7 @@ def test_plan_dev_create_from(runner, tmp_path):
 def test_plan_dev_no_prompts(runner, tmp_path):
     create_example_project(tmp_path)
 
-    # Example project plan for non-prod environment doesn't prompt to apply and doesn't
+    # plan for non-prod environment doesn't prompt to apply and doesn't
     # backfill if only `--no-prompts` is passed
     result = runner.invoke(cli, ["--paths", tmp_path, "plan", "dev", "--no-prompts"])
     assert result.exit_code == 0
@@ -279,16 +297,14 @@ def test_plan_dev_no_prompts(runner, tmp_path):
 def test_plan_dev_auto_apply(runner, tmp_path):
     create_example_project(tmp_path)
 
-    # Example project plan for non-prod environment has start/end prompts if only `--auto-apply` is passed
+    # Input: enter for backfill start date prompt, enter for end date prompt
     result = runner.invoke(cli, ["--paths", tmp_path, "plan", "dev", "--auto-apply"], input="\n\n")
     assert_plan_success(result, "dev")
 
 
 def test_plan_dev_no_changes(runner, tmp_path):
     create_example_project(tmp_path)
-
-    # Create and backfill `prod` environment
-    runner.invoke(cli, ["--paths", tmp_path, "plan", "--auto-apply"])
+    init_prod_and_backfill(runner, tmp_path)
 
     # Error if no changes made and `--include-unmodified` is not passed
     result = runner.invoke(cli, ["--paths", tmp_path, "plan", "dev"])
@@ -299,6 +315,7 @@ def test_plan_dev_no_changes(runner, tmp_path):
     )
 
     # No error if no changes made and `--include-unmodified` is passed
+    # Input: `y` to apply and virtual update
     result = runner.invoke(
         cli, ["--paths", tmp_path, "plan", "dev", "--include-unmodified"], input="y\n"
     )
@@ -310,12 +327,11 @@ def test_plan_dev_no_changes(runner, tmp_path):
 
 def test_plan_nonbreaking(runner, tmp_path):
     create_example_project(tmp_path)
-
-    # Create and backfill `prod` environment
-    runner.invoke(cli, ["--paths", tmp_path, "plan", "--auto-apply"])
+    init_prod_and_backfill(runner, tmp_path)
 
     update_incremental_model(tmp_path)
 
+    # Input: `y` to apply and backfill
     result = runner.invoke(cli, ["--paths", tmp_path, "plan"], input="y\n")
     assert result.exit_code == 0
     assert "Summary of differences against `prod`" in result.output
@@ -323,17 +339,17 @@ def test_plan_nonbreaking(runner, tmp_path):
     assert "Directly Modified: sqlmesh_example.incremental_model (Non-breaking)" in result.output
     assert "sqlmesh_example.full_model (Indirect Non-breaking)" in result.output
     assert "sqlmesh_example.incremental_model evaluated in" in result.output
+    assert "sqlmesh_example.full_model evaluated in" not in result.output
     assert_backfill_success(result)
 
 
 def test_plan_nonbreaking_noautocategorization(runner, tmp_path):
     create_example_project(tmp_path)
-
-    # Create and backfill `prod` environment
-    runner.invoke(cli, ["--paths", tmp_path, "plan", "--auto-apply"])
+    init_prod_and_backfill(runner, tmp_path)
 
     update_incremental_model(tmp_path)
 
+    # Input: `2` to classify change as non-breaking, `y` to apply and backfill
     result = runner.invoke(
         cli, ["--paths", tmp_path, "plan", "--no-auto-categorization"], input="2\ny\n"
     )
@@ -351,12 +367,11 @@ def test_plan_nonbreaking_noautocategorization(runner, tmp_path):
 
 def test_plan_nonbreaking_nodiff(runner, tmp_path):
     create_example_project(tmp_path)
-
-    # Create and backfill `prod` environment
-    runner.invoke(cli, ["--paths", tmp_path, "plan", "--auto-apply"])
+    init_prod_and_backfill(runner, tmp_path)
 
     update_incremental_model(tmp_path)
 
+    # Input: `y` to apply and backfill
     result = runner.invoke(cli, ["--paths", tmp_path, "plan", "--no-diff"], input="y\n")
     assert result.exit_code == 0
     assert "+  'a' AS new_col" not in result.output
@@ -365,31 +380,30 @@ def test_plan_nonbreaking_nodiff(runner, tmp_path):
 
 def test_plan_breaking(runner, tmp_path):
     create_example_project(tmp_path)
-
-    # Create and backfill `prod` environment
-    runner.invoke(cli, ["--paths", tmp_path, "plan", "--auto-apply"])
+    init_prod_and_backfill(runner, tmp_path)
 
     update_full_model(tmp_path)
 
-    # full_model change makes test fail, so we skip it
+    # full_model change makes test fail, so we pass `--skip-tests`
+    # Input: `y` to apply and backfill
     result = runner.invoke(cli, ["--paths", tmp_path, "plan", "--skip-tests"], input="y\n")
     assert result.exit_code == 0
     assert "-ORDER BY" in result.output
     assert "Directly Modified: sqlmesh_example.full_model (Breaking)" in result.output
     assert "sqlmesh_example.full_model evaluated in" in result.output
+    assert "sqlmesh_example.incremental_model evaluated in" not in result.output
     assert_backfill_success(result)
 
 
 def test_plan_dev_select(runner, tmp_path):
     create_example_project(tmp_path)
-
-    # Create and backfill `prod` environment
-    runner.invoke(cli, ["--paths", tmp_path, "plan", "--auto-apply"])
+    init_prod_and_backfill(runner, tmp_path)
 
     update_incremental_model(tmp_path)
     update_full_model(tmp_path)
 
-    # full_model change makes test fail, so we skip it
+    # full_model change makes test fail, so we pass `--skip-tests`
+    # Input: enter for backfill start date prompt, enter for end date prompt, `y` to apply and backfill
     result = runner.invoke(
         cli,
         [
@@ -404,6 +418,11 @@ def test_plan_dev_select(runner, tmp_path):
         input="\n\ny\n",
     )
     assert result.exit_code == 0
+    # incremental_model diff present
+    assert "+  'a' AS new_col" in result.output
+    assert (
+        "Directly Modified: sqlmesh_example__dev.incremental_model (Non-breaking)" in result.output
+    )
     # full_model diff not present
     assert "-ORDER BY" not in result.output
     assert "Directly Modified: sqlmesh_example__dev.full_model (Breaking)" not in result.output
@@ -415,14 +434,13 @@ def test_plan_dev_select(runner, tmp_path):
 
 def test_plan_dev_backfill(runner, tmp_path):
     create_example_project(tmp_path)
-
-    # Create and backfill `prod` environment
-    runner.invoke(cli, ["--paths", tmp_path, "plan", "--auto-apply"])
+    init_prod_and_backfill(runner, tmp_path)
 
     update_incremental_model(tmp_path)
     update_full_model(tmp_path)
 
-    # full_model change makes test fail, so we skip it
+    # full_model change makes test fail, so we pass `--skip-tests`
+    # Input: enter for backfill start date prompt, enter for end date prompt, `y` to apply and backfill
     result = runner.invoke(
         cli,
         [
@@ -465,6 +483,7 @@ def test_run_dev(runner, tmp_path):
     create_example_project(tmp_path)
 
     # Create dev environment but DO NOT backfill
+    # Input: `y` for virtual update
     runner.invoke(cli, ["--paths", tmp_path, "plan", "dev", "--skip-backfill"], input="y\n")
 
     # Confirm backfill occurs when we run non-backfilled dev env
@@ -476,15 +495,15 @@ def test_run_dev(runner, tmp_path):
 @freeze_time(FREEZE_TIME)
 def test_run_cron_not_elapsed(runner, tmp_path):
     create_example_project(tmp_path)
-
-    # Create and backfill `prod` environment
-    runner.invoke(cli, ["--paths", tmp_path, "plan", "--no-prompts", "--auto-apply"])
+    init_prod_and_backfill(runner, tmp_path)
 
     # No error and no output if `prod` environment exists and cron has not elapsed
     result = runner.invoke(cli, ["--paths", tmp_path, "run"])
     assert result.exit_code == 0
 
-    # INFO messages are printed to console when tests run in some environments.
+    # INFO messages are printed to console when tests run in some platforms/environments.
+    # For example, no INFO messages when run with `pytest` from CLI, but INFO messages
+    # present when run with `make`.
     # Regex matches 1 or more INFO messages - example message:
     #     [2024-02-06 15:26:15,856] {connection.py:242} INFO - Creating new DuckDB adapter for in-memory database\n
     assert result.output == "" or re.fullmatch("^(\[.*? INFO.*?\n)+$", result.output)
@@ -495,7 +514,7 @@ def test_run_cron_elapsed(runner, tmp_path):
 
     # Create and backfill `prod` environment
     with freeze_time("2023-01-01 23:59:00"):
-        runner.invoke(cli, ["--paths", tmp_path, "plan", "--no-prompts", "--auto-apply"])
+        init_prod_and_backfill(runner, tmp_path)
 
     # Run `prod` environment with daily cron elapsed
     with freeze_time("2023-01-02 00:01:00"):
