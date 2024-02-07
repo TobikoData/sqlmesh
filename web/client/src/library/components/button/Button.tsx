@@ -85,6 +85,10 @@ const VARIANT = new Map<ButtonVariant, string>([
     'neutral',
     'border-neutral-200 bg-neutral-200 hover:bg-neutral-300 active:bg-neutral-300 text-primary-900',
   ],
+  [
+    'info',
+    'border-transparent bg-neutral-10 dark:bg-neutral-20 hover:bg-neutral-20 active:bg-neutral-20 dark:hover:bg-neutral-10 dark:active:bg-neutral-10 text-neutral-700 dark:text-neutral-200',
+  ],
 ])
 
 const SHAPE = new Map<ButtonShape, string>([
@@ -200,7 +204,7 @@ function makeButton<TElement = HTMLButtonElement>(
           SHAPE.get(shape),
           SIZE.get(size),
           disabled
-            ? 'opacity-50 bg-neutral-10 border-neutral-300 text-prose cursor-not-allowed'
+            ? 'opacity-50 bg-neutral-10 dark:bg-neutral-20 border-transparent text-prose cursor-not-allowed'
             : VARIANT.get(variant),
           className,
         )}

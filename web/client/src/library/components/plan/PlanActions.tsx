@@ -187,9 +187,7 @@ export default function PlanActions({
                   : handleReset
               }
               variant={
-                planAction.isProcessing
-                  ? EnumVariant.Danger
-                  : EnumVariant.Neutral
+                planAction.isProcessing ? EnumVariant.Danger : EnumVariant.Info
               }
               disabled={
                 planAction.isCancelling ||
