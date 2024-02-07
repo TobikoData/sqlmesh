@@ -54,24 +54,12 @@ function CodeEditorDefault({
 }): JSX.Element {
   const { mode } = useColorScheme()
 
-  const extensionsDefault = useMemo(() => {
-    return [
-      autocompletion({
-        selectOnOpen: false,
-        maxRenderedOptions: 50,
-      }),
-      mode === EnumColorScheme.Dark ? dracula : tomorrow,
-      type === EnumFileExtensions.PY && python(),
-      type === EnumFileExtensions.YAML && StreamLanguage.define(yaml),
-      type === EnumFileExtensions.YML && StreamLanguage.define(yaml),
-    ].filter(Boolean) as Extension[]
-  }, [type, mode])
-
   const models = useStoreContext(s => s.models)
-  const engine = useStoreEditor(s => s.engine)
-  const [value, setValue] = useState(content)
 
+  const engine = useStoreEditor(s => s.engine)
   const dialects = useStoreEditor(s => s.dialects)
+
+  const [value, setValue] = useState(content)
 
   const [dialectOptions, setDialectOptions] = useState<{
     types: string
@@ -92,11 +80,22 @@ function CodeEditorDefault({
     }
   }, [])
 
+  const extensionsDefault = useMemo(() => {
+    return [
+      autocompletion({
+        selectOnOpen: false,
+        maxRenderedOptions: 50,
+      }),
+      mode === EnumColorScheme.Dark ? dracula : tomorrow,
+      type === EnumFileExtensions.PY && python(),
+      type === EnumFileExtensions.YAML && StreamLanguage.define(yaml),
+      type === EnumFileExtensions.YML && StreamLanguage.define(yaml),
+    ].filter(Boolean) as Extension[]
+  }, [type, mode])
   const dialectsTitles = useMemo(
     () => dialects.map(d => d.dialect_title),
     [dialects],
   )
-
   const extensionKeymap = useMemo(
     () =>
       keymap.of(
@@ -138,7 +137,6 @@ function CodeEditorDefault({
       })),
     [allModels],
   )
-
   const extensionsAll = useMemo(() => {
     return [
       ...extensionsDefault,
@@ -191,6 +189,10 @@ function CodeEditorDefault({
       payload: dialect,
     })
   }, [dialect])
+
+  useEffect(() => {
+    setValue(content)
+  }, [content])
 
   return (
     <div className={clsx('flex w-full h-full', className)}>
