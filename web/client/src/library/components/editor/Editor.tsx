@@ -193,7 +193,7 @@ function EditorMain({ tab }: { tab: EditorTab }): JSX.Element {
     return showInspector ? [70, 30] : [100, 0]
   }
 
-  const EDITOR_PANE_MIN_WIDTH = 36
+  const EDITOR_PANE_MIN_WIDTH = 32
   const INSPECTOR_PANE_WIDTH_THRESHOLD = 2
 
   return (
@@ -205,7 +205,7 @@ function EditorMain({ tab }: { tab: EditorTab }): JSX.Element {
       )}
       sizes={getPaneSizesPreview()}
       direction={direction}
-      minSize={[320, 0]}
+      minSize={[EDITOR_PANE_MIN_WIDTH, 0]}
       snapOffset={0}
     >
       <div
@@ -218,7 +218,7 @@ function EditorMain({ tab }: { tab: EditorTab }): JSX.Element {
           key={tab.id}
           className="flex h-full overflow-hidden"
           sizes={getPaneSizesInspector()}
-          minSize={[320, EDITOR_PANE_MIN_WIDTH]}
+          minSize={EDITOR_PANE_MIN_WIDTH}
           snapOffset={EDITOR_PANE_MIN_WIDTH}
           handleDrag={(sizes, el) => {
             const containerWidth = el.parent.getBoundingClientRect().width
