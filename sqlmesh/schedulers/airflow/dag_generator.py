@@ -118,7 +118,7 @@ class SnapshotDagGenerator:
             tags=[
                 common.SQLMESH_AIRFLOW_TAG,
                 common.SNAPSHOT_AIRFLOW_TAG,
-                snapshot.model.name[-AIRFLOW_TAG_CHARACTER_LIMIT:],
+                snapshot.node.name[-AIRFLOW_TAG_CHARACTER_LIMIT:],
             ],
             default_args={
                 **DAG_DEFAULT_ARGS,
@@ -413,7 +413,7 @@ class SnapshotDagGenerator:
                 continue
 
             snapshot = snapshots[sid]
-            sanitized_model_name = sanitize_name(snapshot.model.name)
+            sanitized_model_name = sanitize_name(snapshot.node.name)
 
             snapshot_intervals_chain: t.List[t.Union[BaseOperator, t.List[BaseOperator]]] = []
 
@@ -602,7 +602,7 @@ class SnapshotDagGenerator:
                     HighWaterMarkSensor(
                         target_snapshot_info=upstream_snapshot.table_info,
                         this_snapshot=snapshot,
-                        task_id=f"{sanitize_name(upstream_snapshot.model.name)}_{upstream_snapshot.version}_high_water_mark_sensor",
+                        task_id=f"{sanitize_name(upstream_snapshot.node.name)}_{upstream_snapshot.version}_high_water_mark_sensor",
                     )
                 )
 
