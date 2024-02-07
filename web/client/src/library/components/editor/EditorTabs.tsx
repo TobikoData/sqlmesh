@@ -5,16 +5,21 @@ import { Button } from '../button/Button'
 import clsx from 'clsx'
 import { type EditorTab, useStoreEditor } from '~/context/editor'
 import { useStoreProject } from '@context/project'
-import { isNil } from '@utils/index'
+import { isFalse, isNil, isNotNil } from '@utils/index'
 import { useStoreContext } from '@context/context'
+import { ModelDirectory } from '@models/directory'
+import { ModelFile } from '@models/file'
 
 export default function EditorTabs(): JSX.Element {
+  const selectedFile = useStoreProject(s => s.selectedFile)
   const setSelectedFile = useStoreProject(s => s.setSelectedFile)
 
+  const tab = useStoreEditor(s => s.tab)
   const tabs = useStoreEditor(s => s.tabs)
-  const addTab = useStoreEditor(s => s.addTab)
-  const selectTab = useStoreEditor(s => s.selectTab)
+  const replaceTab = useStoreEditor(s => s.replaceTab)
   const createTab = useStoreEditor(s => s.createTab)
+  const selectTab = useStoreEditor(s => s.selectTab)
+  const addTab = useStoreEditor(s => s.addTab)
 
   const [tabsLocal, tabsRemote] = useMemo(() => {
     const local: EditorTab[] = []
@@ -32,6 +37,31 @@ export default function EditorTabs(): JSX.Element {
 
     return [local, remote]
   }, [tabs])
+
+  useEffect(() => {
+    if (
+      isNil(selectedFile) ||
+      tab?.file === selectedFile ||
+      selectedFile instanceof ModelDirectory
+    )
+      return
+
+    const newTab = createTab(selectedFile)
+    const shouldReplaceTab =
+      isNotNil(tab) &&
+      tab.file instanceof ModelFile &&
+      isFalse(tab.file.isChanged) &&
+      tab.file.isRemote &&
+      isFalse(tabs.has(selectedFile))
+
+    if (shouldReplaceTab) {
+      replaceTab(tab, newTab)
+    } else {
+      addTab(newTab)
+    }
+
+    selectTab(newTab)
+  }, [selectedFile])
 
   function addTabAndSelect(): void {
     const tab = createTab()
