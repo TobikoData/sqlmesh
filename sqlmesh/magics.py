@@ -309,6 +309,7 @@ class SQLMeshMagics(Magics):
         "--forward-only",
         action="store_true",
         help="Create a plan for forward-only changes.",
+        default=None,
     )
     @argument(
         "--effective-from",
@@ -319,11 +320,13 @@ class SQLMeshMagics(Magics):
         "--no-prompts",
         action="store_true",
         help="Disables interactive prompts for the backfill time range. Please note that if this flag is set and there are uncategorized changes, plan creation will fail.",
+        default=None,
     )
     @argument(
         "--auto-apply",
         action="store_true",
         help="Automatically applies the new plan after creation.",
+        default=None,
     )
     @argument(
         "--no-auto-categorization",
@@ -353,11 +356,18 @@ class SQLMeshMagics(Magics):
         "--no-diff",
         action="store_true",
         help="Hide text differences for changed models.",
+        default=None,
     )
     @argument(
         "--run",
         action="store_true",
         help="Run latest intervals as part of the plan application (prod environment only).",
+    )
+    @argument(
+        "--enable-preview",
+        action="store_true",
+        help="Enable preview for forward-only models when targeting a development environment.",
+        default=None,
     )
     @line_magic
     @pass_sqlmesh_context
@@ -385,6 +395,7 @@ class SQLMeshMagics(Magics):
             select_models=args.select_model,
             no_diff=args.no_diff,
             run=args.run,
+            enable_preview=args.enable_preview,
         )
 
     @magic_arguments()

@@ -290,6 +290,7 @@ def diff(ctx: click.Context, environment: t.Optional[str] = None) -> None:
     "--forward-only",
     is_flag=True,
     help="Create a plan for forward-only changes.",
+    default=None,
 )
 @click.option(
     "--effective-from",
@@ -301,11 +302,13 @@ def diff(ctx: click.Context, environment: t.Optional[str] = None) -> None:
     "--no-prompts",
     is_flag=True,
     help="Disable interactive prompts for the backfill time range. Please note that if this flag is set and there are uncategorized changes, plan creation will fail.",
+    default=None,
 )
 @click.option(
     "--auto-apply",
     is_flag=True,
     help="Automatically apply the new plan after creation.",
+    default=None,
 )
 @click.option(
     "--no-auto-categorization",
@@ -335,11 +338,18 @@ def diff(ctx: click.Context, environment: t.Optional[str] = None) -> None:
     "--no-diff",
     is_flag=True,
     help="Hide text differences for changed models.",
+    default=None,
 )
 @click.option(
     "--run",
     is_flag=True,
     help="Run latest intervals as part of the plan application (prod environment only).",
+)
+@click.option(
+    "--enable-preview",
+    is_flag=True,
+    help="Enable preview for forward-only models when targeting a development environment.",
+    default=None,
 )
 @opt.verbose
 @click.pass_context

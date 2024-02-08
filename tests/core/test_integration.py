@@ -284,6 +284,56 @@ def test_forward_only_model_regular_plan(init_and_plan_context: t.Callable):
 
 
 @freeze_time("2023-01-08 15:00:00")
+def test_forward_only_model_regular_plan_preview_enabled(init_and_plan_context: t.Callable):
+    context, plan = init_and_plan_context("examples/sushi")
+    context.apply(plan)
+
+    model_name = "sushi.waiter_revenue_by_day"
+
+    model = context.get_model(model_name)
+    model = add_projection_to_model(t.cast(SqlModel, model))
+    forward_only_kind = model.kind.copy(update={"forward_only": True})
+    model = model.copy(update={"kind": forward_only_kind})
+
+    context.upsert_model(model)
+    snapshot = context.get_snapshot(model, raise_if_missing=True)
+    top_waiters_snapshot = context.get_snapshot("sushi.top_waiters", raise_if_missing=True)
+
+    plan = context.plan("dev", no_prompts=True, skip_tests=True, enable_preview=True)
+    assert len(plan.new_snapshots) == 2
+    assert (
+        plan.context_diff.snapshots[snapshot.snapshot_id].change_category
+        == SnapshotChangeCategory.FORWARD_ONLY
+    )
+    assert (
+        plan.context_diff.snapshots[top_waiters_snapshot.snapshot_id].change_category
+        == SnapshotChangeCategory.FORWARD_ONLY
+    )
+    assert plan.start == to_date("2023-01-07")
+    assert plan.missing_intervals == [
+        SnapshotIntervals(
+            snapshot_id=top_waiters_snapshot.snapshot_id,
+            intervals=[
+                (to_timestamp("2023-01-07"), to_timestamp("2023-01-08")),
+            ],
+        ),
+        SnapshotIntervals(
+            snapshot_id=snapshot.snapshot_id,
+            intervals=[
+                (to_timestamp("2023-01-07"), to_timestamp("2023-01-08")),
+            ],
+        ),
+    ]
+
+    context.apply(plan)
+
+    dev_df = context.engine_adapter.fetchdf(
+        "SELECT DISTINCT event_date FROM sushi__dev.waiter_revenue_by_day ORDER BY event_date"
+    )
+    assert dev_df["event_date"].tolist() == [pd.to_datetime("2023-01-07")]
+
+
+@freeze_time("2023-01-08 15:00:00")
 def test_forward_only_parent_created_in_dev_child_created_in_prod(
     init_and_plan_context: t.Callable,
 ):
@@ -1527,7 +1577,7 @@ def test_revert_after_downstream_change(sushi_context: Context):
 def test_auto_categorization(sushi_context: Context):
     environment = "dev"
     for config in sushi_context.configs.values():
-        config.auto_categorize_changes.sql = AutoCategorizationMode.FULL
+        config.plan.auto_categorize_changes.sql = AutoCategorizationMode.FULL
     initial_add(sushi_context, environment)
 
     version = sushi_context.get_snapshot(

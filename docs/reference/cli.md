@@ -238,6 +238,8 @@ Options:
   --no-diff                 Hide text differences for changed models.
   --run                     Run latest intervals as part of the plan
                             application (prod environment only).
+  --enable-preview          Enable preview for forward-only models when
+                            targeting a development environment.
   -v, --verbose             Verbose output.
   --help                    Show this message and exit.
 ```
