@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import datetime
+import logging
 import typing as t
 import uuid
 from pathlib import Path
@@ -180,6 +181,12 @@ def rescope_global_models(request):
 @pytest.fixture(scope="function", autouse=True)
 def rescope_duckdb_classvar(request):
     DuckDBConnectionConfig._data_file_to_adapter = {}
+    yield
+
+
+@pytest.fixture(scope="module", autouse=True)
+def rescope_log_handlers():
+    logging.getLogger().handlers.clear()
     yield
 
 
