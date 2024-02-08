@@ -593,9 +593,17 @@ def test_comments(make_mocked_engine_adapter: t.Callable, mocker: MockerFixture)
 
     adapter.create_table(
         "test_table",
-        {"a": exp.DataType.build("INT"), "b": exp.DataType.build("INT")},
+        {
+            "a": exp.DataType.build("INT"),
+            "b": exp.DataType.build("INT"),
+            "s": exp.DataType.build("STRUCT<foo STRING>"),
+        },
         table_description="test description",
-        column_descriptions={"a": "a description"},
+        column_descriptions={
+            "a": "a description",
+            "s": "s description",
+            "s.foo": "foo description",
+        },
     )
 
     adapter.ctas(
@@ -619,7 +627,7 @@ def test_comments(make_mocked_engine_adapter: t.Callable, mocker: MockerFixture)
 
     sql_calls = _to_sql_calls(execute_mock)
     assert sql_calls == [
-        "CREATE TABLE IF NOT EXISTS `test_table` (`a` INT64 OPTIONS (description='a description'), `b` INT64) OPTIONS (description='test description')",
+        "CREATE TABLE IF NOT EXISTS `test_table` (`a` INT64 OPTIONS (description='a description'), `b` INT64, `s` STRUCT<foo STRING OPTIONS (description='foo description')> OPTIONS (description='s description')) OPTIONS (description='test description')",
         "CREATE TABLE IF NOT EXISTS `test_table` (`a` INT64 OPTIONS (description='a description'), `b` INT64) OPTIONS (description='test description') AS SELECT `a`, `b` FROM `source_table`",
         "CREATE OR REPLACE VIEW `test_table` OPTIONS (description='test description') AS SELECT `a`, `b` FROM `source_table`",
         "ALTER TABLE `test_table` SET OPTIONS(description = 'test description')",

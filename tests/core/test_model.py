@@ -463,6 +463,28 @@ def test_column_descriptions(sushi_context, assert_exp_eq):
     """,
     )
 
+    expressions = d.parse(
+        """
+        MODEL (
+            name db.table,
+            kind FULL,
+        );
+
+        SELECT
+          STRUCT<
+            a STRING, -- a description
+            b INT, -- b description
+          > AS s, -- s description
+        FROM table
+    """
+    )
+    model = load_sql_based_model(expressions, dialect="bigquery", default_catalog="memory")
+
+    assert_exp_eq(
+        model.column_descriptions,
+        {"s": "s description", "s.a": "a description", "s.b": "b description"},
+    )
+
 
 def test_model_jinja_macro_reference_extraction():
     @macro()
