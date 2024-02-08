@@ -5,6 +5,7 @@ import sys
 import typing as t
 from collections import defaultdict
 from datetime import datetime
+from functools import cached_property
 
 from sqlmesh.core.config import (
     AutoCategorizationMode,
@@ -54,6 +55,7 @@ class PlanBuilder:
         environment_suffix_target: Indicates whether to append the environment name to the schema or table name.
         default_start: The default plan start to use if not specified.
         default_end: The default plan end to use if not specified.
+        enable_preview: Whether to enable preview for forward-only models in development environments.
     """
 
     def __init__(
@@ -78,12 +80,14 @@ class PlanBuilder:
         include_unmodified: bool = False,
         default_start: t.Optional[TimeLike] = None,
         default_end: t.Optional[TimeLike] = None,
+        enable_preview: bool = False,
     ):
         self._context_diff = context_diff
         self._no_gaps = no_gaps
         self._skip_backfill = skip_backfill
         self._is_dev = is_dev
         self._forward_only = forward_only
+        self._enable_preview = enable_preview
         self._environment_ttl = environment_ttl
         self._categorizer_config = categorizer_config or CategorizerConfig()
         self._auto_categorization_enabled = auto_categorization_enabled
@@ -96,7 +100,7 @@ class PlanBuilder:
         self._apply = apply
 
         self._start = start
-        if not self._start and is_dev and forward_only:
+        if not self._start and self._forward_only_preview_needed:
             self._start = default_start or yesterday_ds()
 
         self._plan_id: str = random_id()
@@ -252,12 +256,14 @@ class PlanBuilder:
         restatements: t.Dict[SnapshotId, Interval] = {}
         dummy_interval = (sys.maxsize, -sys.maxsize)
         restate_models = self._restate_models
-        is_dev_forward_only = self._is_dev and self._forward_only
-        if not restate_models and is_dev_forward_only:
+        forward_only_preview_needed = self._forward_only_preview_needed
+        if not restate_models and forward_only_preview_needed:
             # Add model names for new forward-only snapshots to the restatement list
             # in order to compute previews.
             restate_models = {
-                s.name for s in self._context_diff.new_snapshots.values() if s.is_materialized
+                s.name
+                for s in self._context_diff.new_snapshots.values()
+                if s.is_materialized and (self._forward_only or s.model.forward_only)
             }
         if not restate_models:
             return restatements
@@ -265,7 +271,9 @@ class PlanBuilder:
         # Add restate snapshots and their downstream snapshots
         for model_fqn in restate_models:
             snapshot = self._model_fqn_to_snapshot.get(model_fqn)
-            if not snapshot or (not is_dev_forward_only and not is_restateable_snapshot(snapshot)):
+            if not snapshot or (
+                not forward_only_preview_needed and not is_restateable_snapshot(snapshot)
+            ):
                 raise PlanError(
                     f"Cannot restate from '{model_fqn}'. Either such model doesn't exist, no other materialized model references it, or restatement was disabled for this model."
                 )
@@ -600,3 +608,18 @@ class PlanBuilder:
             raise NoChangesPlanError(
                 "No changes were detected. Make a change or run with --include-unmodified to create a new environment without changes."
             )
+
+    @cached_property
+    def _forward_only_preview_needed(self) -> bool:
+        """Determines whether the plan should compute previews for forward-only changes (if there are any)."""
+        return self._is_dev and (
+            self._forward_only
+            or (
+                self._enable_preview
+                and any(
+                    snapshot.model.forward_only
+                    for snapshot in self._context_diff.new_snapshots.values()
+                    if snapshot.is_model
+                )
+            )
+        )

@@ -13,7 +13,6 @@ from sqlmesh.cicd.config import CICDBotConfig
 from sqlmesh.core import constants as c
 from sqlmesh.core.config import EnvironmentSuffixTarget
 from sqlmesh.core.config.base import BaseConfig, UpdateStrategy
-from sqlmesh.core.config.categorizer import CategorizerConfig
 from sqlmesh.core.config.connection import (
     ConnectionConfig,
     DuckDBConnectionConfig,
@@ -23,6 +22,7 @@ from sqlmesh.core.config.feature_flag import FeatureFlag
 from sqlmesh.core.config.format import FormatConfig
 from sqlmesh.core.config.gateway import GatewayConfig
 from sqlmesh.core.config.model import ModelDefaultsConfig
+from sqlmesh.core.config.plan import PlanConfig
 from sqlmesh.core.config.run import RunConfig
 from sqlmesh.core.config.scheduler import BuiltInSchedulerConfig, SchedulerConfig
 from sqlmesh.core.config.ui import UIConfig
@@ -53,8 +53,6 @@ class Config(BaseConfig):
         ignore_patterns: Files that match glob patterns specified in this list are ignored when scanning the project folder.
         time_column_format: The default format to use for all model time columns. Defaults to %Y-%m-%d.
             This time format uses python format codes. https://docs.python.org/3/library/datetime.html#strftime-and-strptime-format-codes.
-        auto_categorize_changes: Indicates whether SQLMesh should attempt to automatically categorize model changes (breaking / non-breaking)
-            during plan creation.
         users: A list of users that can be used for approvals/notifications.
         username: Name of a single user who should receive approvals/notification, instead of all users in the `users` list.
         pinned_environments: A list of development environment names that should not be deleted by the janitor task.
@@ -62,7 +60,6 @@ class Config(BaseConfig):
         loader_kwargs: Key-value arguments to pass to the loader instance.
         env_vars: A dictionary of environmental variable names and values.
         model_defaults: Default values for model definitions.
-        include_unmodified: Indicates whether to include unmodified models in the target development environment.
         physical_schema_override: A mapping from model schema names to names of schemas in which physical tables for corresponding models will be placed.
         environment_suffix_target: Indicates whether to append the environment name to the schema or table name.
         default_target_environment: The name of the environment that will be the default target for the `sqlmesh plan` and `sqlmesh run` commands.
@@ -85,7 +82,6 @@ class Config(BaseConfig):
     environment_ttl: t.Optional[str] = c.DEFAULT_ENVIRONMENT_TTL
     ignore_patterns: t.List[str] = c.IGNORE_PATTERNS
     time_column_format: str = c.DEFAULT_TIME_COLUMN_FORMAT
-    auto_categorize_changes: CategorizerConfig = CategorizerConfig()
     users: t.List[User] = []
     model_defaults: ModelDefaultsConfig = ModelDefaultsConfig()
     pinned_environments: t.Set[str] = set()
@@ -93,7 +89,6 @@ class Config(BaseConfig):
     loader_kwargs: t.Dict[str, t.Any] = {}
     env_vars: t.Dict[str, str] = {}
     username: str = ""
-    include_unmodified: bool = False
     physical_schema_override: t.Dict[str, str] = {}
     environment_suffix_target: EnvironmentSuffixTarget = Field(
         default=EnvironmentSuffixTarget.default
@@ -106,6 +101,7 @@ class Config(BaseConfig):
     format: FormatConfig = FormatConfig()
     ui: UIConfig = UIConfig()
     feature_flags: FeatureFlag = FeatureFlag()
+    plan: PlanConfig = PlanConfig()
 
     _FIELD_UPDATE_STRATEGY: t.ClassVar[t.Dict[str, UpdateStrategy]] = {
         "gateways": UpdateStrategy.KEY_UPDATE,
@@ -120,6 +116,7 @@ class Config(BaseConfig):
         "format": UpdateStrategy.NESTED_UPDATE,
         "ui": UpdateStrategy.NESTED_UPDATE,
         "loader_kwargs": UpdateStrategy.KEY_UPDATE,
+        "plan": UpdateStrategy.NESTED_UPDATE,
     }
 
     _connection_config_validator = connection_config_validator
@@ -149,9 +146,15 @@ class Config(BaseConfig):
 
     @model_validator(mode="before")
     @model_validator_v1_args
-    def _normalize_fields(cls, values: t.Dict[str, t.Any]) -> t.Dict[str, t.Any]:
+    def _normalize_and_validate_fields(cls, values: t.Dict[str, t.Any]) -> t.Dict[str, t.Any]:
         if "gateways" not in values and "gateway" in values:
             values["gateways"] = values.pop("gateway")
+
+        for plan_deprecated in ("auto_categorize_changes", "include_unmodified"):
+            if plan_deprecated in values:
+                raise ConfigError(
+                    f"The `{plan_deprecated}` config is deprecated. Please use the `plan.{plan_deprecated}` config instead."
+                )
 
         return values
 

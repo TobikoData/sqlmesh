@@ -829,7 +829,10 @@ class TerminalConsole(Console):
                         blank_meaning = "to preview starting from yesterday"
                         default_start = yesterday_ds()
                 else:
-                    blank_meaning = "to backfill from the beginning of history"
+                    if plan.provided_start:
+                        blank_meaning = f"to backfill starting from '{plan.provided_start}'"
+                    else:
+                        blank_meaning = "to backfill from the beginning of history"
                     default_start = None
 
                 start = self._prompt(
