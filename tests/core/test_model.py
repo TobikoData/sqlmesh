@@ -471,10 +471,10 @@ def test_column_descriptions(sushi_context, assert_exp_eq):
         );
 
         SELECT
-          STRUCT<
-            a STRING, -- a description
-            b INT, -- b description
-          > AS s, -- s description
+          STRUCT(
+            a, -- a description
+            b, -- b description
+          ) AS s, -- s description
         FROM table
     """
     )
