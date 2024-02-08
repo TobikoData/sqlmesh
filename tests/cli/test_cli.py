@@ -1,4 +1,3 @@
-import re
 from os import path
 
 import pytest
@@ -500,13 +499,7 @@ def test_run_cron_not_elapsed(runner, tmp_path):
     # No error and no output if `prod` environment exists and cron has not elapsed
     result = runner.invoke(cli, ["--paths", tmp_path, "run"])
     assert result.exit_code == 0
-
-    # INFO messages are printed to console when tests run in some platforms/environments.
-    # For example, no INFO messages when run with `pytest` from CLI, but INFO messages
-    # present when run with `make`.
-    # Regex matches 1 or more INFO messages - example message:
-    #     [2024-02-06 15:26:15,856] {connection.py:242} INFO - Creating new DuckDB adapter for in-memory database\n
-    assert result.output == "" or re.fullmatch("^(\[.*? INFO.*?\n)+$", result.output)
+    assert result.output == ""
 
 
 def test_run_cron_elapsed(runner, tmp_path):
