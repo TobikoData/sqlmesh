@@ -37,24 +37,23 @@ async def initiate_apply(
     categories: t.Optional[t.Dict[str, SnapshotChangeCategory]] = None,
 ) -> t.Optional[models.PlanApplyStageTracker]:
     """Apply a plan"""
-    if hasattr(request.app.state, "task") and not request.app.state.task.done():
-        raise ApiException(
-            message="Plan/apply is already running",
-            origin="API -> commands -> apply",
+    if not hasattr(request.app.state, "task") or request.app.state.task.done():
+        request.app.state.circuit_breaker.clear()
+        request.app.state.task = asyncio.create_task(
+            run_in_executor(
+                _run_plan_apply,
+                context,
+                environment,
+                plan_options,
+                plan_dates,
+                categories,
+                request.app.state.circuit_breaker.is_set,
+            )
         )
+    else:
+        api_console.log_event_plan_overview()
+        api_console.log_event_plan_apply()
 
-    request.app.state.circuit_breaker.clear()
-    request.app.state.task = asyncio.create_task(
-        run_in_executor(
-            _run_plan_apply,
-            context,
-            environment,
-            plan_options,
-            plan_dates,
-            categories,
-            request.app.state.circuit_breaker.is_set,
-        )
-    )
     response.status_code = HTTP_204_NO_CONTENT
 
     return None
