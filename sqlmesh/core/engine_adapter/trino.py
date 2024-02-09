@@ -22,6 +22,7 @@ from sqlmesh.core.engine_adapter.shared import (
     SourceQuery,
     set_catalog,
 )
+from sqlmesh.utils.date import TimeLike, to_datetime
 
 if t.TYPE_CHECKING:
     from trino.dbapi import Connection as TrinoConnection
@@ -170,3 +171,14 @@ class TrinoEngineAdapter(
                 df[column] = pd.to_datetime(df[column]).map(lambda x: x.isoformat(" "))  # type: ignore
 
         return super()._df_to_source_queries(df, columns_to_types, batch_size, target_table)
+
+    @classmethod
+    def _to_timestamp(
+        cls, col: t.Union[TimeLike, exp.Null], time_data_type: exp.DataType
+    ) -> exp.Cast:
+        column_to_cast = (
+            col
+            if isinstance(col, exp.Null)
+            else exp.Literal.string(to_datetime(col).strftime("%Y-%m-%d %H:%M:%S"))
+        )
+        return exp.cast(exp.cast(column_to_cast, "TIMESTAMP"), time_data_type)

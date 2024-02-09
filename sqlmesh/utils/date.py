@@ -214,7 +214,8 @@ def date_dict(
         kwargs[f"{prefix}_dt"] = dt
         kwargs[f"{prefix}_date"] = to_date(dt)
         kwargs[f"{prefix}_ds"] = to_ds(time_like)
-        kwargs[f"{prefix}_ts"] = dt.isoformat()
+        kwargs[f"{prefix}_ts"] = to_ts(dt)
+        kwargs[f"{prefix}_tstz"] = to_tstz(dt)
         kwargs[f"{prefix}_epoch"] = millis / 1000
         kwargs[f"{prefix}_millis"] = millis
         kwargs[f"{prefix}_hour"] = dt.hour
@@ -227,7 +228,12 @@ def to_ds(obj: TimeLike) -> str:
 
 
 def to_ts(obj: TimeLike) -> str:
-    """Converts a TimeLike object into YYYY-MM-DD HH:MM:SS formatted string."""
+    """Converts a TimeLike object into YYYY-MM-DDTHH:MM:SS formatted string."""
+    return to_datetime(obj).replace(tzinfo=None).isoformat()
+
+
+def to_tstz(obj: TimeLike) -> str:
+    """Converts a TimeLike object into YYYY-MM-DDTHH:MM:SS+HH:MM formatted string."""
     return to_datetime(obj).isoformat()
 
 

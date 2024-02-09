@@ -34,7 +34,14 @@ from sqlmesh.core.model.meta import ModelMeta
 from sqlmesh.core.model.seed import CsvSeedReader, Seed, create_seed
 from sqlmesh.core.renderer import ExpressionRenderer, QueryRenderer
 from sqlmesh.utils import columns_to_types_all_known, str_to_bool
-from sqlmesh.utils.date import TimeLike, make_inclusive, to_datetime, to_ds, to_ts
+from sqlmesh.utils.date import (
+    TimeLike,
+    make_inclusive,
+    to_datetime,
+    to_ds,
+    to_ts,
+    to_tstz,
+)
 from sqlmesh.utils.errors import ConfigError, SQLMeshError, raise_config_error
 from sqlmesh.utils.hashing import hash_data
 from sqlmesh.utils.jinja import JinjaMacroRegistry, extract_macro_references
@@ -61,6 +68,12 @@ else:
     from typing_extensions import Literal
 
 logger = logging.getLogger(__name__)
+
+TEMPORAL_TZ_TYPES = {
+    exp.DataType.Type.TIMETZ,
+    exp.DataType.Type.TIMESTAMPTZ,
+    exp.DataType.Type.TIMESTAMPLTZ,
+}
 
 
 class _Model(ModelMeta, frozen=True):
@@ -514,6 +527,8 @@ class _Model(ModelMeta, frozen=True):
 
             if time_column_type.is_type(exp.DataType.Type.DATE):
                 return exp.cast(exp.Literal.string(to_ds(time)), to="date")
+            if time_column_type.this in TEMPORAL_TZ_TYPES:
+                return exp.cast(exp.Literal.string(to_tstz(time)), to=time_column_type.this)
             if time_column_type.this in exp.DataType.TEMPORAL_TYPES:
                 return exp.cast(exp.Literal.string(to_ts(time)), to=time_column_type.this)
 
