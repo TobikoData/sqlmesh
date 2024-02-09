@@ -93,7 +93,7 @@ jobs:
           command: make install-dev
       - run:
           name: Install Pydantic v1
-          command: pip install --upgrade "pydantic<2.0.0"
+          command: pip install --upgrade "pydantic<2.0.0" && pip uninstall pydantic_core -y
       - run:
           name: Run linters and code style checks
           command: make py-style
