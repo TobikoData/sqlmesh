@@ -1,5 +1,7 @@
+import functools
 import sys
 import typing as t
+from pathlib import Path
 from unittest import mock
 
 import pytest
@@ -8,7 +10,12 @@ from sqlglot import exp, parse_one
 from sqlmesh.core.dialect import StagedFilePath
 from sqlmesh.core.macros import MacroEvaluator, macro
 from sqlmesh.utils.errors import SQLMeshError
-from sqlmesh.utils.metaprogramming import Executable, ExecutableKind
+from sqlmesh.utils.metaprogramming import (
+    Executable,
+    ExecutableKind,
+    build_env,
+    serialize_env,
+)
 
 
 @pytest.fixture
@@ -76,12 +83,15 @@ def test_external_macro() -> None:
     def foo(evaluator: MacroEvaluator) -> str:
         return "foo"
 
+    @functools.wraps(foo)
+    def wrapper(*args, **kwargs):
+        return foo(*args, **kwargs)
+
     # Mimic a SQLMesh macro definition by setting the func's metadata appropriately
-    setattr(foo, "__wrapped__", foo)
-    setattr(foo, "__sqlmesh_macro__", True)
+    setattr(wrapper, "__sqlmesh_macro__", True)
 
     sys.modules["pkg"] = mock.Mock()
-    with mock.patch("pkg.foo", foo):
+    with mock.patch("pkg.foo", wrapper):
         evaluator = MacroEvaluator(
             python_env={
                 "foo": Executable(
@@ -96,6 +106,31 @@ def test_external_macro() -> None:
 
         assert "@FOO" in evaluator.macros
         assert evaluator.macros["@FOO"](evaluator) == "foo"
+
+    # Assert that serializing a wrapped external macro traverses the chain of wrapped functions
+    # even through other modules
+    fakemod = mock.Mock()
+    fakemod.__name__ = "other_pkg"
+    fakemod.__file__ = "some/path.py"
+    sys.modules["other_pkg"] = fakemod
+
+    @functools.wraps(wrapper)
+    def nested_wrapper(*args, **kwargs):
+        return wrapper(*args, **kwargs)
+
+    setattr(nested_wrapper, "__sqlmesh_macro__", True)
+    setattr(nested_wrapper, "__module__", "other_pkg")
+    with mock.patch("other_pkg.bar", nested_wrapper):
+        env: t.Dict[str, t.Any] = {}
+        build_env(nested_wrapper, env=env, name="bar", path=Path("tests/core/test_macros.py"))
+        assert serialize_env(env, path=Path("tests/core")) == {
+            "bar": Executable(
+                payload="def foo(evaluator: MacroEvaluator):\n    return 'foo'",
+                name="foo",
+                path="test_macros.py",
+                alias="bar",
+            )
+        }
 
 
 def test_macro_var(macro_evaluator):
