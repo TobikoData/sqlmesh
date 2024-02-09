@@ -29,6 +29,7 @@ from sqlmesh.core.model import (
     model,
 )
 from sqlmesh.core.model.common import parse_expression
+from sqlmesh.core.model.kind import _model_kind_validator
 from sqlmesh.core.model.seed import CsvSettings
 from sqlmesh.core.node import IntervalUnit, _Node
 from sqlmesh.core.snapshot import SnapshotChangeCategory
@@ -2536,6 +2537,9 @@ def test_scd_type_2_by_time_overrides():
     assert not scd_type_2_model.kind.forward_only
     assert not scd_type_2_model.kind.disable_restatement
 
+    model_kind_dict = scd_type_2_model.kind.dict()
+    assert scd_type_2_model.kind == _model_kind_validator(None, model_kind_dict, {})
+
 
 def test_scd_type_2_by_column_defaults():
     model_def = d.parse(
@@ -2619,6 +2623,9 @@ def test_scd_type_2_by_column_overrides():
     assert scd_type_2_model.kind.time_data_type == exp.DataType.build("TIMESTAMPTZ")
     assert not scd_type_2_model.kind.forward_only
     assert not scd_type_2_model.kind.disable_restatement
+
+    model_kind_dict = scd_type_2_model.kind.dict()
+    assert scd_type_2_model.kind == _model_kind_validator(None, model_kind_dict, {})
 
 
 @pytest.mark.parametrize(
