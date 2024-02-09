@@ -198,11 +198,6 @@ class ManifestHelper:
 
             if node.resource_type == "snapshot":
                 config = _config(node)
-                if config.get("strategy", "timestamp") != "timestamp":
-                    logging.warning(
-                        f"{node.relation_name}: SQLMesh only supports timestamp snapshot strategy. Skipping model."
-                    )
-                    continue
                 if not config.get("invalidate_hard_deletes"):
                     logging.warning(
                         f"{node.relation_name}: SQLMesh only supports invalidate_hard_deletes. Skipping model."

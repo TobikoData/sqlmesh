@@ -432,6 +432,8 @@ def _create_parser(parser_type: t.Type[exp.Expression], table_keys: t.List[str])
                         ModelKindName.SEED,
                         ModelKindName.VIEW,
                         ModelKindName.SCD_TYPE_2,
+                        ModelKindName.SCD_TYPE_2_BY_TIME,
+                        ModelKindName.SCD_TYPE_2_BY_COLUMN,
                     ) and self._match(TokenType.L_PAREN, advance=False):
                         props = self._parse_wrapped_csv(functools.partial(_parse_props, self))
                     else:

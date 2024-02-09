@@ -551,7 +551,7 @@ def test_spark_struct_complex_to_col_to_types(type_name, spark_type):
     assert actual == expected
 
 
-def test_scd_type_2(
+def test_scd_type_2_by_time(
     make_mocked_engine_adapter: t.Callable, make_temp_table_name: t.Callable, mocker: MockerFixture
 ):
     mocker.patch(
@@ -579,7 +579,7 @@ def test_scd_type_2(
         side_effect=check_table_exists,
     )
 
-    adapter.scd_type_2(
+    adapter.scd_type_2_by_time(
         target_table="db.target",
         source_table=t.cast(
             exp.Select, parse_one("SELECT id, name, price, test_updated_at FROM db.source")

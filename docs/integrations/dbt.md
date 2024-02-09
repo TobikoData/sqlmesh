@@ -154,14 +154,10 @@ It's important to note, that the `on_schema_change` setting is ignored by SQLMes
 
 ## Snapshot support
 
-SQLMesh currently supports dbt snapshots with `timestamp` strategy and `invalidate_hard_deletes` set to `True`.
-Unsupported snapshots are skipped and a warning is logged indicating this happened.
-dbt Snapshot support is continuously being improved and full support should be achieved soon.
-
-dbt snapshots have one behavioral difference when running through the SQLMesh dbt adapter.
-If a row is a deleted from source and then added back later, the previously deleted row will keep it's original `valid_to` timestamp while in dbt this record is updated with the current time.
-SQLMesh views that previously deleted record as immutable, and the time where it didn't exist as an invalid time range, and therefore it is not updated.
-If you have a good use case for this behavior, please [join our slack community](https://tobikodata.com/slack) and share your use case with us.
+SQLMesh supports both dbt snapshot strategies of either `timestamp` or `check`. 
+Only unsupported snapshot functionality is `invalidate_hard_deletes` which must be set to `True`. 
+If set to `False`, then the snapshot will be skipped and a warning will be logged indicating this happened.
+Support for this will be added soon.
 
 ## Tests
 SQLMesh uses dbt tests to perform SQLMesh [audits](../concepts/audits.md) (coming soon).
