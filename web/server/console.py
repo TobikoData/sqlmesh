@@ -66,7 +66,10 @@ class ApiConsole(TerminalConsole):
             self.plan_apply_stage_tracker.creation.stop(success=success)
 
             if not success:
-                self.stop_plan_tracker(tracker=self.plan_apply_stage_tracker, success=False)
+                if self.is_cancelling_plan():
+                    self.finish_plan_cancellation()
+                else:
+                    self.stop_plan_tracker(tracker=self.plan_apply_stage_tracker, success=success)
 
     def start_restate_progress(self) -> None:
         if self.plan_apply_stage_tracker:
@@ -81,7 +84,10 @@ class ApiConsole(TerminalConsole):
             self.plan_apply_stage_tracker.restate.stop(success=success)
 
             if not success:
-                self.stop_plan_tracker(tracker=self.plan_apply_stage_tracker, success=False)
+                if self.is_cancelling_plan():
+                    self.finish_plan_cancellation()
+                else:
+                    self.stop_plan_tracker(tracker=self.plan_apply_stage_tracker, success=success)
 
     def start_evaluation_progress(
         self,
@@ -135,7 +141,10 @@ class ApiConsole(TerminalConsole):
             self.plan_apply_stage_tracker.backfill.stop(success=success)
 
             if not success:
-                self.stop_plan_tracker(tracker=self.plan_apply_stage_tracker, success=False)
+                if self.is_cancelling_plan():
+                    self.finish_plan_cancellation()
+                else:
+                    self.stop_plan_tracker(tracker=self.plan_apply_stage_tracker, success=success)
 
     def start_promotion_progress(
         self,
@@ -168,7 +177,10 @@ class ApiConsole(TerminalConsole):
             self.plan_apply_stage_tracker.promote.stop(success=success)
 
             if not success:
-                self.stop_plan_tracker(tracker=self.plan_apply_stage_tracker, success=False)
+                if self.is_cancelling_plan():
+                    self.finish_plan_cancellation()
+                else:
+                    self.stop_plan_tracker(tracker=self.plan_apply_stage_tracker, success=success)
 
     def start_plan_tracker(
         self,
@@ -287,6 +299,37 @@ class ApiConsole(TerminalConsole):
                 origin="API -> console -> log_exception",
             ).to_dict(),
         )
+
+    def is_cancelling_plan(self) -> bool:
+        return bool(self.plan_cancel_stage_tracker and not self.plan_cancel_stage_tracker.meta.done)
+
+    def finish_plan_cancellation(self) -> None:
+        cancel_tracker = self.plan_cancel_stage_tracker
+
+        if not cancel_tracker:
+            return
+
+        if cancel_tracker.cancel and not cancel_tracker.cancel.meta.done:
+            cancel_tracker.cancel.stop(success=True)
+
+        # We can only cancel plan apply
+        # We need to stop it and clean up the state
+        apply_tracker = self.plan_apply_stage_tracker
+        stages = (
+            [attr for attr in apply_tracker.__fields__ if not attr.startswith("__")]
+            if apply_tracker
+            else []
+        )
+
+        def _is_stage_done(stage: str) -> bool:
+            stage = getattr(apply_tracker, stage)
+            return stage.meta.done if stage and hasattr(stage, "meta") else True
+
+        is_apply_tracker_completed = all([_is_stage_done(stage) for stage in stages])
+
+        if apply_tracker and not apply_tracker.meta.done and is_apply_tracker_completed:
+            self.stop_plan_tracker(tracker=apply_tracker, success=False)
+            self.stop_plan_tracker(tracker=cancel_tracker, success=True)
 
 
 api_console = ApiConsole()
