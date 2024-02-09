@@ -227,9 +227,7 @@ export default function PageIDE(): JSX.Element {
   useEffect(() => {
     if (location.pathname === EnumRoutes.Ide) {
       navigate(
-        modules.includes(Modules.editor)
-          ? EnumRoutes.IdeEditor
-          : EnumRoutes.IdeDocs,
+        modules.includes(Modules.editor) ? EnumRoutes.Editor : EnumRoutes.Docs,
         { replace: true },
       )
     }

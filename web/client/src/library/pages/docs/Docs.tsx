@@ -32,8 +32,8 @@ export default function PageDocs(): JSX.Element {
 
     navigate(
       isNil(model)
-        ? `${EnumRoutes.IdeDocsModels}`
-        : `${EnumRoutes.IdeDocsModels}/${model.name}`,
+        ? `${EnumRoutes.DocsModels}`
+        : `${EnumRoutes.DocsModels}/${model.name}`,
       { replace: true },
     )
   }, [models])
@@ -46,9 +46,9 @@ export default function PageDocs(): JSX.Element {
         <SourceList<ModelSQLMeshModel>
           keyId="displayName"
           keyName="displayName"
-          to={EnumRoutes.IdeDocsModels}
+          to={EnumRoutes.DocsModels}
           items={list}
-          isActive={id => `${EnumRoutes.IdeDocsModels}/${id}` === pathname}
+          isActive={id => `${EnumRoutes.DocsModels}/${id}` === pathname}
           types={list.reduce(
             (acc: Record<string, string>, it) =>
               Object.assign(acc, {
@@ -90,7 +90,7 @@ export default function PageDocs(): JSX.Element {
                   size={EnumSize.lg}
                   searchBy="index"
                   displayBy="displayName"
-                  to={model => `${EnumRoutes.IdeDocsModels}/${model.name}`}
+                  to={model => `${EnumRoutes.DocsModels}/${model.name}`}
                   direction="top"
                   className="my-2"
                   isFullWidth

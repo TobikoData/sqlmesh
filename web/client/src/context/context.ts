@@ -223,6 +223,10 @@ export const useStoreContext = create<ContextStore>((set, get) => ({
           environment.setType(EnumRelativeLocation.Remote)
         }
 
+        if (s.environment.name === env.name) {
+          s.environment.update(env)
+        }
+
         if (environment.isInitial && environment.isDefault) {
           s.setEnvironment(environment)
         }

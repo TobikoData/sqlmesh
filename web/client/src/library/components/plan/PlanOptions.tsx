@@ -11,7 +11,6 @@ import PlanBackfillDates from './PlanBackfillDates'
 import { useEffect, useRef } from 'react'
 import { useStorePlan } from '@context/plan'
 import Banner from '@components/banner/Banner'
-import { Modules } from '@api/client'
 
 export default function PlanOptions(): JSX.Element {
   const dispatch = usePlanDispatch()
@@ -33,7 +32,6 @@ export default function PlanOptions(): JSX.Element {
   const planOverview = useStorePlan(s => s.planOverview)
   const planApply = useStorePlan(s => s.planApply)
 
-  const modules = useStoreContext(s => s.modules)
   const environment = useStoreContext(s => s.environment)
   const environments = useStoreContext(s => s.environments)
 
@@ -53,8 +51,7 @@ export default function PlanOptions(): JSX.Element {
     planAction.isProcessing ||
     planAction.isDone ||
     planApply.isFinished ||
-    (planOverview.isLatest && isFalse(planAction.isRun)) ||
-    isFalse(modules.includes(Modules.plans))
+    (planOverview.isLatest && isFalse(planAction.isRun))
 
   useEffect(() => {
     if (isNil(elTrigger.current)) return
