@@ -180,7 +180,10 @@ export class ModelPlanAction<
     const isRunningCancel = planCancel.isRunning
     const isFinished =
       (planApply.isFinished && planOverview.isFinished) || planCancel.isFinished
+    const isEmpty =
+      planCancel.isEmpty && planApply.isEmpty && planOverview.isEmpty
 
+    if (isEmpty) return EnumPlanAction.Run
     if (isRunningCancel) return EnumPlanAction.Cancelling
     if (isRunningApply) return EnumPlanAction.Applying
     if (isRunningPlan) return EnumPlanAction.Running

@@ -55,7 +55,7 @@ export default function EditorPreview({
   const [activeTabIndex, setActiveTabIndex] = useState(-1)
 
   const modelExtensions = useSQLMeshModelExtensions(tab.file.path, model => {
-    navigate(`${EnumRoutes.IdeDocsModels}/${model.name}`)
+    navigate(`${EnumRoutes.DocsModels}/${model.name}`)
   })
 
   const model = models.get(tab.file.path)

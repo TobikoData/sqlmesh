@@ -59,7 +59,7 @@ export default function EditorFooter({ tab }: { tab: EditorTab }): JSX.Element {
           <EditorIndicator.Light ok={isFalse(tab.file.isChanged)} />
         </EditorIndicator>
       )}
-      {tab.file.isSQL && (
+      {tab.file.isRemote && tab.file.isSQL && (
         <EditorIndicator
           className="mr-2"
           text="Formatted"

@@ -425,11 +425,7 @@ function StageBackfill(): JSX.Element {
   return (
     <Stage
       meta={stageBackfill.meta}
-      states={[
-        'Intervals Backfilled',
-        'Intervals Backfilling Failed',
-        'Backfilling Intervals...',
-      ]}
+      states={['Backfilled', 'Backfilling Failed', 'Backfilling Intervals...']}
       showDetails={true}
       isOpen={true}
       shouldCollapse={false}
