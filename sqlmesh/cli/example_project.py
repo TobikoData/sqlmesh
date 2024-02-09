@@ -94,7 +94,7 @@ SELECT
 FROM
     {EXAMPLE_SEED_MODEL_NAME}
 WHERE
-    ds between @start_ds and @end_ds
+    ds between {{start_variable}} and {{end_variable}}
 """
 
 EXAMPLE_SEED_MODEL_DEF = f"""MODEL (
@@ -105,7 +105,7 @@ EXAMPLE_SEED_MODEL_DEF = f"""MODEL (
     columns (
         id INTEGER,
         item_id INTEGER,
-        ds TEXT
+        ds {{date_dtype}}
     ),
     grain (id, ds)
 );
@@ -186,7 +186,7 @@ def init_example_project(
     if template != ProjectTemplate.EMPTY:
         _create_macros(macros_path)
         _create_audits(audits_path)
-        _create_models(models_path)
+        _create_models(models_path, dialect)
         _create_seeds(seeds_path)
         _create_tests(tests_path)
 
@@ -217,12 +217,20 @@ def _create_audits(audits_path: Path) -> None:
     _write_file(audits_path / "assert_positive_order_ids.sql", EXAMPLE_AUDIT)
 
 
-def _create_models(models_path: Path) -> None:
+def _create_models(models_path: Path, dialect: t.Optional[str]) -> None:
     for model_name, model_def in [
         (EXAMPLE_FULL_MODEL_NAME, EXAMPLE_FULL_MODEL_DEF),
         (EXAMPLE_INCREMENTAL_MODEL_NAME, EXAMPLE_INCREMENTAL_MODEL_DEF),
         (EXAMPLE_SEED_MODEL_NAME, EXAMPLE_SEED_MODEL_DEF),
     ]:
+        date_dtype = "DATE" if dialect and dialect == "bigquery" else "TEXT"
+        start_variable = "@start_date" if date_dtype == "DATE" else "@start_ds"
+        end_variable = "@end_date" if date_dtype == "DATE" else "@end_ds"
+        model_def = model_def.format(
+            start_variable=start_variable,
+            end_variable=end_variable,
+            date_dtype=date_dtype,
+        )
         _write_file(models_path / f"{model_name.split('.')[-1]}.sql", model_def)
 
 
