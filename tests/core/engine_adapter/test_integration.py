@@ -21,6 +21,7 @@ from sqlmesh.utils.date import now, to_date, to_ds, yesterday
 from sqlmesh.utils.errors import UnsupportedCatalogOperationError
 from sqlmesh.utils.pydantic import PydanticModel
 from tests.conftest import SushiDataValidator
+from tests.utils.pandas import compare_dataframes
 
 if t.TYPE_CHECKING:
     from sqlmesh.core.engine_adapter._typing import Query
@@ -90,14 +91,6 @@ class TestContext:
     @property
     def dialect(self) -> str:
         return self.engine_adapter.dialect
-
-    @classmethod
-    def _compare_dfs(cls, actual: pd.DataFrame, expected: pd.DataFrame) -> None:
-        actual = actual.reset_index(drop=True)
-        expected = expected.reset_index(drop=True)
-        actual = actual.apply(lambda x: x.sort_values().values).reset_index(drop=True)
-        expected = expected.apply(lambda x: x.sort_values().values).reset_index(drop=True)
-        pd.testing.assert_frame_equal(actual, expected, check_dtype=False, check_index_type=False)
 
     def add_test_suffix(self, value: str) -> str:
         return f"{value}_{self.test_id}"
@@ -179,7 +172,12 @@ class TestContext:
         return df
 
     def compare_with_current(self, table: exp.Table, expected: pd.DataFrame) -> None:
-        self._compare_dfs(self.get_current_data(table), self.output_data(expected))
+        compare_dataframes(
+            self.get_current_data(table),
+            self.output_data(expected),
+            check_dtype=False,
+            check_index_type=False,
+        )
 
     def get_table_comment(
         self,
@@ -1134,7 +1132,7 @@ def test_merge(ctx: TestContext):
         )
 
 
-def test_scd_type_2(ctx: TestContext):
+def test_scd_type_2_by_time(ctx: TestContext):
     time_type = "timestamp"
 
     ctx.columns_to_types = {
@@ -1157,7 +1155,7 @@ def test_scd_type_2(ctx: TestContext):
             {"id": 3, "name": "c", "updated_at": "2022-01-03 00:00:00"},
         ]
     )
-    ctx.engine_adapter.scd_type_2(
+    ctx.engine_adapter.scd_type_2_by_time(
         table,
         ctx.input_data(input_data, input_schema),
         unique_key=[exp.to_identifier("id")],
@@ -1217,10 +1215,10 @@ def test_scd_type_2(ctx: TestContext):
             {"id": 4, "name": "d", "updated_at": "2022-01-04 00:00:00"},
         ]
     )
-    ctx.engine_adapter.scd_type_2(
+    ctx.engine_adapter.scd_type_2_by_time(
         table,
         ctx.input_data(current_data, input_schema),
-        unique_key=[exp.to_identifier("id")],
+        unique_key=[exp.to_column("id")],
         valid_from_name="valid_from",
         valid_to_name="valid_to",
         updated_at_name="updated_at",
@@ -1269,6 +1267,173 @@ def test_scd_type_2(ctx: TestContext):
                     "id": 4,
                     "name": "d",
                     "updated_at": "2022-01-04 00:00:00",
+                    "valid_from": "1970-01-01 00:00:00",
+                    "valid_to": pd.NaT,
+                },
+            ]
+        ),
+    )
+
+
+def test_scd_type_2_by_column(ctx: TestContext):
+    time_type = "datetime" if ctx.dialect == "bigquery" else "timestamp"
+
+    ctx.columns_to_types = {
+        "id": "int",
+        "name": "string",
+        "status": "string",
+        "valid_from": time_type,
+        "valid_to": time_type,
+    }
+    ctx.init()
+    table = ctx.table("test_table")
+    input_schema = {
+        k: v for k, v in ctx.columns_to_types.items() if k not in ("valid_from", "valid_to")
+    }
+    ctx.engine_adapter.create_table(table, ctx.columns_to_types)
+    input_data = pd.DataFrame(
+        [
+            {"id": 1, "name": "a", "status": "active"},
+            {"id": 2, "name": "b", "status": "inactive"},
+            {"id": 3, "name": "c", "status": "active"},
+            {"id": 4, "name": "d", "status": "active"},
+        ]
+    )
+    ctx.engine_adapter.scd_type_2_by_column(
+        table,
+        ctx.input_data(input_data, input_schema),
+        unique_key=[exp.to_column("id")],
+        check_columns=[exp.to_column("name"), exp.to_column("status")],
+        valid_from_name="valid_from",
+        valid_to_name="valid_to",
+        execution_time="2023-01-01",
+        execution_time_as_valid_from=False,
+        columns_to_types=input_schema,
+    )
+    results = ctx.get_metadata_results()
+    assert len(results.views) == 0
+    assert len(results.materialized_views) == 0
+    assert len(results.tables) == len(results.non_temp_tables) == 1
+    assert len(results.non_temp_tables) == 1
+    assert results.non_temp_tables[0] == table.name
+    ctx.compare_with_current(
+        table,
+        pd.DataFrame(
+            [
+                {
+                    "id": 1,
+                    "name": "a",
+                    "status": "active",
+                    "valid_from": "1970-01-01 00:00:00",
+                    "valid_to": pd.NaT,
+                },
+                {
+                    "id": 2,
+                    "name": "b",
+                    "status": "inactive",
+                    "valid_from": "1970-01-01 00:00:00",
+                    "valid_to": pd.NaT,
+                },
+                {
+                    "id": 3,
+                    "name": "c",
+                    "status": "active",
+                    "valid_from": "1970-01-01 00:00:00",
+                    "valid_to": pd.NaT,
+                },
+                {
+                    "id": 4,
+                    "name": "d",
+                    "status": "active",
+                    "valid_from": "1970-01-01 00:00:00",
+                    "valid_to": pd.NaT,
+                },
+            ]
+        ),
+    )
+
+    if ctx.test_type == "query":
+        return
+    current_data = pd.DataFrame(
+        [
+            # Change `a` to `x`
+            {"id": 1, "name": "x", "status": "active"},
+            # Delete
+            # {"id": 2, "name": "b", status: "inactive"},
+            # No change
+            {"id": 3, "name": "c", "status": "active"},
+            # Change status to inactive
+            {"id": 4, "name": "d", "status": "inactive"},
+            # Add
+            {"id": 5, "name": "e", "status": "inactive"},
+        ]
+    )
+    ctx.engine_adapter.scd_type_2_by_column(
+        table,
+        ctx.input_data(current_data, input_schema),
+        unique_key=[exp.to_column("id")],
+        check_columns=[exp.to_column("name"), exp.to_column("status")],
+        valid_from_name="valid_from",
+        valid_to_name="valid_to",
+        execution_time="2023-01-05",
+        execution_time_as_valid_from=False,
+        columns_to_types=input_schema,
+    )
+    results = ctx.get_metadata_results()
+    assert len(results.views) == 0
+    assert len(results.materialized_views) == 0
+    assert len(results.tables) == len(results.non_temp_tables) == 1
+    assert results.non_temp_tables[0] == table.name
+    ctx.compare_with_current(
+        table,
+        pd.DataFrame(
+            [
+                {
+                    "id": 1,
+                    "name": "a",
+                    "status": "active",
+                    "valid_from": "1970-01-01 00:00:00",
+                    "valid_to": "2023-01-05 00:00:00",
+                },
+                {
+                    "id": 1,
+                    "name": "x",
+                    "status": "active",
+                    "valid_from": "2023-01-05 00:00:00",
+                    "valid_to": pd.NaT,
+                },
+                {
+                    "id": 2,
+                    "name": "b",
+                    "status": "inactive",
+                    "valid_from": "1970-01-01 00:00:00",
+                    "valid_to": "2023-01-05 00:00:00",
+                },
+                {
+                    "id": 3,
+                    "name": "c",
+                    "status": "active",
+                    "valid_from": "1970-01-01 00:00:00",
+                    "valid_to": pd.NaT,
+                },
+                {
+                    "id": 4,
+                    "name": "d",
+                    "status": "active",
+                    "valid_from": "1970-01-01 00:00:00",
+                    "valid_to": "2023-01-05 00:00:00",
+                },
+                {
+                    "id": 4,
+                    "name": "d",
+                    "status": "inactive",
+                    "valid_from": "2023-01-05 00:00:00",
+                    "valid_to": pd.NaT,
+                },
+                {
+                    "id": 5,
+                    "name": "e",
+                    "status": "inactive",
                     "valid_from": "1970-01-01 00:00:00",
                     "valid_to": pd.NaT,
                 },

@@ -14,14 +14,14 @@ from sqlmesh.core.model.common import (
     bool_validator,
     default_catalog_validator,
     depends_on_validator,
-    parse_expressions,
     parse_properties,
     properties_validator,
 )
 from sqlmesh.core.model.kind import (
     IncrementalByUniqueKeyKind,
     ModelKind,
-    SCDType2Kind,
+    SCDType2ByColumnKind,
+    SCDType2ByTimeKind,
     TimeColumn,
     ViewKind,
     _Incremental,
@@ -34,6 +34,7 @@ from sqlmesh.utils.errors import ConfigError
 from sqlmesh.utils.pydantic import (
     field_validator,
     field_validator_v1_args,
+    list_of_fields_validator,
     model_validator,
     model_validator_v1_args,
 )
@@ -148,7 +149,7 @@ class ModelMeta(_Node):
     def _partition_by_validator(
         cls, v: t.Any, values: t.Dict[str, t.Any]
     ) -> t.List[exp.Expression]:
-        partitions = parse_expressions(cls, v, values)
+        partitions = list_of_fields_validator(v, values)
 
         for partition in partitions:
             num_cols = len(list(partition.find_all(exp.Column)))
@@ -286,7 +287,14 @@ class ModelMeta(_Node):
 
     @property
     def unique_key(self) -> t.List[exp.Expression]:
-        if isinstance(self.kind, (IncrementalByUniqueKeyKind, SCDType2Kind)):
+        if isinstance(self.kind, IncrementalByUniqueKeyKind):
+            return self.kind.unique_key
+        return []
+
+    @property
+    def unique_key_columns(self) -> t.List[exp.Column]:
+        if self.kind.is_scd_type_2:
+            assert isinstance(self.kind, (SCDType2ByTimeKind, SCDType2ByColumnKind))
             return self.kind.unique_key
         return []
 

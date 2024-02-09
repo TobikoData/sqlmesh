@@ -21,10 +21,10 @@ from sqlmesh.core.model import (
     IncrementalByTimeRangeKind,
     IncrementalByUniqueKeyKind,
     IncrementalUnmanagedKind,
-    SCDType2Kind,
     SqlModel,
     ViewKind,
 )
+from sqlmesh.core.model.kind import SCDType2ByColumnKind, SCDType2ByTimeKind
 from sqlmesh.core.state_sync.engine_adapter import _snapshot_to_json
 from sqlmesh.dbt.builtin import _relation_info_to_relation
 from sqlmesh.dbt.column import (
@@ -40,7 +40,7 @@ from sqlmesh.dbt.target import BigQueryConfig, DuckDbConfig, SnowflakeConfig
 from sqlmesh.dbt.test import TestConfig
 from sqlmesh.utils.errors import ConfigError, MacroEvalError, SQLMeshError
 
-pytestmark = pytest.mark.dbt
+pytestmark = [pytest.mark.dbt, pytest.mark.slow]
 
 
 def test_model_name():
@@ -75,13 +75,28 @@ def test_model_kind():
     assert ModelConfig(materialized=Materialization.VIEW).model_kind(context) == ViewKind()
     assert ModelConfig(materialized=Materialization.EPHEMERAL).model_kind(context) == EmbeddedKind()
     assert ModelConfig(
-        materialized=Materialization.SNAPSHOT, unique_key=["id"], updated_at="updated_at"
-    ).model_kind(context) == SCDType2Kind(
+        materialized=Materialization.SNAPSHOT,
+        unique_key=["id"],
+        updated_at="updated_at",
+        strategy="timestamp",
+    ).model_kind(context) == SCDType2ByTimeKind(
         unique_key=["id"],
         valid_from_name="dbt_valid_from",
         valid_to_name="dbt_valid_to",
         updated_at_as_valid_from=True,
         updated_at_name="updated_at",
+    )
+    assert ModelConfig(
+        materialized=Materialization.SNAPSHOT,
+        unique_key=["id"],
+        strategy="check",
+        check_cols=["foo"],
+    ).model_kind(context) == SCDType2ByColumnKind(
+        unique_key=["id"],
+        valid_from_name="dbt_valid_from",
+        valid_to_name="dbt_valid_to",
+        columns=["foo"],
+        execution_time_as_valid_from=True,
     )
 
     assert ModelConfig(materialized=Materialization.INCREMENTAL, time_column="foo").model_kind(
@@ -181,8 +196,11 @@ def test_model_kind_snapshot_bigquery():
     context.target = BigQueryConfig(name="target", schema="foo", project="bar")
 
     assert ModelConfig(
-        materialized=Materialization.SNAPSHOT, unique_key=["id"], updated_at="updated_at"
-    ).model_kind(context) == SCDType2Kind(
+        materialized=Materialization.SNAPSHOT,
+        unique_key=["id"],
+        updated_at="updated_at",
+        strategy="timestamp",
+    ).model_kind(context) == SCDType2ByTimeKind(
         unique_key=["id"],
         valid_from_name="dbt_valid_from",
         valid_to_name="dbt_valid_to",

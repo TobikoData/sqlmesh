@@ -53,6 +53,14 @@ class SnapshotStrategy(str, Enum):
     TIMESTAMP = "timestamp"
     CHECK = "check"
 
+    @property
+    def is_timestamp(self) -> bool:
+        return self == SnapshotStrategy.TIMESTAMP
+
+    @property
+    def is_check(self) -> bool:
+        return self == SnapshotStrategy.CHECK
+
 
 class Hook(DbtConfig):
     """

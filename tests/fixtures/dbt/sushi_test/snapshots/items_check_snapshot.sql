@@ -5,7 +5,7 @@
       target_schema='snapshots',
       unique_key='id',
       strategy='check',
-      check_cols=['id'],
+      check_cols=['ds'],
       invalidate_hard_deletes=True,
     )
 }}

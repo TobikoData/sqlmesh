@@ -320,13 +320,18 @@ SQLMesh achieves this by adding a `valid_from` and `valid_to` column to your mod
 
 Therefore you can use these models to not only tell you what the latest value is for a given record but also what the values were anytime in the past. Note that maintaining this history does come at a cost of increased storage and compute and this may not be a good fit for sources that change frequently since the history could get very large.
 
-Currently SCD Type 2 only supports sourcing from tables that have an "Updated At" timestamp defined in the table that tells you when a given was last updated. Soon we will also be supporting checking column values in cases where an update column is not available.
+There are two ways to tracking changes: By Time (Recommended) or By Column. 
 
-This example specifies a `SCD_TYPE_2` model kind:
+### SCD Type 2 By Time (Recommended)
+
+SCD Type 2 By Time supports sourcing from tables that have an "Updated At" timestamp defined in the table that tells you when a given was last updated.
+This is the recommended way since this "Updated At" gives you a precise time when the record was last updated and therefore improves the accuracy of the SCD Type 2 table that is produced.
+
+This example specifies a `SCD_TYPE_2_BY_TIME` model kind:
 ```sql linenums="1" hl_lines="3"
 MODEL (
   name db.menu_items,
-  kind SCD_TYPE_2 (
+  kind SCD_TYPE_2_BY_TIME (
     unique_key id,
   )
 );
@@ -352,36 +357,11 @@ TABLE db.menu_items (
 );
 ```
 
-### Column Names
-SQLMesh will automatically add the `valid_from` and `valid_to` columns to your table. If you would like to specify the names of these columns you can do so by adding the following to your model definition:
-```sql linenums="1" hl_lines="5-6"
-MODEL (
-  name db.menu_items,
-  kind SCD_TYPE_2 (
-    unique_key id,
-    valid_from_name my_valid_from, -- Name for `valid_from` column
-    valid_to_name my_valid_to -- Name for `valid_to` column
-  )
-);
-```
-
-SQLMesh will materialize this table with the following structure:
-```sql linenums="1"
-TABLE db.menu_items (
-  id INT,
-  name STRING,
-  price DOUBLE,
-  updated_at TIMESTAMP,
-  my_valid_from TIMESTAMP,
-  my_valid_to TIMESTAMP
-);
-```
-
 The `updated_at` column name can also be changed by adding the following to your model definition:
 ```sql linenums="1" hl_lines="5"
 MODEL (
   name db.menu_items,
-  kind SCD_TYPE_2 (
+  kind SCD_TYPE_2_BY_TIME (
     unique_key id,
     updated_at_name my_updated_at -- Name for `updated_at` column
   )
@@ -408,11 +388,74 @@ TABLE db.menu_items (
 );
 ```
 
+### SCD Type 2 By Column
+
+SCD Type 2 By Column supports sourcing from tables that do not have an "Updated At" timestamp defined in the table. 
+Instead, it will check the columns defined in the `columns` field to see if their value has changed and if so it will record the `valid_from` time as the execution time when the change was detected.
+
+This example specifies a `SCD_TYPE_2_BY_COLUMN` model kind:
+```sql linenums="1" hl_lines="3"
+MODEL (
+  name db.menu_items,
+  kind SCD_TYPE_2_BY_COLUMN (
+    unique_key id,
+    columns [name, price]
+  )
+);
+
+SELECT
+  id::INT,
+  name::STRING,
+  price::DOUBLE,
+FROM
+  stg.current_menu_items;
+```
+
+SQLMesh will materialize this table with the following structure:
+```sql linenums="1"
+TABLE db.menu_items (
+  id INT,
+  name STRING,
+  price DOUBLE,
+  valid_from TIMESTAMP,
+  valid_to TIMESTAMP
+);
+```
+
+### Change Column Names
+SQLMesh will automatically add the `valid_from` and `valid_to` columns to your table. 
+If you would like to specify the names of these columns you can do so by adding the following to your model definition:
+```sql linenums="1" hl_lines="5-6"
+MODEL (
+  name db.menu_items,
+  kind SCD_TYPE_2_BY_TIME (
+    unique_key id,
+    valid_from_name my_valid_from, -- Name for `valid_from` column
+    valid_to_name my_valid_to -- Name for `valid_to` column
+  )
+);
+```
+
+SQLMesh will materialize this table with the following structure:
+```sql linenums="1"
+TABLE db.menu_items (
+  id INT,
+  name STRING,
+  price DOUBLE,
+  updated_at TIMESTAMP,
+  my_valid_from TIMESTAMP,
+  my_valid_to TIMESTAMP
+);
+```
+
 ### Deletes
 
-Deletes are supported and when an item is detected as deleted then the `valid_to` column will be set to the time when SQLMesh started running (called `execution_time`). If a deleted column is added back in the source then it will be inserted back into the table with `valid_from` set to the largest of either the `updated_at` timestamp of the new record or the `valid_from` timestamp of the deleted record in the SCD Type 2 table.
+Deletes are supported and when an item is detected as deleted then the `valid_to` column will be set to the time when SQLMesh started running (called `execution_time`). 
+If a deleted column is added back in the source then it will be inserted back into the table with `valid_from` set to: 
+* SCD_TYPE_2_BY_TIME: the largest of either the `updated_at` timestamp of the new record or the `valid_from` timestamp of the deleted record in the SCD Type 2 table
+* SCD_TYPE_2_BY_COLUMN: the `execution_time` when the record was detected again
 
-### Example of SCD Type 2 in Action
+### Example of SCD Type 2 By Time in Action
 
 Lets say that you started with the following data in your source table:
 
@@ -444,13 +487,13 @@ Summary of Changes:
 * Cheeseburger was removed from the menu.
 * Milkshakes were added to the menu.
 
-Assuming your pipeline ran at `2020-01-02 02:00:00`, target table will be updated with the following data:
+Assuming your pipeline ran at `2020-01-02 11:00:00`, target table will be updated with the following data:
 
 | ID | Name             | Price |     Updated At      |     Valid From      |      Valid To       |
 |----|------------------|:-----:|:-------------------:|:-------------------:|:-------------------:|
 | 1  | Chicken Sandwich | 10.99 | 2020-01-01 00:00:00 | 1970-01-01 00:00:00 | 2020-01-02 00:00:00 |
 | 1  | Chicken Sandwich | 12.99 | 2020-01-02 00:00:00 | 2020-01-02 00:00:00 |        NULL         |
-| 2  | Cheeseburger     | 8.99  | 2020-01-01 00:00:00 | 1970-01-01 00:00:00 | 2020-01-02 02:00:00 |
+| 2  | Cheeseburger     | 8.99  | 2020-01-01 00:00:00 | 1970-01-01 00:00:00 | 2020-01-02 11:00:00 |
 | 3  | French Fries     | 4.99  | 2020-01-01 00:00:00 | 1970-01-01 00:00:00 |        NULL         |
 | 4  | Milkshake        | 3.99  | 2020-01-02 00:00:00 | 2020-01-02 00:00:00 |        NULL         |
 
@@ -476,19 +519,121 @@ Target table will be updated with the following data:
 | 1  | Chicken Sandwich    | 10.99 | 2020-01-01 00:00:00 | 1970-01-01 00:00:00 | 2020-01-02 00:00:00 |
 | 1  | Chicken Sandwich    | 12.99 | 2020-01-02 00:00:00 | 2020-01-02 00:00:00 | 2020-01-03 00:00:00 |
 | 1  | Chicken Sandwich    | 14.99 | 2020-01-03 00:00:00 | 2020-01-03 00:00:00 |        NULL         |
-| 2  | Cheeseburger        | 8.99  | 2020-01-01 00:00:00 | 1970-01-01 00:00:00 | 2020-01-02 02:00:00 |
+| 2  | Cheeseburger        | 8.99  | 2020-01-01 00:00:00 | 1970-01-01 00:00:00 | 2020-01-02 11:00:00 |
 | 2  | Cheeseburger        | 8.99  | 2020-01-03 00:00:00 | 2020-01-03 00:00:00 |        NULL         |
 | 3  | French Fries        | 4.99  | 2020-01-01 00:00:00 | 1970-01-01 00:00:00 |        NULL         |
 | 4  | Milkshake           | 3.99  | 2020-01-02 00:00:00 | 2020-01-02 00:00:00 | 2020-01-03 00:00:00 |
 | 4  | Chocolate Milkshake | 3.99  | 2020-01-03 00:00:00 | 2020-01-03 00:00:00 |        NULL         |
 
-**Note:** `Cheeseburger` was deleted from `2020-01-02 02:00:00` to `2020-01-03 00:00:00` meaning if you queried the table during that time range then you would not see `Cheeseburger` in the menu. This is the most accurate representation of the menu based on the source data provided. If `Cheeseburger` were added back to the menu with it's original updated at timestamp of `2020-01-01 00:00:00` then the `valid_from` timestamp of the new record would have been `2020-01-02 02:00:00` resulting in no period of time where the item was deleted. Since in this case the updated at timestamp did not change it is likely the item was removed in error and this again most accurately represents the menu based on the source data.
+**Note:** `Cheeseburger` was deleted from `2020-01-02 11:00:00` to `2020-01-03 00:00:00` meaning if you queried the table during that time range then you would not see `Cheeseburger` in the menu. 
+This is the most accurate representation of the menu based on the source data provided. 
+If `Cheeseburger` were added back to the menu with it's original updated at timestamp of `2020-01-01 00:00:00` then the `valid_from` timestamp of the new record would have been `2020-01-02 11:00:00` resulting in no period of time where the item was deleted. 
+Since in this case the updated at timestamp did not change it is likely the item was removed in error and this again most accurately represents the menu based on the source data.
+
+
+### Example of SCD Type 2 By Column in Action
+
+Lets say that you started with the following data in your source table:
+
+| ID | Name             | Price |
+|----|------------------|:-----:|
+| 1  | Chicken Sandwich | 10.99 |
+| 2  | Cheeseburger     | 8.99  |
+| 3  | French Fries     | 4.99  |
+
+We configure the SCD Type 2 By Column model to check the columns `Name` and `Price` for changes
+
+The target table, which is currently empty, will be materialized with the following data:
+
+| ID | Name             | Price |     Valid From      | Valid To |
+|----|------------------|:-----:|:-------------------:|:--------:|
+| 1  | Chicken Sandwich | 10.99 | 1970-01-01 00:00:00 |   NULL   |
+| 2  | Cheeseburger     | 8.99  | 1970-01-01 00:00:00 |   NULL   |
+| 3  | French Fries     | 4.99  | 1970-01-01 00:00:00 |   NULL   |
+
+Now lets say that you update the source table with the following data:
+
+| ID | Name             | Price |
+|----|------------------|:-----:|
+| 1  | Chicken Sandwich | 12.99 |
+| 3  | French Fries     | 4.99  |
+| 4  | Milkshake        | 3.99  |
+
+Summary of Changes:
+
+* The price of the Chicken Sandwich was increased from $10.99 to $12.99.
+* Cheeseburger was removed from the menu.
+* Milkshakes were added to the menu.
+
+Assuming your pipeline ran at `2020-01-02 11:00:00`, target table will be updated with the following data:
+
+| ID | Name             | Price |     Valid From      |      Valid To       |
+|----|------------------|:-----:|:-------------------:|:-------------------:|
+| 1  | Chicken Sandwich | 10.99 | 1970-01-01 00:00:00 | 2020-01-02 11:00:00 |
+| 1  | Chicken Sandwich | 12.99 | 2020-01-02 11:00:00 |        NULL         |
+| 2  | Cheeseburger     | 8.99  | 1970-01-01 00:00:00 | 2020-01-02 11:00:00 |
+| 3  | French Fries     | 4.99  | 1970-01-01 00:00:00 |        NULL         |
+| 4  | Milkshake        | 3.99  | 2020-01-02 11:00:00 |        NULL         |
+
+For our final pass, lets say that you update the source table with the following data:
+
+| ID | Name                | Price |
+|----|---------------------|:-----:|
+| 1  | Chicken Sandwich    | 14.99 |
+| 2  | Cheeseburger        | 8.99  |
+| 3  | French Fries        | 4.99  |
+| 4  | Chocolate Milkshake | 3.99  |
+
+Summary of changes:
+
+* The price of the Chicken Sandwich was increased from $12.99 to $14.99 (must be good!)
+* Cheeseburger was added back to the menu with original name and price.
+* Milkshake name was updated to be "Chocolate Milkshake".
+
+Assuming your pipeline ran at `2020-01-03 11:00:00`, Target table will be updated with the following data:
+
+| ID | Name                | Price |     Valid From      |      Valid To       |
+|----|---------------------|:-----:|:-------------------:|:-------------------:|
+| 1  | Chicken Sandwich    | 10.99 | 1970-01-01 00:00:00 | 2020-01-02 11:00:00 |
+| 1  | Chicken Sandwich    | 12.99 | 2020-01-02 11:00:00 | 2020-01-03 11:00:00 |
+| 1  | Chicken Sandwich    | 14.99 | 2020-01-03 11:00:00 |        NULL         |
+| 2  | Cheeseburger        | 8.99  | 1970-01-01 00:00:00 | 2020-01-02 11:00:00 |
+| 2  | Cheeseburger        | 8.99  | 2020-01-03 11:00:00 |        NULL         |
+| 3  | French Fries        | 4.99  | 1970-01-01 00:00:00 |        NULL         |
+| 4  | Milkshake           | 3.99  | 2020-01-02 11:00:00 | 2020-01-03 11:00:00 |
+| 4  | Chocolate Milkshake | 3.99  | 2020-01-03 11:00:00 |        NULL         |
+
+**Note:** `Cheeseburger` was deleted from `2020-01-02 11:00:00` to `2020-01-03 11:00:00` meaning if you queried the table during that time range then you would not see `Cheeseburger` in the menu. 
+This is the most accurate representation of the menu based on the source data provided. 
+
+### Shared Configuration Options
+
+| Name                     | Description                                                                                                                                                                        | Type                      |
+|--------------------------|------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------|---------------------------|
+| unique_key               | Unique key used for identifying rows between source and target                                                                                                                     | List of strings or string |
+| valid_from_name          | The name of the `valid_from` column to create in the target table. Default: `valid_from`                                                                                           | string                    |
+| valid_to_name            | The name of the `valid_to` column to create in the target table. Default: `valid_to`                                                                                               | string                    |
+
+### SCD Type 2 By Time Configuration Options
+
+| Name                     | Description                                                                                                                                                                        | Type                      |
+|--------------------------|------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------|---------------------------|
+| updated_at_name          | The name of the column containing a timestamp to check for new or updated records. Default: `updated_at`                                                                           | string                    |
+| updated_at_as_valid_from | By default, for new rows `valid_from` is set to `1970-01-01 00:00:00`. This changes the behavior to set it to the valid of `updated_at` when the row is inserted. Default: `false` | bool                      |
+
+### SCD Type 2 By Column Configuration Options
+
+| Name                         | Description                                                                                                                                                                   | Type                      |
+|------------------------------|-------------------------------------------------------------------------------------------------------------------------------------------------------------------------------|---------------------------|
+| columns                      | The name of the columns to check for changes. `*` to represent that all columns should be checked.                                                                            | List of strings or string |
+| execution_time_as_valid_from | By default, for new rows `valid_from` is set to `1970-01-01 00:00:00`. This changes the behavior to set it to the `execution_time` of when the pipeline ran. Default: `false` | bool                      |
 
 ### Querying SCD Type 2 Models
 
 #### Querying the current version of a record
 
-Although SCD Type 2 models support history, it is still very easy to query for just the latest version of a record. Simply query the model as you would any other table. For example, if you wanted to query the latest version of the `menu_items` table you would simply run:
+Although SCD Type 2 models support history, it is still very easy to query for just the latest version of a record. Simply query the model as you would any other table. 
+For example, if you wanted to query the latest version of the `menu_items` table you would simply run:
 
 ```sql linenums="1"
 SELECT
@@ -581,19 +726,6 @@ GROUP BY
     id
 ```
 
-### All Configuration Options
-
-| Name                         | Description                                                                                                                                                                        | Type                      |
-|------------------------------|------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------|---------------------------|
-| unique_key                   | Unique key used for identifying rows between source and target                                                                                                                     | List of strings or string |
-| valid_from_name              | The name of the `valid_from` column to create in the target table. Default: `valid_from`                                                                                           | string                    |
-| valid_to_name                | The name of the `valid_to` column to create in the target table. Default: `valid_to`                                                                                               | string                    |
-| updated_at_name              | The name of the column containing a timestamp to check for new or updated records. Default: `updated_at`                                                                           | string                    |
-| updated_at_as_valid_from | By default, for new rows `valid_from` is set to `1970-01-01 00:00:00`. This changes the behavior to set it to the valid of `updated_at` when the row is inserted. Default: `false` | bool                      |
-
-
-### Limitations
-* Currently SCD Type 2 requires an update column to be defined on the table you are sourcing your data from. Soon we will also be supporting checking column values in cases where an update column is not available.
-
 ## EXTERNAL
+
 The EXTERNAL model kind is used to specify [external models](./external_models.md) that store metadata about external tables. External models are special; they are not specified in .sql files like the other model kinds. They are optional but useful for propagating column and type information for external tables queried in your SQLMesh project.

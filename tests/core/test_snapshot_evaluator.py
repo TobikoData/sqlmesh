@@ -1097,7 +1097,7 @@ def test_forward_only_snapshot_for_added_model(mocker: MockerFixture, adapter_mo
     )
 
 
-def test_create_scd_type_2(mocker: MockerFixture, adapter_mock, make_snapshot):
+def test_create_scd_type_2_by_time(adapter_mock, make_snapshot):
     evaluator = SnapshotEvaluator(adapter_mock)
     model = load_sql_based_model(
         parse(  # type: ignore
@@ -1147,7 +1147,7 @@ def test_create_scd_type_2(mocker: MockerFixture, adapter_mock, make_snapshot):
     )
 
 
-def test_create_ctas_scd_type_2(mocker: MockerFixture, adapter_mock, make_snapshot):
+def test_create_ctas_scd_type_2_by_time(adapter_mock, make_snapshot):
     evaluator = SnapshotEvaluator(adapter_mock)
     model = load_sql_based_model(
         parse(  # type: ignore
@@ -1198,7 +1198,7 @@ def test_create_ctas_scd_type_2(mocker: MockerFixture, adapter_mock, make_snapsh
     )
 
 
-def test_insert_into_scd_type_2(adapter_mock, make_snapshot):
+def test_insert_into_scd_type_2_by_time(adapter_mock, make_snapshot):
     evaluator = SnapshotEvaluator(adapter_mock)
     model = load_sql_based_model(
         parse(  # type: ignore
@@ -1226,7 +1226,7 @@ def test_insert_into_scd_type_2(adapter_mock, make_snapshot):
         snapshots={},
     )
 
-    adapter_mock.scd_type_2.assert_called_once_with(
+    adapter_mock.scd_type_2_by_time.assert_called_once_with(
         target_table=snapshot.table_name(),
         source_table=model.render_query(),
         columns_to_types={
@@ -1247,6 +1247,161 @@ def test_insert_into_scd_type_2(adapter_mock, make_snapshot):
         table_description=None,
         column_descriptions={},
         updated_at_as_valid_from=False,
+    )
+
+
+def test_create_scd_type_2_by_column(adapter_mock, make_snapshot):
+    evaluator = SnapshotEvaluator(adapter_mock)
+    model = load_sql_based_model(
+        parse(  # type: ignore
+            """
+            MODEL (
+                name test_schema.test_model,
+                kind SCD_TYPE_2_BY_COLUMN (
+                    unique_key id,
+                    columns *
+                    
+                )
+            );
+
+            SELECT id::int, name::string, FROM tbl;
+            """
+        )
+    )
+
+    snapshot = make_snapshot(model)
+    snapshot.categorize_as(SnapshotChangeCategory.BREAKING)
+
+    evaluator.create([snapshot], {})
+
+    common_kwargs: t.Dict[str, t.Any] = dict(
+        columns_to_types={
+            "id": exp.DataType.build("INT"),
+            "name": exp.DataType.build("STRING"),
+            # Make sure that the call includes these extra columns
+            "valid_from": exp.DataType.build("TIMESTAMP"),
+            "valid_to": exp.DataType.build("TIMESTAMP"),
+        },
+        storage_format=None,
+        partitioned_by=[],
+        partition_interval_unit=IntervalUnit.DAY,
+        clustered_by=[],
+        table_properties={},
+        table_description=None,
+    )
+
+    adapter_mock.create_table.assert_has_calls(
+        [
+            call(
+                snapshot.table_name(is_deployable=False),
+                **{**common_kwargs, "column_descriptions": None},
+            ),
+            call(snapshot.table_name(), **{**common_kwargs, "column_descriptions": {}}),
+        ]
+    )
+
+
+def test_create_ctas_scd_type_2_by_column(adapter_mock, make_snapshot):
+    evaluator = SnapshotEvaluator(adapter_mock)
+    model = load_sql_based_model(
+        parse(  # type: ignore
+            """
+            MODEL (
+                name test_schema.test_model,
+                kind SCD_TYPE_2_BY_COLUMN (
+                    unique_key id,
+                    columns *
+                )
+            );
+
+            SELECT * FROM tbl;
+            """
+        )
+    )
+
+    snapshot = make_snapshot(model)
+    snapshot.categorize_as(SnapshotChangeCategory.BREAKING)
+
+    evaluator.create([snapshot], {})
+
+    query = parse_one(
+        """SELECT *, CAST(NULL AS TIMESTAMP) AS valid_from, CAST(NULL AS TIMESTAMP) AS valid_to FROM "tbl" AS "tbl" WHERE FALSE LIMIT 0"""
+    )
+
+    # Verify that managed columns are included in CTAS with types
+    common_kwargs: t.Dict[str, t.Any] = dict(
+        storage_format=None,
+        partitioned_by=[],
+        partition_interval_unit=IntervalUnit.DAY,
+        clustered_by=[],
+        table_properties={},
+        table_description=None,
+    )
+
+    adapter_mock.ctas.assert_has_calls(
+        [
+            call(
+                snapshot.table_name(is_deployable=False),
+                query,
+                None,
+                **{**common_kwargs, "column_descriptions": None},
+            ),
+            call(
+                snapshot.table_name(), query, None, **{**common_kwargs, "column_descriptions": {}}
+            ),
+        ]
+    )
+
+
+def test_insert_into_scd_type_2_by_column(adapter_mock, make_snapshot):
+    evaluator = SnapshotEvaluator(adapter_mock)
+    model = load_sql_based_model(
+        parse(  # type: ignore
+            """
+            MODEL (
+                name test_schema.test_model,
+                kind SCD_TYPE_2_BY_COLUMN (
+                    unique_key id,
+                    columns *
+                )
+            );
+
+            SELECT id::int, name::string FROM tbl;
+            """
+        )
+    )
+
+    snapshot = make_snapshot(model)
+    snapshot.categorize_as(SnapshotChangeCategory.BREAKING)
+
+    evaluator.evaluate(
+        snapshot,
+        start="2020-01-01",
+        end="2020-01-02",
+        execution_time="2020-01-02",
+        snapshots={},
+    )
+
+    adapter_mock.scd_type_2_by_column.assert_called_once_with(
+        target_table=snapshot.table_name(),
+        source_table=model.render_query(),
+        columns_to_types={
+            "id": exp.DataType.build("INT"),
+            "name": exp.DataType.build("STRING"),
+            # Make sure that the call includes these extra columns
+            "valid_from": exp.DataType.build("TIMESTAMP"),
+            "valid_to": exp.DataType.build("TIMESTAMP"),
+        },
+        unique_key=[exp.to_column("id")],
+        check_columns=exp.Star(),
+        valid_from_name="valid_from",
+        valid_to_name="valid_to",
+        start="2020-01-01",
+        end="2020-01-02",
+        execution_time="2020-01-02",
+        execution_time_as_valid_from=False,
+        table_description=None,
+        column_descriptions={},
     )
 
 

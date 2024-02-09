@@ -1185,20 +1185,79 @@ class EngineAdapter:
             )
         )
 
-    def scd_type_2(
+    def scd_type_2_by_time(
         self,
         target_table: TableName,
         source_table: QueryOrDF,
         unique_key: t.Sequence[exp.Expression],
         valid_from_name: str,
         valid_to_name: str,
-        updated_at_name: str,
         execution_time: TimeLike,
+        updated_at_name: str,
         updated_at_as_valid_from: bool = False,
         columns_to_types: t.Optional[t.Dict[str, exp.DataType]] = None,
         table_description: t.Optional[str] = None,
         column_descriptions: t.Optional[t.Dict[str, str]] = None,
         **kwargs: t.Any,
+    ) -> None:
+        self._scd_type_2(
+            target_table=target_table,
+            source_table=source_table,
+            unique_key=unique_key,
+            valid_from_name=valid_from_name,
+            valid_to_name=valid_to_name,
+            execution_time=execution_time,
+            updated_at_name=updated_at_name,
+            updated_at_as_valid_from=updated_at_as_valid_from,
+            columns_to_types=columns_to_types,
+            table_description=table_description,
+            column_descriptions=column_descriptions,
+        )
+
+    def scd_type_2_by_column(
+        self,
+        target_table: TableName,
+        source_table: QueryOrDF,
+        unique_key: t.Sequence[exp.Column],
+        valid_from_name: str,
+        valid_to_name: str,
+        execution_time: TimeLike,
+        check_columns: t.Union[exp.Star, t.Sequence[exp.Column]],
+        execution_time_as_valid_from: bool = False,
+        columns_to_types: t.Optional[t.Dict[str, exp.DataType]] = None,
+        table_description: t.Optional[str] = None,
+        column_descriptions: t.Optional[t.Dict[str, str]] = None,
+        **kwargs: t.Any,
+    ) -> None:
+        self._scd_type_2(
+            target_table=target_table,
+            source_table=source_table,
+            unique_key=unique_key,
+            valid_from_name=valid_from_name,
+            valid_to_name=valid_to_name,
+            execution_time=execution_time,
+            check_columns=check_columns,
+            columns_to_types=columns_to_types,
+            execution_time_as_valid_from=execution_time_as_valid_from,
+            table_description=table_description,
+            column_descriptions=column_descriptions,
+        )
+
+    def _scd_type_2(
+        self,
+        target_table: TableName,
+        source_table: QueryOrDF,
+        unique_key: t.Union[t.Sequence[exp.Expression], t.Sequence[exp.Column]],
+        valid_from_name: str,
+        valid_to_name: str,
+        execution_time: TimeLike,
+        updated_at_name: t.Optional[str] = None,
+        check_columns: t.Optional[t.Union[exp.Star, t.Sequence[exp.Column]]] = None,
+        updated_at_as_valid_from: bool = False,
+        execution_time_as_valid_from: bool = False,
+        columns_to_types: t.Optional[t.Dict[str, exp.DataType]] = None,
+        table_description: t.Optional[str] = None,
+        column_descriptions: t.Optional[t.Dict[str, str]] = None,
     ) -> None:
         source_queries, columns_to_types = self._get_source_queries_and_columns_to_types(
             source_table, columns_to_types, target_table=target_table, batch_size=0
@@ -1208,10 +1267,25 @@ class EngineAdapter:
             columns_to_types = self.columns(target_table)
         if not columns_to_types:
             raise SQLMeshError(f"Could not get columns_to_types. Does {target_table} exist?")
-        if updated_at_name not in columns_to_types:
+        if not unique_key:
+            raise SQLMeshError("unique_key must be provided for SCD Type 2")
+        if check_columns and updated_at_name:
+            raise SQLMeshError(
+                "Cannot use both `check_columns` and `updated_at_name` for SCD Type 2"
+            )
+        if check_columns and updated_at_as_valid_from:
+            raise SQLMeshError(
+                "Cannot use both `check_columns` and `updated_at_as_valid_from` for SCD Type 2"
+            )
+        if execution_time_as_valid_from and not check_columns:
+            raise SQLMeshError(
+                "Cannot use `execution_time_as_valid_from` without `check_columns` for SCD Type 2"
+            )
+        if updated_at_name and updated_at_name not in columns_to_types:
             raise SQLMeshError(
                 f"Column {updated_at_name} not found in {target_table}. Table must contain an `updated_at` timestamp for SCD Type 2"
             )
+
         unmanaged_columns = [
             col for col in columns_to_types if col not in {valid_from_name, valid_to_name}
         ]
@@ -1219,12 +1293,100 @@ class EngineAdapter:
         select_source_columns: t.List[t.Union[str, exp.Alias]] = [
             col for col in unmanaged_columns if col != updated_at_name
         ]
-        select_source_columns.append(exp.cast(updated_at_name, time_data_type).as_(updated_at_name))
-        valid_from_start = (
-            updated_at_name
-            if updated_at_as_valid_from
-            else self._to_utc_timestamp("1970-01-01 00:00:00+00:00", time_data_type)
-        )
+        if updated_at_name:
+            select_source_columns.append(
+                exp.cast(updated_at_name, time_data_type).as_(updated_at_name)
+            )
+
+        # If a star is provided, we include all unmanaged columns in the check.
+        # This unnecessarily includes unique key columns but since they are used in the join, and therefore we know
+        # they are equal or not, the extra check is not a problem and we gain simplified logic here.
+        # If we want to change this, then we just need to check the expressions in unique_key and pull out the
+        # column names and then remove them from the unmanaged_columns
+        if check_columns and check_columns == exp.Star():
+            check_columns = [exp.column(col) for col in unmanaged_columns]
+        execution_ts = self._to_utc_timestamp(to_ts(execution_time), time_data_type)
+        if updated_at_as_valid_from:
+            if not updated_at_name:
+                raise SQLMeshError(
+                    "Cannot use `updated_at_as_valid_from` without `updated_at_name` for SCD Type 2"
+                )
+            update_valid_from_start: t.Union[str, exp.Expression] = updated_at_name
+        elif execution_time_as_valid_from:
+            update_valid_from_start = execution_ts
+        else:
+            update_valid_from_start = self._to_utc_timestamp(
+                "1970-01-01 00:00:00+00:00", time_data_type
+            )
+        insert_valid_from_start = execution_ts if check_columns else exp.column(updated_at_name)  # type: ignore
+        if check_columns:
+            row_check_conditions = []
+            for col in check_columns:
+                t_col = col.copy()
+                t_col.set("this", exp.to_identifier(f"t_{col.name}"))
+                row_check_conditions.extend(
+                    [
+                        col.neq(t_col),
+                        exp.and_(t_col.is_(exp.Null()), col.is_(exp.Null()).not_()),
+                        exp.and_(t_col.is_(exp.Null()).not_(), col.is_(exp.Null())),
+                    ]
+                )
+            row_value_check = exp.or_(*row_check_conditions)
+            unique_key_conditions = []
+            for col in unique_key:
+                t_col = col.copy()
+                t_col.set("this", exp.to_identifier(f"t_{col.name}"))
+                unique_key_conditions.extend(
+                    [t_col.is_(exp.Null()).not_(), col.is_(exp.Null()).not_()]
+                )
+            unique_key_check = exp.and_(*unique_key_conditions)
+            # unique_key_check is saying "if the row is updated"
+            # row_value_check is saying "if the row has changed"
+            updated_row_filter = exp.and_(unique_key_check, row_value_check)
+            # joined._exists IS NULL is saying "if the row is deleted"
+            valid_to_case_stmt = (
+                exp.Case()
+                .when(
+                    exp.or_(
+                        exp.column("_exists", "joined").is_(exp.Null()),
+                        updated_row_filter,
+                    ),
+                    execution_ts,
+                )
+                .else_(exp.column(f"t_{valid_to_name}"))
+                .as_(valid_to_name)
+            )
+            valid_from_case_stmt = exp.func(
+                "COALESCE",
+                exp.column(f"t_{valid_from_name}"),
+                update_valid_from_start,
+            ).as_(valid_from_name)
+        else:
+            assert updated_at_name is not None
+            updated_row_filter = exp.column(updated_at_name) > exp.column(f"t_{updated_at_name}")
+            valid_to_case_stmt = (
+                exp.Case()
+                .when(updated_row_filter, exp.column(updated_at_name))
+                .when(exp.column("_exists", "joined").is_(exp.Null()), execution_ts)
+                .else_(exp.column(f"t_{valid_to_name}"))
+            ).as_(valid_to_name)
+            valid_from_case_stmt = (
+                exp.Case()
+                .when(
+                    exp.and_(
+                        exp.column(f"t_{valid_from_name}").is_(exp.Null()),
+                        exp.column("_exists", "latest_deleted").is_(exp.Null()).not_(),
+                    ),
+                    exp.Case()
+                    .when(
+                        exp.column(valid_to_name, "latest_deleted") > exp.column(updated_at_name),
+                        exp.column(valid_to_name, "latest_deleted"),
+                    )
+                    .else_(exp.column(updated_at_name)),
+                )
+                .when(exp.column(f"t_{valid_from_name}").is_(exp.Null()), update_valid_from_start)
+                .else_(exp.column(f"t_{valid_from_name}"))
+            ).as_(valid_from_name)
         with source_queries[0] as source_query:
             query = (
                 exp.Select()  # type: ignore
@@ -1336,27 +1498,8 @@ class EngineAdapter:
                             ).as_(col)
                             for col in unmanaged_columns
                         ),
-                        f"""
-                        CASE
-                            WHEN t_{valid_from_name} IS NULL
-                                 AND latest_deleted._exists IS NOT NULL
-                            THEN CASE
-                                    WHEN latest_deleted.{valid_to_name} > {updated_at_name}
-                                    THEN latest_deleted.{valid_to_name}
-                                    ELSE {updated_at_name}
-                                 END
-                            WHEN t_{valid_from_name} IS NULL
-                            THEN {valid_from_start}
-                            ELSE t_{valid_from_name}
-                        END AS {valid_from_name}""",
-                        f"""
-                        CASE
-                            WHEN {updated_at_name} > t_{updated_at_name}
-                            THEN {updated_at_name}
-                            WHEN joined._exists IS NULL
-                            THEN {self._to_utc_timestamp(to_ts(execution_time), time_data_type)}
-                            ELSE t_{valid_to_name}
-                        END AS {valid_to_name}""",
+                        valid_from_case_stmt,
+                        valid_to_case_stmt,
                     )
                     .from_("joined")
                     .join(
@@ -1377,11 +1520,11 @@ class EngineAdapter:
                     "inserted_rows",
                     exp.select(
                         *unmanaged_columns,
-                        f"{updated_at_name} as {valid_from_name}",
-                        f"{self._to_utc_timestamp(exp.null(), time_data_type)} as {valid_to_name}",
+                        insert_valid_from_start.as_(valid_from_name),
+                        self._to_utc_timestamp(exp.null(), time_data_type).as_(valid_to_name),
                     )
                     .from_("joined")
-                    .where(f"{updated_at_name} > t_{updated_at_name}"),
+                    .where(updated_row_filter),
                 )
                 .select("*")
                 .from_("static")

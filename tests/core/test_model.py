@@ -29,6 +29,7 @@ from sqlmesh.core.model import (
     model,
 )
 from sqlmesh.core.model.common import parse_expression
+from sqlmesh.core.model.kind import _model_kind_validator
 from sqlmesh.core.model.seed import CsvSettings
 from sqlmesh.core.node import IntervalUnit, _Node
 from sqlmesh.core.snapshot import SnapshotChangeCategory
@@ -2448,8 +2449,8 @@ def test_interval_unit_validation():
     )
 
 
-def test_scd_type_2_defaults():
-    view_model_expressions = d.parse(
+def test_scd_type_2_by_time_defaults():
+    model_def = d.parse(
         """
         MODEL (
             name db.table,
@@ -2466,8 +2467,8 @@ def test_scd_type_2_defaults():
         ;
         """
     )
-    scd_type_2_model = load_sql_based_model(view_model_expressions)
-    assert scd_type_2_model.unique_key == [exp.to_column("ID", quoted=True)]
+    scd_type_2_model = load_sql_based_model(model_def)
+    assert scd_type_2_model.unique_key_columns == [exp.to_column("ID", quoted=True)]
     assert scd_type_2_model.columns_to_types == {
         "ID": exp.DataType.build("int"),
         "ds": exp.DataType.build("varchar"),
@@ -2484,41 +2485,26 @@ def test_scd_type_2_defaults():
     assert scd_type_2_model.kind.updated_at_name == "updated_at"
     assert scd_type_2_model.kind.valid_from_name == "valid_from"
     assert scd_type_2_model.kind.valid_to_name == "valid_to"
+    assert not scd_type_2_model.kind.updated_at_as_valid_from
+    assert scd_type_2_model.kind.is_scd_type_2_by_time
     assert scd_type_2_model.kind.is_scd_type_2
     assert scd_type_2_model.kind.is_materialized
     assert scd_type_2_model.kind.forward_only
     assert scd_type_2_model.kind.disable_restatement
 
-    # Checks we can parse coalesced key with or without parentheses
-    for coalesced_id in ("""COALESCE("id", '')""", """(COALESCE("id", ''))"""):
-        model = load_sql_based_model(
-            d.parse(
-                f"""
-                MODEL (
-                    name db.table,
-                    kind SCD_TYPE_2 (
-                        unique_key {coalesced_id},
-                    ),
-                );
 
-                SELECT 1 AS "id"
-                """
-            )
-        )
-        assert model.unique_key == [exp.func("COALESCE", exp.column("id", quoted=True), "''")]
-
-
-def test_scd_type_2_overrides():
-    view_model_expressions = d.parse(
+def test_scd_type_2_by_time_overrides():
+    model_def = d.parse(
         """
         MODEL (
             name db.table,
-            kind SCD_TYPE_2 (
-                unique_key ["iD", COALESCE("ds", '')],
+            kind SCD_TYPE_2_BY_TIME (
+                unique_key ["iD", ds],
                 updated_at_name test_updated_at,
                 valid_from_name test_valid_from,
                 valid_to_name test_valid_to,
                 time_data_type TIMESTAMPTZ,
+                updated_at_as_valid_from True,
                 forward_only False,
                 disable_restatement False,
             ),
@@ -2532,10 +2518,10 @@ def test_scd_type_2_overrides():
         ;
         """
     )
-    scd_type_2_model = load_sql_based_model(view_model_expressions)
-    assert scd_type_2_model.unique_key == [
+    scd_type_2_model = load_sql_based_model(model_def)
+    assert scd_type_2_model.unique_key_columns == [
         exp.column("iD", quoted=True),
-        exp.func("COALESCE", '"ds"', "''"),
+        exp.column("ds", quoted=False),
     ]
     assert scd_type_2_model.managed_columns == {
         "test_valid_from": exp.DataType.build("TIMESTAMPTZ"),
@@ -2544,11 +2530,146 @@ def test_scd_type_2_overrides():
     assert scd_type_2_model.kind.updated_at_name == "test_updated_at"
     assert scd_type_2_model.kind.valid_from_name == "test_valid_from"
     assert scd_type_2_model.kind.valid_to_name == "test_valid_to"
+    assert scd_type_2_model.kind.updated_at_as_valid_from
+    assert scd_type_2_model.kind.is_scd_type_2_by_time
+    assert scd_type_2_model.kind.is_scd_type_2
+    assert scd_type_2_model.kind.is_materialized
+    assert not scd_type_2_model.kind.forward_only
+    assert not scd_type_2_model.kind.disable_restatement
+
+    model_kind_dict = scd_type_2_model.kind.dict()
+    assert scd_type_2_model.kind == _model_kind_validator(None, model_kind_dict, {})
+
+
+def test_scd_type_2_by_column_defaults():
+    model_def = d.parse(
+        """
+        MODEL (
+            name db.table,
+            kind SCD_TYPE_2_BY_COLUMN (
+                unique_key "ID",
+                columns ["value_to_track"]
+            ),
+        );
+        SELECT
+            1 as "ID",
+            2 as "value_to_track",
+            '2020-01-01' as ds,
+        ;
+        """
+    )
+    scd_type_2_model = load_sql_based_model(model_def)
+    assert scd_type_2_model.unique_key_columns == [exp.to_column("ID", quoted=True)]
+    assert scd_type_2_model.kind.columns == [exp.to_column("value_to_track", quoted=True)]
+    assert scd_type_2_model.columns_to_types == {
+        "ID": exp.DataType.build("int"),
+        "value_to_track": exp.DataType.build("int"),
+        "ds": exp.DataType.build("varchar"),
+        "valid_from": exp.DataType.build("TIMESTAMP"),
+        "valid_to": exp.DataType.build("TIMESTAMP"),
+    }
+    assert scd_type_2_model.managed_columns == {
+        "valid_from": exp.DataType.build("TIMESTAMP"),
+        "valid_to": exp.DataType.build("TIMESTAMP"),
+    }
+    assert scd_type_2_model.kind.valid_from_name == "valid_from"
+    assert scd_type_2_model.kind.valid_to_name == "valid_to"
+    assert not scd_type_2_model.kind.execution_time_as_valid_from
+    assert scd_type_2_model.kind.is_scd_type_2_by_column
+    assert scd_type_2_model.kind.is_scd_type_2
+    assert scd_type_2_model.kind.is_materialized
+    assert scd_type_2_model.kind.forward_only
+    assert scd_type_2_model.kind.disable_restatement
+
+
+def test_scd_type_2_by_column_overrides():
+    model_def = d.parse(
+        """
+        MODEL (
+            name db.table,
+            kind SCD_TYPE_2_BY_COLUMN (
+                unique_key ["iD", ds],
+                columns "value_to_track",
+                valid_from_name test_valid_from,
+                valid_to_name test_valid_to,
+                execution_time_as_valid_from True,
+                time_data_type TIMESTAMPTZ,
+                forward_only False,
+                disable_restatement False,
+            ),
+        );
+        SELECT
+            1 as "ID",
+            2 as "value_to_track",
+            '2020-01-01' as ds,
+        ;
+        """
+    )
+    scd_type_2_model = load_sql_based_model(model_def)
+    assert scd_type_2_model.unique_key_columns == [
+        exp.column("iD", quoted=True),
+        exp.column("ds", quoted=False),
+    ]
+    assert scd_type_2_model.managed_columns == {
+        "test_valid_from": exp.DataType.build("TIMESTAMPTZ"),
+        "test_valid_to": exp.DataType.build("TIMESTAMPTZ"),
+    }
+    assert scd_type_2_model.kind.valid_from_name == "test_valid_from"
+    assert scd_type_2_model.kind.valid_to_name == "test_valid_to"
+    assert scd_type_2_model.kind.execution_time_as_valid_from
+    assert scd_type_2_model.kind.is_scd_type_2_by_column
     assert scd_type_2_model.kind.is_scd_type_2
     assert scd_type_2_model.kind.is_materialized
     assert scd_type_2_model.kind.time_data_type == exp.DataType.build("TIMESTAMPTZ")
     assert not scd_type_2_model.kind.forward_only
     assert not scd_type_2_model.kind.disable_restatement
+
+    model_kind_dict = scd_type_2_model.kind.dict()
+    assert scd_type_2_model.kind == _model_kind_validator(None, model_kind_dict, {})
+
+
+@pytest.mark.parametrize(
+    "input_columns,expected_columns",
+    [
+        (
+            "col1",
+            [exp.to_column("col1")],
+        ),
+        (
+            "[col1]",
+            [exp.to_column("col1")],
+        ),
+        (
+            "[col1, col2]",
+            [exp.to_column("col1"), exp.to_column("col2")],
+        ),
+        (
+            '"col1"',
+            [exp.to_column("col1", quoted=True)],
+        ),
+        (
+            '["col1"]',
+            [exp.to_column("col1", quoted=True)],
+        ),
+        ("*", exp.Star()),
+    ],
+)
+def test_check_column_variants(input_columns, expected_columns):
+    model_def = d.parse(
+        f"""
+        MODEL (
+            name db.table,
+            kind SCD_TYPE_2_BY_COLUMN (
+                unique_key "ID",
+                columns {input_columns}
+            ),
+        );
+        SELECT 1
+        ;
+        """
+    )
+    scd_type_2_model = load_sql_based_model(model_def)
+    assert scd_type_2_model.kind.columns == expected_columns
 
 
 def test_model_dialect_name():
