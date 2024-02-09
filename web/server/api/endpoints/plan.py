@@ -28,23 +28,22 @@ async def initiate_plan(
     plan_options: t.Optional[models.PlanOptions] = None,
 ) -> t.Optional[models.PlanOverviewStageTracker]:
     """Get a plan for an environment."""
-    if hasattr(request.app.state, "task") and not request.app.state.task.done():
-        raise ApiException(
-            message="Plan/apply is already running",
-            origin="API -> plan -> run_plan",
+    if not hasattr(request.app.state, "task") or request.app.state.task.done():
+        plan_options = plan_options or models.PlanOptions()
+        request.app.state.circuit_breaker.clear()
+        request.app.state.task = asyncio.create_task(
+            run_in_executor(
+                get_plan_builder,
+                context,
+                plan_options,
+                environment,
+                plan_dates,
+            )
         )
+    else:
+        api_console.log_event_plan_overview()
+        api_console.log_event_plan_apply()
 
-    plan_options = plan_options or models.PlanOptions()
-    request.app.state.circuit_breaker.clear()
-    request.app.state.task = asyncio.create_task(
-        run_in_executor(
-            get_plan_builder,
-            context,
-            plan_options,
-            environment,
-            plan_dates,
-        )
-    )
     response.status_code = HTTP_204_NO_CONTENT
 
     return None
@@ -56,25 +55,23 @@ async def cancel_plan(
     response: Response,
 ) -> t.Optional[models.PlanCancelStageTracker]:
     """Cancel a plan application"""
-    if not hasattr(request.app.state, "task") or request.app.state.task.done():
-        raise ApiException(
-            message="Plan/apply is not running",
-            origin="API -> plan -> cancel_plan",
-        )
-
     tracker = models.PlanCancelStageTracker()
     api_console.start_plan_tracker(tracker)
     tracker_stage_cancel = models.PlanStageCancel()
     tracker.add_stage(stage=models.PlanStage.cancel, data=tracker_stage_cancel)
-    request.app.state.circuit_breaker.set()
-    request.app.state.task.cancel()
-    try:
-        await request.app.state.task
-    except asyncio.CancelledError:
-        pass
 
-    tracker_stage_cancel.stop(success=True)
-    api_console.stop_plan_tracker(tracker)
+    if not hasattr(request.app.state, "task") or request.app.state.task.done():
+        tracker_stage_cancel.stop(success=False)
+        api_console.stop_plan_tracker(tracker)
+    elif not request.app.state.task.cancelled():
+        request.app.state.circuit_breaker.set()
+        request.app.state.task.cancel()
+
+        try:
+            await request.app.state.task
+        except asyncio.CancelledError:
+            pass
+
     response.status_code = HTTP_204_NO_CONTENT
 
     return None

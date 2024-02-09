@@ -1450,6 +1450,8 @@
           "INCREMENTAL_UNMANAGED",
           "FULL",
           "SCD_TYPE_2",
+          "SCD_TYPE_2_BY_TIME",
+          "SCD_TYPE_2_BY_COLUMN",
           "VIEW",
           "EMBEDDED",
           "SEED",
