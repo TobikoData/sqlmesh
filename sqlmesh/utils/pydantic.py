@@ -7,7 +7,6 @@ from functools import cached_property, wraps
 
 import pydantic
 from pydantic.fields import FieldInfo
-from pydantic_core.core_schema import ValidationInfo
 from sqlglot import exp, parse_one
 from sqlglot.helper import ensure_list
 from sqlglot.optimizer.normalize_identifiers import normalize_identifiers
@@ -293,7 +292,7 @@ def positive_int_validator(v: t.Any) -> int:
 
 def _get_fields(
     v: t.Any,
-    values: t.Union[t.Dict, ValidationInfo],
+    values: t.Any,
 ) -> t.List[exp.Expression]:
     values = values if isinstance(values, dict) else values.data
     dialect = values.get("dialect")
@@ -321,15 +320,11 @@ def _get_fields(
     return results
 
 
-def list_of_fields_validator(
-    v: t.Any, values: t.Union[t.Dict, ValidationInfo]
-) -> t.List[exp.Expression]:
+def list_of_fields_validator(v: t.Any, values: t.Any) -> t.List[exp.Expression]:
     return _get_fields(v, values)
 
 
-def list_of_columns_validator(
-    v: t.Any, values: t.Union[t.Dict, ValidationInfo]
-) -> t.List[exp.Column]:
+def list_of_columns_validator(v: t.Any, values: t.Any) -> t.List[exp.Column]:
     expressions = _get_fields(v, values)
     for expression in expressions:
         if not isinstance(expression, exp.Column):
@@ -338,7 +333,7 @@ def list_of_columns_validator(
 
 
 def list_of_columns_or_star_validator(
-    v: t.Any, values: t.Union[t.Dict, ValidationInfo]
+    v: t.Any, values: t.Any
 ) -> t.Union[exp.Star, t.List[exp.Column]]:
     expressions = _get_fields(v, values)
     if len(expressions) == 1 and isinstance(expressions[0], exp.Star):
