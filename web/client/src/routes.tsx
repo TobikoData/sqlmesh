@@ -20,19 +20,18 @@ const Welcome = lazy(() => import('./library/components/banner/Welcome'))
 
 export const EnumRoutes = {
   Ide: '/',
-  IdeEditor: '/editor',
-  IdeDocs: '/docs',
   Editor: '/editor',
   Docs: '/docs',
+  DocsModels: '/docs/models',
   Tests: '/tests',
   Audits: '/audits',
   Errors: '/errors',
   Plan: '/plan',
-  IdeDocsModels: '/docs/models',
+  NotFound: '/not-found',
 } as const
 
 const aliases: Record<string, string[]> = {
-  plan: [Modules.plans, Modules['plan-progress']],
+  plan: [Modules.plans],
 }
 
 export function getBrowserRouter(
@@ -60,7 +59,7 @@ export function getBrowserRouter(
           path: '*',
           element: (
             <NotFound
-              link={EnumRoutes.IdeDocs}
+              link={EnumRoutes.Docs}
               message="Back To Docs"
             />
           ),
@@ -81,7 +80,7 @@ export function getBrowserRouter(
               path: '*',
               element: (
                 <NotFound
-                  link={EnumRoutes.IdeDocs}
+                  link={EnumRoutes.Docs}
                   message="Back To Docs"
                 />
               ),

@@ -175,9 +175,9 @@ function EditorMain({ tab }: { tab: EditorTab }): JSX.Element {
     const showLineage =
       isFalse(tab.file.isEmpty) && isNotNil(model) && isModel(tab.file.path)
     const showPreview =
-      (tab.file.isLocal && [previewTable, previewDiff].some(Boolean)) ||
-      showLineage ||
-      errors.size > 0
+      ((tab.file.isLocal || errors.size > 0) &&
+        [previewTable, previewDiff].some(Boolean)) ||
+      showLineage
 
     return showPreview ? [70, 30] : [100, 0]
   }
