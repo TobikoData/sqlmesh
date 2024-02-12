@@ -9,6 +9,8 @@ from sqlmesh.cli.main import cli
 
 FREEZE_TIME = "2023-01-01 00:00:00"
 
+pytestmark = pytest.mark.slow
+
 
 @pytest.fixture(scope="session")
 def runner() -> CliRunner:
