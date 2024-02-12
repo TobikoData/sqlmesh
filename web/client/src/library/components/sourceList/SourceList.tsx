@@ -135,10 +135,15 @@ export default function SourceList<
   const totalSize = rowVirtualizer.getTotalSize()
 
   return (
-    <div className={clsx('flex flex-col w-full h-full relative', className)}>
+    <div
+      className={clsx(
+        'flex flex-col w-full h-full relative text-sm text-neutral-600 dark:text-neutral-300',
+        className,
+      )}
+    >
       {shouldShowReturnButton && (
         <Button
-          className="absolute left-[50%] translate-x-[-50%] top-0 z-10 text-ellipsis !block overflow-hidden no-wrap max-w-[90%] !border-neutral-20 shadow-md !bg-theme text-neutral-500 dark:text-neutral-400 !hover:bg-theme-10 !hover:text-neutral-600 dark:hover:text-neutral-300 !focus:ring-2 !focus:ring-theme-500 !focus:ring-offset-2 !focus:ring-offset-theme-50 !focus:ring-opacity-50 !focus:outline-none !focus:ring-offset-transparent !focus:ring-offset-0 !focus:ring"
+          className="absolute left-[50%] translate-x-[-50%] top-0 z-10 text-ellipsis !block overflow-hidden no-wrap max-w-[90%] !border-neutral-20 shadow-md !bg-theme !hover:bg-theme-10 !hover:text-neutral-600 dark:hover:text-neutral-300 !focus:ring-2 !focus:ring-theme-500 !focus:ring-offset-2 !focus:ring-offset-theme-50 !focus:ring-opacity-50 !focus:outline-none !focus:ring-offset-transparent !focus:ring-offset-0 !focus:ring"
           onClick={() => scrollToItem({ itemIndex: activeItemIndex })}
           size={EnumSize.sm}
           variant={EnumVariant.Secondary}
@@ -158,13 +163,13 @@ export default function SourceList<
           }}
         >
           <ul
-            className="w-full absolute top-0 left-0 px-2 text-neutral-400 dark:text-neutral-500"
+            className="w-full absolute top-0 left-0 px-2"
             style={{ transform: `translateY(${rows[0]?.start ?? 0}px)` }}
           >
             {isArrayEmpty(filtered) && (
               <li
                 key="not-found"
-                className="px-2 py-0.5 text-sm text-neutral-400 dark:text-neutral-500 text-center whitespace-nowrap overflow-ellipsis overflow-hidden"
+                className="px-2 py-0.5 text-center whitespace-nowrap overflow-ellipsis overflow-hidden"
               >
                 {filter.length > 0 ? 'No Results Found' : 'Empty List'}
               </li>
@@ -182,7 +187,7 @@ export default function SourceList<
                   data-index={virtualItem.index}
                   ref={rowVirtualizer.measureElement}
                   className={clsx(
-                    'text-sm font-normal w-full',
+                    'font-normal w-full',
                     disabled && 'cursor-not-allowed',
                   )}
                   tabIndex={id === filter ? -1 : 0}
@@ -259,30 +264,30 @@ export function SourceListItem({
       to={to}
       className={({ isActive }) =>
         clsx(
-          'block overflow-hidden px-2 py-1.5 rounded-md w-full text-sm font-semibold',
+          'block overflow-hidden px-2 py-1.5 rounded-md w-full font-semibold',
           disabled && 'opacity-50 pointer-events-none',
           isActive
             ? variant === EnumVariant.Primary
               ? 'text-primary-500 bg-primary-10'
               : variant === EnumVariant.Danger
               ? 'text-danger-500 bg-danger-5'
-              : 'text-neutral-500 bg-neutral-10'
-            : 'hover:bg-neutral-5 text-neutral-400 dark:text-neutral-300',
+              : 'text-neutral-600 dark:text-neutral-100 bg-neutral-10'
+            : 'hover:bg-neutral-5 text-neutral-500 dark:text-neutral-400',
         )
       }
     >
       <div className="flex items-center">
-        <span className="whitespace-nowrap overflow-ellipsis overflow-hidden">
+        <span className="whitespace-nowrap overflow-ellipsis overflow-hidden min-w-10">
           {name}
         </span>
         {isNotNil(text) && (
-          <span className=" ml-2 px-2 rounded-md leading-0 text-[0.5rem] bg-neutral-10 dark:text-neutral-200 text-neutral-700 font-bold">
+          <span className=" ml-2 px-2 rounded-md leading-0 text-[0.5rem] bg-neutral-10 text-neutral-700 dark:text-neutral-200">
             {text}
           </span>
         )}
       </div>
       {isNotNil(description) && (
-        <p className="text-xs overflow-hidden whitespace-nowrap overflow-ellipsis">
+        <p className="text-xs overflow-hidden whitespace-nowrap overflow-ellipsis text-neutral-300 dark:text-neutral-500">
           {description}
         </p>
       )}

@@ -180,7 +180,7 @@ function PlanChangePreviewDirect({
                       if (isNil(model)) return <></>
 
                       return (
-                        <div className="h-[16rem] bg-theme-lighter rounded-xl p-2">
+                        <div className="h-[16rem] bg-theme-lighter rounded-xl py-2">
                           <LineageFlowProvider
                             showColumns={false}
                             showConnected={true}

@@ -96,9 +96,9 @@ function InspectorModel({
       <div className="flex w-full items-center">
         <Button
           className={clsx(
-            'h-6 w-6 mx-1 border-none bg-neutral-10 dark:bg-neutral-20',
+            'h-6 w-6 !px-0 border-none bg-neutral-10 dark:bg-neutral-20',
             isOpen
-              ? 'text-secondary-500 text-secondary-300'
+              ? 'text-secondary-500 dark:text-secondary-300'
               : 'text-neutral-500 dark:text-neutral-300',
           )}
           variant={EnumVariant.Info}
@@ -109,7 +109,7 @@ function InspectorModel({
             toggle?.()
           }}
         >
-          <Bars3Icon className="min-w-4 min-h-4" />
+          <Bars3Icon className="w-4 h-4" />
         </Button>
         {isOpen && (
           <TabList
@@ -133,10 +133,7 @@ function InspectorModel({
               'ring-white ring-opacity-60 ring-offset-2 ring-offset-blue-400 focus:outline-none focus:ring-2',
             )}
           >
-            <FormActionsModel
-              tab={tab}
-              model={model}
-            />
+            <FormActionsModel model={model} />
           </Tab.Panel>
           <Tab.Panel
             unmount={false}
@@ -189,9 +186,9 @@ function InspectorSql({
       <div className="flex w-full items-center">
         <Button
           className={clsx(
-            'h-6 w-6 mx-1 border-none bg-neutral-10 dark:bg-neutral-20',
+            'h-6 w-6 !px-0 border-none bg-neutral-10 dark:bg-neutral-20',
             isOpen
-              ? 'text-secondary-500 text-secondary-300'
+              ? 'text-secondary-500 dark:text-secondary-300'
               : 'text-neutral-500 dark:text-neutral-300',
           )}
           variant={EnumVariant.Info}
@@ -202,7 +199,7 @@ function InspectorSql({
             toggle?.()
           }}
         >
-          <Bars3Icon className="min-w-4 min-h-4" />
+          <Bars3Icon className="w-4 h-4" />
         </Button>
         {isOpen && (
           <TabList
@@ -351,11 +348,9 @@ function FormActionsCustomSQL({ tab }: { tab: EditorTab }): JSX.Element {
   )
 }
 
-function FormActionsModel({
-  tab,
+export function FormActionsModel({
   model,
 }: {
-  tab: EditorTab
   model: ModelSQLMeshModel
 }): JSX.Element {
   const environment = useStoreContext(s => s.environment)
@@ -372,19 +367,15 @@ function FormActionsModel({
     limit: 1000,
   })
 
-  const { refetch: getRender } = useApiRender(
-    Object.assign(form, { model: model.displayName }) as RenderInput,
-  )
+  const { refetch: getRender } = useApiRender(form as RenderInput)
   const {
     refetch: getEvaluate,
     isFetching,
     cancel: cancelEvaluate,
-  } = useApiEvaluate(
-    Object.assign(form, { model: model.displayName }) as EvaluateInput,
-  )
+  } = useApiEvaluate(form as EvaluateInput)
 
   const shouldEvaluate =
-    isModel(tab.file.path) && Object.values(form).every(Boolean)
+    isModel(model.path) && Object.values(form).every(Boolean)
 
   useEffect(() => {
     return () => {
@@ -512,7 +503,7 @@ function FormActionsModel({
       <Divider />
       <InspectorActions>
         <div className="flex w-full justify-end">
-          {isModel(tab.file.path) && isFetching ? (
+          {isModel(model.path) && isFetching ? (
             <div className="flex items-center">
               <Spinner className="w-3" />
               <small className="text-xs text-neutral-400 block mx-2">

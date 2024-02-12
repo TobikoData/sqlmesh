@@ -225,7 +225,7 @@ function CodeEditorRemoteFile({
   const client = useQueryClient()
 
   const files = useStoreProject(s => s.files)
-  const setFiles = useStoreProject(s => s.setFiles)
+  const refreshFiles = useStoreProject(s => s.refreshFiles)
 
   const {
     refetch: getFileContent,
@@ -238,10 +238,10 @@ function CodeEditorRemoteFile({
   const mutationSaveFile = useMutationApiSaveFile(client)
   const debouncedSaveChange = useCallback(
     debounceSync(
-      function saveChange(): void {
+      function saveChange(view): void {
         mutationSaveFile.mutate({
           path,
-          body: { content: file?.content },
+          body: { content: view.state.doc.toString() },
         })
       },
       500,
@@ -258,8 +258,8 @@ function CodeEditorRemoteFile({
           win: 'Ctrl-s',
           linux: 'Ctrl-s',
           preventDefault: true,
-          run() {
-            debouncedSaveChange()
+          run(view) {
+            debouncedSaveChange(view)
 
             return true
           },
@@ -279,7 +279,7 @@ function CodeEditorRemoteFile({
       } else {
         file.update(data)
 
-        setFiles(Array.from(files.values()))
+        refreshFiles()
       }
     })
 
