@@ -715,9 +715,9 @@ function Stage({
                     {showDetails ? (
                       <>
                         {open ? (
-                          <MinusCircleIcon className="min-w-4 max-w-4 mr-2" />
+                          <MinusCircleIcon className="w-4 mr-2" />
                         ) : (
-                          <PlusCircleIcon className="min-w-4 max-w-4 mr-2" />
+                          <PlusCircleIcon className="w-4 mr-2" />
                         )}
                       </>
                     ) : (
@@ -730,7 +730,7 @@ function Stage({
                         )}
                       </>
                     )}
-                    <Banner.Label className="mr-2 text-sm w-full">
+                    <Banner.Label className="mr-2 text-sm">
                       <Title
                         text={text}
                         size={EnumSize.sm}

@@ -45,9 +45,9 @@ export default function ModelLineageDetails({
       {isNotNil(model) && (
         <span
           title={model.displayName}
-          className="mr-2 w-full whitespace-nowrap text-ellipsis overflow-hidden @lg:block"
+          className="mr-2 w-full whitespace-nowrap text-ellipsis overflow-hidden @lg:block font-bold text-neutral-600 dark:text-neutral-400"
         >
-          <b>Model:</b> {truncate(model.displayName, 50, 25)}
+          {truncate(model.displayName, 50, 25)}
         </span>
       )}
       {isNotNil(highlightedNodes) ?? (

@@ -1,4 +1,4 @@
-import { useMemo, useState, useRef } from 'react'
+import { useMemo, useState, useRef, useEffect } from 'react'
 import '@tanstack/react-table'
 import {
   type RowData,
@@ -19,7 +19,7 @@ import {
 import { useVirtualizer } from '@tanstack/react-virtual'
 import Input from '@components/input/Input'
 import { EnumSize } from '~/types/enum'
-import { isArrayNotEmpty } from '@utils/index'
+import { isArrayNotEmpty, isNotNil } from '@utils/index'
 
 declare module '@tanstack/table-core' {
   // eslint-disable-next-line @typescript-eslint/no-unused-vars
@@ -31,9 +31,13 @@ declare module '@tanstack/table-core' {
 const MIN_HEIGHT_ROW = 24
 
 export default function Table({
+  headline,
   data = [[], []],
+  action,
 }: {
   data: [TableColumn[], TableRow[]]
+  headline?: string
+  action?: React.ReactNode
 }): JSX.Element {
   const elTableContainer = useRef<HTMLDivElement>(null)
 
@@ -64,7 +68,7 @@ export default function Table({
     getSortedRowModel: getSortedRowModel(),
     getFilteredRowModel: getFilteredRowModel(),
   })
-
+  const totalColumns = data[0].length + 1
   const { rows } = table.getRowModel()
   const rowVirtualizer = useVirtualizer({
     getScrollElement: () => elTableContainer.current,
@@ -80,12 +84,19 @@ export default function Table({
       ? totalSize - (virtualRows?.[virtualRows.length - 1]?.end ?? 0)
       : 0
 
+  useEffect(() => {
+    setFilter('')
+    setSorting([])
+  }, [data])
+
   return (
     <div className="w-full h-full flex flex-col">
       <Header
+        headline={headline}
         filter={filter}
         setFilter={setFilter}
       />
+      {action}
       <div
         ref={elTableContainer}
         className="w-full h-full overflow-auto hover:scrollbar scrollbar--horizontal scrollbar--vertical"
@@ -100,7 +111,7 @@ export default function Table({
               {table.getHeaderGroups().map(headerGroup => (
                 <tr
                   key={headerGroup.id}
-                  className="bg-primary-10 dark:bg-secondary-10 backdrop-blur-lg"
+                  className="bg-neutral-10 backdrop-blur-lg"
                   style={{ height: `${MIN_HEIGHT_ROW}px` }}
                 >
                   <th className="pl-2 pr-4 pt-1 text-sm pb-1 border-r-2 last:border-r-0 border-light dark:border-dark">
@@ -157,7 +168,7 @@ export default function Table({
                 return (
                   <tr
                     key={row.id}
-                    className="even:bg-neutral-10 hover:text-neutral-900 hover:bg-secondary-10 dark:hover:text-neutral-100"
+                    className="even:bg-neutral-5 hover:text-neutral-900 hover:bg-neutral-20 dark:hover:text-neutral-100"
                     style={{ maxHeight: `${virtualRow.size}px` }}
                   >
                     <td
@@ -188,7 +199,7 @@ export default function Table({
               })
             ) : (
               <GhostRows
-                columns={columns.length > 0 ? columns.length : undefined}
+                columns={totalColumns > 0 ? totalColumns : undefined}
               />
             )}
             {paddingBottom > 0 && (
@@ -205,14 +216,17 @@ export default function Table({
 }
 
 function Header({
+  headline,
   filter,
   setFilter,
 }: {
   filter: string
   setFilter: (search: string) => void
+  headline?: string
 }): JSX.Element {
   return (
-    <div className="text-neutral-700 dark:text-neutral-300 text-xs font-medium py-2">
+    <div className="flex items-center text-neutral-600 dark:text-neutral-300 text-xs font-medium py-1">
+      {isNotNil(headline) && <h4 className="w-full font-bold">{headline}</h4>}
       <div className="flex justify-end items-center">
         <Input
           className="!m-0 mb-2"
@@ -220,6 +234,7 @@ function Header({
         >
           {({ className }) => (
             <Input.Textfield
+              type="search"
               className={clsx(className, 'w-full')}
               value={filter}
               placeholder="Filter Rows"

@@ -35,6 +35,7 @@ import {
 import ModelLineageSearch from './ModelLineageSearch'
 import { Popover } from '@headlessui/react'
 import ModelLineageDetails from './ModelLineageDetails'
+import { Divider } from '@components/divider/Divider'
 
 const WITH_COLUMNS_LIMIT = 30
 
@@ -350,6 +351,7 @@ function ModelColumnLineage(): JSX.Element {
           className="bg-theme !m-0 w-full !z-10"
         >
           <GraphControls nodes={nodes} />
+          <Divider />
         </Panel>
         <Controls className="bg-light p-1 rounded-md !border-none !shadow-lg" />
         <Background
