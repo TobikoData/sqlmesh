@@ -135,7 +135,7 @@ export default function Content(): JSX.Element {
                     )}
                   </CodeEditorRemoteFile>
                 </div>
-                <div className="flex flex-col h-full px-2">
+                <div className="flex flex-col h-full">
                   <ModelLineage model={model} />
                 </div>
               </SplitPane>
