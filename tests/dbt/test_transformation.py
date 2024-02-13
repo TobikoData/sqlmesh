@@ -410,11 +410,10 @@ def test_run_query(sushi_test_project: Project, runtime_renderer: t.Callable):
     engine_adapter = context.target.to_sqlmesh().create_engine_adapter()
     renderer = runtime_renderer(context, engine_adapter=engine_adapter)
     assert (
-        renderer("{{ run_query('SELECT 1 UNION ALL SELECT 2') }}")
-        == """| column | data_type |
-| ------ | --------- |
-| 1      | Integer   |
-"""
+        renderer(
+            """{% set results = run_query('SELECT 1 UNION ALL SELECT 2') %}{% for val in results.columns[0] %}{{ val }} {% endfor %}"""
+        )
+        == "1 2 "
     )
 
 
