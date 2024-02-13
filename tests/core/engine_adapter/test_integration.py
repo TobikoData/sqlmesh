@@ -1932,7 +1932,7 @@ def test_dialects(ctx: TestContext):
             None,
             {
                 "default": pd.Timestamp("2020-01-01 00:00:00+00:00"),
-                # TODO: Figure out why this is bytes and if this is really ok
+                # https://github.com/pymssql/pymssql/issues/649
                 "tsql": b"\x00\x00\x00\x00\x00\x00\x00\x005\xab\x00\x00\x00\x00\x07\xe0",
                 "mysql": pd.Timestamp("2020-01-01 00:00:00"),
                 "spark": pd.Timestamp("2020-01-01 00:00:00"),
@@ -1944,7 +1944,20 @@ def test_dialects(ctx: TestContext):
             None,
             {
                 "default": pd.Timestamp("2020-01-01 00:00:00"),
-                # TODO: Figure out why this has a timezone and if this is really ok
+                # Databricks' timestamp type is tz-aware:
+                # "Represents values comprising values of fields year, month, day, hour, minute, and second,
+                # with the session local time-zone.
+                # The timestamp value represents an absolute point in time."
+                # https://docs.databricks.com/en/sql/language-manual/data-types/timestamp-type.html
+                #
+                # They are adding a non-aware version TIMESTAMP_NTZ that's currently in public preview -
+                # you have to specify a table option to use it:
+                # "Feature support is enabled automatically when you create a new Delta table with a column of
+                # TIMESTAMP_NTZ type. It is not enabled automatically when you add a column of
+                # TIMESTAMP_NTZ type to an existing table.
+                # To enable support for TIMESTAMP_NTZ columns, support for the feature must be explicitly enabled for
+                # the existing table."
+                # https://docs.databricks.com/en/sql/language-manual/data-types/timestamp-ntz-type.html
                 "databricks": pd.Timestamp("2020-01-01 00:00:00+00:00"),
             },
         ),
@@ -1970,7 +1983,7 @@ def test_to_time_column(
     ctx: TestContext, time_column, time_column_type, time_column_format, result
 ):
     if ctx.test_type != "query":
-        pytest.skip("Sushi end-to-end tests only need to run for query")
+        pytest.skip("Time column tests only need to run for query")
 
     time_column = to_time_column(time_column, time_column_type, time_column_format)
     df = ctx.engine_adapter.fetchdf(exp.select(time_column).as_("the_col"))
