@@ -34,7 +34,7 @@ from sqlmesh.core.model.meta import ModelMeta
 from sqlmesh.core.model.seed import CsvSeedReader, Seed, create_seed
 from sqlmesh.core.renderer import ExpressionRenderer, QueryRenderer
 from sqlmesh.utils import columns_to_types_all_known, str_to_bool
-from sqlmesh.utils.date import TimeLike, make_inclusive, to_datetime, to_ds, to_ts
+from sqlmesh.utils.date import TimeLike, make_inclusive, to_datetime, to_time_column
 from sqlmesh.utils.errors import ConfigError, SQLMeshError, raise_config_error
 from sqlmesh.utils.hashing import hash_data
 from sqlmesh.utils.jinja import JinjaMacroRegistry, extract_macro_references
@@ -512,17 +512,7 @@ class _Model(ModelMeta, frozen=True):
 
             time_column_type = columns_to_types[self.time_column.column]
 
-            if time_column_type.is_type(exp.DataType.Type.DATE):
-                return exp.cast(exp.Literal.string(to_ds(time)), to="date")
-            if time_column_type.this in exp.DataType.TEMPORAL_TYPES:
-                return exp.cast(exp.Literal.string(to_ts(time)), to=time_column_type.this)
-
-            if self.time_column.format:
-                time = to_datetime(time).strftime(self.time_column.format)
-            if time_column_type.this in exp.DataType.TEXT_TYPES:
-                return exp.Literal.string(time)
-            if time_column_type.this in exp.DataType.NUMERIC_TYPES:
-                return exp.Literal.number(time)
+            return to_time_column(time, time_column_type, self.time_column.format)
         return exp.convert(time)
 
     def update_schema(

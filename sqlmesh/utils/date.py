@@ -214,7 +214,7 @@ def date_dict(
         kwargs[f"{prefix}_dt"] = dt
         kwargs[f"{prefix}_date"] = to_date(dt)
         kwargs[f"{prefix}_ds"] = to_ds(time_like)
-        kwargs[f"{prefix}_ts"] = dt.isoformat()
+        kwargs[f"{prefix}_ts"] = to_ts(dt)
         kwargs[f"{prefix}_epoch"] = millis / 1000
         kwargs[f"{prefix}_millis"] = millis
         kwargs[f"{prefix}_hour"] = dt.hour
@@ -228,7 +228,7 @@ def to_ds(obj: TimeLike) -> str:
 
 def to_ts(obj: TimeLike) -> str:
     """Converts a TimeLike object into YYYY-MM-DD HH:MM:SS formatted string."""
-    return to_datetime(obj).isoformat()
+    return to_datetime(obj).isoformat(sep=" ")
 
 
 def is_date(obj: TimeLike) -> bool:
@@ -302,3 +302,25 @@ def is_catagorical_relative_expression(expression: str) -> bool:
     if not grain_kwargs:
         return False
     return not any(k in TIME_UNITS for k in grain_kwargs)
+
+
+def to_time_column(
+    time_column: t.Union[TimeLike, exp.Null],
+    time_column_type: exp.DataType,
+    time_column_format: t.Optional[str] = None,
+) -> exp.Expression:
+    """Convert a TimeLike object to the same time format and type as the model's time column."""
+    if isinstance(time_column, exp.Null):
+        return exp.cast(time_column, to=time_column_type)
+    if time_column_type.is_type(exp.DataType.Type.DATE):
+        return exp.cast(exp.Literal.string(to_ds(time_column)), to="date")
+    if time_column_type.this in exp.DataType.TEMPORAL_TYPES:
+        return exp.cast(exp.Literal.string(to_ts(time_column)), to=time_column_type.this)
+
+    if time_column_format:
+        time_column = to_datetime(time_column).strftime(time_column_format)
+    if time_column_type.this in exp.DataType.TEXT_TYPES:
+        return exp.Literal.string(time_column)
+    if time_column_type.this in exp.DataType.NUMERIC_TYPES:
+        return exp.Literal.number(time_column)
+    return exp.convert(time_column)
