@@ -2068,7 +2068,7 @@ def validate_environment_views(
 
 
 def select_all(table: str, adapter: EngineAdapter) -> t.Iterable:
-    return adapter.fetchall(f"select * from {table}")
+    return adapter.fetchall(f"select * from {table} order by 1")
 
 
 def snapshots_to_versions(snapshots: t.Iterable[Snapshot]) -> t.Dict[str, str]:

@@ -4,7 +4,6 @@ import typing as t
 from pathlib import Path
 from unittest.mock import patch
 
-import agate
 import pytest
 from dbt.adapters.base import BaseRelation
 from dbt.contracts.relation import Policy
@@ -394,9 +393,15 @@ def test_statement(sushi_test_project: Project, runtime_renderer: t.Callable):
     assert context.target
     engine_adapter = context.target.to_sqlmesh().create_engine_adapter()
     renderer = runtime_renderer(context, engine_adapter=engine_adapter)
-    assert renderer(
-        "{% set test_var = 'SELECT 1' %}{% call statement('something', fetch_result=True) %} {{ test_var }} {% endcall %}{{ load_result('something').table }}",
-    ) == str(agate.Table([[1]], column_names=["1"], column_types=[agate.Number()]))
+    assert (
+        renderer(
+            "{% set test_var = 'SELECT 1' %}{% call statement('something', fetch_result=True) %} {{ test_var }} {% endcall %}{{ load_result('something').table }}",
+        )
+        == """| column | data_type |
+| ------ | --------- |
+| 1      | Integer   |
+"""
+    )
 
 
 def test_run_query(sushi_test_project: Project, runtime_renderer: t.Callable):
@@ -404,8 +409,11 @@ def test_run_query(sushi_test_project: Project, runtime_renderer: t.Callable):
     assert context.target
     engine_adapter = context.target.to_sqlmesh().create_engine_adapter()
     renderer = runtime_renderer(context, engine_adapter=engine_adapter)
-    assert renderer("{{ run_query('SELECT 1 UNION ALL SELECT 2') }}") == str(
-        agate.Table([[1], [2]], column_names=["1"], column_types=[agate.Number()])
+    assert (
+        renderer(
+            """{% set results = run_query('SELECT 1 UNION ALL SELECT 2') %}{% for val in results.columns[0] %}{{ val }} {% endfor %}"""
+        )
+        == "1 2 "
     )
 
 
