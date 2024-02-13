@@ -1145,20 +1145,27 @@ class SeedModel(_SqlBasedModel):
     ) -> t.Generator[QueryOrDF, None, None]:
         self._ensure_hydrated()
 
-        date_or_time_columns = []
+        date_columns = []
+        datetime_columns = []
         bool_columns = []
         string_columns = []
         for name, tpe in (self.columns_to_types_ or {}).items():
-            if tpe.this in exp.DataType.TEMPORAL_TYPES:
-                date_or_time_columns.append(name)
+            if tpe.this in (exp.DataType.Type.DATE, exp.DataType.Type.DATE32):
+                date_columns.append(name)
+            elif tpe.this in exp.DataType.TEMPORAL_TYPES:
+                datetime_columns.append(name)
             elif tpe.is_type("boolean"):
                 bool_columns.append(name)
             elif tpe.this in exp.DataType.TEXT_TYPES:
                 string_columns.append(name)
 
         for df in self._reader.read(batch_size=self.kind.batch_size):
-            for column in date_or_time_columns:
+            # convert all date/time types to native pandas timestamp
+            for column in [*date_columns, *datetime_columns]:
                 df[column] = pd.to_datetime(df[column])
+            # extract datetime.date from pandas timestamp for DATE columns
+            for column in date_columns:
+                df[column] = df[column].dt.date
             df[bool_columns] = df[bool_columns].apply(lambda i: str_to_bool(str(i)))
             df[string_columns] = df[string_columns].mask(
                 cond=lambda x: x.notna(), other=df[string_columns].astype(str)  # type: ignore
