@@ -32,6 +32,11 @@ freshness_date_parser_module.PATTERN = re.compile(
 )
 DAY_SHORTCUT_EXPRESSIONS = {"today", "yesterday", "tomorrow"}
 TIME_UNITS = {"hours", "minutes", "seconds"}
+TEMPORAL_TZ_TYPES = {
+    exp.DataType.Type.TIMETZ,
+    exp.DataType.Type.TIMESTAMPTZ,
+    exp.DataType.Type.TIMESTAMPLTZ,
+}
 
 
 def now(minute_floor: bool = True) -> datetime:
@@ -228,6 +233,11 @@ def to_ds(obj: TimeLike) -> str:
 
 def to_ts(obj: TimeLike) -> str:
     """Converts a TimeLike object into YYYY-MM-DD HH:MM:SS formatted string."""
+    return to_datetime(obj).replace(tzinfo=None).isoformat(sep=" ")
+
+
+def to_tstz(obj: TimeLike) -> str:
+    """Converts a TimeLike object into YYYY-MM-DD HH:MM:SS+00:00 formatted string."""
     return to_datetime(obj).isoformat(sep=" ")
 
 
@@ -314,6 +324,8 @@ def to_time_column(
         return exp.cast(time_column, to=time_column_type)
     if time_column_type.is_type(exp.DataType.Type.DATE):
         return exp.cast(exp.Literal.string(to_ds(time_column)), to="date")
+    if time_column_type.this in TEMPORAL_TZ_TYPES:
+        return exp.cast(exp.Literal.string(to_tstz(time_column)), to=time_column_type.this)
     if time_column_type.this in exp.DataType.TEMPORAL_TYPES:
         return exp.cast(exp.Literal.string(to_ts(time_column)), to=time_column_type.this)
 
