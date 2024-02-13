@@ -196,9 +196,9 @@ The rest of this page provides additional detail for some of the configuration o
 
 ### Environment schemas
 
-SQLMesh creates both physical tables and views in the data warehouse/engine.
+SQLMesh creates schemas, physical tables, and views in the data warehouse/engine. Learn more about why and how SQLMesh creates schema in the ["Why does SQLMesh create schemas?" FAQ](../faq/faq.md#schema-question).
 
-The `physical_schema_override` and `environment_suffix_target` configuration options control where SQLMesh creates the tables and views. These options are in the [environments](../reference/configuration.md#environments) section of the configuration reference page.
+The default SQLMesh behavior described in the FAQ is appropriate for most deployments, but you can override where SQLMesh creates physical tables and views with the `physical_schema_override` and `environment_suffix_target` configuration options. These options are in the [environments](../reference/configuration.md#environments) section of the configuration reference page.
 
 #### Physical table schemas
 By default, SQLMesh creates physical tables for a model with a naming convention of `sqlmesh__[model schema]`.

@@ -80,6 +80,7 @@
 
 ## Usage
 
+<a id="schema-question"></a>
 ??? question "Why does SQLMesh create schemas?"
     SQLMesh creates schemas for two reasons:
 
@@ -96,7 +97,7 @@
 
     The SQLMesh janitor automatically deletes unused environment schemas. It determines whether an environment schema should be deleted based on the elapsed time since the `sqlmesh plan [environment name]` command was successfully executed for the environment. If that time is greater than the environment time to live (default value of 1 week), the environment schema is deleted.
 
-    Tools to control the location of different SQLMesh database objects are in development.
+    SQLMesh's default behavior is appropriate for most deployments, but you can override where SQLMesh creates physical tables and views with [schema configuration options](../guides/configuration.md#environment-schemas).
 
 ??? question "What's the difference between a `test` and an `audit`?"
     A SQLMesh [`test`](../concepts/tests.md) is analogous to a "unit test" in software engineering. It tests *code* based on known inputs and outputs. In SQLMesh, the inputs and outputs are specified in a YAML file, and SQLMesh automatically runs them when `sqlmesh plan` is executed.
