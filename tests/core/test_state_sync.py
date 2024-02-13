@@ -1131,7 +1131,7 @@ def test_environment_start_as_timestamp(
 
     stored_env = state_sync.get_environment(env.name)
     assert stored_env
-    assert stored_env.start_at == to_datetime(now_ts).isoformat(sep=" ")
+    assert stored_env.start_at == to_datetime(now_ts).replace(tzinfo=None).isoformat(sep=" ")
 
 
 def test_unpause_snapshots(state_sync: EngineAdapterStateSync, make_snapshot: t.Callable):

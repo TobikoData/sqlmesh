@@ -14,7 +14,6 @@ import itertools
 import logging
 import sys
 import typing as t
-from datetime import datetime, timezone
 from functools import partial
 
 import pandas as pd
@@ -42,7 +41,7 @@ from sqlmesh.core.model.kind import TimeColumn
 from sqlmesh.core.schema_diff import SchemaDiffer
 from sqlmesh.utils import columns_to_types_all_known, double_escape, random_id
 from sqlmesh.utils.connection_pool import create_connection_pool
-from sqlmesh.utils.date import TimeLike, make_inclusive, to_ts
+from sqlmesh.utils.date import TimeLike, make_inclusive, to_time_column
 from sqlmesh.utils.errors import SQLMeshError, UnsupportedCatalogOperationError
 from sqlmesh.utils.pandas import columns_to_types_from_df
 
@@ -150,25 +149,6 @@ class EngineAdapter:
     @classmethod
     def is_pandas_df(cls, value: t.Any) -> bool:
         return isinstance(value, pd.DataFrame)
-
-    @classmethod
-    def _to_utc_timestamp(
-        cls, col: t.Union[str, exp.Literal, exp.Column, exp.Null], time_data_type: exp.DataType
-    ) -> exp.Cast:
-        def ensure_utc_exp(
-            ts: t.Union[str, exp.Literal, exp.Column, exp.Null]
-        ) -> t.Union[exp.Literal, exp.Column, exp.Null]:
-            if not isinstance(ts, (str, exp.Literal)):
-                return ts
-            if isinstance(ts, exp.Literal):
-                if not ts.is_string:
-                    raise SQLMeshError("Timestamp literal must be a string")
-                ts = ts.name
-            return exp.Literal.string(
-                datetime.fromisoformat(ts).astimezone(timezone.utc).strftime("%Y-%m-%d %H:%M:%S")
-            )
-
-        return exp.cast(exp.cast(ensure_utc_exp(col), "TIMESTAMP"), time_data_type)
 
     @classmethod
     def _casted_columns(cls, columns_to_types: t.Dict[str, exp.DataType]) -> t.List[exp.Alias]:
@@ -1305,7 +1285,7 @@ class EngineAdapter:
         # column names and then remove them from the unmanaged_columns
         if check_columns and check_columns == exp.Star():
             check_columns = [exp.column(col) for col in unmanaged_columns]
-        execution_ts = self._to_utc_timestamp(to_ts(execution_time), time_data_type)
+        execution_ts = to_time_column(execution_time, time_data_type)
         if updated_at_as_valid_from:
             if not updated_at_name:
                 raise SQLMeshError(
@@ -1315,9 +1295,7 @@ class EngineAdapter:
         elif execution_time_as_valid_from:
             update_valid_from_start = execution_ts
         else:
-            update_valid_from_start = self._to_utc_timestamp(
-                "1970-01-01 00:00:00+00:00", time_data_type
-            )
+            update_valid_from_start = to_time_column("1970-01-01 00:00:00+00:00", time_data_type)
         insert_valid_from_start = execution_ts if check_columns else exp.column(updated_at_name)  # type: ignore
         if check_columns:
             row_check_conditions = []
@@ -1521,7 +1499,7 @@ class EngineAdapter:
                     exp.select(
                         *unmanaged_columns,
                         insert_valid_from_start.as_(valid_from_name),
-                        self._to_utc_timestamp(exp.null(), time_data_type).as_(valid_to_name),
+                        to_time_column(exp.null(), time_data_type).as_(valid_to_name),
                     )
                     .from_("joined")
                     .where(updated_row_filter),

@@ -52,6 +52,7 @@ Postfixes:
 * date - A python date object that converts into a native SQL Date.
 * ds - A date string with the format: '%Y-%m-%d'
 * ts - An ISO 8601 datetime formatted string: '%Y-%m-%d %H:%M:%S'.
+* tstz - An ISO 8601 datetime formatted string with timezone: '%Y-%m-%d %H:%M:%S%z'.
 * epoch - An integer representing seconds since Unix epoch.
 * millis - An integer representing milliseconds since Unix epoch.
 
@@ -76,6 +77,11 @@ All predefined macro variables:
     * @start_ts
     * @end_ts
     * @execution_ts
+
+* tstz
+    * @start_tstz
+    * @end_tstz
+    * @execution_tstz
 
 * epoch
     * @start_epoch

@@ -1338,7 +1338,7 @@ def test_convert_to_time_column():
     )
     model = load_sql_based_model(expressions)
     assert model.convert_to_time_column("2022-01-01") == d.parse_one(
-        "CAST('2022-01-01 00:00:00+00:00' AS TIMESTAMP)"
+        "CAST('2022-01-01 00:00:00' AS TIMESTAMP)"
     )
 
 
