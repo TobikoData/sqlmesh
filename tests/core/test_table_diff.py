@@ -45,7 +45,7 @@ def test_data_diff(sushi_context_fixed_date):
     modified_model["query"] = (
         exp.select("*")
         .from_(model.query.subquery())
-        .union("select -1, 9999.00, 0, '2023-01-31', 1, 1")
+        .union("select -1, 9999.00, 0, CAST('2023-01-31' AS DATE), 1, 1")
     )
     modified_sqlmodel = SqlModel(**modified_model)
     sushi_context_fixed_date.upsert_model(modified_sqlmodel)
