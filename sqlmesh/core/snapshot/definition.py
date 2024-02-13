@@ -29,6 +29,7 @@ from sqlmesh.utils.date import (
     to_datetime,
     to_ds,
     to_timestamp,
+    to_ts,
     validate_date_range,
     yesterday,
 )
@@ -1349,7 +1350,8 @@ def merge_intervals(intervals: Intervals) -> Intervals:
 def _format_date_time(time_like: TimeLike, unit: t.Optional[IntervalUnit]) -> str:
     if unit is None or unit.is_date_granularity:
         return to_ds(time_like)
-    return to_datetime(time_like).isoformat()[:19]
+    # TODO: Remove `[0:19]` once `to_ts` always returns a timestamp without timezone
+    return to_ts(time_like)[0:19]
 
 
 def format_intervals(intervals: Intervals, unit: t.Optional[IntervalUnit]) -> str:

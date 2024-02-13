@@ -9,6 +9,7 @@ from sqlmesh.utils.date import (
     make_inclusive,
     to_datetime,
     to_timestamp,
+    to_ts,
 )
 
 
@@ -114,3 +115,8 @@ def test_make_inclusive(start_in, end_in, start_out, end_out) -> None:
 )
 def test_is_catagorical_relative_expression(expression, result):
     assert is_catagorical_relative_expression(expression) == result
+
+
+def test_to_ts():
+    assert to_ts(datetime(2020, 1, 1).replace(tzinfo=UTC)) == "2020-01-01 00:00:00+00:00"
+    assert to_ts(datetime(2020, 1, 1).replace(tzinfo=None)) == "2020-01-01 00:00:00+00:00"
