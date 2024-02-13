@@ -231,9 +231,13 @@ This key only applies to the _physical tables_ that SQLMesh creates - the views 
 
 #### Environment view schemas
 
-By default, SQLMesh appends the environment name to the schema name when creating new environments. This can be changed to append a suffix at the end of table/view name instead.
+SQLMesh stores `prod` environment views in the schema in a model's name - for example, the `prod` views for a model `my_schema.users` will be located in `my_schema`.
 
-Appending the suffix to a table/view means that that new environment views will be created in the same schema as production but be differentiated by having their names end with `__<env>`.
+By default, for non-prod environments SQLMesh creates a new schema that appends the environment name to the model name's schema. For example, by default the view for a model `my_schema.users` in a SQLMesh environment named `dev` will be located in the schema `my_schema__dev`.
+
+This behavior can be changed to append a suffix at the end of a _table/view_ name instead. Appending the suffix to a table/view name means that non-prod environment views will be created in the same schema as the `prod` environment. The prod and non-prod views are differentiated by non-prod view names ending with `__<env>`.
+
+For example, if you created a `dev` environment for a project containing a model named `my_schema.users`, the model view would be created as `my_schema.users__dev` instead of the default behavior of `my_schema__dev.users`.
 
 Config example:
 
@@ -256,19 +260,19 @@ Config example:
     )
     ```
 
-If you created a `dev` environment for a project containing a model named `my_schema.users`, the model view would be created as `my_schema.users__dev` instead of the default behavior of `my_schema__dev.users`.
-
 The default behavior of appending the suffix to schemas is recommended because it leaves production with a single clean interface for accessing the views. However, if you are deploying SQLMesh in an environment with tight restrictions on schema creation then this can be a useful way of reducing the number of schemas SQLMesh uses.
 
 #### Environment view catalogs
 
-By default, SQLMesh creates environment views in the same [catalog](../concepts/glossary.md#catalog) as the table it is pointing to. 
-The table's catalog is determine by either the catalog defined in it's name or the default catalog defined in the connection.
-A common use case though would be to have the "prod" catalog contain just the tables and "prod" environment views and then put all the "dev" views in a separate catalog. 
-Another use case could be if you have a CI/CD pipeline creating environments, like the [Github Action CI/CD Bot](../integrations/github.md), and you want to put these environments in a dedicated catalog since there can be many of them.
+By default, SQLMesh creates an environment view in the same [catalog](../concepts/glossary.md#catalog) as the physical table the view points to. The physical table's catalog is determined by either the catalog specified in the model name or the default catalog defined in the connection.
 
-To configure this, you provide a mapping from a [regex pattern](https://en.wikipedia.org/wiki/Regular_expression) to apply to an environment name to a desired catalog name.
-These names are evaluated in the order defined in the configuration and the first match is used.
+Some companies fully segregate `prod` and non-prod environment objects by catalog. For example, they might have a "prod" catalog that contains all `prod` environment physical tables and views and a separate "dev" catalog that contains all `dev` environment physical tables and views.
+
+Separate prod and non-prod catalogs can also be useful if you have a CI/CD pipeline that creates environments, like the [SQLMesh Github Actions CI/CD Bot](../integrations/github.md). You might want to store the CI/CD environment objects in a dedicated catalog since there can be many of them.
+
+To configure separate catalogs, provide a mapping from [regex patterns](https://en.wikipedia.org/wiki/Regular_expression) to catalog names. SQLMesh will compare the name of an environment to the regex patterns; when it finds a match it will store the environment's objects in the corresponding catalog.
+
+SQLMesh evaluates the regex patterns in the order defined in the configuration; it uses the catalog for the first matching pattern. If no match is found, the catalog defined in the model or the default catalog defined on the connection will be used.
 
 Config example:
 
@@ -296,15 +300,13 @@ Config example:
     )
     ```
 
-Example evaluation logic:
+With the example configuration above, SQLMesh would evaluate environment names as follows:
 
 * If the environment name is `prod`, the catalog will be `prod`.
 * If the environment name starts with `dev`, the catalog will be `dev`.
 * If the environment name starts with `analytics_repo`, the catalog will be `cicd`.
 
-If no match is found, the catalog defined in the model or the default catalog defined on the connection will be used.
-
-*Note:* This feature is only available for engines that support querying across catalogs. At the time of writing, this is the supported list:
+*Note:* This feature is only available for engines that support querying across catalogs. At the time of writing, these engines are supported:
 
 * [BigQuery](../integrations/engines/bigquery.md)
 * [Databricks](../integrations/engines/databricks.md)
@@ -316,7 +318,7 @@ If no match is found, the catalog defined in the model or the default catalog de
 * [Spark](../integrations/engines/spark.md)
 * [Trino](../integrations/engines/trino.md)
 
-##### Tips
+##### Regex Tips
 * If you are less familiar with regex, you can use a tool like [regex101](https://regex101.com/) to help you build your regex patterns.
     * LLMs, like [ChatGPT](https://chat.openai.com), can help with generating regex patterns. Make sure to validate the suggestion in regex101.
 * If you are wanting to do an exact word match then surround it with `^` and `$` like in the example above.
