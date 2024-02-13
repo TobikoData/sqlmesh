@@ -1,7 +1,9 @@
 import { useApiModelLineage } from '@api/index'
+import pluralize from 'pluralize'
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { type ModelSQLMeshModel } from '@models/sqlmesh-model'
 import { type HighlightedNodes, useLineageFlow } from './context'
+import { ChevronDownIcon } from '@heroicons/react/24/solid'
 import ReactFlow, {
   Controls,
   Background,
@@ -19,12 +21,11 @@ import ReactFlow, {
 import Loading from '@components/loading/Loading'
 import Spinner from '@components/logo/Spinner'
 import { createLineageWorker } from '~/workers'
-import { isArrayEmpty, isNil, isNotNil } from '@utils/index'
+import { isArrayEmpty, isFalse, isNil, isNotNil } from '@utils/index'
 import ListboxShow from '@components/listbox/ListboxShow'
 import clsx from 'clsx'
 import ModelNode from './ModelNode'
 import {
-  getNodeMap,
   getEdges,
   getLineageIndex,
   getActiveNodes,
@@ -56,6 +57,7 @@ export default function ModelLineage({
     setWithColumns,
     setHighlightedNodes,
     setNodeConnections,
+    setLineageCache,
   } = useLineageFlow()
 
   const {
@@ -99,6 +101,7 @@ export default function ModelLineage({
         setActiveEdges(new Map())
         setConnections(new Map())
         setSelectedNodes(new Set())
+        setLineageCache(undefined)
         setMainNode(model.fqn)
       })
 
@@ -154,7 +157,6 @@ export default function ModelLineage({
 function ModelColumnLineage(): JSX.Element {
   const {
     withColumns,
-    models,
     lineage,
     mainNode,
     selectedEdges,
@@ -166,6 +168,7 @@ function ModelColumnLineage(): JSX.Element {
     activeEdges,
     connectedNodes,
     connections,
+    nodesMap,
     handleError,
     setActiveNodes,
   } = useLineageFlow()
@@ -175,15 +178,7 @@ function ModelColumnLineage(): JSX.Element {
   const [isBuildingLayout, setIsBuildingLayout] = useState(false)
 
   const nodeTypes = useMemo(() => ({ model: ModelNode }), [])
-  const nodesMap = useMemo(
-    () =>
-      getNodeMap({
-        lineage,
-        models,
-        withColumns,
-      }),
-    [lineage, models, withColumns],
-  )
+
   const allEdges = useMemo(() => getEdges(lineage), [lineage])
   const lineageIndex = useMemo(() => getLineageIndex(lineage), [lineage])
 
@@ -249,11 +244,11 @@ function ModelColumnLineage(): JSX.Element {
             zoom: 0.5,
             duration: 0,
           })
-
-          setTimeout(() => {
-            setIsBuildingLayout(false)
-          }, 100)
         }
+
+        setTimeout(() => {
+          setIsBuildingLayout(false)
+        }, 100)
       })
 
     return () => {
@@ -262,7 +257,7 @@ function ModelColumnLineage(): JSX.Element {
       setEdges([])
       setNodes([])
     }
-  }, [lineageIndex, withColumns])
+  }, [activeEdges, nodesMap, lineageIndex])
 
   useEffect(() => {
     if (isNil(mainNode) || isArrayEmpty(nodes)) return
@@ -327,8 +322,9 @@ function ModelColumnLineage(): JSX.Element {
   return (
     <>
       {isBuildingLayout && (
-        <div className="absolute top-0 left-0 z-10 bg-theme flex justify-center items-center w-full h-full">
-          <Loading className="inline-block">
+        <div className="absolute top-0 left-0 z-10 flex justify-center items-center w-full h-full">
+          <span className="absolute w-full h-full z-10 bg-transparent-20 backdrop-blur-lg"></span>
+          <Loading className="inline-block z-10">
             <Spinner className="w-3 h-3 border border-neutral-10 mr-4" />
             <h3 className="text-md whitespace-nowrap">Building Lineage...</h3>
           </Loading>
@@ -418,6 +414,10 @@ function GraphControls({ nodes = [] }: { nodes: Node[] }): JSX.Element {
             className="flex items-center relative w-full cursor-pointer bg-primary-10 text-xs rounded-full text-primary-500 py-1 px-3 text-center focus:outline-none focus-visible:border-accent-500 focus-visible:ring-2 focus-visible:ring-light focus-visible:ring-opacity-75 focus-visible:ring-offset-2 focus-visible:ring-offset-brand-300 border-1 border-transparent"
           >
             Details
+            <ChevronDownIcon
+              className="ml-2 h-4 w-4"
+              aria-hidden="true"
+            />
           </Popover.Button>
           <Popover.Panel className="absolute left-2 right-2 flex-col z-50 mt-8 transform flex px-4 py-3 bg-theme-lighter shadow-xl focus:ring-2 ring-opacity-5 rounded-lg">
             <ModelLineageDetails nodes={nodes} />
@@ -437,16 +437,17 @@ function GraphControls({ nodes = [] }: { nodes: Node[] }): JSX.Element {
                 ? undefined
                 : setWithColumns,
             Connected: activeNodes.size > 0 ? undefined : setWithConnected,
-            Impact: activeNodes.size > 0 ? undefined : setWithImpacted,
-            Secondary: activeNodes.size > 0 ? undefined : setWithSecondary,
+            'Upstream/Downstream':
+              activeNodes.size > 0 ? undefined : setWithImpacted,
+            All: activeNodes.size > 0 ? undefined : setWithSecondary,
           }}
           value={
             [
               withColumns && 'Columns',
               hasBackground && 'Background',
               withConnected && 'Connected',
-              withImpacted && 'Impact',
-              withSecondary && 'Secondary',
+              withImpacted && 'Upstream/Downstream',
+              withSecondary && 'All',
             ].filter(Boolean) as string[]
           }
         />

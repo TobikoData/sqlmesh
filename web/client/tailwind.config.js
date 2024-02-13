@@ -170,7 +170,10 @@ module.exports = {
         800: 'var(--color-warning-800)',
         900: 'var(--color-warning-900)',
       },
-      transparent: 'transparent',
+      transparent: {
+        DEFAULT: 'transparent',
+        20: 'var(--color-transparent-20)',
+      },
     },
     fontFamily: {
       mono: ['JetBrains Mono', 'monospace'],

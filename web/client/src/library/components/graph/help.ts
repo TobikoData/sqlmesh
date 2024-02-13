@@ -365,16 +365,14 @@ function mergeLineageWithColumns(
         const newLineageModelColumnModel =
           newLineageModelColumn.models[sourceColumnName]!
 
-        currentLineageModelColumnModels[sourceColumnNameEncoded] = (
-          isNil(currentLineageModelColumnModel)
-            ? newLineageModelColumnModel
-            : Array.from(
-                new Set(
-                  currentLineageModelColumnModel.concat(
-                    newLineageModelColumnModel,
-                  ),
+        currentLineageModelColumnModels[sourceColumnNameEncoded] = Array.from(
+          new Set(
+            isNil(currentLineageModelColumnModel)
+              ? newLineageModelColumnModel
+              : currentLineageModelColumnModel.concat(
+                  newLineageModelColumnModel,
                 ),
-              )
+          ),
         ).map(encodeURI)
       }
     }
@@ -402,7 +400,7 @@ function mergeConnections(
       const column = model[targetColumnName]
 
       // We don't have any connectins so we skip
-      if (column?.models == null) continue
+      if (isNil(column?.models)) continue
 
       // At this point our Node is model -> {modelName} and column -> {columnName}
       // It is a target (left handler)
