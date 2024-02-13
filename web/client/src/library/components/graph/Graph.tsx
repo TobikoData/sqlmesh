@@ -388,11 +388,9 @@ const ModelColumn = memo(function ModelColumn({
     } else {
       setIsEmpty(false)
 
-      void getColumnLineage().then(({ data }) => {
-        if (isNil(data)) return
-
-        updateColumnLineage(data)
-      })
+      void getColumnLineage().then(({ data }) =>
+        updateColumnLineage(data ?? {}),
+      )
     }
   }
 
@@ -489,6 +487,7 @@ const ModelColumns = memo(function ModelColumns({
   withDescription?: boolean
 }): JSX.Element {
   const {
+    mainNode,
     connections,
     isActiveColumn,
     setConnections,
@@ -498,6 +497,8 @@ const ModelColumns = memo(function ModelColumns({
     removeActiveEdges,
     addActiveEdges,
     lineage,
+    lineageCache,
+    setLineageCache,
   } = useLineageFlow()
 
   const [filter, setFilter] = useState('')
@@ -522,25 +523,44 @@ const ModelColumns = memo(function ModelColumns({
     return [active, rest]
   }, [nodeId, columns, showColumns, isActiveColumn])
 
-  const updateColumnLineage = useCallback(
-    function updateColumnLineage(
-      columnLineage: Record<string, Record<string, LineageColumn>> = {},
-    ): void {
-      const { connections: newConnections, activeEdges } = mergeConnections(
-        structuredClone(connections),
+  function updateColumnLineage(
+    columnLineage: Record<string, Record<string, LineageColumn>> = {},
+  ): void {
+    let mergedLineage
+    let currentConnections
+
+    if (isNil(lineageCache)) {
+      setLineageCache(lineage)
+      currentConnections = new Map()
+
+      const mainNodeLineage = isNil(mainNode)
+        ? undefined
+        : lineage[mainNode] ?? lineageCache?.[mainNode]
+
+      mergedLineage = mergeLineageWithColumns(
+        isNil(mainNode) || isNil(mainNodeLineage)
+          ? {}
+          : { [mainNode]: { models: [] } },
         columnLineage,
       )
-      const mergedLineage = mergeLineageWithColumns(
+    } else {
+      currentConnections = connections
+
+      mergedLineage = mergeLineageWithColumns(
         structuredClone(lineage),
         columnLineage,
       )
+    }
 
-      setLineage(mergedLineage)
-      setConnections(newConnections)
-      addActiveEdges(activeEdges)
-    },
-    [connections, lineage, addActiveEdges],
-  )
+    const { connections: newConnections, activeEdges } = mergeConnections(
+      currentConnections,
+      columnLineage,
+    )
+
+    setLineage(mergedLineage)
+    setConnections(newConnections)
+    addActiveEdges(activeEdges)
+  }
 
   const isSelectManually = useCallback(
     function isSelectManually(columnName: string): boolean {
@@ -563,6 +583,13 @@ const ModelColumns = memo(function ModelColumns({
         walk(columnId, EnumSide.Left).concat(walk(columnId, EnumSide.Right)),
       )
 
+      if (connections.size === 0 && isNotNil(lineageCache)) {
+        setLineage(lineageCache)
+        setLineageCache(undefined)
+      }
+
+      setConnections(connections)
+
       function walk(id: string, side: Side): Array<[string, string]> {
         if (visited.has(id)) return []
 
@@ -571,8 +598,6 @@ const ModelColumns = memo(function ModelColumns({
         connections.delete(id)
 
         visited.add(id)
-
-        setConnections(connections)
 
         return edges
           .map(edge =>

@@ -9,6 +9,7 @@ import {
 import { useLineageFlow } from './context'
 import { type GraphNodeData } from './help'
 import { Position, type NodeProps } from 'reactflow'
+import { type Column } from '@api/client'
 
 export const EnumColumnType = {
   UNKNOWN: 'UNKNOWN',
@@ -28,7 +29,7 @@ export default function ModelNode({
     connections,
     models,
     handleClickModel,
-    lineage = {},
+    lineage,
     selectedNodes,
     setSelectedNodes,
     mainNode,
@@ -38,19 +39,19 @@ export default function ModelNode({
     highlightedNodes,
   } = useLineageFlow()
 
-  const { columns } = useMemo(() => {
+  const columns: Column[] = useMemo(() => {
     const model = models.get(id)
-    const columns = model?.columns ?? []
+    const modelColumns = model?.columns ?? []
 
     Object.keys(lineage[id]?.columns ?? {}).forEach((column: string) => {
-      const found = columns.find(({ name }) => name === column)
+      const found = modelColumns.find(({ name }) => name === column)
 
       if (isNil(found)) {
-        columns.push({ name: column, type: EnumColumnType.UNKNOWN })
+        modelColumns.push({ name: column, type: EnumColumnType.UNKNOWN })
       }
     })
 
-    columns.forEach(column => {
+    modelColumns.forEach(column => {
       let columnType = column.type ?? EnumColumnType.UNKNOWN
 
       if (columnType.startsWith(EnumColumnType.STRUCT)) {
@@ -60,9 +61,7 @@ export default function ModelNode({
       column.type = columnType
     })
 
-    return {
-      columns,
-    }
+    return modelColumns
   }, [id, models, lineage])
 
   const highlightedNodeModels = useMemo(
@@ -116,6 +115,7 @@ export default function ModelNode({
   const isModelExternal = nodeData.type === EnumLineageNodeModelType.external
   const isModelSeed = nodeData.type === EnumLineageNodeModelType.seed
   const isModelPython = nodeData.type === EnumLineageNodeModelType.python
+  const isModelUnknown = nodeData.type === EnumLineageNodeModelType.unknown
   const showColumns =
     (hasSelectedColumns ||
       nodeData.withColumns ||
@@ -186,7 +186,7 @@ export default function ModelNode({
             className="max-h-[15rem]"
             nodeId={id}
             columns={columns}
-            disabled={isModelPython}
+            disabled={isModelPython || isModelUnknown}
             withHandles={true}
             withSource={true}
             withDescription={false}
