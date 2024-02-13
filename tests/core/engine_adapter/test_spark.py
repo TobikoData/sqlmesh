@@ -719,14 +719,14 @@ def test_scd_type_2_by_time(
         ELSE `test_updated_at`
       END
       WHEN `t_test_valid_from` IS NULL
-      THEN CAST(CAST('1970-01-01 00:00:00' AS TIMESTAMP) AS TIMESTAMP)
+      THEN CAST('1970-01-01 00:00:00' AS TIMESTAMP)
       ELSE `t_test_valid_from`
     END AS `test_valid_from`,
     CASE
       WHEN `test_updated_at` > `t_test_updated_at`
       THEN `test_updated_at`
       WHEN `joined`.`_exists` IS NULL
-      THEN CAST(CAST('2020-01-01 00:00:00' AS TIMESTAMP) AS TIMESTAMP)
+      THEN CAST('2020-01-01 00:00:00' AS TIMESTAMP)
       ELSE `t_test_valid_to`
     END AS `test_valid_to`
   FROM `joined`
@@ -739,7 +739,7 @@ def test_scd_type_2_by_time(
     `price`,
     `test_updated_at`,
     `test_updated_at` AS `test_valid_from`,
-    CAST(CAST(NULL AS TIMESTAMP) AS TIMESTAMP) AS `test_valid_to`
+    CAST(NULL AS TIMESTAMP) AS `test_valid_to`
   FROM `joined`
   WHERE
     `test_updated_at` > `t_test_updated_at`

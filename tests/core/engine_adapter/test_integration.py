@@ -5,7 +5,7 @@ import os
 import pathlib
 import sys
 import typing as t
-from datetime import timedelta
+from datetime import datetime, timedelta
 
 import numpy as np
 import pandas as pd
@@ -17,7 +17,7 @@ from sqlmesh.core.config import load_config_from_paths
 from sqlmesh.core.dialect import normalize_model_name
 from sqlmesh.core.engine_adapter.shared import DataObject, DataObjectType
 from sqlmesh.utils import random_id
-from sqlmesh.utils.date import now, to_date, to_ds, yesterday
+from sqlmesh.utils.date import now, to_date, to_ds, to_time_column, yesterday
 from sqlmesh.utils.errors import UnsupportedCatalogOperationError
 from sqlmesh.utils.pydantic import PydanticModel
 from tests.conftest import SushiDataValidator
@@ -1898,3 +1898,98 @@ def test_dialects(ctx: TestContext):
     pd.testing.assert_frame_equal(
         df, pd.DataFrame([[1, 1, 1, 1]], columns=expected_columns), check_dtype=False
     )
+
+
+@pytest.mark.parametrize(
+    "time_column, time_column_type, time_column_format, result",
+    [
+        (
+            exp.null(),
+            exp.DataType.build("TIMESTAMP"),
+            None,
+            {
+                "default": None,
+                "bigquery": pd.NaT,
+                "databricks": pd.NaT,
+                "duckdb": pd.NaT,
+                "motherduck": pd.NaT,
+                "snowflake": pd.NaT,
+                "spark": pd.NaT,
+            },
+        ),
+        (
+            "2020-01-01 00:00:00+00:00",
+            exp.DataType.build("DATE"),
+            None,
+            {
+                "default": datetime(2020, 1, 1).date(),
+                "duckdb": pd.Timestamp("2020-01-01"),
+            },
+        ),
+        (
+            "2020-01-01 00:00:00+00:00",
+            exp.DataType.build("TIMESTAMPTZ"),
+            None,
+            {
+                "default": pd.Timestamp("2020-01-01 00:00:00+00:00"),
+                # https://github.com/pymssql/pymssql/issues/649
+                "tsql": b"\x00\x00\x00\x00\x00\x00\x00\x005\xab\x00\x00\x00\x00\x07\xe0",
+                "mysql": pd.Timestamp("2020-01-01 00:00:00"),
+                "spark": pd.Timestamp("2020-01-01 00:00:00"),
+            },
+        ),
+        (
+            "2020-01-01 00:00:00+00:00",
+            exp.DataType.build("TIMESTAMP"),
+            None,
+            {
+                "default": pd.Timestamp("2020-01-01 00:00:00"),
+                # Databricks' timestamp type is tz-aware:
+                # "Represents values comprising values of fields year, month, day, hour, minute, and second,
+                # with the session local time-zone.
+                # The timestamp value represents an absolute point in time."
+                # https://docs.databricks.com/en/sql/language-manual/data-types/timestamp-type.html
+                #
+                # They are adding a non-aware version TIMESTAMP_NTZ that's currently in public preview -
+                # you have to specify a table option to use it:
+                # "Feature support is enabled automatically when you create a new Delta table with a column of
+                # TIMESTAMP_NTZ type. It is not enabled automatically when you add a column of
+                # TIMESTAMP_NTZ type to an existing table.
+                # To enable support for TIMESTAMP_NTZ columns, support for the feature must be explicitly enabled for
+                # the existing table."
+                # https://docs.databricks.com/en/sql/language-manual/data-types/timestamp-ntz-type.html
+                "databricks": pd.Timestamp("2020-01-01 00:00:00+00:00"),
+            },
+        ),
+        (
+            "2020-01-01 00:00:00+00:00",
+            exp.DataType.build("TEXT"),
+            "%Y-%m-%dT%H:%M:%S%z",
+            {
+                "default": "2020-01-01T00:00:00+0000",
+            },
+        ),
+        (
+            "2020-01-01 00:00:00+00:00",
+            exp.DataType.build("INT"),
+            "%Y%m%d",
+            {
+                "default": 20200101,
+            },
+        ),
+    ],
+)
+def test_to_time_column(
+    ctx: TestContext, time_column, time_column_type, time_column_format, result
+):
+    if ctx.test_type != "query":
+        pytest.skip("Time column tests only need to run for query")
+
+    time_column = to_time_column(time_column, time_column_type, time_column_format)
+    df = ctx.engine_adapter.fetchdf(exp.select(time_column).as_("the_col"))
+    expected = result.get(ctx.dialect, result.get("default"))
+    col_name = "THE_COL" if ctx.dialect == "snowflake" else "the_col"
+    if expected is pd.NaT or expected is None:
+        assert df[col_name][0] is expected
+    else:
+        assert df[col_name][0] == expected

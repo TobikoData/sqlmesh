@@ -1102,14 +1102,14 @@ WITH "source" AS (
         ELSE "test_updated_at"
       END
       WHEN "t_test_valid_from" IS NULL
-      THEN CAST(CAST('1970-01-01 00:00:00' AS TIMESTAMP) AS TIMESTAMP)
+      THEN CAST('1970-01-01 00:00:00' AS TIMESTAMP)
       ELSE "t_test_valid_from"
     END AS "test_valid_from",
     CASE
       WHEN "test_updated_at" > "t_test_updated_at"
       THEN "test_updated_at"
       WHEN "joined"."_exists" IS NULL
-      THEN CAST(CAST('2020-01-01 00:00:00' AS TIMESTAMP) AS TIMESTAMP)
+      THEN CAST('2020-01-01 00:00:00' AS TIMESTAMP)
       ELSE "t_test_valid_to"
     END AS "test_valid_to"
   FROM "joined"
@@ -1122,7 +1122,7 @@ WITH "source" AS (
     "price",
     "test_updated_at",
     "test_updated_at" AS "test_valid_from",
-    CAST(CAST(NULL AS TIMESTAMP) AS TIMESTAMP) AS "test_valid_to"
+    CAST(NULL AS TIMESTAMP) AS "test_valid_to"
   FROM "joined"
   WHERE
     "test_updated_at" > "t_test_updated_at"
@@ -1300,14 +1300,14 @@ WITH "source" AS (
         ELSE "test_updated_at"
       END
       WHEN "t_test_valid_from" IS NULL
-      THEN CAST(CAST('1970-01-01 00:00:00' AS TIMESTAMP) AS TIMESTAMPTZ)
+      THEN CAST('1970-01-01 00:00:00+00:00' AS TIMESTAMPTZ)
       ELSE "t_test_valid_from"
     END AS "test_valid_from",
     CASE
       WHEN "test_updated_at" > "t_test_updated_at"
       THEN "test_updated_at"
       WHEN "joined"."_exists" IS NULL
-      THEN CAST(CAST('2020-01-01 00:00:00' AS TIMESTAMP) AS TIMESTAMPTZ)
+      THEN CAST('2020-01-01 00:00:00+00:00' AS TIMESTAMPTZ)
       ELSE "t_test_valid_to"
     END AS "test_valid_to"
   FROM "joined"
@@ -1322,7 +1322,7 @@ WITH "source" AS (
     "price",
     "test_updated_at",
     "test_updated_at" AS "test_valid_from",
-    CAST(CAST(NULL AS TIMESTAMP) AS TIMESTAMPTZ) AS "test_valid_to"
+    CAST(NULL AS TIMESTAMPTZ) AS "test_valid_to"
   FROM "joined"
   WHERE
     "test_updated_at" > "t_test_updated_at"
@@ -1454,7 +1454,7 @@ WITH "source" AS (
     COALESCE("joined"."t_id", "joined"."id") AS "id",
     COALESCE("joined"."t_name", "joined"."name") AS "name",
     COALESCE("joined"."t_price", "joined"."price") AS "price",
-    COALESCE("t_test_valid_from", CAST(CAST('1970-01-01 00:00:00' AS TIMESTAMP) AS TIMESTAMP)) AS "test_valid_from",
+    COALESCE("t_test_valid_from", CAST('1970-01-01 00:00:00' AS TIMESTAMP)) AS "test_valid_from",
     CASE
       WHEN "joined"."_exists" IS NULL
       OR (
@@ -1478,7 +1478,7 @@ WITH "source" AS (
           )
         )
       )
-      THEN CAST(CAST('2020-01-01 00:00:00' AS TIMESTAMP) AS TIMESTAMP)
+      THEN CAST('2020-01-01 00:00:00' AS TIMESTAMP)
       ELSE "t_test_valid_to"
     END AS "test_valid_to"
   FROM "joined"
@@ -1489,8 +1489,8 @@ WITH "source" AS (
     "id",
     "name",
     "price",
-    CAST(CAST('2020-01-01 00:00:00' AS TIMESTAMP) AS TIMESTAMP) AS "test_valid_from",
-    CAST(CAST(NULL AS TIMESTAMP) AS TIMESTAMP) AS "test_valid_to"
+    CAST('2020-01-01 00:00:00' AS TIMESTAMP) AS "test_valid_from",
+    CAST(NULL AS TIMESTAMP) AS "test_valid_to"
   FROM "joined"
   WHERE
     (
@@ -1640,7 +1640,7 @@ WITH "source" AS (
     COALESCE("joined"."t_id", "joined"."id") AS "id",
     COALESCE("joined"."t_name", "joined"."name") AS "name",
     COALESCE("joined"."t_price", "joined"."price") AS "price",
-    COALESCE("t_test_valid_from", CAST(CAST('1970-01-01 00:00:00' AS TIMESTAMP) AS TIMESTAMP)) AS "test_valid_from",
+    COALESCE("t_test_valid_from", CAST('1970-01-01 00:00:00' AS TIMESTAMP)) AS "test_valid_from",
     CASE
       WHEN "joined"."_exists" IS NULL
       OR (
@@ -1671,7 +1671,7 @@ WITH "source" AS (
           )
         )
       )
-      THEN CAST(CAST('2020-01-01 00:00:00' AS TIMESTAMP) AS TIMESTAMP)
+      THEN CAST('2020-01-01 00:00:00' AS TIMESTAMP)
       ELSE "t_test_valid_to"
     END AS "test_valid_to"
   FROM "joined"
@@ -1682,8 +1682,8 @@ WITH "source" AS (
     "id",
     "name",
     "price",
-    CAST(CAST('2020-01-01 00:00:00' AS TIMESTAMP) AS TIMESTAMP) AS "test_valid_from",
-    CAST(CAST(NULL AS TIMESTAMP) AS TIMESTAMP) AS "test_valid_to"
+    CAST('2020-01-01 00:00:00' AS TIMESTAMP) AS "test_valid_from",
+    CAST(NULL AS TIMESTAMP) AS "test_valid_to"
   FROM "joined"
   WHERE
     (

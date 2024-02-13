@@ -1,15 +1,20 @@
+import typing as t
 from datetime import date, datetime
 
 import pytest
 from freezegun import freeze_time
+from sqlglot import exp
 
 from sqlmesh.utils.date import (
     UTC,
+    TimeLike,
     is_catagorical_relative_expression,
     make_inclusive,
     to_datetime,
+    to_time_column,
     to_timestamp,
     to_ts,
+    to_tstz,
 )
 
 
@@ -118,5 +123,60 @@ def test_is_catagorical_relative_expression(expression, result):
 
 
 def test_to_ts():
-    assert to_ts(datetime(2020, 1, 1).replace(tzinfo=UTC)) == "2020-01-01 00:00:00+00:00"
-    assert to_ts(datetime(2020, 1, 1).replace(tzinfo=None)) == "2020-01-01 00:00:00+00:00"
+    assert to_ts(datetime(2020, 1, 1).replace(tzinfo=UTC)) == "2020-01-01 00:00:00"
+    assert to_ts(datetime(2020, 1, 1).replace(tzinfo=None)) == "2020-01-01 00:00:00"
+
+
+def test_to_tstz():
+    assert to_tstz(datetime(2020, 1, 1).replace(tzinfo=UTC)) == "2020-01-01 00:00:00+00:00"
+    assert to_tstz(datetime(2020, 1, 1).replace(tzinfo=None)) == "2020-01-01 00:00:00+00:00"
+
+
+@pytest.mark.parametrize(
+    "time_column, time_column_type, time_column_format, result",
+    [
+        (
+            exp.null(),
+            exp.DataType.build("TIMESTAMP"),
+            None,
+            "CAST(NULL AS TIMESTAMP)",
+        ),
+        (
+            "2020-01-01 00:00:00+00:00",
+            exp.DataType.build("DATE"),
+            None,
+            "CAST('2020-01-01' AS DATE)",
+        ),
+        (
+            "2020-01-01 00:00:00+00:00",
+            exp.DataType.build("TIMESTAMPTZ"),
+            None,
+            "CAST('2020-01-01 00:00:00+00:00' AS TIMESTAMPTZ)",
+        ),
+        (
+            "2020-01-01 00:00:00+00:00",
+            exp.DataType.build("TIMESTAMP"),
+            None,
+            "CAST('2020-01-01 00:00:00' AS TIMESTAMP)",
+        ),
+        (
+            "2020-01-01 00:00:00+00:00",
+            exp.DataType.build("TEXT"),
+            "%Y-%m-%dT%H:%M:%S%z",
+            "'2020-01-01T00:00:00+0000'",
+        ),
+        (
+            "2020-01-01 00:00:00+00:00",
+            exp.DataType.build("INT"),
+            "%Y%m%d",
+            "20200101",
+        ),
+    ],
+)
+def test_to_time_column(
+    time_column: t.Union[TimeLike, exp.Null],
+    time_column_type: exp.DataType,
+    time_column_format: t.Optional[str],
+    result: str,
+):
+    assert to_time_column(time_column, time_column_type, time_column_format).sql() == result
