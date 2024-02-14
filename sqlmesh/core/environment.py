@@ -92,6 +92,7 @@ class Environment(EnvironmentNamingInfo):
         finalized_ts: The timestamp when this environment was finalized.
         promoted_snapshot_ids: The IDs of the snapshots that are promoted in this environment
             (i.e. for which the views are created). If not specified, all snapshots are promoted.
+        previous_finalized_snapshots: Snapshots that were part of this environment last time it was finalized.
     """
 
     snapshots: t.List[SnapshotTableInfo]
@@ -102,10 +103,13 @@ class Environment(EnvironmentNamingInfo):
     expiration_ts: t.Optional[int] = None
     finalized_ts: t.Optional[int] = None
     promoted_snapshot_ids: t.Optional[t.List[SnapshotId]] = None
+    previous_finalized_snapshots: t.Optional[t.List[SnapshotTableInfo]] = None
 
-    @field_validator("snapshots", mode="before")
+    @field_validator("snapshots", "previous_finalized_snapshots", mode="before")
     @classmethod
-    def _convert_snapshots(cls, v: str | t.List[SnapshotTableInfo]) -> t.List[SnapshotTableInfo]:
+    def _convert_snapshots(
+        cls, v: str | t.List[SnapshotTableInfo] | None
+    ) -> t.List[SnapshotTableInfo] | None:
         if isinstance(v, str):
             return [SnapshotTableInfo.parse_obj(obj) for obj in json.loads(v)]
         return v
@@ -124,6 +128,14 @@ class Environment(EnvironmentNamingInfo):
 
         promoted_snapshot_ids = set(self.promoted_snapshot_ids)
         return [s for s in self.snapshots if s.snapshot_id in promoted_snapshot_ids]
+
+    @property
+    def finalized_or_current_snapshots(self) -> t.List[SnapshotTableInfo]:
+        return (
+            self.snapshots
+            if self.finalized_ts
+            else self.previous_finalized_snapshots or self.snapshots
+        )
 
     @property
     def naming_info(self) -> EnvironmentNamingInfo:

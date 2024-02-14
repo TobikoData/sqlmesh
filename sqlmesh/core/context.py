@@ -978,6 +978,7 @@ class Context(BaseContext):
             create_from=create_from,
             force_no_diff=(restate_models is not None and not expanded_restate_models)
             or (backfill_models is not None and not backfill_models),
+            ensure_finalized_snapshots=self.config.plan.use_finalized_state,
         )
 
         # If no end date is specified, use the max interval end from prod
@@ -999,10 +1000,14 @@ class Context(BaseContext):
                         # that should be considered for the default plan end value by including its parents.
                         models_for_default_end |= {s.name for s in snapshot.parents}
                 default_end = self.state_sync.greatest_common_interval_end(
-                    c.PROD, models_for_default_end
+                    c.PROD,
+                    models_for_default_end,
+                    ensure_finalized_snapshots=self.config.plan.use_finalized_state,
                 )
             else:
-                default_end = self.state_sync.max_interval_end_for_environment(c.PROD)
+                default_end = self.state_sync.max_interval_end_for_environment(
+                    c.PROD, ensure_finalized_snapshots=self.config.plan.use_finalized_state
+                )
         else:
             default_end = None
 
@@ -1679,6 +1684,7 @@ class Context(BaseContext):
         snapshots: t.Optional[t.Dict[str, Snapshot]] = None,
         create_from: t.Optional[str] = None,
         force_no_diff: bool = False,
+        ensure_finalized_snapshots: bool = False,
     ) -> ContextDiff:
         environment = Environment.normalize_name(environment)
         if force_no_diff:
@@ -1688,6 +1694,7 @@ class Context(BaseContext):
             snapshots=snapshots or self.snapshots,
             create_from=create_from or c.PROD,
             state_reader=self.state_reader,
+            ensure_finalized_snapshots=ensure_finalized_snapshots,
         )
 
     def _run_janitor(self) -> None:

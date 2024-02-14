@@ -271,15 +271,20 @@ class AirflowClient(BaseAirflowClient):
         response = self._get(ENVIRONMENTS_PATH)
         return common.EnvironmentsResponse.parse_obj(response).environments
 
-    def max_interval_end_for_environment(self, environment: str) -> t.Optional[int]:
-        response = self._get(f"{ENVIRONMENTS_PATH}/{environment}/max_interval_end")
+    def max_interval_end_for_environment(
+        self, environment: str, ensure_finalized_snapshots: bool
+    ) -> t.Optional[int]:
+        flags = ["ensure_finalized_snapshots"] if ensure_finalized_snapshots else []
+        response = self._get(f"{ENVIRONMENTS_PATH}/{environment}/max_interval_end", *flags)
         return common.IntervalEndResponse.parse_obj(response).max_interval_end
 
     def greatest_common_interval_end(
-        self, environment: str, models: t.Collection[str]
+        self, environment: str, models: t.Collection[str], ensure_finalized_snapshots: bool
     ) -> t.Optional[int]:
+        flags = ["ensure_finalized_snapshots"] if ensure_finalized_snapshots else []
         response = self._get(
             f"{ENVIRONMENTS_PATH}/{environment}/greatest_common_interval_end",
+            *flags,
             models=_json_query_param(list(models)),
         )
         return common.IntervalEndResponse.parse_obj(response).max_interval_end

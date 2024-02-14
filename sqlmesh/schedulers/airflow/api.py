@@ -75,7 +75,10 @@ def get_environments() -> Response:
 @check_authentication
 def get_max_interval_end(name: str) -> Response:
     with util.scoped_state_sync() as state_sync:
-        max_interval_end = state_sync.max_interval_end_for_environment(name)
+        ensure_finalized_snapshots = "ensure_finalized_snapshots" in request.args
+        max_interval_end = state_sync.max_interval_end_for_environment(
+            name, ensure_finalized_snapshots=ensure_finalized_snapshots
+        )
         response = common.IntervalEndResponse(environment=name, max_interval_end=max_interval_end)
         return _success(response)
 
@@ -86,7 +89,10 @@ def get_max_interval_end(name: str) -> Response:
 def get_greatest_common_interval_end(name: str) -> Response:
     with util.scoped_state_sync() as state_sync:
         models = json.loads(request.args["models"]) if "models" in request.args else []
-        max_interval_end = state_sync.greatest_common_interval_end(name, set(models))
+        ensure_finalized_snapshots = "ensure_finalized_snapshots" in request.args
+        max_interval_end = state_sync.greatest_common_interval_end(
+            name, set(models), ensure_finalized_snapshots=ensure_finalized_snapshots
+        )
         response = common.IntervalEndResponse(environment=name, max_interval_end=max_interval_end)
         return _success(response)
 

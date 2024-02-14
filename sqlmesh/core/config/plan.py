@@ -16,6 +16,8 @@ class PlanConfig(BaseConfig):
         no_diff: Hide text differences for changed models.
         no_prompts: Whether to disable interactive prompts for the backfill time range. Please note that
         auto_apply: Whether to automatically apply the new plan after creation.
+        use_finalized_state: Whether to compare against the latest finalized environment state, or to use
+            whatever state the target environment is currently in.
     """
 
     forward_only: bool = False
@@ -25,3 +27,4 @@ class PlanConfig(BaseConfig):
     no_diff: bool = False
     no_prompts: bool = False
     auto_apply: bool = False
+    use_finalized_state: bool = False

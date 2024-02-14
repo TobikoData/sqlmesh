@@ -136,6 +136,7 @@ class EngineAdapterStateSync(CommonStateSyncMixin, StateSync):
             "promoted_snapshot_ids": exp.DataType.build("text"),
             "suffix_target": exp.DataType.build("text"),
             "catalog_name_override": exp.DataType.build("text"),
+            "previous_finalized_snapshots": exp.DataType.build("text"),
         }
 
         self._seed_columns_to_types = {
@@ -705,13 +706,18 @@ class EngineAdapterStateSync(CommonStateSyncMixin, StateSync):
             s.dev_intervals = []
         return Snapshot.hydrate_with_intervals_by_version(snapshots, intervals)
 
-    def max_interval_end_for_environment(self, environment: str) -> t.Optional[int]:
+    def max_interval_end_for_environment(
+        self, environment: str, ensure_finalized_snapshots: bool = False
+    ) -> t.Optional[int]:
         env = self._get_environment(environment)
         if not env:
             return None
 
         max_end = None
-        for where in self._snapshot_name_version_filter(env.snapshots, "intervals"):
+        snapshots = (
+            env.snapshots if not ensure_finalized_snapshots else env.finalized_or_current_snapshots
+        )
+        for where in self._snapshot_name_version_filter(snapshots, "intervals"):
             end = self.engine_adapter.fetchone(
                 exp.select(exp.func("MAX", exp.to_column("end_ts")))
                 .from_(exp.to_table(self.intervals_table).as_("intervals"))
@@ -727,7 +733,9 @@ class EngineAdapterStateSync(CommonStateSyncMixin, StateSync):
 
         return max_end
 
-    def greatest_common_interval_end(self, environment: str, models: t.Set[str]) -> t.Optional[int]:
+    def greatest_common_interval_end(
+        self, environment: str, models: t.Set[str], ensure_finalized_snapshots: bool = False
+    ) -> t.Optional[int]:
         if not models:
             return None
 
@@ -735,7 +743,10 @@ class EngineAdapterStateSync(CommonStateSyncMixin, StateSync):
         if not env:
             return None
 
-        snapshots = [s for s in env.snapshots if s.name in models]
+        snapshots = (
+            env.snapshots if not ensure_finalized_snapshots else env.finalized_or_current_snapshots
+        )
+        snapshots = [s for s in snapshots if s.name in models]
         if not snapshots:
             snapshots = env.snapshots
 
@@ -1256,6 +1267,13 @@ def _environment_to_df(environment: Environment) -> pd.DataFrame:
                 ),
                 "suffix_target": environment.suffix_target.value,
                 "catalog_name_override": environment.catalog_name_override,
+                "previous_finalized_snapshots": (
+                    json.dumps(
+                        [snapshot.dict() for snapshot in environment.previous_finalized_snapshots]
+                    )
+                    if environment.previous_finalized_snapshots is not None
+                    else None
+                ),
             }
         ]
     )

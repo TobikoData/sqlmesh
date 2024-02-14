@@ -349,7 +349,10 @@ def test_get_environments(mocker: MockerFixture, snapshot: Snapshot):
     )
 
 
-def test_max_interval_end_for_environment(mocker: MockerFixture, snapshot: Snapshot):
+@pytest.mark.parametrize("ensure_finalized_snapshots", [True, False])
+def test_max_interval_end_for_environment(
+    mocker: MockerFixture, snapshot: Snapshot, ensure_finalized_snapshots: bool
+):
     response = common.IntervalEndResponse(
         environment="test_environment", max_interval_end=to_timestamp("2023-01-01")
     )
@@ -361,16 +364,20 @@ def test_max_interval_end_for_environment(mocker: MockerFixture, snapshot: Snaps
     max_interval_end_mock.return_value = max_interval_end_response_mock
 
     client = AirflowClient(airflow_url=common.AIRFLOW_LOCAL_URL, session=requests.Session())
-    result = client.max_interval_end_for_environment("test_environment")
+    result = client.max_interval_end_for_environment("test_environment", ensure_finalized_snapshots)
 
     assert result == response.max_interval_end
 
+    flags = "?ensure_finalized_snapshots" if ensure_finalized_snapshots else ""
     max_interval_end_mock.assert_called_once_with(
-        "http://localhost:8080/sqlmesh/api/v1/environments/test_environment/max_interval_end"
+        f"http://localhost:8080/sqlmesh/api/v1/environments/test_environment/max_interval_end{flags}"
     )
 
 
-def test_greatest_common_interval_end(mocker: MockerFixture, snapshot: Snapshot):
+@pytest.mark.parametrize("ensure_finalized_snapshots", [True, False])
+def test_greatest_common_interval_end(
+    mocker: MockerFixture, snapshot: Snapshot, ensure_finalized_snapshots: bool
+):
     response = common.IntervalEndResponse(
         environment="test_environment", max_interval_end=to_timestamp("2023-01-01")
     )
@@ -382,12 +389,15 @@ def test_greatest_common_interval_end(mocker: MockerFixture, snapshot: Snapshot)
     max_interval_end_mock.return_value = max_interval_end_response_mock
 
     client = AirflowClient(airflow_url=common.AIRFLOW_LOCAL_URL, session=requests.Session())
-    result = client.greatest_common_interval_end("test_environment", {"a.b.c"})
+    result = client.greatest_common_interval_end(
+        "test_environment", {"a.b.c"}, ensure_finalized_snapshots
+    )
 
     assert result == response.max_interval_end
 
+    flags = "ensure_finalized_snapshots&" if ensure_finalized_snapshots else ""
     max_interval_end_mock.assert_called_once_with(
-        "http://localhost:8080/sqlmesh/api/v1/environments/test_environment/greatest_common_interval_end?models=%5B%22a.b.c%22%5D"
+        f"http://localhost:8080/sqlmesh/api/v1/environments/test_environment/greatest_common_interval_end?{flags}models=%5B%22a.b.c%22%5D"
     )
 
 
