@@ -220,6 +220,7 @@ def date_dict(
         kwargs[f"{prefix}_date"] = to_date(dt)
         kwargs[f"{prefix}_ds"] = to_ds(time_like)
         kwargs[f"{prefix}_ts"] = to_ts(dt)
+        kwargs[f"{prefix}_tstz"] = to_tstz(dt)
         kwargs[f"{prefix}_epoch"] = millis / 1000
         kwargs[f"{prefix}_millis"] = millis
         kwargs[f"{prefix}_hour"] = dt.hour
