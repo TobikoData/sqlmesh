@@ -3,6 +3,7 @@ from datetime import date
 from pathlib import Path
 from unittest.mock import patch
 
+import pandas as pd
 import pytest
 from pytest_mock.plugin import MockerFixture
 from sqlglot import exp, parse_one
@@ -777,8 +778,8 @@ def test_seed_model_custom_types(tmp_path):
 
     with open(model_csv_path, "w") as fd:
         fd.write(
-            """key,ds,b_a,b_b,i,i_str
-123,2022-01-01,false,0,321,321
+            """key,ds_date,ds_timestamp,b_a,b_b,i,i_str
+123,2022-01-01,2022-01-01,false,0,321,321
 """
         )
 
@@ -787,7 +788,8 @@ def test_seed_model_custom_types(tmp_path):
         SeedKind(path=str(model_csv_path)),
         columns={
             "key": "string",
-            "ds": "date",
+            "ds_date": "date",
+            "ds_timestamp": "timestamp",
             "b_a": "boolean",
             "b_b": "boolean",
             "i": "int",
@@ -797,8 +799,11 @@ def test_seed_model_custom_types(tmp_path):
 
     df = next(model.render(context=None))
 
-    assert df["ds"].dtype == "datetime64[ns]"
-    assert df["ds"].iloc[0].date() == date(2022, 1, 1)
+    assert df["ds_date"].dtype == "object"
+    assert df["ds_date"].iloc[0] == date(2022, 1, 1)
+
+    assert df["ds_timestamp"].dtype == "datetime64[ns]"
+    assert df["ds_timestamp"].iloc[0] == pd.Timestamp("2022-01-01 00:00:00")
 
     assert df["key"].dtype == "object"
     assert df["key"].iloc[0] == "123"
