@@ -42,6 +42,10 @@ class Versions(PydanticModel):
     def minor_sqlglot_version(self) -> t.Tuple[int, int]:
         return major_minor(self.sqlglot_version)
 
+    @property
+    def minor_sqlmesh_version(self) -> t.Tuple[int, int]:
+        return major_minor(self.sqlmesh_version)
+
     @field_validator("sqlglot_version", "sqlmesh_version", mode="before")
     @classmethod
     def _package_version_validator(cls, v: t.Any) -> str:
@@ -178,6 +182,8 @@ class StateReader(abc.ABC):
         Returns:
             The versions object.
         """
+        from sqlmesh._version import __version__ as SQLMESH_VERSION
+
         versions = self._get_versions()
 
         if validate:
@@ -220,11 +226,22 @@ class StateReader(abc.ABC):
                     remote_package_version=versions.sqlglot_version,
                 )
 
+            if major_minor(SQLMESH_VERSION) < major_minor(versions.sqlmesh_version):
+                raise_error(
+                    "SQLMesh",
+                    SQLMESH_VERSION,
+                    versions.sqlmesh_version,
+                    remote_package_version=versions.sqlmesh_version,
+                )
+
             if SCHEMA_VERSION > versions.schema_version:
                 raise_error("SQLMesh", SCHEMA_VERSION, versions.schema_version, ahead=True)
 
             if major_minor(SQLGLOT_VERSION) > major_minor(versions.sqlglot_version):
                 raise_error("SQLGlot", SQLGLOT_VERSION, versions.sqlglot_version, ahead=True)
+
+            if major_minor(SQLMESH_VERSION) > major_minor(versions.sqlmesh_version):
+                raise_error("SQLMesh", SQLMESH_VERSION, versions.sqlmesh_version, ahead=True)
 
         return versions
 
