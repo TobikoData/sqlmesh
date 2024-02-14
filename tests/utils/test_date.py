@@ -8,6 +8,7 @@ from sqlglot import exp
 from sqlmesh.utils.date import (
     UTC,
     TimeLike,
+    date_dict,
     is_catagorical_relative_expression,
     make_inclusive,
     to_datetime,
@@ -180,3 +181,41 @@ def test_to_time_column(
     result: str,
 ):
     assert to_time_column(time_column, time_column_type, time_column_format).sql() == result
+
+
+def test_date_dict():
+    resp = date_dict("2020-01-02 01:00:00", "2020-01-01 00:00:00", "2020-01-02 00:00:00")
+    assert resp == {
+        "latest_dt": datetime(2020, 1, 2, 1, 0, 0, tzinfo=UTC),
+        "execution_dt": datetime(2020, 1, 2, 1, 0, 0, tzinfo=UTC),
+        "start_dt": datetime(2020, 1, 1, 0, 0, 0, tzinfo=UTC),
+        "end_dt": datetime(2020, 1, 2, 0, 0, 0, tzinfo=UTC),
+        "latest_date": date(2020, 1, 2),
+        "execution_date": date(2020, 1, 2),
+        "start_date": date(2020, 1, 1),
+        "end_date": date(2020, 1, 2),
+        "latest_ds": "2020-01-02",
+        "execution_ds": "2020-01-02",
+        "start_ds": "2020-01-01",
+        "end_ds": "2020-01-02",
+        "latest_ts": "2020-01-02 01:00:00",
+        "execution_ts": "2020-01-02 01:00:00",
+        "start_ts": "2020-01-01 00:00:00",
+        "end_ts": "2020-01-02 00:00:00",
+        "latest_tstz": "2020-01-02 01:00:00+00:00",
+        "execution_tstz": "2020-01-02 01:00:00+00:00",
+        "start_tstz": "2020-01-01 00:00:00+00:00",
+        "end_tstz": "2020-01-02 00:00:00+00:00",
+        "latest_epoch": 1577926800.0,
+        "execution_epoch": 1577926800.0,
+        "start_epoch": 1577836800.0,
+        "end_epoch": 1577923200.0,
+        "latest_millis": 1577926800000,
+        "execution_millis": 1577926800000,
+        "start_millis": 1577836800000,
+        "end_millis": 1577923200000,
+        "latest_hour": 1,
+        "execution_hour": 1,
+        "start_hour": 0,
+        "end_hour": 0,
+    }
