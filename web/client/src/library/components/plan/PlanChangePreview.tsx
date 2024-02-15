@@ -222,7 +222,7 @@ function ChangeCategories({
     <RadioGroup
       className="flex flex-col mt-2"
       value={
-        change_categorization.get(change.name)?.category.value ??
+        change_categorization.get(change.name)?.category?.value ??
         change.change_category
       }
       onChange={(category: SnapshotChangeCategory) => {
