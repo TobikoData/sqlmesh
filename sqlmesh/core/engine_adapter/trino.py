@@ -49,6 +49,7 @@ class TrinoEngineAdapter(
     COMMENT_CREATION_TABLE = CommentCreationTable.IN_SCHEMA_DEF_NO_CTAS
     COMMENT_CREATION_VIEW = CommentCreationView.COMMENT_COMMAND_ONLY
     SUPPORTS_REPLACE_TABLE = False
+    DEFAULT_CATALOG_TYPE = "hive"
 
     @property
     def connection(self) -> TrinoConnection:
@@ -58,6 +59,15 @@ class TrinoEngineAdapter(
         """Sets the catalog name of the current connection."""
         self.execute(exp.Use(this=schema_(db="information_schema", catalog=catalog)))
 
+    def get_catalog_type(self, catalog: t.Optional[str]) -> str:
+        if catalog:
+            connector_name = self.fetchone(
+                f"select connector_name from system.metadata.catalogs where catalog_name='{catalog}'"
+            )
+            if len(connector_name) > 0:
+                return connector_name[0]
+        return self.DEFAULT_CATALOG_TYPE
+
     def _insert_overwrite_by_condition(
         self,
         table_name: TableName,
@@ -66,7 +76,10 @@ class TrinoEngineAdapter(
         where: t.Optional[exp.Condition] = None,
         insert_overwrite_strategy_override: t.Optional[InsertOverwriteStrategy] = None,
     ) -> None:
-        if where:
+        if where and self.current_catalog_type == "hive":
+            # These session properties are only valid for the Trino Hive connector
+            # Attempting to set them on an Iceberg catalog will throw an error:
+            # "Session property 'catalog.insert_existing_partitions_behavior' does not exist"
             self.execute(
                 f"SET SESSION {self.get_current_catalog()}.insert_existing_partitions_behavior='OVERWRITE'"
             )

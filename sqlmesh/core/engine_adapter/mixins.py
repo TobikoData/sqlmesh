@@ -147,11 +147,19 @@ class HiveMetastoreTablePropertiesMixin(EngineAdapter):
                     raise SQLMeshError(
                         f"PARTITIONED BY contains non-column value '{expr.sql(dialect='spark')}'."
                     )
-            properties.append(
-                exp.PartitionedByProperty(
-                    this=exp.Schema(expressions=partitioned_by),
+
+            if self.dialect == "trino" and self.current_catalog_type == "iceberg":
+                # On the Trino Iceberg catalog, the table property is called "partitioning" - not "partitioned_by"
+                # ref: https://trino.io/docs/current/connector/iceberg.html#table-properties
+                properties.append(
+                    exp.Property(this="partitioning", value=exp.Schema(expressions=partitioned_by))
                 )
-            )
+            else:
+                properties.append(
+                    exp.PartitionedByProperty(
+                        this=exp.Schema(expressions=partitioned_by),
+                    )
+                )
 
         if table_description:
             properties.append(exp.SchemaCommentProperty(this=exp.Literal.string(table_description)))

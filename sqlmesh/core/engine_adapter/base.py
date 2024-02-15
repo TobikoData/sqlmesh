@@ -95,6 +95,7 @@ class EngineAdapter:
     SUPPORTS_ROW_LEVEL_OP = True
     HAS_VIEW_BINDING = False
     SUPPORTS_REPLACE_TABLE = True
+    DEFAULT_CATALOG_TYPE = DIALECT
 
     def __init__(
         self,
@@ -260,6 +261,16 @@ class EngineAdapter:
     def set_current_catalog(self, catalog: str) -> None:
         """Sets the catalog name of the current connection."""
         raise NotImplementedError()
+
+    def get_catalog_type(self, catalog: t.Optional[str]) -> str:
+        """Intended to be overridden for data virtualization systems like Trino that,
+        depending on the target catalog, require slightly different properties to be set when creating / updating tables
+        """
+        return self.DEFAULT_CATALOG_TYPE
+
+    @property
+    def current_catalog_type(self) -> str:
+        return self.get_catalog_type(self.get_current_catalog())
 
     def replace_query(
         self,
