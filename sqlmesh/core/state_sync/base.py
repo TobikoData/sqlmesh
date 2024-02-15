@@ -210,38 +210,32 @@ class StateReader(abc.ABC):
                     f"{lib} (local) is using version '{local}' which is behind '{remote}' (remote).{upgrade_suggestion}"
                 )
 
-            if SCHEMA_VERSION < versions.schema_version:
+            if SCHEMA_VERSION != versions.schema_version:
                 raise_error(
                     "SQLMesh",
                     SCHEMA_VERSION,
                     versions.schema_version,
                     remote_package_version=versions.sqlmesh_version,
+                    ahead=SCHEMA_VERSION > versions.schema_version,
                 )
 
-            if major_minor(SQLGLOT_VERSION) < major_minor(versions.sqlglot_version):
+            if major_minor(SQLGLOT_VERSION) != major_minor(versions.sqlglot_version):
                 raise_error(
                     "SQLGlot",
                     SQLGLOT_VERSION,
                     versions.sqlglot_version,
                     remote_package_version=versions.sqlglot_version,
+                    ahead=major_minor(SQLGLOT_VERSION) > major_minor(versions.sqlglot_version),
                 )
 
-            if major_minor(SQLMESH_VERSION) < major_minor(versions.sqlmesh_version):
+            if major_minor(SQLMESH_VERSION) != major_minor(versions.sqlmesh_version):
                 raise_error(
                     "SQLMesh",
                     SQLMESH_VERSION,
                     versions.sqlmesh_version,
                     remote_package_version=versions.sqlmesh_version,
+                    ahead=major_minor(SQLMESH_VERSION) > major_minor(versions.sqlmesh_version),
                 )
-
-            if SCHEMA_VERSION > versions.schema_version:
-                raise_error("SQLMesh", SCHEMA_VERSION, versions.schema_version, ahead=True)
-
-            if major_minor(SQLGLOT_VERSION) > major_minor(versions.sqlglot_version):
-                raise_error("SQLGlot", SQLGLOT_VERSION, versions.sqlglot_version, ahead=True)
-
-            if major_minor(SQLMESH_VERSION) > major_minor(versions.sqlmesh_version):
-                raise_error("SQLMesh", SQLMESH_VERSION, versions.sqlmesh_version, ahead=True)
 
         return versions
 
