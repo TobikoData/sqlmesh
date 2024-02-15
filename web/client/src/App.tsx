@@ -20,14 +20,18 @@ import {
 } from '@api/client'
 import { type PlanApplyTracker } from '@models/tracker-plan-apply'
 import { type PlanCancelTracker } from '@models/tracker-plan-cancel'
+import { type EnvironmentName } from '@models/environment'
 
 export default function App(): JSX.Element {
   const environment = useStoreContext(s => s.environment)
+  const environments = useStoreContext(s => s.environments)
   const version = useStoreContext(s => s.version)
   const modules = useStoreContext(s => s.modules)
   const setVersion = useStoreContext(s => s.setVersion)
   const setModules = useStoreContext(s => s.setModules)
+  const addLocalEnvironment = useStoreContext(s => s.addLocalEnvironment)
   const addRemoteEnvironments = useStoreContext(s => s.addRemoteEnvironments)
+  const setEnvironment = useStoreContext(s => s.setEnvironment)
 
   const planOverview = useStorePlan(s => s.planOverview)
   const planApply = useStorePlan(s => s.planApply)
@@ -55,20 +59,25 @@ export default function App(): JSX.Element {
   } = useApiMeta()
 
   useEffect(() => {
-    const channelPlanOverview = channel<any>(
+    const channelPlanOverview = channel(
       'plan-overview',
       updatePlanOverviewTracker,
     )
-    const channelPlanApply = channel<any>('plan-apply', updatePlanApplyTracker)
-    const channelPlanCancel = channel<any>(
-      'plan-cancel',
-      updatePlanCancelTracker,
-    )
+    const channelPlanApply = channel('plan-apply', updatePlanApplyTracker)
+    const channelPlanCancel = channel('plan-cancel', updatePlanCancelTracker)
 
     channelPlanOverview.subscribe()
     channelPlanApply.subscribe()
     channelPlanCancel.subscribe()
 
+    return () => {
+      channelPlanApply.unsubscribe()
+      channelPlanCancel.unsubscribe()
+      channelPlanOverview.unsubscribe()
+    }
+  }, [environment, environments])
+
+  useEffect(() => {
     void getMeta().then(({ data }) => {
       setVersion(data?.version)
       setModules(Array.from(new Set(modules.concat(data?.modules ?? []))))
@@ -83,10 +92,6 @@ export default function App(): JSX.Element {
     })
 
     return () => {
-      channelPlanOverview.unsubscribe()
-      channelPlanApply.unsubscribe()
-      channelPlanCancel.unsubscribe()
-
       void cancelRequestMeta()
       void cancelRequestEnvironments()
     }
@@ -95,17 +100,19 @@ export default function App(): JSX.Element {
   function updatePlanOverviewTracker(data: PlanOverviewTracker): void {
     planOverview.update(data)
 
+    if (data.environment !== environment.name) {
+      synchronizeEnvironment(data.environment)
+    }
+
     setPlanOverview(planOverview)
-  }
-
-  function updatePlanCancelTracker(data: PlanCancelTracker): void {
-    planCancel.update(data)
-
-    setPlanCancel(planCancel)
   }
 
   function updatePlanApplyTracker(data: PlanApplyTracker): void {
     planApply.update(data, planOverview)
+
+    if (data.environment !== environment.name) {
+      synchronizeEnvironment(data.environment)
+    }
 
     const isFinished =
       isTrue(data.meta?.done) && data.meta?.status !== Status.init
@@ -125,6 +132,16 @@ export default function App(): JSX.Element {
     setPlanApply(planApply)
   }
 
+  function updatePlanCancelTracker(data: PlanCancelTracker): void {
+    planCancel.update(data)
+
+    if (data.environment !== environment.name) {
+      synchronizeEnvironment(data.environment)
+    }
+
+    setPlanCancel(planCancel)
+  }
+
   function updateEnviroments(data: Optional<Environments>): void {
     const { environments, default_target_environment, pinned_environments } =
       data ?? {}
@@ -135,6 +152,16 @@ export default function App(): JSX.Element {
         default_target_environment,
         pinned_environments,
       )
+    }
+  }
+
+  function synchronizeEnvironment(environment: EnvironmentName): void {
+    const found = Array.from(environments).find(e => e.name === environment)
+
+    if (isNil(found)) {
+      addLocalEnvironment(environment)
+    } else {
+      setEnvironment(found)
     }
   }
 
