@@ -34,8 +34,8 @@ interface ContextStore {
   getNextEnvironment: () => ModelEnvironment
   setEnvironment: (environment: ModelEnvironment) => void
   addLocalEnvironment: (
-    environments: EnvironmentName,
-    created_from: EnvironmentName,
+    environment: EnvironmentName,
+    created_from?: EnvironmentName,
   ) => void
   removeLocalEnvironment: (environments: ModelEnvironment) => void
   addRemoteEnvironments: (
@@ -45,6 +45,8 @@ interface ContextStore {
   ) => void
   hasRemoteEnvironments: () => boolean
 }
+
+const PROD = 'prod'
 
 const environments = new Set(ModelEnvironment.getEnvironments())
 const environment =
@@ -163,7 +165,7 @@ export const useStoreContext = create<ContextStore>((set, get) => ({
       }
     })
   },
-  addLocalEnvironment(localEnvironment, created_from) {
+  addLocalEnvironment(localEnvironment, created_from = PROD) {
     set(s => {
       if (isStringEmptyOrNil(localEnvironment)) return s
 
@@ -260,7 +262,7 @@ export const useStoreContext = create<ContextStore>((set, get) => ({
 
       environments.forEach(env => {
         switch (env.name) {
-          case 'prod':
+          case PROD:
             prodEnv = env
             break
           case profileEnv?.name:
