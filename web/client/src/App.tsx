@@ -101,7 +101,7 @@ export default function App(): JSX.Element {
     planOverview.update(data)
 
     if (data.environment !== environment.name) {
-      syncronizeEnvironment(data.environment)
+      synchronizeEnvironment(data.environment)
     }
 
     setPlanOverview(planOverview)
@@ -111,7 +111,7 @@ export default function App(): JSX.Element {
     planApply.update(data, planOverview)
 
     if (data.environment !== environment.name) {
-      syncronizeEnvironment(data.environment)
+      synchronizeEnvironment(data.environment)
     }
 
     const isFinished =
@@ -136,7 +136,7 @@ export default function App(): JSX.Element {
     planCancel.update(data)
 
     if (data.environment !== environment.name) {
-      syncronizeEnvironment(data.environment)
+      synchronizeEnvironment(data.environment)
     }
 
     setPlanCancel(planCancel)
@@ -155,7 +155,7 @@ export default function App(): JSX.Element {
     }
   }
 
-  function syncronizeEnvironment(environment: EnvironmentName): void {
+  function synchronizeEnvironment(environment: EnvironmentName): void {
     const found = Array.from(environments).find(e => e.name === environment)
 
     if (isNil(found)) {
