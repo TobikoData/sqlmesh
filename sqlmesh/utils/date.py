@@ -273,7 +273,7 @@ def make_inclusive(start: TimeLike, end: TimeLike) -> Interval:
 
     Example:
         >>> make_inclusive("2020-01-01", "2020-01-01")
-        (datetime.datetime(2020, 1, 1, 0, 0, tzinfo=datetime.timezone.utc), datetime.datetime(2020, 1, 1, 23, 59, 59, 999000, tzinfo=datetime.timezone.utc))
+        (datetime.datetime(2020, 1, 1, 0, 0, tzinfo=datetime.timezone.utc), datetime.datetime(2020, 1, 1, 23, 59, 59, 999999, tzinfo=datetime.timezone.utc))
 
     Returns:
         A tuple of inclusive datetime objects.
@@ -285,7 +285,7 @@ def make_inclusive_end(end: TimeLike) -> datetime:
     end_dt = to_datetime(end)
     if is_date(end):
         end_dt = end_dt + timedelta(days=1)
-    return end_dt - timedelta(milliseconds=1)
+    return end_dt - timedelta(microseconds=1)
 
 
 def validate_date_range(
