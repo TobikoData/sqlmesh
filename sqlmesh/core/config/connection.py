@@ -12,6 +12,7 @@ from enum import Enum
 from cryptography.hazmat.backends import default_backend
 from cryptography.hazmat.primitives import serialization
 from pydantic import Field
+from sqlglot import exp
 from sqlglot.helper import subclasses
 
 from sqlmesh.core import engine_adapter
@@ -149,8 +150,13 @@ class BaseDuckDBConnectionConfig(ConnectionConfig):
                     raise ConfigError(f"Failed to load extension {extension}: {e}")
 
             for i, (alias, path) in enumerate((getattr(self, "catalogs", None) or {}).items()):
+                # we parse_identifier and generate to ensure that `alias` has exactly one set of quotes
+                # regardless of whether it comes in quoted or not
+                alias = exp.parse_identifier(alias, dialect="duckdb").sql(
+                    identify=True, dialect="duckdb"
+                )
                 try:
-                    cursor.execute(f'''ATTACH '{path}' AS "{alias}"''')
+                    cursor.execute(f"""ATTACH '{path}' AS {alias}""")
                 except BinderException as e:
                     # If a user tries to create a catalog pointing at `:memory:` and with the name `memory`
                     # then we don't want to raise since this happens by default. They are just doing this to
@@ -161,7 +167,7 @@ class BaseDuckDBConnectionConfig(ConnectionConfig):
                     ):
                         raise e
                 if i == 0 and not getattr(self, "database", None):
-                    cursor.execute(f'USE "{alias}"')
+                    cursor.execute(f"USE {alias}")
 
         return init
 

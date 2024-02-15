@@ -6,6 +6,7 @@ import typing as t
 import zlib
 
 from pydantic import Field
+from sqlglot import exp
 from sqlglot.helper import first
 from sqlglot.optimizer.normalize_identifiers import normalize_identifiers
 
@@ -169,10 +170,21 @@ class Config(BaseConfig):
         return values
 
     def get_default_test_connection(
-        self, default_catalog: t.Optional[str] = None
+        self,
+        default_catalog: t.Optional[str] = None,
+        default_catalog_dialect: t.Optional[str] = None,
     ) -> ConnectionConfig:
         return self.default_test_connection_ or DuckDBConnectionConfig(
-            catalogs=None if default_catalog is None else {default_catalog: ":memory:"}
+            catalogs=(
+                None
+                if default_catalog is None
+                else {
+                    # transpile catalog name from main connection dialect to DuckDB
+                    exp.parse_identifier(default_catalog, dialect=default_catalog_dialect).sql(
+                        dialect="duckdb"
+                    ): ":memory:"
+                }
+            )
         )
 
     def get_gateway(self, name: t.Optional[str] = None) -> GatewayConfig:
@@ -208,10 +220,13 @@ class Config(BaseConfig):
         return self.get_gateway(gateway_name).state_connection
 
     def get_test_connection(
-        self, gateway_name: t.Optional[str] = None, default_catalog: t.Optional[str] = None
+        self,
+        gateway_name: t.Optional[str] = None,
+        default_catalog: t.Optional[str] = None,
+        default_catalog_dialect: t.Optional[str] = None,
     ) -> ConnectionConfig:
         return self.get_gateway(gateway_name).test_connection or self.get_default_test_connection(
-            default_catalog=default_catalog
+            default_catalog=default_catalog, default_catalog_dialect=default_catalog_dialect
         )
 
     def get_scheduler(self, gateway_name: t.Optional[str] = None) -> SchedulerConfig:

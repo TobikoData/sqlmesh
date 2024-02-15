@@ -291,7 +291,9 @@ class Context(BaseContext):
         self.concurrent_tasks = concurrent_tasks or self._connection_config.concurrent_tasks
         self._engine_adapter = engine_adapter or self._connection_config.create_engine_adapter()
 
-        test_connection_config = self.config.get_test_connection(self.gateway, self.default_catalog)
+        test_connection_config = self.config.get_test_connection(
+            self.gateway, self.default_catalog, default_catalog_dialect=self.engine_adapter.DIALECT
+        )
         self._test_engine_adapter = test_connection_config.create_engine_adapter(
             register_comments_override=False
         )
