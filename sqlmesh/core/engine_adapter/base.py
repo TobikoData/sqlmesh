@@ -1174,6 +1174,7 @@ class EngineAdapter:
         valid_to_name: str,
         execution_time: TimeLike,
         updated_at_name: str,
+        invalidate_hard_deletes: bool = True,
         updated_at_as_valid_from: bool = False,
         columns_to_types: t.Optional[t.Dict[str, exp.DataType]] = None,
         table_description: t.Optional[str] = None,
@@ -1188,6 +1189,7 @@ class EngineAdapter:
             valid_to_name=valid_to_name,
             execution_time=execution_time,
             updated_at_name=updated_at_name,
+            invalidate_hard_deletes=invalidate_hard_deletes,
             updated_at_as_valid_from=updated_at_as_valid_from,
             columns_to_types=columns_to_types,
             table_description=table_description,
@@ -1203,6 +1205,7 @@ class EngineAdapter:
         valid_to_name: str,
         execution_time: TimeLike,
         check_columns: t.Union[exp.Star, t.Sequence[exp.Column]],
+        invalidate_hard_deletes: bool = True,
         execution_time_as_valid_from: bool = False,
         columns_to_types: t.Optional[t.Dict[str, exp.DataType]] = None,
         table_description: t.Optional[str] = None,
@@ -1218,6 +1221,7 @@ class EngineAdapter:
             execution_time=execution_time,
             check_columns=check_columns,
             columns_to_types=columns_to_types,
+            invalidate_hard_deletes=invalidate_hard_deletes,
             execution_time_as_valid_from=execution_time_as_valid_from,
             table_description=table_description,
             column_descriptions=column_descriptions,
@@ -1231,6 +1235,7 @@ class EngineAdapter:
         valid_from_name: str,
         valid_to_name: str,
         execution_time: TimeLike,
+        invalidate_hard_deletes: bool = True,
         updated_at_name: t.Optional[str] = None,
         check_columns: t.Optional[t.Union[exp.Star, t.Sequence[exp.Column]]] = None,
         updated_at_as_valid_from: bool = False,
@@ -1297,6 +1302,10 @@ class EngineAdapter:
         else:
             update_valid_from_start = to_time_column("1970-01-01 00:00:00+00:00", time_data_type)
         insert_valid_from_start = execution_ts if check_columns else exp.column(updated_at_name)  # type: ignore
+        # joined._exists IS NULL is saying "if the row is deleted"
+        delete_check = (
+            exp.column("_exists", "joined").is_(exp.Null()) if invalidate_hard_deletes else None
+        )
         if check_columns:
             row_check_conditions = []
             for col in check_columns:
@@ -1321,13 +1330,14 @@ class EngineAdapter:
             # unique_key_check is saying "if the row is updated"
             # row_value_check is saying "if the row has changed"
             updated_row_filter = exp.and_(unique_key_check, row_value_check)
-            # joined._exists IS NULL is saying "if the row is deleted"
             valid_to_case_stmt = (
                 exp.Case()
                 .when(
-                    exp.or_(
-                        exp.column("_exists", "joined").is_(exp.Null()),
-                        updated_row_filter,
+                    exp.and_(
+                        exp.or_(
+                            delete_check,
+                            updated_row_filter,
+                        )
                     ),
                     execution_ts,
                 )
@@ -1342,12 +1352,18 @@ class EngineAdapter:
         else:
             assert updated_at_name is not None
             updated_row_filter = exp.column(updated_at_name) > exp.column(f"t_{updated_at_name}")
-            valid_to_case_stmt = (
-                exp.Case()
-                .when(updated_row_filter, exp.column(updated_at_name))
-                .when(exp.column("_exists", "joined").is_(exp.Null()), execution_ts)
-                .else_(exp.column(f"t_{valid_to_name}"))
+
+            valid_to_case_stmt_builder = exp.Case().when(
+                updated_row_filter, exp.column(updated_at_name)
+            )
+            if delete_check:
+                valid_to_case_stmt_builder = valid_to_case_stmt_builder.when(
+                    delete_check, execution_ts
+                )
+            valid_to_case_stmt = valid_to_case_stmt_builder.else_(
+                exp.column(f"t_{valid_to_name}")
             ).as_(valid_to_name)
+
             valid_from_case_stmt = (
                 exp.Case()
                 .when(

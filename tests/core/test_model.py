@@ -2512,6 +2512,7 @@ def test_scd_type_2_by_time_overrides():
                 updated_at_as_valid_from True,
                 forward_only False,
                 disable_restatement False,
+                invalidate_hard_deletes False,
             ),
         );
         SELECT
@@ -2539,6 +2540,7 @@ def test_scd_type_2_by_time_overrides():
     assert scd_type_2_model.kind.is_scd_type_2_by_time
     assert scd_type_2_model.kind.is_scd_type_2
     assert scd_type_2_model.kind.is_materialized
+    assert not scd_type_2_model.kind.invalidate_hard_deletes
     assert not scd_type_2_model.kind.forward_only
     assert not scd_type_2_model.kind.disable_restatement
 
@@ -2601,6 +2603,7 @@ def test_scd_type_2_by_column_overrides():
                 time_data_type TIMESTAMPTZ,
                 forward_only False,
                 disable_restatement False,
+                invalidate_hard_deletes False,
             ),
         );
         SELECT
@@ -2626,6 +2629,7 @@ def test_scd_type_2_by_column_overrides():
     assert scd_type_2_model.kind.is_scd_type_2
     assert scd_type_2_model.kind.is_materialized
     assert scd_type_2_model.kind.time_data_type == exp.DataType.build("TIMESTAMPTZ")
+    assert not scd_type_2_model.kind.invalidate_hard_deletes
     assert not scd_type_2_model.kind.forward_only
     assert not scd_type_2_model.kind.disable_restatement
 

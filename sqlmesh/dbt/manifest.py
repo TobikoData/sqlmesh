@@ -196,14 +196,6 @@ class ManifestHelper:
             if node.resource_type not in ("model", "seed", "snapshot"):
                 continue
 
-            if node.resource_type == "snapshot":
-                config = _config(node)
-                if not config.get("invalidate_hard_deletes"):
-                    logging.warning(
-                        f"{node.relation_name}: SQLMesh only supports invalidate_hard_deletes. Skipping model."
-                    )
-                    continue
-
             macro_references = _macro_references(self._manifest, node)
             tests = (
                 self._tests_by_owner[node.name]
