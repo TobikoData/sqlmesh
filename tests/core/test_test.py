@@ -234,6 +234,74 @@ test_foo:
     assert result and result.wasSuccessful()
 
 
+def test_row_order_orderby(sushi_context: Context, full_model_without_ctes: SqlModel) -> None:
+    # add ORDER BY to model query
+    full_model_without_ctes_dict = full_model_without_ctes.dict()
+    full_model_without_ctes_dict["query"] = full_model_without_ctes.query.order_by("id")  # type: ignore
+    full_model_without_ctes_orderby = SqlModel(**full_model_without_ctes_dict)
+
+    model = t.cast(SqlModel, sushi_context.upsert_model(full_model_without_ctes_orderby))
+
+    body = load_yaml(
+        """
+test_foo:
+  model: sushi.foo
+  inputs:
+    raw:
+      - id: 1
+        value: 2
+        ds: 3
+      - id: 2
+        value: 3
+        ds: 4
+  outputs:
+    query:
+      - id: 2
+        value: 3
+        ds: 4
+      - id: 1
+        value: 2
+        ds: 3
+  vars:
+    start: 2022-01-01
+    end: 2022-01-01
+        """
+    )
+    result = _create_test(body, "test_foo", model, sushi_context).run()
+    assert result and not result.wasSuccessful()
+
+
+def test_row_order_no_orderby(sushi_context: Context, full_model_without_ctes: SqlModel) -> None:
+    model = t.cast(SqlModel, sushi_context.upsert_model(full_model_without_ctes))
+    body = load_yaml(
+        """
+test_foo:
+  model: sushi.foo
+  inputs:
+    raw:
+      - id: 1
+        value: 2
+        ds: 3
+      - id: 2
+        value: 3
+        ds: 4
+  outputs:
+    query:
+      - id: 2
+        value: 3
+        ds: 4
+      - id: 1
+        value: 2
+        ds: 3
+  vars:
+    start: 2022-01-01
+    end: 2022-01-01
+        """
+    )
+    result = _create_test(body, "test_foo", model, sushi_context).run()
+    assert result and result.wasSuccessful()
+
+
 def test_partial_data(sushi_context: Context) -> None:
     model = _create_model(
         "WITH source AS (SELECT id, name FROM sushi.waiter_names) SELECT id, name, 'nan' as str FROM source",
