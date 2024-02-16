@@ -58,6 +58,8 @@ class ContextDiff(PydanticModel):
     """Previous plan id."""
     previously_promoted_snapshot_ids: t.Set[SnapshotId]
     """Snapshot IDs that were promoted by the previous plan."""
+    previous_finalized_snapshots: t.Optional[t.List[SnapshotTableInfo]]
+    """Snapshots from the previous finalized state."""
 
     @classmethod
     def create(
@@ -66,6 +68,7 @@ class ContextDiff(PydanticModel):
         snapshots: t.Dict[str, Snapshot],
         create_from: str,
         state_reader: StateReader,
+        ensure_finalized_snapshots: bool = False,
     ) -> ContextDiff:
         """Create a ContextDiff object.
 
@@ -75,6 +78,9 @@ class ContextDiff(PydanticModel):
             create_from: The environment to create the target environment from if it
                 doesn't exist.
             state_reader: StateReader to access the remote environment to diff.
+            ensure_finalized_snapshots: Whether to compare against snapshots from the latest finalized
+                environment state, or to use whatever snapshots are in the current environment state even if
+                the environment is not finalized.
 
         Returns:
             The ContextDiff object.
@@ -90,7 +96,13 @@ class ContextDiff(PydanticModel):
             is_new_environment = False
             previously_promoted_snapshot_ids = {s.snapshot_id for s in env.promoted_snapshots}
 
-        environment_snapshot_infos = env.snapshots if env else []
+        environment_snapshot_infos = []
+        if env:
+            environment_snapshot_infos = (
+                env.snapshots
+                if not ensure_finalized_snapshots
+                else env.finalized_or_current_snapshots
+            )
         remote_snapshot_name_to_info = {
             snapshot_info.name: snapshot_info for snapshot_info in environment_snapshot_infos
         }
@@ -209,6 +221,7 @@ class ContextDiff(PydanticModel):
             new_snapshots=new_snapshots,
             previous_plan_id=env.plan_id if env and not is_new_environment else None,
             previously_promoted_snapshot_ids=previously_promoted_snapshot_ids,
+            previous_finalized_snapshots=env.previous_finalized_snapshots if env else None,
         )
 
     @classmethod
@@ -233,6 +246,7 @@ class ContextDiff(PydanticModel):
             new_snapshots={},
             previous_plan_id=None,
             previously_promoted_snapshot_ids=set(),
+            previous_finalized_snapshots=None,
         )
 
     @property
@@ -276,6 +290,19 @@ class ContextDiff(PydanticModel):
     @cached_property
     def snapshots_by_name(self) -> t.Dict[str, Snapshot]:
         return {x.name: x for x in self.snapshots.values()}
+
+    @property
+    def environment_snapshots(self) -> t.List[SnapshotTableInfo]:
+        """Returns current snapshots in the environment."""
+        return [
+            *self.removed_snapshots.values(),
+            *(old.table_info for _, old in self.modified_snapshots.values()),
+            *[
+                s.table_info
+                for s_id, s in self.snapshots.items()
+                if s_id not in self.added and s.name not in self.modified_snapshots
+            ],
+        ]
 
     def directly_modified(self, name: str) -> bool:
         """Returns whether or not a node was directly modified in this context.
