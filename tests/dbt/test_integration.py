@@ -73,10 +73,16 @@ class TestSCDType2:
     def test_type(self, request):
         return request.param
 
+    @pytest.fixture(params=[True, False])
+    def invalidate_hard_deletes(self, request):
+        return request.param
+
     @pytest.fixture(scope="function")
     def create_scd_type_2_dbt_project(self, tmp_path):
         def _make_function(
-            test_strategy: TestStrategy, include_dbt_adapter_support: bool = False
+            test_strategy: TestStrategy,
+            include_dbt_adapter_support: bool = False,
+            invalidate_hard_deletes: bool = False,
         ) -> t.Tuple[Path, Path]:
             yaml = YAML()
             dbt_project_dir = tmp_path / "dbt"
@@ -91,7 +97,7 @@ class TestSCDType2:
                               unique_key='customer_id',
                               strategy='{test_strategy.value}',
                               {"updated_at='updated_at'" if test_strategy.is_timestamp else "check_cols='all'"},
-                              invalidate_hard_deletes=True,
+                              invalidate_hard_deletes={invalidate_hard_deletes},
                             )
                         }}}}
 
@@ -144,16 +150,18 @@ test_config = config"""
 
     @pytest.fixture
     def create_scd_type_2_sqlmesh_project(self, tmp_path):
-        def _make_function(test_strategy: TestStrategy) -> t.Tuple[Path, Path]:
+        def _make_function(
+            test_strategy: TestStrategy, invalidate_hard_deletes: bool
+        ) -> t.Tuple[Path, Path]:
             sushi_root = Path("examples/sushi")
             project_root = tmp_path / "sqlmesh"
             project_root.mkdir()
             shutil.copy(str(sushi_root / "config.py"), str(project_root / "config.py"))
             (project_root / "models").mkdir()
             if test_strategy.is_timestamp:
-                kind_def = f"SCD_TYPE_2(unique_key customer_id, updated_at_as_valid_from true)"
+                kind_def = f"SCD_TYPE_2(unique_key customer_id, updated_at_as_valid_from true, invalidate_hard_deletes {invalidate_hard_deletes})"
             else:
-                kind_def = f"SCD_TYPE_2_BY_COLUMN(unique_key customer_id, execution_time_as_valid_from true, columns *)"
+                kind_def = f"SCD_TYPE_2_BY_COLUMN(unique_key customer_id, execution_time_as_valid_from true, columns *, invalidate_hard_deletes {invalidate_hard_deletes})"
             snapshot_def = f"""MODEL (
       name sushi.marketing,
       kind {kind_def},
@@ -240,12 +248,17 @@ test_config = config"""
         create_scd_type_2_sqlmesh_project,
         test_type: TestType,
         test_strategy: TestStrategy,
+        invalidate_hard_deletes: bool,
     ):
         project_dir, data_file = (
-            create_scd_type_2_sqlmesh_project(test_strategy=test_strategy)
+            create_scd_type_2_sqlmesh_project(
+                test_strategy=test_strategy, invalidate_hard_deletes=invalidate_hard_deletes
+            )
             if test_type.is_sqlmesh
             else create_scd_type_2_dbt_project(
-                test_strategy=test_strategy, include_dbt_adapter_support=test_type.is_dbt_adapter
+                test_strategy=test_strategy,
+                include_dbt_adapter_support=test_type.is_dbt_adapter,
+                invalidate_hard_deletes=invalidate_hard_deletes,
             )
         )
         context: t.Union[Context, dbtRunner]
@@ -285,12 +298,14 @@ test_config = config"""
         create_scd_type_2_dbt_project,
         create_scd_type_2_sqlmesh_project,
         test_type: TestType,
+        invalidate_hard_deletes: bool,
     ):
         run, adapter, context = self._init_test(
             create_scd_type_2_dbt_project,
             create_scd_type_2_sqlmesh_project,
             test_type,
             TestStrategy.TIMESTAMP,
+            invalidate_hard_deletes,
         )
 
         time_expected_mapping: t.Dict[
@@ -326,7 +341,13 @@ test_config = config"""
                     (1, "a", "2020-01-01 00:00:00", "2020-01-01 00:00:00", "2020-01-02 00:00:00"),
                     (1, "x", "2020-01-02 00:00:00", "2020-01-02 00:00:00", None),
                     (2, "b", "2020-01-01 00:00:00", "2020-01-01 00:00:00", None),
-                    (3, "c", "2020-01-01 00:00:00", "2020-01-01 00:00:00", "2020-01-02 00:00:00"),
+                    (
+                        3,
+                        "c",
+                        "2020-01-01 00:00:00",
+                        "2020-01-01 00:00:00",
+                        "2020-01-02 00:00:00" if invalidate_hard_deletes else None,
+                    ),
                     (4, "d", "2020-01-02 00:00:00", "2020-01-02 00:00:00", None),
                 ],
             ),
@@ -347,8 +368,20 @@ test_config = config"""
                     (1, "a", "2020-01-01 00:00:00", "2020-01-01 00:00:00", "2020-01-02 00:00:00"),
                     (1, "x", "2020-01-02 00:00:00", "2020-01-02 00:00:00", "2020-01-03 00:00:00"),
                     (1, "y", "2020-01-03 00:00:00", "2020-01-03 00:00:00", None),
-                    (2, "b", "2020-01-01 00:00:00", "2020-01-01 00:00:00", "2020-01-04 00:00:00"),
-                    (3, "c", "2020-01-01 00:00:00", "2020-01-01 00:00:00", "2020-01-02 00:00:00"),
+                    (
+                        2,
+                        "b",
+                        "2020-01-01 00:00:00",
+                        "2020-01-01 00:00:00",
+                        "2020-01-04 00:00:00" if invalidate_hard_deletes else None,
+                    ),
+                    (
+                        3,
+                        "c",
+                        "2020-01-01 00:00:00",
+                        "2020-01-01 00:00:00",
+                        "2020-01-02 00:00:00" if invalidate_hard_deletes else "2020-02-01 00:00:00",
+                    ),
                     # Since 3 was deleted and came back and the updated at time when it came back
                     # is greater than the execution time when it was deleted, we have the valid_from
                     # match the updated_at time. If it was less then the valid_from would match the
@@ -382,6 +415,7 @@ test_config = config"""
         create_scd_type_2_dbt_project,
         create_scd_type_2_sqlmesh_project,
         test_type: TestType,
+        invalidate_hard_deletes: bool,
     ):
         if test_type.is_dbt_runtime:
             pytest.skip(
@@ -392,6 +426,7 @@ test_config = config"""
             create_scd_type_2_sqlmesh_project,
             test_type,
             TestStrategy.CHECK,
+            invalidate_hard_deletes,
         )
 
         time_expected_mapping: t.Dict[
@@ -427,7 +462,13 @@ test_config = config"""
                     (1, "a", "2020-01-01 00:00:00", "2020-01-01 00:00:00", "2020-01-02 00:00:00"),
                     (1, "x", "2020-01-02 00:00:00", "2020-01-02 00:00:00", None),
                     (2, "b", "2020-01-01 00:00:00", "2020-01-01 00:00:00", None),
-                    (3, "c", "2020-01-01 00:00:00", "2020-01-01 00:00:00", "2020-01-02 00:00:00"),
+                    (
+                        3,
+                        "c",
+                        "2020-01-01 00:00:00",
+                        "2020-01-01 00:00:00",
+                        "2020-01-02 00:00:00" if invalidate_hard_deletes else None,
+                    ),
                     (4, "d", "2020-01-02 00:00:00", "2020-01-02 00:00:00", None),
                 ],
             ),
@@ -448,8 +489,20 @@ test_config = config"""
                     (1, "a", "2020-01-01 00:00:00", "2020-01-01 00:00:00", "2020-01-02 00:00:00"),
                     (1, "x", "2020-01-02 00:00:00", "2020-01-02 00:00:00", "2020-01-04 00:00:00"),
                     (1, "y", "2020-01-03 00:00:00", "2020-01-04 00:00:00", None),
-                    (2, "b", "2020-01-01 00:00:00", "2020-01-01 00:00:00", "2020-01-04 00:00:00"),
-                    (3, "c", "2020-01-01 00:00:00", "2020-01-01 00:00:00", "2020-01-02 00:00:00"),
+                    (
+                        2,
+                        "b",
+                        "2020-01-01 00:00:00",
+                        "2020-01-01 00:00:00",
+                        "2020-01-04 00:00:00" if invalidate_hard_deletes else None,
+                    ),
+                    (
+                        3,
+                        "c",
+                        "2020-01-01 00:00:00",
+                        "2020-01-01 00:00:00",
+                        "2020-01-02 00:00:00" if invalidate_hard_deletes else "2020-01-04 00:00:00",
+                    ),
                     # Since 3 was deleted and came back then the valid_from is set to the execution_time when it
                     # came back.
                     (3, "c", "2020-02-01 00:00:00", "2020-01-04 00:00:00", None),
