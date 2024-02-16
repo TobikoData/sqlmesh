@@ -250,13 +250,12 @@ class SqlModelTest(ModelTest):
                     )
 
                 cte_query = ctes[cte_name].this
-                query_has_orderby = any(cte_query.find_all(exp.Order))
                 for alias, cte in ctes.items():
                     cte_query = cte_query.with_(alias, cte.this)
 
                 expected_df = pd.DataFrame.from_records(rows, columns=cte_query.named_selects)
                 actual_df = self._execute(cte_query)
-                self.assert_equal(expected_df, actual_df, sort=not query_has_orderby)
+                self.assert_equal(expected_df, actual_df, sort=cte_query.args.get("order") is None)
 
     def runTest(self) -> None:
         # For tests we just use the model name for the table reference and we don't want to expand
@@ -272,7 +271,6 @@ class SqlModelTest(ModelTest):
             engine_adapter=self.engine_adapter,
             table_mapping=mapping,
         )
-        query_has_orderby = any(query.find_all(exp.Order))
 
         self.test_ctes(
             {normalize_model_name(cte.alias, None, self.dialect): cte for cte in query.ctes}
@@ -283,7 +281,7 @@ class SqlModelTest(ModelTest):
         if query_rows is not None:
             expected_df = pd.DataFrame.from_records(query_rows, columns=self.model.columns_to_types)  # type: ignore
             actual_df = self._execute(query)
-            self.assert_equal(expected_df, actual_df, sort=not query_has_orderby)
+            self.assert_equal(expected_df, actual_df, sort=query.args.get("order") is None)
 
 
 class PythonModelTest(ModelTest):
