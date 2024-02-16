@@ -121,6 +121,9 @@ setup(
             "langchain",
             "openai",
         ],
+        "motherduck": [
+            "duckdb==0.9.2",
+        ],
         "mssql": [
             "pymssql",
         ],
