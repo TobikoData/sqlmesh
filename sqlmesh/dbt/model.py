@@ -88,7 +88,7 @@ class ModelConfig(BaseModelConfig):
     # Snapshot (SCD Type 2) Fields
     updated_at: t.Optional[str] = None
     strategy: t.Optional[str] = None
-    invalidate_hard_deletes: bool = True
+    invalidate_hard_deletes: bool = False
     target_schema: t.Optional[str] = None
     check_cols: t.Optional[t.Union[t.List[str], str]] = None
 
@@ -241,6 +241,7 @@ class ModelConfig(BaseModelConfig):
                 )
             shared_kwargs = {
                 "unique_key": self.unique_key,
+                "invalidate_hard_deletes": self.invalidate_hard_deletes,
                 "valid_from_name": "dbt_valid_from",
                 "valid_to_name": "dbt_valid_to",
                 "time_data_type": (

@@ -339,6 +339,7 @@ class _SCDType2Kind(_ModelKind):
     unique_key: SQLGlotListOfColumns
     valid_from_name: SQLGlotString = "valid_from"
     valid_to_name: SQLGlotString = "valid_to"
+    invalidate_hard_deletes: SQLGlotBool = False
     time_data_type: exp.DataType = exp.DataType.build("TIMESTAMP")
 
     forward_only: SQLGlotBool = True

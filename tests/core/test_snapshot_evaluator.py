@@ -1156,7 +1156,8 @@ def test_create_ctas_scd_type_2_by_time(adapter_mock, make_snapshot):
                 name test_schema.test_model,
                 kind SCD_TYPE_2 (
                     unique_key id,
-                    time_data_type TIMESTAMPTZ
+                    time_data_type TIMESTAMPTZ,
+                    invalidate_hard_deletes false
                 )
             );
 
@@ -1244,6 +1245,7 @@ def test_insert_into_scd_type_2_by_time(adapter_mock, make_snapshot):
         start="2020-01-01",
         end="2020-01-02",
         execution_time="2020-01-02",
+        invalidate_hard_deletes=False,
         table_description=None,
         column_descriptions={},
         updated_at_as_valid_from=False,
@@ -1259,8 +1261,8 @@ def test_create_scd_type_2_by_column(adapter_mock, make_snapshot):
                 name test_schema.test_model,
                 kind SCD_TYPE_2_BY_COLUMN (
                     unique_key id,
-                    columns *
-                    
+                    columns *,
+                    invalidate_hard_deletes false,
                 )
             );
 
@@ -1400,6 +1402,7 @@ def test_insert_into_scd_type_2_by_column(adapter_mock, make_snapshot):
         end="2020-01-02",
         execution_time="2020-01-02",
         execution_time_as_valid_from=False,
+        invalidate_hard_deletes=False,
         table_description=None,
         column_descriptions={},
     )
