@@ -67,28 +67,40 @@ class HttpStateSync(StateSync):
         """
         return self._client.get_environments()
 
-    def max_interval_end_for_environment(self, environment: str) -> t.Optional[int]:
+    def max_interval_end_for_environment(
+        self, environment: str, ensure_finalized_snapshots: bool = False
+    ) -> t.Optional[int]:
         """Returns the max interval end for the given environment.
 
         Args:
             environment: The environment.
+            ensure_finalized_snapshots: Whether to use snapshots from the latest finalized environment state,
+                or to use whatever snapshots are in the current environment state even if the environment is not finalized.
 
         Returns:
             A timestamp or None if no interval or environment exists.
         """
-        return self._client.max_interval_end_for_environment(environment)
+        return self._client.max_interval_end_for_environment(
+            environment, ensure_finalized_snapshots
+        )
 
-    def greatest_common_interval_end(self, environment: str, models: t.Set[str]) -> t.Optional[int]:
+    def greatest_common_interval_end(
+        self, environment: str, models: t.Set[str], ensure_finalized_snapshots: bool = False
+    ) -> t.Optional[int]:
         """Returns the greatest common interval end for given models in the target environment.
 
         Args:
             environment: The environment.
             models: The model FQNs to select intervals from.
+            ensure_finalized_snapshots: Whether to use snapshots from the latest finalized environment state,
+                or to use whatever snapshots are in the current environment state even if the environment is not finalized.
 
         Returns:
             A timestamp or None if no interval or environment exists.
         """
-        return self._client.greatest_common_interval_end(environment, models)
+        return self._client.greatest_common_interval_end(
+            environment, models, ensure_finalized_snapshots
+        )
 
     def get_snapshots(
         self,
