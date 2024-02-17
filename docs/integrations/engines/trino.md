@@ -17,10 +17,11 @@ pip install "trino[external-authentication-token-cache]"
 
 ### Trino Connector Support
 
-The trino engine adapter has been tested against the [Hive Connector](https://trino.io/docs/current/connector/hive.html).
+The trino engine adapter has been tested against the [Hive Connector](https://trino.io/docs/current/connector/hive.html) and the [Iceberg Connector](https://trino.io/docs/current/connector/iceberg.html).
+
 Please let us know on [Slack](https://tobikodata.com/slack) if you are wanting to use another connector or have tried another connector.
 
-### Hive Connector Configuration
+#### Hive Connector Configuration
 
 Recommended hive catalog properties configuration (`<catalog_name>.properties`):
 
@@ -34,6 +35,19 @@ hive.allow-drop-column=true
 hive.allow-rename-column=true
 hive.allow-rename-table=true
 ```
+
+#### Iceberg Connector Configuration
+
+If you're using a hive metastore for the Iceberg catalog, the [properties](https://trino.io/docs/current/connector/metastores.html#general-metastore-configuration-properties) are mostly the same as the Hive connector.
+
+```properties linenums="1"
+iceberg.catalog.type=hive_metastore
+# metastore properties as per the Hive Connector Configuration above
+```
+
+**Note**: The Trino Iceberg Connector must be configured with an `iceberg.catalog.type` that supports views. At the time of this writing, this is only `hive_metastore` and `glue`.
+
+The `jdbc`, `rest` and `nessie` catalogs do not support views and are thus incompatible with SQLMesh.
 
 ### Connection options
 

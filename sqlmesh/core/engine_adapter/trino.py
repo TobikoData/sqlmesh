@@ -5,6 +5,7 @@ import typing as t
 import pandas as pd
 from pandas.api.types import is_datetime64_any_dtype  # type: ignore
 from sqlglot import exp
+from sqlglot.helper import seq_get
 
 from sqlmesh.core.dialect import schema_, to_schema
 from sqlmesh.core.engine_adapter.mixins import (
@@ -60,13 +61,12 @@ class TrinoEngineAdapter(
         self.execute(exp.Use(this=schema_(db="information_schema", catalog=catalog)))
 
     def get_catalog_type(self, catalog: t.Optional[str]) -> str:
+        row: t.Tuple = tuple()
         if catalog:
-            connector_name = self.fetchone(
+            row = self.fetchone(
                 f"select connector_name from system.metadata.catalogs where catalog_name='{catalog}'"
             )
-            if len(connector_name) > 0:
-                return connector_name[0]
-        return self.DEFAULT_CATALOG_TYPE
+        return seq_get(row, 0) or self.DEFAULT_CATALOG_TYPE
 
     def _insert_overwrite_by_condition(
         self,
@@ -76,19 +76,17 @@ class TrinoEngineAdapter(
         where: t.Optional[exp.Condition] = None,
         insert_overwrite_strategy_override: t.Optional[InsertOverwriteStrategy] = None,
     ) -> None:
-        if where and self.current_catalog_type == "hive":
+        catalog = exp.to_table(table_name).catalog or self.get_current_catalog()
+
+        if where and self.get_catalog_type(catalog) == "hive":
             # These session properties are only valid for the Trino Hive connector
             # Attempting to set them on an Iceberg catalog will throw an error:
             # "Session property 'catalog.insert_existing_partitions_behavior' does not exist"
-            self.execute(
-                f"SET SESSION {self.get_current_catalog()}.insert_existing_partitions_behavior='OVERWRITE'"
-            )
+            self.execute(f"SET SESSION {catalog}.insert_existing_partitions_behavior='OVERWRITE'")
             super()._insert_overwrite_by_condition(
                 table_name, source_queries, columns_to_types, where
             )
-            self.execute(
-                f"SET SESSION {self.get_current_catalog()}.insert_existing_partitions_behavior='APPEND'"
-            )
+            self.execute(f"SET SESSION {catalog}.insert_existing_partitions_behavior='APPEND'")
         else:
             super()._insert_overwrite_by_condition(
                 table_name,

@@ -40,6 +40,7 @@ services:
     environment:
         SA_PASSWORD: 1StrongPwd@@
         ACCEPT_EULA: Y
+
   # Trino Stack
   trino:
     hostname: trino
