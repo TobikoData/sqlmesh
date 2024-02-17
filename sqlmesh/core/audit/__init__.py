@@ -14,7 +14,7 @@ from sqlmesh.core.audit.definition import (
 
 
 def create_non_blocking_copy(audit: Audit) -> Audit:
-    return audit.model_copy(update={"name": f"{audit.name}_non_blocking", "blocking": False})
+    return audit.copy(update={"name": f"{audit.name}_non_blocking", "blocking": False})
 
 
 def _discover_audits(modules: t.Iterable[ModuleType]) -> t.Dict[str, Audit]:
