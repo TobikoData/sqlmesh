@@ -2,12 +2,12 @@ import pytest
 from sqlglot import exp, parse_one
 
 from sqlmesh.core.audit import (
+    BUILT_IN_AUDITS,
     ModelAudit,
     StandaloneAudit,
     builtin,
     load_audit,
     load_multiple_audits,
-    BUILT_IN_AUDITS,
 )
 from sqlmesh.core.dialect import parse
 from sqlmesh.core.model import IncrementalByTimeRangeKind, Model, create_sql_model
