@@ -7,6 +7,7 @@ from sqlmesh.core.audit import (
     builtin,
     load_audit,
     load_multiple_audits,
+    BUILT_IN_AUDITS,
 )
 from sqlmesh.core.dialect import parse
 from sqlmesh.core.model import IncrementalByTimeRangeKind, Model, create_sql_model
@@ -656,3 +657,9 @@ def test_text_diff():
    owner owner_name,
    standalone TRUE"""
     )
+
+
+def test_non_blocking_builtin():
+    assert BUILT_IN_AUDITS["not_null_non_blocking"].blocking is False
+    assert BUILT_IN_AUDITS["not_null_non_blocking"].name == "not_null_non_blocking"
+    assert BUILT_IN_AUDITS["not_null"].query == BUILT_IN_AUDITS["not_null_non_blocking"].query
