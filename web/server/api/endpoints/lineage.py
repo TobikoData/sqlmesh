@@ -149,26 +149,27 @@ async def column_lineage(
         if not table:
             continue
 
+        downstream_models = _process_downstream(
+            node.downstream,
+            parent_table=table,
+            dialect=dialect,
+            default_catalog=context.default_catalog,
+        )
+
         # At this point node_name should be fqn/normalized/quoted
-        if column_name in graph.get(table, []):
-            graph[table][column_name].models.update(
-                _process_downstream(
-                    node.downstream,
-                    parent_table=table,
-                    dialect=dialect,
-                    default_catalog=context.default_catalog,
-                )
-            )
+        if column_name in graph.get(table, {}):
+            # Merge models and columns
+            models = graph[table][column_name].models
+            for model_name, columns in downstream_models.items():
+                if model_name in models:
+                    models[model_name] = models[model_name] | columns
+                else:
+                    models[model_name] = columns
         else:
             graph[table][column_name] = LineageColumn(
                 expression=node.expression.sql(pretty=True, dialect=dialect),
                 source=_get_node_source(node=node, dialect=dialect),
-                models=_process_downstream(
-                    node.downstream,
-                    parent_table=table,
-                    dialect=dialect,
-                    default_catalog=context.default_catalog,
-                ),
+                models=downstream_models,
             )
 
     return graph

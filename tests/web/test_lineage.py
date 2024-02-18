@@ -192,6 +192,31 @@ def test_get_lineage_join(project_context: Context) -> None:
     assert response_json['"baz"']["price"]["models"] == {'"external_baz"': ["price"]}
 
 
+def test_get_lineage_multiple_columns(project_context: Context) -> None:
+    project_tmp_path = project_context.path
+    models_dir = project_tmp_path / "models"
+    models_dir.mkdir()
+    foo_sql_file = models_dir / "foo.sql"
+    foo_sql_file.write_text(
+        """MODEL (name foo);
+           SELECT id, bar.value * bar.multiplier AS col FROM bar;"""
+    )
+    bar_sql_file = models_dir / "bar.sql"
+    bar_sql_file.write_text(
+        """MODEL (name bar);
+           SELECT id, value, multiplier FROM external_bar;"""
+    )
+    project_context.load()
+
+    response = client.get("/api/lineage/foo/col")
+    assert response.status_code == 200, response.json()
+    response_json = response.json()
+    assert "value" in response_json['"foo"']["col"]["models"]['"bar"']
+    assert "multiplier" in response_json['"foo"']["col"]["models"]['"bar"']
+    assert response_json['"bar"']["value"]["models"] == {'"external_bar"': ["value"]}
+    assert response_json['"bar"']["multiplier"]["models"] == {'"external_bar"': ["multiplier"]}
+
+
 def test_get_lineage_union(project_context: Context) -> None:
     project_tmp_path = project_context.path
     models_dir = project_tmp_path / "models"
@@ -201,7 +226,7 @@ def test_get_lineage_union(project_context: Context) -> None:
         """MODEL (name foo);
            SELECT col FROM bar
            UNION
-           SELECT col from baz;"""
+           SELECT col FROM baz;"""
     )
     bar_sql_file = models_dir / "bar.sql"
     bar_sql_file.write_text(
@@ -235,7 +260,7 @@ def test_get_lineage_union_downstream(project_context: Context) -> None:
         """MODEL (name bar);
            SELECT col FROM baz
            UNION
-           SELECT col from qwe;"""
+           SELECT col FROM qwe;"""
     )
     bar_sql_file = models_dir / "baz.sql"
     bar_sql_file.write_text(
@@ -268,7 +293,7 @@ def test_get_lineage_cte_union(project_context: Context) -> None:
            WITH my_cte AS (
                SELECT col FROM bar
                UNION
-               SELECT col from baz
+               SELECT col FROM baz
            )
            SELECT col FROM my_cte;"""
     )
