@@ -29,25 +29,22 @@ def _get_table(
     """Get a node's table/source"""
     # Default to node name
     table: t.Union[exp.Table, str] = ""
-    if node.alias:
-        # Use node alias if available
-        table = node.alias
-    elif isinstance(node.expression, exp.Table):
+    if isinstance(node.expression, exp.Table):
         table = node.expression
     elif isinstance(node.expression, exp.Alias):
-        # Extract source table from alias
-        sources_from_comments = [
-            comment[len("source :") :]
-            for comment in node.source.args["from"].this.comments or []
-            if comment.startswith("source: ")
-        ]
-        if sources_from_comments:
-            table = sources_from_comments[0]
-        else:
+        ancestor = getattr(node.expression.parent, "parent", None)
+        if isinstance(ancestor, exp.Union):
+            ancestor = ancestor.parent
+        if isinstance(ancestor, exp.CTE):
+            table = ancestor.alias
+        elif isinstance(ancestor, exp.Union):
             for source_table in node.source.find_all(exp.Table):
                 for column in node.expression.find_all(exp.Column):
                     if source_table.alias == column.table:
                         table = source_table
+    if not table and node.alias:
+        # Use node alias if available
+        table = node.alias
 
     try:
         return normalize_model_name(table, default_catalog=default_catalog, dialect=dialect)
@@ -78,7 +75,7 @@ def _process_downstream(
     parent_table: str,
     dialect: DialectType,
     default_catalog: t.Optional[str],
-) -> t.Dict[str, t.List[str]]:
+) -> t.Dict[str, t.Set[str]]:
     """Aggregate a list of downstream nodes by table/source"""
     graph = collections.defaultdict(set)
     for node in downstream:
@@ -126,7 +123,7 @@ async def column_lineage(
                 except SQLMeshError:
                     continue
 
-        node = lineage(
+        root = lineage(
             column=column_name,
             sql=render_query(model),
             sources=sources,
@@ -140,29 +137,43 @@ async def column_lineage(
 
     graph: t.Dict[str, t.Dict[str, LineageColumn]] = collections.defaultdict(dict)
 
-    for i, node in enumerate(node.walk()):
+    for i, node in enumerate(root.walk()):
         if i == 0:
+            if node.name == "UNION":
+                continue
             table = model.fqn
         else:
             table = _get_table(node, default_catalog=context.default_catalog, dialect=dialect)
+            if not table and root.name == "UNION" and node in root.downstream:
+                # SQLGlot adds an extra node named UNION if the node doesn't have an upstream.
+                # That's why we skip processing it above and treat all its downstream as part of
+                # model here.
+                table = model.fqn
             column_name = _get_column(node, dialect)
         if not table:
             continue
 
-        if column_name in graph.get(table, []):
-            continue
-
         # At this point node_name should be fqn/normalized/quoted
-        graph[table][column_name] = LineageColumn(
-            expression=node.expression.sql(pretty=True, dialect=dialect),
-            source=_get_node_source(node=node, dialect=dialect),
-            models=_process_downstream(
-                node.downstream,
-                parent_table=table,
-                dialect=dialect,
-                default_catalog=context.default_catalog,
-            ),
-        )
+        if column_name in graph.get(table, []):
+            graph[table][column_name].models.update(
+                _process_downstream(
+                    node.downstream,
+                    parent_table=table,
+                    dialect=dialect,
+                    default_catalog=context.default_catalog,
+                )
+            )
+        else:
+            graph[table][column_name] = LineageColumn(
+                expression=node.expression.sql(pretty=True, dialect=dialect),
+                source=_get_node_source(node=node, dialect=dialect),
+                models=_process_downstream(
+                    node.downstream,
+                    parent_table=table,
+                    dialect=dialect,
+                    default_catalog=context.default_catalog,
+                ),
+            )
 
     return graph
 
