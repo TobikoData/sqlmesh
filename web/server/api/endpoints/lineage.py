@@ -32,16 +32,11 @@ def _get_table(
     if isinstance(node.expression, exp.Table):
         table = node.expression
     elif isinstance(node.expression, exp.Alias):
-        ancestor = getattr(node.expression.parent, "parent", None)
+        ancestor = getattr(node.expression.parent_select, "parent", None)
         if isinstance(ancestor, exp.Union):
             ancestor = ancestor.parent
         if isinstance(ancestor, exp.CTE):
             table = ancestor.alias
-        elif isinstance(ancestor, exp.Union):
-            for source_table in node.source.find_all(exp.Table):
-                for column in node.expression.find_all(exp.Column):
-                    if source_table.alias == column.table:
-                        table = source_table
     if not table and node.alias:
         # Use node alias if available
         table = node.alias
@@ -143,12 +138,13 @@ async def column_lineage(
                 continue
             table = model.fqn
         else:
-            table = _get_table(node, default_catalog=context.default_catalog, dialect=dialect)
-            if not table and root.name == "UNION" and node in root.downstream:
+            if root.name == "UNION" and node in root.downstream:
                 # SQLGlot adds an extra node named UNION if the node doesn't have an upstream.
                 # That's why we skip processing it above and treat all its downstream as part of
                 # model here.
                 table = model.fqn
+            else:
+                table = _get_table(node, default_catalog=context.default_catalog, dialect=dialect)
             column_name = _get_column(node, dialect)
         if not table:
             continue
