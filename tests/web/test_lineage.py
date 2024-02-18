@@ -372,7 +372,7 @@ def test_get_lineage_cte_downstream_union_downstream(project_context: Context) -
     }
 
 
-def test_get_lineage_cte_downstream_union_downstream2(project_context: Context) -> None:
+def test_get_lineage_nested_cte_union_downstream(project_context: Context) -> None:
     project_tmp_path = project_context.path
     models_dir = project_tmp_path / "models"
     models_dir.mkdir()
