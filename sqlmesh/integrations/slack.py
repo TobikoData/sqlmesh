@@ -104,6 +104,30 @@ def text_section_block(message: str) -> dict:
     }
 
 
+def preformatted_rich_text_block(message: str) -> dict:
+    """Create a "rich text" block with pre-formatted text (i.e.: a code block).
+
+    Note that this can also be acheived with text_section_block and using markdown's
+    triple backticks.
+    This function avoids issues with the text containing such backticks and also does
+    not require editing the message in order to insert such backticks.
+    """
+    return {
+        "type": "rich_text",
+        "elements": [
+            {
+                "type": "rich_text_preformatted",
+                "elements": [
+                    {
+                        "type": "text",
+                        "text": normalize_message(message),
+                    },
+                ],
+            },
+        ],
+    }
+
+
 def empty_section_block() -> dict:
     """Create an empty section block"""
     return {
