@@ -157,6 +157,7 @@ class BuiltInPlanEvaluator(PlanEvaluator):
             selected_snapshots=selected_snapshots,
             deployability_index=deployability_index,
             circuit_breaker=circuit_breaker,
+            end_bounded=plan.end_bounded,
         )
         if not is_run_successful:
             raise SQLMeshError("Plan application failed.")
@@ -357,6 +358,7 @@ class StateBasedAirflowPlanEvaluator(BaseAirflowPlanEvaluator):
             is_dev=plan.is_dev,
             forward_only=plan.forward_only,
             models_to_backfill=plan.models_to_backfill,
+            end_bounded=plan.end_bounded,
         )
         plan_dag_spec = create_plan_dag_spec(plan_application_request, self.state_sync)
         PlanDagState.from_state_sync(self.state_sync).add_dag_spec(plan_dag_spec)
@@ -425,6 +427,7 @@ class AirflowPlanEvaluator(StateBasedAirflowPlanEvaluator):
             is_dev=plan.is_dev,
             forward_only=plan.forward_only,
             models_to_backfill=plan.models_to_backfill,
+            end_bounded=plan.end_bounded,
         )
 
 
