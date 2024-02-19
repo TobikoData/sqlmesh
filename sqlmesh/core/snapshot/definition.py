@@ -732,6 +732,7 @@ class Snapshot(PydanticModel, SnapshotInfoMixin):
         execution_time: t.Optional[TimeLike] = None,
         deployability_index: t.Optional[DeployabilityIndex] = None,
         ignore_cron: bool = False,
+        end_bounded: bool = False,
     ) -> Intervals:
         """Find all missing intervals between [start, end].
 
@@ -746,6 +747,8 @@ class Snapshot(PydanticModel, SnapshotInfoMixin):
             restatements: A set of snapshot names being restated
             deployability_index: Determines snapshots that are deployable in the context of this evaluation.
             ignore_cron: Whether to ignore the node's cron schedule.
+            end_bounded: If set to true, the returned intervals will be bounded by the target end date, disregarding lookback,
+                allow_partials, and other attributes that could cause the intervals to exceed the target end date.
 
         Returns:
             A list of all the missing intervals as epoch timestamps.
@@ -769,7 +772,7 @@ class Snapshot(PydanticModel, SnapshotInfoMixin):
             return []
 
         execution_time = execution_time or now()
-        allow_partials = self.is_model and self.model.allow_partials
+        allow_partials = not end_bounded and self.is_model and self.model.allow_partials
         start_ts, end_ts = (
             to_timestamp(ts)
             for ts in self.inclusive_exclusive(
@@ -782,7 +785,10 @@ class Snapshot(PydanticModel, SnapshotInfoMixin):
 
         interval_unit = self.node.interval_unit
 
-        if allow_partials:
+        if end_bounded:
+            upper_bound_ts = min(end_ts, to_timestamp(execution_time))
+            end_ts = upper_bound_ts
+        elif allow_partials:
             upper_bound_ts = to_timestamp(execution_time)
             end_ts = min(end_ts, upper_bound_ts)
         else:
@@ -1425,6 +1431,7 @@ def missing_intervals(
     restatements: t.Optional[t.Dict[SnapshotId, Interval]] = None,
     deployability_index: t.Optional[DeployabilityIndex] = None,
     ignore_cron: bool = False,
+    end_bounded: bool = False,
 ) -> t.Dict[Snapshot, Intervals]:
     """Returns all missing intervals given a collection of snapshots."""
     missing = {}
@@ -1460,6 +1467,7 @@ def missing_intervals(
             execution_time=execution_time,
             deployability_index=deployability_index,
             ignore_cron=ignore_cron,
+            end_bounded=end_bounded,
         )
         if intervals:
             missing[snapshot] = intervals

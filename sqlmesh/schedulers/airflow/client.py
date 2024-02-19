@@ -196,6 +196,7 @@ class AirflowClient(BaseAirflowClient):
         is_dev: bool = False,
         forward_only: bool = False,
         models_to_backfill: t.Optional[t.Set[str]] = None,
+        end_bounded: bool = False,
     ) -> None:
         request = common.PlanApplicationRequest(
             new_snapshots=list(new_snapshots),
@@ -211,6 +212,7 @@ class AirflowClient(BaseAirflowClient):
             is_dev=is_dev,
             forward_only=forward_only,
             models_to_backfill=models_to_backfill,
+            end_bounded=end_bounded,
         )
 
         response = self._session.post(

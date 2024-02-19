@@ -56,6 +56,8 @@ class PlanBuilder:
         default_start: The default plan start to use if not specified.
         default_end: The default plan end to use if not specified.
         enable_preview: Whether to enable preview for forward-only models in development environments.
+        end_bounded: If set to true, the missing intervals will be bounded by the target end date, disregarding lookback,
+            allow_partials, and other attributes that could cause the intervals to exceed the target end date.
     """
 
     def __init__(
@@ -81,6 +83,7 @@ class PlanBuilder:
         default_start: t.Optional[TimeLike] = None,
         default_end: t.Optional[TimeLike] = None,
         enable_preview: bool = False,
+        end_bounded: bool = False,
     ):
         self._context_diff = context_diff
         self._no_gaps = no_gaps
@@ -88,6 +91,7 @@ class PlanBuilder:
         self._is_dev = is_dev
         self._forward_only = forward_only
         self._enable_preview = enable_preview
+        self._end_bounded = end_bounded
         self._environment_ttl = environment_ttl
         self._categorizer_config = categorizer_config or CategorizerConfig()
         self._auto_categorization_enabled = auto_categorization_enabled
@@ -221,6 +225,7 @@ class PlanBuilder:
             models_to_backfill=models_to_backfill,
             effective_from=self._effective_from,
             execution_time=self._execution_time,
+            end_bounded=self._end_bounded,
         )
         self._latest_plan = plan
         return plan

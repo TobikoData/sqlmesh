@@ -116,6 +116,7 @@ def test_create_plan_dag_spec(
         is_dev=False,
         forward_only=True,
         models_to_backfill=None,
+        end_bounded=False,
     )
 
     deleted_snapshot = SnapshotTableInfo(
@@ -238,6 +239,7 @@ def test_restatement(
         is_dev=False,
         forward_only=True,
         models_to_backfill=None,
+        end_bounded=False,
     )
     old_environment = Environment(
         name=environment_name,
@@ -341,6 +343,7 @@ def test_select_models_for_backfill(mocker: MockerFixture, random_name, make_sna
         is_dev=False,
         forward_only=True,
         models_to_backfill={snapshot_b.name},
+        end_bounded=False,
     )
 
     state_sync_mock = mocker.Mock()
@@ -408,6 +411,7 @@ def test_create_plan_dag_spec_duplicated_snapshot(
         is_dev=False,
         forward_only=False,
         models_to_backfill=None,
+        end_bounded=False,
     )
 
     dag_run_mock = mocker.Mock()
@@ -456,6 +460,7 @@ def test_create_plan_dag_spec_unbounded_end(
         is_dev=False,
         forward_only=False,
         models_to_backfill=None,
+        end_bounded=False,
     )
 
     state_sync_mock = mocker.Mock()

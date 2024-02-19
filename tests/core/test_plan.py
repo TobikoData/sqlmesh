@@ -242,6 +242,7 @@ def test_missing_intervals_lookback(make_snapshot, mocker: MockerFixture):
         ignored=set(),
         deployability_index=DeployabilityIndex.all_deployable(),
         restatements={},
+        end_bounded=False,
     )
 
     assert not plan.missing_intervals

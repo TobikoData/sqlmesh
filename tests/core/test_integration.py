@@ -32,7 +32,7 @@ from sqlmesh.core.snapshot import (
     SnapshotInfoLike,
     SnapshotTableInfo,
 )
-from sqlmesh.utils.date import TimeLike, to_date, to_datetime, to_timestamp
+from sqlmesh.utils.date import TimeLike, now, to_date, to_datetime, to_timestamp
 from tests.conftest import DuckDBMetadata, SushiDataValidator
 
 pytestmark = pytest.mark.slow
@@ -331,6 +331,52 @@ def test_forward_only_model_regular_plan_preview_enabled(init_and_plan_context: 
         "SELECT DISTINCT event_date FROM sushi__dev.waiter_revenue_by_day ORDER BY event_date"
     )
     assert dev_df["event_date"].tolist() == [pd.to_datetime("2023-01-07")]
+
+
+@freeze_time("2023-01-08 15:00:00")
+def test_hourly_model_with_lookback_no_backfill_in_dev(init_and_plan_context: t.Callable):
+    context, plan = init_and_plan_context("examples/sushi")
+
+    model_name = "sushi.waiter_revenue_by_day"
+
+    model = context.get_model(model_name)
+    model = SqlModel.parse_obj(
+        {
+            **model.dict(),
+            "kind": model.kind.copy(update={"lookback": 1}),
+            "cron": "@hourly",
+            "audits": [],
+        }
+    )
+    context.upsert_model(model)
+
+    plan = context.plan("prod", no_prompts=True, skip_tests=True)
+    context.apply(plan)
+
+    top_waiters_model = context.get_model("sushi.top_waiters")
+    top_waiters_model = add_projection_to_model(t.cast(SqlModel, top_waiters_model), literal=True)
+    context.upsert_model(top_waiters_model)
+
+    snapshot = context.get_snapshot(model, raise_if_missing=True)
+    top_waiters_snapshot = context.get_snapshot("sushi.top_waiters", raise_if_missing=True)
+
+    with freeze_time(now() + timedelta(hours=2)):
+        plan = context.plan("dev", no_prompts=True, skip_tests=True)
+        # Make sure the waiter_revenue_by_day model is not backfilled.
+        assert plan.missing_intervals == [
+            SnapshotIntervals(
+                snapshot_id=top_waiters_snapshot.snapshot_id,
+                intervals=[
+                    (to_timestamp("2023-01-01"), to_timestamp("2023-01-02")),
+                    (to_timestamp("2023-01-02"), to_timestamp("2023-01-03")),
+                    (to_timestamp("2023-01-03"), to_timestamp("2023-01-04")),
+                    (to_timestamp("2023-01-04"), to_timestamp("2023-01-05")),
+                    (to_timestamp("2023-01-05"), to_timestamp("2023-01-06")),
+                    (to_timestamp("2023-01-06"), to_timestamp("2023-01-07")),
+                    (to_timestamp("2023-01-07"), to_timestamp("2023-01-08")),
+                ],
+            ),
+        ]
 
 
 @freeze_time("2023-01-08 15:00:00")

@@ -157,6 +157,7 @@ def test_apply_plan(mocker: MockerFixture, snapshot: Snapshot):
         "is_dev": False,
         "forward_only": False,
         "models_to_backfill": ['"test_model"'],
+        "end_bounded": False,
     }
 
 
