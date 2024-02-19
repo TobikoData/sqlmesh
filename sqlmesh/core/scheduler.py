@@ -90,6 +90,7 @@ class Scheduler:
         restatements: t.Optional[t.Dict[SnapshotId, SnapshotInterval]] = None,
         ignore_cron: bool = False,
         selected_snapshots: t.Optional[t.Set[str]] = None,
+        check_allow_partials: bool = True,
     ) -> SnapshotToBatches:
         """Find the optimal date interval paramaters based on what needs processing and maximal batch size.
 
@@ -127,6 +128,7 @@ class Scheduler:
             execution_time=execution_time or now(),
             restatements=restatements,
             ignore_cron=ignore_cron,
+            check_allow_partials=check_allow_partials,
         )
 
     def evaluate(
@@ -246,6 +248,7 @@ class Scheduler:
             restatements=restatements,
             ignore_cron=ignore_cron,
             selected_snapshots=selected_snapshots,
+            check_allow_partials=True,
         )
         if not batches:
             return True
@@ -369,6 +372,7 @@ def compute_interval_params(
     execution_time: t.Optional[TimeLike] = None,
     restatements: t.Optional[t.Dict[SnapshotId, SnapshotInterval]] = None,
     ignore_cron: bool = False,
+    check_allow_partials: bool = True,
 ) -> SnapshotToBatches:
     """Find the optimal date interval paramaters based on what needs processing and maximal batch size.
 
@@ -403,6 +407,7 @@ def compute_interval_params(
         restatements=restatements,
         deployability_index=deployability_index,
         ignore_cron=ignore_cron,
+        check_allow_partials=check_allow_partials,
     ).items():
         batches = []
         batch_size = snapshot.node.batch_size

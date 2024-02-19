@@ -732,6 +732,7 @@ class Snapshot(PydanticModel, SnapshotInfoMixin):
         execution_time: t.Optional[TimeLike] = None,
         deployability_index: t.Optional[DeployabilityIndex] = None,
         ignore_cron: bool = False,
+        check_allow_partials: bool = True,
     ) -> Intervals:
         """Find all missing intervals between [start, end].
 
@@ -769,7 +770,7 @@ class Snapshot(PydanticModel, SnapshotInfoMixin):
             return []
 
         execution_time = execution_time or now()
-        allow_partials = self.is_model and self.model.allow_partials
+        allow_partials = check_allow_partials and self.is_model and self.model.allow_partials
         start_ts, end_ts = (
             to_timestamp(ts)
             for ts in self.inclusive_exclusive(
@@ -1425,6 +1426,7 @@ def missing_intervals(
     restatements: t.Optional[t.Dict[SnapshotId, Interval]] = None,
     deployability_index: t.Optional[DeployabilityIndex] = None,
     ignore_cron: bool = False,
+    check_allow_partials: bool = True,
 ) -> t.Dict[Snapshot, Intervals]:
     """Returns all missing intervals given a collection of snapshots."""
     missing = {}
@@ -1460,6 +1462,7 @@ def missing_intervals(
             execution_time=execution_time,
             deployability_index=deployability_index,
             ignore_cron=ignore_cron,
+            check_allow_partials=check_allow_partials,
         )
         if intervals:
             missing[snapshot] = intervals

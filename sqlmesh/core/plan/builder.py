@@ -81,6 +81,7 @@ class PlanBuilder:
         default_start: t.Optional[TimeLike] = None,
         default_end: t.Optional[TimeLike] = None,
         enable_preview: bool = False,
+        check_allow_partials: bool = False,
     ):
         self._context_diff = context_diff
         self._no_gaps = no_gaps
@@ -115,6 +116,7 @@ class PlanBuilder:
         )
 
         self._latest_plan: t.Optional[Plan] = None
+        self.check_allow_partials = check_allow_partials
 
     @property
     def is_start_and_end_allowed(self) -> bool:
@@ -221,6 +223,7 @@ class PlanBuilder:
             models_to_backfill=models_to_backfill,
             effective_from=self._effective_from,
             execution_time=self._execution_time,
+            check_allow_partials=self.check_allow_partials,
         )
         self._latest_plan = plan
         return plan
