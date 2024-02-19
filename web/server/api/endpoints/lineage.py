@@ -9,6 +9,7 @@ from sqlglot import exp
 from sqlglot.lineage import Node, lineage
 
 from sqlmesh.core.context import Context
+from sqlmesh.core.dialect import normalize_model_name
 from sqlmesh.utils.errors import SQLMeshError
 from web.server.exceptions import ApiException
 from web.server.models import LineageColumn
@@ -22,19 +23,37 @@ if t.TYPE_CHECKING:
 router = APIRouter()
 
 
-def _get_table(node: Node, dialect: t.Optional[DialectType] = None) -> t.Optional[str]:
+def _get_table(
+    node: Node, default_catalog: t.Optional[str], dialect: t.Optional[DialectType] = None
+) -> str:
     """Get a node's table/source"""
-    table: t.Union[exp.Table, str] = node.alias or node.name
+    # Default to node name
+    table: t.Union[exp.Table, str] = ""
     if isinstance(node.expression, exp.Table):
         table = node.expression
+    elif isinstance(node.expression, exp.Alias):
+        ancestor = getattr(node.expression.parent_select, "parent", None)
+        if isinstance(ancestor, exp.Union):
+            ancestor = ancestor.parent
+        if isinstance(ancestor, exp.CTE):
+            table = ancestor.alias
+    if not table and node.alias:
+        # Use node alias if available
+        table = node.alias
 
     try:
-        return exp.table_name(table, identify=True, dialect=dialect)
+        return normalize_model_name(table, default_catalog=default_catalog, dialect=dialect)
     except sqlglot.errors.ParseError:
         # Cannot extract table from node. One reason this can happen is node is
         # '*' because a model selects * from an external model for which we do
         # not know the schema.
-        return None
+        return ""
+
+
+def _get_column(node: Node, dialect: t.Optional[DialectType] = None) -> str:
+    if isinstance(node.expression, exp.Alias):
+        return node.expression.alias_or_name
+    return exp.to_column(node.name).name
 
 
 def _get_node_source(node: Node, dialect: DialectType) -> str:
@@ -46,16 +65,22 @@ def _get_node_source(node: Node, dialect: DialectType) -> str:
     return source
 
 
-def _process_downstream(downstream: t.List[Node], dialect: DialectType) -> t.Dict[str, t.List[str]]:
+def _process_downstream(
+    downstream: t.List[Node],
+    parent_table: str,
+    dialect: DialectType,
+    default_catalog: t.Optional[str],
+) -> t.Dict[str, t.Set[str]]:
     """Aggregate a list of downstream nodes by table/source"""
-    graph = collections.defaultdict(list)
+    graph = collections.defaultdict(set)
     for node in downstream:
-        table = _get_table(node, dialect=dialect)
-        if table is None:
+        table = _get_table(node, default_catalog=default_catalog, dialect=dialect)
+        if not table or table == parent_table:
             continue
 
-        column = exp.to_column(node.name).name
-        graph[table].append(column)
+        column = _get_column(node)
+        if column:
+            graph[table].add(column)
     return graph
 
 
@@ -93,7 +118,7 @@ async def column_lineage(
                 except SQLMeshError:
                     continue
 
-        node = lineage(
+        root = lineage(
             column=column_name,
             sql=render_query(model),
             sources=sources,
@@ -105,28 +130,47 @@ async def column_lineage(
             origin="API -> lineage -> column_lineage",
         )
 
-    graph: t.Dict[str, t.Dict[str, LineageColumn]] = {}
-    node_name = model.fqn
+    graph: t.Dict[str, t.Dict[str, LineageColumn]] = collections.defaultdict(dict)
 
-    for i, node in enumerate(node.walk()):
-        if i > 0:
-            table = _get_table(node, dialect)
-            if table is None:
+    for i, node in enumerate(root.walk()):
+        if i == 0:
+            if node.name == "UNION":
                 continue
-            node_name = table
-
-            column_name = exp.to_column(node.name).name
-        if column_name in graph.get(node_name, []):
+            table = model.fqn
+        else:
+            if root.name == "UNION" and node in root.downstream:
+                # SQLGlot adds an extra node named UNION if the node doesn't have an upstream.
+                # That's why we skip processing it above and treat all its downstream as part of
+                # model here.
+                table = model.fqn
+            else:
+                table = _get_table(node, default_catalog=context.default_catalog, dialect=dialect)
+            column_name = _get_column(node, dialect)
+        if not table:
             continue
 
+        downstream_models = _process_downstream(
+            node.downstream,
+            parent_table=table,
+            dialect=dialect,
+            default_catalog=context.default_catalog,
+        )
+
         # At this point node_name should be fqn/normalized/quoted
-        graph[node_name] = {
-            column_name: LineageColumn(
+        if column_name in graph.get(table, {}):
+            # Merge models and columns
+            models = graph[table][column_name].models
+            for model_name, columns in downstream_models.items():
+                if model_name in models:
+                    models[model_name] = models[model_name] | columns
+                else:
+                    models[model_name] = columns
+        else:
+            graph[table][column_name] = LineageColumn(
                 expression=node.expression.sql(pretty=True, dialect=dialect),
                 source=_get_node_source(node=node, dialect=dialect),
-                models=_process_downstream(node.downstream, dialect=dialect),
+                models=downstream_models,
             )
-        }
 
     return graph
 
