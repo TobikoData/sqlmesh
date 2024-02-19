@@ -267,14 +267,23 @@ class JinjaMacroRegistry(PydanticModel):
         if self.root_package_name is not None:
             package_macros[self.root_package_name].update(root_macros)
 
-        for top_level_package_name in self.top_level_packages:
-            root_macros.update(package_macros.get(top_level_package_name, {}))
-
         env = environment()
 
-        context.update(self._create_builtin_globals(kwargs))
+        builtin_globals = self._create_builtin_globals(kwargs)
+        merged_top_level_package_macros: t.Dict[str, AttributeDict] = {}
+        for top_level_package_name in self.top_level_packages:
+            root_macros.update(package_macros.get(top_level_package_name, {}))
+            merged_top_level_package_macros[top_level_package_name] = AttributeDict(
+                {
+                    **(builtin_globals.pop(top_level_package_name, None) or {}),
+                    **(package_macros.pop(top_level_package_name, None) or {}),
+                }
+            )
+
+        context.update(builtin_globals)
         context.update(root_macros)
         context.update(package_macros)
+        context.update(merged_top_level_package_macros)
 
         env.globals.update(context)
         env.filters.update(self._environment.filters)

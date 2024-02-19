@@ -219,7 +219,6 @@ SQLMesh supports running dbt projects using the majority of dbt jinja methods, i
 The dbt jinja methods that are not currently supported are:
 
 * debug
-* run_started_at
 * selected_sources
 * adapter.expand_target_column_types
 * adapter.rename_relation
