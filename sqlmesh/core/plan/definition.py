@@ -35,6 +35,7 @@ class Plan(PydanticModel, frozen=True):
     no_gaps: bool
     forward_only: bool
     include_unmodified: bool
+    end_bounded: bool
 
     environment_ttl: t.Optional[str] = None
     environment_naming_info: EnvironmentNamingInfo
@@ -153,6 +154,7 @@ class Plan(PydanticModel, frozen=True):
                 execution_time=self.execution_time,
                 restatements=self.restatements,
                 deployability_index=self.deployability_index,
+                end_bounded=self.end_bounded,
             ).items()
             if snapshot.is_model and missing
         ]

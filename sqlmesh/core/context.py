@@ -1045,6 +1045,7 @@ class Context(BaseContext):
             enable_preview=(
                 enable_preview if enable_preview is not None else self.config.plan.enable_preview
             ),
+            end_bounded=not run,
         )
 
     def apply(

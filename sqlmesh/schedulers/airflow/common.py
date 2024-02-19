@@ -50,6 +50,7 @@ class PlanApplicationRequest(PydanticModel):
     is_dev: bool
     forward_only: bool
     models_to_backfill: t.Optional[t.Set[str]]
+    end_bounded: bool
 
     def is_selected_for_backfill(self, model_fqn: str) -> bool:
         return self.models_to_backfill is None or model_fqn in self.models_to_backfill
