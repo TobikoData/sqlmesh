@@ -149,8 +149,7 @@ class HiveMetastoreTablePropertiesMixin(EngineAdapter):
                         f"PARTITIONED BY contains non-column value '{expr.sql(dialect='spark')}'."
                     )
 
-            property: exp.Property
-            property = exp.PartitionedByProperty(
+            property: exp.Property = exp.PartitionedByProperty(
                 this=exp.Schema(expressions=partitioned_by),
             )
 
