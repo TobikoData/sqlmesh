@@ -119,6 +119,7 @@ if t.TYPE_CHECKING:
     ModelOrSnapshot = t.Union[str, Model, Snapshot]
     NodeOrSnapshot = t.Union[str, Model, StandaloneAudit, Snapshot]
 
+C = t.TypeVar("C", bound=Config)
 
 logger = logging.getLogger(__name__)
 
@@ -250,6 +251,7 @@ class Context(BaseContext):
         load: Whether or not to automatically load all models and macros (default True).
         console: The rich instance used for printing out CLI command results.
         users: A list of users to make known to SQLMesh.
+        config_type: The type of config object to use (default Config).
     """
 
     def __init__(
@@ -265,9 +267,12 @@ class Context(BaseContext):
         load: bool = True,
         console: t.Optional[Console] = None,
         users: t.Optional[t.List[User]] = None,
+        config_type: t.Union[t.Type[C], t.Type[Config]] = Config,
     ):
         self.console = console or get_console()
-        self.configs = config if isinstance(config, dict) else load_configs(config, paths)
+        self.configs = (
+            config if isinstance(config, dict) else load_configs(config, config_type, paths)
+        )
         self.dag: DAG[str] = DAG()
         self._models: UniqueKeyDict[str, Model] = UniqueKeyDict("models")
         self._audits: UniqueKeyDict[str, Audit] = UniqueKeyDict("audits")

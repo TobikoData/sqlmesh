@@ -13,12 +13,15 @@ from sqlmesh.utils.errors import ConfigError
 from sqlmesh.utils.metaprogramming import import_python_file
 from sqlmesh.utils.yaml import load as yaml_load
 
+C = t.TypeVar("C", bound=Config)
+
 
 def load_configs(
-    config: t.Optional[str | Config],
+    config: t.Optional[str | t.Union[Config, C]],
+    config_type: t.Type[C],
     paths: t.Union[str | Path, t.Iterable[str | Path]],
     sqlmesh_path: t.Optional[Path] = None,
-) -> t.Dict[Path, Config]:
+) -> t.Dict[Path, C]:
     sqlmesh_path = sqlmesh_path or c.SQLMESH_PATH
     config = config or "config"
 
@@ -27,6 +30,8 @@ def load_configs(
     ]
 
     if isinstance(config, Config):
+        if type(config) != config_type:
+            config = convert_config_type(config, config_type)
         return {path: config for path in absolute_paths}
 
     config_env_vars = None
@@ -43,6 +48,7 @@ def load_configs(
     with env_vars(config_env_vars if config_env_vars else {}):
         return {
             path: load_config_from_paths(
+                config_type=config_type,
                 project_paths=[path / "config.py", path / "config.yml", path / "config.yaml"],
                 personal_paths=personal_paths,
                 config_name=config,
@@ -52,15 +58,16 @@ def load_configs(
 
 
 def load_config_from_paths(
+    config_type: t.Type[C],
     project_paths: t.Optional[t.List[Path]] = None,
     personal_paths: t.Optional[t.List[Path]] = None,
     config_name: str = "config",
     load_from_env: bool = True,
-) -> Config:
+) -> C:
     project_paths = project_paths or []
     personal_paths = personal_paths or []
     visited_folders: t.Set[Path] = set()
-    python_config: t.Optional[Config] = None
+    python_config: t.Optional[C] = None
     non_python_configs = []
 
     if not project_paths or not any(path.exists() for path in project_paths):
@@ -88,7 +95,9 @@ def load_config_from_paths(
                 )
             non_python_configs.append(load_config_from_yaml(path))
         elif extension == "py":
-            python_config = load_config_from_python_module(path, config_name=config_name)
+            python_config = load_config_from_python_module(
+                config_type, path, config_name=config_name
+            )
         else:
             raise ConfigError(
                 f"Unsupported config file extension '{extension}' in config file '{path}'."
@@ -106,7 +115,7 @@ def load_config_from_paths(
 
     no_dialect_err_msg = "Default model SQL dialect is a required configuration parameter. Set it in the `model_defaults` `dialect` key in your config file."
 
-    non_python_config = Config.parse_obj(merge_dicts(*non_python_configs))
+    non_python_config = config_type.parse_obj(merge_dicts(*non_python_configs))
     if python_config:
         model_defaults = python_config.model_defaults
         if model_defaults.dialect is None:
@@ -123,7 +132,9 @@ def load_config_from_yaml(path: Path) -> t.Dict[str, t.Any]:
     return yaml_load(path)
 
 
-def load_config_from_python_module(module_path: Path, config_name: str = "config") -> Config:
+def load_config_from_python_module(
+    config_type: t.Type[C], module_path: Path, config_name: str = "config"
+) -> C:
     with sys_path(module_path.parent):
         config_module = import_python_file(module_path, module_path.parent)
 
@@ -137,7 +148,11 @@ def load_config_from_python_module(module_path: Path, config_name: str = "config
             f"Config needs to be a valid object of type sqlmesh.core.config.Config. Found `{config_obj}` instead at '{module_path}'."
         )
 
-    return config_obj
+    return (
+        config_obj
+        if type(config_obj) == config_type
+        else convert_config_type(config_obj, config_type)
+    )
 
 
 def load_config_from_env() -> t.Dict[str, t.Any]:
@@ -158,3 +173,7 @@ def load_config_from_env() -> t.Dict[str, t.Any]:
             target_dict[segments[-1]] = value
 
     return config_dict
+
+
+def convert_config_type(config_obj: Config, config_type: t.Type[C]) -> C:
+    return config_type.parse_obj(config_obj.dict())

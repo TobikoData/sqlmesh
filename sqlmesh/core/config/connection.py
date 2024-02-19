@@ -42,6 +42,8 @@ class ConnectionConfig(abc.ABC, BaseConfig):
     concurrent_tasks: int
     register_comments: bool
 
+    type_: str = Field(alias="type", default="none")
+
     @property
     @abc.abstractmethod
     def _connection_kwargs_keys(self) -> t.Set[str]:
