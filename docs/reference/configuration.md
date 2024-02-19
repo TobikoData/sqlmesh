@@ -70,7 +70,7 @@ Formatting settings for the `sqlmesh format` command and UI.
 
 | Option                | Description                                                                                    | Type    | Required |
 |-----------------------|------------------------------------------------------------------------------------------------|:-------:|:--------:|
-| `normailize`          | Whether to normalize SQL (Default: False)                                                      | boolean | N        |
+| `normalize`          | Whether to normalize SQL (Default: False)                                                      | boolean | N        |
 | `pad`                 | The number of spaces to use for padding (Default: 2)                                           | int     | N        |
 | `indent`              | The number of spaces to use for indentation (Default: 2)                                       | int     | N        |
 | `normalize_functions` | Whether to normalize function names. Supported values are: 'upper' and 'lower' (Default: None) | string  | N        |
