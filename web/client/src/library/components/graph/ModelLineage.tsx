@@ -1,5 +1,4 @@
 import { useApiModelLineage } from '@api/index'
-import pluralize from 'pluralize'
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { type ModelSQLMeshModel } from '@models/sqlmesh-model'
 import { type HighlightedNodes, useLineageFlow } from './context'
@@ -58,6 +57,9 @@ export default function ModelLineage({
     setHighlightedNodes,
     setNodeConnections,
     setLineageCache,
+    setUnknownModels,
+    models,
+    unknownModels,
   } = useLineageFlow()
 
   const {
@@ -77,9 +79,23 @@ export default function ModelLineage({
       .then(({ data }) => {
         if (isNil(data)) return
 
-        const modelsCount = Object.keys(data).length
+        const lineageModels = Object.keys(data)
+        const lineageModelsCount = lineageModels.length
 
-        if (modelsCount > WITH_COLUMNS_LIMIT) {
+        lineageModels.forEach(modelName => {
+          modelName = encodeURI(modelName)
+
+          if (
+            isFalse(models.has(modelName)) &&
+            isFalse(unknownModels.has(modelName))
+          ) {
+            unknownModels.add(modelName)
+          }
+        })
+
+        setUnknownModels(new Set(unknownModels))
+
+        if (lineageModelsCount > WITH_COLUMNS_LIMIT) {
           setWithColumns(false)
         }
 
