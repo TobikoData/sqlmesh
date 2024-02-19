@@ -8,6 +8,7 @@ import pytest
 from dbt.adapters.base import BaseRelation
 from dbt.contracts.relation import Policy
 from dbt.exceptions import CompilationError
+from freezegun import freeze_time
 from pytest_mock.plugin import MockerFixture
 from sqlglot import exp, parse_one
 
@@ -791,3 +792,13 @@ def test_snapshot_json_payload():
         "database": "memory",
         "target_name": "in_memory",
     }
+
+
+@freeze_time("2023-01-08 00:00:00")
+def test_dbt_package_macros(sushi_test_project: Project):
+    context = sushi_test_project.context
+
+    # Make sure external macros are available.
+    assert context.render("{{ dbt.current_timestamp() }}") == "now()"
+    # Make sure builtins are available too.
+    assert context.render("{{ dbt.run_started_at }}") == "2023-01-08 00:00:00+00:00"

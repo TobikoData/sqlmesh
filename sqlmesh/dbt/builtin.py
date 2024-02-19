@@ -19,6 +19,7 @@ from sqlmesh.dbt.adapter import BaseAdapter, ParsetimeAdapter, RuntimeAdapter
 from sqlmesh.dbt.target import TARGET_TYPE_TO_CONFIG_CLASS
 from sqlmesh.dbt.util import DBT_VERSION
 from sqlmesh.utils import AttributeDict, yaml
+from sqlmesh.utils.date import now
 from sqlmesh.utils.errors import ConfigError, MacroEvalError
 from sqlmesh.utils.jinja import JinjaMacroRegistry, MacroReference, MacroReturnVal
 
@@ -365,6 +366,9 @@ def create_builtin_globals(
             "statement": sql_execution.statement,
         }
     )
+
+    builtin_globals["run_started_at"] = jinja_globals.get("execution_dt") or now()
+    builtin_globals["dbt"] = AttributeDict(builtin_globals)
 
     return {**builtin_globals, **jinja_globals}
 
