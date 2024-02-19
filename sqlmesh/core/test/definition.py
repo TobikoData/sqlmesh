@@ -101,7 +101,7 @@ class ModelTest(unittest.TestCase):
                 else table
             )
 
-    def assert_equal(self, expected: pd.DataFrame, actual: pd.DataFrame) -> None:
+    def assert_equal(self, expected: pd.DataFrame, actual: pd.DataFrame, sort: bool) -> None:
         """Compare two DataFrames"""
 
         # Two astypes are necessary, pandas converts strings to times as NS,
@@ -116,10 +116,19 @@ class ModelTest(unittest.TestCase):
 
         try:
             pd.testing.assert_frame_equal(
-                expected.sort_index(axis=1),
-                actual.sort_index(axis=1),
+                (
+                    expected.sort_values(by=expected.columns.to_list()).reset_index(drop=True)
+                    if sort
+                    else expected
+                ),
+                (
+                    actual.sort_values(by=actual.columns.to_list()).reset_index(drop=True)
+                    if sort
+                    else actual
+                ),
                 check_dtype=False,
                 check_datetimelike_compat=True,
+                check_like=True,  # ignore column order
             )
         except AssertionError as e:
             if expected.empty and actual.empty and all(expected.columns == actual.columns):
@@ -246,7 +255,7 @@ class SqlModelTest(ModelTest):
 
                 expected_df = pd.DataFrame.from_records(rows, columns=cte_query.named_selects)
                 actual_df = self._execute(cte_query)
-                self.assert_equal(expected_df, actual_df)
+                self.assert_equal(expected_df, actual_df, sort=cte_query.args.get("order") is None)
 
     def runTest(self) -> None:
         # For tests we just use the model name for the table reference and we don't want to expand
@@ -272,7 +281,7 @@ class SqlModelTest(ModelTest):
         if query_rows is not None:
             expected_df = pd.DataFrame.from_records(query_rows, columns=self.model.columns_to_types)  # type: ignore
             actual_df = self._execute(query)
-            self.assert_equal(expected_df, actual_df)
+            self.assert_equal(expected_df, actual_df, sort=query.args.get("order") is None)
 
 
 class PythonModelTest(ModelTest):
@@ -324,7 +333,7 @@ class PythonModelTest(ModelTest):
             expected_df = pd.DataFrame.from_records(query_rows, columns=self.model.columns_to_types)  # type: ignore
             actual_df = self._execute_model()
             actual_df.reset_index(drop=True, inplace=True)
-            self.assert_equal(expected_df, actual_df)
+            self.assert_equal(expected_df, actual_df, sort=False)
 
 
 def generate_test(
