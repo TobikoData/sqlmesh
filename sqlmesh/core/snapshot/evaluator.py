@@ -770,6 +770,7 @@ class SnapshotEvaluator:
                 model=snapshot.model_or_none,
                 count=count,
                 query=query,
+                adapter_dialect=self.adapter.dialect,
             )
             if audit.blocking:
                 raise audit_error
