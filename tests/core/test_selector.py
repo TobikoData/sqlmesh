@@ -408,14 +408,16 @@ def test_expand_git_selection(
 
     git_client_mock = mocker.Mock()
     git_client_mock.list_untracked_files.return_value = []
-    git_client_mock.list_changed_files.return_value = [model_a._path, model_c._path]
+    git_client_mock.list_uncommitted_changed_files.return_value = []
+    git_client_mock.list_committed_changed_files.return_value = [model_a._path, model_c._path]
 
     selector = Selector(mocker.Mock(), models)
     selector._git_client = git_client_mock
 
     assert selector.expand_model_selections(expressions) == expected_fqns
 
-    git_client_mock.list_changed_files.assert_called_once_with(target_branch="main")
+    git_client_mock.list_committed_changed_files.assert_called_once_with(target_branch="main")
+    git_client_mock.list_uncommitted_changed_files.assert_called_once()
     git_client_mock.list_untracked_files.assert_called_once()
 
 

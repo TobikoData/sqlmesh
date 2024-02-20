@@ -15,9 +15,12 @@ class GitClient:
             ["ls-files", "--others", "--exclude-standard"], self._work_dir
         )
 
-    def list_changed_files(self, target_branch: str = "main") -> t.List[Path]:
+    def list_uncommitted_changed_files(self) -> t.List[Path]:
+        return self._execute_list_output(["diff", "--name-only", "--diff-filter=d"], self._git_root)
+
+    def list_committed_changed_files(self, target_branch: str = "main") -> t.List[Path]:
         return self._execute_list_output(
-            ["diff", "--name-only", "--diff-filter=d", target_branch], self._git_root
+            ["diff", "--name-only", "--diff-filter=d", f"{target_branch}..."], self._git_root
         )
 
     def _execute_list_output(self, commands: t.List[str], base_path: Path) -> t.List[Path]:
