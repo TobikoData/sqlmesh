@@ -111,11 +111,19 @@ def _parse_statement(self: Parser) -> t.Optional[exp.Expression]:
         # Capture any available description in the form of a comment
         comments = self._curr.comments
 
-        self._advance()
-        meta = self._parse_wrapped(lambda: t.cast(t.Callable, parser)(self))
+        index = self._index
+        try:
+            self._advance()
+            meta = self._parse_wrapped(lambda: t.cast(t.Callable, parser)(self))
+        except ParseError:
+            self._retreat(index)
 
-        meta.comments = comments
-        return meta
+        # Only return the DDL expression if we actually managed to parse one. This is
+        # done in order to allow parsing standalone identifiers / function calls like
+        # "metric", or "model(1, 2, 3)", which collide with SQLMesh's DDL syntax.
+        if self._index != index:
+            meta.comments = comments
+            return meta
 
     return self.__parse_statement()  # type: ignore
 
