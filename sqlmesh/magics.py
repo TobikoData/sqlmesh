@@ -97,7 +97,7 @@ class SQLMeshMagics(Magics):
         from sqlmesh import configure_logging
 
         args = parse_argstring(self.context, line)
-        configs = load_configs(args.config, args.paths, config_type=Config)
+        configs = load_configs(args.config, Config, args.paths)
         log_limit = list(configs.values())[0].log_limit
         configure_logging(args.debug, args.ignore_warnings, log_limit=log_limit)
         try:

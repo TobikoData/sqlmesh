@@ -25,7 +25,7 @@ from sqlmesh.utils.pydantic import model_validator, model_validator_v1_args
 if t.TYPE_CHECKING:
     from google.auth.transport.requests import AuthorizedSession
 
-    from sqlmesh.core.context import Context
+    from sqlmesh.core.context import GenericContext
 
 if sys.version_info >= (3, 9):
     from typing import Annotated, Literal
@@ -37,7 +37,7 @@ class _SchedulerConfig(abc.ABC):
     """Abstract base class for Scheduler configurations."""
 
     @abc.abstractmethod
-    def create_plan_evaluator(self, context: Context) -> PlanEvaluator:
+    def create_plan_evaluator(self, context: GenericContext) -> PlanEvaluator:
         """Creates a Plan Evaluator instance.
 
         Args:
@@ -45,7 +45,7 @@ class _SchedulerConfig(abc.ABC):
         """
 
     @abc.abstractmethod
-    def create_state_sync(self, context: Context) -> StateSync:
+    def create_state_sync(self, context: GenericContext) -> StateSync:
         """Creates a State Sync instance.
 
         Args:
@@ -56,7 +56,7 @@ class _SchedulerConfig(abc.ABC):
         """
 
     @abc.abstractmethod
-    def get_default_catalog(self, context: Context) -> t.Optional[str]:
+    def get_default_catalog(self, context: GenericContext) -> t.Optional[str]:
         """Returns the default catalog for the Scheduler.
 
         Args:
@@ -65,7 +65,7 @@ class _SchedulerConfig(abc.ABC):
 
 
 class _EngineAdapterStateSyncSchedulerConfig(_SchedulerConfig):
-    def create_state_sync(self, context: Context) -> StateSync:
+    def create_state_sync(self, context: GenericContext) -> StateSync:
         state_connection = context.config.get_state_connection(context.gateway)
         engine_adapter = (state_connection or context._connection_config).create_engine_adapter()
         if not engine_adapter.SUPPORTS_ROW_LEVEL_OP:
@@ -84,7 +84,7 @@ class BuiltInSchedulerConfig(_EngineAdapterStateSyncSchedulerConfig, BaseConfig)
 
     type_: Literal["builtin"] = Field(alias="type", default="builtin")
 
-    def create_plan_evaluator(self, context: Context) -> PlanEvaluator:
+    def create_plan_evaluator(self, context: GenericContext) -> PlanEvaluator:
         return BuiltInPlanEvaluator(
             state_sync=context.state_sync,
             snapshot_evaluator=context.snapshot_evaluator,
@@ -94,7 +94,7 @@ class BuiltInSchedulerConfig(_EngineAdapterStateSyncSchedulerConfig, BaseConfig)
             notification_target_manager=context.notification_target_manager,
         )
 
-    def get_default_catalog(self, context: Context) -> t.Optional[str]:
+    def get_default_catalog(self, context: GenericContext) -> t.Optional[str]:
         return context.engine_adapter.default_catalog
 
 
@@ -114,7 +114,7 @@ class _BaseAirflowSchedulerConfig(_EngineAdapterStateSyncSchedulerConfig):
     def get_client(self, console: t.Optional[Console] = None) -> AirflowClient:
         """Constructs the Airflow Client instance."""
 
-    def create_state_sync(self, context: Context) -> StateSync:
+    def create_state_sync(self, context: GenericContext) -> StateSync:
         if self.use_state_connection:
             return super().create_state_sync(context)
 
@@ -126,7 +126,7 @@ class _BaseAirflowSchedulerConfig(_EngineAdapterStateSyncSchedulerConfig):
             console=context.console,
         )
 
-    def create_plan_evaluator(self, context: Context) -> PlanEvaluator:
+    def create_plan_evaluator(self, context: GenericContext) -> PlanEvaluator:
         return AirflowPlanEvaluator(
             airflow_client=self.get_client(context.console),
             dag_run_poll_interval_secs=self.dag_run_poll_interval_secs,
@@ -140,7 +140,7 @@ class _BaseAirflowSchedulerConfig(_EngineAdapterStateSyncSchedulerConfig):
             state_sync=context.state_sync if self.use_state_connection else None,
         )
 
-    def get_default_catalog(self, context: Context) -> t.Optional[str]:
+    def get_default_catalog(self, context: GenericContext) -> t.Optional[str]:
         # The default catalog must still be set on the Airflow side.
         default_catalog = self.get_client(context.console).default_catalog
         return self.default_catalog_override or default_catalog
@@ -299,7 +299,7 @@ class MWAASchedulerConfig(_EngineAdapterStateSyncSchedulerConfig, BaseConfig):
     def get_client(self, console: t.Optional[Console] = None) -> MWAAClient:
         return MWAAClient(self.environment, console=console)
 
-    def create_plan_evaluator(self, context: Context) -> PlanEvaluator:
+    def create_plan_evaluator(self, context: GenericContext) -> PlanEvaluator:
         return MWAAPlanEvaluator(
             client=self.get_client(context.console),
             state_sync=context.state_sync,
@@ -313,7 +313,7 @@ class MWAASchedulerConfig(_EngineAdapterStateSyncSchedulerConfig, BaseConfig):
             users=context.users,
         )
 
-    def get_default_catalog(self, context: Context) -> t.Optional[str]:
+    def get_default_catalog(self, context: GenericContext) -> t.Optional[str]:
         # The default catalog must still be set on the Airflow side.
         default_catalog = self.get_client(context.console).default_catalog
         return self.default_catalog_override or default_catalog

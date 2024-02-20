@@ -53,6 +53,7 @@ from sqlglot.lineage import GraphHTML
 from sqlmesh.core import constants as c
 from sqlmesh.core.audit import Audit, StandaloneAudit
 from sqlmesh.core.config import CategorizerConfig, Config, load_configs
+from sqlmesh.core.config.loader import C
 from sqlmesh.core.console import Console, get_console
 from sqlmesh.core.context_diff import ContextDiff
 from sqlmesh.core.dialect import (
@@ -118,8 +119,6 @@ if t.TYPE_CHECKING:
 
     ModelOrSnapshot = t.Union[str, Model, Snapshot]
     NodeOrSnapshot = t.Union[str, Model, StandaloneAudit, Snapshot]
-
-C = t.TypeVar("C", bound=Config)
 
 logger = logging.getLogger(__name__)
 
@@ -235,7 +234,7 @@ class ExecutionContext(BaseContext):
         return self._default_catalog
 
 
-class Context(BaseContext):
+class GenericContext(BaseContext, t.Generic[C]):
     """Encapsulates a SQLMesh environment supplying convenient functions to perform various tasks.
 
     Args:
@@ -256,24 +255,22 @@ class Context(BaseContext):
 
     def __init__(
         self,
+        config_type: t.Type[C],
         engine_adapter: t.Optional[EngineAdapter] = None,
         notification_targets: t.Optional[t.List[NotificationTarget]] = None,
         state_sync: t.Optional[StateSync] = None,
         paths: t.Union[str | Path, t.Iterable[str | Path]] = "",
-        config: t.Optional[t.Union[Config, str, t.Dict[Path, Config]]] = None,
+        config: t.Optional[t.Union[C, str, t.Dict[Path, C]]] = None,
         gateway: t.Optional[str] = None,
         concurrent_tasks: t.Optional[int] = None,
         loader: t.Optional[t.Type[Loader]] = None,
         load: bool = True,
         console: t.Optional[Console] = None,
         users: t.Optional[t.List[User]] = None,
-        config_type: t.Optional[t.Type[C]] = None,
     ):
         self.console = console or get_console()
         self.configs = (
-            config
-            if isinstance(config, dict)
-            else load_configs(config, paths, config_type=config_type or t.cast(t.Type[C], Config))
+            config if isinstance(config, dict) else load_configs(config, config_type, paths)
         )
         self.dag: DAG[str] = DAG()
         self._models: UniqueKeyDict[str, Model] = UniqueKeyDict("models")
@@ -442,7 +439,7 @@ class Context(BaseContext):
         if self._loader.reload_needed():
             self.load()
 
-    def load(self, update_schemas: bool = True) -> Context:
+    def load(self, update_schemas: bool = True) -> GenericContext[C]:
         """Load all files in the context's path."""
         with sys_path(*self.configs):
             gc.disable()
@@ -1755,3 +1752,8 @@ class Context(BaseContext):
         self.notification_target_manager = NotificationTargetManager(
             event_notifications, user_notification_targets, username=self.config.username
         )
+
+
+class Context(GenericContext[Config]):
+    def __init__(self, *args: t.Any, **kwargs: t.Any):
+        super().__init__(Config, *args, **kwargs)

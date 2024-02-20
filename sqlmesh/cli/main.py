@@ -77,7 +77,7 @@ def cli(
         elif ctx.invoked_subcommand in ("create_external_models", "migrate", "rollback", "ui"):
             load = False
 
-    configs = load_configs(config, paths, config_type=Config)
+    configs = load_configs(config, Config, paths)
     log_limit = list(configs.values())[0].log_limit
     configure_logging(debug, ignore_warnings, log_to_stdout, log_limit=log_limit)
 
