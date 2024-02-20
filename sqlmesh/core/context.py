@@ -267,11 +267,13 @@ class Context(BaseContext):
         load: bool = True,
         console: t.Optional[Console] = None,
         users: t.Optional[t.List[User]] = None,
-        config_type: t.Union[t.Type[C], t.Type[Config]] = Config,
+        config_type: t.Optional[t.Type[C]] = None,
     ):
         self.console = console or get_console()
         self.configs = (
-            config if isinstance(config, dict) else load_configs(config, config_type, paths)
+            config
+            if isinstance(config, dict)
+            else load_configs(config, paths, config_type=config_type or t.cast(t.Type[C], Config))
         )
         self.dag: DAG[str] = DAG()
         self._models: UniqueKeyDict[str, Model] = UniqueKeyDict("models")

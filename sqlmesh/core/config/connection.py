@@ -42,6 +42,7 @@ class ConnectionConfig(abc.ABC, BaseConfig):
     concurrent_tasks: int
     register_comments: bool
 
+    # Pydantic V2 does not include type field in dict unless also in base class
     type_: str = Field(alias="type", default="none")
 
     @property

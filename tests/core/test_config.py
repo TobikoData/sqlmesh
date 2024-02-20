@@ -146,8 +146,7 @@ def test_default_gateway():
 
 
 def test_load_config_from_paths(yaml_config_path: Path, python_config_path: Path):
-    config = load_config_from_paths(
-        Config,
+    config: Config = load_config_from_paths(
         project_paths=[yaml_config_path, python_config_path],
     )
 
@@ -170,12 +169,12 @@ def test_load_config_multiple_config_files_in_folder(tmp_path):
         fd.write("project: project_b")
 
     with pytest.raises(ConfigError, match=r"^Multiple configuration files found in folder.*"):
-        load_config_from_paths(Config, project_paths=[config_a_path, config_b_path])
+        load_config_from_paths(project_paths=[config_a_path, config_b_path])
 
 
 def test_load_config_no_config():
     with pytest.raises(ConfigError, match=r"^SQLMesh project config could not be found.*"):
-        load_config_from_paths(Config, load_from_env=False)
+        load_config_from_paths(load_from_env=False)
 
 
 def test_load_config_no_dialect(tmp_path):
@@ -204,12 +203,12 @@ config = Config(default_connection=DuckDBConnectionConfig())
     with pytest.raises(
         ConfigError, match=r"^Default model SQL dialect is a required configuration parameter.*"
     ):
-        load_config_from_paths(Config, project_paths=[tmp_path / "config.yaml"])
+        load_config_from_paths(project_paths=[tmp_path / "config.yaml"])
 
     with pytest.raises(
         ConfigError, match=r"^Default model SQL dialect is a required configuration parameter.*"
     ):
-        load_config_from_paths(Config, project_paths=[tmp_path / "config.py"])
+        load_config_from_paths(project_paths=[tmp_path / "config.py"])
 
 
 def test_load_config_unsupported_extension(tmp_path):
@@ -217,7 +216,7 @@ def test_load_config_unsupported_extension(tmp_path):
     config_path.touch()
 
     with pytest.raises(ConfigError, match=r"^Unsupported config file extension 'txt'.*"):
-        load_config_from_paths(Config, project_paths=[config_path])
+        load_config_from_paths(project_paths=[config_path])
 
 
 def test_load_python_config_with_personal_config(tmp_path):
@@ -243,7 +242,6 @@ custom_config = Config(default_connection=DuckDBConnectionConfig(), model_defaul
 """,
     )
     config = load_config_from_paths(
-        Config,
         project_paths=[tmp_path / "config.py"],
         personal_paths=[tmp_path / "personal" / "config.yaml"],
         config_name="custom_config",
@@ -288,7 +286,7 @@ def test_load_config_from_python_module_missing_config(tmp_path):
         fd.write("from sqlmesh.core.config import Config")
 
     with pytest.raises(ConfigError, match="Config 'config' was not found."):
-        load_config_from_python_module(Config, config_path)
+        load_config_from_python_module(config_path)
 
 
 def test_load_config_from_python_module_invalid_config_object(tmp_path):
@@ -300,7 +298,7 @@ def test_load_config_from_python_module_invalid_config_object(tmp_path):
         ConfigError,
         match=r"^Config needs to be a valid object.*",
     ):
-        load_config_from_python_module(Config, config_path)
+        load_config_from_python_module(config_path)
 
 
 def test_cloud_composer_scheduler_config(tmp_path_factory):
@@ -323,7 +321,6 @@ model_defaults:
         )
 
     assert load_config_from_paths(
-        Config,
         project_paths=[config_path],
     )
 
@@ -382,12 +379,11 @@ environment_catalog_mapping:
     if raise_error:
         with pytest.raises(ConfigError, match=raise_error):
             load_config_from_paths(
-                Config,
                 project_paths=[config_path],
             )
     else:
         assert (
-            load_config_from_paths(Config, project_paths=[config_path]).environment_catalog_mapping
+            load_config_from_paths(project_paths=[config_path]).environment_catalog_mapping
             == expected
         )
 
@@ -410,7 +406,6 @@ feature_flags:
         )
 
     assert load_config_from_paths(
-        Config,
         project_paths=[config_path],
     ) == Config(
         gateways={
@@ -426,8 +421,8 @@ def test_load_alternative_config_type(yaml_config_path: Path, python_config_path
         pass
 
     config = load_config_from_paths(
-        DerivedConfig,
         project_paths=[yaml_config_path, python_config_path],
+        config_type=DerivedConfig,
     )
 
     assert config == DerivedConfig(

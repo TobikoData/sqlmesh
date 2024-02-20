@@ -13,7 +13,7 @@ import pytest
 from sqlglot import exp, parse_one
 
 from sqlmesh import Config, Context, EngineAdapter
-from sqlmesh.core.config import Config, load_config_from_paths
+from sqlmesh.core.config import load_config_from_paths
 from sqlmesh.core.dialect import normalize_model_name
 from sqlmesh.core.engine_adapter.shared import DataObject, DataObjectType
 from sqlmesh.utils import random_id
@@ -380,7 +380,6 @@ def test_type(request):
 @pytest.fixture(scope="session")
 def config() -> Config:
     return load_config_from_paths(
-        config_type=Config,
         project_paths=[
             pathlib.Path("examples/wursthall/config.yaml"),
             pathlib.Path(os.path.join(os.path.dirname(__file__), "config.yaml")),
@@ -1569,7 +1568,6 @@ def test_sushi(ctx: TestContext):
         pytest.skip("Sushi end-to-end tests only need to run for query")
 
     config = load_config_from_paths(
-        config_type=Config,
         project_paths=[
             pathlib.Path(os.path.join(os.path.dirname(__file__), "config.yaml")),
         ],

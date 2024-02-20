@@ -17,19 +17,20 @@ C = t.TypeVar("C", bound=Config)
 
 
 def load_configs(
-    config: t.Optional[str | t.Union[Config, C]],
-    config_type: t.Type[C],
+    config: t.Optional[t.Union[str, Config]],
     paths: t.Union[str | Path, t.Iterable[str | Path]],
     sqlmesh_path: t.Optional[Path] = None,
+    config_type: t.Optional[t.Type[C]] = None,
 ) -> t.Dict[Path, C]:
     sqlmesh_path = sqlmesh_path or c.SQLMESH_PATH
     config = config or "config"
+    config_type = config_type or t.cast(t.Type[C], Config)
 
     absolute_paths = [
         Path(t.cast(t.Union[str, Path], path)).absolute() for path in ensure_list(paths)
     ]
 
-    if isinstance(config, Config):
+    if not isinstance(config, str):
         if type(config) != config_type:
             config = convert_config_type(config, config_type)
         return {path: config for path in absolute_paths}
@@ -48,24 +49,25 @@ def load_configs(
     with env_vars(config_env_vars if config_env_vars else {}):
         return {
             path: load_config_from_paths(
-                config_type=config_type,
                 project_paths=[path / "config.py", path / "config.yml", path / "config.yaml"],
                 personal_paths=personal_paths,
                 config_name=config,
+                config_type=config_type,
             )
             for path in absolute_paths
         }
 
 
 def load_config_from_paths(
-    config_type: t.Type[C],
     project_paths: t.Optional[t.List[Path]] = None,
     personal_paths: t.Optional[t.List[Path]] = None,
     config_name: str = "config",
     load_from_env: bool = True,
+    config_type: t.Optional[t.Type[C]] = None,
 ) -> C:
     project_paths = project_paths or []
     personal_paths = personal_paths or []
+    config_type = config_type or t.cast(t.Type[C], Config)
     visited_folders: t.Set[Path] = set()
     python_config: t.Optional[C] = None
     non_python_configs = []
@@ -96,7 +98,7 @@ def load_config_from_paths(
             non_python_configs.append(load_config_from_yaml(path))
         elif extension == "py":
             python_config = load_config_from_python_module(
-                config_type, path, config_name=config_name
+                path, config_name=config_name, config_type=config_type
             )
         else:
             raise ConfigError(
@@ -133,8 +135,12 @@ def load_config_from_yaml(path: Path) -> t.Dict[str, t.Any]:
 
 
 def load_config_from_python_module(
-    config_type: t.Type[C], module_path: Path, config_name: str = "config"
+    module_path: Path,
+    config_name: str = "config",
+    config_type: t.Optional[t.Type[C]] = None,
 ) -> C:
+    config_type = config_type or t.cast(t.Type[C], Config)
+
     with sys_path(module_path.parent):
         config_module = import_python_file(module_path, module_path.parent)
 
@@ -175,5 +181,9 @@ def load_config_from_env() -> t.Dict[str, t.Any]:
     return config_dict
 
 
-def convert_config_type(config_obj: Config, config_type: t.Type[C]) -> C:
+def convert_config_type(
+    config_obj: Config,
+    config_type: t.Optional[t.Type[C]] = None,
+) -> C:
+    config_type = config_type or t.cast(t.Type[C], Config)
     return config_type.parse_obj(config_obj.dict())
