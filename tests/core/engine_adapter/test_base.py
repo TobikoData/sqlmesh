@@ -1128,15 +1128,30 @@ WITH "source" AS (
     "test_updated_at" > "t_test_updated_at"
 )
 SELECT
-  *
+  "id",
+  "name",
+  "price",
+  "test_updated_at",
+  "test_valid_from",
+  "test_valid_to"
 FROM "static"
 UNION ALL
 SELECT
-  *
+  "id",
+  "name",
+  "price",
+  "test_updated_at",
+  "test_valid_from",
+  "test_valid_to"
 FROM "updated_rows"
 UNION ALL
 SELECT
-  *
+  "id",
+  "name",
+  "price",
+  "test_updated_at",
+  "test_valid_from",
+  "test_valid_to"
 FROM "inserted_rows"
     """
         ).sql()
@@ -1300,15 +1315,30 @@ WITH "source" AS (
     "test_updated_at" > "t_test_updated_at"
 )
 SELECT
-  *
+  "id",
+  "name",
+  "price",
+  "test_updated_at",
+  "test_valid_from",
+  "test_valid_to"
 FROM "static"
 UNION ALL
 SELECT
-  *
+  "id",
+  "name",
+  "price",
+  "test_updated_at",
+  "test_valid_from",
+  "test_valid_to"
 FROM "updated_rows"
 UNION ALL
 SELECT
-  *
+  "id",
+  "name",
+  "price",
+  "test_updated_at",
+  "test_valid_from",
+  "test_valid_to"
 FROM "inserted_rows"
     """
         ).sql()
@@ -1500,15 +1530,33 @@ WITH "source" AS (
     "test_updated_at" > "t_test_updated_at"
 )
 SELECT
-  *
+  "id1",
+  "id2",
+  "name",
+  "price",
+  "test_updated_at",
+  "test_valid_from",
+  "test_valid_to"
 FROM "static"
 UNION ALL
 SELECT
-  *
+  "id1",
+  "id2",
+  "name",
+  "price",
+  "test_updated_at",
+  "test_valid_from",
+  "test_valid_to"
 FROM "updated_rows"
 UNION ALL
 SELECT
-  *
+  "id1",
+  "id2",
+  "name",
+  "price",
+  "test_updated_at",
+  "test_valid_from",
+  "test_valid_to"
 FROM "inserted_rows"
 """
         ).sql()
@@ -1686,15 +1734,27 @@ WITH "source" AS (
     )
 )
 SELECT
-  *
+  "id",
+  "name",
+  "price",
+  "test_valid_from",
+  "test_valid_to"
 FROM "static"
 UNION ALL
 SELECT
-  *
+  "id",
+  "name",
+  "price",
+  "test_valid_from",
+  "test_valid_to"
 FROM "updated_rows"
 UNION ALL
 SELECT
-  *
+  "id",
+  "name",
+  "price",
+  "test_valid_from",
+  "test_valid_to"
 FROM "inserted_rows"
     """
         ).sql()
@@ -1886,15 +1946,27 @@ WITH "source" AS (
     )
 )
 SELECT
-  *
+  "id",
+  "name",
+  "price",
+  "test_valid_from",
+  "test_valid_to"
 FROM "static"
 UNION ALL
 SELECT
-  *
+  "id",
+  "name",
+  "price",
+  "test_valid_from",
+  "test_valid_to"
 FROM "updated_rows"
 UNION ALL
 SELECT
-  *
+  "id",
+  "name",
+  "price",
+  "test_valid_from",
+  "test_valid_to"
 FROM "inserted_rows"
     """
         ).sql()
@@ -2071,15 +2143,27 @@ WITH "source" AS (
     )
 )
 SELECT
-  *
+  "id",
+  "name",
+  "price",
+  "test_valid_from",
+  "test_valid_to"
 FROM "static"
 UNION ALL
 SELECT
-  *
+  "id",
+  "name",
+  "price",
+  "test_valid_from",
+  "test_valid_to"
 FROM "updated_rows"
 UNION ALL
 SELECT
-  *
+  "id",
+  "name",
+  "price",
+  "test_valid_from",
+  "test_valid_to"
 FROM "inserted_rows"
     """
         ).sql()

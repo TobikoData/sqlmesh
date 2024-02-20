@@ -1278,6 +1278,7 @@ class EngineAdapter:
         select_source_columns: t.List[t.Union[str, exp.Alias]] = [
             col for col in unmanaged_columns if col != updated_at_name
         ]
+        table_columns = [exp.column(c, quoted=True) for c in columns_to_types]
         if updated_at_name:
             select_source_columns.append(
                 exp.cast(updated_at_name, time_data_type).as_(updated_at_name)
@@ -1393,14 +1394,14 @@ class EngineAdapter:
                 # Historical Records that Do Not Change
                 .with_(
                     "static",
-                    self._select_columns(columns_to_types)
+                    exp.select(*table_columns)
                     .from_(target_table)
                     .where(f"{valid_to_name} IS NOT NULL"),
                 )
                 # Latest Records that can be updated
                 .with_(
                     "latest",
-                    self._select_columns(columns_to_types)
+                    exp.select(*table_columns)
                     .from_(target_table)
                     .where(f"{valid_to_name} IS NULL"),
                 )
@@ -1520,14 +1521,14 @@ class EngineAdapter:
                     .from_("joined")
                     .where(updated_row_filter),
                 )
-                .select("*")
+                .select(*table_columns)
                 .from_("static")
                 .union(
-                    "SELECT * FROM updated_rows",
+                    exp.select(*table_columns).from_("updated_rows"),
                     distinct=False,
                 )
                 .union(
-                    "SELECT * FROM inserted_rows",
+                    exp.select(*table_columns).from_("inserted_rows"),
                     distinct=False,
                 )
             )
