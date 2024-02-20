@@ -168,7 +168,8 @@ class Selector:
     def _expand_git(self, target_branch: str) -> t.Set[str]:
         git_modified_files = {
             *self._git_client.list_untracked_files(),
-            *self._git_client.list_changed_files(target_branch=target_branch),
+            *self._git_client.list_uncommitted_changed_files(),
+            *self._git_client.list_committed_changed_files(target_branch=target_branch),
         }
         matched_models = {m.fqn for m in self._models.values() if m._path in git_modified_files}
 
