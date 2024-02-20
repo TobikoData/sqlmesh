@@ -188,6 +188,12 @@ def test_parse():
 
     assert parse_one("{'a': 1}", read="duckdb").sql(dialect="duckdb") == "{'a': 1}"
 
+    assert parse_one("metric") == exp.column("metric")
+    assert parse_one("model(1, 2, 3)") == exp.Anonymous(
+        this="model",
+        expressions=[exp.Literal.number(1), exp.Literal.number(2), exp.Literal.number(3)],
+    )
+
     expressions = parse(
         """
         MODEL (
