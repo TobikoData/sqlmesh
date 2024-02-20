@@ -35,6 +35,7 @@ interface LineageFlow {
   selectedNodes: SelectedNodes
   selectedEdges: ConnectedNode[]
   models: Map<string, ModelSQLMeshModel>
+  unknownModels: Set<string>
   connections: Map<string, Connections>
   withConnected: boolean
   withColumns: boolean
@@ -58,6 +59,7 @@ interface LineageFlow {
   addActiveEdges: (edges: Array<[string, string]>) => void
   removeActiveEdges: (edges: Array<[string, string]>) => void
   setActiveEdges: React.Dispatch<React.SetStateAction<ActiveEdges>>
+  setUnknownModels: React.Dispatch<React.SetStateAction<Set<string>>>
   setLineage: React.Dispatch<React.SetStateAction<Record<string, Lineage>>>
   setLineageCache: React.Dispatch<
     React.SetStateAction<Optional<Record<string, Lineage>>>
@@ -84,6 +86,7 @@ export const LineageFlowContext = createContext<LineageFlow>({
   activeEdges: new Map(),
   activeNodes: new Set(),
   models: new Map(),
+  unknownModels: new Set(),
   manuallySelectedColumn: undefined,
   connections: new Map(),
   selectedNodes: new Set(),
@@ -111,6 +114,7 @@ export const LineageFlowContext = createContext<LineageFlow>({
   setMainNode: () => {},
   setActiveNodes: () => {},
   setNodeConnections: () => {},
+  setUnknownModels: () => {},
 })
 
 export default function LineageFlowProvider({
@@ -129,6 +133,7 @@ export default function LineageFlowProvider({
   const models = useStoreContext(s => s.models)
 
   const [lineage, setLineage] = useState<Record<string, Lineage>>({})
+  const [unknownModels, setUnknownModels] = useState(new Set<string>())
   const [lineageCache, setLineageCache] = useState<
     Record<string, Lineage> | undefined
   >(undefined)
@@ -156,9 +161,10 @@ export default function LineageFlowProvider({
       getNodeMap({
         lineage,
         models,
+        unknownModels,
         withColumns,
       }),
-    [lineage, models, withColumns],
+    [lineage, models, withColumns, unknownModels],
   )
 
   const checkActiveEdge = useCallback(
@@ -259,19 +265,15 @@ export default function LineageFlowProvider({
     <LineageFlowContext.Provider
       value={{
         highlightedNodes,
-        setHighlightedNodes,
         connectedNodes,
         activeEdges,
         selectedEdges,
         activeNodes,
-        setActiveNodes,
-        setNodeConnections,
         selectedNodes,
         mainNode,
         connections,
         lineage,
         lineageCache,
-        setLineageCache,
         models,
         manuallySelectedColumn,
         withColumns,
@@ -280,6 +282,12 @@ export default function LineageFlowProvider({
         withSecondary,
         hasBackground,
         nodesMap,
+        unknownModels,
+        setHighlightedNodes,
+        setActiveNodes,
+        setNodeConnections,
+        setLineageCache,
+        setUnknownModels,
         setWithConnected,
         setWithImpacted,
         setWithSecondary,

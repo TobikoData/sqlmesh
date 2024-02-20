@@ -30,13 +30,14 @@ export default function ModelNode({
     models,
     handleClickModel,
     lineage,
+    lineageCache,
     selectedNodes,
     setSelectedNodes,
     mainNode,
-    activeNodes,
     withConnected,
     connectedNodes,
     highlightedNodes,
+    activeNodes,
   } = useLineageFlow()
 
   const columns: Column[] = useMemo(() => {
@@ -110,11 +111,10 @@ export default function ModelNode({
   const isMainNode = mainNode === id
   const isHighlightedNode = highlightedNodeModels.includes(id)
   const isSelected = selectedNodes.has(id)
-  const isInteractive = mainNode !== id && isNotNil(handleClickModel)
+  const isModelSQL = nodeData.type === EnumLineageNodeModelType.sql
   const isCTE = nodeData.type === EnumLineageNodeModelType.cte
   const isModelExternal = nodeData.type === EnumLineageNodeModelType.external
   const isModelSeed = nodeData.type === EnumLineageNodeModelType.seed
-  const isModelPython = nodeData.type === EnumLineageNodeModelType.python
   const isModelUnknown = nodeData.type === EnumLineageNodeModelType.unknown
   const showColumns =
     (hasSelectedColumns ||
@@ -130,13 +130,19 @@ export default function ModelNode({
         activeNodes.has(id) ||
         (withConnected && connectedNodes.has(id))
       : connectedNodes.has(id)
+  const isInteractive =
+    mainNode !== id &&
+    isNotNil(handleClickModel) &&
+    isFalse(isCTE) &&
+    isFalse(isModelUnknown)
+  const shouldDisableColumns = isFalse(isModelSQL)
 
   return (
     <div
       onMouseEnter={() => setIsMouseOver(true)}
       onMouseLeave={() => setIsMouseOver(false)}
       className={clsx(
-        'text-xs font-semibold rounded-lg shadow-lg relative z-1',
+        'text-xs font-semibold rounded-lg relative z-1',
         isCTE ? 'text-neutral-100' : 'text-secondary-500 dark:text-primary-100',
         (isModelExternal || isModelSeed) &&
           'border-4 border-accent-500 ring-8 ring-accent-200',
@@ -144,7 +150,7 @@ export default function ModelNode({
         isNil(highlighted)
           ? isMainNode
             ? 'ring-8 ring-brand-200'
-            : splat
+            : splat ?? 'ring-4 ring-neutral-20'
           : highlighted,
         (hasHighlightedNodes ? isHighlightedNode : isActiveNode) || isMainNode
           ? 'opacity-100'
@@ -170,8 +176,8 @@ export default function ModelNode({
             ? 'bg-brand-500 text-brand-100 font-black'
             : 'bg-secondary-100 dark:bg-primary-900',
         )}
-        hasLeft={targetPosition === Position.Left}
-        hasRight={sourcePosition === Position.Right}
+        hasLeft={targetPosition === Position.Left && isNil(lineageCache)}
+        hasRight={sourcePosition === Position.Right && isNil(lineageCache)}
         handleClick={isInteractive ? handleClick : undefined}
         handleSelect={
           mainNode === id || isCTE || highlightedNodeModels.includes(id)
@@ -186,7 +192,7 @@ export default function ModelNode({
             className="max-h-[15rem]"
             nodeId={id}
             columns={columns}
-            disabled={isModelPython || isModelUnknown}
+            disabled={shouldDisableColumns}
             withHandles={true}
             withSource={true}
             withDescription={false}

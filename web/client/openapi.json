@@ -1120,13 +1120,23 @@
               { "type": "null" }
             ],
             "title": "Promoted Snapshot Ids"
+          },
+          "previous_finalized_snapshots": {
+            "anyOf": [
+              {
+                "items": { "$ref": "#/components/schemas/SnapshotTableInfo" },
+                "type": "array"
+              },
+              { "type": "null" }
+            ],
+            "title": "Previous Finalized Snapshots"
           }
         },
         "additionalProperties": false,
         "type": "object",
         "required": ["snapshots", "start_at", "plan_id"],
         "title": "Environment",
-        "description": "Represents an isolated environment.\n\nEnvironments are isolated workspaces that hold pointers to physical tables.\n\nArgs:\n    snapshots: The snapshots that are part of this environment.\n    start_at: The start time of the environment.\n    end_at: The end time of the environment.\n    plan_id: The ID of the plan that last updated this environment.\n    previous_plan_id: The ID of the previous plan that updated this environment.\n    expiration_ts: The timestamp when this environment will expire.\n    finalized_ts: The timestamp when this environment was finalized.\n    promoted_snapshot_ids: The IDs of the snapshots that are promoted in this environment\n        (i.e. for which the views are created). If not specified, all snapshots are promoted."
+        "description": "Represents an isolated environment.\n\nEnvironments are isolated workspaces that hold pointers to physical tables.\n\nArgs:\n    snapshots: The snapshots that are part of this environment.\n    start_at: The start time of the environment.\n    end_at: The end time of the environment.\n    plan_id: The ID of the plan that last updated this environment.\n    previous_plan_id: The ID of the previous plan that updated this environment.\n    expiration_ts: The timestamp when this environment will expire.\n    finalized_ts: The timestamp when this environment was finalized.\n    promoted_snapshot_ids: The IDs of the snapshots that are promoted in this environment\n        (i.e. for which the views are created). If not specified, all snapshots are promoted.\n    previous_finalized_snapshots: Snapshots that were part of this environment last time it was finalized."
       },
       "EnvironmentSuffixTarget": {
         "type": "string",
@@ -1261,16 +1271,12 @@
             "title": "Expression"
           },
           "models": {
-            "anyOf": [
-              {
-                "additionalProperties": {
-                  "items": { "type": "string" },
-                  "type": "array"
-                },
-                "type": "object"
-              },
-              { "type": "null" }
-            ],
+            "additionalProperties": {
+              "items": { "type": "string" },
+              "type": "array",
+              "uniqueItems": true
+            },
+            "type": "object",
             "title": "Models"
           }
         },
