@@ -27,6 +27,16 @@ else:
 if t.TYPE_CHECKING:
     from slack_sdk import WebClient, WebhookClient
 
+
+def _sqlmesh_version() -> str:
+    try:
+        from sqlmesh import __version__
+
+        return __version__
+    except ImportError:
+        return "0.0.0"
+
+
 NOTIFICATION_FUNCTIONS: t.Dict[NotificationEvent, str] = {}
 
 
@@ -160,7 +170,7 @@ class BaseNotificationTarget(PydanticModel, frozen=True):
         Args:
             exc: The exception stack trace.
         """
-        self.send(NotificationStatus.FAILURE, f"Failed to apply plan.\n{exc}")
+        self.send(NotificationStatus.FAILURE, "Plan apply failed.", exc=exc)
 
     @notify(NotificationEvent.RUN_FAILURE)
     def notify_run_failure(self, exc: str) -> None:
@@ -169,7 +179,7 @@ class BaseNotificationTarget(PydanticModel, frozen=True):
         Args:
             exc: The exception stack trace.
         """
-        self.send(NotificationStatus.FAILURE, f"Failed to run SQLMesh.\n{exc}")
+        self.send(NotificationStatus.FAILURE, "SQLMesh run failed.", exc=exc)
 
     @notify(NotificationEvent.AUDIT_FAILURE)
     def notify_audit_failure(self, audit_error: AuditError) -> None:
@@ -178,7 +188,7 @@ class BaseNotificationTarget(PydanticModel, frozen=True):
         Args:
             audit_error: The AuditError object.
         """
-        self.send(NotificationStatus.FAILURE, str(audit_error))
+        self.send(NotificationStatus.FAILURE, "Audit failure.", audit_error=audit_error)
 
     @notify(NotificationEvent.MIGRATION_FAILURE)
     def notify_migration_failure(self, exc: str) -> None:
@@ -187,14 +197,39 @@ class BaseNotificationTarget(PydanticModel, frozen=True):
         Args:
             exc: The exception stack trace.
         """
-        self.send(NotificationStatus.FAILURE, f"Failed to migration SQLMesh.\n{exc}")
+        self.send(NotificationStatus.FAILURE, "SQLMesh migration failed.", exc=exc)
 
     @property
     def is_configured(self) -> bool:
         return True
 
 
-class ConsoleNotificationTarget(BaseNotificationTarget):
+class BaseTextBasedNotificationTarget(BaseNotificationTarget):
+    """
+    A base class for unstructured notification targets (e.g.: console, email, etc.)
+    """
+
+    def send_text_message(self, notification_status: NotificationStatus, msg: str) -> None:
+        """Send the notification message as text."""
+
+    def send(
+        self,
+        notification_status: NotificationStatus,
+        msg: str,
+        audit_error: t.Optional[AuditError] = None,
+        exc: t.Optional[str] = None,
+        **kwargs: t.Any,
+    ) -> None:
+        error = None
+        if audit_error:
+            error = str(audit_error)
+        elif exc:
+            error = exc
+
+        self.send_text_message(notification_status, msg if error is None else f"{msg}\n{error}")
+
+
+class ConsoleNotificationTarget(BaseTextBasedNotificationTarget):
     """
     Example console notification target. Keeping this around for testing purposes.
     """
@@ -208,7 +243,7 @@ class ConsoleNotificationTarget(BaseNotificationTarget):
             self._console = get_console()
         return self._console
 
-    def send(self, notification_status: NotificationStatus, msg: str, **kwargs: t.Any) -> None:
+    def send_text_message(self, notification_status: NotificationStatus, msg: str) -> None:
         if notification_status.is_success:
             self.console.log_success(msg)
         elif notification_status.is_failure:
@@ -218,7 +253,15 @@ class ConsoleNotificationTarget(BaseNotificationTarget):
 
 
 class BaseSlackNotificationTarget(BaseNotificationTarget):
-    def send(self, notification_status: NotificationStatus, msg: str, **kwargs: t.Any) -> None:
+    def send(
+        self,
+        notification_status: NotificationStatus,
+        msg: str,
+        audit_error: t.Optional[AuditError] = None,
+        exc: t.Optional[str] = None,
+        **kwargs: t.Any,
+    ) -> None:
+
         status_emoji = {
             NotificationStatus.PROGRESS: slack.SlackAlertIcon.START,
             NotificationStatus.SUCCESS: slack.SlackAlertIcon.SUCCESS,
@@ -226,13 +269,35 @@ class BaseSlackNotificationTarget(BaseNotificationTarget):
             NotificationStatus.WARNING: slack.SlackAlertIcon.WARNING,
             NotificationStatus.INFO: slack.SlackAlertIcon.INFO,
         }
+
         composed = slack.message().add_primary_blocks(
             slack.header_block(f"{status_emoji[notification_status]} SQLMesh Notification"),
-            slack.context_block(f"*Status:* {notification_status.value}"),
+            slack.context_block(f"*Status:* `{notification_status.value}`"),
             slack.divider_block(),
-            slack.text_section_block(msg),
-            slack.context_block(f"*Python Version:* {sys.version}"),
+            slack.text_section_block(f"*Message*: {msg}"),
         )
+
+        details = []
+        if audit_error:
+            details = [
+                slack.fields_section_block(
+                    f"*Audit*: `{audit_error.audit_name}`",
+                    f"*Model*: `{audit_error.model_name}`",
+                    f"*Count*: `{audit_error.count}`",
+                ),
+                slack.preformatted_rich_text_block(audit_error.sql(pretty=True)),
+            ]
+        elif exc:
+            details = [slack.preformatted_rich_text_block(exc)]
+
+        composed.add_primary_blocks(
+            *details,
+            slack.divider_block(),
+            slack.context_block(
+                f"*SQLMesh Version:* {_sqlmesh_version()}", f"*Python Version:* {sys.version}"
+            ),
+        )
+
         self._send_slack_message(
             composed=composed.slack_message,
         )
@@ -311,7 +376,7 @@ class SlackApiNotificationTarget(BaseSlackNotificationTarget):
         return all((self.token, self.channel))
 
 
-class BasicSMTPNotificationTarget(BaseNotificationTarget):
+class BasicSMTPNotificationTarget(BaseTextBasedNotificationTarget):
     host: t.Optional[str] = None
     port: int = 465
     user: t.Optional[str] = None
@@ -321,18 +386,16 @@ class BasicSMTPNotificationTarget(BaseNotificationTarget):
     subject: t.Optional[str] = "SQLMesh Notification"
     type_: Literal["smtp"] = Field(alias="type", default="smtp")
 
-    def send(
+    def send_text_message(
         self,
         notification_status: NotificationStatus,
         msg: str,
-        subject: t.Optional[str] = None,
-        **kwargs: t.Any,
     ) -> None:
         if not self.host:
             raise ConfigError("Missing SMTP host for notification")
 
         email = EmailMessage()
-        email["Subject"] = subject or self.subject
+        email["Subject"] = self.subject
         email["To"] = ",".join(self.recipients or [])
         email["From"] = self.sender
         email.set_content(msg)
