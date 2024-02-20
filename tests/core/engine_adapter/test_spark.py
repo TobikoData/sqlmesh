@@ -759,19 +759,25 @@ SELECT
   `test_updated_at`,
   `test_valid_from`,
   `test_valid_to`
-FROM (
-  SELECT
-    *
-  FROM `static`
-  UNION ALL
-  SELECT
-    *
-  FROM `updated_rows`
-  UNION ALL
-  SELECT
-    *
-  FROM `inserted_rows`
-) AS `_subquery`
+FROM `static`
+UNION ALL
+SELECT
+  `id`,
+  `name`,
+  `price`,
+  `test_updated_at`,
+  `test_valid_from`,
+  `test_valid_to`
+FROM `updated_rows`
+UNION ALL
+SELECT
+  `id`,
+  `name`,
+  `price`,
+  `test_updated_at`,
+  `test_valid_from`,
+  `test_valid_to`
+FROM `inserted_rows`
         """,
             dialect="spark",
         ).sql(dialect="spark"),
