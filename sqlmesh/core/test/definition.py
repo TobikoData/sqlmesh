@@ -398,7 +398,7 @@ def generate_test(
         test_body["vars"] = variables
 
     test = ModelTest.create_test(
-        body=test_body,
+        body=test_body.copy(),
         test_name=test_name,
         models=models,
         engine_adapter=test_engine_adapter,
@@ -423,7 +423,9 @@ def generate_test(
     else:
         output = t.cast(PythonModelTest, test)._execute_model()
 
-    outputs["query"] = output.to_dict(orient="records")
+    outputs["query"] = pandas_timestamp_to_pydatetime(output, model.columns_to_types).to_dict(
+        orient="records"
+    )
 
     test.tearDown()
 
