@@ -785,17 +785,17 @@ class Snapshot(PydanticModel, SnapshotInfoMixin):
 
         interval_unit = self.node.interval_unit
 
-        if end_bounded:
-            upper_bound_ts = min(end_ts, to_timestamp(execution_time))
-            end_ts = upper_bound_ts
-        elif allow_partials:
-            upper_bound_ts = to_timestamp(execution_time)
-            end_ts = min(end_ts, upper_bound_ts)
-        else:
+        if not allow_partials:
             upper_bound_ts = to_timestamp(
                 self.node.cron_floor(execution_time) if not ignore_cron else execution_time
             )
             end_ts = min(end_ts, to_timestamp(interval_unit.cron_floor(upper_bound_ts)))
+        else:
+            upper_bound_ts = to_timestamp(execution_time)
+            end_ts = min(end_ts, upper_bound_ts)
+
+        if end_bounded:
+            upper_bound_ts = end_ts
 
         lookback = self.model.lookback if self.is_model else 0
 
