@@ -18,6 +18,18 @@ gateways:
       register_comments: true
     state_connection:
       type: duckdb
+  inttest_trino_iceberg:
+    connection:
+      type: trino
+      host: localhost
+      port: 8080
+      user: admin
+      catalog: datalake_iceberg
+      http_scheme: http
+      retries: 20
+      register_comments: true
+    state_connection:
+      type: duckdb
   inttest_spark:
     connection:
       type: spark

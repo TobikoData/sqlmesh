@@ -128,6 +128,7 @@ class InsertOverwriteWithMergeMixin(EngineAdapter):
 class HiveMetastoreTablePropertiesMixin(EngineAdapter):
     def _build_table_properties_exp(
         self,
+        table: exp.Table,
         storage_format: t.Optional[str] = None,
         partitioned_by: t.Optional[t.List[exp.Expression]] = None,
         partition_interval_unit: t.Optional[IntervalUnit] = None,
@@ -147,11 +148,23 @@ class HiveMetastoreTablePropertiesMixin(EngineAdapter):
                     raise SQLMeshError(
                         f"PARTITIONED BY contains non-column value '{expr.sql(dialect='spark')}'."
                     )
-            properties.append(
-                exp.PartitionedByProperty(
-                    this=exp.Schema(expressions=partitioned_by),
-                )
+
+            property: exp.Property = exp.PartitionedByProperty(
+                this=exp.Schema(expressions=partitioned_by),
             )
+
+            if (
+                self.dialect == "trino"
+                and self.get_catalog_type(table.catalog or self.get_current_catalog()) == "iceberg"
+            ):
+                # On the Trino Iceberg catalog, the table property is called "partitioning" - not "partitioned_by"
+                # In addition, partition column transform expressions like `day(col)` or `bucket(col, 5)` are allowed
+                # ref: https://trino.io/docs/current/connector/iceberg.html#table-properties
+                property = exp.Property(
+                    this=exp.var("PARTITIONING"), value=exp.Schema(expressions=partitioned_by)
+                )
+
+            properties.append(property)
 
         if table_description:
             properties.append(exp.SchemaCommentProperty(this=exp.Literal.string(table_description)))
