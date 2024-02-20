@@ -36,6 +36,7 @@ class Plan(PydanticModel, frozen=True):
     forward_only: bool
     include_unmodified: bool
     end_bounded: bool
+    ensure_finalized_snapshots: bool
 
     environment_ttl: t.Optional[str] = None
     environment_naming_info: EnvironmentNamingInfo

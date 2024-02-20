@@ -1046,6 +1046,7 @@ class Context(BaseContext):
                 enable_preview if enable_preview is not None else self.config.plan.enable_preview
             ),
             end_bounded=not run,
+            ensure_finalized_snapshots=self.config.plan.use_finalized_state,
         )
 
     def apply(
