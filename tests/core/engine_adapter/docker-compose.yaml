@@ -40,6 +40,7 @@ services:
     environment:
         SA_PASSWORD: 1StrongPwd@@
         ACCEPT_EULA: Y
+
   # Trino Stack
   trino:
     hostname: trino
@@ -50,47 +51,54 @@ services:
     volumes:
       - ./trino/catalog:/etc/trino/catalog
 
-  trino_datalake_metastore_db:
+  trino_metastore_db:
     image: postgres
-    hostname: trino_datalake_metastore_db
+    hostname: trino_metastore_db
     environment:
       POSTGRES_USER: hive
       POSTGRES_PASSWORD: hive
-      POSTGRES_DB: metastore
+    volumes:
+      - ./trino/initdb.sql:/docker-entrypoint-initdb.d/initdb.sql
 
   trino-datalake-hive-metastore:
     hostname: trino-datalake-hive-metastore
     image: 'starburstdata/hive:3.1.2-e.15'
     environment:
       HIVE_METASTORE_DRIVER: org.postgresql.Driver
-      HIVE_METASTORE_JDBC_URL: jdbc:postgresql://trino_datalake_metastore_db:5432/metastore
+      HIVE_METASTORE_JDBC_URL: jdbc:postgresql://trino_metastore_db:5432/datalake_metastore
       HIVE_METASTORE_USER: hive
       HIVE_METASTORE_PASSWORD: hive
       HIVE_METASTORE_WAREHOUSE_DIR: s3://trino/datalake
       <<: *hive_metastore_environments
     depends_on:
-      - trino_datalake_metastore_db
-
-  trino_testing_metastore_db:
-    image: postgres
-    hostname: trino_testing_metastore_db
-    environment:
-      POSTGRES_USER: hive
-      POSTGRES_PASSWORD: hive
-      POSTGRES_DB: metastore
+      - trino_metastore_db
 
   trino-testing-hive-metastore:
     hostname: trino-testing-hive-metastore
     image: 'starburstdata/hive:3.1.2-e.15'
     environment:
       HIVE_METASTORE_DRIVER: org.postgresql.Driver
-      HIVE_METASTORE_JDBC_URL: jdbc:postgresql://trino_testing_metastore_db:5432/metastore
+      HIVE_METASTORE_JDBC_URL: jdbc:postgresql://trino_metastore_db:5432/testing_metastore
       HIVE_METASTORE_USER: hive
       HIVE_METASTORE_PASSWORD: hive
       HIVE_METASTORE_WAREHOUSE_DIR: s3://trino/testing
       <<: *hive_metastore_environments
     depends_on:
-      - trino_testing_metastore_db
+      - trino_metastore_db
+
+  trino-datalake-iceberg-hive-metastore:
+    hostname: trino-datalake-iceberg-hive-metastore
+    image: 'starburstdata/hive:3.1.2-e.15'
+    environment:
+      HIVE_METASTORE_DRIVER: org.postgresql.Driver
+      HIVE_METASTORE_JDBC_URL: jdbc:postgresql://trino_metastore_db:5432/datalake_iceberg_metastore
+      HIVE_METASTORE_USER: hive
+      HIVE_METASTORE_PASSWORD: hive
+      HIVE_METASTORE_WAREHOUSE_DIR: s3://trino/datalake_iceberg
+      <<: *hive_metastore_environments
+    depends_on:
+      - trino_metastore_db
+
   # Spark Stack
   spark:
     build:
@@ -125,7 +133,7 @@ services:
     depends_on:
       - spark_metastore_db
 
-  # Shared Spark/Truno S3 Storage
+  # Shared Spark/Trino S3 Storage
   minio:
     hostname: minio
     image: 'minio/minio:RELEASE.2022-05-26T05-48-41Z'
@@ -145,7 +153,9 @@ services:
       sleep 5;
       /usr/bin/mc config --quiet host add myminio http://minio:9000 minio minio123;
       /usr/bin/mc mb --quiet myminio/trino/datalake;
+      /usr/bin/mc mb --quiet myminio/trino/datalake_iceberg;
       /usr/bin/mc mb --quiet myminio/trino/testing;
+      /usr/bin/mc mb --quiet myminio/trino/testing_iceberg;
       /usr/bin/mc mb --quiet myminio/spark/datalake;
       /usr/bin/mc mb --quiet myminio/spark/testing
       "

@@ -95,6 +95,7 @@ class EngineAdapter:
     SUPPORTS_ROW_LEVEL_OP = True
     HAS_VIEW_BINDING = False
     SUPPORTS_REPLACE_TABLE = True
+    DEFAULT_CATALOG_TYPE = DIALECT
 
     def __init__(
         self,
@@ -260,6 +261,20 @@ class EngineAdapter:
     def set_current_catalog(self, catalog: str) -> None:
         """Sets the catalog name of the current connection."""
         raise NotImplementedError()
+
+    def get_catalog_type(self, catalog: t.Optional[str]) -> str:
+        """Intended to be overridden for data virtualization systems like Trino that,
+        depending on the target catalog, require slightly different properties to be set when creating / updating tables
+        """
+        if self.CATALOG_SUPPORT.is_unsupported:
+            raise UnsupportedCatalogOperationError(
+                f"{self.dialect} does not support catalogs and a catalog was provided: {catalog}"
+            )
+        return self.DEFAULT_CATALOG_TYPE
+
+    @property
+    def current_catalog_type(self) -> str:
+        return self.get_catalog_type(self.get_current_catalog())
 
     def replace_query(
         self,
@@ -676,7 +691,9 @@ class EngineAdapter:
         if not isinstance(table_name_or_schema, exp.Schema):
             table_name_or_schema = exp.to_table(table_name_or_schema)
         properties = (
-            self._build_table_properties_exp(**kwargs, columns_to_types=columns_to_types)
+            self._build_table_properties_exp(
+                **kwargs, table=table_name_or_schema.this, columns_to_types=columns_to_types
+            )
             if kwargs
             else None
         )
@@ -1848,6 +1865,7 @@ class EngineAdapter:
 
     def _build_table_properties_exp(
         self,
+        table: exp.Table,
         storage_format: t.Optional[str] = None,
         partitioned_by: t.Optional[t.List[exp.Expression]] = None,
         partition_interval_unit: t.Optional[IntervalUnit] = None,

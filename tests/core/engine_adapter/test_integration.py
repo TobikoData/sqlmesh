@@ -92,6 +92,10 @@ class TestContext:
     def dialect(self) -> str:
         return self.engine_adapter.dialect
 
+    @property
+    def current_catalog_type(self) -> str:
+        return self.engine_adapter.current_catalog_type
+
     def add_test_suffix(self, value: str) -> str:
         return f"{value}_{self.test_id}"
 
@@ -431,6 +435,14 @@ def config() -> Config:
             ],
         ),
         pytest.param(
+            "trino_iceberg",
+            marks=[
+                pytest.mark.docker,
+                pytest.mark.engine,
+                pytest.mark.trino_iceberg,
+            ],
+        ),
+        pytest.param(
             "spark",
             marks=[
                 pytest.mark.docker,
@@ -480,8 +492,13 @@ def config() -> Config:
         ),
     ]
 )
-def engine_adapter(request, config) -> EngineAdapter:
-    gateway = f"inttest_{request.param}"
+def mark_gateway(request) -> t.Tuple[str, str]:
+    return request.param, f"inttest_{request.param}"
+
+
+@pytest.fixture
+def engine_adapter(mark_gateway: t.Tuple[str, str], config) -> EngineAdapter:
+    mark, gateway = mark_gateway
     if gateway not in config.gateways:
         # TODO: Once everything is fully setup we want to error if a gateway is not configured that we expect
         pytest.skip(f"Gateway {gateway} not configured")
@@ -491,10 +508,10 @@ def engine_adapter(request, config) -> EngineAdapter:
     # table and then immediately after trying to insert rows into it. There seems to be a delay between when the
     # metastore is made aware of the table and when it responds that it exists. I'm hoping this is not an issue
     # in practice on production machines.
-    if request.param != "trino":
+    if not mark.startswith("trino"):
         engine_adapter.DEFAULT_BATCH_SIZE = 1
     # Clear our any local db files that may have been left over from previous runs
-    if request.param == "duckdb":
+    if mark == "duckdb":
         for raw_path in (connection_config.catalogs or {}).values():
             pathlib.Path(raw_path).unlink(missing_ok=True)
     return engine_adapter
@@ -700,7 +717,9 @@ def test_ctas(ctx: TestContext):
         # table comments are actually registered with the engine. Column comments are not.
         assert table_description == "test table description"
         assert column_comments == (
-            {} if ctx.dialect == "trino" else {"id": "test id column description"}
+            {}
+            if (ctx.dialect == "trino" and ctx.current_catalog_type == "hive")
+            else {"id": "test id column description"}
         )
 
 
@@ -747,7 +766,7 @@ def test_create_view(ctx: TestContext):
         assert table_description == "test view description"
         assert column_comments == (
             {}
-            if ctx.dialect == "trino"
+            if (ctx.dialect == "trino" and ctx.current_catalog_type == "hive")
             or (
                 ctx.test_type == "query"
                 and not ctx.engine_adapter.COMMENT_CREATION_VIEW.supports_column_comment_commands
@@ -1563,7 +1582,7 @@ def test_transaction(ctx: TestContext):
     ctx.compare_with_current(table, input_data)
 
 
-def test_sushi(ctx: TestContext):
+def test_sushi(mark_gateway: t.Tuple[str, str], ctx: TestContext):
     if ctx.test_type != "query":
         pytest.skip("Sushi end-to-end tests only need to run for query")
 
@@ -1573,7 +1592,7 @@ def test_sushi(ctx: TestContext):
         ],
         personal_paths=[pathlib.Path("~/.sqlmesh/config.yaml").expanduser()],
     )
-    gateway = "inttest_mssql" if ctx.dialect == "tsql" else f"inttest_{ctx.dialect}"
+    _, gateway = mark_gateway
     context = Context(paths="./examples/sushi", config=config, gateway=gateway)
 
     # clean up any leftover schemas from previous runs (requires context)
