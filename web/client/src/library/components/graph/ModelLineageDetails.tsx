@@ -89,7 +89,7 @@ export default function ModelLineageDetails({
             <b>Active:</b> {countActive}
           </span>
         )}
-        {(showActive || countSelected > 0) && (
+        {(showActive || countSelected > 0 || isNotNil(lineageCache)) && (
           <Button
             size={EnumSize.xs}
             variant={EnumVariant.Neutral}

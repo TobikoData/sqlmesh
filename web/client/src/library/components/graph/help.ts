@@ -153,10 +153,12 @@ function getEdges(lineage: Record<string, Lineage> = {}): Edge[] {
 function getNodeMap({
   lineage,
   models,
+  unknownModels,
   withColumns,
 }: {
   models: Map<string, ModelSQLMeshModel>
   withColumns: boolean
+  unknownModels: Set<string>
   lineage?: Record<string, Lineage>
 }): Record<string, Node> {
   if (isNil(lineage)) return {}
@@ -166,16 +168,8 @@ function getNodeMap({
   const CHAR_WIDTH = 8
   const MAX_VISIBLE_COLUMNS = 5
 
-  const currentModelNames = Array.from(models.keys())
-  const lineageAllModels = Object.values(lineage)
-    .map(({ models }) => models)
-    .flat()
+  const sources = new Set(Object.values(lineage).flatMap(l => l.models))
   const modelNames = Object.keys(lineage)
-  const sources = new Set(
-    Object.values(lineage)
-      .map(l => l.models)
-      .flat(),
-  )
 
   return modelNames.reduce((acc: Record<string, Node>, modelName: string) => {
     const model = models.get(modelName)
@@ -188,8 +182,7 @@ function getNodeMap({
         // it means either this is a CTE or model is UNKNOWN
         // CTEs only have connections between columns
         // where UNKNOWN model has connection only from another model
-        isFalse(currentModelNames.includes(modelName)) &&
-          lineageAllModels.includes(modelName)
+        unknownModels.has(modelName)
         ? EnumLineageNodeModelType.unknown
         : EnumLineageNodeModelType.cte,
     })

@@ -156,26 +156,28 @@ function File({
             }
             onOpenChange={setIsOpenContextMenu}
           >
-            <ContextMenu.Item
-              className={clsx(
-                'py-1.5 group leading-none rounded-md flex items-center relative pl-6 pr-2 select-none outline-none font-medium text-xs text-neutral-500 ',
-                disabled
-                  ? 'opacity-50 cursor-not-allowed'
-                  : 'hover:bg-accent-500 hover:text-light',
-              )}
-              disabled={disabled}
-              onClick={(e: MouseEvent) => {
-                e.stopPropagation()
-              }}
-              onSelect={(e: Event) => {
-                e.stopPropagation()
+            {selectedFile !== file && (
+              <ContextMenu.Item
+                className={clsx(
+                  'py-1.5 group leading-none rounded-md flex items-center relative pl-6 pr-2 select-none outline-none font-medium text-xs text-neutral-500 ',
+                  disabled
+                    ? 'opacity-50 cursor-not-allowed'
+                    : 'hover:bg-accent-500 hover:text-light',
+                )}
+                disabled={disabled}
+                onClick={(e: MouseEvent) => {
+                  e.stopPropagation()
+                }}
+                onSelect={(e: Event) => {
+                  e.stopPropagation()
 
-                openFileInNewTab()
-              }}
-            >
-              Open in New Tab
-              <div className="ml-auto pl-5"></div>
-            </ContextMenu.Item>
+                  openFileInNewTab()
+                }}
+              >
+                Open in New Tab
+                <div className="ml-auto pl-5"></div>
+              </ContextMenu.Item>
+            )}
             <ContextMenu.Item
               className={clsx(
                 'py-1.5 group leading-none rounded-md flex items-center relative pl-6 pr-2 select-none outline-none font-medium text-xs text-neutral-500 ',
