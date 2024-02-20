@@ -285,7 +285,7 @@ class BaseSlackNotificationTarget(BaseNotificationTarget):
                     f"*Model*: `{audit_error.model_name}`",
                     f"*Count*: `{audit_error.count}`",
                 ),
-                slack.preformatted_rich_text_block(str(audit_error.query)),
+                slack.preformatted_rich_text_block(str(audit_error.sql(pretty=True))),
             ]
         elif exc:
             details = [slack.preformatted_rich_text_block(exc)]
