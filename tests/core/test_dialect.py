@@ -188,6 +188,22 @@ def test_parse():
 
     assert parse_one("{'a': 1}", read="duckdb").sql(dialect="duckdb") == "{'a': 1}"
 
+    expressions = parse(
+        """
+        MODEL (
+            kind full,
+            dialect duckdb,
+            grain metric,
+        );
+
+        SELECT 1 AS metric
+        """
+    )
+    assert len(expressions) == 2
+    assert isinstance(expressions[0], Model)
+    assert isinstance(expressions[1], exp.Select)
+    assert expressions[0].expressions[2].args["value"] == exp.to_identifier("metric")
+
 
 def test_parse_jinja_with_semicolons():
     expressions = parse(

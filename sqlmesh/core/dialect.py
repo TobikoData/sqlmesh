@@ -107,7 +107,7 @@ def _parse_statement(self: Parser) -> t.Optional[exp.Expression]:
 
     parser = PARSERS.get(self._curr.text.upper())
 
-    if parser:
+    if parser and self._prev is None:
         # Capture any available description in the form of a comment
         comments = self._curr.comments
 
