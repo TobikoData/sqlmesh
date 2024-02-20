@@ -197,6 +197,7 @@ class AirflowClient(BaseAirflowClient):
         forward_only: bool = False,
         models_to_backfill: t.Optional[t.Set[str]] = None,
         end_bounded: bool = False,
+        ensure_finalized_snapshots: bool = False,
     ) -> None:
         request = common.PlanApplicationRequest(
             new_snapshots=list(new_snapshots),
@@ -213,6 +214,7 @@ class AirflowClient(BaseAirflowClient):
             forward_only=forward_only,
             models_to_backfill=models_to_backfill,
             end_bounded=end_bounded,
+            ensure_finalized_snapshots=ensure_finalized_snapshots,
         )
 
         response = self._session.post(

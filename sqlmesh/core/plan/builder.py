@@ -58,6 +58,9 @@ class PlanBuilder:
         enable_preview: Whether to enable preview for forward-only models in development environments.
         end_bounded: If set to true, the missing intervals will be bounded by the target end date, disregarding lookback,
             allow_partials, and other attributes that could cause the intervals to exceed the target end date.
+        ensure_finalized_snapshots: Whether to compare against snapshots from the latest finalized
+            environment state, or to use whatever snapshots are in the current environment state even if
+            the environment is not finalized.
     """
 
     def __init__(
@@ -84,6 +87,7 @@ class PlanBuilder:
         default_end: t.Optional[TimeLike] = None,
         enable_preview: bool = False,
         end_bounded: bool = False,
+        ensure_finalized_snapshots: bool = False,
     ):
         self._context_diff = context_diff
         self._no_gaps = no_gaps
@@ -92,6 +96,7 @@ class PlanBuilder:
         self._forward_only = forward_only
         self._enable_preview = enable_preview
         self._end_bounded = end_bounded
+        self._ensure_finalized_snapshots = ensure_finalized_snapshots
         self._environment_ttl = environment_ttl
         self._categorizer_config = categorizer_config or CategorizerConfig()
         self._auto_categorization_enabled = auto_categorization_enabled
@@ -226,6 +231,7 @@ class PlanBuilder:
             effective_from=self._effective_from,
             execution_time=self._execution_time,
             end_bounded=self._end_bounded,
+            ensure_finalized_snapshots=self._ensure_finalized_snapshots,
         )
         self._latest_plan = plan
         return plan

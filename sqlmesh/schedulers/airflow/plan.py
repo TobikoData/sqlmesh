@@ -170,6 +170,7 @@ def create_plan_dag_spec(
         deployability_index_for_creation=deployability_index_for_creation,
         no_gaps_snapshot_names=no_gaps_snapshot_names,
         models_to_backfill=request.models_to_backfill,
+        ensure_finalized_snapshots=request.ensure_finalized_snapshots,
     )
 
 
