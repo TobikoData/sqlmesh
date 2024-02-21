@@ -283,7 +283,7 @@ class GenericContext(BaseContext, t.Generic[C]):
         self._jinja_macros = JinjaMacroRegistry()
         self._default_catalog: t.Optional[str] = None
 
-        self.path, self.config = t.cast(t.Tuple[Path, Config], next(iter(self.configs.items())))
+        self.path, self.config = t.cast(t.Tuple[Path, C], next(iter(self.configs.items())))
 
         self.gateway = gateway
         self._scheduler = self.config.get_scheduler(self.gateway)
