@@ -15,7 +15,6 @@ from sqlmesh.utils.errors import ConfigError
 from sqlmesh.utils.pydantic import (
     PydanticModel,
     SQLGlotBool,
-    SQLGlotListOfColumns,
     SQLGlotListOfColumnsOrStar,
     SQLGlotListOfFields,
     SQLGlotPositiveInt,
@@ -336,7 +335,7 @@ class FullKind(_ModelKind):
 
 
 class _SCDType2Kind(_ModelKind):
-    unique_key: SQLGlotListOfColumns
+    unique_key: SQLGlotListOfFields
     valid_from_name: SQLGlotString = "valid_from"
     valid_to_name: SQLGlotString = "valid_to"
     invalidate_hard_deletes: SQLGlotBool = False
