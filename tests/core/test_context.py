@@ -234,6 +234,7 @@ def test_evaluate_limit():
     assert context.evaluate("without_limit", "2020-01-01", "2020-01-02", "2020-01-02", 4).size == 4
     assert context.evaluate("without_limit", "2020-01-01", "2020-01-02", "2020-01-02", 2).size == 2
 
+
 def test_clear_caches(tmp_path: pathlib.Path):
     models_dir = tmp_path / "models"
 
@@ -250,6 +251,7 @@ def test_clear_caches(tmp_path: pathlib.Path):
 
     assert not cache_dir.exists()
     assert models_dir.exists()
+
 
 def test_ignore_files(mocker: MockerFixture, tmp_path: pathlib.Path):
     mocker.patch.object(

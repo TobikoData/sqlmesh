@@ -44,8 +44,8 @@ import unittest.result
 from datetime import timedelta
 from io import StringIO
 from pathlib import Path
-from types import MappingProxyType
 from shutil import rmtree
+from types import MappingProxyType
 
 import pandas as pd
 from sqlglot import exp
@@ -1757,4 +1757,3 @@ class Context(BaseContext):
         self.notification_target_manager = NotificationTargetManager(
             event_notifications, user_notification_targets, username=self.config.username
         )
-
