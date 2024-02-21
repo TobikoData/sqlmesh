@@ -52,6 +52,7 @@ def test_optimized_query_cache(tmp_path: Path, mocker: MockerFixture):
     assert not cache.with_optimized_query(model)
     assert cache.with_optimized_query(model)
 
+
 def test_clean_cache(tmp_path: Path):
     # setup a basic cache
     cache = FileCache(tmp_path, _TestEntry)
