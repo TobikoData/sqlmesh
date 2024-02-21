@@ -385,6 +385,7 @@ def test_type(request):
 @pytest.fixture(scope="session")
 def config() -> Config:
     return load_config_from_paths(
+        Config,
         project_paths=[
             pathlib.Path("examples/wursthall/config.yaml"),
             pathlib.Path(os.path.join(os.path.dirname(__file__), "config.yaml")),
@@ -1588,6 +1589,7 @@ def test_sushi(mark_gateway: t.Tuple[str, str], ctx: TestContext):
         pytest.skip("Sushi end-to-end tests only need to run for query")
 
     config = load_config_from_paths(
+        Config,
         project_paths=[
             pathlib.Path(os.path.join(os.path.dirname(__file__), "config.yaml")),
         ],

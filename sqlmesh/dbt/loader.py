@@ -28,7 +28,7 @@ from sqlmesh.utils.jinja import JinjaMacroRegistry
 logger = logging.getLogger(__name__)
 
 if t.TYPE_CHECKING:
-    from sqlmesh.core.context import Context
+    from sqlmesh.core.context import GenericContext
 
 
 def sqlmesh_config(
@@ -65,7 +65,7 @@ class DbtLoader(Loader):
         self._macros_max_mtime: t.Optional[float] = None
         super().__init__()
 
-    def load(self, context: Context, update_schemas: bool = True) -> LoadedProject:
+    def load(self, context: GenericContext, update_schemas: bool = True) -> LoadedProject:
         self._project = None
         return super().load(context, update_schemas)
 
