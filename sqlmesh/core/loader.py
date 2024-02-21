@@ -35,7 +35,7 @@ from sqlmesh.utils.yaml import YAML
 
 if t.TYPE_CHECKING:
     from sqlmesh.core.config import Config
-    from sqlmesh.core.context import Context
+    from sqlmesh.core.context import GenericContext
 
 
 logger = logging.getLogger(__name__)
@@ -91,7 +91,7 @@ class Loader(abc.ABC):
         self._path_mtimes: t.Dict[Path, float] = {}
         self._dag: DAG[str] = DAG()
 
-    def load(self, context: Context, update_schemas: bool = True) -> LoadedProject:
+    def load(self, context: GenericContext, update_schemas: bool = True) -> LoadedProject:
         """
         Loads all macros and models in the context's path.
 

@@ -5,6 +5,7 @@ import pytest
 from sqlmesh.core.config import (
     AutoCategorizationMode,
     CategorizerConfig,
+    Config,
     load_config_from_paths,
 )
 from sqlmesh.integrations.github.cicd.config import MergeMethod
@@ -25,6 +26,7 @@ model_defaults:
 """,
     )
     config = load_config_from_paths(
+        Config,
         project_paths=[tmp_path / "config.yaml"],
     )
     assert config.cicd_bot.type_ == "github"
@@ -62,6 +64,7 @@ model_defaults:
 """,
     )
     config = load_config_from_paths(
+        Config,
         project_paths=[tmp_path / "config.yaml"],
     )
     assert config.cicd_bot.type_ == "github"
@@ -95,6 +98,7 @@ config = Config(
 """,
     )
     config = load_config_from_paths(
+        Config,
         project_paths=[tmp_path / "config.py"],
     )
     assert config.cicd_bot.type_ == "github"
@@ -138,6 +142,7 @@ config = Config(
     )
 
     config = load_config_from_paths(
+        Config,
         project_paths=[tmp_path / "config.py"],
     )
     assert config.cicd_bot.type_ == "github"
@@ -172,7 +177,7 @@ model_defaults:
     with pytest.raises(
         ValueError, match="enable_deploy_command must be set if command_namespace is set"
     ):
-        load_config_from_paths(project_paths=[tmp_path / "config.yaml"])
+        load_config_from_paths(Config, project_paths=[tmp_path / "config.yaml"])
 
     create_temp_file(
         tmp_path,
@@ -188,4 +193,4 @@ model_defaults:
     with pytest.raises(
         ValueError, match="merge_method must be set if enable_deploy_command is True"
     ):
-        load_config_from_paths(project_paths=[tmp_path / "config.yaml"])
+        load_config_from_paths(Config, project_paths=[tmp_path / "config.yaml"])
