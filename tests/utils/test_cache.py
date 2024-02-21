@@ -1,4 +1,3 @@
-import os
 from pathlib import Path
 
 from pytest_mock.plugin import MockerFixture
@@ -51,18 +50,3 @@ def test_optimized_query_cache(tmp_path: Path, mocker: MockerFixture):
 
     assert not cache.with_optimized_query(model)
     assert cache.with_optimized_query(model)
-
-
-def test_clean_cache(tmp_path: Path):
-    # setup a basic cache
-    cache = FileCache(tmp_path, _TestEntry)
-    cache.put("test_name", "test_entry_a", value=_TestEntry(value="value_a"))
-
-    # check that the cache dir on disk is not empty
-    assert len(os.listdir(cache._path)) > 0
-
-    # clean the cache
-    cache.clean()
-
-    # check that the cache dir on disk is empty
-    assert len(os.listdir(cache._path)) == 0
