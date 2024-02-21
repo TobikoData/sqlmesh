@@ -234,22 +234,22 @@ def test_evaluate_limit():
     assert context.evaluate("without_limit", "2020-01-01", "2020-01-02", "2020-01-02", 4).size == 4
     assert context.evaluate("without_limit", "2020-01-01", "2020-01-02", "2020-01-02", 2).size == 2
 
-def test_clear_cache(tmp_path: pathlib.Path):
-    models_dir = pathlib.Path(sqlmesh.core.constants.MODELS)
+def test_clear_caches(tmp_path: pathlib.Path):
+    models_dir = tmp_path / "models"
 
-    model_cache_file = create_temp_file(
-        tmp_path,
-        pathlib.Path(models_dir, sqlmesh.core.constants.CACHE, "test.txt"),
-        "test",
-    )
+    cache_dir = models_dir / sqlmesh.core.constants.CACHE
+    cache_dir.mkdir(parents=True)
+    model_cache_file = cache_dir / "test.txt"
+    model_cache_file.write_text("test")
 
     assert model_cache_file.exists()
-    assert len(list((tmp_path / models_dir).iterdir())) == 1
+    assert len(list(cache_dir.iterdir())) == 1
 
-    context = Context(config=Config(), paths=models_dir)
-    context.clear_cache()
+    context = Context(config=Config(), paths=str(models_dir))
+    context.clear_caches()
 
-    assert len(list((tmp_path / models_dir).iterdir())) == 0
+    assert not cache_dir.exists()
+    assert models_dir.exists()
 
 def test_ignore_files(mocker: MockerFixture, tmp_path: pathlib.Path):
     mocker.patch.object(
