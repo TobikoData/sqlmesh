@@ -1749,3 +1749,6 @@ class Context(BaseContext):
         self.notification_target_manager = NotificationTargetManager(
             event_notifications, user_notification_targets, username=self.config.username
         )
+
+    def clear_cache(self) -> None:
+        pass
