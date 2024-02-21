@@ -116,7 +116,7 @@ class PydanticModel(pydantic.BaseModel):
         self,
         **kwargs: t.Any,
     ) -> t.Dict[str, t.Any]:
-        kwargs.update(DEFAULT_ARGS)
+        kwargs = {**DEFAULT_ARGS, **kwargs}
         if PYDANTIC_MAJOR_VERSION >= 2:
             return super().model_dump(**kwargs)  # type: ignore
 
@@ -130,7 +130,7 @@ class PydanticModel(pydantic.BaseModel):
         self,
         **kwargs: t.Any,
     ) -> str:
-        kwargs.update(DEFAULT_ARGS)
+        kwargs = {**DEFAULT_ARGS, **kwargs}
         if PYDANTIC_MAJOR_VERSION >= 2:
             # Pydantic v2 doesn't support arbitrary arguments for json.dump().
             if kwargs.pop("sort_keys", False):
