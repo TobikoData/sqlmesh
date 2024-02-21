@@ -5,6 +5,8 @@ import time
 import typing as t
 import warnings
 
+from pandas.api.types import is_datetime64_any_dtype  # type: ignore
+
 warnings.filterwarnings(
     "ignore",
     message="The localize method is no longer necessary, as this time zone supports the fold attribute",
@@ -12,6 +14,7 @@ warnings.filterwarnings(
 from datetime import date, datetime, timedelta, timezone
 
 import dateparser
+import pandas as pd
 from dateparser import freshness_date_parser as freshness_date_parser_module
 from dateparser.freshness_date_parser import freshness_date_parser
 from sqlglot import exp
@@ -337,3 +340,29 @@ def to_time_column(
     if time_column_type.this in exp.DataType.NUMERIC_TYPES:
         return exp.Literal.number(time_column)
     return exp.convert(time_column)
+
+
+def pandas_timestamp_to_pydatetime(
+    df: pd.DataFrame, columns_to_types: t.Optional[t.Dict[str, exp.DataType]]
+) -> pd.DataFrame:
+    for column in df.columns:
+        if is_datetime64_any_dtype(df.dtypes[column]):
+            # We must use `pd.Series` and dtype or pandas will convert it back to pd.Timestamp during assignment
+            # https://stackoverflow.com/a/68961834/1707525
+            df[column] = pd.Series(df[column].dt.to_pydatetime(), dtype="object")
+
+            if columns_to_types and columns_to_types[column].this in (
+                exp.DataType.Type.DATE,
+                exp.DataType.Type.DATE32,
+            ):
+                # Sometimes `to_pydatetime()` has already converted to date, so we only extract from datetime objects.
+                # `datetime` is a subclass of `date`, so we must look at the type to differentiate the two.
+                df[column] = df[column].map(
+                    lambda x: (
+                        x.date()
+                        if isinstance(x, datetime) and type(x) is datetime and not pd.isna(x)
+                        else x
+                    )
+                )
+
+    return df

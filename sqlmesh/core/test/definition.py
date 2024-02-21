@@ -14,6 +14,7 @@ from sqlmesh.core.dialect import normalize_model_name, schema_
 from sqlmesh.core.engine_adapter import EngineAdapter
 from sqlmesh.core.model import Model, PythonModel, SqlModel
 from sqlmesh.utils import UniqueKeyDict, yaml
+from sqlmesh.utils.date import pandas_timestamp_to_pydatetime
 from sqlmesh.utils.errors import ConfigError, SQLMeshError
 
 Row = t.Dict[str, t.Any]
@@ -379,8 +380,14 @@ def generate_test(
             f"Fixture '{fixture_path}' already exists, make sure to set --overwrite if it can be safely overwritten."
         )
 
+    # ruamel.yaml does not support pandas Timestamps, so we must convert them to python
+    # datetime or datetime.date objects based on column type
     inputs = {
-        dep: engine_adapter.fetchdf(query).to_dict(orient="records")
+        models[dep]
+        .name: pandas_timestamp_to_pydatetime(
+            engine_adapter.fetchdf(query), models[dep].columns_to_types
+        )
+        .to_dict(orient="records")
         for dep, query in input_queries.items()
     }
     outputs: t.Dict[str, t.Any] = {"query": {}}
@@ -391,7 +398,7 @@ def generate_test(
         test_body["vars"] = variables
 
     test = ModelTest.create_test(
-        body=test_body,
+        body=test_body.copy(),
         test_name=test_name,
         models=models,
         engine_adapter=test_engine_adapter,
@@ -416,7 +423,9 @@ def generate_test(
     else:
         output = t.cast(PythonModelTest, test)._execute_model()
 
-    outputs["query"] = output.to_dict(orient="records")
+    outputs["query"] = pandas_timestamp_to_pydatetime(output, model.columns_to_types).to_dict(
+        orient="records"
+    )
 
     test.tearDown()
 

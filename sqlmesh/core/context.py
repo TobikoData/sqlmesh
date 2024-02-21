@@ -1277,7 +1277,7 @@ class Context(BaseContext):
         """
         input_queries = {
             # The get_model here has two purposes: return normalized names & check for missing deps
-            self.get_model(dep, raise_if_missing=True).name: query
+            self.get_model(dep, raise_if_missing=True).fqn: query
             for dep, query in input_queries.items()
         }
 
