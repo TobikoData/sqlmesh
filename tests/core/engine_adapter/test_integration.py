@@ -1875,6 +1875,7 @@ def test_init_project(ctx: TestContext, mark_gateway: t.Tuple[str, str], tmp_pat
 
     init_example_project(tmp_path, ctx.dialect)
     config = load_config_from_paths(
+        Config,
         project_paths=[
             pathlib.Path(os.path.join(os.path.dirname(__file__), "config.yaml")),
         ],
