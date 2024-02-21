@@ -122,6 +122,11 @@ class FileCache(t.Generic[T]):
         with gzip.open(self._cache_entry_path(name, entry_id), "wb", compresslevel=1) as fd:
             pickle.dump(value.dict(), fd)
 
+    def clean(self) -> None:
+        """Removes all files in the cache directory."""
+        for file in self._path.glob("*"):
+            file.unlink()
+
     def _cache_entry_path(self, name: str, entry_id: str = "") -> Path:
         entry_file_name = "__".join(p for p in (self._cache_version, name, entry_id) if p)
         return self._path / sanitize_name(entry_file_name)
