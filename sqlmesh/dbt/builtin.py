@@ -145,6 +145,17 @@ class SQLExecution:
         return ""
 
 
+class Var:
+    def __init__(self, variables: t.Dict[str, t.Any]) -> None:
+        self.variables = variables
+
+    def __call__(self, name: str, default: t.Optional[t.Any] = None) -> t.Any:
+        return self.variables.get(name, default)
+
+    def has_var(self, name: str) -> bool:
+        return name in self.variables
+
+
 def env_var(name: str, default: t.Optional[str] = None) -> t.Optional[str]:
     if name not in os.environ and default is None:
         raise ConfigError(f"Missing environment variable '{name}'")
@@ -154,13 +165,6 @@ def env_var(name: str, default: t.Optional[str] = None) -> t.Optional[str]:
 def log(msg: str, info: bool = False) -> str:
     logger.debug(msg)
     return ""
-
-
-def generate_var(variables: t.Dict[str, t.Any]) -> t.Callable:
-    def var(name: str, default: t.Optional[t.Any] = None) -> t.Any:
-        return variables.get(name, default)
-
-    return var
 
 
 def generate_ref(refs: t.Dict[str, t.Any], api: Api) -> t.Callable:
@@ -319,7 +323,7 @@ def create_builtin_globals(
 
     variables = jinja_globals.pop("vars", None)
     if variables is not None:
-        builtin_globals["var"] = generate_var(variables)
+        builtin_globals["var"] = Var(variables)
 
     snapshot = jinja_globals.pop("snapshot", None)
     is_incremental = bool(snapshot.intervals) if snapshot else False
