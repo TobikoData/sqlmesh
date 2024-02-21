@@ -433,11 +433,10 @@ class DatabricksConfig(TargetConfig):
     """
 
     type: Literal["databricks"] = "databricks"
-    catalog: t.Optional[str] = None
     host: str
     http_path: str
     token: str
-    database: t.Optional[str] = None  # type: ignore
+    database: t.Optional[str] = Field(alias="catalog")  # type: ignore
 
     def default_incremental_strategy(self, kind: IncrementalKind) -> str:
         return "merge"
@@ -460,7 +459,7 @@ class DatabricksConfig(TargetConfig):
             http_path=self.http_path,
             access_token=self.token,
             concurrent_tasks=self.threads,
-            catalog=self.catalog,
+            catalog=self.database,
         )
 
 
