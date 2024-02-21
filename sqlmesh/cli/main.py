@@ -720,3 +720,12 @@ def prompt(
     context.console.log_status_update(query)
     if evaluate:
         context.console.log_success(context.fetchdf(query))
+
+
+@cli.command("clean")
+@click.pass_obj
+@error_handler
+def clean(obj: Context) -> None:
+    """Clears the SQLMesh cache and any build artifacts."""
+    obj.clear_caches()
+
