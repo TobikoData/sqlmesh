@@ -1,4 +1,5 @@
 from os import path
+from pathlib import Path
 
 import pytest
 from click.testing import CliRunner
@@ -517,3 +518,21 @@ def test_run_cron_elapsed(runner, tmp_path):
 
     assert result.exit_code == 0
     assert_model_batches_executed(result)
+
+
+def test_clean(runner, tmp_path):
+    # Create and backfill `prod` environment
+    create_example_project(tmp_path)
+    init_prod_and_backfill(runner, tmp_path)
+
+    # Confirm cache exists
+    cache_path = Path(tmp_path) / ".cache"
+    assert cache_path.exists()
+    assert len(list(cache_path.iterdir())) > 0
+
+    # Invoke the clean command
+    result = runner.invoke(cli, ["--paths", tmp_path, "clean"])
+
+    # Confirm cache was cleared
+    assert result.exit_code == 0
+    assert not cache_path.exists()
