@@ -728,4 +728,3 @@ def prompt(
 def clean(obj: Context) -> None:
     """Clears the SQLMesh cache and any build artifacts."""
     obj.clear_caches()
-
