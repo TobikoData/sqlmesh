@@ -1573,11 +1573,8 @@ class GenericContext(BaseContext, t.Generic[C]):
         return success
 
     def clear_caches(self) -> None:
-        for path in self.configs.keys():
-            self._clear_cache(path)
-
-    def _clear_cache(self, path: Path) -> None:
-        rmtree(path / c.CACHE)
+        for path in self.configs:
+            rmtree(path / c.CACHE)
 
     def _run_tests(self) -> t.Tuple[unittest.result.TestResult, str]:
         test_output_io = StringIO()
