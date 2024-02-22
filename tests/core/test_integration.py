@@ -1752,6 +1752,14 @@ def test_multi(mocker):
     validate_apply_basics(context, c.PROD, plan.snapshots.values())
 
 
+def test_multi_dbt(mocker):
+    context = Context(paths=["examples/multi_dbt/bronze", "examples/multi_dbt/silver"])
+    plan = context.plan()
+    assert len(plan.new_snapshots) == 4
+    context.apply(plan)
+    validate_apply_basics(context, c.PROD, plan.snapshots.values())
+
+
 def test_incremental_time_self_reference(
     mocker: MockerFixture, sushi_context: Context, sushi_data_validator: SushiDataValidator
 ):

@@ -748,7 +748,7 @@ def test_migrate(mocker: MockerFixture, make_snapshot):
 
     current_table = "sqlmesh__test_schema.test_schema__test_model__1"
 
-    def columns(table_name: t.Union[str, exp.Table]) -> t.Dict[str, exp.DataType]:
+    def columns(table_name):
         if table_name == current_table:
             return {
                 "c": exp.DataType.build("int"),
@@ -1077,7 +1077,7 @@ def test_forward_only_snapshot_for_added_model(mocker: MockerFixture, adapter_mo
 
     evaluator.create([snapshot], {})
 
-    common_create_args: t.Dict[str, t.Any] = dict(
+    common_create_args = dict(
         columns_to_types={"a": exp.DataType.build("int"), "ds": exp.DataType.build("date")},
         storage_format=None,
         partitioned_by=[exp.to_column("ds")],
@@ -1120,7 +1120,7 @@ def test_create_scd_type_2_by_time(adapter_mock, make_snapshot):
 
     evaluator.create([snapshot], {})
 
-    common_kwargs: t.Dict[str, t.Any] = dict(
+    common_kwargs = dict(
         columns_to_types={
             "id": exp.DataType.build("INT"),
             "name": exp.DataType.build("STRING"),
@@ -1176,7 +1176,7 @@ def test_create_ctas_scd_type_2_by_time(adapter_mock, make_snapshot):
     )
 
     # Verify that managed columns are included in CTAS with types
-    common_kwargs: t.Dict[str, t.Any] = dict(
+    common_kwargs = dict(
         storage_format=None,
         partitioned_by=[],
         partition_interval_unit=IntervalUnit.DAY,
@@ -1276,7 +1276,7 @@ def test_create_scd_type_2_by_column(adapter_mock, make_snapshot):
 
     evaluator.create([snapshot], {})
 
-    common_kwargs: t.Dict[str, t.Any] = dict(
+    common_kwargs = dict(
         columns_to_types={
             "id": exp.DataType.build("INT"),
             "name": exp.DataType.build("STRING"),
@@ -1331,7 +1331,7 @@ def test_create_ctas_scd_type_2_by_column(adapter_mock, make_snapshot):
     )
 
     # Verify that managed columns are included in CTAS with types
-    common_kwargs: t.Dict[str, t.Any] = dict(
+    common_kwargs = dict(
         storage_format=None,
         partitioned_by=[],
         partition_interval_unit=IntervalUnit.DAY,
