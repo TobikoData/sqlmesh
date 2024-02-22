@@ -791,6 +791,14 @@ class SQLMeshMagics(Magics):
         """Rollback SQLMesh to the previous migration."""
         context.rollback()
 
+    @magic_arguments()
+    @line_magic
+    @pass_sqlmesh_context
+    def clean(self, context: Context, line: str) -> None:
+        """Clears the SQLMesh cache and any build artifacts."""
+        context.clear_caches()
+        context.console.log_success("SQLMesh cache and build artifacts cleared")
+
 
 def register_magics() -> None:
     try:
