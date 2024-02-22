@@ -51,7 +51,8 @@ export default function PlanOptions(): JSX.Element {
     planAction.isProcessing ||
     planAction.isDone ||
     planApply.isFinished ||
-    (planOverview.isLatest && isFalse(planAction.isRun))
+    (planOverview.isLatest && isFalse(planAction.isRun)) ||
+    planOverview.isVirtualUpdate
 
   useEffect(() => {
     if (isNil(elTrigger.current)) return
