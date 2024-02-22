@@ -364,7 +364,7 @@ class QueryRenderer(BaseExpressionRenderer):
 
         self._model_fqn = model_fqn
 
-        self._optimized_cache: t.Dict[CacheKey, exp.Subqueryable] = {}
+        self._optimized_cache: t.Dict[CacheKey, exp.Query] = {}
 
     def update_schema(self, schema: t.Dict[str, t.Any]) -> None:
         super().update_schema(schema)
@@ -382,7 +382,7 @@ class QueryRenderer(BaseExpressionRenderer):
         optimize: bool = True,
         runtime_stage: RuntimeStage = RuntimeStage.LOADING,
         **kwargs: t.Any,
-    ) -> t.Optional[exp.Subqueryable]:
+    ) -> t.Optional[exp.Query]:
         """Renders a query, expanding macros with provided kwargs, and optionally expanding referenced models.
 
         Args:
@@ -430,7 +430,7 @@ class QueryRenderer(BaseExpressionRenderer):
 
             if not query:
                 return None
-            if not isinstance(query, exp.Subqueryable):
+            if not isinstance(query, exp.Query):
                 raise_config_error(f"Query needs to be a SELECT or a UNION {query}.", self._path)
                 raise
 
@@ -470,15 +470,15 @@ class QueryRenderer(BaseExpressionRenderer):
         **kwargs: t.Any,
     ) -> None:
         if optimized:
-            if not isinstance(expression, exp.Subqueryable):
-                raise SQLMeshError(f"Expected a subqueryable but got: {expression}")
+            if not isinstance(expression, exp.Query):
+                raise SQLMeshError(f"Expected a Query but got: {expression}")
             self._optimized_cache[self._cache_key(start, end, execution_time)] = expression
         else:
             super().update_cache(
                 expression, start=start, end=end, execution_time=execution_time, **kwargs
             )
 
-    def _optimize_query(self, query: exp.Subqueryable, all_deps: t.Set[str]) -> exp.Subqueryable:
+    def _optimize_query(self, query: exp.Query, all_deps: t.Set[str]) -> exp.Query:
         # We don't want to normalize names in the schema because that's handled by the optimizer
         original = query
         missing_deps = set()

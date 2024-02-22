@@ -74,7 +74,7 @@ class AuditMixin(AuditCommonMetaMixin):
         jinja_macros: A registry of jinja macros to use when rendering the audit query.
     """
 
-    query: t.Union[exp.Subqueryable, d.JinjaQuery]
+    query: t.Union[exp.Query, d.JinjaQuery]
     defaults: t.Dict[str, exp.Expression]
     expressions_: t.Optional[t.List[exp.Expression]]
     jinja_macros: JinjaMacroRegistry
@@ -89,7 +89,7 @@ class AuditMixin(AuditCommonMetaMixin):
         snapshots: t.Optional[t.Dict[str, Snapshot]] = None,
         deployability_index: t.Optional[DeployabilityIndex] = None,
         **kwargs: t.Any,
-    ) -> exp.Subqueryable:
+    ) -> exp.Query:
         """Renders the audit's query.
 
         Args:
@@ -169,7 +169,7 @@ class ModelAudit(PydanticModel, AuditMixin, frozen=True):
     skip: bool = False
     blocking: bool = True
     standalone: Literal[False] = False
-    query: t.Union[exp.Subqueryable, d.JinjaQuery]
+    query: t.Union[exp.Query, d.JinjaQuery]
     defaults: t.Dict[str, exp.Expression] = {}
     expressions_: t.Optional[t.List[exp.Expression]] = Field(default=None, alias="expressions")
     jinja_macros: JinjaMacroRegistry = JinjaMacroRegistry()
@@ -192,7 +192,7 @@ class ModelAudit(PydanticModel, AuditMixin, frozen=True):
         snapshots: t.Optional[t.Dict[str, Snapshot]] = None,
         deployability_index: t.Optional[DeployabilityIndex] = None,
         **kwargs: t.Any,
-    ) -> exp.Subqueryable:
+    ) -> exp.Query:
         from sqlmesh.core.snapshot import DeployabilityIndex, Snapshot
 
         deployability_index = deployability_index or DeployabilityIndex.all_deployable()
@@ -274,7 +274,7 @@ class StandaloneAudit(_Node, AuditMixin):
     skip: bool = False
     blocking: bool = False
     standalone: Literal[True] = True
-    query: t.Union[exp.Subqueryable, d.JinjaQuery]
+    query: t.Union[exp.Query, d.JinjaQuery]
     defaults: t.Dict[str, exp.Expression] = {}
     expressions_: t.Optional[t.List[exp.Expression]] = Field(default=None, alias="expressions")
     jinja_macros: JinjaMacroRegistry = JinjaMacroRegistry()
@@ -510,7 +510,7 @@ def load_audit(
     if extra_fields:
         _raise_config_error(f"Invalid extra fields {extra_fields} in the audit definition", path)
 
-    if not isinstance(query, exp.Subqueryable) and not isinstance(query, d.JinjaQuery):
+    if not isinstance(query, exp.Query) and not isinstance(query, d.JinjaQuery):
         _raise_config_error("Missing SELECT query in the audit definition", path)
         raise
 

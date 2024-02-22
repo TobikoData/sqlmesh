@@ -227,7 +227,7 @@ class _Model(ModelMeta, frozen=True):
         deployability_index: t.Optional[DeployabilityIndex] = None,
         engine_adapter: t.Optional[EngineAdapter] = None,
         **kwargs: t.Any,
-    ) -> t.Optional[exp.Subqueryable]:
+    ) -> t.Optional[exp.Query]:
         """Renders a model's query, expanding macros with provided kwargs, and optionally expanding referenced models.
 
         Args:
@@ -265,7 +265,7 @@ class _Model(ModelMeta, frozen=True):
         deployability_index: t.Optional[DeployabilityIndex] = None,
         engine_adapter: t.Optional[EngineAdapter] = None,
         **kwargs: t.Any,
-    ) -> exp.Subqueryable:
+    ) -> exp.Query:
         """Same as `render_query()` but raises an exception if the query can't be rendered.
 
         Args:
@@ -410,7 +410,7 @@ class _Model(ModelMeta, frozen=True):
 
         return [{t.this.name: _render(t.expression) for t in signal} for signal in self.signals]
 
-    def ctas_query(self, **render_kwarg: t.Any) -> exp.Subqueryable:
+    def ctas_query(self, **render_kwarg: t.Any) -> exp.Query:
         """Return a dummy query to do a CTAS.
 
         If a model's column types are unknown, the only way to create the table is to
@@ -928,7 +928,7 @@ class SqlModel(_SqlBasedModel):
         post_statements: The list of SQL statements that follow after the model's query.
     """
 
-    query: t.Union[exp.Subqueryable, d.JinjaQuery, d.MacroFunc]
+    query: t.Union[exp.Query, d.JinjaQuery, d.MacroFunc]
     source_type: Literal["sql"] = "sql"
 
     _columns_to_types: t.Optional[t.Dict[str, exp.DataType]] = None
@@ -945,7 +945,7 @@ class SqlModel(_SqlBasedModel):
         deployability_index: t.Optional[DeployabilityIndex] = None,
         engine_adapter: t.Optional[EngineAdapter] = None,
         **kwargs: t.Any,
-    ) -> t.Optional[exp.Subqueryable]:
+    ) -> t.Optional[exp.Query]:
         query = self._query_renderer.render(
             start=start,
             end=end,
@@ -1037,7 +1037,7 @@ class SqlModel(_SqlBasedModel):
                 )
             return
 
-        if not isinstance(query, exp.Subqueryable):
+        if not isinstance(query, exp.Query):
             raise_config_error("Missing SELECT query in the model definition", self._path)
 
         projection_list = query.selects
@@ -1460,7 +1460,7 @@ def load_sql_based_model(
     )
 
     if query_or_seed_insert is not None and isinstance(
-        query_or_seed_insert, (exp.Subqueryable, d.JinjaQuery)
+        query_or_seed_insert, (exp.Query, d.JinjaQuery)
     ):
         jinja_macro_references.update(extract_macro_references(query_or_seed_insert.sql()))
         return create_sql_model(
@@ -1523,7 +1523,7 @@ def create_sql_model(
             from the macro registry.
         dialect: The default dialect if no model dialect is configured.
     """
-    if not isinstance(query, (exp.Subqueryable, d.JinjaQuery, d.MacroFunc)):
+    if not isinstance(query, (exp.Query, d.JinjaQuery, d.MacroFunc)):
         # Users are not expected to pass in a single MacroFunc instance for a model's query;
         # this is an implementation detail which allows us to create python models that return
         # SQL, either in the form of SQLGlot expressions or just plain strings.
@@ -1770,7 +1770,7 @@ def _split_sql_model_statements(
     query_positions = []
     for idx, expression in enumerate(expressions):
         if (
-            isinstance(expression, (exp.Subqueryable, d.JinjaQuery))
+            isinstance(expression, (exp.Query, d.JinjaQuery))
             or expression == INSERT_SEED_MACRO_CALL
         ):
             query_positions.append((expression, idx))
