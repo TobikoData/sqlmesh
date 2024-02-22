@@ -74,27 +74,26 @@ SELECT
 FROM
     {EXAMPLE_INCREMENTAL_MODEL_NAME}
 GROUP BY item_id
-ORDER BY item_id
 """
 
 EXAMPLE_INCREMENTAL_MODEL_DEF = f"""MODEL (
     name {EXAMPLE_INCREMENTAL_MODEL_NAME},
     kind INCREMENTAL_BY_TIME_RANGE (
-        time_column ds
+        time_column event_date
     ),
     start '2020-01-01',
     cron '@daily',
-    grain (id, ds)
+    grain (id, event_date)
 );
 
 SELECT
     id,
     item_id,
-    ds,
+    event_date,
 FROM
     {EXAMPLE_SEED_MODEL_NAME}
 WHERE
-    ds between {{start_variable}} and {{end_variable}}
+    event_date between @start_date and @end_date
 """
 
 EXAMPLE_SEED_MODEL_DEF = f"""MODEL (
@@ -105,9 +104,9 @@ EXAMPLE_SEED_MODEL_DEF = f"""MODEL (
     columns (
         id INTEGER,
         item_id INTEGER,
-        ds {{date_dtype}}
+        event_date DATE
     ),
-    grain (id, ds)
+    grain (id, event_date)
 );
 """
 
@@ -121,7 +120,7 @@ WHERE
   item_id < 0
 """
 
-EXAMPLE_SEED_DATA = """id,item_id,ds
+EXAMPLE_SEED_DATA = """id,item_id,event_date
 1,2,2020-01-01
 2,1,2020-01-01
 3,3,2020-01-03
@@ -138,13 +137,13 @@ EXAMPLE_TEST = f"""test_example_full_model:
       rows:
       - id: 1
         item_id: 1
-        ds: '2020-01-01'
+        event_date: '2020-01-01'
       - id: 2
         item_id: 1
-        ds: '2020-01-02'
+        event_date: '2020-01-02'
       - id: 3
         item_id: 2
-        ds: '2020-01-03'
+        event_date: '2020-01-03'
   outputs:
     query:
       rows:
@@ -186,7 +185,7 @@ def init_example_project(
     if template != ProjectTemplate.EMPTY:
         _create_macros(macros_path)
         _create_audits(audits_path)
-        _create_models(models_path, dialect)
+        _create_models(models_path)
         _create_seeds(seeds_path)
         _create_tests(tests_path)
 
@@ -217,20 +216,12 @@ def _create_audits(audits_path: Path) -> None:
     _write_file(audits_path / "assert_positive_order_ids.sql", EXAMPLE_AUDIT)
 
 
-def _create_models(models_path: Path, dialect: t.Optional[str]) -> None:
+def _create_models(models_path: Path) -> None:
     for model_name, model_def in [
         (EXAMPLE_FULL_MODEL_NAME, EXAMPLE_FULL_MODEL_DEF),
         (EXAMPLE_INCREMENTAL_MODEL_NAME, EXAMPLE_INCREMENTAL_MODEL_DEF),
         (EXAMPLE_SEED_MODEL_NAME, EXAMPLE_SEED_MODEL_DEF),
     ]:
-        date_dtype = "DATE" if dialect and dialect == "bigquery" else "TEXT"
-        start_variable = "@start_date" if date_dtype == "DATE" else "@start_ds"
-        end_variable = "@end_date" if date_dtype == "DATE" else "@end_ds"
-        model_def = model_def.format(
-            start_variable=start_variable,
-            end_variable=end_variable,
-            date_dtype=date_dtype,
-        )
         _write_file(models_path / f"{model_name.split('.')[-1]}.sql", model_def)
 
 

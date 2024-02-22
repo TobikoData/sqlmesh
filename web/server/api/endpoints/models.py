@@ -1,6 +1,5 @@
 from __future__ import annotations
 
-import pathlib
 import typing as t
 
 from fastapi import APIRouter, Depends, HTTPException
@@ -8,6 +7,7 @@ from sqlglot import exp
 from starlette.status import HTTP_404_NOT_FOUND
 
 from sqlmesh.core.context import Context
+from sqlmesh.core.lineage import column_description
 from sqlmesh.core.model import Model
 from sqlmesh.utils.date import now, to_datetime
 from web.server import models
@@ -43,7 +43,7 @@ def get_model(
     model = context.get_model(name)
     if not model:
         raise HTTPException(status_code=HTTP_404_NOT_FOUND)
-    return serialize_model(model, context.path, render_query=True)
+    return serialize_model(context, model, render_query=True)
 
 
 def serialize_all_models(
@@ -52,16 +52,14 @@ def serialize_all_models(
     render_queries = render_queries or set()
     return sorted(
         [
-            serialize_model(model, context.path, model.name in render_queries)
+            serialize_model(context, model, model.name in render_queries)
             for model in context.models.values()
         ],
         key=lambda model: model.name,
     )
 
 
-def serialize_model(
-    model: Model, context_path: pathlib.Path, render_query: bool = False
-) -> models.Model:
+def serialize_model(context: Context, model: Model, render_query: bool = False) -> models.Model:
     type = _get_model_type(model)
     default_catalog = model.default_catalog
     dialect = model.dialect or "SQLGlot"
@@ -77,12 +75,19 @@ def serialize_model(
     clustered_by = ", ".join(model.clustered_by) if model.clustered_by else None
     lookback = model.lookback if model.lookback > 0 else None
     columns_to_types = model.columns_to_types or {}
-    columns = [
-        models.Column(
-            name=name, type=str(data_type), description=model.column_descriptions.get(name)
-        )
-        for name, data_type in columns_to_types.items()
-    ]
+
+    columns = []
+
+    for name, data_type in columns_to_types.items():
+        if name in model.column_descriptions:
+            description: t.Optional[str] = model.column_descriptions[name]
+        elif render_query:
+            description = column_description(context, model.name, name)
+        else:
+            description = None
+
+        columns.append(models.Column(name=name, type=str(data_type), description=description))
+
     details = models.ModelDetails(
         owner=model.owner,
         kind=model.kind.name,
@@ -117,7 +122,7 @@ def serialize_model(
     return models.Model(
         name=model.name,
         fqn=model.fqn,
-        path=str(model._path.relative_to(context_path)),
+        path=str(model._path.relative_to(context.path)),
         dialect=dialect,
         columns=columns,
         details=details,

@@ -47,22 +47,22 @@ def update_incremental_model(temp_dir) -> None:
 MODEL (
     name sqlmesh_example.incremental_model,
     kind INCREMENTAL_BY_TIME_RANGE (
-        time_column ds
+        time_column event_date
     ),
     start '2020-01-01',
     cron '@daily',
-    grain (id, ds)
+    grain (id, event_date)
 );
 
 SELECT
     id,
     item_id,
     'a' as new_col,
-    ds,
+    event_date,
 FROM
     sqlmesh_example.seed_model
 WHERE
-    ds between @start_ds and @end_ds
+    event_date between @start_date and @end_date
 """
         )
 
@@ -80,7 +80,7 @@ MODEL (
 );
 
 SELECT
-  item_id,
+  item_id + 1 as item_id,
   count(distinct id) AS num_orders,
 FROM
     sqlmesh_example.incremental_model
@@ -389,7 +389,7 @@ def test_plan_breaking(runner, tmp_path):
     # Input: `y` to apply and backfill
     result = runner.invoke(cli, ["--paths", tmp_path, "plan", "--skip-tests"], input="y\n")
     assert result.exit_code == 0
-    assert "-ORDER BY" in result.output
+    assert "+  item_id + 1 AS item_id," in result.output
     assert "Directly Modified: sqlmesh_example.full_model (Breaking)" in result.output
     assert "sqlmesh_example.full_model evaluated in" in result.output
     assert "sqlmesh_example.incremental_model evaluated in" not in result.output
@@ -425,7 +425,7 @@ def test_plan_dev_select(runner, tmp_path):
         "Directly Modified: sqlmesh_example__dev.incremental_model (Non-breaking)" in result.output
     )
     # full_model diff not present
-    assert "-ORDER BY" not in result.output
+    assert "+  item_id + 1 AS item_id," not in result.output
     assert "Directly Modified: sqlmesh_example__dev.full_model (Breaking)" not in result.output
     # only incremental_model backfilled
     assert "sqlmesh_example__dev.incremental_model evaluated in" in result.output
@@ -458,7 +458,7 @@ def test_plan_dev_backfill(runner, tmp_path):
     assert result.exit_code == 0
     assert_new_env(result, "dev")
     # both model diffs present
-    assert "-ORDER BY" in result.output
+    assert "+  item_id + 1 AS item_id," in result.output
     assert "Directly Modified: sqlmesh_example__dev.full_model (Breaking)" in result.output
     assert "+  'a' AS new_col" in result.output
     assert (

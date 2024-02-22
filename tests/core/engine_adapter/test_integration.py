@@ -13,6 +13,7 @@ import pytest
 from sqlglot import exp, parse_one
 
 from sqlmesh import Config, Context, EngineAdapter
+from sqlmesh.cli.example_project import init_example_project
 from sqlmesh.core.config import load_config_from_paths
 from sqlmesh.core.dialect import normalize_model_name
 from sqlmesh.core.engine_adapter.shared import DataObject, DataObjectType
@@ -384,6 +385,7 @@ def test_type(request):
 @pytest.fixture(scope="session")
 def config() -> Config:
     return load_config_from_paths(
+        Config,
         project_paths=[
             pathlib.Path("examples/wursthall/config.yaml"),
             pathlib.Path(os.path.join(os.path.dirname(__file__), "config.yaml")),
@@ -1177,7 +1179,7 @@ def test_scd_type_2_by_time(ctx: TestContext):
     ctx.engine_adapter.scd_type_2_by_time(
         table,
         ctx.input_data(input_data, input_schema),
-        unique_key=[exp.to_identifier("id")],
+        unique_key=[parse_one("COALESCE(id, -1)")],
         valid_from_name="valid_from",
         valid_to_name="valid_to",
         updated_at_name="updated_at",
@@ -1587,6 +1589,7 @@ def test_sushi(mark_gateway: t.Tuple[str, str], ctx: TestContext):
         pytest.skip("Sushi end-to-end tests only need to run for query")
 
     config = load_config_from_paths(
+        Config,
         project_paths=[
             pathlib.Path(os.path.join(os.path.dirname(__file__), "config.yaml")),
         ],
@@ -1864,6 +1867,70 @@ def test_sushi(mark_gateway: t.Tuple[str, str], ctx: TestContext):
         prod_plan = context.plan(skip_tests=True, no_prompts=True, auto_apply=True)
 
         validate_comments("sushi", is_physical_layer=False)
+
+
+def test_init_project(ctx: TestContext, mark_gateway: t.Tuple[str, str], tmp_path: pathlib.Path):
+    if ctx.test_type != "query":
+        pytest.skip("Init example project end-to-end tests only need to run for query")
+
+    init_example_project(tmp_path, ctx.dialect)
+    config = load_config_from_paths(
+        Config,
+        project_paths=[
+            pathlib.Path(os.path.join(os.path.dirname(__file__), "config.yaml")),
+        ],
+        personal_paths=[pathlib.Path("~/.sqlmesh/config.yaml").expanduser()],
+    )
+    _, gateway = mark_gateway
+    context = Context(paths=tmp_path, config=config, gateway=gateway)
+    ctx.engine_adapter = context.engine_adapter
+
+    # clean up any leftover schemas from previous runs (requires context)
+    for schema in [
+        "sqlmesh_example",
+        "sqlmesh_example__test_dev",
+        "sqlmesh__sqlmesh_example",
+        "sqlmesh",
+    ]:
+        context.engine_adapter.drop_schema(schema, ignore_if_not_exists=True, cascade=True)
+
+    # apply prod plan
+    context.plan(auto_apply=True, no_prompts=True)
+
+    prod_schema_results = ctx.get_metadata_results("sqlmesh_example")
+    assert sorted(prod_schema_results.views) == [
+        "full_model",
+        "incremental_model",
+        "seed_model",
+    ]
+    assert len(prod_schema_results.materialized_views) == 0
+    assert len(prod_schema_results.tables) == len(prod_schema_results.non_temp_tables) == 0
+
+    physical_layer_results = ctx.get_metadata_results("sqlmesh__sqlmesh_example")
+    assert len(physical_layer_results.views) == 0
+    assert len(physical_layer_results.materialized_views) == 0
+    assert len(physical_layer_results.tables) == len(physical_layer_results.non_temp_tables) == 6
+
+    # make and validate unmodified dev environment
+    no_change_plan = context.plan(
+        environment="test_dev",
+        skip_tests=True,
+        no_prompts=True,
+        include_unmodified=True,
+    )
+    assert not no_change_plan.requires_backfill
+    assert no_change_plan.context_diff.is_new_environment
+
+    context.apply(no_change_plan)
+
+    dev_schema_results = ctx.get_metadata_results("sqlmesh_example__test_dev")
+    assert sorted(dev_schema_results.views) == [
+        "full_model",
+        "incremental_model",
+        "seed_model",
+    ]
+    assert len(dev_schema_results.materialized_views) == 0
+    assert len(dev_schema_results.tables) == len(dev_schema_results.non_temp_tables) == 0
 
 
 def test_dialects(ctx: TestContext):

@@ -15,7 +15,7 @@ setup(
     author_email="engineering@tobikodata.com",
     license="Apache License 2.0",
     packages=find_packages(include=["sqlmesh", "sqlmesh.*", "web*"]),
-    package_data={"web": ["client/dist/**"]},
+    package_data={"web": ["client/dist/**"], "": ["py.typed"]},
     entry_points={
         "console_scripts": [
             "sqlmesh = sqlmesh.cli.main:cli",
@@ -47,7 +47,7 @@ setup(
         "requests",
         "rich[jupyter]",
         "ruamel.yaml",
-        "sqlglot[rs]~=21.1.1",
+        "sqlglot[rs]~=21.2.0",
     ],
     extras_require={
         "bigquery": [

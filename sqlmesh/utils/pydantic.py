@@ -13,7 +13,6 @@ from sqlglot.optimizer.normalize_identifiers import normalize_identifiers
 
 from sqlmesh.core import dialect as d
 from sqlmesh.utils import str_to_bool
-from sqlmesh.utils.errors import SQLMeshError
 
 if sys.version_info >= (3, 9):
     from typing import Annotated
@@ -116,7 +115,7 @@ class PydanticModel(pydantic.BaseModel):
         self,
         **kwargs: t.Any,
     ) -> t.Dict[str, t.Any]:
-        kwargs.update(DEFAULT_ARGS)
+        kwargs = {**DEFAULT_ARGS, **kwargs}
         if PYDANTIC_MAJOR_VERSION >= 2:
             return super().model_dump(**kwargs)  # type: ignore
 
@@ -130,7 +129,7 @@ class PydanticModel(pydantic.BaseModel):
         self,
         **kwargs: t.Any,
     ) -> str:
-        kwargs.update(DEFAULT_ARGS)
+        kwargs = {**DEFAULT_ARGS, **kwargs}
         if PYDANTIC_MAJOR_VERSION >= 2:
             # Pydantic v2 doesn't support arbitrary arguments for json.dump().
             if kwargs.pop("sort_keys", False):
@@ -324,14 +323,6 @@ def list_of_fields_validator(v: t.Any, values: t.Any) -> t.List[exp.Expression]:
     return _get_fields(v, values)
 
 
-def list_of_columns_validator(v: t.Any, values: t.Any) -> t.List[exp.Column]:
-    expressions = _get_fields(v, values)
-    for expression in expressions:
-        if not isinstance(expression, exp.Column):
-            raise SQLMeshError(f"Invalid column {expression}. Value must be a column")
-    return t.cast(t.List[exp.Column], expressions)
-
-
 def list_of_columns_or_star_validator(
     v: t.Any, values: t.Any
 ) -> t.Union[exp.Star, t.List[exp.Column]]:
@@ -347,7 +338,6 @@ if t.TYPE_CHECKING:
     SQLGlotBool = bool
     SQLGlotPositiveInt = int
     SQLGlotListOfFields = t.List[exp.Expression]
-    SQLGlotListOfColumns = t.List[exp.Column]
     SQLGlotListOfColumnsOrStar = t.Union[t.List[exp.Column], exp.Star]
 elif PYDANTIC_MAJOR_VERSION >= 2:
     from pydantic.functional_validators import BeforeValidator  # type: ignore
@@ -359,7 +349,6 @@ elif PYDANTIC_MAJOR_VERSION >= 2:
     SQLGlotListOfFields = Annotated[
         t.List[exp.Expression], BeforeValidator(list_of_fields_validator)
     ]
-    SQLGlotListOfColumns = Annotated[t.List[exp.Column], BeforeValidator(list_of_columns_validator)]
     SQLGlotListOfColumnsOrStar = Annotated[
         t.Union[t.List[exp.Column], exp.Star], BeforeValidator(list_of_columns_or_star_validator)
     ]
@@ -386,9 +375,6 @@ else:
 
     class SQLGlotListOfFields(PydanticTypeProxy[t.List[exp.Expression]]):
         validate = list_of_fields_validator
-
-    class SQLGlotListOfColumns(PydanticTypeProxy[t.List[exp.Column]]):
-        validate = list_of_columns_validator
 
     class SQLGlotListOfColumnsOrStar(PydanticTypeProxy[t.Union[exp.Star, t.List[exp.Column]]]):
         validate = list_of_columns_or_star_validator

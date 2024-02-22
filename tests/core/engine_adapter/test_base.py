@@ -978,7 +978,10 @@ def test_scd_type_2_by_time(make_mocked_engine_adapter: t.Callable):
         source_table=t.cast(
             exp.Select, parse_one("SELECT id, name, price, test_updated_at FROM source")
         ),
-        unique_key=[exp.func("COALESCE", "id", "''")],
+        unique_key=[
+            parse_one("""COALESCE("id", '') || '|' || COALESCE("name", '')"""),
+            parse_one("""COALESCE("name", '')"""),
+        ],
         valid_from_name="test_valid_from",
         valid_to_name="test_valid_to",
         updated_at_name="test_updated_at",
@@ -999,7 +1002,7 @@ def test_scd_type_2_by_time(make_mocked_engine_adapter: t.Callable):
             """
 CREATE OR REPLACE TABLE "target" AS
 WITH "source" AS (
-  SELECT DISTINCT ON (COALESCE("id", ''))
+  SELECT DISTINCT ON (COALESCE("id", '') || '|' || COALESCE("name", ''), COALESCE("name", ''))
     TRUE AS "_exists",
     "id",
     "name",
@@ -1045,17 +1048,24 @@ WITH "source" AS (
     "static"."test_valid_to"
   FROM "static"
   LEFT JOIN "latest"
-    ON COALESCE("static"."id", '') = COALESCE("latest"."id", '')
+    ON (
+      COALESCE("static"."id", '') || '|' || COALESCE("static"."name", '')
+    ) = (
+      COALESCE("latest"."id", '') || '|' || COALESCE("latest"."name", '')
+    )
+    AND COALESCE("static"."name", '') = COALESCE("latest"."name", '')
   WHERE
     "latest"."test_valid_to" IS NULL
 ), "latest_deleted" AS (
   SELECT
     TRUE AS "_exists",
-    COALESCE("id", '') AS "_key0",
+    COALESCE("id", '') || '|' || COALESCE("name", '') AS "_key0",
+    COALESCE("name", '') AS "_key1",
     MAX("test_valid_to") AS "test_valid_to"
   FROM "deleted"
   GROUP BY
-    COALESCE("id", '')
+    COALESCE("id", '') || '|' || COALESCE("name", ''),
+    COALESCE("name", '')
 ), "joined" AS (
   SELECT
     "source"."_exists",
@@ -1071,7 +1081,12 @@ WITH "source" AS (
     "source"."test_updated_at" AS "test_updated_at"
   FROM "latest"
   LEFT JOIN "source"
-    ON COALESCE("latest"."id", '') = COALESCE("source"."id", '')
+    ON (
+      COALESCE("latest"."id", '') || '|' || COALESCE("latest"."name", '')
+    ) = (
+      COALESCE("source"."id", '') || '|' || COALESCE("source"."name", '')
+    )
+    AND COALESCE("latest"."name", '') = COALESCE("source"."name", '')
   UNION
   SELECT
     "source"."_exists",
@@ -1087,7 +1102,12 @@ WITH "source" AS (
     "source"."test_updated_at" AS "test_updated_at"
   FROM "latest"
   RIGHT JOIN "source"
-    ON COALESCE("latest"."id", '') = COALESCE("source"."id", '')
+    ON (
+      COALESCE("latest"."id", '') || '|' || COALESCE("latest"."name", '')
+    ) = (
+      COALESCE("source"."id", '') || '|' || COALESCE("source"."name", '')
+    )
+    AND COALESCE("latest"."name", '') = COALESCE("source"."name", '')
 ), "updated_rows" AS (
   SELECT
     COALESCE("joined"."t_id", "joined"."id") AS "id",
@@ -1114,7 +1134,10 @@ WITH "source" AS (
     END AS "test_valid_to"
   FROM "joined"
   LEFT JOIN "latest_deleted"
-    ON COALESCE("joined"."id", '') = "latest_deleted"."_key0"
+    ON (
+      COALESCE("joined"."id", '') || '|' || COALESCE("joined"."name", '')
+    ) = "latest_deleted"."_key0"
+    AND COALESCE("joined"."name", '') = "latest_deleted"."_key1"
 ), "inserted_rows" AS (
   SELECT
     "id",

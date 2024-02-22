@@ -1,5 +1,6 @@
 import logging
 import pathlib
+import typing as t
 from datetime import date, timedelta
 from tempfile import TemporaryDirectory
 from unittest.mock import PropertyMock, call, patch
@@ -358,8 +359,10 @@ model_defaults:
             ConfigError,
             match="User and password must be provided if using default authentication",
         ):
-            load_configs("config", paths=project_config.parent)
-        loaded_configs = load_configs("config", paths=project_config.parent, sqlmesh_path=home_path)
+            load_configs("config", Config, paths=project_config.parent)
+        loaded_configs: t.Dict[pathlib.Path, Config] = load_configs(
+            "config", Config, paths=project_config.parent, sqlmesh_path=home_path
+        )
         assert len(loaded_configs) == 1
         snowflake_connection = list(loaded_configs.values())[0].gateways["snowflake"].connection  # type: ignore
         assert isinstance(snowflake_connection, SnowflakeConnectionConfig)

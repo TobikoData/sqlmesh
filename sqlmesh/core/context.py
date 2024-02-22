@@ -54,6 +54,7 @@ from sqlglot.lineage import GraphHTML
 from sqlmesh.core import constants as c
 from sqlmesh.core.audit import Audit, StandaloneAudit
 from sqlmesh.core.config import CategorizerConfig, Config, load_configs
+from sqlmesh.core.config.loader import C
 from sqlmesh.core.console import Console, get_console
 from sqlmesh.core.context_diff import ContextDiff
 from sqlmesh.core.dialect import (
@@ -119,7 +120,6 @@ if t.TYPE_CHECKING:
 
     ModelOrSnapshot = t.Union[str, Model, Snapshot]
     NodeOrSnapshot = t.Union[str, Model, StandaloneAudit, Snapshot]
-
 
 logger = logging.getLogger(__name__)
 
@@ -235,7 +235,7 @@ class ExecutionContext(BaseContext):
         return self._default_catalog
 
 
-class Context(BaseContext):
+class GenericContext(BaseContext, t.Generic[C]):
     """Encapsulates a SQLMesh environment supplying convenient functions to perform various tasks.
 
     Args:
@@ -251,15 +251,17 @@ class Context(BaseContext):
         load: Whether or not to automatically load all models and macros (default True).
         console: The rich instance used for printing out CLI command results.
         users: A list of users to make known to SQLMesh.
+        config_type: The type of config object to use (default Config).
     """
 
     def __init__(
         self,
+        config_type: t.Type[C],
         engine_adapter: t.Optional[EngineAdapter] = None,
         notification_targets: t.Optional[t.List[NotificationTarget]] = None,
         state_sync: t.Optional[StateSync] = None,
         paths: t.Union[str | Path, t.Iterable[str | Path]] = "",
-        config: t.Optional[t.Union[Config, str, t.Dict[Path, Config]]] = None,
+        config: t.Optional[t.Union[C, str, t.Dict[Path, C]]] = None,
         gateway: t.Optional[str] = None,
         concurrent_tasks: t.Optional[int] = None,
         loader: t.Optional[t.Type[Loader]] = None,
@@ -268,7 +270,9 @@ class Context(BaseContext):
         users: t.Optional[t.List[User]] = None,
     ):
         self.console = console or get_console()
-        self.configs = config if isinstance(config, dict) else load_configs(config, paths)
+        self.configs = (
+            config if isinstance(config, dict) else load_configs(config, config_type, paths)
+        )
         self.dag: DAG[str] = DAG()
         self._models: UniqueKeyDict[str, Model] = UniqueKeyDict("models")
         self._audits: UniqueKeyDict[str, Audit] = UniqueKeyDict("audits")
@@ -280,7 +284,7 @@ class Context(BaseContext):
         self._jinja_macros = JinjaMacroRegistry()
         self._default_catalog: t.Optional[str] = None
 
-        self.path, self.config = t.cast(t.Tuple[Path, Config], next(iter(self.configs.items())))
+        self.path, self.config = t.cast(t.Tuple[Path, C], next(iter(self.configs.items())))
 
         self.gateway = gateway
         self._scheduler = self.config.get_scheduler(self.gateway)
@@ -436,7 +440,7 @@ class Context(BaseContext):
         if self._loader.reload_needed():
             self.load()
 
-    def load(self, update_schemas: bool = True) -> Context:
+    def load(self, update_schemas: bool = True) -> GenericContext[C]:
         """Load all files in the context's path."""
         with sys_path(*self.configs):
             gc.disable()
@@ -1278,7 +1282,7 @@ class Context(BaseContext):
         """
         input_queries = {
             # The get_model here has two purposes: return normalized names & check for missing deps
-            self.get_model(dep, raise_if_missing=True).name: query
+            self.get_model(dep, raise_if_missing=True).fqn: query
             for dep, query in input_queries.items()
         }
 
@@ -1757,3 +1761,8 @@ class Context(BaseContext):
         self.notification_target_manager = NotificationTargetManager(
             event_notifications, user_notification_targets, username=self.config.username
         )
+
+
+class Context(GenericContext[Config]):
+    def __init__(self, *args: t.Any, **kwargs: t.Any):
+        super().__init__(Config, *args, **kwargs)

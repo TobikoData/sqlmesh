@@ -802,3 +802,15 @@ def test_dbt_package_macros(sushi_test_project: Project):
     assert context.render("{{ dbt.current_timestamp() }}") == "now()"
     # Make sure builtins are available too.
     assert context.render("{{ dbt.run_started_at }}") == "2023-01-08 00:00:00+00:00"
+
+
+def test_dbt_vars(sushi_test_project: Project):
+    context = sushi_test_project.context
+
+    assert context.render("{{ var('some_other_var') }}") == "5"
+    assert context.render("{{ var('some_other_var', 0) }}") == "5"
+    assert context.render("{{ var('missing') }}") == "None"
+    assert context.render("{{ var('missing', 0) }}") == "0"
+
+    assert context.render("{{ var.has_var('some_other_var') }}") == "True"
+    assert context.render("{{ var.has_var('missing') }}") == "False"

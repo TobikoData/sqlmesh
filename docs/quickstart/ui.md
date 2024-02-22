@@ -124,11 +124,11 @@ Finally, the scaffold will include data for the example project to use.
 ??? info "Learn more about the project's data"
     The data used in this example project is contained in the `seed_data.csv` file in the `/seeds` project directory. The data reflects sales of 3 items over 7 days in January 2020.
 
-    The file contains three columns, `id`, `item_id`, and `ds`, which correspond to each row's unique ID, the sold item's ID number, and the date the item was sold, respectively.
+    The file contains three columns, `id`, `item_id`, and `event_date`, which correspond to each row's unique ID, the sold item's ID number, and the date the item was sold, respectively.
 
     This is the complete dataset:
 
-    | id | item_id | ds         |
+    | id | item_id | event_date |
     | -- | ------- | ---------- |
     | 1  | 2       | 2020-01-01 |
     | 2  | 1       | 2020-01-01 |
@@ -236,15 +236,15 @@ The pane contains multiple pieces of information about the plan:
         columns (
             id INTEGER,
             item_id INTEGER,
-            ds VARCHAR
+            event_date DATE
         ),
-        grain (id, ds)
+        grain (id, event_date)
     );
     ```
 
     The second model is an `INCREMENTAL_BY_TIME_RANGE` model that includes both a `MODEL` statement and a SQL query selecting from the first seed model.
 
-    The `MODEL` statement's `kind` property includes the required specification of the data column containing each record's timestamp. It also includes the optional `start` property specifying the earliest date/time for which the model should process data and the `cron` property specifying that the model should run daily. It sets the model's grain to columns `id` and `ds`.
+    The `MODEL` statement's `kind` property includes the required specification of the data column containing each record's timestamp. It also includes the optional `start` property specifying the earliest date/time for which the model should process data and the `cron` property specifying that the model should run daily. It sets the model's grain to columns `id` and `event_date`.
 
     The SQL query includes a `WHERE` clause that SQLMesh uses to filter the data to a specific date/time interval when loading data incrementally:
 
@@ -252,21 +252,21 @@ The pane contains multiple pieces of information about the plan:
     MODEL (
         name sqlmesh_example.incremental_model,
         kind INCREMENTAL_BY_TIME_RANGE (
-            time_column ds
+            time_column event_date
         ),
         start '2020-01-01',
         cron '@daily',
-        grain (id, ds)
+        grain (id, event_date)
     );
 
     SELECT
         id,
         item_id,
-        ds,
+        event_date,
     FROM
         sqlmesh_example.seed_model
     WHERE
-        ds between @start_ds and @end_ds
+        event_date between @start_date and @end_date
     ```
 
     The final model in the project is a `FULL` model. In addition to properties used in the other models, its `MODEL` statement includes the [`audits`](../concepts/audits.md) property. The project includes a custom `assert_positive_order_ids` audit in the project `audits` directory; it verifies that all `item_id` values are positive numbers. It will be run every time the model is executed.
