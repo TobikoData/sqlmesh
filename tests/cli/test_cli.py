@@ -1,9 +1,9 @@
 from os import path
+from pathlib import Path
 
 import pytest
 from click.testing import CliRunner
 from freezegun import freeze_time
-from pathlib import Path
 
 from sqlmesh.cli.example_project import init_example_project
 from sqlmesh.cli.main import cli
@@ -518,6 +518,7 @@ def test_run_cron_elapsed(runner, tmp_path):
 
     assert result.exit_code == 0
     assert_model_batches_executed(result)
+
 
 def test_clean(runner, tmp_path):
     # Create and backfill `prod` environment
