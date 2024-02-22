@@ -1179,7 +1179,7 @@ def test_scd_type_2_by_time(ctx: TestContext):
     ctx.engine_adapter.scd_type_2_by_time(
         table,
         ctx.input_data(input_data, input_schema),
-        unique_key=[exp.to_identifier("id")],
+        unique_key=[parse_one("COALESCE(id, -1)")],
         valid_from_name="valid_from",
         valid_to_name="valid_to",
         updated_at_name="updated_at",

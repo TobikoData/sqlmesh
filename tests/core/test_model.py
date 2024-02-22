@@ -2460,7 +2460,7 @@ def test_scd_type_2_by_time_defaults():
         MODEL (
             name db.table,
             kind SCD_TYPE_2 (
-                unique_key "ID",
+                unique_key (COALESCE("ID", '') || '|' || COALESCE("ds", ''), COALESCE("ds", '')),
             ),
         );
         SELECT
@@ -2473,7 +2473,10 @@ def test_scd_type_2_by_time_defaults():
         """
     )
     scd_type_2_model = load_sql_based_model(model_def)
-    assert scd_type_2_model.unique_key_columns == [exp.to_column("ID", quoted=True)]
+    assert scd_type_2_model.unique_key == [
+        parse_one("""COALESCE("ID", '') || '|' || COALESCE("ds", '')"""),
+        parse_one("""COALESCE("ds", '')"""),
+    ]
     assert scd_type_2_model.columns_to_types == {
         "ID": exp.DataType.build("int"),
         "ds": exp.DataType.build("varchar"),
@@ -2525,7 +2528,7 @@ def test_scd_type_2_by_time_overrides():
         """
     )
     scd_type_2_model = load_sql_based_model(model_def)
-    assert scd_type_2_model.unique_key_columns == [
+    assert scd_type_2_model.unique_key == [
         exp.column("iD", quoted=True),
         exp.column("ds", quoted=False),
     ]
@@ -2566,7 +2569,7 @@ def test_scd_type_2_by_column_defaults():
         """
     )
     scd_type_2_model = load_sql_based_model(model_def)
-    assert scd_type_2_model.unique_key_columns == [exp.to_column("ID", quoted=True)]
+    assert scd_type_2_model.unique_key == [exp.to_column("ID", quoted=True)]
     assert scd_type_2_model.kind.columns == [exp.to_column("value_to_track", quoted=True)]
     assert scd_type_2_model.columns_to_types == {
         "ID": exp.DataType.build("int"),
@@ -2614,7 +2617,7 @@ def test_scd_type_2_by_column_overrides():
         """
     )
     scd_type_2_model = load_sql_based_model(model_def)
-    assert scd_type_2_model.unique_key_columns == [
+    assert scd_type_2_model.unique_key == [
         exp.column("iD", quoted=True),
         exp.column("ds", quoted=False),
     ]
