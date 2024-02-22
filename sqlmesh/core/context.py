@@ -44,6 +44,7 @@ import unittest.result
 from datetime import timedelta
 from io import StringIO
 from pathlib import Path
+from shutil import rmtree
 from types import MappingProxyType
 
 import pandas as pd
@@ -1570,6 +1571,10 @@ class GenericContext(BaseContext, t.Generic[C]):
                 )
 
         return success
+
+    def clear_caches(self) -> None:
+        for path in self.configs:
+            rmtree(path / c.CACHE)
 
     def _run_tests(self) -> t.Tuple[unittest.result.TestResult, str]:
         test_output_io = StringIO()

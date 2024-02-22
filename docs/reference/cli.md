@@ -13,25 +13,27 @@ Options:
   --gateway TEXT     The name of the gateway.
   --ignore-warnings  Ignore warnings.
   --debug            Enable debug mode.
+  --log-to-stdout    Display logs in stdout.
   --help             Show this message and exit.
 
 Commands:
-  audit                   Run audits for given models.
+  audit                   Run audits for the target model(s).
+  clean                   Clears the SQLMesh cache and any build artifacts.
   create_external_models  Create a schema file containing external model...
   create_test             Generate a unit test fixture for a given model.
-  dag                     Render the dag as an html file.
+  dag                     Render the DAG as an html file.
   diff                    Show the diff between the local state and the...
   evaluate                Evaluate a model and return a dataframe with a...
-  fetchdf                 Run a sql query and display the results.
-  format                  Format all models in a given directory.
+  fetchdf                 Run a SQL query and display the results.
+  format                  Format all SQL models.
   info                    Print information about a SQLMesh project.
   init                    Create a new SQLMesh repository.
   invalidate              Invalidate the target environment, forcing its...
   migrate                 Migrate SQLMesh to the current running version.
   plan                    Apply local changes to the target environment.
   prompt                  Uses LLM to generate a SQL query from a prompt.
-  render                  Renders a model's query, optionally expanding...
-  rewrite                 Rewrite a sql expression with semantic...
+  render                  Render a model's query, optionally expanding...
+  rewrite                 Rewrite a SQL expression with semantic...
   rollback                Rollback SQLMesh to the previous migration.
   run                     Evaluate missing intervals for the target...
   table_diff              Show the diff between two tables.
@@ -53,6 +55,13 @@ Options:
                          command will be applied.
   --execution-time TEXT  The execution time (defaults to now).
   --help                 Show this message and exit.
+```
+
+## clean
+```
+Usage: sqlmesh clean [OPTIONS]
+
+  Clears the SQLMesh cache and any build artifacts.
 ```
 
 ## create_external_models
