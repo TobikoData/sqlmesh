@@ -35,16 +35,15 @@ def column_dependencies(context: Context, model_name: str, column: str) -> t.Dic
     parents = defaultdict(set)
 
     for node in lineage(column, sql=_render_query(model)).walk():
-        for d in node.downstream:
-            if d.downstream:
-                continue
+        if node.downstream:
+            continue
 
-            table = d.expression.find(exp.Table)
-            if table:
-                name = normalize_model_name(
-                    table, default_catalog=context.default_catalog, dialect=model.dialect
-                )
-                parents[name].add(exp.to_column(d.name).name)
+        table = node.expression.find(exp.Table)
+        if table:
+            name = normalize_model_name(
+                table, default_catalog=context.default_catalog, dialect=model.dialect
+            )
+            parents[name].add(exp.to_column(node.name).name)
     return dict(parents)
 
 
