@@ -13,14 +13,13 @@ import { EnumFileExtensions } from '@models/file'
 import { useLineageFlow } from '@components/graph/context'
 import { CodeEditorRemoteFile, CodeEditorDefault } from './EditorCode'
 import { useDefaultKeymapsEditorTab, useSQLMeshModelExtensions } from './hooks'
-import { useApiFetchdf } from '@api/index'
 import { getTableDataFromArrowStreamResult } from '@components/table/help'
 import { type Table } from 'apache-arrow'
 import { type KeyBinding } from '@codemirror/view'
 import { useStoreContext } from '@context/context'
-import { useIDE } from '~/library/pages/ide/context'
+import { EnumErrorKey, useIDE } from '~/library/pages/ide/context'
 import { type ModelSQLMeshModel } from '@models/sqlmesh-model'
-import { type Column } from '@api/client'
+import { fetchdfApiCommandsFetchdfPost, type Column } from '@api/client'
 
 function Editor(): JSX.Element {
   const tab = useStoreEditor(s => s.tab)
@@ -45,7 +44,7 @@ function EditorEmpty(): JSX.Element {
 }
 
 function EditorMain({ tab }: { tab: EditorTab }): JSX.Element {
-  const { errors } = useIDE()
+  const { errors, addError, removeError } = useIDE()
   const environment = useStoreContext(s => s.environment)
   const models = useStoreContext(s => s.models)
   const isModel = useStoreContext(s => s.isModel)
@@ -93,14 +92,44 @@ function EditorMain({ tab }: { tab: EditorTab }): JSX.Element {
       {
         key: 'Ctrl-Enter',
         preventDefault: true,
-        run() {
-          sendQuery()
+        run(view) {
+          const sql = view.state.doc.toString()
+
+          setPreviewTable(undefined)
+          setPreviewQuery(sql)
+
+          for (const error of errors) {
+            if (error.key === EnumErrorKey.Fetchdf) {
+              removeError(error)
+            }
+          }
+
+          fetchdfApiCommandsFetchdfPost({
+            sql,
+          })
+            .then(data => {
+              setPreviewTable(
+                getTableDataFromArrowStreamResult(
+                  data as unknown as Table<any>,
+                ),
+              )
+            })
+            .catch(error => {
+              addError(EnumErrorKey.Fetchdf, {
+                ...error,
+                errorKey: EnumErrorKey.Fetchdf,
+                trigger: 'Editor -> customSQLKeymaps',
+                message: error.message,
+                timestamp: Date.now(),
+                origin: 'useQueryTimeout',
+              })
+            })
 
           return true
         },
       },
     ] as KeyBinding[]
-  }, [defaultKeymapsEditorTab])
+  }, [defaultKeymapsEditorTab, errors])
 
   const handleEngineWorkerMessage = useCallback(
     (e: MessageEvent): void => {
@@ -157,26 +186,13 @@ function EditorMain({ tab }: { tab: EditorTab }): JSX.Element {
     setPreviewDiff(undefined)
   }, [environment])
 
-  const { refetch: getFetchdf } = useApiFetchdf({
-    sql: tab.file.content,
-  })
-
-  function sendQuery(): void {
-    setPreviewTable(undefined)
-    setPreviewQuery(tab.file.content)
-
-    void getFetchdf().then(({ data }) => {
-      setPreviewTable(getTableDataFromArrowStreamResult(data as Table<any>))
-    })
-  }
-
   function getPaneSizesPreview(): number[] {
     const model = models.get(tab.file.path)
     const showLineage =
       isFalse(tab.file.isEmpty) && isNotNil(model) && isModel(tab.file.path)
     const showPreview =
-      ((tab.file.isLocal || errors.size > 0) &&
-        [previewTable, previewDiff].some(Boolean)) ||
+      errors.size > 0 ||
+      [previewTable, previewDiff].some(Boolean) ||
       showLineage
 
     return showPreview ? [70, 30] : [100, 0]
