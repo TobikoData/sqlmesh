@@ -615,6 +615,14 @@ class BigQueryEngineAdapter(InsertOverwriteWithMergeMixin):
             job_config=job_config,
             timeout=self._extra_config.get("job_creation_timeout_seconds"),
         )
+
+        logger.debug(
+            "BigQuery job created: https://console.cloud.google.com/bigquery?project=%s&j=bq:%s:%s",
+            self._query_job.project,
+            self._query_job.location,
+            self._query_job.job_id,
+        )
+
         results = self._db_call(
             self._query_job.result,
             timeout=self._extra_config.get("job_execution_timeout_seconds"),  # type: ignore
