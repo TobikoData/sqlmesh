@@ -303,7 +303,6 @@ class BaseModelConfig(GeneralConfig):
             }.union({source.canonical_name(context) for source in model_context.sources.values()}),
             "jinja_macros": jinja_macros,
             "path": self.path,
-            "hash_raw_query": True,
             "pre_statements": [d.jinja_statement(hook.sql) for hook in self.pre_hook],
             "post_statements": [d.jinja_statement(hook.sql) for hook in self.post_hook],
             "tags": self.tags,

@@ -392,8 +392,9 @@ class _Model(ModelMeta, frozen=True):
             )
 
         def _render(e: exp.Expression) -> str | int | float | bool:
-            rendered_exprs = _create_renderer(e).render(
-                start=start, end=end, execution_time=execution_time
+            rendered_exprs = (
+                _create_renderer(e).render(start=start, end=end, execution_time=execution_time)
+                or []
             )
             if len(rendered_exprs) != 1:
                 raise SQLMeshError(f"Expected one expression but got {len(rendered_exprs)}")
@@ -770,9 +771,7 @@ class _Model(ModelMeta, frozen=True):
             elif audit_name in audits:
                 audit = audits[audit_name]
                 query = (
-                    audit.query
-                    if self.hash_raw_query
-                    else audit.render_query(self, **t.cast(t.Dict[str, t.Any], audit_args))
+                    audit.render_query(self, **t.cast(t.Dict[str, t.Any], audit_args))
                     or audit.query
                 )
                 metadata.extend(
@@ -884,7 +883,7 @@ class _SqlBasedModel(_Model):
             for statement in statements
             if not isinstance(statement, d.MacroDef)
         )
-        return [r for expressions in rendered for r in expressions]
+        return [r for expressions in rendered if expressions for r in expressions]
 
     def _statement_renderer(self, expression: exp.Expression) -> ExpressionRenderer:
         expression_key = id(expression)
@@ -903,21 +902,21 @@ class _SqlBasedModel(_Model):
 
     @property
     def _data_hash_values(self) -> t.List[str]:
-        statements = (
-            self._additional_metadata
-            if self.hash_raw_query
-            else [gen(e) for e in (*self.render_pre_statements(), *self.render_post_statements())]
-        )
-        return [
-            *super()._data_hash_values,
-            *statements,
-        ]
+        data_hash_values = super()._data_hash_values
 
-    @property
-    def _additional_metadata(self) -> t.List[str]:
-        return [
-            gen(s) for s in (*self.pre_statements, *self.post_statements, *self.macro_definitions)
-        ]
+        for statement in (*self.pre_statements, *self.post_statements):
+            statement_exprs: t.List[exp.Expression] = []
+            if isinstance(statement, d.MacroDef):
+                statement_exprs = [statement]
+            else:
+                rendered = self._statement_renderer(statement).render()
+                if rendered is not None:
+                    statement_exprs = rendered
+                else:
+                    statement_exprs = [statement]
+            data_hash_values.extend(gen(e) for e in statement_exprs)
+
+        return data_hash_values
 
 
 class SqlModel(_SqlBasedModel):
@@ -1115,7 +1114,7 @@ class SqlModel(_SqlBasedModel):
     def _data_hash_values(self) -> t.List[str]:
         data = super()._data_hash_values
 
-        query = self.query if self.hash_raw_query else self.render_query() or self.query
+        query = self.render_query() or self.query
         data.append(gen(query))
         data.extend(self.jinja_macros.data_hash_values)
         return data
@@ -1935,7 +1934,6 @@ META_FIELD_CONVERTER: t.Dict[str, t.Callable] = {
     "tags": _single_value_or_tuple,
     "grains": _refs_to_sql,
     "references": _refs_to_sql,
-    "hash_raw_query": exp.convert,
     "table_properties_": lambda value: value,
     "session_properties_": lambda value: value,
     "allow_partials": exp.convert,

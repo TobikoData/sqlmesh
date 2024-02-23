@@ -266,7 +266,6 @@ class StandaloneAudit(_Node, AuditMixin):
     """
     Args:
         depends_on: A list of tables this audit depends on.
-        hash_raw_query: Whether to hash the raw query or the rendered query.
         python_env: Dictionary containing all global variables needed to render the audit's macros.
     """
 
@@ -281,7 +280,6 @@ class StandaloneAudit(_Node, AuditMixin):
     jinja_macros: JinjaMacroRegistry = JinjaMacroRegistry()
     default_catalog: t.Optional[str] = None
     depends_on_: t.Optional[t.Set[str]] = Field(default=None, alias="depends_on")
-    hash_raw_query: bool = False
     python_env_: t.Optional[t.Dict[str, Executable]] = Field(default=None, alias="python_env")
 
     source_type: Literal["audit"] = "audit"
@@ -353,7 +351,7 @@ class StandaloneAudit(_Node, AuditMixin):
             self.stamp,
         ]
 
-        query = self.query if self.hash_raw_query else self.render_query(self) or self.query
+        query = self.render_query(self) or self.query
         data.append(query.sql(comments=False))
 
         return hash_data(data)
@@ -602,6 +600,5 @@ META_FIELD_CONVERTER: t.Dict[str, t.Callable] = {
     "standalone": exp.convert,
     "depends_on_": lambda value: exp.Tuple(expressions=sorted(value)),
     "tags": _single_value_or_tuple,
-    "hash_raw_query": exp.convert,
     "default_catalog": exp.to_identifier,
 }
