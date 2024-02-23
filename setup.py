@@ -70,6 +70,7 @@ setup(
             "dbt-core",
             "dbt-duckdb>=1.7.1",
             "dbt-snowflake",
+            "dbt-sqlserver",
             "Faker",
             "freezegun",
             "google-auth",
