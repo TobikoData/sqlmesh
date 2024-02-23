@@ -67,6 +67,9 @@ jobs:
           name: Install OpenJDK
           command: sudo apt-get update && sudo apt-get install default-jdk
       - run:
+          name: Install ODBC
+          command: sudo apt-get install unixodbc-dev
+      - run:
           name: Install dependencies
           command: make install-dev
       - run:
@@ -128,7 +131,7 @@ jobs:
 
   ui_test:
     docker:
-      - image: mcr.microsoft.com/playwright:v1.40.1-jammy 
+      - image: mcr.microsoft.com/playwright:v1.40.1-jammy
     resource_class: medium
     steps:
       - halt_unless_client
