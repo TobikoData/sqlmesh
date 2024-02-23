@@ -2,7 +2,11 @@ import { Disclosure, Popover, Transition } from '@headlessui/react'
 import pluralize from 'pluralize'
 import clsx from 'clsx'
 import React, { useState, Fragment, useEffect } from 'react'
-import { useIDE, type ErrorIDE, type ErrorKey } from '../../pages/ide/context'
+import {
+  useNotificationCenter,
+  type ErrorIDE,
+  type ErrorKey,
+} from '../../pages/root/context/notificationCenter'
 import { isNil, isNotNil, toDate, toDateFormat } from '@utils/index'
 import { MinusCircleIcon, PlusCircleIcon } from '@heroicons/react/24/solid'
 import { Divider } from '@components/divider/Divider'
@@ -12,7 +16,7 @@ import { EnumSize, EnumVariant } from '~/types/enum'
 import SplitPane from '@components/splitPane/SplitPane'
 
 export default function ReportErrors(): JSX.Element {
-  const { errors, clearErrors } = useIDE()
+  const { errors, clearErrors } = useNotificationCenter()
 
   const [isShow, setIsShow] = useState(false)
 
@@ -104,7 +108,7 @@ export function DisplayError({
   error: ErrorIDE
   withSplitPane?: boolean
 }): JSX.Element {
-  const { removeError } = useIDE()
+  const { removeError } = useNotificationCenter()
 
   const version = useStoreContext(s => s.version)
 

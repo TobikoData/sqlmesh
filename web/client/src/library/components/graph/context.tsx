@@ -10,11 +10,11 @@ import {
   useMemo,
 } from 'react'
 import { getNodeMap, hasActiveEdge, hasActiveEdgeConnector } from './help'
-import { type ErrorIDE } from '~/library/pages/ide/context'
 import { EnumSide } from '~/types/enum'
 import { isFalse, toID } from '@utils/index'
 import { type ConnectedNode } from '~/workers/lineage'
 import { type Node } from 'reactflow'
+import { ErrorIDE } from '~/library/pages/root/context/notificationCenter'
 export interface Connections {
   left: string[]
   right: string[]

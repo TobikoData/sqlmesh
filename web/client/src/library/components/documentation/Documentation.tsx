@@ -11,7 +11,7 @@ import {
   truncate,
 } from '@utils/index'
 import clsx from 'clsx'
-import { ModelSQLMeshModel } from '@models/sqlmesh-model'
+import { type ModelSQLMeshModel } from '@models/sqlmesh-model'
 import { ModelColumns } from '@components/graph/Graph'
 import { useApiModel } from '@api/index'
 import { useStoreContext } from '@context/context'
@@ -41,7 +41,7 @@ const Documentation = function Documentation({
     void getModel().then(({ data }) => {
       model.update(data)
 
-      setLastSelectedModel(new ModelSQLMeshModel(model))
+      setLastSelectedModel(model)
     })
 
     return () => {

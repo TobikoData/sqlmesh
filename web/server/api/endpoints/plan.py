@@ -30,7 +30,6 @@ async def initiate_plan(
     """Get a plan for an environment."""
     if not hasattr(request.app.state, "task") or request.app.state.task.done():
         plan_options = plan_options or models.PlanOptions()
-        request.app.state.circuit_breaker.clear()
         request.app.state.task = asyncio.create_task(
             run_in_executor(
                 get_plan_builder,

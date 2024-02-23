@@ -13,10 +13,12 @@ export default function SplitPane({
   snapOffset,
   cursor,
   handleDrag,
+  onDragEnd,
 }: SplitProps & {
   className?: string
   children: React.ReactNode
   handleDrag?: (sizes: number[], elSplit?: Maybe<HTMLElement & any>) => void
+  onDragEnd?: (sizes: number[], elSplit?: Maybe<HTMLElement & any>) => void
 }): JSX.Element {
   const elSplit = useRef(null)
   return (
@@ -33,6 +35,7 @@ export default function SplitPane({
       maxSize={maxSize}
       snapOffset={snapOffset}
       onDrag={sizes => handleDrag?.(sizes, elSplit.current)}
+      onDragEnd={sizes => onDragEnd?.(sizes, elSplit.current)}
     >
       {children}
     </Split>

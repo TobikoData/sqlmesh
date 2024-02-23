@@ -15,8 +15,11 @@ import TabList from '@components/tab/Tab'
 import { useSQLMeshModelExtensions } from './hooks'
 import Table from '@components/table/Table'
 import { useStoreContext } from '@context/context'
-import { EnumErrorKey, useIDE } from '~/library/pages/ide/context'
 import { DisplayError } from '@components/report/ReportErrors'
+import {
+  EnumErrorKey,
+  useNotificationCenter,
+} from '~/library/pages/root/context/notificationCenter'
 
 const ModelLineage = lazy(
   async () => await import('@components/graph/ModelLineage'),
@@ -40,7 +43,7 @@ export default function EditorPreview({
   tab: EditorTab
   className?: string
 }): JSX.Element {
-  const { errors, removeError } = useIDE()
+  const { errors, removeError } = useNotificationCenter()
   const navigate = useNavigate()
 
   const models = useStoreContext(s => s.models)

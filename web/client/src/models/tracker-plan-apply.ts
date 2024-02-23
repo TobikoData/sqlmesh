@@ -45,6 +45,7 @@ export class ModelPlanApplyTracker
     super(model)
 
     if (isNotNil(model) && model.isModel) {
+      this._current = model._current
       this._last = model._last
       this._planOverview = model._planOverview
       this._lastPlanOverview = model._lastPlanOverview
@@ -184,12 +185,18 @@ export class ModelPlanApplyTracker
     tracker: PlanApplyTracker,
     planOverview?: ModelPlanOverviewTracker,
   ): void {
-    this._planOverview = planOverview?.clone()
+    const { creation, restate, backfill, promote, meta, environment } = tracker
+    const isEmpty = isNil(meta) || isNil(environment)
+    const newCurrent = isEmpty ? undefined : tracker
+
+    if (isNil(newCurrent)) {
+      this._current = undefined
+
+      return
+    }
 
     if (isNil(this._current)) {
       this._current = tracker
-      this._last = undefined
-      this._lastPlanOverview = undefined
     }
 
     this._current.start = tracker.start
@@ -197,8 +204,6 @@ export class ModelPlanApplyTracker
     this._current.meta = tracker.meta
     this._current.environment = tracker.environment
     this._current.plan_options = tracker.plan_options
-
-    const { creation, restate, backfill, promote } = tracker
 
     if (
       isNotNil(creation) &&
@@ -232,17 +237,27 @@ export class ModelPlanApplyTracker
       this._current.promote = promote
     }
 
-    if (isTrue(this.current?.meta?.done)) {
+    if (isTrue(this.current?.meta?.done) && isNil(this._last)) {
       this._last = this._current
       this._lastPlanOverview = this._planOverview
       this._current = undefined
       this._planOverview = undefined
+    } else {
+      this._planOverview =
+        isNotNil(meta) && isNotNil(environment)
+          ? planOverview?.clone()
+          : undefined
     }
 
     this.isFetching = isFalse(tracker.meta?.done)
   }
 
   reset(): void {
+    this._current = undefined
+    this._planOverview = undefined
+  }
+
+  clear(): void {
     this._current = undefined
     this._last = undefined
     this._planOverview = undefined

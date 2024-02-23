@@ -23,7 +23,7 @@ export default function NotFound({
             {headline}
           </h1>
           {isNotNil(description) && (
-            <p className="mb-10 text-neutral-70 dark:text-primary-70 w-full bg-primary-10 py-5 rounded-md">
+            <p className="mb-10 py-5 px-4 text-neutral-70 dark:text-primary-70 w-full bg-primary-10 rounded-md">
               {description}
             </p>
           )}

@@ -21,7 +21,10 @@ import { ModelFile } from '@models/file'
 import { useStoreEditor } from '@context/editor'
 import { type ResponseWithDetail } from '@api/instance'
 import { useStoreContext } from '@context/context'
-import { EnumErrorKey, useIDE } from '~/library/pages/ide/context'
+import {
+  EnumErrorKey,
+  useNotificationCenter,
+} from '~/library/pages/root/context/notificationCenter'
 
 export const EnumFileExplorerChange = {
   Added: 1,
@@ -66,7 +69,7 @@ export default function FileExplorerProvider({
 }: {
   children: React.ReactNode
 }): JSX.Element {
-  const { addError } = useIDE()
+  const { addError } = useNotificationCenter()
 
   const activeRange = useStoreProject(s => s.activeRange)
   const project = useStoreProject(s => s.project)

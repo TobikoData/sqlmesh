@@ -685,6 +685,27 @@
         }
       }
     },
+    "/api/modules": {
+      "get": {
+        "summary": "Get Api Meta",
+        "description": "Get the modules",
+        "operationId": "get_api_meta_api_modules_get",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "items": { "$ref": "#/components/schemas/Modules" },
+                  "type": "array",
+                  "title": "Response Get Api Meta Api Modules Get"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/api/table_diff": {
       "get": {
         "summary": "Get Table Diff",
@@ -1291,12 +1312,6 @@
             "type": "boolean",
             "title": "Has Running Task",
             "default": false
-          },
-          "modules": {
-            "items": { "$ref": "#/components/schemas/Modules" },
-            "type": "array",
-            "title": "Modules",
-            "default": []
           }
         },
         "type": "object",
@@ -1499,13 +1514,14 @@
         "type": "string",
         "enum": [
           "editor",
+          "files",
           "docs",
           "plans",
-          "plan-progress",
           "tests",
           "audits",
           "errors",
-          "environments"
+          "data",
+          "lineage"
         ],
         "title": "Modules"
       },

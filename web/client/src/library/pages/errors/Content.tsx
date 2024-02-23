@@ -1,12 +1,12 @@
 import { useParams } from 'react-router-dom'
 import NotFound from '../root/NotFound'
 import { EnumRoutes } from '~/routes'
-import { useIDE } from '../ide/context'
+import { useNotificationCenter } from '../root/context/notificationCenter'
 import { isNil } from '@utils/index'
 import { DisplayError } from '@components/report/ReportErrors'
 
 export default function Content(): JSX.Element {
-  const { errors } = useIDE()
+  const { errors } = useNotificationCenter()
   const { id } = useParams()
 
   const error = isNil(id)

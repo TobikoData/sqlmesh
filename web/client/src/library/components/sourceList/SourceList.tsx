@@ -65,15 +65,15 @@ export default function SourceList<
         type.includes(filter)
       ) {
         filteredList.push(item)
+      }
 
-        if (isNotNil(isActive) && isActive(item[keyId])) {
-          activeIndex = index
-        }
+      if (isNotNil(isActive) && isActive(item[keyId])) {
+        activeIndex = index
       }
     })
 
     return [activeIndex, filteredList]
-  }, [items, filter])
+  }, [items, filter, isActive])
 
   const rowVirtualizer = useVirtualizer({
     count: filtered.length,
@@ -137,76 +137,10 @@ export default function SourceList<
   return (
     <div
       className={clsx(
-        'flex flex-col w-full h-full relative text-sm text-neutral-600 dark:text-neutral-300',
+        'flex flex-col w-full h-full text-sm text-neutral-600 dark:text-neutral-300',
         className,
       )}
     >
-      {shouldShowReturnButton && (
-        <Button
-          className="absolute left-[50%] translate-x-[-50%] top-0 z-10 text-ellipsis !block overflow-hidden no-wrap max-w-[90%] !border-neutral-20 shadow-md !bg-theme !hover:bg-theme-10 !hover:text-neutral-600 dark:hover:text-neutral-300 !focus:ring-2 !focus:ring-theme-500 !focus:ring-offset-2 !focus:ring-offset-theme-50 !focus:ring-opacity-50 !focus:outline-none !focus:ring-offset-transparent !focus:ring-offset-0 !focus:ring"
-          onClick={() => scrollToItem({ itemIndex: activeItemIndex })}
-          size={EnumSize.sm}
-          variant={EnumVariant.Secondary}
-        >
-          Scroll to selected
-        </Button>
-      )}
-      <div
-        ref={scrollableAreaRef}
-        className="w-full h-full relative overflow-hidden overflow-y-auto hover:scrollbar scrollbar--horizontal scrollbar--vertical pt-2"
-        style={{ contain: 'strict' }}
-      >
-        <div
-          className="relative w-full"
-          style={{
-            height: totalSize > 0 ? `${totalSize}px` : '100%',
-          }}
-        >
-          <ul
-            className="w-full absolute top-0 left-0 px-2"
-            style={{ transform: `translateY(${rows[0]?.start ?? 0}px)` }}
-          >
-            {isArrayEmpty(filtered) && (
-              <li
-                key="not-found"
-                className="px-2 py-0.5 text-center whitespace-nowrap overflow-ellipsis overflow-hidden"
-              >
-                {filter.length > 0 ? 'No Results Found' : 'Empty List'}
-              </li>
-            )}
-            {rows.map(virtualItem => {
-              const item = filtered[virtualItem.index]!
-              const id = ensureString(item[keyId])
-              const description = ensureString(item[keyDescription])
-              const name = ensureString(item[keyName])
-              const text = ensureString(types?.[id])
-
-              return (
-                <li
-                  key={virtualItem.key}
-                  data-index={virtualItem.index}
-                  ref={rowVirtualizer.measureElement}
-                  className={clsx(
-                    'font-normal w-full',
-                    disabled && 'cursor-not-allowed',
-                  )}
-                  tabIndex={id === filter ? -1 : 0}
-                >
-                  {listItem?.({
-                    id,
-                    to: `${to}/${id}`,
-                    name,
-                    description,
-                    text,
-                    disabled,
-                    item: filtered[virtualItem.index]!,
-                  })}
-                </li>
-              )
-            })}
-          </ul>
-        </div>
-      </div>
       <div className="p-2 w-full flex justify-between">
         <Input
           className="w-full !m-0"
@@ -226,6 +160,74 @@ export default function SourceList<
         </Input>
         <div className="ml-1 px-3 bg-primary-10 text-primary-500 rounded-full text-xs flex items-center">
           {filtered.length}
+        </div>
+      </div>
+      <div className="mt-2 w-full h-full relative">
+        {shouldShowReturnButton && (
+          <Button
+            className="absolute left-[50%] translate-x-[-50%] -top-2 z-10 text-ellipsis !block overflow-hidden no-wrap max-w-[90%] !border-neutral-20 shadow-md !bg-theme !hover:bg-theme text-neutral-500 dark:text-neutral-300 !focus:ring-2 !focus:ring-theme-500 !focus:ring-offset-2 !focus:ring-offset-theme-50 !focus:ring-opacity-50 !focus:outline-none !focus:ring-offset-transparent !focus:ring-offset-0 !focus:ring"
+            onClick={() => scrollToItem({ itemIndex: activeItemIndex })}
+            size={EnumSize.sm}
+            variant={EnumVariant.Secondary}
+          >
+            Scroll to selected
+          </Button>
+        )}
+        <div
+          ref={scrollableAreaRef}
+          className="w-full h-full relative overflow-hidden overflow-y-auto hover:scrollbar scrollbar--horizontal scrollbar--vertical pt-2"
+          style={{ contain: 'strict' }}
+        >
+          <div
+            className="relative w-full"
+            style={{
+              height: totalSize > 0 ? `${totalSize}px` : '100%',
+            }}
+          >
+            <ul
+              className="w-full absolute top-0 left-0 px-2"
+              style={{ transform: `translateY(${rows[0]?.start ?? 0}px)` }}
+            >
+              {isArrayEmpty(filtered) && (
+                <li
+                  key="not-found"
+                  className="px-2 py-0.5 text-center whitespace-nowrap overflow-ellipsis overflow-hidden"
+                >
+                  {filter.length > 0 ? 'No Results Found' : 'Empty List'}
+                </li>
+              )}
+              {rows.map(virtualItem => {
+                const item = filtered[virtualItem.index]!
+                const id = ensureString(item[keyId])
+                const description = ensureString(item[keyDescription])
+                const name = ensureString(item[keyName])
+                const text = ensureString(types?.[id])
+
+                return (
+                  <li
+                    key={virtualItem.key}
+                    data-index={virtualItem.index}
+                    ref={rowVirtualizer.measureElement}
+                    className={clsx(
+                      'font-normal w-full',
+                      disabled && 'cursor-not-allowed',
+                    )}
+                    tabIndex={id === filter ? -1 : 0}
+                  >
+                    {listItem?.({
+                      id,
+                      to: `${to}/${id}`,
+                      name,
+                      description,
+                      text,
+                      disabled,
+                      item: filtered[virtualItem.index]!,
+                    })}
+                  </li>
+                )
+              })}
+            </ul>
+          </div>
         </div>
       </div>
     </div>
