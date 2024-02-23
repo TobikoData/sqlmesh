@@ -16,6 +16,7 @@ from sqlmesh.core.config.connection import (
     ConnectionConfig,
     DatabricksConnectionConfig,
     DuckDBConnectionConfig,
+    MSSQLConnectionConfig,
     PostgresConnectionConfig,
     RedshiftConnectionConfig,
     SnowflakeConnectionConfig,
@@ -99,6 +100,8 @@ class TargetConfig(abc.ABC, DbtConfig):
             return SnowflakeConfig(**data)
         elif db_type == "bigquery":
             return BigQueryConfig(**data)
+        elif db_type == "sqlserver":
+            return MSSQLConfig(**data)
 
         raise ConfigError(f"{db_type} not supported.")
 
@@ -563,6 +566,102 @@ class BigQueryConfig(TargetConfig):
         )
 
 
+class MSSQLConfig(TargetConfig):
+    """
+    Project connection and operational configuration for the SQL Server (MSSQL) target
+
+    Args:
+        host: The MSSQL server host to connect to
+        port: The MSSQL server port to connect to
+        user: User name for authentication
+        password: User password for authentication
+        login_timeout: The number of seconds to wait for a login to complete
+        query_timeout: The number of seconds to wait for a query to complete
+    """
+
+    type: Literal["sqlserver"] = "sqlserver"
+    host: t.Optional[str] = None
+    server: t.Optional[str] = None
+    port: int = 1433
+    database: str = Field(default="master")
+    schema_: str = Field(default="dbo", alias="schema")
+    user: t.Optional[str] = None
+    username: t.Optional[str] = None
+    UID: t.Optional[str] = None
+    password: t.Optional[str] = None
+    PWD: t.Optional[str] = None
+    threads: int = 4
+    login_timeout: t.Optional[int] = None
+    query_timeout: t.Optional[int] = None
+    authentication: t.Optional[str] = "sql"
+    schema_authorization: t.Optional[str] = None  # Not supported by SQLMesh
+
+    # Unused ODBC parameters (SQLMesh uses pymssql instead of ODBC)
+    driver: t.Optional[str] = None
+    encrypt: t.Optional[bool] = None
+    trust_cert: t.Optional[bool] = None
+    retries: t.Optional[int] = None
+
+    # Unused authentication parameters (not supported by pymssql)
+    windows_login: t.Optional[bool] = None  # pymssql doesn't require this flag for Windows Auth
+    tenant_id: t.Optional[str] = None  # Azure Active Directory auth
+    client_id: t.Optional[str] = None  # Azure Active Directory auth
+    client_secret: t.Optional[str] = None  # Azure Active Directory auth
+
+    @model_validator(mode="before")
+    @model_validator_v1_args
+    def validate_alias_fields(
+        cls, values: t.Dict[str, t.Union[t.Tuple[str, ...], t.Optional[str], t.Dict[str, t.Any]]]
+    ) -> t.Dict[str, t.Union[t.Tuple[str, ...], t.Optional[str], t.Dict[str, t.Any]]]:
+        values["host"] = values.get("host") or values.get("server")
+        if not values["host"]:
+            raise ConfigError("Either host or server must be set")
+
+        values["user"] = values.get("user") or values.get("username") or values.get("UID")
+        if not values["user"]:
+            raise ConfigError("One of user, username, or UID must be set")
+
+        values["password"] = values.get("password") or values.get("PWD")
+        if not values["password"]:
+            raise ConfigError("Either password or PWD must be set")
+
+        return values
+
+    @field_validator("authentication")
+    @classmethod
+    def _validate_authentication(cls, v: str) -> str:
+        if v != "sql":
+            raise ConfigError("Only SQL and Windows Authentication are supported for SQL Server")
+        return v
+
+    @field_validator("port")
+    @classmethod
+    def _validate_port(cls, v: t.Union[int, str]) -> int:
+        return int(v)
+
+    def default_incremental_strategy(self, kind: IncrementalKind) -> str:
+        # https://github.com/microsoft/dbt-fabric/blob/main/dbt/include/fabric/macros/materializations/models/incremental/incremental_strategies.sql
+        return "delete+insert" if kind is IncrementalByUniqueKeyKind else "append"
+
+    @classproperty
+    def column_class(cls) -> t.Type[Column]:
+        from dbt.adapters.sqlserver.sql_server_column import SQLServerColumn
+
+        return SQLServerColumn
+
+    def to_sqlmesh(self) -> ConnectionConfig:
+        return MSSQLConnectionConfig(
+            host=self.host,
+            user=self.user,
+            password=self.password,
+            port=self.port,
+            database=self.database,
+            timeout=self.query_timeout,
+            login_timeout=self.login_timeout,
+            concurrent_tasks=self.threads,
+        )
+
+
 TARGET_TYPE_TO_CONFIG_CLASS: t.Dict[str, t.Type[TargetConfig]] = {
     "databricks": DatabricksConfig,
     "duckdb": DuckDbConfig,
@@ -570,4 +669,5 @@ TARGET_TYPE_TO_CONFIG_CLASS: t.Dict[str, t.Type[TargetConfig]] = {
     "redshift": RedshiftConfig,
     "snowflake": SnowflakeConfig,
     "bigquery": BigQueryConfig,
+    "sqlserver": MSSQLConfig,
 }
