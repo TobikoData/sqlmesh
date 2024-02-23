@@ -306,15 +306,18 @@ class ExpressionRenderer(BaseExpressionRenderer):
         deployability_index: t.Optional[DeployabilityIndex] = None,
         expand: t.Iterable[str] = tuple(),
         **kwargs: t.Any,
-    ) -> t.List[exp.Expression]:
-        expressions = super()._render(
-            start=start,
-            end=end,
-            execution_time=execution_time,
-            snapshots=snapshots,
-            deployability_index=deployability_index,
-            **kwargs,
-        )
+    ) -> t.Optional[t.List[exp.Expression]]:
+        try:
+            expressions = super()._render(
+                start=start,
+                end=end,
+                execution_time=execution_time,
+                snapshots=snapshots,
+                deployability_index=deployability_index,
+                **kwargs,
+            )
+        except ParsetimeAdapterCallError:
+            return None
 
         return [
             self._resolve_tables(

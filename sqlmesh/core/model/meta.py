@@ -59,7 +59,6 @@ class ModelMeta(_Node):
     audits: t.List[AuditReference] = []
     grains: t.List[exp.Expression] = []
     references: t.List[exp.Expression] = []
-    hash_raw_query: bool = False
     physical_schema_override: t.Optional[str] = None
     table_properties_: t.Optional[exp.Tuple] = Field(default=None, alias="table_properties")
     session_properties_: t.Optional[exp.Tuple] = Field(default=None, alias="session_properties")

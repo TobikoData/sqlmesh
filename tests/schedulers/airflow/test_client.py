@@ -104,7 +104,6 @@ def test_apply_plan(mocker: MockerFixture, snapshot: Snapshot):
                     "source_type": "sql",
                     "tags": [],
                     "grains": [],
-                    "hash_raw_query": False,
                     "allow_partials": False,
                     "signals": [],
                 },

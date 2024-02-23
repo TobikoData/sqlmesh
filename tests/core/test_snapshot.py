@@ -125,7 +125,6 @@ def test_json(snapshot: Snapshot):
             "tags": [],
             "grains": [],
             "references": [],
-            "hash_raw_query": False,
             "allow_partials": False,
             "signals": [],
         },
@@ -628,13 +627,13 @@ def test_fingerprint(model: Model, parent_model: Model):
     fingerprint = fingerprint_from_node(model, nodes={})
     assert new_fingerprint != fingerprint
     assert new_fingerprint.data_hash != fingerprint.data_hash
-    assert new_fingerprint.metadata_hash != fingerprint.metadata_hash
+    assert new_fingerprint.metadata_hash == fingerprint.metadata_hash
 
     model = SqlModel(**{**original_model.dict(), "post_statements": [parse_one("DROP TABLE test")]})
     fingerprint = fingerprint_from_node(model, nodes={})
     assert new_fingerprint != fingerprint
     assert new_fingerprint.data_hash != fingerprint.data_hash
-    assert new_fingerprint.metadata_hash != fingerprint.metadata_hash
+    assert new_fingerprint.metadata_hash == fingerprint.metadata_hash
 
 
 def test_fingerprint_seed_model():
