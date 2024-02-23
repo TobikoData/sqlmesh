@@ -585,11 +585,11 @@ class MSSQLConfig(TargetConfig):
     port: int = 1433
     database: str = Field(default="master")
     schema_: str = Field(default="dbo", alias="schema")
-    user: t.Optional[str]
-    username: t.Optional[str]
-    UID: t.Optional[str]
-    password: t.Optional[str]
-    PWD: t.Optional[str]
+    user: t.Optional[str] = None
+    username: t.Optional[str] = None
+    UID: t.Optional[str] = None
+    password: t.Optional[str] = None
+    PWD: t.Optional[str] = None
     threads: int = 4
     login_timeout: t.Optional[int] = None
     query_timeout: t.Optional[int] = None
