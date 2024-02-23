@@ -542,12 +542,20 @@ function StageVirtualUpdate(): JSX.Element {
 }
 
 function PlanChanges(): JSX.Element {
+  const planAction = useStorePlan(s => s.planAction)
   const planOverview = useStorePlan(s => s.planOverview)
   const planApply = useStorePlan(s => s.planApply)
   const planCancel = useStorePlan(s => s.planCancel)
 
   const { hasChanges, added, removed, direct, indirect, metadata } =
     getPlanOverviewDetails(planApply, planOverview, planCancel)
+
+  const shouldDisable =
+    planAction.isProcessing ||
+    planAction.isDone ||
+    planApply.isFinished ||
+    (planOverview.isLatest && isFalse(planAction.isRun)) ||
+    planOverview.isVirtualUpdate
 
   return (
     <div className="w-full my-2">
@@ -583,7 +591,10 @@ function PlanChanges(): JSX.Element {
               headline="Modified Directly"
               type={EnumPlanChangeType.Direct}
             >
-              <PlanChangePreview.Direct changes={direct} />
+              <PlanChangePreview.Direct
+                changes={direct}
+                disabled={shouldDisable}
+              />
             </PlanChangePreview>
           )}
           {isArrayNotEmpty(indirect) && (

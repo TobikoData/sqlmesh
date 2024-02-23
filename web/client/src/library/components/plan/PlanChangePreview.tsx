@@ -23,17 +23,17 @@ import { type ModelSQLMeshChangeDisplay } from '@models/sqlmesh-change-display'
 import { useEffect } from 'react'
 import { type SnapshotChangeCategory } from '@api/client'
 
-interface PropsPlanChangePreview extends React.HTMLAttributes<HTMLElement> {
-  headline?: string
-  type: PlanChangeType
-}
-
 function PlanChangePreview({
   children,
   headline,
   type,
   className,
-}: PropsPlanChangePreview): JSX.Element {
+}: {
+  headline?: string
+  type: PlanChangeType
+  className?: string
+  children: React.ReactNode
+}): JSX.Element {
   return (
     <div
       className={clsx(
@@ -117,8 +117,10 @@ function PlanChangePreviewDefault({
 
 function PlanChangePreviewDirect({
   changes = [],
+  disabled = false,
 }: {
   changes: ModelSQLMeshChangeDisplay[]
+  disabled?: boolean
 }): JSX.Element {
   const dispatch = usePlanDispatch()
   const { categories } = usePlan()
@@ -168,7 +170,10 @@ function PlanChangePreviewDirect({
                     />
                   )}
                   <Divider className="border-neutral-200 mt-2" />
-                  <ChangeCategories change={change} />
+                  <ChangeCategories
+                    change={change}
+                    disabled={disabled}
+                  />
                   <Divider className="border-neutral-200 mt-2" />
                   <div className="flex flex-col w-full h-full overflow-hidden overflow-y-auto hover:scrollbar scrollbar--vertical scrollbar--horizontal">
                     {isNotNil(change?.diff) && (
@@ -211,7 +216,9 @@ function PlanChangePreviewDirect({
 
 function ChangeCategories({
   change,
+  disabled = false,
 }: {
+  disabled?: boolean
   change: ModelSQLMeshChangeDisplay
 }): JSX.Element {
   const dispatch = usePlanDispatch()
@@ -220,7 +227,11 @@ function ChangeCategories({
 
   return (
     <RadioGroup
-      className="flex flex-col mt-2"
+      className={clsx(
+        'flex flex-col mt-2',
+        disabled && 'pointer-events-none opacity-50 cursor-not-allowed',
+      )}
+      disabled={disabled}
       value={
         change_categorization.get(change.name)?.category?.value ??
         change.change_category

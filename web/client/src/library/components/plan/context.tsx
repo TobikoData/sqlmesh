@@ -304,18 +304,6 @@ function useCategories(): [Category, Category[]] {
       description: 'The change requires no rebuilding',
       value: SnapshotChangeCategory.NUMBER_3,
     },
-    {
-      id: EnumCategoryType.IndirectBreaking,
-      name: 'Indirect Breaking Change',
-      description: 'The change was caused indirectly and is breaking',
-      value: SnapshotChangeCategory.NUMBER_4,
-    },
-    {
-      id: EnumCategoryType.IndirectNonBreaking,
-      name: 'Indirect Non-Breaking Change',
-      description: 'The change was caused indirectly by a non-breaking change',
-      value: SnapshotChangeCategory.NUMBER_5,
-    },
   ]
 
   return [categoryBreakingChange, categories]
