@@ -17,9 +17,12 @@ import { getTableDataFromArrowStreamResult } from '@components/table/help'
 import { type Table } from 'apache-arrow'
 import { type KeyBinding } from '@codemirror/view'
 import { useStoreContext } from '@context/context'
-import { EnumErrorKey, useIDE } from '~/library/pages/ide/context'
 import { type ModelSQLMeshModel } from '@models/sqlmesh-model'
 import { fetchdfApiCommandsFetchdfPost, type Column } from '@api/client'
+import {
+  EnumErrorKey,
+  useNotificationCenter,
+} from '~/library/pages/root/context/notificationCenter'
 
 function Editor(): JSX.Element {
   const tab = useStoreEditor(s => s.tab)
@@ -44,7 +47,7 @@ function EditorEmpty(): JSX.Element {
 }
 
 function EditorMain({ tab }: { tab: EditorTab }): JSX.Element {
-  const { errors, addError, removeError } = useIDE()
+  const { errors, addError, removeError } = useNotificationCenter()
   const environment = useStoreContext(s => s.environment)
   const models = useStoreContext(s => s.models)
   const isModel = useStoreContext(s => s.isModel)

@@ -14,6 +14,7 @@ from sqlmesh.core.environment import Environment
 from sqlmesh.utils.errors import PlanError
 from web.server.api.endpoints.files import _get_file_with_content
 from web.server.main import app
+from web.server.settings import get_settings
 
 pytestmark = pytest.mark.web
 
@@ -381,6 +382,21 @@ def test_evaluate(web_sushi_context: Context) -> None:
     with pa.ipc.open_stream(response.content) as reader:
         df = reader.read_pandas()
     assert not df.empty
+
+
+def test_meta() -> None:
+    from sqlmesh.cli.main import _sqlmesh_version
+
+    response = client.get("/api/meta")
+    assert response.status_code == 200
+    assert response.json() == {"version": _sqlmesh_version(), "has_running_task": False}
+
+
+def test_modules() -> None:
+    settings = get_settings()
+    response = client.get("/api/modules")
+    assert response.status_code == 200
+    assert response.json() == list(settings.modules)
 
 
 def test_fetchdf(web_sushi_context: Context) -> None:

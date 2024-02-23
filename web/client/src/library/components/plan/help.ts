@@ -1,5 +1,5 @@
 import { type ModelPlanOverviewTracker } from '@models/tracker-plan-overview'
-import { isArrayNotEmpty, isNotNil } from '../../../utils'
+import { isArrayNotEmpty, isFalse, isNotNil } from '../../../utils'
 import { type ModelPlanApplyTracker } from '@models/tracker-plan-apply'
 import { type ModelPlanCancelTracker } from '@models/tracker-plan-cancel'
 
@@ -34,7 +34,8 @@ export function getPlanOverviewDetails(
   const isLatest =
     ((planApply.isFinished &&
       (planOverview.isLatest || planOverview.isRunning)) ||
-      planCancel.isFinished) &&
+      planCancel.isFinished ||
+      isFalse(planApply.overview?.isFailed)) &&
     isNotNil(planApply.overview)
   const overview = isLatest ? planApply.overview : planOverview
   const plan = isLatest ? planApply : planOverview

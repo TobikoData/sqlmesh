@@ -370,7 +370,11 @@ function ModelColumnLineage(): JSX.Element {
           variant={BackgroundVariant.Cross}
           gap={32}
           size={4}
-          className={clsx(hasBackground ? 'opacity-100' : 'opacity-0')}
+          className={clsx(
+            hasBackground
+              ? 'opacity-100 stroke-neutral-200 dark:stroke-neutral-800'
+              : 'opacity-0',
+          )}
         />
       </ReactFlow>
     </>

@@ -75,6 +75,15 @@ const FileExplorer = function FileExplorer({
         </div>
       ) : (
         <>
+          <SearchList<ModelFile>
+            list={project.allFiles}
+            searchBy="path"
+            displayBy="name"
+            size={EnumSize.sm}
+            onSelect={setSelectedFile}
+            direction="top"
+            isFullWidth
+          />
           <FileExplorer.ContextMenu
             key={project.id}
             trigger={
@@ -115,14 +124,6 @@ const FileExplorer = function FileExplorer({
               <div className="ml-auto pl-5"></div>
             </ContextMenu.Item>
           </FileExplorer.ContextMenu>
-          <SearchList<ModelFile>
-            list={project.allFiles}
-            searchBy="path"
-            displayBy="name"
-            size={EnumSize.sm}
-            onSelect={setSelectedFile}
-            direction="bottom"
-          />
         </>
       )}
     </div>

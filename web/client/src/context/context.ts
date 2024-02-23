@@ -1,4 +1,5 @@
 import { type Confirmation } from '@components/modal/ModalConfirmation'
+import { ModelModuleController } from '@models/module-controller'
 import { ModelSQLMeshModel } from '@models/sqlmesh-model'
 import { create } from 'zustand'
 import { type Model, type Environment } from '~/api/client'
@@ -17,11 +18,11 @@ interface ContextStore {
   environments: Set<ModelEnvironment>
   lastSelectedModel?: ModelSQLMeshModel
   models: Map<string, ModelSQLMeshModel>
-  modules: string[]
+  modules: ModelModuleController
   splitPaneSizes: number[]
   setLastSelectedModel: (model?: ModelSQLMeshModel) => void
   setSplitPaneSizes: (splitPaneSizes: number[]) => void
-  setModules: (modules: string[]) => void
+  setModules: (modules: ModelModuleController) => void
   setVersion: (version?: string) => void
   setShowConfirmation: (showConfirmation: boolean) => void
   addConfirmation: (confirmation: Confirmation) => void
@@ -54,7 +55,7 @@ const environment =
 
 export const useStoreContext = create<ContextStore>((set, get) => ({
   version: undefined,
-  modules: [],
+  modules: new ModelModuleController(),
   splitPaneSizes: [20, 80],
   showConfirmation: false,
   confirmations: [],
@@ -71,7 +72,7 @@ export const useStoreContext = create<ContextStore>((set, get) => ({
   },
   setModules(modules) {
     set(() => ({
-      modules,
+      modules: new ModelModuleController(modules.list),
     }))
   },
   isModel(nameOrPath) {
@@ -274,7 +275,7 @@ export const useStoreContext = create<ContextStore>((set, get) => ({
         }
       })
 
-      const currentEnv = storedEnv ?? defaultEnv ?? s.environment
+      const currentEnv = s.environment ?? storedEnv ?? defaultEnv
       const environment = isTrue(prodEnv?.isInitial) ? prodEnv : currentEnv
 
       ModelEnvironment.save({ environments, environment })

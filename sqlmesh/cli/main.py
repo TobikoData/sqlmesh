@@ -562,13 +562,15 @@ def info(obj: Context) -> None:
     default=8000,
     help="Bind socket to this port. Default: 8000",
 )
+@click.option(
+    "--mode",
+    type=click.Choice(["ide", "default", "docs", "plan"], case_sensitive=False),
+    default="default",
+    help="Mode to start the UI in. Default: default",
+)
 @click.pass_context
 @error_handler
-def ui(
-    ctx: click.Context,
-    host: str,
-    port: int,
-) -> None:
+def ui(ctx: click.Context, host: str, port: int, mode: str) -> None:
     """Start a browser-based SQLMesh UI."""
     try:
         import uvicorn
@@ -578,6 +580,7 @@ def ui(
         ) from e
 
     os.environ["PROJECT_PATH"] = str(ctx.obj.path)
+    os.environ["UI_MODE"] = mode
     if ctx.parent:
         config = ctx.parent.params.get("config")
         gateway = ctx.parent.params.get("gateway")

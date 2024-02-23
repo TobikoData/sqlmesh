@@ -3,7 +3,7 @@ import CodeMirror from '@uiw/react-codemirror'
 import { type KeyBinding, keymap } from '@codemirror/view'
 import { type Extension } from '@codemirror/state'
 import { useApiFileByPath, useMutationApiSaveFile } from '~/api'
-import { debounceSync, isNil, isNotNil } from '~/utils'
+import { debounceSync, isNil } from '~/utils'
 import { useStoreContext } from '~/context/context'
 import { useStoreEditor } from '~/context/editor'
 import {
@@ -233,8 +233,6 @@ function CodeEditorRemoteFile({
     cancel: cancelRequestFileByPath,
   } = useApiFileByPath(path)
 
-  const [file, setFile] = useState<ModelFile | undefined>(files.get(path))
-
   const mutationSaveFile = useMutationApiSaveFile(client)
   const debouncedSaveChange = useCallback(
     debounceSync(
@@ -269,24 +267,26 @@ function CodeEditorRemoteFile({
   )
 
   useEffect(() => {
-    if (isNotNil(file) && file.isSynced) return
-
     void getFileContent().then(({ data }) => {
       if (isNil(data)) return
 
+      const file = files.get(data.path)
+
       if (isNil(file)) {
-        setFile(new ModelFile(data))
+        files.set(path, new ModelFile(data))
       } else {
         file.update(data)
-
-        refreshFiles()
       }
+
+      refreshFiles()
     })
 
     return () => {
       void cancelRequestFileByPath()
     }
-  }, [])
+  }, [path])
+
+  const file = files.get(path)
 
   return isFetching ? (
     <div className="flex justify-center items-center w-full h-full">

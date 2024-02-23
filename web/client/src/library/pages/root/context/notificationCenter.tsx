@@ -17,6 +17,7 @@ export const EnumErrorKey = {
   ColumnLineage: 'column-lineage',
   ModelLineage: 'model-lineage',
   Meta: 'meta',
+  Modules: 'modules',
   FileExplorer: 'file-explorer',
   Table: 'table',
   TableDiff: 'table-diff',
@@ -31,10 +32,8 @@ export interface ErrorIDE extends ApiExceptionPayload {
   tip?: string
 }
 
-interface IDE {
+interface NotificationCenter {
   errors: Set<ErrorIDE>
-  isPlanOpen: boolean
-  setIsPlanOpen: (isPlanOpen: boolean) => void
   addError: (
     key: ErrorKey,
     error: ApiExceptionPayload,
@@ -46,21 +45,18 @@ interface IDE {
   clearErrors: () => void
 }
 
-export const IDEContext = createContext<IDE>({
+export const NotificationCenterContext = createContext<NotificationCenter>({
   errors: new Set(),
-  isPlanOpen: false,
-  setIsPlanOpen: () => {},
   addError: () => ({ removeError: () => {}, error: {} as unknown as ErrorIDE }),
   removeError: () => {},
   clearErrors: () => {},
 })
 
-export default function IDEProvider({
+export default function NotificationCenterProvider({
   children,
 }: {
   children: ReactNode
 }): JSX.Element {
-  const [isPlanOpen, setIsPlanOpen] = useState(false)
   const [errors, setErrors] = useState<Set<ErrorIDE>>(new Set())
 
   function addError(
@@ -108,10 +104,8 @@ export default function IDEProvider({
   }
 
   return (
-    <IDEContext.Provider
+    <NotificationCenterContext.Provider
       value={{
-        isPlanOpen,
-        setIsPlanOpen,
         errors,
         addError,
         removeError,
@@ -119,10 +113,10 @@ export default function IDEProvider({
       }}
     >
       {children}
-    </IDEContext.Provider>
+    </NotificationCenterContext.Provider>
   )
 }
 
-export function useIDE(): IDE {
-  return useContext(IDEContext)
+export function useNotificationCenter(): NotificationCenter {
+  return useContext(NotificationCenterContext)
 }

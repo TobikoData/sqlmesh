@@ -177,7 +177,7 @@ export default function SearchList<
             static
             focus
             className={clsx(
-              'absolute z-50 right-0 transform cursor-pointer rounded-lg bg-theme border-2 border-neutral-200 min-w-[20rem]',
+              'absolute z-50 right-0 transform cursor-pointer rounded-lg bg-theme border-2 border-neutral-200',
               'p-2 bg-theme dark:bg-theme-lighter overflow-auto hover:scrollbar scrollbar--vertical scrollbar--horizontal shadow-2xl',
               direction === 'top' ? 'top-0' : 'bottom-10',
               size === EnumSize.sm && 'mt-7 max-h-[30vh]',

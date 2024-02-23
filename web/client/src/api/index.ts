@@ -49,13 +49,15 @@ import {
   type BodyInitiateApplyApiCommandsApplyPostCategories,
   type Model,
   getModelApiModelsNameGet,
+  getApiMetaApiModulesGet,
+  type Modules,
 } from './client'
 import {
-  useIDE,
+  useNotificationCenter,
   type ErrorIDE,
   EnumErrorKey,
   type ErrorKey,
-} from '~/library/pages/ide/context'
+} from '~/library/pages/root/context/notificationCenter'
 import { useState } from 'react'
 import { isNotNil } from '@utils/index'
 
@@ -83,6 +85,23 @@ export type UseQueryWithTimeoutOptions<
 > = UseQueryResult<TData, TError> & {
   cancel: () => void
   isTimeout: boolean
+}
+
+export function useApiModules(
+  options?: ApiOptions,
+): UseQueryWithTimeoutOptions<Modules[]> {
+  return useQueryWithTimeout(
+    {
+      queryKey: ['/api/modules'],
+      queryFn: getApiMetaApiModulesGet,
+      enabled: true,
+    },
+    {
+      ...options,
+      errorKey: EnumErrorKey.Modules,
+      trigger: 'API -> useApiModules',
+    },
+  )
 }
 
 export function useApiMeta(
@@ -389,7 +408,7 @@ export function useMutationApiSaveFile(
   { path: string; body: BodyWriteFileApiFilesPathPost },
   void
 > {
-  const { addError } = useIDE()
+  const { addError } = useNotificationCenter()
 
   return useMutation({
     mutationFn: async ({ path, body }) =>
@@ -424,7 +443,7 @@ function useQueryWithTimeout<
 ): UseQueryWithTimeoutOptions<TData, TError> {
   const key = options.queryKey.join(' -> ')
   const queryClient = useQueryClient()
-  const { addError } = useIDE()
+  const { addError } = useNotificationCenter()
 
   const [isTimeout, setIsTimeout] = useState(false)
 

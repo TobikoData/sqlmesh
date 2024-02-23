@@ -15,3 +15,6 @@ react-flow__attribution {
   pointer-events: none !important;
   z-index: -1 !important;
 }
+.react-flow__background path {
+  stroke: inherit;
+}
