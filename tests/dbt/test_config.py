@@ -5,7 +5,14 @@ from unittest.mock import PropertyMock
 
 import pytest
 from dbt.adapters.base import BaseRelation, Column
+from dbt.adapters.bigquery import BigQueryColumn
+from dbt.adapters.bigquery.relation import BigQueryRelation
+from dbt.adapters.databricks.column import DatabricksColumn
+from dbt.adapters.databricks.relation import DatabricksRelation
 from dbt.adapters.duckdb.relation import DuckDBRelation
+from dbt.adapters.redshift import RedshiftRelation
+from dbt.adapters.snowflake import SnowflakeColumn, SnowflakeRelation
+from dbt.adapters.sqlserver.sql_server_column import SQLServerColumn
 from dbt.contracts.relation import Policy
 from pytest_mock import MockerFixture
 
@@ -21,6 +28,7 @@ from sqlmesh.dbt.target import (
     BigQueryConfig,
     DatabricksConfig,
     DuckDbConfig,
+    MSSQLConfig,
     PostgresConfig,
     RedshiftConfig,
     SnowflakeConfig,
@@ -621,12 +629,44 @@ def test_bigquery_config():
         )
 
 
+def test_sqlserver_config():
+    _test_warehouse_config(
+        """
+        dbt-sqlserver:
+          target: dev
+          outputs:
+            dev:
+              type: sqlserver
+              host: localhost
+              user: user
+              password: password
+              database: master
+              driver: "ODBC Driver 17 for SQL Server"
+              schema: sushi
+              threads: 1
+              authentication: sql
+        """,
+        MSSQLConfig,
+        "dbt-sqlserver",
+        "outputs",
+        "dev",
+    )
+
+
 def test_db_type_to_relation_class():
+    assert (TARGET_TYPE_TO_CONFIG_CLASS["bigquery"].relation_class) == BigQueryRelation
+    assert (TARGET_TYPE_TO_CONFIG_CLASS["databricks"].relation_class) == DatabricksRelation
     assert (TARGET_TYPE_TO_CONFIG_CLASS["duckdb"].relation_class) == DuckDBRelation
+    assert (TARGET_TYPE_TO_CONFIG_CLASS["redshift"].relation_class) == RedshiftRelation
+    assert (TARGET_TYPE_TO_CONFIG_CLASS["snowflake"].relation_class) == SnowflakeRelation
 
 
 def test_db_type_to_column_class():
+    assert (TARGET_TYPE_TO_CONFIG_CLASS["bigquery"].column_class) == BigQueryColumn
+    assert (TARGET_TYPE_TO_CONFIG_CLASS["databricks"].column_class) == DatabricksColumn
     assert (TARGET_TYPE_TO_CONFIG_CLASS["duckdb"].column_class) == Column
+    assert (TARGET_TYPE_TO_CONFIG_CLASS["snowflake"].column_class) == SnowflakeColumn
+    assert (TARGET_TYPE_TO_CONFIG_CLASS["sqlserver"].column_class) == SQLServerColumn
 
 
 def test_db_type_to_quote_policy():

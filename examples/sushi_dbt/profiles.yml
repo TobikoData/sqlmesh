@@ -34,4 +34,14 @@ sushi:
       schema: sushi
       threads: 1
       type: redshift
+    sqlserver:
+      host: "{{ env_var('SQLSERVER_HOST') }}"
+      user: "{{ env_var('SQLSERVER_USER') }}"
+      password: "{{ env_var('SQLSERVER_PASSWORD') }}"
+      database: "{{ env_var('SQLSERVER_DATABASE') }}"
+      driver: "{{ env_var('SQLSERVER_DRIVER') }}"
+      authentication: sql
+      schema: sushi
+      threads: 1
+      type: sqlserver
   target: in_memory
