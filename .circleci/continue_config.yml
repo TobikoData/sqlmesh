@@ -166,6 +166,9 @@ jobs:
           name: Install envsubst
           command: sudo apt-get update && sudo apt-get install gettext-base
       - run:
+          name: Install ODBC
+          command: sudo apt-get install unixodbc-dev
+      - run:
           name: Install ruamel.yaml
           command: pip3 install ruamel.yaml==0.16.0
       - run:
@@ -194,6 +197,9 @@ jobs:
       - run:
           name: Install pg_config
           command: sudo apt-get update && sudo apt-get install libpq-dev
+      - run:
+          name: Install ODBC
+          command: sudo apt-get install unixodbc-dev
       - run:
           name: Install dependencies
           command: make install-engine-test
