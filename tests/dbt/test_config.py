@@ -5,14 +5,6 @@ from unittest.mock import PropertyMock
 
 import pytest
 from dbt.adapters.base import BaseRelation, Column
-from dbt.adapters.bigquery import BigQueryColumn
-from dbt.adapters.bigquery.relation import BigQueryRelation
-from dbt.adapters.databricks.column import DatabricksColumn
-from dbt.adapters.databricks.relation import DatabricksRelation
-from dbt.adapters.duckdb.relation import DuckDBRelation
-from dbt.adapters.redshift import RedshiftRelation
-from dbt.adapters.snowflake import SnowflakeColumn, SnowflakeRelation
-from dbt.adapters.sqlserver.sql_server_column import SQLServerColumn
 from dbt.contracts.relation import Policy
 from pytest_mock import MockerFixture
 
@@ -654,6 +646,12 @@ def test_sqlserver_config():
 
 
 def test_db_type_to_relation_class():
+    from dbt.adapters.bigquery.relation import BigQueryRelation
+    from dbt.adapters.databricks.relation import DatabricksRelation
+    from dbt.adapters.duckdb.relation import DuckDBRelation
+    from dbt.adapters.redshift import RedshiftRelation
+    from dbt.adapters.snowflake import SnowflakeRelation
+
     assert (TARGET_TYPE_TO_CONFIG_CLASS["bigquery"].relation_class) == BigQueryRelation
     assert (TARGET_TYPE_TO_CONFIG_CLASS["databricks"].relation_class) == DatabricksRelation
     assert (TARGET_TYPE_TO_CONFIG_CLASS["duckdb"].relation_class) == DuckDBRelation
@@ -662,6 +660,11 @@ def test_db_type_to_relation_class():
 
 
 def test_db_type_to_column_class():
+    from dbt.adapters.bigquery import BigQueryColumn
+    from dbt.adapters.databricks.column import DatabricksColumn
+    from dbt.adapters.snowflake import SnowflakeColumn
+    from dbt.adapters.sqlserver.sql_server_column import SQLServerColumn
+
     assert (TARGET_TYPE_TO_CONFIG_CLASS["bigquery"].column_class) == BigQueryColumn
     assert (TARGET_TYPE_TO_CONFIG_CLASS["databricks"].column_class) == DatabricksColumn
     assert (TARGET_TYPE_TO_CONFIG_CLASS["duckdb"].column_class) == Column
