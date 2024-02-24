@@ -771,7 +771,6 @@ class Snapshot(PydanticModel, SnapshotInfoMixin):
         if self.is_symbolic or (self.is_seed and intervals):
             return []
 
-        execution_time = execution_time or now()
         allow_partials = not end_bounded and self.is_model and self.model.allow_partials
         start_ts, end_ts = (
             to_timestamp(ts)
@@ -785,6 +784,10 @@ class Snapshot(PydanticModel, SnapshotInfoMixin):
 
         interval_unit = self.node.interval_unit
 
+        execution_time = execution_time or now()
+        if end_bounded:
+            execution_time = min(to_timestamp(execution_time), end_ts)
+
         if not allow_partials:
             upper_bound_ts = to_timestamp(
                 self.node.cron_floor(execution_time) if not ignore_cron else execution_time
@@ -793,9 +796,6 @@ class Snapshot(PydanticModel, SnapshotInfoMixin):
         else:
             upper_bound_ts = to_timestamp(execution_time)
             end_ts = min(end_ts, upper_bound_ts)
-
-        if end_bounded:
-            upper_bound_ts = end_ts
 
         lookback = self.model.lookback if self.is_model else 0
 

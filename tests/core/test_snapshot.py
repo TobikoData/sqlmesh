@@ -338,10 +338,13 @@ def test_missing_intervals_end_bounded_with_ignore_cron(make_snapshot):
         (to_timestamp("2023-01-02"), to_timestamp(end)),
     ]
     assert (
-        snapshot.missing_intervals(start, end, execution_time=execution_ts, end_bounded=True) == []
+        snapshot.missing_intervals(
+            start, to_datetime(end), execution_time=execution_ts, end_bounded=True
+        )
+        == []
     )
     assert snapshot.missing_intervals(
-        start, end, execution_time=execution_ts, ignore_cron=True, end_bounded=True
+        start, to_datetime(end), execution_time=execution_ts, ignore_cron=True, end_bounded=True
     ) == [
         (to_timestamp("2023-01-02"), to_timestamp(end)),
     ]
