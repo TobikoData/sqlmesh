@@ -5,6 +5,7 @@ import pytest
 from pytest_lazyfixture import lazy_fixture
 
 from sqlmesh.core.config.connection import (
+    BigQueryConnectionConfig,
     ConnectionConfig,
     DuckDBConnectionConfig,
     SnowflakeConnectionConfig,
@@ -508,3 +509,16 @@ def test_duckdb_shared(make_config, caplog, kwargs1, kwargs2, shared_adapter):
         assert id(adapter1) != id(adapter2)
         assert "Creating new DuckDB adapter" in caplog.messages[0]
         assert "Creating new DuckDB adapter" in caplog.messages[1]
+
+
+def test_bigquery(make_config):
+    config = make_config(
+        type="bigquery",
+        project="project",
+        execution_project="execution_project",
+    )
+
+    assert isinstance(config, BigQueryConnectionConfig)
+    assert config.project == "project"
+    assert config.execution_project == "execution_project"
+    assert config.get_catalog() == "project"

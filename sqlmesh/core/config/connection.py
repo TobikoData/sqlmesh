@@ -614,6 +614,7 @@ class BigQueryConnectionConfig(ConnectionConfig):
     method: BigQueryConnectionMethod = BigQueryConnectionMethod.OAUTH
 
     project: t.Optional[str] = None
+    execution_project: t.Optional[str] = None
     location: t.Optional[str] = None
     # Keyfile Auth
     keyfile: t.Optional[str] = None
@@ -675,7 +676,7 @@ class BigQueryConnectionConfig(ConnectionConfig):
         else:
             raise ConfigError("Invalid BigQuery Connection Method")
         client = google.cloud.bigquery.Client(
-            project=self.project,
+            project=self.execution_project or self.project,
             credentials=creds,
             location=self.location,
             client_info=client_info.ClientInfo(user_agent="sqlmesh"),
