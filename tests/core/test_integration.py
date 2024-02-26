@@ -379,6 +379,48 @@ def test_hourly_model_with_lookback_no_backfill_in_dev(init_and_plan_context: t.
         ]
 
 
+@freeze_time("2023-01-08 00:00:00")
+def test_parent_cron_before_child(init_and_plan_context: t.Callable):
+    context, plan = init_and_plan_context("examples/sushi")
+
+    model = context.get_model("sushi.waiter_revenue_by_day")
+    model = SqlModel.parse_obj(
+        {
+            **model.dict(),
+            "cron": "50 23 * * *",
+        }
+    )
+    context.upsert_model(model)
+
+    plan = context.plan("prod", no_prompts=True, skip_tests=True)
+    context.apply(plan)
+
+    top_waiters_model = context.get_model("sushi.top_waiters")
+    top_waiters_model = add_projection_to_model(t.cast(SqlModel, top_waiters_model), literal=True)
+    context.upsert_model(top_waiters_model)
+
+    snapshot = context.get_snapshot(model, raise_if_missing=True)
+    top_waiters_snapshot = context.get_snapshot("sushi.top_waiters", raise_if_missing=True)
+
+    with freeze_time("2023-01-08 23:55:00"):  # Past parent's cron, but before child's
+        plan = context.plan("dev", no_prompts=True, skip_tests=True)
+        # Make sure the waiter_revenue_by_day model is not backfilled.
+        assert plan.missing_intervals == [
+            SnapshotIntervals(
+                snapshot_id=top_waiters_snapshot.snapshot_id,
+                intervals=[
+                    (to_timestamp("2023-01-01"), to_timestamp("2023-01-02")),
+                    (to_timestamp("2023-01-02"), to_timestamp("2023-01-03")),
+                    (to_timestamp("2023-01-03"), to_timestamp("2023-01-04")),
+                    (to_timestamp("2023-01-04"), to_timestamp("2023-01-05")),
+                    (to_timestamp("2023-01-05"), to_timestamp("2023-01-06")),
+                    (to_timestamp("2023-01-06"), to_timestamp("2023-01-07")),
+                    (to_timestamp("2023-01-07"), to_timestamp("2023-01-08")),
+                ],
+            ),
+        ]
+
+
 @freeze_time("2023-01-08 15:00:00")
 def test_forward_only_parent_created_in_dev_child_created_in_prod(
     init_and_plan_context: t.Callable,
