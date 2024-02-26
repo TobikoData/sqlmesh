@@ -37,9 +37,9 @@ def _get_table(
             ancestor = ancestor.parent
         if isinstance(ancestor, exp.CTE):
             table = ancestor.alias
-    if not table and node.alias:
-        # Use node alias if available
-        table = node.alias
+    if not table and node.source_name:
+        # Use node source name if available
+        table = node.source_name
 
     try:
         return normalize_model_name(table, default_catalog=default_catalog, dialect=dialect)
