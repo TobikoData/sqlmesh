@@ -842,7 +842,7 @@ def union(
     evaluator: MacroEvaluator,
     type_: exp.Literal = exp.Literal.string("ALL"),
     *tables: exp.Column,  # These represent tables but the ast node will be columns
-) -> exp.Unionable:
+) -> exp.Query:
     """Returns a UNION of the given tables. Only choosing columns that have the same name and type.
 
     Example:

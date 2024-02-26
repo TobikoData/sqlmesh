@@ -21,12 +21,14 @@ WITH current_marketing AS (
   FROM sushi.marketing
   WHERE valid_to is null
 )
-SELECT DISTINCT
-  o.customer_id::INT AS customer_id, -- customer_id uniquely identifies customers
-  m.status,
-  d.zip
-FROM sushi.orders AS o
-LEFT JOIN current_marketing AS m
+(
+  SELECT DISTINCT
+    o.customer_id::INT AS customer_id, -- customer_id uniquely identifies customers
+    m.status,
+    d.zip
+  FROM sushi.orders AS o
+  LEFT JOIN current_marketing AS m
     ON o.customer_id = m.customer_id
-LEFT JOIN raw.demographics AS d
+  LEFT JOIN raw.demographics AS d
     ON o.customer_id = d.customer_id
+)

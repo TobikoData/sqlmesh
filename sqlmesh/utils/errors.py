@@ -66,7 +66,7 @@ class AuditError(SQLMeshError):
         self,
         audit_name: str,
         count: int,
-        query: exp.Subqueryable,
+        query: exp.Query,
         model: t.Optional[Model] = None,
         # the dialect of the engine adapter that evaluated the audit query
         adapter_dialect: t.Optional[str] = None,

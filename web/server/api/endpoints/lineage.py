@@ -37,9 +37,9 @@ def _get_table(
             ancestor = ancestor.parent
         if isinstance(ancestor, exp.CTE):
             table = ancestor.alias
-    if not table and node.alias:
-        # Use node alias if available
-        table = node.alias
+    if not table and node.source_name:
+        # Use node source name if available
+        table = node.source_name
 
     try:
         return normalize_model_name(table, default_catalog=default_catalog, dialect=dialect)
@@ -84,7 +84,7 @@ def _process_downstream(
     return graph
 
 
-def render_query(model: Model) -> exp.Subqueryable:
+def render_query(model: Model) -> exp.Query:
     """Render a model's query, adding in managed columns"""
     query = model.render_query_or_raise()
     if model.managed_columns:
@@ -110,7 +110,7 @@ async def column_lineage(
     try:
         model = context.get_model(model_name)
         dialect = model.dialect
-        sources: t.Dict[str, str | exp.Subqueryable] = {}
+        sources: t.Dict[str, str | exp.Query] = {}
         for m in context.dag.upstream(model.fqn):
             if m in context.models:
                 try:
