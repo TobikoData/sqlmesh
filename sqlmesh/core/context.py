@@ -1066,6 +1066,7 @@ class GenericContext(BaseContext, t.Generic[C]):
 
         Args:
             plan: The plan to apply.
+            circuit_breaker: An optional handler which checks if the apply should be aborted.
         """
         if (
             not plan.context_diff.has_changes
