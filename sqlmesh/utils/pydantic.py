@@ -78,8 +78,8 @@ def _expression_encoder(e: exp.Expression) -> str:
     return e.meta.get("sql") or e.sql(dialect=e.meta.get("dialect"))
 
 
-AuditQueryTypes = t.Union[exp.Subqueryable, d.JinjaQuery]
-ModelQueryTypes = t.Union[exp.Subqueryable, d.JinjaQuery, d.MacroFunc]
+AuditQueryTypes = t.Union[exp.Query, d.JinjaQuery]
+ModelQueryTypes = t.Union[exp.Query, d.JinjaQuery, d.MacroFunc]
 
 
 class PydanticModel(pydantic.BaseModel):

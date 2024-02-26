@@ -176,7 +176,7 @@ class EngineAdapter:
         batch_size: t.Optional[int] = None,
     ) -> t.List[SourceQuery]:
         batch_size = self.DEFAULT_BATCH_SIZE if batch_size is None else batch_size
-        if isinstance(query_or_df, (exp.Subqueryable, exp.DerivedTable)):
+        if isinstance(query_or_df, (exp.Query, exp.DerivedTable)):
             return [SourceQuery(query_factory=lambda: query_or_df)]  # type: ignore
         if not columns_to_types:
             raise SQLMeshError(
@@ -1154,9 +1154,7 @@ class EngineAdapter:
         if contains_json and properties:
             properties = {
                 k: (
-                    self._escape_json(v)
-                    if isinstance(v, (str, exp.Subqueryable, exp.DerivedTable))
-                    else v
+                    self._escape_json(v) if isinstance(v, (str, exp.Query, exp.DerivedTable)) else v
                 )
                 for k, v in properties.items()
             }
@@ -1948,12 +1946,12 @@ class EngineAdapter:
         columns_to_types: t.Dict[str, exp.DataType],
         where: t.Optional[exp.Expression] = None,
     ) -> Query:
-        if not isinstance(query, exp.Subqueryable) or (
+        if not isinstance(query, exp.Query) or (
             not where and query.named_selects == list(columns_to_types)
         ):
             return query
 
-        query = t.cast(exp.Subqueryable, query.copy())
+        query = t.cast(exp.Query, query.copy())
         with_ = query.args.pop("with", None)
         query = self._select_columns(columns_to_types).from_(
             query.subquery("_subquery", copy=False), copy=False

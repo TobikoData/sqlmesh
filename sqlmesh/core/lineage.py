@@ -14,7 +14,7 @@ if t.TYPE_CHECKING:
     from sqlmesh.core.model import Model
 
 
-def _render_query(model: Model) -> exp.Subqueryable:
+def _render_query(model: Model) -> exp.Query:
     """Render a model's query, adding in managed columns"""
     query = model.render_query_or_raise()
     if model.managed_columns:
