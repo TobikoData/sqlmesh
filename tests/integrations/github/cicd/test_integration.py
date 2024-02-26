@@ -111,7 +111,7 @@ def test_merge_pr_has_non_breaking_change(
     ]
     # Make a non-breaking change
     model = controller._context.get_model("sushi.waiter_revenue_by_day").copy()
-    model.query.expressions.append(exp.alias_("1", "new_col"))
+    model.query.select(exp.alias_("1", "new_col"), copy=False)
     controller._context.upsert_model(model)
 
     github_output_file = tmp_path / "github_output.txt"
@@ -309,7 +309,7 @@ def test_merge_pr_has_non_breaking_change_diff_start(
     ]
     # Make a non-breaking change
     model = controller._context.get_model("sushi.waiter_revenue_by_day").copy()
-    model.query.expressions.append(exp.alias_("1", "new_col"))
+    model.query.select(exp.alias_("1", "new_col"), copy=False)
     controller._context.upsert_model(model)
 
     github_output_file = tmp_path / "github_output.txt"
@@ -511,7 +511,7 @@ def test_merge_pr_has_non_breaking_change_no_categorization(
     ]
     # Make a non-breaking change
     model = controller._context.get_model("sushi.waiter_revenue_by_day").copy()
-    model.query.expressions.append(exp.alias_("1", "new_col"))
+    model.query.select(exp.alias_("1", "new_col"), copy=False)
     controller._context.upsert_model(model)
 
     github_output_file = tmp_path / "github_output.txt"
@@ -824,7 +824,7 @@ def test_no_merge_since_no_deploy_signal(
     ]
     # Make a non-breaking change
     model = controller._context.get_model("sushi.waiter_revenue_by_day").copy()
-    model.query.expressions.append(exp.alias_("1", "new_col"))
+    model.query.select(exp.alias_("1", "new_col"), copy=False)
     controller._context.upsert_model(model)
 
     github_output_file = tmp_path / "github_output.txt"
@@ -1007,7 +1007,7 @@ def test_no_merge_since_no_deploy_signal_no_approvers_defined(
     controller._context.users = [User(username="test", github_username="test_github", roles=[])]
     # Make a non-breaking change
     model = controller._context.get_model("sushi.waiter_revenue_by_day").copy()
-    model.query.expressions.append(exp.alias_("1", "new_col"))
+    model.query.select(exp.alias_("1", "new_col"), copy=False)
     controller._context.upsert_model(model)
 
     github_output_file = tmp_path / "github_output.txt"
@@ -1174,7 +1174,7 @@ def test_deploy_comment_pre_categorized(
     controller._context.users = [User(username="test", github_username="test_github", roles=[])]
     # Make a non-breaking change
     model = controller._context.get_model("sushi.waiter_revenue_by_day").copy()
-    model.query.expressions.append(exp.alias_("1", "new_col"))
+    model.query.select(exp.alias_("1", "new_col"), copy=False)
     controller._context.upsert_model(model)
 
     # Manually categorize the change as non-breaking and don't backfill anything
@@ -1367,7 +1367,7 @@ def test_error_msg_when_applying_plan_with_bug(
     ]
     # Make an error by adding a column that doesn't exist
     model = controller._context.get_model("sushi.waiter_revenue_by_day").copy()
-    model.query.expressions.append(exp.alias_("non_existing_col", "new_col"))
+    model.query.select(exp.alias_("non_existing_col", "new_col"), copy=False)
     controller._context.upsert_model(model)
 
     github_output_file = tmp_path / "github_output.txt"
@@ -1523,7 +1523,7 @@ def test_overlapping_changes_models(
     # These changes have shared children and this ensures we don't repeat the children in the output
     # Make a non-breaking change
     model = controller._context.get_model("sushi.customers").copy()
-    model.query.expressions.append(exp.alias_("1", "new_col"))
+    model.query.select(exp.alias_("1", "new_col"), copy=False)
     controller._context.upsert_model(model)
 
     # Make a breaking change
@@ -1576,17 +1576,17 @@ def test_overlapping_changes_models(
 
 +++ 
 
-@@ -25,7 +25,8 @@
+@@ -26,7 +26,8 @@
 
- SELECT DISTINCT
-   CAST(o.customer_id AS INT) AS customer_id,
-   m.status,
--  d.zip
-+  d.zip,
-+  1 AS new_col
- FROM sushi.orders AS o
- LEFT JOIN current_marketing AS m
-   ON o.customer_id = m.customer_id
+   SELECT DISTINCT
+     CAST(o.customer_id AS INT) AS customer_id,
+     m.status,
+-    d.zip
++    d.zip,
++    1 AS new_col
+   FROM sushi.orders AS o
+   LEFT JOIN current_marketing AS m
+     ON o.customer_id = m.customer_id
 ```
 
 ```
@@ -1744,7 +1744,7 @@ def test_capture_console_errors(
     ]
     # Make a non-breaking change
     model = controller._context.get_model("sushi.waiter_revenue_by_day").copy()
-    model.query.expressions.append(exp.alias_("1", "new_col"))
+    model.query.select(exp.alias_("1", "new_col"), copy=False)
     controller._context.upsert_model(model)
 
     github_output_file = tmp_path / "github_output.txt"
