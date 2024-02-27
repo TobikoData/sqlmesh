@@ -37,14 +37,48 @@ WHERE
         },
     }
 
-
-def test_get_lineage_managed_columns(web_sushi_context: Context) -> None:
-    # Get lineage with upstream managed columns
     response = client.get("/api/lineage/sushi.customers/customer_id")
     assert response.status_code == 200
-    assert "valid_from" in response.text
-    assert "valid_to" in response.text
+    assert response.json() == {
+        '"memory"."sushi"."customers"': {
+            "customer_id": {
+                "expression": "CAST(o.customer_id AS INT) AS customer_id /* customer_id uniquely identifies customers */",
+                "models": {'"memory"."sushi"."orders"': ["customer_id"]},
+                "source": """WITH current_marketing AS (
+  SELECT
+    marketing.customer_id AS customer_id,
+    marketing.status AS status
+  FROM memory.sushi.marketing AS marketing
+  WHERE
+    marketing.valid_to IS NULL
+)
+(
+  SELECT DISTINCT
+    CAST(o.customer_id AS INT) AS customer_id, /* customer_id uniquely identifies customers */
+    m.status AS status,
+    d.zip AS zip
+  FROM memory.sushi.orders AS o
+  LEFT JOIN current_marketing AS m
+    ON m.customer_id = o.customer_id
+  LEFT JOIN memory.raw.demographics AS d
+    ON d.customer_id = o.customer_id
+)""",
+            }
+        },
+        '"memory"."sushi"."orders"': {
+            "customer_id": {
+                "expression": "CAST(NULL AS INT) AS customer_id",
+                "models": {},
+                "source": """SELECT
+  CAST(NULL AS INT) AS customer_id
+FROM (VALUES
+  (1)) AS t(dummy)""",
+            }
+        },
+    }
 
+
+def test_get_lineage_managed_columns(web_sushi_context: Context) -> None:
     # Get lineage of managed column
     response = client.get("/api/lineage/sushi.marketing/valid_from")
     assert response.status_code == 200
@@ -53,7 +87,7 @@ def test_get_lineage_managed_columns(web_sushi_context: Context) -> None:
             "valid_from": {
                 "source": """SELECT
   CAST(NULL AS TIMESTAMP) AS valid_from
-FROM memory.sushi.raw_marketing""",
+FROM memory.sushi.raw_marketing AS raw_marketing""",
                 "expression": "CAST(NULL AS TIMESTAMP) AS valid_from",
                 "models": {},
             }
