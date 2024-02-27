@@ -31,7 +31,7 @@ def get_node_source(node: Node, dialect: DialectType) -> str:
     return source
 
 
-def get_source_name(node: Node, default_catalog: str, dialect: str) -> str:
+def get_source_name(node: Node, default_catalog: t.Optional[str], dialect: str) -> str:
     table = node.expression.find(exp.Table)
     if table:
         return normalize_model_name(table, default_catalog=default_catalog, dialect=dialect)
@@ -80,6 +80,8 @@ async def column_lineage(
         )
 
         for node in root.walk():
+            if root.name == "UNION" and node is root:
+                continue
             node_name = (
                 get_source_name(
                     node, default_catalog=context.default_catalog, dialect=model.dialect
@@ -90,9 +92,7 @@ async def column_lineage(
             if node_column in graph[node_name]:
                 dependencies = defaultdict(set, graph[node_name][column].models)
             else:
-                dependencies: t.Dict[str, t.Set[str]] = defaultdict(set)
-            if root.name == "UNION" and node is root:
-                continue
+                dependencies = defaultdict(set)
             for d in node.downstream:
                 table = get_source_name(
                     d, default_catalog=context.default_catalog, dialect=model.dialect

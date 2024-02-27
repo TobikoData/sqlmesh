@@ -20,17 +20,7 @@ def test_get_lineage(web_sushi_context: Context) -> None:
             "event_date": {
                 "source": """SELECT DISTINCT
   CAST(o.event_date AS DATE) AS event_date
-FROM (
-  SELECT
-    CAST(NULL AS INT) AS id,
-    CAST(NULL AS INT) AS customer_id,
-    CAST(NULL AS INT) AS waiter_id,
-    CAST(NULL AS INT) AS start_ts,
-    CAST(NULL AS INT) AS end_ts,
-    CAST(NULL AS DATE) AS event_date
-  FROM (VALUES
-    (1)) AS t(dummy)
-) AS o /* source: memory.sushi.orders */
+FROM memory.sushi.orders AS o
 WHERE
   o.event_date <= CAST('1970-01-01' AS DATE)
   AND o.event_date >= CAST('1970-01-01' AS DATE)""",
@@ -63,14 +53,7 @@ def test_get_lineage_managed_columns(web_sushi_context: Context) -> None:
             "valid_from": {
                 "source": """SELECT
   CAST(NULL AS TIMESTAMP) AS valid_from
-FROM (
-  SELECT
-    CAST(NULL AS INT) AS customer_id,
-    CAST(NULL AS TEXT) AS status,
-    CAST(NULL AS TIMESTAMP) AS updated_at
-  FROM (VALUES
-    (1)) AS t(dummy)
-) AS raw_marketing /* source: memory.sushi.raw_marketing */""",
+FROM memory.sushi.raw_marketing""",
                 "expression": "CAST(NULL AS TIMESTAMP) AS valid_from",
                 "models": {},
             }
