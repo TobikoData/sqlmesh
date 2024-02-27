@@ -80,16 +80,16 @@ def divider_block() -> dict:
 
 
 def fields_section_block(*messages: str) -> dict:
-    """Create a section block with multiple fields"""
+    """Create a section block with multiple markdown fields"""
     return {
         "type": "section",
-        **{
-            "fields": {
+        "fields": [
+            {
                 "type": "mrkdwn",
                 "text": normalize_message(message),
             }
             for message in messages
-        },
+        ],
     }
 
 
