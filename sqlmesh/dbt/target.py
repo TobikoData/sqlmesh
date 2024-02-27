@@ -489,6 +489,7 @@ class BigQueryConfig(TargetConfig):
     method: t.Optional[str] = BigQueryConnectionMethod.OAUTH
     dataset: t.Optional[str] = None
     project: t.Optional[str] = None
+    execution_project: t.Optional[str] = None
     location: t.Optional[str] = None
     keyfile: t.Optional[str] = None
     keyfile_json: t.Optional[t.Dict[str, t.Any]] = None
@@ -548,6 +549,7 @@ class BigQueryConfig(TargetConfig):
         return BigQueryConnectionConfig(
             method=self.method,
             project=self.database,
+            execution_project=self.execution_project,
             location=self.location,
             concurrent_tasks=self.threads,
             keyfile=self.keyfile,
