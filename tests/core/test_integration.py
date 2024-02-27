@@ -400,7 +400,6 @@ def test_parent_cron_before_child(init_and_plan_context: t.Callable):
     top_waiters_model = add_projection_to_model(t.cast(SqlModel, top_waiters_model), literal=True)
     context.upsert_model(top_waiters_model)
 
-    snapshot = context.get_snapshot(model, raise_if_missing=True)
     top_waiters_snapshot = context.get_snapshot("sushi.top_waiters", raise_if_missing=True)
 
     with freeze_time("2023-01-08 23:55:00"):  # Past parent's cron, but before child's

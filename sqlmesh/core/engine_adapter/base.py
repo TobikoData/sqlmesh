@@ -46,7 +46,7 @@ from sqlmesh.utils.errors import SQLMeshError, UnsupportedCatalogOperationError
 from sqlmesh.utils.pandas import columns_to_types_from_df
 
 if t.TYPE_CHECKING:
-    from sqlmesh.core._typing import SchemaName, TableName
+    from sqlmesh.core._typing import SchemaName, SessionProperties, TableName
     from sqlmesh.core.engine_adapter._typing import (
         DF,
         PySparkDataFrame,
@@ -1757,19 +1757,19 @@ class EngineAdapter:
             self._connection_pool.commit()
 
     @contextlib.contextmanager
-    def session(self) -> t.Iterator[None]:
+    def session(self, properties: SessionProperties) -> t.Iterator[None]:
         """A session context manager."""
         if self._is_session_active():
             yield
             return
 
-        self._begin_session()
+        self._begin_session(properties)
         try:
             yield
         finally:
             self._end_session()
 
-    def _begin_session(self) -> None:
+    def _begin_session(self, properties: SessionProperties) -> t.Any:
         """Begin a new session."""
 
     def _end_session(self) -> None:

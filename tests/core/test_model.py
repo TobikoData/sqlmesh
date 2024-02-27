@@ -2312,10 +2312,13 @@ def test_model_session_properties(sushi_context):
                 'spark.executor.memory' = '1G',
                 some_bool = True,
                 some_float = 0.1,
+                quoted_identifier = "quoted identifier",
+                unquoted_identifier = unquoted_identifier,
             )
         );
         SELECT a FROM tbl;
-        """
+        """,
+            default_dialect="snowflake",
         )
     )
 
@@ -2324,6 +2327,8 @@ def test_model_session_properties(sushi_context):
         "spark.executor.memory": "1G",
         "some_bool": True,
         "some_float": 0.1,
+        "quoted_identifier": exp.column("quoted identifier", quoted=True),
+        "unquoted_identifier": exp.column("unquoted_identifier", quoted=False),
     }
 
 
