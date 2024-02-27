@@ -529,7 +529,7 @@ def test_begin_end_session(mocker: MockerFixture):
 
     adapter = BigQueryEngineAdapter(lambda: connection_mock, job_retries=0)
 
-    with adapter.session():
+    with adapter.session({}):
         assert adapter._connection_pool.get_attribute("session_id") is not None
         adapter.execute("SELECT 2;")
 

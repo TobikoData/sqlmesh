@@ -275,3 +275,15 @@ sqlmesh_airflow = SQLMeshAirflow(
     },
 )
 ```
+
+## Configuring Virtual Warehouses
+
+The Snowflake Virtual Warehouse can be specified on a per-model basis using the `session_properties` attribute of the model definition:
+```sql
+MODEL (
+  name model_name,
+  session_properties (
+    'warehouse' = TEST_WAREHOUSE,
+  ),
+);
+```

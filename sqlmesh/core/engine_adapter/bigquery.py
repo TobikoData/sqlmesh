@@ -30,7 +30,7 @@ if t.TYPE_CHECKING:
     from google.cloud.bigquery.job.base import _AsyncJob as BigQueryQueryResult
     from google.cloud.bigquery.table import Table as BigQueryTable
 
-    from sqlmesh.core._typing import SchemaName, TableName
+    from sqlmesh.core._typing import SchemaName, SessionProperties, TableName
     from sqlmesh.core.engine_adapter._typing import DF, Query
     from sqlmesh.core.engine_adapter.base import QueryOrDF
 
@@ -131,7 +131,7 @@ class BigQueryEngineAdapter(InsertOverwriteWithMergeMixin):
             )
         ]
 
-    def _begin_session(self) -> None:
+    def _begin_session(self, properties: SessionProperties) -> None:
         from google.cloud.bigquery import QueryJobConfig
 
         job = self.client.query("SELECT 1;", job_config=QueryJobConfig(create_session=True))
@@ -366,7 +366,7 @@ class BigQueryEngineAdapter(InsertOverwriteWithMergeMixin):
             raise SQLMeshError(
                 f"The partition expression '{partition_sql}' doesn't contain a column."
             )
-        with self.session(), self.temp_table(
+        with self.session({}), self.temp_table(
             query_or_df, name=table_name, partitioned_by=partitioned_by
         ) as temp_table_name:
             if columns_to_types is None or columns_to_types[

@@ -1,10 +1,13 @@
 from __future__ import annotations
 
+import contextlib
 import typing as t
 
 import pandas as pd
 from pandas.api.types import is_datetime64_any_dtype  # type: ignore
 from sqlglot import exp
+from sqlglot.optimizer.normalize_identifiers import normalize_identifiers
+from sqlglot.optimizer.qualify_columns import quote_identifiers
 
 from sqlmesh.core.dialect import to_schema
 from sqlmesh.core.engine_adapter.mixins import GetCurrentCatalogFromFunctionMixin
@@ -16,9 +19,10 @@ from sqlmesh.core.engine_adapter.shared import (
     SourceQuery,
     set_catalog,
 )
+from sqlmesh.utils.errors import SQLMeshError
 
 if t.TYPE_CHECKING:
-    from sqlmesh.core._typing import SchemaName, TableName
+    from sqlmesh.core._typing import SchemaName, SessionProperties, TableName
     from sqlmesh.core.engine_adapter._typing import DF, Query
 
 
@@ -38,6 +42,38 @@ class SnowflakeEngineAdapter(GetCurrentCatalogFromFunctionMixin):
     CATALOG_SUPPORT = CatalogSupport.FULL_SUPPORT
     CURRENT_CATALOG_EXPRESSION = exp.func("current_database")
     COMMENT_CREATION_VIEW = CommentCreationView.IN_SCHEMA_DEF_NO_COLUMN_COMMAND
+
+    @contextlib.contextmanager
+    def session(self, properties: SessionProperties) -> t.Iterator[None]:
+        warehouse = properties.get("warehouse")
+        if not warehouse:
+            yield
+            return
+
+        if isinstance(warehouse, str):
+            warehouse = exp.to_identifier(warehouse)
+        if not isinstance(warehouse, exp.Expression):
+            raise SQLMeshError(f"Invalid warehouse: '{warehouse}'")
+
+        warehouse_exp = quote_identifiers(
+            normalize_identifiers(warehouse, dialect=self.dialect), dialect=self.dialect
+        )
+        warehouse_sql = warehouse_exp.sql(dialect=self.dialect)
+
+        current_warehouse_str = self.fetchone("SELECT CURRENT_WAREHOUSE()")[0]
+        # The warehouse value returned by Snowflake is already normalized, so only quoting is needed.
+        current_warehouse_exp = quote_identifiers(
+            exp.to_identifier(current_warehouse_str), dialect=self.dialect
+        )
+        current_warehouse_sql = current_warehouse_exp.sql(dialect=self.dialect)
+
+        if warehouse_sql == current_warehouse_sql:
+            yield
+            return
+
+        self.execute(f"USE WAREHOUSE {warehouse_sql}")
+        yield
+        self.execute(f"USE WAREHOUSE {current_warehouse_sql}")
 
     def _df_to_source_queries(
         self,

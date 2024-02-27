@@ -39,6 +39,9 @@ from sqlmesh.utils.pydantic import (
     model_validator_v1_args,
 )
 
+if t.TYPE_CHECKING:
+    from sqlmesh.core._typing import SessionProperties
+
 AuditReference = t.Tuple[str, t.Dict[str, exp.Expression]]
 
 
@@ -334,7 +337,7 @@ class ModelMeta(_Node):
         return {}
 
     @property
-    def session_properties(self) -> t.Dict[str, t.Union[exp.Expression | str | int | float | bool]]:
+    def session_properties(self) -> SessionProperties:
         """A dictionary of session properties."""
         if not self.session_properties_:
             return {}
