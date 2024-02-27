@@ -504,7 +504,7 @@ class SnapshotEvaluator:
             **common_render_kwargs,
         )
 
-        with self.adapter.transaction(), self.adapter.session():
+        with self.adapter.transaction(), self.adapter.session(snapshot.model.session_properties):
             wap_id: t.Optional[str] = None
             if (
                 table_name
@@ -599,7 +599,7 @@ class SnapshotEvaluator:
 
         evaluation_strategy = _evaluation_strategy(snapshot, self.adapter)
 
-        with self.adapter.transaction(), self.adapter.session():
+        with self.adapter.transaction(), self.adapter.session(snapshot.model.session_properties):
             self.adapter.execute(snapshot.model.render_pre_statements(**render_kwargs))
 
             if (
