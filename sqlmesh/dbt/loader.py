@@ -13,7 +13,7 @@ from sqlmesh.core.config import (
     ModelDefaultsConfig,
 )
 from sqlmesh.core.loader import LoadedProject, Loader
-from sqlmesh.core.macros import MacroRegistry
+from sqlmesh.core.macros import MacroRegistry, macro
 from sqlmesh.core.model import Model, ModelCache
 from sqlmesh.dbt.basemodel import BMC, BaseModelConfig
 from sqlmesh.dbt.context import DbtContext
@@ -77,7 +77,7 @@ class DbtLoader(Loader):
 
         # This doesn't do anything, the actual content will be loaded from the manifest
         return (
-            UniqueKeyDict("macros"),
+            macro.get_registry(),
             JinjaMacroRegistry(),
         )
 
