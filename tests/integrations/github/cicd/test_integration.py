@@ -1576,17 +1576,17 @@ def test_overlapping_changes_models(
 
 +++ 
 
-@@ -26,7 +26,8 @@
+@@ -25,7 +25,8 @@
 
-   SELECT DISTINCT
-     CAST(o.customer_id AS INT) AS customer_id,
-     m.status,
--    d.zip
-+    d.zip,
-+    1 AS new_col
-   FROM sushi.orders AS o
-   LEFT JOIN current_marketing AS m
-     ON o.customer_id = m.customer_id
+ SELECT DISTINCT
+   CAST(o.customer_id AS INT) AS customer_id,
+   m.status,
+-  d.zip
++  d.zip,
++  1 AS new_col
+ FROM sushi.orders AS o
+ LEFT JOIN current_marketing AS m
+   ON o.customer_id = m.customer_id
 ```
 
 ```
