@@ -73,7 +73,7 @@ docker_compose["services"]["sqlmesh-tests"] = {
     "entrypoint": "/bin/bash",
     "command": [
         "-c",
-        "make install-dev && pytest -m 'airflow and docker'",
+        "make install-dev && pytest -m 'airflow and docker and not cicdonly'",
     ],
     "image": "airflow-sqlmesh",
     "user": "airflow",
