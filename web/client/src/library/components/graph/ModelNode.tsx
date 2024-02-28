@@ -45,7 +45,7 @@ export default function ModelNode({
     const modelColumns = model?.columns ?? []
 
     Object.keys(lineage[id]?.columns ?? {}).forEach((column: string) => {
-      const found = modelColumns.find(({ name }) => name === column)
+      const found = modelColumns.find(({ name }) => name === decodeURI(column))
 
       if (isNil(found)) {
         modelColumns.push({ name: column, type: EnumColumnType.UNKNOWN })
@@ -100,6 +100,7 @@ export default function ModelNode({
     [setSelectedNodes, highlightedNodeModels],
   )
 
+  const splat = highlightedNodes?.['*']
   const hasSelectedColumns = columns.some(({ name }) =>
     connections.get(toID(id, name)),
   )
@@ -107,7 +108,6 @@ export default function ModelNode({
   const highlighted = Object.keys(highlightedNodes ?? {}).find(key =>
     highlightedNodes[key]!.includes(id),
   )
-  const splat = highlightedNodes?.['*']
   const isMainNode = mainNode === id
   const isHighlightedNode = highlightedNodeModels.includes(id)
   const isSelected = selectedNodes.has(id)
@@ -142,19 +142,33 @@ export default function ModelNode({
       onMouseEnter={() => setIsMouseOver(true)}
       onMouseLeave={() => setIsMouseOver(false)}
       className={clsx(
-        'text-xs font-semibold rounded-lg relative z-1',
-        isCTE ? 'text-neutral-100' : 'text-secondary-500 dark:text-primary-100',
-        (isModelExternal || isModelSeed) &&
-          'border-4 border-accent-500 ring-8 ring-accent-200',
-        isSelected && 'border-4 border-secondary-500 ring-8 ring-secondary-200',
-        isNil(highlighted)
-          ? isMainNode
-            ? 'ring-8 ring-brand-200'
-            : splat ?? 'ring-4 ring-neutral-20'
-          : highlighted,
+        'text-xs font-semibold border-4',
+        isMouseOver ? 'z-50' : 'z-1',
+        showColumns ? 'rounded-xl' : 'rounded-2xl',
         (hasHighlightedNodes ? isHighlightedNode : isActiveNode) || isMainNode
           ? 'opacity-100'
           : 'opacity-40 hover:opacity-100',
+        isNil(highlighted)
+          ? hasHighlightedNodes
+            ? splat
+            : [
+                isCTE
+                  ? 'border-accent-500 bg-accent-500 text-accent-500 dark:border-accent-300 dark:bg-accent-300 dark:text-accent-300'
+                  : isModelUnknown
+                  ? 'border-neutral-500 bg-neutral-500 text-neutral-500 dark:border-neutral-300 dark:bg-neutral-300 dark:text-neutral-300'
+                  : 'border-secondary-500 bg-secondary-500 text-secondary-500 dark:bg-primary-500  dark:border-primary-500 dark:text-primary-500',
+                isMainNode
+                  ? 'ring-8 ring-brand-50'
+                  : isModelExternal || isModelSeed
+                  ? 'ring-8 ring-accent-50'
+                  : '',
+              ]
+          : highlighted,
+        isSelected && isCTE
+          ? 'ring-8 ring-accent-50'
+          : isSelected && isModelUnknown
+          ? 'ring-8 ring-neutral-50'
+          : isSelected && 'ring-8 ring-secondary-50 dark:ring-primary-50',
       )}
       style={{
         maxWidth: isNil(nodeData.width)
@@ -169,45 +183,32 @@ export default function ModelNode({
         isSelected={isSelected}
         isDraggable={true}
         className={clsx(
-          'rounded-md',
-          isCTE
-            ? 'bg-accent-500'
-            : isMainNode
-            ? 'bg-brand-500 text-brand-100 font-black'
-            : 'bg-secondary-100 dark:bg-primary-900',
+          'bg-theme-lighter',
+          showColumns ? 'rounded-t-[8px]' : 'rounded-xl',
         )}
         hasLeft={targetPosition === Position.Left && isNil(lineageCache)}
         hasRight={sourcePosition === Position.Right && isNil(lineageCache)}
         handleClick={isInteractive ? handleClick : undefined}
         handleSelect={
-          mainNode === id || isCTE || highlightedNodeModels.includes(id)
+          mainNode === id ||
+          isCTE ||
+          hasHighlightedNodes ||
+          isNotNil(lineageCache)
             ? undefined
             : handleSelect
         }
         count={columns.length}
       />
       {showColumns && (
-        <>
-          <ModelColumns
-            className="max-h-[15rem]"
-            nodeId={id}
-            columns={columns}
-            disabled={shouldDisableColumns}
-            withHandles={true}
-            withSource={true}
-            withDescription={false}
-          />
-          <div
-            className={clsx(
-              'rounded-b-md py-1',
-              isCTE
-                ? 'bg-accent-500'
-                : isMainNode
-                ? 'bg-brand-500'
-                : 'bg-secondary-100 dark:bg-primary-900',
-            )}
-          ></div>
-        </>
+        <ModelColumns
+          className="max-h-[15rem] rounded-b-lg"
+          nodeId={id}
+          columns={columns}
+          disabled={shouldDisableColumns}
+          withHandles={true}
+          withSource={true}
+          withDescription={false}
+        />
       )}
     </div>
   )

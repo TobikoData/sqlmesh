@@ -152,7 +152,7 @@ export default function ModelLineage({
   }
 
   return (
-    <div className="relative h-full w-full">
+    <div className="relative h-full w-full overflow-hidden">
       {(isFetching || isMegringModels) && (
         <div className="absolute top-0 left-0 z-10 w-full h-full bg-theme flex justify-center items-center">
           <Loading className="inline-block">
@@ -185,6 +185,7 @@ function ModelColumnLineage(): JSX.Element {
     connectedNodes,
     connections,
     nodesMap,
+    showControls,
     handleError,
     setActiveNodes,
   } = useLineageFlow()
@@ -358,13 +359,15 @@ function ModelColumnLineage(): JSX.Element {
         snapGrid={[16, 16]}
         snapToGrid
       >
-        <Panel
-          position="top-right"
-          className="bg-theme !m-0 w-full !z-10"
-        >
-          <GraphControls nodes={nodes} />
-          <Divider />
-        </Panel>
+        {showControls && (
+          <Panel
+            position="top-right"
+            className="bg-theme !m-0 w-full !z-10"
+          >
+            <GraphControls nodes={nodes} />
+            <Divider />
+          </Panel>
+        )}
         <Controls className="bg-light p-1 rounded-md !border-none !shadow-lg" />
         <Background
           variant={BackgroundVariant.Cross}

@@ -1,6 +1,10 @@
 .react-flow__node {
   z-index: 10 !important;
 }
+.react-flow__handle {
+  background-color: currentColor;
+}
+.react-flow__node.react-flow__node-model:hover,
 .react-flow__node.react-flow__node-model:active {
   z-index: 20 !important;
 }
