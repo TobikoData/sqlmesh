@@ -99,6 +99,9 @@ class ModelConfig(BaseModelConfig):
     require_partition_filter: t.Optional[bool] = None
     partition_expiration_days: t.Optional[int] = None
 
+    # snowflake
+    snowflake_warehouse: t.Optional[str] = None
+
     # Private fields
     _sql_embedded_config: t.Optional[SqlStr] = None
     _sql_no_config: t.Optional[SqlStr] = None
@@ -348,6 +351,9 @@ class ModelConfig(BaseModelConfig):
 
             if table_properties:
                 model_kwargs["table_properties"] = table_properties
+
+        if context.target.type == "snowflake" and self.snowflake_warehouse is not None:
+            model_kwargs["session_properties"] = {"warehouse": self.snowflake_warehouse}
 
         return create_sql_model(
             self.canonical_name(context),

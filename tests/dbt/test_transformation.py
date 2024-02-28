@@ -814,3 +814,31 @@ def test_dbt_vars(sushi_test_project: Project):
 
     assert context.render("{{ var.has_var('some_other_var') }}") == "True"
     assert context.render("{{ var.has_var('missing') }}") == "False"
+
+
+def test_snowflake_session_properties(sushi_test_project: Project, mocker: MockerFixture):
+    context = sushi_test_project.context
+    context.target = SnowflakeConfig(
+        name="target", schema="test", database="test", account="foo", user="bar", password="baz"
+    )
+
+    base_config = ModelConfig(
+        name="model",
+        alias="model",
+        package_name="package",
+        schema="sushi",
+        partition_by={"field": "`ds`", "data_type": "datetime", "granularity": "month"},
+        materialized=Materialization.INCREMENTAL,
+        sql="SELECT 1 AS one FROM tbl_a",
+    )
+
+    assert base_config.to_sqlmesh(context).session_properties == {}
+
+    model_with_warehouse = base_config.copy(
+        update={"snowflake_warehouse": "test_warehouse"}
+    ).to_sqlmesh(context)
+
+    assert model_with_warehouse.session_properties_ == exp.Tuple(
+        expressions=[exp.Literal.string("warehouse").eq(exp.Literal.string("test_warehouse"))]
+    )
+    assert model_with_warehouse.session_properties == {"warehouse": "test_warehouse"}
