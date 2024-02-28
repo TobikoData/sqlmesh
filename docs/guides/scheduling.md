@@ -56,7 +56,7 @@ To integrate with [Airflow](../integrations/airflow.md), ensure that you meet th
         for dag in sqlmesh_airflow.dags:
             globals()[dag.dag_id] = dag
 
-    The example above uses `spark` as the engine of choice. Other engines can be configured instead by providing a corresponding string as an argument to the `SQLMeshAirflow` constructor. Supported strings are `"spark"`, `"databricks"`, `"snowflake"`, `"bigquery"` and `"redshift"`. See the [Airflow Cluster Configuration](../integrations/airflow.md#airflow-cluster-configuration) for full list of arguments and their descriptions.
+    The example above uses `spark` as the engine of choice. Other engines can be configured instead by providing a corresponding string as an argument to the `SQLMeshAirflow` constructor. Supported strings are `"spark"`, `"databricks"`, `"snowflake"`, `"bigquery"`, `"redshift"` and `"trino"`. See the [Airflow Cluster Configuration](../integrations/airflow.md#airflow-cluster-configuration) for full list of arguments and their descriptions.
 
 After setup is completed, the `sqlmesh_janitor_dag` DAG should become available in the Airflow UI when filtered by the `sqlmesh` tag:
 
