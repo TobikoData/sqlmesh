@@ -47,20 +47,10 @@ def get_column_name(node: Node) -> str:
     return exp.to_column(node.name).name
 
 
-@router.get("/{model_name:str}/{column_name:str}")
-async def column_lineage(
-    column_name: str,
-    model_name: str,
-    context: Context = Depends(get_loaded_context),
+def create_lineage_adjacency_list(
+    model_name: str, column_name: str, context: Context
 ) -> t.Dict[str, t.Dict[str, LineageColumn]]:
-    """Get a column's lineage"""
-    try:
-        model_name = context.get_model(model_name).fqn
-    except Exception:
-        raise ApiException(
-            message="Unable to get column lineage",
-            origin="API -> lineage -> column_lineage",
-        )
+    model_name = context.get_model(model_name).fqn
 
     graph: t.Dict[str, t.Dict[str, LineageColumn]] = defaultdict(dict)
     nodes = [(model_name, column_name)]
@@ -109,6 +99,22 @@ async def column_lineage(
                 models=dependencies,
             )
     return graph
+
+
+@router.get("/{model_name:str}/{column_name:str}")
+async def column_lineage(
+    model_name: str,
+    column_name: str,
+    context: Context = Depends(get_loaded_context),
+) -> t.Dict[str, t.Dict[str, LineageColumn]]:
+    """Get a column's lineage"""
+    try:
+        return create_lineage_adjacency_list(model_name, column_name, context)
+    except Exception:
+        raise ApiException(
+            message="Unable to get column lineage",
+            origin="API -> lineage -> column_lineage",
+        )
 
 
 @router.get("/{model_name:str}")
