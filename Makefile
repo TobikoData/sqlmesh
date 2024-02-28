@@ -96,20 +96,20 @@ cicd-test:
 	pytest -n auto -m "fast or slow"
 
 core-fast-test:
-	pytest -n auto -m "fast and not web and not github and not dbt and not airflow and not jupyter and not cicdonly"
+	pytest -n auto -m "fast and not web and not github and not dbt and not airflow and not jupyter"
 
 core-slow-test:
-	pytest -n auto -m "(fast or slow) and not web and not github and not dbt and not airflow and not jupyter and not cicdonly"
+	pytest -n auto -m "(fast or slow) and not web and not github and not dbt and not airflow and not jupyter"
 
 airflow-fast-test:
-	pytest -n auto -m "fast and airflow and not cicdonly"
+	pytest -n auto -m "fast and airflow"
 
 airflow-test:
-	pytest -n auto -m "(fast or slow) and airflow and not cicdonly"
+	pytest -n auto -m "(fast or slow) and airflow"
 
 airflow-local-test:
 	export AIRFLOW__DATABASE__SQL_ALCHEMY_CONN=postgresql+psycopg2://airflow:airflow@localhost/airflow && \
-		pytest -n 1 -m "docker and airflow and not cicdonly"
+		pytest -n 1 -m "docker and airflow"
 
 airflow-docker-test:
 	make -C ./examples/airflow docker-test
@@ -119,58 +119,58 @@ airflow-local-test-with-env: develop airflow-clean airflow-init airflow-run airf
 airflow-docker-test-with-env: develop airflow-clean airflow-init airflow-run airflow-docker-test airflow-stop
 
 engine-slow-test:
-	pytest -n auto -m "(fast or slow) and engine and not cicdonly"
+	pytest -n auto -m "(fast or slow) and engine"
 
 engine-docker-test:
-	pytest -n auto -m "docker and engine and not cicdonly"
+	pytest -n auto -m "docker and engine"
 
 engine-remote-test:
-	pytest -n auto -m "remote and engine and not cicdonly"
+	pytest -n auto -m "remote and engine"
 
 engine-test:
-	pytest -n auto -m "engine and not cicdonly"
+	pytest -n auto -m "engine"
 
 dbt-test:
 	pytest -n auto -m "dbt and not cicdonly"
 
 github-test:
-	pytest -n auto -m "github and not cicdonly"
+	pytest -n auto -m "github"
 
 jupyter-test:
-	pytest -n auto -m "jupyter and not cicdonly"
+	pytest -n auto -m "jupyter"
 
 web-test:
-	pytest -n auto -m "web and not cicdonly"
+	pytest -n auto -m "web"
 
 bigquery-test:
-	pytest -n auto -m "bigquery and not cicdonly"
+	pytest -n auto -m "bigquery"
 
 databricks-test:
-	pytest -n auto -m "databricks and not cicdonly"
+	pytest -n auto -m "databricks"
 
 duckdb-test:
-	pytest -n auto -m "duckdb and not cicdonly"
+	pytest -n auto -m "duckdb"
 
 mssql-test:
-	pytest -n auto -m "mssql and not cicdonly"
+	pytest -n auto -m "mssql"
 
 mysql-test:
-	pytest -n auto -m "mysql and not cicdonly"
+	pytest -n auto -m "mysql"
 
 postgres-test:
-	pytest -n auto -m "postgres and not cicdonly"
+	pytest -n auto -m "postgres"
 
 redshift-test:
-	pytest -n auto -m "redshift and not cicdonly"
+	pytest -n auto -m "redshift"
 
 snowflake-test:
-	pytest -n auto -m "snowflake and not cicdonly"
+	pytest -n auto -m "snowflake"
 
 spark-test:
-	pytest -n auto -m "spark and not cicdonly"
+	pytest -n auto -m "spark"
 
 spark-pyspark-test:
-	pytest -n auto -m "spark_pyspark and not cicdonly"
+	pytest -n auto -m "spark_pyspark"
 
 trino-test:
-	pytest -n auto -m "trino or trino_iceberg and not cicdonly"
+	pytest -n auto -m "trino or trino_iceberg"
