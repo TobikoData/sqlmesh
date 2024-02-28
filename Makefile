@@ -3,6 +3,9 @@
 install-dev:
 	pip3 install -e ".[dev,web,slack]"
 
+install-cicd-test:
+	pip3 install -e ".[dev,web,slack,cicdtest]"
+
 install-doc:
 	pip3 install -r ./docs/requirements.txt
 
@@ -84,9 +87,12 @@ engine-down:
 	docker-compose -f ./tests/core/engine_adapter/docker-compose.yaml down
 
 fast-test:
-	pytest -n auto -m "fast"
+	pytest -n auto -m "fast and not cicdonly"
 
 slow-test:
+	pytest -n auto -m "(fast or slow) and not cicdonly"
+
+cicd-test:
 	pytest -n auto -m "fast or slow"
 
 core-fast-test:
@@ -125,7 +131,7 @@ engine-test:
 	pytest -n auto -m "engine"
 
 dbt-test:
-	pytest -n auto -m "dbt"
+	pytest -n auto -m "dbt and not cicdonly"
 
 github-test:
 	pytest -n auto -m "github"

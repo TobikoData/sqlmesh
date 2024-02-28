@@ -645,6 +645,7 @@ def test_sqlserver_config():
     )
 
 
+@pytest.mark.cicdonly
 def test_db_type_to_relation_class():
     from dbt.adapters.bigquery.relation import BigQueryRelation
     from dbt.adapters.databricks.relation import DatabricksRelation
@@ -659,6 +660,7 @@ def test_db_type_to_relation_class():
     assert (TARGET_TYPE_TO_CONFIG_CLASS["snowflake"].relation_class) == SnowflakeRelation
 
 
+@pytest.mark.cicdonly
 def test_db_type_to_column_class():
     from dbt.adapters.bigquery import BigQueryColumn
     from dbt.adapters.databricks.column import DatabricksColumn
