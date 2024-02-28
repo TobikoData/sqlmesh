@@ -52,17 +52,13 @@ WHERE
   WHERE
     marketing.valid_to IS NULL
 )
-(
-  SELECT DISTINCT
-    CAST(o.customer_id AS INT) AS customer_id, /* customer_id uniquely identifies customers */
-    m.status AS status,
-    d.zip AS zip
-  FROM memory.sushi.orders AS o
-  LEFT JOIN current_marketing AS m
-    ON m.customer_id = o.customer_id
-  LEFT JOIN memory.raw.demographics AS d
-    ON d.customer_id = o.customer_id
-)""",
+SELECT DISTINCT
+  CAST(o.customer_id AS INT) AS customer_id /* customer_id uniquely identifies customers */
+FROM memory.sushi.orders AS o
+LEFT JOIN current_marketing AS m
+  ON m.customer_id = o.customer_id
+LEFT JOIN memory.raw.demographics AS d
+  ON d.customer_id = o.customer_id""",
             }
         },
         '"memory"."sushi"."orders"': {
