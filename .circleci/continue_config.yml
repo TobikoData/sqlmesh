@@ -70,7 +70,7 @@ jobs:
           name: Install ODBC
           command: sudo apt-get install unixodbc-dev
       - run:
-          name: Install dependencies
+          name: Install SQLMesh and dbt adapter dependencies
           command: make install-cicd-test
       - run:
           name: Run linters and code style checks
@@ -95,7 +95,7 @@ jobs:
           name: Install ODBC
           command: sudo apt-get install unixodbc-dev
       - run:
-          name: Install dependencies
+          name: Install SQLMesh and dbt adapter dependencies
           command: make install-cicd-test
       - run:
           name: Install Pydantic v1
