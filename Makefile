@@ -3,7 +3,7 @@
 install-dev:
 	pip3 install -e ".[dev,web,slack]"
 
-install-cicdtest:
+install-cicd-test:
 	pip3 install -e ".[dev,web,slack,cicdtest]"
 
 install-doc:

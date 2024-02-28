@@ -71,7 +71,7 @@ jobs:
           command: sudo apt-get install unixodbc-dev
       - run:
           name: Install dependencies
-          command: make install-cicdtest
+          command: make install-cicd-test
       - run:
           name: Run linters and code style checks
           command: make py-style
@@ -96,7 +96,7 @@ jobs:
           command: sudo apt-get install unixodbc-dev
       - run:
           name: Install dependencies
-          command: make install-cicdtest
+          command: make install-cicd-test
       - run:
           name: Install Pydantic v1
           command: pip install --upgrade "pydantic<2.0.0" && pip uninstall pydantic_core -y
