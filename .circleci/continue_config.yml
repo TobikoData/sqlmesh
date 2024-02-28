@@ -71,13 +71,13 @@ jobs:
           command: sudo apt-get install unixodbc-dev
       - run:
           name: Install dependencies
-          command: make install-dev
+          command: make install-cicd
       - run:
           name: Run linters and code style checks
           command: make py-style
       - run:
           name: Run slow tests
-          command: make slow-test
+          command: make cicd-test
 
   style_and_slow_tests_pydantic_v1:
     docker:
@@ -96,7 +96,7 @@ jobs:
           command: sudo apt-get install unixodbc-dev
       - run:
           name: Install dependencies
-          command: make install-dev
+          command: make install-cicd
       - run:
           name: Install Pydantic v1
           command: pip install --upgrade "pydantic<2.0.0" && pip uninstall pydantic_core -y
@@ -105,7 +105,7 @@ jobs:
           command: make py-style
       - run:
           name: Run slow tests
-          command: make slow-test
+          command: make cicd-test
 
   ui_style:
     docker:
@@ -166,9 +166,6 @@ jobs:
           name: Install envsubst
           command: sudo apt-get update && sudo apt-get install gettext-base
       - run:
-          name: Install ODBC
-          command: sudo apt-get install unixodbc-dev
-      - run:
           name: Install ruamel.yaml
           command: pip3 install ruamel.yaml==0.16.0
       - run:
@@ -197,9 +194,6 @@ jobs:
       - run:
           name: Install pg_config
           command: sudo apt-get update && sudo apt-get install libpq-dev
-      - run:
-          name: Install ODBC
-          command: sudo apt-get install unixodbc-dev
       - run:
           name: Install dependencies
           command: make install-engine-test
