@@ -108,7 +108,7 @@ setup(
             "types-requests==2.28.8",
             "typing-extensions",
         ],
-        "cicd": [
+        "cicdtest": [
             "dbt-bigquery",
             "dbt-databricks",
             "dbt-redshift",

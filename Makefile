@@ -3,8 +3,8 @@
 install-dev:
 	pip3 install -e ".[dev,web,slack]"
 
-install-cicd:
-	pip3 install -e ".[dev,web,slack,cicd]"
+install-cicdtest:
+	pip3 install -e ".[dev,web,slack,cicdtest]"
 
 install-doc:
 	pip3 install -r ./docs/requirements.txt
