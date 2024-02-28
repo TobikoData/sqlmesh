@@ -80,7 +80,7 @@ def create_lineage_adjacency_list(
             )
             node_column = get_column_name(node)
             if node_column in graph[node_name]:
-                dependencies = defaultdict(set, graph[node_name][column].models)
+                dependencies = defaultdict(set, graph[node_name][node_column].models)
             else:
                 dependencies = defaultdict(set)
             for d in node.downstream:
