@@ -189,14 +189,18 @@ function PlanChangePreviewDirect({
                           <LineageFlowProvider
                             showColumns={false}
                             showConnected={true}
+                            showControls={false}
                           >
                             <ModelLineage
                               model={model}
                               highlightedNodes={{
-                                'border-4 border-warning-500':
+                                'border-4 border-warning-500 bg-warning-500 text-warning-500 dark:text-light':
                                   change.indirect?.map(c => c.name) ?? [],
-                                'border-4 border-secondary-500': [change.name],
-                                '*': [],
+                                'border-4 border-secondary-500 dark:border-primary-500 bg-secondary-500 dark:bg-primary-500 text-bg-secondary-500 dark:text-light':
+                                  [change.name],
+                                '*': [
+                                  'border-4 border-neutral-500 bg-neutral-500 text-neutral-600 dark:text-light',
+                                ],
                               }}
                             />
                           </LineageFlowProvider>

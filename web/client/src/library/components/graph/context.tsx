@@ -14,7 +14,7 @@ import { EnumSide } from '~/types/enum'
 import { isFalse, toID } from '@utils/index'
 import { type ConnectedNode } from '~/workers/lineage'
 import { type Node } from 'reactflow'
-import { ErrorIDE } from '~/library/pages/root/context/notificationCenter'
+import { type ErrorIDE } from '~/library/pages/root/context/notificationCenter'
 export interface Connections {
   left: string[]
   right: string[]
@@ -42,6 +42,7 @@ interface LineageFlow {
   hasBackground: boolean
   withImpacted: boolean
   withSecondary: boolean
+  showControls: boolean
   manuallySelectedColumn?: [ModelSQLMeshModel, Column]
   highlightedNodes: HighlightedNodes
   nodesMap: Record<string, Node>
@@ -93,6 +94,7 @@ export const LineageFlowContext = createContext<LineageFlow>({
   connectedNodes: new Set(),
   highlightedNodes: {},
   nodesMap: {},
+  showControls: true,
   setHighlightedNodes: () => {},
   setWithColumns: () => false,
   setHasBackground: () => false,
@@ -123,12 +125,14 @@ export default function LineageFlowProvider({
   children,
   showColumns = false,
   showConnected = false,
+  showControls = true,
 }: {
   children: React.ReactNode
   handleClickModel?: (modelName: string) => void
   handleError?: (error: ErrorIDE) => void
   showColumns?: boolean
   showConnected?: boolean
+  showControls?: boolean
 }): JSX.Element {
   const models = useStoreContext(s => s.models)
 
@@ -280,6 +284,7 @@ export default function LineageFlowProvider({
         withConnected,
         withImpacted,
         withSecondary,
+        showControls,
         hasBackground,
         nodesMap,
         unknownModels,

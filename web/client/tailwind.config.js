@@ -4,6 +4,9 @@ module.exports = {
   darkMode: ['class', '[mode="dark"]'],
   theme: {
     colors: {
+      current: 'currentColor',
+      inherit: 'inherit',
+      transparent: 'transparent',
       prose: {
         DEFAULT: 'var(--color-text)',
         darker: 'var(--color-text-darker)',
@@ -46,6 +49,9 @@ module.exports = {
         5: 'var(--color-brand-5)',
         10: 'var(--color-brand-10)',
         20: 'var(--color-brand-20)',
+        75: 'var(--color-brand-75)',
+        50: 'var(--color-brand-50)',
+        90: 'var(--color-brand-90)',
         100: 'var(--color-brand-100)',
         200: 'var(--color-brand-200)',
         300: 'var(--color-brand-300)',
@@ -115,6 +121,7 @@ module.exports = {
       },
       accent: {
         5: 'var(--color-accent-5)',
+        50: 'var(--color-accent-50)',
         100: 'var(--color-accent-100)',
         200: 'var(--color-accent-200)',
         300: 'var(--color-accent-300)',
@@ -169,10 +176,6 @@ module.exports = {
         700: 'var(--color-warning-700)',
         800: 'var(--color-warning-800)',
         900: 'var(--color-warning-900)',
-      },
-      transparent: {
-        DEFAULT: 'transparent',
-        20: 'var(--color-transparent-20)',
       },
     },
     fontFamily: {
