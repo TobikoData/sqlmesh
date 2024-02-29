@@ -61,12 +61,12 @@ def sqlmesh_config(
 class DbtLoader(Loader):
     def __init__(self, variables: t.Optional[t.Dict[str, t.Any]] = None) -> None:
         self._variables = variables
-        self._project: t.Optional[Project] = None
+        self._projects: t.List[Project] = []
         self._macros_max_mtime: t.Optional[float] = None
         super().__init__()
 
     def load(self, context: GenericContext, update_schemas: bool = True) -> LoadedProject:
-        self._project = None
+        self._projects = []
         return super().load(context, update_schemas)
 
     def _load_scripts(self) -> t.Tuple[MacroRegistry, JinjaMacroRegistry]:
@@ -86,36 +86,38 @@ class DbtLoader(Loader):
     ) -> UniqueKeyDict[str, Model]:
         models: UniqueKeyDict[str, Model] = UniqueKeyDict("models")
 
-        project = self._load_project()
-        context = project.context.copy()
+        for project in self._load_projects():
+            context = project.context.copy()
 
-        macros_max_mtime = self._macros_max_mtime
-        yaml_max_mtimes = self._compute_yaml_max_mtime_per_subfolder(self._context.path)
-        cache = DbtLoader._Cache(self, project, macros_max_mtime, yaml_max_mtimes)
+            macros_max_mtime = self._macros_max_mtime
+            yaml_max_mtimes = self._compute_yaml_max_mtime_per_subfolder(
+                project.context.project_root
+            )
+            cache = DbtLoader._Cache(self, project, macros_max_mtime, yaml_max_mtimes)
 
-        logger.debug("Converting models to sqlmesh")
-        # Now that config is rendered, create the sqlmesh models
-        for package in project.packages.values():
-            context.set_and_render_variables(package.variables, package.name)
-            package_models: t.Dict[str, BaseModelConfig] = {**package.models, **package.seeds}
+            logger.debug("Converting models to sqlmesh")
+            # Now that config is rendered, create the sqlmesh models
+            for package in project.packages.values():
+                context.set_and_render_variables(package.variables, package.name)
+                package_models: t.Dict[str, BaseModelConfig] = {**package.models, **package.seeds}
 
-            for model in package_models.values():
-                if (
-                    not context.sqlmesh_config.feature_flags.dbt.scd_type_2_support
-                    and isinstance(model, ModelConfig)
-                    and model.model_kind(context).is_scd_type_2
-                ):
-                    logger.info(
-                        "Skipping loading Snapshot (SCD Type 2) models due to the feature flag disabling this feature"
+                for model in package_models.values():
+                    if (
+                        not context.sqlmesh_config.feature_flags.dbt.scd_type_2_support
+                        and isinstance(model, ModelConfig)
+                        and model.model_kind(context).is_scd_type_2
+                    ):
+                        logger.info(
+                            "Skipping loading Snapshot (SCD Type 2) models due to the feature flag disabling this feature"
+                        )
+                        continue
+                    sqlmesh_model = cache.get_or_load_model(
+                        model.path, loader=lambda: self._to_sqlmesh(model, context)
                     )
-                    continue
-                sqlmesh_model = cache.get_or_load_model(
-                    model.path, loader=lambda: self._to_sqlmesh(model, context)
-                )
 
-                models[sqlmesh_model.fqn] = sqlmesh_model
+                    models[sqlmesh_model.fqn] = sqlmesh_model
 
-        models.update(self._load_external_models())
+            models.update(self._load_external_models())
 
         return models
 
@@ -124,59 +126,65 @@ class DbtLoader(Loader):
     ) -> UniqueKeyDict[str, Audit]:
         audits: UniqueKeyDict = UniqueKeyDict("audits")
 
-        project = self._load_project()
-        context = project.context
+        for project in self._load_projects():
+            context = project.context
 
-        logger.debug("Converting audits to sqlmesh")
-        for package in project.packages.values():
-            context.set_and_render_variables(package.variables, package.name)
-            for test in package.tests.values():
-                logger.debug("Converting '%s' to sqlmesh format", test.name)
-                audits[test.name] = test.to_sqlmesh(context)
+            logger.debug("Converting audits to sqlmesh")
+            for package in project.packages.values():
+                context.set_and_render_variables(package.variables, package.name)
+                for test in package.tests.values():
+                    logger.debug("Converting '%s' to sqlmesh format", test.name)
+                    audits[test.name] = test.to_sqlmesh(context)
 
         return audits
 
-    def _load_project(self) -> Project:
-        if self._project:
-            return self._project
+    def _load_projects(self) -> t.List[Project]:
+        if not self._projects:
+            target_name = self._context.gateway or self._context.config.default_gateway
 
-        target_name = self._context.gateway or self._context.config.default_gateway
+            self._projects = []
 
-        self._project = Project.load(
-            DbtContext(
-                project_root=self._context.path,
-                target_name=target_name,
-                sqlmesh_config=self._context.config,
-            ),
-            variables=self._variables,
-        )
-        if self._project.context.target.database != self._context.default_catalog:
-            raise ConfigError("Project default catalog does not match context default catalog")
-        for path in self._project.project_files:
-            self._track_file(path)
+            for path, config in self._context.configs.items():
+                project = Project.load(
+                    DbtContext(
+                        project_root=path,
+                        target_name=target_name,
+                        sqlmesh_config=config,
+                    ),
+                    variables=self._variables,
+                )
 
-        context = self._project.context
+                self._projects.append(project)
 
-        macros_mtimes: t.List[float] = []
+                if project.context.target.database != self._context.default_catalog:
+                    raise ConfigError(
+                        "Project default catalog does not match context default catalog"
+                    )
+                for path in project.project_files:
+                    self._track_file(path)
 
-        for package_name, package in self._project.packages.items():
-            context.add_sources(package.sources)
-            context.add_seeds(package.seeds)
-            context.add_models(package.models)
-            macros_mtimes.extend(
-                [
-                    self._path_mtimes[m.path]
-                    for m in package.macros.values()
-                    if m.path in self._path_mtimes
-                ]
-            )
+                context = project.context
 
-        for package_name, macro_infos in context.manifest.all_macros.items():
-            context.add_macros(macro_infos, package=package_name)
+                macros_mtimes: t.List[float] = []
 
-        self._macros_max_mtime = max(macros_mtimes) if macros_mtimes else None
+                for package_name, package in project.packages.items():
+                    context.add_sources(package.sources)
+                    context.add_seeds(package.seeds)
+                    context.add_models(package.models)
+                    macros_mtimes.extend(
+                        [
+                            self._path_mtimes[m.path]
+                            for m in package.macros.values()
+                            if m.path in self._path_mtimes
+                        ]
+                    )
 
-        return self._project
+                for package_name, macro_infos in context.manifest.all_macros.items():
+                    context.add_macros(macro_infos, package=package_name)
+
+                self._macros_max_mtime = max(macros_mtimes) if macros_mtimes else None
+
+        return self._projects
 
     @classmethod
     def _to_sqlmesh(cls, config: BMC, context: DbtContext) -> Model:
