@@ -2,7 +2,7 @@ import typing as t
 
 import pytest
 from pytest_mock.plugin import MockerFixture
-from sqlglot import exp
+from sqlglot import exp, parse_one
 
 from sqlmesh.core.engine_adapter import TrinoEngineAdapter
 from tests.core.engine_adapter import to_sql_calls
@@ -73,8 +73,11 @@ def test_partitioned_by_hive(
 
     adapter.create_table("test_table", columns_to_types, partitioned_by=[exp.to_column("colb")])
 
+    adapter.ctas("test_table", parse_one("select 1"), partitioned_by=[exp.to_column("colb")])  # type: ignore
+
     assert to_sql_calls(adapter) == [
-        """CREATE TABLE IF NOT EXISTS "test_table" ("cola" INTEGER, "colb" VARCHAR) WITH (PARTITIONED_BY=ARRAY['colb'])"""
+        """CREATE TABLE IF NOT EXISTS "test_table" ("cola" INTEGER, "colb" VARCHAR) WITH (PARTITIONED_BY=ARRAY['colb'])""",
+        """CREATE TABLE IF NOT EXISTS "test_table" WITH (PARTITIONED_BY=ARRAY['colb']) AS SELECT 1""",
     ]
 
 
@@ -96,8 +99,11 @@ def test_partitioned_by_iceberg(
 
     adapter.create_table("test_table", columns_to_types, partitioned_by=[exp.to_column("colb")])
 
+    adapter.ctas("test_table", parse_one("select 1"), partitioned_by=[exp.to_column("colb")])  # type: ignore
+
     assert to_sql_calls(adapter) == [
-        """CREATE TABLE IF NOT EXISTS "test_table" ("cola" INTEGER, "colb" VARCHAR) WITH (PARTITIONING=ARRAY['colb'])"""
+        """CREATE TABLE IF NOT EXISTS "test_table" ("cola" INTEGER, "colb" VARCHAR) WITH (PARTITIONING=ARRAY['colb'])""",
+        """CREATE TABLE IF NOT EXISTS "test_table" WITH (PARTITIONING=ARRAY['colb']) AS SELECT 1""",
     ]
 
 
@@ -122,8 +128,15 @@ def test_partitioned_by_iceberg_transforms(
         partitioned_by=[exp.to_column("day(cola)"), exp.to_column("truncate(colb, 8)")],
     )
 
+    adapter.ctas(
+        "test_table",
+        parse_one("select 1"),  # type: ignore
+        partitioned_by=[exp.to_column("day(cola)"), exp.to_column("truncate(colb, 8)")],
+    )
+
     assert to_sql_calls(adapter) == [
-        """CREATE TABLE IF NOT EXISTS "test_table" ("cola" INTEGER, "colb" VARCHAR) WITH (PARTITIONING=ARRAY['day(cola)', 'truncate(colb, 8)'])"""
+        """CREATE TABLE IF NOT EXISTS "test_table" ("cola" INTEGER, "colb" VARCHAR) WITH (PARTITIONING=ARRAY['day(cola)', 'truncate(colb, 8)'])""",
+        """CREATE TABLE IF NOT EXISTS "test_table" WITH (PARTITIONING=ARRAY['day(cola)', 'truncate(colb, 8)']) AS SELECT 1""",
     ]
 
 
@@ -141,13 +154,27 @@ def test_partitioned_by_with_multiple_catalogs_same_server(
         "datalake.test_schema.test_table", columns_to_types, partitioned_by=[exp.to_column("colb")]
     )
 
+    adapter.ctas(
+        "datalake.test_schema.test_table",
+        parse_one("select 1"),  # type: ignore
+        partitioned_by=[exp.to_column("colb")],
+    )
+
     adapter.create_table(
         "datalake_iceberg.test_schema.test_table",
         columns_to_types,
         partitioned_by=[exp.to_column("colb")],
     )
 
+    adapter.ctas(
+        "datalake_iceberg.test_schema.test_table",
+        parse_one("select 1"),  # type: ignore
+        partitioned_by=[exp.to_column("colb")],
+    )
+
     assert to_sql_calls(adapter) == [
         """CREATE TABLE IF NOT EXISTS "datalake"."test_schema"."test_table" ("cola" INTEGER, "colb" VARCHAR) WITH (PARTITIONED_BY=ARRAY['colb'])""",
+        """CREATE TABLE IF NOT EXISTS "datalake"."test_schema"."test_table" WITH (PARTITIONED_BY=ARRAY['colb']) AS SELECT 1""",
         """CREATE TABLE IF NOT EXISTS "datalake_iceberg"."test_schema"."test_table" ("cola" INTEGER, "colb" VARCHAR) WITH (PARTITIONING=ARRAY['colb'])""",
+        """CREATE TABLE IF NOT EXISTS "datalake_iceberg"."test_schema"."test_table" WITH (PARTITIONING=ARRAY['colb']) AS SELECT 1""",
     ]
