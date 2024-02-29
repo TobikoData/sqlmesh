@@ -68,7 +68,7 @@ The `jdbc`, `rest` and `nessie` catalogs do not support views and are thus incom
 ## Airflow Scheduler
 **Engine Name:** `trino`
 
-The SQLMesh Trino Operator is similar to the [TrinoOperator](https://airflow.apache.org/docs/apache-airflow-providers-postgres/stable/_api/airflow/providers/postgres/operators/postgres/index.html), and relies on the same [TrinoHook](https://airflow.apache.org/docs/apache-airflow-providers-postgres/stable/_api/airflow/providers/postgres/hooks/postgres/index.html) implementation.
+The SQLMesh Trino Operator is similar to the [TrinoOperator](https://airflow.apache.org/docs/apache-airflow-providers-trino/stable/operators/trino.html), and relies on the same [TrinoHook](https://airflow.apache.org/docs/apache-airflow-providers-trino/stable/_api/airflow/providers/trino/hooks/trino/index.html) implementation.
 
 To enable support for this operator, the Airflow Trino provider package should be installed on the target Airflow cluster along with SQLMesh with the Trino extra:
 ```
