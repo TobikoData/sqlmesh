@@ -34,7 +34,9 @@ def column_dependencies(context: Context, model_name: str, column: str) -> t.Dic
     model = context.get_model(model_name)
     parents = defaultdict(set)
 
-    for node in lineage(column, sql=_render_query(model)).walk():
+    for node in lineage(
+        column, sql=_render_query(model), schema=model.mapping_schema, infer_schema=True
+    ).walk():
         if node.downstream:
             continue
 
