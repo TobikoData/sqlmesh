@@ -76,7 +76,7 @@ pip install "apache-airflow-providers-trino"
 pip install "sqlmesh[trino]"
 ```
 
-The operator requires an [Airflow connection](https://airflow.apache.org/docs/apache-airflow/stable/howto/connection.html) to determine the target Trino account. Refer to [Trino connection](https://airflow.apache.org/docs/apache-airflow-providers-postgres/stable/connections/postgres.html) for more details.
+The operator requires an [Airflow connection](https://airflow.apache.org/docs/apache-airflow/stable/howto/connection.html) to determine the target Trino account. Refer to [Trino connection](https://airflow.apache.org/docs/apache-airflow-providers-trino/stable/connections.html) for more details.
 
 By default, the connection ID is set to `trino_default`, but can be overridden using the `engine_operator_args` parameter to the `SQLMeshAirflow` instance as in the example below:
 ```python linenums="1"
@@ -84,7 +84,7 @@ sqlmesh_airflow = SQLMeshAirflow(
     "trino",
     default_catalog="<database name>",
     engine_operator_args={
-        "tromp_conn_id": "<Connection ID>"
+        "trino_conn_id": "<Connection ID>"
     },
 )
 ```
