@@ -113,17 +113,17 @@ def test_get_lineage_external_model(project_context: Context) -> None:
     foo_sql_file = models_dir / "foo.sql"
     foo_sql_file.write_text("MODEL (name foo); SELECT col FROM bar;")
     bar_sql_file = models_dir / "bar.sql"
-    bar_sql_file.write_text("MODEL (name bar); SELECT * FROM baz;")
+    bar_sql_file.write_text("MODEL (name bar); SELECT col FROM baz;")
     baz_sql_file = models_dir / "baz.sql"
-    baz_sql_file.write_text("MODEL (name baz); SELECT * FROM external_table;")
+    baz_sql_file.write_text("MODEL (name baz); SELECT col FROM external_table;")
     project_context.load()
 
     response = client.get("/api/lineage/foo/col")
     assert response.status_code == 200, response.json()
     response_json = response.json()
     assert response_json['"foo"']["col"]["models"] == {'"bar"': ["col"]}
-    assert response_json['"bar"']["col"]["models"] == {'"baz"': ["*"]}
-    assert response_json['"baz"']["*"]["models"] == {'"external_table"': ["*"]}
+    assert response_json['"bar"']["col"]["models"] == {'"baz"': ["col"]}
+    assert response_json['"baz"']["col"]["models"] == {'"external_table"': ["col"]}
 
 
 def test_get_lineage_cte(project_context: Context) -> None:
