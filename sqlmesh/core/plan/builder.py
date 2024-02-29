@@ -582,10 +582,7 @@ class PlanBuilder:
                 and not promoted.is_paused
                 and not candidate.is_forward_only
                 and not candidate.is_indirect_non_breaking
-                and (
-                    promoted.version == candidate.version
-                    or candidate.data_version in promoted.previous_versions
-                )
+                and promoted.version == candidate.version
             ):
                 raise PlanError(
                     f"Attempted to revert to an unrevertable version of model '{name}'. Run `sqlmesh plan` again to mitigate the issue."
