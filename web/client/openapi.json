@@ -883,6 +883,13 @@
             "allOf": [{ "$ref": "#/components/schemas/NodeType" }],
             "default": "model"
           },
+          "parents": {
+            "items": { "type": "string" },
+            "type": "array",
+            "uniqueItems": true,
+            "title": "Parents",
+            "default": []
+          },
           "interval": {
             "items": { "type": "string" },
             "type": "array",
@@ -901,6 +908,13 @@
           "node_type": {
             "allOf": [{ "$ref": "#/components/schemas/NodeType" }],
             "default": "model"
+          },
+          "parents": {
+            "items": { "type": "string" },
+            "type": "array",
+            "uniqueItems": true,
+            "title": "Parents",
+            "default": []
           },
           "completed": { "type": "integer", "title": "Completed" },
           "total": { "type": "integer", "title": "Total" },
@@ -972,6 +986,18 @@
               { "$ref": "#/components/schemas/PlanOptions" },
               { "type": "null" }
             ]
+          },
+          "categories": {
+            "anyOf": [
+              {
+                "additionalProperties": {
+                  "$ref": "#/components/schemas/SnapshotChangeCategory"
+                },
+                "type": "object"
+              },
+              { "type": "null" }
+            ],
+            "title": "Categories"
           }
         },
         "type": "object",
@@ -1006,11 +1032,24 @@
             "allOf": [{ "$ref": "#/components/schemas/NodeType" }],
             "default": "model"
           },
+          "parents": {
+            "items": { "type": "string" },
+            "type": "array",
+            "uniqueItems": true,
+            "title": "Parents",
+            "default": []
+          },
           "diff": { "type": "string", "title": "Diff" },
           "indirect": {
             "items": { "$ref": "#/components/schemas/ChangeDisplay" },
             "type": "array",
             "title": "Indirect",
+            "default": []
+          },
+          "direct": {
+            "items": { "$ref": "#/components/schemas/ChangeDisplay" },
+            "type": "array",
+            "title": "Direct",
             "default": []
           },
           "change_category": {
@@ -1031,6 +1070,13 @@
           "node_type": {
             "allOf": [{ "$ref": "#/components/schemas/NodeType" }],
             "default": "model"
+          },
+          "parents": {
+            "items": { "type": "string" },
+            "type": "array",
+            "uniqueItems": true,
+            "title": "Parents",
+            "default": []
           }
         },
         "type": "object",
@@ -1045,10 +1091,11 @@
             "allOf": [{ "$ref": "#/components/schemas/NodeType" }],
             "default": "model"
           },
-          "direct": {
-            "items": { "$ref": "#/components/schemas/ChangeDisplay" },
+          "parents": {
+            "items": { "type": "string" },
             "type": "array",
-            "title": "Direct",
+            "uniqueItems": true,
+            "title": "Parents",
             "default": []
           }
         },

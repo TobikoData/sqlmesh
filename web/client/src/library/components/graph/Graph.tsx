@@ -145,9 +145,11 @@ const ModelNodeHeaderHandles = memo(function ModelNodeHeaderHandles({
           >
             {truncate(decodeURI(label), 50, 20)}
           </span>
-          <span className="flex justify-between ml-2 mr-1 px-2 rounded-full bg-neutral-10">
-            {count}
-          </span>
+          {isNotNil(count) && (
+            <span className="flex justify-between ml-2 mr-1 px-2 rounded-full bg-neutral-10">
+              {count}
+            </span>
+          )}
         </span>
       </div>
       {hasRight && (

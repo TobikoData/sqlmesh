@@ -75,7 +75,10 @@ export default function PlanOptions(): JSX.Element {
       </fieldset>
       <fieldset className="my-2">
         <Banner>
-          <Disclosure defaultOpen={false}>
+          <Disclosure
+            key={String(planAction.isRun)}
+            defaultOpen={planAction.isRun}
+          >
             {({ open }) => (
               <>
                 <Disclosure.Button
