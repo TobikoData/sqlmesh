@@ -73,8 +73,6 @@ function createGraphLayout({
               'elk.direction': 'RIGHT',
               // https://eclipse.dev/elk/reference/options/org-eclipse-elk-layered-considerModelOrder-strategy.html
               'elk.layered.considerModelOrder.strategy': 'PREFER_NODES',
-              'elk.layered.spacing.edgeNodeBetweenLayers': '40',
-              'elk.spacing.nodeNode': '40',
               'elk.layered.nodePlacement.strategy': 'SIMPLE',
             },
             children: nodes.map(node => ({
@@ -352,7 +350,7 @@ function mergeLineageWithColumns(
 
       const currentLineageModelColumn =
         currentLineageModel.columns[targetColumnNameEncoded]!
-      const currentLineageModelColumnModels = currentLineageModelColumn.models!
+      const currentLineageModelColumnModels = currentLineageModelColumn.models
 
       for (const sourceColumnName in newLineageModelColumn.models) {
         const sourceColumnNameEncoded = encodeURI(sourceColumnName)

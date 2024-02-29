@@ -25,6 +25,9 @@
     --color-brand-20: hsla(24, 100%, 60%, 0.2);
     --color-brand-30: hsla(24, 100%, 60%, 0.3);
     --color-brand-40: hsla(24, 100%, 60%, 0.4);
+    --color-brand-50: hsla(24, 100%, 60%, 0.5);
+    --color-brand-75: hsla(24, 100%, 60%, 0.75);
+    --color-brand-90: hsla(24, 100%, 60%, 0.9);
     --color-brand-100: hsla(37, 100%, 92%, 1);
     --color-brand-200: hsla(34, 100%, 84%, 1);
     --color-brand-300: hsla(31, 100%, 76%, 1);
@@ -78,7 +81,8 @@
     --color-secondary-900: hsla(226, 100%, 24%, 1);
 
     /* Accent */
-    --color-accent-5: hsla(264, 100%, 98%, 0.05);
+    --color-accent-5: hsla(264, 100%, 60%, 0.05);
+    --color-accent-50: hsla(264, 100%, 60%, 0.5);
     --color-accent-100: hsla(264, 100%, 98%, 1);
     --color-accent-200: hsla(260, 100%, 90%, 1);
     --color-accent-300: hsla(260, 100%, 80%, 1);
@@ -205,9 +209,9 @@ html[mode='dark'] {
   --color-theme: var(--color-dark);
   --color-theme-lighter: var(--color-dark-lighter);
 
-  --color-text-darker: var(--color-neutral-300);
-  --color-text: var(--color-neutral-200);
-  --color-text-lighter: var(--color-neutral-100);
+  --color-text-darker: var(--color-neutral-400);
+  --color-text: var(--color-neutral-300);
+  --color-text-lighter: var(--color-neutral-200);
 
   --color-divider-darker: var(--color-theme-darker);
   --color-divider: var(--color-theme-lighter);
@@ -220,10 +224,10 @@ html[mode='dark'] {
   --color-editor-text: var(--color-neutral-300);
   --color-editor-active-line-text: var(--color-neutral-100);
 
-  --color-graph-edge-secondary: var(--color-neutral-100);
-  --color-graph-edge-main: var(--color-neutral-80);
+  --color-graph-edge-secondary: var(--color-primary-500);
+  --color-graph-edge-main: var(--color-primary-20);
   --color-graph-edge-selected: var(--color-primary-500);
-  --color-graph-edge-direct: var(--color-neutral-500);
+  --color-graph-edge-direct: var(--color-primary-20);
 
   --color-transparent-20: var(--color-dark-transparent-20);
 }
@@ -233,9 +237,9 @@ html[mode='light'] {
   --color-theme: var(--color-light);
   --color-theme-lighter: var(--color-light-lighter);
 
-  --color-text-darker: var(--color-neutral-900);
-  --color-text: var(--color-neutral-800);
-  --color-text-lighter: var(--color-neutral-700);
+  --color-text-darker: var(--color-neutral-700);
+  --color-text: var(--color-neutral-600);
+  --color-text-lighter: var(--color-neutral-500);
 
   --color-divider-darker: var(--color-neutral-500);
   --color-divider: var(--color-neutral-200);
@@ -248,8 +252,8 @@ html[mode='light'] {
   --color-editor-text: var(--color-neutral-600);
   --color-editor-active-line-text: var(--color-neutral-800);
 
-  --color-graph-edge-secondary: var(--color-neutral-500);
-  --color-graph-edge-main: var(--color-neutral-200);
+  --color-graph-edge-secondary: var(--color-secondary-500);
+  --color-graph-edge-main: var(--color-secondary-20);
   --color-graph-edge-selected: var(--color-secondary-500);
   --color-graph-edge-direct: var(--color-secondary-20);
 
