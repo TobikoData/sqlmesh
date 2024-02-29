@@ -459,7 +459,7 @@ class BigQueryEngineAdapter(InsertOverwriteWithMergeMixin):
 
     def _build_table_properties_exp(
         self,
-        table: exp.Table,
+        catalog_name: t.Optional[str] = None,
         storage_format: t.Optional[str] = None,
         partitioned_by: t.Optional[t.List[exp.Expression]] = None,
         partition_interval_unit: t.Optional[IntervalUnit] = None,

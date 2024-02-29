@@ -128,7 +128,7 @@ class InsertOverwriteWithMergeMixin(EngineAdapter):
 class HiveMetastoreTablePropertiesMixin(EngineAdapter):
     def _build_table_properties_exp(
         self,
-        table: exp.Table,
+        catalog_name: t.Optional[str] = None,
         storage_format: t.Optional[str] = None,
         partitioned_by: t.Optional[t.List[exp.Expression]] = None,
         partition_interval_unit: t.Optional[IntervalUnit] = None,
@@ -155,7 +155,7 @@ class HiveMetastoreTablePropertiesMixin(EngineAdapter):
 
             if (
                 self.dialect == "trino"
-                and self.get_catalog_type(table.catalog or self.get_current_catalog()) == "iceberg"
+                and self.get_catalog_type(catalog_name or self.get_current_catalog()) == "iceberg"
             ):
                 # On the Trino Iceberg catalog, the table property is called "partitioning" - not "partitioned_by"
                 # In addition, partition column transform expressions like `day(col)` or `bucket(col, 5)` are allowed

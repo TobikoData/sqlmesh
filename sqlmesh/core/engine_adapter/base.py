@@ -688,11 +688,17 @@ class EngineAdapter:
         **kwargs: t.Any,
     ) -> exp.Create:
         exists = False if replace else exists
+        catalog_name = None
         if not isinstance(table_name_or_schema, exp.Schema):
             table_name_or_schema = exp.to_table(table_name_or_schema)
+            catalog_name = table_name_or_schema.catalog
+        else:
+            if isinstance(table_name_or_schema.this, exp.Table):
+                catalog_name = table_name_or_schema.this.catalog
+
         properties = (
             self._build_table_properties_exp(
-                **kwargs, table=table_name_or_schema.this, columns_to_types=columns_to_types
+                **kwargs, catalog_name=catalog_name, columns_to_types=columns_to_types
             )
             if kwargs
             else None
@@ -1864,7 +1870,7 @@ class EngineAdapter:
 
     def _build_table_properties_exp(
         self,
-        table: exp.Table,
+        catalog_name: t.Optional[str] = None,
         storage_format: t.Optional[str] = None,
         partitioned_by: t.Optional[t.List[exp.Expression]] = None,
         partition_interval_unit: t.Optional[IntervalUnit] = None,
