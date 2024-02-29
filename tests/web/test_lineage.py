@@ -122,7 +122,8 @@ def test_get_lineage_external_model(project_context: Context) -> None:
     assert response.status_code == 200, response.json()
     response_json = response.json()
     assert response_json['"foo"']["col"]["models"] == {'"bar"': ["col"]}
-    assert response_json['"bar"']["col"]["models"] == {}
+    assert response_json['"bar"']["col"]["models"] == {'"baz"': ["*"]}
+    assert response_json['"baz"']["*"]["models"] == {'"external_table"': ["*"]}
 
 
 def test_get_lineage_cte(project_context: Context) -> None:
@@ -157,6 +158,14 @@ def test_get_lineage_cte(project_context: Context) -> None:
     assert response_json['"bar"']["col"]["models"] == {'"baz"': ["col"]}
     assert response_json['"baz"']["col"]["models"] == {'"external_table"': ["col"]}
 
+    # Models only
+    response = client.get("/api/lineage/foo/col?models_only=1")
+    assert response.status_code == 200, response.json()
+    response_json = response.json()
+    assert response_json['"foo"']["col"]["models"] == {'"bar"': ["col"]}
+    assert response_json['"bar"']["col"]["models"] == {'"baz"': ["col"]}
+    assert response_json['"baz"']["col"]["models"] == {'"external_table"': ["col"]}
+
 
 def test_get_lineage_cte_downstream(project_context: Context) -> None:
     project_tmp_path = project_context.path
@@ -188,6 +197,14 @@ def test_get_lineage_cte_downstream(project_context: Context) -> None:
     assert response_json['"foo"']["col"]["models"] == {'"bar"': ["col"]}
     assert response_json['"bar"']["col"]["models"] == {"my_cte": ["col"]}
     assert response_json["my_cte"]["col"]["models"] == {'"baz"': ["col"]}
+    assert response_json['"baz"']["col"]["models"] == {'"external_table"': ["col"]}
+
+    # Models only
+    response = client.get("/api/lineage/foo/col?models_only=1")
+    assert response.status_code == 200, response.json()
+    response_json = response.json()
+    assert response_json['"foo"']["col"]["models"] == {'"bar"': ["col"]}
+    assert response_json['"bar"']["col"]["models"] == {'"baz"': ["col"]}
     assert response_json['"baz"']["col"]["models"] == {'"external_table"': ["col"]}
 
 
@@ -273,6 +290,12 @@ def test_get_lineage_union(project_context: Context) -> None:
     response_json = response.json()
     assert response_json['"foo"']["col"]["models"] == {'"bar"': ["col"], '"baz"': ["col"]}
 
+    # Models only
+    response = client.get("/api/lineage/foo/col?models_only=1")
+    assert response.status_code == 200, response.json()
+    response_json = response.json()
+    assert response_json['"foo"']["col"]["models"] == {'"bar"': ["col"], '"baz"': ["col"]}
+
 
 def test_get_lineage_union_downstream(project_context: Context) -> None:
     project_tmp_path = project_context.path
@@ -303,6 +326,15 @@ def test_get_lineage_union_downstream(project_context: Context) -> None:
     project_context.load()
 
     response = client.get("/api/lineage/foo/col")
+    assert response.status_code == 200, response.json()
+    response_json = response.json()
+    assert response_json['"foo"']["col"]["models"] == {'"bar"': ["col"]}
+    assert response_json['"bar"']["col"]["models"] == {'"baz"': ["col"], '"qwe"': ["col"]}
+    assert response_json['"baz"']["col"]["models"] == {'"external_baz"': ["col"]}
+    assert response_json['"qwe"']["col"]["models"] == {'"external_qwe"': ["col"]}
+
+    # Models only
+    response = client.get("/api/lineage/foo/col?models_only=1")
     assert response.status_code == 200, response.json()
     response_json = response.json()
     assert response_json['"foo"']["col"]["models"] == {'"bar"': ["col"]}
@@ -342,6 +374,14 @@ def test_get_lineage_cte_union(project_context: Context) -> None:
     response_json = response.json()
     assert response_json['"foo"']["col"]["models"] == {"my_cte": ["col"]}
     assert response_json["my_cte"]["col"]["models"] == {'"bar"': ["col"], '"baz"': ["col"]}
+    assert response_json['"bar"']["col"]["models"] == {'"external_bar"': ["col"]}
+    assert response_json['"baz"']["col"]["models"] == {'"external_baz"': ["col"]}
+
+    # Models only
+    response = client.get("/api/lineage/foo/col?models_only=1")
+    assert response.status_code == 200, response.json()
+    response_json = response.json()
+    assert response_json['"foo"']["col"]["models"] == {'"bar"': ["col"], '"baz"': ["col"]}
     assert response_json['"bar"']["col"]["models"] == {'"external_bar"': ["col"]}
     assert response_json['"baz"']["col"]["models"] == {'"external_baz"': ["col"]}
 
@@ -386,6 +426,15 @@ def test_get_lineage_cte_union_downstream(project_context: Context) -> None:
     assert response_json['"baz"']["col"]["models"] == {'"external_baz"': ["col"]}
     assert response_json['"qwe"']["col"]["models"] == {'"external_qwe"': ["col"]}
 
+    # Models only
+    response = client.get("/api/lineage/foo/col?models_only=1")
+    assert response.status_code == 200, response.json()
+    response_json = response.json()
+    assert response_json['"foo"']["col"]["models"] == {'"bar"': ["col"]}
+    assert response_json['"bar"']["col"]["models"] == {'"baz"': ["col"], '"qwe"': ["col"]}
+    assert response_json['"baz"']["col"]["models"] == {'"external_baz"': ["col"]}
+    assert response_json['"qwe"']["col"]["models"] == {'"external_qwe"': ["col"]}
+
 
 def test_get_lineage_cte_downstream_union_downstream(project_context: Context) -> None:
     project_tmp_path = project_context.path
@@ -419,6 +468,17 @@ def test_get_lineage_cte_downstream_union_downstream(project_context: Context) -
     assert response_json['"foo"']["col"]["models"] == {'"bar"': ["col"]}
     assert response_json['"bar"']["col"]["models"] == {"my_cte": ["col"]}
     assert response_json["my_cte"]["col"]["models"] == {'"baz"': ["col"]}
+    assert response_json['"baz"']["col"]["models"] == {
+        '"external_table1"': ["col"],
+        '"external_table2"': ["col"],
+    }
+
+    # Models only
+    response = client.get("/api/lineage/foo/col?models_only=1")
+    assert response.status_code == 200, response.json()
+    response_json = response.json()
+    assert response_json['"foo"']["col"]["models"] == {'"bar"': ["col"]}
+    assert response_json['"bar"']["col"]["models"] == {'"baz"': ["col"]}
     assert response_json['"baz"']["col"]["models"] == {
         '"external_table1"': ["col"],
         '"external_table2"': ["col"],
@@ -460,6 +520,19 @@ def test_get_lineage_nested_cte_union_downstream(project_context: Context) -> No
         '"external_table1"': ["col"],
     }
     assert response_json["my_cte2"]["col"]["models"] == {'"bar"': ["col"]}
+    assert response_json['"bar"']["col"]["models"] == {
+        '"external_table2"': ["col"],
+        '"external_table3"': ["col"],
+    }
+
+    # Models only
+    response = client.get("/api/lineage/foo/col?models_only=1")
+    assert response.status_code == 200, response.json()
+    response_json = response.json()
+    assert response_json['"foo"']["col"]["models"] == {
+        '"bar"': ["col"],
+        '"external_table1"': ["col"],
+    }
     assert response_json['"bar"']["col"]["models"] == {
         '"external_table2"': ["col"],
         '"external_table3"': ["col"],

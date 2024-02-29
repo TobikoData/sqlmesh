@@ -9,7 +9,7 @@ from sqlglot.lineage import lineage
 
 from sqlmesh.core.context import Context
 from sqlmesh.core.dialect import normalize_model_name
-from sqlmesh.core.lineage import _render_query
+from sqlmesh.core.lineage import _render_query, column_dependencies
 from web.server.exceptions import ApiException
 from web.server.models import LineageColumn
 from web.server.settings import get_loaded_context
@@ -50,8 +50,7 @@ def get_column_name(node: Node) -> str:
 def create_lineage_adjacency_list(
     model_name: str, column_name: str, context: Context
 ) -> t.Dict[str, t.Dict[str, LineageColumn]]:
-    model_name = context.get_model(model_name).fqn
-
+    """Create an adjacency list representation of a column's lineage graph including CTEs"""
     graph: t.Dict[str, t.Dict[str, LineageColumn]] = defaultdict(dict)
     nodes = [(model_name, column_name)]
     while nodes:
@@ -87,8 +86,8 @@ def create_lineage_adjacency_list(
                 table = get_source_name(
                     d, default_catalog=context.default_catalog, dialect=model.dialect
                 )
-                column_name = get_column_name(d)
-                if table and column_name != "*":
+                if table:
+                    column_name = get_column_name(d)
                     dependencies[table].add(column_name)
                     if not d.downstream:
                         nodes.append((table, column_name))
@@ -101,14 +100,40 @@ def create_lineage_adjacency_list(
     return graph
 
 
+def create_models_only_lineage_adjacency_list(
+    model_name: str, column_name: str, context: Context
+) -> t.Dict[str, t.Dict[str, LineageColumn]]:
+    """Create an adjacency list representation of a column's lineage graph only with models"""
+    graph: t.Dict[str, t.Dict[str, LineageColumn]] = defaultdict(dict)
+    nodes = [(model_name, column_name)]
+    while nodes:
+        model_name, column = nodes.pop(0)
+        model = context.get_model(model_name)
+        dependencies = defaultdict(set)
+        if model:
+            for table, column_names in column_dependencies(context, model_name, column).items():
+                for column_name in column_names:
+                    dependencies[table].add(column_name)
+                    nodes.append((table, column_name))
+
+        graph[model_name][column] = LineageColumn(
+            models=dependencies,
+        )
+    return graph
+
+
 @router.get("/{model_name:str}/{column_name:str}")
 async def column_lineage(
     model_name: str,
     column_name: str,
+    models_only: bool = False,
     context: Context = Depends(get_loaded_context),
 ) -> t.Dict[str, t.Dict[str, LineageColumn]]:
     """Get a column's lineage"""
     try:
+        model_name = context.get_model(model_name).fqn
+        if models_only:
+            return create_models_only_lineage_adjacency_list(model_name, column_name, context)
         return create_lineage_adjacency_list(model_name, column_name, context)
     except Exception:
         raise ApiException(
