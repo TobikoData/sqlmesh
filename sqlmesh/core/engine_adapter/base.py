@@ -688,12 +688,13 @@ class EngineAdapter:
         **kwargs: t.Any,
     ) -> exp.Create:
         exists = False if replace else exists
+        catalog_name = None
         if not isinstance(table_name_or_schema, exp.Schema):
             table_name_or_schema = exp.to_table(table_name_or_schema)
             catalog_name = table_name_or_schema.catalog
         else:
-            table: exp.Table = table_name_or_schema.this
-            catalog_name = table.catalog
+            if isinstance(table_name_or_schema.this, exp.Table):
+                catalog_name = table_name_or_schema.this.catalog
 
         properties = (
             self._build_table_properties_exp(
