@@ -15,20 +15,10 @@ from web.server.models import LineageColumn
 from web.server.settings import get_loaded_context
 
 if t.TYPE_CHECKING:
-    from sqlglot.dialects.dialect import DialectType
     from sqlglot.lineage import Node
 
 
 router = APIRouter()
-
-
-def get_node_source(node: Node, dialect: DialectType) -> str:
-    """Get a node's source"""
-    if isinstance(node.expression, exp.Table):
-        source = f"SELECT {node.name} FROM {node.expression.this}"
-    else:
-        source = node.source.sql(pretty=True, dialect=dialect)
-    return source
 
 
 def get_source_name(node: Node, default_catalog: t.Optional[str], dialect: str) -> str:
@@ -116,9 +106,7 @@ def create_models_only_lineage_adjacency_list(
                     dependencies[table].add(column_name)
                     nodes.append((table, column_name))
 
-        graph[model_name][column] = LineageColumn(
-            models=dependencies,
-        )
+        graph[model_name][column] = LineageColumn(models=dependencies)
     return graph
 
 
