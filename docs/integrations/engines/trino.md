@@ -65,6 +65,29 @@ The `jdbc`, `rest` and `nessie` catalogs do not support views and are thus incom
 | `retries`            | Number of retries to attempt when a request fails. Default: `3`                                                                                                           |  int   |    N     |
 | `timezone`           | Timezone to use for the connection. Default: client-side local timezone                                                                                                   | string |    N     |
 
+## Airflow Scheduler
+**Engine Name:** `trino`
+
+The SQLMesh Trino Operator is similar to the [TrinoOperator](https://airflow.apache.org/docs/apache-airflow-providers-postgres/stable/_api/airflow/providers/postgres/operators/postgres/index.html), and relies on the same [TrinoHook](https://airflow.apache.org/docs/apache-airflow-providers-postgres/stable/_api/airflow/providers/postgres/hooks/postgres/index.html) implementation.
+
+To enable support for this operator, the Airflow Trino provider package should be installed on the target Airflow cluster along with SQLMesh with the Trino extra:
+```
+pip install "apache-airflow-providers-trino"
+pip install "sqlmesh[trino]"
+```
+
+The operator requires an [Airflow connection](https://airflow.apache.org/docs/apache-airflow/stable/howto/connection.html) to determine the target Trino account. Refer to [Trino connection](https://airflow.apache.org/docs/apache-airflow-providers-trino/stable/connections.html) for more details.
+
+By default, the connection ID is set to `trino_default`, but can be overridden using the `engine_operator_args` parameter to the `SQLMeshAirflow` instance as in the example below:
+```python linenums="1"
+sqlmesh_airflow = SQLMeshAirflow(
+    "trino",
+    default_catalog="<database name>",
+    engine_operator_args={
+        "trino_conn_id": "<Connection ID>"
+    },
+)
+```
 ```yaml linenums="1"
 gateway_name:
     connection:
