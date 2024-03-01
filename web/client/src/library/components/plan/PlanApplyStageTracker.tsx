@@ -372,10 +372,10 @@ function StageBackfill(): JSX.Element {
             acc[c.name] = []
           }
 
-          acc[c.name]?.push(category.value !== SnapshotChangeCategory.NUMBER_1)
+          acc[c.name]?.push(category?.value !== SnapshotChangeCategory.NUMBER_1)
         })
 
-        if (category.value === SnapshotChangeCategory.NUMBER_3) {
+        if (category?.value === SnapshotChangeCategory.NUMBER_3) {
           acc[change.name] = [true]
         }
 
