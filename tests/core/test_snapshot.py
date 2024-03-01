@@ -880,7 +880,7 @@ def test_categorize_change_sql(make_snapshot):
             old=old_snapshot,
             config=config,
         )
-        is None
+        is SnapshotChangeCategory.NON_BREAKING
     )
 
     # A WHERE clause has been added.

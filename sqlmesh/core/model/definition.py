@@ -14,7 +14,7 @@ import pandas as pd
 from astor import to_source
 from pydantic import Field
 from sqlglot import diff, exp
-from sqlglot.diff import Insert, Keep
+from sqlglot.diff import Insert, Keep, Move
 from sqlglot.helper import ensure_list
 from sqlglot.optimizer.simplify import gen
 from sqlglot.schema import MappingSchema, nested_set
@@ -1092,6 +1092,8 @@ class SqlModel(_SqlBasedModel):
                     not _is_projection(expr) and expr.parent not in inserted_expressions
                 ):
                     return None
+            elif isinstance(edit, Move) and _is_projection(edit.expression):
+                continue
             elif not isinstance(edit, Keep):
                 return None
 
