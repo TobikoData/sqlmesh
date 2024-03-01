@@ -248,9 +248,7 @@ class RuntimeAdapter(BaseAdapter):
 
         mapped_table = self._map_table_name(self._normalize(self._relation_to_table(relation)))
         return [
-            Column.from_description(
-                name=name, raw_data_type=dtype.sql(dialect=self.engine_adapter.dialect)
-            )
+            Column.from_description(name=name, raw_data_type=dtype.sql(dialect=self.dialect))
             for name, dtype in self.engine_adapter.columns(table_name=mapped_table).items()
         ]
 
@@ -290,9 +288,9 @@ class RuntimeAdapter(BaseAdapter):
             self.engine_adapter.fetchdf if fetch else self.engine_adapter.execute  # type: ignore
         )
 
-        expression = parse_one(sql, read=self.engine_adapter.dialect)
+        expression = parse_one(sql, read=self.dialect)
         with _normalize_and_quote(
-            expression, self.engine_adapter.dialect, self.engine_adapter.default_catalog
+            expression, self.dialect, self.engine_adapter.default_catalog  # type: ignore
         ) as expression:
             expression = exp.replace_tables(
                 expression, self.table_mapping, dialect=self.dialect, copy=False
@@ -327,11 +325,11 @@ class RuntimeAdapter(BaseAdapter):
 
         logger.debug("Resolved ref '%s' to snapshot table '%s'", name, physical_table_name)
 
-        return exp.to_table(physical_table_name, dialect=self.engine_adapter.dialect)
+        return exp.to_table(physical_table_name, dialect=self.dialect)
 
     def _relation_to_table(self, relation: BaseRelation) -> exp.Table:
-        table = exp.to_table(relation.render(), dialect=self.engine_adapter.dialect)
-        return exp.to_table(relation.render(), dialect=self.engine_adapter.dialect)
+        table = exp.to_table(relation.render(), dialect=self.dialect)
+        return exp.to_table(relation.render(), dialect=self.dialect)
 
     def _table_to_relation(self, table: exp.Table) -> BaseRelation:
         return self.relation_type.create(
@@ -351,7 +349,7 @@ class RuntimeAdapter(BaseAdapter):
 
     def _normalize(self, input_table: exp.Table) -> exp.Table:
         normalized_name = normalize_model_name(
-            input_table, self.engine_adapter.default_catalog, self.engine_adapter.dialect
+            input_table, self.engine_adapter.default_catalog, self.dialect
         )
         normalized_table = exp.to_table(normalized_name)
         if not input_table.this:
