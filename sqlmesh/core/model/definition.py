@@ -1894,7 +1894,7 @@ def _list_of_calls_to_exp(value: t.List[t.Tuple[str, t.Dict[str, t.Any]]]) -> ex
 
 def _is_projection(expr: exp.Expression) -> bool:
     parent = expr.parent
-    return isinstance(parent, exp.Select) and expr in parent.expressions
+    return isinstance(parent, exp.Select) and expr.arg_key == "expressions"
 
 
 def _is_udtf(expr: exp.Expression) -> bool:
