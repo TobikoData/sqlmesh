@@ -527,16 +527,26 @@
         "operationId": "column_lineage_api_lineage__model_name___column_name__get",
         "parameters": [
           {
+            "name": "model_name",
+            "in": "path",
+            "required": true,
+            "schema": { "type": "string", "title": "Model Name" }
+          },
+          {
             "name": "column_name",
             "in": "path",
             "required": true,
             "schema": { "type": "string", "title": "Column Name" }
           },
           {
-            "name": "model_name",
-            "in": "path",
-            "required": true,
-            "schema": { "type": "string", "title": "Model Name" }
+            "name": "models_only",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "boolean",
+              "default": false,
+              "title": "Models Only"
+            }
           }
         ],
         "responses": {
