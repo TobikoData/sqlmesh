@@ -240,11 +240,23 @@ class CommonStateSyncMixin(StateSync):
                         [(snapshot, snapshot.get_removal_interval(effective_from_ts, current_ts))]
                     )
 
+                update_required = False
+
                 if snapshot.unpaused_ts:
                     logger.info("Pausing snapshot %s", snapshot.snapshot_id)
                     snapshot.set_unpaused_ts(None)
-                    if not snapshot.is_forward_only and target_snapshot.is_forward_only:
-                        snapshot.unrestorable = True
+                    update_required = True
+
+                if (
+                    not snapshot.is_forward_only
+                    and target_snapshot.is_forward_only
+                    and not snapshot.unrestorable
+                ):
+                    logger.info("Marking snapshot %s as unrestorable", snapshot.snapshot_id)
+                    snapshot.unrestorable = True
+                    update_required = True
+
+                if update_required:
                     self._update_snapshot(snapshot)
 
     def _ensure_no_gaps(
