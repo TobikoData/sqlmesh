@@ -39,7 +39,6 @@ from sqlmesh.core.snapshot import (
     Intervals,
     Node,
     Snapshot,
-    SnapshotDataVersion,
     SnapshotFingerprint,
     SnapshotId,
     SnapshotIdLike,
@@ -48,6 +47,7 @@ from sqlmesh.core.snapshot import (
     SnapshotNameVersion,
     SnapshotNameVersionLike,
     SnapshotTableCleanupTask,
+    SnapshotTableInfo,
     fingerprint_from_node,
 )
 from sqlmesh.core.snapshot.definition import (
@@ -95,6 +95,8 @@ class EngineAdapterStateSync(CommonStateSyncMixin, StateSync):
     """
 
     SNAPSHOT_BATCH_SIZE = 1000
+    SNAPSHOT_MIGRATION_BATCH_SIZE = 500
+    SNAPSHOT_SEED_MIGRATION_BATCH_SIZE = 200
 
     def __init__(
         self,
@@ -980,127 +982,189 @@ class EngineAdapterStateSync(CommonStateSyncMixin, StateSync):
                     )
 
     def _migrate_rows(self) -> None:
-        all_snapshots = self._get_snapshots(
-            lock_for_update=True, hydrate_seeds=True, hydrate_intervals=False
-        )
-        environments = self.get_environments()
+        snapshot_mapping = self._migrate_snapshot_rows()
+        if not snapshot_mapping:
+            logger.debug("No changes to snapshots detected")
+            return
+        self._migrate_seed_rows(snapshot_mapping)
+        self._migrate_environment_rows(snapshot_mapping)
 
-        snapshot_id_mapping: t.Dict[SnapshotId, SnapshotId] = {}
-        new_snapshots: t.Dict[SnapshotId, Snapshot] = {}
+    def _migrate_snapshot_rows(self) -> t.Dict[SnapshotId, SnapshotTableInfo]:
+        logger.info("Migrating snapshot rows...")
+        raw_snapshots = {
+            SnapshotId(name=name, identifier=identifier): raw_snapshot
+            for name, identifier, raw_snapshot in self.engine_adapter.fetchall(
+                exp.select("name", "identifier", "snapshot").from_(self.snapshots_table).lock()
+            )
+        }
+        if not raw_snapshots:
+            return {}
 
-        if all_snapshots:
-            self.console.start_migration_progress(len(all_snapshots))
+        self.console.start_migration_progress(len(raw_snapshots))
 
-        for snapshot in all_snapshots.values():
-            seen = set()
-            queue = {snapshot.snapshot_id}
-            node = snapshot.node
-            nodes: t.Dict[str, Node] = {}
-            audits: t.Dict[str, ModelAudit] = {}
+        all_snapshot_mapping: t.Dict[SnapshotId, SnapshotTableInfo] = {}
 
-            while queue:
-                snapshot_id = queue.pop()
+        for snapshot_id_batch in self._snapshot_batches(
+            sorted(raw_snapshots), batch_size=self.SNAPSHOT_MIGRATION_BATCH_SIZE
+        ):
+            parsed_snapshots = LazilyParsedSnapshots(raw_snapshots)
+            snapshot_id_mapping: t.Dict[SnapshotId, SnapshotId] = {}
+            new_snapshots: t.Dict[SnapshotId, Snapshot] = {}
 
-                if snapshot_id in seen:
-                    continue
+            for snapshot_id in snapshot_id_batch:
+                snapshot = parsed_snapshots[snapshot_id]
 
-                seen.add(snapshot_id)
+                seen = set()
+                queue = {snapshot.snapshot_id}
+                node = snapshot.node
+                nodes: t.Dict[str, Node] = {}
+                audits: t.Dict[str, ModelAudit] = {}
 
-                s = all_snapshots.get(snapshot_id)
+                while queue:
+                    snapshot_id = queue.pop()
 
-                if not s:
-                    continue
+                    if snapshot_id in seen:
+                        continue
 
-                queue.update(s.parents)
-                nodes[s.name] = s.node
-                for audit in s.audits:
-                    audits[audit.name] = audit
+                    seen.add(snapshot_id)
 
-            new_snapshot = deepcopy(snapshot)
+                    s = parsed_snapshots.get(snapshot_id)
 
-            fingerprint_cache: t.Dict[str, SnapshotFingerprint] = {}
+                    if not s:
+                        continue
 
-            try:
-                new_snapshot.fingerprint = fingerprint_from_node(
-                    node,
-                    nodes=nodes,
-                    audits=audits,
-                )
-                new_snapshot.parents = tuple(
-                    SnapshotId(
-                        name=parent_node.fqn,
-                        identifier=fingerprint_from_node(
-                            parent_node,
-                            nodes=nodes,
-                            audits=audits,
-                            cache=fingerprint_cache,
-                        ).to_identifier(),
+                    queue.update(s.parents)
+                    nodes[s.name] = s.node
+                    for audit in s.audits:
+                        audits[audit.name] = audit
+
+                new_snapshot = deepcopy(snapshot)
+
+                fingerprint_cache: t.Dict[str, SnapshotFingerprint] = {}
+
+                try:
+                    new_snapshot.fingerprint = fingerprint_from_node(
+                        node,
+                        nodes=nodes,
+                        audits=audits,
                     )
-                    for parent_node in _parents_from_node(node, nodes).values()
-                )
-            except Exception:
-                logger.exception("Could not compute fingerprint for %s", snapshot.snapshot_id)
+                    new_snapshot.parents = tuple(
+                        SnapshotId(
+                            name=parent_node.fqn,
+                            identifier=fingerprint_from_node(
+                                parent_node,
+                                nodes=nodes,
+                                audits=audits,
+                                cache=fingerprint_cache,
+                            ).to_identifier(),
+                        )
+                        for parent_node in _parents_from_node(node, nodes).values()
+                    )
+                except Exception:
+                    logger.exception("Could not compute fingerprint for %s", snapshot.snapshot_id)
+                    continue
+
+                new_snapshot.previous_versions = snapshot.all_versions
+                new_snapshot.migrated = True
+                if not new_snapshot.temp_version:
+                    new_snapshot.temp_version = snapshot.fingerprint.to_version()
+
+                self.console.update_migration_progress(1)
+
+                if new_snapshot.fingerprint == snapshot.fingerprint:
+                    logger.debug(f"{new_snapshot.snapshot_id} is unchanged.")
+                    continue
+
+                new_snapshot_id = new_snapshot.snapshot_id
+
+                if new_snapshot_id in raw_snapshots:
+                    # Mapped to an existing snapshot.
+                    new_snapshots[new_snapshot_id] = parsed_snapshots[new_snapshot_id]
+                elif (
+                    new_snapshot_id not in new_snapshots
+                    or new_snapshot.updated_ts > new_snapshots[new_snapshot_id].updated_ts
+                ):
+                    new_snapshots[new_snapshot_id] = new_snapshot
+
+                snapshot_id_mapping[snapshot.snapshot_id] = new_snapshot_id
+                logger.debug(f"{snapshot.snapshot_id} mapped to {new_snapshot_id}.")
+
+            if not new_snapshots:
                 continue
 
-            new_snapshot.previous_versions = snapshot.all_versions
-            new_snapshot.migrated = True
-            if not new_snapshot.temp_version:
-                new_snapshot.temp_version = snapshot.fingerprint.to_version()
+            all_snapshot_mapping.update(
+                {
+                    from_id: new_snapshots[to_id].table_info
+                    for from_id, to_id in snapshot_id_mapping.items()
+                }
+            )
 
-            self.console.update_migration_progress(1)
+            existing_new_snapshots = self.snapshots_exist(new_snapshots)
+            new_snapshots_to_push = [
+                s for s in new_snapshots.values() if s.snapshot_id not in existing_new_snapshots
+            ]
+            if new_snapshots_to_push:
+                self._push_snapshots(new_snapshots_to_push)
 
-            if new_snapshot.fingerprint == snapshot.fingerprint:
-                logger.debug(f"{new_snapshot.snapshot_id} is unchanged.")
-                continue
+            # Force cleanup to free memory.
+            del parsed_snapshots
 
-            new_snapshot_id = new_snapshot.snapshot_id
+        return all_snapshot_mapping
 
-            if new_snapshot_id in all_snapshots:
-                # Mapped to an existing snapshot.
-                new_snapshots[new_snapshot_id] = all_snapshots[new_snapshot_id]
-            elif (
-                new_snapshot_id not in new_snapshots
-                or new_snapshot.updated_ts > new_snapshots[new_snapshot_id].updated_ts
-            ):
-                new_snapshots[new_snapshot_id] = new_snapshot
-
-            snapshot_id_mapping[snapshot.snapshot_id] = new_snapshot_id
-            logger.debug(f"{snapshot.snapshot_id} mapped to {new_snapshot_id}.")
-
-        if not snapshot_id_mapping:
-            logger.debug("No changes to snapshots detected.")
+    def _migrate_seed_rows(self, snapshot_mapping: t.Dict[SnapshotId, SnapshotTableInfo]) -> None:
+        # FIXME: This migration won't be necessary if the primary key of the seeds table is changed to
+        # (name, version) instead of (name, identifier).
+        seed_snapshot_ids = [
+            s_id for s_id, table_info in snapshot_mapping.items() if table_info.is_seed
+        ]
+        if not seed_snapshot_ids:
+            logger.info("No seed rows to migrate")
             return
 
-        def map_data_versions(
-            name: str, versions: t.Tuple[SnapshotDataVersion, ...]
-        ) -> t.Tuple[SnapshotDataVersion, ...]:
-            if versions and versions[-1].snapshot_id(name) in snapshot_id_mapping:
-                new_snapshot = new_snapshots[snapshot_id_mapping[versions[-1].snapshot_id(name)]]
-                return new_snapshot.all_versions
-            return versions
+        logger.info("Migrating seed rows...")
 
-        for from_snapshot_id, to_snapshot_id in snapshot_id_mapping.items():
-            from_snapshot = all_snapshots[from_snapshot_id]
-            to_snapshot = new_snapshots[to_snapshot_id]
-            to_snapshot.indirect_versions = {
-                name: map_data_versions(name, versions)
-                for name, versions in from_snapshot.indirect_versions.items()
+        for where in self._snapshot_id_filter(
+            seed_snapshot_ids, batch_size=self.SNAPSHOT_SEED_MIGRATION_BATCH_SIZE
+        ):
+            seeds = {
+                SnapshotId(name=name, identifier=identifier): content
+                for name, identifier, content in self.engine_adapter.fetchall(
+                    exp.select("name", "identifier", "content").from_(self.seeds_table).where(where)
+                )
             }
+            if not seeds:
+                continue
 
-        existing_new_snapshots = self.snapshots_exist(new_snapshots)
-        new_snapshots_to_push = [
-            s for s in new_snapshots.values() if s.snapshot_id not in existing_new_snapshots
-        ]
-        if new_snapshots_to_push:
-            self._push_snapshots(new_snapshots_to_push)
+            new_seeds = []
+            for snapshot_id, content in seeds.items():
+                new_snapshot_id = snapshot_mapping[snapshot_id].snapshot_id
+                new_seeds.append(
+                    {
+                        "name": new_snapshot_id.name,
+                        "identifier": new_snapshot_id.identifier,
+                        "content": content,
+                    }
+                )
+            self.engine_adapter.insert_append(
+                self.seeds_table,
+                pd.DataFrame(new_seeds),
+                columns_to_types=self._seed_columns_to_types,
+                contains_json=True,
+            )
+
+    def _migrate_environment_rows(
+        self, snapshot_mapping: t.Dict[SnapshotId, SnapshotTableInfo]
+    ) -> None:
+        logger.info("Migrating environment rows...")
+        environments = self.get_environments()
 
         updated_prod_environment: t.Optional[Environment] = None
         updated_environments = []
         for environment in environments:
             snapshots = [
                 (
-                    new_snapshots[snapshot_id_mapping[info.snapshot_id]].table_info
-                    if info.snapshot_id in snapshot_id_mapping
+                    snapshot_mapping[info.snapshot_id]
+                    if info.snapshot_id in snapshot_mapping
                     else info
                 )
                 for info in environment.snapshots
@@ -1122,12 +1186,15 @@ class EngineAdapterStateSync(CommonStateSyncMixin, StateSync):
                 logger.warning("Failed to unpause migrated snapshots", exc_info=True)
 
     def _snapshot_id_filter(
-        self, snapshot_ids: t.Iterable[SnapshotIdLike], alias: t.Optional[str] = None
+        self,
+        snapshot_ids: t.Iterable[SnapshotIdLike],
+        alias: t.Optional[str] = None,
+        batch_size: t.Optional[int] = None,
     ) -> t.Iterator[exp.Condition]:
         name_identifiers = sorted(
             {(snapshot_id.name, snapshot_id.identifier) for snapshot_id in snapshot_ids}
         )
-        batches = self._snapshot_batches(name_identifiers)
+        batches = self._snapshot_batches(name_identifiers, batch_size=batch_size)
 
         if not name_identifiers:
             yield exp.false()
@@ -1185,10 +1252,11 @@ class EngineAdapterStateSync(CommonStateSyncMixin, StateSync):
                     ]
                 )
 
-    def _snapshot_batches(self, l: t.List[T]) -> t.List[t.List[T]]:
-        return [
-            l[i : i + self.SNAPSHOT_BATCH_SIZE] for i in range(0, len(l), self.SNAPSHOT_BATCH_SIZE)
-        ]
+    def _snapshot_batches(
+        self, l: t.List[T], batch_size: t.Optional[int] = None
+    ) -> t.List[t.List[T]]:
+        batch_size = batch_size or self.SNAPSHOT_BATCH_SIZE
+        return [l[i : i + batch_size] for i in range(0, len(l), batch_size)]
 
     @contextlib.contextmanager
     def _transaction(self) -> t.Iterator[None]:
@@ -1291,3 +1359,24 @@ def _backup_table_name(table_name: TableName) -> exp.Table:
 
 def _snapshot_to_json(snapshot: Snapshot) -> str:
     return snapshot.json(exclude={"intervals", "dev_intervals"})
+
+
+class LazilyParsedSnapshots:
+    def __init__(self, raw_snapshots: t.Dict[SnapshotId, str]):
+        self._raw_snapshots = raw_snapshots
+        self._parsed_snapshots: t.Dict[SnapshotId, t.Optional[Snapshot]] = {}
+
+    def get(self, snapshot_id: SnapshotId) -> t.Optional[Snapshot]:
+        if snapshot_id not in self._parsed_snapshots:
+            raw_snapshot = self._raw_snapshots.get(snapshot_id)
+            if raw_snapshot:
+                self._parsed_snapshots[snapshot_id] = Snapshot.parse_raw(raw_snapshot)
+            else:
+                self._parsed_snapshots[snapshot_id] = None
+        return self._parsed_snapshots[snapshot_id]
+
+    def __getitem__(self, snapshot_id: SnapshotId) -> Snapshot:
+        snapshot = self.get(snapshot_id)
+        if snapshot is None:
+            raise KeyError(snapshot_id)
+        return snapshot

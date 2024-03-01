@@ -18,8 +18,8 @@ from functools import cached_property
 from sqlmesh.core.snapshot import (
     Snapshot,
     SnapshotChangeCategory,
-    SnapshotDataVersion,
     SnapshotId,
+    SnapshotIndirectVersion,
     SnapshotTableInfo,
 )
 from sqlmesh.utils.errors import SQLMeshError
@@ -148,7 +148,9 @@ class ContextDiff(PydanticModel):
         merged_snapshots = {}
         modified_snapshots = {}
         new_snapshots = {}
-        snapshot_remote_versions: t.Dict[str, t.Tuple[t.Tuple[SnapshotDataVersion, ...], int]] = {}
+        snapshot_remote_versions: t.Dict[
+            str, t.Tuple[t.Tuple[SnapshotIndirectVersion, ...], int]
+        ] = {}
 
         for snapshot in snapshots.values():
             s_id = snapshot.snapshot_id

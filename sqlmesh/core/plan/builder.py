@@ -516,13 +516,15 @@ class PlanBuilder:
             else:
                 child_snapshot.categorize_as(SnapshotChangeCategory.INDIRECT_NON_BREAKING)
 
-            snapshot.indirect_versions[child_s_id.name] = child_snapshot.all_versions
+            snapshot.indirect_versions[child_s_id.name] = tuple(
+                v.indirect_version for v in child_snapshot.all_versions
+            )
 
             for upstream_id in directly_modified:
                 upstream = self._context_diff.snapshots[upstream_id]
                 if child_s_id.name in upstream.indirect_versions:
-                    data_version = upstream.indirect_versions[child_s_id.name][-1]
-                    if data_version.is_new_version:
+                    indirect_version = upstream.indirect_versions[child_s_id.name][-1]
+                    if indirect_version.change_category == SnapshotChangeCategory.INDIRECT_BREAKING:
                         # If any other snapshot specified breaking this child, then that child
                         # needs to be backfilled as a part of the plan.
                         child_snapshot.categorize_as(
@@ -532,7 +534,7 @@ class PlanBuilder:
                         )
                         break
                     elif (
-                        data_version.change_category == SnapshotChangeCategory.FORWARD_ONLY
+                        indirect_version.change_category == SnapshotChangeCategory.FORWARD_ONLY
                         and child_snapshot.is_indirect_non_breaking
                     ):
                         # FORWARD_ONLY takes precedence over INDIRECT_NON_BREAKING.
