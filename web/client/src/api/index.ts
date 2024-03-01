@@ -51,6 +51,7 @@ import {
   getModelApiModelsNameGet,
   getApiMetaApiModulesGet,
   type Modules,
+  type ColumnLineageApiLineageModelNameColumnNameGetParams,
 } from './client'
 import {
   useNotificationCenter,
@@ -211,14 +212,20 @@ export function useApiColumnLineage(
   model: string,
   column: string,
   options?: ApiOptions,
+  params?: ColumnLineageApiLineageModelNameColumnNameGetParams,
 ): UseQueryWithTimeoutOptions<ColumnLineageApiLineageModelNameColumnNameGet200> {
   return useQueryWithTimeout(
     {
       queryKey: ['/api/lineage', model, column],
       queryFn: async ({ signal }) =>
-        await columnLineageApiLineageModelNameColumnNameGet(model, column, {
-          signal,
-        }),
+        await columnLineageApiLineageModelNameColumnNameGet(
+          model,
+          column,
+          params,
+          {
+            signal,
+          },
+        ),
     },
     {
       ...options,
@@ -526,7 +533,7 @@ function useQueryWithTimeout<
   async function queryFn(...args: any[]): Promise<TQueryFnData> {
     timeout()
 
-    return (options.queryFn as (...args: any[]) => Promise<TQueryFnData>)!(
+    return (options.queryFn as (...args: any[]) => Promise<TQueryFnData>)(
       ...args,
     )
   }
