@@ -437,3 +437,27 @@ def test_load_alternative_config_type(yaml_config_path: Path, python_config_path
         },
         model_defaults=ModelDefaultsConfig(dialect=""),
     )
+
+
+def test_connection_config_serialization():
+    config = Config(
+        default_connection=DuckDBConnectionConfig(database="my_db"),
+        default_test_connection=DuckDBConnectionConfig(database="my_test_db"),
+    )
+    serialized = config.dict()
+    assert serialized["default_connection"] == {
+        "concurrent_tasks": 1,
+        "register_comments": True,
+        "type": "duckdb",
+        "extensions": [],
+        "connector_config": {},
+        "database": "my_db",
+    }
+    assert serialized["default_test_connection"] == {
+        "concurrent_tasks": 1,
+        "register_comments": True,
+        "type": "duckdb",
+        "extensions": [],
+        "connector_config": {},
+        "database": "my_test_db",
+    }
