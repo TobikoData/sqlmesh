@@ -166,6 +166,16 @@ class EngineAdapterStateSync(CommonStateSyncMixin, StateSync):
             "sqlmesh_version": exp.DataType.build("text"),
         }
 
+    def _fetchone(self, query: t.Union[exp.Expression, str]) -> t.Tuple:
+        return self.engine_adapter.fetchone(
+            query, ignore_unsupported_errors=True, quote_identifiers=True
+        )
+
+    def _fetchall(self, query: t.Union[exp.Expression, str]) -> t.List[t.Tuple]:
+        return self.engine_adapter.fetchall(
+            query, ignore_unsupported_errors=True, quote_identifiers=True
+        )
+
     @transactional()
     def push_snapshots(self, snapshots: t.Iterable[Snapshot]) -> None:
         """Pushes snapshots to the state store, merging them with existing ones.
@@ -279,9 +289,7 @@ class EngineAdapterStateSync(CommonStateSyncMixin, StateSync):
             SnapshotId(name=name, identifier=identifier): SnapshotNameVersion(
                 name=name, version=version
             )
-            for name, identifier, version in self.engine_adapter.fetchall(
-                expired_query, quote_identifiers=True
-            )
+            for name, identifier, version in self._fetchall(expired_query)
         }
         if not expired_candidates:
             return []
@@ -343,13 +351,11 @@ class EngineAdapterStateSync(CommonStateSyncMixin, StateSync):
             expression=exp.Literal.number(now_ts),
         )
 
-        rows = self.engine_adapter.fetchall(
+        rows = self._fetchall(
             self._environments_query(
                 where=filter_expr,
                 lock_for_update=True,
-            ),
-            ignore_unsupported_errors=True,
-            quote_identifiers=True,
+            )
         )
         environments = [self._environment_from_row(r) for r in rows]
 
@@ -369,9 +375,8 @@ class EngineAdapterStateSync(CommonStateSyncMixin, StateSync):
         return {
             SnapshotId(name=name, identifier=identifier)
             for where in self._snapshot_id_filter(snapshot_ids)
-            for name, identifier in self.engine_adapter.fetchall(
-                exp.select("name", "identifier").from_(self.snapshots_table).where(where),
-                quote_identifiers=True,
+            for name, identifier in self._fetchall(
+                exp.select("name", "identifier").from_(self.snapshots_table).where(where)
             )
         }
 
@@ -389,7 +394,7 @@ class EngineAdapterStateSync(CommonStateSyncMixin, StateSync):
         )
         if exclude_external:
             query = query.where(exp.column("kind_name").neq(ModelKindName.EXTERNAL.value))
-        return {name for name, in self.engine_adapter.fetchall(query, quote_identifiers=True)}
+        return {name for name, in self._fetchall(query)}
 
     def reset(self, default_catalog: t.Optional[str]) -> None:
         """Resets the state store to the state when it was first initialized."""
@@ -431,10 +436,7 @@ class EngineAdapterStateSync(CommonStateSyncMixin, StateSync):
             A list of all environments.
         """
         return [
-            self._environment_from_row(row)
-            for row in self.engine_adapter.fetchall(
-                self._environments_query(), ignore_unsupported_errors=True, quote_identifiers=True
-            )
+            self._environment_from_row(row) for row in self._fetchall(self._environments_query())
         ]
 
     def _environment_from_row(self, row: t.Tuple[str, ...]) -> Environment:
@@ -502,9 +504,7 @@ class EngineAdapterStateSync(CommonStateSyncMixin, StateSync):
             elif lock_for_update:
                 query = query.lock(copy=False)
 
-            for row in self.engine_adapter.fetchall(
-                query, ignore_unsupported_errors=True, quote_identifiers=True
-            ):
+            for row in self._fetchall(query):
                 payload = json.loads(row[0])
 
                 def loader() -> Node:
@@ -565,11 +565,7 @@ class EngineAdapterStateSync(CommonStateSyncMixin, StateSync):
             if lock_for_update:
                 query = query.lock(copy=False)
 
-            snapshot_rows.extend(
-                self.engine_adapter.fetchall(
-                    query, ignore_unsupported_errors=True, quote_identifiers=True
-                )
-            )
+            snapshot_rows.extend(self._fetchall(query))
 
         return [Snapshot(**json.loads(row[0])) for row in snapshot_rows]
 
@@ -583,7 +579,7 @@ class EngineAdapterStateSync(CommonStateSyncMixin, StateSync):
         if lock_for_update:
             query.lock(copy=False)
 
-        row = self.engine_adapter.fetchone(query, quote_identifiers=True)
+        row = self._fetchone(query)
         if not row:
             return no_version
 
@@ -603,16 +599,14 @@ class EngineAdapterStateSync(CommonStateSyncMixin, StateSync):
         Returns:
             The environment object.
         """
-        row = self.engine_adapter.fetchone(
+        row = self._fetchone(
             self._environments_query(
                 where=exp.EQ(
                     this=exp.column("name"),
                     expression=exp.Literal.string(environment),
                 ),
                 lock_for_update=lock_for_update,
-            ),
-            ignore_unsupported_errors=True,
-            quote_identifiers=True,
+            )
         )
 
         if not row:
@@ -720,12 +714,11 @@ class EngineAdapterStateSync(CommonStateSyncMixin, StateSync):
             env.snapshots if not ensure_finalized_snapshots else env.finalized_or_current_snapshots
         )
         for where in self._snapshot_name_version_filter(snapshots, "intervals"):
-            end = self.engine_adapter.fetchone(
+            end = self._fetchone(
                 exp.select(exp.func("MAX", exp.to_column("end_ts")))
                 .from_(exp.to_table(self.intervals_table).as_("intervals"))
                 .where(where, copy=False)
                 .where(exp.to_column("is_dev").not_(), copy=False),
-                quote_identifiers=True,
             )[0]
 
             if max_end is None:
@@ -774,7 +767,7 @@ class EngineAdapterStateSync(CommonStateSyncMixin, StateSync):
                 max_end_subquery.subquery(alias="max_ends")
             )
 
-            end = self.engine_adapter.fetchone(query, quote_identifiers=True)[0]
+            end = self._fetchone(query)[0]
 
             if greatest_common_end is None:
                 greatest_common_end = end
@@ -841,7 +834,7 @@ class EngineAdapterStateSync(CommonStateSyncMixin, StateSync):
         for where in (
             self._snapshot_name_version_filter(snapshots, "intervals") if snapshots else [None]
         ):
-            rows = self.engine_adapter.fetchall(query.where(where), quote_identifiers=True)
+            rows = self._fetchall(query.where(where))
             interval_ids.update(row[0] for row in rows)
 
             intervals: t.Dict[t.Tuple[str, str, str], Intervals] = defaultdict(list)
@@ -993,9 +986,8 @@ class EngineAdapterStateSync(CommonStateSyncMixin, StateSync):
         logger.info("Migrating snapshot rows...")
         raw_snapshots = {
             SnapshotId(name=name, identifier=identifier): raw_snapshot
-            for name, identifier, raw_snapshot in self.engine_adapter.fetchall(
-                exp.select("name", "identifier", "snapshot").from_(self.snapshots_table).lock(),
-                quote_identifiers=True,
+            for name, identifier, raw_snapshot in self._fetchall(
+                exp.select("name", "identifier", "snapshot").from_(self.snapshots_table).lock()
             )
         }
         if not raw_snapshots:
@@ -1129,11 +1121,8 @@ class EngineAdapterStateSync(CommonStateSyncMixin, StateSync):
         ):
             seeds = {
                 SnapshotId(name=name, identifier=identifier): content
-                for name, identifier, content in self.engine_adapter.fetchall(
-                    exp.select("name", "identifier", "content")
-                    .from_(self.seeds_table)
-                    .where(where),
-                    quote_identifiers=True,
+                for name, identifier, content in self._fetchall(
+                    exp.select("name", "identifier", "content").from_(self.seeds_table).where(where)
                 )
             }
             if not seeds:
