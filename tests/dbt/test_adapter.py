@@ -69,6 +69,7 @@ def test_adapter_relation(sushi_test_project: Project, runtime_renderer: t.Calla
     )
 
 
+@pytest.mark.cicdonly
 def test_normalization(
     sushi_test_project: Project, runtime_renderer: t.Callable, mocker: MockerFixture
 ):
