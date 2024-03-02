@@ -134,6 +134,10 @@ class TargetConfig(abc.ABC, DbtConfig):
     def column_class(cls) -> t.Type[Column]:
         return Column
 
+    @property
+    def dialect(self) -> str:
+        return self.type
+
 
 DUCKDB_IN_MEMORY = ":memory:"
 
@@ -650,6 +654,10 @@ class MSSQLConfig(TargetConfig):
         from dbt.adapters.sqlserver.sql_server_column import SQLServerColumn
 
         return SQLServerColumn
+
+    @property
+    def dialect(self) -> str:
+        return "tsql"
 
     def to_sqlmesh(self) -> ConnectionConfig:
         return MSSQLConnectionConfig(
