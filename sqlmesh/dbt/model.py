@@ -249,7 +249,7 @@ class ModelConfig(BaseModelConfig):
                 "valid_to_name": "dbt_valid_to",
                 "time_data_type": (
                     exp.DataType.build("TIMESTAMPTZ")
-                    if target.type == "bigquery"
+                    if target.dialect == "bigquery"
                     else exp.DataType.build("TIMESTAMP")
                 ),
             }
@@ -338,7 +338,7 @@ class ModelConfig(BaseModelConfig):
         if self.sql_header:
             model_kwargs["pre_statements"].insert(0, d.jinja_statement(self.sql_header))
 
-        if context.target.type == "bigquery":
+        if context.target.dialect == "bigquery":
             dbt_max_partition_blob = self._dbt_max_partition_blob()
             if dbt_max_partition_blob:
                 model_kwargs["pre_statements"].append(d.jinja_statement(dbt_max_partition_blob))
@@ -352,7 +352,7 @@ class ModelConfig(BaseModelConfig):
             if table_properties:
                 model_kwargs["table_properties"] = table_properties
 
-        if context.target.type == "snowflake" and self.snowflake_warehouse is not None:
+        if context.target.dialect == "snowflake" and self.snowflake_warehouse is not None:
             model_kwargs["session_properties"] = {"warehouse": self.snowflake_warehouse}
 
         return create_sql_model(

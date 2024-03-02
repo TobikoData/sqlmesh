@@ -62,7 +62,7 @@ class DbtContext:
     def dialect(self) -> str:
         if not self.target:
             raise SQLMeshError("Target must be configured before calling the dialect property.")
-        return TARGET_TYPE_TO_DIALECT_OVERRIDE.get(self.target.type) or self.target.type
+        return self.target.dialect
 
     @property
     def project_name(self) -> t.Optional[str]:
@@ -281,7 +281,3 @@ class DbtContext:
 
 
 SQLMESH_DBT_PACKAGE = "sqlmesh.dbt"
-
-TARGET_TYPE_TO_DIALECT_OVERRIDE: t.Dict[str, str] = {
-    "sqlserver": "tsql",
-}
