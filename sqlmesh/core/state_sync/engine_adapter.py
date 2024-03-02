@@ -994,7 +994,8 @@ class EngineAdapterStateSync(CommonStateSyncMixin, StateSync):
         raw_snapshots = {
             SnapshotId(name=name, identifier=identifier): raw_snapshot
             for name, identifier, raw_snapshot in self.engine_adapter.fetchall(
-                exp.select("name", "identifier", "snapshot").from_(self.snapshots_table).lock()
+                exp.select("name", "identifier", "snapshot").from_(self.snapshots_table).lock(),
+                quote_identifiers=True,
             )
         }
         if not raw_snapshots:
@@ -1129,7 +1130,10 @@ class EngineAdapterStateSync(CommonStateSyncMixin, StateSync):
             seeds = {
                 SnapshotId(name=name, identifier=identifier): content
                 for name, identifier, content in self.engine_adapter.fetchall(
-                    exp.select("name", "identifier", "content").from_(self.seeds_table).where(where)
+                    exp.select("name", "identifier", "content")
+                    .from_(self.seeds_table)
+                    .where(where),
+                    quote_identifiers=True,
                 )
             }
             if not seeds:
