@@ -290,7 +290,7 @@ class RuntimeAdapter(BaseAdapter):
 
         expression = parse_one(sql, read=self.dialect)
         with _normalize_and_quote(
-            expression, self.dialect, self.engine_adapter.default_catalog  # type: ignore
+            expression, t.cast(str, self.dialect), self.engine_adapter.default_catalog
         ) as expression:
             expression = exp.replace_tables(
                 expression, self.table_mapping, dialect=self.dialect, copy=False
