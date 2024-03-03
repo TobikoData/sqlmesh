@@ -5,11 +5,10 @@ from collections import defaultdict
 
 from fastapi import APIRouter, Depends
 from sqlglot import exp
-from sqlglot.lineage import lineage
 
 from sqlmesh.core.context import Context
 from sqlmesh.core.dialect import normalize_model_name
-from sqlmesh.core.lineage import _render_query, column_dependencies
+from sqlmesh.core.lineage import column_dependencies, lineage
 from web.server.exceptions import ApiException
 from web.server.models import LineageColumn
 from web.server.settings import get_loaded_context
@@ -54,9 +53,7 @@ def create_lineage_adjacency_list(
                 models={},
             )
             continue
-        root = lineage(
-            column, sql=_render_query(model), schema=model.mapping_schema, infer_schema=True
-        )
+        root = lineage(column, model)
 
         for node in root.walk():
             if root.name == "UNION" and node is root:

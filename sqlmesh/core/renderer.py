@@ -14,7 +14,6 @@ from sqlglot.optimizer.qualify import qualify
 from sqlglot.optimizer.qualify_columns import quote_identifiers
 from sqlglot.optimizer.qualify_tables import qualify_tables
 from sqlglot.optimizer.simplify import simplify
-from sqlglot.schema import MappingSchema
 
 from sqlmesh.core import constants as c
 from sqlmesh.core import dialect as d
@@ -66,7 +65,7 @@ class BaseExpressionRenderer:
         self._cache: t.Dict[CacheKey, t.List[t.Optional[exp.Expression]]] = {}
 
     def update_schema(self, schema: t.Dict[str, t.Any]) -> None:
-        self.schema = MappingSchema(_unquote_schema(schema), dialect=self._dialect, normalize=False)
+        self.schema = d.normalize_mapping_schema(schema, dialect=self._dialect)
 
     def _render(
         self,
@@ -534,10 +533,3 @@ def _normalize_and_quote(query: E, dialect: str, default_catalog: t.Optional[str
     normalize_identifiers(query, dialect=dialect)
     yield query
     quote_identifiers(query, dialect=dialect)
-
-
-def _unquote_schema(schema: t.Dict) -> t.Dict:
-    """SQLGlot schema expects unquoted normalized keys."""
-    return {
-        k.strip('"'): _unquote_schema(v) if isinstance(v, dict) else v for k, v in schema.items()
-    }
