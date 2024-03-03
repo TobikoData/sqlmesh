@@ -410,6 +410,7 @@ def test_missing_column_failure(sushi_context: Context, full_model_without_ctes:
         """
 test_foo:
   model: sushi.foo
+  description: sushi.foo's output has a missing column (fails intentionally)
   inputs:
     raw:
       - id: 1
@@ -424,7 +425,15 @@ test_foo:
     result = _create_test(body, "test_foo", model, sushi_context).run()
     assert result and not result.wasSuccessful()
 
-    expected_msg = "AssertionError: Data differs (exp: expected, act: actual)\n\n  value      ds    \n    exp act exp act\n0   NaN   2 NaN   3\n"
+    expected_msg = """AssertionError: Data differs (exp: expected, act: actual)
+
+  value      ds    
+    exp act exp act
+0   NaN   2 NaN   3
+
+
+Test description: sushi.foo's output has a missing column (fails intentionally)
+"""
     assert expected_msg in result.failures[0][1]
 
 
