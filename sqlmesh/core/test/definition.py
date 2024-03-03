@@ -137,7 +137,9 @@ class ModelTest(unittest.TestCase):
                 return
 
             diff = expected.compare(actual).rename(columns={"self": "exp", "other": "act"})
-            e.args = (f"Data differs (exp: expected, act: actual)\n\n{diff}",)
+            description = self.body.get("description")
+            description = f"\n\n\nTest description: {description}" if description else ""
+            e.args = (f"Data differs (exp: expected, act: actual)\n\n{diff}{description}",)
             raise e
 
     def runTest(self) -> None:
