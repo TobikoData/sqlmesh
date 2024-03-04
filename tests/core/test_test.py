@@ -63,9 +63,8 @@ def _check_successful_or_raise(
         error_or_failure_traceback = (result.errors or result.failures)[0][1]
         if result.failures and expected_failure_msg:
             assert expected_failure_msg in error_or_failure_traceback
-            return
-
-        raise AssertionError(error_or_failure_traceback)
+        else:
+            raise AssertionError(error_or_failure_traceback)
 
 
 @pytest.fixture
@@ -282,7 +281,7 @@ test_foo:
 
     # model query without ORDER BY should pass unit test
     result = _create_test(body, "test_foo", model, sushi_context).run()
-    assert result and result.wasSuccessful()
+    _check_successful_or_raise(result)
 
     # model query with ORDER BY should fail unit test
     full_model_without_ctes_dict = full_model_without_ctes.dict()
@@ -290,9 +289,16 @@ test_foo:
     full_model_without_ctes_orderby = SqlModel(**full_model_without_ctes_dict)
 
     model = t.cast(SqlModel, sushi_context.upsert_model(full_model_without_ctes_orderby))
-
     result = _create_test(body, "test_foo", model, sushi_context).run()
-    _check_successful_or_raise(result)
+
+    expected_failure_msg = """AssertionError: Data differs (exp: expected, act: actual)
+
+   id     value      ds    
+  exp act   exp act exp act
+0   2   1     3   2   4   3
+1   1   2     2   3   3   4"""
+
+    _check_successful_or_raise(result, expected_failure_msg=expected_failure_msg)
 
 
 def test_partial_data(sushi_context: Context) -> None:
