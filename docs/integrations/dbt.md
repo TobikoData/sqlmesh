@@ -22,8 +22,13 @@ Models **require** a start date for backfilling data through use of the `start` 
 >   +start: Jan 1 2000
 ```
 
+### Configuration
 
-### Runtime vars
+SQLMesh determines a project's configuration settings from its dbt configuration files.
+
+This section describes using runtime variables to create multiple configurations and how to disable SQLMesh's automatic model description and comment registration.
+
+#### Runtime vars
 
 dbt supports passing variable values at runtime with its [CLI `vars` option](https://docs.getdbt.com/docs/build/project-variables#defining-variables-on-the-command-line).
 
@@ -69,6 +74,21 @@ sqlmesh --config marketing_config plan
 ```
 
 Note that the `--config` option is specified between the word `sqlmesh` and the command being executed (e.g., `plan`, `run`).
+
+#### Registering comments
+
+SQLMesh automatically registers model descriptions and column comments with the target SQL engine, as described in the [Models Overview documentation](../concepts/models/overview#model-description-and-comments). Comment registration is on by default for all engines that support it (but off by default for Snowflake).
+
+dbt offers similar comment registration functionality via its [`persist_docs` model configuration parameter](https://docs.getdbt.com/reference/resource-configs/persist_docs), specified by model. SQLMesh comment registration is configured at the project level, so it does not use dbt's model-specific `persist_docs` configuration.
+
+SQLMesh's project-level comment registration defaults are overridden with the `sqlmesh_config()` `register_comments` argument. For example, this configuration turns comment registration off:
+
+```python
+config = sqlmesh_config(
+    Path(__file__).parent,
+    register_comments=False,
+    )
+```
 
 ### Running SQLMesh
 
@@ -154,8 +174,8 @@ It's important to note, that the `on_schema_change` setting is ignored by SQLMes
 
 ## Snapshot support
 
-SQLMesh supports both dbt snapshot strategies of either `timestamp` or `check`. 
-Only unsupported snapshot functionality is `invalidate_hard_deletes` which must be set to `True`. 
+SQLMesh supports both dbt snapshot strategies of either `timestamp` or `check`.
+Only unsupported snapshot functionality is `invalidate_hard_deletes` which must be set to `True`.
 If set to `False`, then the snapshot will be skipped and a warning will be logged indicating this happened.
 Support for this will be added soon.
 
@@ -168,7 +188,7 @@ Add SQLMesh [unit tests](../concepts/tests.md) to a dbt project by placing them 
 SQLMesh does not have its own package manager; however, SQLMesh's dbt adapter is compatible with dbt's package manager. Continue to use [dbt deps](https://docs.getdbt.com/reference/commands/deps) and [dbt clean](https://docs.getdbt.com/reference/commands/clean) to update, add, or remove packages.
 
 ## Documentation
-Model documentation is available in the [SQLMesh UI](../quickstart/ui.md#2-open-the-sqlmesh-web-ui). 
+Model documentation is available in the [SQLMesh UI](../quickstart/ui.md#2-open-the-sqlmesh-web-ui).
 
 ## Using Airflow
 To use SQLMesh and dbt projects with Airflow, first configure SQLMesh to use Airflow as described in the [Airflow integrations documentation](./airflow.md).
