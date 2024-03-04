@@ -608,7 +608,9 @@ test_foo:
   inputs:
     raw:
       - value: [1, 2, 3]
-      - value: [2, 3]
+      - value:
+        - 2
+        - 3
       - value: [0, 4, 1]
   outputs:
     query:
