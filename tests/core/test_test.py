@@ -16,6 +16,9 @@ from sqlmesh.core.test.definition import SqlModelTest
 from sqlmesh.utils.errors import ConfigError
 from sqlmesh.utils.yaml import load as load_yaml
 
+if t.TYPE_CHECKING:
+    from unittest import TestResult
+
 pytestmark = pytest.mark.slow
 
 SUSHI_FOO_META = "MODEL (name sushi.foo, kind FULL)"
@@ -50,6 +53,19 @@ def _create_model(
         SqlModel,
         load_sql_based_model(parsed_definition, dialect=dialect, default_catalog=default_catalog),
     )
+
+
+def _check_successful_or_raise(
+    result: t.Optional[TestResult], expected_failure_msg: t.Optional[str] = None
+) -> None:
+    assert result is not None
+    if not result.wasSuccessful():
+        error_or_failure_traceback = (result.errors or result.failures)[0][1]
+        if result.failures and expected_failure_msg:
+            assert expected_failure_msg in error_or_failure_traceback
+            return
+
+        raise AssertionError(error_or_failure_traceback)
 
 
 @pytest.fixture
@@ -110,7 +126,7 @@ test_foo:
         """
     )
     result = _create_test(body, "test_foo", model, sushi_context).run()
-    assert result and result.wasSuccessful()
+    _check_successful_or_raise(result)
 
 
 def test_ctes_only(sushi_context: Context, full_model_with_two_ctes: SqlModel) -> None:
@@ -134,7 +150,7 @@ test_foo:
         """
     )
     result = _create_test(body, "test_foo", model, sushi_context).run()
-    assert result and result.wasSuccessful()
+    _check_successful_or_raise(result)
 
 
 def test_query_only(sushi_context: Context, full_model_with_two_ctes: SqlModel) -> None:
@@ -155,7 +171,7 @@ test_foo:
         """
     )
     result = _create_test(body, "test_foo", model, sushi_context).run()
-    assert result and result.wasSuccessful()
+    _check_successful_or_raise(result)
 
 
 def test_with_rows(sushi_context: Context, full_model_with_single_cte: SqlModel) -> None:
@@ -182,7 +198,7 @@ test_foo:
         """
     )
     result = _create_test(body, "test_foo", model, sushi_context).run()
-    assert result and result.wasSuccessful()
+    _check_successful_or_raise(result)
 
 
 def test_without_rows(sushi_context: Context, full_model_with_single_cte: SqlModel) -> None:
@@ -206,7 +222,7 @@ test_foo:
         """
     )
     result = _create_test(body, "test_foo", model, sushi_context).run()
-    assert result and result.wasSuccessful()
+    _check_successful_or_raise(result)
 
 
 def test_column_order(sushi_context: Context, full_model_without_ctes: SqlModel) -> None:
@@ -231,7 +247,7 @@ test_foo:
         """
     )
     result = _create_test(body, "test_foo", model, sushi_context).run()
-    assert result and result.wasSuccessful()
+    _check_successful_or_raise(result)
 
 
 def test_row_order(sushi_context: Context, full_model_without_ctes: SqlModel) -> None:
@@ -276,7 +292,7 @@ test_foo:
     model = t.cast(SqlModel, sushi_context.upsert_model(full_model_without_ctes_orderby))
 
     result = _create_test(body, "test_foo", model, sushi_context).run()
-    assert result and not result.wasSuccessful()
+    _check_successful_or_raise(result)
 
 
 def test_partial_data(sushi_context: Context) -> None:
@@ -316,7 +332,7 @@ test_foo:
         """
     )
     result = _create_test(body, "test_foo", model, sushi_context).run()
-    assert result and result.wasSuccessful()
+    _check_successful_or_raise(result)
 
 
 def test_partial_data_column_order(sushi_context: Context) -> None:
@@ -347,7 +363,7 @@ test_foo:
         """
     )
     result = _create_test(body, "test_foo", model, sushi_context).run()
-    assert result and result.wasSuccessful()
+    _check_successful_or_raise(result)
 
 
 def test_partial_data_missing_schemas(sushi_context: Context) -> None:
@@ -371,7 +387,7 @@ test_foo:
         """
     )
     result = _create_test(body, "test_foo", model, sushi_context).run()
-    assert result and result.wasSuccessful()
+    _check_successful_or_raise(result)
 
     model = _create_model(
         "SELECT *, DATE_TRUNC('month', date)::DATE AS month, NULL::DATE AS null_date, FROM unknown"
@@ -401,7 +417,7 @@ test_foo:
         """
     )
     result = _create_test(body, "test_foo", model, sushi_context).run()
-    assert result and result.wasSuccessful()
+    _check_successful_or_raise(result)
 
 
 def test_missing_column_failure(sushi_context: Context, full_model_without_ctes: SqlModel) -> None:
@@ -423,9 +439,8 @@ test_foo:
         """
     )
     result = _create_test(body, "test_foo", model, sushi_context).run()
-    assert result and not result.wasSuccessful()
 
-    expected_msg = """AssertionError: Data differs (exp: expected, act: actual)
+    expected_failure_msg = """AssertionError: Data differs (exp: expected, act: actual)
 
   value      ds    
     exp act exp act
@@ -434,7 +449,7 @@ test_foo:
 
 Test description: sushi.foo's output has a missing column (fails intentionally)
 """
-    assert expected_msg in result.failures[0][1]
+    _check_successful_or_raise(result, expected_failure_msg=expected_failure_msg)
 
 
 def test_empty_rows(sushi_context: Context) -> None:
@@ -454,7 +469,7 @@ test_foo:
         """
     )
     result = _create_test(body, "test_foo", model, sushi_context).run()
-    assert result and result.wasSuccessful()
+    _check_successful_or_raise(result)
 
 
 @pytest.mark.parametrize("full_model_without_ctes", ["snowflake"], indirect=True)
@@ -541,7 +556,7 @@ def test_test_generation(tmp_path: Path) -> None:
     assert test["test_full_model"]["vars"] == {"start": "2020-01-01", "end": "2024-01-01"}
 
     result = context.test()
-    assert result and result.wasSuccessful()
+    _check_successful_or_raise(result)
 
     context.create_test(
         "sqlmesh_example.full_model", input_queries=input_queries, name="new_name", path="foo/bar"
@@ -557,13 +572,13 @@ def test_source_func() -> None:
         body=load_yaml(
             """
 test_foo:
-    model: xyz
-    outputs:
-        query:
-            - month: 2023-01-01
-            - month: 2023-02-01
-            - month: 2023-03-01
-"""
+  model: xyz
+  outputs:
+    query:
+      - month: 2023-01-01
+      - month: 2023-02-01
+      - month: 2023-03-01
+            """
         ),
         test_name="test_foo",
         model=_create_model(
@@ -575,4 +590,30 @@ test_foo:
         context=Context(config=Config(model_defaults=ModelDefaultsConfig(dialect="duckdb"))),
     ).run()
 
-    assert result and result.wasSuccessful()
+    _check_successful_or_raise(result)
+
+
+def test_nested_data_types() -> None:
+    result = _create_test(
+        body=load_yaml(
+            """
+test_foo:
+  model: sushi.foo
+  inputs:
+    raw:
+      - value: [1, 2, 3]
+      - value: [2, 3]
+      - value: [0, 4, 1]
+  outputs:
+    query:
+      - value: [0, 4, 1]
+      - value: [1, 2, 3]
+      - value: [2, 3]
+            """
+        ),
+        test_name="test_foo",
+        model=_create_model("SELECT value FROM raw"),
+        context=Context(config=Config(model_defaults=ModelDefaultsConfig(dialect="duckdb"))),
+    ).run()
+
+    _check_successful_or_raise(result)

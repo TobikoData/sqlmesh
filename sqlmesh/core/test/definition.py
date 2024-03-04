@@ -7,6 +7,7 @@ from pathlib import Path
 import numpy as np
 import pandas as pd
 from sqlglot import exp, parse_one
+from sqlglot.optimizer.annotate_types import annotate_types
 from sqlglot.optimizer.normalize_identifiers import normalize_identifiers
 
 from sqlmesh.core import constants as c
@@ -82,7 +83,8 @@ class ModelTest(unittest.TestCase):
                 for i, v in rows[0].items():
                     # convert ruamel into python
                     v = v.real if hasattr(v, "real") else v
-                    columns_to_types[i] = parse_one(type(v).__name__, into=exp.DataType)
+                    v_type = annotate_types(exp.convert(v)).type or type(v).__name__
+                    columns_to_types[i] = exp.maybe_parse(v_type, into=exp.DataType)
 
             test_fixture_table = _fully_qualified_test_fixture_table(table_name, self.dialect)
             if test_fixture_table.db:
@@ -112,21 +114,20 @@ class ModelTest(unittest.TestCase):
             actual_types, errors="ignore"
         )
 
-        expected = expected.replace({None: np.nan})
         actual = actual.replace({None: np.nan})
+        expected = expected.replace({None: np.nan})
+
+        def _to_hashable(x: t.Any) -> t.Any:
+            return tuple(x) if isinstance(x, list) else x
 
         try:
+            if sort:
+                actual = actual.map(_to_hashable).sort_values(by=actual.columns.to_list()).reset_index(drop=True)
+                expected = expected.map(_to_hashable).sort_values(by=expected.columns.to_list()).reset_index(drop=True)
+
             pd.testing.assert_frame_equal(
-                (
-                    expected.sort_values(by=expected.columns.to_list()).reset_index(drop=True)
-                    if sort
-                    else expected
-                ),
-                (
-                    actual.sort_values(by=actual.columns.to_list()).reset_index(drop=True)
-                    if sort
-                    else actual
-                ),
+                expected,
+                actual,
                 check_dtype=False,
                 check_datetimelike_compat=True,
                 check_like=True,  # ignore column order
