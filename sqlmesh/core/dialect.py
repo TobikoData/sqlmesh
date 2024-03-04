@@ -13,6 +13,7 @@ from sqlglot.dialects.dialect import DialectType
 from sqlglot.dialects.snowflake import Snowflake
 from sqlglot.optimizer.normalize_identifiers import normalize_identifiers
 from sqlglot.optimizer.scope import traverse_scope
+from sqlglot.schema import MappingSchema
 from sqlglot.tokens import Token
 
 from sqlmesh.core.constants import MAX_MODEL_DEFINITION_SIZE
@@ -965,3 +966,14 @@ def schema_(
         db=exp.to_identifier(db, quoted=quoted) if db else None,
         catalog=exp.to_identifier(catalog, quoted=quoted) if catalog else None,
     )
+
+
+def normalize_mapping_schema(schema: t.Dict, dialect: DialectType) -> MappingSchema:
+    return MappingSchema(_unquote_schema(schema), dialect=dialect, normalize=False)
+
+
+def _unquote_schema(schema: t.Dict) -> t.Dict:
+    """SQLGlot schema expects unquoted normalized keys."""
+    return {
+        k.strip('"'): _unquote_schema(v) if isinstance(v, dict) else v for k, v in schema.items()
+    }
