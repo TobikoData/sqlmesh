@@ -116,7 +116,7 @@ setup(
             "dbt-sqlserver",
         ],
         "dbt": [
-            "dbt-core<1.5.0",
+            "dbt-core<2",
         ],
         "gcppostgres": [
             "cloud-sql-python-connector[pg8000]",
