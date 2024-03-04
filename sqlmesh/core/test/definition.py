@@ -123,12 +123,12 @@ class ModelTest(unittest.TestCase):
         try:
             if sort:
                 actual = (
-                    actual.map(_to_hashable)
+                    actual.apply(_to_hashable)
                     .sort_values(by=actual.columns.to_list())
                     .reset_index(drop=True)
                 )
                 expected = (
-                    expected.map(_to_hashable)
+                    expected.apply(_to_hashable)
                     .sort_values(by=expected.columns.to_list())
                     .reset_index(drop=True)
                 )
