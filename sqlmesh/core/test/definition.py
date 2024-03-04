@@ -6,7 +6,7 @@ from pathlib import Path
 
 import numpy as np
 import pandas as pd
-from sqlglot import exp, parse_one
+from sqlglot import exp
 from sqlglot.optimizer.annotate_types import annotate_types
 from sqlglot.optimizer.normalize_identifiers import normalize_identifiers
 
@@ -122,8 +122,16 @@ class ModelTest(unittest.TestCase):
 
         try:
             if sort:
-                actual = actual.map(_to_hashable).sort_values(by=actual.columns.to_list()).reset_index(drop=True)
-                expected = expected.map(_to_hashable).sort_values(by=expected.columns.to_list()).reset_index(drop=True)
+                actual = (
+                    actual.map(_to_hashable)
+                    .sort_values(by=actual.columns.to_list())
+                    .reset_index(drop=True)
+                )
+                expected = (
+                    expected.map(_to_hashable)
+                    .sort_values(by=expected.columns.to_list())
+                    .reset_index(drop=True)
+                )
 
             pd.testing.assert_frame_equal(
                 expected,
