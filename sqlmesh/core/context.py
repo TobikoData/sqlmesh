@@ -254,9 +254,10 @@ class GenericContext(BaseContext, t.Generic[C]):
         config_type: The type of config object to use (default Config).
     """
 
+    CONFIG_TYPE: t.Type[C]
+
     def __init__(
         self,
-        config_type: t.Type[C],
         engine_adapter: t.Optional[EngineAdapter] = None,
         notification_targets: t.Optional[t.List[NotificationTarget]] = None,
         state_sync: t.Optional[StateSync] = None,
@@ -271,7 +272,7 @@ class GenericContext(BaseContext, t.Generic[C]):
     ):
         self.console = console or get_console()
         self.configs = (
-            config if isinstance(config, dict) else load_configs(config, config_type, paths)
+            config if isinstance(config, dict) else load_configs(config, self.CONFIG_TYPE, paths)
         )
         self.dag: DAG[str] = DAG()
         self._models: UniqueKeyDict[str, Model] = UniqueKeyDict("models")
@@ -1762,5 +1763,4 @@ class GenericContext(BaseContext, t.Generic[C]):
 
 
 class Context(GenericContext[Config]):
-    def __init__(self, *args: t.Any, **kwargs: t.Any):
-        super().__init__(Config, *args, **kwargs)
+    CONFIG_TYPE = Config

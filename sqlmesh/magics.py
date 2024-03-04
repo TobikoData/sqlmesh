@@ -19,7 +19,7 @@ from rich.jupyter import JupyterRenderable
 
 from sqlmesh.cli.example_project import ProjectTemplate, init_example_project
 from sqlmesh.core import constants as c
-from sqlmesh.core.config import Config, load_configs
+from sqlmesh.core.config import load_configs
 from sqlmesh.core.console import get_console
 from sqlmesh.core.context import Context
 from sqlmesh.core.dialect import format_model_expressions, parse
@@ -97,7 +97,7 @@ class SQLMeshMagics(Magics):
         from sqlmesh import configure_logging
 
         args = parse_argstring(self.context, line)
-        configs = load_configs(args.config, Config, args.paths)
+        configs = load_configs(args.config, Context.CONFIG_TYPE, args.paths)
         log_limit = list(configs.values())[0].log_limit
         configure_logging(args.debug, args.ignore_warnings, log_limit=log_limit)
         try:
