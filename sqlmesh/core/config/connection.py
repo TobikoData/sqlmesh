@@ -24,6 +24,7 @@ from sqlmesh.core.config.common import (
 from sqlmesh.core.engine_adapter import EngineAdapter
 from sqlmesh.utils.errors import ConfigError
 from sqlmesh.utils.pydantic import (
+    PYDANTIC_MAJOR_VERSION,
     field_validator,
     model_validator,
     model_validator_v1_args,
@@ -41,9 +42,6 @@ logger = logging.getLogger(__name__)
 class ConnectionConfig(abc.ABC, BaseConfig):
     concurrent_tasks: int
     register_comments: bool
-
-    # Pydantic V2 does not include type field in dict unless also in base class
-    type_: str = Field(alias="type", default="none")
 
     @property
     @abc.abstractmethod
@@ -1276,3 +1274,16 @@ connection_config_validator = field_validator(
     mode="before",
     check_fields=False,
 )(_connection_config_validator)
+
+
+if t.TYPE_CHECKING:
+    # TypeAlias hasn't been introduced until Python 3.10 which means that we can't use it
+    # outside the TYPE_CHECKING guard.
+    SerializableConnectionConfig: t.TypeAlias = ConnectionConfig  # type: ignore
+elif PYDANTIC_MAJOR_VERSION >= 2:
+    import pydantic
+
+    # Workaround for https://docs.pydantic.dev/latest/concepts/serialization/#serializing-with-duck-typing
+    SerializableConnectionConfig = pydantic.SerializeAsAny[ConnectionConfig]  # type: ignore
+else:
+    SerializableConnectionConfig = ConnectionConfig  # type: ignore

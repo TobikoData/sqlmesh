@@ -17,6 +17,7 @@ from sqlmesh.core.config.base import BaseConfig, UpdateStrategy
 from sqlmesh.core.config.connection import (
     ConnectionConfig,
     DuckDBConnectionConfig,
+    SerializableConnectionConfig,
     connection_config_validator,
 )
 from sqlmesh.core.config.feature_flag import FeatureFlag
@@ -71,8 +72,8 @@ class Config(BaseConfig):
     """
 
     gateways: t.Dict[str, GatewayConfig] = {"": GatewayConfig()}
-    default_connection: ConnectionConfig = DuckDBConnectionConfig()
-    default_test_connection_: t.Optional[ConnectionConfig] = Field(
+    default_connection: SerializableConnectionConfig = DuckDBConnectionConfig()
+    default_test_connection_: t.Optional[SerializableConnectionConfig] = Field(
         default=None, alias="default_test_connection"
     )
     default_scheduler: SchedulerConfig = BuiltInSchedulerConfig()

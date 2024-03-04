@@ -4,7 +4,10 @@ import typing as t
 
 from sqlmesh.core import constants as c
 from sqlmesh.core.config.base import BaseConfig
-from sqlmesh.core.config.connection import ConnectionConfig, connection_config_validator
+from sqlmesh.core.config.connection import (
+    SerializableConnectionConfig,
+    connection_config_validator,
+)
 from sqlmesh.core.config.scheduler import SchedulerConfig
 
 
@@ -22,9 +25,9 @@ class GatewayConfig(BaseConfig):
             then no schema name is used and therefore the default schema defined for the connection will be used
     """
 
-    connection: t.Optional[ConnectionConfig] = None
-    state_connection: t.Optional[ConnectionConfig] = None
-    test_connection: t.Optional[ConnectionConfig] = None
+    connection: t.Optional[SerializableConnectionConfig] = None
+    state_connection: t.Optional[SerializableConnectionConfig] = None
+    test_connection: t.Optional[SerializableConnectionConfig] = None
     scheduler: t.Optional[SchedulerConfig] = None
     state_schema: t.Optional[str] = c.SQLMESH
 
