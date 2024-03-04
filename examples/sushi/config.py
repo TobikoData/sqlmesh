@@ -3,6 +3,7 @@ import os
 from sqlmesh.core.config import (
     AirflowSchedulerConfig,
     AutoCategorizationMode,
+    BigQueryConnectionConfig,
     CategorizerConfig,
     Config,
     DuckDBConnectionConfig,
@@ -29,6 +30,16 @@ config = Config(
     model_defaults=ModelDefaultsConfig(dialect="duckdb"),
 )
 
+bigquery_config = Config(
+    gateways={
+        "gcp": GatewayConfig(
+            connection=BigQueryConnectionConfig(),
+            state_connection=DuckDBConnectionConfig(database=f"{DATA_DIR}/bigquery.duckdb"),
+        )
+    },
+    default_gateway="gcp",
+    model_defaults=ModelDefaultsConfig(dialect="bigquery"),
+)
 
 # A configuration used for SQLMesh tests.
 test_config = Config(
