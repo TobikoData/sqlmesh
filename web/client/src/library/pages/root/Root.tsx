@@ -184,6 +184,125 @@ export default function Root(): JSX.Element {
     [synchronizeEnvironment, environment],
   )
 
+  const updateFiles = useCallback(
+    function updateFiles({
+      changes,
+      directories,
+    }: {
+      changes: Array<{
+        change: FileExplorerChange
+        path: string
+        file: ModelFile
+      }>
+      directories: Record<string, Directory>
+    }): void {
+      changes.sort((a: any) =>
+        a.change === EnumFileExplorerChange.Deleted ? -1 : 1,
+      )
+
+      changes.forEach(({ change, path, file }) => {
+        if (change === EnumFileExplorerChange.Modified) {
+          const currentFile = files.get(path)
+
+          if (isNil(currentFile) || isNil(file)) return
+
+          currentFile.update(file)
+        }
+
+        if (change === EnumFileExplorerChange.Deleted) {
+          const artifact = findArtifactByPath(path) ?? files.get(path)
+
+          if (isNil(artifact)) return
+
+          if (artifact instanceof ModelDirectory) {
+            artifact.parent?.removeDirectory(artifact)
+          }
+
+          if (artifact instanceof ModelFile) {
+            artifact.parent?.removeFile(artifact)
+
+            if (inTabs(artifact)) {
+              closeTab(artifact)
+            }
+          }
+        }
+      })
+
+      for (const path in directories) {
+        const directory = directories[path]!
+
+        const currentDirectory = findArtifactByPath(
+          path,
+        ) as Optional<ModelDirectory>
+
+        if (isNil(currentDirectory)) continue
+
+        directory.directories?.forEach(d => {
+          const directory = findArtifactByPath(
+            d.path,
+          ) as Optional<ModelDirectory>
+
+          if (isNil(directory)) {
+            currentDirectory.addDirectory(
+              new ModelDirectory(d, currentDirectory),
+            )
+          }
+        })
+
+        directory.files?.forEach(f => {
+          const file = files.get(f.path)
+
+          if (isNil(file)) {
+            currentDirectory.addFile(new ModelFile(f, currentDirectory))
+          }
+        })
+
+        currentDirectory.directories.sort((a, b) => (a.name > b.name ? 1 : -1))
+        currentDirectory.files.sort((a, b) => (a.name > b.name ? 1 : -1))
+      }
+
+      refreshFiles()
+      setActiveRange()
+    },
+    [files],
+  )
+
+  const formatFile = useCallback(
+    function formatFile(formatFileStatus: FormatFileStatus): void {
+      const file = files.get(formatFileStatus.path)
+
+      if (isNotNil(file)) {
+        file.isFormatted = formatFileStatus.status === Status.success
+
+        refreshFiles()
+      }
+    },
+    [files],
+  )
+
+  const restoreEditorTabsFromSaved = useCallback(
+    function restoreEditorTabsFromSaved(files: ModelFile[]): void {
+      if (isArrayEmpty(storedTabs)) return
+
+      const tabs = storedTabs.map(({ id, content }) => {
+        const file = files.find(file => file.id === id) ?? createLocalFile(id)
+        const storedTab = createTab(file)
+
+        storedTab.file.content = content ?? storedTab.file.content ?? ''
+
+        return storedTab
+      })
+      const tab = tabs.find(tab => tab.file.id === storedTabId)
+
+      addTabs(tabs)
+
+      if (isNotNil(tab) && isNil(selectedFile)) {
+        selectTab(tab)
+      }
+    },
+    [selectTab],
+  )
+
   useEffect(() => {
     void getMeta().then(({ data }) => {
       setVersion(data?.version)
@@ -200,12 +319,8 @@ export default function Root(): JSX.Element {
     const channelErrors = channel('errors', displayErrors)
     const channelTests = channel('tests', updateTests)
     const channelModels = channel('models', updateModels)
-    const channelFile = channel('file', updateFiles)
-    const channelFormatFile = channel('format-file', formatFile)
 
     channelModels.subscribe()
-    channelFormatFile.subscribe()
-    channelFile.subscribe()
 
     if (modules.hasPlans) {
       channelTests.subscribe()
@@ -234,8 +349,6 @@ export default function Root(): JSX.Element {
       void cancelRequestModels()
 
       channelModels.unsubscribe()
-      channelFormatFile?.unsubscribe()
-      channelFile?.unsubscribe()
 
       if (modules.hasPlans) {
         cancelRequestEnvironments()
@@ -305,6 +418,26 @@ export default function Root(): JSX.Element {
   }, [updatePlanCancelTracker])
 
   useEffect(() => {
+    const channelFile = channel('file', updateFiles)
+
+    channelFile.subscribe()
+
+    return () => {
+      channelFile?.unsubscribe()
+    }
+  }, [updateFiles])
+
+  useEffect(() => {
+    const channelFormatFile = channel('format-file', formatFile)
+
+    channelFormatFile.subscribe()
+
+    return () => {
+      channelFormatFile?.unsubscribe()
+    }
+  }, [formatFile])
+
+  useEffect(() => {
     if (location.pathname === EnumRoutes.Home) {
       navigate(modules.defaultNavigationRoute(), { replace: true })
     }
@@ -329,84 +462,6 @@ export default function Root(): JSX.Element {
     setTests(tests)
   }
 
-  function updateFiles({
-    changes,
-    directories,
-  }: {
-    changes: Array<{
-      change: FileExplorerChange
-      path: string
-      file: ModelFile
-    }>
-    directories: Record<string, Directory>
-  }): void {
-    changes.sort((a: any) =>
-      a.change === EnumFileExplorerChange.Deleted ? -1 : 1,
-    )
-
-    changes.forEach(({ change, path, file }) => {
-      if (change === EnumFileExplorerChange.Modified) {
-        const currentFile = files.get(path)
-
-        if (isNil(currentFile) || isNil(file)) return
-
-        currentFile.update(file)
-      }
-
-      if (change === EnumFileExplorerChange.Deleted) {
-        const artifact = findArtifactByPath(path) ?? files.get(path)
-
-        if (isNil(artifact)) return
-
-        if (artifact instanceof ModelDirectory) {
-          artifact.parent?.removeDirectory(artifact)
-        }
-
-        if (artifact instanceof ModelFile) {
-          artifact.parent?.removeFile(artifact)
-
-          if (inTabs(artifact)) {
-            closeTab(artifact)
-          }
-        }
-      }
-    })
-
-    for (const path in directories) {
-      const directory = directories[path]!
-
-      const currentDirectory = findArtifactByPath(path) as
-        | ModelDirectory
-        | undefined
-
-      if (isNil(currentDirectory)) continue
-
-      directory.directories?.forEach((d: any) => {
-        const directory = findArtifactByPath(d.path) as
-          | ModelDirectory
-          | undefined
-
-        if (isNil(directory)) {
-          currentDirectory.addDirectory(new ModelDirectory(d, currentDirectory))
-        }
-      })
-
-      directory.files?.forEach((f: any) => {
-        const file = files.get(path)
-
-        if (isNil(file)) {
-          currentDirectory.addFile(new ModelFile(f, currentDirectory))
-        }
-      })
-
-      currentDirectory.directories.sort((a, b) => (a.name > b.name ? 1 : -1))
-      currentDirectory.files.sort((a, b) => (a.name > b.name ? 1 : -1))
-    }
-
-    refreshFiles()
-    setActiveRange()
-  }
-
   function updateEnviroments(data: Optional<Environments>): void {
     const { environments, default_target_environment, pinned_environments } =
       data ?? {}
@@ -420,40 +475,10 @@ export default function Root(): JSX.Element {
     }
   }
 
-  function formatFile(formatFileStatus: FormatFileStatus): void {
-    const file = files.get(formatFileStatus.path)
-
-    if (isNotNil(file)) {
-      file.isFormatted = formatFileStatus.status === Status.success
-
-      refreshFiles()
-    }
-  }
-
   function closeModalConfirmation(confirmation?: Confirmation): void {
     confirmation?.cancel?.()
 
     setShowConfirmation(false)
-  }
-
-  function restoreEditorTabsFromSaved(files: ModelFile[]): void {
-    if (isArrayEmpty(storedTabs)) return
-
-    const tabs = storedTabs.map(({ id, content }) => {
-      const file = files.find(file => file.id === id) ?? createLocalFile(id)
-      const storedTab = createTab(file)
-
-      storedTab.file.content = content ?? storedTab.file.content ?? ''
-
-      return storedTab
-    })
-    const tab = tabs.find(tab => tab.file.id === storedTabId)
-
-    addTabs(tabs)
-
-    if (isNotNil(tab) && isNil(selectedFile)) {
-      selectTab(tab)
-    }
   }
 
   const confirmation = confirmations[0]
