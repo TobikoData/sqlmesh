@@ -12,6 +12,7 @@ from sqlmesh.core.dialect import jinja_query
 from sqlmesh.core.model import SqlModel
 from sqlmesh.dbt.common import Dependencies
 from sqlmesh.dbt.context import DbtContext
+from sqlmesh.dbt.loader import sqlmesh_config
 from sqlmesh.dbt.model import IncrementalByUniqueKeyKind, Materialization, ModelConfig
 from sqlmesh.dbt.project import Project
 from sqlmesh.dbt.source import SourceConfig
@@ -643,6 +644,16 @@ def test_sqlserver_config():
         "outputs",
         "dev",
     )
+
+
+def test_connection_args(tmp_path):
+    dbt_project_dir = "tests/fixtures/dbt/sushi_test"
+
+    config = sqlmesh_config(dbt_project_dir)
+    assert config.gateways["in_memory"].connection.register_comments
+
+    config = sqlmesh_config(dbt_project_dir, register_comments=False)
+    assert not config.gateways["in_memory"].connection.register_comments
 
 
 @pytest.mark.cicdonly
