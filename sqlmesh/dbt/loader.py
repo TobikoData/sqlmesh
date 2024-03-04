@@ -41,7 +41,7 @@ def sqlmesh_config(
     project_root = project_root or Path()
     context = DbtContext(project_root=project_root)
     profile = Profile.load(context, target_name=dbt_target_name)
-    model_defaults = kwargs.get("model_defaults", ModelDefaultsConfig())
+    model_defaults = kwargs.pop("model_defaults", ModelDefaultsConfig())
     model_defaults.dialect = profile.target.dialect
 
     loader_kwargs = kwargs.pop("loader_kwargs", {})

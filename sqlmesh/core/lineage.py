@@ -5,9 +5,10 @@ from collections import defaultdict
 
 from sqlglot import exp
 from sqlglot.helper import first
-from sqlglot.lineage import lineage
+from sqlglot.lineage import Node
+from sqlglot.lineage import lineage as sqlglot_lineage
 
-from sqlmesh.core.dialect import normalize_model_name
+from sqlmesh.core.dialect import normalize_mapping_schema, normalize_model_name
 
 if t.TYPE_CHECKING:
     from sqlmesh.core.context import Context
@@ -30,13 +31,28 @@ def _render_query(model: Model) -> exp.Query:
     return query
 
 
+def lineage(
+    column: str | exp.Column,
+    model: Model,
+    **kwargs: t.Any,
+) -> Node:
+    return sqlglot_lineage(
+        column,
+        sql=_render_query(model),
+        schema=normalize_mapping_schema(model.mapping_schema, dialect=model.dialect),
+        dialect=model.dialect,
+        **{
+            "infer_schema": True,
+            **kwargs,
+        },
+    )
+
+
 def column_dependencies(context: Context, model_name: str, column: str) -> t.Dict[str, t.Set[str]]:
     model = context.get_model(model_name)
     parents = defaultdict(set)
 
-    for node in lineage(
-        column, sql=_render_query(model), schema=model.mapping_schema, infer_schema=True
-    ).walk():
+    for node in lineage(column, model).walk():
         if node.downstream:
             continue
 
