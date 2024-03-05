@@ -100,19 +100,17 @@ export default function Root(): JSX.Element {
   const inTabs = useStoreEditor(s => s.inTabs)
   const setVersion = useStoreContext(s => s.setVersion)
 
-  // We need to fetch from IDE level to make sure
-  // all pages have access to models and files
+  const { refetch: getMeta, cancel: cancelRequestMeta } = useApiMeta()
   const { refetch: getModels, cancel: cancelRequestModels } = useApiModels()
   const { refetch: getFiles, cancel: cancelRequestFile } = useApiFiles()
   const { refetch: getEnvironments, cancel: cancelRequestEnvironments } =
     useApiEnvironments()
-  const { refetch: planRun, cancel: cancelRequestPlan } = useApiPlanRun(
+  const { refetch: getPlan, cancel: cancelRequestPlan } = useApiPlanRun(
     environment.name,
     {
       planOptions: { skip_tests: true, include_unmodified: true },
     },
   )
-  const { refetch: getMeta, cancel: cancelRequestMeta } = useApiMeta()
 
   const synchronizeEnvironment = useCallback(
     function synchronizeEnvironment(env: EnvironmentName): void {
@@ -157,7 +155,7 @@ export default function Root(): JSX.Element {
         return
 
       void getEnvironments().then(({ data }) => {
-        void planRun()
+        void getPlan()
 
         updateEnviroments(data)
       })
@@ -179,7 +177,7 @@ export default function Root(): JSX.Element {
         return
 
       // Sync backfills after plan apply canceled
-      void planRun()
+      void getPlan()
     },
     [synchronizeEnvironment, environment],
   )
@@ -263,6 +261,8 @@ export default function Root(): JSX.Element {
 
       refreshFiles()
       setActiveRange()
+
+      void getModels().then(({ data }) => updateModels(data as Model[]))
     },
     [files],
   )

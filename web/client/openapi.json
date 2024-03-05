@@ -1357,10 +1357,19 @@
           "default_catalog": {
             "anyOf": [{ "type": "string" }, { "type": "null" }],
             "title": "Default Catalog"
-          }
+          },
+          "hash": { "type": "string", "title": "Hash" }
         },
         "type": "object",
-        "required": ["name", "fqn", "path", "dialect", "type", "columns"],
+        "required": [
+          "name",
+          "fqn",
+          "path",
+          "dialect",
+          "type",
+          "columns",
+          "hash"
+        ],
         "title": "Model"
       },
       "ModelDetails": {

@@ -47,7 +47,7 @@ const Documentation = function Documentation({
     return () => {
       cancelRequestModel()
     }
-  }, [model.name])
+  }, [model.hash])
 
   return (
     <Container>

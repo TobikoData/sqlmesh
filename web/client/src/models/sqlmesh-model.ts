@@ -9,6 +9,7 @@ import {
 } from '@api/client'
 import { type Lineage } from '@context/editor'
 import { ModelInitial } from './initial'
+import { isArrayNotEmpty } from '@utils/index'
 
 export interface InitialSQLMeshModel extends Model {
   lineage?: Record<string, Lineage>
@@ -17,16 +18,19 @@ export interface InitialSQLMeshModel extends Model {
 export class ModelSQLMeshModel<
   T extends InitialSQLMeshModel = InitialSQLMeshModel,
 > extends ModelInitial<T> {
+  _details: ModelDetails = {}
+  _detailsIndex: string = ''
+
   name: string
   fqn: string
   path: string
   dialect: string
   type: ModelType
   columns: Column[]
-  details: ModelDetails
   default_catalog?: ModelDefaultCatalog
   description?: ModelDescription
   sql?: ModelSql
+  hash: string
 
   constructor(initial?: T | ModelSQLMeshModel) {
     super(
@@ -48,28 +52,49 @@ export class ModelSQLMeshModel<
     this.description = this.initial.description
     this.sql = this.initial.sql
     this.columns = this.initial.columns ?? []
-    this.details = this.initial.details ?? {}
     this.type = this.initial.type
+    this.hash = this.initial.hash
+    this.details = this.initial.details ?? {}
   }
 
   get defaultCatalog(): Optional<ModelDefaultCatalog> {
     return this.default_catalog
   }
 
+  get details(): ModelDetails {
+    return this._details
+  }
+
+  set details(details: ModelDetails) {
+    const output = []
+
+    for (const value of Object.values(details)) {
+      if (isArrayNotEmpty(value)) {
+        value.forEach(v => {
+          output.push(...Object.values(v))
+        })
+      } else {
+        output.push(value)
+      }
+    }
+
+    this._details = details
+    this._detailsIndex = output.join(' ')
+  }
+
   get index(): string {
     return [
-      this.path,
       this.displayName,
-      this.dialect,
+      this.path,
       this.type,
+      ...this.columns.map(column => Object.values(column)).flat(),
+      this._detailsIndex,
+      this.dialect,
       this.description,
-      this.columns.map(column => String(Object.values(column))),
-      Object.values(this.details),
     ]
-      .flat()
       .filter(Boolean)
       .join(' ')
-      .toLocaleLowerCase()
+      .toLowerCase()
   }
 
   get isModelPython(): boolean {

@@ -22,10 +22,9 @@ router = APIRouter()
     response_model_exclude_unset=True,
     response_model_exclude_none=True,
 )
-def get_models(
-    context: Context = Depends(get_loaded_context),
-) -> t.List[models.Model]:
+def get_models(context: Context = Depends(get_loaded_context)) -> t.List[models.Model]:
     """Get a list of models"""
+    context.refresh()
     return serialize_all_models(context)
 
 
@@ -130,6 +129,7 @@ def serialize_model(context: Context, model: Model, render_query: bool = False) 
         sql=sql,
         type=type,
         default_catalog=default_catalog,
+        hash=model.data_hash,
     )
 
 

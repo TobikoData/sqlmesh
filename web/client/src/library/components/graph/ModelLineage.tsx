@@ -1,4 +1,4 @@
-import { useApiModelLineage } from '@api/index'
+import { useApiModelLineage, useApiModels } from '@api/index'
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { type ModelSQLMeshModel } from '@models/sqlmesh-model'
 import { type HighlightedNodes, useLineageFlow } from './context'
@@ -36,6 +36,7 @@ import ModelLineageSearch from './ModelLineageSearch'
 import { Popover } from '@headlessui/react'
 import ModelLineageDetails from './ModelLineageDetails'
 import { Divider } from '@components/divider/Divider'
+import { type ModelLineageApiLineageModelNameGet200 } from '@api/client'
 
 const WITH_COLUMNS_LIMIT = 30
 
@@ -64,11 +65,14 @@ export default function ModelLineage({
 
   const {
     refetch: getModelLineage,
-    isFetching,
+    isFetching: isFetchingModelLineage,
     cancel,
   } = useApiModelLineage(model.name)
+  const { isFetching: isFetchingModels } = useApiModels()
 
   const [isMegringModels, setIsMergingModels] = useState(false)
+  const [modelLineage, setModelLineage] =
+    useState<Optional<ModelLineageApiLineageModelNameGet200>>(undefined)
 
   useEffect(() => {
     const lineageWorker = createLineageWorker()
@@ -77,27 +81,11 @@ export default function ModelLineage({
 
     getModelLineage()
       .then(({ data }) => {
+        setModelLineage(data)
+
         if (isNil(data)) return
 
-        const lineageModels = Object.keys(data)
-        const lineageModelsCount = lineageModels.length
-
-        lineageModels.forEach(modelName => {
-          modelName = encodeURI(modelName)
-
-          if (
-            isFalse(models.has(modelName)) &&
-            isFalse(unknownModels.has(modelName))
-          ) {
-            unknownModels.add(modelName)
-          }
-        })
-
-        setUnknownModels(new Set(unknownModels))
-
-        if (lineageModelsCount > WITH_COLUMNS_LIMIT) {
-          setWithColumns(false)
-        }
+        setIsMergingModels(true)
 
         lineageWorker.postMessage({
           topic: 'lineage',
@@ -107,8 +95,6 @@ export default function ModelLineage({
             mainNode: model.fqn,
           },
         })
-
-        setIsMergingModels(true)
       })
       .catch(error => {
         handleError?.(error)
@@ -132,7 +118,22 @@ export default function ModelLineage({
       setMainNode(undefined)
       setHighlightedNodes({})
     }
-  }, [model])
+  }, [model.hash])
+
+  useEffect(() => {
+    Object.keys(modelLineage ?? {}).forEach(modelName => {
+      modelName = encodeURI(modelName)
+
+      if (
+        isFalse(models.has(modelName)) &&
+        isFalse(unknownModels.has(modelName))
+      ) {
+        unknownModels.add(modelName)
+      }
+    })
+
+    setUnknownModels(new Set(unknownModels))
+  }, [modelLineage, models])
 
   useEffect(() => {
     setHighlightedNodes(highlightedNodes ?? {})
@@ -143,6 +144,12 @@ export default function ModelLineage({
       setIsMergingModels(false)
       setNodeConnections(e.data.payload.nodesConnections)
       setLineage(e.data.payload.lineage)
+
+      if (
+        Object.values(e.data.payload?.lineage ?? {}).length > WITH_COLUMNS_LIMIT
+      ) {
+        setWithColumns(false)
+      }
     }
 
     if (e.data.topic === 'error') {
@@ -151,11 +158,15 @@ export default function ModelLineage({
     }
   }
 
+  const isFetching =
+    isFetchingModelLineage || isFetchingModels || isMegringModels
+
   return (
     <div className="relative h-full w-full overflow-hidden">
-      {(isFetching || isMegringModels) && (
-        <div className="absolute top-0 left-0 z-10 w-full h-full bg-theme flex justify-center items-center">
-          <Loading className="inline-block">
+      {isFetching && (
+        <div className="absolute top-0 left-0 z-10 flex justify-center items-center w-full h-full">
+          <span className="absolute w-full h-full z-10 bg-transparent-20 backdrop-blur-lg"></span>
+          <Loading className="inline-block z-10">
             <Spinner className="w-3 h-3 border border-neutral-10 mr-4" />
             <h3 className="text-md whitespace-nowrap">
               {isFetching ? "Loading Model's Lineage..." : "Merging Model's..."}

@@ -584,7 +584,7 @@ function FormDiffModel({
     void getDiff().then(({ data }) => {
       setPreviewDiff(data)
     })
-  }, [model.name])
+  }, [model.hash])
 
   useEffect(() => {
     return () => {
