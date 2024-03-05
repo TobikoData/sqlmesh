@@ -21,6 +21,8 @@ from sqlmesh.core.config.connection import (
     PostgresConnectionConfig,
     RedshiftConnectionConfig,
     SnowflakeConnectionConfig,
+    TrinoAuthenticationMethod,
+    TrinoConnectionConfig,
 )
 from sqlmesh.core.model import (
     IncrementalByTimeRangeKind,
@@ -105,6 +107,8 @@ class TargetConfig(abc.ABC, DbtConfig):
             return BigQueryConfig(**data)
         elif db_type == "sqlserver":
             return MSSQLConfig(**data)
+        elif db_type == "trino":
+            return TrinoConfig(**data)
 
         raise ConfigError(f"{db_type} not supported.")
 
@@ -677,6 +681,120 @@ class MSSQLConfig(TargetConfig):
         )
 
 
+class TrinoConfig(TargetConfig):
+    """
+    Project connection and operational configuration for the Trino target.
+
+    Args:
+        method: The Trino authentication method to use
+        host: The server host to connect to
+        port: The MSSQL server port to connect to
+        database: Name of the database
+        roles: Trino catalog roles
+        session_properties: Trino session properties
+        retries: Number of times to retry if the Trino connector encounters an error
+        timezone: The timezone to use for the Trino session
+        http_headers: HTTP Headers to send alongside requests to Trino
+        http_scheme: The HTTP scheme to use for requests to Trino (default: http, or https if kerberos, ldap or jwt auth)
+    """
+
+    type: Literal["trino"] = "trino"
+    host: str
+    database: str
+    schema_: str = Field(alias="schema")
+    port: int = 443
+    method: str
+    user: t.Optional[str] = None
+
+    threads: int = 1
+    roles: t.Optional[t.Dict[str, str]] = None
+    session_properties: t.Optional[t.Dict[str, str]] = None
+    retries: int = 3
+    timezone: t.Optional[str] = None
+    http_headers: t.Optional[t.Dict[str, str]] = None
+    http_scheme: t.Optional[str] = None
+    prepared_statements_enabled: bool = True  # not used by SQLMesh
+
+    # ldap authentication
+    password: t.Optional[str] = None
+    impersonation_user: t.Optional[str] = None
+
+    # kerberos authentication
+    keytab: t.Optional[str] = None
+    krb5_config: t.Optional[str] = None
+    principal: t.Optional[str] = None
+    service_name: str = "trino"
+    hostname_override: t.Optional[str] = None
+    mutual_authentication: bool = False
+    force_preemptive: bool = False
+    sanitize_mutual_error_response: bool = True
+    delegate: bool = False
+
+    # jwt authentication
+    jwt_token: t.Optional[str] = None
+
+    # certificate authentication
+    client_certificate: t.Optional[str] = None
+    client_private_key: t.Optional[str] = None
+    cert: t.Optional[str] = None
+
+    def default_incremental_strategy(self, kind: IncrementalKind) -> str:
+        return "append"
+
+    @classproperty
+    def relation_class(cls) -> t.Type[BaseRelation]:
+        from dbt.adapters.trino.relation import TrinoRelation
+
+        return TrinoRelation
+
+    @classproperty
+    def column_class(cls) -> t.Type[Column]:
+        from dbt.adapters.trino.column import TrinoColumn
+
+        return TrinoColumn
+
+    def to_sqlmesh(self) -> ConnectionConfig:
+        method_to_auth_enum = {
+            "none": TrinoAuthenticationMethod.NO_AUTH,
+            "ldap": TrinoAuthenticationMethod.LDAP,
+            "kerberos": TrinoAuthenticationMethod.KERBEROS,
+            "jwt": TrinoAuthenticationMethod.JWT,
+            "certificate": TrinoAuthenticationMethod.CERTIFICATE,
+            "oauth": TrinoAuthenticationMethod.OAUTH,
+            "oauth_console": TrinoAuthenticationMethod.OAUTH,
+        }
+
+        return TrinoConnectionConfig(
+            method=method_to_auth_enum[self.method],
+            host=self.host,
+            user=self.user,
+            catalog=self.database,
+            port=self.port,
+            http_scheme=self.http_scheme,
+            roles=self.roles,
+            http_headers=self.http_headers,
+            session_properties=self.session_properties,
+            retries=self.retries,
+            timezone=self.timezone,
+            password=self.password,
+            impersonation_user=self.impersonation_user,
+            keytab=self.keytab,
+            krb5_config=self.krb5_config,
+            principal=self.principal,
+            service_name=self.service_name,
+            hostname_override=self.hostname_override,
+            mutual_authentication=self.mutual_authentication,
+            force_preemptive=self.force_preemptive,
+            sanitize_mutual_error_response=self.sanitize_mutual_error_response,
+            delegate=self.delegate,
+            jwt_token=self.jwt_token,
+            client_certificate=self.client_certificate,
+            client_private_key=self.client_private_key,
+            cert=self.cert,
+            concurrent_tasks=self.threads,
+        )
+
+
 TARGET_TYPE_TO_CONFIG_CLASS: t.Dict[str, t.Type[TargetConfig]] = {
     "databricks": DatabricksConfig,
     "duckdb": DuckDbConfig,
@@ -685,4 +803,5 @@ TARGET_TYPE_TO_CONFIG_CLASS: t.Dict[str, t.Type[TargetConfig]] = {
     "snowflake": SnowflakeConfig,
     "bigquery": BigQueryConfig,
     "sqlserver": MSSQLConfig,
+    "trino": TrinoConfig,
 }
