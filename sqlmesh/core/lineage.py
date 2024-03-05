@@ -17,7 +17,7 @@ if t.TYPE_CHECKING:
 
 def _render_query(model: Model) -> exp.Query:
     """Render a model's query, adding in managed columns"""
-    query = model.render_query_or_raise()
+    query = model.render_query_or_raise().copy()
     if model.managed_columns:
         query.select(
             *[
