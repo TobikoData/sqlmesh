@@ -92,9 +92,7 @@ export const useStoreProject = create<ProjectStore>((set, get) => ({
   refreshFiles() {
     const s = get()
 
-    set(() => ({
-      files: new Map(s.files),
-    }))
+    s.setFiles(s.project.allFiles)
   },
 }))
 
