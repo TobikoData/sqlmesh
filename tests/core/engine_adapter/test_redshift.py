@@ -840,3 +840,110 @@ def test_parse_plan():
             },
         },
     ]
+
+
+def test_parse_plan_limit():
+    plan = parse_plan(
+        """
+{ LIMIT
+  :startup_cost 0.00
+  :total_cost 0.00
+  :plan_rows 1
+  :node_id 1
+  :parent_id 0
+  :plan_width 0
+  :best_pathkeys <>
+  :phys_properties <>
+  :reqd_phys_properties <>
+  :targetlist (
+    { TARGETENTRY
+    :resdom
+      { RESDOM
+      :resno 1
+      :restype 20
+      :restypmod -1
+      :resname ?column?
+      :ressortgroupref 0
+      :resorigtbl 0
+      :resorigcol 0
+      :resjunk false
+      }
+    :expr
+      { CONST
+      :consttype 20
+      :constlen 8
+      :constbyval true
+      :constisnull true
+      :constvalue <>
+      }
+    }
+  )
+  }
+
+XN Limit  (cost=0.00..0.00 rows=1 width=0)
+  ->  XN Result  (cost=0.00..0.01 rows=1 width=0)
+        One-Time Filter: false
+
+  { RESULT
+  :targetlist (
+    { TARGETENTRY
+    :resdom
+      { RESDOM
+      :resno 1
+      :restype 1043
+      :restypmod 36
+      :resname surrogate_key
+      :ressortgroupref 0
+      :resorigtbl 0
+      :resorigcol 0
+      :resjunk false
+      }
+    :expr
+      { VAR
+      :varno 65001
+      :varattno 1
+      :vartype 1043
+      :vartypmod 36
+      :varlevelsup 0
+      :varnoold 1
+      :varoattno 1
+      }
+    }
+  )
+  :scanrelid 0
+  :values_lists <>
+  }
+        """
+    )
+
+    assert plan == {
+        "name": "RESULT",
+        "scanrelid": "0",
+        "targetlist": [
+            {
+                "expr": {
+                    "name": "VAR",
+                    "varattno": "1",
+                    "varlevelsup": "0",
+                    "varno": "65001",
+                    "varnoold": "1",
+                    "varoattno": "1",
+                    "vartype": "1043",
+                    "vartypmod": "36",
+                },
+                "name": "TARGETENTRY",
+                "resdom": {
+                    "name": "RESDOM",
+                    "resjunk": "false",
+                    "resname": "surrogate_key",
+                    "resno": "1",
+                    "resorigcol": "0",
+                    "resorigtbl": "0",
+                    "ressortgroupref": "0",
+                    "restype": "1043",
+                    "restypmod": "36",
+                },
+            }
+        ],
+        "values_lists": "<>",
+    }
