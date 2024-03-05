@@ -49,13 +49,13 @@ def sqlmesh_config(
     if variables is not None:
         loader_kwargs["variables"] = variables
 
-    connection_kwargs = kwargs.pop("connection_kwargs", {})
+    target_to_sqlmesh_args = {}
     if register_comments is not None:
-        connection_kwargs["register_comments"] = register_comments
+        target_to_sqlmesh_args["register_comments"] = register_comments
 
     return Config(
         default_gateway=profile.target_name,
-        gateways={profile.target_name: GatewayConfig(connection=profile.target.to_sqlmesh(**connection_kwargs), state_connection=state_connection)},  # type: ignore
+        gateways={profile.target_name: GatewayConfig(connection=profile.target.to_sqlmesh(**target_to_sqlmesh_args), state_connection=state_connection)},  # type: ignore
         loader=DbtLoader,
         loader_kwargs=loader_kwargs,
         model_defaults=model_defaults,
