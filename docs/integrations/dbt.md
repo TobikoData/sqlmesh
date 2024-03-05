@@ -154,8 +154,8 @@ It's important to note, that the `on_schema_change` setting is ignored by SQLMes
 
 ## Snapshot support
 
-SQLMesh supports both dbt snapshot strategies of either `timestamp` or `check`. 
-Only unsupported snapshot functionality is `invalidate_hard_deletes` which must be set to `True`. 
+SQLMesh supports both dbt snapshot strategies of either `timestamp` or `check`.
+Only unsupported snapshot functionality is `invalidate_hard_deletes` which must be set to `True`.
 If set to `False`, then the snapshot will be skipped and a warning will be logged indicating this happened.
 Support for this will be added soon.
 
@@ -164,11 +164,29 @@ SQLMesh uses dbt tests to perform SQLMesh [audits](../concepts/audits.md) (comin
 
 Add SQLMesh [unit tests](../concepts/tests.md) to a dbt project by placing them in the "tests" directory.
 
+## Seed column types
+
+SQLMesh parses seed CSV files using [Panda's `read_csv` utility](https://pandas.pydata.org/pandas-docs/stable/reference/api/pandas.read_csv.html) and its default column type inference.
+
+dbt parses seed CSV files using [agate's csv reader](https://agate.readthedocs.io/en/latest/api/csv.html#csv-reader-and-writer) and [customizes agate's default type inference](https://github.com/dbt-labs/dbt-common/blob/ae8ffe082926fdb3ef2a15486588f40c7739aea9/dbt_common/clients/agate_helper.py#L59).
+
+If SQLMesh and dbt infer different column types for a seed CSV file, you may specify your desired data types in a [seed properties configuration file](https://docs.getdbt.com/reference/seed-properties).
+
+Specify a column's SQL data type in its `data_type` key, as shown below. The file must list all columns present in the CSV file; SQLMesh's default type inference will be used for columns that do not specify the `data_type` key.
+
+``` yaml
+seeds:
+  - name: <seed name>
+    columns:
+      - name: <column name>
+        data_type: <SQL data type>
+```
+
 ## Package Management
 SQLMesh does not have its own package manager; however, SQLMesh's dbt adapter is compatible with dbt's package manager. Continue to use [dbt deps](https://docs.getdbt.com/reference/commands/deps) and [dbt clean](https://docs.getdbt.com/reference/commands/clean) to update, add, or remove packages.
 
 ## Documentation
-Model documentation is available in the [SQLMesh UI](../quickstart/ui.md#2-open-the-sqlmesh-web-ui). 
+Model documentation is available in the [SQLMesh UI](../quickstart/ui.md#2-open-the-sqlmesh-web-ui).
 
 ## Using Airflow
 To use SQLMesh and dbt projects with Airflow, first configure SQLMesh to use Airflow as described in the [Airflow integrations documentation](./airflow.md).
