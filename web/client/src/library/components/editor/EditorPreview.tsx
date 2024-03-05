@@ -126,7 +126,6 @@ export default function EditorPreview({
         includes(
           [
             EnumErrorKey.Fetchdf,
-            EnumErrorKey.General,
             EnumErrorKey.EvaluateModel,
             EnumErrorKey.RenderQuery,
             EnumErrorKey.ColumnLineage,

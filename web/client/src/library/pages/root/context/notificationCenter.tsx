@@ -1,5 +1,5 @@
 import { type ApiExceptionPayload } from '@api/client'
-import { isString, uid } from '@utils/index'
+import { uid } from '@utils/index'
 import { createContext, type ReactNode, useState, useContext } from 'react'
 
 export const EnumErrorKey = {
@@ -89,14 +89,15 @@ export default function NotificationCenterProvider({
   }
 
   function removeError(error: ErrorIDE | ErrorKey): void {
-    setErrors(
-      errors =>
-        new Set(
-          Array.from(errors).filter(e =>
-            isString(error) ? e.key !== error : e !== error,
-          ),
-        ),
-    )
+    setErrors(errors => {
+      errors.forEach(err => {
+        if (err === error || err.key === error) {
+          errors.delete(err)
+        }
+      })
+
+      return new Set(errors)
+    })
   }
 
   function clearErrors(): void {

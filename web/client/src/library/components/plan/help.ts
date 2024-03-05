@@ -24,7 +24,9 @@ type PlanOverviewDetails = Pick<
   | 'stageValidation'
   | 'stageChanges'
   | 'stageBackfills'
->
+> & {
+  isFailed: boolean
+}
 
 export function getPlanOverviewDetails(
   planApply: ModelPlanApplyTracker,
@@ -56,5 +58,6 @@ export function getPlanOverviewDetails(
     stageValidation: plan.stageValidation,
     stageBackfills: plan.stageBackfills,
     stageChanges: plan.stageChanges,
+    isFailed: overview.isFailed || planCancel.isFailed || planApply.isFailed,
   }
 }
