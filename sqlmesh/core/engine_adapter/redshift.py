@@ -344,4 +344,10 @@ def parse_plan(plan: str) -> t.Optional[t.Dict]:
         match(TokenType.R_BRACE, True)
         return query_plan
 
-    return parse_nested()
+    while curr():
+        nested = parse_nested()
+
+        if nested and nested.get("name") == "RESULT":
+            return nested
+        advance()
+    return None
