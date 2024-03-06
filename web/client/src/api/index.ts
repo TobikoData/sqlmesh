@@ -78,6 +78,7 @@ export interface ApiQueryMeta extends QueryMeta {
 }
 
 const DELAY_1_MIN = 60 * 1000
+const DELAY_5_MIN = 5 * DELAY_1_MIN
 const DELAY_10_MIN = 10 * DELAY_1_MIN
 
 export type UseQueryWithTimeoutOptions<
@@ -442,7 +443,7 @@ function useQueryWithTimeout<
     queryKey: TQueryKey
   },
   {
-    delay = DELAY_1_MIN,
+    delay = DELAY_5_MIN,
     removeTimeoutErrorAfter,
     errorKey = EnumErrorKey.API,
     trigger,
