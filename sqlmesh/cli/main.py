@@ -71,10 +71,10 @@ def cli(
 
     if len(paths) == 1:
         path = os.path.abspath(paths[0])
-        if ctx.invoked_subcommand == "init":
+        if ctx.invoked_subcommand in ("init", "ui"):
             ctx.obj = path
             return
-        elif ctx.invoked_subcommand in ("create_external_models", "migrate", "rollback", "ui"):
+        elif ctx.invoked_subcommand in ("create_external_models", "migrate", "rollback"):
             load = False
 
     configs = load_configs(config, Context.CONFIG_TYPE, paths)
@@ -579,7 +579,7 @@ def ui(ctx: click.Context, host: str, port: int, mode: str) -> None:
             "Missing UI dependencies. Run `pip install 'sqlmesh[web]'` to install them."
         ) from e
 
-    os.environ["PROJECT_PATH"] = str(ctx.obj.path)
+    os.environ["PROJECT_PATH"] = ctx.obj
     os.environ["UI_MODE"] = mode
     if ctx.parent:
         config = ctx.parent.params.get("config")
