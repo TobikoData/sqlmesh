@@ -10,13 +10,17 @@ from web.server.api.endpoints.files import _get_directory, _get_file_with_conten
 from web.server.api.endpoints.models import serialize_all_models
 from web.server.console import api_console
 from web.server.exceptions import ApiException
-from web.server.settings import _get_path_to_model_mapping, get_context, get_settings
+from web.server.settings import (
+    _get_path_to_model_mapping,
+    get_context_or_raise,
+    get_settings,
+)
 from web.server.utils import is_relative_to, run_in_executor
 
 
 async def watch_project() -> None:
     settings = get_settings()
-    context = await get_context(settings)
+    context = await get_context_or_raise(settings)
 
     paths = [
         (context.path / c.MODELS).resolve(),

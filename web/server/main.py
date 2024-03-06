@@ -11,7 +11,7 @@ from starlette.status import HTTP_500_INTERNAL_SERVER_ERROR
 from web.server.api.endpoints import api_router
 from web.server.console import api_console
 from web.server.exceptions import ApiException
-from web.server.settings import get_context, get_settings
+from web.server.settings import get_context_or_raise, get_settings
 from web.server.watcher import watch_project
 
 app = FastAPI()
@@ -45,7 +45,7 @@ async def startup_event() -> None:
 async def shutdown_event() -> None:
     app.state.dispatch_task.cancel()
     app.state.watch_task.cancel()
-    context = await get_context(settings=get_settings())
+    context = await get_context_or_raise(settings=get_settings())
     context.close()
 
 

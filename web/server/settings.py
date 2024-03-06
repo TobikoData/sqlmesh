@@ -109,12 +109,19 @@ async def get_loaded_context(settings: Settings = Depends(get_settings)) -> Cont
         )
 
 
-async def get_context(settings: Settings = Depends(get_settings)) -> Context:
+async def get_context(settings: Settings = Depends(get_settings)) -> t.Optional[Context]:
     try:
         async with get_context_lock:
             return _get_context(settings.project_path, settings.config, settings.gateway)
     except Exception:
+        return None
+
+
+async def get_context_or_raise(settings: Settings = Depends(get_settings)) -> Context:
+    context = await get_context(settings)
+    if not context:
         raise ApiException(
             message="Unable to create a context",
             origin="API -> settings -> get_context",
         )
+    return context
