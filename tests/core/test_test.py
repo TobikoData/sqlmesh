@@ -56,13 +56,13 @@ def _create_model(
 
 
 def _check_successful_or_raise(
-    result: t.Optional[TestResult], expected_failure_msg: t.Optional[str] = None
+    result: t.Optional[TestResult], expected_msg: t.Optional[str] = None
 ) -> None:
     assert result is not None
     if not result.wasSuccessful():
         error_or_failure_traceback = (result.errors or result.failures)[0][1]
-        if result.failures and expected_failure_msg:
-            assert expected_failure_msg in error_or_failure_traceback
+        if expected_msg:
+            assert expected_msg in error_or_failure_traceback
         else:
             raise AssertionError(error_or_failure_traceback)
 
@@ -296,9 +296,9 @@ test_foo:
    id     value      ds    
   exp act   exp act exp act
 0   2   1     3   2   4   3
-1   1   2     2   3   3   4"""
-
-    _check_successful_or_raise(result, expected_failure_msg=expected_failure_msg)
+1   1   2     2   3   3   4
+"""
+    _check_successful_or_raise(result, expected_msg=expected_failure_msg)
 
 
 def test_partial_data(sushi_context: Context) -> None:
@@ -338,6 +338,45 @@ test_foo:
         """
     )
     result = _create_test(body, "test_foo", model, sushi_context).run()
+    _check_successful_or_raise(result)
+
+
+def test_partial_output_columns() -> None:
+    result = _create_test(
+        body=load_yaml(
+            """
+test_foo:
+  model: sushi.foo
+  inputs:
+    raw:
+      - a: 1
+        b: 2
+        c: 3
+        d: 4
+      - a: 5
+        b: 6
+        c: 7
+  outputs:
+    ctes:
+      t:
+        partial: true
+        rows:
+          - c: 3
+          - c: 7
+    query:
+      partial: true
+      rows:
+        - a: 1
+          b: 2
+        - a: 5
+          b: 6
+            """
+        ),
+        test_name="test_foo",
+        model=_create_model("WITH t AS (SELECT a, b, c, d FROM raw) SELECT a, b, c, d FROM t"),
+        context=Context(config=Config(model_defaults=ModelDefaultsConfig(dialect="duckdb"))),
+    ).run()
+
     _check_successful_or_raise(result)
 
 
@@ -455,7 +494,35 @@ test_foo:
 
 Test description: sushi.foo's output has a missing column (fails intentionally)
 """
-    _check_successful_or_raise(result, expected_failure_msg=expected_failure_msg)
+    _check_successful_or_raise(result, expected_msg=expected_failure_msg)
+
+
+def test_unknown_column_error() -> None:
+    result = _create_test(
+        body=load_yaml(
+            """
+test_foo:
+  model: sushi.foo
+  inputs:
+    raw:
+      - id: 1
+        value: 2
+  outputs:
+    query:
+      - foo: 1
+                """
+        ),
+        test_name="test_foo",
+        model=_create_model("SELECT id, value FROM raw"),
+        context=Context(config=Config(model_defaults=ModelDefaultsConfig(dialect="duckdb"))),
+    ).run()
+
+    expected_error_msg = """sqlmesh.core.test.definition.TestError: Detected unknown column(s)
+
+Expected column(s): id, value
+Unknown column(s): foo
+"""
+    _check_successful_or_raise(result, expected_msg=expected_error_msg)
 
 
 def test_empty_rows(sushi_context: Context) -> None:
@@ -507,10 +574,10 @@ test_foo:
 
     expected_body = {
         "model": '"MEMORY"."SUSHI"."FOO"',
-        "inputs": {'"RAW"': [{"ID": 1}]},
+        "inputs": {'"RAW"': {"rows": [{"ID": 1}]}},
         "outputs": {
-            "ctes": {'"SOURCE"': [{"ID": 1}], '"RENAMED"': [{"FID": 1}]},
-            "query": [{"FID": 1}],
+            "ctes": {'"SOURCE"': {"rows": [{"ID": 1}]}, '"RENAMED"': {"rows": [{"FID": 1}]}},
+            "query": {"rows": [{"FID": 1}]},
         },
         "vars": {"start": datetime.date(2022, 1, 1), "end": datetime.date(2022, 1, 1)},
     }
