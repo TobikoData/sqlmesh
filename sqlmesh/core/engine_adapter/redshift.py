@@ -20,6 +20,7 @@ from sqlmesh.core.engine_adapter.shared import (
     SourceQuery,
     set_catalog,
 )
+from sqlmesh.utils.errors import SQLMeshError
 
 if t.TYPE_CHECKING:
     from sqlmesh.core._typing import SchemaName, TableName
@@ -136,6 +137,17 @@ class RedshiftEngineAdapter(
                 for target in plan["targetlist"]:  # type: ignore
                     if target["name"] == "TARGETENTRY":
                         resdom = target["resdom"]
+                        resname = resdom["resname"]
+                        if resname == "<>":
+                            # A synthetic column added by Redshift to compute a window function.
+                            continue
+                        if resname == "? column ?":
+                            table_name_str = (
+                                table_name_or_schema
+                                if isinstance(table_name_or_schema, str)
+                                else table_name_or_schema.sql(dialect=self.dialect)
+                            )
+                            raise SQLMeshError(f"Missing column name for table '{table_name_str}'")
                         # https://github.com/postgres/postgres/blob/master/src/include/catalog/pg_type.dat
                         if resdom["restype"] == "1043":
                             size = (
@@ -150,11 +162,11 @@ class RedshiftEngineAdapter(
                                     exp.null(),
                                     f"VARCHAR({size})",
                                     dialect=self.dialect,
-                                ).as_(resdom["resname"]),
+                                ).as_(resname),
                                 copy=False,
                             )
                         else:
-                            select.select(resdom["resname"], copy=False)
+                            select.select(resname, copy=False)
 
         return statement
 
