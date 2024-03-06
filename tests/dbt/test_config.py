@@ -1,6 +1,7 @@
 import base64
 import typing as t
 from pathlib import Path
+from shutil import copytree
 from unittest.mock import PropertyMock
 
 import pytest
@@ -12,6 +13,7 @@ from sqlmesh.core.dialect import jinja_query
 from sqlmesh.core.model import SqlModel
 from sqlmesh.dbt.common import Dependencies
 from sqlmesh.dbt.context import DbtContext
+from sqlmesh.dbt.loader import sqlmesh_config
 from sqlmesh.dbt.model import IncrementalByUniqueKeyKind, Materialization, ModelConfig
 from sqlmesh.dbt.project import Project
 from sqlmesh.dbt.source import SourceConfig
@@ -377,6 +379,29 @@ def _test_warehouse_config(
             assert input_value == value
 
     return config
+
+
+def test_duckdb_threads(tmp_path):
+    dbt_project_dir = "tests/fixtures/dbt/sushi_test"
+    temp_dir = tmp_path / "sushi_test"
+
+    copytree(dbt_project_dir, temp_dir, symlinks=True)
+
+    with open(temp_dir / "profiles.yml", "w") as f:
+        f.write(
+            """
+            sushi:
+              outputs:
+                in_memory:
+                  type: duckdb
+                  schema: sushi
+                  threads: 4
+              target: in_memory
+            """
+        )
+
+    config = sqlmesh_config(temp_dir)
+    assert config.gateways["in_memory"].connection.concurrent_tasks == 1
 
 
 def test_snowflake_config():

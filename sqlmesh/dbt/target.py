@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import abc
+import logging
 import sys
 import typing as t
 from pathlib import Path
@@ -40,6 +41,8 @@ if sys.version_info >= (3, 9):
     from typing import Literal
 else:
     from typing_extensions import Literal
+
+logger = logging.getLogger(__name__)
 
 IncrementalKind = t.Union[
     t.Type[IncrementalByUniqueKeyKind],
@@ -171,6 +174,8 @@ class DuckDbConfig(TargetConfig):
                 if path is None or path == DUCKDB_IN_MEMORY
                 else Path(t.cast(str, path)).stem
             )
+        if "threads" in values and t.cast(int, values["threads"]) > 1:
+            logger.warning("DuckDB does not support concurrency - setting threads to 1.")
         return values
 
     def default_incremental_strategy(self, kind: IncrementalKind) -> str:
@@ -190,7 +195,7 @@ class DuckDbConfig(TargetConfig):
             kwargs["connector_config"] = self.settings
         return DuckDBConnectionConfig(
             database=self.path,
-            concurrent_tasks=self.threads,
+            concurrent_tasks=1,
             **kwargs,
         )
 
