@@ -187,12 +187,29 @@ class PlanBuilder:
 
         self._apply_effective_from()
 
-        dag, ignored = self._build_filtered_dag()
+        dag = self._build_dag()
         directly_modified, indirectly_modified = self._build_directly_and_indirectly_modified(dag)
-        models_to_backfill = self._build_models_to_backfill(dag)
 
         self._categorize_snapshots(dag, directly_modified, indirectly_modified)
         self._adjust_new_snapshot_intervals()
+
+        deployability_index = (
+            DeployabilityIndex.create(self._context_diff.snapshots.values())
+            if self._is_dev
+            else DeployabilityIndex.all_deployable()
+        )
+
+        filtered_dag, ignored = self._build_filtered_dag(dag, deployability_index)
+
+        # Exclude ignored snapshots from the modified sets.
+        directly_modified = {s_id for s_id in directly_modified if s_id not in ignored}
+        for s_id in list(indirectly_modified):
+            if s_id in ignored:
+                indirectly_modified.pop(s_id, None)
+            else:
+                indirectly_modified[s_id] = {
+                    s_id for s_id in indirectly_modified[s_id] if s_id not in ignored
+                }
 
         filtered_snapshots = {
             s.snapshot_id: s
@@ -200,12 +217,7 @@ class PlanBuilder:
             if s.snapshot_id not in ignored
         }
 
-        deployability_index = (
-            DeployabilityIndex.create(filtered_snapshots)
-            if self._is_dev
-            else DeployabilityIndex.all_deployable()
-        )
-
+        models_to_backfill = self._build_models_to_backfill(filtered_dag)
         restatements = self._build_restatements(
             dag, earliest_interval_start(filtered_snapshots.values())
         )
@@ -236,25 +248,35 @@ class PlanBuilder:
         self._latest_plan = plan
         return plan
 
-    def _build_filtered_dag(self) -> t.Tuple[DAG[SnapshotId], t.Set[SnapshotId]]:
+    def _build_dag(self) -> DAG[SnapshotId]:
+        dag: DAG[SnapshotId] = DAG()
+        for s_id, context_snapshot in self._context_diff.snapshots.items():
+            dag.add(s_id, context_snapshot.parents)
+        return dag
+
+    def _build_filtered_dag(
+        self, full_dag: DAG[SnapshotId], deployability_index: DeployabilityIndex
+    ) -> t.Tuple[DAG[SnapshotId], t.Set[SnapshotId]]:
         ignored_snapshot_ids: t.Set[SnapshotId] = set()
-        full_dag: DAG[SnapshotId] = DAG()
         filtered_dag: DAG[SnapshotId] = DAG()
         cache: t.Optional[t.Dict[str, datetime]] = {}
-        for s_id, context_snapshot in self._context_diff.snapshots.items():
-            full_dag.add(s_id, context_snapshot.parents)
         for s_id in full_dag:
             snapshot = self._context_diff.snapshots.get(s_id)
             # If the snapshot doesn't exist then it must be an external model
             if not snapshot:
                 continue
-            if snapshot.is_valid_start(
+
+            is_deployable = deployability_index.is_deployable(s_id)
+            is_valid_start = snapshot.is_valid_start(
                 self._start, start_date(snapshot, self._context_diff.snapshots.values(), cache)
-            ) and set(snapshot.parents).isdisjoint(ignored_snapshot_ids):
-                filtered_dag.add(snapshot.snapshot_id, snapshot.parents)
+            )
+            if not is_deployable or (
+                is_valid_start and set(snapshot.parents).isdisjoint(ignored_snapshot_ids)
+            ):
+                filtered_dag.add(s_id, snapshot.parents)
             else:
-                ignored_snapshot_ids.add(snapshot.snapshot_id)
-        return (filtered_dag, ignored_snapshot_ids)
+                ignored_snapshot_ids.add(s_id)
+        return filtered_dag, ignored_snapshot_ids
 
     def _build_restatements(
         self, dag: DAG[SnapshotId], earliest_interval_start: TimeLike

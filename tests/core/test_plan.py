@@ -1415,6 +1415,13 @@ def test_dev_plan_depends_past(make_snapshot, mocker: MockerFixture):
         '"a_child"',
         '"b"',
     ]
+    assert dev_plan_start_aligned.directly_modified == {
+        snapshot.snapshot_id,
+        snapshot_child.snapshot_id,
+        unrelated_snapshot.snapshot_id,
+    }
+    assert dev_plan_start_aligned.indirectly_modified == {}
+
     dev_plan_start_ahead_of_model = PlanBuilder(
         context_diff, start="2023-01-02", end="2023-01-10", is_dev=True
     ).build()
@@ -1425,6 +1432,103 @@ def test_dev_plan_depends_past(make_snapshot, mocker: MockerFixture):
         snapshot.snapshot_id,
         snapshot_child.snapshot_id,
     ]
+    assert dev_plan_start_ahead_of_model.directly_modified == {unrelated_snapshot.snapshot_id}
+    assert dev_plan_start_ahead_of_model.indirectly_modified == {}
+
+
+def test_dev_plan_depends_past_non_deployable(make_snapshot, mocker: MockerFixture):
+    snapshot = make_snapshot(
+        SqlModel(
+            name="a",
+            # self reference query so it depends_on_past
+            query=parse_one("select 1, ds FROM a"),
+            start="2023-01-01",
+            kind=IncrementalByTimeRangeKind(time_column="ds"),
+        ),
+    )
+    snapshot.categorize_as(SnapshotChangeCategory.BREAKING)
+
+    updated_snapshot = make_snapshot(
+        SqlModel(
+            **{
+                **snapshot.model.dict(),
+                "query": parse_one("select 1, ds, 2 FROM a"),
+            }
+        ),
+    )
+    updated_snapshot.categorize_as(SnapshotChangeCategory.FORWARD_ONLY)
+
+    snapshot_child = make_snapshot(
+        SqlModel(
+            name="a_child",
+            query=parse_one("select 1, ds FROM a"),
+            start="2023-01-01",
+            kind=IncrementalByTimeRangeKind(time_column="ds"),
+        ),
+        nodes={'"a"': updated_snapshot.model},
+    )
+    snapshot_child.categorize_as(SnapshotChangeCategory.BREAKING)
+    unrelated_snapshot = make_snapshot(
+        SqlModel(
+            name="b",
+            query=parse_one("select 1, ds"),
+            start="2023-01-01",
+            kind=IncrementalByTimeRangeKind(time_column="ds"),
+        ),
+    )
+    unrelated_snapshot.categorize_as(SnapshotChangeCategory.BREAKING)
+
+    assert updated_snapshot.depends_on_past
+    assert not snapshot_child.depends_on_past
+    assert not unrelated_snapshot.depends_on_past
+    assert snapshot_child.model.depends_on == {'"a"'}
+    assert snapshot_child.parents == (updated_snapshot.snapshot_id,)
+    assert unrelated_snapshot.model.depends_on == set()
+
+    context_diff = ContextDiff(
+        environment="test_environment",
+        is_new_environment=True,
+        is_unfinalized_environment=False,
+        create_from="prod",
+        added={snapshot_child.snapshot_id, unrelated_snapshot.snapshot_id},
+        removed_snapshots={},
+        modified_snapshots={snapshot.name: (updated_snapshot, snapshot)},
+        snapshots={
+            updated_snapshot.snapshot_id: updated_snapshot,
+            snapshot_child.snapshot_id: snapshot_child,
+            unrelated_snapshot.snapshot_id: unrelated_snapshot,
+        },
+        new_snapshots={
+            updated_snapshot.snapshot_id: snapshot,
+            snapshot_child.snapshot_id: snapshot_child,
+            unrelated_snapshot.snapshot_id: unrelated_snapshot,
+        },
+        previous_plan_id=None,
+        previously_promoted_snapshot_ids=set(),
+        previous_finalized_snapshots=None,
+    )
+
+    dev_plan_start_aligned = PlanBuilder(
+        context_diff, start="2023-01-01", end="2023-01-10", is_dev=True
+    ).build()
+    assert len(dev_plan_start_aligned.new_snapshots) == 3
+    assert sorted([x.name for x in dev_plan_start_aligned.new_snapshots]) == [
+        '"a"',
+        '"a_child"',
+        '"b"',
+    ]
+
+    # There should be no ignored snapshots because all changes are non-deployable.
+    dev_plan_start_ahead_of_model = PlanBuilder(
+        context_diff, start="2023-01-02", end="2023-01-10", is_dev=True
+    ).build()
+    assert len(dev_plan_start_ahead_of_model.new_snapshots) == 3
+    assert sorted([x.name for x in dev_plan_start_aligned.new_snapshots]) == [
+        '"a"',
+        '"a_child"',
+        '"b"',
+    ]
+    assert not dev_plan_start_ahead_of_model.ignored
 
 
 def test_restatement_intervals_after_updating_start(sushi_context: Context):
