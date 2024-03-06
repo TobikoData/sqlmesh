@@ -116,7 +116,7 @@ class TargetConfig(abc.ABC, DbtConfig):
         """The default incremental strategy for the db"""
         raise NotImplementedError
 
-    def to_sqlmesh(self) -> ConnectionConfig:
+    def to_sqlmesh(self, **kwargs: t.Any) -> ConnectionConfig:
         """Converts target config to SQLMesh connection config"""
         raise NotImplementedError
 
@@ -191,8 +191,7 @@ class DuckDbConfig(TargetConfig):
 
         return DuckDBRelation
 
-    def to_sqlmesh(self) -> ConnectionConfig:
-        kwargs: t.Dict[str, t.Any] = {}
+    def to_sqlmesh(self, **kwargs: t.Any) -> ConnectionConfig:
         if self.extensions is not None:
             kwargs["extensions"] = self.extensions
         if self.settings is not None:
@@ -286,7 +285,7 @@ class SnowflakeConfig(TargetConfig):
 
         return SnowflakeColumn
 
-    def to_sqlmesh(self) -> ConnectionConfig:
+    def to_sqlmesh(self, **kwargs: t.Any) -> ConnectionConfig:
         return SnowflakeConnectionConfig(
             user=self.user,
             password=self.password,
@@ -300,6 +299,7 @@ class SnowflakeConfig(TargetConfig):
             private_key=self.private_key,
             private_key_path=self.private_key_path,
             private_key_passphrase=self.private_key_passphrase,
+            **kwargs,
         )
 
     @classproperty
@@ -356,7 +356,7 @@ class PostgresConfig(TargetConfig):
     def default_incremental_strategy(self, kind: IncrementalKind) -> str:
         return "delete+insert" if kind is IncrementalByUniqueKeyKind else "append"
 
-    def to_sqlmesh(self) -> ConnectionConfig:
+    def to_sqlmesh(self, **kwargs: t.Any) -> ConnectionConfig:
         return PostgresConnectionConfig(
             host=self.host,
             user=self.user,
@@ -368,6 +368,7 @@ class PostgresConfig(TargetConfig):
             connect_timeout=self.connect_timeout,
             role=self.role,
             sslmode=self.sslmode,
+            **kwargs,
         )
 
 
@@ -427,7 +428,7 @@ class RedshiftConfig(TargetConfig):
         else:
             return super(RedshiftConfig, cls).column_class
 
-    def to_sqlmesh(self) -> ConnectionConfig:
+    def to_sqlmesh(self, **kwargs: t.Any) -> ConnectionConfig:
         return RedshiftConnectionConfig(
             user=self.user,
             password=self.password,
@@ -437,6 +438,7 @@ class RedshiftConfig(TargetConfig):
             sslmode=self.sslmode,
             timeout=self.connect_timeout,
             concurrent_tasks=self.threads,
+            **kwargs,
         )
 
 
@@ -473,13 +475,14 @@ class DatabricksConfig(TargetConfig):
 
         return DatabricksColumn
 
-    def to_sqlmesh(self) -> ConnectionConfig:
+    def to_sqlmesh(self, **kwargs: t.Any) -> ConnectionConfig:
         return DatabricksConnectionConfig(
             server_hostname=self.host,
             http_path=self.http_path,
             access_token=self.token,
             concurrent_tasks=self.threads,
             catalog=self.database,
+            **kwargs,
         )
 
 
@@ -563,7 +566,7 @@ class BigQueryConfig(TargetConfig):
 
         return BigQueryColumn
 
-    def to_sqlmesh(self) -> ConnectionConfig:
+    def to_sqlmesh(self, **kwargs: t.Any) -> ConnectionConfig:
         job_retries = self.job_retries if self.job_retries is not None else self.retries
         job_execution_timeout_seconds = (
             self.job_execution_timeout_seconds
@@ -589,6 +592,7 @@ class BigQueryConfig(TargetConfig):
             job_retry_deadline_seconds=self.job_retry_deadline_seconds,
             priority=self.priority,
             maximum_bytes_billed=self.maximum_bytes_billed,
+            **kwargs,
         )
 
 
@@ -693,7 +697,7 @@ class MSSQLConfig(TargetConfig):
     def dialect(self) -> str:
         return "tsql"
 
-    def to_sqlmesh(self) -> ConnectionConfig:
+    def to_sqlmesh(self, **kwargs: t.Any) -> ConnectionConfig:
         return MSSQLConnectionConfig(
             host=self.host,
             user=self.user,
@@ -703,6 +707,7 @@ class MSSQLConfig(TargetConfig):
             timeout=self.query_timeout,
             login_timeout=self.login_timeout,
             concurrent_tasks=self.threads,
+            **kwargs,
         )
 
 
@@ -806,7 +811,7 @@ class TrinoConfig(TargetConfig):
 
         return TrinoColumn
 
-    def to_sqlmesh(self) -> ConnectionConfig:
+    def to_sqlmesh(self, **kwargs: t.Any) -> ConnectionConfig:
         return TrinoConnectionConfig(
             method=self._method_to_auth_enum[self.method],
             host=self.host,
@@ -835,6 +840,7 @@ class TrinoConfig(TargetConfig):
             client_private_key=self.client_private_key,
             cert=self.cert,
             concurrent_tasks=self.threads,
+            **kwargs,
         )
 
 

@@ -695,6 +695,16 @@ def test_trino_config():
     )
 
 
+def test_connection_args(tmp_path):
+    dbt_project_dir = "tests/fixtures/dbt/sushi_test"
+
+    config = sqlmesh_config(dbt_project_dir)
+    assert config.gateways["in_memory"].connection.register_comments
+
+    config = sqlmesh_config(dbt_project_dir, register_comments=False)
+    assert not config.gateways["in_memory"].connection.register_comments
+
+
 @pytest.mark.cicdonly
 def test_db_type_to_relation_class():
     from dbt.adapters.bigquery.relation import BigQueryRelation
