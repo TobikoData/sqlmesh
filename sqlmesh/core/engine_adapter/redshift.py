@@ -125,10 +125,18 @@ class RedshiftEngineAdapter(
             # is applied to a ctas statement, VARCHAR types default to 1 in some instances.
             # this checks the explain plain from redshift and tries to detect when these optimizer
             # bugs occur and force a cast
-            sql = statement.sql(
+            explain_statement = statement.copy()
+            for select in explain_statement.find_all(exp.Select):
+                if select.args.get("from"):
+                    select.args["limit"] = None
+                    select.args["where"] = None
+
+            explain_statement_sql = explain_statement.sql(
                 dialect=self.dialect, identify=True, unsupported_level=ErrorLevel.IGNORE
             )
-            plan = parse_plan("\n".join(r[0] for r in self.fetchall(f"EXPLAIN VERBOSE {sql}")))
+            plan = parse_plan(
+                "\n".join(r[0] for r in self.fetchall(f"EXPLAIN VERBOSE {explain_statement_sql}"))
+            )
 
             if plan:
                 select = exp.Select().from_(statement.expression.subquery("_subquery"))
@@ -149,7 +157,8 @@ class RedshiftEngineAdapter(
                             )
                             raise SQLMeshError(f"Missing column name for table '{table_name_str}'")
                         # https://github.com/postgres/postgres/blob/master/src/include/catalog/pg_type.dat
-                        if resdom["restype"] == "1043":
+                        restype = resdom["restype"]
+                        if restype == "1043":
                             size = (
                                 int(resdom["restypmod"]) - 4
                                 if resdom["restypmod"] != "- 1"
@@ -161,6 +170,15 @@ class RedshiftEngineAdapter(
                                 exp.cast(
                                     exp.null(),
                                     f"VARCHAR({size})",
+                                    dialect=self.dialect,
+                                ).as_(resname),
+                                copy=False,
+                            )
+                        elif restype == "1114":
+                            select.select(
+                                exp.cast(
+                                    exp.null(),
+                                    "TIMESTAMP",
                                     dialect=self.dialect,
                                 ).as_(resname),
                                 copy=False,
