@@ -36,6 +36,7 @@ def sqlmesh_config(
     state_connection: t.Optional[ConnectionConfig] = None,
     dbt_target_name: t.Optional[str] = None,
     variables: t.Optional[t.Dict[str, t.Any]] = None,
+    register_comments: t.Optional[bool] = None,
     **kwargs: t.Any,
 ) -> Config:
     project_root = project_root or Path()
@@ -48,9 +49,13 @@ def sqlmesh_config(
     if variables is not None:
         loader_kwargs["variables"] = variables
 
+    target_to_sqlmesh_args = {}
+    if register_comments is not None:
+        target_to_sqlmesh_args["register_comments"] = register_comments
+
     return Config(
         default_gateway=profile.target_name,
-        gateways={profile.target_name: GatewayConfig(connection=profile.target.to_sqlmesh(), state_connection=state_connection)},  # type: ignore
+        gateways={profile.target_name: GatewayConfig(connection=profile.target.to_sqlmesh(**target_to_sqlmesh_args), state_connection=state_connection)},  # type: ignore
         loader=DbtLoader,
         loader_kwargs=loader_kwargs,
         model_defaults=model_defaults,
