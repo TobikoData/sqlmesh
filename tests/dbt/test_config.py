@@ -27,6 +27,7 @@ from sqlmesh.dbt.target import (
     RedshiftConfig,
     SnowflakeConfig,
     TargetConfig,
+    TrinoConfig,
 )
 from sqlmesh.dbt.test import TestConfig
 from sqlmesh.utils.errors import ConfigError
@@ -670,6 +671,30 @@ def test_sqlserver_config():
     )
 
 
+def test_trino_config():
+    _test_warehouse_config(
+        """
+        dbt-trino:
+          target: dev
+          outputs:
+            dev:
+              type: trino
+              method: ldap
+              user: user
+              password: password
+              host: localhost
+              database: database
+              schema: dbt_schema
+              port: 443
+              threads: 1
+        """,
+        TrinoConfig,
+        "dbt-trino",
+        "outputs",
+        "dev",
+    )
+
+
 def test_connection_args(tmp_path):
     dbt_project_dir = "tests/fixtures/dbt/sushi_test"
 
@@ -687,12 +712,14 @@ def test_db_type_to_relation_class():
     from dbt.adapters.duckdb.relation import DuckDBRelation
     from dbt.adapters.redshift import RedshiftRelation
     from dbt.adapters.snowflake import SnowflakeRelation
+    from dbt.adapters.trino.relation import TrinoRelation
 
     assert (TARGET_TYPE_TO_CONFIG_CLASS["bigquery"].relation_class) == BigQueryRelation
     assert (TARGET_TYPE_TO_CONFIG_CLASS["databricks"].relation_class) == DatabricksRelation
     assert (TARGET_TYPE_TO_CONFIG_CLASS["duckdb"].relation_class) == DuckDBRelation
     assert (TARGET_TYPE_TO_CONFIG_CLASS["redshift"].relation_class) == RedshiftRelation
     assert (TARGET_TYPE_TO_CONFIG_CLASS["snowflake"].relation_class) == SnowflakeRelation
+    assert (TARGET_TYPE_TO_CONFIG_CLASS["trino"].relation_class) == TrinoRelation
 
 
 @pytest.mark.cicdonly
@@ -701,12 +728,14 @@ def test_db_type_to_column_class():
     from dbt.adapters.databricks.column import DatabricksColumn
     from dbt.adapters.snowflake import SnowflakeColumn
     from dbt.adapters.sqlserver.sql_server_column import SQLServerColumn
+    from dbt.adapters.trino.column import TrinoColumn
 
     assert (TARGET_TYPE_TO_CONFIG_CLASS["bigquery"].column_class) == BigQueryColumn
     assert (TARGET_TYPE_TO_CONFIG_CLASS["databricks"].column_class) == DatabricksColumn
     assert (TARGET_TYPE_TO_CONFIG_CLASS["duckdb"].column_class) == Column
     assert (TARGET_TYPE_TO_CONFIG_CLASS["snowflake"].column_class) == SnowflakeColumn
     assert (TARGET_TYPE_TO_CONFIG_CLASS["sqlserver"].column_class) == SQLServerColumn
+    assert (TARGET_TYPE_TO_CONFIG_CLASS["trino"].column_class) == TrinoColumn
 
 
 def test_db_type_to_quote_policy():

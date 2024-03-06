@@ -21,6 +21,8 @@ from sqlmesh.core.config.connection import (
     PostgresConnectionConfig,
     RedshiftConnectionConfig,
     SnowflakeConnectionConfig,
+    TrinoAuthenticationMethod,
+    TrinoConnectionConfig,
 )
 from sqlmesh.core.model import (
     IncrementalByTimeRangeKind,
@@ -105,6 +107,8 @@ class TargetConfig(abc.ABC, DbtConfig):
             return BigQueryConfig(**data)
         elif db_type == "sqlserver":
             return MSSQLConfig(**data)
+        elif db_type == "trino":
+            return TrinoConfig(**data)
 
         raise ConfigError(f"{db_type} not supported.")
 
@@ -215,6 +219,11 @@ class SnowflakeConfig(TargetConfig):
         connect_timeout: Number of seconds to wait between failed attempts
         retry_on_database_errors: A boolean flag to retry if a Snowflake connector Database error is encountered
         retry_all: A boolean flag to retry on all Snowflake connector errors
+        authenticator: SSO authentication: Snowflake authentication method
+        private_key: Key pair authentication: Private key
+        private_key_path: Key pair authentication: Path to the private key, used instead of private_key
+        private_key_passphrase: Key pair authentication: passphrase used to decrypt private key (if encrypted)
+        token: OAuth authentication: The Snowflake OAuth 2.0 access token
     """
 
     type: Literal["snowflake"] = "snowflake"
@@ -373,7 +382,6 @@ class RedshiftConfig(TargetConfig):
         password: User's password
         port: The port to connect to
         dbname: Name of the database
-        keepalives_idle: Seconds between TCP keepalive packets
         connect_timeout: Number of seconds to wait between failed attempts
         ra3_node: Enables cross-database sources
         search_path: Overrides the default search path
@@ -495,6 +503,13 @@ class BigQueryConfig(TargetConfig):
         client_secret: The BigQuery client secret
         token_uri: The BigQuery token URI
         scopes: The BigQuery scopes
+        job_execution_timeout_seconds: The maximum amount of time, in seconds, to wait for the underlying job to complete
+        timeout_seconds: Alias for job_execution_timeout_seconds
+        job_retries: The number of times to retry the underlying job if it fails
+        retries: Alias for job_retries
+        job_retry_deadline_seconds: Total number of seconds to wait while retrying the same query
+        priority: The priority of the underlying job
+        maximum_bytes_billed: The maximum number of bytes to be billed for the underlying job
     """
 
     type: Literal["bigquery"] = "bigquery"
@@ -587,11 +602,25 @@ class MSSQLConfig(TargetConfig):
 
     Args:
         host: The MSSQL server host to connect to
+        server: Alias for host
         port: The MSSQL server port to connect to
         user: User name for authentication
+        username: Alias for user
+        UID: Alias for user
         password: User password for authentication
+        PWD: Alias for password
         login_timeout: The number of seconds to wait for a login to complete
         query_timeout: The number of seconds to wait for a query to complete
+        authentication: The authentication method to use (only "sql" is supported)
+        schema_authorization: The principal who should own created schemas, not supported by SQLMesh
+        driver: ODBC driver to use, not used by SQLMesh
+        encrypt: A boolean flag to enable server connection encryption, not used by SQLMesh
+        trust_cert: A boolean flag to trust the server certificate, not used by SQLMesh
+        retries: Number of times to retry if the SQL Server connector encounters an error, not used by SQLMesh
+        windows_login: A boolean flag to use Windows Authentication, not used by SQLMesh
+        tenant_id: The tenant ID of the Azure Active Directory instance, not used by SQLMesh
+        client_id: The client ID of the Azure Active Directory service principal, not used by SQLMesh
+        client_secret: The client secret of the Azure Active Directory service principal, not used by SQLMesh
     """
 
     type: Literal["sqlserver"] = "sqlserver"
@@ -682,6 +711,139 @@ class MSSQLConfig(TargetConfig):
         )
 
 
+class TrinoConfig(TargetConfig):
+    """
+    Project connection and operational configuration for the Trino target.
+
+    Args:
+        method: The Trino authentication method to use
+        host: The server host to connect to
+        port: The MSSQL server port to connect to
+        database: Name of the Trino database/catalog
+        schema: Name of the Trino schema
+        user: User name for authentication
+        password: User password for authentication
+        roles: Trino catalog roles
+        session_properties: Trino session properties
+        retries: Number of times to retry if the Trino connector encounters an error
+        timezone: The timezone to use for the Trino session
+        http_headers: HTTP Headers to send alongside requests to Trino
+        http_scheme: The HTTP scheme to use for requests to Trino (default: http, or https if kerberos, ldap or jwt auth)
+        threads: The number of threads to run on
+        impersonation_user:  LDAP authentication: override the provided username
+        keytab: Kerberos authentication: Path to keytab
+        krb5_config: Kerberos authentication: Path to config
+        principal: Kerberos authentication: Principal
+        service_name: Kerberos authentication: Service name
+        hostname_override: Kerberos authentication: hostname for a host whose DNS name doesn't match
+        mutual_authentication: Kerberos authentication: Boolean flag for mutual authentication.
+        force_preemptive: Kerberos authentication: Boolean flag to preemptively initiate the GSS exchange.
+        sanitize_mutual_error_response: Kerberos authentication: Boolean flag to strip content and headers from error responses.
+        delegate: Kerberos authentication: Boolean flag for credential delegation (`GSS_C_DELEG_FLAG`)
+        jwt_token: JWT authentication: JWT string
+        client_certificate: Certification authentication: Path to client certificate
+        client_private_key: Certification authentication: Path to client private key
+        cert: Certification authentication: Full path to a certificate file
+    """
+
+    _method_to_auth_enum: t.ClassVar[t.Dict[str, TrinoAuthenticationMethod]] = {
+        "none": TrinoAuthenticationMethod.NO_AUTH,
+        "ldap": TrinoAuthenticationMethod.LDAP,
+        "kerberos": TrinoAuthenticationMethod.KERBEROS,
+        "jwt": TrinoAuthenticationMethod.JWT,
+        "certificate": TrinoAuthenticationMethod.CERTIFICATE,
+        "oauth": TrinoAuthenticationMethod.OAUTH,
+        "oauth_console": TrinoAuthenticationMethod.OAUTH,
+    }
+
+    type: Literal["trino"] = "trino"
+    host: str
+    database: str
+    schema_: str = Field(alias="schema")
+    port: int = 443
+    method: str
+    user: t.Optional[str] = None
+
+    threads: int = 1
+    roles: t.Optional[t.Dict[str, str]] = None
+    session_properties: t.Optional[t.Dict[str, str]] = None
+    retries: int = 3
+    timezone: t.Optional[str] = None
+    http_headers: t.Optional[t.Dict[str, str]] = None
+    http_scheme: t.Optional[str] = None
+    prepared_statements_enabled: bool = True  # not used by SQLMesh
+
+    # ldap authentication
+    password: t.Optional[str] = None
+    impersonation_user: t.Optional[str] = None
+
+    # kerberos authentication
+    keytab: t.Optional[str] = None
+    krb5_config: t.Optional[str] = None
+    principal: t.Optional[str] = None
+    service_name: str = "trino"
+    hostname_override: t.Optional[str] = None
+    mutual_authentication: bool = False
+    force_preemptive: bool = False
+    sanitize_mutual_error_response: bool = True
+    delegate: bool = False
+
+    # jwt authentication
+    jwt_token: t.Optional[str] = None
+
+    # certificate authentication
+    client_certificate: t.Optional[str] = None
+    client_private_key: t.Optional[str] = None
+    cert: t.Optional[str] = None
+
+    def default_incremental_strategy(self, kind: IncrementalKind) -> str:
+        return "append"
+
+    @classproperty
+    def relation_class(cls) -> t.Type[BaseRelation]:
+        from dbt.adapters.trino.relation import TrinoRelation
+
+        return TrinoRelation
+
+    @classproperty
+    def column_class(cls) -> t.Type[Column]:
+        from dbt.adapters.trino.column import TrinoColumn
+
+        return TrinoColumn
+
+    def to_sqlmesh(self, **kwargs: t.Any) -> ConnectionConfig:
+        return TrinoConnectionConfig(
+            method=self._method_to_auth_enum[self.method],
+            host=self.host,
+            user=self.user,
+            catalog=self.database,
+            port=self.port,
+            http_scheme=self.http_scheme,
+            roles=self.roles,
+            http_headers=self.http_headers,
+            session_properties=self.session_properties,
+            retries=self.retries,
+            timezone=self.timezone,
+            password=self.password,
+            impersonation_user=self.impersonation_user,
+            keytab=self.keytab,
+            krb5_config=self.krb5_config,
+            principal=self.principal,
+            service_name=self.service_name,
+            hostname_override=self.hostname_override,
+            mutual_authentication=self.mutual_authentication,
+            force_preemptive=self.force_preemptive,
+            sanitize_mutual_error_response=self.sanitize_mutual_error_response,
+            delegate=self.delegate,
+            jwt_token=self.jwt_token,
+            client_certificate=self.client_certificate,
+            client_private_key=self.client_private_key,
+            cert=self.cert,
+            concurrent_tasks=self.threads,
+            **kwargs,
+        )
+
+
 TARGET_TYPE_TO_CONFIG_CLASS: t.Dict[str, t.Type[TargetConfig]] = {
     "databricks": DatabricksConfig,
     "duckdb": DuckDbConfig,
@@ -690,4 +852,5 @@ TARGET_TYPE_TO_CONFIG_CLASS: t.Dict[str, t.Type[TargetConfig]] = {
     "snowflake": SnowflakeConfig,
     "bigquery": BigQueryConfig,
     "sqlserver": MSSQLConfig,
+    "trino": TrinoConfig,
 }

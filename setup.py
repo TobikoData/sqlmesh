@@ -114,6 +114,7 @@ setup(
             "dbt-redshift",
             "dbt-snowflake",
             "dbt-sqlserver",
+            "dbt-trino",
         ],
         "dbt": [
             "dbt-core<2",
