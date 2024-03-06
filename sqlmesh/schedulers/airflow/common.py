@@ -52,6 +52,9 @@ class PlanApplicationRequest(PydanticModel):
     models_to_backfill: t.Optional[t.Set[str]]
     end_bounded: bool
     ensure_finalized_snapshots: bool
+    directly_modified_snapshots: t.List[SnapshotId]
+    indirectly_modified_snapshots: t.Dict[SnapshotId, t.Set[SnapshotId]]
+    removed_snapshots: t.List[SnapshotId]
 
     def is_selected_for_backfill(self, model_fqn: str) -> bool:
         return self.models_to_backfill is None or model_fqn in self.models_to_backfill
@@ -83,6 +86,9 @@ class PlanDagSpec(PydanticModel):
     no_gaps_snapshot_names: t.Optional[t.Set[str]] = None
     models_to_backfill: t.Optional[t.Set[str]] = None
     ensure_finalized_snapshots: bool = False
+    directly_modified_snapshots: t.Optional[t.List[SnapshotId]] = None
+    indirectly_modified_snapshots: t.Optional[t.Dict[SnapshotId, t.Set[SnapshotId]]] = None
+    removed_snapshots: t.Optional[t.List[SnapshotId]] = None
 
 
 class EnvironmentsResponse(PydanticModel):

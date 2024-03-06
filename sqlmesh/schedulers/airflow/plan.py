@@ -171,6 +171,9 @@ def create_plan_dag_spec(
         no_gaps_snapshot_names=no_gaps_snapshot_names,
         models_to_backfill=request.models_to_backfill,
         ensure_finalized_snapshots=request.ensure_finalized_snapshots,
+        directly_modified_snapshots=request.directly_modified_snapshots,
+        indirectly_modified_snapshots=request.indirectly_modified_snapshots,
+        removed_snapshots=request.removed_snapshots,
     )
 
 

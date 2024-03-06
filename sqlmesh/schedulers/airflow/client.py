@@ -198,6 +198,9 @@ class AirflowClient(BaseAirflowClient):
         models_to_backfill: t.Optional[t.Set[str]] = None,
         end_bounded: bool = False,
         ensure_finalized_snapshots: bool = False,
+        directly_modified_snapshots: t.List[SnapshotId] = [],
+        indirectly_modified_snapshots: t.Dict[SnapshotId, t.Set[SnapshotId]] = {},
+        removed_snapshots: t.List[SnapshotId] = [],
     ) -> None:
         request = common.PlanApplicationRequest(
             new_snapshots=list(new_snapshots),
@@ -215,6 +218,9 @@ class AirflowClient(BaseAirflowClient):
             models_to_backfill=models_to_backfill,
             end_bounded=end_bounded,
             ensure_finalized_snapshots=ensure_finalized_snapshots,
+            directly_modified_snapshots=directly_modified_snapshots,
+            indirectly_modified_snapshots=indirectly_modified_snapshots,
+            removed_snapshots=removed_snapshots,
         )
 
         response = self._session.post(

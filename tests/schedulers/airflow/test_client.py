@@ -61,12 +61,19 @@ def test_apply_plan(mocker: MockerFixture, snapshot: Snapshot):
     request_id = "test_request_id"
 
     client = AirflowClient(airflow_url=common.AIRFLOW_LOCAL_URL, session=requests.Session())
-    client.apply_plan([snapshot], environment, request_id, models_to_backfill={'"test_model"'})
+    client.apply_plan(
+        [snapshot],
+        environment,
+        request_id,
+        models_to_backfill={'"test_model"'},
+        directly_modified_snapshots=[snapshot.snapshot_id],
+    )
 
     apply_plan_mock.assert_called_once()
     args, data = apply_plan_mock.call_args_list[0]
 
     assert args[0] == "http://localhost:8080/sqlmesh/api/v1/plans"
+    pytest.set_trace()
     assert json.loads(data["data"]) == {
         "new_snapshots": [
             {
@@ -158,6 +165,9 @@ def test_apply_plan(mocker: MockerFixture, snapshot: Snapshot):
         "models_to_backfill": ['"test_model"'],
         "end_bounded": False,
         "ensure_finalized_snapshots": False,
+        "directly_modified_snapshots": [snapshot.snapshot_id],
+        "indirectly_modified_snapshots": {},
+        "removed_snapshots": [],
     }
 
 
