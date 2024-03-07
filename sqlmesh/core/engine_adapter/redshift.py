@@ -158,6 +158,7 @@ class RedshiftEngineAdapter(
                             raise SQLMeshError(f"Missing column name for table '{table_name_str}'")
                         # https://github.com/postgres/postgres/blob/master/src/include/catalog/pg_type.dat
                         restype = resdom["restype"]
+                        data_type: t.Optional[str] = None
                         if restype == "1043":
                             size = (
                                 int(resdom["restypmod"]) - 4
@@ -166,19 +167,15 @@ class RedshiftEngineAdapter(
                             )
                             # Cast NULL instead of the original projection to trick the planner into assigning a
                             # correct type to the column.
+                            data_type = f"VARCHAR({size})"
+                        else:
+                            data_type = REDSHIFT_PLAN_TYPE_MAPPINGS.get(restype)
+
+                        if data_type:
                             select.select(
                                 exp.cast(
                                     exp.null(),
-                                    f"VARCHAR({size})",
-                                    dialect=self.dialect,
-                                ).as_(resname),
-                                copy=False,
-                            )
-                        elif restype == "1114":
-                            select.select(
-                                exp.cast(
-                                    exp.null(),
-                                    "TIMESTAMP",
+                                    data_type,
                                     dialect=self.dialect,
                                 ).as_(resname),
                                 copy=False,
@@ -381,3 +378,21 @@ def parse_plan(plan: str) -> t.Optional[t.Dict]:
             return nested
         advance()
     return None
+
+
+# https://github.com/postgres/postgres/blob/master/src/include/catalog/pg_type.dat
+REDSHIFT_PLAN_TYPE_MAPPINGS = {
+    "16": "BOOL",
+    "18": "CHAR",
+    "21": "SMALLINT",
+    "23": "INT",
+    "20": "BIGINT",
+    "1700": "NUMERIC",
+    "700": "FLOAT",
+    "701": "DOUBLE",
+    "1114": "TIMESTAMP",
+    "1184": "TIMESTAMPTZ",
+    "1083": "TIME",
+    "1266": "TIMETZ",
+    "1082": "DATE",
+}
