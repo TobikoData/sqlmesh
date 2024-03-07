@@ -377,7 +377,7 @@ def parse_plan(plan: str) -> t.Optional[t.Dict]:
     while curr():
         nested = parse_nested()
 
-        if nested and nested.get("name") == "RESULT":
+        if nested and nested.get("name") in ("RESULT", "SEQSCAN"):
             return nested
         advance()
     return None
