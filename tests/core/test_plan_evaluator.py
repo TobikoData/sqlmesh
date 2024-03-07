@@ -102,7 +102,7 @@ def test_airflow_evaluator(sushi_plan: Plan, mocker: MockerFixture):
         end_bounded=False,
         ensure_finalized_snapshots=False,
         directly_modified_snapshots=[],
-        indirectly_modified_snapshots=[],
+        indirectly_modified_snapshots={},
         removed_snapshots=[],
     )
 

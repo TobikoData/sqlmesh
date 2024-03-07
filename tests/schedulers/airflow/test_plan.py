@@ -119,7 +119,7 @@ def test_create_plan_dag_spec(
         end_bounded=False,
         ensure_finalized_snapshots=False,
         directly_modified_snapshots=[the_snapshot.snapshot_id],
-        indirectly_modified_snapshots=[],
+        indirectly_modified_snapshots={},
         removed_snapshots=[],
     )
 
@@ -184,7 +184,7 @@ def test_create_plan_dag_spec(
             else DeployabilityIndex.none_deployable()
         ),
         directly_modified_snapshots=[the_snapshot.snapshot_id],
-        indirectly_modified_snapshots=[],
+        indirectly_modified_snapshots={},
         removed_snapshots=[],
     )
 
@@ -250,7 +250,7 @@ def test_restatement(
         end_bounded=False,
         ensure_finalized_snapshots=False,
         directly_modified_snapshots=[],
-        indirectly_modified_snapshots=[],
+        indirectly_modified_snapshots={},
         removed_snapshots=[],
     )
     old_environment = Environment(
@@ -294,7 +294,7 @@ def test_restatement(
         dag_start_ts=to_timestamp(now_value),
         no_gaps_snapshot_names={the_snapshot.name},
         directly_modified_snapshots=[],
-        indirectly_modified_snapshots=[],
+        indirectly_modified_snapshots={},
         removed_snapshots=[],
     )
 
@@ -361,7 +361,7 @@ def test_select_models_for_backfill(mocker: MockerFixture, random_name, make_sna
         end_bounded=False,
         ensure_finalized_snapshots=False,
         directly_modified_snapshots=[snapshot_a.snapshot_id, snapshot_b.snapshot_id],
-        indirectly_modified_snapshots=[],
+        indirectly_modified_snapshots={},
         removed_snapshots=[],
     )
 
@@ -402,7 +402,7 @@ def test_select_models_for_backfill(mocker: MockerFixture, random_name, make_sna
         no_gaps_snapshot_names={'"a"', '"b"'},
         models_to_backfill={snapshot_b.name},
         directly_modified_snapshots=[snapshot_a.snapshot_id, snapshot_b.snapshot_id],
-        indirectly_modified_snapshots=[],
+        indirectly_modified_snapshots={},
         removed_snapshots=[],
     )
 
@@ -436,7 +436,7 @@ def test_create_plan_dag_spec_duplicated_snapshot(
         end_bounded=False,
         ensure_finalized_snapshots=False,
         directly_modified_snapshots=[],
-        indirectly_modified_snapshots=[],
+        indirectly_modified_snapshots={},
         removed_snapshots=[],
     )
 
@@ -489,7 +489,7 @@ def test_create_plan_dag_spec_unbounded_end(
         end_bounded=False,
         ensure_finalized_snapshots=False,
         directly_modified_snapshots=[],
-        indirectly_modified_snapshots=[],
+        indirectly_modified_snapshots={},
         removed_snapshots=[],
     )
 

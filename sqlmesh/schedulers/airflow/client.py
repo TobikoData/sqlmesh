@@ -199,7 +199,7 @@ class AirflowClient(BaseAirflowClient):
         end_bounded: bool = False,
         ensure_finalized_snapshots: bool = False,
         directly_modified_snapshots: t.Optional[t.List[SnapshotId]] = None,
-        indirectly_modified_snapshots: t.Optional[t.List[SnapshotId]] = None,
+        indirectly_modified_snapshots: t.Optional[t.Dict[str, t.List[SnapshotId]]] = None,
         removed_snapshots: t.Optional[t.List[SnapshotId]] = None,
     ) -> None:
         request = common.PlanApplicationRequest(
@@ -219,7 +219,7 @@ class AirflowClient(BaseAirflowClient):
             end_bounded=end_bounded,
             ensure_finalized_snapshots=ensure_finalized_snapshots,
             directly_modified_snapshots=directly_modified_snapshots or [],
-            indirectly_modified_snapshots=indirectly_modified_snapshots or [],
+            indirectly_modified_snapshots=indirectly_modified_snapshots or {},
             removed_snapshots=removed_snapshots or [],
         )
 

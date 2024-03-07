@@ -165,7 +165,7 @@ def test_apply_plan(mocker: MockerFixture, snapshot: Snapshot):
         "end_bounded": False,
         "ensure_finalized_snapshots": False,
         "directly_modified_snapshots": [snapshot.snapshot_id],
-        "indirectly_modified_snapshots": [],
+        "indirectly_modified_snapshots": {},
         "removed_snapshots": [],
     }
 
