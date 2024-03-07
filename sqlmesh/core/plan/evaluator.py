@@ -371,7 +371,11 @@ class StateBasedAirflowPlanEvaluator(BaseAirflowPlanEvaluator):
             end_bounded=plan.end_bounded,
             ensure_finalized_snapshots=plan.ensure_finalized_snapshots,
             directly_modified_snapshots=list(plan.directly_modified),
-            indirectly_modified_snapshots=plan.indirectly_modified,
+            indirectly_modified_snapshots=(
+                list(set.union(*(s for s in plan.indirectly_modified.values())))
+                if plan.indirectly_modified
+                else []
+            ),
             removed_snapshots=list(plan.context_diff.removed_snapshots),
         )
         plan_dag_spec = create_plan_dag_spec(plan_application_request, self.state_sync)
@@ -444,7 +448,11 @@ class AirflowPlanEvaluator(StateBasedAirflowPlanEvaluator):
             end_bounded=plan.end_bounded,
             ensure_finalized_snapshots=plan.ensure_finalized_snapshots,
             directly_modified_snapshots=list(plan.directly_modified),
-            indirectly_modified_snapshots=plan.indirectly_modified,
+            indirectly_modified_snapshots=(
+                list(set.union(*(s for s in plan.indirectly_modified.values())))
+                if plan.indirectly_modified
+                else []
+            ),
             removed_snapshots=list(plan.context_diff.removed_snapshots),
         )
 

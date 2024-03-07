@@ -73,7 +73,6 @@ def test_apply_plan(mocker: MockerFixture, snapshot: Snapshot):
     args, data = apply_plan_mock.call_args_list[0]
 
     assert args[0] == "http://localhost:8080/sqlmesh/api/v1/plans"
-    pytest.set_trace()
     assert json.loads(data["data"]) == {
         "new_snapshots": [
             {
@@ -166,7 +165,7 @@ def test_apply_plan(mocker: MockerFixture, snapshot: Snapshot):
         "end_bounded": False,
         "ensure_finalized_snapshots": False,
         "directly_modified_snapshots": [snapshot.snapshot_id],
-        "indirectly_modified_snapshots": {},
+        "indirectly_modified_snapshots": [],
         "removed_snapshots": [],
     }
 
