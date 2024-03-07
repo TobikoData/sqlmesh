@@ -175,6 +175,9 @@
 
     You can resolve this by creating an [`external` model](../concepts/models/external_models.md) for each external data source. The `sqlmesh create_external_models` command captures schema information for external data sources and stores them in the project's `schema.yml` file. You can create the file manually instead, if desired.
 
+??? question "Why did I get the error 'Table "xxx" must match the schema's nesting level: 3'?"
+    SQLMesh throws this error when a model’s name does not include a schema. Model names must be of the form `schema.table` or `catalog.schema.table`.
+
 ## How is this different from dbt?
 
 ??? question "Terminology differences?"
