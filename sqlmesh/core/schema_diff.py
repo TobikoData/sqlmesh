@@ -8,6 +8,7 @@ from enum import Enum, auto
 from sqlglot import exp
 from sqlglot.helper import ensure_list, seq_get
 
+from sqlmesh.utils import columns_to_types_to_struct
 from sqlmesh.utils.pydantic import PydanticModel
 
 if t.TYPE_CHECKING:
@@ -303,16 +304,6 @@ class SchemaDiffer(PydanticModel):
 
     _coerceable_types: t.Dict[exp.DataType, t.Set[exp.DataType]] = {}
 
-    @classmethod
-    def _dict_to_struct(cls, value: t.Dict[str, exp.DataType]) -> exp.DataType:
-        return exp.DataType(
-            this=exp.DataType.Type.STRUCT,
-            expressions=[
-                exp.ColumnDef(this=exp.to_identifier(k), kind=v) for k, v in value.items()
-            ],
-            nested=True,
-        )
-
     @property
     def coerceable_types(self) -> t.Dict[exp.DataType, t.Set[exp.DataType]]:
         if not self._coerceable_types:
@@ -588,7 +579,7 @@ class SchemaDiffer(PydanticModel):
             The list of schema deltas.
         """
         return self.compare_structs(
-            table_name, self._dict_to_struct(current), self._dict_to_struct(new)
+            table_name, columns_to_types_to_struct(current), columns_to_types_to_struct(new)
         )
 
 
