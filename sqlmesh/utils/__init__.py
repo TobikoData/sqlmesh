@@ -308,11 +308,35 @@ def groupby(
     return grouped
 
 
+def columns_to_types_to_struct(
+    columns_to_types: t.Union[t.Dict[str, exp.DataType], t.Dict[str, str]]
+) -> exp.DataType:
+    """
+    Converts a dict of column names to types to a struct.
+    """
+    return exp.DataType(
+        this=exp.DataType.Type.STRUCT,
+        expressions=[
+            exp.ColumnDef(this=exp.to_identifier(k), kind=v) for k, v in columns_to_types.items()
+        ],
+        nested=True,
+    )
+
+
 def columns_to_types_all_known(columns_to_types: t.Dict[str, exp.DataType]) -> bool:
     """
     Checks that all column types are known and not NULL.
     """
-    return all(
-        not column_type.is_type(exp.DataType.Type.UNKNOWN, exp.DataType.Type.NULL)
-        for column_type in columns_to_types.values()
-    )
+
+    def check_expression_unknown(d_type: t.Union[exp.DataType, exp.ColumnDef]) -> bool:
+        if isinstance(d_type, exp.ColumnDef):
+            if not d_type.kind:
+                return False
+            d_type = d_type.kind
+        if d_type.is_type(exp.DataType.Type.UNKNOWN, exp.DataType.Type.NULL):
+            return False
+        if d_type.expressions:
+            return all(check_expression_unknown(expression) for expression in d_type.expressions)
+        return True
+
+    return all(check_expression_unknown(expression) for expression in columns_to_types.values())
