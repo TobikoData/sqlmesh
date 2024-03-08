@@ -126,6 +126,9 @@ class InsertOverwriteWithMergeMixin(EngineAdapter):
 
 
 class HiveMetastoreTablePropertiesMixin(EngineAdapter):
+    MAX_TABLE_COMMENT_LENGTH = 4000
+    MAX_COLUMN_COMMENT_LENGTH = 4000
+
     def _build_table_properties_exp(
         self,
         catalog_name: t.Optional[str] = None,
@@ -167,7 +170,11 @@ class HiveMetastoreTablePropertiesMixin(EngineAdapter):
             properties.append(property)
 
         if table_description:
-            properties.append(exp.SchemaCommentProperty(this=exp.Literal.string(table_description)))
+            properties.append(
+                exp.SchemaCommentProperty(
+                    this=exp.Literal.string(self._truncate_comment(table_description, "table"))
+                )
+            )
 
         properties.extend(self._table_properties_to_expressions(table_properties))
 
@@ -184,13 +191,31 @@ class HiveMetastoreTablePropertiesMixin(EngineAdapter):
         properties: t.List[exp.Expression] = []
 
         if table_description:
-            properties.append(exp.SchemaCommentProperty(this=exp.Literal.string(table_description)))
+            properties.append(
+                exp.SchemaCommentProperty(
+                    this=exp.Literal.string(self._truncate_comment(table_description, "table"))
+                )
+            )
 
         properties.extend(self._table_properties_to_expressions(table_properties))
 
         if properties:
             return exp.Properties(expressions=properties)
         return None
+
+    def _truncate_comment(self, comment: str, table_or_column: str) -> str:
+        length = None
+
+        # iceberg has no limit on comment length so we leave length as None
+        if table_or_column == "table" and self.current_catalog_type == "hive":
+            length = self.MAX_TABLE_COMMENT_LENGTH
+        elif table_or_column == "column" and self.current_catalog_type == "hive":
+            length = self.MAX_COLUMN_COMMENT_LENGTH
+
+        if length is None:
+            return comment
+
+        return comment[:length]
 
 
 class GetCurrentCatalogFromFunctionMixin(EngineAdapter):

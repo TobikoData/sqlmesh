@@ -529,7 +529,7 @@ class SparkEngineAdapter(GetCurrentCatalogFromFunctionMixin, HiveMetastoreTableP
         table_sql = table.sql(dialect=self.dialect, identify=True)
         column_sql = exp.column(column_name).sql(dialect=self.dialect, identify=True)
 
-        return f"ALTER TABLE {table_sql} ALTER COLUMN {column_sql} COMMENT '{column_comment}'"
+        return f"ALTER TABLE {table_sql} ALTER COLUMN {column_sql} COMMENT '{self._truncate_comment(column_comment, 'column')}'"
 
     @classmethod
     def _wap_branch_name(cls, wap_id: str) -> str:
