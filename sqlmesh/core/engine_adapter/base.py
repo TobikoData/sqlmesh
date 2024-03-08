@@ -1917,10 +1917,7 @@ class EngineAdapter:
         return None
 
     def _truncate_comment(self, comment: str, length: t.Optional[int]) -> str:
-        if length is None:
-            return comment
-
-        return comment[:length]
+        return comment[:length] if length else comment
 
     def _truncate_table_comment(self, comment: str) -> str:
         return self._truncate_comment(comment, self.MAX_TABLE_COMMENT_LENGTH)
