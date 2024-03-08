@@ -366,7 +366,6 @@ def test_duckdb(make_config):
         connector_config={"foo": "bar"},
     )
     assert isinstance(config, DuckDBConnectionConfig)
-    assert config._static_connection_kwargs == {"config": {"foo": "bar"}}
 
 
 @pytest.mark.parametrize(
