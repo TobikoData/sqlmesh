@@ -23,6 +23,7 @@ from sqlmesh.core.config.connection import (
 from sqlmesh.core.config.feature_flag import FeatureFlag
 from sqlmesh.core.config.format import FormatConfig
 from sqlmesh.core.config.gateway import GatewayConfig
+from sqlmesh.core.config.migration import MigrationConfig
 from sqlmesh.core.config.model import ModelDefaultsConfig
 from sqlmesh.core.config.plan import PlanConfig
 from sqlmesh.core.config.run import RunConfig
@@ -69,6 +70,8 @@ class Config(BaseConfig):
         format: The formatting options for SQL code.
         ui: The UI configuration for SQLMesh.
         feature_flags: Feature flags to enable/disable certain features.
+        plan: The plan configuration.
+        migration: The migration configuration.
     """
 
     gateways: t.Dict[str, GatewayConfig] = {"": GatewayConfig()}
@@ -104,6 +107,7 @@ class Config(BaseConfig):
     ui: UIConfig = UIConfig()
     feature_flags: FeatureFlag = FeatureFlag()
     plan: PlanConfig = PlanConfig()
+    migration: MigrationConfig = MigrationConfig()
 
     _FIELD_UPDATE_STRATEGY: t.ClassVar[t.Dict[str, UpdateStrategy]] = {
         "gateways": UpdateStrategy.KEY_UPDATE,
