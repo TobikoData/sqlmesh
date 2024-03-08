@@ -104,9 +104,7 @@ class MySQLEngineAdapter(
     ) -> exp.Comment | str:
         table_sql = table.sql(dialect=self.dialect, identify=True)
 
-        return (
-            f"ALTER TABLE {table_sql} COMMENT = '{self._truncate_comment(table_comment, 'table')}'"
-        )
+        return f"ALTER TABLE {table_sql} COMMENT = '{self._truncate_table_comment(table_comment)}'"
 
     def _create_column_comments(
         self,

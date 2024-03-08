@@ -444,8 +444,8 @@ class BigQueryEngineAdapter(InsertOverwriteWithMergeMixin):
         for i in range(len(table_def["schema"]["fields"])):
             comment = column_comments.get(table_def["schema"]["fields"][i]["name"], None)
             if comment:
-                table_def["schema"]["fields"][i]["description"] = self._truncate_comment(
-                    comment, "column"
+                table_def["schema"]["fields"][i]["description"] = self._truncate_column_comment(
+                    comment
                 )
 
         # convert dict back to a Table object
@@ -456,11 +456,13 @@ class BigQueryEngineAdapter(InsertOverwriteWithMergeMixin):
         self._db_call(self.client.update_table, table=table, fields=["schema"])
 
     def _build_description_property_exp(
-        self, description: str, table_or_column: str
+        self,
+        description: str,
+        trunc_method: t.Callable,
     ) -> exp.Property:
         return exp.Property(
             this=exp.to_identifier("description", quoted=True),
-            value=exp.Literal.string(self._truncate_comment(description, table_or_column)),
+            value=exp.Literal.string(trunc_method(description)),
         )
 
     def _build_table_properties_exp(
@@ -518,7 +520,9 @@ class BigQueryEngineAdapter(InsertOverwriteWithMergeMixin):
 
         if table_description:
             properties.append(
-                self._build_description_property_exp(table_description, "table"),
+                self._build_description_property_exp(
+                    table_description, self._truncate_table_comment
+                ),
             )
 
         properties.extend(self._table_properties_to_expressions(table_properties))
@@ -536,7 +540,9 @@ class BigQueryEngineAdapter(InsertOverwriteWithMergeMixin):
                 exp.ColumnConstraint(
                     kind=exp.Properties(
                         expressions=[
-                            self._build_description_property_exp(comment, "column"),
+                            self._build_description_property_exp(
+                                comment, self._truncate_column_comment
+                            ),
                         ]
                     )
                 )
@@ -553,7 +559,9 @@ class BigQueryEngineAdapter(InsertOverwriteWithMergeMixin):
 
         if table_description:
             properties.append(
-                self._build_description_property_exp(table_description, "table"),
+                self._build_description_property_exp(
+                    table_description, self._truncate_table_comment
+                ),
             )
 
         if properties:
@@ -565,7 +573,7 @@ class BigQueryEngineAdapter(InsertOverwriteWithMergeMixin):
     ) -> exp.Comment | str:
         table_sql = table.sql(dialect=self.dialect, identify=True)
 
-        return f"ALTER {table_kind} {table_sql} SET OPTIONS(description = '{self._truncate_comment(table_comment, 'table')}')"
+        return f"ALTER {table_kind} {table_sql} SET OPTIONS(description = '{self._truncate_table_comment(table_comment)}')"
 
     def _build_create_comment_column_exp(
         self, table: exp.Table, column_name: str, column_comment: str, table_kind: str = "TABLE"
@@ -573,7 +581,7 @@ class BigQueryEngineAdapter(InsertOverwriteWithMergeMixin):
         table_sql = table.sql(dialect=self.dialect, identify=True)
         column_sql = exp.column(column_name).sql(dialect=self.dialect, identify=True)
 
-        return f"ALTER {table_kind} {table_sql} ALTER COLUMN {column_sql} SET OPTIONS(description = '{self._truncate_comment(column_comment, 'column')}')"
+        return f"ALTER {table_kind} {table_sql} ALTER COLUMN {column_sql} SET OPTIONS(description = '{self._truncate_column_comment(column_comment)}')"
 
     def create_state_table(
         self,

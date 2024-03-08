@@ -172,7 +172,7 @@ class HiveMetastoreTablePropertiesMixin(EngineAdapter):
         if table_description:
             properties.append(
                 exp.SchemaCommentProperty(
-                    this=exp.Literal.string(self._truncate_comment(table_description, "table"))
+                    this=exp.Literal.string(self._truncate_table_comment(table_description))
                 )
             )
 
@@ -193,7 +193,7 @@ class HiveMetastoreTablePropertiesMixin(EngineAdapter):
         if table_description:
             properties.append(
                 exp.SchemaCommentProperty(
-                    this=exp.Literal.string(self._truncate_comment(table_description, "table"))
+                    this=exp.Literal.string(self._truncate_table_comment(table_description))
                 )
             )
 
@@ -203,19 +203,19 @@ class HiveMetastoreTablePropertiesMixin(EngineAdapter):
             return exp.Properties(expressions=properties)
         return None
 
-    def _truncate_comment(self, comment: str, table_or_column: str) -> str:
-        length = None
-
-        # iceberg has no limit on comment length so we leave length as None
-        if table_or_column == "table" and self.current_catalog_type == "hive":
-            length = self.MAX_TABLE_COMMENT_LENGTH
-        elif table_or_column == "column" and self.current_catalog_type == "hive":
-            length = self.MAX_COLUMN_COMMENT_LENGTH
-
-        if length is None:
+    def _truncate_table_comment(self, comment: str) -> str:
+        # iceberg tables do not have a comment length limit
+        if self.current_catalog_type == "iceberg":
             return comment
 
-        return comment[:length]
+        return super()._truncate_table_comment(comment)
+
+    def _truncate_column_comment(self, comment: str) -> str:
+        # iceberg tables do not have a comment length limit
+        if self.current_catalog_type == "iceberg":
+            return comment
+
+        return super()._truncate_column_comment(comment)
 
 
 class GetCurrentCatalogFromFunctionMixin(EngineAdapter):
