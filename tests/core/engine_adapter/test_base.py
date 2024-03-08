@@ -14,6 +14,7 @@ from sqlmesh.core.dialect import normalize_model_name
 from sqlmesh.core.engine_adapter import EngineAdapter, EngineAdapterWithIndexSupport
 from sqlmesh.core.engine_adapter.shared import InsertOverwriteStrategy
 from sqlmesh.core.schema_diff import SchemaDiffer, TableAlterOperation
+from sqlmesh.utils import columns_to_types_to_struct
 from sqlmesh.utils.date import to_ds
 from sqlmesh.utils.errors import SQLMeshError, UnsupportedCatalogOperationError
 from tests.core.engine_adapter import to_sql_calls
@@ -807,7 +808,7 @@ def test_alter_table(
         operations = original_from_structs(current_struct, new_struct)
         assert (
             operations[-1].expected_table_struct.sql()
-            == SchemaDiffer._dict_to_struct(expected_final_structure).sql()
+            == columns_to_types_to_struct(expected_final_structure).sql()
         )
         return operations
 
