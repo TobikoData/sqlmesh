@@ -1078,7 +1078,7 @@ This macro takes two arguments: `text` of type `str` and `count` of type `int`, 
 
 ### Supported Types
 
-SQLMesh supports common Python types for typed macros, including but not limited to:
+SQLMesh supports common Python types for typed macros including:
 
 - `str`
 - `int`
@@ -1086,6 +1086,7 @@ SQLMesh supports common Python types for typed macros, including but not limited
 - `bool`
 - `List[T]` - where `T` is any supported type including sqlglot expressions
 - `Tuple[T]` - where `T` is any supported type including sqlglot expressions
+- `Union[T1, T2, ...]` - where `T1`, `T2`, etc. are any supported types including sqlglot expressions
 
 We also support SQLGlot expressions as type hints, allowing you to ensure inputs are coerced to the desired SQL AST node your intending on working with. Some useful examples include:
 
@@ -1144,6 +1145,8 @@ SELECT
   @sum_integers([1, 2, 3, 4, 5]) as total
 FROM some_table;
 ```
+
+Generics can be nested and are resolved recursively allowing for fairly robust type hinting.
 
 See examples of the coercion function in action in the test suite [here](../../../tests/core/test_macros.py).
 
