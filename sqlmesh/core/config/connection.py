@@ -148,7 +148,7 @@ class BaseDuckDBConnectionConfig(ConnectionConfig):
 
             for field, setting in self.connector_config.items():
                 try:
-                    cursor.execute(f'SET {field} = "{setting}"')
+                    cursor.execute(f"SET {field} = '{setting}'")
                 except Exception as e:
                     raise ConfigError(f"Failed to set connector config {field} to {setting}: {e}")
 
