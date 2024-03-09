@@ -1094,7 +1094,16 @@ We also support SQLGlot expressions as type hints, allowing you to ensure inputs
 - `exp.Literal`
 - `exp.Identifier`
 
-While these might be obvious examples, you can effectively coerce an input into _any_ SQLGlot expression type, which can be useful for more complex macros. When coercing to more complex types, you will almost certainly need to pass a string literal. When a string literal is passed to a macro that hints at a SQLGlot expression, the string will be parsed using SQLGlot and coerced to the correct type. Failure to coerce to the correct type will result in the original expression being passed to the macro and a warning being logged for the user to address as-needed. 
+While these might be obvious examples, you can effectively coerce an input into _any_ SQLGlot expression type, which can be useful for more complex macros. When coercing to more complex types, you will almost certainly need to pass a string literal since expression to expression coercion is limited. When a string literal is passed to a macro that hints at a SQLGlot expression, the string will be parsed using SQLGlot and coerced to the correct type. Failure to coerce to the correct type will result in the original expression being passed to the macro and a warning being logged for the user to address as-needed.
+
+```python linenums="1"
+@macro()
+def stamped(evaluator, query: exp.Select) -> exp.Subquery:
+    return query.select(exp.Literal.string(str(datetime.now())).as_("stamp")).subquery()
+
+# Coercing to a complex node like `exp.Select` works as expected given a string literal input
+# SELECT * FROM @stamped('SELECT a, b, c')
+```
 
 When coercion fails, there will always be a warning logged but we will not crash. We believe the macro should be flexible by default, meaning the default behavior is preserved if we cannot coerce. Give that, the user can express whatever level of additional checks they want. For example, if you would like to raise an error when the coercion fails, you can use an `assert` statement. For example:
 

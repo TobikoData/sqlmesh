@@ -69,6 +69,10 @@ def macro_evaluator() -> MacroEvaluator:
     def suffix_idents_2(evaluator: MacroEvaluator, items: t.Tuple[str, ...], suffix: str):
         return [item + suffix for item in items]
 
+    @macro()
+    def stamped(evaluator, query: exp.Select) -> exp.Subquery:
+        return query.select(exp.Literal.string("2024-01-01").as_("stamp")).subquery()
+
     return MacroEvaluator(
         "hive",
         {"test": Executable(name="test", payload=f"def test(_):\n    return 'test'")},
@@ -405,6 +409,11 @@ def test_ast_correctness(macro_evaluator):
         (
             """SELECT @SUFFIX_IDENTS_2(['a', 'b', 'c'], 'z')""",
             "SELECT az, bz, cz",
+            {},
+        ),
+        (
+            """select * FROM @STAMPED('select a, b, c')""",
+            "SELECT * FROM (SELECT a, b, c, '2024-01-01' AS stamp)",
             {},
         ),
     ],
