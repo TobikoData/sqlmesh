@@ -1051,13 +1051,12 @@ Typed macros in SQLMesh bring the power of type hints from Python, enhancing rea
 ### Benefits of Typed Macros
 
 1. **Improved Readability**: By specifying types, the intent of the macro is clearer to other developers or future you.
-2. **Reduced Boilerplate**: No need for manual type checking or conversion within the macro function, allowing you to focus on the core logic.
-3. **Error Prevention**: Early detection of type mismatches before the macro is executed, reducing runtime errors.
-4. **Enhanced Autocompletion**: IDEs can provide better autocompletion and documentation based on the specified types.
+2. **Reduced Boilerplate**: No need for manual type conversion within the macro function, allowing you to focus on the core logic.
+3. **Enhanced Autocompletion**: IDEs can provide better autocompletion and documentation based on the specified types.
 
 ### Defining a Typed Macro
 
-Typed macros in SQLMesh use Python's type hints. Here's a simple example of a typed macro that concatenates a string a given number of times:
+Typed macros in SQLMesh use Python's type hints. Here's a simple example of a typed macro that repeats a string a given number of times:
 
 ```python linenums="1"
 from sqlmesh import macro
@@ -1075,7 +1074,7 @@ SELECT
 FROM some_table;
 ```
 
-This macro takes two arguments: `text` of type `str` and `count` of type `int`, and it returns a string.
+This macro takes two arguments: `text` of type `str` and `count` of type `int`, and it returns a string. Without type hints, the inputs to the macro would have been two `exp.Literal` objects you would have had to convert to strings and integers manually.
 
 ### Supported Types
 
@@ -1085,19 +1084,19 @@ SQLMesh supports common Python types for typed macros, including but not limited
 - `int`
 - `float`
 - `bool`
-- `List[T]` - where `T` is any supported type
-- `Tuple[T]` - where `T` is any supported type
-- `Dict[K, V]` - where `K` and `V` are supported types
+- `List[T]` - where `T` is any supported type including sqlglot expressions
+- `Tuple[T]` - where `T` is any supported type including sqlglot expressions
 
-We also support SQLGlot expressions as a type hint, allowing you to ensure inputs are coerced to the desired SQL AST node. Some useful examples include:
+We also support SQLGlot expressions as type hints, allowing you to ensure inputs are coerced to the desired SQL AST node your intending on working with. Some useful examples include:
 
 - `exp.Table`
 - `exp.Column`
 - `exp.Literal`
 - `exp.Identifier`
-- `exp.Binary`
 
-Effectively, we can attempt to coerce into any SQLGlot expression type, which can be useful for more complex macros. When coercing to more complex types, its most useful to pass a string literal. A typed macro will parse a string literal using SQLGlot and assert it is the correct type. Failure to coerce to the correct type will result in the original expression being passed to the macro. This is preferred to coercing to a type that is not the correct type. If you would like to raise an error when the coercion fails, you can use the `assert` statement. For example:
+While these might be obvious examples, you can effectively coerce an input into _any_ SQLGlot expression type, which can be useful for more complex macros. When coercing to more complex types, you will almost certainly need to pass a string literal. When a string literal is passed to a macro that hints at a SQLGlot expression, the string will be parsed using SQLGlot and coerced to the correct type. Failure to coerce to the correct type will result in the original expression being passed to the macro and a warning being logged for the user to address as-needed. 
+
+When coercion fails, there will always be a warning logged but we will not crash. We believe the macro should be flexible by default, meaning the default behavior is preserved if we cannot coerce. Give that, the user can express whatever level of additional checks they want. For example, if you would like to raise an error when the coercion fails, you can use an `assert` statement. For example:
 
 ```python linenums="1"
 @macro()
@@ -1105,9 +1104,16 @@ def my_macro(evaluator, table: exp.Table) -> exp.Column:
     assert isinstance(table, exp.Table)
     table.set("catalog", "dev")
     return table
+
+# Works
+# SELECT * FROM @my_macro('some.table')
+# SELECT * FROM @my_macro(some.table)
+
+# Raises an error thanks to the users inclusion of the assert, otherwise would pass through the string literal and log a warning
+# SELECT * FROM @my_macro('SELECT 1 + 1')
 ```
 
-In this way, you still get the benefits of reducing boilerplate needed to coerce types; but you also get guarantees about the type of the input. This allows us to keep the macro definition clean and focused on the core logic. Additionally, it ensures macros are flexible enough to handle a wide range of inputs.
+In using assert this way, you still get the benefits of reducing/removing the boilerplate needed to coerce types; but you **also** get guarantees about the type of the input. This is a useful pattern and is user-defined, so you can use it as you see fit. It ultimately allows you to keep the macro definition clean and focused on the core business logic.
 
 ### Advanced Typed Macros
 
@@ -1130,12 +1136,7 @@ SELECT
 FROM some_table;
 ```
 
-### Best Practices for Typed Macros
-
-1. **Clear Documentation**: Alongside type hints, include docstrings explaining the macro's purpose, arguments, and return type.
-2. **Consistent Naming**: Use clear and descriptive names for your macros and their arguments.
-3. **Type Hinting**: Always specify types for all arguments and the return value to leverage the full benefits of typed macros.
-4. **Testing**: Test your macros thoroughly to ensure they behave as expected with various input types.
+See examples of the coercion function in action in the test suite [here](../../../tests/core/test_macros.py).
 
 ### Conclusion
 
