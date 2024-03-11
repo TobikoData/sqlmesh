@@ -275,6 +275,7 @@ export function useApiPlanRun(
   inputs?: {
     planDates?: PlanDates
     planOptions?: PlanOptions
+    categories?: BodyInitiateApplyApiCommandsApplyPostCategories
   },
   options?: ApiOptions,
 ): UseQueryWithTimeoutOptions<PlanOverviewStageTracker> {
@@ -287,6 +288,7 @@ export function useApiPlanRun(
             environment,
             plan_dates: inputs?.planDates,
             plan_options: inputs?.planOptions,
+            categories: inputs?.categories,
           },
           { signal },
         )

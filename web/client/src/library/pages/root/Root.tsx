@@ -514,12 +514,20 @@ export default function Root(): JSX.Element {
           }}
         >
           <ModalConfirmation.Main>
-            {confirmation?.headline != null && (
+            {isNotNil(confirmation?.headline) && (
               <ModalConfirmation.Headline>
                 {confirmation?.headline}
               </ModalConfirmation.Headline>
             )}
-            {confirmation?.description != null && (
+            {isNotNil(confirmation?.tagline) && (
+              <ModalConfirmation.Tagline>
+                {confirmation?.tagline}
+              </ModalConfirmation.Tagline>
+            )}
+            {isNotNil(confirmation?.details) && (
+              <ModalConfirmation.Details details={confirmation?.details} />
+            )}
+            {isNotNil(confirmation?.description) && (
               <ModalConfirmation.Description>
                 {confirmation?.description}
               </ModalConfirmation.Description>
