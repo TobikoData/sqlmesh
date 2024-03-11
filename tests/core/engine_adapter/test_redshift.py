@@ -74,21 +74,39 @@ def test_create_table_from_query_exists_no_if_not_exists(
                         "restypmod": "- 1",
                     },
                 },
+                {
+                    "name": "TARGETENTRY",
+                    "resdom": {
+                        "resname": "e",
+                        "restype": "1114",
+                        "restypmod": "- 1",
+                    },
+                },
+                {
+                    "name": "TARGETENTRY",
+                    "resdom": {
+                        "resname": "f",
+                        "restype": "0000",  # Unknown type
+                        "restypmod": "- 1",
+                    },
+                },
             ]
         },
     )
 
     adapter.ctas(
         table_name="test_table",
-        query_or_df=parse_one("SELECT a, b, x + 1 AS c, d AS d FROM table LIMIT 0"),
+        query_or_df=parse_one(
+            "SELECT a, b, x + 1 AS c, d AS d, e, f FROM (SELECT * FROM table WHERE FALSE LIMIT 0) WHERE d > 0 AND FALSE LIMIT 0"
+        ),
         exists=False,
     )
 
     assert to_sql_calls(adapter) == [
-        'EXPLAIN VERBOSE CREATE TABLE "test_table" AS SELECT "a", "b", "x" + 1 AS "c", "d" AS "d" FROM "table" LIMIT 0',
+        'EXPLAIN VERBOSE CREATE TABLE "test_table" AS SELECT "a", "b", "x" + 1 AS "c", "d" AS "d", "e", "f" FROM (SELECT * FROM "table")',
         'CREATE TABLE "test_table" AS SELECT CAST(NULL AS VARCHAR(MAX)) AS "a", CAST(NULL AS VARCHAR(60)) AS "b", CAST(NULL '
-        'AS VARCHAR(MAX)) AS "c", CAST(NULL AS VARCHAR(MAX)) AS "d" FROM (SELECT "a", "b", "x" + 1 '
-        'AS "c", "d" AS "d" FROM "table" LIMIT 0) AS "_subquery"',
+        'AS VARCHAR(MAX)) AS "c", CAST(NULL AS VARCHAR(MAX)) AS "d", CAST(NULL AS TIMESTAMP) AS "e", "f" FROM (SELECT "a", "b", "x" + 1 '
+        'AS "c", "d" AS "d", "e", "f" FROM (SELECT * FROM "table" WHERE FALSE LIMIT 0) WHERE "d" > 0 AND FALSE LIMIT 0) AS "_subquery"',
     ]
 
 
