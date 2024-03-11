@@ -402,6 +402,7 @@ def config() -> Config:
                 pytest.mark.duckdb,
                 pytest.mark.engine,
                 pytest.mark.slow,
+                pytest.mark.xdist_group("engine_integration_duckdb"),
             ],
         ),
         pytest.param(
@@ -410,6 +411,7 @@ def config() -> Config:
                 pytest.mark.docker,
                 pytest.mark.engine,
                 pytest.mark.postgres,
+                pytest.mark.xdist_group("engine_integration_postgres"),
             ],
         ),
         pytest.param(
@@ -418,6 +420,7 @@ def config() -> Config:
                 pytest.mark.docker,
                 pytest.mark.engine,
                 pytest.mark.mysql,
+                pytest.mark.xdist_group("engine_integration_mysql"),
             ],
         ),
         pytest.param(
@@ -426,6 +429,7 @@ def config() -> Config:
                 pytest.mark.docker,
                 pytest.mark.engine,
                 pytest.mark.mssql,
+                pytest.mark.xdist_group("engine_integration_mssql"),
             ],
         ),
         pytest.param(
@@ -434,6 +438,7 @@ def config() -> Config:
                 pytest.mark.docker,
                 pytest.mark.engine,
                 pytest.mark.trino,
+                pytest.mark.xdist_group("engine_integration_trino"),
             ],
         ),
         pytest.param(
@@ -442,6 +447,7 @@ def config() -> Config:
                 pytest.mark.docker,
                 pytest.mark.engine,
                 pytest.mark.trino_iceberg,
+                pytest.mark.xdist_group("engine_integration_trino_iceberg"),
             ],
         ),
         pytest.param(
@@ -450,6 +456,7 @@ def config() -> Config:
                 pytest.mark.docker,
                 pytest.mark.engine,
                 pytest.mark.spark,
+                pytest.mark.xdist_group("engine_integration_spark"),
             ],
         ),
         pytest.param(
@@ -458,6 +465,7 @@ def config() -> Config:
                 pytest.mark.bigquery,
                 pytest.mark.engine,
                 pytest.mark.remote,
+                pytest.mark.xdist_group("engine_integration_bigquery"),
             ],
         ),
         pytest.param(
@@ -466,6 +474,7 @@ def config() -> Config:
                 pytest.mark.databricks,
                 pytest.mark.engine,
                 pytest.mark.remote,
+                pytest.mark.xdist_group("engine_integration_databricks"),
             ],
         ),
         pytest.param(
@@ -474,6 +483,7 @@ def config() -> Config:
                 pytest.mark.motherduck,
                 pytest.mark.engine,
                 pytest.mark.remote,
+                pytest.mark.xdist_group("engine_integration_motherduck"),
             ],
         ),
         pytest.param(
@@ -482,6 +492,7 @@ def config() -> Config:
                 pytest.mark.engine,
                 pytest.mark.remote,
                 pytest.mark.redshift,
+                pytest.mark.xdist_group("engine_integration_redshift"),
             ],
         ),
         pytest.param(
@@ -490,6 +501,7 @@ def config() -> Config:
                 pytest.mark.engine,
                 pytest.mark.remote,
                 pytest.mark.snowflake,
+                pytest.mark.xdist_group("engine_integration_snowflake"),
             ],
         ),
     ]
