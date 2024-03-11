@@ -77,7 +77,7 @@ export default function PlanActions({
         details: hasUncategorized
           ? [
               'ATTENTION!',
-              '[Braking Change] category will be applied to all uncategorized changes',
+              '[Breaking Change] category will be applied to all uncategorized changes',
             ]
           : undefined,
         children: (
@@ -113,9 +113,9 @@ export default function PlanActions({
           headline: 'Some changes are missing categorization!',
           description: 'Are you sure you want to proceed?',
           details: [
-            '[Braking Change] category will be applied to all uncategorized changes',
+            '[Breaking Change] category will be applied to all uncategorized changes',
           ],
-          yesText: `Yes, Apply`,
+          yesText: 'Yes, Apply',
           noText: 'No, Cancel',
           action: apply,
         })

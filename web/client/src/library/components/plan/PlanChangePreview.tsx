@@ -84,7 +84,7 @@ function PlanChangePreviewDefault({
   changes: ModelSQLMeshChangeDisplay[]
 }): JSX.Element {
   return (
-    <ul className="">
+    <ul>
       {changes.map(change => (
         <li
           key={change.name}
