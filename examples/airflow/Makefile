@@ -27,18 +27,18 @@ build-airflow-image: init-airflow-dockerfile
 	cd ../../ && docker build -t $(AIRFLOW_IMAGE_NAME) -f ./examples/airflow/Dockerfile .
 
 create-metastore-db: build-airflow-image decorate-docker-compose
-	export AIRFLOW_IMAGE_NAME=$(AIRFLOW_IMAGE_NAME) AIRFLOW_UID=$(AIRFLOW_UID) && docker-compose up create-metastore-db
+	export AIRFLOW_IMAGE_NAME=$(AIRFLOW_IMAGE_NAME) AIRFLOW_UID=$(AIRFLOW_UID) && docker-compose up --force-recreate create-metastore-db
 
 provision-metastore-tables: build-airflow-image decorate-docker-compose create-metastore-db
-	export AIRFLOW_IMAGE_NAME=$(AIRFLOW_IMAGE_NAME) AIRFLOW_UID=$(AIRFLOW_UID) && docker-compose up provision-metastore-tables
+	export AIRFLOW_IMAGE_NAME=$(AIRFLOW_IMAGE_NAME) AIRFLOW_UID=$(AIRFLOW_UID) && docker-compose up --force-recreate provision-metastore-tables
 
 init-airflow: decorate-docker-compose
-	export AIRFLOW_IMAGE_NAME=$(AIRFLOW_IMAGE_NAME) AIRFLOW_UID=$(AIRFLOW_UID) && docker-compose up airflow-init
+	export AIRFLOW_IMAGE_NAME=$(AIRFLOW_IMAGE_NAME) AIRFLOW_UID=$(AIRFLOW_UID) && docker-compose up --force-recreate airflow-init
 
 init: decorate-docker-compose download-cli package-sqlmesh init-folders build-airflow-image init-airflow provision-metastore-tables
 
 run: build-airflow-image
-	export AIRFLOW_IMAGE_NAME=$(AIRFLOW_IMAGE_NAME) AIRFLOW_UID=$(AIRFLOW_UID) && docker-compose up -d
+	export AIRFLOW_IMAGE_NAME=$(AIRFLOW_IMAGE_NAME) AIRFLOW_UID=$(AIRFLOW_UID) && docker-compose up --force-recreate -d
 
 stop:
 	docker-compose down
@@ -53,4 +53,4 @@ spark-sql:
 	docker exec -it airflow-airflow-worker-1 spark-sql
 
 docker-test: decorate-docker-compose
-	docker-compose up --exit-code-from sqlmesh-tests sqlmesh-tests
+	docker-compose up --force-recreate --exit-code-from sqlmesh-tests sqlmesh-tests
