@@ -8,6 +8,8 @@ from sqlmesh.utils.errors import ConfigError, SQLMeshError
 
 H = t.TypeVar("H", bound=t.Hashable)
 S = t.TypeVar("S", bound=SnapshotInfoLike)
+A = t.TypeVar("A")
+R = t.TypeVar("R")
 
 
 class NodeExecutionFailedError(t.Generic[H], SQLMeshError):
@@ -234,3 +236,36 @@ def sequential_apply_to_dag(
             failed_or_skipped_nodes.add(node)
 
     return node_errors, skipped_nodes
+
+
+def concurrent_apply_to_values(
+    values: t.Sequence[A],
+    fn: t.Callable[[A], R],
+    tasks_num: int,
+) -> t.List[R]:
+    """Applies a function to the given collection of values concurrently.
+
+    Args:
+        values: Target values.
+        fn: The function that will be applied concurrently to each value.
+        tasks_num: The number of concurrent tasks.
+
+    Returns:
+        A list of results.
+    """
+    if tasks_num == 1:
+        return [fn(value) for value in values]
+
+    futures: t.List[Future] = [Future() for _ in values]
+
+    def _process_value(value: A, index: int) -> None:
+        try:
+            futures[index].set_result(fn(value))
+        except Exception as ex:
+            futures[index].set_exception(ex)
+
+    with ThreadPoolExecutor(max_workers=tasks_num) as pool:
+        for index, value in enumerate(values):
+            pool.submit(_process_value, value, index)
+
+    return [f.result() for f in futures]

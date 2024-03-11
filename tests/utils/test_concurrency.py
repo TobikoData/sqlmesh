@@ -5,6 +5,7 @@ from sqlmesh.core.snapshot import SnapshotId
 from sqlmesh.utils.concurrency import (
     NodeExecutionFailedError,
     concurrent_apply_to_snapshots,
+    concurrent_apply_to_values,
 )
 
 
@@ -139,3 +140,10 @@ def test_concurrent_apply_to_snapshots_skip_each_node_only_once(mocker: MockerFi
     assert errors[0].node == failed_snapshot.snapshot_id
 
     assert skipped == [snapshot_a.snapshot_id, snapshot_b.snapshot_id, snapshot_c.snapshot_id]
+
+
+@pytest.mark.parametrize("tasks_num", [1, 3])
+def test_concurrent_apply(tasks_num: int):
+    values = [1, 2, 3, 4, 5, 6, 7, 8, 9, 10]
+    results = concurrent_apply_to_values(values, lambda x: x * 2, tasks_num)
+    assert results == [x * 2 for x in values]

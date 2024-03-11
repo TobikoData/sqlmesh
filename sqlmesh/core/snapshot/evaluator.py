@@ -57,7 +57,10 @@ from sqlmesh.core.snapshot import (
     SnapshotTableCleanupTask,
 )
 from sqlmesh.utils import random_id
-from sqlmesh.utils.concurrency import concurrent_apply_to_snapshots
+from sqlmesh.utils.concurrency import (
+    concurrent_apply_to_snapshots,
+    concurrent_apply_to_values,
+)
 from sqlmesh.utils.date import TimeLike, now
 from sqlmesh.utils.errors import AuditError, ConfigError, SQLMeshError
 
@@ -251,11 +254,19 @@ class SnapshotEvaluator:
                 snapshots_with_table_names[snapshot].add(table.name)
                 tables_by_schema[d.schema_(table.db, catalog=table.catalog)].add(table.name)
 
-        existing_objects: t.Set[str] = set()
-        for schema, object_names in tables_by_schema.items():
+        def _get_data_objects(schema: exp.Table) -> t.Set[str]:
             logger.info("Listing data objects in schema %s", schema.sql())
-            objs = self.adapter.get_data_objects(schema, object_names)
-            existing_objects.update(obj.name for obj in objs)
+            objs = self.adapter.get_data_objects(schema, tables_by_schema[schema])
+            return {obj.name for obj in objs}
+
+        with self.concurrent_context():
+            existing_objects = {
+                obj
+                for objs in concurrent_apply_to_values(
+                    list(tables_by_schema), _get_data_objects, self.ddl_concurrent_tasks
+                )
+                for obj in objs
+            }
 
         snapshots_to_create = []
         for snapshot, table_names in snapshots_with_table_names.items():
