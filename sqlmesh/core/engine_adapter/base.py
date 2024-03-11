@@ -85,6 +85,8 @@ class EngineAdapter:
     SUPPORTS_INDEXES = False
     COMMENT_CREATION_TABLE = CommentCreationTable.IN_SCHEMA_DEF_CTAS
     COMMENT_CREATION_VIEW = CommentCreationView.IN_SCHEMA_DEF_AND_COMMANDS
+    MAX_TABLE_COMMENT_LENGTH: t.Optional[int] = None
+    MAX_COLUMN_COMMENT_LENGTH: t.Optional[int] = None
     INSERT_OVERWRITE_STRATEGY = InsertOverwriteStrategy.DELETE_INSERT
     SUPPORTS_MATERIALIZED_VIEWS = False
     SUPPORTS_MATERIALIZED_VIEW_SCHEMA = False
@@ -581,7 +583,9 @@ class EngineAdapter:
         if comment:
             return [
                 exp.ColumnConstraint(
-                    kind=exp.CommentColumnConstraint(this=exp.Literal.string(comment))
+                    kind=exp.CommentColumnConstraint(
+                        this=exp.Literal.string(self._truncate_column_comment(comment))
+                    )
                 )
             ]
         return []
@@ -1883,7 +1887,11 @@ class EngineAdapter:
         properties: t.List[exp.Expression] = []
 
         if table_description:
-            properties.append(exp.SchemaCommentProperty(this=exp.Literal.string(table_description)))
+            properties.append(
+                exp.SchemaCommentProperty(
+                    this=exp.Literal.string(self._truncate_table_comment(table_description))
+                )
+            )
 
         if properties:
             return exp.Properties(expressions=properties)
@@ -1898,11 +1906,24 @@ class EngineAdapter:
         properties: t.List[exp.Expression] = []
 
         if table_description:
-            properties.append(exp.SchemaCommentProperty(this=exp.Literal.string(table_description)))
+            properties.append(
+                exp.SchemaCommentProperty(
+                    this=exp.Literal.string(self._truncate_table_comment(table_description))
+                )
+            )
 
         if properties:
             return exp.Properties(expressions=properties)
         return None
+
+    def _truncate_comment(self, comment: str, length: t.Optional[int]) -> str:
+        return comment[:length] if length else comment
+
+    def _truncate_table_comment(self, comment: str) -> str:
+        return self._truncate_comment(comment, self.MAX_TABLE_COMMENT_LENGTH)
+
+    def _truncate_column_comment(self, comment: str) -> str:
+        return self._truncate_comment(comment, self.MAX_COLUMN_COMMENT_LENGTH)
 
     def _to_sql(self, expression: exp.Expression, quote: bool = True, **kwargs: t.Any) -> str:
         """
@@ -1980,7 +2001,7 @@ class EngineAdapter:
         return exp.Comment(
             this=table,
             kind=table_kind,
-            expression=exp.Literal.string(table_comment),
+            expression=exp.Literal.string(self._truncate_table_comment(table_comment)),
         )
 
     def _create_table_comment(
@@ -2002,7 +2023,7 @@ class EngineAdapter:
         return exp.Comment(
             this=exp.column(column_name, *reversed(table.parts)),  # type: ignore
             kind="COLUMN",
-            expression=exp.Literal.string(column_comment),
+            expression=exp.Literal.string(self._truncate_column_comment(column_comment)),
         )
 
     def _create_column_comments(
