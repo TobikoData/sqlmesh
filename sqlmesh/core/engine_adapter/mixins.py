@@ -126,6 +126,9 @@ class InsertOverwriteWithMergeMixin(EngineAdapter):
 
 
 class HiveMetastoreTablePropertiesMixin(EngineAdapter):
+    MAX_TABLE_COMMENT_LENGTH = 4000
+    MAX_COLUMN_COMMENT_LENGTH = 4000
+
     def _build_table_properties_exp(
         self,
         catalog_name: t.Optional[str] = None,
@@ -167,7 +170,11 @@ class HiveMetastoreTablePropertiesMixin(EngineAdapter):
             properties.append(property)
 
         if table_description:
-            properties.append(exp.SchemaCommentProperty(this=exp.Literal.string(table_description)))
+            properties.append(
+                exp.SchemaCommentProperty(
+                    this=exp.Literal.string(self._truncate_table_comment(table_description))
+                )
+            )
 
         properties.extend(self._table_properties_to_expressions(table_properties))
 
@@ -184,13 +191,23 @@ class HiveMetastoreTablePropertiesMixin(EngineAdapter):
         properties: t.List[exp.Expression] = []
 
         if table_description:
-            properties.append(exp.SchemaCommentProperty(this=exp.Literal.string(table_description)))
+            properties.append(
+                exp.SchemaCommentProperty(
+                    this=exp.Literal.string(self._truncate_table_comment(table_description))
+                )
+            )
 
         properties.extend(self._table_properties_to_expressions(table_properties))
 
         if properties:
             return exp.Properties(expressions=properties)
         return None
+
+    def _truncate_comment(self, comment: str, length: t.Optional[int]) -> str:
+        # iceberg does not have a comment length limit
+        if self.current_catalog_type == "iceberg":
+            return comment
+        return super()._truncate_comment(comment, length)
 
 
 class GetCurrentCatalogFromFunctionMixin(EngineAdapter):

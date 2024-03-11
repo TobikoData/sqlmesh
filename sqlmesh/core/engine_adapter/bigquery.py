@@ -50,6 +50,8 @@ class BigQueryEngineAdapter(InsertOverwriteWithMergeMixin):
     SUPPORTS_MATERIALIZED_VIEWS = True
     SUPPORTS_CLONING = True
     CATALOG_SUPPORT = CatalogSupport.FULL_SUPPORT
+    MAX_TABLE_COMMENT_LENGTH = 1024
+    MAX_COLUMN_COMMENT_LENGTH = 1024
 
     # SQL is not supported for adding columns to structs: https://cloud.google.com/bigquery/docs/managing-table-schemas#api_1
     # Can explore doing this with the API in the future
@@ -442,7 +444,9 @@ class BigQueryEngineAdapter(InsertOverwriteWithMergeMixin):
         for i in range(len(table_def["schema"]["fields"])):
             comment = column_comments.get(table_def["schema"]["fields"][i]["name"], None)
             if comment:
-                table_def["schema"]["fields"][i]["description"] = comment
+                table_def["schema"]["fields"][i]["description"] = self._truncate_column_comment(
+                    comment
+                )
 
         # convert dict back to a Table object
         table = table.from_api_repr(table_def)
@@ -451,10 +455,14 @@ class BigQueryEngineAdapter(InsertOverwriteWithMergeMixin):
         logger.info(f"Registering column comments for table {table_name}")
         self._db_call(self.client.update_table, table=table, fields=["schema"])
 
-    def _build_description_property_exp(self, description: str) -> exp.Property:
+    def _build_description_property_exp(
+        self,
+        description: str,
+        trunc_method: t.Callable,
+    ) -> exp.Property:
         return exp.Property(
             this=exp.to_identifier("description", quoted=True),
-            value=exp.Literal.string(description),
+            value=exp.Literal.string(trunc_method(description)),
         )
 
     def _build_table_properties_exp(
@@ -512,7 +520,9 @@ class BigQueryEngineAdapter(InsertOverwriteWithMergeMixin):
 
         if table_description:
             properties.append(
-                self._build_description_property_exp(table_description),
+                self._build_description_property_exp(
+                    table_description, self._truncate_table_comment
+                ),
             )
 
         properties.extend(self._table_properties_to_expressions(table_properties))
@@ -530,7 +540,9 @@ class BigQueryEngineAdapter(InsertOverwriteWithMergeMixin):
                 exp.ColumnConstraint(
                     kind=exp.Properties(
                         expressions=[
-                            self._build_description_property_exp(comment),
+                            self._build_description_property_exp(
+                                comment, self._truncate_column_comment
+                            ),
                         ]
                     )
                 )
@@ -547,7 +559,9 @@ class BigQueryEngineAdapter(InsertOverwriteWithMergeMixin):
 
         if table_description:
             properties.append(
-                self._build_description_property_exp(table_description),
+                self._build_description_property_exp(
+                    table_description, self._truncate_table_comment
+                ),
             )
 
         if properties:
@@ -559,7 +573,7 @@ class BigQueryEngineAdapter(InsertOverwriteWithMergeMixin):
     ) -> exp.Comment | str:
         table_sql = table.sql(dialect=self.dialect, identify=True)
 
-        return f"ALTER {table_kind} {table_sql} SET OPTIONS(description = '{table_comment}')"
+        return f"ALTER {table_kind} {table_sql} SET OPTIONS(description = '{self._truncate_table_comment(table_comment)}')"
 
     def _build_create_comment_column_exp(
         self, table: exp.Table, column_name: str, column_comment: str, table_kind: str = "TABLE"
@@ -567,7 +581,7 @@ class BigQueryEngineAdapter(InsertOverwriteWithMergeMixin):
         table_sql = table.sql(dialect=self.dialect, identify=True)
         column_sql = exp.column(column_name).sql(dialect=self.dialect, identify=True)
 
-        return f"ALTER {table_kind} {table_sql} ALTER COLUMN {column_sql} SET OPTIONS(description = '{column_comment}')"
+        return f"ALTER {table_kind} {table_sql} ALTER COLUMN {column_sql} SET OPTIONS(description = '{self._truncate_column_comment(column_comment)}')"
 
     def create_state_table(
         self,

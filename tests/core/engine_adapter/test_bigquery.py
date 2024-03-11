@@ -587,6 +587,14 @@ def test_create_table_table_options(make_mocked_engine_adapter: t.Callable, mock
 def test_comments(make_mocked_engine_adapter: t.Callable, mocker: MockerFixture):
     adapter = make_mocked_engine_adapter(BigQueryEngineAdapter)
 
+    allowed_table_comment_length = BigQueryEngineAdapter.MAX_TABLE_COMMENT_LENGTH
+    truncated_table_comment = "a" * allowed_table_comment_length
+    long_table_comment = truncated_table_comment + "b"
+
+    allowed_column_comment_length = BigQueryEngineAdapter.MAX_COLUMN_COMMENT_LENGTH
+    truncated_column_comment = "c" * allowed_column_comment_length
+    long_column_comment = truncated_column_comment + "d"
+
     execute_mock = mocker.patch(
         "sqlmesh.core.engine_adapter.bigquery.BigQueryEngineAdapter.execute"
     )
@@ -594,35 +602,35 @@ def test_comments(make_mocked_engine_adapter: t.Callable, mocker: MockerFixture)
     adapter.create_table(
         "test_table",
         {"a": exp.DataType.build("INT"), "b": exp.DataType.build("INT")},
-        table_description="test description",
-        column_descriptions={"a": "a description"},
+        table_description=long_table_comment,
+        column_descriptions={"a": long_column_comment},
     )
 
     adapter.ctas(
         "test_table",
         parse_one("SELECT a, b FROM source_table"),
         {"a": exp.DataType.build("INT"), "b": exp.DataType.build("INT")},
-        table_description="test description",
-        column_descriptions={"a": "a description"},
+        table_description=long_table_comment,
+        column_descriptions={"a": long_column_comment},
     )
 
     adapter.create_view(
         "test_table",
         parse_one("SELECT a, b FROM source_table"),
-        table_description="test description",
+        table_description=long_table_comment,
     )
 
     adapter._create_table_comment(
         "test_table",
-        "test description",
+        long_table_comment,
     )
 
     sql_calls = _to_sql_calls(execute_mock)
     assert sql_calls == [
-        "CREATE TABLE IF NOT EXISTS `test_table` (`a` INT64 OPTIONS (description='a description'), `b` INT64) OPTIONS (description='test description')",
-        "CREATE TABLE IF NOT EXISTS `test_table` (`a` INT64 OPTIONS (description='a description'), `b` INT64) OPTIONS (description='test description') AS SELECT `a`, `b` FROM `source_table`",
-        "CREATE OR REPLACE VIEW `test_table` OPTIONS (description='test description') AS SELECT `a`, `b` FROM `source_table`",
-        "ALTER TABLE `test_table` SET OPTIONS(description = 'test description')",
+        f"CREATE TABLE IF NOT EXISTS `test_table` (`a` INT64 OPTIONS (description='{truncated_column_comment}'), `b` INT64) OPTIONS (description='{truncated_table_comment}')",
+        f"CREATE TABLE IF NOT EXISTS `test_table` (`a` INT64 OPTIONS (description='{truncated_column_comment}'), `b` INT64) OPTIONS (description='{truncated_table_comment}') AS SELECT `a`, `b` FROM `source_table`",
+        f"CREATE OR REPLACE VIEW `test_table` OPTIONS (description='{truncated_table_comment}') AS SELECT `a`, `b` FROM `source_table`",
+        f"ALTER TABLE `test_table` SET OPTIONS(description = '{truncated_table_comment}')",
     ]
 
 
