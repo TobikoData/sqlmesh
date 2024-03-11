@@ -1214,7 +1214,7 @@ def test_deploy_comment_pre_categorized(
     assert pr_checks_runs[2]["output"]["title"] == "PR Virtual Data Environment: hello_world_2"
     assert (
         pr_checks_runs[2]["output"]["summary"]
-        == """<table><thead><tr><th colspan="3">PR Environment Summary</th></tr><tr><th>Model</th><th>Change Type</th><th>Dates Loaded</th></tr></thead><tbody><tr><td>sushi.waiter_revenue_by_day</td><td>Non-breaking</td><td>2022-12-31 - 2022-12-31</td></tr></tbody></table>"""
+        == """<table><thead><tr><th colspan="3">PR Environment Summary</th></tr><tr><th>Model</th><th>Change Type</th><th>Dates Loaded</th></tr></thead><tbody><tr><td>sushi.waiter_revenue_by_day</td><td>Non-breaking</td><td>2022-12-25 - 2022-12-31</td></tr></tbody></table>"""
     )
 
     assert "SQLMesh - Prod Plan Preview" in controller._check_run_mapping
@@ -1251,13 +1251,6 @@ Directly Modified: sushi.waiter_revenue_by_day (Non-breaking)
     └── sushi.top_waiters (Indirect Non-breaking)
 
 ```
-
-**Models needing backfill (missing dates):**
-
-
-* `sushi.waiter_revenue_by_day`: 2022-12-25 - 2022-12-30
-
-
 
 """
     assert prod_plan_preview_checks_runs[2]["output"]["title"] == "Prod Plan Preview"
