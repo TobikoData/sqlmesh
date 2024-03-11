@@ -128,11 +128,11 @@ class RedshiftEngineAdapter(
             explain_statement = statement.copy()
             for select in explain_statement.find_all(exp.Select):
                 if select.args.get("from"):
-                    select.args["limit"] = None
-                    select.args["where"] = None
+                    select.set("limit", None)
+                    select.set("where", None)
 
             explain_statement_sql = explain_statement.sql(
-                dialect=self.dialect, identify=True, unsupported_level=ErrorLevel.IGNORE
+                dialect=self.dialect, identify=True, unsupported_level=ErrorLevel.IGNORE, copy=False
             )
             plan = parse_plan(
                 "\n".join(r[0] for r in self.fetchall(f"EXPLAIN VERBOSE {explain_statement_sql}"))
