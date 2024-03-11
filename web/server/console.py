@@ -37,7 +37,7 @@ class ApiConsole(TerminalConsole):
 
     def stop_plan_evaluation(self) -> None:
         if self.plan_apply_stage_tracker:
-            self.stop_plan_tracker(tracker=self.plan_apply_stage_tracker, success=True)
+            self.stop_plan_tracker(self.plan_apply_stage_tracker, True)
 
     def start_creation_progress(
         self,
@@ -210,17 +210,20 @@ class ApiConsole(TerminalConsole):
         success: bool = True,
     ) -> None:
         if isinstance(tracker, models.PlanApplyStageTracker) and self.plan_apply_stage_tracker:
-            self.plan_apply_stage_tracker.stop(success=success)
+            self.stop_plan_tracker_stages(self.plan_apply_stage_tracker, False)
+            self.plan_apply_stage_tracker.stop(success)
             self.log_event_plan_apply()
             self.plan_apply_stage_tracker = None
         elif (
             isinstance(tracker, models.PlanOverviewStageTracker)
             and self.plan_overview_stage_tracker
         ):
-            self.plan_overview_stage_tracker.stop(success=success)
+            self.stop_plan_tracker_stages(self.plan_overview_stage_tracker, False)
+            self.plan_overview_stage_tracker.stop(success)
             self.log_event_plan_overview()
         elif isinstance(tracker, models.PlanCancelStageTracker) and self.plan_cancel_stage_tracker:
-            self.plan_cancel_stage_tracker.stop(success=success)
+            self.stop_plan_tracker_stages(self.plan_cancel_stage_tracker, False)
+            self.plan_cancel_stage_tracker.stop(success)
             self.log_event_plan_cancel()
             self.plan_cancel_stage_tracker = None
 
@@ -289,23 +292,45 @@ class ApiConsole(TerminalConsole):
             data=self.plan_cancel_stage_tracker.dict() if self.plan_cancel_stage_tracker else {},
         )
 
-    def log_exception(self) -> None:
+    def log_exception(self, exception: ApiException) -> None:
         self.log_event(
             event=models.EventName.ERRORS,
-            data=ApiException(
-                message="Tasks failed to run",
-                origin="API -> console -> log_exception",
-            ).to_dict(),
+            data=exception.to_dict(),
         )
 
         if self.plan_overview_stage_tracker:
-            self.stop_plan_tracker(tracker=self.plan_overview_stage_tracker, success=False)
+            self.stop_plan_tracker(self.plan_overview_stage_tracker, False)
 
         if self.plan_apply_stage_tracker:
-            self.stop_plan_tracker(tracker=self.plan_apply_stage_tracker, success=False)
+            self.stop_plan_tracker(self.plan_apply_stage_tracker, False)
 
     def is_cancelling_plan(self) -> bool:
         return bool(self.plan_cancel_stage_tracker and not self.plan_cancel_stage_tracker.meta.done)
+
+    def stop_plan_tracker_stages(
+        self,
+        tracker: t.Optional[
+            t.Union[
+                models.PlanApplyStageTracker,
+                models.PlanCancelStageTracker,
+                models.PlanOverviewStageTracker,
+            ]
+        ],
+        success: bool = True,
+    ) -> None:
+        if not tracker:
+            return
+
+        stages = (
+            [attr for attr in tracker.__fields__ if not attr.startswith("__")] if tracker else []
+        )
+
+        for key in stages:
+            stage = getattr(tracker, key)
+            if isinstance(stage, models.Trackable) and stage.meta and not stage.meta.done:
+                stage.stop(success)
+
+        tracker.stop(success)
 
     def finish_plan_cancellation(self) -> None:
         cancel_tracker = self.plan_cancel_stage_tracker
@@ -332,8 +357,8 @@ class ApiConsole(TerminalConsole):
         is_apply_tracker_completed = all([_is_stage_done(stage) for stage in stages])
 
         if apply_tracker and not apply_tracker.meta.done and is_apply_tracker_completed:
-            self.stop_plan_tracker(tracker=apply_tracker, success=False)
-            self.stop_plan_tracker(tracker=cancel_tracker, success=True)
+            self.stop_plan_tracker(apply_tracker, False)
+            self.stop_plan_tracker(cancel_tracker, True)
 
 
 api_console = ApiConsole()

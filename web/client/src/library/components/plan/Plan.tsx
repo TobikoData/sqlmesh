@@ -50,10 +50,10 @@ function Plan(): JSX.Element {
   function reset(): void {
     setPlanAction(new ModelPlanAction({ value: EnumPlanAction.Run }))
 
-    resetPlanTrackers()
     clearPlanApply()
-
     cleanUp()
+
+    setTimeout(() => resetPlanTrackers(), 500)
   }
 
   function cancel(): void {
@@ -78,7 +78,6 @@ function Plan(): JSX.Element {
   function apply(): void {
     setPlanAction(new ModelPlanAction({ value: EnumPlanAction.Applying }))
 
-    resetPlanTrackers()
     clearPlanApply()
 
     dispatch([{ type: EnumPlanActions.ResetTestsReport }])

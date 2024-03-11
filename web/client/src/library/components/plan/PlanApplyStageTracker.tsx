@@ -1,9 +1,6 @@
 import { Disclosure, Transition } from '@headlessui/react'
-import {
-  MinusCircleIcon,
-  PlusCircleIcon,
-  ExclamationCircleIcon,
-} from '@heroicons/react/24/solid'
+import { MinusCircleIcon, PlusCircleIcon } from '@heroicons/react/24/solid'
+import { ExclamationCircleIcon } from '@heroicons/react/24/outline'
 import { CheckIcon } from '@heroicons/react/20/solid'
 import clsx from 'clsx'
 import { useEffect, useMemo, useRef, useState } from 'react'
@@ -16,6 +13,8 @@ import {
   isNil,
   toDateFormat,
   isFalse,
+  includes,
+  isFalseOrNil,
 } from '../../../utils'
 import { EnumPlanChangeType, usePlan } from './context'
 import { getPlanOverviewDetails } from './help'
@@ -45,11 +44,8 @@ export default function PlanApplyStageTracker(): JSX.Element {
   const planCancel = useStorePlan(s => s.planCancel)
   const planAction = useStorePlan(s => s.planAction)
 
-  const { plan_options } = getPlanOverviewDetails(
-    planApply,
-    planOverview,
-    planCancel,
-  )
+  const { plan_options, hasChanges, hasBackfills, isFailed } =
+    getPlanOverviewDetails(planApply, planOverview, planCancel)
 
   const hasTestsDetails = isNotNil(tests) && Boolean(tests.total)
   const showTestsMessage =
@@ -60,6 +56,11 @@ export default function PlanApplyStageTracker(): JSX.Element {
     isFalse(planAction.isProcessing) &&
     isFalse(planAction.isDone) &&
     isFalse(planCancel.isFinished)
+  const showFailedMessage =
+    isFailed &&
+    [hasFailedTests, hasTestsDetails, hasChanges, hasBackfills].every(
+      isFalseOrNil,
+    )
 
   return (
     <Transition
@@ -71,53 +72,78 @@ export default function PlanApplyStageTracker(): JSX.Element {
       leave="transition ease duration-300 transform"
       leaveFrom="opacity-100 scale-100"
       leaveTo="opacity-0 scale-95"
-      className="my-2"
+      className={clsx('my-2 rounded-xl', isFailed && 'bg-danger-5')}
     >
-      {isTrue(plan_options?.skip_tests) ? (
+      {showFailedMessage ? (
         <Banner
-          className="flex items-center mb-1"
+          className="flex items-center"
           size={EnumSize.sm}
-          hasBackground={false}
+          variant={EnumVariant.Danger}
         >
-          <CheckIcon className="w-4 mr-2" />
-          <Banner.Label className="mr-2 text-sm">Tests Skipped</Banner.Label>
+          <ExclamationCircleIcon className="w-4 mr-2" />
+          <Banner.Label className="mr-2 text-sm">Plan Failed</Banner.Label>
         </Banner>
-      ) : hasTestsDetails ? (
-        <StageTestsFailed
-          isOpen={true}
-          report={tests}
-        />
-      ) : showTestsMessage ? (
-        <StageTestsCompleted report={tests} />
       ) : (
-        <Banner
-          className="flex items-center mb-1"
-          size={EnumSize.sm}
-          hasBackground={false}
-        >
-          <CheckIcon className="w-4 mr-2" />
-          <Banner.Label className="mr-2 text-sm">No Tests</Banner.Label>
-        </Banner>
-      )}
-      {isFalse(hasFailedTests) && (
         <>
-          <StageChanges isOpen={showChangesAndBackfills} />
-          <StageBackfills isOpen={showChangesAndBackfills} />
-          <StageVirtualUpdate />
-          {planApply.shouldShowEvaluation && (
-            <StageEvaluate
-              start={planApply.evaluationStart}
-              end={
-                planApply.isFinished
-                  ? planApply.evaluationEnd ?? planCancel.meta?.end
-                  : undefined
-              }
+          {isFailed && (
+            <Banner
+              className="flex items-center mb-1"
+              size={EnumSize.sm}
+              variant={EnumVariant.Danger}
             >
-              <StageCreation />
-              <StageRestate />
-              <StageBackfill />
-              <StagePromote />
-            </StageEvaluate>
+              <ExclamationCircleIcon className="w-4 mr-2" />
+              <Banner.Label className="mr-2 text-sm">Plan Failed</Banner.Label>
+            </Banner>
+          )}
+          {isTrue(plan_options?.skip_tests) ? (
+            <Banner
+              className="flex items-center mb-1"
+              size={EnumSize.sm}
+              hasBackground={false}
+            >
+              <CheckIcon className="w-4 mr-2" />
+              <Banner.Label className="mr-2 text-sm">
+                Tests Skipped
+              </Banner.Label>
+            </Banner>
+          ) : hasTestsDetails ? (
+            <StageTestsFailed
+              isOpen={true}
+              report={tests}
+            />
+          ) : showTestsMessage ? (
+            <StageTestsCompleted report={tests} />
+          ) : (
+            <Banner
+              className="flex items-center mb-1"
+              size={EnumSize.sm}
+              hasBackground={false}
+            >
+              <CheckIcon className="w-4 mr-2" />
+              <Banner.Label className="mr-2 text-sm">No Tests</Banner.Label>
+            </Banner>
+          )}
+          {isFalse(hasFailedTests) && (
+            <>
+              <StageChanges isOpen={showChangesAndBackfills} />
+              <StageBackfills isOpen={showChangesAndBackfills} />
+              <StageVirtualUpdate />
+              {planApply.shouldShowEvaluation && (
+                <StageEvaluate
+                  start={planApply.evaluationStart}
+                  end={
+                    planApply.isFinished
+                      ? planApply.evaluationEnd ?? planCancel.meta?.end
+                      : undefined
+                  }
+                >
+                  <StageCreation />
+                  <StageRestate />
+                  <StageBackfill />
+                  <StagePromote />
+                </StageEvaluate>
+              )}
+            </>
           )}
         </>
       )}
@@ -136,7 +162,9 @@ function StageChanges({ isOpen = false }: { isOpen?: boolean }): JSX.Element {
     planCancel,
   )
   const tempMeta = stageChanges?.meta ?? meta
-  const showChanges = tempMeta?.status === Status.init || isTrue(hasChanges)
+  const showChanges =
+    includes([Status.init, Status.fail], stageChanges?.meta?.status) ||
+    isTrue(hasChanges)
 
   return showChanges ? (
     <Stage
@@ -288,20 +316,18 @@ function StageEvaluate({
     }, 500)
   }, [])
 
-  return (
+  return isNil(start) ? (
+    <></>
+  ) : (
     <div
       ref={elStageEvaluate}
       className="pt-4 pb-2 text-xs"
     >
-      {isNotNil(start) && (
-        <>
-          <span className="text-neutral-500 block px-4 mb-1">
-            Evaluation started at{' '}
-            {toDateFormat(new Date(start), 'yyyy-mm-dd hh-mm-ss')}
-          </span>
-          <Divider />
-        </>
-      )}
+      <span className="text-neutral-500 block px-4 mb-1">
+        Evaluation started at{' '}
+        {toDateFormat(new Date(start), 'yyyy-mm-dd hh-mm-ss')}
+      </span>
+      <Divider />
       <div className="py-2">{children}</div>
       {isNotNil(end) && (
         <>
@@ -319,9 +345,9 @@ function StageEvaluate({
 function StageCreation({ isOpen }: { isOpen?: boolean }): JSX.Element {
   const planApply = useStorePlan(s => s.planApply)
 
-  if (isNil(planApply.stageCreation)) return <></>
-
-  return (
+  return isNil(planApply.stageCreation) ? (
+    <></>
+  ) : (
     <Stage
       meta={planApply.stageCreation?.meta}
       states={[
@@ -418,9 +444,9 @@ function StageBackfill(): JSX.Element {
     [backfills, planApply.tasks],
   )
 
-  if (isNil(stageBackfill) || isNil(environment)) return <></>
+  const showStageBackfill = isNotNil(stageBackfill) && isNotNil(environment)
 
-  return (
+  return showStageBackfill ? (
     <Stage
       meta={stageBackfill.meta}
       states={['Backfilled', 'Backfilling Failed', 'Backfilling Intervals...']}
@@ -458,6 +484,8 @@ function StageBackfill(): JSX.Element {
         )}
       </TasksOverview>
     </Stage>
+  ) : (
+    <></>
   )
 }
 
@@ -515,12 +543,19 @@ function StageVirtualUpdate(): JSX.Element {
 
   const planApply = useStorePlan(s => s.planApply)
   const planOverview = useStorePlan(s => s.planOverview)
+  const planCancel = useStorePlan(s => s.planCancel)
+
+  const { isFailed } = getPlanOverviewDetails(
+    planApply,
+    planOverview,
+    planCancel,
+  )
 
   const isVirtualUpdate =
     planApply.overview?.isVirtualUpdate ?? planOverview.isVirtualUpdate
   const isUpdated = isTrue(planApply.isFinished)
 
-  return isVirtualUpdate ? (
+  return isVirtualUpdate && isFalse(isFailed) ? (
     <Stage
       meta={{
         status: Status.success,
@@ -647,7 +682,8 @@ function Stage({
   const planOverview = useStorePlan(s => s.planOverview)
   const planApply = useStorePlan(s => s.planApply)
 
-  const hasChildren = isNotNil(panel) || isNotNil(children)
+  const hasChildren =
+    (meta?.status !== Status.fail && isNotNil(panel)) || isNotNil(children)
 
   const [open, setOpen] = useState(isOpen)
 
@@ -665,19 +701,21 @@ function Stage({
     setOpen(isOpen && hasChildren)
   }, [isOpen, hasChildren])
 
-  const variant =
-    meta?.status === Status.success
-      ? EnumVariant.Success
-      : meta?.status === Status.fail
-      ? EnumVariant.Danger
-      : EnumVariant.Info
+  const isStatusFail = meta?.status === Status.fail
+  const isStatusSuccess = meta?.status === Status.success
+  const isStatusInit = meta?.status === Status.init
+
+  const variant = isStatusSuccess
+    ? EnumVariant.Success
+    : isStatusFail
+    ? EnumVariant.Danger
+    : EnumVariant.Info
   const [titleSuccess, titleFail, titleDefault] = states
-  const text =
-    meta?.status === Status.success
-      ? titleSuccess
-      : meta?.status === Status.fail
-      ? titleFail
-      : titleDefault
+  const text = isStatusSuccess
+    ? titleSuccess
+    : isStatusFail
+    ? titleFail
+    : titleDefault
 
   return (
     <Transition
@@ -710,7 +748,7 @@ function Stage({
           >
             {isNil(trigger) ? (
               <>
-                {meta?.status === Status.init && (
+                {isStatusInit && (
                   <Loading
                     text={text}
                     hasSpinner
@@ -719,9 +757,9 @@ function Stage({
                     className="w-full"
                   />
                 )}
-                {meta?.status !== Status.init && (
+                {isFalse(isStatusInit) && (
                   <div className="flex items-center h-full">
-                    {showDetails ? (
+                    {showDetails && hasChildren ? (
                       <>
                         {open ? (
                           <MinusCircleIcon className="w-4 mr-2" />
