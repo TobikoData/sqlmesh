@@ -90,10 +90,8 @@ setup(
             # https://github.com/dpgaspar/Flask-AppBuilder/blob/master/requirements.txt#L25
             "pydantic<2.6.0",
             "PyGithub",
-            # 8.0.0 broke compatability with lazy-fixture
-            "pytest<8.0.0",
+            "pytest",
             "pytest-asyncio<0.23.0",
-            "pytest-lazy-fixture",
             "pytest-mock",
             "pytest-xdist",
             "pyspark==3.4.0",

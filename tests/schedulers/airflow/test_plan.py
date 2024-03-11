@@ -3,8 +3,8 @@ from datetime import datetime
 from unittest import mock
 
 import pytest
+from _pytest.fixtures import FixtureRequest
 from _pytest.monkeypatch import MonkeyPatch
-from pytest_lazyfixture import lazy_fixture
 from pytest_mock.plugin import MockerFixture
 from sqlglot import parse_one
 
@@ -62,12 +62,12 @@ def depends_on_past_snapshot(make_snapshot, random_name) -> Snapshot:
 
 
 @pytest.mark.parametrize(
-    "the_snapshot, expected_intervals, paused_forward_only",
+    "snapshot_fixture, expected_intervals, paused_forward_only",
     [
-        (lazy_fixture("snapshot"), [(to_datetime("2022-01-01"), to_datetime("2022-01-05"))], False),
-        (lazy_fixture("snapshot"), [(to_datetime("2022-01-01"), to_datetime("2022-01-05"))], True),
+        ("snapshot", [(to_datetime("2022-01-01"), to_datetime("2022-01-05"))], False),
+        ("snapshot", [(to_datetime("2022-01-01"), to_datetime("2022-01-05"))], True),
         (
-            lazy_fixture("depends_on_past_snapshot"),
+            "depends_on_past_snapshot",
             [
                 (to_datetime("2022-01-01"), to_datetime("2022-01-02")),
                 (to_datetime("2022-01-02"), to_datetime("2022-01-03")),
@@ -80,11 +80,13 @@ def depends_on_past_snapshot(make_snapshot, random_name) -> Snapshot:
 )
 def test_create_plan_dag_spec(
     mocker: MockerFixture,
-    the_snapshot: Snapshot,
+    snapshot_fixture: str,
     expected_intervals: t.List[t.Tuple[datetime, datetime]],
     paused_forward_only: bool,
     random_name,
+    request: FixtureRequest,
 ):
+    the_snapshot = request.getfixturevalue(snapshot_fixture)
     the_snapshot.categorize_as(
         SnapshotChangeCategory.FORWARD_ONLY
         if paused_forward_only
@@ -188,14 +190,14 @@ def test_create_plan_dag_spec(
 
 
 @pytest.mark.parametrize(
-    "the_snapshot, expected_intervals",
+    "snapshot_fixture, expected_intervals",
     [
         (
-            lazy_fixture("snapshot"),
+            "snapshot",
             [(to_datetime("2022-01-02"), to_datetime("2022-01-04"))],
         ),
         (
-            lazy_fixture("depends_on_past_snapshot"),
+            "depends_on_past_snapshot",
             [
                 (to_datetime("2022-01-02"), to_datetime("2022-01-03")),
                 (to_datetime("2022-01-03"), to_datetime("2022-01-04")),
@@ -206,10 +208,12 @@ def test_create_plan_dag_spec(
 def test_restatement(
     mocker: MockerFixture,
     monkeypatch: MonkeyPatch,
-    the_snapshot: Snapshot,
+    snapshot_fixture: str,
     expected_intervals: t.List[t.Tuple[datetime, datetime]],
     random_name,
+    request: FixtureRequest,
 ):
+    the_snapshot = request.getfixturevalue(snapshot_fixture)
     environment_name = random_name()
     new_environment = Environment(
         name=environment_name,
