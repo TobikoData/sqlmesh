@@ -41,7 +41,7 @@ async def initiate_apply(
         request.app.state.circuit_breaker.clear()
         request.app.state.task = asyncio.create_task(
             run_in_executor(
-                _run_plan_apply,
+                run_plan_apply,
                 context,
                 environment,
                 plan_options,
@@ -187,6 +187,33 @@ async def test(
     )
 
 
+def run_plan_apply(
+    context: Context,
+    environment: t.Optional[str] = None,
+    plan_options: t.Optional[models.PlanOptions] = None,
+    plan_dates: t.Optional[models.PlanDates] = None,
+    categories: t.Optional[t.Dict[str, SnapshotChangeCategory]] = None,
+    circuit_breaker: t.Optional[t.Callable[[], bool]] = None,
+) -> None:
+    try:
+        _run_plan_apply(
+            context,
+            environment,
+            plan_options,
+            plan_dates,
+            categories,
+            circuit_breaker,
+        )
+    except ApiException as e:
+        raise e
+    except Exception as e:
+        raise ApiException(
+            message="Unable to apply a plan",
+            origin="API -> plan -> initiate_apply",
+        ) from e
+    return None
+
+
 def _run_plan_apply(
     context: Context,
     environment: t.Optional[str] = None,
@@ -212,7 +239,7 @@ def _run_plan_apply(
         api_console.stop_plan_tracker(tracker_apply, success=False)
         raise ApiException(
             message=str(e),
-            origin="API -> commands -> apply",
+            origin="API -> commands -> _run_plan_apply",
         )
 
     return None
