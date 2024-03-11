@@ -34,7 +34,7 @@ model_defaults:
     assert config.cicd_bot.merge_method is None
     assert config.cicd_bot.command_namespace is None
     assert config.cicd_bot.auto_categorize_changes == CategorizerConfig.all_off()
-    assert config.cicd_bot.default_pr_start == "1 day ago"
+    assert config.cicd_bot.default_pr_start is None
     assert not config.cicd_bot.enable_deploy_command
     assert config.cicd_bot.skip_pr_backfill
     assert config.cicd_bot.pr_include_unmodified is None
@@ -106,7 +106,7 @@ config = Config(
     assert config.cicd_bot.merge_method is None
     assert config.cicd_bot.command_namespace is None
     assert config.cicd_bot.auto_categorize_changes == CategorizerConfig.all_off()
-    assert config.cicd_bot.default_pr_start == "1 day ago"
+    assert config.cicd_bot.default_pr_start is None
     assert not config.cicd_bot.enable_deploy_command
     assert config.cicd_bot.skip_pr_backfill
     assert config.cicd_bot.pr_include_unmodified is None
