@@ -1,7 +1,7 @@
 import { type MouseEvent } from 'react'
 import useActiveFocus from '~/hooks/useActiveFocus'
 import { EnumSize, EnumVariant } from '~/types/enum'
-import { isFalse } from '~/utils'
+import { isFalse, isNil } from '~/utils'
 import { Button } from '../button/Button'
 import { EnumPlanAction, ModelPlanAction } from '@models/plan-action'
 import { useStorePlan } from '@context/plan'
@@ -10,6 +10,7 @@ import { Transition } from '@headlessui/react'
 import { useNavigate } from 'react-router-dom'
 import { SelectEnvironment } from '@components/environmentDetails/SelectEnvironment'
 import { AddEnvironment } from '@components/environmentDetails/AddEnvironment'
+import { usePlan } from './context'
 
 export default function PlanActions({
   run,
@@ -23,6 +24,7 @@ export default function PlanActions({
   reset: () => void
 }): JSX.Element {
   const navigate = useNavigate()
+  const { change_categorization } = usePlan()
 
   const modules = useStoreContext(s => s.modules)
   const environment = useStoreContext(s => s.environment)
@@ -58,15 +60,26 @@ export default function PlanActions({
   function handleApply(e: MouseEvent): void {
     e.stopPropagation()
 
-    if (environment.isProd && isFalse(environment.isInitial)) {
+    const isProd = environment.isProd && isFalse(environment.isInitial)
+    const hasUncategorized = Array.from(change_categorization.values()).some(
+      c => isNil(c.category),
+    )
+
+    if (isProd) {
       addConfirmation({
         headline: 'Applying Plan Directly On Prod Environment!',
-        description: `Are you sure you want to apply your changes directly on prod? Safer choice will be to select or add new environment first.`,
+        tagline: 'Safer choice will be to select or add new environment first.',
+        description:
+          'Are you sure you want to apply your changes directly on prod?',
         yesText: `Yes, Run ${environment.name}`,
         noText: 'No, Cancel',
-        action() {
-          apply()
-        },
+        action: apply,
+        details: hasUncategorized
+          ? [
+              'ATTENTION!',
+              '[Breaking Change] category will be applied to all uncategorized changes',
+            ]
+          : undefined,
         children: (
           <div className="mt-5 pt-4">
             <h4 className="mb-2">{`${
@@ -95,7 +108,20 @@ export default function PlanActions({
         ),
       })
     } else {
-      apply()
+      if (hasUncategorized) {
+        addConfirmation({
+          headline: 'Some changes are missing categorization!',
+          description: 'Are you sure you want to proceed?',
+          details: [
+            '[Breaking Change] category will be applied to all uncategorized changes',
+          ],
+          yesText: 'Yes, Apply',
+          noText: 'No, Cancel',
+          action: apply,
+        })
+      } else {
+        apply()
+      }
     }
   }
 

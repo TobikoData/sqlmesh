@@ -66,7 +66,7 @@ export default function ReportErrors(): JSX.Element {
             leaveFrom="opacity-100 translate-y-0"
             leaveTo="opacity-0 translate-y-1"
           >
-            <Popover.Panel className="absolute top-20 right-2 z-[1000] flex flex-col rounded-md bg-light transform text-danger-700 shadow-2xl w-[90vw] max-h-[80vh]">
+            <Popover.Panel className="absolute top-10 right-2 z-[1000] flex flex-col rounded-md bg-light transform text-danger-700 shadow-2xl w-[90vw] max-h-[80vh]">
               <div className="flex justify-end mx-1 mt-2">
                 <Button
                   size={EnumSize.sm}
@@ -136,7 +136,7 @@ export function DisplayError({
           {isNotNil(error.traceback) && (
             <Disclosure defaultOpen={true}>
               {({ open }) => (
-                <div className="w-full h-full overflow-hidden">
+                <div className="flex flex-col w-full h-full overflow-hidden">
                   <Disclosure.Button className="flex items-center justify-between rounded-lg text-left w-full bg-neutral-10 px-3 my-2">
                     <div className="text-lg font-bold whitespace-nowrap w-full">
                       <h3 className="py-2">Traceback</h3>

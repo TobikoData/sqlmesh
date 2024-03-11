@@ -1,4 +1,3 @@
-import { isNil, isTrue } from '~/utils'
 import { useStorePlan } from '~/context/plan'
 import { useApiPlanRun, useApiPlanApply, useApiCancelPlan } from '~/api'
 import PlanHeader from './PlanHeader'
@@ -26,11 +25,8 @@ function Plan(): JSX.Element {
 
   const setTests = useStoreProject(s => s.setTests)
 
-  const isInitialPlanRun =
-    isNil(environment?.isDefault) || isTrue(environment?.isDefault)
-
-  const planPayload = usePlanPayload({ environment, isInitialPlanRun })
-  const applyPayload = useApplyPayload({ isInitialPlanRun })
+  const planPayload = usePlanPayload()
+  const applyPayload = useApplyPayload()
 
   const { refetch: planRun, cancel: cancelRequestPlanRun } = useApiPlanRun(
     environment.name,
@@ -47,6 +43,7 @@ function Plan(): JSX.Element {
       { type: EnumPlanActions.ResetPlanDates },
       { type: EnumPlanActions.ResetPlanOptions },
       { type: EnumPlanActions.ResetTestsReport },
+      { type: EnumPlanActions.ResetCategories },
     ])
   }
 

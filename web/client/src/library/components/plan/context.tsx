@@ -18,6 +18,7 @@ import {
 export const EnumPlanActions = {
   ResetPlanOptions: 'reset-plan-options',
   ResetPlanDates: 'reset-plan-dates',
+  ResetCategories: 'reset-categories',
   PlanOptions: 'plan-options',
   Dates: 'dates',
   DateStart: 'date-start',
@@ -173,6 +174,15 @@ function reducer(
   { type, ...newState }: PlanAction,
 ): PlanDetails {
   switch (type) {
+    case EnumPlanActions.ResetCategories: {
+      return Object.assign<
+        Record<string, unknown>,
+        PlanDetails,
+        { change_categorization: Map<string, ChangeCategory> }
+      >({}, plan, {
+        change_categorization: new Map(),
+      })
+    }
     case EnumPlanActions.ResetPlanDates: {
       return Object.assign<
         Record<string, unknown>,

@@ -121,7 +121,7 @@ export function SelectEnvironment({
             leaveFrom="opacity-100"
             leaveTo="opacity-0"
           >
-            <div className="!mx-0 absolute top-10 right-0 min-w-[20rem] max-w-[100%] overflow-hidden shadow-2xl bg-theme border-0 border-neutral-100 dark:border-neutral-800 rounded-md flex flex-col z-10">
+            <div className="!mx-0 absolute top-10 right-0 min-w-[16rem] max-w-[100%] overflow-hidden shadow-2xl bg-theme border-0 border-neutral-100 dark:border-neutral-800 rounded-md flex flex-col z-50">
               <Menu.Items className="mx-0 overflow-auto max-h-80 hover:scrollbar scrollbar--vertical">
                 {Array.from(environments).map(env => (
                   <Menu.Item

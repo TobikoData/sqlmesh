@@ -16,7 +16,6 @@ import {
   isNil,
   toDateFormat,
   isFalse,
-  isArrayEmpty,
 } from '../../../utils'
 import { EnumPlanChangeType, usePlan } from './context'
 import { getPlanOverviewDetails } from './help'
@@ -37,7 +36,6 @@ import {
 } from '@api/client'
 import { type PlanTrackerMeta } from '@models/tracker-plan'
 import { type Tests, useStoreProject } from '@context/project'
-import { type ModelSQLMeshChangeDisplay } from '@models/sqlmesh-change-display'
 
 export default function PlanApplyStageTracker(): JSX.Element {
   const tests = useStoreProject(s => s.tests)
@@ -160,6 +158,8 @@ function StageChanges({ isOpen = false }: { isOpen?: boolean }): JSX.Element {
 }
 
 function StageBackfills({ isOpen = false }: { isOpen?: boolean }): JSX.Element {
+  const { change_categorization } = usePlan()
+
   const planApply = useStorePlan(s => s.planApply)
   const planOverview = useStorePlan(s => s.planOverview)
   const planCancel = useStorePlan(s => s.planCancel)
@@ -167,7 +167,40 @@ function StageBackfills({ isOpen = false }: { isOpen?: boolean }): JSX.Element {
   const { meta, stageBackfills, backfills, hasBackfills } =
     getPlanOverviewDetails(planApply, planOverview, planCancel)
   const tempMeta = stageBackfills?.meta ?? meta
-  const showBackfills = tempMeta?.status === Status.init || isTrue(hasBackfills)
+
+  const categories = useMemo(
+    () =>
+      Array.from(change_categorization.values()).reduce(
+        (acc, { category, change }) => {
+          if (category?.value !== SnapshotChangeCategory.NUMBER_3) {
+            acc.add(change.name)
+          }
+
+          if (
+            isNil(category) ||
+            category.value === SnapshotChangeCategory.NUMBER_1
+          ) {
+            change.indirect?.forEach(c => acc.add(c.name))
+          }
+
+          return acc
+        },
+        new Set<string>(),
+      ),
+    [change_categorization],
+  )
+
+  const changes = useMemo(
+    () =>
+      change_categorization.size > 0
+        ? backfills.filter(backfill => categories.has(backfill.name))
+        : backfills,
+    [backfills, categories],
+  )
+
+  const showBackfills =
+    (tempMeta?.status === Status.init || isTrue(hasBackfills)) &&
+    (change_categorization.size > 0 ? changes.length > 0 : true)
 
   return showBackfills ? (
     <Stage
@@ -176,12 +209,12 @@ function StageBackfills({ isOpen = false }: { isOpen?: boolean }): JSX.Element {
       isOpen={isOpen && isTrue(hasBackfills)}
       panel={
         <PlanChangePreview
-          headline={`Models ${backfills.length}`}
+          headline={`Models ${changes.length}`}
           type={EnumPlanChangeType.Default}
         >
           <PlanChangePreview.Default
             type={EnumPlanChangeType.Default}
-            changes={backfills}
+            changes={changes}
           />
         </PlanChangePreview>
       }
@@ -356,72 +389,33 @@ function StageRestate(): JSX.Element {
 function StageBackfill(): JSX.Element {
   const planApply = useStorePlan(s => s.planApply)
   const planAction = useStorePlan(s => s.planAction)
+  const planOverview = useStorePlan(s => s.planOverview)
+  const planCancel = useStorePlan(s => s.planCancel)
 
   const environment = planApply.environment
   const stageBackfill = planApply.stageBackfill
 
-  const { change_categorization } = usePlan()
-
-  const categories = useMemo(
-    () =>
-      Array.from(change_categorization.values()).reduce<
-        Record<string, boolean[]>
-      >((acc, { category, change }) => {
-        change.indirect?.forEach(c => {
-          if (isNil(acc[c.name])) {
-            acc[c.name] = []
-          }
-
-          acc[c.name]?.push(category?.value !== SnapshotChangeCategory.NUMBER_1)
-        })
-
-        if (category?.value === SnapshotChangeCategory.NUMBER_3) {
-          acc[change.name] = [true]
-        }
-
-        return acc
-      }, {}),
-    [change_categorization],
+  const { backfills } = getPlanOverviewDetails(
+    planApply,
+    planOverview,
+    planCancel,
   )
 
   const tasks = useMemo(
     () =>
-      isArrayEmpty(planApply.backfills)
-        ? Object.entries(planApply.tasks).reduce(
-            (acc: Record<string, ModelSQLMeshChangeDisplay>, [name, task]) => {
-              const choices = categories[name]
-              const shouldExclude = isNil(choices)
-                ? false
-                : choices.every(Boolean)
+      Object.values(planApply.tasks).reduce<typeof planApply.tasks>(
+        (acc, task) => {
+          const backfill = backfills.find(b => b.name === task.name)
 
-              if (shouldExclude) return acc
+          task.interval = backfill?.interval ?? []
 
-              acc[name] = task
+          acc[task.name] = task
 
-              return acc
-            },
-            {},
-          )
-        : planApply.backfills.reduce(
-            (acc: Record<string, ModelSQLMeshChangeDisplay>, model) => {
-              const taskBackfill = planApply.tasks[model.name] ?? model
-
-              taskBackfill.interval = model.interval ?? []
-
-              const choices = categories[model.name]
-              const shouldExclude = isNil(choices)
-                ? false
-                : choices.every(Boolean)
-
-              if (shouldExclude) return acc
-
-              acc[model.name] = taskBackfill
-
-              return acc
-            },
-            {},
-          ),
-    [planApply.backfills, planApply.tasks, categories],
+          return acc
+        },
+        {},
+      ),
+    [backfills, planApply.tasks],
   )
 
   if (isNil(stageBackfill) || isNil(environment)) return <></>

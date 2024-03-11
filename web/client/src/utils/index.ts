@@ -30,7 +30,7 @@ export function isStringEmptyOrNil(
   return isNil(value) || value === ''
 }
 
-export function isStringNotEmpty(value: unknown): boolean {
+export function isStringNotEmpty(value: unknown): value is string {
   return isString(value) && value.trim() !== ''
 }
 

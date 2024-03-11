@@ -8,6 +8,7 @@ from starlette.status import HTTP_204_NO_CONTENT
 
 from sqlmesh.core.context import Context
 from sqlmesh.core.plan import Plan, PlanBuilder
+from sqlmesh.core.snapshot.definition import SnapshotChangeCategory
 from sqlmesh.utils.date import make_inclusive, to_ds
 from web.server import models
 from web.server.console import api_console
@@ -26,17 +27,14 @@ async def initiate_plan(
     environment: t.Optional[str] = Body(None),
     plan_dates: t.Optional[models.PlanDates] = None,
     plan_options: t.Optional[models.PlanOptions] = None,
+    categories: t.Optional[t.Dict[str, SnapshotChangeCategory]] = None,
 ) -> t.Optional[models.PlanOverviewStageTracker]:
     """Get a plan for an environment."""
     if not hasattr(request.app.state, "task") or request.app.state.task.done():
         plan_options = plan_options or models.PlanOptions()
         request.app.state.task = asyncio.create_task(
             run_in_executor(
-                get_plan_builder,
-                context,
-                plan_options,
-                environment,
-                plan_dates,
+                get_plan_builder, context, plan_options, environment, plan_dates, categories
             )
         )
     else:
@@ -81,6 +79,7 @@ def get_plan_builder(
     plan_options: models.PlanOptions,
     environment: t.Optional[str] = None,
     plan_dates: t.Optional[models.PlanDates] = None,
+    categories: t.Optional[t.Dict[str, SnapshotChangeCategory]] = None,
 ) -> PlanBuilder:
     tracker = models.PlanOverviewStageTracker(environment=environment, plan_options=plan_options)
     api_console.start_plan_tracker(tracker)
@@ -103,6 +102,11 @@ def get_plan_builder(
         plan = plan_builder.build()
         tracker.start = plan.start
         tracker.end = plan.end
+        if categories:
+            for new, _ in plan.context_diff.modified_snapshots.values():
+                if plan.is_new_snapshot(new) and new.name in categories:
+                    plan_builder.set_choice(new, categories[new.name])
+            plan = plan_builder.build()
         tracker_stage_validate.stop(success=True)
         api_console.log_event_plan_overview()
     except Exception:

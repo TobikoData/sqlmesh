@@ -100,12 +100,12 @@ export default function ModelNode({
     [setSelectedNodes, highlightedNodeModels],
   )
 
-  const splat = highlightedNodes?.['*']
+  const splat = highlightedNodes['*']
   const hasSelectedColumns = columns.some(({ name }) =>
     connections.get(toID(id, name)),
   )
   const hasHighlightedNodes = Object.keys(highlightedNodes).length > 0
-  const highlighted = Object.keys(highlightedNodes ?? {}).find(key =>
+  const highlighted = Object.keys(highlightedNodes).find(key =>
     highlightedNodes[key]!.includes(id),
   )
   const isMainNode = mainNode === id
@@ -197,7 +197,7 @@ export default function ModelNode({
             ? undefined
             : handleSelect
         }
-        count={columns.length}
+        count={hasHighlightedNodes ? undefined : columns.length}
       />
       {showColumns && (
         <ModelColumns
