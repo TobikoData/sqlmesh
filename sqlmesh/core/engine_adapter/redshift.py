@@ -125,10 +125,18 @@ class RedshiftEngineAdapter(
             # is applied to a ctas statement, VARCHAR types default to 1 in some instances.
             # this checks the explain plain from redshift and tries to detect when these optimizer
             # bugs occur and force a cast
-            sql = statement.sql(
-                dialect=self.dialect, identify=True, unsupported_level=ErrorLevel.IGNORE
+            explain_statement = statement.copy()
+            for select in explain_statement.find_all(exp.Select):
+                if select.args.get("from"):
+                    select.set("limit", None)
+                    select.set("where", None)
+
+            explain_statement_sql = explain_statement.sql(
+                dialect=self.dialect, identify=True, unsupported_level=ErrorLevel.IGNORE, copy=False
             )
-            plan = parse_plan("\n".join(r[0] for r in self.fetchall(f"EXPLAIN VERBOSE {sql}")))
+            plan = parse_plan(
+                "\n".join(r[0] for r in self.fetchall(f"EXPLAIN VERBOSE {explain_statement_sql}"))
+            )
 
             if plan:
                 select = exp.Select().from_(statement.expression.subquery("_subquery"))
@@ -149,7 +157,9 @@ class RedshiftEngineAdapter(
                             )
                             raise SQLMeshError(f"Missing column name for table '{table_name_str}'")
                         # https://github.com/postgres/postgres/blob/master/src/include/catalog/pg_type.dat
-                        if resdom["restype"] == "1043":
+                        restype = resdom["restype"]
+                        data_type: t.Optional[str] = None
+                        if restype == "1043":
                             size = (
                                 int(resdom["restypmod"]) - 4
                                 if resdom["restypmod"] != "- 1"
@@ -157,10 +167,15 @@ class RedshiftEngineAdapter(
                             )
                             # Cast NULL instead of the original projection to trick the planner into assigning a
                             # correct type to the column.
+                            data_type = f"VARCHAR({size})"
+                        else:
+                            data_type = REDSHIFT_PLAN_TYPE_MAPPINGS.get(restype)
+
+                        if data_type:
                             select.select(
                                 exp.cast(
                                     exp.null(),
-                                    f"VARCHAR({size})",
+                                    data_type,
                                     dialect=self.dialect,
                                 ).as_(resname),
                                 copy=False,
@@ -359,7 +374,25 @@ def parse_plan(plan: str) -> t.Optional[t.Dict]:
     while curr():
         nested = parse_nested()
 
-        if nested and nested.get("name") == "RESULT":
+        if nested and nested.get("name") in ("RESULT", "SEQSCAN"):
             return nested
         advance()
     return None
+
+
+# https://github.com/postgres/postgres/blob/master/src/include/catalog/pg_type.dat
+REDSHIFT_PLAN_TYPE_MAPPINGS = {
+    "16": "BOOL",
+    "18": "CHAR",
+    "21": "SMALLINT",
+    "23": "INT",
+    "20": "BIGINT",
+    "1700": "NUMERIC",
+    "700": "FLOAT",
+    "701": "DOUBLE",
+    "1114": "TIMESTAMP",
+    "1184": "TIMESTAMPTZ",
+    "1083": "TIME",
+    "1266": "TIMETZ",
+    "1082": "DATE",
+}
