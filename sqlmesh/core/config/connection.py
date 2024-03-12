@@ -123,10 +123,6 @@ class BaseDuckDBConnectionConfig(ConnectionConfig):
     register_comments: bool = True
 
     @property
-    def _static_connection_kwargs(self) -> t.Dict[str, t.Any]:
-        return {"config": self.connector_config} if self.connector_config else {}
-
-    @property
     def _engine_adapter(self) -> t.Type[EngineAdapter]:
         return engine_adapter.DuckDBEngineAdapter
 
@@ -149,6 +145,12 @@ class BaseDuckDBConnectionConfig(ConnectionConfig):
                     cursor.execute(f"LOAD {extension}")
                 except Exception as e:
                     raise ConfigError(f"Failed to load extension {extension}: {e}")
+
+            for field, setting in self.connector_config.items():
+                try:
+                    cursor.execute(f"SET {field} = '{setting}'")
+                except Exception as e:
+                    raise ConfigError(f"Failed to set connector config {field} to {setting}: {e}")
 
             for i, (alias, path) in enumerate((getattr(self, "catalogs", None) or {}).items()):
                 # we parse_identifier and generate to ensure that `alias` has exactly one set of quotes
