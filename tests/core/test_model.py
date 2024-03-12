@@ -1767,6 +1767,30 @@ def test_model_ctas_query():
         == 'SELECT 1 AS "a" FROM "b" AS "b" WHERE FALSE LIMIT 0'
     )
 
+    expressions = d.parse(
+        """
+        MODEL (name `a-b-c.table`, kind FULL, dialect bigquery);
+        SELECT 1 AS a FROM t UNION ALL SELECT 2 AS a FROM t UNION ALL SELECT 3 AS a FROM t UNION ALL SELECT 4 AS a FROM t
+    """
+    )
+
+    assert (
+        load_sql_based_model(expressions, dialect="bigquery").ctas_query().sql()
+        == 'SELECT 1 AS "a" FROM "t" AS "t" WHERE FALSE UNION ALL SELECT 2 AS "a" FROM "t" AS "t" WHERE FALSE UNION ALL SELECT 3 AS "a" FROM "t" AS "t" WHERE FALSE UNION ALL SELECT 4 AS "a" FROM "t" AS "t" WHERE FALSE LIMIT 0'
+    )
+
+    expressions = d.parse(
+        """
+        MODEL (name `a-b-c.table`, kind FULL, dialect bigquery);
+        SELECT 1 AS a FROM t UNION ALL SELECT 2 AS a FROM t
+    """
+    )
+
+    assert (
+        load_sql_based_model(expressions, dialect="bigquery").ctas_query().sql()
+        == 'SELECT 1 AS "a" FROM "t" AS "t" WHERE FALSE UNION ALL SELECT 2 AS "a" FROM "t" AS "t" WHERE FALSE LIMIT 0'
+    )
+
 
 def test_is_breaking_change():
     model = create_external_model("a", columns={"a": "int", "limit": "int"})
