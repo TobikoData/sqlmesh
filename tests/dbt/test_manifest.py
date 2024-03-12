@@ -13,6 +13,7 @@ from sqlmesh.utils.jinja import MacroReference
 pytestmark = pytest.mark.dbt
 
 
+@pytest.mark.xdist_group("dbt_manifest")
 def test_manifest_helper(caplog):
     project_path = Path("tests/fixtures/dbt/sushi_test")
     profile = Profile.load(DbtContext(project_path))
@@ -91,6 +92,7 @@ def test_manifest_helper(caplog):
     assert helper.sources()["streaming.order_items"].schema_ == "raw"
 
 
+@pytest.mark.xdist_group("dbt_manifest")
 def test_tests_referencing_disabled_models():
     project_path = Path("tests/fixtures/dbt/sushi_test")
     profile = Profile.load(DbtContext(project_path))
