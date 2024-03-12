@@ -1,14 +1,21 @@
+import typing as t
 from datetime import date, datetime
 
 import pytest
 from freezegun import freeze_time
+from sqlglot import exp
 
 from sqlmesh.utils.date import (
     UTC,
+    TimeLike,
+    date_dict,
     is_catagorical_relative_expression,
     make_inclusive,
     to_datetime,
+    to_time_column,
     to_timestamp,
+    to_ts,
+    to_tstz,
 )
 
 
@@ -61,25 +68,25 @@ def test_to_timestamp() -> None:
 @pytest.mark.parametrize(
     "start_in, end_in, start_out, end_out",
     [
-        ("2020-01-01", "2020-01-01", "2020-01-01", "2020-01-01 23:59:59.999000"),
-        ("2020-01-01", date(2020, 1, 1), "2020-01-01", "2020-01-01 23:59:59.999000"),
+        ("2020-01-01", "2020-01-01", "2020-01-01", "2020-01-01 23:59:59.999999"),
+        ("2020-01-01", date(2020, 1, 1), "2020-01-01", "2020-01-01 23:59:59.999999"),
         (
             date(2020, 1, 1),
             date(2020, 1, 1),
             "2020-01-01",
-            "2020-01-01 23:59:59.999000",
+            "2020-01-01 23:59:59.999999",
         ),
         (
             "2020-01-01",
             "2020-01-01 12:00:00",
             "2020-01-01",
-            "2020-01-01 11:59:59.99900",
+            "2020-01-01 11:59:59.999999",
         ),
         (
             "2020-01-01",
             to_datetime("2020-01-02"),
             "2020-01-01",
-            "2020-01-01 23:59:59.999000",
+            "2020-01-01 23:59:59.999999",
         ),
     ],
 )
@@ -114,3 +121,101 @@ def test_make_inclusive(start_in, end_in, start_out, end_out) -> None:
 )
 def test_is_catagorical_relative_expression(expression, result):
     assert is_catagorical_relative_expression(expression) == result
+
+
+def test_to_ts():
+    assert to_ts(datetime(2020, 1, 1).replace(tzinfo=UTC)) == "2020-01-01 00:00:00"
+    assert to_ts(datetime(2020, 1, 1).replace(tzinfo=None)) == "2020-01-01 00:00:00"
+
+
+def test_to_tstz():
+    assert to_tstz(datetime(2020, 1, 1).replace(tzinfo=UTC)) == "2020-01-01 00:00:00+00:00"
+    assert to_tstz(datetime(2020, 1, 1).replace(tzinfo=None)) == "2020-01-01 00:00:00+00:00"
+
+
+@pytest.mark.parametrize(
+    "time_column, time_column_type, time_column_format, result",
+    [
+        (
+            exp.null(),
+            exp.DataType.build("TIMESTAMP"),
+            None,
+            "CAST(NULL AS TIMESTAMP)",
+        ),
+        (
+            "2020-01-01 00:00:00+00:00",
+            exp.DataType.build("DATE"),
+            None,
+            "CAST('2020-01-01' AS DATE)",
+        ),
+        (
+            "2020-01-01 00:00:00+00:00",
+            exp.DataType.build("TIMESTAMPTZ"),
+            None,
+            "CAST('2020-01-01 00:00:00+00:00' AS TIMESTAMPTZ)",
+        ),
+        (
+            "2020-01-01 00:00:00+00:00",
+            exp.DataType.build("TIMESTAMP"),
+            None,
+            "CAST('2020-01-01 00:00:00' AS TIMESTAMP)",
+        ),
+        (
+            "2020-01-01 00:00:00+00:00",
+            exp.DataType.build("TEXT"),
+            "%Y-%m-%dT%H:%M:%S%z",
+            "'2020-01-01T00:00:00+0000'",
+        ),
+        (
+            "2020-01-01 00:00:00+00:00",
+            exp.DataType.build("INT"),
+            "%Y%m%d",
+            "20200101",
+        ),
+    ],
+)
+def test_to_time_column(
+    time_column: t.Union[TimeLike, exp.Null],
+    time_column_type: exp.DataType,
+    time_column_format: t.Optional[str],
+    result: str,
+):
+    assert to_time_column(time_column, time_column_type, time_column_format).sql() == result
+
+
+def test_date_dict():
+    resp = date_dict("2020-01-02 01:00:00", "2020-01-01 00:00:00", "2020-01-02 00:00:00")
+    assert resp == {
+        "latest_dt": datetime(2020, 1, 2, 1, 0, 0, tzinfo=UTC),
+        "execution_dt": datetime(2020, 1, 2, 1, 0, 0, tzinfo=UTC),
+        "start_dt": datetime(2020, 1, 1, 0, 0, 0, tzinfo=UTC),
+        "end_dt": datetime(2020, 1, 2, 0, 0, 0, tzinfo=UTC),
+        "latest_date": date(2020, 1, 2),
+        "execution_date": date(2020, 1, 2),
+        "start_date": date(2020, 1, 1),
+        "end_date": date(2020, 1, 2),
+        "latest_ds": "2020-01-02",
+        "execution_ds": "2020-01-02",
+        "start_ds": "2020-01-01",
+        "end_ds": "2020-01-02",
+        "latest_ts": "2020-01-02 01:00:00",
+        "execution_ts": "2020-01-02 01:00:00",
+        "start_ts": "2020-01-01 00:00:00",
+        "end_ts": "2020-01-02 00:00:00",
+        "latest_tstz": "2020-01-02 01:00:00+00:00",
+        "execution_tstz": "2020-01-02 01:00:00+00:00",
+        "start_tstz": "2020-01-01 00:00:00+00:00",
+        "end_tstz": "2020-01-02 00:00:00+00:00",
+        "latest_epoch": 1577926800.0,
+        "execution_epoch": 1577926800.0,
+        "start_epoch": 1577836800.0,
+        "end_epoch": 1577923200.0,
+        "latest_millis": 1577926800000,
+        "execution_millis": 1577926800000,
+        "start_millis": 1577836800000,
+        "end_millis": 1577923200000,
+        "latest_hour": 1,
+        "execution_hour": 1,
+        "start_hour": 0,
+        "end_hour": 0,
+    }

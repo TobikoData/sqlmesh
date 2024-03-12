@@ -6,6 +6,7 @@ import typing as t
 import zlib
 
 from pydantic import Field
+from sqlglot import exp
 from sqlglot.helper import first
 from sqlglot.optimizer.normalize_identifiers import normalize_identifiers
 
@@ -13,16 +14,20 @@ from sqlmesh.cicd.config import CICDBotConfig
 from sqlmesh.core import constants as c
 from sqlmesh.core.config import EnvironmentSuffixTarget
 from sqlmesh.core.config.base import BaseConfig, UpdateStrategy
-from sqlmesh.core.config.categorizer import CategorizerConfig
 from sqlmesh.core.config.connection import (
     ConnectionConfig,
     DuckDBConnectionConfig,
+    SerializableConnectionConfig,
     connection_config_validator,
 )
+from sqlmesh.core.config.feature_flag import FeatureFlag
+from sqlmesh.core.config.format import FormatConfig
 from sqlmesh.core.config.gateway import GatewayConfig
 from sqlmesh.core.config.model import ModelDefaultsConfig
+from sqlmesh.core.config.plan import PlanConfig
 from sqlmesh.core.config.run import RunConfig
 from sqlmesh.core.config.scheduler import BuiltInSchedulerConfig, SchedulerConfig
+from sqlmesh.core.config.ui import UIConfig
 from sqlmesh.core.loader import Loader, SqlMeshLoader
 from sqlmesh.core.notification_target import NotificationTarget
 from sqlmesh.core.user import User
@@ -50,8 +55,6 @@ class Config(BaseConfig):
         ignore_patterns: Files that match glob patterns specified in this list are ignored when scanning the project folder.
         time_column_format: The default format to use for all model time columns. Defaults to %Y-%m-%d.
             This time format uses python format codes. https://docs.python.org/3/library/datetime.html#strftime-and-strptime-format-codes.
-        auto_categorize_changes: Indicates whether SQLMesh should attempt to automatically categorize model changes (breaking / non-breaking)
-            during plan creation.
         users: A list of users that can be used for approvals/notifications.
         username: Name of a single user who should receive approvals/notification, instead of all users in the `users` list.
         pinned_environments: A list of development environment names that should not be deleted by the janitor task.
@@ -59,16 +62,18 @@ class Config(BaseConfig):
         loader_kwargs: Key-value arguments to pass to the loader instance.
         env_vars: A dictionary of environmental variable names and values.
         model_defaults: Default values for model definitions.
-        include_unmodified: Indicates whether to include unmodified models in the target development environment.
         physical_schema_override: A mapping from model schema names to names of schemas in which physical tables for corresponding models will be placed.
         environment_suffix_target: Indicates whether to append the environment name to the schema or table name.
         default_target_environment: The name of the environment that will be the default target for the `sqlmesh plan` and `sqlmesh run` commands.
         log_limit: The default number of logs to keep.
+        format: The formatting options for SQL code.
+        ui: The UI configuration for SQLMesh.
+        feature_flags: Feature flags to enable/disable certain features.
     """
 
     gateways: t.Dict[str, GatewayConfig] = {"": GatewayConfig()}
-    default_connection: ConnectionConfig = DuckDBConnectionConfig()
-    default_test_connection_: t.Optional[ConnectionConfig] = Field(
+    default_connection: SerializableConnectionConfig = DuckDBConnectionConfig()
+    default_test_connection_: t.Optional[SerializableConnectionConfig] = Field(
         default=None, alias="default_test_connection"
     )
     default_scheduler: SchedulerConfig = BuiltInSchedulerConfig()
@@ -79,7 +84,6 @@ class Config(BaseConfig):
     environment_ttl: t.Optional[str] = c.DEFAULT_ENVIRONMENT_TTL
     ignore_patterns: t.List[str] = c.IGNORE_PATTERNS
     time_column_format: str = c.DEFAULT_TIME_COLUMN_FORMAT
-    auto_categorize_changes: CategorizerConfig = CategorizerConfig()
     users: t.List[User] = []
     model_defaults: ModelDefaultsConfig = ModelDefaultsConfig()
     pinned_environments: t.Set[str] = set()
@@ -87,7 +91,6 @@ class Config(BaseConfig):
     loader_kwargs: t.Dict[str, t.Any] = {}
     env_vars: t.Dict[str, str] = {}
     username: str = ""
-    include_unmodified: bool = False
     physical_schema_override: t.Dict[str, str] = {}
     environment_suffix_target: EnvironmentSuffixTarget = Field(
         default=EnvironmentSuffixTarget.default
@@ -97,6 +100,10 @@ class Config(BaseConfig):
     log_limit: int = c.DEFAULT_LOG_LIMIT
     cicd_bot: t.Optional[CICDBotConfig] = None
     run: RunConfig = RunConfig()
+    format: FormatConfig = FormatConfig()
+    ui: UIConfig = UIConfig()
+    feature_flags: FeatureFlag = FeatureFlag()
+    plan: PlanConfig = PlanConfig()
 
     _FIELD_UPDATE_STRATEGY: t.ClassVar[t.Dict[str, UpdateStrategy]] = {
         "gateways": UpdateStrategy.KEY_UPDATE,
@@ -108,7 +115,10 @@ class Config(BaseConfig):
         "pinned_environments": UpdateStrategy.EXTEND,
         "physical_schema_override": UpdateStrategy.KEY_UPDATE,
         "run": UpdateStrategy.NESTED_UPDATE,
+        "format": UpdateStrategy.NESTED_UPDATE,
+        "ui": UpdateStrategy.NESTED_UPDATE,
         "loader_kwargs": UpdateStrategy.KEY_UPDATE,
+        "plan": UpdateStrategy.NESTED_UPDATE,
     }
 
     _connection_config_validator = connection_config_validator
@@ -138,9 +148,15 @@ class Config(BaseConfig):
 
     @model_validator(mode="before")
     @model_validator_v1_args
-    def _normalize_fields(cls, values: t.Dict[str, t.Any]) -> t.Dict[str, t.Any]:
+    def _normalize_and_validate_fields(cls, values: t.Dict[str, t.Any]) -> t.Dict[str, t.Any]:
         if "gateways" not in values and "gateway" in values:
             values["gateways"] = values.pop("gateway")
+
+        for plan_deprecated in ("auto_categorize_changes", "include_unmodified"):
+            if plan_deprecated in values:
+                raise ConfigError(
+                    f"The `{plan_deprecated}` config is deprecated. Please use the `plan.{plan_deprecated}` config instead."
+                )
 
         return values
 
@@ -155,10 +171,21 @@ class Config(BaseConfig):
         return values
 
     def get_default_test_connection(
-        self, default_catalog: t.Optional[str] = None
+        self,
+        default_catalog: t.Optional[str] = None,
+        default_catalog_dialect: t.Optional[str] = None,
     ) -> ConnectionConfig:
         return self.default_test_connection_ or DuckDBConnectionConfig(
-            catalogs=None if default_catalog is None else {default_catalog: ":memory:"}
+            catalogs=(
+                None
+                if default_catalog is None
+                else {
+                    # transpile catalog name from main connection dialect to DuckDB
+                    exp.parse_identifier(default_catalog, dialect=default_catalog_dialect).sql(
+                        dialect="duckdb"
+                    ): ":memory:"
+                }
+            )
         )
 
     def get_gateway(self, name: t.Optional[str] = None) -> GatewayConfig:
@@ -194,10 +221,13 @@ class Config(BaseConfig):
         return self.get_gateway(gateway_name).state_connection
 
     def get_test_connection(
-        self, gateway_name: t.Optional[str] = None, default_catalog: t.Optional[str] = None
+        self,
+        gateway_name: t.Optional[str] = None,
+        default_catalog: t.Optional[str] = None,
+        default_catalog_dialect: t.Optional[str] = None,
     ) -> ConnectionConfig:
         return self.get_gateway(gateway_name).test_connection or self.get_default_test_connection(
-            default_catalog=default_catalog
+            default_catalog=default_catalog, default_catalog_dialect=default_catalog_dialect
         )
 
     def get_scheduler(self, gateway_name: t.Optional[str] = None) -> SchedulerConfig:

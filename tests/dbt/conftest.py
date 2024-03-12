@@ -6,15 +6,12 @@ import pytest
 
 from sqlmesh.core.context import Context
 from sqlmesh.dbt.context import DbtContext
-from sqlmesh.dbt.loader import DbtLoader
 from sqlmesh.dbt.project import Project
 
 
 @pytest.fixture()
 def sushi_test_project(sushi_test_dbt_context: Context) -> Project:
-    project = t.cast(DbtLoader, sushi_test_dbt_context._loader)._project
-    assert project
-    return project
+    return sushi_test_dbt_context._loader._load_projects()[0]  # type: ignore
 
 
 @pytest.fixture()

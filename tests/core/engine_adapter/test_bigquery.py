@@ -218,7 +218,9 @@ def test_replace_query(make_mocked_engine_adapter: t.Callable, mocker: MockerFix
     execute_mock = mocker.patch(
         "sqlmesh.core.engine_adapter.bigquery.BigQueryEngineAdapter.execute"
     )
-    adapter.replace_query("test_table", parse_one("SELECT a FROM tbl"), {"a": "int"})
+    adapter.replace_query(
+        "test_table", parse_one("SELECT a FROM tbl"), {"a": exp.DataType.build("INT")}
+    )
 
     sql_calls = _to_sql_calls(execute_mock)
     assert sql_calls == ["CREATE OR REPLACE TABLE `test_table` AS SELECT `a` FROM `tbl`"]
@@ -315,7 +317,7 @@ def test_create_table_date_partition(
     )
     adapter.create_table(
         "test_table",
-        {"a": "int", "b": "int"},
+        {"a": exp.DataType.build("int"), "b": exp.DataType.build("int")},
         partitioned_by=partition_by_cols,
         partition_interval_unit=IntervalUnit.DAY,
         clustered_by=["b"],
@@ -323,7 +325,7 @@ def test_create_table_date_partition(
 
     sql_calls = _to_sql_calls(execute_mock)
     assert sql_calls == [
-        f"CREATE TABLE IF NOT EXISTS `test_table` (`a` int, `b` int) PARTITION BY {partition_by_statement} CLUSTER BY `b`"
+        f"CREATE TABLE IF NOT EXISTS `test_table` (`a` INT64, `b` INT64) PARTITION BY {partition_by_statement} CLUSTER BY `b`"
     ]
 
 
@@ -527,7 +529,7 @@ def test_begin_end_session(mocker: MockerFixture):
 
     adapter = BigQueryEngineAdapter(lambda: connection_mock, job_retries=0)
 
-    with adapter.session():
+    with adapter.session({}):
         assert adapter._connection_pool.get_attribute("session_id") is not None
         adapter.execute("SELECT 2;")
 
@@ -570,7 +572,7 @@ def test_create_table_table_options(make_mocked_engine_adapter: t.Callable, mock
 
     adapter.create_table(
         "test_table",
-        {"a": "int", "b": "int"},
+        {"a": exp.DataType.build("int"), "b": exp.DataType.build("int")},
         table_properties={
             "partition_expiration_days": exp.convert(7),
         },
@@ -578,12 +580,20 @@ def test_create_table_table_options(make_mocked_engine_adapter: t.Callable, mock
 
     sql_calls = _to_sql_calls(execute_mock)
     assert sql_calls == [
-        "CREATE TABLE IF NOT EXISTS `test_table` (`a` int, `b` int) OPTIONS (partition_expiration_days=7)"
+        "CREATE TABLE IF NOT EXISTS `test_table` (`a` INT64, `b` INT64) OPTIONS (partition_expiration_days=7)"
     ]
 
 
 def test_comments(make_mocked_engine_adapter: t.Callable, mocker: MockerFixture):
     adapter = make_mocked_engine_adapter(BigQueryEngineAdapter)
+
+    allowed_table_comment_length = BigQueryEngineAdapter.MAX_TABLE_COMMENT_LENGTH
+    truncated_table_comment = "a" * allowed_table_comment_length
+    long_table_comment = truncated_table_comment + "b"
+
+    allowed_column_comment_length = BigQueryEngineAdapter.MAX_COLUMN_COMMENT_LENGTH
+    truncated_column_comment = "c" * allowed_column_comment_length
+    long_column_comment = truncated_column_comment + "d"
 
     execute_mock = mocker.patch(
         "sqlmesh.core.engine_adapter.bigquery.BigQueryEngineAdapter.execute"
@@ -591,36 +601,36 @@ def test_comments(make_mocked_engine_adapter: t.Callable, mocker: MockerFixture)
 
     adapter.create_table(
         "test_table",
-        {"a": "int", "b": "int"},
-        table_description="test description",
-        column_descriptions={"a": "a description"},
+        {"a": exp.DataType.build("INT"), "b": exp.DataType.build("INT")},
+        table_description=long_table_comment,
+        column_descriptions={"a": long_column_comment},
     )
 
     adapter.ctas(
         "test_table",
         parse_one("SELECT a, b FROM source_table"),
-        {"a": "int", "b": "int"},
-        table_description="test description",
-        column_descriptions={"a": "a description"},
+        {"a": exp.DataType.build("INT"), "b": exp.DataType.build("INT")},
+        table_description=long_table_comment,
+        column_descriptions={"a": long_column_comment},
     )
 
     adapter.create_view(
         "test_table",
         parse_one("SELECT a, b FROM source_table"),
-        table_description="test description",
+        table_description=long_table_comment,
     )
 
     adapter._create_table_comment(
         "test_table",
-        "test description",
+        long_table_comment,
     )
 
     sql_calls = _to_sql_calls(execute_mock)
     assert sql_calls == [
-        "CREATE TABLE IF NOT EXISTS `test_table` (`a` int OPTIONS (description='a description'), `b` int) OPTIONS (description='test description')",
-        "CREATE TABLE IF NOT EXISTS `test_table` (`a` int OPTIONS (description='a description'), `b` int) OPTIONS (description='test description') AS SELECT `a`, `b` FROM `source_table`",
-        "CREATE OR REPLACE VIEW `test_table` OPTIONS (description='test description') AS SELECT `a`, `b` FROM `source_table`",
-        "ALTER TABLE `test_table` SET OPTIONS(description = 'test description')",
+        f"CREATE TABLE IF NOT EXISTS `test_table` (`a` INT64 OPTIONS (description='{truncated_column_comment}'), `b` INT64) OPTIONS (description='{truncated_table_comment}')",
+        f"CREATE TABLE IF NOT EXISTS `test_table` (`a` INT64 OPTIONS (description='{truncated_column_comment}'), `b` INT64) OPTIONS (description='{truncated_table_comment}') AS SELECT `a`, `b` FROM `source_table`",
+        f"CREATE OR REPLACE VIEW `test_table` OPTIONS (description='{truncated_table_comment}') AS SELECT `a`, `b` FROM `source_table`",
+        f"ALTER TABLE `test_table` SET OPTIONS(description = '{truncated_table_comment}')",
     ]
 
 
@@ -633,7 +643,7 @@ def test_select_partitions_expr():
             granularity="day",
             database="{{ target.database }}",
         )
-        == "SELECT MAX(PARSE_DATE('%Y%m%d', partition_id)) FROM `{{ target.database }}`.`{{ adapter.resolve_schema(this) }}`.INFORMATION_SCHEMA.PARTITIONS WHERE table_name = '{{ adapter.resolve_identifier(this) }}' AND NOT partition_id IS NULL AND partition_id <> '__NULL__'"
+        == "SELECT MAX(PARSE_DATE('%Y%m%d', partition_id)) FROM `{{ target.database }}.{{ adapter.resolve_schema(this) }}.INFORMATION_SCHEMA.PARTITIONS` WHERE table_name = '{{ adapter.resolve_identifier(this) }}' AND NOT partition_id IS NULL AND partition_id <> '__NULL__'"
     )
 
     assert (

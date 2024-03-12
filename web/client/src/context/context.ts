@@ -1,4 +1,5 @@
 import { type Confirmation } from '@components/modal/ModalConfirmation'
+import { ModelModuleController } from '@models/module-controller'
 import { ModelSQLMeshModel } from '@models/sqlmesh-model'
 import { create } from 'zustand'
 import { type Model, type Environment } from '~/api/client'
@@ -17,11 +18,11 @@ interface ContextStore {
   environments: Set<ModelEnvironment>
   lastSelectedModel?: ModelSQLMeshModel
   models: Map<string, ModelSQLMeshModel>
-  modules: string[]
+  modules: ModelModuleController
   splitPaneSizes: number[]
   setLastSelectedModel: (model?: ModelSQLMeshModel) => void
   setSplitPaneSizes: (splitPaneSizes: number[]) => void
-  setModules: (modules: string[]) => void
+  setModules: (modules: ModelModuleController) => void
   setVersion: (version?: string) => void
   setShowConfirmation: (showConfirmation: boolean) => void
   addConfirmation: (confirmation: Confirmation) => void
@@ -34,8 +35,8 @@ interface ContextStore {
   getNextEnvironment: () => ModelEnvironment
   setEnvironment: (environment: ModelEnvironment) => void
   addLocalEnvironment: (
-    environments: EnvironmentName,
-    created_from: EnvironmentName,
+    environment: EnvironmentName,
+    created_from?: EnvironmentName,
   ) => void
   removeLocalEnvironment: (environments: ModelEnvironment) => void
   addRemoteEnvironments: (
@@ -46,13 +47,15 @@ interface ContextStore {
   hasRemoteEnvironments: () => boolean
 }
 
+const PROD = 'prod'
+
 const environments = new Set(ModelEnvironment.getEnvironments())
 const environment =
   ModelEnvironment.getEnvironment() ?? environments.values().next().value
 
 export const useStoreContext = create<ContextStore>((set, get) => ({
   version: undefined,
-  modules: [],
+  modules: new ModelModuleController(),
   splitPaneSizes: [20, 80],
   showConfirmation: false,
   confirmations: [],
@@ -69,7 +72,7 @@ export const useStoreContext = create<ContextStore>((set, get) => ({
   },
   setModules(modules) {
     set(() => ({
-      modules,
+      modules: new ModelModuleController(modules.list),
     }))
   },
   isModel(nameOrPath) {
@@ -163,7 +166,7 @@ export const useStoreContext = create<ContextStore>((set, get) => ({
       }
     })
   },
-  addLocalEnvironment(localEnvironment, created_from) {
+  addLocalEnvironment(localEnvironment, created_from = PROD) {
     set(s => {
       if (isStringEmptyOrNil(localEnvironment)) return s
 
@@ -223,6 +226,10 @@ export const useStoreContext = create<ContextStore>((set, get) => ({
           environment.setType(EnumRelativeLocation.Remote)
         }
 
+        if (s.environment.name === env.name) {
+          s.environment.update(env)
+        }
+
         if (environment.isInitial && environment.isDefault) {
           s.setEnvironment(environment)
         }
@@ -256,7 +263,7 @@ export const useStoreContext = create<ContextStore>((set, get) => ({
 
       environments.forEach(env => {
         switch (env.name) {
-          case 'prod':
+          case PROD:
             prodEnv = env
             break
           case profileEnv?.name:
@@ -268,7 +275,7 @@ export const useStoreContext = create<ContextStore>((set, get) => ({
         }
       })
 
-      const currentEnv = storedEnv ?? defaultEnv ?? s.environment
+      const currentEnv = s.environment ?? storedEnv ?? defaultEnv
       const environment = isTrue(prodEnv?.isInitial) ? prodEnv : currentEnv
 
       ModelEnvironment.save({ environments, environment })

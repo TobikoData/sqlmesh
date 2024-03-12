@@ -152,7 +152,6 @@ class TestConfig(GeneralConfig):
                     {source.canonical_name(context) for source in test_context.sources.values()}
                 ),
                 tags=self.tags,
-                hash_raw_query=True,
                 default_catalog=context.target.database,
                 **self.sqlmesh_config_kwargs,
             )

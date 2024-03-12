@@ -30,6 +30,7 @@ context = Context(path="example")
 context.test()
 ```
 """
+
 from __future__ import annotations
 
 import abc
@@ -43,6 +44,7 @@ import unittest.result
 from datetime import timedelta
 from io import StringIO
 from pathlib import Path
+from shutil import rmtree
 from types import MappingProxyType
 
 import pandas as pd
@@ -52,6 +54,7 @@ from sqlglot.lineage import GraphHTML
 from sqlmesh.core import constants as c
 from sqlmesh.core.audit import Audit, StandaloneAudit
 from sqlmesh.core.config import CategorizerConfig, Config, load_configs
+from sqlmesh.core.config.loader import C
 from sqlmesh.core.console import Console, get_console
 from sqlmesh.core.context_diff import ContextDiff
 from sqlmesh.core.dialect import (
@@ -117,7 +120,6 @@ if t.TYPE_CHECKING:
 
     ModelOrSnapshot = t.Union[str, Model, Snapshot]
     NodeOrSnapshot = t.Union[str, Model, StandaloneAudit, Snapshot]
-
 
 logger = logging.getLogger(__name__)
 
@@ -233,7 +235,7 @@ class ExecutionContext(BaseContext):
         return self._default_catalog
 
 
-class Context(BaseContext):
+class GenericContext(BaseContext, t.Generic[C]):
     """Encapsulates a SQLMesh environment supplying convenient functions to perform various tasks.
 
     Args:
@@ -249,7 +251,10 @@ class Context(BaseContext):
         load: Whether or not to automatically load all models and macros (default True).
         console: The rich instance used for printing out CLI command results.
         users: A list of users to make known to SQLMesh.
+        config_type: The type of config object to use (default Config).
     """
+
+    CONFIG_TYPE: t.Type[C]
 
     def __init__(
         self,
@@ -257,7 +262,7 @@ class Context(BaseContext):
         notification_targets: t.Optional[t.List[NotificationTarget]] = None,
         state_sync: t.Optional[StateSync] = None,
         paths: t.Union[str | Path, t.Iterable[str | Path]] = "",
-        config: t.Optional[t.Union[Config, str, t.Dict[Path, Config]]] = None,
+        config: t.Optional[t.Union[C, str, t.Dict[Path, C]]] = None,
         gateway: t.Optional[str] = None,
         concurrent_tasks: t.Optional[int] = None,
         loader: t.Optional[t.Type[Loader]] = None,
@@ -266,7 +271,9 @@ class Context(BaseContext):
         users: t.Optional[t.List[User]] = None,
     ):
         self.console = console or get_console()
-        self.configs = config if isinstance(config, dict) else load_configs(config, paths)
+        self.configs = (
+            config if isinstance(config, dict) else load_configs(config, self.CONFIG_TYPE, paths)
+        )
         self.dag: DAG[str] = DAG()
         self._models: UniqueKeyDict[str, Model] = UniqueKeyDict("models")
         self._audits: UniqueKeyDict[str, Audit] = UniqueKeyDict("audits")
@@ -278,19 +285,21 @@ class Context(BaseContext):
         self._jinja_macros = JinjaMacroRegistry()
         self._default_catalog: t.Optional[str] = None
 
-        self.path, self.config = t.cast(t.Tuple[Path, Config], next(iter(self.configs.items())))
+        self.path, self.config = t.cast(t.Tuple[Path, C], next(iter(self.configs.items())))
 
         self.gateway = gateway
         self._scheduler = self.config.get_scheduler(self.gateway)
         self.environment_ttl = self.config.environment_ttl
         self.pinned_environments = Environment.normalize_names(self.config.pinned_environments)
-        self.auto_categorize_changes = self.config.auto_categorize_changes
+        self.auto_categorize_changes = self.config.plan.auto_categorize_changes
 
         self._connection_config = self.config.get_connection(self.gateway)
         self.concurrent_tasks = concurrent_tasks or self._connection_config.concurrent_tasks
         self._engine_adapter = engine_adapter or self._connection_config.create_engine_adapter()
 
-        test_connection_config = self.config.get_test_connection(self.gateway, self.default_catalog)
+        test_connection_config = self.config.get_test_connection(
+            self.gateway, self.default_catalog, default_catalog_dialect=self.engine_adapter.DIALECT
+        )
         self._test_engine_adapter = test_connection_config.create_engine_adapter(
             register_comments_override=False
         )
@@ -432,7 +441,7 @@ class Context(BaseContext):
         if self._loader.reload_needed():
             self.load()
 
-    def load(self, update_schemas: bool = True) -> Context:
+    def load(self, update_schemas: bool = True) -> GenericContext[C]:
         """Load all files in the context's path."""
         with sys_path(*self.configs):
             gc.disable()
@@ -518,16 +527,14 @@ class Context(BaseContext):
     @t.overload
     def get_model(
         self, model_or_snapshot: ModelOrSnapshot, raise_if_missing: Literal[True] = True
-    ) -> Model:
-        ...
+    ) -> Model: ...
 
     @t.overload
     def get_model(
         self,
         model_or_snapshot: ModelOrSnapshot,
         raise_if_missing: Literal[False] = False,
-    ) -> t.Optional[Model]:
-        ...
+    ) -> t.Optional[Model]: ...
 
     def get_model(
         self, model_or_snapshot: ModelOrSnapshot, raise_if_missing: bool = False
@@ -557,20 +564,17 @@ class Context(BaseContext):
         return model
 
     @t.overload
-    def get_snapshot(self, node_or_snapshot: NodeOrSnapshot) -> t.Optional[Snapshot]:
-        ...
+    def get_snapshot(self, node_or_snapshot: NodeOrSnapshot) -> t.Optional[Snapshot]: ...
 
     @t.overload
     def get_snapshot(
         self, node_or_snapshot: NodeOrSnapshot, raise_if_missing: Literal[True]
-    ) -> Snapshot:
-        ...
+    ) -> Snapshot: ...
 
     @t.overload
     def get_snapshot(
         self, node_or_snapshot: NodeOrSnapshot, raise_if_missing: Literal[False]
-    ) -> t.Optional[Snapshot]:
-        ...
+    ) -> t.Optional[Snapshot]: ...
 
     def get_snapshot(
         self, node_or_snapshot: NodeOrSnapshot, raise_if_missing: bool = False
@@ -741,7 +745,10 @@ class Context(BaseContext):
         return df
 
     def format(
-        self, transpile: t.Optional[str] = None, newline: bool = False, **kwargs: t.Any
+        self,
+        transpile: t.Optional[str] = None,
+        append_newline: t.Optional[bool] = None,
+        **kwargs: t.Any,
     ) -> None:
         """Format all SQL models."""
         for model in self._models.values():
@@ -760,11 +767,15 @@ class Context(BaseContext):
                                     value=exp.Literal.string(transpile or model.dialect),
                                 )
                             )
+                format = self.config_for_node(model).format
+                opts = {**format.generator_options, **kwargs}
                 file.seek(0)
                 file.write(
-                    format_model_expressions(expressions, transpile or model.dialect, **kwargs)
+                    format_model_expressions(expressions, transpile or model.dialect, **opts)
                 )
-                if newline:
+                if append_newline is None:
+                    append_newline = format.append_newline
+                if append_newline:
                     file.write("\n")
                 file.truncate()
 
@@ -780,16 +791,17 @@ class Context(BaseContext):
         restate_models: t.Optional[t.Iterable[str]] = None,
         no_gaps: bool = False,
         skip_backfill: bool = False,
-        forward_only: bool = False,
-        no_prompts: bool = False,
-        auto_apply: bool = False,
+        forward_only: t.Optional[bool] = None,
+        no_prompts: t.Optional[bool] = None,
+        auto_apply: t.Optional[bool] = None,
         no_auto_categorization: t.Optional[bool] = None,
         effective_from: t.Optional[TimeLike] = None,
         include_unmodified: t.Optional[bool] = None,
         select_models: t.Optional[t.Collection[str]] = None,
         backfill_models: t.Optional[t.Collection[str]] = None,
         categorizer_config: t.Optional[CategorizerConfig] = None,
-        no_diff: bool = False,
+        enable_preview: t.Optional[bool] = None,
+        no_diff: t.Optional[bool] = None,
         run: bool = False,
     ) -> Plan:
         """Interactively creates a plan.
@@ -829,6 +841,7 @@ class Context(BaseContext):
             include_unmodified: Indicates whether to include unmodified models in the target development environment.
             select_models: A list of model selection strings to filter the models that should be included into this plan.
             backfill_models: A list of model selection strings to filter the models for which the data should be backfilled.
+            enable_preview: Indicates whether to enable preview for forward-only models in development environments.
             no_diff: Hide text differences for changed models.
             run: Whether to run latest intervals as part of the plan application.
 
@@ -852,11 +865,16 @@ class Context(BaseContext):
             select_models=select_models,
             backfill_models=backfill_models,
             categorizer_config=categorizer_config,
+            enable_preview=enable_preview,
             run=run,
         )
 
         self.console.plan(
-            plan_builder, auto_apply, self.default_catalog, no_diff=no_diff, no_prompts=no_prompts
+            plan_builder,
+            auto_apply if auto_apply is not None else self.config.plan.auto_apply,
+            self.default_catalog,
+            no_diff=no_diff if no_diff is not None else self.config.plan.no_diff,
+            no_prompts=no_prompts if no_prompts is not None else self.config.plan.no_prompts,
         )
 
         return plan_builder.build()
@@ -873,13 +891,14 @@ class Context(BaseContext):
         restate_models: t.Optional[t.Iterable[str]] = None,
         no_gaps: bool = False,
         skip_backfill: bool = False,
-        forward_only: bool = False,
+        forward_only: t.Optional[bool] = None,
         no_auto_categorization: t.Optional[bool] = None,
         effective_from: t.Optional[TimeLike] = None,
         include_unmodified: t.Optional[bool] = None,
         select_models: t.Optional[t.Collection[str]] = None,
         backfill_models: t.Optional[t.Collection[str]] = None,
         categorizer_config: t.Optional[CategorizerConfig] = None,
+        enable_preview: t.Optional[bool] = None,
         run: bool = False,
     ) -> PlanBuilder:
         """Creates a plan builder.
@@ -912,6 +931,7 @@ class Context(BaseContext):
             include_unmodified: Indicates whether to include unmodified models in the target development environment.
             select_models: A list of model selection strings to filter the models that should be included into this plan.
             backfill_models: A list of model selection strings to filter the models for which the data should be backfilled.
+            enable_preview: Indicates whether to enable preview for forward-only models in development environments.
             run: Whether to run latest intervals as part of the plan application.
 
         Returns:
@@ -934,9 +954,6 @@ class Context(BaseContext):
         environment_ttl = (
             self.environment_ttl if environment not in self.pinned_environments else None
         )
-
-        if include_unmodified is None:
-            include_unmodified = self.config.include_unmodified
 
         model_selector = self._new_selector()
 
@@ -969,6 +986,7 @@ class Context(BaseContext):
             create_from=create_from,
             force_no_diff=(restate_models is not None and not expanded_restate_models)
             or (backfill_models is not None and not backfill_models),
+            ensure_finalized_snapshots=self.config.plan.use_finalized_state,
         )
 
         # If no end date is specified, use the max interval end from prod
@@ -990,10 +1008,14 @@ class Context(BaseContext):
                         # that should be considered for the default plan end value by including its parents.
                         models_for_default_end |= {s.name for s in snapshot.parents}
                 default_end = self.state_sync.greatest_common_interval_end(
-                    c.PROD, models_for_default_end
+                    c.PROD,
+                    models_for_default_end,
+                    ensure_finalized_snapshots=self.config.plan.use_finalized_state,
                 )
             else:
-                default_end = self.state_sync.max_interval_end_for_environment(c.PROD)
+                default_end = self.state_sync.max_interval_end_for_environment(
+                    c.PROD, ensure_finalized_snapshots=self.config.plan.use_finalized_state
+                )
         else:
             default_end = None
 
@@ -1010,16 +1032,27 @@ class Context(BaseContext):
             no_gaps=no_gaps,
             skip_backfill=skip_backfill,
             is_dev=is_dev,
-            forward_only=forward_only,
+            forward_only=(
+                forward_only if forward_only is not None else self.config.plan.forward_only
+            ),
             environment_ttl=environment_ttl,
             environment_suffix_target=self.config.environment_suffix_target,
             environment_catalog_mapping=self.config.environment_catalog_mapping,
             categorizer_config=categorizer_config or self.auto_categorize_changes,
             auto_categorization_enabled=not no_auto_categorization,
             effective_from=effective_from,
-            include_unmodified=include_unmodified,
+            include_unmodified=(
+                include_unmodified
+                if include_unmodified is not None
+                else self.config.plan.include_unmodified
+            ),
             default_start=default_start,
             default_end=default_end,
+            enable_preview=(
+                enable_preview if enable_preview is not None else self.config.plan.enable_preview
+            ),
+            end_bounded=not run,
+            ensure_finalized_snapshots=self.config.plan.use_finalized_state,
         )
 
     def apply(
@@ -1034,6 +1067,7 @@ class Context(BaseContext):
 
         Args:
             plan: The plan to apply.
+            circuit_breaker: An optional handler which checks if the apply should be aborted.
         """
         if (
             not plan.context_diff.has_changes
@@ -1060,14 +1094,20 @@ class Context(BaseContext):
             NotificationEvent.APPLY_END, environment=plan.environment_naming_info.name
         )
 
-    def invalidate_environment(self, name: str) -> None:
+    def invalidate_environment(self, name: str, sync: bool = False) -> None:
         """Invalidates the target environment by setting its expiration timestamp to now.
 
         Args:
             name: The name of the environment to invalidate.
+            sync: If True, the call blocks until the environment is deleted. Otherwise, the environment will
+                be deleted asynchronously by the janitor process.
         """
         self.state_sync.invalidate_environment(name)
-        self.console.log_success(f"Environment '{name}' has been invalidated.")
+        if sync:
+            self._cleanup_environments()
+            self.console.log_success(f"Environment '{name}' has been deleted.")
+        else:
+            self.console.log_success(f"Environment '{name}' has been invalidated.")
 
     def diff(self, environment: t.Optional[str] = None, detailed: bool = False) -> None:
         """Show a diff of the current context with a given environment.
@@ -1244,7 +1284,7 @@ class Context(BaseContext):
         """
         input_queries = {
             # The get_model here has two purposes: return normalized names & check for missing deps
-            self.get_model(dep, raise_if_missing=True).name: query
+            self.get_model(dep, raise_if_missing=True).fqn: query
             for dep, query in input_queries.items()
         }
 
@@ -1371,7 +1411,10 @@ class Context(BaseContext):
                 f"\nFailure in audit {error.audit.name} ({error.audit._path})."
             )
             self.console.log_status_update(f"Got {error.count} results, expected 0.")
-            self.console.show_sql(f"{error.query}")
+            if error.query:
+                self.console.show_sql(
+                    f"{error.query.sql(dialect=self.snapshot_evaluator.adapter.dialect)}"
+                )
 
         self.console.log_status_update("Done.")
 
@@ -1531,6 +1574,10 @@ class Context(BaseContext):
 
         return success
 
+    def clear_caches(self) -> None:
+        for path in self.configs:
+            rmtree(path / c.CACHE)
+
     def _run_tests(self) -> t.Tuple[unittest.result.TestResult, str]:
         test_output_io = StringIO()
         result = self.test(stream=test_output_io)
@@ -1559,13 +1606,15 @@ class Context(BaseContext):
         If a snapshot has not been versioned yet, its view name will be returned.
         """
         return {
-            fqn: snapshot.table_name()
-            if snapshot.version
-            else snapshot.qualified_view_name.for_environment(
-                EnvironmentNamingInfo.from_environment_catalog_mapping(
-                    self.config.environment_catalog_mapping,
-                    name=c.PROD,
-                    suffix_target=self.config.environment_suffix_target,
+            fqn: (
+                snapshot.table_name()
+                if snapshot.version
+                else snapshot.qualified_view_name.for_environment(
+                    EnvironmentNamingInfo.from_environment_catalog_mapping(
+                        self.config.environment_catalog_mapping,
+                        name=c.PROD,
+                        suffix_target=self.config.environment_suffix_target,
+                    )
                 )
             )
             for fqn, snapshot in self.snapshots.items()
@@ -1650,6 +1699,7 @@ class Context(BaseContext):
         snapshots: t.Optional[t.Dict[str, Snapshot]] = None,
         create_from: t.Optional[str] = None,
         force_no_diff: bool = False,
+        ensure_finalized_snapshots: bool = False,
     ) -> ContextDiff:
         environment = Environment.normalize_name(environment)
         if force_no_diff:
@@ -1659,17 +1709,21 @@ class Context(BaseContext):
             snapshots=snapshots or self.snapshots,
             create_from=create_from or c.PROD,
             state_reader=self.state_reader,
+            ensure_finalized_snapshots=ensure_finalized_snapshots,
         )
 
     def _run_janitor(self) -> None:
-        expired_environments = self.state_sync.delete_expired_environments()
-        cleanup_expired_views(self.engine_adapter, expired_environments, console=self.console)
+        self._cleanup_environments()
         expired_snapshots = self.state_sync.delete_expired_snapshots()
         self.snapshot_evaluator.cleanup(
             expired_snapshots, on_complete=self.console.update_cleanup_progress
         )
 
         self.state_sync.compact_intervals()
+
+    def _cleanup_environments(self) -> None:
+        expired_environments = self.state_sync.delete_expired_environments()
+        cleanup_expired_views(self.engine_adapter, expired_environments, console=self.console)
 
     def _try_connection(self, connection_name: str, engine_adapter: EngineAdapter) -> None:
         connection_name = connection_name.capitalize()
@@ -1706,3 +1760,7 @@ class Context(BaseContext):
         self.notification_target_manager = NotificationTargetManager(
             event_notifications, user_notification_targets, username=self.config.username
         )
+
+
+class Context(GenericContext[Config]):
+    CONFIG_TYPE = Config

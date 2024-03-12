@@ -6,7 +6,8 @@ from pathlib import Path
 
 import numpy as np
 import pandas as pd
-from sqlglot import exp, parse_one
+from sqlglot import exp
+from sqlglot.optimizer.annotate_types import annotate_types
 from sqlglot.optimizer.normalize_identifiers import normalize_identifiers
 
 from sqlmesh.core import constants as c
@@ -14,6 +15,7 @@ from sqlmesh.core.dialect import normalize_model_name, schema_
 from sqlmesh.core.engine_adapter import EngineAdapter
 from sqlmesh.core.model import Model, PythonModel, SqlModel
 from sqlmesh.utils import UniqueKeyDict, yaml
+from sqlmesh.utils.date import pandas_timestamp_to_pydatetime
 from sqlmesh.utils.errors import ConfigError, SQLMeshError
 
 Row = t.Dict[str, t.Any]
@@ -71,17 +73,19 @@ class ModelTest(unittest.TestCase):
 
     def setUp(self) -> None:
         """Load all input tables"""
-        for table_name, rows in self.body.get("inputs", {}).items():
+        for table_name, values in self.body.get("inputs", {}).items():
             columns_to_types: t.Dict[str, exp.DataType] = {}
             if table_name in self.models:
                 model = self.models[table_name]
                 columns_to_types = model.columns_to_types if model.annotated else {}
 
+            rows = values["rows"]
             if not columns_to_types and rows:
                 for i, v in rows[0].items():
                     # convert ruamel into python
                     v = v.real if hasattr(v, "real") else v
-                    columns_to_types[i] = parse_one(type(v).__name__, into=exp.DataType)
+                    v_type = annotate_types(exp.convert(v)).type or type(v).__name__
+                    columns_to_types[i] = exp.maybe_parse(v_type, into=exp.DataType)
 
             test_fixture_table = _fully_qualified_test_fixture_table(table_name, self.dialect)
             if test_fixture_table.db:
@@ -89,7 +93,7 @@ class ModelTest(unittest.TestCase):
                     schema_(test_fixture_table.args["db"], test_fixture_table.args.get("catalog"))
                 )
 
-            df = pd.DataFrame.from_records(rows, columns=columns_to_types)  # type: ignore
+            df = self._create_df(rows, columns=columns_to_types)
             self.engine_adapter.create_view(test_fixture_table, df, columns_to_types)
 
     def tearDown(self) -> None:
@@ -101,8 +105,18 @@ class ModelTest(unittest.TestCase):
                 else table
             )
 
-    def assert_equal(self, expected: pd.DataFrame, actual: pd.DataFrame) -> None:
+    def assert_equal(
+        self,
+        expected: pd.DataFrame,
+        actual: pd.DataFrame,
+        sort: bool,
+        partial: t.Optional[bool] = False,
+    ) -> None:
         """Compare two DataFrames"""
+        if partial:
+            intersection = actual[actual.columns.intersection(expected.columns)]
+            if not intersection.empty:
+                actual = intersection
 
         # Two astypes are necessary, pandas converts strings to times as NS,
         # but if the actual is US, it doesn't take effect until the 2nd try!
@@ -111,23 +125,37 @@ class ModelTest(unittest.TestCase):
             actual_types, errors="ignore"
         )
 
-        expected = expected.replace({None: np.nan})
         actual = actual.replace({None: np.nan})
+        expected = expected.replace({None: np.nan})
+
+        def _to_hashable(x: t.Any) -> t.Any:
+            return tuple(x) if isinstance(x, list) else x
+
+        if sort:
+            actual = (
+                actual.apply(_to_hashable)
+                .sort_values(by=actual.columns.to_list())
+                .reset_index(drop=True)
+            )
+            expected = (
+                expected.apply(_to_hashable)
+                .sort_values(by=expected.columns.to_list())
+                .reset_index(drop=True)
+            )
 
         try:
             pd.testing.assert_frame_equal(
-                expected.sort_index(axis=1),
-                actual.sort_index(axis=1),
+                expected,
+                actual,
                 check_dtype=False,
                 check_datetimelike_compat=True,
+                check_like=True,  # ignore column order
             )
         except AssertionError as e:
-            if expected.empty and actual.empty and all(expected.columns == actual.columns):
-                # Only the index differs, so we treat the two DataFrames as equivalent in this case
-                return
-
             diff = expected.compare(actual).rename(columns={"self": "exp", "other": "act"})
-            e.args = (f"Data differs (exp: expected, act: actual)\n\n{diff}",)
+            description = self.body.get("description")
+            description = f"\n\n\nTest description: {description}" if description else ""
+            e.args = (f"Data differs (exp: expected, act: actual)\n\n{diff}{description}",)
             raise e
 
     def runTest(self) -> None:
@@ -187,43 +215,64 @@ class ModelTest(unittest.TestCase):
     def _normalize_test(self, dialect: str | None) -> None:
         """Normalizes all identifiers in this test according to the given dialect."""
 
-        def _normalize_rows(rows: t.List[Row] | t.Dict[str, t.List[Row]]) -> t.List[Row]:
-            if isinstance(rows, dict) and rows:
-                if "rows" not in rows:
-                    _raise_error("Incomplete test, missing row data for table", self.path)
-                rows = rows["rows"]
+        def _normalize_rows(values: t.List[Row] | t.Dict) -> t.Dict:
+            if not isinstance(values, dict):
+                values = {"rows": values}
 
-            return [
+            if "rows" not in values:
+                _raise_error("Incomplete test, missing row data for table", self.path)
+
+            values["rows"] = [
                 {
                     normalize_identifiers(column, dialect=dialect).name: value
-                    for column, value in t.cast(Row, row).items()
+                    for column, value in row.items()
                 }
-                for row in rows
+                for row in values["rows"]
             ]
+            return values
 
-        def _normalize_sources(sources: t.Dict[str, t.Any]) -> t.Dict[str, t.Any]:
+        def _normalize_sources(sources: t.Dict) -> t.Dict:
             return {
                 normalize_model_name(
                     name, default_catalog=self.default_catalog, dialect=dialect
-                ): _normalize_rows(rows)
-                for name, rows in sources.items()
+                ): _normalize_rows(values)
+                for name, values in sources.items()
             }
 
-        inputs = self.body.get("inputs", {})
+        inputs = self.body.get("inputs")
         outputs = self.body["outputs"]
-        ctes = outputs.get("ctes", {})
-        query = outputs.get("query", [])
+        ctes = outputs.get("ctes")
+        query = outputs.get("query")
 
         if inputs:
             self.body["inputs"] = _normalize_sources(inputs)
         if ctes:
             outputs["ctes"] = _normalize_sources(ctes)
-        if query:
+        if query or query == []:
             outputs["query"] = _normalize_rows(query)
 
         self.body["model"] = normalize_model_name(
             self.body["model"], default_catalog=self.default_catalog, dialect=dialect
         )
+
+    def _create_df(
+        self,
+        rows: t.List[Row],
+        columns: t.Optional[t.Iterable] = None,
+        partial: t.Optional[bool] = False,
+    ) -> pd.DataFrame:
+        if columns:
+            referenced_columns = {col for row in rows for col in row}
+            unknown_columns = [col for col in referenced_columns if col not in columns]
+            if unknown_columns:
+                expected_cols = f"Expected column(s): {', '.join(columns)}\n"
+                unknown_cols = f"Unknown column(s): {', '.join(unknown_columns)}"
+                _raise_error(f"Detected unknown column(s)\n\n{expected_cols}{unknown_cols}")
+
+            if partial:
+                columns = list(referenced_columns)
+
+        return pd.DataFrame.from_records(rows, columns=columns)
 
 
 class SqlModelTest(ModelTest):
@@ -233,7 +282,7 @@ class SqlModelTest(ModelTest):
 
     def test_ctes(self, ctes: t.Dict[str, exp.Expression]) -> None:
         """Run CTE queries and compare output to expected output"""
-        for cte_name, rows in self.body["outputs"].get("ctes", {}).items():
+        for cte_name, values in self.body["outputs"].get("ctes", {}).items():
             with self.subTest(cte=cte_name):
                 if cte_name not in ctes:
                     _raise_error(
@@ -244,9 +293,14 @@ class SqlModelTest(ModelTest):
                 for alias, cte in ctes.items():
                     cte_query = cte_query.with_(alias, cte.this)
 
-                expected_df = pd.DataFrame.from_records(rows, columns=cte_query.named_selects)
-                actual_df = self._execute(cte_query)
-                self.assert_equal(expected_df, actual_df)
+                rows = values["rows"]
+                partial = values.get("partial")
+                sort = cte_query.args.get("order") is None
+
+                actual = self._execute(cte_query)
+                expected = self._create_df(rows, columns=cte_query.named_selects, partial=partial)
+
+                self.assert_equal(expected, actual, sort=sort, partial=partial)
 
     def runTest(self) -> None:
         # For tests we just use the model name for the table reference and we don't want to expand
@@ -267,12 +321,16 @@ class SqlModelTest(ModelTest):
             {normalize_model_name(cte.alias, None, self.dialect): cte for cte in query.ctes}
         )
 
-        # Test model query
-        query_rows = self.body["outputs"].get("query")
-        if query_rows is not None:
-            expected_df = pd.DataFrame.from_records(query_rows, columns=self.model.columns_to_types)  # type: ignore
-            actual_df = self._execute(query)
-            self.assert_equal(expected_df, actual_df)
+        values = self.body["outputs"].get("query")
+        if values is not None:
+            rows = values["rows"]
+            partial = values.get("partial")
+            sort = query.args.get("order") is None
+
+            actual = self._execute(query)
+            expected = self._create_df(rows, columns=self.model.columns_to_types, partial=partial)
+
+            self.assert_equal(expected, actual, sort=sort, partial=partial)
 
 
 class PythonModelTest(ModelTest):
@@ -319,12 +377,16 @@ class PythonModelTest(ModelTest):
         )
 
     def runTest(self) -> None:
-        query_rows = self.body["outputs"].get("query")
-        if query_rows is not None:
-            expected_df = pd.DataFrame.from_records(query_rows, columns=self.model.columns_to_types)  # type: ignore
+        values = self.body["outputs"].get("query")
+        if values is not None:
+            rows = values["rows"]
+            partial = values.get("partial")
+
             actual_df = self._execute_model()
             actual_df.reset_index(drop=True, inplace=True)
-            self.assert_equal(expected_df, actual_df)
+            expected = self._create_df(rows, columns=self.model.columns_to_types, partial=partial)
+
+            self.assert_equal(expected, actual_df, sort=False, partial=partial)
 
 
 def generate_test(
@@ -370,8 +432,14 @@ def generate_test(
             f"Fixture '{fixture_path}' already exists, make sure to set --overwrite if it can be safely overwritten."
         )
 
+    # ruamel.yaml does not support pandas Timestamps, so we must convert them to python
+    # datetime or datetime.date objects based on column type
     inputs = {
-        dep: engine_adapter.fetchdf(query).to_dict(orient="records")
+        models[dep]
+        .name: pandas_timestamp_to_pydatetime(
+            engine_adapter.fetchdf(query), models[dep].columns_to_types
+        )
+        .to_dict(orient="records")
         for dep, query in input_queries.items()
     }
     outputs: t.Dict[str, t.Any] = {"query": {}}
@@ -382,7 +450,7 @@ def generate_test(
         test_body["vars"] = variables
 
     test = ModelTest.create_test(
-        body=test_body,
+        body=test_body.copy(),
         test_name=test_name,
         models=models,
         engine_adapter=test_engine_adapter,
@@ -407,7 +475,9 @@ def generate_test(
     else:
         output = t.cast(PythonModelTest, test)._execute_model()
 
-    outputs["query"] = output.to_dict(orient="records")
+    outputs["query"] = pandas_timestamp_to_pydatetime(output, model.columns_to_types).to_dict(
+        orient="records"
+    )
 
     test.tearDown()
 
@@ -426,7 +496,7 @@ def _fully_qualified_test_fixture_name(name: str, dialect: str | None) -> str:
     return _fully_qualified_test_fixture_table(name, dialect).sql()
 
 
-def _raise_error(msg: str, path: Path | None) -> None:
+def _raise_error(msg: str, path: Path | None = None) -> None:
     if path:
         raise TestError(f"{msg} at {path}")
     raise TestError(msg)

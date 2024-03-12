@@ -1,3 +1,4 @@
+import { type Model } from '@api/client'
 import {
   completeFromList,
   type CompletionContext,
@@ -5,7 +6,6 @@ import {
 } from '@codemirror/autocomplete'
 import { keywordCompletionSource, SQLDialect } from '@codemirror/lang-sql'
 import { LanguageSupport } from '@codemirror/language'
-import { type Model } from '~/api/client'
 import { isArrayEmpty, isNil, isNotNil, isStringEmptyOrNil } from '~/utils'
 import { sqlglotWorker } from '~/workers'
 
@@ -14,16 +14,21 @@ const WHITE_SPACE = ' '
 
 export type ExtensionSQLMeshDialect = (
   models: Map<string, Model>,
+  allModelsNames: Array<{ label: string; type: string }>,
+  allColumnsNames: Array<{ label: string; type: string }>,
   options?: { types: string; keywords: string },
   dialects?: string[],
 ) => LanguageSupport
 
 export const SQLMeshDialect: ExtensionSQLMeshDialect = function SQLMeshDialect(
   models,
+  allModelsNames,
+  allColumnsNames,
   options = { types: '', keywords: '' },
   dialects,
 ): LanguageSupport {
-  const SQLKeywords = options.keywords + ' coalesce sum count avg min max cast'
+  const SQLKeywords =
+    options.keywords + ' coalesce sum count avg min max cast round'
   const SQLTypes = options.types + ' string'
   const SQLMeshModelDictionary = getSQLMeshModelKeywords(dialects)
   const SQLMeshKeywords =
@@ -34,20 +39,6 @@ export const SQLMeshDialect: ExtensionSQLMeshDialect = function SQLMeshDialect(
     keywords: (SQLKeywords + WHITE_SPACE + SQLMeshKeywords).toLowerCase(),
     types: (SQLTypes + WHITE_SPACE + SQLMeshTypes).toLowerCase(),
   })
-  const allModels = Array.from(new Set(models.values()))
-  const modelColumns = Array.from(
-    new Set(
-      allModels.map(model => model.columns.map(column => column.name)).flat(),
-    ),
-  )
-  const modelNames: Completion[] = allModels.map(model => ({
-    label: model.name,
-    type: 'model',
-  }))
-  const columnNames: Completion[] = modelColumns.map(name => ({
-    label: name,
-    type: 'column',
-  }))
 
   SQLMeshDialectCleanUp()
 
@@ -67,21 +58,29 @@ export const SQLMeshDialect: ExtensionSQLMeshDialect = function SQLMeshDialect(
         const dot = ctx.matchBefore(/[A-Za-z0-9_.]*\.(\w+)?\s*$/i)
 
         if (isNotNil(dot)) {
-          let options = columnNames
           const blocks = dot.text.split('.')
           const text = blocks.pop()
           const maybeModelName = blocks.join('.')
-          const maybeModel = models.get(maybeModelName)
+          const maybeModel = models.get(maybeModelName) ?? models.get(dot.text)
+          let options = allColumnsNames
+          let from = isStringEmptyOrNil(text)
+            ? dot.to
+            : dot.to - dot.text.length
 
           if (isNotNil(maybeModel)) {
             options = maybeModel.columns.map(column => ({
               label: column.name,
               type: 'column',
             }))
+          } else {
+            if (maybeSuggestion(allModelsNames, dot.text)) {
+              options = allModelsNames.filter(n => n.label.startsWith(dot.text))
+              from = dot.from
+            }
           }
 
           return {
-            from: isStringEmptyOrNil(text) ? dot.to : dot.to - text.length,
+            from,
             to: dot.to,
             options,
           }
@@ -94,9 +93,6 @@ export const SQLMeshDialect: ExtensionSQLMeshDialect = function SQLMeshDialect(
         const keywordKind = matchWordWithSpacesAfter(ctx, 'kind')
         const keywordDialect = matchWordWithSpacesAfter(ctx, 'dialect')
         const keywordModel = matchWordWithSpacesAfter(ctx, 'model')
-        const keywordFrom = matchWordWithSpacesAfter(ctx, 'from')
-        const keywordJoin = matchWordWithSpacesAfter(ctx, 'join')
-        const keywordSelect = matchWordWithSpacesAfter(ctx, 'select')
 
         const text = ctx.state.doc.toJSON().join('\n')
         const matchModels = text.match(/MODEL \(([\s\S]+?)\);/g) ?? []
@@ -121,27 +117,50 @@ export const SQLMeshDialect: ExtensionSQLMeshDialect = function SQLMeshDialect(
           }
 
           return completeFromList(suggestions ?? [])(ctx)
-        } else {
-          let suggestions: Completion[] = []
-
-          if (isNotNil(keywordModel) && isArrayEmpty(matchModels)) {
-            suggestions = [
-              {
-                label: 'model',
-                type: 'keyword',
-                apply: 'MODEL (\n\r);',
-              },
-            ]
-          } else if (isNotNil(keywordSelect)) {
-            suggestions = columnNames
-          } else if (isNotNil(keywordFrom) || isNotNil(keywordJoin)) {
-            suggestions = modelNames
-          }
-
-          return isArrayEmpty(suggestions)
-            ? keywordCompletionSource(lang)(ctx)
-            : completeFromList(suggestions)(ctx)
         }
+
+        let suggestions: Completion[] = []
+
+        if (isNotNil(keywordModel) && isArrayEmpty(matchModels)) {
+          suggestions = [
+            {
+              label: 'model',
+              type: 'keyword',
+              apply: 'MODEL (\n\r);',
+            },
+          ]
+        }
+
+        if (maybeSuggestion(allModelsNames, word.text)) {
+          suggestions.push(...allModelsNames)
+        }
+
+        if (maybeSuggestion(allColumnsNames, word.text)) {
+          suggestions.push(...allColumnsNames)
+        }
+
+        const wordLastChar = getFirstChar(word.text)
+        const isUpperCase =
+          isStringEmptyOrNil(wordLastChar) &&
+          wordLastChar === wordLastChar.toUpperCase()
+
+        if (isUpperCase) {
+          suggestions = suggestions.map(suggestion => ({
+            ...suggestion,
+            label: suggestion.label.toUpperCase(),
+          }))
+        }
+
+        const source = isArrayEmpty(suggestions)
+          ? keywordCompletionSource(lang, isUpperCase)(ctx)
+          : {
+              from: word.from,
+              to: word.to,
+              options: suggestions,
+              validFor: /^\w*$/,
+            }
+
+        return source
       },
     }),
   ])
@@ -240,4 +259,21 @@ function matchWordWithSpacesAfter(
   text: string
 }> {
   return ctx.matchBefore(new RegExp(`${word}\\s*(?=\\S)([^ ]+)`, 'i'))
+}
+
+function maybeSuggestion(suggestions: Completion[], word: string): boolean {
+  return (
+    word.length > 1 &&
+    suggestions.some(suggestion =>
+      suggestion.label.toLowerCase().includes(word.toLowerCase()),
+    )
+  )
+}
+
+function getFirstChar(word: string): string {
+  for (const char of word) {
+    if (/[a-zA-Z]/.test(char)) return char
+  }
+
+  return ''
 }

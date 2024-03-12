@@ -52,14 +52,15 @@ export function findColumn(
 export function getDecorations(
   models: Map<string, ModelSQLMeshModel>,
   view: EditorView,
-  model: ModelSQLMeshModel,
   columns: Set<string>,
   isActionMode: boolean,
+  model?: ModelSQLMeshModel,
 ): DecorationSet {
   const ranges: any = []
   const columnNames = Array.from(columns)
-  const modelNames = Array.from(new Set(models.values())).map(m => m.name)
-  const modelColumns = model.columns.map(c => c.name.toLowerCase())
+  const allModels = Array.from(new Set(models.values()))
+  const modelNames = allModels.map(m => m.name)
+  const modelColumns = model?.columns.map(c => c.name.toLowerCase()) ?? []
   const validLeftCharColumn = new Set(['.', '(', '[', ' ', '\n'])
   const validRightCharColumn = new Set([':', ')', ',', ']', ' ', '\n'])
 
@@ -73,14 +74,14 @@ export function getDecorations(
           createMarkDecorationModel({
             model: name,
             isActionMode,
-            isActiveModel: model.name === name,
+            isActiveModel: model?.name === name,
           }).range(from, to),
         )
       },
     )
 
     getMarkDecorations(
-      columnNames,
+      isNil(model) ? columnNames : modelColumns,
       view.state.doc.sliceString(range.from, range.to),
       range,
       ({ from, to, key }) => {

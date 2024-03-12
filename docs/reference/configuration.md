@@ -29,9 +29,7 @@ Configuration options for SQLMesh environment creation and promotion.
 | `snapshot_ttl`               | The period of time that a model snapshot not a part of any environment should exist before being deleted. This is defined as a string with the default `in 1 week`. Other [relative dates](https://dateparser.readthedocs.io/en/latest/) can be used, such as `in 30 days`. (Default: `in 1 week`) | string               | N        |
 | `environment_ttl`            | The period of time that a development environment should exist before being deleted. This is defined as a string with the default `in 1 week`. Other [relative dates](https://dateparser.readthedocs.io/en/latest/) can be used, such as `in 30 days`. (Default: `in 1 week`)                      | string               | N        |
 | `pinned_environments`        | The list of development environments that are exempt from deletion due to expiration                                                                                                                                                                                                               | list[string]         | N        |
-| `include_unmodified`         | Indicates whether to create views for all models in the target development environment or only for modified ones                                                                                                                                                                                   | boolean              | N        |
 | `time_column_format`         | The default format to use for all model time columns. This time format uses [python format codes](https://docs.python.org/3/library/datetime.html#strftime-and-strptime-format-codes) (Default: `%Y-%m-%d`)                                                                                        | string               | N        |
-| `auto_categorize_changes`    | Indicates whether SQLMesh should attempt to automatically [categorize](../concepts/plans.md#change-categories) model changes during plan creation per each model source type ([additional details](../guides/configuration.md#auto-categorize-changes))                                                                      | dict[string, string] | N        |
 | `default_target_environment` | The name of the environment that will be the default target for the `sqlmesh plan` and `sqlmesh run` commands. (Default: `prod`)                                                                                                                                                                   | string               | N        |
 | `physical_schema_override`   | A mapping from model schema names to names of schemas in which physical tables for the corresponding models will be placed - [addition details](../guides/configuration.md#physical-schema-override). (Default physical schema name: `sqlmesh__[model schema]`)                                                                                                                                                                   | string               | N        |
 | `environment_suffix_target`  | Whether SQLMesh views should append their environment name to the `schema` or `table` - [additional details](../guides/configuration.md#view-schema-override). (Default: `schema`)                                                                                                                                                                   | string               | N        |
@@ -43,7 +41,21 @@ The `model_defaults` key is **required** and must contain a value for the `diale
 
 See all the keys allowed in `model_defaults` at the [model configuration reference page](./model_configuration.md#model-defaults).
 
-### Run
+## Plan
+
+Configuration for the `sqlmesh plan` command.
+
+| Option                    | Description                                                                                                                                                                                                                                             | Type                 | Required |
+|---------------------------|---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------|:--------------------:|:--------:|
+| `auto_categorize_changes` | Indicates whether SQLMesh should attempt to automatically [categorize](../concepts/plans.md#change-categories) model changes during plan creation per each model source type ([additional details](../guides/configuration.md#auto-categorize-changes)) | dict[string, string] | N        |
+| `include_unmodified`      | Indicates whether to create views for all models in the target development environment or only for modified ones (Default: False)                                                                                                                       | boolean              | N        |
+| `auto_apply`              | Indicates whether to automatically apply a new plan after creation (Default: False)                                                                                                                                                                     | boolean              | N        |
+| `forward_only`            | Indicates whether the plan should be [forward-only](../concepts/plans.md#forward-only-plans) (Default: False)                                                                                                                                           | boolean              | N        |
+| `enable_preview`         | Indicates whether to enable [data preview](../concepts/plans.md#data-preview) for forward-only models when targeting a development environment (Default: False)                                                                                         | boolean              | N        |
+| `no_diff`                 | Don't show diffs for changed models (Default: False)                                                                                                                                                                                                    | boolean              | N        |
+| `no_prompts`              | Disables interactive prompts in CLI (Default: False)                                                                                                                                                                                                    | boolean              | N        |
+
+## Run
 
 Configuration for the `sqlmesh run` command. Please note that this is only applicable when configured with the [builtin](#builtin) scheduler.
 
@@ -51,6 +63,28 @@ Configuration for the `sqlmesh run` command. Please note that this is only appli
 |------------------------------|--------------------------------------------------------------------------------------------------------------------|:----:|:--------:|
 | `environment_check_interval` | The number of seconds to wait between attempts to check the target environment for readiness (Default: 30 seconds) | int  | N        |
 | `environment_check_max_wait` | The maximum number of seconds to wait for the target environment to be ready (Default: 6 hours)                    | int  | N        |
+
+## Format
+
+Formatting settings for the `sqlmesh format` command and UI.
+
+| Option                | Description                                                                                    | Type    | Required |
+|-----------------------|------------------------------------------------------------------------------------------------|:-------:|:--------:|
+| `normalize`          | Whether to normalize SQL (Default: False)                                                      | boolean | N        |
+| `pad`                 | The number of spaces to use for padding (Default: 2)                                           | int     | N        |
+| `indent`              | The number of spaces to use for indentation (Default: 2)                                       | int     | N        |
+| `normalize_functions` | Whether to normalize function names. Supported values are: 'upper' and 'lower' (Default: None) | string  | N        |
+| `leading_comma`       | Whether to use leading commas (Default: False)                                                 | boolean | N        |
+| `max_text_width`      | The maximum text width in a segment before creating new lines (Default: 80)                    | int     | N        |
+| `append_newline`      | Whether to append a newline to the end of the file (Default: False)                            | boolean | N        |
+
+## UI
+
+SQLMesh UI settings.
+
+| Option   | Description                                                                                   | Type    | Required |
+|----------|-----------------------------------------------------------------------------------------------|:-------:|:--------:|
+| `format` | Whether to automatically format model definitions upon saving them to a file (Default: False) | boolean | N        |
 
 ## Gateways
 
@@ -114,7 +148,7 @@ Most parameters are specific to the connection engine `type` - see [below](#engi
 | ------------------- | --------------------------------------------------------------------------------------------------------------------------- | :--: | :------: |
 | `type`              | The engine type name, listed in engine-specific configuration pages below.                                                  | str  |    Y     |
 | `concurrent_tasks`  | The maximum number of concurrent tasks that will be run by SQLMesh. (Default: 4 for engines that support concurrent tasks.) | int  |    N     |
-| `register_comments` | Whether SQLMesh should register model comments with the SQL engine (if the engine supports it).                             | bool |    N     |
+| `register_comments` | Whether SQLMesh should register model comments with the SQL engine (if the engine supports it). (Default: `true`; `false` for Snowflake engine.)                            | bool |    N     |
 
 #### Engine-specific
 
@@ -123,6 +157,7 @@ These pages describe the connection configuration options for each execution eng
 * [BigQuery](../integrations/engines/bigquery.md)
 * [Databricks](../integrations/engines/databricks.md)
 * [DuckDB](../integrations/engines/duckdb.md)
+* [MotherDuck](../integrations/engines/motherduck.md)
 * [MySQL](../integrations/engines/mysql.md)
 * [MSSQL](../integrations/engines/mssql.md)
 * [Postgres](../integrations/engines/postgres.md)
@@ -148,18 +183,19 @@ No configuration options are supported by this scheduler type.
 
 See [Airflow Integration Guide](../integrations/airflow.md) for information about how to integrate Airflow with SQLMesh.
 
-| Option                            | Description                                                                                                                              | Type    | Required |
-|-----------------------------------|------------------------------------------------------------------------------------------------------------------------------------------|:-------:|:--------:|
-| `airflow_url`                     | The URL of the Airflow Webserver                                                                                                         | string  | Y        |
-| `username`                        | The Airflow username                                                                                                                     | string  | Y        |
-| `password`                        | The Airflow password                                                                                                                     | string  | Y        |
-| `dag_run_poll_interval_secs`      | Determines, in seconds, how often a running DAG can be polled (Default: `10`)                                                            | int     | N        |
-| `dag_creation_poll_interval_secs` | Determines, in seconds, how often SQLMesh should check whether a DAG has been created (Default: `30`)                                    | int     | N        |
-| `dag_creation_max_retry_attempts` | Determines the maximum number of attempts that SQLMesh will make while checking for whether a DAG has been created (Default: `10`)       | int     | N        |
-| `backfill_concurrent_tasks`       | The number of concurrent tasks used for model backfilling during plan application (Default: `4`)                                         | int     | N        |
-| `ddl_concurrent_tasks`            | The number of concurrent tasks used for DDL operations like table/view creation, deletion, and so forth (Default: `4`)                   | int     | N        |
-| `max_snapshot_ids_per_request`    | The maximum number of snapshot IDs that can be sent in a single HTTP GET request to the Airflow Webserver (Default: `None`)              | int     | N        |
-| `use_state_connection`            | Whether to use the `state_connection` configuration to bypass Airflow Webserver and access the SQLMesh state directly (Default: `false`) | boolean | N        |
+| Option                            | Description                                                                                                                                                                                                                                                                                                                                                                          | Type    | Required |
+|-----------------------------------|--------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------|:-------:|:--------:|
+| `airflow_url`                     | The URL of the Airflow Webserver                                                                                                                                                                                                                                                                                                                                                     | string  | Y        |
+| `username`                        | The Airflow username                                                                                                                                                                                                                                                                                                                                                                 | string  | Y        |
+| `password`                        | The Airflow password                                                                                                                                                                                                                                                                                                                                                                 | string  | Y        |
+| `dag_run_poll_interval_secs`      | Determines, in seconds, how often a running DAG can be polled (Default: `10`)                                                                                                                                                                                                                                                                                                        | int     | N        |
+| `dag_creation_poll_interval_secs` | Determines, in seconds, how often SQLMesh should check whether a DAG has been created (Default: `30`)                                                                                                                                                                                                                                                                                | int     | N        |
+| `dag_creation_max_retry_attempts` | Determines the maximum number of attempts that SQLMesh will make while checking for whether a DAG has been created (Default: `10`)                                                                                                                                                                                                                                                   | int     | N        |
+| `backfill_concurrent_tasks`       | The number of concurrent tasks used for model backfilling during plan application (Default: `4`)                                                                                                                                                                                                                                                                                     | int     | N        |
+| `ddl_concurrent_tasks`            | The number of concurrent tasks used for DDL operations like table/view creation, deletion, and so forth (Default: `4`)                                                                                                                                                                                                                                                               | int     | N        |
+| `max_snapshot_ids_per_request`    | The maximum number of snapshot IDs that can be sent in a single HTTP GET request to the Airflow Webserver (Default: `None`)                                                                                                                                                                                                                                                          | int     | N        |
+| `use_state_connection`            | Whether to use the `state_connection` configuration to bypass Airflow Webserver and access the SQLMesh state directly (Default: `false`)                                                                                                                                                                                                                                             | boolean | N        |
+| `default_catalog_override`        | Overrides the default catalog value for this project. If specified, this value takes precedence over the default catalog value set on the Airflow side. This only applies in the [multi-repo](../guides/multi_repo.md) setup when different projects require different default catalog values (Default: `None`) | string  | N        |
 
 
 #### Cloud Composer

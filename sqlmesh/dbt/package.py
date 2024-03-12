@@ -72,8 +72,8 @@ class PackageLoader:
         # Only include globally-scoped variables (i.e. filter out the package-scoped ones)
         logger.debug("Processing project variables.")
 
-        all_variables = project_yaml.get("vars", {})
-        all_variables.update(all_variables.pop(package_name, {}))
+        all_variables = project_yaml.get("vars") or {}
+        all_variables.update(all_variables.pop(package_name, None) or {})
 
         package_variables = {
             var: value for var, value in all_variables.items() if not isinstance(value, dict)

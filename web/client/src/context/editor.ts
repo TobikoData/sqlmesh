@@ -42,7 +42,7 @@ interface EditorStore {
   closeTab: (file: ModelFile) => void
   createTab: (file?: ModelFile) => EditorTab
   setDialects: (dialects: Dialect[]) => void
-  refreshTab: () => void
+  refreshTab: (tab?: EditorTab) => void
   setPreviewQuery: (previewQuery?: string) => void
   setPreviewTable: (previewTable?: [TableColumn[], TableRow[]]) => void
   setPreviewDiff: (previewDiff?: any) => void
@@ -59,7 +59,6 @@ export interface EditorTab {
   id: string
   file: ModelFile
   isValid: boolean
-  isSaved: boolean
   dialect?: string
   dialectOptions?: {
     keywords: string
@@ -152,9 +151,7 @@ export const useStoreEditor = create<EditorStore>((set, get) => ({
       storedTabs: tabs,
     }))
   },
-  refreshTab() {
-    const tab = get().tab
-
+  refreshTab(tab) {
     if (isNil(tab)) return
 
     get().selectTab({ ...tab })
@@ -250,7 +247,6 @@ function createTab(file: ModelFile = createLocalFile()): EditorTab {
     id: uid(),
     file,
     isValid: true,
-    isSaved: true,
   }
 }
 

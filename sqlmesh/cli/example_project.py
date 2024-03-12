@@ -65,7 +65,7 @@ EXAMPLE_FULL_MODEL_DEF = f"""MODEL (
   kind FULL,
   cron '@daily',
   grain item_id,
-  audits [assert_positive_order_ids],
+  audits (assert_positive_order_ids),
 );
 
 SELECT
@@ -74,27 +74,26 @@ SELECT
 FROM
     {EXAMPLE_INCREMENTAL_MODEL_NAME}
 GROUP BY item_id
-ORDER BY item_id
 """
 
 EXAMPLE_INCREMENTAL_MODEL_DEF = f"""MODEL (
     name {EXAMPLE_INCREMENTAL_MODEL_NAME},
     kind INCREMENTAL_BY_TIME_RANGE (
-        time_column ds
+        time_column event_date
     ),
     start '2020-01-01',
     cron '@daily',
-    grain [id, ds]
+    grain (id, event_date)
 );
 
 SELECT
     id,
     item_id,
-    ds,
+    event_date,
 FROM
     {EXAMPLE_SEED_MODEL_NAME}
 WHERE
-    ds between @start_ds and @end_ds
+    event_date between @start_date and @end_date
 """
 
 EXAMPLE_SEED_MODEL_DEF = f"""MODEL (
@@ -105,9 +104,9 @@ EXAMPLE_SEED_MODEL_DEF = f"""MODEL (
     columns (
         id INTEGER,
         item_id INTEGER,
-        ds TEXT
+        event_date DATE
     ),
-    grain [id, ds]
+    grain (id, event_date)
 );
 """
 
@@ -121,7 +120,7 @@ WHERE
   item_id < 0
 """
 
-EXAMPLE_SEED_DATA = """id,item_id,ds
+EXAMPLE_SEED_DATA = """id,item_id,event_date
 1,2,2020-01-01
 2,1,2020-01-01
 3,3,2020-01-03
@@ -138,13 +137,13 @@ EXAMPLE_TEST = f"""test_example_full_model:
       rows:
       - id: 1
         item_id: 1
-        ds: '2020-01-01'
+        event_date: '2020-01-01'
       - id: 2
         item_id: 1
-        ds: '2020-01-02'
+        event_date: '2020-01-02'
       - id: 3
         item_id: 2
-        ds: '2020-01-03'
+        event_date: '2020-01-03'
   outputs:
     query:
       rows:

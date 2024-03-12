@@ -67,14 +67,17 @@ jobs:
           name: Install OpenJDK
           command: sudo apt-get update && sudo apt-get install default-jdk
       - run:
-          name: Install dependencies
-          command: make install-dev
+          name: Install ODBC
+          command: sudo apt-get install unixodbc-dev
+      - run:
+          name: Install SQLMesh and dbt adapter dependencies
+          command: make install-cicd-test
       - run:
           name: Run linters and code style checks
           command: make py-style
       - run:
           name: Run slow tests
-          command: make slow-test
+          command: make cicd-test
 
   style_and_slow_tests_pydantic_v1:
     docker:
@@ -89,17 +92,20 @@ jobs:
           name: Install OpenJDK
           command: sudo apt-get update && sudo apt-get install default-jdk
       - run:
-          name: Install dependencies
-          command: make install-dev
+          name: Install ODBC
+          command: sudo apt-get install unixodbc-dev
+      - run:
+          name: Install SQLMesh and dbt adapter dependencies
+          command: make install-cicd-test
       - run:
           name: Install Pydantic v1
-          command: pip install --upgrade "pydantic<2.0.0"
+          command: pip install --upgrade "pydantic<2.0.0" && pip uninstall pydantic_core -y
       - run:
           name: Run linters and code style checks
           command: make py-style
       - run:
           name: Run slow tests
-          command: make slow-test
+          command: make cicd-test
 
   ui_style:
     docker:
@@ -128,7 +134,7 @@ jobs:
 
   ui_test:
     docker:
-      - image: mcr.microsoft.com/playwright:v1.40.1-jammy 
+      - image: mcr.microsoft.com/playwright:v1.40.1-jammy
     resource_class: medium
     steps:
       - halt_unless_client

@@ -5,6 +5,7 @@ import pytest
 from sqlmesh.core.config import (
     AutoCategorizationMode,
     CategorizerConfig,
+    Config,
     load_config_from_paths,
 )
 from sqlmesh.integrations.github.cicd.config import MergeMethod
@@ -25,6 +26,7 @@ model_defaults:
 """,
     )
     config = load_config_from_paths(
+        Config,
         project_paths=[tmp_path / "config.yaml"],
     )
     assert config.cicd_bot.type_ == "github"
@@ -32,7 +34,7 @@ model_defaults:
     assert config.cicd_bot.merge_method is None
     assert config.cicd_bot.command_namespace is None
     assert config.cicd_bot.auto_categorize_changes == CategorizerConfig.all_off()
-    assert config.cicd_bot.default_pr_start == "1 day ago"
+    assert config.cicd_bot.default_pr_start is None
     assert not config.cicd_bot.enable_deploy_command
     assert config.cicd_bot.skip_pr_backfill
     assert config.cicd_bot.pr_include_unmodified is None
@@ -62,6 +64,7 @@ model_defaults:
 """,
     )
     config = load_config_from_paths(
+        Config,
         project_paths=[tmp_path / "config.yaml"],
     )
     assert config.cicd_bot.type_ == "github"
@@ -95,6 +98,7 @@ config = Config(
 """,
     )
     config = load_config_from_paths(
+        Config,
         project_paths=[tmp_path / "config.py"],
     )
     assert config.cicd_bot.type_ == "github"
@@ -102,7 +106,7 @@ config = Config(
     assert config.cicd_bot.merge_method is None
     assert config.cicd_bot.command_namespace is None
     assert config.cicd_bot.auto_categorize_changes == CategorizerConfig.all_off()
-    assert config.cicd_bot.default_pr_start == "1 day ago"
+    assert config.cicd_bot.default_pr_start is None
     assert not config.cicd_bot.enable_deploy_command
     assert config.cicd_bot.skip_pr_backfill
     assert config.cicd_bot.pr_include_unmodified is None
@@ -138,6 +142,7 @@ config = Config(
     )
 
     config = load_config_from_paths(
+        Config,
         project_paths=[tmp_path / "config.py"],
     )
     assert config.cicd_bot.type_ == "github"
@@ -172,7 +177,7 @@ model_defaults:
     with pytest.raises(
         ValueError, match="enable_deploy_command must be set if command_namespace is set"
     ):
-        load_config_from_paths(project_paths=[tmp_path / "config.yaml"])
+        load_config_from_paths(Config, project_paths=[tmp_path / "config.yaml"])
 
     create_temp_file(
         tmp_path,
@@ -188,4 +193,4 @@ model_defaults:
     with pytest.raises(
         ValueError, match="merge_method must be set if enable_deploy_command is True"
     ):
-        load_config_from_paths(project_paths=[tmp_path / "config.yaml"])
+        load_config_from_paths(Config, project_paths=[tmp_path / "config.yaml"])

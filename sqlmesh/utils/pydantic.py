@@ -7,7 +7,9 @@ from functools import cached_property, wraps
 
 import pydantic
 from pydantic.fields import FieldInfo
-from sqlglot import exp
+from sqlglot import exp, parse_one
+from sqlglot.helper import ensure_list
+from sqlglot.optimizer.normalize_identifiers import normalize_identifiers
 
 from sqlmesh.core import dialect as d
 from sqlmesh.utils import str_to_bool
@@ -76,8 +78,8 @@ def _expression_encoder(e: exp.Expression) -> str:
     return e.meta.get("sql") or e.sql(dialect=e.meta.get("dialect"))
 
 
-AuditQueryTypes = t.Union[exp.Subqueryable, d.JinjaQuery]
-ModelQueryTypes = t.Union[exp.Subqueryable, d.JinjaQuery, d.MacroFunc]
+AuditQueryTypes = t.Union[exp.Query, d.JinjaQuery]
+ModelQueryTypes = t.Union[exp.Query, d.JinjaQuery, d.MacroFunc]
 
 
 class PydanticModel(pydantic.BaseModel):
@@ -113,7 +115,7 @@ class PydanticModel(pydantic.BaseModel):
         self,
         **kwargs: t.Any,
     ) -> t.Dict[str, t.Any]:
-        kwargs.update(DEFAULT_ARGS)
+        kwargs = {**DEFAULT_ARGS, **kwargs}
         if PYDANTIC_MAJOR_VERSION >= 2:
             return super().model_dump(**kwargs)  # type: ignore
 
@@ -127,7 +129,7 @@ class PydanticModel(pydantic.BaseModel):
         self,
         **kwargs: t.Any,
     ) -> str:
-        kwargs.update(DEFAULT_ARGS)
+        kwargs = {**DEFAULT_ARGS, **kwargs}
         if PYDANTIC_MAJOR_VERSION >= 2:
             # Pydantic v2 doesn't support arbitrary arguments for json.dump().
             if kwargs.pop("sort_keys", False):
@@ -287,11 +289,56 @@ def positive_int_validator(v: t.Any) -> int:
     return v
 
 
+def _get_fields(
+    v: t.Any,
+    values: t.Any,
+) -> t.List[exp.Expression]:
+    values = values if isinstance(values, dict) else values.data
+    dialect = values.get("dialect")
+
+    if isinstance(v, (exp.Tuple, exp.Array)):
+        expressions: t.List[exp.Expression] = v.expressions
+    elif isinstance(v, exp.Expression):
+        expressions = [v]
+    else:
+        expressions = [
+            parse_one(entry, dialect=dialect) if isinstance(entry, str) else entry
+            for entry in ensure_list(v)
+        ]
+
+    results = []
+
+    for expr in expressions:
+        expr = normalize_identifiers(
+            exp.column(expr) if isinstance(expr, exp.Identifier) else expr,
+            dialect=dialect,
+        )
+        expr.meta["dialect"] = dialect
+        results.append(expr)
+
+    return results
+
+
+def list_of_fields_validator(v: t.Any, values: t.Any) -> t.List[exp.Expression]:
+    return _get_fields(v, values)
+
+
+def list_of_columns_or_star_validator(
+    v: t.Any, values: t.Any
+) -> t.Union[exp.Star, t.List[exp.Column]]:
+    expressions = _get_fields(v, values)
+    if len(expressions) == 1 and isinstance(expressions[0], exp.Star):
+        return t.cast(exp.Star, expressions[0])
+    return t.cast(t.List[exp.Column], expressions)
+
+
 if t.TYPE_CHECKING:
     SQLGlotListOfStrings = t.List[str]
     SQLGlotString = str
     SQLGlotBool = bool
     SQLGlotPositiveInt = int
+    SQLGlotListOfFields = t.List[exp.Expression]
+    SQLGlotListOfColumnsOrStar = t.Union[t.List[exp.Column], exp.Star]
 elif PYDANTIC_MAJOR_VERSION >= 2:
     from pydantic.functional_validators import BeforeValidator  # type: ignore
 
@@ -299,6 +346,12 @@ elif PYDANTIC_MAJOR_VERSION >= 2:
     SQLGlotString = Annotated[str, BeforeValidator(validate_string)]
     SQLGlotBool = Annotated[bool, BeforeValidator(bool_validator)]
     SQLGlotPositiveInt = Annotated[int, BeforeValidator(positive_int_validator)]
+    SQLGlotListOfFields = Annotated[
+        t.List[exp.Expression], BeforeValidator(list_of_fields_validator)
+    ]
+    SQLGlotListOfColumnsOrStar = Annotated[
+        t.Union[t.List[exp.Column], exp.Star], BeforeValidator(list_of_columns_or_star_validator)
+    ]
 else:
 
     class PydanticTypeProxy(t.Generic[T]):
@@ -319,3 +372,9 @@ else:
 
     class SQLGlotPositiveInt(PydanticTypeProxy[int]):
         validate = positive_int_validator
+
+    class SQLGlotListOfFields(PydanticTypeProxy[t.List[exp.Expression]]):
+        validate = list_of_fields_validator
+
+    class SQLGlotListOfColumnsOrStar(PydanticTypeProxy[t.Union[exp.Star, t.List[exp.Column]]]):
+        validate = list_of_columns_or_star_validator

@@ -1,12 +1,16 @@
 import { type MouseEvent } from 'react'
 import useActiveFocus from '~/hooks/useActiveFocus'
 import { EnumSize, EnumVariant } from '~/types/enum'
-import { includes, isFalse } from '~/utils'
+import { isFalse, isNil } from '~/utils'
 import { Button } from '../button/Button'
 import { EnumPlanAction, ModelPlanAction } from '@models/plan-action'
 import { useStorePlan } from '@context/plan'
 import { useStoreContext } from '@context/context'
-import { AddEnvironment, SelectEnvironemnt } from '~/library/pages/root/Page'
+import { Transition } from '@headlessui/react'
+import { useNavigate } from 'react-router-dom'
+import { SelectEnvironment } from '@components/environmentDetails/SelectEnvironment'
+import { AddEnvironment } from '@components/environmentDetails/AddEnvironment'
+import { usePlan } from './context'
 
 export default function PlanActions({
   run,
@@ -19,12 +23,19 @@ export default function PlanActions({
   cancel: () => void
   reset: () => void
 }): JSX.Element {
+  const navigate = useNavigate()
+  const { change_categorization } = usePlan()
+
+  const modules = useStoreContext(s => s.modules)
   const environment = useStoreContext(s => s.environment)
   const environments = useStoreContext(s => s.environments)
   const addConfirmation = useStoreContext(s => s.addConfirmation)
   const setShowConfirmation = useStoreContext(s => s.setShowConfirmation)
 
   const planAction = useStorePlan(s => s.planAction)
+  const planOverview = useStorePlan(s => s.planOverview)
+  const planApply = useStorePlan(s => s.planApply)
+  const planCancel = useStorePlan(s => s.planCancel)
 
   const setFocus = useActiveFocus<HTMLButtonElement>()
 
@@ -40,18 +51,35 @@ export default function PlanActions({
     cancel()
   }
 
+  function handleGoBack(e: MouseEvent): void {
+    e.stopPropagation()
+
+    navigate(-1)
+  }
+
   function handleApply(e: MouseEvent): void {
     e.stopPropagation()
 
-    if (environment.isProd && isFalse(environment.isInitial)) {
+    const isProd = environment.isProd && isFalse(environment.isInitial)
+    const hasUncategorized = Array.from(change_categorization.values()).some(
+      c => isNil(c.category),
+    )
+
+    if (isProd) {
       addConfirmation({
         headline: 'Applying Plan Directly On Prod Environment!',
-        description: `Are you sure you want to apply your changes directly on prod? Safer choice will be to select or add new environment first.`,
+        tagline: 'Safer choice will be to select or add new environment first.',
+        description:
+          'Are you sure you want to apply your changes directly on prod?',
         yesText: `Yes, Run ${environment.name}`,
         noText: 'No, Cancel',
-        action() {
-          apply()
-        },
+        action: apply,
+        details: hasUncategorized
+          ? [
+              'ATTENTION!',
+              '[Breaking Change] category will be applied to all uncategorized changes',
+            ]
+          : undefined,
         children: (
           <div className="mt-5 pt-4">
             <h4 className="mb-2">{`${
@@ -59,7 +87,7 @@ export default function PlanActions({
             }Add Environment`}</h4>
             <div className="flex items-center relative">
               {environments.size > 1 && (
-                <SelectEnvironemnt
+                <SelectEnvironment
                   className="mr-2"
                   showAddEnvironment={false}
                   onSelect={() => {
@@ -80,7 +108,20 @@ export default function PlanActions({
         ),
       })
     } else {
-      apply()
+      if (hasUncategorized) {
+        addConfirmation({
+          headline: 'Some changes are missing categorization!',
+          description: 'Are you sure you want to proceed?',
+          details: [
+            '[Breaking Change] category will be applied to all uncategorized changes',
+          ],
+          yesText: 'Yes, Apply',
+          noText: 'No, Cancel',
+          action: apply,
+        })
+      } else {
+        apply()
+      }
     }
   }
 
@@ -90,81 +131,123 @@ export default function PlanActions({
     run()
   }
 
+  const isFailedOrCanceled =
+    planOverview.isFailed || planApply.isFailed || planCancel.isSuccessful
+  const showPlanActionButton =
+    isFalse(planAction.isCancelling) &&
+    isFalse(planAction.isDone) &&
+    (planAction.isProcessing ? isFalse(planCancel.isSuccessful) : true) &&
+    isFalse(isFailedOrCanceled)
+  const showCancelButton =
+    planAction.isApplying ||
+    planCancel.isCancelling ||
+    (planApply.isRunning && planOverview.isFinished)
+  const showResetButton =
+    isFailedOrCanceled ||
+    (isFalse(planAction.isProcessing) &&
+      isFalse(planAction.isRun) &&
+      isFalse(planAction.isDone))
+  const showBackButton = modules.showHistoryNavigation
+
   return (
     <>
-      <div className="flex justify-between px-4 pb-2">
+      <div className="flex justify-between pt-2 pl-4 pr-2 pb-2">
         <div className="flex w-full items-center">
-          {(planAction.isRun || planAction.isRunning) && (
-            <Button
-              disabled={planAction.isRunning}
-              onClick={handleRun}
-              ref={setFocus}
-              variant={EnumVariant.Primary}
-              autoFocus
-            >
-              <span>
-                {ModelPlanAction.getActionDisplayName(planAction, [
-                  EnumPlanAction.RunningTask,
-                  EnumPlanAction.Running,
-                  EnumPlanAction.Run,
-                ])}
-              </span>
-            </Button>
-          )}
-          {(planAction.isApply || planAction.isApplying) && (
-            <Button
-              onClick={handleApply}
-              disabled={planAction.isApplying}
-              ref={setFocus}
-              variant={EnumVariant.Primary}
-            >
-              {ModelPlanAction.getActionDisplayName(
-                planAction,
-                [
-                  EnumPlanAction.Applying,
-                  EnumPlanAction.ApplyBackfill,
-                  EnumPlanAction.ApplyVirtual,
-                  EnumPlanAction.ApplyChangesAndBackfill,
-                  EnumPlanAction.ApplyMetadata,
-                ],
-                'Apply',
-              )}
-            </Button>
-          )}
-          {planAction.isProcessing && (
+          <Transition
+            appear
+            show={showPlanActionButton}
+            enter="transition ease duration-300 transform"
+            enterFrom="opacity-0 scale-95"
+            enterTo="opacity-100 scale-100"
+            leave="transition ease duration-300 transform"
+            leaveFrom="opacity-100 scale-100"
+            leaveTo="opacity-0 scale-95"
+            className="trasition-all duration-300 ease-in-out"
+          >
+            {showPlanActionButton && (
+              <Button
+                disabled={
+                  planAction.isProcessing ||
+                  planCancel.isSuccessful ||
+                  planAction.isDone
+                }
+                onClick={
+                  planAction.isRun
+                    ? handleRun
+                    : planCancel.isSuccessful
+                    ? undefined
+                    : handleApply
+                }
+                ref={setFocus}
+                variant={
+                  planCancel.isSuccessful
+                    ? EnumVariant.Danger
+                    : EnumVariant.Primary
+                }
+                autoFocus
+                className="trasition-all duration-300 ease-in-out"
+              >
+                <span>
+                  {ModelPlanAction.getActionDisplayName(
+                    planAction,
+                    planCancel.isSuccessful
+                      ? []
+                      : [
+                          EnumPlanAction.RunningTask,
+                          EnumPlanAction.Running,
+                          EnumPlanAction.Run,
+                          EnumPlanAction.Applying,
+                          EnumPlanAction.ApplyBackfill,
+                          EnumPlanAction.ApplyVirtual,
+                          EnumPlanAction.ApplyChangesAndBackfill,
+                          EnumPlanAction.ApplyMetadata,
+                        ],
+                    planCancel.isSuccessful ? 'Canceled' : 'Done',
+                  )}
+                </span>
+              </Button>
+            )}
+          </Transition>
+        </div>
+        <div className="flex items-center">
+          {showCancelButton && (
             <Button
               onClick={handleCancel}
               variant={EnumVariant.Danger}
-              className="justify-self-end"
-              disabled={planAction.isCancelling}
+              disabled={
+                planAction.isCancelling ||
+                (planAction.isProcessing && planCancel.isSuccessful)
+              }
             >
               {ModelPlanAction.getActionDisplayName(
                 planAction,
-                [EnumPlanAction.Cancelling],
-                'Cancel',
+                planAction.isProcessing && isFalse(planCancel.isSuccessful)
+                  ? [EnumPlanAction.Cancelling]
+                  : [],
+                planCancel.isSuccessful
+                  ? 'Finishing Cancellation...'
+                  : 'Cancel',
               )}
             </Button>
           )}
-        </div>
-        <div className="flex items-center">
-          {[planAction.isProcessing, planAction.isRun].every(isFalse) && (
+          {showResetButton && (
             <Button
               onClick={handleReset}
-              variant={EnumVariant.Neutral}
-              disabled={includes(
-                [
-                  EnumPlanAction.Running,
-                  EnumPlanAction.Applying,
-                  EnumPlanAction.Cancelling,
-                ],
-                planAction.value,
-              )}
+              variant={EnumVariant.Info}
+              disabled={
+                planAction.isCancelling ||
+                (planAction.isProcessing && planCancel.isSuccessful)
+              }
             >
-              {ModelPlanAction.getActionDisplayName(
-                planAction,
-                [],
-                'Start Over',
-              )}
+              Start Over
+            </Button>
+          )}
+          {showBackButton && (
+            <Button
+              onClick={handleGoBack}
+              variant={EnumVariant.Info}
+            >
+              Go Back
             </Button>
           )}
         </div>

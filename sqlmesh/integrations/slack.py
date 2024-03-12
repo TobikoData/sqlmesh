@@ -80,16 +80,16 @@ def divider_block() -> dict:
 
 
 def fields_section_block(*messages: str) -> dict:
-    """Create a section block with multiple fields"""
+    """Create a section block with multiple markdown fields"""
     return {
         "type": "section",
-        **{
-            "fields": {
+        "fields": [
+            {
                 "type": "mrkdwn",
                 "text": normalize_message(message),
             }
             for message in messages
-        },
+        ],
     }
 
 
@@ -101,6 +101,30 @@ def text_section_block(message: str) -> dict:
             "type": "mrkdwn",
             "text": normalize_message(message),
         },
+    }
+
+
+def preformatted_rich_text_block(message: str) -> dict:
+    """Create a "rich text" block with pre-formatted text (i.e.: a code block).
+
+    Note that this can also be acheived with text_section_block and using markdown's
+    triple backticks.
+    This function avoids issues with the text containing such backticks and also does
+    not require editing the message in order to insert such backticks.
+    """
+    return {
+        "type": "rich_text",
+        "elements": [
+            {
+                "type": "rich_text_preformatted",
+                "elements": [
+                    {
+                        "type": "text",
+                        "text": normalize_message(message),
+                    },
+                ],
+            },
+        ],
     }
 
 

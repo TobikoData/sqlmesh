@@ -34,4 +34,23 @@ sushi:
       schema: sushi
       threads: 1
       type: redshift
+    sqlserver:
+      host: "{{ env_var('SQLSERVER_HOST') }}"
+      user: "{{ env_var('SQLSERVER_USER') }}"
+      password: "{{ env_var('SQLSERVER_PASSWORD') }}"
+      database: "{{ env_var('SQLSERVER_DATABASE') }}"
+      driver: "{{ env_var('SQLSERVER_DRIVER') }}"
+      authentication: sql
+      schema: sushi
+      threads: 1
+      type: sqlserver
+    trino:
+      type: trino
+      method: none
+      http_scheme: http
+      user: "{{ env_var('TRINO_USER') }}"
+      host: "{{ env_var('TRINO_HOST') }}"
+      database: "{{ env_var('TRINO_DATABASE') }}"
+      schema: sushi
+      threads: 1
   target: in_memory

@@ -62,7 +62,7 @@ class DbtContext:
     def dialect(self) -> str:
         if not self.target:
             raise SQLMeshError("Target must be configured before calling the dialect property.")
-        return self.target.type
+        return self.target.dialect
 
     @property
     def project_name(self) -> t.Optional[str]:

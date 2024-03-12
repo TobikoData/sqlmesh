@@ -1,15 +1,15 @@
 import clsx from 'clsx'
-import React, { memo } from 'react'
+import React from 'react'
 import { EnumVariant, type Variant } from '~/types/enum'
 
 interface PropsSpinner extends React.SVGAttributes<SVGAElement> {
   variant?: Variant
 }
 
-function Spinner({
+export default function Spinner({
   style,
   className,
-  variant = EnumVariant.Primary,
+  variant = EnumVariant.Info,
 }: PropsSpinner): JSX.Element {
   return (
     <svg
@@ -51,5 +51,3 @@ function Spinner({
     </svg>
   )
 }
-
-export default memo(Spinner)

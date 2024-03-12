@@ -13,50 +13,13 @@ from sqlmesh.core.context import Context
 from sqlmesh.core.environment import Environment
 from sqlmesh.utils.errors import PlanError
 from web.server.api.endpoints.files import _get_file_with_content
-from web.server.main import api_console, app
-from web.server.settings import Settings, get_loaded_context, get_settings
+from web.server.main import app
+from web.server.settings import get_settings
 
 pytestmark = pytest.mark.web
 
 
 client = TestClient(app)
-
-
-@pytest.fixture
-def project_tmp_path(tmp_path: Path) -> Path:
-    def get_settings_override() -> Settings:
-        return Settings(project_path=tmp_path)
-
-    config = tmp_path / "config.py"
-    config.write_text(
-        """from sqlmesh.core.config import Config, ModelDefaultsConfig
-config = Config(model_defaults=ModelDefaultsConfig(dialect=''))
-    """
-    )
-
-    app.dependency_overrides[get_settings] = get_settings_override
-    return tmp_path
-
-
-@pytest.fixture
-def project_context(project_tmp_path: Path) -> Context:
-    context = Context(paths=project_tmp_path, console=api_console)
-
-    def get_loaded_context_override() -> Context:
-        return context
-
-    app.dependency_overrides[get_loaded_context] = get_loaded_context_override
-    return context
-
-
-@pytest.fixture
-def web_sushi_context(sushi_context: Context) -> Context:
-    def get_context_override() -> Context:
-        sushi_context.console = api_console
-        return sushi_context
-
-    app.dependency_overrides[get_loaded_context] = get_context_override
-    return sushi_context
 
 
 def test_get_files(project_tmp_path: Path) -> None:
@@ -190,7 +153,7 @@ def test_rename_file_and_keep_content(project_tmp_path: Path) -> None:
     assert not txt_file.exists()
 
 
-def test_rename_file_not_found() -> None:
+def test_rename_file_not_found(project_tmp_path: Path) -> None:
     response = client.post("/api/files/foo.txt", json={"new_path": "baz.txt"})
     assert response.status_code == 404
 
@@ -224,7 +187,7 @@ def test_rename_file_to_existing_directory(project_tmp_path: Path) -> None:
     assert foo_file.exists()
 
 
-def test_write_file_empty_body() -> None:
+def test_write_file_empty_body(project_tmp_path: Path) -> None:
     response = client.post("/api/files/foo.txt", json={})
     assert response.status_code == 204
 
@@ -238,7 +201,7 @@ def test_delete_file(project_tmp_path: Path) -> None:
     assert not txt_file.exists()
 
 
-def test_delete_file_not_found() -> None:
+def test_delete_file_not_found(project_tmp_path: Path) -> None:
     response = client.delete("/api/files/not_found.txt")
     assert response.status_code == 404
 
@@ -401,8 +364,7 @@ async def test_cancel() -> None:
 
 def test_cancel_no_task() -> None:
     response = client.post("/api/plan/cancel")
-    assert response.status_code == 422
-    assert response.json()["message"] == "Plan/apply is not running"
+    assert response.status_code == 204
 
 
 def test_evaluate(web_sushi_context: Context) -> None:
@@ -420,6 +382,21 @@ def test_evaluate(web_sushi_context: Context) -> None:
     with pa.ipc.open_stream(response.content) as reader:
         df = reader.read_pandas()
     assert not df.empty
+
+
+def test_meta() -> None:
+    from sqlmesh.cli.main import _sqlmesh_version
+
+    response = client.get("/api/meta")
+    assert response.status_code == 200
+    assert response.json() == {"version": _sqlmesh_version(), "has_running_task": False}
+
+
+def test_modules() -> None:
+    settings = get_settings()
+    response = client.get("/api/modules")
+    assert response.status_code == 200
+    assert response.json() == list(settings.modules)
 
 
 def test_fetchdf(web_sushi_context: Context) -> None:
@@ -509,121 +486,6 @@ def test_delete_environment_failure(web_sushi_context: Context, mocker: MockerFi
 
     assert response.status_code == 422
     assert response.json()["message"] == "Unable to delete environments"
-
-
-def test_get_lineage(web_sushi_context: Context) -> None:
-    response = client.get("/api/lineage/sushi.waiters/event_date")
-
-    assert response.status_code == 200
-    assert response.json() == {
-        '"memory"."sushi"."waiters"': {
-            "event_date": {
-                "source": """SELECT DISTINCT
-  CAST(o.event_date AS DATE) AS event_date
-FROM (
-  SELECT
-    CAST(NULL AS INT) AS id,
-    CAST(NULL AS INT) AS customer_id,
-    CAST(NULL AS INT) AS waiter_id,
-    CAST(NULL AS INT) AS start_ts,
-    CAST(NULL AS INT) AS end_ts,
-    CAST(NULL AS DATE) AS event_date
-  FROM (VALUES
-    (1)) AS t(dummy)
-) AS o /* source: memory.sushi.orders */
-WHERE
-  o.event_date <= CAST('1970-01-01' AS DATE)
-  AND o.event_date >= CAST('1970-01-01' AS DATE)""",
-                "expression": "CAST(o.event_date AS DATE) AS event_date",
-                "models": {'"memory"."sushi"."orders"': ["event_date"]},
-            }
-        },
-        '"memory"."sushi"."orders"': {
-            "event_date": {
-                "source": "SELECT\n  CAST(NULL AS DATE) AS event_date\nFROM (VALUES\n  (1)) AS t(dummy)",
-                "expression": "CAST(NULL AS DATE) AS event_date",
-                "models": {},
-            }
-        },
-    }
-
-
-def test_get_lineage_external_model(project_context: Context) -> None:
-    project_tmp_path = project_context.path
-    models_dir = project_tmp_path / "models"
-    models_dir.mkdir()
-    foo_sql_file = models_dir / "foo.sql"
-    foo_sql_file.write_text("MODEL (name foo); SELECT id FROM bar;")
-    bar_sql_file = models_dir / "bar.sql"
-    bar_sql_file.write_text("MODEL (name bar); SELECT * FROM baz;")
-    baz_sql_file = models_dir / "baz.sql"
-    baz_sql_file.write_text("MODEL (name baz); SELECT * FROM external_table;")
-    project_context.load()
-
-    response = client.get("/api/lineage/foo/id")
-    assert response.status_code == 200, response.json()
-    assert response.json() == {
-        '"foo"': {
-            "id": {
-                "source": """SELECT
-  bar.id AS id
-FROM (
-  SELECT
-    *
-  FROM (
-    SELECT
-      *
-    FROM external_table AS external_table
-  ) AS baz /* source: baz */
-) AS bar /* source: bar */""",
-                "expression": "bar.id AS id",
-                "models": {'"bar"': ["id"]},
-            }
-        },
-        '"bar"': {
-            "id": {
-                "source": """SELECT
-  *
-FROM (
-  SELECT
-    *
-  FROM external_table AS external_table
-) AS baz /* source: baz */""",
-                "expression": "*",
-                "models": {},
-            }
-        },
-    }
-
-
-def test_get_lineage_managed_columns(web_sushi_context: Context) -> None:
-    # Get lineage with upstream managed columns
-    response = client.get("/api/lineage/sushi.customers/customer_id")
-    assert response.status_code == 200
-    assert "valid_from" in response.text
-    assert "valid_to" in response.text
-
-    # Get lineage of managed column
-    response = client.get("/api/lineage/sushi.marketing/valid_from")
-    assert response.status_code == 200
-    assert response.json() == {
-        '"memory"."sushi"."marketing"': {
-            "valid_from": {
-                "source": """SELECT
-  CAST(NULL AS TIMESTAMP) AS valid_from
-FROM (
-  SELECT
-    CAST(NULL AS INT) AS customer_id,
-    CAST(NULL AS TEXT) AS status,
-    CAST(NULL AS TIMESTAMP) AS updated_at
-  FROM (VALUES
-    (1)) AS t(dummy)
-) AS raw_marketing /* source: memory.sushi.raw_marketing */""",
-                "expression": "CAST(NULL AS TIMESTAMP) AS valid_from",
-                "models": {},
-            }
-        }
-    }
 
 
 def test_table_diff(web_sushi_context: Context) -> None:

@@ -2,7 +2,11 @@ import { Disclosure, Popover, Transition } from '@headlessui/react'
 import pluralize from 'pluralize'
 import clsx from 'clsx'
 import React, { useState, Fragment, useEffect } from 'react'
-import { useIDE, type ErrorIDE, type ErrorKey } from '../../pages/ide/context'
+import {
+  useNotificationCenter,
+  type ErrorIDE,
+  type ErrorKey,
+} from '../../pages/root/context/notificationCenter'
 import { isNil, isNotNil, toDate, toDateFormat } from '@utils/index'
 import { MinusCircleIcon, PlusCircleIcon } from '@heroicons/react/24/solid'
 import { Divider } from '@components/divider/Divider'
@@ -12,7 +16,7 @@ import { EnumSize, EnumVariant } from '~/types/enum'
 import SplitPane from '@components/splitPane/SplitPane'
 
 export default function ReportErrors(): JSX.Element {
-  const { errors, clearErrors } = useIDE()
+  const { errors, clearErrors } = useNotificationCenter()
 
   const [isShow, setIsShow] = useState(false)
 
@@ -40,8 +44,8 @@ export default function ReportErrors(): JSX.Element {
             className={clsx(
               'block ml-1 px-3 py-1 first-child:ml-0 rounded-full whitespace-nowrap font-bold text-xs text-center',
               hasError
-                ? 'border-danger-10 text-danger-500 bg-danger-10 cursor-pointer'
-                : 'border-neutral-10 cursor-default text-neutral-500 bg-neutral-10 dark:text-neutral-300',
+                ? 'text-danger-500 bg-danger-10 dark:bg-danger-20 cursor-pointer'
+                : 'bg-neutral-5 dark:bg-neutral-20 cursor-default text-neutral-500 dark:text-neutral-300',
             )}
           >
             {hasError ? (
@@ -62,7 +66,7 @@ export default function ReportErrors(): JSX.Element {
             leaveFrom="opacity-100 translate-y-0"
             leaveTo="opacity-0 translate-y-1"
           >
-            <Popover.Panel className="absolute top-20 right-2 z-[1000] flex flex-col rounded-md bg-light transform text-danger-700 shadow-2xl w-[90vw] max-h-[80vh]">
+            <Popover.Panel className="absolute top-10 right-2 z-[1000] flex flex-col rounded-md bg-light transform text-danger-700 shadow-2xl w-[90vw] max-h-[80vh]">
               <div className="flex justify-end mx-1 mt-2">
                 <Button
                   size={EnumSize.sm}
@@ -104,7 +108,7 @@ export function DisplayError({
   error: ErrorIDE
   withSplitPane?: boolean
 }): JSX.Element {
-  const { removeError } = useIDE()
+  const { removeError } = useNotificationCenter()
 
   const version = useStoreContext(s => s.version)
 
@@ -132,7 +136,7 @@ export function DisplayError({
           {isNotNil(error.traceback) && (
             <Disclosure defaultOpen={true}>
               {({ open }) => (
-                <div className="w-full h-full overflow-hidden">
+                <div className="flex flex-col w-full h-full overflow-hidden">
                   <Disclosure.Button className="flex items-center justify-between rounded-lg text-left w-full bg-neutral-10 px-3 my-2">
                     <div className="text-lg font-bold whitespace-nowrap w-full">
                       <h3 className="py-2">Traceback</h3>

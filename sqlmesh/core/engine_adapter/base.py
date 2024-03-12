@@ -6,6 +6,7 @@ generalize its functionality to different engines that have Python Database API 
 connections. Rather than executing queries directly against your data stores, SQLMesh components such as
 the SnapshotEvaluator delegate them to engine adapters so these components can be engine-agnostic.
 """
+
 from __future__ import annotations
 
 import contextlib
@@ -13,7 +14,6 @@ import itertools
 import logging
 import sys
 import typing as t
-from datetime import datetime, timezone
 from functools import partial
 
 import pandas as pd
@@ -39,14 +39,14 @@ from sqlmesh.core.engine_adapter.shared import (
 )
 from sqlmesh.core.model.kind import TimeColumn
 from sqlmesh.core.schema_diff import SchemaDiffer
-from sqlmesh.utils import double_escape, random_id
+from sqlmesh.utils import columns_to_types_all_known, double_escape, random_id
 from sqlmesh.utils.connection_pool import create_connection_pool
-from sqlmesh.utils.date import TimeLike, make_inclusive, to_ts
+from sqlmesh.utils.date import TimeLike, make_inclusive, to_time_column
 from sqlmesh.utils.errors import SQLMeshError, UnsupportedCatalogOperationError
 from sqlmesh.utils.pandas import columns_to_types_from_df
 
 if t.TYPE_CHECKING:
-    from sqlmesh.core._typing import SchemaName, TableName
+    from sqlmesh.core._typing import SchemaName, SessionProperties, TableName
     from sqlmesh.core.engine_adapter._typing import (
         DF,
         PySparkDataFrame,
@@ -79,12 +79,14 @@ class EngineAdapter:
 
     DIALECT = ""
     DEFAULT_BATCH_SIZE = 10000
-    DATA_OBJECT_FILTER_BATCH_SIZE = 1000
+    DATA_OBJECT_FILTER_BATCH_SIZE = 4000
     ESCAPE_JSON = False
     SUPPORTS_TRANSACTIONS = True
     SUPPORTS_INDEXES = False
     COMMENT_CREATION_TABLE = CommentCreationTable.IN_SCHEMA_DEF_CTAS
     COMMENT_CREATION_VIEW = CommentCreationView.IN_SCHEMA_DEF_AND_COMMANDS
+    MAX_TABLE_COMMENT_LENGTH: t.Optional[int] = None
+    MAX_COLUMN_COMMENT_LENGTH: t.Optional[int] = None
     INSERT_OVERWRITE_STRATEGY = InsertOverwriteStrategy.DELETE_INSERT
     SUPPORTS_MATERIALIZED_VIEWS = False
     SUPPORTS_MATERIALIZED_VIEW_SCHEMA = False
@@ -95,6 +97,7 @@ class EngineAdapter:
     SUPPORTS_ROW_LEVEL_OP = True
     HAS_VIEW_BINDING = False
     SUPPORTS_REPLACE_TABLE = True
+    DEFAULT_CATALOG_TYPE = DIALECT
 
     def __init__(
         self,
@@ -151,25 +154,6 @@ class EngineAdapter:
         return isinstance(value, pd.DataFrame)
 
     @classmethod
-    def _to_utc_timestamp(
-        cls, col: t.Union[str, exp.Literal, exp.Column, exp.Null], time_data_type: exp.DataType
-    ) -> exp.Cast:
-        def ensure_utc_exp(
-            ts: t.Union[str, exp.Literal, exp.Column, exp.Null]
-        ) -> t.Union[exp.Literal, exp.Column, exp.Null]:
-            if not isinstance(ts, (str, exp.Literal)):
-                return ts
-            if isinstance(ts, exp.Literal):
-                if not ts.is_string:
-                    raise SQLMeshError("Timestamp literal must be a string")
-                ts = ts.name
-            return exp.Literal.string(
-                datetime.fromisoformat(ts).astimezone(timezone.utc).strftime("%Y-%m-%d %H:%M:%S")
-            )
-
-        return exp.cast(exp.cast(ensure_utc_exp(col), "TIMESTAMP"), time_data_type)
-
-    @classmethod
     def _casted_columns(cls, columns_to_types: t.Dict[str, exp.DataType]) -> t.List[exp.Alias]:
         return [
             exp.alias_(exp.cast(exp.column(column), to=kind), column, copy=False)
@@ -194,7 +178,7 @@ class EngineAdapter:
         batch_size: t.Optional[int] = None,
     ) -> t.List[SourceQuery]:
         batch_size = self.DEFAULT_BATCH_SIZE if batch_size is None else batch_size
-        if isinstance(query_or_df, (exp.Subqueryable, exp.DerivedTable)):
+        if isinstance(query_or_df, (exp.Query, exp.DerivedTable)):
             return [SourceQuery(query_factory=lambda: query_or_df)]  # type: ignore
         if not columns_to_types:
             raise SQLMeshError(
@@ -247,14 +231,12 @@ class EngineAdapter:
     @t.overload
     def _columns_to_types(
         self, query_or_df: DF, columns_to_types: t.Optional[t.Dict[str, exp.DataType]] = None
-    ) -> t.Dict[str, exp.DataType]:
-        ...
+    ) -> t.Dict[str, exp.DataType]: ...
 
     @t.overload
     def _columns_to_types(
         self, query_or_df: Query, columns_to_types: t.Optional[t.Dict[str, exp.DataType]] = None
-    ) -> t.Optional[t.Dict[str, exp.DataType]]:
-        ...
+    ) -> t.Optional[t.Dict[str, exp.DataType]]: ...
 
     def _columns_to_types(
         self, query_or_df: QueryOrDF, columns_to_types: t.Optional[t.Dict[str, exp.DataType]] = None
@@ -281,6 +263,20 @@ class EngineAdapter:
     def set_current_catalog(self, catalog: str) -> None:
         """Sets the catalog name of the current connection."""
         raise NotImplementedError()
+
+    def get_catalog_type(self, catalog: t.Optional[str]) -> str:
+        """Intended to be overridden for data virtualization systems like Trino that,
+        depending on the target catalog, require slightly different properties to be set when creating / updating tables
+        """
+        if self.CATALOG_SUPPORT.is_unsupported:
+            raise UnsupportedCatalogOperationError(
+                f"{self.dialect} does not support catalogs and a catalog was provided: {catalog}"
+            )
+        return self.DEFAULT_CATALOG_TYPE
+
+    @property
+    def current_catalog_type(self) -> str:
+        return self.get_catalog_type(self.get_current_catalog())
 
     def replace_query(
         self,
@@ -343,10 +339,12 @@ class EngineAdapter:
                 ) as temp_table:
                     for source_query in source_queries:
                         source_query.add_transform(
-                            lambda node: temp_table  # type: ignore
-                            if isinstance(node, exp.Table)
-                            and quote_identifiers(node) == quote_identifiers(target_table)
-                            else node
+                            lambda node: (  # type: ignore
+                                temp_table  # type: ignore
+                                if isinstance(node, exp.Table)
+                                and quote_identifiers(node) == quote_identifiers(target_table)
+                                else node
+                            )
                         )
                     return self._insert_overwrite_by_condition(
                         target_table,
@@ -381,7 +379,7 @@ class EngineAdapter:
             this=exp.Index(
                 this=exp.to_identifier(index_name),
                 table=exp.to_table(table_name),
-                columns=[exp.to_column(c) for c in columns],
+                params=exp.IndexParameters(columns=[exp.to_column(c) for c in columns]),
             ),
             kind="INDEX",
             exists=exists,
@@ -495,6 +493,17 @@ class EngineAdapter:
             kwargs: Optional create table properties.
         """
         table = exp.to_table(table_name)
+
+        if not columns_to_types_all_known(columns_to_types):
+            # It is ok if the columns types are not known if the table already exists and IF NOT EXISTS is set
+            if exists and self.table_exists(table_name):
+                return
+            raise SQLMeshError(
+                "Cannot create a table without knowing the column types. "
+                "Try casting the columns to an expected type or defining the columns in the model metadata. "
+                f"Columns to types: {columns_to_types}"
+            )
+
         primary_key_expression = (
             [exp.PrimaryKey(expressions=[exp.to_column(k) for k in primary_key])]
             if primary_key and self.SUPPORTS_INDEXES
@@ -554,11 +563,13 @@ class EngineAdapter:
                 exp.ColumnDef(
                     this=exp.to_identifier(column),
                     kind=None if is_view else kind,  # don't include column data type for views
-                    constraints=self._build_col_comment_exp(column, column_descriptions)
-                    if column_descriptions
-                    and engine_supports_schema_comments
-                    and self.comments_enabled
-                    else None,
+                    constraints=(
+                        self._build_col_comment_exp(column, column_descriptions)
+                        if column_descriptions
+                        and engine_supports_schema_comments
+                        and self.comments_enabled
+                        else None
+                    ),
                 )
                 for column, kind in columns_to_types.items()
             ]
@@ -572,7 +583,9 @@ class EngineAdapter:
         if comment:
             return [
                 exp.ColumnConstraint(
-                    kind=exp.CommentColumnConstraint(this=exp.Literal.string(comment))
+                    kind=exp.CommentColumnConstraint(
+                        this=exp.Literal.string(self._truncate_column_comment(comment))
+                    )
                 )
             ]
         return []
@@ -604,13 +617,14 @@ class EngineAdapter:
         # types, and for evaluation methods like `LogicalReplaceQueryMixin.replace_query()`
         # calls and SCD Type 2 model calls.
         schema = None
+        columns_to_types_known = columns_to_types and columns_to_types_all_known(columns_to_types)
         if (
             column_descriptions
-            and columns_to_types
+            and columns_to_types_known
             and self.COMMENT_CREATION_TABLE.is_in_schema_def_ctas
             and self.comments_enabled
         ):
-            schema = self._build_schema_exp(table, columns_to_types, column_descriptions)
+            schema = self._build_schema_exp(table, columns_to_types, column_descriptions)  # type: ignore
 
         with self.transaction(condition=len(source_queries) > 1):
             for i, source_query in enumerate(source_queries):
@@ -659,9 +673,11 @@ class EngineAdapter:
                 exists=exists,
                 replace=replace,
                 columns_to_types=columns_to_types,
-                table_description=table_description
-                if self.COMMENT_CREATION_TABLE.supports_schema_def and self.comments_enabled
-                else None,
+                table_description=(
+                    table_description
+                    if self.COMMENT_CREATION_TABLE.supports_schema_def and self.comments_enabled
+                    else None
+                ),
                 **kwargs,
             )
         )
@@ -676,10 +692,18 @@ class EngineAdapter:
         **kwargs: t.Any,
     ) -> exp.Create:
         exists = False if replace else exists
+        catalog_name = None
         if not isinstance(table_name_or_schema, exp.Schema):
             table_name_or_schema = exp.to_table(table_name_or_schema)
+            catalog_name = table_name_or_schema.catalog
+        else:
+            if isinstance(table_name_or_schema.this, exp.Table):
+                catalog_name = table_name_or_schema.this.catalog
+
         properties = (
-            self._build_table_properties_exp(**kwargs, columns_to_types=columns_to_types)
+            self._build_table_properties_exp(
+                **kwargs, catalog_name=catalog_name, columns_to_types=columns_to_types
+            )
             if kwargs
             else None
         )
@@ -833,9 +857,11 @@ class EngineAdapter:
 
         create_view_properties = self._build_view_properties_exp(
             create_kwargs.pop("table_properties", None),
-            table_description
-            if self.COMMENT_CREATION_VIEW.supports_schema_def and self.comments_enabled
-            else None,
+            (
+                table_description
+                if self.COMMENT_CREATION_VIEW.supports_schema_def and self.comments_enabled
+                else None
+            ),
         )
         if create_view_properties:
             for view_property in create_view_properties.expressions:
@@ -974,13 +1000,11 @@ class EngineAdapter:
 
     @t.overload
     @classmethod
-    def _escape_json(cls, value: Query) -> Query:
-        ...
+    def _escape_json(cls, value: Query) -> Query: ...
 
     @t.overload
     @classmethod
-    def _escape_json(cls, value: str) -> str:
-        ...
+    def _escape_json(cls, value: str) -> str: ...
 
     @classmethod
     def _escape_json(cls, value: Query | str) -> Query | str:
@@ -992,9 +1016,11 @@ class EngineAdapter:
             if isinstance(value, str):
                 return double_escape(value)
             return value.transform(
-                lambda e: exp.Literal.string(double_escape(e.name))
-                if isinstance(e, exp.Literal) and e.args["is_string"]
-                else e
+                lambda e: (
+                    exp.Literal.string(double_escape(e.name))
+                    if isinstance(e, exp.Literal) and e.args["is_string"]
+                    else e
+                )
             )
         return value
 
@@ -1021,10 +1047,8 @@ class EngineAdapter:
     ) -> None:
         if contains_json:
             query = self._escape_json(query)
-        if order_projections and query.named_selects != list(columns_to_types):
-            if isinstance(query, exp.Subqueryable):
-                query = query.subquery(alias="_ordered_projections")
-            query = self._select_columns(columns_to_types).from_(query)
+        if order_projections:
+            query = self._order_projections_and_filter(query, columns_to_types)
         self.execute(exp.insert(query, table_name, columns=list(columns_to_types)))
 
     def insert_overwrite_by_partition(
@@ -1104,7 +1128,7 @@ class EngineAdapter:
             columns_to_types = columns_to_types or self.columns(table_name)
             for i, source_query in enumerate(source_queries):
                 with source_query as query:
-                    query = self._add_where_to_query(query, where, columns_to_types)
+                    query = self._order_projections_and_filter(query, columns_to_types, where=where)
                     if i > 0 or insert_overwrite_strategy.is_delete_insert:
                         if i == 0:
                             self.delete_from(table_name, where=where or exp.true())
@@ -1119,9 +1143,11 @@ class EngineAdapter:
                             query,
                             table,
                             # Change once Databricks supports REPLACE WHERE with columns
-                            columns=list(columns_to_types)
-                            if not insert_overwrite_strategy.is_replace_where
-                            else None,
+                            columns=(
+                                list(columns_to_types)
+                                if not insert_overwrite_strategy.is_replace_where
+                                else None
+                            ),
                             overwrite=insert_overwrite_strategy.is_insert_overwrite,
                         )
                         if insert_overwrite_strategy.is_replace_where:
@@ -1137,9 +1163,9 @@ class EngineAdapter:
     ) -> None:
         if contains_json and properties:
             properties = {
-                k: self._escape_json(v)
-                if isinstance(v, (str, exp.Subqueryable, exp.DerivedTable))
-                else v
+                k: (
+                    self._escape_json(v) if isinstance(v, (str, exp.Query, exp.DerivedTable)) else v
+                )
                 for k, v in properties.items()
             }
         self.execute(exp.update(table_name, properties, where=where))
@@ -1164,20 +1190,84 @@ class EngineAdapter:
             )
         )
 
-    def scd_type_2(
+    def scd_type_2_by_time(
         self,
         target_table: TableName,
         source_table: QueryOrDF,
         unique_key: t.Sequence[exp.Expression],
         valid_from_name: str,
         valid_to_name: str,
-        updated_at_name: str,
         execution_time: TimeLike,
+        updated_at_name: str,
+        invalidate_hard_deletes: bool = True,
         updated_at_as_valid_from: bool = False,
         columns_to_types: t.Optional[t.Dict[str, exp.DataType]] = None,
         table_description: t.Optional[str] = None,
         column_descriptions: t.Optional[t.Dict[str, str]] = None,
         **kwargs: t.Any,
+    ) -> None:
+        self._scd_type_2(
+            target_table=target_table,
+            source_table=source_table,
+            unique_key=unique_key,
+            valid_from_name=valid_from_name,
+            valid_to_name=valid_to_name,
+            execution_time=execution_time,
+            updated_at_name=updated_at_name,
+            invalidate_hard_deletes=invalidate_hard_deletes,
+            updated_at_as_valid_from=updated_at_as_valid_from,
+            columns_to_types=columns_to_types,
+            table_description=table_description,
+            column_descriptions=column_descriptions,
+        )
+
+    def scd_type_2_by_column(
+        self,
+        target_table: TableName,
+        source_table: QueryOrDF,
+        unique_key: t.Sequence[exp.Expression],
+        valid_from_name: str,
+        valid_to_name: str,
+        execution_time: TimeLike,
+        check_columns: t.Union[exp.Star, t.Sequence[exp.Column]],
+        invalidate_hard_deletes: bool = True,
+        execution_time_as_valid_from: bool = False,
+        columns_to_types: t.Optional[t.Dict[str, exp.DataType]] = None,
+        table_description: t.Optional[str] = None,
+        column_descriptions: t.Optional[t.Dict[str, str]] = None,
+        **kwargs: t.Any,
+    ) -> None:
+        self._scd_type_2(
+            target_table=target_table,
+            source_table=source_table,
+            unique_key=unique_key,
+            valid_from_name=valid_from_name,
+            valid_to_name=valid_to_name,
+            execution_time=execution_time,
+            check_columns=check_columns,
+            columns_to_types=columns_to_types,
+            invalidate_hard_deletes=invalidate_hard_deletes,
+            execution_time_as_valid_from=execution_time_as_valid_from,
+            table_description=table_description,
+            column_descriptions=column_descriptions,
+        )
+
+    def _scd_type_2(
+        self,
+        target_table: TableName,
+        source_table: QueryOrDF,
+        unique_key: t.Sequence[exp.Expression],
+        valid_from_name: str,
+        valid_to_name: str,
+        execution_time: TimeLike,
+        invalidate_hard_deletes: bool = True,
+        updated_at_name: t.Optional[str] = None,
+        check_columns: t.Optional[t.Union[exp.Star, t.Sequence[exp.Column]]] = None,
+        updated_at_as_valid_from: bool = False,
+        execution_time_as_valid_from: bool = False,
+        columns_to_types: t.Optional[t.Dict[str, exp.DataType]] = None,
+        table_description: t.Optional[str] = None,
+        column_descriptions: t.Optional[t.Dict[str, str]] = None,
     ) -> None:
         source_queries, columns_to_types = self._get_source_queries_and_columns_to_types(
             source_table, columns_to_types, target_table=target_table, batch_size=0
@@ -1187,10 +1277,25 @@ class EngineAdapter:
             columns_to_types = self.columns(target_table)
         if not columns_to_types:
             raise SQLMeshError(f"Could not get columns_to_types. Does {target_table} exist?")
-        if updated_at_name not in columns_to_types:
+        if not unique_key:
+            raise SQLMeshError("unique_key must be provided for SCD Type 2")
+        if check_columns and updated_at_name:
+            raise SQLMeshError(
+                "Cannot use both `check_columns` and `updated_at_name` for SCD Type 2"
+            )
+        if check_columns and updated_at_as_valid_from:
+            raise SQLMeshError(
+                "Cannot use both `check_columns` and `updated_at_as_valid_from` for SCD Type 2"
+            )
+        if execution_time_as_valid_from and not check_columns:
+            raise SQLMeshError(
+                "Cannot use `execution_time_as_valid_from` without `check_columns` for SCD Type 2"
+            )
+        if updated_at_name and updated_at_name not in columns_to_types:
             raise SQLMeshError(
                 f"Column {updated_at_name} not found in {target_table}. Table must contain an `updated_at` timestamp for SCD Type 2"
             )
+
         unmanaged_columns = [
             col for col in columns_to_types if col not in {valid_from_name, valid_to_name}
         ]
@@ -1198,12 +1303,110 @@ class EngineAdapter:
         select_source_columns: t.List[t.Union[str, exp.Alias]] = [
             col for col in unmanaged_columns if col != updated_at_name
         ]
-        select_source_columns.append(exp.cast(updated_at_name, time_data_type).as_(updated_at_name))
-        valid_from_start = (
-            updated_at_name
-            if updated_at_as_valid_from
-            else self._to_utc_timestamp("1970-01-01 00:00:00+00:00", time_data_type)
+        table_columns = [exp.column(c, quoted=True) for c in columns_to_types]
+        if updated_at_name:
+            select_source_columns.append(
+                exp.cast(updated_at_name, time_data_type).as_(updated_at_name)
+            )
+
+        # If a star is provided, we include all unmanaged columns in the check.
+        # This unnecessarily includes unique key columns but since they are used in the join, and therefore we know
+        # they are equal or not, the extra check is not a problem and we gain simplified logic here.
+        # If we want to change this, then we just need to check the expressions in unique_key and pull out the
+        # column names and then remove them from the unmanaged_columns
+        if check_columns and check_columns == exp.Star():
+            check_columns = [exp.column(col) for col in unmanaged_columns]
+        execution_ts = to_time_column(execution_time, time_data_type)
+        if updated_at_as_valid_from:
+            if not updated_at_name:
+                raise SQLMeshError(
+                    "Cannot use `updated_at_as_valid_from` without `updated_at_name` for SCD Type 2"
+                )
+            update_valid_from_start: t.Union[str, exp.Expression] = updated_at_name
+        elif execution_time_as_valid_from:
+            update_valid_from_start = execution_ts
+        else:
+            update_valid_from_start = to_time_column("1970-01-01 00:00:00+00:00", time_data_type)
+        insert_valid_from_start = execution_ts if check_columns else exp.column(updated_at_name)  # type: ignore
+        # joined._exists IS NULL is saying "if the row is deleted"
+        delete_check = (
+            exp.column("_exists", "joined").is_(exp.Null()) if invalidate_hard_deletes else None
         )
+        if check_columns:
+            row_check_conditions = []
+            for col in check_columns:
+                t_col = col.copy()
+                t_col.set("this", exp.to_identifier(f"t_{col.name}"))
+                row_check_conditions.extend(
+                    [
+                        col.neq(t_col),
+                        exp.and_(t_col.is_(exp.Null()), col.is_(exp.Null()).not_()),
+                        exp.and_(t_col.is_(exp.Null()).not_(), col.is_(exp.Null())),
+                    ]
+                )
+            row_value_check = exp.or_(*row_check_conditions)
+            unique_key_conditions = []
+            for col in unique_key:
+                t_col = col.copy()
+                t_col.set("this", exp.to_identifier(f"t_{col.name}"))
+                unique_key_conditions.extend(
+                    [t_col.is_(exp.Null()).not_(), col.is_(exp.Null()).not_()]
+                )
+            unique_key_check = exp.and_(*unique_key_conditions)
+            # unique_key_check is saying "if the row is updated"
+            # row_value_check is saying "if the row has changed"
+            updated_row_filter = exp.and_(unique_key_check, row_value_check)
+            valid_to_case_stmt = (
+                exp.Case()
+                .when(
+                    exp.and_(
+                        exp.or_(
+                            delete_check,
+                            updated_row_filter,
+                        )
+                    ),
+                    execution_ts,
+                )
+                .else_(exp.column(f"t_{valid_to_name}"))
+                .as_(valid_to_name)
+            )
+            valid_from_case_stmt = exp.func(
+                "COALESCE",
+                exp.column(f"t_{valid_from_name}"),
+                update_valid_from_start,
+            ).as_(valid_from_name)
+        else:
+            assert updated_at_name is not None
+            updated_row_filter = exp.column(updated_at_name) > exp.column(f"t_{updated_at_name}")
+
+            valid_to_case_stmt_builder = exp.Case().when(
+                updated_row_filter, exp.column(updated_at_name)
+            )
+            if delete_check:
+                valid_to_case_stmt_builder = valid_to_case_stmt_builder.when(
+                    delete_check, execution_ts
+                )
+            valid_to_case_stmt = valid_to_case_stmt_builder.else_(
+                exp.column(f"t_{valid_to_name}")
+            ).as_(valid_to_name)
+
+            valid_from_case_stmt = (
+                exp.Case()
+                .when(
+                    exp.and_(
+                        exp.column(f"t_{valid_from_name}").is_(exp.Null()),
+                        exp.column("_exists", "latest_deleted").is_(exp.Null()).not_(),
+                    ),
+                    exp.Case()
+                    .when(
+                        exp.column(valid_to_name, "latest_deleted") > exp.column(updated_at_name),
+                        exp.column(valid_to_name, "latest_deleted"),
+                    )
+                    .else_(exp.column(updated_at_name)),
+                )
+                .when(exp.column(f"t_{valid_from_name}").is_(exp.Null()), update_valid_from_start)
+                .else_(exp.column(f"t_{valid_from_name}"))
+            ).as_(valid_from_name)
         with source_queries[0] as source_query:
             query = (
                 exp.Select()  # type: ignore
@@ -1216,14 +1419,14 @@ class EngineAdapter:
                 # Historical Records that Do Not Change
                 .with_(
                     "static",
-                    self._select_columns(columns_to_types)
+                    exp.select(*table_columns)
                     .from_(target_table)
                     .where(f"{valid_to_name} IS NOT NULL"),
                 )
                 # Latest Records that can be updated
                 .with_(
                     "latest",
-                    self._select_columns(columns_to_types)
+                    exp.select(*table_columns)
                     .from_(target_table)
                     .where(f"{valid_to_name} IS NULL"),
                 )
@@ -1315,27 +1518,8 @@ class EngineAdapter:
                             ).as_(col)
                             for col in unmanaged_columns
                         ),
-                        f"""
-                        CASE
-                            WHEN t_{valid_from_name} IS NULL
-                                 AND latest_deleted._exists IS NOT NULL
-                            THEN CASE
-                                    WHEN latest_deleted.{valid_to_name} > {updated_at_name}
-                                    THEN latest_deleted.{valid_to_name}
-                                    ELSE {updated_at_name}
-                                 END
-                            WHEN t_{valid_from_name} IS NULL
-                            THEN {valid_from_start}
-                            ELSE t_{valid_from_name}
-                        END AS {valid_from_name}""",
-                        f"""
-                        CASE
-                            WHEN {updated_at_name} > t_{updated_at_name}
-                            THEN {updated_at_name}
-                            WHEN joined._exists IS NULL
-                            THEN {self._to_utc_timestamp(to_ts(execution_time), time_data_type)}
-                            ELSE t_{valid_to_name}
-                        END AS {valid_to_name}""",
+                        valid_from_case_stmt,
+                        valid_to_case_stmt,
                     )
                     .from_("joined")
                     .join(
@@ -1356,20 +1540,20 @@ class EngineAdapter:
                     "inserted_rows",
                     exp.select(
                         *unmanaged_columns,
-                        f"{updated_at_name} as {valid_from_name}",
-                        f"{self._to_utc_timestamp(exp.null(), time_data_type)} as {valid_to_name}",
+                        insert_valid_from_start.as_(valid_from_name),
+                        to_time_column(exp.null(), time_data_type).as_(valid_to_name),
                     )
                     .from_("joined")
-                    .where(f"{updated_at_name} > t_{updated_at_name}"),
+                    .where(updated_row_filter),
                 )
-                .select("*")
+                .select(*table_columns)
                 .from_("static")
                 .union(
-                    "SELECT * FROM updated_rows",
+                    exp.select(*table_columns).from_("updated_rows"),
                     distinct=False,
                 )
                 .union(
-                    "SELECT * FROM inserted_rows",
+                    exp.select(*table_columns).from_("inserted_rows"),
                     distinct=False,
                 )
             )
@@ -1583,19 +1767,19 @@ class EngineAdapter:
             self._connection_pool.commit()
 
     @contextlib.contextmanager
-    def session(self) -> t.Iterator[None]:
+    def session(self, properties: SessionProperties) -> t.Iterator[None]:
         """A session context manager."""
         if self._is_session_active():
             yield
             return
 
-        self._begin_session()
+        self._begin_session(properties)
         try:
             yield
         finally:
             self._end_session()
 
-    def _begin_session(self) -> None:
+    def _begin_session(self, properties: SessionProperties) -> t.Any:
         """Begin a new session."""
 
     def _end_session(self) -> None:
@@ -1621,9 +1805,11 @@ class EngineAdapter:
             for e in ensure_list(expressions):
                 sql = t.cast(
                     str,
-                    self._to_sql(e, quote=quote_identifiers, **to_sql_kwargs)
-                    if isinstance(e, exp.Expression)
-                    else e,
+                    (
+                        self._to_sql(e, quote=quote_identifiers, **to_sql_kwargs)
+                        if isinstance(e, exp.Expression)
+                        else e
+                    ),
                 )
                 self._log_sql(sql)
                 self._execute(sql, **kwargs)
@@ -1688,6 +1874,7 @@ class EngineAdapter:
 
     def _build_table_properties_exp(
         self,
+        catalog_name: t.Optional[str] = None,
         storage_format: t.Optional[str] = None,
         partitioned_by: t.Optional[t.List[exp.Expression]] = None,
         partition_interval_unit: t.Optional[IntervalUnit] = None,
@@ -1700,7 +1887,11 @@ class EngineAdapter:
         properties: t.List[exp.Expression] = []
 
         if table_description:
-            properties.append(exp.SchemaCommentProperty(this=exp.Literal.string(table_description)))
+            properties.append(
+                exp.SchemaCommentProperty(
+                    this=exp.Literal.string(self._truncate_table_comment(table_description))
+                )
+            )
 
         if properties:
             return exp.Properties(expressions=properties)
@@ -1715,11 +1906,24 @@ class EngineAdapter:
         properties: t.List[exp.Expression] = []
 
         if table_description:
-            properties.append(exp.SchemaCommentProperty(this=exp.Literal.string(table_description)))
+            properties.append(
+                exp.SchemaCommentProperty(
+                    this=exp.Literal.string(self._truncate_table_comment(table_description))
+                )
+            )
 
         if properties:
             return exp.Properties(expressions=properties)
         return None
+
+    def _truncate_comment(self, comment: str, length: t.Optional[int]) -> str:
+        return comment[:length] if length else comment
+
+    def _truncate_table_comment(self, comment: str) -> str:
+        return self._truncate_comment(comment, self.MAX_TABLE_COMMENT_LENGTH)
+
+    def _truncate_column_comment(self, comment: str) -> str:
+        return self._truncate_comment(comment, self.MAX_COLUMN_COMMENT_LENGTH)
 
     def _to_sql(self, expression: exp.Expression, quote: bool = True, **kwargs: t.Any) -> str:
         """
@@ -1763,22 +1967,24 @@ class EngineAdapter:
 
         return table
 
-    def _add_where_to_query(
+    def _order_projections_and_filter(
         self,
         query: Query,
-        where: t.Optional[exp.Expression],
         columns_to_types: t.Dict[str, exp.DataType],
+        where: t.Optional[exp.Expression] = None,
     ) -> Query:
-        if not where or not isinstance(query, exp.Subqueryable):
+        if not isinstance(query, exp.Query) or (
+            not where and query.named_selects == list(columns_to_types)
+        ):
             return query
 
-        query = t.cast(exp.Subqueryable, query.copy())
+        query = t.cast(exp.Query, query.copy())
         with_ = query.args.pop("with", None)
-        query = (
-            self._select_columns(columns_to_types)
-            .from_(query.subquery("_subquery", copy=False), copy=False)
-            .where(where, copy=False)
+        query = self._select_columns(columns_to_types).from_(
+            query.subquery("_subquery", copy=False), copy=False
         )
+        if where:
+            query = query.where(where, copy=False)
 
         if with_:
             query.set("with", with_)
@@ -1795,7 +2001,7 @@ class EngineAdapter:
         return exp.Comment(
             this=table,
             kind=table_kind,
-            expression=exp.Literal.string(table_comment),
+            expression=exp.Literal.string(self._truncate_table_comment(table_comment)),
         )
 
     def _create_table_comment(
@@ -1817,7 +2023,7 @@ class EngineAdapter:
         return exp.Comment(
             this=exp.column(column_name, *reversed(table.parts)),  # type: ignore
             kind="COLUMN",
-            expression=exp.Literal.string(column_comment),
+            expression=exp.Literal.string(self._truncate_column_comment(column_comment)),
         )
 
     def _create_column_comments(

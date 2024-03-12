@@ -3,8 +3,8 @@ from datetime import datetime
 from unittest import mock
 
 import pytest
+from _pytest.fixtures import FixtureRequest
 from _pytest.monkeypatch import MonkeyPatch
-from pytest_lazyfixture import lazy_fixture
 from pytest_mock.plugin import MockerFixture
 from sqlglot import parse_one
 
@@ -62,12 +62,12 @@ def depends_on_past_snapshot(make_snapshot, random_name) -> Snapshot:
 
 
 @pytest.mark.parametrize(
-    "the_snapshot, expected_intervals, paused_forward_only",
+    "snapshot_fixture, expected_intervals, paused_forward_only",
     [
-        (lazy_fixture("snapshot"), [(to_datetime("2022-01-01"), to_datetime("2022-01-05"))], False),
-        (lazy_fixture("snapshot"), [(to_datetime("2022-01-01"), to_datetime("2022-01-05"))], True),
+        ("snapshot", [(to_datetime("2022-01-01"), to_datetime("2022-01-05"))], False),
+        ("snapshot", [(to_datetime("2022-01-01"), to_datetime("2022-01-05"))], True),
         (
-            lazy_fixture("depends_on_past_snapshot"),
+            "depends_on_past_snapshot",
             [
                 (to_datetime("2022-01-01"), to_datetime("2022-01-02")),
                 (to_datetime("2022-01-02"), to_datetime("2022-01-03")),
@@ -80,11 +80,13 @@ def depends_on_past_snapshot(make_snapshot, random_name) -> Snapshot:
 )
 def test_create_plan_dag_spec(
     mocker: MockerFixture,
-    the_snapshot: Snapshot,
+    snapshot_fixture: str,
     expected_intervals: t.List[t.Tuple[datetime, datetime]],
     paused_forward_only: bool,
     random_name,
+    request: FixtureRequest,
 ):
+    the_snapshot = request.getfixturevalue(snapshot_fixture)
     the_snapshot.categorize_as(
         SnapshotChangeCategory.FORWARD_ONLY
         if paused_forward_only
@@ -116,6 +118,11 @@ def test_create_plan_dag_spec(
         is_dev=False,
         forward_only=True,
         models_to_backfill=None,
+        end_bounded=False,
+        ensure_finalized_snapshots=False,
+        directly_modified_snapshots=[the_snapshot.snapshot_id],
+        indirectly_modified_snapshots={},
+        removed_snapshots=[],
     )
 
     deleted_snapshot = SnapshotTableInfo(
@@ -150,6 +157,7 @@ def test_create_plan_dag_spec(
         side_effect=lambda: to_datetime("2023-01-01"),
     ):
         plan_spec = create_plan_dag_spec(plan_request, state_sync_mock)
+
     assert plan_spec == common.PlanDagSpec(
         request_id="test_request_id",
         environment=new_environment,
@@ -172,9 +180,14 @@ def test_create_plan_dag_spec(
         forward_only=True,
         dag_start_ts=to_timestamp("2023-01-01"),
         no_gaps_snapshot_names=expected_no_gaps_snapshot_names,
-        deployability_index_for_creation=DeployabilityIndex.all_deployable()
-        if not paused_forward_only
-        else DeployabilityIndex.none_deployable(),
+        deployability_index_for_creation=(
+            DeployabilityIndex.all_deployable()
+            if not paused_forward_only
+            else DeployabilityIndex.none_deployable()
+        ),
+        directly_modified_snapshots=[the_snapshot.snapshot_id],
+        indirectly_modified_snapshots={},
+        removed_snapshots=[],
     )
 
     state_sync_mock.get_snapshots.assert_called_once()
@@ -184,14 +197,14 @@ def test_create_plan_dag_spec(
 
 
 @pytest.mark.parametrize(
-    "the_snapshot, expected_intervals",
+    "snapshot_fixture, expected_intervals",
     [
         (
-            lazy_fixture("snapshot"),
+            "snapshot",
             [(to_datetime("2022-01-02"), to_datetime("2022-01-04"))],
         ),
         (
-            lazy_fixture("depends_on_past_snapshot"),
+            "depends_on_past_snapshot",
             [
                 (to_datetime("2022-01-02"), to_datetime("2022-01-03")),
                 (to_datetime("2022-01-03"), to_datetime("2022-01-04")),
@@ -202,10 +215,12 @@ def test_create_plan_dag_spec(
 def test_restatement(
     mocker: MockerFixture,
     monkeypatch: MonkeyPatch,
-    the_snapshot: Snapshot,
+    snapshot_fixture: str,
     expected_intervals: t.List[t.Tuple[datetime, datetime]],
     random_name,
+    request: FixtureRequest,
 ):
+    the_snapshot = request.getfixturevalue(snapshot_fixture)
     environment_name = random_name()
     new_environment = Environment(
         name=environment_name,
@@ -236,6 +251,11 @@ def test_restatement(
         is_dev=False,
         forward_only=True,
         models_to_backfill=None,
+        end_bounded=False,
+        ensure_finalized_snapshots=False,
+        directly_modified_snapshots=[],
+        indirectly_modified_snapshots={},
+        removed_snapshots=[],
     )
     old_environment = Environment(
         name=environment_name,
@@ -277,6 +297,9 @@ def test_restatement(
         forward_only=True,
         dag_start_ts=to_timestamp(now_value),
         no_gaps_snapshot_names={the_snapshot.name},
+        directly_modified_snapshots=[],
+        indirectly_modified_snapshots={},
+        removed_snapshots=[],
     )
 
     state_sync_mock.get_snapshots.assert_called_once()
@@ -339,6 +362,11 @@ def test_select_models_for_backfill(mocker: MockerFixture, random_name, make_sna
         is_dev=False,
         forward_only=True,
         models_to_backfill={snapshot_b.name},
+        end_bounded=False,
+        ensure_finalized_snapshots=False,
+        directly_modified_snapshots=[snapshot_a.snapshot_id, snapshot_b.snapshot_id],
+        indirectly_modified_snapshots={},
+        removed_snapshots=[],
     )
 
     state_sync_mock = mocker.Mock()
@@ -377,6 +405,9 @@ def test_select_models_for_backfill(mocker: MockerFixture, random_name, make_sna
         deployability_index=DeployabilityIndex.all_deployable(),
         no_gaps_snapshot_names={'"a"', '"b"'},
         models_to_backfill={snapshot_b.name},
+        directly_modified_snapshots=[snapshot_a.snapshot_id, snapshot_b.snapshot_id],
+        indirectly_modified_snapshots={},
+        removed_snapshots=[],
     )
 
 
@@ -406,6 +437,11 @@ def test_create_plan_dag_spec_duplicated_snapshot(
         is_dev=False,
         forward_only=False,
         models_to_backfill=None,
+        end_bounded=False,
+        ensure_finalized_snapshots=False,
+        directly_modified_snapshots=[],
+        indirectly_modified_snapshots={},
+        removed_snapshots=[],
     )
 
     dag_run_mock = mocker.Mock()
@@ -454,6 +490,11 @@ def test_create_plan_dag_spec_unbounded_end(
         is_dev=False,
         forward_only=False,
         models_to_backfill=None,
+        end_bounded=False,
+        ensure_finalized_snapshots=False,
+        directly_modified_snapshots=[],
+        indirectly_modified_snapshots={},
+        removed_snapshots=[],
     )
 
     state_sync_mock = mocker.Mock()

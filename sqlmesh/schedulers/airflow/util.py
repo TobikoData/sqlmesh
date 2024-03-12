@@ -165,6 +165,10 @@ def discover_engine_operator(name: str, sql_only: bool = False) -> t.Type[BaseOp
             )
 
             return SQLMeshPostgresOperator
+        if name == "trino":
+            from sqlmesh.schedulers.airflow.operators.trino import SQLMeshTrinoOperator
+
+            return SQLMeshTrinoOperator
     except ImportError:
         raise SQLMeshError(f"Failed to automatically discover an operator for '{name}'.'")
 

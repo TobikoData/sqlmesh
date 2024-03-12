@@ -3,8 +3,6 @@ from __future__ import annotations
 import typing as t
 
 from sqlglot import exp
-from sqlglot.helper import ensure_list
-from sqlglot.optimizer.normalize_identifiers import normalize_identifiers
 
 from sqlmesh.core.dialect import normalize_model_name, parse_one
 from sqlmesh.utils import str_to_bool
@@ -39,32 +37,6 @@ def parse_expression(
         raise ConfigError(f"Could not parse {v}")
 
     return v
-
-
-@field_validator_v1_args
-def parse_expressions(cls: t.Type, v: t.Any, values: t.Dict[str, t.Any]) -> t.List[exp.Expression]:
-    dialect = values.get("dialect")
-
-    if isinstance(v, (exp.Tuple, exp.Array)):
-        expressions: t.List[exp.Expression] = v.expressions
-    elif isinstance(v, exp.Expression):
-        expressions = [v]
-    else:
-        expressions = [
-            parse_one(entry, dialect=dialect) if isinstance(entry, str) else entry
-            for entry in ensure_list(v)
-        ]
-
-    results = []
-
-    for expr in expressions:
-        expr = normalize_identifiers(
-            exp.column(expr) if isinstance(expr, exp.Identifier) else expr, dialect=dialect
-        )
-        expr.meta["dialect"] = dialect
-        results.append(expr)
-
-    return results
 
 
 def parse_bool(v: t.Any) -> bool:

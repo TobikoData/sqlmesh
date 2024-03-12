@@ -71,13 +71,13 @@ def cli(
 
     if len(paths) == 1:
         path = os.path.abspath(paths[0])
-        if ctx.invoked_subcommand == "init":
+        if ctx.invoked_subcommand in ("init", "ui"):
             ctx.obj = path
             return
-        elif ctx.invoked_subcommand in ("create_external_models", "migrate", "rollback", "ui"):
+        elif ctx.invoked_subcommand in ("create_external_models", "migrate", "rollback"):
             load = False
 
-    configs = load_configs(config, paths)
+    configs = load_configs(config, Context.CONFIG_TYPE, paths)
     log_limit = list(configs.values())[0].log_limit
     configure_logging(debug, ignore_warnings, log_to_stdout, log_limit=log_limit)
 
@@ -201,27 +201,26 @@ def evaluate(
     help="Transpile project models to the specified dialect.",
 )
 @click.option(
-    "--newline",
+    "--append-newline",
     is_flag=True,
-    help="Include a new line at the end of each file.",
+    help="Include a newline at the end of each file.",
+    default=None,
 )
 @click.option(
     "--normalize",
     is_flag=True,
     help="Whether or not to normalize identifiers to lowercase.",
-    default=False,
+    default=None,
 )
 @click.option(
     "--pad",
     type=int,
     help="Determines the pad size in a formatted string.",
-    default=2,
 )
 @click.option(
     "--indent",
     type=int,
     help="Determines the indentation size in a formatted string.",
-    default=2,
 )
 @click.option(
     "--normalize-functions",
@@ -232,21 +231,18 @@ def evaluate(
     "--leading-comma",
     is_flag=True,
     help="Determines whether or not the comma is leading or trailing in select expressions. Default is trailing.",
-    default=False,
+    default=None,
 )
 @click.option(
     "--max-text-width",
     type=int,
     help="The max number of characters in a segment before creating new lines in pretty mode.",
-    default=80,
 )
 @click.pass_context
 @error_handler
-def format(
-    ctx: click.Context, transpile: t.Optional[str] = None, newline: bool = False, **kwargs: t.Any
-) -> None:
+def format(ctx: click.Context, **kwargs: t.Any) -> None:
     """Format all SQL models."""
-    ctx.obj.format(transpile, newline, **{k: v for k, v in kwargs.items() if v is not None})
+    ctx.obj.format(**{k: v for k, v in kwargs.items() if v is not None})
 
 
 @cli.command("diff")
@@ -294,6 +290,7 @@ def diff(ctx: click.Context, environment: t.Optional[str] = None) -> None:
     "--forward-only",
     is_flag=True,
     help="Create a plan for forward-only changes.",
+    default=None,
 )
 @click.option(
     "--effective-from",
@@ -305,11 +302,13 @@ def diff(ctx: click.Context, environment: t.Optional[str] = None) -> None:
     "--no-prompts",
     is_flag=True,
     help="Disable interactive prompts for the backfill time range. Please note that if this flag is set and there are uncategorized changes, plan creation will fail.",
+    default=None,
 )
 @click.option(
     "--auto-apply",
     is_flag=True,
     help="Automatically apply the new plan after creation.",
+    default=None,
 )
 @click.option(
     "--no-auto-categorization",
@@ -339,11 +338,18 @@ def diff(ctx: click.Context, environment: t.Optional[str] = None) -> None:
     "--no-diff",
     is_flag=True,
     help="Hide text differences for changed models.",
+    default=None,
 )
 @click.option(
     "--run",
     is_flag=True,
     help="Run latest intervals as part of the plan application (prod environment only).",
+)
+@click.option(
+    "--enable-preview",
+    is_flag=True,
+    help="Enable preview for forward-only models when targeting a development environment.",
+    default=None,
 )
 @opt.verbose
 @click.pass_context
@@ -388,12 +394,18 @@ def run(ctx: click.Context, environment: t.Optional[str] = None, **kwargs: t.Any
 
 @cli.command("invalidate")
 @click.argument("environment", required=True)
+@click.option(
+    "--sync",
+    "-s",
+    is_flag=True,
+    help="Wait for the environment to be deleted before returning. If not specified, the environment will be deleted asynchronously by the janitor process. This option requires a connection to the data warehouse.",
+)
 @click.pass_context
 @error_handler
-def invalidate(ctx: click.Context, environment: str) -> None:
+def invalidate(ctx: click.Context, environment: str, **kwargs: t.Any) -> None:
     """Invalidate the target environment, forcing its removal during the next run of the janitor process."""
     context = ctx.obj
-    context.invalidate_environment(environment)
+    context.invalidate_environment(environment, **kwargs)
 
 
 @cli.command("dag")
@@ -550,13 +562,15 @@ def info(obj: Context) -> None:
     default=8000,
     help="Bind socket to this port. Default: 8000",
 )
+@click.option(
+    "--mode",
+    type=click.Choice(["ide", "default", "docs", "plan"], case_sensitive=False),
+    default="default",
+    help="Mode to start the UI in. Default: default",
+)
 @click.pass_context
 @error_handler
-def ui(
-    ctx: click.Context,
-    host: str,
-    port: int,
-) -> None:
+def ui(ctx: click.Context, host: str, port: int, mode: str) -> None:
     """Start a browser-based SQLMesh UI."""
     try:
         import uvicorn
@@ -565,7 +579,8 @@ def ui(
             "Missing UI dependencies. Run `pip install 'sqlmesh[web]'` to install them."
         ) from e
 
-    os.environ["PROJECT_PATH"] = str(ctx.obj.path)
+    os.environ["PROJECT_PATH"] = ctx.obj
+    os.environ["UI_MODE"] = mode
     if ctx.parent:
         config = ctx.parent.params.get("config")
         gateway = ctx.parent.params.get("gateway")
@@ -708,3 +723,11 @@ def prompt(
     context.console.log_status_update(query)
     if evaluate:
         context.console.log_success(context.fetchdf(query))
+
+
+@cli.command("clean")
+@click.pass_obj
+@error_handler
+def clean(obj: Context) -> None:
+    """Clears the SQLMesh cache and any build artifacts."""
+    obj.clear_caches()

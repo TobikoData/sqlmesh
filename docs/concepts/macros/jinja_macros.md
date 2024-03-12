@@ -60,7 +60,7 @@ MODEL (
   name sqlmesh_example.full_model,
   kind FULL,
   cron '@daily',
-  audits [assert_positive_order_ids],
+  audits (assert_positive_order_ids),
 );
 
 JINJA_QUERY_BEGIN;

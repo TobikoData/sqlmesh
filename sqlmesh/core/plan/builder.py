@@ -5,6 +5,7 @@ import sys
 import typing as t
 from collections import defaultdict
 from datetime import datetime
+from functools import cached_property
 
 from sqlmesh.core.config import (
     AutoCategorizationMode,
@@ -54,6 +55,12 @@ class PlanBuilder:
         environment_suffix_target: Indicates whether to append the environment name to the schema or table name.
         default_start: The default plan start to use if not specified.
         default_end: The default plan end to use if not specified.
+        enable_preview: Whether to enable preview for forward-only models in development environments.
+        end_bounded: If set to true, the missing intervals will be bounded by the target end date, disregarding lookback,
+            allow_partials, and other attributes that could cause the intervals to exceed the target end date.
+        ensure_finalized_snapshots: Whether to compare against snapshots from the latest finalized
+            environment state, or to use whatever snapshots are in the current environment state even if
+            the environment is not finalized.
     """
 
     def __init__(
@@ -78,12 +85,18 @@ class PlanBuilder:
         include_unmodified: bool = False,
         default_start: t.Optional[TimeLike] = None,
         default_end: t.Optional[TimeLike] = None,
+        enable_preview: bool = False,
+        end_bounded: bool = False,
+        ensure_finalized_snapshots: bool = False,
     ):
         self._context_diff = context_diff
         self._no_gaps = no_gaps
         self._skip_backfill = skip_backfill
         self._is_dev = is_dev
         self._forward_only = forward_only
+        self._enable_preview = enable_preview
+        self._end_bounded = end_bounded
+        self._ensure_finalized_snapshots = ensure_finalized_snapshots
         self._environment_ttl = environment_ttl
         self._categorizer_config = categorizer_config or CategorizerConfig()
         self._auto_categorization_enabled = auto_categorization_enabled
@@ -96,7 +109,7 @@ class PlanBuilder:
         self._apply = apply
 
         self._start = start
-        if not self._start and is_dev and forward_only:
+        if not self._start and self._forward_only_preview_needed:
             self._start = default_start or yesterday_ds()
 
         self._plan_id: str = random_id()
@@ -174,12 +187,29 @@ class PlanBuilder:
 
         self._apply_effective_from()
 
-        dag, ignored = self._build_filtered_dag()
+        dag = self._build_dag()
         directly_modified, indirectly_modified = self._build_directly_and_indirectly_modified(dag)
-        models_to_backfill = self._build_models_to_backfill(dag)
 
         self._categorize_snapshots(dag, directly_modified, indirectly_modified)
         self._adjust_new_snapshot_intervals()
+
+        deployability_index = (
+            DeployabilityIndex.create(self._context_diff.snapshots.values())
+            if self._is_dev
+            else DeployabilityIndex.all_deployable()
+        )
+
+        filtered_dag, ignored = self._build_filtered_dag(dag, deployability_index)
+
+        # Exclude ignored snapshots from the modified sets.
+        directly_modified = {s_id for s_id in directly_modified if s_id not in ignored}
+        for s_id in list(indirectly_modified):
+            if s_id in ignored:
+                indirectly_modified.pop(s_id, None)
+            else:
+                indirectly_modified[s_id] = {
+                    s_id for s_id in indirectly_modified[s_id] if s_id not in ignored
+                }
 
         filtered_snapshots = {
             s.snapshot_id: s
@@ -187,12 +217,7 @@ class PlanBuilder:
             if s.snapshot_id not in ignored
         }
 
-        deployability_index = (
-            DeployabilityIndex.create(filtered_snapshots)
-            if self._is_dev
-            else DeployabilityIndex.all_deployable()
-        )
-
+        models_to_backfill = self._build_models_to_backfill(filtered_dag)
         restatements = self._build_restatements(
             dag, earliest_interval_start(filtered_snapshots.values())
         )
@@ -217,29 +242,41 @@ class PlanBuilder:
             models_to_backfill=models_to_backfill,
             effective_from=self._effective_from,
             execution_time=self._execution_time,
+            end_bounded=self._end_bounded,
+            ensure_finalized_snapshots=self._ensure_finalized_snapshots,
         )
         self._latest_plan = plan
         return plan
 
-    def _build_filtered_dag(self) -> t.Tuple[DAG[SnapshotId], t.Set[SnapshotId]]:
+    def _build_dag(self) -> DAG[SnapshotId]:
+        dag: DAG[SnapshotId] = DAG()
+        for s_id, context_snapshot in self._context_diff.snapshots.items():
+            dag.add(s_id, context_snapshot.parents)
+        return dag
+
+    def _build_filtered_dag(
+        self, full_dag: DAG[SnapshotId], deployability_index: DeployabilityIndex
+    ) -> t.Tuple[DAG[SnapshotId], t.Set[SnapshotId]]:
         ignored_snapshot_ids: t.Set[SnapshotId] = set()
-        full_dag: DAG[SnapshotId] = DAG()
         filtered_dag: DAG[SnapshotId] = DAG()
         cache: t.Optional[t.Dict[str, datetime]] = {}
-        for s_id, context_snapshot in self._context_diff.snapshots.items():
-            full_dag.add(s_id, context_snapshot.parents)
         for s_id in full_dag:
             snapshot = self._context_diff.snapshots.get(s_id)
             # If the snapshot doesn't exist then it must be an external model
             if not snapshot:
                 continue
-            if snapshot.is_valid_start(
+
+            is_deployable = deployability_index.is_deployable(s_id)
+            is_valid_start = snapshot.is_valid_start(
                 self._start, start_date(snapshot, self._context_diff.snapshots.values(), cache)
-            ) and set(snapshot.parents).isdisjoint(ignored_snapshot_ids):
-                filtered_dag.add(snapshot.snapshot_id, snapshot.parents)
+            )
+            if not is_deployable or (
+                is_valid_start and set(snapshot.parents).isdisjoint(ignored_snapshot_ids)
+            ):
+                filtered_dag.add(s_id, snapshot.parents)
             else:
-                ignored_snapshot_ids.add(snapshot.snapshot_id)
-        return (filtered_dag, ignored_snapshot_ids)
+                ignored_snapshot_ids.add(s_id)
+        return filtered_dag, ignored_snapshot_ids
 
     def _build_restatements(
         self, dag: DAG[SnapshotId], earliest_interval_start: TimeLike
@@ -252,12 +289,14 @@ class PlanBuilder:
         restatements: t.Dict[SnapshotId, Interval] = {}
         dummy_interval = (sys.maxsize, -sys.maxsize)
         restate_models = self._restate_models
-        is_dev_forward_only = self._is_dev and self._forward_only
-        if not restate_models and is_dev_forward_only:
+        forward_only_preview_needed = self._forward_only_preview_needed
+        if not restate_models and forward_only_preview_needed:
             # Add model names for new forward-only snapshots to the restatement list
             # in order to compute previews.
             restate_models = {
-                s.name for s in self._context_diff.new_snapshots.values() if s.is_materialized
+                s.name
+                for s in self._context_diff.new_snapshots.values()
+                if s.is_materialized and (self._forward_only or s.model.forward_only)
             }
         if not restate_models:
             return restatements
@@ -265,7 +304,9 @@ class PlanBuilder:
         # Add restate snapshots and their downstream snapshots
         for model_fqn in restate_models:
             snapshot = self._model_fqn_to_snapshot.get(model_fqn)
-            if not snapshot or (not is_dev_forward_only and not is_restateable_snapshot(snapshot)):
+            if not snapshot or (
+                not forward_only_preview_needed and not is_restateable_snapshot(snapshot)
+            ):
                 raise PlanError(
                     f"Cannot restate from '{model_fqn}'. Either such model doesn't exist, no other materialized model references it, or restatement was disabled for this model."
                 )
@@ -338,7 +379,11 @@ class PlanBuilder:
         return {
             self._context_diff.snapshots[s_id].name
             for s_id in dag.subdag(
-                *[self._model_fqn_to_snapshot[m].snapshot_id for m in self._backfill_models]
+                *[
+                    self._model_fqn_to_snapshot[m].snapshot_id
+                    for m in self._backfill_models
+                    if m in self._model_fqn_to_snapshot
+                ]
             ).sorted
         }
 
@@ -493,13 +538,15 @@ class PlanBuilder:
             else:
                 child_snapshot.categorize_as(SnapshotChangeCategory.INDIRECT_NON_BREAKING)
 
-            snapshot.indirect_versions[child_s_id.name] = child_snapshot.all_versions
+            snapshot.indirect_versions[child_s_id.name] = tuple(
+                v.indirect_version for v in child_snapshot.all_versions
+            )
 
             for upstream_id in directly_modified:
                 upstream = self._context_diff.snapshots[upstream_id]
                 if child_s_id.name in upstream.indirect_versions:
-                    data_version = upstream.indirect_versions[child_s_id.name][-1]
-                    if data_version.is_new_version:
+                    indirect_version = upstream.indirect_versions[child_s_id.name][-1]
+                    if indirect_version.change_category == SnapshotChangeCategory.INDIRECT_BREAKING:
                         # If any other snapshot specified breaking this child, then that child
                         # needs to be backfilled as a part of the plan.
                         child_snapshot.categorize_as(
@@ -509,7 +556,7 @@ class PlanBuilder:
                         )
                         break
                     elif (
-                        data_version.change_category == SnapshotChangeCategory.FORWARD_ONLY
+                        indirect_version.change_category == SnapshotChangeCategory.FORWARD_ONLY
                         and child_snapshot.is_indirect_non_breaking
                     ):
                         # FORWARD_ONLY takes precedence over INDIRECT_NON_BREAKING.
@@ -559,10 +606,7 @@ class PlanBuilder:
                 and not promoted.is_paused
                 and not candidate.is_forward_only
                 and not candidate.is_indirect_non_breaking
-                and (
-                    promoted.version == candidate.version
-                    or candidate.data_version in promoted.previous_versions
-                )
+                and promoted.version == candidate.version
             ):
                 raise PlanError(
                     f"Attempted to revert to an unrevertable version of model '{name}'. Run `sqlmesh plan` again to mitigate the issue."
@@ -596,3 +640,18 @@ class PlanBuilder:
             raise NoChangesPlanError(
                 "No changes were detected. Make a change or run with --include-unmodified to create a new environment without changes."
             )
+
+    @cached_property
+    def _forward_only_preview_needed(self) -> bool:
+        """Determines whether the plan should compute previews for forward-only changes (if there are any)."""
+        return self._is_dev and (
+            self._forward_only
+            or (
+                self._enable_preview
+                and any(
+                    snapshot.model.forward_only
+                    for snapshot in self._context_diff.new_snapshots.values()
+                    if snapshot.is_model
+                )
+            )
+        )

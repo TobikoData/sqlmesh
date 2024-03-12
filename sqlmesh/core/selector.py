@@ -13,6 +13,7 @@ from sqlmesh.core.model import Model
 from sqlmesh.core.state_sync import StateReader
 from sqlmesh.utils import UniqueKeyDict
 from sqlmesh.utils.dag import DAG
+from sqlmesh.utils.git import GitClient
 
 logger = logging.getLogger(__name__)
 
@@ -32,6 +33,7 @@ class Selector:
         self._context_path = context_path
         self._default_catalog = default_catalog
         self._dialect = dialect
+        self._git_client = GitClient(context_path)
         self.__models_by_tag: t.Optional[t.Dict[str, t.Set[str]]] = None
 
         if dag is None:
@@ -40,15 +42,6 @@ class Selector:
                 self._dag.add(fqn, model.depends_on)
         else:
             self._dag = dag
-
-    @property
-    def _models_by_tag(self) -> t.Dict[str, t.Set[str]]:
-        if self.__models_by_tag is None:
-            self.__models_by_tag = defaultdict(set)
-            for model in self._models.values():
-                for tag in model.tags:
-                    self.__models_by_tag[tag.lower()].add(model.fqn)
-        return self.__models_by_tag
 
     def select_models(
         self,
@@ -121,29 +114,102 @@ class Selector:
 
         return models
 
-    @staticmethod
-    def _get_value_and_dependency_inclusion(value: str) -> t.Tuple[str, bool, bool]:
-        include_upstream = False
-        include_downstream = False
-        if value[0] == "+":
-            value = value[1:]
-            include_upstream = True
-        if value[-1] == "+":
-            value = value[:-1]
-            include_downstream = True
-        return value, include_upstream, include_downstream
-
-    def _get_models(
-        self, model_name: str, include_upstream: bool, include_downstream: bool
+    def expand_model_selections(
+        self, model_selections: t.Iterable[str], models: t.Optional[t.Dict[str, Model]] = None
     ) -> t.Set[str]:
-        result = {model_name}
-        if include_upstream:
-            result.update(self._dag.upstream(model_name))
-        if include_downstream:
-            result.update(self._dag.downstream(model_name))
-        return result
+        """Expands a set of model selections into a set of model names.
 
-    def _expand_model_tag(self, tag_selection: str) -> t.Set[str]:
+        Args:
+            model_selections: A set of model selections.
+
+        Returns:
+            A set of model names.
+        """
+        results: t.Set[str] = set()
+        models = models or self._models
+        models_by_tags: t.Optional[t.Dict[str, t.Set[str]]] = None
+
+        for selection in model_selections:
+            sub_results: t.Optional[t.Set[str]] = None
+
+            def add_sub_results(sr: t.Set[str]) -> None:
+                nonlocal sub_results
+                if sub_results is None:
+                    sub_results = sr
+                else:
+                    sub_results &= sr
+
+            sub_selections = [s.strip() for s in selection.split("&")]
+            for sub_selection in sub_selections:
+                if not sub_selection:
+                    continue
+
+                if sub_selection.startswith("tag:"):
+                    if models_by_tags is None:
+                        models_by_tag = defaultdict(set)
+                        for model in models.values():
+                            for tag in model.tags:
+                                models_by_tag[tag.lower()].add(model.fqn)
+                    add_sub_results(
+                        self._expand_model_tag(sub_selection[4:], models, models_by_tag)
+                    )
+                elif sub_selection.startswith("git:"):
+                    add_sub_results(self._expand_git(sub_selection[4:]))
+                else:
+                    add_sub_results(self._expand_model_name(sub_selection, models))
+
+            if sub_results:
+                results.update(sub_results)
+            else:
+                logger.warning(f"Expression '{selection}' doesn't match any models.")
+
+        return results
+
+    def _expand_git(self, target_branch: str) -> t.Set[str]:
+        git_modified_files = {
+            *self._git_client.list_untracked_files(),
+            *self._git_client.list_uncommitted_changed_files(),
+            *self._git_client.list_committed_changed_files(target_branch=target_branch),
+        }
+        matched_models = {m.fqn for m in self._models.values() if m._path in git_modified_files}
+
+        if not matched_models:
+            logger.warning(f"Expression 'git:{target_branch}' doesn't match any models.")
+
+        return matched_models
+
+    def _expand_model_name(self, selection: str, models: t.Dict[str, Model]) -> t.Set[str]:
+        results = set()
+
+        (
+            selection,
+            include_upstream,
+            include_downstream,
+        ) = self._get_value_and_dependency_inclusion(selection.lower())
+
+        matched_models = set()
+
+        if "*" in selection:
+            for model in models.values():
+                if fnmatch.fnmatchcase(model.name, selection):
+                    matched_models.add(model.fqn)
+        else:
+            model_fqn = normalize_model_name(selection, self._default_catalog, self._dialect)
+            if model_fqn in models:
+                matched_models.add(model_fqn)
+
+        if not matched_models:
+            logger.warning(f"Expression '{selection}' doesn't match any models.")
+
+        for model_fqn in matched_models:
+            results.update(
+                self._get_models(model_fqn, include_upstream, include_downstream, models)
+            )
+        return results
+
+    def _expand_model_tag(
+        self, tag_selection: str, models: t.Dict[str, Model], models_by_tag: t.Dict[str, t.Set[str]]
+    ) -> t.Set[str]:
         """
         Expands a set of model tags into a set of model names.
         The tag matching is case-insensitive and supports wildcards and + prefix and suffix to
@@ -164,64 +230,43 @@ class Selector:
         ) = self._get_value_and_dependency_inclusion(tag_selection.lower())
 
         if "*" in selection:
-            for model_tag in self._models_by_tag:
+            for model_tag in models_by_tag:
                 if fnmatch.fnmatchcase(model_tag, selection):
                     matched_tags.add(model_tag)
-        elif selection in self._models_by_tag:
+        elif selection in models_by_tag:
             matched_tags.add(selection)
 
         if not matched_tags:
             logger.warning(f"Expression 'tag:{tag_selection}' doesn't match any models.")
 
         for tag in matched_tags:
-            for model in self._models_by_tag[tag]:
-                result.update(self._get_models(model, include_upstream, include_downstream))
+            for model in models_by_tag[tag]:
+                result.update(self._get_models(model, include_upstream, include_downstream, models))
 
         return result
 
-    def expand_model_selections(
-        self, model_selections: t.Iterable[str], models: t.Optional[t.Dict[str, Model]] = None
+    def _get_models(
+        self,
+        model_name: str,
+        include_upstream: bool,
+        include_downstream: bool,
+        models: t.Dict[str, Model],
     ) -> t.Set[str]:
-        """Expands a set of model selections into a set of model names.
+        result = {model_name}
+        if include_upstream:
+            result.update([u for u in self._dag.upstream(model_name) if u in models])
+        if include_downstream:
+            result.update(self._dag.downstream(model_name))
+        return result
 
-        Args:
-            model_selections: A set of model selections.
-
-        Returns:
-            A set of model names.
-        """
-        results: t.Set[str] = set()
-        models = models or self._models
-
-        for selection in model_selections:
-            if not selection:
-                continue
-
-            if selection.startswith("tag:"):
-                results.update(self._expand_model_tag(selection[4:]))
-                continue
-
-            (
-                selection,
-                include_upstream,
-                include_downstream,
-            ) = self._get_value_and_dependency_inclusion(selection.lower())
-
-            matched_models = set()
-
-            if "*" in selection:
-                for model in models.values():
-                    if fnmatch.fnmatchcase(model.name, selection):
-                        matched_models.add(model.fqn)
-            else:
-                model_fqn = normalize_model_name(selection, self._default_catalog, self._dialect)
-                if model_fqn in models:
-                    matched_models.add(model_fqn)
-
-            if not matched_models:
-                logger.warning(f"Expression '{selection}' doesn't match any models.")
-
-            for model_fqn in matched_models:
-                results.update(self._get_models(model_fqn, include_upstream, include_downstream))
-
-        return results
+    @staticmethod
+    def _get_value_and_dependency_inclusion(value: str) -> t.Tuple[str, bool, bool]:
+        include_upstream = False
+        include_downstream = False
+        if value[0] == "+":
+            value = value[1:]
+            include_upstream = True
+        if value[-1] == "+":
+            value = value[:-1]
+            include_downstream = True
+        return value, include_upstream, include_downstream

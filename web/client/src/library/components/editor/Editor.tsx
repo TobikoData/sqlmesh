@@ -2,72 +2,36 @@ import { useCallback, useEffect, useMemo, useState } from 'react'
 import { Divider } from '../divider/Divider'
 import { useStoreProject } from '../../../context/project'
 import SplitPane from '../splitPane/SplitPane'
-import {
-  debounceSync,
-  isFalse,
-  isNil,
-  isNotNil,
-  isStringEmptyOrNil,
-} from '../../../utils'
+import { isFalse, isNil, isNotNil, isStringEmptyOrNil } from '../../../utils'
 import EditorFooter from './EditorFooter'
 import EditorTabs from './EditorTabs'
 import EditorInspector from './EditorInspector'
 import EditorPreview from './EditorPreview'
 import { type EditorTab, useStoreEditor } from '~/context/editor'
 import clsx from 'clsx'
-import Loading from '@components/loading/Loading'
-import Spinner from '@components/logo/Spinner'
 import { EnumFileExtensions } from '@models/file'
 import { useLineageFlow } from '@components/graph/context'
 import { CodeEditorRemoteFile, CodeEditorDefault } from './EditorCode'
 import { useDefaultKeymapsEditorTab, useSQLMeshModelExtensions } from './hooks'
-import { useApiFetchdf } from '@api/index'
 import { getTableDataFromArrowStreamResult } from '@components/table/help'
 import { type Table } from 'apache-arrow'
 import { type KeyBinding } from '@codemirror/view'
 import { useStoreContext } from '@context/context'
+import { type ModelSQLMeshModel } from '@models/sqlmesh-model'
+import { fetchdfApiCommandsFetchdfPost, type Column } from '@api/client'
+import {
+  EnumErrorKey,
+  useNotificationCenter,
+} from '~/library/pages/root/context/notificationCenter'
 
 function Editor(): JSX.Element {
   const tab = useStoreEditor(s => s.tab)
-  const engine = useStoreEditor(s => s.engine)
-
-  const [isReadyEngine, setIsreadyEngine] = useState(false)
-
-  const handleEngineWorkerMessage = useCallback(
-    (e: MessageEvent): void => {
-      if (e.data.topic === 'init' && isFalse(isReadyEngine)) {
-        setIsreadyEngine(true)
-      }
-    },
-    [engine],
-  )
-
-  useEffect(() => {
-    isFalse(isReadyEngine) &&
-      engine.postMessage({
-        topic: 'init',
-      })
-  }, [])
-
-  useEffect(() => {
-    engine.addEventListener('message', handleEngineWorkerMessage)
-
-    return () => {
-      engine.removeEventListener('message', handleEngineWorkerMessage)
-    }
-  }, [handleEngineWorkerMessage])
 
   return (
     <div className="w-full h-full flex flex-col overflow-hidden">
-      {isReadyEngine ? (
-        <>
-          <EditorTabs />
-          <Divider />
-          {isNil(tab) ? <EditorEmpty /> : <EditorMain tab={tab} />}
-        </>
-      ) : (
-        <EditorLoading />
-      )}
+      <EditorTabs />
+      <Divider />
+      {isNil(tab) ? <EditorEmpty /> : <EditorMain tab={tab} />}
     </div>
   )
 }
@@ -82,22 +46,14 @@ function EditorEmpty(): JSX.Element {
   )
 }
 
-function EditorLoading(): JSX.Element {
-  return (
-    <div className="flex justify-center items-center w-full h-full">
-      <Loading className="inline-block">
-        <Spinner className="w-5 h-5 border border-neutral-10 mr-4" />
-        <h3 className="text-xl">Starting Editor...</h3>
-      </Loading>
-    </div>
-  )
-}
-
 function EditorMain({ tab }: { tab: EditorTab }): JSX.Element {
+  const { errors, addError, removeError } = useNotificationCenter()
+  const environment = useStoreContext(s => s.environment)
   const models = useStoreContext(s => s.models)
   const isModel = useStoreContext(s => s.isModel)
 
   const files = useStoreProject(s => s.files)
+  const selectedFile = useStoreProject(s => s.selectedFile)
   const setSelectedFile = useStoreProject(s => s.setSelectedFile)
 
   const direction = useStoreEditor(s => s.direction)
@@ -112,16 +68,26 @@ function EditorMain({ tab }: { tab: EditorTab }): JSX.Element {
 
   const { setManuallySelectedColumn } = useLineageFlow()
 
+  const handleModelClick = useCallback(
+    function (model: ModelSQLMeshModel) {
+      setSelectedFile(files.get(model.path))
+    },
+    [files],
+  )
+  const handleModelColumn = useCallback(function (
+    model: ModelSQLMeshModel,
+    column: Column,
+  ) {
+    setManuallySelectedColumn([model, column])
+  }, [])
   const defaultKeymapsEditorTab = useDefaultKeymapsEditorTab()
   const modelExtensions = useSQLMeshModelExtensions(
     tab.file.path,
-    model => {
-      setSelectedFile(files.get(model.path))
-    },
-    (model, column) => {
-      setManuallySelectedColumn([model, column])
-    },
+    handleModelClick,
+    handleModelColumn,
   )
+
+  const [isOpenInspector, setIsOpenInspector] = useState(false)
 
   const customSQLKeymaps = useMemo(() => {
     return [
@@ -129,25 +95,54 @@ function EditorMain({ tab }: { tab: EditorTab }): JSX.Element {
       {
         key: 'Ctrl-Enter',
         preventDefault: true,
-        run: debounceSync(() => {
-          sendQuery()
+        run(view) {
+          const sql = view.state.doc.toString()
+
+          setPreviewTable(undefined)
+          setPreviewQuery(sql)
+
+          for (const error of errors) {
+            if (error.key === EnumErrorKey.Fetchdf) {
+              removeError(error)
+            }
+          }
+
+          fetchdfApiCommandsFetchdfPost({
+            sql,
+          })
+            .then(data => {
+              setPreviewTable(
+                getTableDataFromArrowStreamResult(
+                  data as unknown as Table<any>,
+                ),
+              )
+            })
+            .catch(error => {
+              addError(EnumErrorKey.Fetchdf, {
+                ...error,
+                errorKey: EnumErrorKey.Fetchdf,
+                trigger: 'Editor -> customSQLKeymaps',
+                message: error.message,
+                timestamp: Date.now(),
+                origin: 'useQueryTimeout',
+              })
+            })
 
           return true
-        }),
+        },
       },
     ] as KeyBinding[]
-  }, [defaultKeymapsEditorTab])
+  }, [defaultKeymapsEditorTab, errors])
 
   const handleEngineWorkerMessage = useCallback(
     (e: MessageEvent): void => {
       if (e.data.topic === 'dialects') {
+        const model = models.get(tab.file.path)
+
+        tab.dialect = model?.dialect ?? ''
+
         setDialects(e.data.payload)
-      }
-
-      if (e.data.topic === 'validate') {
-        tab.isValid = e.data.payload
-
-        refreshTab()
+        refreshTab(tab)
       }
 
       if (e.data.topic === 'format') {
@@ -155,7 +150,7 @@ function EditorMain({ tab }: { tab: EditorTab }): JSX.Element {
 
         tab.file.content = e.data.payload
 
-        refreshTab()
+        refreshTab(tab)
       }
     },
     [tab.id],
@@ -165,55 +160,24 @@ function EditorMain({ tab }: { tab: EditorTab }): JSX.Element {
     function updateFileContent(value: string): void {
       tab.file.content = value
 
-      refreshTab()
+      refreshTab(tab)
     },
     [tab.id],
   )
 
-  const sizesCodeEditorAndInspector = useMemo(() => {
-    const model = models.get(tab?.file.path)
-    const showInspector =
-      ((isNotNil(model) && isModel(tab.file.path)) || tab.file.isLocal) &&
-      isFalse(isStringEmptyOrNil(tab.file.content))
-
-    return showInspector ? [75, 25] : [100, 0]
-  }, [tab, models])
-
-  const sizesCodeEditorAndPreview = useMemo(() => {
-    const model = models.get(tab.file.path)
-    const showLineage =
-      isFalse(tab.file.isEmpty) && isNotNil(model) && isModel(tab.file.path)
-    const showPreview =
-      (tab.file.isLocal && [previewTable, previewDiff].some(Boolean)) ||
-      showLineage
-
-    return showPreview ? [70, 30] : [100, 0]
-  }, [tab, models, previewTable, previewDiff])
-
   useEffect(() => {
     engine.addEventListener('message', handleEngineWorkerMessage)
+
+    setIsOpenInspector(false)
+
+    if (isNil(selectedFile)) {
+      setSelectedFile(tab?.file)
+    }
 
     return () => {
       engine.removeEventListener('message', handleEngineWorkerMessage)
     }
-  }, [handleEngineWorkerMessage])
-
-  useEffect(() => {
-    const model = models.get(tab.file.path)
-
-    tab.dialect = model?.dialect ?? ''
-
-    refreshTab()
-  }, [tab.id, models])
-
-  useEffect(() => {
-    tab.isSaved = isFalse(tab.file.isChanged)
-
-    engine.postMessage({
-      topic: 'validate',
-      payload: tab.file.content,
-    })
-  }, [tab.file.fingerprint, tab.file.content])
+  }, [tab.id])
 
   useEffect(() => {
     setPreviewQuery(undefined)
@@ -221,18 +185,34 @@ function EditorMain({ tab }: { tab: EditorTab }): JSX.Element {
     setPreviewDiff(undefined)
   }, [tab.id, tab.file.fingerprint])
 
-  const { refetch: getFetchdf } = useApiFetchdf({
-    sql: tab.file.content,
-  })
+  useEffect(() => {
+    setPreviewDiff(undefined)
+  }, [environment])
 
-  function sendQuery(): void {
-    setPreviewTable(undefined)
-    setPreviewQuery(tab.file.content)
+  function getPaneSizesPreview(): number[] {
+    const model = models.get(tab.file.path)
+    const showLineage =
+      isFalse(tab.file.isEmpty) && isNotNil(model) && isModel(tab.file.path)
+    const showPreview =
+      errors.size > 0 ||
+      [previewTable, previewDiff].some(Boolean) ||
+      showLineage
 
-    void getFetchdf().then(({ data }) => {
-      setPreviewTable(getTableDataFromArrowStreamResult(data as Table<any>))
-    })
+    return showPreview ? [70, 30] : [100, 0]
   }
+
+  function getPaneSizesInspector(): number[] {
+    const model = models.get(tab?.file.path)
+    const showInspector =
+      isOpenInspector &&
+      ((isNotNil(model) && isModel(tab.file.path)) || tab.file.isLocal) &&
+      isFalse(isStringEmptyOrNil(tab.file.content))
+
+    return showInspector ? [70, 30] : [100, 0]
+  }
+
+  const EDITOR_PANE_MIN_WIDTH = 32
+  const INSPECTOR_PANE_WIDTH_THRESHOLD = 2
 
   return (
     <SplitPane
@@ -241,9 +221,9 @@ function EditorMain({ tab }: { tab: EditorTab }): JSX.Element {
         'w-full h-full overflow-hidden',
         direction === 'vertical' ? 'flex flex-col' : 'flex',
       )}
-      sizes={sizesCodeEditorAndPreview}
+      sizes={getPaneSizesPreview()}
       direction={direction}
-      minSize={0}
+      minSize={[EDITOR_PANE_MIN_WIDTH, 0]}
       snapOffset={0}
     >
       <div
@@ -255,30 +235,42 @@ function EditorMain({ tab }: { tab: EditorTab }): JSX.Element {
         <SplitPane
           key={tab.id}
           className="flex h-full overflow-hidden"
-          sizes={sizesCodeEditorAndInspector}
-          minSize={0}
-          snapOffset={0}
+          sizes={getPaneSizesInspector()}
+          minSize={EDITOR_PANE_MIN_WIDTH}
+          snapOffset={EDITOR_PANE_MIN_WIDTH}
+          handleDrag={(sizes, el) => {
+            const containerWidth = el.parent.getBoundingClientRect().width
+            const inspectorPaneWidth = (containerWidth * (sizes[1] ?? 0)) / 100
+
+            setIsOpenInspector(
+              inspectorPaneWidth >=
+                EDITOR_PANE_MIN_WIDTH + INSPECTOR_PANE_WIDTH_THRESHOLD,
+            )
+          }}
         >
           <div className="flex flex-col h-full">
             {tab.file.isLocal && (
               <CodeEditorDefault
-                key={tab.id}
                 type={EnumFileExtensions.SQL}
                 dialect={tab.dialect}
-                content={tab.file.content}
                 keymaps={customSQLKeymaps}
+                content={tab.file.content}
+                extensions={modelExtensions}
                 onChange={updateFileContent}
               />
             )}
             {tab.file.isRemote && (
-              <CodeEditorRemoteFile path={tab.file.path}>
+              <CodeEditorRemoteFile
+                keymaps={defaultKeymapsEditorTab}
+                path={tab.file.path}
+              >
                 {({ file, keymaps }) => (
                   <CodeEditorDefault
                     type={file.extension}
                     dialect={tab.dialect}
-                    content={file.content}
                     extensions={modelExtensions}
-                    keymaps={keymaps.concat(defaultKeymapsEditorTab)}
+                    keymaps={keymaps}
+                    content={file.content}
                     onChange={updateFileContent}
                   />
                 )}
@@ -286,11 +278,18 @@ function EditorMain({ tab }: { tab: EditorTab }): JSX.Element {
             )}
           </div>
           <div className="flex flex-col h-full">
-            <EditorInspector tab={tab} />
+            <EditorInspector
+              tab={tab}
+              toggle={() => setIsOpenInspector(s => !s)}
+              isOpen={isOpenInspector}
+            />
           </div>
         </SplitPane>
         <Divider />
-        <EditorFooter tab={tab} />
+        <EditorFooter
+          key={tab.file.fingerprint}
+          tab={tab}
+        />
       </div>
       <EditorPreview
         tab={tab}

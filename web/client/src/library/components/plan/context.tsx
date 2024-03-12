@@ -18,6 +18,7 @@ import {
 export const EnumPlanActions = {
   ResetPlanOptions: 'reset-plan-options',
   ResetPlanDates: 'reset-plan-dates',
+  ResetCategories: 'reset-categories',
   PlanOptions: 'plan-options',
   Dates: 'dates',
   DateStart: 'date-start',
@@ -39,8 +40,11 @@ export const EnumPlanChangeType = {
 } as const
 
 export const EnumCategoryType = {
-  BreakingChange: 'breaking-change',
-  NonBreakingChange: 'non-breaking-change',
+  Breaking: 'breaking',
+  NonBreaking: 'non-breaking',
+  ForwardOnly: 'forward-only',
+  IndirectBreaking: 'indirect-breaking',
+  IndirectNonBreaking: 'indirect-non-breaking',
 } as const
 
 export type PlanActions = KeyOf<typeof EnumPlanActions>
@@ -170,6 +174,15 @@ function reducer(
   { type, ...newState }: PlanAction,
 ): PlanDetails {
   switch (type) {
+    case EnumPlanActions.ResetCategories: {
+      return Object.assign<
+        Record<string, unknown>,
+        PlanDetails,
+        { change_categorization: Map<string, ChangeCategory> }
+      >({}, plan, {
+        change_categorization: new Map(),
+      })
+    }
     case EnumPlanActions.ResetPlanDates: {
       return Object.assign<
         Record<string, unknown>,
@@ -282,7 +295,7 @@ function reducer(
 
 function useCategories(): [Category, Category[]] {
   const categoryBreakingChange: Category = {
-    id: EnumCategoryType.BreakingChange,
+    id: EnumCategoryType.Breaking,
     name: 'Breaking Change',
     description: 'It will rebuild all models',
     value: SnapshotChangeCategory.NUMBER_1,
@@ -290,10 +303,16 @@ function useCategories(): [Category, Category[]] {
   const categories = [
     categoryBreakingChange,
     {
-      id: EnumCategoryType.NonBreakingChange,
+      id: EnumCategoryType.NonBreaking,
       name: 'Non-Breaking Change',
       description: 'It will exclude all indirect models caused by this change',
       value: SnapshotChangeCategory.NUMBER_2,
+    },
+    {
+      id: EnumCategoryType.ForwardOnly,
+      name: 'Forward-Only Change',
+      description: 'The change requires no rebuilding',
+      value: SnapshotChangeCategory.NUMBER_3,
     },
   ]
 

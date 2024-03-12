@@ -29,6 +29,7 @@ from sqlmesh.utils.date import (
     to_datetime,
     to_ds,
     to_timestamp,
+    to_ts,
     validate_date_range,
     yesterday,
 )
@@ -147,6 +148,11 @@ class SnapshotIntervals(PydanticModel, frozen=True):
         return SnapshotId(name=self.name, identifier=self.identifier)
 
 
+class SnapshotIndirectVersion(PydanticModel, frozen=True):
+    version: str
+    change_category: t.Optional[SnapshotChangeCategory] = None
+
+
 class SnapshotDataVersion(PydanticModel, frozen=True):
     fingerprint: SnapshotFingerprint
     version: str
@@ -171,6 +177,13 @@ class SnapshotDataVersion(PydanticModel, frozen=True):
     def is_new_version(self) -> bool:
         """Returns whether or not this version is new and requires a backfill."""
         return self.fingerprint.to_version() == self.version
+
+    @property
+    def indirect_version(self) -> SnapshotIndirectVersion:
+        return SnapshotIndirectVersion(
+            version=self.version,
+            change_category=self.change_category,
+        )
 
 
 class QualifiedViewName(PydanticModel, frozen=True):
@@ -454,7 +467,7 @@ class Snapshot(PydanticModel, SnapshotInfoMixin):
     updated_ts: int
     ttl: str
     previous_versions: t.Tuple[SnapshotDataVersion, ...] = ()
-    indirect_versions: t.Dict[str, t.Tuple[SnapshotDataVersion, ...]] = {}
+    indirect_versions: t.Dict[str, t.Tuple[SnapshotIndirectVersion, ...]] = {}
     version: t.Optional[str] = None
     temp_version: t.Optional[str] = None
     change_category: t.Optional[SnapshotChangeCategory] = None
@@ -731,6 +744,7 @@ class Snapshot(PydanticModel, SnapshotInfoMixin):
         execution_time: t.Optional[TimeLike] = None,
         deployability_index: t.Optional[DeployabilityIndex] = None,
         ignore_cron: bool = False,
+        end_bounded: bool = False,
     ) -> Intervals:
         """Find all missing intervals between [start, end].
 
@@ -745,6 +759,8 @@ class Snapshot(PydanticModel, SnapshotInfoMixin):
             restatements: A set of snapshot names being restated
             deployability_index: Determines snapshots that are deployable in the context of this evaluation.
             ignore_cron: Whether to ignore the node's cron schedule.
+            end_bounded: If set to true, the returned intervals will be bounded by the target end date, disregarding lookback,
+                allow_partials, and other attributes that could cause the intervals to exceed the target end date.
 
         Returns:
             A list of all the missing intervals as epoch timestamps.
@@ -767,8 +783,7 @@ class Snapshot(PydanticModel, SnapshotInfoMixin):
         if self.is_symbolic or (self.is_seed and intervals):
             return []
 
-        execution_time = execution_time or now()
-        allow_partials = self.is_model and self.model.allow_partials
+        allow_partials = not end_bounded and self.is_model and self.model.allow_partials
         start_ts, end_ts = (
             to_timestamp(ts)
             for ts in self.inclusive_exclusive(
@@ -781,14 +796,18 @@ class Snapshot(PydanticModel, SnapshotInfoMixin):
 
         interval_unit = self.node.interval_unit
 
-        if allow_partials:
-            upper_bound_ts = to_timestamp(execution_time)
-            end_ts = min(end_ts, upper_bound_ts)
-        else:
+        execution_time = execution_time or now()
+        if end_bounded:
+            execution_time = min(to_timestamp(execution_time), end_ts)
+
+        if not allow_partials:
             upper_bound_ts = to_timestamp(
                 self.node.cron_floor(execution_time) if not ignore_cron else execution_time
             )
             end_ts = min(end_ts, to_timestamp(interval_unit.cron_floor(upper_bound_ts)))
+        else:
+            upper_bound_ts = to_timestamp(execution_time)
+            end_ts = min(end_ts, upper_bound_ts)
 
         lookback = self.model.lookback if self.is_model else 0
 
@@ -1072,9 +1091,11 @@ class DeployabilityIndex(PydanticModel, frozen=True):
         # Transforming into strings because the serialization of sets of objects / lists is broken in Pydantic.
         return frozenset(
             {
-                cls._snapshot_id_key(snapshot_id)
-                if isinstance(snapshot_id, SnapshotId)
-                else snapshot_id
+                (
+                    cls._snapshot_id_key(snapshot_id)
+                    if isinstance(snapshot_id, SnapshotId)
+                    else snapshot_id
+                )
                 for snapshot_id in v
             }
         )
@@ -1241,9 +1262,11 @@ def display_name(
         return snapshot_info_like.name
     view_name = exp.to_table(snapshot_info_like.name)
     qvn = QualifiedViewName(
-        catalog=view_name.catalog
-        if view_name.catalog and view_name.catalog != default_catalog
-        else None,
+        catalog=(
+            view_name.catalog
+            if view_name.catalog and view_name.catalog != default_catalog
+            else None
+        ),
         schema_name=view_name.db or None,
         table=view_name.name,
     )
@@ -1345,7 +1368,8 @@ def merge_intervals(intervals: Intervals) -> Intervals:
 def _format_date_time(time_like: TimeLike, unit: t.Optional[IntervalUnit]) -> str:
     if unit is None or unit.is_date_granularity:
         return to_ds(time_like)
-    return to_datetime(time_like).isoformat()[:19]
+    # TODO: Remove `[0:19]` once `to_ts` always returns a timestamp without timezone
+    return to_ts(time_like)[0:19]
 
 
 def format_intervals(intervals: Intervals, unit: t.Optional[IntervalUnit]) -> str:
@@ -1419,6 +1443,7 @@ def missing_intervals(
     restatements: t.Optional[t.Dict[SnapshotId, Interval]] = None,
     deployability_index: t.Optional[DeployabilityIndex] = None,
     ignore_cron: bool = False,
+    end_bounded: bool = False,
 ) -> t.Dict[Snapshot, Intervals]:
     """Returns all missing intervals given a collection of snapshots."""
     missing = {}
@@ -1454,6 +1479,7 @@ def missing_intervals(
             execution_time=execution_time,
             deployability_index=deployability_index,
             ignore_cron=ignore_cron,
+            end_bounded=end_bounded,
         )
         if intervals:
             missing[snapshot] = intervals

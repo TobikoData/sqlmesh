@@ -13,25 +13,27 @@ Options:
   --gateway TEXT     The name of the gateway.
   --ignore-warnings  Ignore warnings.
   --debug            Enable debug mode.
+  --log-to-stdout    Display logs in stdout.
   --help             Show this message and exit.
 
 Commands:
-  audit                   Run audits for given models.
+  audit                   Run audits for the target model(s).
+  clean                   Clears the SQLMesh cache and any build artifacts.
   create_external_models  Create a schema file containing external model...
   create_test             Generate a unit test fixture for a given model.
-  dag                     Render the dag as an html file.
+  dag                     Render the DAG as an html file.
   diff                    Show the diff between the local state and the...
   evaluate                Evaluate a model and return a dataframe with a...
-  fetchdf                 Run a sql query and display the results.
-  format                  Format all models in a given directory.
+  fetchdf                 Run a SQL query and display the results.
+  format                  Format all SQL models.
   info                    Print information about a SQLMesh project.
   init                    Create a new SQLMesh repository.
   invalidate              Invalidate the target environment, forcing its...
   migrate                 Migrate SQLMesh to the current running version.
   plan                    Apply local changes to the target environment.
   prompt                  Uses LLM to generate a SQL query from a prompt.
-  render                  Renders a model's query, optionally expanding...
-  rewrite                 Rewrite a sql expression with semantic...
+  render                  Render a model's query, optionally expanding...
+  rewrite                 Rewrite a SQL expression with semantic...
   rollback                Rollback SQLMesh to the previous migration.
   run                     Evaluate missing intervals for the target...
   table_diff              Show the diff between two tables.
@@ -53,6 +55,13 @@ Options:
                          command will be applied.
   --execution-time TEXT  The execution time (defaults to now).
   --help                 Show this message and exit.
+```
+
+## clean
+```
+Usage: sqlmesh clean [OPTIONS]
+
+  Clears the SQLMesh cache and any build artifacts.
 ```
 
 ## create_external_models
@@ -143,20 +152,6 @@ Options:
   --help  Show this message and exit.
 ```
 
-## ide
-```
-Usage: sqlmesh ide [OPTIONS]
-
-  Start a browser-based SQLMesh IDE.
-
-  WARNING: soft-deprecated, please use `sqlmesh ui` instead.
-
-Options:
-  --host TEXT     Bind socket to this host. Default: 127.0.0.1
-  --port INTEGER  Bind socket to this port. Default: 8000
-  --help          Show this message and exit.
-```
-
 ## info
 ```
 Usage: sqlmesh info [OPTIONS]
@@ -180,6 +175,21 @@ Options:
   -t, --template TEXT  Project template. Supported values: airflow, dbt,
                        default, empty.
   --help               Show this message and exit.
+```
+
+## invalidate
+```
+Usage: sqlmesh invalidate [OPTIONS] ENVIRONMENT
+
+  Invalidate the target environment, forcing its removal during the next run
+  of the janitor process.
+
+Options:
+  -s, --sync  Wait for the environment to be deleted before returning. If not
+              specified, the environment will be deleted asynchronously by the
+              janitor process. This option requires a connection to the data
+              warehouse.
+  --help      Show this message and exit.
 ```
 
 ## migrate
@@ -237,6 +247,8 @@ Options:
   --no-diff                 Hide text differences for changed models.
   --run                     Run latest intervals as part of the plan
                             application (prod environment only).
+  --enable-preview          Enable preview for forward-only models when
+                            targeting a development environment.
   -v, --verbose             Verbose output.
   --help                    Show this message and exit.
 ```
@@ -277,6 +289,20 @@ Options:
   --help             Show this message and exit.
 ```
 
+## rewrite
+```
+Usage: sqlmesh rewrite [OPTIONS] SQL
+
+  Rewrite a SQL expression with semantic references into an executable query.
+
+  https://sqlmesh.readthedocs.io/en/latest/concepts/metrics/overview/
+
+Options:
+  --read TEXT   The input dialect of the sql string.
+  --write TEXT  The output dialect of the sql string.
+  --help        Show this message and exit.
+```
+
 ## rollback
 ```
 Usage: sqlmesh rollback [OPTIONS]
@@ -313,20 +339,6 @@ Options:
   --where TEXT     An optional where statement to filter results.
   --limit INTEGER  The limit of the sample dataframe.
   --help           Show this message and exit.
-```
-
-## rewrite
-```
-Usage: sqlmesh rewrite [OPTIONS] SQL
-
-  Rewrite a SQL expression with semantic references into an executable query.
-
-  https://sqlmesh.readthedocs.io/en/latest/concepts/metrics/overview/
-
-Options:
-  --read TEXT   The input dialect of the sql string.
-  --write TEXT  The output dialect of the sql string.
-  --help        Show this message and exit.
 ```
 
 ## test

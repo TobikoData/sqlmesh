@@ -15,7 +15,7 @@ setup(
     author_email="engineering@tobikodata.com",
     license="Apache License 2.0",
     packages=find_packages(include=["sqlmesh", "sqlmesh.*", "web*"]),
-    package_data={"web": ["client/dist/**"]},
+    package_data={"web": ["client/dist/**"], "": ["py.typed"]},
     entry_points={
         "console_scripts": [
             "sqlmesh = sqlmesh.cli.main:cli",
@@ -35,7 +35,9 @@ setup(
         "astor",
         "click",
         "croniter",
-        "cryptography",
+        # Issue with Snowflake connector and cryptography 42+
+        # Check here if they have added support: https://github.com/dbt-labs/dbt-snowflake/blob/main/dev-requirements.txt#L12
+        "cryptography~=41.0.7",
         "duckdb",
         "dateparser",
         "fsspec",
@@ -43,11 +45,11 @@ setup(
         "ipywidgets",
         "jinja2",
         "pandas",
-        "pydantic<2.6.0",
+        "pydantic",
         "requests",
         "rich[jupyter]",
         "ruamel.yaml",
-        "sqlglot[rs]~=20.11.0",
+        "sqlglot[rs]~=22.4.0",
     ],
     extras_require={
         "bigquery": [
@@ -61,20 +63,18 @@ setup(
         "dev": [
             f"apache-airflow=={os.environ.get('AIRFLOW_VERSION', '2.3.3')}",
             "autoflake==1.7.7",
-            "agate==1.6.3",
+            "agate==1.7.1",
             "beautifulsoup4",
-            "black==22.6.0",
-            "dbt-bigquery",
+            "black==24.1.1",
             "dbt-core",
-            "dbt-duckdb>=1.4.2",
-            "dbt-snowflake",
+            "dbt-duckdb>=1.7.1",
             "Faker",
             "freezegun",
             "google-auth",
             "google-cloud-bigquery",
             "google-cloud-bigquery-storage",
             "isort==5.10.1",
-            "mypy~=1.4.0",
+            "mypy~=1.8.0",
             # Pendulum 3.0.0 contains a breaking change for Airflow.
             # To test if this is fixed with future versions, check if this line works:
             # https://github.com/apache/airflow/blob/main/airflow/settings.py#L59
@@ -84,11 +84,14 @@ setup(
             "pandas-stubs",
             "psycopg2-binary",
             "pyarrow>=10.0.1,<10.1.0",
+            # All Airflow releases require flast-appbuilder==4.3.10 and
+            # 4.3.10 requires email-validator==1.3.1
+            # https://github.com/apache/airflow/blob/main/pyproject.toml#L685
+            # https://github.com/dpgaspar/Flask-AppBuilder/blob/master/requirements.txt#L25
+            "pydantic<2.6.0",
             "PyGithub",
-            # 8.0.0 broke compatability with lazy-fixture
-            "pytest<8.0.0",
+            "pytest",
             "pytest-asyncio<0.23.0",
-            "pytest-lazy-fixture",
             "pytest-mock",
             "pytest-xdist",
             "pyspark==3.4.0",
@@ -103,8 +106,16 @@ setup(
             "types-requests==2.28.8",
             "typing-extensions",
         ],
+        "cicdtest": [
+            "dbt-bigquery",
+            "dbt-databricks",
+            "dbt-redshift",
+            "dbt-snowflake",
+            "dbt-sqlserver",
+            "dbt-trino",
+        ],
         "dbt": [
-            "dbt-core<1.5.0",
+            "dbt-core<2",
         ],
         "gcppostgres": [
             "cloud-sql-python-connector[pg8000]",
@@ -115,6 +126,9 @@ setup(
         "llm": [
             "langchain",
             "openai",
+        ],
+        "motherduck": [
+            "duckdb<0.10.0",
         ],
         "mssql": [
             "pymssql",

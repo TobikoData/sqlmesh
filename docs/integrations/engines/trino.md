@@ -17,10 +17,11 @@ pip install "trino[external-authentication-token-cache]"
 
 ### Trino Connector Support
 
-The trino engine adapter has been tested against the [Hive Connector](https://trino.io/docs/current/connector/hive.html).
+The trino engine adapter has been tested against the [Hive Connector](https://trino.io/docs/current/connector/hive.html) and the [Iceberg Connector](https://trino.io/docs/current/connector/iceberg.html).
+
 Please let us know on [Slack](https://tobikodata.com/slack) if you are wanting to use another connector or have tried another connector.
 
-### Hive Connector Configuration
+#### Hive Connector Configuration
 
 Recommended hive catalog properties configuration (`<catalog_name>.properties`):
 
@@ -34,6 +35,19 @@ hive.allow-drop-column=true
 hive.allow-rename-column=true
 hive.allow-rename-table=true
 ```
+
+#### Iceberg Connector Configuration
+
+If you're using a hive metastore for the Iceberg catalog, the [properties](https://trino.io/docs/current/connector/metastores.html#general-metastore-configuration-properties) are mostly the same as the Hive connector.
+
+```properties linenums="1"
+iceberg.catalog.type=hive_metastore
+# metastore properties as per the Hive Connector Configuration above
+```
+
+**Note**: The Trino Iceberg Connector must be configured with an `iceberg.catalog.type` that supports views. At the time of this writing, this is only `hive_metastore` and `glue`.
+
+The `jdbc`, `rest` and `nessie` catalogs do not support views and are thus incompatible with SQLMesh.
 
 ### Connection options
 
@@ -51,6 +65,29 @@ hive.allow-rename-table=true
 | `retries`            | Number of retries to attempt when a request fails. Default: `3`                                                                                                           |  int   |    N     |
 | `timezone`           | Timezone to use for the connection. Default: client-side local timezone                                                                                                   | string |    N     |
 
+## Airflow Scheduler
+**Engine Name:** `trino`
+
+The SQLMesh Trino Operator is similar to the [TrinoOperator](https://airflow.apache.org/docs/apache-airflow-providers-trino/stable/operators/trino.html), and relies on the same [TrinoHook](https://airflow.apache.org/docs/apache-airflow-providers-trino/stable/_api/airflow/providers/trino/hooks/trino/index.html) implementation.
+
+To enable support for this operator, the Airflow Trino provider package should be installed on the target Airflow cluster along with SQLMesh with the Trino extra:
+```
+pip install "apache-airflow-providers-trino"
+pip install "sqlmesh[trino]"
+```
+
+The operator requires an [Airflow connection](https://airflow.apache.org/docs/apache-airflow/stable/howto/connection.html) to determine the target Trino account. Refer to [Trino connection](https://airflow.apache.org/docs/apache-airflow-providers-trino/stable/connections.html) for more details.
+
+By default, the connection ID is set to `trino_default`, but can be overridden using the `engine_operator_args` parameter to the `SQLMeshAirflow` instance as in the example below:
+```python linenums="1"
+sqlmesh_airflow = SQLMeshAirflow(
+    "trino",
+    default_catalog="<database name>",
+    engine_operator_args={
+        "trino_conn_id": "<Connection ID>"
+    },
+)
+```
 ```yaml linenums="1"
 gateway_name:
     connection:

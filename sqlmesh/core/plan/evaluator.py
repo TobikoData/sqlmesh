@@ -13,6 +13,7 @@ At a high level, when a plan is evaluated, SQLMesh will:
 
 Refer to `sqlmesh.core.plan`.
 """
+
 import abc
 import logging
 import typing as t
@@ -156,6 +157,7 @@ class BuiltInPlanEvaluator(PlanEvaluator):
             selected_snapshots=selected_snapshots,
             deployability_index=deployability_index,
             circuit_breaker=circuit_breaker,
+            end_bounded=plan.end_bounded,
         )
         if not is_run_successful:
             raise SQLMeshError("Plan application failed.")
@@ -215,7 +217,11 @@ class BuiltInPlanEvaluator(PlanEvaluator):
                 [s for s in plan.snapshots.values() if s.is_paused],
                 plan.snapshots,
             )
-            self.state_sync.unpause_snapshots(promotion_result.added, plan.end)
+            if not plan.ensure_finalized_snapshots:
+                # Only unpause at this point if we don't have to use the finalized snapshots
+                # for subsequent plan applications. Otherwise, unpause right before finalizing
+                # the environment.
+                self.state_sync.unpause_snapshots(promotion_result.added, plan.end)
 
         return promotion_result
 
@@ -232,6 +238,12 @@ class BuiltInPlanEvaluator(PlanEvaluator):
             promotion_result: The result of the promotion.
             deployability_index: Indicates which snapshots are deployable in the context of this promotion.
         """
+        if not plan.is_dev and plan.ensure_finalized_snapshots:
+            # Unpause right before finalizing the environment in case when
+            # we need to use the finalized snapshots for subsequent plan applications.
+            # Otherwise, unpause right after updatig the environment record.
+            self.state_sync.unpause_snapshots(promotion_result.added, plan.end)
+
         environment = plan.environment
 
         self.console.start_promotion_progress(
@@ -356,6 +368,14 @@ class StateBasedAirflowPlanEvaluator(BaseAirflowPlanEvaluator):
             is_dev=plan.is_dev,
             forward_only=plan.forward_only,
             models_to_backfill=plan.models_to_backfill,
+            end_bounded=plan.end_bounded,
+            ensure_finalized_snapshots=plan.ensure_finalized_snapshots,
+            directly_modified_snapshots=list(plan.directly_modified),
+            indirectly_modified_snapshots={
+                change_source.name: list(snapshots)
+                for change_source, snapshots in plan.indirectly_modified.items()
+            },
+            removed_snapshots=list(plan.context_diff.removed_snapshots),
         )
         plan_dag_spec = create_plan_dag_spec(plan_application_request, self.state_sync)
         PlanDagState.from_state_sync(self.state_sync).add_dag_spec(plan_dag_spec)
@@ -424,6 +444,14 @@ class AirflowPlanEvaluator(StateBasedAirflowPlanEvaluator):
             is_dev=plan.is_dev,
             forward_only=plan.forward_only,
             models_to_backfill=plan.models_to_backfill,
+            end_bounded=plan.end_bounded,
+            ensure_finalized_snapshots=plan.ensure_finalized_snapshots,
+            directly_modified_snapshots=list(plan.directly_modified),
+            indirectly_modified_snapshots={
+                change_source.name: list(snapshots)
+                for change_source, snapshots in plan.indirectly_modified.items()
+            },
+            removed_snapshots=list(plan.context_diff.removed_snapshots),
         )
 
 

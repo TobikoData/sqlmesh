@@ -196,6 +196,11 @@ class AirflowClient(BaseAirflowClient):
         is_dev: bool = False,
         forward_only: bool = False,
         models_to_backfill: t.Optional[t.Set[str]] = None,
+        end_bounded: bool = False,
+        ensure_finalized_snapshots: bool = False,
+        directly_modified_snapshots: t.Optional[t.List[SnapshotId]] = None,
+        indirectly_modified_snapshots: t.Optional[t.Dict[str, t.List[SnapshotId]]] = None,
+        removed_snapshots: t.Optional[t.List[SnapshotId]] = None,
     ) -> None:
         request = common.PlanApplicationRequest(
             new_snapshots=list(new_snapshots),
@@ -211,6 +216,11 @@ class AirflowClient(BaseAirflowClient):
             is_dev=is_dev,
             forward_only=forward_only,
             models_to_backfill=models_to_backfill,
+            end_bounded=end_bounded,
+            ensure_finalized_snapshots=ensure_finalized_snapshots,
+            directly_modified_snapshots=directly_modified_snapshots or [],
+            indirectly_modified_snapshots=indirectly_modified_snapshots or {},
+            removed_snapshots=removed_snapshots or [],
         )
 
         response = self._session.post(
@@ -271,15 +281,20 @@ class AirflowClient(BaseAirflowClient):
         response = self._get(ENVIRONMENTS_PATH)
         return common.EnvironmentsResponse.parse_obj(response).environments
 
-    def max_interval_end_for_environment(self, environment: str) -> t.Optional[int]:
-        response = self._get(f"{ENVIRONMENTS_PATH}/{environment}/max_interval_end")
+    def max_interval_end_for_environment(
+        self, environment: str, ensure_finalized_snapshots: bool
+    ) -> t.Optional[int]:
+        flags = ["ensure_finalized_snapshots"] if ensure_finalized_snapshots else []
+        response = self._get(f"{ENVIRONMENTS_PATH}/{environment}/max_interval_end", *flags)
         return common.IntervalEndResponse.parse_obj(response).max_interval_end
 
     def greatest_common_interval_end(
-        self, environment: str, models: t.Collection[str]
+        self, environment: str, models: t.Collection[str], ensure_finalized_snapshots: bool
     ) -> t.Optional[int]:
+        flags = ["ensure_finalized_snapshots"] if ensure_finalized_snapshots else []
         response = self._get(
             f"{ENVIRONMENTS_PATH}/{environment}/greatest_common_interval_end",
+            *flags,
             models=_json_query_param(list(models)),
         )
         return common.IntervalEndResponse.parse_obj(response).max_interval_end

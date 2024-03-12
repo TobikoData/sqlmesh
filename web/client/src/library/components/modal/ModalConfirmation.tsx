@@ -35,7 +35,7 @@ function ModalConfirmation({
       onClose={onClose}
       afterLeave={afterLeave}
     >
-      <Dialog.Panel className="w-[30rem] transform rounded-xl bg-theme text-left align-middle shadow-xl transition-all">
+      <Dialog.Panel className="min-w-[20rem] max-w-[50rem] transform rounded-xl bg-theme text-left align-middle shadow-xl transition-all overflow-hidden">
         {children}
       </Dialog.Panel>
     </Modal>
@@ -80,7 +80,7 @@ function ModalConfirmationDetails({
   details: string[]
 }): JSX.Element {
   return (
-    <ul className="mt-2 p-4 bg-warning-10 rounded-md max-h-[20vh] overflow-y-auto hover:scrollbar scrollbar--vertical">
+    <ul className="my-2 p-4 bg-warning-10 rounded-md max-h-[20vh] overflow-y-auto hover:scrollbar scrollbar--vertical">
       {details.map(detail => (
         <li
           key={detail}

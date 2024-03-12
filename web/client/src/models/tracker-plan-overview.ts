@@ -4,7 +4,14 @@ import {
   type PlanStageChanges,
 } from '@api/client'
 import { ModelPlanTracker, type PlanTracker } from './tracker-plan'
-import { isArrayNotEmpty, isFalse, isNil, isNotNil } from '@utils/index'
+import {
+  isArrayNotEmpty,
+  isFalse,
+  isFalseOrNil,
+  isNil,
+  isNotNil,
+  isTrue,
+} from '@utils/index'
 import {
   type InitialChangeDisplay,
   ModelSQLMeshChangeDisplay,
@@ -82,6 +89,10 @@ export class ModelPlanOverviewTracker
       : isArrayNotEmpty(this._current.backfills?.models)
   }
 
+  get hasUpdates(): boolean {
+    return isTrue(this.hasChanges) || isTrue(this.hasBackfills)
+  }
+
   get backfills(): ModelSQLMeshChangeDisplay[] {
     return this._backfills
   }
@@ -119,7 +130,7 @@ export class ModelPlanOverviewTracker
 
   get isBackfillUpdate(): boolean {
     return (
-      isNil(this.hasChanges) &&
+      isFalseOrNil(this.hasChanges) &&
       Boolean(this.hasBackfills) &&
       isFalse(this.skipBackfill)
     )

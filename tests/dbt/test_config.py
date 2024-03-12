@@ -1,11 +1,11 @@
 import base64
 import typing as t
 from pathlib import Path
+from shutil import copytree
 from unittest.mock import PropertyMock
 
 import pytest
 from dbt.adapters.base import BaseRelation, Column
-from dbt.adapters.duckdb.relation import DuckDBRelation
 from dbt.contracts.relation import Policy
 from pytest_mock import MockerFixture
 
@@ -13,6 +13,7 @@ from sqlmesh.core.dialect import jinja_query
 from sqlmesh.core.model import SqlModel
 from sqlmesh.dbt.common import Dependencies
 from sqlmesh.dbt.context import DbtContext
+from sqlmesh.dbt.loader import sqlmesh_config
 from sqlmesh.dbt.model import IncrementalByUniqueKeyKind, Materialization, ModelConfig
 from sqlmesh.dbt.project import Project
 from sqlmesh.dbt.source import SourceConfig
@@ -21,10 +22,12 @@ from sqlmesh.dbt.target import (
     BigQueryConfig,
     DatabricksConfig,
     DuckDbConfig,
+    MSSQLConfig,
     PostgresConfig,
     RedshiftConfig,
     SnowflakeConfig,
     TargetConfig,
+    TrinoConfig,
 )
 from sqlmesh.dbt.test import TestConfig
 from sqlmesh.utils.errors import ConfigError
@@ -379,6 +382,29 @@ def _test_warehouse_config(
     return config
 
 
+def test_duckdb_threads(tmp_path):
+    dbt_project_dir = "tests/fixtures/dbt/sushi_test"
+    temp_dir = tmp_path / "sushi_test"
+
+    copytree(dbt_project_dir, temp_dir, symlinks=True)
+
+    with open(temp_dir / "profiles.yml", "w") as f:
+        f.write(
+            """
+            sushi:
+              outputs:
+                in_memory:
+                  type: duckdb
+                  schema: sushi
+                  threads: 4
+              target: in_memory
+            """
+        )
+
+    config = sqlmesh_config(temp_dir)
+    assert config.gateways["in_memory"].connection.concurrent_tasks == 1
+
+
 def test_snowflake_config():
     _test_warehouse_config(
         """
@@ -621,12 +647,95 @@ def test_bigquery_config():
         )
 
 
+def test_sqlserver_config():
+    _test_warehouse_config(
+        """
+        dbt-sqlserver:
+          target: dev
+          outputs:
+            dev:
+              type: sqlserver
+              host: localhost
+              user: user
+              password: password
+              database: master
+              driver: "ODBC Driver 17 for SQL Server"
+              schema: sushi
+              threads: 1
+              authentication: sql
+        """,
+        MSSQLConfig,
+        "dbt-sqlserver",
+        "outputs",
+        "dev",
+    )
+
+
+def test_trino_config():
+    _test_warehouse_config(
+        """
+        dbt-trino:
+          target: dev
+          outputs:
+            dev:
+              type: trino
+              method: ldap
+              user: user
+              password: password
+              host: localhost
+              database: database
+              schema: dbt_schema
+              port: 443
+              threads: 1
+        """,
+        TrinoConfig,
+        "dbt-trino",
+        "outputs",
+        "dev",
+    )
+
+
+def test_connection_args(tmp_path):
+    dbt_project_dir = "tests/fixtures/dbt/sushi_test"
+
+    config = sqlmesh_config(dbt_project_dir)
+    assert config.gateways["in_memory"].connection.register_comments
+
+    config = sqlmesh_config(dbt_project_dir, register_comments=False)
+    assert not config.gateways["in_memory"].connection.register_comments
+
+
+@pytest.mark.cicdonly
 def test_db_type_to_relation_class():
+    from dbt.adapters.bigquery.relation import BigQueryRelation
+    from dbt.adapters.databricks.relation import DatabricksRelation
+    from dbt.adapters.duckdb.relation import DuckDBRelation
+    from dbt.adapters.redshift import RedshiftRelation
+    from dbt.adapters.snowflake import SnowflakeRelation
+    from dbt.adapters.trino.relation import TrinoRelation
+
+    assert (TARGET_TYPE_TO_CONFIG_CLASS["bigquery"].relation_class) == BigQueryRelation
+    assert (TARGET_TYPE_TO_CONFIG_CLASS["databricks"].relation_class) == DatabricksRelation
     assert (TARGET_TYPE_TO_CONFIG_CLASS["duckdb"].relation_class) == DuckDBRelation
+    assert (TARGET_TYPE_TO_CONFIG_CLASS["redshift"].relation_class) == RedshiftRelation
+    assert (TARGET_TYPE_TO_CONFIG_CLASS["snowflake"].relation_class) == SnowflakeRelation
+    assert (TARGET_TYPE_TO_CONFIG_CLASS["trino"].relation_class) == TrinoRelation
 
 
+@pytest.mark.cicdonly
 def test_db_type_to_column_class():
+    from dbt.adapters.bigquery import BigQueryColumn
+    from dbt.adapters.databricks.column import DatabricksColumn
+    from dbt.adapters.snowflake import SnowflakeColumn
+    from dbt.adapters.sqlserver.sql_server_column import SQLServerColumn
+    from dbt.adapters.trino.column import TrinoColumn
+
+    assert (TARGET_TYPE_TO_CONFIG_CLASS["bigquery"].column_class) == BigQueryColumn
+    assert (TARGET_TYPE_TO_CONFIG_CLASS["databricks"].column_class) == DatabricksColumn
     assert (TARGET_TYPE_TO_CONFIG_CLASS["duckdb"].column_class) == Column
+    assert (TARGET_TYPE_TO_CONFIG_CLASS["snowflake"].column_class) == SnowflakeColumn
+    assert (TARGET_TYPE_TO_CONFIG_CLASS["sqlserver"].column_class) == SQLServerColumn
+    assert (TARGET_TYPE_TO_CONFIG_CLASS["trino"].column_class) == TrinoColumn
 
 
 def test_db_type_to_quote_policy():

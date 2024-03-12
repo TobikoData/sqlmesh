@@ -1,134 +1,130 @@
 from __future__ import annotations
 
-import collections
 import typing as t
+from collections import defaultdict
 
-import sqlglot
 from fastapi import APIRouter, Depends
 from sqlglot import exp
-from sqlglot.lineage import Node, lineage
 
 from sqlmesh.core.context import Context
-from sqlmesh.utils.errors import SQLMeshError
+from sqlmesh.core.dialect import normalize_model_name
+from sqlmesh.core.lineage import column_dependencies, lineage
 from web.server.exceptions import ApiException
 from web.server.models import LineageColumn
 from web.server.settings import get_loaded_context
 
 if t.TYPE_CHECKING:
-    from sqlglot.dialects.dialect import DialectType
+    from sqlglot.lineage import Node
 
-    from sqlmesh.core.model import Model
 
 router = APIRouter()
 
 
-def _get_table(node: Node, dialect: t.Optional[DialectType] = None) -> t.Optional[str]:
-    """Get a node's table/source"""
-    table: t.Union[exp.Table, str] = node.alias or node.name
-    if isinstance(node.expression, exp.Table):
-        table = node.expression
-
-    try:
-        return exp.table_name(table, identify=True, dialect=dialect)
-    except sqlglot.errors.ParseError:
-        # Cannot extract table from node. One reason this can happen is node is
-        # '*' because a model selects * from an external model for which we do
-        # not know the schema.
-        return None
+def get_source_name(node: Node, default_catalog: t.Optional[str], dialect: str) -> str:
+    table = node.expression.find(exp.Table)
+    if table:
+        return normalize_model_name(table, default_catalog=default_catalog, dialect=dialect)
+    if node.reference_node_name:
+        # CTE name
+        return node.reference_node_name
+    return ""
 
 
-def _get_node_source(node: Node, dialect: DialectType) -> str:
-    """Get a node's source"""
-    if isinstance(node.expression, exp.Table):
-        source = f"SELECT {node.name} FROM {node.expression.this}"
-    else:
-        source = node.source.sql(pretty=True, dialect=dialect)
-    return source
+def get_column_name(node: Node) -> str:
+    if isinstance(node.expression, exp.Alias):
+        return node.expression.alias_or_name
+    return exp.to_column(node.name).name
 
 
-def _process_downstream(downstream: t.List[Node], dialect: DialectType) -> t.Dict[str, t.List[str]]:
-    """Aggregate a list of downstream nodes by table/source"""
-    graph = collections.defaultdict(list)
-    for node in downstream:
-        table = _get_table(node, dialect=dialect)
-        if table is None:
+def create_lineage_adjacency_list(
+    model_name: str, column_name: str, context: Context
+) -> t.Dict[str, t.Dict[str, LineageColumn]]:
+    """Create an adjacency list representation of a column's lineage graph including CTEs"""
+    graph: t.Dict[str, t.Dict[str, LineageColumn]] = defaultdict(dict)
+    nodes = [(model_name, column_name)]
+    while nodes:
+        model_name, column = nodes.pop(0)
+        model = context.get_model(model_name)
+        if not model:
+            # External model
+            graph[model_name][column] = LineageColumn(
+                expression=f"FROM {model_name}",
+                source=f"SELECT {column} FROM {model_name}",
+                models={},
+            )
             continue
+        root = lineage(column, model)
 
-        column = exp.to_column(node.name).name
-        graph[table].append(column)
+        for node in root.walk():
+            if root.name == "UNION" and node is root:
+                continue
+            node_name = (
+                get_source_name(
+                    node, default_catalog=context.default_catalog, dialect=model.dialect
+                )
+                or model_name
+            )
+            node_column = get_column_name(node)
+            if node_column in graph[node_name]:
+                dependencies = defaultdict(set, graph[node_name][node_column].models)
+            else:
+                dependencies = defaultdict(set)
+            for d in node.downstream:
+                table = get_source_name(
+                    d, default_catalog=context.default_catalog, dialect=model.dialect
+                )
+                if table:
+                    column_name = get_column_name(d)
+                    dependencies[table].add(column_name)
+                    if not d.downstream:
+                        nodes.append((table, column_name))
+
+            graph[node_name][node_column] = LineageColumn(
+                expression=node.expression.sql(pretty=True, dialect=model.dialect),
+                source=node.source.sql(pretty=True, dialect=model.dialect),
+                models=dependencies,
+            )
     return graph
 
 
-def render_query(model: Model) -> exp.Subqueryable:
-    """Render a model's query, adding in managed columns"""
-    query = model.render_query_or_raise()
-    if model.managed_columns:
-        query.select(
-            *[
-                exp.alias_(exp.cast(exp.Null(), to=col_type), col)
-                for col, col_type in model.managed_columns.items()
-                if col not in query.named_selects
-            ],
-            append=True,
-            copy=False,
-        )
-    return query
+def create_models_only_lineage_adjacency_list(
+    model_name: str, column_name: str, context: Context
+) -> t.Dict[str, t.Dict[str, LineageColumn]]:
+    """Create an adjacency list representation of a column's lineage graph only with models"""
+    graph: t.Dict[str, t.Dict[str, LineageColumn]] = defaultdict(dict)
+    nodes = [(model_name, column_name)]
+    while nodes:
+        model_name, column = nodes.pop(0)
+        model = context.get_model(model_name)
+        dependencies = defaultdict(set)
+        if model:
+            for table, column_names in column_dependencies(context, model_name, column).items():
+                for column_name in column_names:
+                    dependencies[table].add(column_name)
+                    nodes.append((table, column_name))
+
+        graph[model_name][column] = LineageColumn(models=dependencies)
+    return graph
 
 
 @router.get("/{model_name:str}/{column_name:str}")
 async def column_lineage(
-    column_name: str,
     model_name: str,
+    column_name: str,
+    models_only: bool = False,
     context: Context = Depends(get_loaded_context),
 ) -> t.Dict[str, t.Dict[str, LineageColumn]]:
     """Get a column's lineage"""
     try:
-        model = context.get_model(model_name)
-        dialect = model.dialect
-        sources: t.Dict[str, str | exp.Subqueryable] = {}
-        for m in context.dag.upstream(model.fqn):
-            if m in context.models:
-                try:
-                    sources[m] = render_query(context.models[m])
-                except SQLMeshError:
-                    continue
-
-        node = lineage(
-            column=column_name,
-            sql=render_query(model),
-            sources=sources,
-            dialect=dialect,
-        )
+        model_name = context.get_model(model_name).fqn
+        if models_only:
+            return create_models_only_lineage_adjacency_list(model_name, column_name, context)
+        return create_lineage_adjacency_list(model_name, column_name, context)
     except Exception:
         raise ApiException(
-            message="Unable to get a column lineage",
+            message="Unable to get column lineage",
             origin="API -> lineage -> column_lineage",
         )
-
-    graph: t.Dict[str, t.Dict[str, LineageColumn]] = {}
-    node_name = model.fqn
-
-    for i, node in enumerate(node.walk()):
-        if i > 0:
-            table = _get_table(node, dialect)
-            if table is None:
-                continue
-            node_name = table
-
-            column_name = exp.to_column(node.name).name
-        if column_name in graph.get(node_name, []):
-            continue
-
-        # At this point node_name should be fqn/normalized/quoted
-        graph[node_name] = {
-            column_name: LineageColumn(
-                expression=node.expression.sql(pretty=True, dialect=dialect),
-                source=_get_node_source(node=node, dialect=dialect),
-                models=_process_downstream(node.downstream, dialect=dialect),
-            )
-        }
-
-    return graph
 
 
 @router.get("/{model_name:str}")
@@ -141,7 +137,7 @@ async def model_lineage(
         model_name = context.get_model(model_name).fqn
     except Exception:
         raise ApiException(
-            message="Unable to get a model lineage",
+            message="Unable to get model lineage",
             origin="API -> lineage -> model_lineage",
         )
 

@@ -1131,7 +1131,7 @@ def test_environment_start_as_timestamp(
 
     stored_env = state_sync.get_environment(env.name)
     assert stored_env
-    assert stored_env.start_at == to_datetime(now_ts).isoformat()
+    assert stored_env.start_at == to_datetime(now_ts).replace(tzinfo=None).isoformat(sep=" ")
 
 
 def test_unpause_snapshots(state_sync: EngineAdapterStateSync, make_snapshot: t.Callable):
@@ -1173,6 +1173,70 @@ def test_unpause_snapshots(state_sync: EngineAdapterStateSync, make_snapshot: t.
     assert not actual_snapshots[new_snapshot.snapshot_id].unrestorable
 
 
+def test_unrestorable_snapshot(state_sync: EngineAdapterStateSync, make_snapshot: t.Callable):
+    snapshot = make_snapshot(
+        SqlModel(
+            name="test_snapshot",
+            query=parse_one("select 1, ds"),
+            cron="@daily",
+        ),
+    )
+    snapshot.categorize_as(SnapshotChangeCategory.BREAKING)
+    snapshot.version = "a"
+
+    assert not snapshot.unpaused_ts
+    state_sync.push_snapshots([snapshot])
+
+    unpaused_dt = "2022-01-01"
+    state_sync.unpause_snapshots([snapshot], unpaused_dt)
+
+    actual_snapshot = state_sync.get_snapshots([snapshot])[snapshot.snapshot_id]
+    assert actual_snapshot.unpaused_ts
+    assert actual_snapshot.unpaused_ts == to_timestamp(unpaused_dt)
+
+    new_indirect_non_breaking_snapshot = make_snapshot(
+        SqlModel(name="test_snapshot", query=parse_one("select 2, ds"), cron="@daily")
+    )
+    new_indirect_non_breaking_snapshot.categorize_as(SnapshotChangeCategory.INDIRECT_NON_BREAKING)
+    new_indirect_non_breaking_snapshot.version = "a"
+
+    assert not new_indirect_non_breaking_snapshot.unpaused_ts
+    state_sync.push_snapshots([new_indirect_non_breaking_snapshot])
+    state_sync.unpause_snapshots([new_indirect_non_breaking_snapshot], unpaused_dt)
+
+    actual_snapshots = state_sync.get_snapshots([snapshot, new_indirect_non_breaking_snapshot])
+    assert not actual_snapshots[snapshot.snapshot_id].unpaused_ts
+    assert actual_snapshots[
+        new_indirect_non_breaking_snapshot.snapshot_id
+    ].unpaused_ts == to_timestamp(unpaused_dt)
+
+    assert not actual_snapshots[snapshot.snapshot_id].unrestorable
+    assert not actual_snapshots[new_indirect_non_breaking_snapshot.snapshot_id].unrestorable
+
+    new_forward_only_snapshot = make_snapshot(
+        SqlModel(name="test_snapshot", query=parse_one("select 3, ds"), cron="@daily")
+    )
+    new_forward_only_snapshot.categorize_as(SnapshotChangeCategory.FORWARD_ONLY)
+    new_forward_only_snapshot.version = "a"
+
+    assert not new_forward_only_snapshot.unpaused_ts
+    state_sync.push_snapshots([new_forward_only_snapshot])
+    state_sync.unpause_snapshots([new_forward_only_snapshot], unpaused_dt)
+
+    actual_snapshots = state_sync.get_snapshots(
+        [snapshot, new_indirect_non_breaking_snapshot, new_forward_only_snapshot]
+    )
+    assert not actual_snapshots[snapshot.snapshot_id].unpaused_ts
+    assert not actual_snapshots[new_indirect_non_breaking_snapshot.snapshot_id].unpaused_ts
+    assert actual_snapshots[new_forward_only_snapshot.snapshot_id].unpaused_ts == to_timestamp(
+        unpaused_dt
+    )
+
+    assert actual_snapshots[snapshot.snapshot_id].unrestorable
+    assert actual_snapshots[new_indirect_non_breaking_snapshot.snapshot_id].unrestorable
+    assert not actual_snapshots[new_forward_only_snapshot.snapshot_id].unrestorable
+
+
 def test_unpause_snapshots_remove_intervals(
     state_sync: EngineAdapterStateSync, make_snapshot: t.Callable
 ):
@@ -1205,7 +1269,7 @@ def test_unpause_snapshots_remove_intervals(
     ]
 
 
-def test_get_version(state_sync: EngineAdapterStateSync) -> None:
+def test_version_schema(state_sync: EngineAdapterStateSync) -> None:
     from sqlmesh import __version__ as SQLMESH_VERSION
 
     # fresh install should not raise
@@ -1250,22 +1314,56 @@ def test_get_version(state_sync: EngineAdapterStateSync) -> None:
         state_sync.get_versions()
     state_sync.get_versions(validate=False)
 
+
+def test_version_sqlmesh(state_sync: EngineAdapterStateSync) -> None:
+    from sqlmesh import __version__ as SQLMESH_VERSION
+    from sqlmesh import __version_tuple__ as SQLMESH_VERSION_TUPLE
+
+    # patch version sqlmesh doesn't matter
+    major, minor, patch, *_ = SQLMESH_VERSION_TUPLE
+    sqlmesh_version_patch_bump = f"{major}.{minor}.{int(patch) + 1}"
+    state_sync._update_versions(sqlmesh_version=sqlmesh_version_patch_bump)
+    state_sync.get_versions(validate=False)
+
+    # sqlmesh version is behind
+    sqlmesh_version_minor_bump = f"{major}.{int(minor) + 1}.{patch}"
+    error = (
+        rf"SQLMesh \(local\) is using version '{SQLMESH_VERSION}' which is behind '{sqlmesh_version_minor_bump}' \(remote\). "
+        rf"""Please upgrade SQLMesh \('pip install --upgrade "sqlmesh=={sqlmesh_version_minor_bump}"' command\)."""
+    )
+    state_sync._update_versions(sqlmesh_version=sqlmesh_version_minor_bump)
+    with pytest.raises(SQLMeshError, match=error):
+        state_sync.get_versions()
+    state_sync.get_versions(validate=False)
+
+    # sqlmesh version is ahead
+    sqlmesh_version_minor_decrease = f"{major}.{int(minor) - 1}.{patch}"
+    error = rf"SQLMesh \(local\) is using version '{SQLMESH_VERSION}' which is ahead of '{sqlmesh_version_minor_decrease}'"
+    state_sync._update_versions(sqlmesh_version=sqlmesh_version_minor_decrease)
+    with pytest.raises(SQLMeshError, match=error):
+        state_sync.get_versions()
+    state_sync.get_versions(validate=False)
+
+
+def test_version_sqlglot(state_sync: EngineAdapterStateSync) -> None:
     # patch version sqlglot doesn't matter
     major, minor, patch, *_ = SQLGLOT_VERSION.split(".")
     sqlglot_version = f"{major}.{minor}.{int(patch) + 1}"
     state_sync._update_versions(sqlglot_version=sqlglot_version)
     state_sync.get_versions(validate=False)
 
-    # sqlglot version is behind, always raise
+    # sqlglot version is behind
     sqlglot_version = f"{major}.{int(minor) + 1}.{patch}"
     error = (
         rf"SQLGlot \(local\) is using version '{SQLGLOT_VERSION}' which is behind '{sqlglot_version}' \(remote\). "
         rf"""Please upgrade SQLGlot \('pip install --upgrade "sqlglot=={sqlglot_version}"' command\)."""
     )
     state_sync._update_versions(sqlglot_version=sqlglot_version)
+    with pytest.raises(SQLMeshError, match=error):
+        state_sync.get_versions()
     state_sync.get_versions(validate=False)
 
-    # sqlglot version is ahead, only raise with validate is true
+    # sqlglot version is ahead
     sqlglot_version = f"{major}.{int(minor) - 1}.{patch}"
     error = rf"SQLGlot \(local\) is using version '{SQLGLOT_VERSION}' which is ahead of '{sqlglot_version}'"
     state_sync._update_versions(sqlglot_version=sqlglot_version)
@@ -1273,6 +1371,8 @@ def test_get_version(state_sync: EngineAdapterStateSync) -> None:
         state_sync.get_versions()
     state_sync.get_versions(validate=False)
 
+
+def test_empty_versions() -> None:
     for empty_versions in (
         Versions(),
         Versions(schema_version=None, sqlglot_version=None, sqlmesh_version=None),
@@ -1732,12 +1832,65 @@ def test_max_interval_end_for_environment(
             start_at="2023-01-01",
             end_at="2023-01-03",
             plan_id="test_plan_id",
+            previous_finalized_snapshots=[snapshot_b.table_info],
         )
     )
 
     assert state_sync.max_interval_end_for_environment(environment_name) == to_timestamp(
         "2023-01-03"
     )
+
+
+def test_max_interval_end_for_environment_ensure_finalized_snapshots(
+    state_sync: EngineAdapterStateSync, make_snapshot: t.Callable
+) -> None:
+    snapshot_a = make_snapshot(
+        SqlModel(
+            name="a",
+            cron="@daily",
+            query=parse_one("select 1, ds"),
+        ),
+    )
+    snapshot_a.categorize_as(SnapshotChangeCategory.BREAKING)
+
+    snapshot_b = make_snapshot(
+        SqlModel(
+            name="b",
+            cron="@daily",
+            query=parse_one("select 2, ds"),
+        ),
+    )
+    snapshot_b.categorize_as(SnapshotChangeCategory.BREAKING)
+
+    state_sync.push_snapshots([snapshot_a, snapshot_b])
+
+    state_sync.add_interval(snapshot_a, "2023-01-01", "2023-01-01")
+    state_sync.add_interval(snapshot_a, "2023-01-02", "2023-01-02")
+    state_sync.add_interval(snapshot_b, "2023-01-01", "2023-01-01")
+
+    environment_name = "test_max_interval_end_for_environment"
+
+    assert (
+        state_sync.max_interval_end_for_environment(
+            environment_name, ensure_finalized_snapshots=True
+        )
+        is None
+    )
+
+    state_sync.promote(
+        Environment(
+            name=environment_name,
+            snapshots=[snapshot_a.table_info, snapshot_b.table_info],
+            start_at="2023-01-01",
+            end_at="2023-01-03",
+            plan_id="test_plan_id",
+            previous_finalized_snapshots=[snapshot_b.table_info],
+        )
+    )
+
+    assert state_sync.max_interval_end_for_environment(
+        environment_name, ensure_finalized_snapshots=True
+    ) == to_timestamp("2023-01-02")
 
 
 def test_greatest_common_interval_end(
@@ -1780,6 +1933,7 @@ def test_greatest_common_interval_end(
             start_at="2023-01-01",
             end_at="2023-01-03",
             plan_id="test_plan_id",
+            previous_finalized_snapshots=[snapshot_b.table_info],
         )
     )
 
@@ -1798,6 +1952,68 @@ def test_greatest_common_interval_end(
     assert state_sync.greatest_common_interval_end(environment_name, {"missing"}) == to_timestamp(
         "2023-01-03"
     )
+    assert state_sync.greatest_common_interval_end(environment_name, set()) is None
+
+
+def test_greatest_common_interval_end_ensure_finalized_snapshots(
+    state_sync: EngineAdapterStateSync, make_snapshot: t.Callable
+) -> None:
+    snapshot_a = make_snapshot(
+        SqlModel(
+            name="a",
+            cron="@daily",
+            query=parse_one("select 1, ds"),
+        ),
+    )
+    snapshot_a.categorize_as(SnapshotChangeCategory.BREAKING)
+
+    snapshot_b = make_snapshot(
+        SqlModel(
+            name="b",
+            cron="@daily",
+            query=parse_one("select 2, ds"),
+        ),
+    )
+    snapshot_b.categorize_as(SnapshotChangeCategory.BREAKING)
+
+    state_sync.push_snapshots([snapshot_a, snapshot_b])
+
+    state_sync.add_interval(snapshot_a, "2023-01-01", "2023-01-01")
+    state_sync.add_interval(snapshot_a, "2023-01-02", "2023-01-02")
+    state_sync.add_interval(snapshot_a, "2023-01-03", "2023-01-03")
+    state_sync.add_interval(snapshot_b, "2023-01-01", "2023-01-01")
+    state_sync.add_interval(snapshot_b, "2023-01-02", "2023-01-02")
+
+    environment_name = "test_max_interval_end_for_environment"
+
+    assert state_sync.greatest_common_interval_end(environment_name, {snapshot_a.name}) is None
+
+    state_sync.promote(
+        Environment(
+            name=environment_name,
+            snapshots=[snapshot_a.table_info, snapshot_b.table_info],
+            start_at="2023-01-01",
+            end_at="2023-01-03",
+            plan_id="test_plan_id",
+            previous_finalized_snapshots=[snapshot_b.table_info],
+        )
+    )
+
+    assert state_sync.greatest_common_interval_end(
+        environment_name, {snapshot_a.name}, ensure_finalized_snapshots=True
+    ) == to_timestamp("2023-01-03")
+
+    assert state_sync.greatest_common_interval_end(
+        environment_name, {snapshot_b.name}, ensure_finalized_snapshots=True
+    ) == to_timestamp("2023-01-03")
+
+    assert state_sync.greatest_common_interval_end(
+        environment_name, {snapshot_a.name, snapshot_b.name}, ensure_finalized_snapshots=True
+    ) == to_timestamp("2023-01-03")
+
+    assert state_sync.greatest_common_interval_end(
+        environment_name, {"missing"}, ensure_finalized_snapshots=True
+    ) == to_timestamp("2023-01-03")
     assert state_sync.greatest_common_interval_end(environment_name, set()) is None
 
 

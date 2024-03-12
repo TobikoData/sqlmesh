@@ -1,7 +1,7 @@
 import { lazy, useEffect, useMemo, useState } from 'react'
 import { Tab } from '@headlessui/react'
 import clsx from 'clsx'
-import { isArrayEmpty, isFalse, isNotNil } from '~/utils'
+import { includes, isArrayEmpty, isFalse, isNotNil } from '~/utils'
 import { type EditorTab, useStoreEditor } from '~/context/editor'
 import { ViewColumnsIcon } from '@heroicons/react/24/solid'
 import { Button } from '@components/button/Button'
@@ -15,6 +15,11 @@ import TabList from '@components/tab/Tab'
 import { useSQLMeshModelExtensions } from './hooks'
 import Table from '@components/table/Table'
 import { useStoreContext } from '@context/context'
+import { DisplayError } from '@components/report/ReportErrors'
+import {
+  EnumErrorKey,
+  useNotificationCenter,
+} from '~/library/pages/root/context/notificationCenter'
 
 const ModelLineage = lazy(
   async () => await import('@components/graph/ModelLineage'),
@@ -26,6 +31,7 @@ export const EnumEditorPreviewTabs = {
   Console: 'Logs',
   Lineage: 'Lineage',
   Diff: 'Diff',
+  Errors: 'Errors',
 } as const
 
 export type EditorPreviewTabs = KeyOf<typeof EnumEditorPreviewTabs>
@@ -37,6 +43,7 @@ export default function EditorPreview({
   tab: EditorTab
   className?: string
 }): JSX.Element {
+  const { errors, removeError } = useNotificationCenter()
   const navigate = useNavigate()
 
   const models = useStoreContext(s => s.models)
@@ -51,33 +58,89 @@ export default function EditorPreview({
   const [activeTabIndex, setActiveTabIndex] = useState(-1)
 
   const modelExtensions = useSQLMeshModelExtensions(tab.file.path, model => {
-    navigate(`${EnumRoutes.IdeDocsModels}/${model.name}`)
+    navigate(`${EnumRoutes.DocsModels}/${model.name}`)
   })
 
   const model = models.get(tab.file.path)
   const showLineage =
     isFalse(tab.file.isEmpty) && isNotNil(model) && isModel(tab.file.path)
+  const showErrors = errors.size > 0
 
   const tabs: string[] = useMemo(
     () =>
       [
         isNotNil(previewTable) && EnumEditorPreviewTabs.Table,
-        isNotNil(previewQuery) && EnumEditorPreviewTabs.Query,
+        isNotNil(previewQuery) &&
+          tab.file.isRemote &&
+          EnumEditorPreviewTabs.Query,
         showLineage && EnumEditorPreviewTabs.Lineage,
         isNotNil(previewDiff) && EnumEditorPreviewTabs.Diff,
+        showErrors && EnumEditorPreviewTabs.Errors,
       ].filter(Boolean) as string[],
-    [tab.id, previewTable, previewQuery, previewDiff, showLineage],
+    [
+      tab.id,
+      previewTable,
+      previewQuery,
+      previewDiff,
+      showLineage,
+      errors,
+      showErrors,
+    ],
   )
+
+  useEffect(() => {
+    if (isNotNil(previewTable)) {
+      setActiveTabIndex(tabs.indexOf(EnumEditorPreviewTabs.Table))
+    } else {
+      setActiveTabIndex(0)
+    }
+  }, [previewTable])
 
   useEffect(() => {
     if (isNotNil(previewDiff)) {
       setActiveTabIndex(tabs.indexOf(EnumEditorPreviewTabs.Diff))
-    } else if (isNotNil(previewTable)) {
-      setActiveTabIndex(tabs.indexOf(EnumEditorPreviewTabs.Table))
-    } else if (showLineage) {
-      setActiveTabIndex(tabs.indexOf(EnumEditorPreviewTabs.Lineage))
+    } else {
+      setActiveTabIndex(0)
     }
-  }, [tabs, previewTable, previewQuery, previewDiff, showLineage])
+  }, [previewDiff])
+
+  useEffect(() => {
+    if (isNotNil(showLineage)) {
+      setActiveTabIndex(tabs.indexOf(EnumEditorPreviewTabs.Lineage))
+    } else {
+      setActiveTabIndex(0)
+    }
+  }, [showLineage])
+
+  useEffect(() => {
+    if (showErrors) {
+      setActiveTabIndex(tabs.indexOf(EnumEditorPreviewTabs.Errors))
+    } else {
+      setActiveTabIndex(0)
+    }
+  }, [showErrors])
+
+  useEffect(() => {
+    for (const error of errors) {
+      if (
+        includes(
+          [
+            EnumErrorKey.Fetchdf,
+            EnumErrorKey.EvaluateModel,
+            EnumErrorKey.RenderQuery,
+            EnumErrorKey.ColumnLineage,
+            EnumErrorKey.ModelLineage,
+            EnumErrorKey.TableDiff,
+            EnumErrorKey.Table,
+            EnumErrorKey.SaveFile,
+          ],
+          error.key,
+        )
+      ) {
+        removeError(error)
+      }
+    }
+  }, [previewTable, previewDiff, previewQuery, showLineage])
 
   return (
     <div
@@ -134,7 +197,7 @@ export default function EditorPreview({
                 <Table data={previewTable} />
               </Tab.Panel>
             )}
-            {isNotNil(previewQuery) && (
+            {isNotNil(previewQuery) && tab.file.isRemote && (
               <Tab.Panel
                 unmount={false}
                 className="w-full h-full ring-white ring-opacity-60 ring-offset-2 ring-offset-blue-400 focus:outline-none focus:ring-2 p-2"
@@ -153,7 +216,7 @@ export default function EditorPreview({
               <Tab.Panel
                 unmount={false}
                 className={clsx(
-                  'w-full h-full ring-white ring-opacity-60 ring-offset-2 ring-offset-blue-400 focus:outline-none focus:ring-2 py-2',
+                  'w-full h-full ring-white ring-opacity-60 ring-offset-2 ring-offset-blue-400 focus:outline-none focus:ring-2',
                 )}
               >
                 <ModelLineage
@@ -173,6 +236,28 @@ export default function EditorPreview({
                   key={tab.id}
                   diff={previewDiff}
                 />
+              </Tab.Panel>
+            )}
+            {showErrors && (
+              <Tab.Panel
+                unmount={false}
+                className="w-full h-full ring-white ring-opacity-60 ring-offset-2 ring-offset-blue-400 focus:outline-none focus:ring-2 py-2"
+              >
+                <ul className="w-full h-full p-2 overflow-auto hover:scrollbar scrollbar--vertical scrollbar--horizontal">
+                  {Array.from(errors)
+                    .reverse()
+                    .map(error => (
+                      <li
+                        key={error.id}
+                        className="bg-danger-10 mb-4 last:m-0 p-2 rounded-md"
+                      >
+                        <DisplayError
+                          scope={error.key}
+                          error={error}
+                        />
+                      </li>
+                    ))}
+                </ul>
               </Tab.Panel>
             )}
           </Tab.Panels>

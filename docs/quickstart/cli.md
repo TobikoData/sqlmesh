@@ -111,11 +111,11 @@ Finally, the scaffold will include data for the example project to use.
 ??? info "Learn more about the project's data"
     The data used in this example project is contained in the `seed_data.csv` file in the `/seeds` project directory. The data reflects sales of 3 items over 7 days in January 2020.
 
-    The file contains three columns, `id`, `item_id`, and `ds`, which correspond to each row's unique ID, the sold item's ID number, and the date the item was sold, respectively.
+    The file contains three columns, `id`, `item_id`, and `event_date`, which correspond to each row's unique ID, the sold item's ID number, and the date the item was sold, respectively.
 
     This is the complete dataset:
 
-    | id | item_id | ds         |
+    | id | item_id | event_date |
     | -- | ------- | ---------- |
     | 1  | 2       | 2020-01-01 |
     | 2  | 1       | 2020-01-01 |
@@ -186,7 +186,7 @@ The `seed_model` date range begins on the same day the plan was made because `SE
 
     The first model is a `SEED` model that imports `seed_data.csv`. This model consists of only a `MODEL` statement because `SEED` models do not query a database.
 
-    In addition to specifying the model name and CSV path relative to the model file, it includes the column names and data types of the columns in the CSV. It also sets the `grain` of the model to the columns that collectively form the model's unique identifier, `id` and `ds`.
+    In addition to specifying the model name and CSV path relative to the model file, it includes the column names and data types of the columns in the CSV. It also sets the `grain` of the model to the columns that collectively form the model's unique identifier, `id` and `event_date`.
 
     ```sql linenums="1"
     MODEL (
@@ -197,15 +197,15 @@ The `seed_model` date range begins on the same day the plan was made because `SE
         columns (
             id INTEGER,
             item_id INTEGER,
-            ds VARCHAR
+            event_date DATE
         ),
-        grain [id, ds]
+        grain (id, event_date)
     );
     ```
 
     The second model is an `INCREMENTAL_BY_TIME_RANGE` model that includes both a `MODEL` statement and a SQL query selecting from the first seed model.
 
-    The `MODEL` statement's `kind` property includes the required specification of the data column containing each record's timestamp. It also includes the optional `start` property specifying the earliest date/time for which the model should process data and the `cron` property specifying that the model should run daily. It sets the model's grain to columns `id` and `ds`.
+    The `MODEL` statement's `kind` property includes the required specification of the data column containing each record's timestamp. It also includes the optional `start` property specifying the earliest date/time for which the model should process data and the `cron` property specifying that the model should run daily. It sets the model's grain to columns `id` and `event_date`.
 
     The SQL query includes a `WHERE` clause that SQLMesh uses to filter the data to a specific date/time interval when loading data incrementally:
 
@@ -213,21 +213,21 @@ The `seed_model` date range begins on the same day the plan was made because `SE
     MODEL (
         name sqlmesh_example.incremental_model,
         kind INCREMENTAL_BY_TIME_RANGE (
-            time_column ds
+            time_column event_date
         ),
         start '2020-01-01',
         cron '@daily',
-        grain [id, ds]
+        grain (id, event_date)
     );
 
     SELECT
         id,
         item_id,
-        ds,
+        event_date,
     FROM
         sqlmesh_example.seed_model
     WHERE
-        ds between @start_ds and @end_ds
+        event_date between @start_date and @end_date
     ```
 
     The final model in the project is a `FULL` model. In addition to properties used in the other models, its `MODEL` statement includes the [`audits`](../concepts/audits.md) property. The project includes a custom `assert_positive_order_ids` audit in the project `audits` directory; it verifies that all `item_id` values are positive numbers. It will be run every time the model is executed.
@@ -238,7 +238,7 @@ The `seed_model` date range begins on the same day the plan was made because `SE
         kind FULL,
         cron '@daily',
         grain item_id,
-        audits [assert_positive_order_ids],
+        audits (assert_positive_order_ids),
     );
 
     SELECT
@@ -293,22 +293,22 @@ We modify the incremental SQL model by adding a new column to the query. Open th
 MODEL (
     name sqlmesh_example.incremental_model,
     kind INCREMENTAL_BY_TIME_RANGE (
-        time_column ds
+        time_column event_date
     ),
     start '2020-01-01',
     cron '@daily',
-    grain [id, ds]
+    grain (id, event_date)
 );
 
 SELECT
     id,
     item_id,
 	'z' AS new_column, -- Added column
-    ds,
+    event_date,
 FROM
     sqlmesh_example.seed_model
 WHERE
-    ds between @start_ds and @end_ds
+    event_date between @start_date and @end_date
 ```
 
 ## 4. Work with a development environment
@@ -340,7 +340,7 @@ Models:
    id,
    item_id,
 +  'z' AS new_column,
-   ds
+   event_date
  FROM sqlmesh_example.seed_model
  WHERE
 Directly Modified: sqlmesh_example__dev.incremental_model (Non-breaking)
@@ -390,14 +390,14 @@ Note that the environment name `__dev` is appended to the schema namespace `sqlm
 ```bash
 $ sqlmesh fetchdf "select * from sqlmesh_example__dev.incremental_model"
 
-   id  item_id new_column         ds
-0   1        2          z 2020-01-01
-1   2        1          z 2020-01-01
-2   3        3          z 2020-01-03
-3   4        1          z 2020-01-04
-4   5        1          z 2020-01-05
-5   6        1          z 2020-01-06
-6   7        1          z 2020-01-07
+   id  item_id new_column  event_date
+0   1        2          z  2020-01-01
+1   2        1          z  2020-01-01
+2   3        3          z  2020-01-03
+3   4        1          z  2020-01-04
+4   5        1          z  2020-01-05
+5   6        1          z  2020-01-06
+6   7        1          z  2020-01-07
 ```
 
 You can see that `new_column` was added to the dataset. The production table was not modified; you can validate this by querying the production table using `sqlmesh fetchdf "select * from sqlmesh_example.incremental_model"`.
@@ -407,14 +407,14 @@ Note that nothing has been appended to the schema namespace `sqlmesh_example` in
 ```bash
 $ sqlmesh fetchdf "select * from sqlmesh_example.incremental_model"
 
-   id  item_id          ds
-0   1        2  2020-01-01
-1   2        1  2020-01-01
-2   3        3  2020-01-03
-3   4        1  2020-01-04
-4   5        1  2020-01-05
-5   6        1  2020-01-06
-6   7        1  2020-01-07
+   id  item_id   event_date
+0   1        2   2020-01-01
+1   2        1   2020-01-01
+2   3        3   2020-01-03
+3   4        1   2020-01-04
+4   5        1   2020-01-05
+5   6        1   2020-01-06
+6   7        1   2020-01-07
 ```
 
 The production table does not have `new_column` because the changes to `dev` have not yet been applied to `prod`.
@@ -447,7 +447,7 @@ Models:
    id,
    item_id,
 +  'z' AS new_column,
-   ds
+   event_date
  FROM sqlmesh_example.seed_model
  WHERE
 Directly Modified: sqlmesh_example.incremental_model (Non-breaking)
@@ -469,14 +469,14 @@ Double-check that the data updated in `prod` by running `sqlmesh fetchdf "select
 ```bash
 $ sqlmesh fetchdf "select * from sqlmesh_example.incremental_model"
 
-   id  item_id new_column         ds
-0   1        2          z 2020-01-01
-1   2        1          z 2020-01-01
-2   3        3          z 2020-01-03
-3   4        1          z 2020-01-04
-4   5        1          z 2020-01-05
-5   6        1          z 2020-01-06
-6   7        1          z 2020-01-07
+   id  item_id new_column  event_date
+0   1        2          z  2020-01-01
+1   2        1          z  2020-01-01
+2   3        3          z  2020-01-03
+3   4        1          z  2020-01-04
+4   5        1          z  2020-01-05
+5   6        1          z  2020-01-06
+6   7        1          z  2020-01-07
 ```
 
 ## 6. Next steps

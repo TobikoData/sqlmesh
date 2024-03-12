@@ -97,7 +97,7 @@ class SQLMeshMagics(Magics):
         from sqlmesh import configure_logging
 
         args = parse_argstring(self.context, line)
-        configs = load_configs(args.config, args.paths)
+        configs = load_configs(args.config, Context.CONFIG_TYPE, args.paths)
         log_limit = list(configs.values())[0].log_limit
         configure_logging(args.debug, args.ignore_warnings, log_limit=log_limit)
         try:
@@ -309,6 +309,7 @@ class SQLMeshMagics(Magics):
         "--forward-only",
         action="store_true",
         help="Create a plan for forward-only changes.",
+        default=None,
     )
     @argument(
         "--effective-from",
@@ -319,11 +320,13 @@ class SQLMeshMagics(Magics):
         "--no-prompts",
         action="store_true",
         help="Disables interactive prompts for the backfill time range. Please note that if this flag is set and there are uncategorized changes, plan creation will fail.",
+        default=None,
     )
     @argument(
         "--auto-apply",
         action="store_true",
         help="Automatically applies the new plan after creation.",
+        default=None,
     )
     @argument(
         "--no-auto-categorization",
@@ -353,11 +356,18 @@ class SQLMeshMagics(Magics):
         "--no-diff",
         action="store_true",
         help="Hide text differences for changed models.",
+        default=None,
     )
     @argument(
         "--run",
         action="store_true",
         help="Run latest intervals as part of the plan application (prod environment only).",
+    )
+    @argument(
+        "--enable-preview",
+        action="store_true",
+        help="Enable preview for forward-only models when targeting a development environment.",
+        default=None,
     )
     @line_magic
     @pass_sqlmesh_context
@@ -385,6 +395,7 @@ class SQLMeshMagics(Magics):
             select_models=args.select_model,
             no_diff=args.no_diff,
             run=args.run,
+            enable_preview=args.enable_preview,
         )
 
     @magic_arguments()
@@ -618,26 +629,26 @@ class SQLMeshMagics(Magics):
         help="Transpile project models to the specified dialect.",
     )
     @argument(
-        "--newline",
+        "--append-newline",
         action="store_true",
-        help="The output dialect of the sql string.",
+        help="Whether or not to append a newline to the end of the file.",
+        default=None,
     )
     @argument(
         "--normalize",
         action="store_true",
         help="Whether or not to normalize identifiers to lowercase.",
+        default=None,
     )
     @argument(
         "--pad",
         type=int,
         help="Determines the pad size in a formatted string.",
-        default=2,
     )
     @argument(
         "--indent",
         type=int,
         help="Determines the indentation size in a formatted string.",
-        default=2,
     )
     @argument(
         "--normalize-functions",
@@ -648,19 +659,19 @@ class SQLMeshMagics(Magics):
         "--leading-comma",
         action="store_true",
         help="Determines whether or not the comma is leading or trailing in select expressions. Default is trailing.",
+        default=None,
     )
     @argument(
         "--max-text-width",
         type=int,
         help="The max number of characters in a segment before creating new lines in pretty mode.",
-        default=80,
     )
     @line_magic
     @pass_sqlmesh_context
     def format(self, context: Context, line: str) -> None:
         """Format all SQL models."""
         args = parse_argstring(self.format, line)
-        context.format(**vars(args))
+        context.format(**{k: v for k, v in vars(args).items() if v is not None})
 
     @magic_arguments()
     @argument("environment", type=str, help="The environment to diff local state against.")
@@ -779,6 +790,14 @@ class SQLMeshMagics(Magics):
     def rollback(self, context: Context, line: str) -> None:
         """Rollback SQLMesh to the previous migration."""
         context.rollback()
+
+    @magic_arguments()
+    @line_magic
+    @pass_sqlmesh_context
+    def clean(self, context: Context, line: str) -> None:
+        """Clears the SQLMesh cache and any build artifacts."""
+        context.clear_caches()
+        context.console.log_success("SQLMesh cache and build artifacts cleared")
 
 
 def register_magics() -> None:

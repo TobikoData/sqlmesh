@@ -9,7 +9,7 @@ MODEL (
   cron '@daily',
   dialect hive,
   tags expensive,
-  grain [customer_id, event_date],
+  grain (customer_id, event_date),
 );
 
 WITH order_total AS (

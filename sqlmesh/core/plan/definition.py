@@ -35,6 +35,8 @@ class Plan(PydanticModel, frozen=True):
     no_gaps: bool
     forward_only: bool
     include_unmodified: bool
+    end_bounded: bool
+    ensure_finalized_snapshots: bool
 
     environment_ttl: t.Optional[str] = None
     environment_naming_info: EnvironmentNamingInfo
@@ -153,6 +155,7 @@ class Plan(PydanticModel, frozen=True):
                 execution_time=self.execution_time,
                 restatements=self.restatements,
                 deployability_index=self.deployability_index,
+                end_bounded=self.end_bounded,
             ).items()
             if snapshot.is_model and missing
         ]
@@ -186,6 +189,12 @@ class Plan(PydanticModel, frozen=True):
                 s.snapshot_id for s in snapshots if s.snapshot_id in promotable_snapshot_ids
             ]
 
+        previous_finalized_snapshots = (
+            self.context_diff.environment_snapshots
+            if not self.context_diff.is_unfinalized_environment
+            else self.context_diff.previous_finalized_snapshots
+        )
+
         return Environment(
             snapshots=snapshots,
             start_at=self.provided_start or self._earliest_interval_start,
@@ -194,6 +203,7 @@ class Plan(PydanticModel, frozen=True):
             previous_plan_id=self.previous_plan_id,
             expiration_ts=expiration_ts,
             promoted_snapshot_ids=promoted_snapshot_ids,
+            previous_finalized_snapshots=previous_finalized_snapshots,
             **self.environment_naming_info.dict(),
         )
 

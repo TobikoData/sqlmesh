@@ -37,24 +37,23 @@ async def initiate_apply(
     categories: t.Optional[t.Dict[str, SnapshotChangeCategory]] = None,
 ) -> t.Optional[models.PlanApplyStageTracker]:
     """Apply a plan"""
-    if hasattr(request.app.state, "task") and not request.app.state.task.done():
-        raise ApiException(
-            message="Plan/apply is already running",
-            origin="API -> commands -> apply",
+    if not hasattr(request.app.state, "task") or request.app.state.task.done():
+        request.app.state.circuit_breaker.clear()
+        request.app.state.task = asyncio.create_task(
+            run_in_executor(
+                run_plan_apply,
+                context,
+                environment,
+                plan_options,
+                plan_dates,
+                categories,
+                request.app.state.circuit_breaker.is_set,
+            )
         )
+    else:
+        api_console.log_event_plan_overview()
+        api_console.log_event_plan_apply()
 
-    request.app.state.circuit_breaker.clear()
-    request.app.state.task = asyncio.create_task(
-        run_in_executor(
-            _run_plan_apply,
-            context,
-            environment,
-            plan_options,
-            plan_dates,
-            categories,
-            request.app.state.circuit_breaker.is_set,
-        )
-    )
     response.status_code = HTTP_204_NO_CONTENT
 
     return None
@@ -188,6 +187,33 @@ async def test(
     )
 
 
+def run_plan_apply(
+    context: Context,
+    environment: t.Optional[str] = None,
+    plan_options: t.Optional[models.PlanOptions] = None,
+    plan_dates: t.Optional[models.PlanDates] = None,
+    categories: t.Optional[t.Dict[str, SnapshotChangeCategory]] = None,
+    circuit_breaker: t.Optional[t.Callable[[], bool]] = None,
+) -> None:
+    try:
+        _run_plan_apply(
+            context,
+            environment,
+            plan_options,
+            plan_dates,
+            categories,
+            circuit_breaker,
+        )
+    except ApiException as e:
+        raise e
+    except Exception as e:
+        raise ApiException(
+            message="Unable to apply a plan",
+            origin="API -> plan -> initiate_apply",
+        ) from e
+    return None
+
+
 def _run_plan_apply(
     context: Context,
     environment: t.Optional[str] = None,
@@ -198,17 +224,10 @@ def _run_plan_apply(
 ) -> None:
     """Run plan apply"""
     plan_options = plan_options or models.PlanOptions()
-
-    plan_builder = get_plan_builder(context, plan_options, environment, plan_dates)
-    plan = plan_builder.build()
-
-    if categories is not None:
-        for new, _ in plan.context_diff.modified_snapshots.values():
-            if plan.is_new_snapshot(new) and new.name in categories:
-                plan_builder.set_choice(new, categories[new.name])
-        plan = plan_builder.build()
-
     tracker_apply = models.PlanApplyStageTracker(environment=environment, plan_options=plan_options)
+    api_console.start_plan_tracker(tracker_apply)
+    plan_builder = get_plan_builder(context, plan_options, environment, plan_dates, categories)
+    plan = plan_builder.build()
     tracker_apply.start = plan.start
     tracker_apply.end = plan.end
     api_console.start_plan_tracker(tracker_apply)
@@ -220,7 +239,7 @@ def _run_plan_apply(
         api_console.stop_plan_tracker(tracker_apply, success=False)
         raise ApiException(
             message=str(e),
-            origin="API -> commands -> apply",
+            origin="API -> commands -> _run_plan_apply",
         )
 
     return None

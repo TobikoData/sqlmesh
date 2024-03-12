@@ -124,11 +124,11 @@ Finally, the scaffold will include data for the example project to use.
 ??? info "Learn more about the project's data"
     The data used in this example project is contained in the `seed_data.csv` file in the `/seeds` project directory. The data reflects sales of 3 items over 7 days in January 2020.
 
-    The file contains three columns, `id`, `item_id`, and `ds`, which correspond to each row's unique ID, the sold item's ID number, and the date the item was sold, respectively.
+    The file contains three columns, `id`, `item_id`, and `event_date`, which correspond to each row's unique ID, the sold item's ID number, and the date the item was sold, respectively.
 
     This is the complete dataset:
 
-    | id | item_id | ds         |
+    | id | item_id | event_date |
     | -- | ------- | ---------- |
     | 1  | 2       | 2020-01-01 |
     | 2  | 1       | 2020-01-01 |
@@ -159,27 +159,31 @@ The SQLMesh UI default view contains five panes:
 1. Project directory allows navigation of project directories and files.
 2. Editor tabs displays open code editors.
 3. Code editor allows viewing and editing code files.
-4. Inspector provides settings and information based on recent actions and the currently active pane.
-5. Details displays results of queries.
+4. Inspector provides settings and information based on recent actions and the currently active pane. (Note: inspector pane is collapsed by default. Expand it by clicking the hamburger button at the top of the collapsed pane - see previous image.)
+5. Details displays column-level lineage for models open in the editor and results of queries. (Note: details pane is collapsed by default. It will automatically expand upon opening a model in the editor or running a query.)
 
 ![SQLMesh web UI panes](./ui/ui-quickstart_ui-startup-panes.png)
 
-It also contains six buttons:
+It also contains nine buttons:
 
-1. Add new tab opens a new code editor window.
-2. Toggle Editor/Docs view toggles between the Code Editor (default) and Docs views.
-3. Run plan command executes the [`sqlmesh plan` command](../reference/cli.md#plan).
-4. Run query command executes the [`sqlmesh fetchdf` command](../reference/cli.md#fetchdf).
-5. Format SQL query reformats the SQL query using SQLGlot's pretty layout.
-6. Change SQL dialect specifies the SQL dialect of the current tab for custom SQL queries. It does not affect the SQL dialect for the project.
+1. Toggle Editor/Docs/Errors toggles among the Code Editor (default), Docs, and Errors views. Errors view is only available if an error has occurred.
+2. History navigation returns to previous views, similar to the back button in a web browser.
+3. Add new tab opens a new code editor window.
+4. Run plan command executes the [`sqlmesh plan` command](../reference/cli.md#plan).
+5. Documentation links to the SQLMesh documentation website.
+6. The crescent moon toggles between page light and dark modes.
+7. Run SQL query executes the [`sqlmesh fetchdf` command](../reference/cli.md#fetchdf).
+8. Format SQL query reformats a SQL query using SQLGlot's pretty layout.
+9. Change SQL dialect specifies the SQL dialect of the current tab for custom SQL queries. It does not affect the SQL dialect for the project.
 
 ![SQLMesh web UI buttons](./ui/ui-quickstart_ui-startup-buttons.png)
 
-The default view contains three status indicators:
+The default view contains four status indicators:
 
 1. Editor tab language displays the programming language of the current code editor tab (SQL or Python).
-2. Change indicator displays a summary of the changes in the most recently run SQLMesh plan.
-3. Error indicator displays the count of errors that occurred in the most recently run SQLMesh plan.
+2. Current environment displays the currently selected environment
+3. Change indicator displays a summary of the changes in the project files relative to the most recently run SQLMesh plan in the selected environment.
+4. Error indicator displays the count of errors in the project.
 
 ![SQLMesh web UI status indicators](./ui/ui-quickstart_ui-startup-status.png)
 
@@ -200,18 +204,14 @@ SQLMesh's key actions are creating and applying *plans* to *environments*. At th
 
     After SQLMesh creates a plan, it summarizes the breaking and non-breaking changes so you can understand what will happen if you apply the plan. It will prompt you to "backfill" data to apply the plan - in this context, backfill is a generic term for updating or adding to a table's data (including an initial load or full refresh).
 
-The first SQLMesh plan must execute every model to populate the production environment. Click the blue `Run Plan` button in the top right, and a new pane will open on the right side.
+The first SQLMesh plan must execute every model to populate the production environment. Click the green `Plan` button in the top right, and a new pane will open.
 
 The pane contains multiple pieces of information about the plan:
 
-- The pane title on the top left states that the plan's target environment is `prod`. The error indicator on the top right shows that the plan has no errors associated with it.
 - The `Initializing Prod Environment` section shows that the plan is initializing the `prod` environment.
-- The `Tests` section notes that the plan successfully executed the project's test `tests/test_full_model.yaml` with duckdb.
-- The `Models` section shows that SQLMesh detected three new models added relative to the current empty environment.
-- In the `Backfill` section, the `Needs Backfill` sub-section lists each model that will be executed by the plan, along with the date intervals that will be run. Both `full_model` and `incremental_model` show `2020-01-01` as their start date because:
-
-    1. The incremental model specifies that date in the `start` property of its `MODEL` statement and
-    2. The full model depends on the incremental model
+- The Start and End date sections are grayed out because they are not allowed when running a plan in the `prod` environment.
+- The `Changes` section shows that SQLMesh detected three models added relative to the current empty environment.
+- The `Backfills` section shows that backfills will occur for all three of the added models.
 
 ??? info "Learn more about the project's models"
 
@@ -236,15 +236,15 @@ The pane contains multiple pieces of information about the plan:
         columns (
             id INTEGER,
             item_id INTEGER,
-            ds VARCHAR
+            event_date DATE
         ),
-        grain [id, ds]
+        grain (id, event_date)
     );
     ```
 
     The second model is an `INCREMENTAL_BY_TIME_RANGE` model that includes both a `MODEL` statement and a SQL query selecting from the first seed model.
 
-    The `MODEL` statement's `kind` property includes the required specification of the data column containing each record's timestamp. It also includes the optional `start` property specifying the earliest date/time for which the model should process data and the `cron` property specifying that the model should run daily. It sets the model's grain to columns `id` and `ds`.
+    The `MODEL` statement's `kind` property includes the required specification of the data column containing each record's timestamp. It also includes the optional `start` property specifying the earliest date/time for which the model should process data and the `cron` property specifying that the model should run daily. It sets the model's grain to columns `id` and `event_date`.
 
     The SQL query includes a `WHERE` clause that SQLMesh uses to filter the data to a specific date/time interval when loading data incrementally:
 
@@ -252,21 +252,21 @@ The pane contains multiple pieces of information about the plan:
     MODEL (
         name sqlmesh_example.incremental_model,
         kind INCREMENTAL_BY_TIME_RANGE (
-            time_column ds
+            time_column event_date
         ),
         start '2020-01-01',
         cron '@daily',
-        grain [id, ds]
+        grain (id, event_date)
     );
 
     SELECT
         id,
         item_id,
-        ds,
+        event_date,
     FROM
         sqlmesh_example.seed_model
     WHERE
-        ds between @start_ds and @end_ds
+        event_date between @start_date and @end_date
     ```
 
     The final model in the project is a `FULL` model. In addition to properties used in the other models, its `MODEL` statement includes the [`audits`](../concepts/audits.md) property. The project includes a custom `assert_positive_order_ids` audit in the project `audits` directory; it verifies that all `item_id` values are positive numbers. It will be run every time the model is executed.
@@ -277,7 +277,7 @@ The pane contains multiple pieces of information about the plan:
         kind FULL,
         cron '@daily',
         grain item_id,
-        audits [assert_positive_order_ids],
+        audits (assert_positive_order_ids),
     );
 
     SELECT
@@ -290,20 +290,27 @@ The pane contains multiple pieces of information about the plan:
 
 ![Run plan pane](./ui/ui-quickstart_run-plan.png)
 
-Click the blue button labeled `Apply And Backfill` to apply the plan and initiate backfill. The `Backfill` section contents at the bottom will update.
+Click the blue button labeled `Apply Changes And Backfill` to apply the plan and initiate backfill.
 
-The updated backfill output shows the operation's completion status. The first progress indicator shows the total number of tasks and completion percentage for the entire backfill operation. The remaining progress bars show completion percentage and run time for each model (very fast in this simple example).
+The page will update and new output sections will appear. Each section reflects a stage in the plan application and will be green if the step succeeded.
+
+The `Tests Completed` section indicates that the project's [unit tests](../concepts/tests.md) ran successfully.
+
+The `Snapshot Tables Created` indicates that [snapshots](../concepts/architecture/snapshots.md) of the added and modified models were created successfully.
+
+
+The `Backfilled` section shows progress indicators for the backfill operations. The first progress indicator shows the total number of tasks and completion percentage for the entire backfill operation. The remaining progress bars show completion percentage and run time for each model (very fast in this simple example).
 
 ![Apply plan pane](./ui/ui-quickstart_apply-plan.png)
 
-Click the blue `Done` button to close the pane.
+Click the `Go Back` button to close the pane.
 
 You've now created a new production environment with all of history backfilled.
 
 ### 2.2 Create a dev environment
-Now that you've created a production environment, it's time to create a development environment so that you can modify models without affecting production.
+Now that you've created the production environment, it's time to create a development environment so you can modify models without affecting production.
 
-Open the environment menu by clicking the button labeled `prod \/` next to the blue `Run plan` button on the top right. Type `dev` into the Environment field and click the blue `Add` button.
+Open the environment menu by clicking the button labeled `prod \/` next to the green `Plan` button on the top right. Type `dev` into the Environment field and click the blue `Add` button.
 
 ![Open environment menu](./ui/ui-quickstart_create-dev.png)
 
@@ -311,38 +318,24 @@ The button now shows that the SQLMesh UI is working in the `dev` environment:
 
 ![Working in dev environment](./ui/ui-quickstart_plan-dev.png)
 
-Click the `Run Plan` button, and a new pane will open:
+Click the green `Plan` button, and a new pane will open:
 
 ![Run plan on dev pane](./ui/ui-quickstart_run-plan-dev.png)
 
-The pane title on the top left states that the plan's target environment is now `dev`. The error indicator on the top right shows that the plan has no errors associated with it.
+The output section does not list any added/modified models or backfills because `dev` is being created from the existing `prod` environment without modification. Because the project has not been modified, no new computations need to run and a virtual update occurs.
 
-The output does not list any added or modified models because `dev` is being created from the existing `prod` environment without modification.
-
-Dates in the `Set Dates` section are automatically populated based on the `prod` environment.
-
-The `Additional Options` section can be opened to display detailed configuration options for the plan.
-
-Click the blue `Run` button to create the new plan:
+Click the blue `Apply Virtual Update` button to apply the new plan:
 
 ![Run plan on dev pane output](./ui/ui-quickstart_run-plan-dev-output.png)
 
-The `Backfill` section shows that only a virtual update will occur. The project has not been modified, so no new computations need to run.
-
-Click the blue `Apply Virtual Update` button to perform the virtual update:
-
-![Apply virtual update on dev](./ui/ui-quickstart_apply-plan-dev.png)
-
-The output confirms that the virtual update has completed. Click the blue `Done` button to close the pane.
+The output confirms that the tests, virtual update, snapshot table creation, and environment promotion steps have completed. Click the `Go Back` button to close the pane.
 
 ## 3. Make your first update
 
 Now that we have have populated both `prod` and `dev` environments, let's modify one of the SQL models, validate it in `dev`, and push it to `prod`.
 
-### 3.1 Edit the configuration
+### 3.1 Edit the model query
 To modify the incremental SQL model, open it in the editor by clicking on it in the project directory pane on the left side of the window.
-
-The inspector pane on the right now shows the `Actions` tab, where you can specify parameters and [`Evaluate`](../reference/cli.md#evaluate) the SQLMesh model. The other tabs display information about the model, including its columns and the rendered query.
 
 The `Details` pane at the bottom displays the project's table and column lineage.
 
@@ -354,21 +347,17 @@ Modify the incremental SQL model by adding a new column to the query. Press `Cmd
 
 
 ## 4. Plan and apply updates
-Preview the impact of the change by clicking the `Run Plan` button in the top right.
-
-Click the blue `Run` button in the newly opened pane, and the updated plan information will appear:
+Preview the impact of the change by clicking the green `Plan` button in the top right.
 
 ![Plan pane after running plan with modified incremental model](./ui/ui-quickstart_run-plan-dev-modified.png)
 
-The `Test` output section notes that `plan` successfully executed the project's test `tests/test_full_model.yaml` with duckdb.
+The `Changes` section detects that we directly modified `incremental_model` and that `full_model` was indirectly modified because it selects from the incremental model. SQLMesh understood that the change was additive (added a column not used by `full_model`) and was automatically classified as a non-breaking change.
 
-The `Models` section detects that we directly modified `incremental_model` and that `full_model` was indirectly modified because it selects from the incremental model. SQLMesh understood that the change was additive (added a column not used by `full_model`) and was automatically classified as a non-breaking change.
-
-The `Backfill` section describes the models requiring backfill, including the incremental model from our start date `2020-01-01`. Click the blue `Apply And Backfill` button to apply the plan and execute the backfill:
+The `Backfill` section shows that only `incremental_model` requires backfill. Click the blue `Apply Changes And Backfill` button to apply the plan and execute the backfill:
 
 ![Plan after applying updated plan with modified incremental model](./ui/ui-quickstart_apply-plan-dev-modified.png)
 
-SQLMesh applies the change to `sqlmesh_example.incremental_model` and backfills the model. The `Backfill` section shows that the backfill completed successfully.
+SQLMesh applies the change to `sqlmesh_example.incremental_model` and backfills the model. The `Backfilled` section shows that the backfill completed successfully.
 
 ### 4.1 Validate updates in dev
 You can now view this change by querying data from `incremental_model`. Add the SQL query `select * from sqlmesh_example__dev.incremental_model` to the Custom SQL 1 tab in the editor:
@@ -394,7 +383,7 @@ Now that we've tested the changes in dev, it's time to move them to prod. Open t
 
 ![`prod` environment selected in environment menu](./ui/ui-quickstart_plan-prod-modified.png)
 
-Click the `Run Plan` button, and a warning screen will appear:
+Click the green `Plan` button, and a warning screen will appear:
 
 ![`prod` environment modification warning](./ui/ui-quickstart_plan-prod-modified-warning.png)
 
@@ -402,15 +391,11 @@ Click the `Yes, Run prod` button to proceed, and the run plan interface will app
 
 ![`prod` environment plan pane](./ui/ui-quickstart_plan-prod-modified-pane.png)
 
-Click the `Run` button, and the apply plan interface will appear:
-
-![`prod` environment apply plan pane](./ui/ui-quickstart_apply-plan-prod-modified-pane.png)
-
 Click the blue `Apply Virtual Update` button to apply the plan and execute the backfill:
 
 ![`prod` environment after applying plan](./ui/ui-quickstart_apply-plan-prod-modified.png)
 
-Note that a backfill was not necessary and only a Virtual Update occurred - the computations have already occurred when backfilling the model in `dev`. Click the blue `Done` button to close the pane.
+Note that a backfill was not necessary and only a Virtual Update occurred - the computations have already occurred when backfilling the model in `dev`. Click the `Go Back` button to close the pane.
 
 ### 4.3. Validate updates in prod
 Double-check that the data updated in `prod` by re-running the SQL query from the editor. Click the `Run Query` button to execute the query:

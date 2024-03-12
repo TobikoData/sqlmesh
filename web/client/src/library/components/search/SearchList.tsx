@@ -70,8 +70,10 @@ export default function SearchList<
   autoFocus = false,
   showIndex = true,
   isFullWidth = false,
+  isLoading = false,
   direction = 'bottom',
   className,
+  onInput,
 }: {
   list: T[]
   searchBy: string
@@ -86,6 +88,8 @@ export default function SearchList<
   direction?: 'top' | 'bottom'
   className?: string
   isFullWidth?: boolean
+  isLoading?: boolean
+  onInput?: (value: string) => void
 }): JSX.Element {
   const navigate = useNavigate()
 
@@ -147,7 +151,10 @@ export default function SearchList<
           value={search}
           placeholder={placeholder}
           onInput={(e: React.ChangeEvent<HTMLInputElement>) => {
-            setSearch(e.target.value.trim())
+            const value = e.target.value.trim()
+
+            setSearch(value)
+            onInput?.(value)
           }}
           onKeyDown={(e: React.KeyboardEvent) => {
             if (e.key === 'ArrowDown' || e.key === 'ArrowUp') {
@@ -170,7 +177,7 @@ export default function SearchList<
             static
             focus
             className={clsx(
-              'absolute z-50 transform cursor-pointer rounded-lg bg-theme border-2 border-neutral-200',
+              'absolute z-50 right-0 transform cursor-pointer rounded-lg bg-theme border-2 border-neutral-200',
               'p-2 bg-theme dark:bg-theme-lighter overflow-auto hover:scrollbar scrollbar--vertical scrollbar--horizontal shadow-2xl',
               direction === 'top' ? 'top-0' : 'bottom-10',
               size === EnumSize.sm && 'mt-7 max-h-[30vh]',
@@ -218,7 +225,7 @@ export default function SearchList<
                   size === EnumSize.lg && 'p-3',
                 )}
               >
-                No Results Found
+                {isLoading ? 'Loading...' : 'No Results Found'}
               </div>
             ) : (
               found.map(([item, index], idx) => (
@@ -280,9 +287,9 @@ function SearchResult<T extends Record<string, any> = Record<string, any>>({
       onClick={onClick}
       className={clsx(
         'font-normal w-full overflow-hidden whitespace-nowrap overflow-ellipsis px-2',
-        size === EnumSize.sm && 'text-sm py-1',
-        size === EnumSize.md && 'text-md py-2',
-        size === EnumSize.lg && 'text-lg py-3',
+        size === EnumSize.sm && 'text-xs py-1',
+        size === EnumSize.md && 'text-sm py-2',
+        size === EnumSize.lg && 'text-md py-3',
       )}
     >
       {showIndex ? (

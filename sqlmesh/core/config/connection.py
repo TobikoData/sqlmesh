@@ -12,6 +12,7 @@ from enum import Enum
 from cryptography.hazmat.backends import default_backend
 from cryptography.hazmat.primitives import serialization
 from pydantic import Field
+from sqlglot import exp
 from sqlglot.helper import subclasses
 
 from sqlmesh.core import engine_adapter
@@ -23,6 +24,7 @@ from sqlmesh.core.config.common import (
 from sqlmesh.core.engine_adapter import EngineAdapter
 from sqlmesh.utils.errors import ConfigError
 from sqlmesh.utils.pydantic import (
+    PYDANTIC_MAJOR_VERSION,
     field_validator,
     model_validator,
     model_validator_v1_args,
@@ -104,48 +106,21 @@ class ConnectionConfig(abc.ABC, BaseConfig):
         return None
 
 
-class DuckDBConnectionConfig(ConnectionConfig):
-    """Configuration for the DuckDB connection.
+class BaseDuckDBConnectionConfig(ConnectionConfig):
+    """Common configuration for the DuckDB-based connections.
 
     Args:
-        database: The optional database name. If not specified, the in-memory database will be used.
-        catalogs: Key is the name of the catalog and value is the path.
         extensions: A list of autoloadable extensions to load.
         connector_config: A dictionary of configuration to pass into the duckdb connector.
         concurrent_tasks: The maximum number of tasks that can use this connection concurrently.
         register_comments: Whether or not to register model comments with the SQL engine.
     """
 
-    database: t.Optional[str] = None
-    catalogs: t.Optional[t.Dict[str, str]] = None
     extensions: t.List[str] = []
     connector_config: t.Dict[str, t.Any] = {}
 
     concurrent_tasks: Literal[1] = 1
     register_comments: bool = True
-
-    type_: Literal["duckdb"] = Field(alias="type", default="duckdb")
-
-    _data_file_to_adapter: t.ClassVar[t.Dict[str, EngineAdapter]] = {}
-
-    @model_validator(mode="before")
-    @model_validator_v1_args
-    def _validate_database_catalogs(
-        cls, values: t.Dict[str, t.Optional[str]]
-    ) -> t.Dict[str, t.Optional[str]]:
-        if values.get("database") and values.get("catalogs"):
-            raise ConfigError(
-                "Cannot specify both `database` and `catalogs`. Define all your catalogs in `catalogs` and have the first entry be the default catalog"
-            )
-        return values
-
-    @property
-    def _static_connection_kwargs(self) -> t.Dict[str, t.Any]:
-        return {"config": self.connector_config} if self.connector_config else {}
-
-    @property
-    def _connection_kwargs_keys(self) -> t.Set[str]:
-        return {"database"}
 
     @property
     def _engine_adapter(self) -> t.Type[EngineAdapter]:
@@ -171,9 +146,20 @@ class DuckDBConnectionConfig(ConnectionConfig):
                 except Exception as e:
                     raise ConfigError(f"Failed to load extension {extension}: {e}")
 
-            for i, (alias, path) in enumerate((self.catalogs or {}).items()):
+            for field, setting in self.connector_config.items():
                 try:
-                    cursor.execute(f'''ATTACH '{path}' AS "{alias}"''')
+                    cursor.execute(f"SET {field} = '{setting}'")
+                except Exception as e:
+                    raise ConfigError(f"Failed to set connector config {field} to {setting}: {e}")
+
+            for i, (alias, path) in enumerate((getattr(self, "catalogs", None) or {}).items()):
+                # we parse_identifier and generate to ensure that `alias` has exactly one set of quotes
+                # regardless of whether it comes in quoted or not
+                alias = exp.parse_identifier(alias, dialect="duckdb").sql(
+                    identify=True, dialect="duckdb"
+                )
+                try:
+                    cursor.execute(f"""ATTACH '{path}' AS {alias}""")
                 except BinderException as e:
                     # If a user tries to create a catalog pointing at `:memory:` and with the name `memory`
                     # then we don't want to raise since this happens by default. They are just doing this to
@@ -183,10 +169,67 @@ class DuckDBConnectionConfig(ConnectionConfig):
                         and path == ":memory:"
                     ):
                         raise e
-                if i == 0 and not self.database:
-                    cursor.execute(f'USE "{alias}"')
+                if i == 0 and not getattr(self, "database", None):
+                    cursor.execute(f"USE {alias}")
 
         return init
+
+
+class MotherDuckConnectionConfig(BaseDuckDBConnectionConfig):
+    """Configuration for the MotherDuck connection.
+
+    Args:
+        database: The database name.
+        token: The optional MotherDuck token. If not specified, the user will be prompted to login with their web browser.
+    """
+
+    database: str
+    token: t.Optional[str] = None
+
+    type_: Literal["motherduck"] = Field(alias="type", default="motherduck")
+
+    @property
+    def _connection_kwargs_keys(self) -> t.Set[str]:
+        return set()
+
+    @property
+    def _static_connection_kwargs(self) -> t.Dict[str, t.Any]:
+        """kwargs that are for execution config only"""
+        connection_str = f"md:{self.database}"
+        if self.token:
+            connection_str += f"?motherduck_token={self.token}"
+        return {"database": connection_str}
+
+
+class DuckDBConnectionConfig(BaseDuckDBConnectionConfig):
+    """Configuration for the DuckDB connection.
+
+    Args:
+        database: The optional database name. If not specified, the in-memory database will be used.
+        catalogs: Key is the name of the catalog and value is the path.
+    """
+
+    database: t.Optional[str] = None
+    catalogs: t.Optional[t.Dict[str, str]] = None
+
+    type_: Literal["duckdb"] = Field(alias="type", default="duckdb")
+
+    _data_file_to_adapter: t.ClassVar[t.Dict[str, EngineAdapter]] = {}
+
+    @model_validator(mode="before")
+    @model_validator_v1_args
+    def _validate_database_catalogs(
+        cls, values: t.Dict[str, t.Optional[str]]
+    ) -> t.Dict[str, t.Optional[str]]:
+        if values.get("database") and values.get("catalogs"):
+            raise ConfigError(
+                "Cannot specify both `database` and `catalogs`. Define all your catalogs in `catalogs` and have the first entry be the default catalog"
+            )
+        return values
+
+    @property
+    def _connection_kwargs_keys(self) -> t.Set[str]:
+        return {"database"}
 
     def create_engine_adapter(self, register_comments_override: bool = False) -> EngineAdapter:
         """Checks if another engine adapter has already been created that shares a catalog that points to the same data
@@ -571,6 +614,7 @@ class BigQueryConnectionConfig(ConnectionConfig):
     method: BigQueryConnectionMethod = BigQueryConnectionMethod.OAUTH
 
     project: t.Optional[str] = None
+    execution_project: t.Optional[str] = None
     location: t.Optional[str] = None
     # Keyfile Auth
     keyfile: t.Optional[str] = None
@@ -632,7 +676,7 @@ class BigQueryConnectionConfig(ConnectionConfig):
         else:
             raise ConfigError("Invalid BigQuery Connection Method")
         client = google.cloud.bigquery.Client(
-            project=self.project,
+            project=self.execution_project or self.project,
             credentials=creds,
             location=self.location,
             client_info=client_info.ClientInfo(user_agent="sqlmesh"),
@@ -1198,7 +1242,9 @@ class TrinoConnectionConfig(ConnectionConfig):
 CONNECTION_CONFIG_TO_TYPE = {
     # Map all subclasses of ConnectionConfig to the value of their `type_` field.
     tpe.all_field_infos()["type_"].default: tpe
-    for tpe in subclasses(__name__, ConnectionConfig, exclude=(ConnectionConfig,))
+    for tpe in subclasses(
+        __name__, ConnectionConfig, exclude=(ConnectionConfig, BaseDuckDBConnectionConfig)
+    )
 }
 
 
@@ -1230,3 +1276,16 @@ connection_config_validator = field_validator(
     mode="before",
     check_fields=False,
 )(_connection_config_validator)
+
+
+if t.TYPE_CHECKING:
+    # TypeAlias hasn't been introduced until Python 3.10 which means that we can't use it
+    # outside the TYPE_CHECKING guard.
+    SerializableConnectionConfig: t.TypeAlias = ConnectionConfig  # type: ignore
+elif PYDANTIC_MAJOR_VERSION >= 2:
+    import pydantic
+
+    # Workaround for https://docs.pydantic.dev/latest/concepts/serialization/#serializing-with-duck-typing
+    SerializableConnectionConfig = pydantic.SerializeAsAny[ConnectionConfig]  # type: ignore
+else:
+    SerializableConnectionConfig = ConnectionConfig  # type: ignore

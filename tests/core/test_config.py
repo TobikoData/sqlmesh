@@ -12,6 +12,7 @@ from sqlmesh.core.config import (
     GatewayConfig,
     ModelDefaultsConfig,
 )
+from sqlmesh.core.config.feature_flag import DbtFeatureFlag, FeatureFlag
 from sqlmesh.core.config.loader import (
     load_config_from_env,
     load_config_from_paths,
@@ -145,7 +146,8 @@ def test_default_gateway():
 
 
 def test_load_config_from_paths(yaml_config_path: Path, python_config_path: Path):
-    config = load_config_from_paths(
+    config: Config = load_config_from_paths(
+        Config,
         project_paths=[yaml_config_path, python_config_path],
     )
 
@@ -168,12 +170,12 @@ def test_load_config_multiple_config_files_in_folder(tmp_path):
         fd.write("project: project_b")
 
     with pytest.raises(ConfigError, match=r"^Multiple configuration files found in folder.*"):
-        load_config_from_paths(project_paths=[config_a_path, config_b_path])
+        load_config_from_paths(Config, project_paths=[config_a_path, config_b_path])
 
 
 def test_load_config_no_config():
     with pytest.raises(ConfigError, match=r"^SQLMesh project config could not be found.*"):
-        load_config_from_paths(load_from_env=False)
+        load_config_from_paths(Config, load_from_env=False)
 
 
 def test_load_config_no_dialect(tmp_path):
@@ -202,12 +204,12 @@ config = Config(default_connection=DuckDBConnectionConfig())
     with pytest.raises(
         ConfigError, match=r"^Default model SQL dialect is a required configuration parameter.*"
     ):
-        load_config_from_paths(project_paths=[tmp_path / "config.yaml"])
+        load_config_from_paths(Config, project_paths=[tmp_path / "config.yaml"])
 
     with pytest.raises(
         ConfigError, match=r"^Default model SQL dialect is a required configuration parameter.*"
     ):
-        load_config_from_paths(project_paths=[tmp_path / "config.py"])
+        load_config_from_paths(Config, project_paths=[tmp_path / "config.py"])
 
 
 def test_load_config_unsupported_extension(tmp_path):
@@ -215,7 +217,7 @@ def test_load_config_unsupported_extension(tmp_path):
     config_path.touch()
 
     with pytest.raises(ConfigError, match=r"^Unsupported config file extension 'txt'.*"):
-        load_config_from_paths(project_paths=[config_path])
+        load_config_from_paths(Config, project_paths=[config_path])
 
 
 def test_load_python_config_with_personal_config(tmp_path):
@@ -241,6 +243,7 @@ custom_config = Config(default_connection=DuckDBConnectionConfig(), model_defaul
 """,
     )
     config = load_config_from_paths(
+        Config,
         project_paths=[tmp_path / "config.py"],
         personal_paths=[tmp_path / "personal" / "config.yaml"],
         config_name="custom_config",
@@ -256,10 +259,12 @@ def test_load_config_from_env():
         {
             "SQLMESH__GATEWAY__CONNECTION__TYPE": "duckdb",
             "SQLMESH__GATEWAY__CONNECTION__DATABASE": "test_db",
+            "SQLMESH__FEATURE_FLAGS__DBT__SCD_TYPE_2_SUPPORT": "false",
         },
     ):
         assert Config.parse_obj(load_config_from_env()) == Config(
-            gateways=GatewayConfig(connection=DuckDBConnectionConfig(database="test_db"))
+            gateways=GatewayConfig(connection=DuckDBConnectionConfig(database="test_db")),
+            feature_flags=FeatureFlag(dbt=DbtFeatureFlag(scd_type_2_support=False)),
         )
 
 
@@ -283,7 +288,7 @@ def test_load_config_from_python_module_missing_config(tmp_path):
         fd.write("from sqlmesh.core.config import Config")
 
     with pytest.raises(ConfigError, match="Config 'config' was not found."):
-        load_config_from_python_module(config_path)
+        load_config_from_python_module(Config, config_path)
 
 
 def test_load_config_from_python_module_invalid_config_object(tmp_path):
@@ -295,7 +300,7 @@ def test_load_config_from_python_module_invalid_config_object(tmp_path):
         ConfigError,
         match=r"^Config needs to be a valid object.*",
     ):
-        load_config_from_python_module(config_path)
+        load_config_from_python_module(Config, config_path)
 
 
 def test_cloud_composer_scheduler_config(tmp_path_factory):
@@ -318,6 +323,7 @@ model_defaults:
         )
 
     assert load_config_from_paths(
+        Config,
         project_paths=[config_path],
     )
 
@@ -376,10 +382,82 @@ environment_catalog_mapping:
     if raise_error:
         with pytest.raises(ConfigError, match=raise_error):
             load_config_from_paths(
+                Config,
                 project_paths=[config_path],
             )
     else:
         assert (
-            load_config_from_paths(project_paths=[config_path]).environment_catalog_mapping
+            load_config_from_paths(Config, project_paths=[config_path]).environment_catalog_mapping
             == expected
         )
+
+
+def test_load_feature_flag(tmp_path_factory):
+    config_path = tmp_path_factory.mktemp("yaml_config") / "config.yaml"
+    with open(config_path, "w") as fd:
+        fd.write(
+            """
+gateways:
+    duckdb_gateway:
+        connection:
+            type: duckdb
+model_defaults:
+    dialect: bigquery
+feature_flags:
+    dbt:
+        scd_type_2_support: false
+        """
+        )
+
+    assert load_config_from_paths(
+        Config,
+        project_paths=[config_path],
+    ) == Config(
+        gateways={
+            "duckdb_gateway": GatewayConfig(connection=DuckDBConnectionConfig()),
+        },
+        model_defaults=ModelDefaultsConfig(dialect="bigquery"),
+        feature_flags=FeatureFlag(dbt=DbtFeatureFlag(scd_type_2_support=False)),
+    )
+
+
+def test_load_alternative_config_type(yaml_config_path: Path, python_config_path: Path):
+    class DerivedConfig(Config):
+        pass
+
+    config = load_config_from_paths(
+        DerivedConfig,
+        project_paths=[yaml_config_path, python_config_path],
+    )
+
+    assert config == DerivedConfig(
+        gateways={  # type: ignore
+            "another_gateway": GatewayConfig(connection=DuckDBConnectionConfig(database="test_db")),
+            "": GatewayConfig(connection=DuckDBConnectionConfig()),
+        },
+        model_defaults=ModelDefaultsConfig(dialect=""),
+    )
+
+
+def test_connection_config_serialization():
+    config = Config(
+        default_connection=DuckDBConnectionConfig(database="my_db"),
+        default_test_connection=DuckDBConnectionConfig(database="my_test_db"),
+    )
+    serialized = config.dict()
+    assert serialized["default_connection"] == {
+        "concurrent_tasks": 1,
+        "register_comments": True,
+        "type": "duckdb",
+        "extensions": [],
+        "connector_config": {},
+        "database": "my_db",
+    }
+    assert serialized["default_test_connection"] == {
+        "concurrent_tasks": 1,
+        "register_comments": True,
+        "type": "duckdb",
+        "extensions": [],
+        "connector_config": {},
+        "database": "my_test_db",
+    }

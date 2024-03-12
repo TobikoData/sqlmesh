@@ -13,6 +13,7 @@ from sqlmesh.utils.jinja import MacroReference
 pytestmark = pytest.mark.dbt
 
 
+@pytest.mark.xdist_group("dbt_manifest")
 def test_manifest_helper(caplog):
     project_path = Path("tests/fixtures/dbt/sushi_test")
     profile = Profile.load(DbtContext(project_path))
@@ -29,19 +30,23 @@ def test_manifest_helper(caplog):
         sources={"streaming.orders"},
     )
     assert helper.models()["waiters"].materialized == "ephemeral"
-    assert (
-        '"memory"."snapshots"."items_no_hard_delete_snapshot": SQLMesh only supports invalidate_hard_deletes. Skipping model.'
-        in caplog.messages
-    )
-    assert (
-        '"memory"."snapshots"."items_check_snapshot": SQLMesh only supports timestamp snapshot strategy. Skipping model.'
-        in caplog.messages
-    )
     assert helper.models()["items_snapshot"].materialized == "snapshot"
     assert helper.models()["items_snapshot"].updated_at == "ds"
     assert helper.models()["items_snapshot"].unique_key == ["id"]
     assert helper.models()["items_snapshot"].strategy == "timestamp"
     assert helper.models()["items_snapshot"].table_schema == "snapshots"
+    assert helper.models()["items_snapshot"].invalidate_hard_deletes is True
+    assert helper.models()["items_check_snapshot"].materialized == "snapshot"
+    assert helper.models()["items_check_snapshot"].check_cols == ["ds"]
+    assert helper.models()["items_check_snapshot"].unique_key == ["id"]
+    assert helper.models()["items_check_snapshot"].strategy == "check"
+    assert helper.models()["items_check_snapshot"].table_schema == "snapshots"
+    assert helper.models()["items_check_snapshot"].invalidate_hard_deletes is True
+    assert helper.models()["items_no_hard_delete_snapshot"].materialized == "snapshot"
+    assert helper.models()["items_no_hard_delete_snapshot"].unique_key == ["id"]
+    assert helper.models()["items_no_hard_delete_snapshot"].strategy == "timestamp"
+    assert helper.models()["items_no_hard_delete_snapshot"].table_schema == "snapshots"
+    assert helper.models()["items_no_hard_delete_snapshot"].invalidate_hard_deletes is False
 
     waiter_as_customer_by_day_config = helper.models()["waiter_as_customer_by_day"]
     assert waiter_as_customer_by_day_config.dependencies == Dependencies(
@@ -87,6 +92,7 @@ def test_manifest_helper(caplog):
     assert helper.sources()["streaming.order_items"].schema_ == "raw"
 
 
+@pytest.mark.xdist_group("dbt_manifest")
 def test_tests_referencing_disabled_models():
     project_path = Path("tests/fixtures/dbt/sushi_test")
     profile = Profile.load(DbtContext(project_path))
@@ -96,6 +102,7 @@ def test_tests_referencing_disabled_models():
     assert "not_null_disabled_model_one" not in helper.tests()
 
 
+@pytest.mark.xdist_group("dbt_manifest")
 def test_variable_override():
     project_path = Path("tests/fixtures/dbt/sushi_test")
     profile = Profile.load(DbtContext(project_path))

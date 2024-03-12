@@ -13,10 +13,31 @@ from pydantic import Field
 from sqlmesh.core.context import Context
 from sqlmesh.core.model.definition import Model
 from sqlmesh.utils.pydantic import PydanticModel
+from web.server import models
 from web.server.exceptions import ApiException
+from web.server.models import Mode
 
 logger = logging.getLogger(__name__)
 get_context_lock = asyncio.Lock()
+
+MODE_TO_MODULES = {
+    models.Mode.IDE: {
+        models.Modules.EDITOR,
+        models.Modules.FILES,
+        models.Modules.DOCS,
+        models.Modules.ERRORS,
+        models.Modules.PLANS,
+    },
+    models.Mode.DOCS: {models.Modules.DOCS, models.Modules.ERRORS},
+    models.Mode.PLAN: {models.Modules.PLANS, models.Modules.LINEAGE, models.Modules.ERRORS},
+    models.Mode.DEFAULT: {
+        models.Modules.DOCS,
+        models.Modules.PLANS,
+        models.Modules.ERRORS,
+        models.Modules.EDITOR,
+        models.Modules.FILES,
+    },
+}
 
 
 class Settings(PydanticModel):
@@ -25,6 +46,13 @@ class Settings(PydanticModel):
     )
     config: str = Field(default_factory=lambda: os.getenv("CONFIG", ""))
     gateway: t.Optional[str] = Field(default_factory=lambda: os.getenv("GATEWAY"))
+    ui_mode: Mode = Field(
+        default_factory=lambda: Mode[os.getenv("UI_MODE", Mode.DEFAULT.value).upper()]
+    )
+
+    @property
+    def modules(self) -> t.Set[models.Modules]:
+        return MODE_TO_MODULES[self.ui_mode]
 
 
 @lru_cache()
@@ -81,12 +109,19 @@ async def get_loaded_context(settings: Settings = Depends(get_settings)) -> Cont
         )
 
 
-async def get_context(settings: Settings = Depends(get_settings)) -> Context:
+async def get_context(settings: Settings = Depends(get_settings)) -> t.Optional[Context]:
     try:
         async with get_context_lock:
             return _get_context(settings.project_path, settings.config, settings.gateway)
     except Exception:
+        return None
+
+
+async def get_context_or_raise(settings: Settings = Depends(get_settings)) -> Context:
+    context = await get_context(settings)
+    if not context:
         raise ApiException(
             message="Unable to create a context",
             origin="API -> settings -> get_context",
         )
+    return context

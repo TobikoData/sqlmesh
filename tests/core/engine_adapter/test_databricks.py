@@ -4,7 +4,7 @@ import typing as t
 import pandas as pd
 import pytest
 from pytest_mock import MockFixture
-from sqlglot import parse_one
+from sqlglot import exp, parse_one
 
 from sqlmesh.core.engine_adapter import DatabricksEngineAdapter
 from tests.core.engine_adapter import to_sql_calls
@@ -18,7 +18,9 @@ def test_replace_query_not_exists(mocker: MockFixture, make_mocked_engine_adapte
         return_value=False,
     )
     adapter = make_mocked_engine_adapter(DatabricksEngineAdapter)
-    adapter.replace_query("test_table", parse_one("SELECT a FROM tbl"), {"a": "int"})
+    adapter.replace_query(
+        "test_table", parse_one("SELECT a FROM tbl"), {"a": exp.DataType.build("INT")}
+    )
 
     assert to_sql_calls(adapter) == [
         "CREATE TABLE IF NOT EXISTS `test_table` AS SELECT `a` FROM `tbl`",
@@ -47,7 +49,9 @@ def test_replace_query_pandas_not_exists(
     )
     adapter = make_mocked_engine_adapter(DatabricksEngineAdapter)
     df = pd.DataFrame({"a": [1, 2, 3], "b": [4, 5, 6]})
-    adapter.replace_query("test_table", df, {"a": "int", "b": "int"})
+    adapter.replace_query(
+        "test_table", df, {"a": exp.DataType.build("INT"), "b": exp.DataType.build("INT")}
+    )
 
     assert to_sql_calls(adapter) == [
         "CREATE TABLE IF NOT EXISTS `test_table` AS SELECT CAST(`a` AS INT) AS `a`, CAST(`b` AS INT) AS `b` FROM VALUES (1, 4), (2, 5), (3, 6) AS `t`(`a`, `b`)",

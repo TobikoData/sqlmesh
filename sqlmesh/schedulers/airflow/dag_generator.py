@@ -60,6 +60,8 @@ DAG_DEFAULT_ARGS = {
     ),
 }
 
+AIRFLOW_TAG_CHARACTER_LIMIT = 100
+
 
 class SnapshotDagGenerator:
     def __init__(
@@ -116,7 +118,7 @@ class SnapshotDagGenerator:
             tags=[
                 common.SQLMESH_AIRFLOW_TAG,
                 common.SNAPSHOT_AIRFLOW_TAG,
-                snapshot.name,
+                snapshot.node.name[-AIRFLOW_TAG_CHARACTER_LIMIT:],
             ],
             default_args={
                 **DAG_DEFAULT_ARGS,
@@ -146,16 +148,14 @@ class SnapshotDagGenerator:
             plan_dag_spec.environment.name,
         )
 
-        environment = plan_dag_spec.environment
-
         all_snapshots = {
             **{s.snapshot_id: s for s in plan_dag_spec.new_snapshots},
-            **self._state_reader.get_snapshots(environment.snapshots),
+            **self._state_reader.get_snapshots(plan_dag_spec.environment.snapshots),
         }
 
         snapshots_to_create = [
             all_snapshots[snapshot.snapshot_id]
-            for snapshot in environment.snapshots
+            for snapshot in plan_dag_spec.environment.snapshots
             if snapshot.snapshot_id in all_snapshots
             and (
                 plan_dag_spec.models_to_backfill is None
@@ -214,22 +214,36 @@ class SnapshotDagGenerator:
             (
                 promote_start_task,
                 promote_end_task,
-            ) = self._create_promotion_demotion_tasks(plan_dag_spec, environment, all_snapshots)
-
-            update_views_task_pair = self._create_update_views_tasks(plan_dag_spec, all_snapshots)
-
-            finalize_task = self._create_finalize_task(environment)
+            ) = self._create_promotion_demotion_tasks(plan_dag_spec, all_snapshots)
 
             start_task >> create_start_task
             create_end_task >> backfill_before_promote_start_task
             backfill_before_promote_end_task >> promote_start_task
-            promote_end_task >> backfill_after_promote_start_task
 
+            update_views_task_pair = self._create_update_views_tasks(plan_dag_spec, all_snapshots)
             if update_views_task_pair:
                 backfill_after_promote_end_task >> update_views_task_pair[0]
-                update_views_task_pair[1] >> finalize_task
+                before_finalize_task = update_views_task_pair[1]
             else:
-                backfill_after_promote_end_task >> finalize_task
+                before_finalize_task = backfill_after_promote_end_task
+
+            unpause_snapshots_task = self._create_unpause_snapshots_task(plan_dag_spec)
+            if unpause_snapshots_task:
+                if not plan_dag_spec.ensure_finalized_snapshots:
+                    # Only unpause right after updatign the environment record if we don't
+                    # have to use the finalized snapshots for subsequent plan applications.
+                    promote_end_task >> unpause_snapshots_task
+                    unpause_snapshots_task >> backfill_after_promote_start_task
+                else:
+                    # Otherwise, unpause right before finalizing the environment.
+                    promote_end_task >> backfill_after_promote_start_task
+                    before_finalize_task >> unpause_snapshots_task
+                    before_finalize_task = unpause_snapshots_task
+            else:
+                promote_end_task >> backfill_after_promote_start_task
+
+            finalize_task = self._create_finalize_task(plan_dag_spec.environment)
+            before_finalize_task >> finalize_task
 
             self._add_notification_target_tasks(plan_dag_spec, start_task, end_task, finalize_task)
             return dag
@@ -308,50 +322,51 @@ class SnapshotDagGenerator:
     def _create_promotion_demotion_tasks(
         self,
         request: common.PlanDagSpec,
-        environment: Environment,
         snapshots: t.Dict[SnapshotId, Snapshot],
     ) -> t.Tuple[BaseOperator, BaseOperator]:
         update_state_task = PythonOperator(
             task_id="snapshot_promotion_update_state",
             python_callable=promotion_update_state_task,
             op_kwargs={
-                "environment": environment,
-                "no_gaps_snapshot_names": request.no_gaps_snapshot_names
-                if request.no_gaps
-                else set(),
+                "environment": request.environment,
+                "no_gaps_snapshot_names": (
+                    request.no_gaps_snapshot_names if request.no_gaps else set()
+                ),
             },
         )
 
         start_task = update_state_task
-        end_task = update_state_task
+        end_task: BaseOperator = update_state_task
 
-        if request.environment.promoted_snapshots:
-            if not request.is_dev and request.unpaused_dt:
-                migrate_tables_task = self._create_snapshot_migrate_tables_operator(
-                    [
-                        snapshots[s.snapshot_id]
-                        for s in request.environment.promoted_snapshots
-                        if snapshots[s.snapshot_id].is_paused
-                    ],
-                    request.ddl_concurrent_tasks,
-                    "snapshot_promotion_migrate_tables",
-                )
-
-                unpause_snapshots_task = PythonOperator(
-                    task_id="snapshot_promotion_unpause_snapshots",
-                    python_callable=promotion_unpause_snapshots_task,
-                    op_kwargs={
-                        "environment": environment,
-                        "unpaused_dt": request.unpaused_dt,
-                    },
-                    trigger_rule="none_failed",
-                )
-
-                update_state_task >> migrate_tables_task
-                migrate_tables_task >> unpause_snapshots_task
-                end_task = unpause_snapshots_task
+        if request.environment.promoted_snapshots and not request.is_dev and request.unpaused_dt:
+            migrate_tables_task = self._create_snapshot_migrate_tables_operator(
+                [
+                    snapshots[s.snapshot_id]
+                    for s in request.environment.promoted_snapshots
+                    if snapshots[s.snapshot_id].is_paused
+                ],
+                request.ddl_concurrent_tasks,
+                "snapshot_promotion_migrate_tables",
+            )
+            update_state_task >> migrate_tables_task
+            end_task = migrate_tables_task
 
         return (start_task, end_task)
+
+    def _create_unpause_snapshots_task(
+        self, request: common.PlanDagSpec
+    ) -> t.Optional[BaseOperator]:
+        if request.is_dev or not request.unpaused_dt:
+            return None
+        return PythonOperator(
+            task_id="snapshot_promotion_unpause_snapshots",
+            python_callable=promotion_unpause_snapshots_task,
+            op_kwargs={
+                "environment": request.environment,
+                "unpaused_dt": request.unpaused_dt,
+            },
+            trigger_rule="none_failed",
+        )
 
     def _create_update_views_tasks(
         self, request: common.PlanDagSpec, snapshots: t.Dict[SnapshotId, Snapshot]
@@ -411,18 +426,18 @@ class SnapshotDagGenerator:
                 continue
 
             snapshot = snapshots[sid]
-            sanitized_snapshot_name = sanitize_name(snapshot.name)
+            sanitized_model_name = sanitize_name(snapshot.node.name)
 
             snapshot_intervals_chain: t.List[t.Union[BaseOperator, t.List[BaseOperator]]] = []
 
             snapshot_start_task = EmptyOperator(
-                task_id=f"snapshot_backfill__{sanitized_snapshot_name}__{snapshot.identifier}__start"
+                task_id=f"snapshot_backfill__{sanitized_model_name}__{snapshot.identifier}__start"
             )
             snapshot_end_task = EmptyOperator(
-                task_id=f"snapshot_backfill__{sanitized_snapshot_name}__{snapshot.identifier}__end"
+                task_id=f"snapshot_backfill__{sanitized_model_name}__{snapshot.identifier}__end"
             )
 
-            task_id_prefix = f"snapshot_backfill__{sanitized_snapshot_name}__{snapshot.identifier}"
+            task_id_prefix = f"snapshot_backfill__{sanitized_model_name}__{snapshot.identifier}"
             for start, end in intervals_per_snapshot.intervals:
                 evaluation_task = self._create_snapshot_evaluation_operator(
                     snapshots=snapshots,
@@ -600,7 +615,7 @@ class SnapshotDagGenerator:
                     HighWaterMarkSensor(
                         target_snapshot_info=upstream_snapshot.table_info,
                         this_snapshot=snapshot,
-                        task_id=f"{sanitize_name(upstream_snapshot.name)}_{upstream_snapshot.version}_high_water_mark_sensor",
+                        task_id=f"{sanitize_name(upstream_snapshot.node.name)}_{upstream_snapshot.version}_high_water_mark_sensor",
                     )
                 )
 

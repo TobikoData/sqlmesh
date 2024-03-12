@@ -2,6 +2,7 @@ import { useApiModelLineage } from '@api/index'
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { type ModelSQLMeshModel } from '@models/sqlmesh-model'
 import { type HighlightedNodes, useLineageFlow } from './context'
+import { ChevronDownIcon } from '@heroicons/react/24/solid'
 import ReactFlow, {
   Controls,
   Background,
@@ -19,23 +20,22 @@ import ReactFlow, {
 import Loading from '@components/loading/Loading'
 import Spinner from '@components/logo/Spinner'
 import { createLineageWorker } from '~/workers'
-import { isArrayEmpty, isNil, isNotNil } from '@utils/index'
+import { isArrayEmpty, isFalse, isNil, isNotNil } from '@utils/index'
 import ListboxShow from '@components/listbox/ListboxShow'
 import clsx from 'clsx'
 import ModelNode from './ModelNode'
 import {
-  getNodeMap,
   getEdges,
   getLineageIndex,
   getActiveNodes,
   getUpdatedNodes,
   getUpdatedEdges,
   createGraphLayout,
-  getModelAncestors,
 } from './help'
 import ModelLineageSearch from './ModelLineageSearch'
 import { Popover } from '@headlessui/react'
 import ModelLineageDetails from './ModelLineageDetails'
+import { Divider } from '@components/divider/Divider'
 
 const WITH_COLUMNS_LIMIT = 30
 
@@ -56,6 +56,10 @@ export default function ModelLineage({
     setWithColumns,
     setHighlightedNodes,
     setNodeConnections,
+    setLineageCache,
+    setUnknownModels,
+    models,
+    unknownModels,
   } = useLineageFlow()
 
   const {
@@ -75,9 +79,23 @@ export default function ModelLineage({
       .then(({ data }) => {
         if (isNil(data)) return
 
-        const modelsCount = Object.keys(data).length
+        const lineageModels = Object.keys(data)
+        const lineageModelsCount = lineageModels.length
 
-        if (modelsCount > WITH_COLUMNS_LIMIT) {
+        lineageModels.forEach(modelName => {
+          modelName = encodeURI(modelName)
+
+          if (
+            isFalse(models.has(modelName)) &&
+            isFalse(unknownModels.has(modelName))
+          ) {
+            unknownModels.add(modelName)
+          }
+        })
+
+        setUnknownModels(new Set(unknownModels))
+
+        if (lineageModelsCount > WITH_COLUMNS_LIMIT) {
           setWithColumns(false)
         }
 
@@ -99,6 +117,7 @@ export default function ModelLineage({
         setActiveEdges(new Map())
         setConnections(new Map())
         setSelectedNodes(new Set())
+        setLineageCache(undefined)
         setMainNode(model.fqn)
       })
 
@@ -121,10 +140,11 @@ export default function ModelLineage({
 
   function handleLineageWorkerMessage(e: MessageEvent): void {
     if (e.data.topic === 'lineage') {
-      setLineage(e.data.payload.lineage)
-      setNodeConnections(e.data.payload.nodesConnections)
       setIsMergingModels(false)
+      setNodeConnections(e.data.payload.nodesConnections)
+      setLineage(e.data.payload.lineage)
     }
+
     if (e.data.topic === 'error') {
       handleError?.(e.data.error)
       setIsMergingModels(false)
@@ -132,12 +152,12 @@ export default function ModelLineage({
   }
 
   return (
-    <div className="relative h-full w-full">
+    <div className="relative h-full w-full overflow-hidden">
       {(isFetching || isMegringModels) && (
         <div className="absolute top-0 left-0 z-10 w-full h-full bg-theme flex justify-center items-center">
           <Loading className="inline-block">
             <Spinner className="w-3 h-3 border border-neutral-10 mr-4" />
-            <h3 className="text-md">
+            <h3 className="text-md whitespace-nowrap">
               {isFetching ? "Loading Model's Lineage..." : "Merging Model's..."}
             </h3>
           </Loading>
@@ -153,7 +173,6 @@ export default function ModelLineage({
 function ModelColumnLineage(): JSX.Element {
   const {
     withColumns,
-    models,
     lineage,
     mainNode,
     selectedEdges,
@@ -165,6 +184,8 @@ function ModelColumnLineage(): JSX.Element {
     activeEdges,
     connectedNodes,
     connections,
+    nodesMap,
+    showControls,
     handleError,
     setActiveNodes,
   } = useLineageFlow()
@@ -174,15 +195,7 @@ function ModelColumnLineage(): JSX.Element {
   const [isBuildingLayout, setIsBuildingLayout] = useState(false)
 
   const nodeTypes = useMemo(() => ({ model: ModelNode }), [])
-  const nodesMap = useMemo(
-    () =>
-      getNodeMap({
-        lineage,
-        models,
-        withColumns,
-      }),
-    [lineage, models, withColumns],
-  )
+
   const allEdges = useMemo(() => getEdges(lineage), [lineage])
   const lineageIndex = useMemo(() => getLineageIndex(lineage), [lineage])
 
@@ -248,11 +261,11 @@ function ModelColumnLineage(): JSX.Element {
             zoom: 0.5,
             duration: 0,
           })
-
-          setTimeout(() => {
-            setIsBuildingLayout(false)
-          }, 100)
         }
+
+        setTimeout(() => {
+          setIsBuildingLayout(false)
+        }, 100)
       })
 
     return () => {
@@ -261,7 +274,7 @@ function ModelColumnLineage(): JSX.Element {
       setEdges([])
       setNodes([])
     }
-  }, [lineageIndex, withColumns])
+  }, [activeEdges, nodesMap, lineageIndex])
 
   useEffect(() => {
     if (isNil(mainNode) || isArrayEmpty(nodes)) return
@@ -326,10 +339,11 @@ function ModelColumnLineage(): JSX.Element {
   return (
     <>
       {isBuildingLayout && (
-        <div className="absolute top-0 left-0 z-10 bg-theme flex justify-center items-center w-full h-full">
-          <Loading className="inline-block">
+        <div className="absolute top-0 left-0 z-10 flex justify-center items-center w-full h-full">
+          <span className="absolute w-full h-full z-10 bg-transparent-20 backdrop-blur-lg"></span>
+          <Loading className="inline-block z-10">
             <Spinner className="w-3 h-3 border border-neutral-10 mr-4" />
-            <h3 className="text-md">Building Lineage...</h3>
+            <h3 className="text-md whitespace-nowrap">Building Lineage...</h3>
           </Loading>
         </div>
       )}
@@ -345,18 +359,25 @@ function ModelColumnLineage(): JSX.Element {
         snapGrid={[16, 16]}
         snapToGrid
       >
-        <Panel
-          position="top-right"
-          className="bg-theme !m-0 w-full !z-10"
-        >
-          <GraphControls nodes={nodes} />
-        </Panel>
+        {showControls && (
+          <Panel
+            position="top-right"
+            className="bg-theme !m-0 w-full !z-10"
+          >
+            <GraphControls nodes={nodes} />
+            <Divider />
+          </Panel>
+        )}
         <Controls className="bg-light p-1 rounded-md !border-none !shadow-lg" />
         <Background
           variant={BackgroundVariant.Cross}
           gap={32}
           size={4}
-          className={clsx(hasBackground ? 'opacity-100' : 'opacity-0')}
+          className={clsx(
+            hasBackground
+              ? 'opacity-100 stroke-neutral-200 dark:stroke-neutral-800'
+              : 'opacity-0',
+          )}
         />
       </ReactFlow>
     </>
@@ -365,9 +386,7 @@ function ModelColumnLineage(): JSX.Element {
 
 function GraphControls({ nodes = [] }: { nodes: Node[] }): JSX.Element {
   const {
-    models,
     withColumns,
-    lineage,
     mainNode,
     selectedNodes,
     withConnected,
@@ -375,7 +394,6 @@ function GraphControls({ nodes = [] }: { nodes: Node[] }): JSX.Element {
     withSecondary,
     hasBackground,
     activeNodes,
-    connectedNodes,
     highlightedNodes,
     setSelectedNodes,
     setWithColumns,
@@ -386,22 +404,6 @@ function GraphControls({ nodes = [] }: { nodes: Node[] }): JSX.Element {
   } = useLineageFlow()
 
   const lineageInfoTrigger = useRef<HTMLButtonElement>(null)
-
-  const currentModels = useMemo(() => {
-    if (isNil(mainNode) || isNil(lineage)) return []
-
-    const ancestors = getModelAncestors(lineage, mainNode)
-
-    return Object.keys(lineage)
-      .map(model => ({
-        name: model,
-        displayName: models.get(model)?.displayName ?? decodeURI(model),
-        description: `${
-          ancestors.includes(model) ? 'Upstream' : 'Downstream'
-        } | ${connectedNodes.has(model) ? 'Directly' : 'Indirectly'} Connected`,
-      }))
-      .filter(Boolean) as Array<{ name: string; description: string }>
-  }, [lineage, mainNode])
 
   const highlightedNodeModels = useMemo(
     () => Object.values(highlightedNodes ?? {}).flat(),
@@ -435,6 +437,10 @@ function GraphControls({ nodes = [] }: { nodes: Node[] }): JSX.Element {
             className="flex items-center relative w-full cursor-pointer bg-primary-10 text-xs rounded-full text-primary-500 py-1 px-3 text-center focus:outline-none focus-visible:border-accent-500 focus-visible:ring-2 focus-visible:ring-light focus-visible:ring-opacity-75 focus-visible:ring-offset-2 focus-visible:ring-offset-brand-300 border-1 border-transparent"
           >
             Details
+            <ChevronDownIcon
+              className="ml-2 h-4 w-4"
+              aria-hidden="true"
+            />
           </Popover.Button>
           <Popover.Panel className="absolute left-2 right-2 flex-col z-50 mt-8 transform flex px-4 py-3 bg-theme-lighter shadow-xl focus:ring-2 ring-opacity-5 rounded-lg">
             <ModelLineageDetails nodes={nodes} />
@@ -445,10 +451,7 @@ function GraphControls({ nodes = [] }: { nodes: Node[] }): JSX.Element {
         </div>
       </div>
       <div className="flex w-full justify-end items-center">
-        <ModelLineageSearch
-          currentModels={currentModels}
-          handleSelect={handleSelect}
-        />
+        <ModelLineageSearch handleSelect={handleSelect} />
         <ListboxShow
           options={{
             Background: setHasBackground,
@@ -457,16 +460,17 @@ function GraphControls({ nodes = [] }: { nodes: Node[] }): JSX.Element {
                 ? undefined
                 : setWithColumns,
             Connected: activeNodes.size > 0 ? undefined : setWithConnected,
-            Impact: activeNodes.size > 0 ? undefined : setWithImpacted,
-            Secondary: activeNodes.size > 0 ? undefined : setWithSecondary,
+            'Upstream/Downstream':
+              activeNodes.size > 0 ? undefined : setWithImpacted,
+            All: activeNodes.size > 0 ? undefined : setWithSecondary,
           }}
           value={
             [
               withColumns && 'Columns',
               hasBackground && 'Background',
               withConnected && 'Connected',
-              withImpacted && 'Impact',
-              withSecondary && 'Secondary',
+              withImpacted && 'Upstream/Downstream',
+              withSecondary && 'All',
             ].filter(Boolean) as string[]
           }
         />

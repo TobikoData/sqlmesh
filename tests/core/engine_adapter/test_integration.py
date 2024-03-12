@@ -5,21 +5,23 @@ import os
 import pathlib
 import sys
 import typing as t
-from datetime import timedelta
+from datetime import datetime, timedelta
 
+import numpy as np
 import pandas as pd
 import pytest
 from sqlglot import exp, parse_one
 
 from sqlmesh import Config, Context, EngineAdapter
+from sqlmesh.cli.example_project import init_example_project
 from sqlmesh.core.config import load_config_from_paths
 from sqlmesh.core.dialect import normalize_model_name
 from sqlmesh.core.engine_adapter.shared import DataObject, DataObjectType
 from sqlmesh.utils import random_id
-from sqlmesh.utils.date import now, to_date, to_ds, yesterday
-from sqlmesh.utils.errors import UnsupportedCatalogOperationError
+from sqlmesh.utils.date import now, to_date, to_ds, to_time_column, yesterday
 from sqlmesh.utils.pydantic import PydanticModel
 from tests.conftest import SushiDataValidator
+from tests.utils.pandas import compare_dataframes
 
 if t.TYPE_CHECKING:
     from sqlmesh.core.engine_adapter._typing import Query
@@ -90,13 +92,9 @@ class TestContext:
     def dialect(self) -> str:
         return self.engine_adapter.dialect
 
-    @classmethod
-    def _compare_dfs(cls, actual: pd.DataFrame, expected: pd.DataFrame) -> None:
-        actual = actual.reset_index(drop=True)
-        expected = expected.reset_index(drop=True)
-        actual = actual.apply(lambda x: x.sort_values().values).reset_index(drop=True)
-        expected = expected.apply(lambda x: x.sort_values().values).reset_index(drop=True)
-        pd.testing.assert_frame_equal(actual, expected, check_dtype=False, check_index_type=False)
+    @property
+    def current_catalog_type(self) -> str:
+        return self.engine_adapter.current_catalog_type
 
     def add_test_suffix(self, value: str) -> str:
         return f"{value}_{self.test_id}"
@@ -174,11 +172,16 @@ class TestContext:
     def get_current_data(self, table: exp.Table) -> pd.DataFrame:
         df = self.engine_adapter.fetchdf(exp.select("*").from_(table), quote_identifiers=True)
         if self.dialect == "snowflake" and "id" in df.columns:
-            df["id"] = df["id"].astype("int")
+            df["id"] = df["id"].apply(lambda x: x if pd.isna(x) else int(x))
         return df
 
     def compare_with_current(self, table: exp.Table, expected: pd.DataFrame) -> None:
-        self._compare_dfs(self.get_current_data(table), self.output_data(expected))
+        compare_dataframes(
+            self.get_current_data(table),
+            self.output_data(expected),
+            check_dtype=False,
+            check_index_type=False,
+        )
 
     def get_table_comment(
         self,
@@ -381,6 +384,7 @@ def test_type(request):
 @pytest.fixture(scope="session")
 def config() -> Config:
     return load_config_from_paths(
+        Config,
         project_paths=[
             pathlib.Path("examples/wursthall/config.yaml"),
             pathlib.Path(os.path.join(os.path.dirname(__file__), "config.yaml")),
@@ -397,6 +401,7 @@ def config() -> Config:
                 pytest.mark.duckdb,
                 pytest.mark.engine,
                 pytest.mark.slow,
+                pytest.mark.xdist_group("engine_integration_duckdb"),
             ],
         ),
         pytest.param(
@@ -405,6 +410,7 @@ def config() -> Config:
                 pytest.mark.docker,
                 pytest.mark.engine,
                 pytest.mark.postgres,
+                pytest.mark.xdist_group("engine_integration_postgres"),
             ],
         ),
         pytest.param(
@@ -413,6 +419,7 @@ def config() -> Config:
                 pytest.mark.docker,
                 pytest.mark.engine,
                 pytest.mark.mysql,
+                pytest.mark.xdist_group("engine_integration_mysql"),
             ],
         ),
         pytest.param(
@@ -421,6 +428,7 @@ def config() -> Config:
                 pytest.mark.docker,
                 pytest.mark.engine,
                 pytest.mark.mssql,
+                pytest.mark.xdist_group("engine_integration_mssql"),
             ],
         ),
         pytest.param(
@@ -429,6 +437,16 @@ def config() -> Config:
                 pytest.mark.docker,
                 pytest.mark.engine,
                 pytest.mark.trino,
+                pytest.mark.xdist_group("engine_integration_trino"),
+            ],
+        ),
+        pytest.param(
+            "trino_iceberg",
+            marks=[
+                pytest.mark.docker,
+                pytest.mark.engine,
+                pytest.mark.trino_iceberg,
+                pytest.mark.xdist_group("engine_integration_trino_iceberg"),
             ],
         ),
         pytest.param(
@@ -437,6 +455,7 @@ def config() -> Config:
                 pytest.mark.docker,
                 pytest.mark.engine,
                 pytest.mark.spark,
+                pytest.mark.xdist_group("engine_integration_spark"),
             ],
         ),
         pytest.param(
@@ -445,6 +464,7 @@ def config() -> Config:
                 pytest.mark.bigquery,
                 pytest.mark.engine,
                 pytest.mark.remote,
+                pytest.mark.xdist_group("engine_integration_bigquery"),
             ],
         ),
         pytest.param(
@@ -453,6 +473,16 @@ def config() -> Config:
                 pytest.mark.databricks,
                 pytest.mark.engine,
                 pytest.mark.remote,
+                pytest.mark.xdist_group("engine_integration_databricks"),
+            ],
+        ),
+        pytest.param(
+            "motherduck",
+            marks=[
+                pytest.mark.motherduck,
+                pytest.mark.engine,
+                pytest.mark.remote,
+                pytest.mark.xdist_group("engine_integration_motherduck"),
             ],
         ),
         pytest.param(
@@ -461,6 +491,7 @@ def config() -> Config:
                 pytest.mark.engine,
                 pytest.mark.remote,
                 pytest.mark.redshift,
+                pytest.mark.xdist_group("engine_integration_redshift"),
             ],
         ),
         pytest.param(
@@ -469,12 +500,18 @@ def config() -> Config:
                 pytest.mark.engine,
                 pytest.mark.remote,
                 pytest.mark.snowflake,
+                pytest.mark.xdist_group("engine_integration_snowflake"),
             ],
         ),
     ]
 )
-def engine_adapter(request, config) -> EngineAdapter:
-    gateway = f"inttest_{request.param}"
+def mark_gateway(request) -> t.Tuple[str, str]:
+    return request.param, f"inttest_{request.param}"
+
+
+@pytest.fixture
+def engine_adapter(mark_gateway: t.Tuple[str, str], config) -> EngineAdapter:
+    mark, gateway = mark_gateway
     if gateway not in config.gateways:
         # TODO: Once everything is fully setup we want to error if a gateway is not configured that we expect
         pytest.skip(f"Gateway {gateway} not configured")
@@ -484,10 +521,10 @@ def engine_adapter(request, config) -> EngineAdapter:
     # table and then immediately after trying to insert rows into it. There seems to be a delay between when the
     # metastore is made aware of the table and when it responds that it exists. I'm hoping this is not an issue
     # in practice on production machines.
-    if request.param != "trino":
+    if not mark.startswith("trino"):
         engine_adapter.DEFAULT_BATCH_SIZE = 1
     # Clear our any local db files that may have been left over from previous runs
-    if request.param == "duckdb":
+    if mark == "duckdb":
         for raw_path in (connection_config.catalogs or {}).values():
             pathlib.Path(raw_path).unlink(missing_ok=True)
     return engine_adapter
@@ -526,6 +563,12 @@ def test_catalog_operations(ctx: TestContext):
         ctx.engine_adapter.cursor.connection.autocommit(False)
     elif ctx.dialect == "snowflake":
         ctx.engine_adapter.execute(f'CREATE DATABASE IF NOT EXISTS "{catalog_name}"')
+    elif ctx.dialect == "duckdb":
+        try:
+            # Only applies to MotherDuck
+            ctx.engine_adapter.execute(f'CREATE DATABASE IF NOT EXISTS "{catalog_name}"')
+        except Exception:
+            pass
     current_catalog = ctx.engine_adapter.get_current_catalog()
     ctx.engine_adapter.set_current_catalog(catalog_name)
     assert ctx.engine_adapter.get_current_catalog() == catalog_name
@@ -533,7 +576,7 @@ def test_catalog_operations(ctx: TestContext):
     assert ctx.engine_adapter.get_current_catalog() == current_catalog
 
 
-def test_drop_schema_catalog(ctx: TestContext):
+def test_drop_schema_catalog(ctx: TestContext, caplog):
     def drop_schema_and_validate(schema_name: str):
         ctx.engine_adapter.drop_schema(schema_name, cascade=True)
         results = ctx.get_metadata_results(schema_name)
@@ -588,16 +631,19 @@ def test_drop_schema_catalog(ctx: TestContext):
         ctx.engine_adapter.cursor.connection.autocommit(False)
     elif ctx.dialect == "snowflake":
         ctx.engine_adapter.execute(f'CREATE DATABASE IF NOT EXISTS "{catalog_name}"')
+    elif ctx.dialect == "duckdb":
+        try:
+            # Only applies to MotherDuck
+            ctx.engine_adapter.execute(f'CREATE DATABASE IF NOT EXISTS "{catalog_name}"')
+        except Exception:
+            pass
     elif ctx.dialect == "bigquery":
         catalog_name = "tobiko-test"
 
     schema = ctx.schema("drop_schema_catalog_test", catalog_name)
     if ctx.engine_adapter.CATALOG_SUPPORT.is_single_catalog_only:
-        with pytest.raises(
-            UnsupportedCatalogOperationError,
-            match=".*requires that all catalog operations be against a single catalog.*",
-        ):
-            drop_schema_and_validate(schema)
+        drop_schema_and_validate(schema)
+        assert "requires that all catalog operations be against a single catalog" in caplog.text
         return
     drop_schema_and_validate(schema)
     create_objects_and_validate(schema)
@@ -681,7 +727,9 @@ def test_ctas(ctx: TestContext):
         # table comments are actually registered with the engine. Column comments are not.
         assert table_description == "test table description"
         assert column_comments == (
-            {} if ctx.dialect == "trino" else {"id": "test id column description"}
+            {}
+            if (ctx.dialect == "trino" and ctx.current_catalog_type == "hive")
+            else {"id": "test id column description"}
         )
 
 
@@ -728,7 +776,7 @@ def test_create_view(ctx: TestContext):
         assert table_description == "test view description"
         assert column_comments == (
             {}
-            if ctx.dialect == "trino"
+            if (ctx.dialect == "trino" and ctx.current_catalog_type == "hive")
             or (
                 ctx.test_type == "query"
                 and not ctx.engine_adapter.COMMENT_CREATION_VIEW.supports_column_comment_commands
@@ -800,6 +848,34 @@ def test_drop_schema(ctx: TestContext):
     assert len(results.views) == 0
 
 
+def test_nan_roundtrip(ctx: TestContext):
+    if ctx.test_type != "df":
+        pytest.skip("NaN roundtrip test only relevant for dataframes.")
+    ctx.engine_adapter.DEFAULT_BATCH_SIZE = sys.maxsize
+    ctx.init()
+    table = ctx.table("test_table")
+    # Initial Load
+    input_data = pd.DataFrame(
+        [
+            {"id": 1, "ds": "2022-01-01"},
+            {"id": 2, "ds": "2022-01-02"},
+            {"id": np.nan, "ds": np.nan},
+        ]
+    )
+    ctx.engine_adapter.create_table(table, ctx.columns_to_types)
+    ctx.engine_adapter.replace_query(
+        table,
+        ctx.input_data(input_data),
+        columns_to_types=ctx.columns_to_types,
+    )
+    results = ctx.get_metadata_results()
+    assert not results.views
+    assert not results.materialized_views
+    assert len(results.tables) == len(results.non_temp_tables) == 1
+    assert results.non_temp_tables[0] == table.name
+    ctx.compare_with_current(table, input_data)
+
+
 def test_replace_query(ctx: TestContext):
     ctx.engine_adapter.DEFAULT_BATCH_SIZE = sys.maxsize
     ctx.init()
@@ -841,9 +917,9 @@ def test_replace_query(ctx: TestContext):
         ctx.engine_adapter.replace_query(
             table,
             ctx.input_data(replace_data),
-            columns_to_types=ctx.columns_to_types
-            if ctx.dialect in ["spark", "databricks"]
-            else None,
+            columns_to_types=(
+                ctx.columns_to_types if ctx.dialect in ["spark", "databricks"] else None
+            ),
         )
         results = ctx.get_metadata_results()
         assert len(results.views) == 0
@@ -894,9 +970,9 @@ def test_replace_query_batched(ctx: TestContext):
         ctx.engine_adapter.replace_query(
             table,
             ctx.input_data(replace_data),
-            columns_to_types=ctx.columns_to_types
-            if ctx.dialect in ["spark", "databricks"]
-            else None,
+            columns_to_types=(
+                ctx.columns_to_types if ctx.dialect in ["spark", "databricks"] else None
+            ),
         )
         results = ctx.get_metadata_results()
         assert len(results.views) == 0
@@ -1085,7 +1161,7 @@ def test_merge(ctx: TestContext):
         )
 
 
-def test_scd_type_2(ctx: TestContext):
+def test_scd_type_2_by_time(ctx: TestContext):
     time_type = "timestamp"
 
     ctx.columns_to_types = {
@@ -1108,10 +1184,10 @@ def test_scd_type_2(ctx: TestContext):
             {"id": 3, "name": "c", "updated_at": "2022-01-03 00:00:00"},
         ]
     )
-    ctx.engine_adapter.scd_type_2(
+    ctx.engine_adapter.scd_type_2_by_time(
         table,
         ctx.input_data(input_data, input_schema),
-        unique_key=[exp.to_identifier("id")],
+        unique_key=[parse_one("COALESCE(id, -1)")],
         valid_from_name="valid_from",
         valid_to_name="valid_to",
         updated_at_name="updated_at",
@@ -1168,10 +1244,10 @@ def test_scd_type_2(ctx: TestContext):
             {"id": 4, "name": "d", "updated_at": "2022-01-04 00:00:00"},
         ]
     )
-    ctx.engine_adapter.scd_type_2(
+    ctx.engine_adapter.scd_type_2_by_time(
         table,
         ctx.input_data(current_data, input_schema),
-        unique_key=[exp.to_identifier("id")],
+        unique_key=[exp.to_column("id")],
         valid_from_name="valid_from",
         valid_to_name="valid_to",
         updated_at_name="updated_at",
@@ -1220,6 +1296,173 @@ def test_scd_type_2(ctx: TestContext):
                     "id": 4,
                     "name": "d",
                     "updated_at": "2022-01-04 00:00:00",
+                    "valid_from": "1970-01-01 00:00:00",
+                    "valid_to": pd.NaT,
+                },
+            ]
+        ),
+    )
+
+
+def test_scd_type_2_by_column(ctx: TestContext):
+    time_type = "datetime" if ctx.dialect == "bigquery" else "timestamp"
+
+    ctx.columns_to_types = {
+        "id": "int",
+        "name": "string",
+        "status": "string",
+        "valid_from": time_type,
+        "valid_to": time_type,
+    }
+    ctx.init()
+    table = ctx.table("test_table")
+    input_schema = {
+        k: v for k, v in ctx.columns_to_types.items() if k not in ("valid_from", "valid_to")
+    }
+    ctx.engine_adapter.create_table(table, ctx.columns_to_types)
+    input_data = pd.DataFrame(
+        [
+            {"id": 1, "name": "a", "status": "active"},
+            {"id": 2, "name": "b", "status": "inactive"},
+            {"id": 3, "name": "c", "status": "active"},
+            {"id": 4, "name": "d", "status": "active"},
+        ]
+    )
+    ctx.engine_adapter.scd_type_2_by_column(
+        table,
+        ctx.input_data(input_data, input_schema),
+        unique_key=[exp.to_column("id")],
+        check_columns=[exp.to_column("name"), exp.to_column("status")],
+        valid_from_name="valid_from",
+        valid_to_name="valid_to",
+        execution_time="2023-01-01",
+        execution_time_as_valid_from=False,
+        columns_to_types=input_schema,
+    )
+    results = ctx.get_metadata_results()
+    assert len(results.views) == 0
+    assert len(results.materialized_views) == 0
+    assert len(results.tables) == len(results.non_temp_tables) == 1
+    assert len(results.non_temp_tables) == 1
+    assert results.non_temp_tables[0] == table.name
+    ctx.compare_with_current(
+        table,
+        pd.DataFrame(
+            [
+                {
+                    "id": 1,
+                    "name": "a",
+                    "status": "active",
+                    "valid_from": "1970-01-01 00:00:00",
+                    "valid_to": pd.NaT,
+                },
+                {
+                    "id": 2,
+                    "name": "b",
+                    "status": "inactive",
+                    "valid_from": "1970-01-01 00:00:00",
+                    "valid_to": pd.NaT,
+                },
+                {
+                    "id": 3,
+                    "name": "c",
+                    "status": "active",
+                    "valid_from": "1970-01-01 00:00:00",
+                    "valid_to": pd.NaT,
+                },
+                {
+                    "id": 4,
+                    "name": "d",
+                    "status": "active",
+                    "valid_from": "1970-01-01 00:00:00",
+                    "valid_to": pd.NaT,
+                },
+            ]
+        ),
+    )
+
+    if ctx.test_type == "query":
+        return
+    current_data = pd.DataFrame(
+        [
+            # Change `a` to `x`
+            {"id": 1, "name": "x", "status": "active"},
+            # Delete
+            # {"id": 2, "name": "b", status: "inactive"},
+            # No change
+            {"id": 3, "name": "c", "status": "active"},
+            # Change status to inactive
+            {"id": 4, "name": "d", "status": "inactive"},
+            # Add
+            {"id": 5, "name": "e", "status": "inactive"},
+        ]
+    )
+    ctx.engine_adapter.scd_type_2_by_column(
+        table,
+        ctx.input_data(current_data, input_schema),
+        unique_key=[exp.to_column("id")],
+        check_columns=[exp.to_column("name"), exp.to_column("status")],
+        valid_from_name="valid_from",
+        valid_to_name="valid_to",
+        execution_time="2023-01-05",
+        execution_time_as_valid_from=False,
+        columns_to_types=input_schema,
+    )
+    results = ctx.get_metadata_results()
+    assert len(results.views) == 0
+    assert len(results.materialized_views) == 0
+    assert len(results.tables) == len(results.non_temp_tables) == 1
+    assert results.non_temp_tables[0] == table.name
+    ctx.compare_with_current(
+        table,
+        pd.DataFrame(
+            [
+                {
+                    "id": 1,
+                    "name": "a",
+                    "status": "active",
+                    "valid_from": "1970-01-01 00:00:00",
+                    "valid_to": "2023-01-05 00:00:00",
+                },
+                {
+                    "id": 1,
+                    "name": "x",
+                    "status": "active",
+                    "valid_from": "2023-01-05 00:00:00",
+                    "valid_to": pd.NaT,
+                },
+                {
+                    "id": 2,
+                    "name": "b",
+                    "status": "inactive",
+                    "valid_from": "1970-01-01 00:00:00",
+                    "valid_to": "2023-01-05 00:00:00",
+                },
+                {
+                    "id": 3,
+                    "name": "c",
+                    "status": "active",
+                    "valid_from": "1970-01-01 00:00:00",
+                    "valid_to": pd.NaT,
+                },
+                {
+                    "id": 4,
+                    "name": "d",
+                    "status": "active",
+                    "valid_from": "1970-01-01 00:00:00",
+                    "valid_to": "2023-01-05 00:00:00",
+                },
+                {
+                    "id": 4,
+                    "name": "d",
+                    "status": "inactive",
+                    "valid_from": "2023-01-05 00:00:00",
+                    "valid_to": pd.NaT,
+                },
+                {
+                    "id": 5,
+                    "name": "e",
+                    "status": "inactive",
                     "valid_from": "1970-01-01 00:00:00",
                     "valid_to": pd.NaT,
                 },
@@ -1349,17 +1592,18 @@ def test_transaction(ctx: TestContext):
     ctx.compare_with_current(table, input_data)
 
 
-def test_sushi(ctx: TestContext):
+def test_sushi(mark_gateway: t.Tuple[str, str], ctx: TestContext):
     if ctx.test_type != "query":
         pytest.skip("Sushi end-to-end tests only need to run for query")
 
     config = load_config_from_paths(
+        Config,
         project_paths=[
             pathlib.Path(os.path.join(os.path.dirname(__file__), "config.yaml")),
         ],
         personal_paths=[pathlib.Path("~/.sqlmesh/config.yaml").expanduser()],
     )
-    gateway = "inttest_mssql" if ctx.dialect == "tsql" else f"inttest_{ctx.dialect}"
+    _, gateway = mark_gateway
     context = Context(paths="./examples/sushi", config=config, gateway=gateway)
 
     # clean up any leftover schemas from previous runs (requires context)
@@ -1375,6 +1619,24 @@ def test_sushi(ctx: TestContext):
 
     start = to_date(now() - timedelta(days=7))
     end = now()
+
+    # Databricks requires the table property `delta.columnMapping.mode = 'name'` for
+    # spaces in column names. Other engines error if it is set in the model definition,
+    # so we set it here.
+    if ctx.dialect == "databricks":
+        cust_rev_by_day_key = [key for key in context._models if "customer_revenue_by_day" in key][
+            0
+        ]
+
+        cust_rev_by_day_model_tbl_props = context._models[cust_rev_by_day_key].copy(
+            update={
+                "table_properties": {
+                    "delta.columnMapping.mode": exp.Literal(this="name", is_string=True)
+                }
+            }
+        )
+
+        context._models.update({cust_rev_by_day_key: cust_rev_by_day_model_tbl_props})
 
     context.plan(
         environment="test_prod",
@@ -1453,9 +1715,7 @@ def test_sushi(ctx: TestContext):
         ) -> None:
             layer_objects = context.engine_adapter.get_data_objects(schema_name)
             layer_models = {
-                x.name.split("__")[1]
-                if is_physical_layer
-                else x.name: {
+                x.name.split("__")[1] if is_physical_layer else x.name: {
                     "table_name": x.name,
                     "is_view": x.type == DataObjectType.VIEW,
                 }
@@ -1534,9 +1794,7 @@ def test_sushi(ctx: TestContext):
         ) -> None:
             layer_objects = context.engine_adapter.get_data_objects(schema_name)
             layer_models = {
-                x.name.split("__")[1]
-                if is_physical_layer
-                else x.name: {
+                x.name.split("__")[1] if is_physical_layer else x.name: {
                     "table_name": x.name,
                     "is_view": x.type == DataObjectType.VIEW,
                 }
@@ -1619,6 +1877,70 @@ def test_sushi(ctx: TestContext):
         validate_comments("sushi", is_physical_layer=False)
 
 
+def test_init_project(ctx: TestContext, mark_gateway: t.Tuple[str, str], tmp_path: pathlib.Path):
+    if ctx.test_type != "query":
+        pytest.skip("Init example project end-to-end tests only need to run for query")
+
+    init_example_project(tmp_path, ctx.dialect)
+    config = load_config_from_paths(
+        Config,
+        project_paths=[
+            pathlib.Path(os.path.join(os.path.dirname(__file__), "config.yaml")),
+        ],
+        personal_paths=[pathlib.Path("~/.sqlmesh/config.yaml").expanduser()],
+    )
+    _, gateway = mark_gateway
+    context = Context(paths=tmp_path, config=config, gateway=gateway)
+    ctx.engine_adapter = context.engine_adapter
+
+    # clean up any leftover schemas from previous runs (requires context)
+    for schema in [
+        "sqlmesh_example",
+        "sqlmesh_example__test_dev",
+        "sqlmesh__sqlmesh_example",
+        "sqlmesh",
+    ]:
+        context.engine_adapter.drop_schema(schema, ignore_if_not_exists=True, cascade=True)
+
+    # apply prod plan
+    context.plan(auto_apply=True, no_prompts=True)
+
+    prod_schema_results = ctx.get_metadata_results("sqlmesh_example")
+    assert sorted(prod_schema_results.views) == [
+        "full_model",
+        "incremental_model",
+        "seed_model",
+    ]
+    assert len(prod_schema_results.materialized_views) == 0
+    assert len(prod_schema_results.tables) == len(prod_schema_results.non_temp_tables) == 0
+
+    physical_layer_results = ctx.get_metadata_results("sqlmesh__sqlmesh_example")
+    assert len(physical_layer_results.views) == 0
+    assert len(physical_layer_results.materialized_views) == 0
+    assert len(physical_layer_results.tables) == len(physical_layer_results.non_temp_tables) == 6
+
+    # make and validate unmodified dev environment
+    no_change_plan = context.plan(
+        environment="test_dev",
+        skip_tests=True,
+        no_prompts=True,
+        include_unmodified=True,
+    )
+    assert not no_change_plan.requires_backfill
+    assert no_change_plan.context_diff.is_new_environment
+
+    context.apply(no_change_plan)
+
+    dev_schema_results = ctx.get_metadata_results("sqlmesh_example__test_dev")
+    assert sorted(dev_schema_results.views) == [
+        "full_model",
+        "incremental_model",
+        "seed_model",
+    ]
+    assert len(dev_schema_results.materialized_views) == 0
+    assert len(dev_schema_results.tables) == len(dev_schema_results.non_temp_tables) == 0
+
+
 def test_dialects(ctx: TestContext):
     if ctx.test_type != "query":
         pytest.skip("Dialect tests only need to run once so we skip anything not query")
@@ -1670,3 +1992,98 @@ def test_dialects(ctx: TestContext):
     pd.testing.assert_frame_equal(
         df, pd.DataFrame([[1, 1, 1, 1]], columns=expected_columns), check_dtype=False
     )
+
+
+@pytest.mark.parametrize(
+    "time_column, time_column_type, time_column_format, result",
+    [
+        (
+            exp.null(),
+            exp.DataType.build("TIMESTAMP"),
+            None,
+            {
+                "default": None,
+                "bigquery": pd.NaT,
+                "databricks": pd.NaT,
+                "duckdb": pd.NaT,
+                "motherduck": pd.NaT,
+                "snowflake": pd.NaT,
+                "spark": pd.NaT,
+            },
+        ),
+        (
+            "2020-01-01 00:00:00+00:00",
+            exp.DataType.build("DATE"),
+            None,
+            {
+                "default": datetime(2020, 1, 1).date(),
+                "duckdb": pd.Timestamp("2020-01-01"),
+            },
+        ),
+        (
+            "2020-01-01 00:00:00+00:00",
+            exp.DataType.build("TIMESTAMPTZ"),
+            None,
+            {
+                "default": pd.Timestamp("2020-01-01 00:00:00+00:00"),
+                # https://github.com/pymssql/pymssql/issues/649
+                "tsql": b"\x00\x00\x00\x00\x00\x00\x00\x005\xab\x00\x00\x00\x00\x07\xe0",
+                "mysql": pd.Timestamp("2020-01-01 00:00:00"),
+                "spark": pd.Timestamp("2020-01-01 00:00:00"),
+            },
+        ),
+        (
+            "2020-01-01 00:00:00+00:00",
+            exp.DataType.build("TIMESTAMP"),
+            None,
+            {
+                "default": pd.Timestamp("2020-01-01 00:00:00"),
+                # Databricks' timestamp type is tz-aware:
+                # "Represents values comprising values of fields year, month, day, hour, minute, and second,
+                # with the session local time-zone.
+                # The timestamp value represents an absolute point in time."
+                # https://docs.databricks.com/en/sql/language-manual/data-types/timestamp-type.html
+                #
+                # They are adding a non-aware version TIMESTAMP_NTZ that's currently in public preview -
+                # you have to specify a table option to use it:
+                # "Feature support is enabled automatically when you create a new Delta table with a column of
+                # TIMESTAMP_NTZ type. It is not enabled automatically when you add a column of
+                # TIMESTAMP_NTZ type to an existing table.
+                # To enable support for TIMESTAMP_NTZ columns, support for the feature must be explicitly enabled for
+                # the existing table."
+                # https://docs.databricks.com/en/sql/language-manual/data-types/timestamp-ntz-type.html
+                "databricks": pd.Timestamp("2020-01-01 00:00:00+00:00"),
+            },
+        ),
+        (
+            "2020-01-01 00:00:00+00:00",
+            exp.DataType.build("TEXT"),
+            "%Y-%m-%dT%H:%M:%S%z",
+            {
+                "default": "2020-01-01T00:00:00+0000",
+            },
+        ),
+        (
+            "2020-01-01 00:00:00+00:00",
+            exp.DataType.build("INT"),
+            "%Y%m%d",
+            {
+                "default": 20200101,
+            },
+        ),
+    ],
+)
+def test_to_time_column(
+    ctx: TestContext, time_column, time_column_type, time_column_format, result
+):
+    if ctx.test_type != "query":
+        pytest.skip("Time column tests only need to run for query")
+
+    time_column = to_time_column(time_column, time_column_type, time_column_format)
+    df = ctx.engine_adapter.fetchdf(exp.select(time_column).as_("the_col"))
+    expected = result.get(ctx.dialect, result.get("default"))
+    col_name = "THE_COL" if ctx.dialect == "snowflake" else "the_col"
+    if expected is pd.NaT or expected is None:
+        assert df[col_name][0] is expected
+    else:
+        assert df[col_name][0] == expected

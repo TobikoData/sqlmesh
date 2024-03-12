@@ -14,8 +14,9 @@ from sqlmesh.core.dialect import normalize_model_name
 from sqlmesh.core.engine_adapter import EngineAdapter, EngineAdapterWithIndexSupport
 from sqlmesh.core.engine_adapter.shared import InsertOverwriteStrategy
 from sqlmesh.core.schema_diff import SchemaDiffer, TableAlterOperation
+from sqlmesh.utils import columns_to_types_to_struct
 from sqlmesh.utils.date import to_ds
-from sqlmesh.utils.errors import UnsupportedCatalogOperationError
+from sqlmesh.utils.errors import SQLMeshError, UnsupportedCatalogOperationError
 from tests.core.engine_adapter import to_sql_calls
 
 pytestmark = pytest.mark.engine
@@ -268,6 +269,30 @@ def test_insert_overwrite_by_time_partition_replace_where_pandas(
     ]
 
 
+def test_insert_overwrite_no_where(make_mocked_engine_adapter: t.Callable):
+    adapter = make_mocked_engine_adapter(EngineAdapter)
+
+    source_queries, columns_to_types = adapter._get_source_queries_and_columns_to_types(
+        parse_one("SELECT b, a FROM tbl"),
+        {"a": exp.DataType.build("INT"), "b": exp.DataType.build("STRING")},
+        target_table="test_table",
+    )
+
+    adapter._insert_overwrite_by_condition(
+        "test_table",
+        source_queries,
+        columns_to_types=columns_to_types,
+    )
+
+    adapter.cursor.begin.assert_called_once()
+    adapter.cursor.commit.assert_called_once()
+
+    assert to_sql_calls(adapter) == [
+        """DELETE FROM "test_table" WHERE TRUE""",
+        """INSERT INTO "test_table" ("a", "b") SELECT "a", "b" FROM (SELECT "b", "a" FROM "tbl") AS "_subquery" """.strip(),
+    ]
+
+
 def test_insert_append_query(make_mocked_engine_adapter: t.Callable):
     adapter = make_mocked_engine_adapter(EngineAdapter)
 
@@ -292,7 +317,7 @@ def test_insert_append_query_select_star(make_mocked_engine_adapter: t.Callable)
     )
 
     assert to_sql_calls(adapter) == [
-        'INSERT INTO "test_table" ("a", "b") SELECT "a", "b" FROM (SELECT 1 AS "a", * FROM "tbl") AS "_ordered_projections"',
+        'INSERT INTO "test_table" ("a", "b") SELECT "a", "b" FROM (SELECT 1 AS "a", * FROM "tbl") AS "_subquery"',
     ]
 
 
@@ -376,7 +401,7 @@ def test_comments(make_mocked_engine_adapter: t.Callable, mocker: MockerFixture)
 
     adapter.create_table(
         "test_table",
-        {"a": "int", "b": "int"},
+        {"a": exp.DataType.build("INT"), "b": exp.DataType.build("INT")},
         table_description="test description",
         column_descriptions={"a": "a description"},
     )
@@ -384,7 +409,16 @@ def test_comments(make_mocked_engine_adapter: t.Callable, mocker: MockerFixture)
     adapter.ctas(
         "test_table",
         parse_one("SELECT a, b FROM source_table"),
-        {"a": "int", "b": "int"},
+        {"a": exp.DataType.build("INT"), "b": exp.DataType.build("INT")},
+        table_description="test description",
+        column_descriptions={"a": "a description"},
+    )
+
+    # CTAS call should not include schema definition if UNKNOWN data type present
+    adapter.ctas(
+        "test_table",
+        parse_one("SELECT a, b FROM source_table"),
+        {"a": exp.DataType.build("UNKNOWN"), "b": exp.DataType.build("INT")},
         table_description="test description",
         column_descriptions={"a": "a description"},
     )
@@ -407,8 +441,10 @@ def test_comments(make_mocked_engine_adapter: t.Callable, mocker: MockerFixture)
 
     sql_calls = to_sql_calls(adapter)
     assert sql_calls == [
-        """CREATE TABLE IF NOT EXISTS "test_table" ("a" int COMMENT 'a description', "b" int) COMMENT='test description'""",
-        """CREATE TABLE IF NOT EXISTS "test_table" ("a" int COMMENT 'a description', "b" int) COMMENT='test description' AS SELECT "a", "b" FROM "source_table\"""",
+        """CREATE TABLE IF NOT EXISTS "test_table" ("a" INT COMMENT 'a description', "b" INT) COMMENT='test description'""",
+        """CREATE TABLE IF NOT EXISTS "test_table" ("a" INT COMMENT 'a description', "b" INT) COMMENT='test description' AS SELECT "a", "b" FROM "source_table\"""",
+        """CREATE TABLE IF NOT EXISTS "test_table" COMMENT='test description' AS SELECT "a", "b" FROM "source_table\"""",
+        """COMMENT ON COLUMN "test_table"."a" IS 'a description'""",
         """CREATE OR REPLACE VIEW "test_view" COMMENT='test description' AS SELECT "a", "b" FROM "source_table\"""",
         """COMMENT ON TABLE "test_table" IS 'test description'""",
         """COMMENT ON COLUMN "test_table"."a" IS 'a description'""",
@@ -419,14 +455,14 @@ def test_comments(make_mocked_engine_adapter: t.Callable, mocker: MockerFixture)
 
     adapter_no_comments.create_table(
         "test_table",
-        {"a": "int", "b": "int"},
+        {"a": exp.DataType.build("int"), "b": exp.DataType.build("int")},
         table_description="test description",
         column_descriptions={"a": "a description"},
     )
 
     sql_calls = to_sql_calls(adapter_no_comments)
     assert sql_calls == [
-        """CREATE TABLE IF NOT EXISTS "test_table" ("a" int, "b" int)""",
+        """CREATE TABLE IF NOT EXISTS "test_table" ("a" INT, "b" INT)""",
     ]
 
 
@@ -772,7 +808,7 @@ def test_alter_table(
         operations = original_from_structs(current_struct, new_struct)
         assert (
             operations[-1].expected_table_struct.sql()
-            == SchemaDiffer._dict_to_struct(expected_final_structure).sql()
+            == columns_to_types_to_struct(expected_final_structure).sql()
         )
         return operations
 
@@ -935,10 +971,221 @@ MERGE INTO "target" AS "__MERGE_TARGET__" USING (
     )
 
 
-def test_scd_type_2(make_mocked_engine_adapter: t.Callable):
+def test_scd_type_2_by_time(make_mocked_engine_adapter: t.Callable):
     adapter = make_mocked_engine_adapter(EngineAdapter)
 
-    adapter.scd_type_2(
+    adapter.scd_type_2_by_time(
+        target_table="target",
+        source_table=t.cast(
+            exp.Select, parse_one("SELECT id, name, price, test_updated_at FROM source")
+        ),
+        unique_key=[
+            parse_one("""COALESCE("id", '') || '|' || COALESCE("name", '')"""),
+            parse_one("""COALESCE("name", '')"""),
+        ],
+        valid_from_name="test_valid_from",
+        valid_to_name="test_valid_to",
+        updated_at_name="test_updated_at",
+        columns_to_types={
+            "id": exp.DataType.build("INT"),
+            "name": exp.DataType.build("VARCHAR"),
+            "price": exp.DataType.build("DOUBLE"),
+            "test_updated_at": exp.DataType.build("TIMESTAMP"),
+            "test_valid_from": exp.DataType.build("TIMESTAMP"),
+            "test_valid_to": exp.DataType.build("TIMESTAMP"),
+        },
+        execution_time=datetime(2020, 1, 1, 0, 0, 0),
+    )
+
+    assert (
+        adapter.cursor.execute.call_args[0][0]
+        == parse_one(
+            """
+CREATE OR REPLACE TABLE "target" AS
+WITH "source" AS (
+  SELECT DISTINCT ON (COALESCE("id", '') || '|' || COALESCE("name", ''), COALESCE("name", ''))
+    TRUE AS "_exists",
+    "id",
+    "name",
+    "price",
+    CAST("test_updated_at" AS TIMESTAMP) AS "test_updated_at"
+  FROM (
+    SELECT
+      "id",
+      "name",
+      "price",
+      "test_updated_at"
+    FROM "source"
+  ) AS "raw_source"
+), "static" AS (
+  SELECT
+    "id",
+    "name",
+    "price",
+    "test_updated_at",
+    "test_valid_from",
+    "test_valid_to"
+  FROM "target"
+  WHERE
+    NOT "test_valid_to" IS NULL
+), "latest" AS (
+  SELECT
+    "id",
+    "name",
+    "price",
+    "test_updated_at",
+    "test_valid_from",
+    "test_valid_to"
+  FROM "target"
+  WHERE
+    "test_valid_to" IS NULL
+), "deleted" AS (
+  SELECT
+    "static"."id",
+    "static"."name",
+    "static"."price",
+    "static"."test_updated_at",
+    "static"."test_valid_from",
+    "static"."test_valid_to"
+  FROM "static"
+  LEFT JOIN "latest"
+    ON (
+      COALESCE("static"."id", '') || '|' || COALESCE("static"."name", '')
+    ) = (
+      COALESCE("latest"."id", '') || '|' || COALESCE("latest"."name", '')
+    )
+    AND COALESCE("static"."name", '') = COALESCE("latest"."name", '')
+  WHERE
+    "latest"."test_valid_to" IS NULL
+), "latest_deleted" AS (
+  SELECT
+    TRUE AS "_exists",
+    COALESCE("id", '') || '|' || COALESCE("name", '') AS "_key0",
+    COALESCE("name", '') AS "_key1",
+    MAX("test_valid_to") AS "test_valid_to"
+  FROM "deleted"
+  GROUP BY
+    COALESCE("id", '') || '|' || COALESCE("name", ''),
+    COALESCE("name", '')
+), "joined" AS (
+  SELECT
+    "source"."_exists",
+    "latest"."id" AS "t_id",
+    "latest"."name" AS "t_name",
+    "latest"."price" AS "t_price",
+    "latest"."test_updated_at" AS "t_test_updated_at",
+    "latest"."test_valid_from" AS "t_test_valid_from",
+    "latest"."test_valid_to" AS "t_test_valid_to",
+    "source"."id" AS "id",
+    "source"."name" AS "name",
+    "source"."price" AS "price",
+    "source"."test_updated_at" AS "test_updated_at"
+  FROM "latest"
+  LEFT JOIN "source"
+    ON (
+      COALESCE("latest"."id", '') || '|' || COALESCE("latest"."name", '')
+    ) = (
+      COALESCE("source"."id", '') || '|' || COALESCE("source"."name", '')
+    )
+    AND COALESCE("latest"."name", '') = COALESCE("source"."name", '')
+  UNION
+  SELECT
+    "source"."_exists",
+    "latest"."id" AS "t_id",
+    "latest"."name" AS "t_name",
+    "latest"."price" AS "t_price",
+    "latest"."test_updated_at" AS "t_test_updated_at",
+    "latest"."test_valid_from" AS "t_test_valid_from",
+    "latest"."test_valid_to" AS "t_test_valid_to",
+    "source"."id" AS "id",
+    "source"."name" AS "name",
+    "source"."price" AS "price",
+    "source"."test_updated_at" AS "test_updated_at"
+  FROM "latest"
+  RIGHT JOIN "source"
+    ON (
+      COALESCE("latest"."id", '') || '|' || COALESCE("latest"."name", '')
+    ) = (
+      COALESCE("source"."id", '') || '|' || COALESCE("source"."name", '')
+    )
+    AND COALESCE("latest"."name", '') = COALESCE("source"."name", '')
+), "updated_rows" AS (
+  SELECT
+    COALESCE("joined"."t_id", "joined"."id") AS "id",
+    COALESCE("joined"."t_name", "joined"."name") AS "name",
+    COALESCE("joined"."t_price", "joined"."price") AS "price",
+    COALESCE("joined"."t_test_updated_at", "joined"."test_updated_at") AS "test_updated_at",
+    CASE
+      WHEN "t_test_valid_from" IS NULL AND NOT "latest_deleted"."_exists" IS NULL
+      THEN CASE
+        WHEN "latest_deleted"."test_valid_to" > "test_updated_at"
+        THEN "latest_deleted"."test_valid_to"
+        ELSE "test_updated_at"
+      END
+      WHEN "t_test_valid_from" IS NULL
+      THEN CAST('1970-01-01 00:00:00' AS TIMESTAMP)
+      ELSE "t_test_valid_from"
+    END AS "test_valid_from",
+    CASE
+      WHEN "test_updated_at" > "t_test_updated_at"
+      THEN "test_updated_at"
+      WHEN "joined"."_exists" IS NULL
+      THEN CAST('2020-01-01 00:00:00' AS TIMESTAMP)
+      ELSE "t_test_valid_to"
+    END AS "test_valid_to"
+  FROM "joined"
+  LEFT JOIN "latest_deleted"
+    ON (
+      COALESCE("joined"."id", '') || '|' || COALESCE("joined"."name", '')
+    ) = "latest_deleted"."_key0"
+    AND COALESCE("joined"."name", '') = "latest_deleted"."_key1"
+), "inserted_rows" AS (
+  SELECT
+    "id",
+    "name",
+    "price",
+    "test_updated_at",
+    "test_updated_at" AS "test_valid_from",
+    CAST(NULL AS TIMESTAMP) AS "test_valid_to"
+  FROM "joined"
+  WHERE
+    "test_updated_at" > "t_test_updated_at"
+)
+SELECT
+  "id",
+  "name",
+  "price",
+  "test_updated_at",
+  "test_valid_from",
+  "test_valid_to"
+FROM "static"
+UNION ALL
+SELECT
+  "id",
+  "name",
+  "price",
+  "test_updated_at",
+  "test_valid_from",
+  "test_valid_to"
+FROM "updated_rows"
+UNION ALL
+SELECT
+  "id",
+  "name",
+  "price",
+  "test_updated_at",
+  "test_valid_from",
+  "test_valid_to"
+FROM "inserted_rows"
+    """
+        ).sql()
+    )
+
+
+def test_scd_type_2_by_time_no_invalidate_hard_deletes(make_mocked_engine_adapter: t.Callable):
+    adapter = make_mocked_engine_adapter(EngineAdapter)
+
+    adapter.scd_type_2_by_time(
         target_table="target",
         source_table=t.cast(
             exp.Select, parse_one("SELECT id, name, price, test_updated_at FROM source")
@@ -947,6 +1194,7 @@ def test_scd_type_2(make_mocked_engine_adapter: t.Callable):
         valid_from_name="test_valid_from",
         valid_to_name="test_valid_to",
         updated_at_name="test_updated_at",
+        invalidate_hard_deletes=False,
         columns_to_types={
             "id": exp.DataType.build("INT"),
             "name": exp.DataType.build("VARCHAR"),
@@ -1067,14 +1315,12 @@ WITH "source" AS (
         ELSE "test_updated_at"
       END
       WHEN "t_test_valid_from" IS NULL
-      THEN CAST(CAST('1970-01-01 00:00:00' AS TIMESTAMP) AS TIMESTAMP)
+      THEN CAST('1970-01-01 00:00:00' AS TIMESTAMP)
       ELSE "t_test_valid_from"
     END AS "test_valid_from",
     CASE
       WHEN "test_updated_at" > "t_test_updated_at"
       THEN "test_updated_at"
-      WHEN "joined"."_exists" IS NULL
-      THEN CAST(CAST('2020-01-01 00:00:00' AS TIMESTAMP) AS TIMESTAMP)
       ELSE "t_test_valid_to"
     END AS "test_valid_to"
   FROM "joined"
@@ -1087,21 +1333,36 @@ WITH "source" AS (
     "price",
     "test_updated_at",
     "test_updated_at" AS "test_valid_from",
-    CAST(CAST(NULL AS TIMESTAMP) AS TIMESTAMP) AS "test_valid_to"
+    CAST(NULL AS TIMESTAMP) AS "test_valid_to"
   FROM "joined"
   WHERE
     "test_updated_at" > "t_test_updated_at"
 )
 SELECT
-  *
+  "id",
+  "name",
+  "price",
+  "test_updated_at",
+  "test_valid_from",
+  "test_valid_to"
 FROM "static"
 UNION ALL
 SELECT
-  *
+  "id",
+  "name",
+  "price",
+  "test_updated_at",
+  "test_valid_from",
+  "test_valid_to"
 FROM "updated_rows"
 UNION ALL
 SELECT
-  *
+  "id",
+  "name",
+  "price",
+  "test_updated_at",
+  "test_valid_from",
+  "test_valid_to"
 FROM "inserted_rows"
     """
         ).sql()
@@ -1120,7 +1381,7 @@ def test_merge_scd_type_2_pandas(make_mocked_engine_adapter: t.Callable):
             "updated_at": ["2020-01-01 10:00:00", "2020-01-02 15:00:00", "2020-01-03 12:00:00"],
         }
     )
-    adapter.scd_type_2(
+    adapter.scd_type_2_by_time(
         target_table="target",
         source_table=df,
         unique_key=[exp.column("id1"), exp.column("id2")],
@@ -1265,14 +1526,14 @@ WITH "source" AS (
         ELSE "test_updated_at"
       END
       WHEN "t_test_valid_from" IS NULL
-      THEN CAST(CAST('1970-01-01 00:00:00' AS TIMESTAMP) AS TIMESTAMPTZ)
+      THEN CAST('1970-01-01 00:00:00+00:00' AS TIMESTAMPTZ)
       ELSE "t_test_valid_from"
     END AS "test_valid_from",
     CASE
       WHEN "test_updated_at" > "t_test_updated_at"
       THEN "test_updated_at"
       WHEN "joined"."_exists" IS NULL
-      THEN CAST(CAST('2020-01-01 00:00:00' AS TIMESTAMP) AS TIMESTAMPTZ)
+      THEN CAST('2020-01-01 00:00:00+00:00' AS TIMESTAMPTZ)
       ELSE "t_test_valid_to"
     END AS "test_valid_to"
   FROM "joined"
@@ -1287,30 +1548,657 @@ WITH "source" AS (
     "price",
     "test_updated_at",
     "test_updated_at" AS "test_valid_from",
-    CAST(CAST(NULL AS TIMESTAMP) AS TIMESTAMPTZ) AS "test_valid_to"
+    CAST(NULL AS TIMESTAMPTZ) AS "test_valid_to"
   FROM "joined"
   WHERE
     "test_updated_at" > "t_test_updated_at"
 )
 SELECT
-  *
+  "id1",
+  "id2",
+  "name",
+  "price",
+  "test_updated_at",
+  "test_valid_from",
+  "test_valid_to"
 FROM "static"
 UNION ALL
 SELECT
-  *
+  "id1",
+  "id2",
+  "name",
+  "price",
+  "test_updated_at",
+  "test_valid_from",
+  "test_valid_to"
 FROM "updated_rows"
 UNION ALL
 SELECT
-  *
+  "id1",
+  "id2",
+  "name",
+  "price",
+  "test_updated_at",
+  "test_valid_from",
+  "test_valid_to"
 FROM "inserted_rows"
 """
         ).sql()
     )
 
 
+def test_scd_type_2_by_column(make_mocked_engine_adapter: t.Callable):
+    adapter = make_mocked_engine_adapter(EngineAdapter)
+
+    adapter.scd_type_2_by_column(
+        target_table="target",
+        source_table=t.cast(exp.Select, parse_one("SELECT id, name, price FROM source")),
+        unique_key=[exp.column("id")],
+        valid_from_name="test_valid_from",
+        valid_to_name="test_valid_to",
+        check_columns=[exp.column("name"), exp.column("price")],
+        columns_to_types={
+            "id": exp.DataType.build("INT"),
+            "name": exp.DataType.build("VARCHAR"),
+            "price": exp.DataType.build("DOUBLE"),
+            "test_valid_from": exp.DataType.build("TIMESTAMP"),
+            "test_valid_to": exp.DataType.build("TIMESTAMP"),
+        },
+        execution_time=datetime(2020, 1, 1, 0, 0, 0),
+    )
+
+    assert (
+        adapter.cursor.execute.call_args[0][0]
+        == parse_one(
+            """
+CREATE OR REPLACE TABLE "target" AS
+WITH "source" AS (
+  SELECT DISTINCT ON ("id")
+    TRUE AS "_exists",
+    "id",
+    "name",
+    "price"
+  FROM (
+    SELECT
+      "id",
+      "name",
+      "price"
+    FROM "source"
+  ) AS "raw_source"
+), "static" AS (
+  SELECT
+    "id",
+    "name",
+    "price",
+    "test_valid_from",
+    "test_valid_to"
+  FROM "target"
+  WHERE
+    NOT "test_valid_to" IS NULL
+), "latest" AS (
+  SELECT
+    "id",
+    "name",
+    "price",
+    "test_valid_from",
+    "test_valid_to"
+  FROM "target"
+  WHERE
+    "test_valid_to" IS NULL
+), "deleted" AS (
+  SELECT
+    "static"."id",
+    "static"."name",
+    "static"."price",
+    "static"."test_valid_from",
+    "static"."test_valid_to"
+  FROM "static"
+  LEFT JOIN "latest"
+    ON "static"."id" = "latest"."id"
+  WHERE
+    "latest"."test_valid_to" IS NULL
+), "latest_deleted" AS (
+  SELECT
+    TRUE AS "_exists",
+    "id" AS "_key0",
+    MAX("test_valid_to") AS "test_valid_to"
+  FROM "deleted"
+  GROUP BY
+    "id"
+), "joined" AS (
+  SELECT
+    "source"."_exists",
+    "latest"."id" AS "t_id",
+    "latest"."name" AS "t_name",
+    "latest"."price" AS "t_price",
+    "latest"."test_valid_from" AS "t_test_valid_from",
+    "latest"."test_valid_to" AS "t_test_valid_to",
+    "source"."id" AS "id",
+    "source"."name" AS "name",
+    "source"."price" AS "price"
+  FROM "latest"
+  LEFT JOIN "source"
+    ON "latest"."id" = "source"."id"
+  UNION
+  SELECT
+    "source"."_exists",
+    "latest"."id" AS "t_id",
+    "latest"."name" AS "t_name",
+    "latest"."price" AS "t_price",
+    "latest"."test_valid_from" AS "t_test_valid_from",
+    "latest"."test_valid_to" AS "t_test_valid_to",
+    "source"."id" AS "id",
+    "source"."name" AS "name",
+    "source"."price" AS "price"
+  FROM "latest"
+  RIGHT JOIN "source"
+    ON "latest"."id" = "source"."id"
+), "updated_rows" AS (
+  SELECT
+    COALESCE("joined"."t_id", "joined"."id") AS "id",
+    COALESCE("joined"."t_name", "joined"."name") AS "name",
+    COALESCE("joined"."t_price", "joined"."price") AS "price",
+    COALESCE("t_test_valid_from", CAST('1970-01-01 00:00:00' AS TIMESTAMP)) AS "test_valid_from",
+    CASE
+      WHEN "joined"."_exists" IS NULL
+      OR (
+        (
+          NOT "t_id" IS NULL AND NOT "id" IS NULL
+        )
+        AND (
+          "name" <> "t_name"
+          OR (
+            "t_name" IS NULL AND NOT "name" IS NULL
+          )
+          OR (
+            NOT "t_name" IS NULL AND "name" IS NULL
+          )
+          OR "price" <> "t_price"
+          OR (
+            "t_price" IS NULL AND NOT "price" IS NULL
+          )
+          OR (
+            NOT "t_price" IS NULL AND "price" IS NULL
+          )
+        )
+      )
+      THEN CAST('2020-01-01 00:00:00' AS TIMESTAMP)
+      ELSE "t_test_valid_to"
+    END AS "test_valid_to"
+  FROM "joined"
+  LEFT JOIN "latest_deleted"
+    ON "joined"."id" = "latest_deleted"."_key0"
+), "inserted_rows" AS (
+  SELECT
+    "id",
+    "name",
+    "price",
+    CAST('2020-01-01 00:00:00' AS TIMESTAMP) AS "test_valid_from",
+    CAST(NULL AS TIMESTAMP) AS "test_valid_to"
+  FROM "joined"
+  WHERE
+    (
+      NOT "t_id" IS NULL AND NOT "id" IS NULL
+    )
+    AND (
+      "name" <> "t_name"
+      OR (
+        "t_name" IS NULL AND NOT "name" IS NULL
+      )
+      OR (
+        NOT "t_name" IS NULL AND "name" IS NULL
+      )
+      OR "price" <> "t_price"
+      OR (
+        "t_price" IS NULL AND NOT "price" IS NULL
+      )
+      OR (
+        NOT "t_price" IS NULL AND "price" IS NULL
+      )
+    )
+)
+SELECT
+  "id",
+  "name",
+  "price",
+  "test_valid_from",
+  "test_valid_to"
+FROM "static"
+UNION ALL
+SELECT
+  "id",
+  "name",
+  "price",
+  "test_valid_from",
+  "test_valid_to"
+FROM "updated_rows"
+UNION ALL
+SELECT
+  "id",
+  "name",
+  "price",
+  "test_valid_from",
+  "test_valid_to"
+FROM "inserted_rows"
+    """
+        ).sql()
+    )
+
+
+def test_scd_type_2_by_column_star_check(make_mocked_engine_adapter: t.Callable):
+    adapter = make_mocked_engine_adapter(EngineAdapter)
+
+    adapter.scd_type_2_by_column(
+        target_table="target",
+        source_table=t.cast(exp.Select, parse_one("SELECT id, name, price FROM source")),
+        unique_key=[exp.column("id")],
+        valid_from_name="test_valid_from",
+        valid_to_name="test_valid_to",
+        check_columns=exp.Star(),
+        columns_to_types={
+            "id": exp.DataType.build("INT"),
+            "name": exp.DataType.build("VARCHAR"),
+            "price": exp.DataType.build("DOUBLE"),
+            "test_valid_from": exp.DataType.build("TIMESTAMP"),
+            "test_valid_to": exp.DataType.build("TIMESTAMP"),
+        },
+        execution_time=datetime(2020, 1, 1, 0, 0, 0),
+    )
+
+    assert (
+        adapter.cursor.execute.call_args[0][0]
+        == parse_one(
+            """
+CREATE OR REPLACE TABLE "target" AS
+WITH "source" AS (
+  SELECT DISTINCT ON ("id")
+    TRUE AS "_exists",
+    "id",
+    "name",
+    "price"
+  FROM (
+    SELECT
+      "id",
+      "name",
+      "price"
+    FROM "source"
+  ) AS "raw_source"
+), "static" AS (
+  SELECT
+    "id",
+    "name",
+    "price",
+    "test_valid_from",
+    "test_valid_to"
+  FROM "target"
+  WHERE
+    NOT "test_valid_to" IS NULL
+), "latest" AS (
+  SELECT
+    "id",
+    "name",
+    "price",
+    "test_valid_from",
+    "test_valid_to"
+  FROM "target"
+  WHERE
+    "test_valid_to" IS NULL
+), "deleted" AS (
+  SELECT
+    "static"."id",
+    "static"."name",
+    "static"."price",
+    "static"."test_valid_from",
+    "static"."test_valid_to"
+  FROM "static"
+  LEFT JOIN "latest"
+    ON "static"."id" = "latest"."id"
+  WHERE
+    "latest"."test_valid_to" IS NULL
+), "latest_deleted" AS (
+  SELECT
+    TRUE AS "_exists",
+    "id" AS "_key0",
+    MAX("test_valid_to") AS "test_valid_to"
+  FROM "deleted"
+  GROUP BY
+    "id"
+), "joined" AS (
+  SELECT
+    "source"."_exists",
+    "latest"."id" AS "t_id",
+    "latest"."name" AS "t_name",
+    "latest"."price" AS "t_price",
+    "latest"."test_valid_from" AS "t_test_valid_from",
+    "latest"."test_valid_to" AS "t_test_valid_to",
+    "source"."id" AS "id",
+    "source"."name" AS "name",
+    "source"."price" AS "price"
+  FROM "latest"
+  LEFT JOIN "source"
+    ON "latest"."id" = "source"."id"
+  UNION
+  SELECT
+    "source"."_exists",
+    "latest"."id" AS "t_id",
+    "latest"."name" AS "t_name",
+    "latest"."price" AS "t_price",
+    "latest"."test_valid_from" AS "t_test_valid_from",
+    "latest"."test_valid_to" AS "t_test_valid_to",
+    "source"."id" AS "id",
+    "source"."name" AS "name",
+    "source"."price" AS "price"
+  FROM "latest"
+  RIGHT JOIN "source"
+    ON "latest"."id" = "source"."id"
+), "updated_rows" AS (
+  SELECT
+    COALESCE("joined"."t_id", "joined"."id") AS "id",
+    COALESCE("joined"."t_name", "joined"."name") AS "name",
+    COALESCE("joined"."t_price", "joined"."price") AS "price",
+    COALESCE("t_test_valid_from", CAST('1970-01-01 00:00:00' AS TIMESTAMP)) AS "test_valid_from",
+    CASE
+      WHEN "joined"."_exists" IS NULL
+      OR (
+        (
+          NOT "t_id" IS NULL AND NOT "id" IS NULL
+        )
+        AND (
+          "id" <> "t_id"
+          OR (
+            "t_id" IS NULL AND NOT "id" IS NULL
+          )
+          OR (
+            NOT "t_id" IS NULL AND "id" IS NULL
+          )
+          OR "name" <> "t_name"
+          OR (
+            "t_name" IS NULL AND NOT "name" IS NULL
+          )
+          OR (
+            NOT "t_name" IS NULL AND "name" IS NULL
+          )
+          OR "price" <> "t_price"
+          OR (
+            "t_price" IS NULL AND NOT "price" IS NULL
+          )
+          OR (
+            NOT "t_price" IS NULL AND "price" IS NULL
+          )
+        )
+      )
+      THEN CAST('2020-01-01 00:00:00' AS TIMESTAMP)
+      ELSE "t_test_valid_to"
+    END AS "test_valid_to"
+  FROM "joined"
+  LEFT JOIN "latest_deleted"
+    ON "joined"."id" = "latest_deleted"."_key0"
+), "inserted_rows" AS (
+  SELECT
+    "id",
+    "name",
+    "price",
+    CAST('2020-01-01 00:00:00' AS TIMESTAMP) AS "test_valid_from",
+    CAST(NULL AS TIMESTAMP) AS "test_valid_to"
+  FROM "joined"
+  WHERE
+    (
+      NOT "t_id" IS NULL AND NOT "id" IS NULL
+    )
+    AND (
+      "id" <> "t_id"
+      OR (
+        "t_id" IS NULL AND NOT "id" IS NULL
+      )
+      OR (
+        NOT "t_id" IS NULL AND "id" IS NULL
+      )
+      OR "name" <> "t_name"
+      OR (
+        "t_name" IS NULL AND NOT "name" IS NULL
+      )
+      OR (
+        NOT "t_name" IS NULL AND "name" IS NULL
+      )
+      OR "price" <> "t_price"
+      OR (
+        "t_price" IS NULL AND NOT "price" IS NULL
+      )
+      OR (
+        NOT "t_price" IS NULL AND "price" IS NULL
+      )
+    )
+)
+SELECT
+  "id",
+  "name",
+  "price",
+  "test_valid_from",
+  "test_valid_to"
+FROM "static"
+UNION ALL
+SELECT
+  "id",
+  "name",
+  "price",
+  "test_valid_from",
+  "test_valid_to"
+FROM "updated_rows"
+UNION ALL
+SELECT
+  "id",
+  "name",
+  "price",
+  "test_valid_from",
+  "test_valid_to"
+FROM "inserted_rows"
+    """
+        ).sql()
+    )
+
+
+def test_scd_type_2_by_column_no_invalidate_hard_deletes(make_mocked_engine_adapter: t.Callable):
+    adapter = make_mocked_engine_adapter(EngineAdapter)
+
+    adapter.scd_type_2_by_column(
+        target_table="target",
+        source_table=t.cast(exp.Select, parse_one("SELECT id, name, price FROM source")),
+        unique_key=[exp.column("id")],
+        valid_from_name="test_valid_from",
+        valid_to_name="test_valid_to",
+        invalidate_hard_deletes=False,
+        check_columns=[exp.column("name"), exp.column("price")],
+        columns_to_types={
+            "id": exp.DataType.build("INT"),
+            "name": exp.DataType.build("VARCHAR"),
+            "price": exp.DataType.build("DOUBLE"),
+            "test_valid_from": exp.DataType.build("TIMESTAMP"),
+            "test_valid_to": exp.DataType.build("TIMESTAMP"),
+        },
+        execution_time=datetime(2020, 1, 1, 0, 0, 0),
+    )
+
+    assert (
+        adapter.cursor.execute.call_args[0][0]
+        == parse_one(
+            """
+CREATE OR REPLACE TABLE "target" AS
+WITH "source" AS (
+  SELECT DISTINCT ON ("id")
+    TRUE AS "_exists",
+    "id",
+    "name",
+    "price"
+  FROM (
+    SELECT
+      "id",
+      "name",
+      "price"
+    FROM "source"
+  ) AS "raw_source"
+), "static" AS (
+  SELECT
+    "id",
+    "name",
+    "price",
+    "test_valid_from",
+    "test_valid_to"
+  FROM "target"
+  WHERE
+    NOT "test_valid_to" IS NULL
+), "latest" AS (
+  SELECT
+    "id",
+    "name",
+    "price",
+    "test_valid_from",
+    "test_valid_to"
+  FROM "target"
+  WHERE
+    "test_valid_to" IS NULL
+), "deleted" AS (
+  SELECT
+    "static"."id",
+    "static"."name",
+    "static"."price",
+    "static"."test_valid_from",
+    "static"."test_valid_to"
+  FROM "static"
+  LEFT JOIN "latest"
+    ON "static"."id" = "latest"."id"
+  WHERE
+    "latest"."test_valid_to" IS NULL
+), "latest_deleted" AS (
+  SELECT
+    TRUE AS "_exists",
+    "id" AS "_key0",
+    MAX("test_valid_to") AS "test_valid_to"
+  FROM "deleted"
+  GROUP BY
+    "id"
+), "joined" AS (
+  SELECT
+    "source"."_exists",
+    "latest"."id" AS "t_id",
+    "latest"."name" AS "t_name",
+    "latest"."price" AS "t_price",
+    "latest"."test_valid_from" AS "t_test_valid_from",
+    "latest"."test_valid_to" AS "t_test_valid_to",
+    "source"."id" AS "id",
+    "source"."name" AS "name",
+    "source"."price" AS "price"
+  FROM "latest"
+  LEFT JOIN "source"
+    ON "latest"."id" = "source"."id"
+  UNION
+  SELECT
+    "source"."_exists",
+    "latest"."id" AS "t_id",
+    "latest"."name" AS "t_name",
+    "latest"."price" AS "t_price",
+    "latest"."test_valid_from" AS "t_test_valid_from",
+    "latest"."test_valid_to" AS "t_test_valid_to",
+    "source"."id" AS "id",
+    "source"."name" AS "name",
+    "source"."price" AS "price"
+  FROM "latest"
+  RIGHT JOIN "source"
+    ON "latest"."id" = "source"."id"
+), "updated_rows" AS (
+  SELECT
+    COALESCE("joined"."t_id", "joined"."id") AS "id",
+    COALESCE("joined"."t_name", "joined"."name") AS "name",
+    COALESCE("joined"."t_price", "joined"."price") AS "price",
+    COALESCE("t_test_valid_from", CAST('1970-01-01 00:00:00' AS TIMESTAMP)) AS "test_valid_from",
+    CASE
+      WHEN 
+        (
+          NOT "t_id" IS NULL AND NOT "id" IS NULL
+        )
+        AND (
+          "name" <> "t_name"
+          OR (
+            "t_name" IS NULL AND NOT "name" IS NULL
+          )
+          OR (
+            NOT "t_name" IS NULL AND "name" IS NULL
+          )
+          OR "price" <> "t_price"
+          OR (
+            "t_price" IS NULL AND NOT "price" IS NULL
+          )
+          OR (
+            NOT "t_price" IS NULL AND "price" IS NULL
+          )
+        )
+      THEN CAST('2020-01-01 00:00:00' AS TIMESTAMP)
+      ELSE "t_test_valid_to"
+    END AS "test_valid_to"
+  FROM "joined"
+  LEFT JOIN "latest_deleted"
+    ON "joined"."id" = "latest_deleted"."_key0"
+), "inserted_rows" AS (
+  SELECT
+    "id",
+    "name",
+    "price",
+    CAST('2020-01-01 00:00:00' AS TIMESTAMP) AS "test_valid_from",
+    CAST(NULL AS TIMESTAMP) AS "test_valid_to"
+  FROM "joined"
+  WHERE
+    (
+      NOT "t_id" IS NULL AND NOT "id" IS NULL
+    )
+    AND (
+      "name" <> "t_name"
+      OR (
+        "t_name" IS NULL AND NOT "name" IS NULL
+      )
+      OR (
+        NOT "t_name" IS NULL AND "name" IS NULL
+      )
+      OR "price" <> "t_price"
+      OR (
+        "t_price" IS NULL AND NOT "price" IS NULL
+      )
+      OR (
+        NOT "t_price" IS NULL AND "price" IS NULL
+      )
+    )
+)
+SELECT
+  "id",
+  "name",
+  "price",
+  "test_valid_from",
+  "test_valid_to"
+FROM "static"
+UNION ALL
+SELECT
+  "id",
+  "name",
+  "price",
+  "test_valid_from",
+  "test_valid_to"
+FROM "updated_rows"
+UNION ALL
+SELECT
+  "id",
+  "name",
+  "price",
+  "test_valid_from",
+  "test_valid_to"
+FROM "inserted_rows"
+    """
+        ).sql()
+    )
+
+
 def test_replace_query(make_mocked_engine_adapter: t.Callable):
     adapter = make_mocked_engine_adapter(EngineAdapter)
-    adapter.replace_query("test_table", parse_one("SELECT a FROM tbl"), {"a": "int"})
+    adapter.replace_query(
+        "test_table", parse_one("SELECT a FROM tbl"), {"a": exp.DataType.build("INT")}
+    )
 
     # TODO: Shouldn't we enforce that `a` is casted to an int?
     assert to_sql_calls(adapter) == [
@@ -1323,12 +2211,78 @@ def test_replace_query_pandas(make_mocked_engine_adapter: t.Callable):
     adapter.DEFAULT_BATCH_SIZE = 1
 
     df = pd.DataFrame({"a": [1, 2, 3], "b": [4, 5, 6]})
-    adapter.replace_query("test_table", df, {"a": "int", "b": "int"})
+    adapter.replace_query(
+        "test_table", df, {"a": exp.DataType.build("INT"), "b": exp.DataType.build("INT")}
+    )
 
     assert to_sql_calls(adapter) == [
         'CREATE OR REPLACE TABLE "test_table" AS SELECT CAST("a" AS INT) AS "a", CAST("b" AS INT) AS "b" FROM (VALUES (1, 4)) AS "t"("a", "b")',
         'INSERT INTO "test_table" ("a", "b") SELECT CAST("a" AS INT) AS "a", CAST("b" AS INT) AS "b" FROM (VALUES (2, 5)) AS "t"("a", "b")',
         'INSERT INTO "test_table" ("a", "b") SELECT CAST("a" AS INT) AS "a", CAST("b" AS INT) AS "b" FROM (VALUES (3, 6)) AS "t"("a", "b")',
+    ]
+
+
+def test_replace_query_self_referencing_not_exists_unknown(
+    make_mocked_engine_adapter: t.Callable, mocker: MockerFixture
+):
+    adapter = make_mocked_engine_adapter(EngineAdapter)
+
+    mocker.patch(
+        "sqlmesh.core.engine_adapter.base.EngineAdapter.table_exists",
+        return_value=False,
+    )
+
+    with pytest.raises(
+        SQLMeshError,
+        match="Cannot create a table without knowing the column types.*",
+    ):
+        adapter.replace_query(
+            "test",
+            parse_one("SELECT a FROM test"),
+            columns_to_types={"a": exp.DataType.build("UNKNOWN")},
+        )
+
+
+def test_replace_query_self_referencing_exists(
+    make_mocked_engine_adapter: t.Callable, mocker: MockerFixture
+):
+    adapter = make_mocked_engine_adapter(EngineAdapter)
+
+    mocker.patch(
+        "sqlmesh.core.engine_adapter.base.EngineAdapter.table_exists",
+        return_value=True,
+    )
+
+    adapter.replace_query(
+        "test",
+        parse_one("SELECT a FROM test"),
+        columns_to_types={"a": exp.DataType.build("UNKNOWN")},
+    )
+
+    assert to_sql_calls(adapter) == [
+        'CREATE OR REPLACE TABLE "test" AS SELECT "a" FROM "test"',
+    ]
+
+
+def test_replace_query_self_referencing_not_exists_known(
+    make_mocked_engine_adapter: t.Callable, mocker: MockerFixture
+):
+    adapter = make_mocked_engine_adapter(EngineAdapter)
+
+    mocker.patch(
+        "sqlmesh.core.engine_adapter.base.EngineAdapter.table_exists",
+        return_value=False,
+    )
+
+    adapter.replace_query(
+        "test",
+        parse_one("SELECT a FROM test"),
+        columns_to_types={"a": exp.DataType.build("INT")},
+    )
+
+    assert to_sql_calls(adapter) == [
+        'CREATE TABLE IF NOT EXISTS "test" ("a" INT)',
+        'CREATE OR REPLACE TABLE "test" AS SELECT "a" FROM "test"',
     ]
 
 

@@ -28,6 +28,13 @@ from sqlmesh.utils.pydantic import (
 SUPPORTED_EXTENSIONS = {".py", ".sql", ".yaml", ".yml", ".csv"}
 
 
+class Mode(str, enum.Enum):
+    IDE = "ide"  # Allow all modules
+    DOCS = "docs"  # Only docs module
+    DEFAULT = "default"  # Allow docs and plan
+    PLAN = "plan"  # Allow plan
+
+
 class EventName(str, enum.Enum):
     """An enumeration of possible SSE names."""
 
@@ -44,14 +51,15 @@ class EventName(str, enum.Enum):
 
 
 class Modules(str, enum.Enum):
-    EDITOR = "editor"  # include file editor and file explorer
+    EDITOR = "editor"  # include ability to edit files and run queries
+    FILES = "files"  # include projects files
     DOCS = "docs"  # include docs
     PLANS = "plans"  # include ability to run/apply plans
-    PLAN_PROGRESS = "plan-progress"  # include ability to see plan progress
     TESTS = "tests"  # include ability to run tests
     AUDITS = "audits"  # include ability to run audits
     ERRORS = "errors"  # include ability to see errors
-    ENVIRONMENTS = "environments"  # include ability to see environments
+    DATA = "data"  # include ability to query data
+    LINEAGE = "lineage"  # include lineage
 
 
 class ModelType(str, enum.Enum):
@@ -130,7 +138,6 @@ class Directory(BaseModel):
 class Meta(BaseModel):
     version: str
     has_running_task: bool = False
-    modules: t.List[Modules] = []
 
 
 class Reference(BaseModel):
@@ -183,6 +190,7 @@ class ChangeDisplay(BaseModel):
     name: str
     view_name: str
     node_type: NodeType = NodeType.MODEL
+    parents: t.Set[str] = set()
 
     @staticmethod
     def get_view_name(
@@ -205,11 +213,12 @@ class ChangeDisplay(BaseModel):
 class ChangeDirect(ChangeDisplay):
     diff: str
     indirect: t.List[ChangeDisplay] = []
+    direct: t.List[ChangeDisplay] = []
     change_category: t.Optional[SnapshotChangeCategory] = None
 
 
 class ChangeIndirect(ChangeDisplay):
-    direct: t.List[ChangeDisplay] = []
+    pass
 
 
 class ModelsDiff(BaseModel):
@@ -224,35 +233,29 @@ class ModelsDiff(BaseModel):
         plan: Plan,
     ) -> ModelsDiff:
         """Get the modified snapshots for a environment."""
-        snapshots = plan.context_diff.snapshots
         modified_snapshots = plan.context_diff.modified_snapshots.items()
         default_catalog = context.default_catalog
         environment_naming_info = plan.environment_naming_info
 
-        direct: t.List[ChangeDirect] = []
+        def _get_parents(
+            current: Snapshot, visited: t.Optional[t.Dict[str, t.Set[str]]] = None
+        ) -> t.Set[str]:
+            visited = visited or {current.name: {p.name for p in current.parents}}
+            parents: t.Set[str] = set()
+            for parent in current.parents:
+                if parent.name not in plan.context_diff.modified_snapshots:
+                    continue
+                (snapshot, _) = plan.context_diff.modified_snapshots[parent.name]
+                parents = (
+                    parents
+                    | {parent.name}
+                    | visited.get(parent.name, _get_parents(snapshot, visited))
+                )
+            return parents
+
         metadata: t.List[ChangeDisplay] = []
-        indirect: t.List[ChangeIndirect] = [
-            ChangeIndirect(
-                name=name,
-                view_name=current.display_name(environment_naming_info, default_catalog),
-                node_type=current.node_type,
-                direct=[
-                    ChangeDisplay(
-                        name=parent.name,
-                        view_name=ChangeDisplay.get_view_name(
-                            snapshots,
-                            parent,
-                            environment_naming_info,
-                            default_catalog,
-                        ),
-                        node_type=ChangeDisplay.get_node_type(snapshots, parent),
-                    )
-                    for parent in current.parents
-                ],
-            )
-            for name, (current, _) in modified_snapshots
-            if plan.context_diff.indirectly_modified(name)
-        ]
+        direct: t.List[ChangeDirect] = []
+        indirect: t.List[ChangeIndirect] = []
 
         for name, (current, _) in modified_snapshots:
             if plan.context_diff.directly_modified(name):
@@ -262,14 +265,19 @@ class ModelsDiff(BaseModel):
                         view_name=current.display_name(environment_naming_info, default_catalog),
                         node_type=current.node_type,
                         diff=plan.context_diff.text_diff(name),
-                        indirect=[
-                            change for change in indirect if name in [c.name for c in change.direct]
-                        ],
                         change_category=current.change_category,
+                        parents=_get_parents(current),
                     )
                 )
             elif plan.context_diff.indirectly_modified(name):
-                continue
+                indirect.append(
+                    ChangeIndirect(
+                        name=name,
+                        view_name=current.display_name(environment_naming_info, default_catalog),
+                        node_type=current.node_type,
+                        parents=_get_parents(current),
+                    )
+                )
             elif plan.context_diff.metadata_updated(name):
                 metadata.append(
                     ChangeDisplay(
@@ -279,17 +287,9 @@ class ModelsDiff(BaseModel):
                     )
                 )
 
-        direct_change_model_names = [change.name for change in direct]
-        indirect_change_model_names = [change.name for change in indirect]
-
-        for change in indirect:
-            change.direct = [
-                model_display
-                for model_display in change.direct
-                if model_display.name in direct_change_model_names
-                or model_display.name in indirect_change_model_names
-            ]
-            change.direct.reverse()
+        for c in direct:
+            c.indirect = [change for change in indirect if c.name in change.parents]
+            c.direct = [change for change in direct if c.name in change.parents]
 
         return ModelsDiff(
             direct=direct,
@@ -354,7 +354,7 @@ class PlanOptions(BaseModel):
 class LineageColumn(BaseModel):
     source: t.Optional[str] = None
     expression: t.Optional[str] = None
-    models: t.Optional[t.Dict[str, t.List[str]]]
+    models: t.Dict[str, t.Set[str]]
 
 
 class Query(BaseModel):

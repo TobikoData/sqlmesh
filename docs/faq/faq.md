@@ -80,6 +80,7 @@
 
 ## Usage
 
+<a id="schema-question"></a>
 ??? question "Why does SQLMesh create schemas?"
     SQLMesh creates schemas for two reasons:
 
@@ -96,16 +97,21 @@
 
     The SQLMesh janitor automatically deletes unused environment schemas. It determines whether an environment schema should be deleted based on the elapsed time since the `sqlmesh plan [environment name]` command was successfully executed for the environment. If that time is greater than the environment time to live (default value of 1 week), the environment schema is deleted.
 
-    Tools to control the location of different SQLMesh database objects are in development.
+    SQLMesh's default behavior is appropriate for most deployments, but you can override where SQLMesh creates physical tables and views with [schema configuration options](../guides/configuration.md#environment-schemas).
 
 ??? question "What's the difference between a `test` and an `audit`?"
     A SQLMesh [`test`](../concepts/tests.md) is analogous to a "unit test" in software engineering. It tests *code* based on known inputs and outputs. In SQLMesh, the inputs and outputs are specified in a YAML file, and SQLMesh automatically runs them when `sqlmesh plan` is executed.
 
     A SQLMesh [`audit`](../concepts/audits.md) validates that transformed *data* meet some criteria. For example, an `audit` might verify that a column contains no `NULL` values or has no duplicated values. SQLMesh automatically runs audits when a `sqlmesh plan` is executed and the plan is applied or when `sqlmesh run` is executed.
 
+??? question "How does a model know when to run?"
+    A SQLMesh model determines when to run based on its [`cron`](#cron-question) parameter and how much time has elapsed since its previous run.
+
+    Models are not aware of upstream data updates and do not run based on what has happened in an upstream data source.
+
 <a id="cron-question"></a>
 ??? question "What is the model `cron` parameter?"
-    SQLMesh does not fully refresh models when a project is run. Instead, you specify how frequently each model should run with its [`cron` parameter](../concepts/models/overview.md#cron) (defaults to daily).
+    SQLMesh does not fully refresh models every time a project is run. Instead, you specify how frequently each model should run with its [`cron` parameter](../concepts/models/overview.md#cron) (defaults to daily).
 
     When you execute `sqlmesh run`, SQLMesh compares each model's `cron` value to its record of when the model was last run. If enough time has elapsed it will run the model, otherwise it does nothing.
 
@@ -137,6 +143,7 @@
 
     You can retroactively apply the forward-only plan's changes to existing data in the production environment with [`plan`'s `--effective-from` option](../reference/cli.md#plan).
 
+
 ## Databases/Engines
 
 ??? question "What databases/engines does SQLMesh work with?"
@@ -167,6 +174,9 @@
     SQLMesh uses its knowledge of table schema (column names and data types) to optimize model queries and create column-level lineage. SQLMesh does not have schema knowledge for data sources outside the project and will generate this warning when a model selects from one.
 
     You can resolve this by creating an [`external` model](../concepts/models/external_models.md) for each external data source. The `sqlmesh create_external_models` command captures schema information for external data sources and stores them in the project's `schema.yml` file. You can create the file manually instead, if desired.
+
+??? question "Why did I get the error 'Table "xxx" must match the schema's nesting level: 3'?"
+    SQLMesh throws this error when a model’s name does not include a schema. Model names must be of the form `schema.table` or `catalog.schema.table`.
 
 ## How is this different from dbt?
 

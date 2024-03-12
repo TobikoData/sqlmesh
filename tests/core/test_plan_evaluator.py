@@ -99,6 +99,11 @@ def test_airflow_evaluator(sushi_plan: Plan, mocker: MockerFixture):
         is_dev=True,
         forward_only=False,
         models_to_backfill=None,
+        end_bounded=False,
+        ensure_finalized_snapshots=False,
+        directly_modified_snapshots=[],
+        indirectly_modified_snapshots={},
+        removed_snapshots=[],
     )
 
     airflow_client_mock.wait_for_dag_run_completion.assert_called_once()

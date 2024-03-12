@@ -171,7 +171,9 @@ def test_replace_query_not_exists(mocker: MockerFixture, make_mocked_engine_adap
         return_value=False,
     )
     adapter = make_mocked_engine_adapter(SparkEngineAdapter)
-    adapter.replace_query("test_table", parse_one("SELECT a FROM tbl"), {"a": "int"})
+    adapter.replace_query(
+        "test_table", parse_one("SELECT a FROM tbl"), {"a": exp.DataType.build("INT")}
+    )
 
     assert to_sql_calls(adapter) == [
         "CREATE TABLE IF NOT EXISTS `test_table` AS SELECT `a` FROM `tbl`",
@@ -237,10 +239,6 @@ def test_replace_query_self_ref_not_exists(
     make_mocked_engine_adapter: t.Callable, mocker: MockerFixture, make_temp_table_name: t.Callable
 ):
     mocker.patch(
-        "sqlmesh.core.engine_adapter.spark.SparkEngineAdapter.table_exists",
-        return_value=False,
-    )
-    mocker.patch(
         "sqlmesh.core.engine_adapter.spark.SparkEngineAdapter.get_current_catalog",
         lambda self: "spark_catalog",
     )
@@ -264,13 +262,25 @@ def test_replace_query_self_ref_not_exists(
         return_value={"col": exp.DataType(this=exp.DataType.Type.INT)},
     )
 
+    def check_table_exists(table_name: exp.Table) -> bool:
+        for sql in to_sql_calls(adapter):
+            if f"CREATE TABLE IF NOT EXISTS {table_name.sql(dialect=adapter.dialect)}" in sql:
+                return True
+        return False
+
+    mocker.patch(
+        "sqlmesh.core.engine_adapter.spark.SparkEngineAdapter.table_exists",
+        side_effect=check_table_exists,
+    )
+
     adapter.replace_query(table_name, parse_one(f"SELECT col + 1 AS col FROM {table_name}"))
 
     assert to_sql_calls(adapter) == [
         "CREATE TABLE IF NOT EXISTS `db`.`table` (`col` INT)",
-        # This second query doesn't do anything but we can't just run this because we need the table
-        # to exist since it is self-referencing
-        "CREATE TABLE IF NOT EXISTS `db`.`table` AS SELECT `col` + 1 AS `col` FROM `db`.`table`",
+        "CREATE SCHEMA IF NOT EXISTS `db`",
+        "CREATE TABLE IF NOT EXISTS `db`.`temp_table_abcdefgh` AS SELECT `col` FROM `db`.`table`",
+        "INSERT OVERWRITE TABLE `db`.`table` (`col`) SELECT `col` + 1 AS `col` FROM `db`.`temp_table_abcdefgh`",
+        "DROP TABLE IF EXISTS `db`.`temp_table_abcdefgh`",
     ]
 
 
@@ -323,24 +333,28 @@ def test_create_table_table_options(make_mocked_engine_adapter: t.Callable):
 
     adapter.create_table(
         "test_table",
-        {"a": "int", "b": "int"},
+        {"a": exp.DataType.build("int"), "b": exp.DataType.build("int")},
         table_properties={
             "test.conf.key": exp.convert("value"),
         },
     )
 
     assert to_sql_calls(adapter) == [
-        "CREATE TABLE IF NOT EXISTS `test_table` (`a` int, `b` int) TBLPROPERTIES ('test.conf.key'='value')",
+        "CREATE TABLE IF NOT EXISTS `test_table` (`a` INT, `b` INT) TBLPROPERTIES ('test.conf.key'='value')",
     ]
 
 
 def test_create_state_table(make_mocked_engine_adapter: t.Callable):
     adapter = make_mocked_engine_adapter(SparkEngineAdapter)
 
-    adapter.create_state_table("test_table", {"a": "int", "b": "int"}, primary_key=["a"])
+    adapter.create_state_table(
+        "test_table",
+        {"a": exp.DataType.build("int"), "b": exp.DataType.build("int")},
+        primary_key=["a"],
+    )
 
     assert to_sql_calls(adapter) == [
-        "CREATE TABLE IF NOT EXISTS `test_table` (`a` int, `b` int) PARTITIONED BY (`a`)",
+        "CREATE TABLE IF NOT EXISTS `test_table` (`a` INT, `b` INT) PARTITIONED BY (`a`)",
     ]
 
 
@@ -537,9 +551,14 @@ def test_spark_struct_complex_to_col_to_types(type_name, spark_type):
     assert actual == expected
 
 
-def test_scd_type_2(
+def test_scd_type_2_by_time(
     make_mocked_engine_adapter: t.Callable, make_temp_table_name: t.Callable, mocker: MockerFixture
 ):
+    mocker.patch(
+        "sqlmesh.core.engine_adapter.spark.SparkEngineAdapter.table_exists",
+        return_value=False,
+    )
+
     adapter = make_mocked_engine_adapter(SparkEngineAdapter)
     adapter.spark.catalog.currentCatalog.return_value = "spark_catalog"
     adapter.spark.catalog.currentDatabase.return_value = "default"
@@ -549,7 +568,18 @@ def test_scd_type_2(
     temp_table_id = "abcdefgh"
     temp_table_mock.return_value = make_temp_table_name(table_name, temp_table_id)
 
-    adapter.scd_type_2(
+    def check_table_exists(table_name: exp.Table) -> bool:
+        for sql in to_sql_calls(adapter):
+            if f"CREATE TABLE IF NOT EXISTS {table_name.sql(dialect=adapter.dialect)}" in sql:
+                return True
+        return False
+
+    mocker.patch(
+        "sqlmesh.core.engine_adapter.spark.SparkEngineAdapter.table_exists",
+        side_effect=check_table_exists,
+    )
+
+    adapter.scd_type_2_by_time(
         target_table="db.target",
         source_table=t.cast(
             exp.Select, parse_one("SELECT id, name, price, test_updated_at FROM db.source")
@@ -571,7 +601,6 @@ def test_scd_type_2(
 
     assert to_sql_calls(adapter) == [
         "CREATE TABLE IF NOT EXISTS `db`.`target` (`id` INT, `name` STRING, `price` DOUBLE, `test_updated_at` TIMESTAMP, `test_valid_from` TIMESTAMP, `test_valid_to` TIMESTAMP)",
-        "DESCRIBE `db`.`target`",
         "CREATE SCHEMA IF NOT EXISTS `db`",
         "CREATE TABLE IF NOT EXISTS `db`.`temp_target_abcdefgh` AS SELECT `id`, `name`, `price`, `test_updated_at`, `test_valid_from`, `test_valid_to` FROM `db`.`target`",
         parse_one(
@@ -690,14 +719,14 @@ def test_scd_type_2(
         ELSE `test_updated_at`
       END
       WHEN `t_test_valid_from` IS NULL
-      THEN CAST(CAST('1970-01-01 00:00:00' AS TIMESTAMP) AS TIMESTAMP)
+      THEN CAST('1970-01-01 00:00:00' AS TIMESTAMP)
       ELSE `t_test_valid_from`
     END AS `test_valid_from`,
     CASE
       WHEN `test_updated_at` > `t_test_updated_at`
       THEN `test_updated_at`
       WHEN `joined`.`_exists` IS NULL
-      THEN CAST(CAST('2020-01-01 00:00:00' AS TIMESTAMP) AS TIMESTAMP)
+      THEN CAST('2020-01-01 00:00:00' AS TIMESTAMP)
       ELSE `t_test_valid_to`
     END AS `test_valid_to`
   FROM `joined`
@@ -710,7 +739,7 @@ def test_scd_type_2(
     `price`,
     `test_updated_at`,
     `test_updated_at` AS `test_valid_from`,
-    CAST(CAST(NULL AS TIMESTAMP) AS TIMESTAMP) AS `test_valid_to`
+    CAST(NULL AS TIMESTAMP) AS `test_valid_to`
   FROM `joined`
   WHERE
     `test_updated_at` > `t_test_updated_at`
@@ -724,15 +753,30 @@ INSERT OVERWRITE TABLE `db`.`target` (
   `test_valid_to`
 )
 SELECT
-  *
+  `id`,
+  `name`,
+  `price`,
+  `test_updated_at`,
+  `test_valid_from`,
+  `test_valid_to`
 FROM `static`
 UNION ALL
 SELECT
-  *
+  `id`,
+  `name`,
+  `price`,
+  `test_updated_at`,
+  `test_valid_from`,
+  `test_valid_to`
 FROM `updated_rows`
 UNION ALL
 SELECT
-  *
+  `id`,
+  `name`,
+  `price`,
+  `test_updated_at`,
+  `test_valid_from`,
+  `test_valid_to`
 FROM `inserted_rows`
         """,
             dialect="spark",
@@ -810,23 +854,119 @@ def test_create_table_iceberg(mocker: MockerFixture, make_mocked_engine_adapter:
     ]
 
 
-def test_comments(make_mocked_engine_adapter: t.Callable):
+def test_comments_hive(mocker: MockerFixture, make_mocked_engine_adapter: t.Callable):
     adapter = make_mocked_engine_adapter(SparkEngineAdapter)
+
+    current_catalog_mock = mocker.patch(
+        "sqlmesh.core.engine_adapter.EngineAdapter.get_catalog_type"
+    )
+    current_catalog_mock.return_value = "hive"
+
+    allowed_table_comment_length = SparkEngineAdapter.MAX_TABLE_COMMENT_LENGTH
+    truncated_table_comment = "a" * allowed_table_comment_length
+    long_table_comment = truncated_table_comment + "b"
+
+    allowed_column_comment_length = SparkEngineAdapter.MAX_COLUMN_COMMENT_LENGTH
+    truncated_column_comment = "c" * allowed_column_comment_length
+    long_column_comment = truncated_column_comment + "d"
+
+    adapter.create_table(
+        "test_table",
+        {"a": exp.DataType.build("INT"), "b": exp.DataType.build("INT")},
+        table_description=long_table_comment,
+        column_descriptions={"a": long_column_comment},
+    )
+
+    adapter.ctas(
+        "test_table",
+        parse_one("SELECT a, b FROM source_table"),
+        {"a": exp.DataType.build("INT"), "b": exp.DataType.build("INT")},
+        table_description=long_table_comment,
+        column_descriptions={"a": long_column_comment},
+    )
+
+    adapter.create_view(
+        "test_view",
+        parse_one("SELECT a, b FROM source_table"),
+        table_description=long_table_comment,
+    )
 
     adapter._create_table_comment(
         "test_table",
-        "test description",
+        long_table_comment,
     )
 
     adapter._create_column_comments(
         "test_table",
-        {"a": "a description"},
+        {"a": long_column_comment},
     )
 
     sql_calls = to_sql_calls(adapter)
     assert sql_calls == [
-        "COMMENT ON TABLE `test_table` IS 'test description'",
-        "ALTER TABLE `test_table` ALTER COLUMN `a` COMMENT 'a description'",
+        f"CREATE TABLE IF NOT EXISTS `test_table` (`a` INT COMMENT '{truncated_column_comment}', `b` INT) COMMENT '{truncated_table_comment}'",
+        f"CREATE TABLE IF NOT EXISTS `test_table` COMMENT '{truncated_table_comment}' AS SELECT `a`, `b` FROM `source_table`",
+        f"ALTER TABLE `test_table` ALTER COLUMN `a` COMMENT '{truncated_column_comment}'",
+        f"CREATE OR REPLACE VIEW `test_view` COMMENT '{truncated_table_comment}' AS SELECT `a`, `b` FROM `source_table`",
+        f"COMMENT ON TABLE `test_table` IS '{truncated_table_comment}'",
+        f"ALTER TABLE `test_table` ALTER COLUMN `a` COMMENT '{truncated_column_comment}'",
+    ]
+
+
+def test_comments_iceberg(mocker: MockerFixture, make_mocked_engine_adapter: t.Callable):
+    adapter = make_mocked_engine_adapter(SparkEngineAdapter)
+
+    current_catalog_mock = mocker.patch(
+        "sqlmesh.core.engine_adapter.EngineAdapter.get_catalog_type"
+    )
+    current_catalog_mock.return_value = "iceberg"
+
+    allowed_table_comment_length = SparkEngineAdapter.MAX_TABLE_COMMENT_LENGTH
+    truncated_table_comment = "a" * allowed_table_comment_length
+    long_table_comment = truncated_table_comment + "b"
+
+    allowed_column_comment_length = SparkEngineAdapter.MAX_COLUMN_COMMENT_LENGTH
+    truncated_column_comment = "c" * allowed_column_comment_length
+    long_column_comment = truncated_column_comment + "d"
+
+    adapter.create_table(
+        "test_table",
+        {"a": exp.DataType.build("INT"), "b": exp.DataType.build("INT")},
+        table_description=long_table_comment,
+        column_descriptions={"a": long_column_comment},
+    )
+
+    adapter.ctas(
+        "test_table",
+        parse_one("SELECT a, b FROM source_table"),
+        {"a": exp.DataType.build("INT"), "b": exp.DataType.build("INT")},
+        table_description=long_table_comment,
+        column_descriptions={"a": long_column_comment},
+    )
+
+    adapter.create_view(
+        "test_view",
+        parse_one("SELECT a, b FROM source_table"),
+        table_description=long_table_comment,
+    )
+
+    adapter._create_table_comment(
+        "test_table",
+        long_table_comment,
+    )
+
+    adapter._create_column_comments(
+        "test_table",
+        {"a": long_column_comment},
+    )
+
+    sql_calls = to_sql_calls(adapter)
+    assert sql_calls == [
+        f"CREATE TABLE IF NOT EXISTS `test_table` (`a` INT COMMENT '{long_column_comment}', `b` INT) COMMENT '{long_table_comment}'",
+        f"CREATE TABLE IF NOT EXISTS `test_table` COMMENT '{long_table_comment}' AS SELECT `a`, `b` FROM `source_table`",
+        f"ALTER TABLE `test_table` ALTER COLUMN `a` COMMENT '{long_column_comment}'",
+        f"CREATE OR REPLACE VIEW `test_view` COMMENT '{long_table_comment}' AS SELECT `a`, `b` FROM `source_table`",
+        f"COMMENT ON TABLE `test_table` IS '{long_table_comment}'",
+        f"ALTER TABLE `test_table` ALTER COLUMN `a` COMMENT '{long_column_comment}'",
     ]
 
 
@@ -839,13 +979,13 @@ def test_create_table_with_wap(make_mocked_engine_adapter: t.Callable, mocker: M
 
     adapter.create_table(
         "catalog.schema.table.branch_wap_12345",
-        {"a": "int"},
+        {"a": exp.DataType.build("int")},
         storage_format="ICEBERG",
     )
 
     sql_calls = to_sql_calls(adapter)
     assert sql_calls == [
-        "CREATE TABLE IF NOT EXISTS `catalog`.`schema`.`table` (`a` int) USING ICEBERG",
+        "CREATE TABLE IF NOT EXISTS `catalog`.`schema`.`table` (`a` INT) USING ICEBERG",
         "INSERT INTO `catalog`.`schema`.`table` SELECT * FROM `catalog`.`schema`.`table`",
     ]
 
@@ -867,13 +1007,13 @@ def test_replace_query_with_wap_self_reference(
     adapter.replace_query(
         "catalog.schema.table.branch_wap_12345",
         parse_one("SELECT 1 as a FROM catalog.schema.table.branch_wap_12345"),
-        columns_to_types={"a": "int"},
+        columns_to_types={"a": exp.DataType.build("INT")},
         storage_format="ICEBERG",
     )
 
     sql_calls = to_sql_calls(adapter)
     assert sql_calls == [
-        "CREATE TABLE IF NOT EXISTS `catalog`.`schema`.`table` (`a` int)",
+        "CREATE TABLE IF NOT EXISTS `catalog`.`schema`.`table` (`a` INT)",
         "CREATE SCHEMA IF NOT EXISTS `schema`",
         "CREATE TABLE IF NOT EXISTS `catalog`.`schema`.`temp_branch_wap_12345_abcdefgh` USING ICEBERG AS SELECT `a` FROM `catalog`.`schema`.`table`.`branch_wap_12345`",
         "INSERT OVERWRITE TABLE `catalog`.`schema`.`table`.`branch_wap_12345` (`a`) SELECT 1 AS `a` FROM `catalog`.`schema`.`temp_branch_wap_12345_abcdefgh`",

@@ -13,6 +13,7 @@ from sqlglot.dialects.dialect import DialectType
 from sqlglot.dialects.snowflake import Snowflake
 from sqlglot.optimizer.normalize_identifiers import normalize_identifiers
 from sqlglot.optimizer.scope import traverse_scope
+from sqlglot.schema import MappingSchema
 from sqlglot.tokens import Token
 
 from sqlmesh.core.constants import MAX_MODEL_DEFINITION_SIZE
@@ -111,11 +112,19 @@ def _parse_statement(self: Parser) -> t.Optional[exp.Expression]:
         # Capture any available description in the form of a comment
         comments = self._curr.comments
 
-        self._advance()
-        meta = self._parse_wrapped(lambda: t.cast(t.Callable, parser)(self))
+        index = self._index
+        try:
+            self._advance()
+            meta = self._parse_wrapped(lambda: t.cast(t.Callable, parser)(self))
+        except ParseError:
+            self._retreat(index)
 
-        meta.comments = comments
-        return meta
+        # Only return the DDL expression if we actually managed to parse one. This is
+        # done in order to allow parsing standalone identifiers / function calls like
+        # "metric", or "model(1, 2, 3)", which collide with SQLMesh's DDL syntax.
+        if self._index != index:
+            meta.comments = comments
+            return meta
 
     return self.__parse_statement()  # type: ignore
 
@@ -356,8 +365,10 @@ def _parse_types(
 # MacroVar, it'll render into @<path>, so it won't break staged file path references.
 #
 # See: https://docs.snowflake.com/en/user-guide/querying-stage
-def _parse_table_parts(self: Parser, schema: bool = False) -> exp.Table:
-    table = self.__parse_table_parts(schema=schema)  # type: ignore
+def _parse_table_parts(
+    self: Parser, schema: bool = False, is_db_reference: bool = False
+) -> exp.Table:
+    table = self.__parse_table_parts(schema=schema, is_db_reference=is_db_reference)  # type: ignore
     table_arg = table.this
 
     if isinstance(table_arg, exp.Var) and table_arg.name.startswith(SQLMESH_MACRO_PREFIX):
@@ -430,6 +441,8 @@ def _create_parser(parser_type: t.Type[exp.Expression], table_keys: t.List[str])
                         ModelKindName.SEED,
                         ModelKindName.VIEW,
                         ModelKindName.SCD_TYPE_2,
+                        ModelKindName.SCD_TYPE_2_BY_TIME,
+                        ModelKindName.SCD_TYPE_2_BY_COLUMN,
                     ) and self._match(TokenType.L_PAREN, advance=False):
                         props = self._parse_wrapped_csv(functools.partial(_parse_props, self))
                     else:
@@ -953,3 +966,14 @@ def schema_(
         db=exp.to_identifier(db, quoted=quoted) if db else None,
         catalog=exp.to_identifier(catalog, quoted=quoted) if catalog else None,
     )
+
+
+def normalize_mapping_schema(schema: t.Dict, dialect: DialectType) -> MappingSchema:
+    return MappingSchema(_unquote_schema(schema), dialect=dialect, normalize=False)
+
+
+def _unquote_schema(schema: t.Dict) -> t.Dict:
+    """SQLGlot schema expects unquoted normalized keys."""
+    return {
+        k.strip('"'): _unquote_schema(v) if isinstance(v, dict) else v for k, v in schema.items()
+    }

@@ -9,12 +9,14 @@ from sqlglot import exp
 from sqlglot.time import format_time
 
 from sqlmesh.core import dialect as d
-from sqlmesh.core.model.common import parse_expressions, parse_properties
+from sqlmesh.core.model.common import parse_properties
 from sqlmesh.core.model.seed import CsvSettings
 from sqlmesh.utils.errors import ConfigError
 from sqlmesh.utils.pydantic import (
     PydanticModel,
     SQLGlotBool,
+    SQLGlotListOfColumnsOrStar,
+    SQLGlotListOfFields,
     SQLGlotPositiveInt,
     SQLGlotString,
     field_validator,
@@ -78,7 +80,19 @@ class ModelKindMixin:
 
     @property
     def is_scd_type_2(self) -> bool:
-        return self.model_kind_name == ModelKindName.SCD_TYPE_2
+        return self.model_kind_name in {
+            ModelKindName.SCD_TYPE_2,
+            ModelKindName.SCD_TYPE_2_BY_TIME,
+            ModelKindName.SCD_TYPE_2_BY_COLUMN,
+        }
+
+    @property
+    def is_scd_type_2_by_time(self) -> bool:
+        return self.model_kind_name in {ModelKindName.SCD_TYPE_2, ModelKindName.SCD_TYPE_2_BY_TIME}
+
+    @property
+    def is_scd_type_2_by_column(self) -> bool:
+        return self.model_kind_name == ModelKindName.SCD_TYPE_2_BY_COLUMN
 
     @property
     def is_symbolic(self) -> bool:
@@ -102,7 +116,11 @@ class ModelKindName(str, ModelKindMixin, Enum):
     INCREMENTAL_BY_UNIQUE_KEY = "INCREMENTAL_BY_UNIQUE_KEY"
     INCREMENTAL_UNMANAGED = "INCREMENTAL_UNMANAGED"
     FULL = "FULL"
+    # Legacy alias to SCD Type 2 By Time
+    # Only used for Parsing and mapping name to SCD Type 2 By Time
     SCD_TYPE_2 = "SCD_TYPE_2"
+    SCD_TYPE_2_BY_TIME = "SCD_TYPE_2_BY_TIME"
+    SCD_TYPE_2_BY_COLUMN = "SCD_TYPE_2_BY_COLUMN"
     VIEW = "VIEW"
     EMBEDDED = "EMBEDDED"
     SEED = "SEED"
@@ -117,9 +135,6 @@ class ModelKindName(str, ModelKindMixin, Enum):
 
     def __repr__(self) -> str:
         return str(self)
-
-
-_unique_key_validator = field_validator("unique_key", mode="before")(parse_expressions)
 
 
 class _ModelKind(PydanticModel, ModelKindMixin):
@@ -223,10 +238,8 @@ class IncrementalByTimeRangeKind(_Incremental):
 
 class IncrementalByUniqueKeyKind(_Incremental):
     name: Literal[ModelKindName.INCREMENTAL_BY_UNIQUE_KEY] = ModelKindName.INCREMENTAL_BY_UNIQUE_KEY
-    unique_key: t.List[exp.Expression]
+    unique_key: SQLGlotListOfFields
     when_matched: t.Optional[exp.When] = None
-
-    _unique_key_validator = _unique_key_validator
 
     @field_validator("when_matched", mode="before")
     @field_validator_v1_args
@@ -321,18 +334,15 @@ class FullKind(_ModelKind):
     name: Literal[ModelKindName.FULL] = ModelKindName.FULL
 
 
-class SCDType2Kind(_ModelKind):
-    name: Literal[ModelKindName.SCD_TYPE_2] = ModelKindName.SCD_TYPE_2
-    unique_key: t.List[exp.Expression]
+class _SCDType2Kind(_ModelKind):
+    unique_key: SQLGlotListOfFields
     valid_from_name: SQLGlotString = "valid_from"
     valid_to_name: SQLGlotString = "valid_to"
-    updated_at_name: SQLGlotString = "updated_at"
-    updated_at_as_valid_from: SQLGlotBool = False
+    invalidate_hard_deletes: SQLGlotBool = False
     time_data_type: exp.DataType = exp.DataType.build("TIMESTAMP")
 
     forward_only: SQLGlotBool = True
     disable_restatement: SQLGlotBool = True
-    _unique_key_validator = _unique_key_validator
 
     @property
     def managed_columns(self) -> t.Dict[str, exp.DataType]:
@@ -340,6 +350,20 @@ class SCDType2Kind(_ModelKind):
             self.valid_from_name: self.time_data_type,
             self.valid_to_name: self.time_data_type,
         }
+
+
+class SCDType2ByTimeKind(_SCDType2Kind):
+    name: Literal[ModelKindName.SCD_TYPE_2, ModelKindName.SCD_TYPE_2_BY_TIME] = (
+        ModelKindName.SCD_TYPE_2_BY_TIME
+    )
+    updated_at_name: SQLGlotString = "updated_at"
+    updated_at_as_valid_from: SQLGlotBool = False
+
+
+class SCDType2ByColumnKind(_SCDType2Kind):
+    name: Literal[ModelKindName.SCD_TYPE_2_BY_COLUMN] = ModelKindName.SCD_TYPE_2_BY_COLUMN
+    columns: SQLGlotListOfColumnsOrStar
+    execution_time_as_valid_from: SQLGlotBool = False
 
 
 class EmbeddedKind(_ModelKind):
@@ -360,7 +384,8 @@ ModelKind = Annotated[
         IncrementalUnmanagedKind,
         SeedKind,
         ViewKind,
-        SCDType2Kind,
+        SCDType2ByTimeKind,
+        SCDType2ByColumnKind,
     ],
     Field(discriminator="name"),
 ]
@@ -374,7 +399,9 @@ MODEL_KIND_NAME_TO_TYPE: t.Dict[str, t.Type[ModelKind]] = {
     ModelKindName.INCREMENTAL_UNMANAGED: IncrementalUnmanagedKind,
     ModelKindName.SEED: SeedKind,
     ModelKindName.VIEW: ViewKind,
-    ModelKindName.SCD_TYPE_2: SCDType2Kind,
+    ModelKindName.SCD_TYPE_2: SCDType2ByTimeKind,
+    ModelKindName.SCD_TYPE_2_BY_TIME: SCDType2ByTimeKind,
+    ModelKindName.SCD_TYPE_2_BY_COLUMN: SCDType2ByColumnKind,
 }
 
 
@@ -399,15 +426,22 @@ def _model_kind_validator(cls: t.Type, v: t.Any, values: t.Dict[str, t.Any]) -> 
             else v
         )
         time_data_type = props.pop("time_data_type", None)
-        if isinstance(time_data_type, exp.Expression):
+        if isinstance(time_data_type, exp.Expression) and not isinstance(
+            time_data_type, exp.DataType
+        ):
             time_data_type = time_data_type.name
         if time_data_type:
             props["time_data_type"] = exp.DataType.build(time_data_type, dialect=dialect)
         name = v.this if isinstance(v, d.ModelKind) else props.get("name")
+        # We want to ensure whatever name is provided to construct the class is the same name that will be
+        # found inside the class itself in order to avoid a change during plan/apply for legacy aliases.
+        # Ex: Pass in `SCD_TYPE_2` then we want to ensure we get `SCD_TYPE_2` as the kind name
+        # instead of `SCD_TYPE_2_BY_TIME`.
+        props["name"] = name
         return model_kind_type_from_name(name)(**props)
 
     name = (v.name if isinstance(v, exp.Expression) else str(v)).upper()
-    return model_kind_type_from_name(name)()  # type: ignore
+    return model_kind_type_from_name(name)(name=name)  # type: ignore
 
 
 model_kind_validator = field_validator("kind", mode="before")(_model_kind_validator)

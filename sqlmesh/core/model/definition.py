@@ -33,8 +33,8 @@ from sqlmesh.core.model.kind import (
 from sqlmesh.core.model.meta import ModelMeta
 from sqlmesh.core.model.seed import CsvSeedReader, Seed, create_seed
 from sqlmesh.core.renderer import ExpressionRenderer, QueryRenderer
-from sqlmesh.utils import str_to_bool
-from sqlmesh.utils.date import TimeLike, make_inclusive, to_datetime, to_ds, to_ts
+from sqlmesh.utils import columns_to_types_all_known, str_to_bool
+from sqlmesh.utils.date import TimeLike, make_inclusive, to_datetime, to_time_column
 from sqlmesh.utils.errors import ConfigError, SQLMeshError, raise_config_error
 from sqlmesh.utils.hashing import hash_data
 from sqlmesh.utils.jinja import JinjaMacroRegistry, extract_macro_references
@@ -227,7 +227,7 @@ class _Model(ModelMeta, frozen=True):
         deployability_index: t.Optional[DeployabilityIndex] = None,
         engine_adapter: t.Optional[EngineAdapter] = None,
         **kwargs: t.Any,
-    ) -> t.Optional[exp.Subqueryable]:
+    ) -> t.Optional[exp.Query]:
         """Renders a model's query, expanding macros with provided kwargs, and optionally expanding referenced models.
 
         Args:
@@ -265,7 +265,7 @@ class _Model(ModelMeta, frozen=True):
         deployability_index: t.Optional[DeployabilityIndex] = None,
         engine_adapter: t.Optional[EngineAdapter] = None,
         **kwargs: t.Any,
-    ) -> exp.Subqueryable:
+    ) -> exp.Query:
         """Same as `render_query()` but raises an exception if the query can't be rendered.
 
         Args:
@@ -392,8 +392,9 @@ class _Model(ModelMeta, frozen=True):
             )
 
         def _render(e: exp.Expression) -> str | int | float | bool:
-            rendered_exprs = _create_renderer(e).render(
-                start=start, end=end, execution_time=execution_time
+            rendered_exprs = (
+                _create_renderer(e).render(start=start, end=end, execution_time=execution_time)
+                or []
             )
             if len(rendered_exprs) != 1:
                 raise SQLMeshError(f"Expected one expression but got {len(rendered_exprs)}")
@@ -409,7 +410,7 @@ class _Model(ModelMeta, frozen=True):
 
         return [{t.this.name: _render(t.expression) for t in signal} for signal in self.signals]
 
-    def ctas_query(self, **render_kwarg: t.Any) -> exp.Subqueryable:
+    def ctas_query(self, **render_kwarg: t.Any) -> exp.Query:
         """Return a dummy query to do a CTAS.
 
         If a model's column types are unknown, the only way to create the table is to
@@ -421,12 +422,15 @@ class _Model(ModelMeta, frozen=True):
         Return:
             The mocked out ctas query.
         """
-        # the query is expanded so it's been copied, it's safe to mutate.
-        query = (
-            self.render_query_or_raise(**render_kwarg)
-            .limit(0, copy=False)
-            .where(exp.false(), copy=False, append=False)
-        )
+        query = self.render_query_or_raise(**render_kwarg).copy()
+
+        for select in query.find_all(exp.Select):
+            if select.args.get("from"):
+                select.where(exp.false(), copy=False)
+                if not isinstance(select.parent, exp.Union) or (
+                    select.parent.parent is None and select.arg_key == "expression"
+                ):
+                    select.limit(0, copy=False)
 
         if self.managed_columns:
             query.select(
@@ -512,17 +516,7 @@ class _Model(ModelMeta, frozen=True):
 
             time_column_type = columns_to_types[self.time_column.column]
 
-            if time_column_type.is_type(exp.DataType.Type.DATE):
-                return exp.cast(exp.Literal.string(to_ds(time)), to="date")
-            if time_column_type.this in exp.DataType.TEMPORAL_TYPES:
-                return exp.cast(exp.Literal.string(to_ts(time)), to=time_column_type.this)
-
-            if self.time_column.format:
-                time = to_datetime(time).strftime(self.time_column.format)
-            if time_column_type.this in exp.DataType.TEXT_TYPES:
-                return exp.Literal.string(time)
-            if time_column_type.this in exp.DataType.NUMERIC_TYPES:
-                return exp.Literal.number(time)
+            return to_time_column(time, time_column_type, self.time_column.format)
         return exp.convert(time)
 
     def update_schema(
@@ -575,10 +569,7 @@ class _Model(ModelMeta, frozen=True):
         }
         if not columns_to_types:
             return False
-        return all(
-            not column_type.is_type(exp.DataType.Type.UNKNOWN, exp.DataType.Type.NULL)
-            for column_type in columns_to_types.values()
-        )
+        return columns_to_types_all_known(columns_to_types)
 
     @property
     def sorted_python_env(self) -> t.List[t.Tuple[str, Executable]]:
@@ -783,9 +774,7 @@ class _Model(ModelMeta, frozen=True):
             elif audit_name in audits:
                 audit = audits[audit_name]
                 query = (
-                    audit.query
-                    if self.hash_raw_query
-                    else audit.render_query(self, **t.cast(t.Dict[str, t.Any], audit_args))
+                    audit.render_query(self, **t.cast(t.Dict[str, t.Any], audit_args))
                     or audit.query
                 )
                 metadata.extend(
@@ -897,7 +886,7 @@ class _SqlBasedModel(_Model):
             for statement in statements
             if not isinstance(statement, d.MacroDef)
         )
-        return [r for expressions in rendered for r in expressions]
+        return [r for expressions in rendered if expressions for r in expressions]
 
     def _statement_renderer(self, expression: exp.Expression) -> ExpressionRenderer:
         expression_key = id(expression)
@@ -916,21 +905,21 @@ class _SqlBasedModel(_Model):
 
     @property
     def _data_hash_values(self) -> t.List[str]:
-        statements = (
-            self._additional_metadata
-            if self.hash_raw_query
-            else [gen(e) for e in (*self.render_pre_statements(), *self.render_post_statements())]
-        )
-        return [
-            *super()._data_hash_values,
-            *statements,
-        ]
+        data_hash_values = super()._data_hash_values
 
-    @property
-    def _additional_metadata(self) -> t.List[str]:
-        return [
-            gen(s) for s in (*self.pre_statements, *self.post_statements, *self.macro_definitions)
-        ]
+        for statement in (*self.pre_statements, *self.post_statements):
+            statement_exprs: t.List[exp.Expression] = []
+            if isinstance(statement, d.MacroDef):
+                statement_exprs = [statement]
+            else:
+                rendered = self._statement_renderer(statement).render()
+                if rendered is not None:
+                    statement_exprs = rendered
+                else:
+                    statement_exprs = [statement]
+            data_hash_values.extend(gen(e) for e in statement_exprs)
+
+        return data_hash_values
 
 
 class SqlModel(_SqlBasedModel):
@@ -942,7 +931,7 @@ class SqlModel(_SqlBasedModel):
         post_statements: The list of SQL statements that follow after the model's query.
     """
 
-    query: t.Union[exp.Subqueryable, d.JinjaQuery, d.MacroFunc]
+    query: t.Union[exp.Query, d.JinjaQuery, d.MacroFunc]
     source_type: Literal["sql"] = "sql"
 
     _columns_to_types: t.Optional[t.Dict[str, exp.DataType]] = None
@@ -959,7 +948,7 @@ class SqlModel(_SqlBasedModel):
         deployability_index: t.Optional[DeployabilityIndex] = None,
         engine_adapter: t.Optional[EngineAdapter] = None,
         **kwargs: t.Any,
-    ) -> t.Optional[exp.Subqueryable]:
+    ) -> t.Optional[exp.Query]:
         query = self._query_renderer.render(
             start=start,
             end=end,
@@ -1051,7 +1040,7 @@ class SqlModel(_SqlBasedModel):
                 )
             return
 
-        if not isinstance(query, exp.Subqueryable):
+        if not isinstance(query, exp.Query):
             raise_config_error("Missing SELECT query in the model definition", self._path)
 
         projection_list = query.selects
@@ -1128,7 +1117,7 @@ class SqlModel(_SqlBasedModel):
     def _data_hash_values(self) -> t.List[str]:
         data = super()._data_hash_values
 
-        query = self.query if self.hash_raw_query else self.render_query() or self.query
+        query = self.render_query() or self.query
         data.append(gen(query))
         data.extend(self.jinja_macros.data_hash_values)
         return data
@@ -1158,22 +1147,31 @@ class SeedModel(_SqlBasedModel):
     ) -> t.Generator[QueryOrDF, None, None]:
         self._ensure_hydrated()
 
-        date_or_time_columns = []
+        date_columns = []
+        datetime_columns = []
         bool_columns = []
         string_columns = []
         for name, tpe in (self.columns_to_types_ or {}).items():
-            if tpe.this in exp.DataType.TEMPORAL_TYPES:
-                date_or_time_columns.append(name)
+            if tpe.this in (exp.DataType.Type.DATE, exp.DataType.Type.DATE32):
+                date_columns.append(name)
+            elif tpe.this in exp.DataType.TEMPORAL_TYPES:
+                datetime_columns.append(name)
             elif tpe.is_type("boolean"):
                 bool_columns.append(name)
             elif tpe.this in exp.DataType.TEXT_TYPES:
                 string_columns.append(name)
 
         for df in self._reader.read(batch_size=self.kind.batch_size):
-            for column in date_or_time_columns:
+            # convert all date/time types to native pandas timestamp
+            for column in [*date_columns, *datetime_columns]:
                 df[column] = pd.to_datetime(df[column])
+            # extract datetime.date from pandas timestamp for DATE columns
+            for column in date_columns:
+                df[column] = df[column].dt.date
             df[bool_columns] = df[bool_columns].apply(lambda i: str_to_bool(str(i)))
-            df[string_columns] = df[string_columns].astype(str)
+            df[string_columns] = df[string_columns].mask(
+                cond=lambda x: x.notna(), other=df[string_columns].astype(str)  # type: ignore
+            )
             yield df
 
     def text_diff(self, other: Node) -> str:
@@ -1424,9 +1422,9 @@ def load_sql_based_model(
 
     meta_fields: t.Dict[str, t.Any] = {
         "dialect": dialect,
-        "description": "\n".join(comment.strip() for comment in meta.comments)
-        if meta.comments
-        else None,
+        "description": (
+            "\n".join(comment.strip() for comment in meta.comments) if meta.comments else None
+        ),
         **{prop.name.lower(): prop.args.get("value") for prop in meta.expressions},
         **kwargs,
     }
@@ -1465,7 +1463,7 @@ def load_sql_based_model(
     )
 
     if query_or_seed_insert is not None and isinstance(
-        query_or_seed_insert, (exp.Subqueryable, d.JinjaQuery)
+        query_or_seed_insert, (exp.Query, d.JinjaQuery)
     ):
         jinja_macro_references.update(extract_macro_references(query_or_seed_insert.sql()))
         return create_sql_model(
@@ -1528,7 +1526,7 @@ def create_sql_model(
             from the macro registry.
         dialect: The default dialect if no model dialect is configured.
     """
-    if not isinstance(query, (exp.Subqueryable, d.JinjaQuery, d.MacroFunc)):
+    if not isinstance(query, (exp.Query, d.JinjaQuery, d.MacroFunc)):
         # Users are not expected to pass in a single MacroFunc instance for a model's query;
         # this is an implementation detail which allows us to create python models that return
         # SQL, either in the form of SQLGlot expressions or just plain strings.
@@ -1775,7 +1773,7 @@ def _split_sql_model_statements(
     query_positions = []
     for idx, expression in enumerate(expressions):
         if (
-            isinstance(expression, (exp.Subqueryable, d.JinjaQuery))
+            isinstance(expression, (exp.Query, d.JinjaQuery))
             or expression == INSERT_SEED_MACRO_CALL
         ):
             query_positions.append((expression, idx))
@@ -1897,7 +1895,7 @@ def _list_of_calls_to_exp(value: t.List[t.Tuple[str, t.Dict[str, t.Any]]]) -> ex
 
 def _is_projection(expr: exp.Expression) -> bool:
     parent = expr.parent
-    return isinstance(parent, exp.Select) and expr in parent.expressions
+    return isinstance(parent, exp.Select) and expr.arg_key == "expressions"
 
 
 def _is_udtf(expr: exp.Expression) -> bool:
@@ -1939,7 +1937,6 @@ META_FIELD_CONVERTER: t.Dict[str, t.Callable] = {
     "tags": _single_value_or_tuple,
     "grains": _refs_to_sql,
     "references": _refs_to_sql,
-    "hash_raw_query": exp.convert,
     "table_properties_": lambda value: value,
     "session_properties_": lambda value: value,
     "allow_partials": exp.convert,

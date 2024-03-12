@@ -42,6 +42,10 @@ class Versions(PydanticModel):
     def minor_sqlglot_version(self) -> t.Tuple[int, int]:
         return major_minor(self.sqlglot_version)
 
+    @property
+    def minor_sqlmesh_version(self) -> t.Tuple[int, int]:
+        return major_minor(self.sqlmesh_version)
+
     @field_validator("sqlglot_version", "sqlmesh_version", mode="before")
     @classmethod
     def _package_version_validator(cls, v: t.Any) -> str:
@@ -138,23 +142,31 @@ class StateReader(abc.ABC):
         """
 
     @abc.abstractmethod
-    def max_interval_end_for_environment(self, environment: str) -> t.Optional[int]:
+    def max_interval_end_for_environment(
+        self, environment: str, ensure_finalized_snapshots: bool = False
+    ) -> t.Optional[int]:
         """Returns the max interval end for the given environment.
 
         Args:
             environment: The environment.
+            ensure_finalized_snapshots: Whether to use snapshots from the latest finalized environment state,
+                or to use whatever snapshots are in the current environment state even if the environment is not finalized.
 
         Returns:
             A timestamp or None if no interval or environment exists.
         """
 
     @abc.abstractmethod
-    def greatest_common_interval_end(self, environment: str, models: t.Set[str]) -> t.Optional[int]:
+    def greatest_common_interval_end(
+        self, environment: str, models: t.Set[str], ensure_finalized_snapshots: bool = False
+    ) -> t.Optional[int]:
         """Returns the greatest common interval end for given models in the target environment.
 
         Args:
             environment: The environment.
             models: The model FQNs to select intervals from.
+            ensure_finalized_snapshots: Whether to use snapshots from the latest finalized environment state,
+                or to use whatever snapshots are in the current environment state even if the environment is not finalized.
 
         Returns:
             A timestamp or None if no interval or environment exists.
@@ -178,6 +190,8 @@ class StateReader(abc.ABC):
         Returns:
             The versions object.
         """
+        from sqlmesh._version import __version__ as SQLMESH_VERSION
+
         versions = self._get_versions()
 
         if validate:
@@ -204,27 +218,32 @@ class StateReader(abc.ABC):
                     f"{lib} (local) is using version '{local}' which is behind '{remote}' (remote).{upgrade_suggestion}"
                 )
 
-            if SCHEMA_VERSION < versions.schema_version:
+            if SCHEMA_VERSION != versions.schema_version:
                 raise_error(
                     "SQLMesh",
                     SCHEMA_VERSION,
                     versions.schema_version,
                     remote_package_version=versions.sqlmesh_version,
+                    ahead=SCHEMA_VERSION > versions.schema_version,
                 )
 
-            if major_minor(SQLGLOT_VERSION) < major_minor(versions.sqlglot_version):
+            if major_minor(SQLGLOT_VERSION) != major_minor(versions.sqlglot_version):
                 raise_error(
                     "SQLGlot",
                     SQLGLOT_VERSION,
                     versions.sqlglot_version,
                     remote_package_version=versions.sqlglot_version,
+                    ahead=major_minor(SQLGLOT_VERSION) > major_minor(versions.sqlglot_version),
                 )
 
-            if SCHEMA_VERSION > versions.schema_version:
-                raise_error("SQLMesh", SCHEMA_VERSION, versions.schema_version, ahead=True)
-
-            if major_minor(SQLGLOT_VERSION) > major_minor(versions.sqlglot_version):
-                raise_error("SQLGlot", SQLGLOT_VERSION, versions.sqlglot_version, ahead=True)
+            if major_minor(SQLMESH_VERSION) != major_minor(versions.sqlmesh_version):
+                raise_error(
+                    "SQLMesh",
+                    SQLMESH_VERSION,
+                    versions.sqlmesh_version,
+                    remote_package_version=versions.sqlmesh_version,
+                    ahead=major_minor(SQLMESH_VERSION) > major_minor(versions.sqlmesh_version),
+                )
 
         return versions
 

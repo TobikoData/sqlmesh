@@ -224,14 +224,12 @@ class SparkEngineAdapter(GetCurrentCatalogFromFunctionMixin, HiveMetastoreTableP
     @t.overload
     def _columns_to_types(
         self, query_or_df: DF, columns_to_types: t.Optional[t.Dict[str, exp.DataType]] = None
-    ) -> t.Dict[str, exp.DataType]:
-        ...
+    ) -> t.Dict[str, exp.DataType]: ...
 
     @t.overload
     def _columns_to_types(
         self, query_or_df: Query, columns_to_types: t.Optional[t.Dict[str, exp.DataType]] = None
-    ) -> t.Optional[t.Dict[str, exp.DataType]]:
-        ...
+    ) -> t.Optional[t.Dict[str, exp.DataType]]: ...
 
     def _columns_to_types(
         self, query_or_df: QueryOrDF, columns_to_types: t.Optional[t.Dict[str, exp.DataType]] = None
@@ -328,9 +326,11 @@ class SparkEngineAdapter(GetCurrentCatalogFromFunctionMixin, HiveMetastoreTableP
                 catalog=self.get_current_catalog(),
                 schema=schema_name,
                 name=row["tableName"],
-                type=DataObjectType.VIEW
-                if "Type: VIEW" in row["information"]
-                else DataObjectType.TABLE,
+                type=(
+                    DataObjectType.VIEW
+                    if "Type: VIEW" in row["information"]
+                    else DataObjectType.TABLE
+                ),
             )
             for row in results  # type: ignore
         ]
@@ -529,7 +529,7 @@ class SparkEngineAdapter(GetCurrentCatalogFromFunctionMixin, HiveMetastoreTableP
         table_sql = table.sql(dialect=self.dialect, identify=True)
         column_sql = exp.column(column_name).sql(dialect=self.dialect, identify=True)
 
-        return f"ALTER TABLE {table_sql} ALTER COLUMN {column_sql} COMMENT '{column_comment}'"
+        return f"ALTER TABLE {table_sql} ALTER COLUMN {column_sql} COMMENT '{self._truncate_column_comment(column_comment)}'"
 
     @classmethod
     def _wap_branch_name(cls, wap_id: str) -> str:

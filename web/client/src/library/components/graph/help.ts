@@ -73,6 +73,7 @@ function createGraphLayout({
               'elk.direction': 'RIGHT',
               // https://eclipse.dev/elk/reference/options/org-eclipse-elk-layered-considerModelOrder-strategy.html
               'elk.layered.considerModelOrder.strategy': 'PREFER_NODES',
+              'elk.layered.nodePlacement.strategy': 'SIMPLE',
             },
             children: nodes.map(node => ({
               id: node.id,
@@ -153,10 +154,12 @@ function getEdges(lineage: Record<string, Lineage> = {}): Edge[] {
 function getNodeMap({
   lineage,
   models,
+  unknownModels,
   withColumns,
 }: {
   models: Map<string, ModelSQLMeshModel>
   withColumns: boolean
+  unknownModels: Set<string>
   lineage?: Record<string, Lineage>
 }): Record<string, Node> {
   if (isNil(lineage)) return {}
@@ -166,16 +169,8 @@ function getNodeMap({
   const CHAR_WIDTH = 8
   const MAX_VISIBLE_COLUMNS = 5
 
-  const currentModelNames = Array.from(models.keys())
-  const lineageAllModels = Object.values(lineage)
-    .map(({ models }) => models)
-    .flat()
+  const sources = new Set(Object.values(lineage).flatMap(l => l.models))
   const modelNames = Object.keys(lineage)
-  const sources = new Set(
-    Object.values(lineage)
-      .map(l => l.models)
-      .flat(),
-  )
 
   return modelNames.reduce((acc: Record<string, Node>, modelName: string) => {
     const model = models.get(modelName)
@@ -188,8 +183,7 @@ function getNodeMap({
         // it means either this is a CTE or model is UNKNOWN
         // CTEs only have connections between columns
         // where UNKNOWN model has connection only from another model
-        isFalse(currentModelNames.includes(modelName)) &&
-          lineageAllModels.includes(modelName)
+        unknownModels.has(modelName)
         ? EnumLineageNodeModelType.unknown
         : EnumLineageNodeModelType.cte,
     })
@@ -356,7 +350,7 @@ function mergeLineageWithColumns(
 
       const currentLineageModelColumn =
         currentLineageModel.columns[targetColumnNameEncoded]!
-      const currentLineageModelColumnModels = currentLineageModelColumn.models!
+      const currentLineageModelColumnModels = currentLineageModelColumn.models
 
       for (const sourceColumnName in newLineageModelColumn.models) {
         const sourceColumnNameEncoded = encodeURI(sourceColumnName)
@@ -365,16 +359,14 @@ function mergeLineageWithColumns(
         const newLineageModelColumnModel =
           newLineageModelColumn.models[sourceColumnName]!
 
-        currentLineageModelColumnModels[sourceColumnNameEncoded] = (
-          isNil(currentLineageModelColumnModel)
-            ? newLineageModelColumnModel
-            : Array.from(
-                new Set(
-                  currentLineageModelColumnModel.concat(
-                    newLineageModelColumnModel,
-                  ),
+        currentLineageModelColumnModels[sourceColumnNameEncoded] = Array.from(
+          new Set(
+            isNil(currentLineageModelColumnModel)
+              ? newLineageModelColumnModel
+              : currentLineageModelColumnModel.concat(
+                  newLineageModelColumnModel,
                 ),
-              )
+          ),
         ).map(encodeURI)
       }
     }
@@ -402,7 +394,7 @@ function mergeConnections(
       const column = model[targetColumnName]
 
       // We don't have any connectins so we skip
-      if (column?.models == null) continue
+      if (isNil(column?.models)) continue
 
       // At this point our Node is model -> {modelName} and column -> {columnName}
       // It is a target (left handler)
@@ -502,18 +494,18 @@ function getLineageIndex(lineage: Record<string, Lineage> = {}): string {
 function getModelAncestors(
   lineage: Record<string, Lineage> = {},
   name: string,
-): string[] {
+  output = new Set<string>(),
+): Set<string> {
   const model = lineage[name]
+  const models = model?.models ?? []
 
-  if (isNil(model) || isNil(model.models)) return []
+  for (const modelName of models) {
+    if (output.has(modelName)) continue
 
-  const models = new Set(model.models)
+    getModelAncestors(lineage, modelName, output).add(modelName)
+  }
 
-  model.models.forEach(modelName => {
-    getModelAncestors(lineage, modelName).forEach(m => models.add(m))
-  })
-
-  return Array.from(models)
+  return output
 }
 
 function getActiveNodes(

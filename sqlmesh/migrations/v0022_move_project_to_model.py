@@ -1,4 +1,5 @@
 """Move project attr from snapshot to model."""
+
 import json
 
 import pandas as pd

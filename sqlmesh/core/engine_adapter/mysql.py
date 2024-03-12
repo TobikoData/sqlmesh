@@ -37,6 +37,8 @@ class MySQLEngineAdapter(
     SUPPORTS_INDEXES = True
     COMMENT_CREATION_TABLE = CommentCreationTable.IN_SCHEMA_DEF_NO_CTAS
     COMMENT_CREATION_VIEW = CommentCreationView.UNSUPPORTED
+    MAX_TABLE_COMMENT_LENGTH = 2048
+    MAX_COLUMN_COMMENT_LENGTH = 1024
     SUPPORTS_REPLACE_TABLE = False
 
     def get_current_catalog(self) -> t.Optional[str]:
@@ -102,7 +104,7 @@ class MySQLEngineAdapter(
     ) -> exp.Comment | str:
         table_sql = table.sql(dialect=self.dialect, identify=True)
 
-        return f"ALTER TABLE {table_sql} COMMENT = '{table_comment}'"
+        return f"ALTER TABLE {table_sql} COMMENT = '{self._truncate_table_comment(table_comment)}'"
 
     def _create_column_comments(
         self,

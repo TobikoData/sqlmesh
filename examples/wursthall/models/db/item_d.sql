@@ -3,6 +3,7 @@ MODEL (
   kind VIEW,
   cron '@daily',
   owner jen,
+  grain item_id,
   start '2022-06-01 00:00:00+00:00',
 );
 

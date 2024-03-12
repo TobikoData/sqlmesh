@@ -1,4 +1,5 @@
 """Add support for environment catalog name override."""
+
 from sqlglot import exp
 
 

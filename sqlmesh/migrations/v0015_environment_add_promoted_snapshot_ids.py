@@ -1,4 +1,5 @@
 """Include a set of snapshot IDs filtered for promotion."""
+
 from sqlglot import exp
 
 

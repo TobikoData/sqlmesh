@@ -8,7 +8,9 @@ import {
   QueryClientProvider,
 } from '@tanstack/react-query'
 import App from './App'
-import IDEProvider, { type ErrorIDE } from './library/pages/ide/context'
+import NotificationCenterProvider, {
+  type ErrorIDE,
+} from './library/pages/root/context/notificationCenter'
 import { isNotNil } from './utils'
 
 import './index.css'
@@ -38,9 +40,9 @@ ReactDOM.createRoot(getRootNode()).render(
   <React.StrictMode>
     <QueryClientProvider client={client}>
       <ThemeProvider>
-        <IDEProvider>
+        <NotificationCenterProvider>
           <App />
-        </IDEProvider>
+        </NotificationCenterProvider>
       </ThemeProvider>
     </QueryClientProvider>
   </React.StrictMode>,

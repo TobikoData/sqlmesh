@@ -19,6 +19,7 @@ has been evaluated to check for data quality issues.
 
 For more information about audits, see `sqlmesh.core.audit`.
 """
+
 from __future__ import annotations
 
 import abc
@@ -39,7 +40,13 @@ from sqlmesh.core.dialect import schema_
 from sqlmesh.core.engine_adapter import EngineAdapter
 from sqlmesh.core.engine_adapter.shared import InsertOverwriteStrategy
 from sqlmesh.core.macros import RuntimeStage
-from sqlmesh.core.model import IncrementalUnmanagedKind, Model, SCDType2Kind, ViewKind
+from sqlmesh.core.model import (
+    IncrementalUnmanagedKind,
+    Model,
+    SCDType2ByColumnKind,
+    SCDType2ByTimeKind,
+    ViewKind,
+)
 from sqlmesh.core.snapshot import (
     DeployabilityIndex,
     QualifiedViewName,
@@ -50,7 +57,10 @@ from sqlmesh.core.snapshot import (
     SnapshotTableCleanupTask,
 )
 from sqlmesh.utils import random_id
-from sqlmesh.utils.concurrency import concurrent_apply_to_snapshots
+from sqlmesh.utils.concurrency import (
+    concurrent_apply_to_snapshots,
+    concurrent_apply_to_values,
+)
 from sqlmesh.utils.date import TimeLike, now
 from sqlmesh.utils.errors import AuditError, ConfigError, SQLMeshError
 
@@ -244,11 +254,19 @@ class SnapshotEvaluator:
                 snapshots_with_table_names[snapshot].add(table.name)
                 tables_by_schema[d.schema_(table.db, catalog=table.catalog)].add(table.name)
 
-        existing_objects: t.Set[str] = set()
-        for schema, object_names in tables_by_schema.items():
+        def _get_data_objects(schema: exp.Table) -> t.Set[str]:
             logger.info("Listing data objects in schema %s", schema.sql())
-            objs = self.adapter.get_data_objects(schema, object_names)
-            existing_objects.update(obj.name for obj in objs)
+            objs = self.adapter.get_data_objects(schema, tables_by_schema[schema])
+            return {obj.name for obj in objs}
+
+        with self.concurrent_context():
+            existing_objects = {
+                obj
+                for objs in concurrent_apply_to_values(
+                    list(tables_by_schema), _get_data_objects, self.ddl_concurrent_tasks
+                )
+                for obj in objs
+            }
 
         snapshots_to_create = []
         for snapshot, table_names in snapshots_with_table_names.items():
@@ -497,7 +515,7 @@ class SnapshotEvaluator:
             **common_render_kwargs,
         )
 
-        with self.adapter.transaction(), self.adapter.session():
+        with self.adapter.transaction(), self.adapter.session(snapshot.model.session_properties):
             wap_id: t.Optional[str] = None
             if (
                 table_name
@@ -545,9 +563,11 @@ class SnapshotEvaluator:
                 and snapshot.is_incremental_by_time_range
             ):
                 query_or_df = reduce(
-                    lambda a, b: pd.concat([a, b], ignore_index=True)  # type: ignore
-                    if self.adapter.is_pandas_df(a)
-                    else a.union_all(b),  # type: ignore
+                    lambda a, b: (
+                        pd.concat([a, b], ignore_index=True)  # type: ignore
+                        if self.adapter.is_pandas_df(a)
+                        else a.union_all(b)  # type: ignore
+                    ),  # type: ignore
                     queries_or_dfs,
                 )
                 apply(query_or_df, index=0)
@@ -590,7 +610,7 @@ class SnapshotEvaluator:
 
         evaluation_strategy = _evaluation_strategy(snapshot, self.adapter)
 
-        with self.adapter.transaction(), self.adapter.session():
+        with self.adapter.transaction(), self.adapter.session(snapshot.model.session_properties):
             self.adapter.execute(snapshot.model.render_pre_statements(**render_kwargs))
 
             if (
@@ -761,6 +781,7 @@ class SnapshotEvaluator:
                 model=snapshot.model_or_none,
                 count=count,
                 query=query,
+                adapter_dialect=self.adapter.dialect,
             )
             if audit.blocking:
                 raise audit_error
@@ -1227,11 +1248,12 @@ class SCDType2Strategy(MaterializableStrategy):
         **render_kwargs: t.Any,
     ) -> None:
         model = snapshot.model
-        assert isinstance(model.kind, SCDType2Kind)
+        assert isinstance(model.kind, (SCDType2ByTimeKind, SCDType2ByColumnKind))
         if model.annotated:
             logger.info("Creating table '%s'", name)
             columns_to_types = model.columns_to_types_or_raise
-            columns_to_types[model.kind.updated_at_name] = model.kind.time_data_type
+            if isinstance(model.kind, SCDType2ByTimeKind):
+                columns_to_types[model.kind.updated_at_name] = model.kind.time_data_type
             self.adapter.create_table(
                 name,
                 columns_to_types=columns_to_types,
@@ -1265,20 +1287,40 @@ class SCDType2Strategy(MaterializableStrategy):
         **kwargs: t.Any,
     ) -> None:
         model = snapshot.model
-        assert isinstance(model.kind, SCDType2Kind)
-        self.adapter.scd_type_2(
-            target_table=name,
-            source_table=query_or_df,
-            unique_key=model.unique_key,
-            valid_from_name=model.kind.valid_from_name,
-            valid_to_name=model.kind.valid_to_name,
-            updated_at_name=model.kind.updated_at_name,
-            updated_at_as_valid_from=model.kind.updated_at_as_valid_from,
-            columns_to_types=model.columns_to_types,
-            table_description=model.description,
-            column_descriptions=model.column_descriptions,
-            **kwargs,
-        )
+        if isinstance(model.kind, SCDType2ByTimeKind):
+            self.adapter.scd_type_2_by_time(
+                target_table=name,
+                source_table=query_or_df,
+                unique_key=model.unique_key,
+                valid_from_name=model.kind.valid_from_name,
+                valid_to_name=model.kind.valid_to_name,
+                updated_at_name=model.kind.updated_at_name,
+                invalidate_hard_deletes=model.kind.invalidate_hard_deletes,
+                updated_at_as_valid_from=model.kind.updated_at_as_valid_from,
+                columns_to_types=model.columns_to_types,
+                table_description=model.description,
+                column_descriptions=model.column_descriptions,
+                **kwargs,
+            )
+        elif isinstance(model.kind, SCDType2ByColumnKind):
+            self.adapter.scd_type_2_by_column(
+                target_table=name,
+                source_table=query_or_df,
+                unique_key=model.unique_key,
+                valid_from_name=model.kind.valid_from_name,
+                valid_to_name=model.kind.valid_to_name,
+                check_columns=model.kind.columns,
+                columns_to_types=model.columns_to_types,
+                invalidate_hard_deletes=model.kind.invalidate_hard_deletes,
+                execution_time_as_valid_from=model.kind.execution_time_as_valid_from,
+                table_description=model.description,
+                column_descriptions=model.column_descriptions,
+                **kwargs,
+            )
+        else:
+            raise SQLMeshError(
+                f"Unexpected SCD Type 2 kind: {model.kind}. This is not expected and please report this as a bug."
+            )
 
     def append(
         self,
@@ -1290,20 +1332,40 @@ class SCDType2Strategy(MaterializableStrategy):
         **kwargs: t.Any,
     ) -> None:
         model = snapshot.model
-        assert isinstance(model.kind, SCDType2Kind)
-        self.adapter.scd_type_2(
-            target_table=table_name,
-            source_table=query_or_df,
-            unique_key=model.unique_key,
-            valid_from_name=model.kind.valid_from_name,
-            valid_to_name=model.kind.valid_to_name,
-            updated_at_name=model.kind.updated_at_name,
-            updated_at_as_valid_from=model.kind.updated_at_as_valid_from,
-            columns_to_types=model.columns_to_types,
-            table_description=model.description,
-            column_descriptions=model.column_descriptions,
-            **kwargs,
-        )
+        if isinstance(model.kind, SCDType2ByTimeKind):
+            self.adapter.scd_type_2_by_time(
+                target_table=table_name,
+                source_table=query_or_df,
+                unique_key=model.unique_key,
+                valid_from_name=model.kind.valid_from_name,
+                valid_to_name=model.kind.valid_to_name,
+                updated_at_name=model.kind.updated_at_name,
+                invalidate_hard_deletes=model.kind.invalidate_hard_deletes,
+                updated_at_as_valid_from=model.kind.updated_at_as_valid_from,
+                columns_to_types=model.columns_to_types,
+                table_description=model.description,
+                column_descriptions=model.column_descriptions,
+                **kwargs,
+            )
+        elif isinstance(model.kind, SCDType2ByColumnKind):
+            self.adapter.scd_type_2_by_column(
+                target_table=table_name,
+                source_table=query_or_df,
+                unique_key=model.unique_key,
+                valid_from_name=model.kind.valid_from_name,
+                valid_to_name=model.kind.valid_to_name,
+                check_columns=model.kind.columns,
+                columns_to_types=model.columns_to_types,
+                invalidate_hard_deletes=model.kind.invalidate_hard_deletes,
+                execution_time_as_valid_from=model.kind.execution_time_as_valid_from,
+                table_description=model.description,
+                column_descriptions=model.column_descriptions,
+                **kwargs,
+            )
+        else:
+            raise SQLMeshError(
+                f"Unexpected SCD Type 2 kind: {model.kind}. This is not expected and please report this as a bug."
+            )
 
 
 class ViewStrategy(PromotableStrategy):

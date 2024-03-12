@@ -63,6 +63,7 @@ def test_forward_only_plan_sets_version(make_snapshot, mocker: MockerFixture):
         new_snapshots={snapshot_b.snapshot_id: snapshot_b},
         previous_plan_id=None,
         previously_promoted_snapshot_ids=set(),
+        previous_finalized_snapshots=None,
     )
 
     plan_builder = PlanBuilder(context_diff, forward_only=True)
@@ -100,6 +101,7 @@ def test_forward_only_dev(make_snapshot, mocker: MockerFixture):
         new_snapshots={snapshot_a.snapshot_id: snapshot_a},
         previous_plan_id=None,
         previously_promoted_snapshot_ids=set(),
+        previous_finalized_snapshots=None,
     )
 
     yesterday_ds_mock = mocker.patch("sqlmesh.core.plan.builder.yesterday_ds")
@@ -145,6 +147,7 @@ def test_forward_only_plan_added_models(make_snapshot, mocker: MockerFixture):
         },
         previous_plan_id=None,
         previously_promoted_snapshot_ids=set(),
+        previous_finalized_snapshots=None,
     )
 
     PlanBuilder(context_diff, forward_only=True).build()
@@ -187,6 +190,7 @@ def test_paused_forward_only_parent(make_snapshot, mocker: MockerFixture):
         new_snapshots={snapshot_b.snapshot_id: snapshot_b},
         previous_plan_id=None,
         previously_promoted_snapshot_ids=set(),
+        previous_finalized_snapshots=None,
     )
 
     PlanBuilder(context_diff, forward_only=False).build()
@@ -218,6 +222,7 @@ def test_missing_intervals_lookback(make_snapshot, mocker: MockerFixture):
         new_snapshots={snapshot_a.snapshot_id: snapshot_a},
         previous_plan_id=None,
         previously_promoted_snapshot_ids=set(),
+        previous_finalized_snapshots=None,
     )
 
     plan = Plan(
@@ -237,6 +242,8 @@ def test_missing_intervals_lookback(make_snapshot, mocker: MockerFixture):
         ignored=set(),
         deployability_index=DeployabilityIndex.all_deployable(),
         restatements={},
+        end_bounded=False,
+        ensure_finalized_snapshots=False,
     )
 
     assert not plan.missing_intervals
@@ -365,6 +372,7 @@ def test_restate_model_with_merge_strategy(make_snapshot, mocker: MockerFixture)
         new_snapshots={},
         previous_plan_id=None,
         previously_promoted_snapshot_ids=set(),
+        previous_finalized_snapshots=None,
     )
 
     with pytest.raises(
@@ -389,6 +397,7 @@ def test_new_snapshots_with_restatements(make_snapshot, mocker: MockerFixture):
         new_snapshots={snapshot_a.snapshot_id: snapshot_a},
         previous_plan_id=None,
         previously_promoted_snapshot_ids=set(),
+        previous_finalized_snapshots=None,
     )
 
     with pytest.raises(
@@ -419,6 +428,7 @@ def test_end_validation(make_snapshot, mocker: MockerFixture):
         new_snapshots={snapshot_a.snapshot_id: snapshot_a},
         previous_plan_id=None,
         previously_promoted_snapshot_ids=set(),
+        previous_finalized_snapshots=None,
     )
 
     dev_plan_builder = PlanBuilder(context_diff, end="2022-01-03", is_dev=True)
@@ -479,6 +489,7 @@ def test_forward_only_revert_not_allowed(make_snapshot, mocker: MockerFixture):
         new_snapshots={},
         previous_plan_id=None,
         previously_promoted_snapshot_ids=set(),
+        previous_finalized_snapshots=None,
     )
 
     with pytest.raises(
@@ -533,6 +544,7 @@ def test_forward_only_plan_seed_models(make_snapshot, mocker: MockerFixture):
         new_snapshots={snapshot_a_updated.snapshot_id: snapshot_a},
         previous_plan_id=None,
         previously_promoted_snapshot_ids=set(),
+        previous_finalized_snapshots=None,
     )
 
     PlanBuilder(context_diff, forward_only=True).build()
@@ -564,6 +576,7 @@ def test_start_inference(make_snapshot, mocker: MockerFixture):
         new_snapshots={},
         previous_plan_id=None,
         previously_promoted_snapshot_ids=set(),
+        previous_finalized_snapshots=None,
     )
 
     snapshot_b.add_interval("2022-01-01", now())
@@ -598,6 +611,7 @@ def test_auto_categorization(make_snapshot, mocker: MockerFixture):
         new_snapshots={updated_snapshot.snapshot_id: updated_snapshot},
         previous_plan_id=None,
         previously_promoted_snapshot_ids=set(),
+        previous_finalized_snapshots=None,
     )
 
     PlanBuilder(context_diff).build()
@@ -641,6 +655,7 @@ def test_auto_categorization_missing_schema_downstream(make_snapshot, mocker: Mo
         new_snapshots={updated_snapshot.snapshot_id: updated_snapshot},
         previous_plan_id=None,
         previously_promoted_snapshot_ids=set(),
+        previous_finalized_snapshots=None,
     )
 
     PlanBuilder(context_diff).build()
@@ -670,6 +685,7 @@ def test_broken_references(make_snapshot, mocker: MockerFixture):
         new_snapshots={},
         previous_plan_id=None,
         previously_promoted_snapshot_ids=set(),
+        previous_finalized_snapshots=None,
     )
 
     with pytest.raises(
@@ -703,6 +719,7 @@ def test_effective_from(make_snapshot, mocker: MockerFixture):
         new_snapshots={updated_snapshot.snapshot_id: updated_snapshot},
         previous_plan_id=None,
         previously_promoted_snapshot_ids=set(),
+        previous_finalized_snapshots=None,
     )
 
     with pytest.raises(
@@ -758,6 +775,7 @@ def test_new_environment_no_changes(make_snapshot, mocker: MockerFixture):
         new_snapshots={},
         previous_plan_id=None,
         previously_promoted_snapshot_ids=set(),
+        previous_finalized_snapshots=None,
     )
 
     with pytest.raises(PlanError, match="No changes were detected.*"):
@@ -795,6 +813,7 @@ def test_new_environment_with_changes(make_snapshot, mocker: MockerFixture):
         new_snapshots={updated_snapshot_a.snapshot_id: updated_snapshot_a},
         previous_plan_id=None,
         previously_promoted_snapshot_ids=set(),
+        previous_finalized_snapshots=None,
     )
 
     # Modified the existing model.
@@ -860,6 +879,7 @@ def test_forward_only_models(make_snapshot, mocker: MockerFixture):
         new_snapshots={updated_snapshot.snapshot_id: updated_snapshot},
         previous_plan_id=None,
         previously_promoted_snapshot_ids=set(),
+        previous_finalized_snapshots=None,
     )
 
     PlanBuilder(context_diff, is_dev=True).build()
@@ -927,6 +947,7 @@ def test_indirectly_modified_forward_only_model(make_snapshot, mocker: MockerFix
         },
         previous_plan_id=None,
         previously_promoted_snapshot_ids=set(),
+        previous_finalized_snapshots=None,
     )
 
     plan = PlanBuilder(context_diff, is_dev=True).build()
@@ -976,6 +997,7 @@ def test_added_model_with_forward_only_parent(make_snapshot, mocker: MockerFixtu
         new_snapshots={snapshot_b.snapshot_id: snapshot_b},
         previous_plan_id=None,
         previously_promoted_snapshot_ids=set(),
+        previous_finalized_snapshots=None,
     )
 
     PlanBuilder(context_diff, is_dev=True).build()
@@ -1011,6 +1033,7 @@ def test_added_forward_only_model(make_snapshot, mocker: MockerFixture):
         },
         previous_plan_id=None,
         previously_promoted_snapshot_ids=set(),
+        previous_finalized_snapshots=None,
     )
 
     PlanBuilder(context_diff).build()
@@ -1040,6 +1063,7 @@ def test_disable_restatement(make_snapshot, mocker: MockerFixture):
         new_snapshots={},
         previous_plan_id=None,
         previously_promoted_snapshot_ids=set(),
+        previous_finalized_snapshots=None,
     )
 
     with pytest.raises(PlanError, match="""Cannot restate from '"a"'.*"""):
@@ -1095,6 +1119,7 @@ def test_revert_to_previous_value(make_snapshot, mocker: MockerFixture):
         new_snapshots={snapshot_a.snapshot_id: snapshot_a},
         previous_plan_id=None,
         previously_promoted_snapshot_ids=set(),
+        previous_finalized_snapshots=None,
     )
 
     plan_builder = PlanBuilder(context_diff)
@@ -1304,6 +1329,7 @@ def test_add_restatements(
         new_snapshots={},
         previous_plan_id=None,
         previously_promoted_snapshot_ids=set(),
+        previous_finalized_snapshots=None,
     )
 
     plan = PlanBuilder(
@@ -1377,6 +1403,7 @@ def test_dev_plan_depends_past(make_snapshot, mocker: MockerFixture):
         },
         previous_plan_id=None,
         previously_promoted_snapshot_ids=set(),
+        previous_finalized_snapshots=None,
     )
 
     dev_plan_start_aligned = PlanBuilder(
@@ -1388,6 +1415,13 @@ def test_dev_plan_depends_past(make_snapshot, mocker: MockerFixture):
         '"a_child"',
         '"b"',
     ]
+    assert dev_plan_start_aligned.directly_modified == {
+        snapshot.snapshot_id,
+        snapshot_child.snapshot_id,
+        unrelated_snapshot.snapshot_id,
+    }
+    assert dev_plan_start_aligned.indirectly_modified == {}
+
     dev_plan_start_ahead_of_model = PlanBuilder(
         context_diff, start="2023-01-02", end="2023-01-10", is_dev=True
     ).build()
@@ -1398,6 +1432,103 @@ def test_dev_plan_depends_past(make_snapshot, mocker: MockerFixture):
         snapshot.snapshot_id,
         snapshot_child.snapshot_id,
     ]
+    assert dev_plan_start_ahead_of_model.directly_modified == {unrelated_snapshot.snapshot_id}
+    assert dev_plan_start_ahead_of_model.indirectly_modified == {}
+
+
+def test_dev_plan_depends_past_non_deployable(make_snapshot, mocker: MockerFixture):
+    snapshot = make_snapshot(
+        SqlModel(
+            name="a",
+            # self reference query so it depends_on_past
+            query=parse_one("select 1, ds FROM a"),
+            start="2023-01-01",
+            kind=IncrementalByTimeRangeKind(time_column="ds"),
+        ),
+    )
+    snapshot.categorize_as(SnapshotChangeCategory.BREAKING)
+
+    updated_snapshot = make_snapshot(
+        SqlModel(
+            **{
+                **snapshot.model.dict(),
+                "query": parse_one("select 1, ds, 2 FROM a"),
+            }
+        ),
+    )
+    updated_snapshot.categorize_as(SnapshotChangeCategory.FORWARD_ONLY)
+
+    snapshot_child = make_snapshot(
+        SqlModel(
+            name="a_child",
+            query=parse_one("select 1, ds FROM a"),
+            start="2023-01-01",
+            kind=IncrementalByTimeRangeKind(time_column="ds"),
+        ),
+        nodes={'"a"': updated_snapshot.model},
+    )
+    snapshot_child.categorize_as(SnapshotChangeCategory.BREAKING)
+    unrelated_snapshot = make_snapshot(
+        SqlModel(
+            name="b",
+            query=parse_one("select 1, ds"),
+            start="2023-01-01",
+            kind=IncrementalByTimeRangeKind(time_column="ds"),
+        ),
+    )
+    unrelated_snapshot.categorize_as(SnapshotChangeCategory.BREAKING)
+
+    assert updated_snapshot.depends_on_past
+    assert not snapshot_child.depends_on_past
+    assert not unrelated_snapshot.depends_on_past
+    assert snapshot_child.model.depends_on == {'"a"'}
+    assert snapshot_child.parents == (updated_snapshot.snapshot_id,)
+    assert unrelated_snapshot.model.depends_on == set()
+
+    context_diff = ContextDiff(
+        environment="test_environment",
+        is_new_environment=True,
+        is_unfinalized_environment=False,
+        create_from="prod",
+        added={snapshot_child.snapshot_id, unrelated_snapshot.snapshot_id},
+        removed_snapshots={},
+        modified_snapshots={snapshot.name: (updated_snapshot, snapshot)},
+        snapshots={
+            updated_snapshot.snapshot_id: updated_snapshot,
+            snapshot_child.snapshot_id: snapshot_child,
+            unrelated_snapshot.snapshot_id: unrelated_snapshot,
+        },
+        new_snapshots={
+            updated_snapshot.snapshot_id: snapshot,
+            snapshot_child.snapshot_id: snapshot_child,
+            unrelated_snapshot.snapshot_id: unrelated_snapshot,
+        },
+        previous_plan_id=None,
+        previously_promoted_snapshot_ids=set(),
+        previous_finalized_snapshots=None,
+    )
+
+    dev_plan_start_aligned = PlanBuilder(
+        context_diff, start="2023-01-01", end="2023-01-10", is_dev=True
+    ).build()
+    assert len(dev_plan_start_aligned.new_snapshots) == 3
+    assert sorted([x.name for x in dev_plan_start_aligned.new_snapshots]) == [
+        '"a"',
+        '"a_child"',
+        '"b"',
+    ]
+
+    # There should be no ignored snapshots because all changes are non-deployable.
+    dev_plan_start_ahead_of_model = PlanBuilder(
+        context_diff, start="2023-01-02", end="2023-01-10", is_dev=True
+    ).build()
+    assert len(dev_plan_start_ahead_of_model.new_snapshots) == 3
+    assert sorted([x.name for x in dev_plan_start_aligned.new_snapshots]) == [
+        '"a"',
+        '"a_child"',
+        '"b"',
+    ]
+    assert not dev_plan_start_ahead_of_model.ignored
 
 
 def test_restatement_intervals_after_updating_start(sushi_context: Context):
@@ -1444,6 +1575,7 @@ def test_models_selected_for_backfill(make_snapshot, mocker: MockerFixture):
         new_snapshots={snapshot_b.snapshot_id: snapshot_b},
         previous_plan_id=None,
         previously_promoted_snapshot_ids=set(),
+        previous_finalized_snapshots=None,
     )
 
     with pytest.raises(
@@ -1492,11 +1624,12 @@ def test_categorized_uncategorized(make_snapshot, mocker: MockerFixture):
         create_from="prod",
         added=set(),
         removed_snapshots={},
-        modified_snapshots={new_snapshot.name: (snapshot, new_snapshot)},
+        modified_snapshots={new_snapshot.name: (new_snapshot, snapshot)},
         snapshots={new_snapshot.snapshot_id: new_snapshot},
         new_snapshots={new_snapshot.snapshot_id: new_snapshot},
         previous_plan_id=None,
         previously_promoted_snapshot_ids=set(),
+        previous_finalized_snapshots=None,
     )
 
     plan_builder = PlanBuilder(context_diff, auto_categorization_enabled=False)
@@ -1510,3 +1643,57 @@ def test_categorized_uncategorized(make_snapshot, mocker: MockerFixture):
     plan = plan_builder.build()
     assert not plan.uncategorized
     assert plan.categorized == [new_snapshot]
+
+
+def test_environment_previous_finalized_snapshots(make_snapshot, mocker: MockerFixture):
+    snapshot_a = make_snapshot(SqlModel(name="a", query=parse_one("select 1 as one, ds")))
+    snapshot_a.categorize_as(SnapshotChangeCategory.BREAKING)
+
+    updated_snapshot_a = make_snapshot(SqlModel(name="a", query=parse_one("select 4 as four, ds")))
+    updated_snapshot_a.categorize_as(SnapshotChangeCategory.BREAKING)
+
+    snapshot_b = make_snapshot(SqlModel(name="b", query=parse_one("select 2 as two, ds")))
+    snapshot_b.categorize_as(SnapshotChangeCategory.BREAKING)
+
+    snapshot_c = make_snapshot(SqlModel(name="c", query=parse_one("select 3 as three, ds")))
+    snapshot_c.categorize_as(SnapshotChangeCategory.BREAKING)
+
+    snapshot_d = make_snapshot(SqlModel(name="d", query=parse_one("select 5 as five, ds")))
+    snapshot_d.categorize_as(SnapshotChangeCategory.BREAKING)
+
+    context_diff = ContextDiff(
+        environment="test_environment",
+        is_new_environment=False,
+        is_unfinalized_environment=True,
+        create_from="prod",
+        added={snapshot_b.snapshot_id},
+        removed_snapshots={snapshot_c.snapshot_id: snapshot_c.table_info},
+        modified_snapshots={snapshot_a.name: (updated_snapshot_a, snapshot_a)},
+        snapshots={
+            updated_snapshot_a.snapshot_id: updated_snapshot_a,
+            snapshot_b.snapshot_id: snapshot_b,
+            snapshot_d.snapshot_id: snapshot_d,
+        },
+        new_snapshots={
+            snapshot_b.snapshot_id: snapshot_b,
+            updated_snapshot_a.snapshot_id: updated_snapshot_a,
+        },
+        previous_plan_id=None,
+        previously_promoted_snapshot_ids=set(),
+        previous_finalized_snapshots=[snapshot_c.table_info, snapshot_d.table_info],
+    )
+
+    plan = PlanBuilder(context_diff).build()
+    assert set(plan.environment.previous_finalized_snapshots or []) == {
+        snapshot_c.table_info,
+        snapshot_d.table_info,
+    }
+
+    context_diff.is_unfinalized_environment = False
+
+    plan = PlanBuilder(context_diff).build()
+    assert set(plan.environment.previous_finalized_snapshots or []) == {
+        snapshot_a.table_info,
+        snapshot_c.table_info,
+        snapshot_d.table_info,
+    }

@@ -4,11 +4,11 @@ import typing as t
 from pathlib import Path
 from unittest.mock import patch
 
-import agate
 import pytest
 from dbt.adapters.base import BaseRelation
 from dbt.contracts.relation import Policy
 from dbt.exceptions import CompilationError
+from freezegun import freeze_time
 from pytest_mock.plugin import MockerFixture
 from sqlglot import exp, parse_one
 
@@ -21,10 +21,10 @@ from sqlmesh.core.model import (
     IncrementalByTimeRangeKind,
     IncrementalByUniqueKeyKind,
     IncrementalUnmanagedKind,
-    SCDType2Kind,
     SqlModel,
     ViewKind,
 )
+from sqlmesh.core.model.kind import SCDType2ByColumnKind, SCDType2ByTimeKind
 from sqlmesh.core.state_sync.engine_adapter import _snapshot_to_json
 from sqlmesh.dbt.builtin import _relation_info_to_relation
 from sqlmesh.dbt.column import (
@@ -40,7 +40,7 @@ from sqlmesh.dbt.target import BigQueryConfig, DuckDbConfig, SnowflakeConfig
 from sqlmesh.dbt.test import TestConfig
 from sqlmesh.utils.errors import ConfigError, MacroEvalError, SQLMeshError
 
-pytestmark = pytest.mark.dbt
+pytestmark = [pytest.mark.dbt, pytest.mark.slow]
 
 
 def test_model_name():
@@ -75,13 +75,28 @@ def test_model_kind():
     assert ModelConfig(materialized=Materialization.VIEW).model_kind(context) == ViewKind()
     assert ModelConfig(materialized=Materialization.EPHEMERAL).model_kind(context) == EmbeddedKind()
     assert ModelConfig(
-        materialized=Materialization.SNAPSHOT, unique_key=["id"], updated_at="updated_at"
-    ).model_kind(context) == SCDType2Kind(
+        materialized=Materialization.SNAPSHOT,
+        unique_key=["id"],
+        updated_at="updated_at",
+        strategy="timestamp",
+    ).model_kind(context) == SCDType2ByTimeKind(
         unique_key=["id"],
         valid_from_name="dbt_valid_from",
         valid_to_name="dbt_valid_to",
         updated_at_as_valid_from=True,
         updated_at_name="updated_at",
+    )
+    assert ModelConfig(
+        materialized=Materialization.SNAPSHOT,
+        unique_key=["id"],
+        strategy="check",
+        check_cols=["foo"],
+    ).model_kind(context) == SCDType2ByColumnKind(
+        unique_key=["id"],
+        valid_from_name="dbt_valid_from",
+        valid_to_name="dbt_valid_to",
+        columns=["foo"],
+        execution_time_as_valid_from=True,
     )
 
     assert ModelConfig(materialized=Materialization.INCREMENTAL, time_column="foo").model_kind(
@@ -181,8 +196,11 @@ def test_model_kind_snapshot_bigquery():
     context.target = BigQueryConfig(name="target", schema="foo", project="bar")
 
     assert ModelConfig(
-        materialized=Materialization.SNAPSHOT, unique_key=["id"], updated_at="updated_at"
-    ).model_kind(context) == SCDType2Kind(
+        materialized=Materialization.SNAPSHOT,
+        unique_key=["id"],
+        updated_at="updated_at",
+        strategy="timestamp",
+    ).model_kind(context) == SCDType2ByTimeKind(
         unique_key=["id"],
         valid_from_name="dbt_valid_from",
         valid_to_name="dbt_valid_to",
@@ -267,6 +285,7 @@ def test_seed_columns():
     assert sqlmesh_seed.column_descriptions == expected_column_descriptions
 
 
+@pytest.mark.xdist_group("dbt_manifest")
 @pytest.mark.parametrize(
     "model_fqn", ['"memory"."sushi"."waiters"', '"memory"."sushi"."waiter_names"']
 )
@@ -292,6 +311,7 @@ def test_hooks(sushi_test_dbt_context: Context, model_fqn: str):
     assert "post-hook" in mock_logger.call_args[0][0]
 
 
+@pytest.mark.xdist_group("dbt_manifest")
 def test_target_jinja(sushi_test_project: Project):
     context = sushi_test_project.context
 
@@ -303,11 +323,13 @@ def test_target_jinja(sushi_test_project: Project):
     assert context.render("{{ target.profile_name }}") == "None"
 
 
+@pytest.mark.xdist_group("dbt_manifest")
 def test_project_name_jinja(sushi_test_project: Project):
     context = sushi_test_project.context
     assert context.render("{{ project_name }}") == "sushi"
 
 
+@pytest.mark.xdist_group("dbt_manifest")
 def test_schema_jinja(sushi_test_project: Project, assert_exp_eq):
     model_config = ModelConfig(
         name="model",
@@ -323,6 +345,7 @@ def test_schema_jinja(sushi_test_project: Project, assert_exp_eq):
     )
 
 
+@pytest.mark.xdist_group("dbt_manifest")
 def test_config_jinja(sushi_test_project: Project):
     hook = "{{ config(alias='bar') }} {{ config.alias }}"
     model_config = ModelConfig(
@@ -339,6 +362,7 @@ def test_config_jinja(sushi_test_project: Project):
     assert model.render_pre_statements()[0].sql() == '"bar"'
 
 
+@pytest.mark.xdist_group("dbt_manifest")
 def test_model_this(assert_exp_eq, sushi_test_project: Project):
     model_config = ModelConfig(
         name="model",
@@ -354,6 +378,7 @@ def test_model_this(assert_exp_eq, sushi_test_project: Project):
     )
 
 
+@pytest.mark.xdist_group("dbt_manifest")
 def test_test_this(assert_exp_eq, sushi_test_project: Project):
     test_config = TestConfig(
         name="test",
@@ -371,26 +396,38 @@ def test_test_this(assert_exp_eq, sushi_test_project: Project):
     )
 
 
+@pytest.mark.xdist_group("dbt_manifest")
 def test_statement(sushi_test_project: Project, runtime_renderer: t.Callable):
     context = sushi_test_project.context
     assert context.target
     engine_adapter = context.target.to_sqlmesh().create_engine_adapter()
     renderer = runtime_renderer(context, engine_adapter=engine_adapter)
-    assert renderer(
-        "{% set test_var = 'SELECT 1' %}{% call statement('something', fetch_result=True) %} {{ test_var }} {% endcall %}{{ load_result('something').table }}",
-    ) == str(agate.Table([[1]], column_names=["1"], column_types=[agate.Number()]))
+    assert (
+        renderer(
+            "{% set test_var = 'SELECT 1' %}{% call statement('something', fetch_result=True) %} {{ test_var }} {% endcall %}{{ load_result('something').table }}",
+        )
+        == """| column | data_type |
+| ------ | --------- |
+| 1      | Integer   |
+"""
+    )
 
 
+@pytest.mark.xdist_group("dbt_manifest")
 def test_run_query(sushi_test_project: Project, runtime_renderer: t.Callable):
     context = sushi_test_project.context
     assert context.target
     engine_adapter = context.target.to_sqlmesh().create_engine_adapter()
     renderer = runtime_renderer(context, engine_adapter=engine_adapter)
-    assert renderer("{{ run_query('SELECT 1 UNION ALL SELECT 2') }}") == str(
-        agate.Table([[1], [2]], column_names=["1"], column_types=[agate.Number()])
+    assert (
+        renderer(
+            """{% set results = run_query('SELECT 1 UNION ALL SELECT 2') %}{% for val in results.columns[0] %}{{ val }} {% endfor %}"""
+        )
+        == "1 2 "
     )
 
 
+@pytest.mark.xdist_group("dbt_manifest")
 def test_logging(sushi_test_project: Project, runtime_renderer: t.Callable):
     context = sushi_test_project.context
     assert context.target
@@ -407,6 +444,7 @@ def test_logging(sushi_test_project: Project, runtime_renderer: t.Callable):
     assert "bar" in mock_logger.call_args[0][0]
 
 
+@pytest.mark.xdist_group("dbt_manifest")
 def test_exceptions(sushi_test_project: Project):
     context = sushi_test_project.context
 
@@ -419,6 +457,7 @@ def test_exceptions(sushi_test_project: Project):
         context.render('{{ exceptions.raise_compiler_error("Error") }}')
 
 
+@pytest.mark.xdist_group("dbt_manifest")
 def test_modules(sushi_test_project: Project):
     context = sushi_test_project.context
 
@@ -441,6 +480,7 @@ def test_modules(sushi_test_project: Project):
     assert context.render(itertools_jinja) == "5"
 
 
+@pytest.mark.xdist_group("dbt_manifest")
 def test_flags(sushi_test_project: Project):
     context = sushi_test_project.context
 
@@ -449,6 +489,7 @@ def test_flags(sushi_test_project: Project):
     assert context.render("{{ flags.WHICH }}") == "parse"
 
 
+@pytest.mark.xdist_group("dbt_manifest")
 def test_relation(sushi_test_project: Project):
     context = sushi_test_project.context
 
@@ -465,6 +506,7 @@ def test_relation(sushi_test_project: Project):
     assert context.render(jinja) == "sushi waiters"
 
 
+@pytest.mark.xdist_group("dbt_manifest")
 def test_column(sushi_test_project: Project):
     context = sushi_test_project.context
 
@@ -477,6 +519,7 @@ def test_column(sushi_test_project: Project):
     assert context.render(jinja) == "True False"
 
 
+@pytest.mark.xdist_group("dbt_manifest")
 def test_quote(sushi_test_project: Project):
     context = sushi_test_project.context
 
@@ -484,6 +527,7 @@ def test_quote(sushi_test_project: Project):
     assert context.render(jinja) == '"foo" "bar"'
 
 
+@pytest.mark.xdist_group("dbt_manifest")
 def test_as_filters(sushi_test_project: Project):
     context = sushi_test_project.context
 
@@ -500,6 +544,7 @@ def test_as_filters(sushi_test_project: Project):
     assert context.render("{{ None | as_native }}") == "None"
 
 
+@pytest.mark.xdist_group("dbt_manifest")
 def test_set(sushi_test_project: Project):
     context = sushi_test_project.context
 
@@ -511,6 +556,7 @@ def test_set(sushi_test_project: Project):
         assert context.render("{{ set_strict(1) }}")
 
 
+@pytest.mark.xdist_group("dbt_manifest")
 def test_json(sushi_test_project: Project):
     context = sushi_test_project.context
 
@@ -521,6 +567,7 @@ def test_json(sushi_test_project: Project):
     assert context.render("""{{ fromjson('invalid') }}""") == "None"
 
 
+@pytest.mark.xdist_group("dbt_manifest")
 def test_yaml(sushi_test_project: Project):
     context = sushi_test_project.context
 
@@ -530,6 +577,7 @@ def test_yaml(sushi_test_project: Project):
     assert context.render("""{{ fromyaml('key: value') }}""") == "{'key': 'value'}"
 
 
+@pytest.mark.xdist_group("dbt_manifest")
 def test_zip(sushi_test_project: Project):
     context = sushi_test_project.context
 
@@ -541,12 +589,14 @@ def test_zip(sushi_test_project: Project):
         context.render("{{ zip_strict(12, ['a', 'b']) }}")
 
 
+@pytest.mark.xdist_group("dbt_manifest")
 def test_dbt_version(sushi_test_project: Project):
     context = sushi_test_project.context
 
     assert context.render("{{ dbt_version }}").startswith("1.")
 
 
+@pytest.mark.xdist_group("dbt_manifest")
 def test_parsetime_adapter_call(
     assert_exp_eq, sushi_test_project: Project, sushi_test_dbt_context: Context
 ):
@@ -576,6 +626,7 @@ def test_parsetime_adapter_call(
     )
 
 
+@pytest.mark.xdist_group("dbt_manifest")
 def test_partition_by(sushi_test_project: Project):
     context = sushi_test_project.context
     context.target = BigQueryConfig(name="production", database="main", schema="sushi")
@@ -617,6 +668,7 @@ def test_partition_by(sushi_test_project: Project):
     assert model_config.to_sqlmesh(context).partitioned_by == [exp.to_column("ds")]
 
 
+@pytest.mark.xdist_group("dbt_manifest")
 def test_relation_info_to_relation():
     assert _relation_info_to_relation(
         {"quote_policy": {}},
@@ -649,6 +701,7 @@ def test_relation_info_to_relation():
     ).quote_policy == Policy(database=False, schema=False, identifier=False)
 
 
+@pytest.mark.xdist_group("dbt_manifest")
 def test_is_incremental(sushi_test_project: Project, assert_exp_eq, mocker):
     model_config = ModelConfig(
         name="model",
@@ -678,6 +731,7 @@ def test_is_incremental(sushi_test_project: Project, assert_exp_eq, mocker):
     )
 
 
+@pytest.mark.xdist_group("dbt_manifest")
 def test_dbt_max_partition(sushi_test_project: Project, assert_exp_eq, mocker: MockerFixture):
     model_config = ModelConfig(
         name="model",
@@ -706,7 +760,7 @@ def test_dbt_max_partition(sushi_test_project: Project, assert_exp_eq, mocker: M
 JINJA_STATEMENT_BEGIN;
 {% if is_incremental() %}
   DECLARE _dbt_max_partition DATETIME DEFAULT (
-    SELECT MAX(PARSE_DATETIME('%Y%m', partition_id)) FROM `{{ target.database }}`.`{{ adapter.resolve_schema(this) }}`.INFORMATION_SCHEMA.PARTITIONS WHERE table_name = '{{ adapter.resolve_identifier(this) }}' AND NOT partition_id IS NULL AND partition_id <> '__NULL__'
+    SELECT MAX(PARSE_DATETIME('%Y%m', partition_id)) FROM `{{ target.database }}.{{ adapter.resolve_schema(this) }}.INFORMATION_SCHEMA.PARTITIONS` WHERE table_name = '{{ adapter.resolve_identifier(this) }}' AND NOT partition_id IS NULL AND partition_id <> '__NULL__'
   );
 {% endif %}
 JINJA_END;""".strip()
@@ -715,6 +769,7 @@ JINJA_END;""".strip()
     assert d.parse_one(pre_statement.sql()) == pre_statement
 
 
+@pytest.mark.xdist_group("dbt_manifest")
 def test_bigquery_table_properties(sushi_test_project: Project, mocker: MockerFixture):
     context = sushi_test_project.context
     context.target = BigQueryConfig(
@@ -753,6 +808,7 @@ def test_bigquery_table_properties(sushi_test_project: Project, mocker: MockerFi
     }
 
 
+@pytest.mark.xdist_group("dbt_manifest")
 def test_snapshot_json_payload():
     sushi_context = Context(paths=["tests/fixtures/dbt/sushi_test"])
     snapshot_json = json.loads(
@@ -765,3 +821,56 @@ def test_snapshot_json_payload():
         "database": "memory",
         "target_name": "in_memory",
     }
+
+
+@pytest.mark.xdist_group("dbt_manifest")
+@freeze_time("2023-01-08 00:00:00")
+def test_dbt_package_macros(sushi_test_project: Project):
+    context = sushi_test_project.context
+
+    # Make sure external macros are available.
+    assert context.render("{{ dbt.current_timestamp() }}") == "now()"
+    # Make sure builtins are available too.
+    assert context.render("{{ dbt.run_started_at }}") == "2023-01-08 00:00:00+00:00"
+
+
+@pytest.mark.xdist_group("dbt_manifest")
+def test_dbt_vars(sushi_test_project: Project):
+    context = sushi_test_project.context
+
+    assert context.render("{{ var('some_other_var') }}") == "5"
+    assert context.render("{{ var('some_other_var', 0) }}") == "5"
+    assert context.render("{{ var('missing') }}") == "None"
+    assert context.render("{{ var('missing', 0) }}") == "0"
+
+    assert context.render("{{ var.has_var('some_other_var') }}") == "True"
+    assert context.render("{{ var.has_var('missing') }}") == "False"
+
+
+@pytest.mark.xdist_group("dbt_manifest")
+def test_snowflake_session_properties(sushi_test_project: Project, mocker: MockerFixture):
+    context = sushi_test_project.context
+    context.target = SnowflakeConfig(
+        name="target", schema="test", database="test", account="foo", user="bar", password="baz"
+    )
+
+    base_config = ModelConfig(
+        name="model",
+        alias="model",
+        package_name="package",
+        schema="sushi",
+        partition_by={"field": "`ds`", "data_type": "datetime", "granularity": "month"},
+        materialized=Materialization.INCREMENTAL,
+        sql="SELECT 1 AS one FROM tbl_a",
+    )
+
+    assert base_config.to_sqlmesh(context).session_properties == {}
+
+    model_with_warehouse = base_config.copy(
+        update={"snowflake_warehouse": "test_warehouse"}
+    ).to_sqlmesh(context)
+
+    assert model_with_warehouse.session_properties_ == exp.Tuple(
+        expressions=[exp.Literal.string("warehouse").eq(exp.Literal.string("test_warehouse"))]
+    )
+    assert model_with_warehouse.session_properties == {"warehouse": "test_warehouse"}

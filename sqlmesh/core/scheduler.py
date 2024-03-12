@@ -89,6 +89,7 @@ class Scheduler:
         deployability_index: t.Optional[DeployabilityIndex] = None,
         restatements: t.Optional[t.Dict[SnapshotId, SnapshotInterval]] = None,
         ignore_cron: bool = False,
+        end_bounded: bool = False,
         selected_snapshots: t.Optional[t.Set[str]] = None,
     ) -> SnapshotToBatches:
         """Find the optimal date interval paramaters based on what needs processing and maximal batch size.
@@ -108,6 +109,8 @@ class Scheduler:
             deployability_index: Determines snapshots that are deployable in the context of this evaluation.
             restatements: A set of snapshot names being restated.
             ignore_cron: Whether to ignore the node's cron schedule.
+            end_bounded: If set to true, the returned intervals will be bounded by the target end date, disregarding lookback,
+                allow_partials, and other attributes that could cause the intervals to exceed the target end date.
             selected_snapshots: A set of snapshot names to run. If not provided, all snapshots will be run.
         """
         restatements = restatements or {}
@@ -127,6 +130,7 @@ class Scheduler:
             execution_time=execution_time or now(),
             restatements=restatements,
             ignore_cron=ignore_cron,
+            end_bounded=end_bounded,
         )
 
     def evaluate(
@@ -201,6 +205,7 @@ class Scheduler:
         execution_time: t.Optional[TimeLike] = None,
         restatements: t.Optional[t.Dict[SnapshotId, SnapshotInterval]] = None,
         ignore_cron: bool = False,
+        end_bounded: bool = False,
         selected_snapshots: t.Optional[t.Set[str]] = None,
         circuit_breaker: t.Optional[t.Callable[[], bool]] = None,
         deployability_index: t.Optional[DeployabilityIndex] = None,
@@ -216,6 +221,8 @@ class Scheduler:
             execution_time: The date/time time reference to use for execution time. Defaults to now.
             restatements: A dict of snapshots to restate and their intervals.
             ignore_cron: Whether to ignore the node's cron schedule.
+            end_bounded: If set to true, the evaluated intervals will be bounded by the target end date, disregarding lookback,
+                allow_partials, and other attributes that could cause the intervals to exceed the target end date.
             selected_snapshots: A set of snapshot names to run. If not provided, all snapshots will be run.
             circuit_breaker: An optional handler which checks if the run should be aborted.
             deployability_index: Determines snapshots that are deployable in the context of this render.
@@ -245,6 +252,7 @@ class Scheduler:
             deployability_index=deployability_index,
             restatements=restatements,
             ignore_cron=ignore_cron,
+            end_bounded=end_bounded,
             selected_snapshots=selected_snapshots,
         )
         if not batches:
@@ -345,7 +353,7 @@ class Scheduler:
                     if len(p_intervals) > 1:
                         upstream_dependencies.append((p_sid.name, terminal_node))
                     else:
-                        for (i, interval) in enumerate(p_intervals):
+                        for i, interval in enumerate(p_intervals):
                             upstream_dependencies.append((p_sid.name, (interval, i)))
 
             for i, interval in enumerate(intervals):
@@ -369,6 +377,7 @@ def compute_interval_params(
     execution_time: t.Optional[TimeLike] = None,
     restatements: t.Optional[t.Dict[SnapshotId, SnapshotInterval]] = None,
     ignore_cron: bool = False,
+    end_bounded: bool = False,
 ) -> SnapshotToBatches:
     """Find the optimal date interval paramaters based on what needs processing and maximal batch size.
 
@@ -389,6 +398,8 @@ def compute_interval_params(
         execution_time: The date/time time reference to use for execution time.
         restatements: A dict of snapshot names being restated and their intervals.
         ignore_cron: Whether to ignore the node's cron schedule.
+        end_bounded: If set to true, the returned intervals will be bounded by the target end date, disregarding lookback,
+            allow_partials, and other attributes that could cause the intervals to exceed the target end date.
 
     Returns:
         A dict containing all snapshots needing to be run with their associated interval params.
@@ -403,6 +414,7 @@ def compute_interval_params(
         restatements=restatements,
         deployability_index=deployability_index,
         ignore_cron=ignore_cron,
+        end_bounded=end_bounded,
     ).items():
         batches = []
         batch_size = snapshot.node.batch_size

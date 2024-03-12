@@ -14,14 +14,14 @@ from sqlmesh.core.model.common import (
     bool_validator,
     default_catalog_validator,
     depends_on_validator,
-    parse_expressions,
     parse_properties,
     properties_validator,
 )
 from sqlmesh.core.model.kind import (
     IncrementalByUniqueKeyKind,
     ModelKind,
-    SCDType2Kind,
+    SCDType2ByColumnKind,
+    SCDType2ByTimeKind,
     TimeColumn,
     ViewKind,
     _Incremental,
@@ -34,9 +34,13 @@ from sqlmesh.utils.errors import ConfigError
 from sqlmesh.utils.pydantic import (
     field_validator,
     field_validator_v1_args,
+    list_of_fields_validator,
     model_validator,
     model_validator_v1_args,
 )
+
+if t.TYPE_CHECKING:
+    from sqlmesh.core._typing import SessionProperties
 
 AuditReference = t.Tuple[str, t.Dict[str, exp.Expression]]
 
@@ -58,7 +62,6 @@ class ModelMeta(_Node):
     audits: t.List[AuditReference] = []
     grains: t.List[exp.Expression] = []
     references: t.List[exp.Expression] = []
-    hash_raw_query: bool = False
     physical_schema_override: t.Optional[str] = None
     table_properties_: t.Optional[exp.Tuple] = Field(default=None, alias="table_properties")
     session_properties_: t.Optional[exp.Tuple] = Field(default=None, alias="session_properties")
@@ -148,7 +151,7 @@ class ModelMeta(_Node):
     def _partition_by_validator(
         cls, v: t.Any, values: t.Dict[str, t.Any]
     ) -> t.List[exp.Expression]:
-        partitions = parse_expressions(cls, v, values)
+        partitions = list_of_fields_validator(v, values)
 
         for partition in partitions:
             num_cols = len(list(partition.find_all(exp.Column)))
@@ -286,7 +289,9 @@ class ModelMeta(_Node):
 
     @property
     def unique_key(self) -> t.List[exp.Expression]:
-        if isinstance(self.kind, (IncrementalByUniqueKeyKind, SCDType2Kind)):
+        if isinstance(
+            self.kind, (SCDType2ByTimeKind, SCDType2ByColumnKind, IncrementalByUniqueKeyKind)
+        ):
             return self.kind.unique_key
         return []
 
@@ -332,7 +337,7 @@ class ModelMeta(_Node):
         return {}
 
     @property
-    def session_properties(self) -> t.Dict[str, t.Union[exp.Expression | str | int | float | bool]]:
+    def session_properties(self) -> SessionProperties:
         """A dictionary of session properties."""
         if not self.session_properties_:
             return {}

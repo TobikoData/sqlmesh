@@ -1,21 +1,23 @@
 .gutter {
-  background-color: var(--color-divider);
+  background-color: var(--color-brand);
   background-repeat: no-repeat;
   background-position: 50%;
+  z-index: 1;
 }
 
 .gutter:hover {
-  background-color: var(--color-brand);
+  background-color: var(--color-brand) !important;
+  outline: 1px solid var(--color-brand);
 }
 
 .gutter.gutter-vertical {
   cursor: row-resize;
-  background-image: url('data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAB4AAAAFAQMAAABo7865AAAABlBMVEVHcEzMzMzyAv2sAAAAAXRSTlMAQObYZgAAABBJREFUeF5jOAMEEAIEEFwAn3kMwcB6I2AAAAAASUVORK5CYII=');
+  background-color: var(--color-divider);
 }
 
 .gutter.gutter-horizontal {
   cursor: col-resize;
-  background-image: url('data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAUAAAAeCAYAAADkftS9AAAAIklEQVQoU2M4c+bMfxAGAgYYmwGrIIiDjrELjpo5aiZeMwF+yNnOs5KSvgAAAABJRU5ErkJggg==');
+  background-color: var(--color-divider);
 }
 
 .split {

@@ -101,7 +101,7 @@ class InsertOverwriteWithMergeMixin(EngineAdapter):
         columns_to_types = columns_to_types or self.columns(table_name)
         for source_query in source_queries:
             with source_query as query:
-                query = self._add_where_to_query(query, where, columns_to_types)
+                query = self._order_projections_and_filter(query, columns_to_types, where=where)
                 columns = [exp.to_column(col) for col in columns_to_types]
                 when_not_matched_by_source = exp.When(
                     matched=False,
@@ -126,8 +126,12 @@ class InsertOverwriteWithMergeMixin(EngineAdapter):
 
 
 class HiveMetastoreTablePropertiesMixin(EngineAdapter):
+    MAX_TABLE_COMMENT_LENGTH = 4000
+    MAX_COLUMN_COMMENT_LENGTH = 4000
+
     def _build_table_properties_exp(
         self,
+        catalog_name: t.Optional[str] = None,
         storage_format: t.Optional[str] = None,
         partitioned_by: t.Optional[t.List[exp.Expression]] = None,
         partition_interval_unit: t.Optional[IntervalUnit] = None,
@@ -147,14 +151,30 @@ class HiveMetastoreTablePropertiesMixin(EngineAdapter):
                     raise SQLMeshError(
                         f"PARTITIONED BY contains non-column value '{expr.sql(dialect='spark')}'."
                     )
-            properties.append(
-                exp.PartitionedByProperty(
-                    this=exp.Schema(expressions=partitioned_by),
-                )
+
+            property: exp.Property = exp.PartitionedByProperty(
+                this=exp.Schema(expressions=partitioned_by),
             )
 
+            if (
+                self.dialect == "trino"
+                and self.get_catalog_type(catalog_name or self.get_current_catalog()) == "iceberg"
+            ):
+                # On the Trino Iceberg catalog, the table property is called "partitioning" - not "partitioned_by"
+                # In addition, partition column transform expressions like `day(col)` or `bucket(col, 5)` are allowed
+                # ref: https://trino.io/docs/current/connector/iceberg.html#table-properties
+                property = exp.Property(
+                    this=exp.var("PARTITIONING"), value=exp.Schema(expressions=partitioned_by)
+                )
+
+            properties.append(property)
+
         if table_description:
-            properties.append(exp.SchemaCommentProperty(this=exp.Literal.string(table_description)))
+            properties.append(
+                exp.SchemaCommentProperty(
+                    this=exp.Literal.string(self._truncate_table_comment(table_description))
+                )
+            )
 
         properties.extend(self._table_properties_to_expressions(table_properties))
 
@@ -171,13 +191,23 @@ class HiveMetastoreTablePropertiesMixin(EngineAdapter):
         properties: t.List[exp.Expression] = []
 
         if table_description:
-            properties.append(exp.SchemaCommentProperty(this=exp.Literal.string(table_description)))
+            properties.append(
+                exp.SchemaCommentProperty(
+                    this=exp.Literal.string(self._truncate_table_comment(table_description))
+                )
+            )
 
         properties.extend(self._table_properties_to_expressions(table_properties))
 
         if properties:
             return exp.Properties(expressions=properties)
         return None
+
+    def _truncate_comment(self, comment: str, length: t.Optional[int]) -> str:
+        # iceberg does not have a comment length limit
+        if self.current_catalog_type == "iceberg":
+            return comment
+        return super()._truncate_comment(comment, length)
 
 
 class GetCurrentCatalogFromFunctionMixin(EngineAdapter):

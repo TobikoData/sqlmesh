@@ -127,6 +127,7 @@ def create_plan_dag_spec(
             execution_time=now(),
             deployability_index=deployability_index_for_evaluation,
             restatements=request.restatements,
+            end_bounded=request.end_bounded,
         )
     else:
         backfill_batches = {}
@@ -147,9 +148,7 @@ def create_plan_dag_spec(
             if deployability_index_for_creation.is_representative(s)
         }
         if request.no_gaps and not request.is_dev
-        else None
-        if request.no_gaps
-        else set()
+        else None if request.no_gaps else set()
     )
 
     return common.PlanDagSpec(
@@ -171,6 +170,10 @@ def create_plan_dag_spec(
         deployability_index_for_creation=deployability_index_for_creation,
         no_gaps_snapshot_names=no_gaps_snapshot_names,
         models_to_backfill=request.models_to_backfill,
+        ensure_finalized_snapshots=request.ensure_finalized_snapshots,
+        directly_modified_snapshots=request.directly_modified_snapshots,
+        indirectly_modified_snapshots=request.indirectly_modified_snapshots,
+        removed_snapshots=request.removed_snapshots,
     )
 
 

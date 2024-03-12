@@ -1,23 +1,27 @@
-import { useIDE } from '../ide/context'
+import {
+  type ErrorIDE,
+  useNotificationCenter,
+} from '../root/context/notificationCenter'
 import Page from '../root/Page'
 import SourceList, { SourceListItem } from '@components/sourceList/SourceList'
 import { EnumRoutes } from '~/routes'
-import { Outlet, useNavigate } from 'react-router-dom'
+import { Outlet, useLocation, useNavigate } from 'react-router-dom'
 import { EnumSize, EnumVariant } from '~/types/enum'
 import { useEffect, useMemo } from 'react'
 import { isArrayEmpty, isNil, isNotNil } from '@utils/index'
 import { Button } from '@components/button/Button'
 
 export default function PageErrors(): JSX.Element {
+  const { pathname } = useLocation()
   const navigate = useNavigate()
 
-  const { errors, removeError, clearErrors } = useIDE()
+  const { errors, removeError, clearErrors } = useNotificationCenter()
 
   const list = useMemo(() => Array.from(errors).reverse(), [errors])
 
   useEffect(() => {
     if (isArrayEmpty(list)) {
-      setTimeout(() => navigate(EnumRoutes.Ide))
+      setTimeout(() => navigate(EnumRoutes.Home))
     } else {
       const id = list[0]?.id
 
@@ -40,7 +44,7 @@ export default function PageErrors(): JSX.Element {
   return (
     <Page
       sidebar={
-        <>
+        <div className="flex flex-col h-full w-full">
           {errors.size > 0 && (
             <div className="flex justify-end m-1">
               <Button
@@ -52,12 +56,13 @@ export default function PageErrors(): JSX.Element {
               </Button>
             </div>
           )}
-          <SourceList
-            by="id"
-            byName="key"
-            byDescription="message"
+          <SourceList<ErrorIDE>
+            keyId="id"
+            keyName="key"
+            keyDescription="message"
             to={EnumRoutes.Errors}
             items={list}
+            isActive={id => `${EnumRoutes.Errors}/${id}` === pathname}
             types={list.reduce(
               (acc: Record<string, string>, it) =>
                 Object.assign(acc, { [it.id]: it.status }),
@@ -82,7 +87,7 @@ export default function PageErrors(): JSX.Element {
               />
             )}
           />
-        </>
+        </div>
       }
       content={<Outlet />}
     />

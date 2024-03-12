@@ -14,7 +14,6 @@ from sqlglot.optimizer.qualify import qualify
 from sqlglot.optimizer.qualify_columns import quote_identifiers
 from sqlglot.optimizer.qualify_tables import qualify_tables
 from sqlglot.optimizer.simplify import simplify
-from sqlglot.schema import MappingSchema
 
 from sqlmesh.core import constants as c
 from sqlmesh.core import dialect as d
@@ -66,7 +65,7 @@ class BaseExpressionRenderer:
         self._cache: t.Dict[CacheKey, t.List[t.Optional[exp.Expression]]] = {}
 
     def update_schema(self, schema: t.Dict[str, t.Any]) -> None:
-        self.schema = MappingSchema(_unquote_schema(schema), dialect=self._dialect, normalize=False)
+        self.schema = d.normalize_mapping_schema(schema, dialect=self._dialect)
 
     def _render(
         self,
@@ -306,15 +305,18 @@ class ExpressionRenderer(BaseExpressionRenderer):
         deployability_index: t.Optional[DeployabilityIndex] = None,
         expand: t.Iterable[str] = tuple(),
         **kwargs: t.Any,
-    ) -> t.List[exp.Expression]:
-        expressions = super()._render(
-            start=start,
-            end=end,
-            execution_time=execution_time,
-            snapshots=snapshots,
-            deployability_index=deployability_index,
-            **kwargs,
-        )
+    ) -> t.Optional[t.List[exp.Expression]]:
+        try:
+            expressions = super()._render(
+                start=start,
+                end=end,
+                execution_time=execution_time,
+                snapshots=snapshots,
+                deployability_index=deployability_index,
+                **kwargs,
+            )
+        except ParsetimeAdapterCallError:
+            return None
 
         return [
             self._resolve_tables(
@@ -361,7 +363,7 @@ class QueryRenderer(BaseExpressionRenderer):
 
         self._model_fqn = model_fqn
 
-        self._optimized_cache: t.Dict[CacheKey, exp.Subqueryable] = {}
+        self._optimized_cache: t.Dict[CacheKey, exp.Query] = {}
 
     def update_schema(self, schema: t.Dict[str, t.Any]) -> None:
         super().update_schema(schema)
@@ -379,7 +381,7 @@ class QueryRenderer(BaseExpressionRenderer):
         optimize: bool = True,
         runtime_stage: RuntimeStage = RuntimeStage.LOADING,
         **kwargs: t.Any,
-    ) -> t.Optional[exp.Subqueryable]:
+    ) -> t.Optional[exp.Query]:
         """Renders a query, expanding macros with provided kwargs, and optionally expanding referenced models.
 
         Args:
@@ -427,7 +429,7 @@ class QueryRenderer(BaseExpressionRenderer):
 
             if not query:
                 return None
-            if not isinstance(query, exp.Subqueryable):
+            if not isinstance(query, exp.Query):
                 raise_config_error(f"Query needs to be a SELECT or a UNION {query}.", self._path)
                 raise
 
@@ -467,15 +469,15 @@ class QueryRenderer(BaseExpressionRenderer):
         **kwargs: t.Any,
     ) -> None:
         if optimized:
-            if not isinstance(expression, exp.Subqueryable):
-                raise SQLMeshError(f"Expected a subqueryable but got: {expression}")
+            if not isinstance(expression, exp.Query):
+                raise SQLMeshError(f"Expected a Query but got: {expression}")
             self._optimized_cache[self._cache_key(start, end, execution_time)] = expression
         else:
             super().update_cache(
                 expression, start=start, end=end, execution_time=execution_time, **kwargs
             )
 
-    def _optimize_query(self, query: exp.Subqueryable, all_deps: t.Set[str]) -> exp.Subqueryable:
+    def _optimize_query(self, query: exp.Query, all_deps: t.Set[str]) -> exp.Query:
         # We don't want to normalize names in the schema because that's handled by the optimizer
         original = query
         missing_deps = set()
@@ -531,10 +533,3 @@ def _normalize_and_quote(query: E, dialect: str, default_catalog: t.Optional[str
     normalize_identifiers(query, dialect=dialect)
     yield query
     quote_identifiers(query, dialect=dialect)
-
-
-def _unquote_schema(schema: t.Dict) -> t.Dict:
-    """SQLGlot schema expects unquoted normalized keys."""
-    return {
-        k.strip('"'): _unquote_schema(v) if isinstance(v, dict) else v for k, v in schema.items()
-    }

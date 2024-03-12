@@ -2,6 +2,7 @@
 These integration tests are for testing integrating with SQLMesh and not integrating with Github.
 Therefore Github calls are still mocked but context is fully evaluated.
 """
+
 import os
 import pathlib
 import typing as t
@@ -110,7 +111,7 @@ def test_merge_pr_has_non_breaking_change(
     ]
     # Make a non-breaking change
     model = controller._context.get_model("sushi.waiter_revenue_by_day").copy()
-    model.query.expressions.append(exp.alias_("1", "new_col"))
+    model.query.select(exp.alias_("1", "new_col"), copy=False)
     controller._context.upsert_model(model)
 
     github_output_file = tmp_path / "github_output.txt"
@@ -308,7 +309,7 @@ def test_merge_pr_has_non_breaking_change_diff_start(
     ]
     # Make a non-breaking change
     model = controller._context.get_model("sushi.waiter_revenue_by_day").copy()
-    model.query.expressions.append(exp.alias_("1", "new_col"))
+    model.query.select(exp.alias_("1", "new_col"), copy=False)
     controller._context.upsert_model(model)
 
     github_output_file = tmp_path / "github_output.txt"
@@ -510,7 +511,7 @@ def test_merge_pr_has_non_breaking_change_no_categorization(
     ]
     # Make a non-breaking change
     model = controller._context.get_model("sushi.waiter_revenue_by_day").copy()
-    model.query.expressions.append(exp.alias_("1", "new_col"))
+    model.query.select(exp.alias_("1", "new_col"), copy=False)
     controller._context.upsert_model(model)
 
     github_output_file = tmp_path / "github_output.txt"
@@ -823,7 +824,7 @@ def test_no_merge_since_no_deploy_signal(
     ]
     # Make a non-breaking change
     model = controller._context.get_model("sushi.waiter_revenue_by_day").copy()
-    model.query.expressions.append(exp.alias_("1", "new_col"))
+    model.query.select(exp.alias_("1", "new_col"), copy=False)
     controller._context.upsert_model(model)
 
     github_output_file = tmp_path / "github_output.txt"
@@ -1006,7 +1007,7 @@ def test_no_merge_since_no_deploy_signal_no_approvers_defined(
     controller._context.users = [User(username="test", github_username="test_github", roles=[])]
     # Make a non-breaking change
     model = controller._context.get_model("sushi.waiter_revenue_by_day").copy()
-    model.query.expressions.append(exp.alias_("1", "new_col"))
+    model.query.select(exp.alias_("1", "new_col"), copy=False)
     controller._context.upsert_model(model)
 
     github_output_file = tmp_path / "github_output.txt"
@@ -1173,7 +1174,7 @@ def test_deploy_comment_pre_categorized(
     controller._context.users = [User(username="test", github_username="test_github", roles=[])]
     # Make a non-breaking change
     model = controller._context.get_model("sushi.waiter_revenue_by_day").copy()
-    model.query.expressions.append(exp.alias_("1", "new_col"))
+    model.query.select(exp.alias_("1", "new_col"), copy=False)
     controller._context.upsert_model(model)
 
     # Manually categorize the change as non-breaking and don't backfill anything
@@ -1213,7 +1214,7 @@ def test_deploy_comment_pre_categorized(
     assert pr_checks_runs[2]["output"]["title"] == "PR Virtual Data Environment: hello_world_2"
     assert (
         pr_checks_runs[2]["output"]["summary"]
-        == """<table><thead><tr><th colspan="3">PR Environment Summary</th></tr><tr><th>Model</th><th>Change Type</th><th>Dates Loaded</th></tr></thead><tbody><tr><td>sushi.waiter_revenue_by_day</td><td>Non-breaking</td><td>2022-12-31 - 2022-12-31</td></tr></tbody></table>"""
+        == """<table><thead><tr><th colspan="3">PR Environment Summary</th></tr><tr><th>Model</th><th>Change Type</th><th>Dates Loaded</th></tr></thead><tbody><tr><td>sushi.waiter_revenue_by_day</td><td>Non-breaking</td><td>2022-12-25 - 2022-12-31</td></tr></tbody></table>"""
     )
 
     assert "SQLMesh - Prod Plan Preview" in controller._check_run_mapping
@@ -1250,13 +1251,6 @@ Directly Modified: sushi.waiter_revenue_by_day (Non-breaking)
     └── sushi.top_waiters (Indirect Non-breaking)
 
 ```
-
-**Models needing backfill (missing dates):**
-
-
-* `sushi.waiter_revenue_by_day`: 2022-12-25 - 2022-12-30
-
-
 
 """
     assert prod_plan_preview_checks_runs[2]["output"]["title"] == "Prod Plan Preview"
@@ -1366,7 +1360,7 @@ def test_error_msg_when_applying_plan_with_bug(
     ]
     # Make an error by adding a column that doesn't exist
     model = controller._context.get_model("sushi.waiter_revenue_by_day").copy()
-    model.query.expressions.append(exp.alias_("non_existing_col", "new_col"))
+    model.query.select(exp.alias_("non_existing_col", "new_col"), copy=False)
     controller._context.upsert_model(model)
 
     github_output_file = tmp_path / "github_output.txt"
@@ -1522,7 +1516,7 @@ def test_overlapping_changes_models(
     # These changes have shared children and this ensures we don't repeat the children in the output
     # Make a non-breaking change
     model = controller._context.get_model("sushi.customers").copy()
-    model.query.expressions.append(exp.alias_("1", "new_col"))
+    model.query.select(exp.alias_("1", "new_col"), copy=False)
     controller._context.upsert_model(model)
 
     # Make a breaking change
@@ -1743,7 +1737,7 @@ def test_capture_console_errors(
     ]
     # Make a non-breaking change
     model = controller._context.get_model("sushi.waiter_revenue_by_day").copy()
-    model.query.expressions.append(exp.alias_("1", "new_col"))
+    model.query.select(exp.alias_("1", "new_col"), copy=False)
     controller._context.upsert_model(model)
 
     github_output_file = tmp_path / "github_output.txt"

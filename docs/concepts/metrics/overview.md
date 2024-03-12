@@ -1,4 +1,6 @@
 # Overview
+Metrics are currently in a prototype phase and not meant for production use at the moment.
+
 SQLMesh provides a framework for defining and working with metrics (also known as a semantic layer). Metrics are arbitrary SQL functions that perform aggregations for use in analytics, data science, or machine learning.
 
 A semantic layer is valuable because it provides a consistent definition and language for metrics. For example, if an executive asks "How many active users are there?" the answer could differ depending on who they ask or what dashboard they look at. The tables, aggregations, and joins needed to correctly calculate the answer could be complex and implemented differently (or incorrectly) by different people.

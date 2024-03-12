@@ -1,4 +1,5 @@
 """Move batch_size from the model and into the kind."""
+
 import json
 
 from sqlglot import exp

@@ -74,21 +74,39 @@ def test_create_table_from_query_exists_no_if_not_exists(
                         "restypmod": "- 1",
                     },
                 },
+                {
+                    "name": "TARGETENTRY",
+                    "resdom": {
+                        "resname": "e",
+                        "restype": "1114",
+                        "restypmod": "- 1",
+                    },
+                },
+                {
+                    "name": "TARGETENTRY",
+                    "resdom": {
+                        "resname": "f",
+                        "restype": "0000",  # Unknown type
+                        "restypmod": "- 1",
+                    },
+                },
             ]
         },
     )
 
     adapter.ctas(
         table_name="test_table",
-        query_or_df=parse_one("SELECT a, b, x + 1 AS c, d AS d FROM table LIMIT 0"),
+        query_or_df=parse_one(
+            "SELECT a, b, x + 1 AS c, d AS d, e, f FROM (SELECT * FROM table WHERE FALSE LIMIT 0) WHERE d > 0 AND FALSE LIMIT 0"
+        ),
         exists=False,
     )
 
     assert to_sql_calls(adapter) == [
-        'EXPLAIN VERBOSE CREATE TABLE "test_table" AS SELECT "a", "b", "x" + 1 AS "c", "d" AS "d" FROM "table" LIMIT 0',
+        'EXPLAIN VERBOSE CREATE TABLE "test_table" AS SELECT "a", "b", "x" + 1 AS "c", "d" AS "d", "e", "f" FROM (SELECT * FROM "table")',
         'CREATE TABLE "test_table" AS SELECT CAST(NULL AS VARCHAR(MAX)) AS "a", CAST(NULL AS VARCHAR(60)) AS "b", CAST(NULL '
-        'AS VARCHAR(MAX)) AS "c", CAST(NULL AS VARCHAR(MAX)) AS "d" FROM (SELECT "a", "b", "x" + 1 '
-        'AS "c", "d" AS "d" FROM "table" LIMIT 0) AS "_subquery"',
+        'AS VARCHAR(MAX)) AS "c", CAST(NULL AS VARCHAR(MAX)) AS "d", CAST(NULL AS TIMESTAMP) AS "e", "f" FROM (SELECT "a", "b", "x" + 1 '
+        'AS "c", "d" AS "d", "e", "f" FROM (SELECT * FROM "table" WHERE FALSE LIMIT 0) WHERE "d" > 0 AND FALSE LIMIT 0) AS "_subquery"',
     ]
 
 
@@ -840,3 +858,110 @@ def test_parse_plan():
             },
         },
     ]
+
+
+def test_parse_plan_limit():
+    plan = parse_plan(
+        """
+{ LIMIT
+  :startup_cost 0.00
+  :total_cost 0.00
+  :plan_rows 1
+  :node_id 1
+  :parent_id 0
+  :plan_width 0
+  :best_pathkeys <>
+  :phys_properties <>
+  :reqd_phys_properties <>
+  :targetlist (
+    { TARGETENTRY
+    :resdom
+      { RESDOM
+      :resno 1
+      :restype 20
+      :restypmod -1
+      :resname ?column?
+      :ressortgroupref 0
+      :resorigtbl 0
+      :resorigcol 0
+      :resjunk false
+      }
+    :expr
+      { CONST
+      :consttype 20
+      :constlen 8
+      :constbyval true
+      :constisnull true
+      :constvalue <>
+      }
+    }
+  )
+  }
+
+XN Limit  (cost=0.00..0.00 rows=1 width=0)
+  ->  XN Result  (cost=0.00..0.01 rows=1 width=0)
+        One-Time Filter: false
+
+  { RESULT
+  :targetlist (
+    { TARGETENTRY
+    :resdom
+      { RESDOM
+      :resno 1
+      :restype 1043
+      :restypmod 36
+      :resname surrogate_key
+      :ressortgroupref 0
+      :resorigtbl 0
+      :resorigcol 0
+      :resjunk false
+      }
+    :expr
+      { VAR
+      :varno 65001
+      :varattno 1
+      :vartype 1043
+      :vartypmod 36
+      :varlevelsup 0
+      :varnoold 1
+      :varoattno 1
+      }
+    }
+  )
+  :scanrelid 0
+  :values_lists <>
+  }
+        """
+    )
+
+    assert plan == {
+        "name": "RESULT",
+        "scanrelid": "0",
+        "targetlist": [
+            {
+                "expr": {
+                    "name": "VAR",
+                    "varattno": "1",
+                    "varlevelsup": "0",
+                    "varno": "65001",
+                    "varnoold": "1",
+                    "varoattno": "1",
+                    "vartype": "1043",
+                    "vartypmod": "36",
+                },
+                "name": "TARGETENTRY",
+                "resdom": {
+                    "name": "RESDOM",
+                    "resjunk": "false",
+                    "resname": "surrogate_key",
+                    "resno": "1",
+                    "resorigcol": "0",
+                    "resorigtbl": "0",
+                    "ressortgroupref": "0",
+                    "restype": "1043",
+                    "restypmod": "36",
+                },
+            }
+        ],
+        "values_lists": "<>",
+    }

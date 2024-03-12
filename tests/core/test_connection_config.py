@@ -2,9 +2,10 @@ import base64
 import typing as t
 
 import pytest
-from pytest_lazyfixture import lazy_fixture
+from _pytest.fixtures import FixtureRequest
 
 from sqlmesh.core.config.connection import (
+    BigQueryConnectionConfig,
     ConnectionConfig,
     DuckDBConnectionConfig,
     SnowflakeConnectionConfig,
@@ -180,27 +181,37 @@ def test_snowflake(make_config, snowflake_key_passphrase_bytes, snowflake_oauth_
 
 
 @pytest.mark.parametrize(
-    "key_path, key_pem, key_b64, key_bytes, key_passphrase",
+    "key_path_fixture, key_pem_fixture, key_b64_fixture, key_bytes_fixture, key_passphrase",
     [
         (
-            lazy_fixture("snowflake_key_no_passphrase_path"),
-            lazy_fixture("snowflake_key_no_passphrase_pem"),
-            lazy_fixture("snowflake_key_no_passphrase_b64"),
-            lazy_fixture("snowflake_key_no_passphrase_bytes"),
+            "snowflake_key_no_passphrase_path",
+            "snowflake_key_no_passphrase_pem",
+            "snowflake_key_no_passphrase_b64",
+            "snowflake_key_no_passphrase_bytes",
             None,
         ),
         (
-            lazy_fixture("snowflake_key_passphrase_path"),
-            lazy_fixture("snowflake_key_passphrase_pem"),
-            lazy_fixture("snowflake_key_passphrase_b64"),
-            lazy_fixture("snowflake_key_passphrase_bytes"),
+            "snowflake_key_passphrase_path",
+            "snowflake_key_passphrase_pem",
+            "snowflake_key_passphrase_b64",
+            "snowflake_key_passphrase_bytes",
             "insecure",
         ),
     ],
 )
 def test_snowflake_private_key_pass(
-    make_config, key_path, key_pem, key_b64, key_bytes, key_passphrase
+    make_config,
+    key_path_fixture,
+    key_pem_fixture,
+    key_b64_fixture,
+    key_bytes_fixture,
+    key_passphrase,
+    request: FixtureRequest,
 ):
+    key_path = request.getfixturevalue(key_path_fixture)
+    key_pem = request.getfixturevalue(key_pem_fixture)
+    key_b64 = request.getfixturevalue(key_b64_fixture)
+    key_bytes = request.getfixturevalue(key_bytes_fixture)
     common_kwargs = dict(
         type="snowflake",
         account="test",
@@ -365,7 +376,6 @@ def test_duckdb(make_config):
         connector_config={"foo": "bar"},
     )
     assert isinstance(config, DuckDBConnectionConfig)
-    assert config._static_connection_kwargs == {"config": {"foo": "bar"}}
 
 
 @pytest.mark.parametrize(
@@ -508,3 +518,16 @@ def test_duckdb_shared(make_config, caplog, kwargs1, kwargs2, shared_adapter):
         assert id(adapter1) != id(adapter2)
         assert "Creating new DuckDB adapter" in caplog.messages[0]
         assert "Creating new DuckDB adapter" in caplog.messages[1]
+
+
+def test_bigquery(make_config):
+    config = make_config(
+        type="bigquery",
+        project="project",
+        execution_project="execution_project",
+    )
+
+    assert isinstance(config, BigQueryConnectionConfig)
+    assert config.project == "project"
+    assert config.execution_project == "execution_project"
+    assert config.get_catalog() == "project"

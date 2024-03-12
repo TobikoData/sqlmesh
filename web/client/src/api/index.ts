@@ -49,13 +49,16 @@ import {
   type BodyInitiateApplyApiCommandsApplyPostCategories,
   type Model,
   getModelApiModelsNameGet,
+  getApiMetaApiModulesGet,
+  type Modules,
+  type ColumnLineageApiLineageModelNameColumnNameGetParams,
 } from './client'
 import {
-  useIDE,
+  useNotificationCenter,
   type ErrorIDE,
   EnumErrorKey,
   type ErrorKey,
-} from '~/library/pages/ide/context'
+} from '~/library/pages/root/context/notificationCenter'
 import { useState } from 'react'
 import { isNotNil } from '@utils/index'
 
@@ -75,6 +78,7 @@ export interface ApiQueryMeta extends QueryMeta {
 }
 
 const DELAY_1_MIN = 60 * 1000
+const DELAY_5_MIN = 5 * DELAY_1_MIN
 const DELAY_10_MIN = 10 * DELAY_1_MIN
 
 export type UseQueryWithTimeoutOptions<
@@ -83,6 +87,23 @@ export type UseQueryWithTimeoutOptions<
 > = UseQueryResult<TData, TError> & {
   cancel: () => void
   isTimeout: boolean
+}
+
+export function useApiModules(
+  options?: ApiOptions,
+): UseQueryWithTimeoutOptions<Modules[]> {
+  return useQueryWithTimeout(
+    {
+      queryKey: ['/api/modules'],
+      queryFn: getApiMetaApiModulesGet,
+      enabled: true,
+    },
+    {
+      ...options,
+      errorKey: EnumErrorKey.Modules,
+      trigger: 'API -> useApiModules',
+    },
+  )
 }
 
 export function useApiMeta(
@@ -192,14 +213,20 @@ export function useApiColumnLineage(
   model: string,
   column: string,
   options?: ApiOptions,
+  params?: ColumnLineageApiLineageModelNameColumnNameGetParams,
 ): UseQueryWithTimeoutOptions<ColumnLineageApiLineageModelNameColumnNameGet200> {
   return useQueryWithTimeout(
     {
       queryKey: ['/api/lineage', model, column],
       queryFn: async ({ signal }) =>
-        await columnLineageApiLineageModelNameColumnNameGet(model, column, {
-          signal,
-        }),
+        await columnLineageApiLineageModelNameColumnNameGet(
+          model,
+          column,
+          params,
+          {
+            signal,
+          },
+        ),
     },
     {
       ...options,
@@ -248,6 +275,7 @@ export function useApiPlanRun(
   inputs?: {
     planDates?: PlanDates
     planOptions?: PlanOptions
+    categories?: BodyInitiateApplyApiCommandsApplyPostCategories
   },
   options?: ApiOptions,
 ): UseQueryWithTimeoutOptions<PlanOverviewStageTracker> {
@@ -260,6 +288,7 @@ export function useApiPlanRun(
             environment,
             plan_dates: inputs?.planDates,
             plan_options: inputs?.planOptions,
+            categories: inputs?.categories,
           },
           { signal },
         )
@@ -389,7 +418,7 @@ export function useMutationApiSaveFile(
   { path: string; body: BodyWriteFileApiFilesPathPost },
   void
 > {
-  const { addError } = useIDE()
+  const { addError } = useNotificationCenter()
 
   return useMutation({
     mutationFn: async ({ path, body }) =>
@@ -416,7 +445,7 @@ function useQueryWithTimeout<
     queryKey: TQueryKey
   },
   {
-    delay = DELAY_1_MIN,
+    delay = DELAY_5_MIN,
     removeTimeoutErrorAfter,
     errorKey = EnumErrorKey.API,
     trigger,
@@ -424,7 +453,7 @@ function useQueryWithTimeout<
 ): UseQueryWithTimeoutOptions<TData, TError> {
   const key = options.queryKey.join(' -> ')
   const queryClient = useQueryClient()
-  const { addError } = useIDE()
+  const { addError } = useNotificationCenter()
 
   const [isTimeout, setIsTimeout] = useState(false)
 
@@ -507,7 +536,7 @@ function useQueryWithTimeout<
   async function queryFn(...args: any[]): Promise<TQueryFnData> {
     timeout()
 
-    return (options.queryFn as (...args: any[]) => Promise<TQueryFnData>)!(
+    return (options.queryFn as (...args: any[]) => Promise<TQueryFnData>)(
       ...args,
     )
   }

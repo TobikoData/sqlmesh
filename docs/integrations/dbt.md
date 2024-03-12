@@ -22,8 +22,13 @@ Models **require** a start date for backfilling data through use of the `start` 
 >   +start: Jan 1 2000
 ```
 
+### Configuration
 
-### Runtime vars
+SQLMesh determines a project's configuration settings from its dbt configuration files.
+
+This section describes using runtime variables to create multiple configurations and how to disable SQLMesh's automatic model description and comment registration.
+
+#### Runtime vars
 
 dbt supports passing variable values at runtime with its [CLI `vars` option](https://docs.getdbt.com/docs/build/project-variables#defining-variables-on-the-command-line).
 
@@ -69,6 +74,21 @@ sqlmesh --config marketing_config plan
 ```
 
 Note that the `--config` option is specified between the word `sqlmesh` and the command being executed (e.g., `plan`, `run`).
+
+#### Registering comments
+
+SQLMesh automatically registers model descriptions and column comments with the target SQL engine, as described in the [Models Overview documentation](../concepts/models/overview#model-description-and-comments). Comment registration is on by default for all engines that support it (but off by default for Snowflake).
+
+dbt offers similar comment registration functionality via its [`persist_docs` model configuration parameter](https://docs.getdbt.com/reference/resource-configs/persist_docs), specified by model. SQLMesh comment registration is configured at the project level, so it does not use dbt's model-specific `persist_docs` configuration.
+
+SQLMesh's project-level comment registration defaults are overridden with the `sqlmesh_config()` `register_comments` argument. For example, this configuration turns comment registration off:
+
+```python
+config = sqlmesh_config(
+    Path(__file__).parent,
+    register_comments=False,
+    )
+```
 
 ### Running SQLMesh
 
@@ -154,25 +174,39 @@ It's important to note, that the `on_schema_change` setting is ignored by SQLMes
 
 ## Snapshot support
 
-SQLMesh currently supports dbt snapshots with `timestamp` strategy and `invalidate_hard_deletes` set to `True`.
-Unsupported snapshots are skipped and a warning is logged indicating this happened.
-dbt Snapshot support is continuously being improved and full support should be achieved soon.
-
-dbt snapshots have one behavioral difference when running through the SQLMesh dbt adapter.
-If a row is a deleted from source and then added back later, the previously deleted row will keep it's original `valid_to` timestamp while in dbt this record is updated with the current time.
-SQLMesh views that previously deleted record as immutable, and the time where it didn't exist as an invalid time range, and therefore it is not updated.
-If you have a good use case for this behavior, please [join our slack community](https://tobikodata.com/slack) and share your use case with us.
+SQLMesh supports both dbt snapshot strategies of either `timestamp` or `check`.
+Only unsupported snapshot functionality is `invalidate_hard_deletes` which must be set to `True`.
+If set to `False`, then the snapshot will be skipped and a warning will be logged indicating this happened.
+Support for this will be added soon.
 
 ## Tests
 SQLMesh uses dbt tests to perform SQLMesh [audits](../concepts/audits.md) (coming soon).
 
 Add SQLMesh [unit tests](../concepts/tests.md) to a dbt project by placing them in the "tests" directory.
 
+## Seed column types
+
+SQLMesh parses seed CSV files using [Panda's `read_csv` utility](https://pandas.pydata.org/pandas-docs/stable/reference/api/pandas.read_csv.html) and its default column type inference.
+
+dbt parses seed CSV files using [agate's csv reader](https://agate.readthedocs.io/en/latest/api/csv.html#csv-reader-and-writer) and [customizes agate's default type inference](https://github.com/dbt-labs/dbt-common/blob/ae8ffe082926fdb3ef2a15486588f40c7739aea9/dbt_common/clients/agate_helper.py#L59).
+
+If SQLMesh and dbt infer different column types for a seed CSV file, you may specify your desired data types in a [seed properties configuration file](https://docs.getdbt.com/reference/seed-properties).
+
+Specify a column's SQL data type in its `data_type` key, as shown below. The file must list all columns present in the CSV file; SQLMesh's default type inference will be used for columns that do not specify the `data_type` key.
+
+``` yaml
+seeds:
+  - name: <seed name>
+    columns:
+      - name: <column name>
+        data_type: <SQL data type>
+```
+
 ## Package Management
 SQLMesh does not have its own package manager; however, SQLMesh's dbt adapter is compatible with dbt's package manager. Continue to use [dbt deps](https://docs.getdbt.com/reference/commands/deps) and [dbt clean](https://docs.getdbt.com/reference/commands/clean) to update, add, or remove packages.
 
 ## Documentation
-Model documentation is available in the [SQLMesh UI](../quickstart/ui.md#2-open-the-sqlmesh-web-ui). 
+Model documentation is available in the [SQLMesh UI](../quickstart/ui.md#2-open-the-sqlmesh-web-ui).
 
 ## Using Airflow
 To use SQLMesh and dbt projects with Airflow, first configure SQLMesh to use Airflow as described in the [Airflow integrations documentation](./airflow.md).
@@ -223,7 +257,6 @@ SQLMesh supports running dbt projects using the majority of dbt jinja methods, i
 The dbt jinja methods that are not currently supported are:
 
 * debug
-* run_started_at
 * selected_sources
 * adapter.expand_target_column_types
 * adapter.rename_relation

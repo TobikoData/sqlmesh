@@ -5,6 +5,8 @@ import time
 import typing as t
 import warnings
 
+from pandas.api.types import is_datetime64_any_dtype  # type: ignore
+
 warnings.filterwarnings(
     "ignore",
     message="The localize method is no longer necessary, as this time zone supports the fold attribute",
@@ -12,6 +14,7 @@ warnings.filterwarnings(
 from datetime import date, datetime, timedelta, timezone
 
 import dateparser
+import pandas as pd
 from dateparser import freshness_date_parser as freshness_date_parser_module
 from dateparser.freshness_date_parser import freshness_date_parser
 from sqlglot import exp
@@ -32,6 +35,11 @@ freshness_date_parser_module.PATTERN = re.compile(
 )
 DAY_SHORTCUT_EXPRESSIONS = {"today", "yesterday", "tomorrow"}
 TIME_UNITS = {"hours", "minutes", "seconds"}
+TEMPORAL_TZ_TYPES = {
+    exp.DataType.Type.TIMETZ,
+    exp.DataType.Type.TIMESTAMPTZ,
+    exp.DataType.Type.TIMESTAMPLTZ,
+}
 
 
 def now(minute_floor: bool = True) -> datetime:
@@ -214,7 +222,8 @@ def date_dict(
         kwargs[f"{prefix}_dt"] = dt
         kwargs[f"{prefix}_date"] = to_date(dt)
         kwargs[f"{prefix}_ds"] = to_ds(time_like)
-        kwargs[f"{prefix}_ts"] = dt.isoformat()
+        kwargs[f"{prefix}_ts"] = to_ts(dt)
+        kwargs[f"{prefix}_tstz"] = to_tstz(dt)
         kwargs[f"{prefix}_epoch"] = millis / 1000
         kwargs[f"{prefix}_millis"] = millis
         kwargs[f"{prefix}_hour"] = dt.hour
@@ -228,7 +237,12 @@ def to_ds(obj: TimeLike) -> str:
 
 def to_ts(obj: TimeLike) -> str:
     """Converts a TimeLike object into YYYY-MM-DD HH:MM:SS formatted string."""
-    return to_datetime(obj).isoformat()
+    return to_datetime(obj).replace(tzinfo=None).isoformat(sep=" ")
+
+
+def to_tstz(obj: TimeLike) -> str:
+    """Converts a TimeLike object into YYYY-MM-DD HH:MM:SS+00:00 formatted string."""
+    return to_datetime(obj).isoformat(sep=" ")
 
 
 def is_date(obj: TimeLike) -> bool:
@@ -262,7 +276,7 @@ def make_inclusive(start: TimeLike, end: TimeLike) -> Interval:
 
     Example:
         >>> make_inclusive("2020-01-01", "2020-01-01")
-        (datetime.datetime(2020, 1, 1, 0, 0, tzinfo=datetime.timezone.utc), datetime.datetime(2020, 1, 1, 23, 59, 59, 999000, tzinfo=datetime.timezone.utc))
+        (datetime.datetime(2020, 1, 1, 0, 0, tzinfo=datetime.timezone.utc), datetime.datetime(2020, 1, 1, 23, 59, 59, 999999, tzinfo=datetime.timezone.utc))
 
     Returns:
         A tuple of inclusive datetime objects.
@@ -274,7 +288,7 @@ def make_inclusive_end(end: TimeLike) -> datetime:
     end_dt = to_datetime(end)
     if is_date(end):
         end_dt = end_dt + timedelta(days=1)
-    return end_dt - timedelta(milliseconds=1)
+    return end_dt - timedelta(microseconds=1)
 
 
 def validate_date_range(
@@ -302,3 +316,53 @@ def is_catagorical_relative_expression(expression: str) -> bool:
     if not grain_kwargs:
         return False
     return not any(k in TIME_UNITS for k in grain_kwargs)
+
+
+def to_time_column(
+    time_column: t.Union[TimeLike, exp.Null],
+    time_column_type: exp.DataType,
+    time_column_format: t.Optional[str] = None,
+) -> exp.Expression:
+    """Convert a TimeLike object to the same time format and type as the model's time column."""
+    if isinstance(time_column, exp.Null):
+        return exp.cast(time_column, to=time_column_type)
+    if time_column_type.is_type(exp.DataType.Type.DATE):
+        return exp.cast(exp.Literal.string(to_ds(time_column)), to="date")
+    if time_column_type.this in TEMPORAL_TZ_TYPES:
+        return exp.cast(exp.Literal.string(to_tstz(time_column)), to=time_column_type.this)
+    if time_column_type.this in exp.DataType.TEMPORAL_TYPES:
+        return exp.cast(exp.Literal.string(to_ts(time_column)), to=time_column_type.this)
+
+    if time_column_format:
+        time_column = to_datetime(time_column).strftime(time_column_format)
+    if time_column_type.this in exp.DataType.TEXT_TYPES:
+        return exp.Literal.string(time_column)
+    if time_column_type.this in exp.DataType.NUMERIC_TYPES:
+        return exp.Literal.number(time_column)
+    return exp.convert(time_column)
+
+
+def pandas_timestamp_to_pydatetime(
+    df: pd.DataFrame, columns_to_types: t.Optional[t.Dict[str, exp.DataType]]
+) -> pd.DataFrame:
+    for column in df.columns:
+        if is_datetime64_any_dtype(df.dtypes[column]):
+            # We must use `pd.Series` and dtype or pandas will convert it back to pd.Timestamp during assignment
+            # https://stackoverflow.com/a/68961834/1707525
+            df[column] = pd.Series(df[column].dt.to_pydatetime(), dtype="object")
+
+            if columns_to_types and columns_to_types[column].this in (
+                exp.DataType.Type.DATE,
+                exp.DataType.Type.DATE32,
+            ):
+                # Sometimes `to_pydatetime()` has already converted to date, so we only extract from datetime objects.
+                # `datetime` is a subclass of `date`, so we must look at the type to differentiate the two.
+                df[column] = df[column].map(
+                    lambda x: (
+                        x.date()
+                        if isinstance(x, datetime) and type(x) is datetime and not pd.isna(x)
+                        else x
+                    )
+                )
+
+    return df

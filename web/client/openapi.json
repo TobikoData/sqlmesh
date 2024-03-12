@@ -527,16 +527,26 @@
         "operationId": "column_lineage_api_lineage__model_name___column_name__get",
         "parameters": [
           {
+            "name": "model_name",
+            "in": "path",
+            "required": true,
+            "schema": { "type": "string", "title": "Model Name" }
+          },
+          {
             "name": "column_name",
             "in": "path",
             "required": true,
             "schema": { "type": "string", "title": "Column Name" }
           },
           {
-            "name": "model_name",
-            "in": "path",
-            "required": true,
-            "schema": { "type": "string", "title": "Model Name" }
+            "name": "models_only",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "boolean",
+              "default": false,
+              "title": "Models Only"
+            }
           }
         ],
         "responses": {
@@ -679,6 +689,27 @@
             "content": {
               "application/json": {
                 "schema": { "$ref": "#/components/schemas/Meta" }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/modules": {
+      "get": {
+        "summary": "Get Api Meta",
+        "description": "Get the modules",
+        "operationId": "get_api_meta_api_modules_get",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "items": { "$ref": "#/components/schemas/Modules" },
+                  "type": "array",
+                  "title": "Response Get Api Meta Api Modules Get"
+                }
               }
             }
           }
@@ -852,6 +883,13 @@
             "allOf": [{ "$ref": "#/components/schemas/NodeType" }],
             "default": "model"
           },
+          "parents": {
+            "items": { "type": "string" },
+            "type": "array",
+            "uniqueItems": true,
+            "title": "Parents",
+            "default": []
+          },
           "interval": {
             "items": { "type": "string" },
             "type": "array",
@@ -870,6 +908,13 @@
           "node_type": {
             "allOf": [{ "$ref": "#/components/schemas/NodeType" }],
             "default": "model"
+          },
+          "parents": {
+            "items": { "type": "string" },
+            "type": "array",
+            "uniqueItems": true,
+            "title": "Parents",
+            "default": []
           },
           "completed": { "type": "integer", "title": "Completed" },
           "total": { "type": "integer", "title": "Total" },
@@ -941,6 +986,18 @@
               { "$ref": "#/components/schemas/PlanOptions" },
               { "type": "null" }
             ]
+          },
+          "categories": {
+            "anyOf": [
+              {
+                "additionalProperties": {
+                  "$ref": "#/components/schemas/SnapshotChangeCategory"
+                },
+                "type": "object"
+              },
+              { "type": "null" }
+            ],
+            "title": "Categories"
           }
         },
         "type": "object",
@@ -975,11 +1032,24 @@
             "allOf": [{ "$ref": "#/components/schemas/NodeType" }],
             "default": "model"
           },
+          "parents": {
+            "items": { "type": "string" },
+            "type": "array",
+            "uniqueItems": true,
+            "title": "Parents",
+            "default": []
+          },
           "diff": { "type": "string", "title": "Diff" },
           "indirect": {
             "items": { "$ref": "#/components/schemas/ChangeDisplay" },
             "type": "array",
             "title": "Indirect",
+            "default": []
+          },
+          "direct": {
+            "items": { "$ref": "#/components/schemas/ChangeDisplay" },
+            "type": "array",
+            "title": "Direct",
             "default": []
           },
           "change_category": {
@@ -1000,6 +1070,13 @@
           "node_type": {
             "allOf": [{ "$ref": "#/components/schemas/NodeType" }],
             "default": "model"
+          },
+          "parents": {
+            "items": { "type": "string" },
+            "type": "array",
+            "uniqueItems": true,
+            "title": "Parents",
+            "default": []
           }
         },
         "type": "object",
@@ -1014,10 +1091,11 @@
             "allOf": [{ "$ref": "#/components/schemas/NodeType" }],
             "default": "model"
           },
-          "direct": {
-            "items": { "$ref": "#/components/schemas/ChangeDisplay" },
+          "parents": {
+            "items": { "type": "string" },
             "type": "array",
-            "title": "Direct",
+            "uniqueItems": true,
+            "title": "Parents",
             "default": []
           }
         },
@@ -1120,13 +1198,23 @@
               { "type": "null" }
             ],
             "title": "Promoted Snapshot Ids"
+          },
+          "previous_finalized_snapshots": {
+            "anyOf": [
+              {
+                "items": { "$ref": "#/components/schemas/SnapshotTableInfo" },
+                "type": "array"
+              },
+              { "type": "null" }
+            ],
+            "title": "Previous Finalized Snapshots"
           }
         },
         "additionalProperties": false,
         "type": "object",
         "required": ["snapshots", "start_at", "plan_id"],
         "title": "Environment",
-        "description": "Represents an isolated environment.\n\nEnvironments are isolated workspaces that hold pointers to physical tables.\n\nArgs:\n    snapshots: The snapshots that are part of this environment.\n    start_at: The start time of the environment.\n    end_at: The end time of the environment.\n    plan_id: The ID of the plan that last updated this environment.\n    previous_plan_id: The ID of the previous plan that updated this environment.\n    expiration_ts: The timestamp when this environment will expire.\n    finalized_ts: The timestamp when this environment was finalized.\n    promoted_snapshot_ids: The IDs of the snapshots that are promoted in this environment\n        (i.e. for which the views are created). If not specified, all snapshots are promoted."
+        "description": "Represents an isolated environment.\n\nEnvironments are isolated workspaces that hold pointers to physical tables.\n\nArgs:\n    snapshots: The snapshots that are part of this environment.\n    start_at: The start time of the environment.\n    end_at: The end time of the environment.\n    plan_id: The ID of the plan that last updated this environment.\n    previous_plan_id: The ID of the previous plan that updated this environment.\n    expiration_ts: The timestamp when this environment will expire.\n    finalized_ts: The timestamp when this environment was finalized.\n    promoted_snapshot_ids: The IDs of the snapshots that are promoted in this environment\n        (i.e. for which the views are created). If not specified, all snapshots are promoted.\n    previous_finalized_snapshots: Snapshots that were part of this environment last time it was finalized."
       },
       "EnvironmentSuffixTarget": {
         "type": "string",
@@ -1261,16 +1349,12 @@
             "title": "Expression"
           },
           "models": {
-            "anyOf": [
-              {
-                "additionalProperties": {
-                  "items": { "type": "string" },
-                  "type": "array"
-                },
-                "type": "object"
-              },
-              { "type": "null" }
-            ],
+            "additionalProperties": {
+              "items": { "type": "string" },
+              "type": "array",
+              "uniqueItems": true
+            },
+            "type": "object",
             "title": "Models"
           }
         },
@@ -1285,12 +1369,6 @@
             "type": "boolean",
             "title": "Has Running Task",
             "default": false
-          },
-          "modules": {
-            "items": { "$ref": "#/components/schemas/Modules" },
-            "type": "array",
-            "title": "Modules",
-            "default": []
           }
         },
         "type": "object",
@@ -1450,6 +1528,8 @@
           "INCREMENTAL_UNMANAGED",
           "FULL",
           "SCD_TYPE_2",
+          "SCD_TYPE_2_BY_TIME",
+          "SCD_TYPE_2_BY_COLUMN",
           "VIEW",
           "EMBEDDED",
           "SEED",
@@ -1491,13 +1571,14 @@
         "type": "string",
         "enum": [
           "editor",
+          "files",
           "docs",
           "plans",
-          "plan-progress",
           "tests",
           "audits",
           "errors",
-          "environments"
+          "data",
+          "lineage"
         ],
         "title": "Modules"
       },

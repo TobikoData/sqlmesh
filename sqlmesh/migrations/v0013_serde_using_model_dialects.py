@@ -1,4 +1,5 @@
 """Serialize SQL using the dialect of each model."""
+
 import json
 import typing as t
 

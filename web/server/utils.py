@@ -10,7 +10,7 @@ import pandas as pd
 import pyarrow as pa  # type: ignore
 from fastapi import Depends, HTTPException
 from starlette.responses import StreamingResponse
-from starlette.status import HTTP_404_NOT_FOUND
+from starlette.status import HTTP_404_NOT_FOUND, HTTP_422_UNPROCESSABLE_ENTITY
 
 from sqlmesh.core.context import Context
 from web.server.console import api_console
@@ -33,8 +33,18 @@ async def run_in_executor(func: t.Callable[..., R], *args: t.Any) -> R:
     def func_wrapper() -> R:
         try:
             return func(*args)
+        except ApiException as e:
+            api_console.log_exception(e)
+            raise e
         except Exception as e:
-            api_console.log_exception()
+            api_console.log_exception(
+                ApiException(
+                    message="An unexpected error occurred",
+                    origin="API -> utils -> run_in_executor",
+                    trigger="An unexpected error occurred",
+                    status_code=HTTP_422_UNPROCESSABLE_ENTITY,
+                )
+            )
             raise e
 
     loop = asyncio.get_running_loop()

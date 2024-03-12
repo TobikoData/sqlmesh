@@ -53,6 +53,14 @@ class SnapshotStrategy(str, Enum):
     TIMESTAMP = "timestamp"
     CHECK = "check"
 
+    @property
+    def is_timestamp(self) -> bool:
+        return self == SnapshotStrategy.TIMESTAMP
+
+    @property
+    def is_check(self) -> bool:
+        return self == SnapshotStrategy.CHECK
+
 
 class Hook(DbtConfig):
     """
@@ -295,7 +303,6 @@ class BaseModelConfig(GeneralConfig):
             }.union({source.canonical_name(context) for source in model_context.sources.values()}),
             "jinja_macros": jinja_macros,
             "path": self.path,
-            "hash_raw_query": True,
             "pre_statements": [d.jinja_statement(hook.sql) for hook in self.pre_hook],
             "post_statements": [d.jinja_statement(hook.sql) for hook in self.post_hook],
             "tags": self.tags,

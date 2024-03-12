@@ -50,7 +50,8 @@ Supported model kind objects include:
 - [SeedKind()](https://sqlmesh.readthedocs.io/en/stable/_readthedocs/html/sqlmesh/core/model/kind.html#SeedKind)
 - [IncrementalByTimeRangeKind()](https://sqlmesh.readthedocs.io/en/stable/_readthedocs/html/sqlmesh/core/model/kind.html#IncrementalByTimeRangeKind)
 - [IncrementalByUniqueKeyKind()](https://sqlmesh.readthedocs.io/en/stable/_readthedocs/html/sqlmesh/core/model/kind.html#IncrementalByUniqueKeyKind)
-- [SCDType2Kind()](https://sqlmesh.readthedocs.io/en/stable/_readthedocs/html/sqlmesh/core/model/kind.html#SCDType2Kind)
+- [SCDType2KindByTimeKind()](https://sqlmesh.readthedocs.io/en/stable/_readthedocs/html/sqlmesh/core/model/kind.html#SCDType2ByTimeKind)
+- [SCDType2KindByColumnKind()](https://sqlmesh.readthedocs.io/en/stable/_readthedocs/html/sqlmesh/core/model/kind.html#SCDType2ByColumnKind)
 - [EmbeddedKind()](https://sqlmesh.readthedocs.io/en/stable/_readthedocs/html/sqlmesh/core/model/kind.html#EmbeddedKind)
 - [ExternalKind()](https://sqlmesh.readthedocs.io/en/stable/_readthedocs/html/sqlmesh/core/model/kind.html#ExternalKind)
 

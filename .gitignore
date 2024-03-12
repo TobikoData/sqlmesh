@@ -129,6 +129,9 @@ dmypy.json
 # PyCharm
 .idea/
 
+# VSCode
+.vscode/
+
 # Emacs
 *~
 *#

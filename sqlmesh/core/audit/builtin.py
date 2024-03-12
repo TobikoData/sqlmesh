@@ -4,7 +4,7 @@ from sqlglot import exp
 
 from sqlmesh.core.audit.definition import ModelAudit
 
-# not_null(columns=[column_1, column_2])
+# not_null(columns=(column_1, column_2))
 not_null_audit = ModelAudit(
     name="not_null",
     defaults={"condition": exp.true()},
@@ -23,7 +23,7 @@ WHERE @condition AND (
     """,
 )
 
-# unique_values(columns=[column_1, column_2])
+# unique_values(columns=(column_1, column_2))
 unique_values_audit = ModelAudit(
     name="unique_values",
     defaults={"condition": exp.true()},
@@ -48,7 +48,7 @@ WHERE @REDUCE(
     """,
 )
 
-# accepted_values(column=column_name, is_in=[1, 2, 3])
+# accepted_values(column=column_name, is_in=(1, 2, 3))
 accepted_values_audit = ModelAudit(
     name="accepted_values",
     defaults={"condition": exp.true()},
@@ -75,11 +75,11 @@ HAVING COUNT(*) <= @threshold
     """,
 )
 
-# forall(criteria=[
+# forall(criteria=(
 #   column_1 > 0,
 #   column_2 in (1, 2, 3),
 #   column_3 is not null
-# ]))
+# ))
 forall_audit = ModelAudit(
     name="forall",
     query="""
@@ -177,7 +177,7 @@ WHERE s.cnt_not_null <= s.cnt_tot * @threshold
     """,
 )
 
-# not_accepted_values(column=column_name, is_in=[1, 2, 3])
+# not_accepted_values(column=column_name, is_in=(1, 2, 3))
 not_accepted_values_audit = ModelAudit(
     name="not_accepted_values",
     defaults={"condition": exp.true()},
@@ -213,7 +213,7 @@ FROM validation_errors
     """,
 )
 
-# unique_combination_of_columns(columns=[column_1, column_2])
+# unique_combination_of_columns(columns=(column_1, column_2))
 unique_combination_of_columns_audit = ModelAudit(
     name="unique_combination_of_columns",
     defaults={"condition": exp.true()},
@@ -320,7 +320,7 @@ WHERE @condition AND NOT @column ~ '^[a-zA-Z0-9_.+-]+@[a-zA-Z0-9-]+\.[a-zA-Z0-9-
     """,
 )
 
-# match_regex_pattern_list(column=column_name, patterns=['^pattern_1', 'pattern_2$'])
+# match_regex_pattern_list(column=column_name, patterns=('^pattern_1', 'pattern_2$'))
 match_regex_pattern_list_audit = ModelAudit(
     name="match_regex_pattern_list",
     defaults={"condition": exp.true()},
@@ -340,7 +340,7 @@ WHERE @condition AND (
     """,
 )
 
-# not_match_regex_pattern_list(column=column_name, patterns=['^pattern_1', 'pattern_2$'])
+# not_match_regex_pattern_list(column=column_name, patterns=('^pattern_1', 'pattern_2$'))
 not_match_regex_pattern_list_audit = ModelAudit(
     name="not_match_regex_pattern_list",
     defaults={"condition": exp.true()},
@@ -360,7 +360,7 @@ WHERE @condition AND (
     """,
 )
 
-# match_like_pattern_list(column=column_name, patterns=['%pattern_1%', 'pattern_2%'])
+# match_like_pattern_list(column=column_name, patterns=('%pattern_1%', 'pattern_2%'))
 match_like_pattern_list = ModelAudit(
     name="match_like_pattern_list",
     defaults={"condition": exp.true()},
@@ -379,7 +379,7 @@ WHERE @condition AND (
     """,
 )
 
-# not_match_like_pattern_list(column=column_name, patterns=['%pattern_1%', 'pattern_2%'])
+# not_match_like_pattern_list(column=column_name, patterns=('%pattern_1%', 'pattern_2%'))
 not_match_like_pattern_list_audit = ModelAudit(
     name="not_match_like_pattern_list",
     defaults={"condition": exp.true()},
@@ -707,7 +707,7 @@ HAVING NOT @IF(@dependent, chi_square > @critical_value, chi_square <= @critical
 #     """,
 # )
 
-# equality(columns=[column_1, column_2], to=some.model)
+# equality(columns=(column_1, column_2), to=some.model)
 # equality_audit = ModelAudit(
 #     name="equality",
 #     query="""

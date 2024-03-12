@@ -9,12 +9,12 @@ import {
   useCallback,
   useMemo,
 } from 'react'
-import { hasActiveEdge, hasActiveEdgeConnector } from './help'
-import { type ErrorIDE } from '~/library/pages/ide/context'
+import { getNodeMap, hasActiveEdge, hasActiveEdgeConnector } from './help'
 import { EnumSide } from '~/types/enum'
 import { isFalse, toID } from '@utils/index'
 import { type ConnectedNode } from '~/workers/lineage'
-
+import { type Node } from 'reactflow'
+import { type ErrorIDE } from '~/library/pages/root/context/notificationCenter'
 export interface Connections {
   left: string[]
   right: string[]
@@ -26,7 +26,8 @@ export type SelectedNodes = Set<string>
 export type HighlightedNodes = Record<string, string[]>
 
 interface LineageFlow {
-  lineage?: Record<string, Lineage>
+  lineage: Record<string, Lineage>
+  lineageCache?: Record<string, Lineage>
   mainNode?: string
   connectedNodes: Set<string>
   activeEdges: ActiveEdges
@@ -34,14 +35,17 @@ interface LineageFlow {
   selectedNodes: SelectedNodes
   selectedEdges: ConnectedNode[]
   models: Map<string, ModelSQLMeshModel>
+  unknownModels: Set<string>
   connections: Map<string, Connections>
   withConnected: boolean
   withColumns: boolean
   hasBackground: boolean
   withImpacted: boolean
   withSecondary: boolean
+  showControls: boolean
   manuallySelectedColumn?: [ModelSQLMeshModel, Column]
   highlightedNodes: HighlightedNodes
+  nodesMap: Record<string, Node>
   setHighlightedNodes: React.Dispatch<React.SetStateAction<HighlightedNodes>>
   setActiveNodes: React.Dispatch<React.SetStateAction<ActiveNodes>>
   setWithConnected: React.Dispatch<React.SetStateAction<boolean>>
@@ -56,7 +60,11 @@ interface LineageFlow {
   addActiveEdges: (edges: Array<[string, string]>) => void
   removeActiveEdges: (edges: Array<[string, string]>) => void
   setActiveEdges: React.Dispatch<React.SetStateAction<ActiveEdges>>
+  setUnknownModels: React.Dispatch<React.SetStateAction<Set<string>>>
   setLineage: React.Dispatch<React.SetStateAction<Record<string, Lineage>>>
+  setLineageCache: React.Dispatch<
+    React.SetStateAction<Optional<Record<string, Lineage>>>
+  >
   handleClickModel?: (modelName: string) => void
   handleError?: (error: ErrorIDE) => void
   setManuallySelectedColumn: React.Dispatch<
@@ -69,6 +77,7 @@ interface LineageFlow {
 export const LineageFlowContext = createContext<LineageFlow>({
   selectedEdges: [],
   lineage: {},
+  lineageCache: undefined,
   withColumns: false,
   withConnected: false,
   withImpacted: true,
@@ -78,11 +87,14 @@ export const LineageFlowContext = createContext<LineageFlow>({
   activeEdges: new Map(),
   activeNodes: new Set(),
   models: new Map(),
+  unknownModels: new Set(),
   manuallySelectedColumn: undefined,
   connections: new Map(),
   selectedNodes: new Set(),
   connectedNodes: new Set(),
   highlightedNodes: {},
+  nodesMap: {},
+  showControls: true,
   setHighlightedNodes: () => {},
   setWithColumns: () => false,
   setHasBackground: () => false,
@@ -97,12 +109,14 @@ export const LineageFlowContext = createContext<LineageFlow>({
   setManuallySelectedColumn: () => {},
   handleError: () => {},
   setLineage: () => {},
+  setLineageCache: () => {},
   isActiveColumn: () => false,
   setConnections: () => {},
   setSelectedNodes: () => {},
   setMainNode: () => {},
   setActiveNodes: () => {},
   setNodeConnections: () => {},
+  setUnknownModels: () => {},
 })
 
 export default function LineageFlowProvider({
@@ -111,16 +125,22 @@ export default function LineageFlowProvider({
   children,
   showColumns = false,
   showConnected = false,
+  showControls = true,
 }: {
   children: React.ReactNode
   handleClickModel?: (modelName: string) => void
   handleError?: (error: ErrorIDE) => void
   showColumns?: boolean
   showConnected?: boolean
+  showControls?: boolean
 }): JSX.Element {
   const models = useStoreContext(s => s.models)
 
   const [lineage, setLineage] = useState<Record<string, Lineage>>({})
+  const [unknownModels, setUnknownModels] = useState(new Set<string>())
+  const [lineageCache, setLineageCache] = useState<
+    Record<string, Lineage> | undefined
+  >(undefined)
   const [nodesConnections, setNodeConnections] = useState<
     Record<string, ConnectedNode>
   >({})
@@ -139,6 +159,17 @@ export default function LineageFlowProvider({
   const [hasBackground, setHasBackground] = useState(true)
   const [withImpacted, setWithImpacted] = useState(true)
   const [withSecondary, setWithSecondary] = useState(false)
+
+  const nodesMap = useMemo(
+    () =>
+      getNodeMap({
+        lineage,
+        models,
+        unknownModels,
+        withColumns,
+      }),
+    [lineage, models, withColumns, unknownModels],
+  )
 
   const checkActiveEdge = useCallback(
     function checkActiveEdge(edge: [Maybe<string>, Maybe<string>]): boolean {
@@ -238,24 +269,30 @@ export default function LineageFlowProvider({
     <LineageFlowContext.Provider
       value={{
         highlightedNodes,
-        setHighlightedNodes,
         connectedNodes,
         activeEdges,
         selectedEdges,
         activeNodes,
-        setActiveNodes,
-        setNodeConnections,
         selectedNodes,
         mainNode,
         connections,
         lineage,
+        lineageCache,
         models,
         manuallySelectedColumn,
         withColumns,
         withConnected,
         withImpacted,
         withSecondary,
+        showControls,
         hasBackground,
+        nodesMap,
+        unknownModels,
+        setHighlightedNodes,
+        setActiveNodes,
+        setNodeConnections,
+        setLineageCache,
+        setUnknownModels,
         setWithConnected,
         setWithImpacted,
         setWithSecondary,

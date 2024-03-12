@@ -2,6 +2,7 @@ import pytest
 from sqlglot import exp, parse_one
 
 from sqlmesh.core.audit import (
+    BUILT_IN_AUDITS,
     ModelAudit,
     StandaloneAudit,
     builtin,
@@ -37,6 +38,7 @@ def model_default_catalog() -> Model:
 def test_load(assert_exp_eq):
     expressions = parse(
         """
+        -- Audit comment
         Audit (
             name my_audit,
             dialect spark,
@@ -655,3 +657,9 @@ def test_text_diff():
    owner owner_name,
    standalone TRUE"""
     )
+
+
+def test_non_blocking_builtin():
+    assert BUILT_IN_AUDITS["not_null_non_blocking"].blocking is False
+    assert BUILT_IN_AUDITS["not_null_non_blocking"].name == "not_null_non_blocking"
+    assert BUILT_IN_AUDITS["not_null"].query == BUILT_IN_AUDITS["not_null_non_blocking"].query

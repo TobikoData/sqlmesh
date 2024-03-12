@@ -395,6 +395,13 @@ options:
 Rollback SQLMesh to the previous migration.
 ```
 
+#### clean
+```
+%clean
+
+Clears the SQLMesh cache and any build artifacts.
+```
+
 #### rewrite
 ```
 %rewrite [--read READ] [--write WRITE]

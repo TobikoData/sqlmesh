@@ -74,7 +74,7 @@ class AuditMixin(AuditCommonMetaMixin):
         jinja_macros: A registry of jinja macros to use when rendering the audit query.
     """
 
-    query: t.Union[exp.Subqueryable, d.JinjaQuery]
+    query: t.Union[exp.Query, d.JinjaQuery]
     defaults: t.Dict[str, exp.Expression]
     expressions_: t.Optional[t.List[exp.Expression]]
     jinja_macros: JinjaMacroRegistry
@@ -89,7 +89,7 @@ class AuditMixin(AuditCommonMetaMixin):
         snapshots: t.Optional[t.Dict[str, Snapshot]] = None,
         deployability_index: t.Optional[DeployabilityIndex] = None,
         **kwargs: t.Any,
-    ) -> exp.Subqueryable:
+    ) -> exp.Query:
         """Renders the audit's query.
 
         Args:
@@ -169,7 +169,7 @@ class ModelAudit(PydanticModel, AuditMixin, frozen=True):
     skip: bool = False
     blocking: bool = True
     standalone: Literal[False] = False
-    query: t.Union[exp.Subqueryable, d.JinjaQuery]
+    query: t.Union[exp.Query, d.JinjaQuery]
     defaults: t.Dict[str, exp.Expression] = {}
     expressions_: t.Optional[t.List[exp.Expression]] = Field(default=None, alias="expressions")
     jinja_macros: JinjaMacroRegistry = JinjaMacroRegistry()
@@ -192,7 +192,7 @@ class ModelAudit(PydanticModel, AuditMixin, frozen=True):
         snapshots: t.Optional[t.Dict[str, Snapshot]] = None,
         deployability_index: t.Optional[DeployabilityIndex] = None,
         **kwargs: t.Any,
-    ) -> exp.Subqueryable:
+    ) -> exp.Query:
         from sqlmesh.core.snapshot import DeployabilityIndex, Snapshot
 
         deployability_index = deployability_index or DeployabilityIndex.all_deployable()
@@ -266,7 +266,6 @@ class StandaloneAudit(_Node, AuditMixin):
     """
     Args:
         depends_on: A list of tables this audit depends on.
-        hash_raw_query: Whether to hash the raw query or the rendered query.
         python_env: Dictionary containing all global variables needed to render the audit's macros.
     """
 
@@ -275,13 +274,12 @@ class StandaloneAudit(_Node, AuditMixin):
     skip: bool = False
     blocking: bool = False
     standalone: Literal[True] = True
-    query: t.Union[exp.Subqueryable, d.JinjaQuery]
+    query: t.Union[exp.Query, d.JinjaQuery]
     defaults: t.Dict[str, exp.Expression] = {}
     expressions_: t.Optional[t.List[exp.Expression]] = Field(default=None, alias="expressions")
     jinja_macros: JinjaMacroRegistry = JinjaMacroRegistry()
     default_catalog: t.Optional[str] = None
     depends_on_: t.Optional[t.Set[str]] = Field(default=None, alias="depends_on")
-    hash_raw_query: bool = False
     python_env_: t.Optional[t.Dict[str, Executable]] = Field(default=None, alias="python_env")
 
     source_type: Literal["audit"] = "audit"
@@ -353,7 +351,7 @@ class StandaloneAudit(_Node, AuditMixin):
             self.stamp,
         ]
 
-        query = self.query if self.hash_raw_query else self.render_query(self) or self.query
+        query = self.render_query(self) or self.query
         data.append(query.sql(comments=False))
 
         return hash_data(data)
@@ -485,8 +483,6 @@ def load_audit(
         raise
 
     meta_fields = {p.name: p.args.get("value") for p in meta.expressions if p}
-    if meta.comments:
-        meta_fields["description"] = "\n".join(comment.strip() for comment in meta.comments)
 
     standalone_field = meta_fields.pop("standalone", None)
     if standalone_field and not isinstance(standalone_field, exp.Boolean):
@@ -514,7 +510,7 @@ def load_audit(
     if extra_fields:
         _raise_config_error(f"Invalid extra fields {extra_fields} in the audit definition", path)
 
-    if not isinstance(query, exp.Subqueryable) and not isinstance(query, d.JinjaQuery):
+    if not isinstance(query, exp.Query) and not isinstance(query, d.JinjaQuery):
         _raise_config_error("Missing SELECT query in the audit definition", path)
         raise
 
@@ -604,6 +600,5 @@ META_FIELD_CONVERTER: t.Dict[str, t.Callable] = {
     "standalone": exp.convert,
     "depends_on_": lambda value: exp.Tuple(expressions=sorted(value)),
     "tags": _single_value_or_tuple,
-    "hash_raw_query": exp.convert,
     "default_catalog": exp.to_identifier,
 }

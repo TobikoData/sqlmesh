@@ -36,7 +36,7 @@ To run the audit, include it in a model's `MODEL` statement:
 ```sql linenums="1"
 MODEL (
   name sushi.items,
-  audits [assert_item_price_is_not_null]
+  audits (assert_item_price_is_not_null)
 );
 ```
 
@@ -64,10 +64,10 @@ Apply the generic audit to a model by referencing it in the `MODEL` statement:
 ```sql linenums="1"
 MODEL (
   name sushi.items,
-  audits [
+  audits (
     does_not_exceed_threshold(column=id, threshold=1000),
     does_not_exceed_threshold(column=price, threshold=100)
-  ]
+  )
 );
 ```
 
@@ -83,14 +83,14 @@ For example, if an audit `my_audit` uses a `values` parameter, invoking it will 
 ```sql linenums="1" hl_lines="4"
 MODEL (
   name sushi.items,
-  audits[
-    my_audit(column=a, "values"=[1,2,3])
-  ]
+  audits (
+    my_audit(column=a, "values"=(1,2,3))
+  )
 )
 ```
 
 ## Built-in audits
-SQLMesh comes with a suite of built-in generic audits that cover a broad set of common use cases.
+SQLMesh comes with a suite of built-in generic audits that cover a broad set of common use cases. Built-in audits are blocking by default, but they all have non-blocking counterparts which you can use by appending `_non_blocking` - see [Non-blocking audits](#non-blocking-audits).
 
 This section describes the audits, grouped by general purpose.
 
@@ -98,7 +98,7 @@ This section describes the audits, grouped by general purpose.
 
 The `forall` audit is the most generic built-in audit, allowing arbitrary boolean SQL expressions.
 
-#### forall
+#### forall, forall_non_blocking
 Ensures that a set of arbitrary boolean expressions evaluate to `TRUE` for all rows in the model. The boolean expressions should be written in SQL.
 
 This example asserts that all rows have a `price` greater than 0 and a `name` value containing at least one character:
@@ -106,12 +106,12 @@ This example asserts that all rows have a `price` greater than 0 and a `name` va
 ```sql linenums="1" hl_lines="4-7"
 MODEL (
   name sushi.items,
-  audits [
-    forall(criteria=[
+  audits (
+    forall(criteria=(
       price > 0,
       LENGTH(name) > 0
-    ])
-  ]
+    ))
+  )
 );
 ```
 
@@ -119,7 +119,7 @@ MODEL (
 
 These audits concern row counts and presence of `NULL` values.
 
-#### number_of_rows
+#### number_of_rows, number_of_rows_non_blocking
 Ensures that the number of rows in the model's table exceeds the threshold.
 
 This example asserts that the model has more than 10 rows:
@@ -127,13 +127,13 @@ This example asserts that the model has more than 10 rows:
 ```sql linenums="1"
 MODEL (
   name sushi.orders,
-  audits [
+  audits (
     number_of_rows(threshold=10)
-  ]
+  )
 );
 ```
 
-#### not_null
+#### not_null, not_null_non_blocking
 Ensures that specified columns do not contain `NULL` values.
 
 This example asserts that none of the `id`, `customer_id`, or `waiter_id` columns contain `NULL` values:
@@ -141,13 +141,13 @@ This example asserts that none of the `id`, `customer_id`, or `waiter_id` column
 ```sql linenums="1"
 MODEL (
   name sushi.orders,
-  audits [
-    not_null(columns=[id, customer_id, waiter_id])
-  ]
+  audits (
+    not_null(columns=(id, customer_id, waiter_id))
+  )
 );
 ```
 
-#### at_least_one
+#### at_least_one, at_least_one_non_blocking
 Ensures that specified columns contain at least one non-NULL value.
 
 This example asserts that the `zip` column contains at least one non-NULL value:
@@ -155,13 +155,13 @@ This example asserts that the `zip` column contains at least one non-NULL value:
 ```sql linenums="1"
 MODEL (
   name sushi.customers,
-  audits [
+  audits (
     at_least_one(column=zip)
-    ]
+    )
 );
 ```
 
-#### not_null_proportion
+#### not_null_proportion, not_null_proportion_non_blocking
 Ensures that the specified column's proportion of `NULL` values is no greater than a threshold.
 
 This example asserts that the `zip` column has no more than 80% `NULL` values:
@@ -169,9 +169,9 @@ This example asserts that the `zip` column has no more than 80% `NULL` values:
 ```sql linenums="1"
 MODEL (
   name sushi.customers,
-  audits [
+  audits (
     not_null_proportion(column=zip, threshold=0.8)
-    ]
+    )
 );
 ```
 
@@ -179,7 +179,7 @@ MODEL (
 
 These audits concern the specific set of data values present in a column.
 
-#### not_constant
+#### not_constant, not_constant_non_blocking
 Ensures that the specified columns are not constant (i.e., have at least two non-NULL values).
 
 This example asserts that the column `customer_id` has at least two non-NULL values:
@@ -187,13 +187,13 @@ This example asserts that the column `customer_id` has at least two non-NULL val
 ```sql linenums="1"
 MODEL (
   name sushi.customer_revenue_by_day,
-  audits [
+  audits (
     not_constant(column=customer_id)
-    ]
+    )
 );
 ```
 
-#### unique_values
+#### unique_values, unique_values_non_blocking
 Ensures that specified columns contain unique values (i.e., have no duplicated values).
 
 This example asserts that the `id` and `item_id` columns have unique values:
@@ -201,13 +201,13 @@ This example asserts that the `id` and `item_id` columns have unique values:
 ```sql linenums="1"
 MODEL (
   name sushi.orders,
-  audits [
-    unique_values(columns=[id, item_id])
-  ]
+  audits (
+    unique_values(columns=(id, item_id))
+  )
 );
 ```
 
-#### unique_combination_of_columns
+#### unique_combination_of_columns, unique_combination_of_columns_non_blocking
 Ensures that each row has a unique combination of values over the specified columns.
 
 This example asserts that the combination of `id` and `ds` columns has no duplicated values:
@@ -215,13 +215,13 @@ This example asserts that the combination of `id` and `ds` columns has no duplic
 ```sql linenums="1"
 MODEL (
   name sushi.orders,
-  audits [
-    unique_combination_of_columns(columns=[id, ds])
-  ]
+  audits (
+    unique_combination_of_columns(columns=(id, ds))
+  )
 );
 ```
 
-#### accepted_values
+#### accepted_values, accepted_values_non_blocking
 Ensures that all rows of the specified column contain one of the accepted values.
 
 NOTE: rows with `NULL` values for the column will pass this audit in most databases/engines. Use the [`not_null` audit](#not_null) to ensure there are no `NULL` values present in a column.
@@ -231,13 +231,13 @@ This example asserts that column `name` has a value of 'Hamachi', 'Unagi', or 'S
 ```sql linenums="1"
 MODEL (
   name sushi.items,
-  audits [
-    accepted_values(column=name, is_in=['Hamachi', 'Unagi', 'Sake'])
-  ]
+  audits (
+    accepted_values(column=name, is_in=('Hamachi', 'Unagi', 'Sake'))
+  )
 );
 ```
 
-#### not_accepted_values
+#### not_accepted_values, not_accepted_values_non_blocking
 Ensures that no rows of the specified column contain one of the not accepted values.
 
 NOTE: this audit does not support rejecting `NULL` values. Use the [`not_null` audit](#not_null) to ensure there are no `NULL` values present in a column.
@@ -247,9 +247,9 @@ This example asserts that column `name` is not one of 'Hamburger' or 'French fri
 ```sql linenums="1"
 MODEL (
   name sushi.items,
-  audits [
-    not_accepted_values(column=name, is_in=['Hamburger', 'French fries'])
-  ]
+  audits (
+    not_accepted_values(column=name, is_in=('Hamburger', 'French fries'))
+  )
 );
 ```
 
@@ -257,7 +257,7 @@ MODEL (
 
 These audits concern the distribution of values in numeric columns.
 
-#### sequential_values
+#### sequential_values, sequential_values_non_blocking
 Ensures that each of an ordered numeric column's values contains the previous row's value plus `interval`.
 
 For example, with a column having minimum value 1 and maximum value 4 and `interval=1`, it ensures that the rows contain values `[1, 2, 3, 4]`.
@@ -267,13 +267,13 @@ This example asserts that column `item_id` contains sequential values that diffe
 ```sql linenums="1"
 MODEL (
   name sushi.items,
-  audits [
+  audits (
     sequential_values(column=item_id, interval=1)
-  ]
+  )
 );
 ```
 
-#### accepted_range
+#### accepted_range, accepted_range_non_blocking
 Ensures that a column's values are in a numeric range. Range is inclusive by default, such that values equal to the range boundaries will pass the audit.
 
 This example asserts that all rows have a `price` greater than or equal 1 and less than or equal to 100:
@@ -281,9 +281,9 @@ This example asserts that all rows have a `price` greater than or equal 1 and le
 ```sql linenums="1"
 MODEL (
   name sushi.items,
-  audits [
+  audits (
     accepted_range(column=price, min_v=1, max_v=100)
-  ]
+  )
 );
 ```
 
@@ -292,22 +292,22 @@ This example specifies the `inclusive=false` argument to assert that all rows ha
 ```sql linenums="1"
 MODEL (
   name sushi.items,
-  audits [
+  audits (
     accepted_range(column=price, min_v=0, max_v=100, inclusive=false)
-  ]
+  )
 );
 ```
 
-#### mutually_exclusive_ranges
+#### mutually_exclusive_ranges, mutually_exclusive_ranges_non_blocking
 Ensures that each row's numeric range does not overlap with any other row's range.
 
 This example asserts that each row's range [min_price, max_price] does not overlap with any other row's range:
 
 ```sql linenums="1"
 MODEL (
-  audits [
+  audits (
     mutually_exclusive_ranges(lower_bound_column=min_price, upper_bound_column=max_price)
-  ]
+  )
 );
 ```
 
@@ -317,7 +317,7 @@ These audits concern the characteristics of values in character/string columns.
 
 NOTE: databases/engines may exhibit different behavior for different character sets or languages.
 
-#### not_empty_string
+#### not_empty_string, not_empty_string_non_blocking
 Ensures that no rows of a column contain an empty string value `''`.
 
 This example asserts that no `name` is an empty string:
@@ -325,13 +325,13 @@ This example asserts that no `name` is an empty string:
 ```sql linenums="1"
 MODEL (
   name sushi.items,
-  audits [
+  audits (
     not_empty_string(column=name)
-  ]
+  )
 );
 ```
 
-#### string_length_equal_audit
+#### string_length_equal_audit, string_length_equal_audit_non_blocking
 Ensures that all rows of a column contain a string with the specified number of characters.
 
 This example asserts that all `zip` values are 5 characters long:
@@ -339,13 +339,13 @@ This example asserts that all `zip` values are 5 characters long:
 ```sql linenums="1"
 MODEL (
   name sushi.customers,
-  audits [
+  audits (
     string_length_equal_audit(column=zip, v=5)
-    ]
+    )
 );
 ```
 
-#### string_length_between_audit
+#### string_length_between_audit, string_length_between_audit_non_blocking
 Ensures that all rows of a column contain a string with number of characters in the specified range. Range is inclusive by default, such that values equal to the range boundaries will pass the audit.
 
 This example asserts that all `name` values have 5 or more and 50 or fewer characters:
@@ -353,9 +353,9 @@ This example asserts that all `name` values have 5 or more and 50 or fewer chara
 ```sql linenums="1"
 MODEL (
   name sushi.customers,
-  audits [
+  audits (
     string_length_between_audit(column=name, min_v=5, max_v=50)
-    ]
+    )
 );
 ```
 
@@ -364,13 +364,13 @@ This example specifies the `inclusive=false` argument to assert that all rows ha
 ```sql linenums="1"
 MODEL (
   name sushi.customers,
-  audits [
+  audits (
     string_length_between_audit(column=zip, min_v=4, max_v=60, inclusive=false)
-    ]
+    )
 );
 ```
 
-#### valid_uuid
+#### valid_uuid, valid_uuid_non_blocking
 Ensures that all non-NULL rows of a column contain a string with the UUID structure.
 
 UUID structure determined by matching regular expression `'^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$'`.
@@ -379,13 +379,13 @@ This example asserts that all `uuid` values have the UUID structure:
 
 ```sql linenums="1"
 MODEL (
-  audits [
+  audits (
     valid_uuid(column=uuid)
-    ]
+    )
 );
 ```
 
-#### valid_email
+#### valid_email, valid_email_non_blocking
 Ensures that all non-NULL rows of a column contain a string with the email address structure.
 
 Email address structure determined by matching regular expression `'^[a-zA-Z0-9_.+-]+@[a-zA-Z0-9-]+\.[a-zA-Z0-9-.]+$'`.
@@ -394,13 +394,13 @@ This example asserts that all `email` values have the email address structure:
 
 ```sql linenums="1"
 MODEL (
-  audits [
+  audits (
     valid_email(column=email)
-    ]
+    )
 );
 ```
 
-#### valid_url
+#### valid_url, valid_url_non_blocking
 Ensures that all non-NULL rows of a column contain a string with the URL structure.
 
 URL structure determined by matching regular expression `'^(https?|ftp)://[^\s/$.?#].[^\s]*$'`.
@@ -409,13 +409,13 @@ This example asserts that all `url` values have the URL structure:
 
 ```sql linenums="1"
 MODEL (
-  audits [
+  audits (
     valid_url(column=url)
-    ]
+    )
 );
 ```
 
-#### valid_http_method
+#### valid_http_method, valid_http_method_non_blocking
 Ensures that all non-NULL rows of a column contain a valid HTTP method.
 
 Valid HTTP methods determined by matching values `GET`, `POST`, `PUT`, `DELETE`, `PATCH`, `HEAD`, `OPTIONS`, `TRACE`, `CONNECT`.
@@ -424,61 +424,61 @@ This example asserts that all `http_method` values are valid HTTP methods:
 
 ```sql linenums="1"
 MODEL (
-  audits [
+  audits (
     valid_http_method(column=http_method)
-    ]
+    )
 );
 ```
 
-#### match_regex_pattern_list
+#### match_regex_pattern_list, match_regex_pattern_list_non_blocking
 Ensures that all non-NULL rows of a column match at least one of the specified regular expressions.
 
 This example asserts that all `todo` values match one of `'^\d.*'` (string starts with a digit) or `'.*!$'` (ends with an exclamation mark):
 
 ```sql linenums="1"
 MODEL (
-  audits [
-    match_regex_pattern_list(column=todo, patterns=['^\d.*', '.*!$'])
-    ]
+  audits (
+    match_regex_pattern_list(column=todo, patterns=('^\d.*', '.*!$'))
+  )
 );
 ```
 
-#### not_match_regex_pattern_list
+#### not_match_regex_pattern_list, not_match_regex_pattern_list_non_blocking
 Ensures that no non-NULL rows of a column match any of the specified regular expressions.
 
 This example asserts that no `todo` values match one of `'^!.*'` (string starts with an exclamation mark) or `'.*\d$'` (ends with a digit):
 
 ```sql linenums="1"
 MODEL (
-  audits [
-    match_regex_pattern_list(column=todo, patterns=['^!.*', '.*\d$'])
-    ]
+  audits (
+    match_regex_pattern_list(column=todo, patterns=('^!.*', '.*\d$'))
+  )
 );
 ```
 
-#### match_like_pattern_list
+#### match_like_pattern_list, match_like_pattern_list_non_blocking
 Ensures that all non-NULL rows of a column are `LIKE` at least one of the specified patterns.
 
 This example asserts that all `name` values are `LIKE` one of `'jim%'` or `'pam%'`:
 
 ```sql linenums="1"
 MODEL (
-  audits [
-    match_like_pattern_list(column=name, patterns=['jim%', 'pam%'])
-    ]
+  audits (
+    match_like_pattern_list(column=name, patterns=('jim%', 'pam%'))
+  )
 );
 ```
 
-#### not_match_like_pattern_list
+#### not_match_like_pattern_list, not_match_like_pattern_list_non_blocking
 Ensures that no non-NULL rows of a column are `LIKE` any of the specified patterns.
 
 This example asserts that no `name` values are `LIKE` `'%doe'` or `'%smith'`:
 
 ```sql linenums="1"
 MODEL (
-  audits [
-    not_match_like_pattern_list(column=name, patterns=['%doe', '%smith'])
-    ]
+  audits (
+    not_match_like_pattern_list(column=name, patterns=('%doe', '%smith'))
+  )
 );
 ```
 
@@ -489,16 +489,16 @@ These audits concern the statistical distributions of numeric columns.
 
 NOTE: audit thresholds will likely require fine-tuning via trial and error for each column being audited.
 
-#### mean_in_range
+#### mean_in_range, mean_in_range_non_blocking
 Ensures that a numeric column's mean is in the specified range. Range is inclusive by default, such that values equal to the range boundaries will pass the audit.
 
 This example asserts that the `age` column has a mean of at least 21 and at most 50:
 
 ```sql linenums="1"
 MODEL (
-  audits [
+  audits (
     mean_in_range(column=age, min_v=21, max_v=50)
-    ]
+    )
 );
 ```
 
@@ -506,22 +506,22 @@ This example specifies the `inclusive=false` argument to assert that `age` has a
 
 ```sql linenums="1"
 MODEL (
-  audits [
+  audits (
     mean_in_range(column=age, min_v=18, max_v=65, inclusive=false)
-    ]
+    )
 );
 ```
 
-#### stddev_in_range
+#### stddev_in_range, stddev_in_range_non_blocking
 Ensures that a numeric column's standard deviation is in the specified range. Range is inclusive by default, such that values equal to the range boundaries will pass the audit.
 
 This example asserts that the `age` column has a standard deviation of at least 2 and at most 5:
 
 ```sql linenums="1"
 MODEL (
-  audits [
+  audits (
     stddev_in_range(column=age, min_v=2, max_v=5)
-    ]
+    )
 );
 ```
 
@@ -529,13 +529,13 @@ This example specifies the `inclusive=false` argument to assert that `age` has a
 
 ```sql linenums="1"
 MODEL (
-  audits [
+  audits (
     mean_in_range(column=age, min_v=3, max_v=6, inclusive=false)
-    ]
+    )
 );
 ```
 
-#### z_score
+#### z_score, z_score_non_blocking
 Ensures that no rows of a numeric column contain a value whose absolute z-score exceeds the threshold.
 
 z-score is calculated as `ABS(([row value] - [column mean]) / NULLIF([column standard deviation], 0))`.
@@ -544,26 +544,26 @@ This example asserts that the `age` column contains no rows with z-scores greate
 
 ```sql linenums="1"
 MODEL (
-  audits [
+  audits (
     z_score(column=age, threshold=3)
-    ]
+    )
 );
 ```
 
-#### kl_divergence
+#### kl_divergence, kl_divergence_non_blocking
 Ensures that the [symmetrised Kullback-Leibler divergence](https://en.wikipedia.org/wiki/Kullback%E2%80%93Leibler_divergence#Symmetrised_divergence) (aka "Jeffreys divergence" or "Population Stability Index") between two columns does not exceed a threshold.
 
 This example asserts that the symmetrised KL Divergence between columns `age` and `reference_age` is less than or equal to 0.1:
 
 ```sql linenums="1"
 MODEL (
-  audits [
+  audits (
     kl_divergence(column=age, target_column=reference_age, threshold=0.1)
-    ]
+    )
 );
 ```
 
-#### chi_square
+#### chi_square, chi_square_non_blocking
 Ensures that the [chi-square](https://en.wikipedia.org/wiki/Chi-squared_test) statistic for two categorical columns does not exceed a critical value.
 
 You can look up the critical value corresponding to a p-value with a table (such as [this one](https://www.medcalc.org/manual/chi-square-table.php)) or by using the Python [scipy library](https://docs.scipy.org/doc/scipy/reference/generated/scipy.stats.chi2.html):
@@ -578,9 +578,9 @@ This example asserts that the chi-square statistic0 for columns `user_state` and
 
 ```sql linenums="1"
 MODEL (
-  audits [
+  audits (
     chi_square(column=user_state, target_column=user_type, critical_value=6.635)
-    ]
+    )
 );
 ```
 
