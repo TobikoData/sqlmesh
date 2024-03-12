@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import functools
 import inspect
+import logging
 import types
 import typing as t
 from enum import Enum
@@ -16,6 +17,9 @@ from sqlmesh.utils.pydantic import PydanticModel
 if t.TYPE_CHECKING:
     from sqlmesh.core.engine_adapter._typing import Query
     from sqlmesh.core.engine_adapter.base import EngineAdapter
+
+
+logger = logging.getLogger(__name__)
 
 
 class DataObjectType(str, Enum):
@@ -290,8 +294,8 @@ def set_catalog(override_mapping: t.Optional[t.Dict[str, CatalogSupport]] = None
             container[key] = expression  # type: ignore
             if catalog_support.is_single_catalog_only:
                 if catalog_name != engine_adapter._default_catalog:
-                    raise UnsupportedCatalogOperationError(
-                        f"{engine_adapter.dialect} requires that all catalog operations be against a single catalog: {engine_adapter._default_catalog}"
+                    logger.warning(
+                        f"{engine_adapter.dialect} requires that all catalog operations be against a single catalog: {engine_adapter._default_catalog}. Ignoring catalog: {catalog_name}"
                     )
                 return func(*list_args, **kwargs)
             # Set the catalog name on the engine adapter if needed

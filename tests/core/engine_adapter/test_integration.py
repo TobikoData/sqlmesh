@@ -19,7 +19,6 @@ from sqlmesh.core.dialect import normalize_model_name
 from sqlmesh.core.engine_adapter.shared import DataObject, DataObjectType
 from sqlmesh.utils import random_id
 from sqlmesh.utils.date import now, to_date, to_ds, to_time_column, yesterday
-from sqlmesh.utils.errors import UnsupportedCatalogOperationError
 from sqlmesh.utils.pydantic import PydanticModel
 from tests.conftest import SushiDataValidator
 from tests.utils.pandas import compare_dataframes
@@ -577,7 +576,7 @@ def test_catalog_operations(ctx: TestContext):
     assert ctx.engine_adapter.get_current_catalog() == current_catalog
 
 
-def test_drop_schema_catalog(ctx: TestContext):
+def test_drop_schema_catalog(ctx: TestContext, caplog):
     def drop_schema_and_validate(schema_name: str):
         ctx.engine_adapter.drop_schema(schema_name, cascade=True)
         results = ctx.get_metadata_results(schema_name)
@@ -643,11 +642,8 @@ def test_drop_schema_catalog(ctx: TestContext):
 
     schema = ctx.schema("drop_schema_catalog_test", catalog_name)
     if ctx.engine_adapter.CATALOG_SUPPORT.is_single_catalog_only:
-        with pytest.raises(
-            UnsupportedCatalogOperationError,
-            match=".*requires that all catalog operations be against a single catalog.*",
-        ):
-            drop_schema_and_validate(schema)
+        drop_schema_and_validate(schema)
+        assert "requires that all catalog operations be against a single catalog" in caplog.text
         return
     drop_schema_and_validate(schema)
     create_objects_and_validate(schema)
