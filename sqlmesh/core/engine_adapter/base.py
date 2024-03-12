@@ -379,7 +379,7 @@ class EngineAdapter:
             this=exp.Index(
                 this=exp.to_identifier(index_name),
                 table=exp.to_table(table_name),
-                columns=[exp.to_column(c) for c in columns],
+                params=exp.IndexParameters(columns=[exp.to_column(c) for c in columns]),
             ),
             kind="INDEX",
             exists=exists,
