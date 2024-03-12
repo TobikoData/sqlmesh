@@ -416,6 +416,31 @@ def test_ast_correctness(macro_evaluator):
             "SELECT * FROM (SELECT a, b, c, '2024-01-01' AS stamp)",
             {},
         ),
+        (
+            """@OR(NULL, TRUE)""",
+            "TRUE",
+            {},
+        ),
+        (
+            """@OR(NULL, NULL)""",
+            "TRUE",
+            {},
+        ),
+        (
+            """@OR(NULL)""",
+            "TRUE",
+            {},
+        ),
+        (
+            """@OR()""",
+            "TRUE",
+            {},
+        ),
+        (
+            """@AND(TRUE, NULL)""",
+            "TRUE",
+            {},
+        ),
     ],
 )
 def test_macro_functions(macro_evaluator: MacroEvaluator, assert_exp_eq, sql, expected, args):
