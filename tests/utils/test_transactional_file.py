@@ -6,7 +6,7 @@ import pytest
 from sqlmesh.utils.transactional_file import TransactionalFile
 
 
-@pytest.fixture(scope="session")
+@pytest.fixture()
 def fs() -> fsspec.AbstractFileSystem:
     return fsspec.filesystem("file")
 

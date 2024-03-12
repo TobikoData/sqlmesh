@@ -285,6 +285,7 @@ def test_seed_columns():
     assert sqlmesh_seed.column_descriptions == expected_column_descriptions
 
 
+@pytest.mark.xdist_group("dbt_manifest")
 @pytest.mark.parametrize(
     "model_fqn", ['"memory"."sushi"."waiters"', '"memory"."sushi"."waiter_names"']
 )
@@ -310,6 +311,7 @@ def test_hooks(sushi_test_dbt_context: Context, model_fqn: str):
     assert "post-hook" in mock_logger.call_args[0][0]
 
 
+@pytest.mark.xdist_group("dbt_manifest")
 def test_target_jinja(sushi_test_project: Project):
     context = sushi_test_project.context
 
@@ -321,11 +323,13 @@ def test_target_jinja(sushi_test_project: Project):
     assert context.render("{{ target.profile_name }}") == "None"
 
 
+@pytest.mark.xdist_group("dbt_manifest")
 def test_project_name_jinja(sushi_test_project: Project):
     context = sushi_test_project.context
     assert context.render("{{ project_name }}") == "sushi"
 
 
+@pytest.mark.xdist_group("dbt_manifest")
 def test_schema_jinja(sushi_test_project: Project, assert_exp_eq):
     model_config = ModelConfig(
         name="model",
@@ -341,6 +345,7 @@ def test_schema_jinja(sushi_test_project: Project, assert_exp_eq):
     )
 
 
+@pytest.mark.xdist_group("dbt_manifest")
 def test_config_jinja(sushi_test_project: Project):
     hook = "{{ config(alias='bar') }} {{ config.alias }}"
     model_config = ModelConfig(
@@ -357,6 +362,7 @@ def test_config_jinja(sushi_test_project: Project):
     assert model.render_pre_statements()[0].sql() == '"bar"'
 
 
+@pytest.mark.xdist_group("dbt_manifest")
 def test_model_this(assert_exp_eq, sushi_test_project: Project):
     model_config = ModelConfig(
         name="model",
@@ -372,6 +378,7 @@ def test_model_this(assert_exp_eq, sushi_test_project: Project):
     )
 
 
+@pytest.mark.xdist_group("dbt_manifest")
 def test_test_this(assert_exp_eq, sushi_test_project: Project):
     test_config = TestConfig(
         name="test",
@@ -389,6 +396,7 @@ def test_test_this(assert_exp_eq, sushi_test_project: Project):
     )
 
 
+@pytest.mark.xdist_group("dbt_manifest")
 def test_statement(sushi_test_project: Project, runtime_renderer: t.Callable):
     context = sushi_test_project.context
     assert context.target
@@ -405,6 +413,7 @@ def test_statement(sushi_test_project: Project, runtime_renderer: t.Callable):
     )
 
 
+@pytest.mark.xdist_group("dbt_manifest")
 def test_run_query(sushi_test_project: Project, runtime_renderer: t.Callable):
     context = sushi_test_project.context
     assert context.target
@@ -418,6 +427,7 @@ def test_run_query(sushi_test_project: Project, runtime_renderer: t.Callable):
     )
 
 
+@pytest.mark.xdist_group("dbt_manifest")
 def test_logging(sushi_test_project: Project, runtime_renderer: t.Callable):
     context = sushi_test_project.context
     assert context.target
@@ -434,6 +444,7 @@ def test_logging(sushi_test_project: Project, runtime_renderer: t.Callable):
     assert "bar" in mock_logger.call_args[0][0]
 
 
+@pytest.mark.xdist_group("dbt_manifest")
 def test_exceptions(sushi_test_project: Project):
     context = sushi_test_project.context
 
@@ -446,6 +457,7 @@ def test_exceptions(sushi_test_project: Project):
         context.render('{{ exceptions.raise_compiler_error("Error") }}')
 
 
+@pytest.mark.xdist_group("dbt_manifest")
 def test_modules(sushi_test_project: Project):
     context = sushi_test_project.context
 
@@ -468,6 +480,7 @@ def test_modules(sushi_test_project: Project):
     assert context.render(itertools_jinja) == "5"
 
 
+@pytest.mark.xdist_group("dbt_manifest")
 def test_flags(sushi_test_project: Project):
     context = sushi_test_project.context
 
@@ -476,6 +489,7 @@ def test_flags(sushi_test_project: Project):
     assert context.render("{{ flags.WHICH }}") == "parse"
 
 
+@pytest.mark.xdist_group("dbt_manifest")
 def test_relation(sushi_test_project: Project):
     context = sushi_test_project.context
 
@@ -492,6 +506,7 @@ def test_relation(sushi_test_project: Project):
     assert context.render(jinja) == "sushi waiters"
 
 
+@pytest.mark.xdist_group("dbt_manifest")
 def test_column(sushi_test_project: Project):
     context = sushi_test_project.context
 
@@ -504,6 +519,7 @@ def test_column(sushi_test_project: Project):
     assert context.render(jinja) == "True False"
 
 
+@pytest.mark.xdist_group("dbt_manifest")
 def test_quote(sushi_test_project: Project):
     context = sushi_test_project.context
 
@@ -511,6 +527,7 @@ def test_quote(sushi_test_project: Project):
     assert context.render(jinja) == '"foo" "bar"'
 
 
+@pytest.mark.xdist_group("dbt_manifest")
 def test_as_filters(sushi_test_project: Project):
     context = sushi_test_project.context
 
@@ -527,6 +544,7 @@ def test_as_filters(sushi_test_project: Project):
     assert context.render("{{ None | as_native }}") == "None"
 
 
+@pytest.mark.xdist_group("dbt_manifest")
 def test_set(sushi_test_project: Project):
     context = sushi_test_project.context
 
@@ -538,6 +556,7 @@ def test_set(sushi_test_project: Project):
         assert context.render("{{ set_strict(1) }}")
 
 
+@pytest.mark.xdist_group("dbt_manifest")
 def test_json(sushi_test_project: Project):
     context = sushi_test_project.context
 
@@ -548,6 +567,7 @@ def test_json(sushi_test_project: Project):
     assert context.render("""{{ fromjson('invalid') }}""") == "None"
 
 
+@pytest.mark.xdist_group("dbt_manifest")
 def test_yaml(sushi_test_project: Project):
     context = sushi_test_project.context
 
@@ -557,6 +577,7 @@ def test_yaml(sushi_test_project: Project):
     assert context.render("""{{ fromyaml('key: value') }}""") == "{'key': 'value'}"
 
 
+@pytest.mark.xdist_group("dbt_manifest")
 def test_zip(sushi_test_project: Project):
     context = sushi_test_project.context
 
@@ -568,12 +589,14 @@ def test_zip(sushi_test_project: Project):
         context.render("{{ zip_strict(12, ['a', 'b']) }}")
 
 
+@pytest.mark.xdist_group("dbt_manifest")
 def test_dbt_version(sushi_test_project: Project):
     context = sushi_test_project.context
 
     assert context.render("{{ dbt_version }}").startswith("1.")
 
 
+@pytest.mark.xdist_group("dbt_manifest")
 def test_parsetime_adapter_call(
     assert_exp_eq, sushi_test_project: Project, sushi_test_dbt_context: Context
 ):
@@ -603,6 +626,7 @@ def test_parsetime_adapter_call(
     )
 
 
+@pytest.mark.xdist_group("dbt_manifest")
 def test_partition_by(sushi_test_project: Project):
     context = sushi_test_project.context
     context.target = BigQueryConfig(name="production", database="main", schema="sushi")
@@ -644,6 +668,7 @@ def test_partition_by(sushi_test_project: Project):
     assert model_config.to_sqlmesh(context).partitioned_by == [exp.to_column("ds")]
 
 
+@pytest.mark.xdist_group("dbt_manifest")
 def test_relation_info_to_relation():
     assert _relation_info_to_relation(
         {"quote_policy": {}},
@@ -676,6 +701,7 @@ def test_relation_info_to_relation():
     ).quote_policy == Policy(database=False, schema=False, identifier=False)
 
 
+@pytest.mark.xdist_group("dbt_manifest")
 def test_is_incremental(sushi_test_project: Project, assert_exp_eq, mocker):
     model_config = ModelConfig(
         name="model",
@@ -705,6 +731,7 @@ def test_is_incremental(sushi_test_project: Project, assert_exp_eq, mocker):
     )
 
 
+@pytest.mark.xdist_group("dbt_manifest")
 def test_dbt_max_partition(sushi_test_project: Project, assert_exp_eq, mocker: MockerFixture):
     model_config = ModelConfig(
         name="model",
@@ -742,6 +769,7 @@ JINJA_END;""".strip()
     assert d.parse_one(pre_statement.sql()) == pre_statement
 
 
+@pytest.mark.xdist_group("dbt_manifest")
 def test_bigquery_table_properties(sushi_test_project: Project, mocker: MockerFixture):
     context = sushi_test_project.context
     context.target = BigQueryConfig(
@@ -780,6 +808,7 @@ def test_bigquery_table_properties(sushi_test_project: Project, mocker: MockerFi
     }
 
 
+@pytest.mark.xdist_group("dbt_manifest")
 def test_snapshot_json_payload():
     sushi_context = Context(paths=["tests/fixtures/dbt/sushi_test"])
     snapshot_json = json.loads(
@@ -794,6 +823,7 @@ def test_snapshot_json_payload():
     }
 
 
+@pytest.mark.xdist_group("dbt_manifest")
 @freeze_time("2023-01-08 00:00:00")
 def test_dbt_package_macros(sushi_test_project: Project):
     context = sushi_test_project.context
@@ -804,6 +834,7 @@ def test_dbt_package_macros(sushi_test_project: Project):
     assert context.render("{{ dbt.run_started_at }}") == "2023-01-08 00:00:00+00:00"
 
 
+@pytest.mark.xdist_group("dbt_manifest")
 def test_dbt_vars(sushi_test_project: Project):
     context = sushi_test_project.context
 
@@ -816,6 +847,7 @@ def test_dbt_vars(sushi_test_project: Project):
     assert context.render("{{ var.has_var('missing') }}") == "False"
 
 
+@pytest.mark.xdist_group("dbt_manifest")
 def test_snowflake_session_properties(sushi_test_project: Project, mocker: MockerFixture):
     context = sushi_test_project.context
     context.target = SnowflakeConfig(
