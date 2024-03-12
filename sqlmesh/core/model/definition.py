@@ -422,13 +422,14 @@ class _Model(ModelMeta, frozen=True):
         Return:
             The mocked out ctas query.
         """
-        # the query is expanded so it's been copied, it's safe to mutate.
-        query = self.render_query_or_raise(**render_kwarg)
+        query = self.render_query_or_raise(**render_kwarg).copy()
 
         for select in query.find_all(exp.Select):
             if select.args.get("from"):
                 select.where(exp.false(), copy=False)
-                if not isinstance(select.parent, exp.Union):
+                if not isinstance(select.parent, exp.Union) or (
+                    select.parent.parent is None and select.arg_key == "expression"
+                ):
                     select.limit(0, copy=False)
 
         if self.managed_columns:
