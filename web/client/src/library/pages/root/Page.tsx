@@ -1,6 +1,6 @@
 import SplitPane from '@components/splitPane/SplitPane'
 import { useStoreContext } from '@context/context'
-import { isNotNil } from '@utils/index'
+import { isNil } from '@utils/index'
 
 export default function Page({
   sidebar,
@@ -14,7 +14,11 @@ export default function Page({
 
   return (
     <>
-      {isNotNil(sidebar) ? (
+      {isNil(sidebar) ? (
+        <div className="flex w-full h-full overflow-hidden justify-center">
+          {content}
+        </div>
+      ) : (
         <SplitPane
           sizes={splitPaneSizes}
           minSize={[0, 0]}
@@ -25,10 +29,6 @@ export default function Page({
           <div className="w-full h-full overflow-hidden">{sidebar}</div>
           <div className="w-full h-full overflow-hidden">{content}</div>
         </SplitPane>
-      ) : (
-        <div className="flex w-full h-full overflow-hidden justify-center">
-          {content}
-        </div>
       )}
     </>
   )

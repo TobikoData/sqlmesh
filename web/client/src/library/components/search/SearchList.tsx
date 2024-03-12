@@ -17,6 +17,7 @@ interface PropsSearchListInput {
   autoFocus?: boolean
   onInput?: (e: React.ChangeEvent<HTMLInputElement>) => void
   onKeyDown?: (e: React.KeyboardEvent<HTMLInputElement>) => void
+  disabled?: boolean
 }
 
 const SearchListInput = React.forwardRef<
@@ -32,6 +33,7 @@ const SearchListInput = React.forwardRef<
     onInput,
     onKeyDown,
     className,
+    disabled,
   },
   ref: React.Ref<HTMLInputElement>,
 ): JSX.Element {
@@ -50,6 +52,7 @@ const SearchListInput = React.forwardRef<
           value={value}
           onInput={onInput}
           onKeyDown={onKeyDown}
+          disabled={disabled}
         />
       )}
     </Input>
@@ -71,6 +74,7 @@ export default function SearchList<
   showIndex = true,
   isFullWidth = false,
   isLoading = false,
+  disabled = false,
   direction = 'bottom',
   className,
   onInput,
@@ -89,6 +93,7 @@ export default function SearchList<
   className?: string
   isFullWidth?: boolean
   isLoading?: boolean
+  disabled?: boolean
   onInput?: (value: string) => void
 }): JSX.Element {
   const navigate = useNavigate()
@@ -133,7 +138,11 @@ export default function SearchList<
 
   return (
     <div
-      className={clsx('px-2 py-1 relative', className)}
+      className={clsx(
+        'px-2 py-1 relative',
+        disabled && 'opacity-50 cursor-not-allowed',
+        className,
+      )}
       ref={ref}
       onKeyDown={(e: React.KeyboardEvent) => {
         if (e.key === 'Escape') {
@@ -145,7 +154,7 @@ export default function SearchList<
         <Popover.Button
           ref={elTrigger}
           as={SearchListInput}
-          className="w-full !m-0"
+          className={clsx('w-full !m-0', disabled && 'pointer-events-none')}
           type="search"
           size={size}
           value={search}
@@ -162,6 +171,7 @@ export default function SearchList<
             }
           }}
           autoFocus={autoFocus}
+          disabled={disabled}
         />
         <Transition
           show={showSearchResults}
