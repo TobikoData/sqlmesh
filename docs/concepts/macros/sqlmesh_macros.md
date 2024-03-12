@@ -1044,6 +1044,116 @@ def some_macro(evaluator):
     ...
 ```
 
+## Typed Macros
+
+Typed macros in SQLMesh bring the power of type hints from Python, enhancing readability, maintainability, and usability of your SQL macros. These macros enable developers to specify expected types for arguments, making the macros more intuitive and less error-prone.
+
+### Benefits of Typed Macros
+
+1. **Improved Readability**: By specifying types, the intent of the macro is clearer to other developers or future you.
+2. **Reduced Boilerplate**: No need for manual type conversion within the macro function, allowing you to focus on the core logic.
+3. **Enhanced Autocompletion**: IDEs can provide better autocompletion and documentation based on the specified types.
+
+### Defining a Typed Macro
+
+Typed macros in SQLMesh use Python's type hints. Here's a simple example of a typed macro that repeats a string a given number of times:
+
+```python linenums="1"
+from sqlmesh import macro
+
+@macro()
+def repeat_string(evaluator, text: str, count: int) -> str:
+    return text * count
+```
+
+Usage in SQLMesh:
+
+```sql linenums="1"
+SELECT
+  @repeat_string('SQLMesh ', 3) as repeated_string
+FROM some_table;
+```
+
+This macro takes two arguments: `text` of type `str` and `count` of type `int`, and it returns a string. Without type hints, the inputs to the macro would have been two `exp.Literal` objects you would have had to convert to strings and integers manually.
+
+### Supported Types
+
+SQLMesh supports common Python types for typed macros including:
+
+- `str`
+- `int`
+- `float`
+- `bool`
+- `List[T]` - where `T` is any supported type including sqlglot expressions
+- `Tuple[T]` - where `T` is any supported type including sqlglot expressions
+- `Union[T1, T2, ...]` - where `T1`, `T2`, etc. are any supported types including sqlglot expressions
+
+We also support SQLGlot expressions as type hints, allowing you to ensure inputs are coerced to the desired SQL AST node your intending on working with. Some useful examples include:
+
+- `exp.Table`
+- `exp.Column`
+- `exp.Literal`
+- `exp.Identifier`
+
+While these might be obvious examples, you can effectively coerce an input into _any_ SQLGlot expression type, which can be useful for more complex macros. When coercing to more complex types, you will almost certainly need to pass a string literal since expression to expression coercion is limited. When a string literal is passed to a macro that hints at a SQLGlot expression, the string will be parsed using SQLGlot and coerced to the correct type. Failure to coerce to the correct type will result in the original expression being passed to the macro and a warning being logged for the user to address as-needed.
+
+```python linenums="1"
+@macro()
+def stamped(evaluator, query: exp.Select) -> exp.Subquery:
+    return query.select(exp.Literal.string(str(datetime.now())).as_("stamp")).subquery()
+
+# Coercing to a complex node like `exp.Select` works as expected given a string literal input
+# SELECT * FROM @stamped('SELECT a, b, c')
+```
+
+When coercion fails, there will always be a warning logged but we will not crash. We believe the macro should be flexible by default, meaning the default behavior is preserved if we cannot coerce. Give that, the user can express whatever level of additional checks they want. For example, if you would like to raise an error when the coercion fails, you can use an `assert` statement. For example:
+
+```python linenums="1"
+@macro()
+def my_macro(evaluator, table: exp.Table) -> exp.Column:
+    assert isinstance(table, exp.Table)
+    table.set("catalog", "dev")
+    return table
+
+# Works
+# SELECT * FROM @my_macro('some.table')
+# SELECT * FROM @my_macro(some.table)
+
+# Raises an error thanks to the users inclusion of the assert, otherwise would pass through the string literal and log a warning
+# SELECT * FROM @my_macro('SELECT 1 + 1')
+```
+
+In using assert this way, you still get the benefits of reducing/removing the boilerplate needed to coerce types; but you **also** get guarantees about the type of the input. This is a useful pattern and is user-defined, so you can use it as you see fit. It ultimately allows you to keep the macro definition clean and focused on the core business logic.
+
+### Advanced Typed Macros
+
+You can create more complex macros using advanced Python features like generics. For example, a macro that accepts a list of integers and returns their sum:
+
+```python linenums="1"
+from typing import List
+from sqlmesh import macro
+
+@macro()
+def sum_integers(evaluator, numbers: List[int]) -> int:
+    return sum(numbers)
+```
+
+Usage in SQLMesh:
+
+```sql linenums="1"
+SELECT
+  @sum_integers([1, 2, 3, 4, 5]) as total
+FROM some_table;
+```
+
+Generics can be nested and are resolved recursively allowing for fairly robust type hinting.
+
+See examples of the coercion function in action in the test suite [here](../../../tests/core/test_macros.py).
+
+### Conclusion
+
+Typed macros in SQLMesh not only enhance the development experience by making macros more readable and easier to use but also contribute to more robust and maintainable code. By leveraging Python's type hinting system, developers can create powerful and intuitive macros for their SQL queries, further bridging the gap between SQL and Python.
+
 ## Mixing macro systems
 
 SQLMesh supports both SQLMesh and [Jinja](./jinja_macros.md) macro systems. We strongly recommend using only one system in a model - if both are present, they may fail or behave in unintuitive ways.

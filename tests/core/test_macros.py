@@ -1,5 +1,7 @@
+import functools
 import sys
 import typing as t
+from pathlib import Path
 from unittest import mock
 
 import pytest
@@ -8,7 +10,12 @@ from sqlglot import exp, parse_one
 from sqlmesh.core.dialect import StagedFilePath
 from sqlmesh.core.macros import MacroEvaluator, macro
 from sqlmesh.utils.errors import SQLMeshError
-from sqlmesh.utils.metaprogramming import Executable, ExecutableKind
+from sqlmesh.utils.metaprogramming import (
+    Executable,
+    ExecutableKind,
+    build_env,
+    serialize_env,
+)
 
 
 @pytest.fixture
@@ -27,6 +34,45 @@ def macro_evaluator() -> MacroEvaluator:
     def noop(evaluator: MacroEvaluator):
         return None
 
+    @macro()
+    def bitshift_square(evaluator: MacroEvaluator, x: int, y: int) -> int:
+        return (x >> y) ** 2
+
+    @macro()
+    def prefix_db(evaluator: MacroEvaluator, table: exp.Table, prefix: str) -> exp.Table:
+        table.set("db", prefix + table.db)
+        return table
+
+    @macro()
+    def repeated(evaluator: MacroEvaluator, expr: str, times: int = 2, multi: bool = False):
+        if multi is True:
+            return (expr,) * times
+        return expr * times
+
+    @macro()
+    def split(evaluator: MacroEvaluator, string: str, sep: str = ","):
+        return string.split(sep)
+
+    @macro()
+    def cte_tag_name(evaluator: MacroEvaluator, with_: exp.Select):
+        for cte in with_.find_all(exp.CTE):
+            name = cte.alias_or_name
+            for query in cte.find_all(exp.Select):
+                query.select(exp.Literal.string(name).as_("source"), copy=False)
+        return with_
+
+    @macro()
+    def suffix_idents(evaluator: MacroEvaluator, items: t.List[str], suffix: str):
+        return [item + suffix for item in items]
+
+    @macro()
+    def suffix_idents_2(evaluator: MacroEvaluator, items: t.Tuple[str, ...], suffix: str):
+        return [item + suffix for item in items]
+
+    @macro()
+    def stamped(evaluator, query: exp.Select) -> exp.Subquery:
+        return query.select(exp.Literal.string("2024-01-01").as_("stamp")).subquery()
+
     return MacroEvaluator(
         "hive",
         {"test": Executable(name="test", payload=f"def test(_):\n    return 'test'")},
@@ -41,12 +87,15 @@ def test_external_macro() -> None:
     def foo(evaluator: MacroEvaluator) -> str:
         return "foo"
 
+    @functools.wraps(foo)
+    def wrapper(*args, **kwargs):
+        return foo(*args, **kwargs)
+
     # Mimic a SQLMesh macro definition by setting the func's metadata appropriately
-    setattr(foo, "__wrapped__", foo)
-    setattr(foo, "__sqlmesh_macro__", True)
+    setattr(wrapper, "__sqlmesh_macro__", True)
 
     sys.modules["pkg"] = mock.Mock()
-    with mock.patch("pkg.foo", foo):
+    with mock.patch("pkg.foo", wrapper):
         evaluator = MacroEvaluator(
             python_env={
                 "foo": Executable(
@@ -61,6 +110,31 @@ def test_external_macro() -> None:
 
         assert "@FOO" in evaluator.macros
         assert evaluator.macros["@FOO"](evaluator) == "foo"
+
+    # Assert that serializing a wrapped external macro traverses the chain of wrapped functions
+    # even through other modules
+    fakemod = mock.Mock()
+    fakemod.__name__ = "other_pkg"
+    fakemod.__file__ = "some/path.py"
+    sys.modules["other_pkg"] = fakemod
+
+    @functools.wraps(wrapper)
+    def nested_wrapper(*args, **kwargs):
+        return wrapper(*args, **kwargs)
+
+    setattr(nested_wrapper, "__sqlmesh_macro__", True)
+    setattr(nested_wrapper, "__module__", "other_pkg")
+    with mock.patch("other_pkg.bar", nested_wrapper):
+        env: t.Dict[str, t.Any] = {}
+        build_env(nested_wrapper, env=env, name="bar", path=Path("tests/core/test_macros.py"))
+        assert serialize_env(env, path=Path("tests/core")) == {
+            "bar": Executable(
+                payload="def foo(evaluator: MacroEvaluator):\n    return 'foo'",
+                name="foo",
+                path="test_macros.py",
+                alias="bar",
+            )
+        }
 
 
 def test_macro_var(macro_evaluator):
@@ -292,12 +366,136 @@ def test_ast_correctness(macro_evaluator):
             "SELECT d",
             {},
         ),
+        (
+            """@BITSHIFT_SQUARE(50, '3')""",
+            "36",
+            {},
+        ),
+        (
+            """@PREFIX_DB(my.schema.table, 'dev_')""",
+            "my.dev_schema.table",
+            {},
+        ),
+        (
+            """select @REPEATED(test, 3)""",
+            "SELECT testtesttest",
+            {},
+        ),
+        (
+            """select @REPEATED(test, 3, true)""",
+            "SELECT test, test, test",
+            {},
+        ),
+        (
+            """select @SPLIT('a,b,c')""",
+            "SELECT a, b, c",
+            {},
+        ),
+        (
+            """@CTE_TAG_NAME(WITH step1 AS (SELECT 1) SELECT * FROM step1)""",
+            "WITH step1 AS (SELECT 1, 'step1' AS source) SELECT * FROM step1",
+            {},
+        ),
+        (
+            """@CTE_TAG_NAME('WITH step1 AS (SELECT 1) SELECT * FROM step1')""",
+            "WITH step1 AS (SELECT 1, 'step1' AS source) SELECT * FROM step1",
+            {},
+        ),
+        (
+            """SELECT @SUFFIX_IDENTS(['a', 'b', 'c'], 'z')""",
+            "SELECT az, bz, cz",
+            {},
+        ),
+        (
+            """SELECT @SUFFIX_IDENTS_2(['a', 'b', 'c'], 'z')""",
+            "SELECT az, bz, cz",
+            {},
+        ),
+        (
+            """select * FROM @STAMPED('select a, b, c')""",
+            "SELECT * FROM (SELECT a, b, c, '2024-01-01' AS stamp)",
+            {},
+        ),
     ],
 )
-def test_macro_functions(macro_evaluator, assert_exp_eq, sql, expected, args):
+def test_macro_functions(macro_evaluator: MacroEvaluator, assert_exp_eq, sql, expected, args):
     macro_evaluator.locals = args or {}
     assert_exp_eq(macro_evaluator.transform(parse_one(sql)), expected)
 
 
-def test_macro_returns_none(macro_evaluator):
+def test_macro_returns_none(macro_evaluator: MacroEvaluator):
     assert macro_evaluator.transform(parse_one("@NOOP()")) is None
+
+
+def test_macro_coercion(macro_evaluator: MacroEvaluator, assert_exp_eq):
+    coerce = macro_evaluator._coerce
+    assert coerce(exp.Literal.number(1), int) == 1
+    assert coerce(exp.Literal.number(1.1), float) == 1.1
+    assert coerce(exp.Literal.string("Hi mom"), str) == "Hi mom"
+    assert coerce(exp.true(), bool) is True
+
+    # Coercing a string literal to a column should return a column with the same name
+    assert_exp_eq(coerce(exp.Literal.string("order"), exp.Column), exp.column("order"))
+    # Not possible to coerce this string literal Cast to an exp.Column node -- so it should just return the input
+    assert_exp_eq(
+        coerce(exp.Literal.string("order::date"), exp.Column), exp.Literal.string("order::date")
+    )
+    # This however, is correctly coercible since it's a cast
+    assert_exp_eq(
+        coerce(exp.Literal.string("order::date"), exp.Cast), exp.cast(exp.column("order"), "DATE")
+    )
+
+    # Here we resolve ambiguity via the user type hint
+    assert_exp_eq(coerce(exp.Literal.string("order"), exp.Identifier), exp.to_identifier("order"))
+    assert_exp_eq(coerce(exp.Literal.string("order"), exp.Table), exp.table_("order"))
+
+    # Resolve a union type hint by choosing the first one that works
+    assert_exp_eq(
+        coerce(exp.Literal.string("order::date"), t.Union[exp.Column, exp.Cast]),
+        exp.cast(exp.column("order"), "DATE"),
+    )
+
+    # Simply ask for a string, and always get a string
+    assert coerce(exp.column("order"), str) == "order"
+    assert (
+        coerce(parse_one("SELECT x FROM UNNEST(y) AS x WHERE 1 = 1"), str)
+        == "SELECT x FROM UNNEST(y) AS x WHERE 1 = 1"
+    )
+
+    # From a string literal to a Select should parse the string literal, and the inverse operation works as well
+    assert_exp_eq(
+        coerce(exp.Literal.string("SELECT 1 FROM a"), exp.Select), parse_one("SELECT 1 FROM a")
+    )
+    assert coerce(parse_one("SELECT 1 FROM a"), str) == "SELECT 1 FROM a"
+
+    # Get a list of exp directly instead of an exp.Array
+    assert coerce(parse_one("[1, 2, 3]"), list) == [
+        exp.Literal.number(1),
+        exp.Literal.number(2),
+        exp.Literal.number(3),
+    ]
+
+    # Generics work as well, recursively resolving inner types
+    assert coerce(parse_one("[1, 2, 3]"), t.List[int]) == [1, 2, 3]
+    assert coerce(parse_one("[1, 2, 3]"), t.Tuple[int, int, float]) == (1, 2, 3.0)
+    assert coerce(parse_one("[1, 2, 3]"), t.Tuple[int, ...]) == (1, 2, 3)
+    assert coerce(parse_one("[1, 2, 3]"), t.Tuple[int, str, float]) == (1, "2", 3.0)
+    assert coerce(
+        parse_one("[1, 2, [3]]"), t.Tuple[int, str, t.Union[float, t.Tuple[float, ...]]]
+    ) == (1, "2", (3.0,))
+
+    # Using exp.Expression will always return the input expression
+    assert coerce(parse_one("order", into=exp.Column), exp.Expression) == exp.column("order")
+    assert coerce(exp.Literal.string("OK"), exp.Expression) == exp.Literal.string("OK")
+
+    # Strict flag allows raising errors and is used when recursively coercing expressions
+    # otherwise, in general, we want to be lenient and just warn the user when something is not possible
+    with pytest.raises(SQLMeshError):
+        coerce(exp.Literal.string("order"), exp.Select, strict=True)
+
+    with pytest.raises(SQLMeshError):
+        _ = coerce(
+            exp.Literal.string("order::date"),
+            t.Union[exp.Column, exp.Identifier],
+            strict=True,
+        )
