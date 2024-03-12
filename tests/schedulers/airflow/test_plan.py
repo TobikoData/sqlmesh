@@ -120,6 +120,9 @@ def test_create_plan_dag_spec(
         models_to_backfill=None,
         end_bounded=False,
         ensure_finalized_snapshots=False,
+        directly_modified_snapshots=[the_snapshot.snapshot_id],
+        indirectly_modified_snapshots={},
+        removed_snapshots=[],
     )
 
     deleted_snapshot = SnapshotTableInfo(
@@ -154,6 +157,7 @@ def test_create_plan_dag_spec(
         side_effect=lambda: to_datetime("2023-01-01"),
     ):
         plan_spec = create_plan_dag_spec(plan_request, state_sync_mock)
+
     assert plan_spec == common.PlanDagSpec(
         request_id="test_request_id",
         environment=new_environment,
@@ -181,6 +185,9 @@ def test_create_plan_dag_spec(
             if not paused_forward_only
             else DeployabilityIndex.none_deployable()
         ),
+        directly_modified_snapshots=[the_snapshot.snapshot_id],
+        indirectly_modified_snapshots={},
+        removed_snapshots=[],
     )
 
     state_sync_mock.get_snapshots.assert_called_once()
@@ -246,6 +253,9 @@ def test_restatement(
         models_to_backfill=None,
         end_bounded=False,
         ensure_finalized_snapshots=False,
+        directly_modified_snapshots=[],
+        indirectly_modified_snapshots={},
+        removed_snapshots=[],
     )
     old_environment = Environment(
         name=environment_name,
@@ -287,6 +297,9 @@ def test_restatement(
         forward_only=True,
         dag_start_ts=to_timestamp(now_value),
         no_gaps_snapshot_names={the_snapshot.name},
+        directly_modified_snapshots=[],
+        indirectly_modified_snapshots={},
+        removed_snapshots=[],
     )
 
     state_sync_mock.get_snapshots.assert_called_once()
@@ -351,6 +364,9 @@ def test_select_models_for_backfill(mocker: MockerFixture, random_name, make_sna
         models_to_backfill={snapshot_b.name},
         end_bounded=False,
         ensure_finalized_snapshots=False,
+        directly_modified_snapshots=[snapshot_a.snapshot_id, snapshot_b.snapshot_id],
+        indirectly_modified_snapshots={},
+        removed_snapshots=[],
     )
 
     state_sync_mock = mocker.Mock()
@@ -389,6 +405,9 @@ def test_select_models_for_backfill(mocker: MockerFixture, random_name, make_sna
         deployability_index=DeployabilityIndex.all_deployable(),
         no_gaps_snapshot_names={'"a"', '"b"'},
         models_to_backfill={snapshot_b.name},
+        directly_modified_snapshots=[snapshot_a.snapshot_id, snapshot_b.snapshot_id],
+        indirectly_modified_snapshots={},
+        removed_snapshots=[],
     )
 
 
@@ -420,6 +439,9 @@ def test_create_plan_dag_spec_duplicated_snapshot(
         models_to_backfill=None,
         end_bounded=False,
         ensure_finalized_snapshots=False,
+        directly_modified_snapshots=[],
+        indirectly_modified_snapshots={},
+        removed_snapshots=[],
     )
 
     dag_run_mock = mocker.Mock()
@@ -470,6 +492,9 @@ def test_create_plan_dag_spec_unbounded_end(
         models_to_backfill=None,
         end_bounded=False,
         ensure_finalized_snapshots=False,
+        directly_modified_snapshots=[],
+        indirectly_modified_snapshots={},
+        removed_snapshots=[],
     )
 
     state_sync_mock = mocker.Mock()

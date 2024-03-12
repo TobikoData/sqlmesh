@@ -370,6 +370,12 @@ class StateBasedAirflowPlanEvaluator(BaseAirflowPlanEvaluator):
             models_to_backfill=plan.models_to_backfill,
             end_bounded=plan.end_bounded,
             ensure_finalized_snapshots=plan.ensure_finalized_snapshots,
+            directly_modified_snapshots=list(plan.directly_modified),
+            indirectly_modified_snapshots={
+                change_source.name: list(snapshots)
+                for change_source, snapshots in plan.indirectly_modified.items()
+            },
+            removed_snapshots=list(plan.context_diff.removed_snapshots),
         )
         plan_dag_spec = create_plan_dag_spec(plan_application_request, self.state_sync)
         PlanDagState.from_state_sync(self.state_sync).add_dag_spec(plan_dag_spec)
@@ -440,6 +446,12 @@ class AirflowPlanEvaluator(StateBasedAirflowPlanEvaluator):
             models_to_backfill=plan.models_to_backfill,
             end_bounded=plan.end_bounded,
             ensure_finalized_snapshots=plan.ensure_finalized_snapshots,
+            directly_modified_snapshots=list(plan.directly_modified),
+            indirectly_modified_snapshots={
+                change_source.name: list(snapshots)
+                for change_source, snapshots in plan.indirectly_modified.items()
+            },
+            removed_snapshots=list(plan.context_diff.removed_snapshots),
         )
 
 
