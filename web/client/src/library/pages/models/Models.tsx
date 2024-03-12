@@ -1,6 +1,12 @@
 import { Outlet, useLocation, useNavigate, useParams } from 'react-router-dom'
 import { useEffect, useMemo } from 'react'
-import { isArrayNotEmpty, isNil, isNotNil } from '@utils/index'
+import {
+  isArrayEmpty,
+  isArrayNotEmpty,
+  isFalse,
+  isNil,
+  isNotNil,
+} from '@utils/index'
 import { useStoreContext } from '@context/context'
 import { type ModelSQLMeshModel } from '@models/sqlmesh-model'
 import Container from '@components/container/Container'
@@ -57,38 +63,40 @@ export default function PageModels({
     navigate(`${to}/${model.name}`, { replace: true })
   }, [files, model, to])
 
-  const isNotFound = isNil(model) && isNotNil(modelName)
+  const isNotFound =
+    isNil(model) && isNotNil(modelName) && isFalse(isFetchingModels)
 
-  return isFetchingModels ? (
-    <LoadingSegment>Loading Models...</LoadingSegment>
-  ) : (
+  return (
     <Page
       sidebar={
-        <SourceList<ModelSQLMeshModel>
-          keyId="displayName"
-          keyName="displayName"
-          to={to}
-          items={list}
-          isActive={id => `${to}/${id}` === pathname}
-          types={list.reduce(
-            (acc: Record<string, string>, it) =>
-              Object.assign(acc, {
-                [it.name]: getModelNodeTypeTitle(
-                  it.type as LineageNodeModelType,
-                ),
-              }),
-            {},
-          )}
-          listItem={({ to, name, description, text, disabled = false }) => (
-            <SourceListItem
-              to={to}
-              name={name}
-              text={text}
-              description={description}
-              disabled={disabled}
-            />
-          )}
-        />
+        isArrayEmpty(list) ? undefined : (
+          <SourceList<ModelSQLMeshModel>
+            keyId="displayName"
+            keyName="displayName"
+            to={to}
+            items={list}
+            isActive={id => `${to}/${id}` === pathname}
+            types={list.reduce(
+              (acc: Record<string, string>, it) =>
+                Object.assign(acc, {
+                  [it.name]: getModelNodeTypeTitle(
+                    it.type as LineageNodeModelType,
+                  ),
+                }),
+              {},
+            )}
+            listItem={({ to, name, description, text, disabled = false }) => (
+              <SourceListItem
+                to={to}
+                name={name}
+                text={text}
+                description={description}
+                disabled={disabled}
+              />
+            )}
+            disabled={isFetchingModels}
+          />
+        )
       }
       content={
         <Container.Page>
@@ -103,6 +111,7 @@ export default function PageModels({
                 direction="top"
                 className="my-2"
                 isFullWidth
+                disabled={isFetchingModels}
               />
             )}
             <Divider />
@@ -112,6 +121,8 @@ export default function PageModels({
                 message="Go Back"
                 description={`Model "${modelName}" not found.`}
               />
+            ) : isFetchingModels ? (
+              <LoadingSegment>Loading Model page...</LoadingSegment>
             ) : (
               <Outlet />
             )}

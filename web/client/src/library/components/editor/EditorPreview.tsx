@@ -219,10 +219,7 @@ export default function EditorPreview({
                   'w-full h-full ring-white ring-opacity-60 ring-offset-2 ring-offset-blue-400 focus:outline-none focus:ring-2',
                 )}
               >
-                <ModelLineage
-                  key={tab.file.fingerprint}
-                  model={model}
-                />
+                <ModelLineage model={model} />
               </Tab.Panel>
             )}
             {isNotNil(previewDiff?.row_diff) && (

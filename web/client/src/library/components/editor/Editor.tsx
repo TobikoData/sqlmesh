@@ -61,6 +61,8 @@ function EditorMain({ tab }: { tab: EditorTab }): JSX.Element {
   const previewTable = useStoreEditor(s => s.previewTable)
   const previewDiff = useStoreEditor(s => s.previewDiff)
   const refreshTab = useStoreEditor(s => s.refreshTab)
+  const updateStoredTabsIds = useStoreEditor(s => s.updateStoredTabsIds)
+
   const setPreviewQuery = useStoreEditor(s => s.setPreviewQuery)
   const setPreviewTable = useStoreEditor(s => s.setPreviewTable)
   const setPreviewDiff = useStoreEditor(s => s.setPreviewDiff)
@@ -183,6 +185,7 @@ function EditorMain({ tab }: { tab: EditorTab }): JSX.Element {
     setPreviewQuery(undefined)
     setPreviewTable(undefined)
     setPreviewDiff(undefined)
+    updateStoredTabsIds()
   }, [tab.id, tab.file.fingerprint])
 
   useEffect(() => {
