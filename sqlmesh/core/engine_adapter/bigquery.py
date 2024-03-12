@@ -448,6 +448,11 @@ class BigQueryEngineAdapter(InsertOverwriteWithMergeMixin):
                     comment
                 )
 
+        # An "etag" is BQ versioning metadata that changes when an object is updated/modified. `update_table`
+        # compares the etags of the table object passed to it and the remote table, erroring if the etags
+        # don't match. We set the local etag to None to avoid this check.
+        table_def["etag"] = None
+
         # convert dict back to a Table object
         table = table.from_api_repr(table_def)
 
