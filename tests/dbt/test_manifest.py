@@ -100,6 +100,7 @@ def test_tests_referencing_disabled_models():
     assert "not_null_disabled_model_one" not in helper.tests()
 
 
+@pytest.mark.xdist_group("dbt_manifest")
 def test_variable_override():
     project_path = Path("tests/fixtures/dbt/sushi_test")
     profile = Profile.load(DbtContext(project_path))
