@@ -387,8 +387,8 @@ class MacroEvaluator:
                     )
                 if isinstance(coerced, base):
                     return coerced
-                raise SQLMeshError(base_err_msg)
-
+                else:
+                    raise SQLMeshError(base_err_msg)
             if base in (int, float, str) and isinstance(expr, exp.Literal):
                 return base(expr.this)
             if base is bool and isinstance(expr, exp.Boolean):
