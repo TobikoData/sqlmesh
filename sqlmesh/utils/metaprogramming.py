@@ -215,6 +215,8 @@ def normalize_source(obj: t.Any) -> str:
             # remove function return type annotation
             if isinstance(node, ast.FunctionDef):
                 node.returns = None
+        elif isinstance(node, ast.arg):
+            node.annotation = None
 
     return to_source(root_node).strip()
 
@@ -276,8 +278,7 @@ def build_env(
     if name not in env:
         # We only need to add the undecorated code of @macro() functions in env, which
         # is accessible through the `__wrapped__` attribute added by functools.wraps
-        # We account for the case where the function is wrapped multiple times too
-        env[name] = inspect.unwrap(obj) if hasattr(obj, "__sqlmesh_macro__") else obj
+        env[name] = obj.__wrapped__ if getattr(obj, "__sqlmesh_macro__", None) else obj
 
         if obj_module and _is_relative_to(obj_module.__file__, path):
             walk(env[name])
