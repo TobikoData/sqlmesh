@@ -145,6 +145,7 @@ class ModelTest(unittest.TestCase):
             actual = actual.sort_values(by=actual.columns.to_list()).reset_index(drop=True)
             expected = expected.apply(lambda col: col.map(_to_hashable))
             expected = expected.sort_values(by=expected.columns.to_list()).reset_index(drop=True)
+
         try:
             pd.testing.assert_frame_equal(
                 expected,
