@@ -40,7 +40,6 @@ setup(
         "cryptography~=41.0.7",
         "duckdb",
         "dateparser",
-        "fsspec",
         "hyperscript",
         "ipywidgets",
         "jinja2",
