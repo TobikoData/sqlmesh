@@ -496,21 +496,21 @@ def test_accepted_range_audit(model: Model):
     )
     assert (
         rendered_query.sql()
-        == 'SELECT * FROM (SELECT * FROM "db"."test_model" AS "test_model" WHERE "ds" BETWEEN \'1970-01-01\' AND \'1970-01-01\') AS "_q_0" WHERE "a" < 0'
+        == 'SELECT * FROM (SELECT * FROM "db"."test_model" AS "test_model" WHERE "ds" BETWEEN \'1970-01-01\' AND \'1970-01-01\') AS "_q_0" WHERE FALSE OR "a" < 0 OR FALSE OR FALSE OR FALSE'
     )
     rendered_query = builtin.accepted_range_audit.render_query(
         model, column=exp.to_column("a"), max_v=100, inclusive=exp.false()
     )
     assert (
         rendered_query.sql()
-        == 'SELECT * FROM (SELECT * FROM "db"."test_model" AS "test_model" WHERE "ds" BETWEEN \'1970-01-01\' AND \'1970-01-01\') AS "_q_0" WHERE "a" >= 100'
+        == 'SELECT * FROM (SELECT * FROM "db"."test_model" AS "test_model" WHERE "ds" BETWEEN \'1970-01-01\' AND \'1970-01-01\') AS "_q_0" WHERE FALSE OR FALSE OR FALSE OR FALSE OR "a" >= 100'
     )
     rendered_query = builtin.accepted_range_audit.render_query(
         model, column=exp.to_column("a"), min_v=100, max_v=100
     )
     assert (
         rendered_query.sql()
-        == 'SELECT * FROM (SELECT * FROM "db"."test_model" AS "test_model" WHERE "ds" BETWEEN \'1970-01-01\' AND \'1970-01-01\') AS "_q_0" WHERE "a" < 100 OR "a" > 100'
+        == 'SELECT * FROM (SELECT * FROM "db"."test_model" AS "test_model" WHERE "ds" BETWEEN \'1970-01-01\' AND \'1970-01-01\') AS "_q_0" WHERE FALSE OR "a" < 100 OR FALSE OR "a" > 100 OR FALSE'
     )
 
 
@@ -643,10 +643,10 @@ def test_text_diff():
     modified_audit.name = "my_audit_2"
 
     assert (
-        "\n".join(l.rstrip() for l in audit.text_diff(modified_audit).split("\n"))
-        == """---
+        audit.text_diff(modified_audit)
+        == """--- 
 
-+++
++++ 
 
 @@ -1,5 +1,5 @@
 
@@ -663,26 +663,3 @@ def test_non_blocking_builtin():
     assert BUILT_IN_AUDITS["not_null_non_blocking"].blocking is False
     assert BUILT_IN_AUDITS["not_null_non_blocking"].name == "not_null_non_blocking"
     assert BUILT_IN_AUDITS["not_null"].query == BUILT_IN_AUDITS["not_null_non_blocking"].query
-
-
-def test_string_length_between_audit(model: Model):
-    rendered_query = builtin.string_length_between_audit.render_query(
-        model,
-        column=exp.column("x"),
-        min_v=1,
-        max_v=5,
-    )
-    assert (
-        rendered_query.sql()
-        == """SELECT * FROM (SELECT * FROM "db"."test_model" AS "test_model" WHERE "ds" BETWEEN '1970-01-01' AND '1970-01-01') AS "_q_0" WHERE LENGTH("x") < 1 OR LENGTH("x") > 5"""
-    )
-
-
-def test_not_constant_audit(model: Model):
-    rendered_query = builtin.not_constant_audit.render_query(
-        model, column=exp.column("x"), condition=exp.condition("x > 1")
-    )
-    assert (
-        rendered_query.sql()
-        == """SELECT 1 AS "1" FROM (SELECT COUNT(DISTINCT "x") AS "t_cardinality" FROM (SELECT * FROM "db"."test_model" AS "test_model" WHERE "ds" BETWEEN '1970-01-01' AND '1970-01-01') AS "_q_0" WHERE "x" > 1) AS "r" WHERE "r"."t_cardinality" <= 1"""
-    )

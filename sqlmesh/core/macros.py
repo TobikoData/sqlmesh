@@ -1053,28 +1053,6 @@ def pivot(
     return aggregates
 
 
-@macro("AND")
-def and_(evaluator: MacroEvaluator, *expressions: t.Optional[exp.Expression]) -> exp.Condition:
-    """Returns an AND statement filtering out any NULL expressions."""
-    conditions = [e for e in expressions if not isinstance(e, exp.Null)]
-
-    if not conditions:
-        return exp.true()
-
-    return exp.and_(*conditions, dialect=evaluator.dialect)
-
-
-@macro("OR")
-def or_(evaluator: MacroEvaluator, *expressions: t.Optional[exp.Expression]) -> exp.Condition:
-    """Returns an OR statement filtering out any NULL expressions."""
-    conditions = [e for e in expressions if not isinstance(e, exp.Null)]
-
-    if not conditions:
-        return exp.true()
-
-    return exp.or_(*conditions, dialect=evaluator.dialect)
-
-
 def normalize_macro_name(name: str) -> str:
     """Prefix macro name with @ and upcase"""
     return f"@{name.upper()}"
