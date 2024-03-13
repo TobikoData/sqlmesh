@@ -383,15 +383,15 @@ Now that we've tested the changes in dev, it's time to move them to prod. Open t
 
 ![`prod` environment selected in environment menu](./ui/ui-quickstart_plan-prod-modified.png)
 
-Click the green `Plan` button, and a warning screen will appear:
-
-![`prod` environment modification warning](./ui/ui-quickstart_plan-prod-modified-warning.png)
-
-Click the `Yes, Run prod` button to proceed, and the run plan interface will appear:
+Click the green `Plan` button to open the run plan interface:
 
 ![`prod` environment plan pane](./ui/ui-quickstart_plan-prod-modified-pane.png)
 
-Click the blue `Apply Virtual Update` button to apply the plan and execute the backfill:
+Click the blue `Apply Virtual Update` button, and a warning screen will appear:
+
+![`prod` environment modification warning](./ui/ui-quickstart_plan-prod-modified-warning.png)
+
+Click the `Yes, Run prod` button to proceed with applying the plan:
 
 ![`prod` environment after applying plan](./ui/ui-quickstart_apply-plan-prod-modified.png)
 
