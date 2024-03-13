@@ -1,15 +1,13 @@
 from __future__ import annotations
 
-import inspect
-import logging
 import typing as t
 from enum import Enum
-from functools import reduce, wraps
+from functools import reduce
 from string import Template
 
 import sqlglot
 from jinja2 import Environment
-from sqlglot import Generator, exp, parse_one
+from sqlglot import Generator, exp
 from sqlglot.executor.env import ENV
 from sqlglot.executor.python import Python
 from sqlglot.helper import csv, ensure_collection
@@ -17,7 +15,6 @@ from sqlglot.schema import MappingSchema
 
 from sqlmesh.core.dialect import (
     SQLMESH_MACRO_PREFIX,
-    Dialect,
     MacroDef,
     MacroFunc,
     MacroSQL,
@@ -35,8 +32,6 @@ if t.TYPE_CHECKING:
     from sqlmesh.core._typing import TableName
     from sqlmesh.core.engine_adapter import EngineAdapter
     from sqlmesh.core.snapshot import Snapshot
-
-logger = logging.getLogger(__name__)
 
 
 class RuntimeStage(Enum):
@@ -354,75 +349,6 @@ class MacroEvaluator:
             )
         return self.locals["engine_adapter"]
 
-    def _coerce(self, expr: exp.Expression, typ: t.Any, strict: bool = False) -> t.Any:
-        """Coerces the given expression to the specified type on a best-effort basis."""
-        base_err_msg = f"Failed to coerce expression '{expr}' to type '{typ}'."
-        try:
-            if typ is None or typ is t.Any:
-                return expr
-            base = t.get_origin(typ) or typ
-            # We need to handle t.Union first since we cannot use isinstance with it
-            if base is t.Union:
-                for branch in t.get_args(typ):
-                    try:
-                        return self._coerce(expr, branch, True)
-                    except Exception:
-                        pass
-                raise SQLMeshError(base_err_msg)
-            if isinstance(expr, base):
-                return expr
-            if issubclass(base, exp.Expression):
-                d = Dialect.get_or_raise(self.dialect)
-                into = base if base in d.parser().EXPRESSION_PARSERS else None
-                if into is None:
-                    if isinstance(expr, exp.Literal):
-                        coerced = parse_one(expr.this)
-                    else:
-                        raise SQLMeshError(
-                            f"{base_err_msg} Coercion to {base} requires a literal expression."
-                        )
-                else:
-                    coerced = parse_one(
-                        expr.this if isinstance(expr, exp.Literal) else expr.sql(), into=into
-                    )
-                if isinstance(coerced, base):
-                    return coerced
-                else:
-                    raise SQLMeshError(base_err_msg)
-            if base in (int, float, str) and isinstance(expr, exp.Literal):
-                return base(expr.this)
-            if base is bool and isinstance(expr, exp.Boolean):
-                return expr.this
-            if base is str and isinstance(expr, exp.Expression):
-                return expr.sql(self.dialect)
-            if base is tuple and isinstance(expr, (exp.Tuple, exp.Array)):
-                generic = t.get_args(typ)
-                if not generic:
-                    return tuple(expr.expressions)
-                if generic[-1] is ...:
-                    return tuple(self._coerce(expr, generic[0]) for expr in expr.expressions)
-                elif len(generic) == len(expr.expressions):
-                    return tuple(
-                        self._coerce(expr, generic[i]) for i, expr in enumerate(expr.expressions)
-                    )
-                raise SQLMeshError(f"{base_err_msg} Expected {len(generic)} items.")
-            if base is list and isinstance(expr, (exp.Array, exp.Tuple)):
-                generic = t.get_args(typ)
-                if not generic:
-                    return expr.expressions
-                return [self._coerce(expr, generic[0]) for expr in expr.expressions]
-            raise SQLMeshError(base_err_msg)
-        except Exception:
-            if strict:
-                raise
-            logger.warning(
-                "Coercion of expression '%s' to type '%s' failed. Using non coerced expression.",
-                expr,
-                typ,
-                exc_info=True,
-            )
-            return expr
-
 
 class macro(registry_decorator):
     """Specifies a function is a macro and registers it the global MACROS registry.
@@ -446,31 +372,7 @@ class macro(registry_decorator):
     def __call__(
         self, func: t.Callable[..., DECORATOR_RETURN_TYPE]
     ) -> t.Callable[..., DECORATOR_RETURN_TYPE]:
-        @wraps(func)
-        def _typed_func(
-            evaluator: MacroEvaluator, *args_: t.Any, **kwargs_: t.Any
-        ) -> DECORATOR_RETURN_TYPE:
-            spec = inspect.getfullargspec(func)
-            annotations = t.get_type_hints(func)
-            kwargs = inspect.getcallargs(func, evaluator, *args_, **kwargs_)
-            for param, value in kwargs.items():
-                coercible_type = annotations.get(param)
-                if not coercible_type:
-                    continue
-                kwargs[param] = evaluator._coerce(value, coercible_type)
-            args = [kwargs.pop(k) for k in spec.args if k in kwargs]
-            if spec.varargs:
-                args.extend(kwargs.pop(spec.varargs, []))
-            return func(*args, **kwargs)
-
-        try:
-            annotated = any(t.get_type_hints(func).keys() - {"return"})
-        except TypeError:
-            annotated = False
-
-        wrapper = super().__call__(
-            func if not annotated else t.cast(t.Callable[..., DECORATOR_RETURN_TYPE], _typed_func)
-        )
+        wrapper = super().__call__(func)
 
         # This is useful to identify macros at runtime
         setattr(wrapper, "__sqlmesh_macro__", True)
