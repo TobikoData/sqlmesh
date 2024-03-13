@@ -964,8 +964,8 @@ class MySQLConnectionConfig(ConnectionConfig):
 
 class MSSQLConnectionConfig(ConnectionConfig):
     host: str
-    user: str
-    password: str
+    user: t.Optional[str] = None
+    password: t.Optional[str] = None
     database: t.Optional[str] = ""
     timeout: t.Optional[int] = 0
     login_timeout: t.Optional[int] = 60
