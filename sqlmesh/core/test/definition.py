@@ -82,10 +82,17 @@ class ModelTest(unittest.TestCase):
             rows = values["rows"]
             if not columns_to_types and rows:
                 for i, v in rows[0].items():
-                    # convert ruamel into python
-                    v = v.real if hasattr(v, "real") else v
-                    v_type = annotate_types(exp.convert(v)).type or type(v).__name__
-                    columns_to_types[i] = exp.maybe_parse(v_type, into=exp.DataType)
+                    if isinstance(v, dict):
+                        # Since a YAML dict can be interpreted in many ways (e.g. STRUCT, MAP),
+                        # we parse it to figure out what the correct representation is per dialect
+                        v_ast: exp.Expression = exp.maybe_parse(str(v), dialect=self.dialect)
+                    else:
+                        v_ast = exp.convert(v)
+
+                    v_type = annotate_types(v_ast).type or type(v).__name__
+                    columns_to_types[i] = exp.maybe_parse(
+                        v_type, into=exp.DataType, dialect=self.dialect
+                    )
 
             test_fixture_table = _fully_qualified_test_fixture_table(table_name, self.dialect)
             if test_fixture_table.db:

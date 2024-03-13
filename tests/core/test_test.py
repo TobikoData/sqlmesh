@@ -674,20 +674,22 @@ test_foo:
   model: sushi.foo
   inputs:
     raw:
-      - value: [1, 2, 3]
-      - value:
+      - array: [1, 2, 3]
+        struct: {'x': [1, 2, 3], 'y': 'foo', 'z': 1}
+      - array:
         - 2
         - 3
-      - value: [0, 4, 1]
+      - array: [0, 4, 1]
   outputs:
     query:
-      - value: [0, 4, 1]
-      - value: [1, 2, 3]
-      - value: [2, 3]
+      - array: [0, 4, 1]
+      - array: [1, 2, 3]
+        struct: {'x': [1, 2, 3], 'y': 'foo', 'z': 1}
+      - array: [2, 3]
             """
         ),
         test_name="test_foo",
-        model=_create_model("SELECT value FROM raw"),
+        model=_create_model("SELECT array, struct FROM raw"),
         context=Context(config=Config(model_defaults=ModelDefaultsConfig(dialect="duckdb"))),
     ).run()
 

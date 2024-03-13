@@ -805,6 +805,7 @@ def select_from_values_for_batch_range(
     batch_start: int,
     batch_end: int,
     alias: str = "t",
+    dialect: DialectType = None,
 ) -> exp.Select:
     casted_columns = [
         exp.alias_(exp.cast(column, to=kind), column, copy=False)
@@ -818,7 +819,8 @@ def select_from_values_for_batch_range(
     else:
         where = None
         expressions = [
-            tuple(transform_values(v, columns_to_types)) for v in values[batch_start:batch_end]
+            tuple(transform_values(v, columns_to_types, dialect=dialect))
+            for v in values[batch_start:batch_end]
         ]
 
     values_exp = exp.values(expressions, alias=alias, columns=columns_to_types)
@@ -923,15 +925,16 @@ def add_table(node: exp.Expression, table: str) -> exp.Expression:
 
 
 def transform_values(
-    values: t.Tuple[t.Any, ...], columns_to_types: t.Dict[str, exp.DataType]
+    values: t.Tuple[t.Any, ...],
+    columns_to_types: t.Dict[str, exp.DataType],
+    dialect: DialectType = None,
 ) -> t.Iterator[t.Any]:
-    """Perform transformations on values given columns_to_types.
-
-    Currently, the only transformation is wrapping JSON columns with PARSE_JSON().
-    """
+    """Perform transformations on values given columns_to_types."""
     for value, col_type in zip(values, columns_to_types.values()):
         if col_type == JSON_TYPE:
             yield exp.func("PARSE_JSON", f"'{value}'")
+        elif isinstance(value, dict):
+            yield exp.maybe_parse(str(value), dialect=dialect)
         else:
             yield value
 
