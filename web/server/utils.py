@@ -12,10 +12,10 @@ from fastapi import Depends, HTTPException
 from starlette.responses import StreamingResponse
 from starlette.status import HTTP_404_NOT_FOUND, HTTP_422_UNPROCESSABLE_ENTITY
 
-from sqlmesh.core.context import Context
+from sqlmesh.core import constants as c
 from web.server.console import api_console
 from web.server.exceptions import ApiException
-from web.server.settings import get_context
+from web.server.settings import Settings, get_context, get_settings
 
 R = t.TypeVar("R")
 
@@ -51,11 +51,9 @@ async def run_in_executor(func: t.Callable[..., R], *args: t.Any) -> R:
     return await loop.run_in_executor(None, func_wrapper)
 
 
-def validate_path(
-    path: str,
-    context: Context = Depends(get_context),
-) -> str:
-    resolved_path = context.path.resolve()
+async def validate_path(path: str, settings: Settings = Depends(get_settings)) -> str:
+    context = await get_context(settings)
+    resolved_path = settings.project_path.resolve()
     full_path = (resolved_path / path).resolve()
     try:
         full_path.relative_to(resolved_path)
@@ -63,7 +61,10 @@ def validate_path(
         raise HTTPException(status_code=HTTP_404_NOT_FOUND)
 
     if any(
-        full_path.match(pattern) for pattern in context.config_for_path(Path(path)).ignore_patterns
+        full_path.match(pattern)
+        for pattern in (
+            context.config_for_path(Path(path)).ignore_patterns if context else c.IGNORE_PATTERNS
+        )
     ):
         raise HTTPException(status_code=HTTP_404_NOT_FOUND)
 

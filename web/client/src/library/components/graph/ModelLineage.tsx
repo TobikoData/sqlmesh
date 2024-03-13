@@ -118,7 +118,7 @@ export default function ModelLineage({
       setMainNode(undefined)
       setHighlightedNodes({})
     }
-  }, [model.hash])
+  }, [model.name, model.hash])
 
   useEffect(() => {
     Object.keys(modelLineage ?? {}).forEach(modelName => {
