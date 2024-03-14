@@ -109,7 +109,7 @@ def test_model_to_sqlmesh_fields():
         == 'SELECT 1 AS "a" FROM "memory"."foo"."table" AS "table"'
     )
     assert model.start == "Jan 1 2023"
-    assert [col.sql() for col in model.partitioned_by] == ["a"]
+    assert [col.sql() for col in model.partitioned_by] == ['"a"']
     assert model.clustered_by == ["a", "b"]
     assert model.cron == "@hourly"
     assert model.interval_unit.value == "five_minute"

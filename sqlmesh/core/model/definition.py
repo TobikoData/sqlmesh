@@ -509,12 +509,12 @@ class _Model(ModelMeta, frozen=True):
             if columns_to_types is None:
                 columns_to_types = self.columns_to_types_or_raise
 
-            if self.time_column.column not in columns_to_types:
+            if self.time_column.column.name not in columns_to_types:
                 raise ConfigError(
-                    f"Time column '{self.time_column.column}' not found in model '{self.name}'."
+                    f"Time column '{self.time_column.column.sql(dialect=self.dialect)}' not found in model '{self.name}'."
                 )
 
-            time_column_type = columns_to_types[self.time_column.column]
+            time_column_type = columns_to_types[self.time_column.column.name]
 
             return to_time_column(time, time_column_type, self.time_column.format)
         return exp.convert(time)
@@ -726,7 +726,7 @@ class _Model(ModelMeta, frozen=True):
             data.append(gen(value))
 
         if isinstance(self.kind, IncrementalByTimeRangeKind):
-            data.append(self.kind.time_column.column)
+            data.append(gen(self.kind.time_column.column))
             data.append(self.kind.time_column.format)
         elif isinstance(self.kind, IncrementalByUniqueKeyKind):
             data.extend((gen(k) for k in self.kind.unique_key))
