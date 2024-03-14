@@ -91,6 +91,7 @@ class SQLMeshMagics(Magics):
     @argument("--gateway", type=str, help="The name of the gateway.")
     @argument("--ignore-warnings", action="store_true", help="Ignore warnings.")
     @argument("--debug", action="store_true", help="Enable debug mode.")
+    @argument("--log-file-dir", type=str, help="The directory to write the log file to.")
     @line_magic
     def context(self, line: str) -> None:
         """Sets the context in the user namespace."""
@@ -99,7 +100,9 @@ class SQLMeshMagics(Magics):
         args = parse_argstring(self.context, line)
         configs = load_configs(args.config, Context.CONFIG_TYPE, args.paths)
         log_limit = list(configs.values())[0].log_limit
-        configure_logging(args.debug, args.ignore_warnings, log_limit=log_limit)
+        configure_logging(
+            args.debug, args.ignore_warnings, log_limit=log_limit, log_file_dir=args.log_file_dir
+        )
         try:
             context = Context(paths=args.paths, config=configs, gateway=args.gateway)
             self._shell.user_ns["context"] = context

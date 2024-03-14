@@ -11,6 +11,7 @@ import sys
 import typing as t
 from datetime import datetime
 from enum import Enum
+from pathlib import Path
 
 from sqlmesh.core.dialect import extend_sqlglot
 
@@ -93,7 +94,7 @@ if RuntimeEnv.get().is_notebook:
 
 
 LOG_FORMAT = "%(asctime)s - %(threadName)s - %(name)s - %(levelname)s - %(message)s (%(filename)s:%(lineno)d)"
-LOG_PREFIX = "logs/sqlmesh_"
+LOG_FILENAME_PREFIX = "sqlmesh_"
 
 
 # SO: https://stackoverflow.com/questions/384076/how-can-i-color-python-logging-output
@@ -126,6 +127,7 @@ def configure_logging(
     write_to_stdout: bool = False,
     write_to_file: bool = True,
     log_limit: int = c.DEFAULT_LOG_LIMIT,
+    log_file_dir: t.Optional[t.Union[str, Path]] = None,
 ) -> None:
     logger = logging.getLogger()
     debug = force_debug or debug_mode_enabled()
@@ -141,9 +143,11 @@ def configure_logging(
     )
     logger.addHandler(stdout_handler)
 
+    log_file_dir = log_file_dir or c.DEFAULT_LOG_FILE_DIR
+    log_path_prefix = Path(log_file_dir) / LOG_FILENAME_PREFIX
     if write_to_file:
-        os.makedirs("logs", exist_ok=True)
-        filename = f"{LOG_PREFIX}{datetime.now().strftime('%Y_%m_%d_%H_%M_%S')}.log"
+        os.makedirs(str(log_file_dir), exist_ok=True)
+        filename = f"{log_path_prefix}{datetime.now().strftime('%Y_%m_%d_%H_%M_%S')}.log"
         file_handler = logging.FileHandler(filename, mode="w", encoding="utf-8")
         # the log files should always log at least info so that users will always have
         # minimal info for debugging even if they specify "ignore_warnings"
@@ -152,7 +156,7 @@ def configure_logging(
         logger.addHandler(file_handler)
 
     if log_limit > 0:
-        for path in list(sorted(glob.glob(f"{LOG_PREFIX}*.log"), reverse=True))[log_limit:]:
+        for path in list(sorted(glob.glob(f"{log_path_prefix}*.log"), reverse=True))[log_limit:]:
             os.remove(path)
 
     if debug:
