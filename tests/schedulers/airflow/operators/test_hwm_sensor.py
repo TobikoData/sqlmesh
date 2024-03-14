@@ -1,5 +1,3 @@
-import os
-from unittest import mock
 from unittest.mock import call
 
 import pytest
@@ -17,12 +15,6 @@ from sqlmesh.utils.date import to_datetime
 
 pytest_plugins = ["tests.schedulers.airflow.operators.fixtures"]
 pytestmark = pytest.mark.airflow
-
-
-@pytest.fixture
-def set_airflow_as_library():
-    with mock.patch.dict(os.environ, {"_AIRFLOW__AS_LIBRARY": "1"}):
-        yield
 
 
 def test_no_current_hwm(mocker: MockerFixture, make_snapshot, random_name, set_airflow_as_library):
