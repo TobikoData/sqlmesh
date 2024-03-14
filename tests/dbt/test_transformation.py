@@ -85,6 +85,7 @@ def test_model_kind():
         valid_to_name="dbt_valid_to",
         updated_at_as_valid_from=True,
         updated_at_name="updated_at",
+        dialect="duckdb",
     )
     assert ModelConfig(
         materialized=Materialization.SNAPSHOT,
@@ -97,37 +98,44 @@ def test_model_kind():
         valid_to_name="dbt_valid_to",
         columns=["foo"],
         execution_time_as_valid_from=True,
+        dialect="duckdb",
     )
 
     assert ModelConfig(materialized=Materialization.INCREMENTAL, time_column="foo").model_kind(
         context
-    ) == IncrementalByTimeRangeKind(time_column="foo", forward_only=True)
+    ) == IncrementalByTimeRangeKind(time_column="foo", dialect="duckdb", forward_only=True)
     assert ModelConfig(
         materialized=Materialization.INCREMENTAL,
         time_column="foo",
         incremental_strategy="delete+insert",
         forward_only=False,
-    ).model_kind(context) == IncrementalByTimeRangeKind(time_column="foo")
+    ).model_kind(context) == IncrementalByTimeRangeKind(time_column="foo", dialect="duckdb")
     assert ModelConfig(
         materialized=Materialization.INCREMENTAL,
         time_column="foo",
         incremental_strategy="insert_overwrite",
-    ).model_kind(context) == IncrementalByTimeRangeKind(time_column="foo", forward_only=True)
+    ).model_kind(context) == IncrementalByTimeRangeKind(
+        time_column="foo", dialect="duckdb", forward_only=True
+    )
     assert ModelConfig(
         materialized=Materialization.INCREMENTAL, time_column="foo", unique_key=["bar"]
-    ).model_kind(context) == IncrementalByTimeRangeKind(time_column="foo", forward_only=True)
+    ).model_kind(context) == IncrementalByTimeRangeKind(
+        time_column="foo", dialect="duckdb", forward_only=True
+    )
 
     assert ModelConfig(
         materialized=Materialization.INCREMENTAL, unique_key=["bar"], incremental_strategy="merge"
-    ).model_kind(context) == IncrementalByUniqueKeyKind(unique_key=["bar"], forward_only=True)
+    ).model_kind(context) == IncrementalByUniqueKeyKind(
+        unique_key=["bar"], dialect="duckdb", forward_only=True
+    )
     assert ModelConfig(materialized=Materialization.INCREMENTAL, unique_key=["bar"]).model_kind(
         context
-    ) == IncrementalByUniqueKeyKind(unique_key=["bar"], forward_only=True)
+    ) == IncrementalByUniqueKeyKind(unique_key=["bar"], dialect="duckdb", forward_only=True)
 
     assert ModelConfig(
         materialized=Materialization.INCREMENTAL, time_column="foo", incremental_strategy="merge"
     ).model_kind(context) == IncrementalByTimeRangeKind(
-        time_column="foo", forward_only=True, disable_restatement=False
+        time_column="foo", dialect="duckdb", forward_only=True, disable_restatement=False
     )
 
     assert ModelConfig(
@@ -136,7 +144,7 @@ def test_model_kind():
         incremental_strategy="append",
         disable_restatement=True,
     ).model_kind(context) == IncrementalByTimeRangeKind(
-        time_column="foo", forward_only=True, disable_restatement=True
+        time_column="foo", dialect="duckdb", forward_only=True, disable_restatement=True
     )
 
     assert ModelConfig(
@@ -145,7 +153,7 @@ def test_model_kind():
         incremental_strategy="insert_overwrite",
         partition_by={"field": "bar"},
         forward_only=False,
-    ).model_kind(context) == IncrementalByTimeRangeKind(time_column="foo")
+    ).model_kind(context) == IncrementalByTimeRangeKind(time_column="foo", dialect="duckdb")
 
     assert ModelConfig(
         materialized=Materialization.INCREMENTAL,
@@ -207,6 +215,7 @@ def test_model_kind_snapshot_bigquery():
         updated_at_as_valid_from=True,
         updated_at_name="updated_at",
         time_data_type=exp.DataType.build("TIMESTAMPTZ"),
+        dialect="bigquery",
     )
 
 

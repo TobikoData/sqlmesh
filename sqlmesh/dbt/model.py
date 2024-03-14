@@ -184,7 +184,7 @@ class ModelConfig(BaseModelConfig):
         if materialization == Materialization.VIEW:
             return ViewKind()
         if materialization == Materialization.INCREMENTAL:
-            incremental_kwargs = {}
+            incremental_kwargs = {"dialect": context.dialect}
             for field in ("batch_size", "lookback", "forward_only", "disable_restatement"):
                 field_val = getattr(self, field, None) or self.meta.get(field, None)
                 if field_val:
@@ -243,6 +243,7 @@ class ModelConfig(BaseModelConfig):
                     f"{self.canonical_name(context)}: SQLMesh snapshot strategy is required for snapshot materialization."
                 )
             shared_kwargs = {
+                "dialect": context.dialect,
                 "unique_key": self.unique_key,
                 "invalidate_hard_deletes": self.invalidate_hard_deletes,
                 "valid_from_name": "dbt_valid_from",

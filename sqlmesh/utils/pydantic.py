@@ -311,8 +311,7 @@ def _get_fields(
 
     for expr in expressions:
         expr = exp.column(expr) if isinstance(expr, exp.Identifier) else expr
-        if dialect:
-            expr = quote_identifiers(normalize_identifiers(expr, dialect=dialect), dialect=dialect)
+        expr = quote_identifiers(normalize_identifiers(expr, dialect=dialect), dialect=dialect)
         expr.meta["dialect"] = dialect
         results.append(expr)
 

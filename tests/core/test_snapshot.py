@@ -102,10 +102,11 @@ def test_json(snapshot: Snapshot):
             "cron": "1 0 * * *",
             "kind": {
                 "name": "INCREMENTAL_BY_TIME_RANGE",
-                "time_column": {"column": "ds"},
+                "time_column": {"column": '"ds"'},
                 "batch_size": 30,
                 "forward_only": False,
                 "disable_restatement": False,
+                "dialect": "",
             },
             "mapping_schema": {},
             "start": "2020-01-01",

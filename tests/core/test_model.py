@@ -1,3 +1,4 @@
+import json
 import logging
 from datetime import date
 from pathlib import Path
@@ -426,7 +427,14 @@ def test_json_serde():
     )
 
     model = load_sql_based_model(expressions)
-    deserialized_model = SqlModel.parse_raw(model.json())
+
+    model_json = model.json()
+    model_json_parsed = json.loads(model.json())
+    assert model_json_parsed["kind"]["dialect"] == "spark"
+    assert model_json_parsed["kind"]["time_column"]["column"] == "`ds`"
+    assert model_json_parsed["partitioned_by"] == ["`a`"]
+
+    deserialized_model = SqlModel.parse_raw(model_json)
 
     assert deserialized_model == model
 

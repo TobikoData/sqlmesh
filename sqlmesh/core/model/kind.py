@@ -6,6 +6,8 @@ from enum import Enum
 
 from pydantic import Field
 from sqlglot import exp
+from sqlglot.optimizer.normalize_identifiers import normalize_identifiers
+from sqlglot.optimizer.qualify_columns import quote_identifiers
 from sqlglot.time import format_time
 
 from sqlmesh.core import dialect as d
@@ -29,6 +31,10 @@ if sys.version_info >= (3, 9):
     from typing import Annotated, Literal
 else:
     from typing_extensions import Annotated, Literal
+
+
+if t.TYPE_CHECKING:
+    MODEL_KIND = t.TypeVar("MODEL_KIND", bound="_ModelKind")
 
 
 class ModelKindMixin:
@@ -158,33 +164,43 @@ class TimeColumn(PydanticModel):
 
     @classmethod
     def validator(cls) -> classmethod:
-        def _time_column_validator(v: t.Any) -> TimeColumn:
+        def _time_column_validator(v: t.Any, values: t.Any) -> TimeColumn:
+            values = values if isinstance(values, dict) else values.data
+            dialect = values.get("dialect")
             if isinstance(v, exp.Tuple):
                 column_expr = v.expressions[0]
-                return TimeColumn(
-                    column=(
-                        exp.column(column_expr)
-                        if isinstance(column_expr, exp.Identifier)
-                        else column_expr
-                    ),
-                    format=v.expressions[1].name if len(v.expressions) > 1 else None,
+                column = (
+                    exp.column(column_expr)
+                    if isinstance(column_expr, exp.Identifier)
+                    else column_expr
                 )
-
-            if isinstance(v, exp.Expression):
-                v = exp.column(v) if isinstance(v, exp.Identifier) else v
-                return TimeColumn(column=v)
-
-            if isinstance(v, str):
-                return TimeColumn(column=d.parse_one(v))
-
-            if isinstance(v, dict):
-                column = v["column"]
-                return TimeColumn(
-                    column=d.parse_one(column) if isinstance(column, str) else column,
-                    format=v.get("format"),
+                format = v.expressions[1].name if len(v.expressions) > 1 else None
+            elif isinstance(v, exp.Expression):
+                column = exp.column(v) if isinstance(v, exp.Identifier) else v
+                format = None
+            elif isinstance(v, str):
+                column = d.parse_one(v, dialect=dialect)
+                column.meta.pop("sql")
+                format = None
+            elif isinstance(v, dict):
+                column_raw = v["column"]
+                column = (
+                    d.parse_one(column_raw, dialect=dialect)
+                    if isinstance(column_raw, str)
+                    else column_raw
                 )
+                format = v.get("format")
+            elif isinstance(v, TimeColumn):
+                return v
+            else:
+                raise ConfigError(f"Invalid time_column: '{v}'.")
 
-            return v
+            column = quote_identifiers(
+                normalize_identifiers(column, dialect=dialect), dialect=dialect
+            )
+            column.meta["dialect"] = dialect
+
+            return TimeColumn(column=column, format=format)
 
         return field_validator("time_column", mode="before")(_time_column_validator)
 
@@ -224,6 +240,7 @@ class TimeColumn(PydanticModel):
 
 
 class _Incremental(_ModelKind):
+    dialect: str = ""
     batch_size: t.Optional[SQLGlotPositiveInt] = None
     lookback: t.Optional[SQLGlotPositiveInt] = None
     forward_only: SQLGlotBool = False
@@ -348,6 +365,7 @@ class FullKind(_ModelKind):
 
 
 class _SCDType2Kind(_ModelKind):
+    dialect: str = ""
     unique_key: SQLGlotListOfFields
     valid_from_name: SQLGlotString = "valid_from"
     valid_to_name: SQLGlotString = "valid_to"
@@ -356,6 +374,16 @@ class _SCDType2Kind(_ModelKind):
 
     forward_only: SQLGlotBool = True
     disable_restatement: SQLGlotBool = True
+
+    @field_validator("time_data_type", mode="before")
+    @classmethod
+    def _time_data_type_validator(
+        cls, v: t.Union[str, exp.Expression], values: t.Any
+    ) -> exp.Expression:
+        values = values if isinstance(values, dict) else values.data
+        if isinstance(v, exp.Expression) and not isinstance(v, exp.DataType):
+            v = v.name
+        return exp.DataType.build(v, dialect=values.get("dialect"))
 
     @property
     def managed_columns(self) -> t.Dict[str, exp.DataType]:
@@ -438,20 +466,16 @@ def _model_kind_validator(cls: t.Type, v: t.Any, values: t.Dict[str, t.Any]) -> 
             if isinstance(v, d.ModelKind)
             else v
         )
-        time_data_type = props.pop("time_data_type", None)
-        if isinstance(time_data_type, exp.Expression) and not isinstance(
-            time_data_type, exp.DataType
-        ):
-            time_data_type = time_data_type.name
-        if time_data_type:
-            props["time_data_type"] = exp.DataType.build(time_data_type, dialect=dialect)
         name = v.this if isinstance(v, d.ModelKind) else props.get("name")
         # We want to ensure whatever name is provided to construct the class is the same name that will be
         # found inside the class itself in order to avoid a change during plan/apply for legacy aliases.
         # Ex: Pass in `SCD_TYPE_2` then we want to ensure we get `SCD_TYPE_2` as the kind name
         # instead of `SCD_TYPE_2_BY_TIME`.
         props["name"] = name
-        return model_kind_type_from_name(name)(**props)
+        kind_type = model_kind_type_from_name(name)
+        if "dialect" in kind_type.all_fields() and props.get("dialect") is None:
+            props["dialect"] = dialect
+        return kind_type(**props)
 
     name = (v.name if isinstance(v, exp.Expression) else str(v)).upper()
     return model_kind_type_from_name(name)(name=name)  # type: ignore

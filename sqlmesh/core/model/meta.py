@@ -7,7 +7,6 @@ from pydantic import Field
 from sqlglot import Dialect, exp
 from sqlglot.helper import ensure_collection, ensure_list
 from sqlglot.optimizer.normalize_identifiers import normalize_identifiers
-from sqlglot.optimizer.qualify_columns import quote_identifiers
 
 from sqlmesh.core import dialect as d
 from sqlmesh.core.dialect import normalize_model_name
@@ -268,21 +267,6 @@ class ModelMeta(_Node):
             for field in ("partitioned_by_", "clustered_by"):
                 if values.get(field) and not kind.is_materialized:
                     raise ValueError(f"{field} field cannot be set for {kind} models")
-
-            dialect = values.get("dialect")
-
-            def _normalize_and_quote_identifiers(v: exp.Expression) -> exp.Expression:
-                return quote_identifiers(normalize_identifiers(v, dialect=dialect), dialect=dialect)
-
-            if hasattr(kind, "time_column"):
-                kind.time_column.column = _normalize_and_quote_identifiers(kind.time_column.column)
-
-            if hasattr(kind, "unique_key"):
-                kind.unique_key = [_normalize_and_quote_identifiers(key) for key in kind.unique_key]
-
-            if hasattr(kind, "columns") and isinstance(kind.columns, list):
-                kind.columns = [_normalize_and_quote_identifiers(key) for key in kind.columns]
-
         return values
 
     @property

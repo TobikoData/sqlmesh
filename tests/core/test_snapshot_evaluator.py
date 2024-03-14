@@ -512,7 +512,7 @@ def test_evaluate_incremental_unmanaged(
         adapter_mock.insert_overwrite_by_partition.assert_called_once_with(
             snapshot.table_name(),
             model.render_query(),
-            [exp.to_column("ds")],
+            [exp.to_column("ds", quoted=True)],
             columns_to_types=model.columns_to_types,
         )
     else:
