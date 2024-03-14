@@ -9,8 +9,6 @@ import sys
 import typing as t
 from enum import Enum
 
-from cryptography.hazmat.backends import default_backend
-from cryptography.hazmat.primitives import serialization
 from pydantic import Field
 from sqlglot import exp
 from sqlglot.helper import subclasses
@@ -337,6 +335,8 @@ class SnowflakeConnectionConfig(ConnectionConfig):
         Overall code change: Use local variables instead of class attributes + Validation
         """
         # Start custom code
+        from cryptography.hazmat.backends import default_backend
+        from cryptography.hazmat.primitives import serialization
         from snowflake.connector.network import (
             DEFAULT_AUTHENTICATOR,
             KEY_PAIR_AUTHENTICATOR,
