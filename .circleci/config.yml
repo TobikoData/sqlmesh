@@ -24,7 +24,9 @@ jobs:
       - run:
           name: Publish Python package
           command: make publish
-
+      - run:
+          name: Publish Python Tests package
+          command: make publish-tests
   gh-release:
     docker:
       - image: cimg/node:16.14

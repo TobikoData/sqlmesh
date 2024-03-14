@@ -28,6 +28,7 @@ from sqlmesh.core.snapshot import (
     Snapshot,
     SnapshotChangeCategory,
     SnapshotId,
+    SnapshotIntervals,
     SnapshotTableCleanupTask,
     missing_intervals,
 )
@@ -211,12 +212,21 @@ def test_snapshots_exists(state_sync: EngineAdapterStateSync, snapshots: t.List[
     assert state_sync.snapshots_exist(snapshot_ids) == snapshot_ids
 
 
-def get_snapshot_intervals(state_sync, snapshot):
-    intervals = state_sync._get_snapshot_intervals([snapshot])[-1]
-    return intervals[0] if intervals else None
+@pytest.fixture
+def get_snapshot_intervals(state_sync) -> t.Callable[[Snapshot], t.Optional[SnapshotIntervals]]:
+
+    def _get_snapshot_intervals(snapshot: Snapshot) -> t.Optional[SnapshotIntervals]:
+        intervals = state_sync._get_snapshot_intervals([snapshot])[-1]
+        return intervals[0] if intervals else None
+
+    return _get_snapshot_intervals
 
 
-def test_add_interval(state_sync: EngineAdapterStateSync, make_snapshot: t.Callable) -> None:
+def test_add_interval(
+    state_sync: EngineAdapterStateSync,
+    make_snapshot: t.Callable,
+    get_snapshot_intervals: t.Callable,
+) -> None:
     snapshot = make_snapshot(
         SqlModel(
             name="a",
@@ -229,24 +239,24 @@ def test_add_interval(state_sync: EngineAdapterStateSync, make_snapshot: t.Calla
     state_sync.push_snapshots([snapshot])
 
     state_sync.add_interval(snapshot, "2020-01-01", "20200101")
-    assert get_snapshot_intervals(state_sync, snapshot).intervals == [
+    assert get_snapshot_intervals(snapshot).intervals == [
         (to_timestamp("2020-01-01"), to_timestamp("2020-01-02")),
     ]
 
     state_sync.add_interval(snapshot, "20200101", to_datetime("2020-01-04"))
-    assert get_snapshot_intervals(state_sync, snapshot).intervals == [
+    assert get_snapshot_intervals(snapshot).intervals == [
         (to_timestamp("2020-01-01"), to_timestamp("2020-01-04")),
     ]
 
     state_sync.add_interval(snapshot, to_datetime("2020-01-05"), "2020-01-10")
-    assert get_snapshot_intervals(state_sync, snapshot).intervals == [
+    assert get_snapshot_intervals(snapshot).intervals == [
         (to_timestamp("2020-01-01"), to_timestamp("2020-01-04")),
         (to_timestamp("2020-01-05"), to_timestamp("2020-01-11")),
     ]
 
     snapshot.change_category = SnapshotChangeCategory.FORWARD_ONLY
     state_sync.add_interval(snapshot, to_datetime("2020-01-16"), "2020-01-20", is_dev=True)
-    intervals = get_snapshot_intervals(state_sync, snapshot)
+    intervals = get_snapshot_intervals(snapshot)
     assert intervals.intervals == [
         (to_timestamp("2020-01-01"), to_timestamp("2020-01-04")),
         (to_timestamp("2020-01-05"), to_timestamp("2020-01-11")),
@@ -257,7 +267,9 @@ def test_add_interval(state_sync: EngineAdapterStateSync, make_snapshot: t.Calla
 
 
 def test_add_interval_partial(
-    state_sync: EngineAdapterStateSync, make_snapshot: t.Callable
+    state_sync: EngineAdapterStateSync,
+    make_snapshot: t.Callable,
+    get_snapshot_intervals: t.Callable,
 ) -> None:
     snapshot = make_snapshot(
         SqlModel(
@@ -271,10 +283,10 @@ def test_add_interval_partial(
     state_sync.push_snapshots([snapshot])
 
     state_sync.add_interval(snapshot, "2023-01-01", to_timestamp("2023-01-01") + 1000)
-    assert get_snapshot_intervals(state_sync, snapshot) is None
+    assert get_snapshot_intervals(snapshot) is None
 
     state_sync.add_interval(snapshot, "2023-01-01", to_timestamp("2023-01-02") + 1000)
-    assert get_snapshot_intervals(state_sync, snapshot).intervals == [
+    assert get_snapshot_intervals(snapshot).intervals == [
         (to_timestamp("2023-01-01"), to_timestamp("2023-01-02")),
     ]
 
@@ -338,7 +350,7 @@ def test_refresh_snapshot_intervals(
 
 
 def test_get_snapshot_intervals(
-    state_sync: EngineAdapterStateSync, make_snapshot: t.Callable
+    state_sync: EngineAdapterStateSync, make_snapshot: t.Callable, get_snapshot_intervals
 ) -> None:
     state_sync.SNAPSHOT_BATCH_SIZE = 1
 
@@ -372,16 +384,20 @@ def test_get_snapshot_intervals(
         ),
         version="c",
     )
-    state_sync.add_interval(snapshot_c, "2020-01-03", "2020-01-03")
     state_sync.push_snapshots([snapshot_c])
+    state_sync.add_interval(snapshot_c, "2020-01-03", "2020-01-03")
 
-    _, intervals = state_sync._get_snapshot_intervals([snapshot_b, snapshot_c])
-    assert len(intervals) == 2
-    assert intervals[0].intervals == [(to_timestamp("2020-01-01"), to_timestamp("2020-01-02"))]
-    assert intervals[1].intervals == [(to_timestamp("2020-01-03"), to_timestamp("2020-01-04"))]
+    a_intervals = get_snapshot_intervals(snapshot_a)
+    c_intervals = get_snapshot_intervals(snapshot_c)
+    assert a_intervals.intervals == [(to_timestamp("2020-01-01"), to_timestamp("2020-01-02"))]
+    assert c_intervals.intervals == [(to_timestamp("2020-01-03"), to_timestamp("2020-01-04"))]
 
 
-def test_compact_intervals(state_sync: EngineAdapterStateSync, make_snapshot: t.Callable) -> None:
+def test_compact_intervals(
+    state_sync: EngineAdapterStateSync,
+    make_snapshot: t.Callable,
+    get_snapshot_intervals: t.Callable,
+) -> None:
     snapshot = make_snapshot(
         SqlModel(
             name="a",
@@ -408,14 +424,14 @@ def test_compact_intervals(state_sync: EngineAdapterStateSync, make_snapshot: t.
         (to_timestamp("2020-01-12"), to_timestamp("2020-01-14")),
     ]
 
-    assert get_snapshot_intervals(state_sync, snapshot).intervals == expected_intervals
+    assert get_snapshot_intervals(snapshot).intervals == expected_intervals
 
     state_sync.compact_intervals()
-    assert get_snapshot_intervals(state_sync, snapshot).intervals == expected_intervals
+    assert get_snapshot_intervals(snapshot).intervals == expected_intervals
 
     # Make sure compaction is idempotent.
     state_sync.compact_intervals()
-    assert get_snapshot_intervals(state_sync, snapshot).intervals == expected_intervals
+    assert get_snapshot_intervals(snapshot).intervals == expected_intervals
 
 
 def test_promote_snapshots(state_sync: EngineAdapterStateSync, make_snapshot: t.Callable):
@@ -1248,6 +1264,8 @@ def test_unpause_snapshots_remove_intervals(
         ),
         version="a",
     )
+    snapshot.categorize_as(SnapshotChangeCategory.BREAKING)
+    snapshot.version = "a"
     state_sync.push_snapshots([snapshot])
     state_sync.add_interval(snapshot, "2023-01-01", "2023-01-05")
 
@@ -1255,6 +1273,8 @@ def test_unpause_snapshots_remove_intervals(
         SqlModel(name="test_snapshot", query=parse_one("select 2, ds"), cron="@daily"),
         version="a",
     )
+    new_snapshot.categorize_as(SnapshotChangeCategory.FORWARD_ONLY)
+    new_snapshot.version = "a"
     new_snapshot.effective_from = "2023-01-03"
     state_sync.push_snapshots([new_snapshot])
     state_sync.add_interval(snapshot, "2023-01-06", "2023-01-06")
