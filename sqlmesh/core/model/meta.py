@@ -267,19 +267,6 @@ class ModelMeta(_Node):
             for field in ("partitioned_by_", "clustered_by"):
                 if values.get(field) and not kind.is_materialized:
                     raise ValueError(f"{field} field cannot be set for {kind} models")
-
-            dialect = values.get("dialect")
-
-            if hasattr(kind, "time_column"):
-                kind.time_column.column = normalize_identifiers(
-                    kind.time_column.column, dialect=dialect
-                ).name
-
-            if hasattr(kind, "unique_key"):
-                kind.unique_key = [
-                    normalize_identifiers(key, dialect=dialect) for key in kind.unique_key
-                ]
-
         return values
 
     @property
@@ -298,9 +285,9 @@ class ModelMeta(_Node):
     @property
     def partitioned_by(self) -> t.List[exp.Expression]:
         if self.time_column and self.time_column.column not in [
-            col.name for col in self._partition_by_columns
+            col for col in self._partition_by_columns
         ]:
-            return [*[exp.to_column(self.time_column.column)], *self.partitioned_by_]
+            return [self.time_column.column, *self.partitioned_by_]
         return self.partitioned_by_
 
     @property

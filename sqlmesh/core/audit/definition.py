@@ -217,7 +217,7 @@ class ModelAudit(PydanticModel, AuditMixin, frozen=True):
 
         node = t.cast(_Model, node)
         if node.time_column:
-            where = exp.column(node.time_column.column).between(
+            where = node.time_column.column.between(
                 node.convert_to_time_column(start or c.EPOCH, columns_to_types),
                 node.convert_to_time_column(end or c.EPOCH, columns_to_types),
             )

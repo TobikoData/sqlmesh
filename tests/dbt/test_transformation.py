@@ -85,6 +85,7 @@ def test_model_kind():
         valid_to_name="dbt_valid_to",
         updated_at_as_valid_from=True,
         updated_at_name="updated_at",
+        dialect="duckdb",
     )
     assert ModelConfig(
         materialized=Materialization.SNAPSHOT,
@@ -97,37 +98,44 @@ def test_model_kind():
         valid_to_name="dbt_valid_to",
         columns=["foo"],
         execution_time_as_valid_from=True,
+        dialect="duckdb",
     )
 
     assert ModelConfig(materialized=Materialization.INCREMENTAL, time_column="foo").model_kind(
         context
-    ) == IncrementalByTimeRangeKind(time_column="foo", forward_only=True)
+    ) == IncrementalByTimeRangeKind(time_column="foo", dialect="duckdb", forward_only=True)
     assert ModelConfig(
         materialized=Materialization.INCREMENTAL,
         time_column="foo",
         incremental_strategy="delete+insert",
         forward_only=False,
-    ).model_kind(context) == IncrementalByTimeRangeKind(time_column="foo")
+    ).model_kind(context) == IncrementalByTimeRangeKind(time_column="foo", dialect="duckdb")
     assert ModelConfig(
         materialized=Materialization.INCREMENTAL,
         time_column="foo",
         incremental_strategy="insert_overwrite",
-    ).model_kind(context) == IncrementalByTimeRangeKind(time_column="foo", forward_only=True)
+    ).model_kind(context) == IncrementalByTimeRangeKind(
+        time_column="foo", dialect="duckdb", forward_only=True
+    )
     assert ModelConfig(
         materialized=Materialization.INCREMENTAL, time_column="foo", unique_key=["bar"]
-    ).model_kind(context) == IncrementalByTimeRangeKind(time_column="foo", forward_only=True)
+    ).model_kind(context) == IncrementalByTimeRangeKind(
+        time_column="foo", dialect="duckdb", forward_only=True
+    )
 
     assert ModelConfig(
         materialized=Materialization.INCREMENTAL, unique_key=["bar"], incremental_strategy="merge"
-    ).model_kind(context) == IncrementalByUniqueKeyKind(unique_key=["bar"], forward_only=True)
+    ).model_kind(context) == IncrementalByUniqueKeyKind(
+        unique_key=["bar"], dialect="duckdb", forward_only=True
+    )
     assert ModelConfig(materialized=Materialization.INCREMENTAL, unique_key=["bar"]).model_kind(
         context
-    ) == IncrementalByUniqueKeyKind(unique_key=["bar"], forward_only=True)
+    ) == IncrementalByUniqueKeyKind(unique_key=["bar"], dialect="duckdb", forward_only=True)
 
     assert ModelConfig(
         materialized=Materialization.INCREMENTAL, time_column="foo", incremental_strategy="merge"
     ).model_kind(context) == IncrementalByTimeRangeKind(
-        time_column="foo", forward_only=True, disable_restatement=False
+        time_column="foo", dialect="duckdb", forward_only=True, disable_restatement=False
     )
 
     assert ModelConfig(
@@ -136,7 +144,7 @@ def test_model_kind():
         incremental_strategy="append",
         disable_restatement=True,
     ).model_kind(context) == IncrementalByTimeRangeKind(
-        time_column="foo", forward_only=True, disable_restatement=True
+        time_column="foo", dialect="duckdb", forward_only=True, disable_restatement=True
     )
 
     assert ModelConfig(
@@ -145,7 +153,7 @@ def test_model_kind():
         incremental_strategy="insert_overwrite",
         partition_by={"field": "bar"},
         forward_only=False,
-    ).model_kind(context) == IncrementalByTimeRangeKind(time_column="foo")
+    ).model_kind(context) == IncrementalByTimeRangeKind(time_column="foo", dialect="duckdb")
 
     assert ModelConfig(
         materialized=Materialization.INCREMENTAL,
@@ -207,6 +215,7 @@ def test_model_kind_snapshot_bigquery():
         updated_at_as_valid_from=True,
         updated_at_name="updated_at",
         time_data_type=exp.DataType.build("TIMESTAMPTZ"),
+        dialect="bigquery",
     )
 
 
@@ -641,8 +650,8 @@ def test_partition_by(sushi_test_project: Project):
         sql="""SELECT 1 AS one, ds FROM foo""",
     )
     date_trunc_expr = model_config.to_sqlmesh(context).partitioned_by[0]
-    assert date_trunc_expr.sql(dialect="bigquery") == "DATE_TRUNC(ds, MONTH)"
-    assert date_trunc_expr.sql() == "DATE_TRUNC('MONTH', ds)"
+    assert date_trunc_expr.sql(dialect="bigquery") == "DATE_TRUNC(`ds`, MONTH)"
+    assert date_trunc_expr.sql() == "DATE_TRUNC('MONTH', \"ds\")"
 
     model_config.partition_by = {"field": "`ds`", "data_type": "datetime", "granularity": "day"}
     datetime_trunc_expr = model_config.to_sqlmesh(context).partitioned_by[0]
@@ -651,8 +660,8 @@ def test_partition_by(sushi_test_project: Project):
 
     model_config.partition_by = {"field": "ds", "data_type": "timestamp", "granularity": "day"}
     timestamp_trunc_expr = model_config.to_sqlmesh(context).partitioned_by[0]
-    assert timestamp_trunc_expr.sql(dialect="bigquery") == "timestamp_trunc(ds, DAY)"
-    assert timestamp_trunc_expr.sql() == "TIMESTAMP_TRUNC(ds, DAY)"
+    assert timestamp_trunc_expr.sql(dialect="bigquery") == "timestamp_trunc(`ds`, DAY)"
+    assert timestamp_trunc_expr.sql() == 'TIMESTAMP_TRUNC("ds", DAY)'
 
     model_config.partition_by = {
         "field": "one",
@@ -661,11 +670,11 @@ def test_partition_by(sushi_test_project: Project):
     }
     assert (
         model_config.to_sqlmesh(context).partitioned_by[0].sql()
-        == "RANGE_BUCKET(one, GENERATE_SERIES(0, 10, 2))"
+        == 'RANGE_BUCKET("one", GENERATE_SERIES(0, 10, 2))'
     )
 
     model_config.partition_by = {"field": "ds", "data_type": "date", "granularity": "day"}
-    assert model_config.to_sqlmesh(context).partitioned_by == [exp.to_column("ds")]
+    assert model_config.to_sqlmesh(context).partitioned_by == [exp.to_column("ds", quoted=True)]
 
 
 @pytest.mark.xdist_group("dbt_manifest")

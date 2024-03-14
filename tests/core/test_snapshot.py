@@ -102,10 +102,11 @@ def test_json(snapshot: Snapshot):
             "cron": "1 0 * * *",
             "kind": {
                 "name": "INCREMENTAL_BY_TIME_RANGE",
-                "time_column": {"column": "ds"},
+                "time_column": {"column": '"ds"'},
                 "batch_size": 30,
                 "forward_only": False,
                 "disable_restatement": False,
+                "dialect": "",
             },
             "mapping_schema": {},
             "start": "2020-01-01",
@@ -592,7 +593,7 @@ def test_fingerprint(model: Model, parent_model: Model):
     fingerprint = fingerprint_from_node(model, nodes={})
 
     original_fingerprint = SnapshotFingerprint(
-        data_hash="1307135649",
+        data_hash="3648098745",
         metadata_hash="3575901791",
     )
 
@@ -691,7 +692,7 @@ def test_fingerprint_jinja_macros(model: Model):
         }
     )
     original_fingerprint = SnapshotFingerprint(
-        data_hash="2621778565",
+        data_hash="3877498837",
         metadata_hash="3575901791",
     )
 

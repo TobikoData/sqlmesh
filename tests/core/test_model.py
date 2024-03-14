@@ -1,3 +1,4 @@
+import json
 import logging
 from datetime import date
 from pathlib import Path
@@ -99,7 +100,7 @@ def test_load(assert_exp_eq):
     assert model.owner == "owner_name"
     assert model.dialect == "spark"
     assert model.storage_format == "iceberg"
-    assert [col.sql() for col in model.partitioned_by] == ["a", "d"]
+    assert [col.sql() for col in model.partitioned_by] == ['"a"', '"d"']
     assert model.clustered_by == ["e"]
     assert model.columns_to_types == {
         "a": exp.DataType.build("int"),
@@ -246,9 +247,9 @@ def test_model_qualification():
 @pytest.mark.parametrize(
     "partition_by_input, partition_by_output, expected_exception",
     [
-        ("a", ["a"], None),
-        ("(a, b)", ["a", "b"], None),
-        ("TIMESTAMP_TRUNC(a, DAY)", ["TIMESTAMP_TRUNC(a, DAY)"], None),
+        ("a", ["`a`"], None),
+        ("(a, b)", ["`a`", "`b`"], None),
+        ("TIMESTAMP_TRUNC(`a`, DAY)", ["TIMESTAMP_TRUNC(`a`, DAY)"], None),
         ("e", "", ConfigError),
         ("(a, e)", "", ConfigError),
         ("(a, a)", "", ConfigError),
@@ -426,7 +427,14 @@ def test_json_serde():
     )
 
     model = load_sql_based_model(expressions)
-    deserialized_model = SqlModel.parse_raw(model.json())
+
+    model_json = model.json()
+    model_json_parsed = json.loads(model.json())
+    assert model_json_parsed["kind"]["dialect"] == "spark"
+    assert model_json_parsed["kind"]["time_column"]["column"] == "`ds`"
+    assert model_json_parsed["partitioned_by"] == ["`a`"]
+
+    deserialized_model = SqlModel.parse_raw(model_json)
 
     assert deserialized_model == model
 
@@ -857,7 +865,7 @@ def test_render_definition():
                 time_column (a, 'yyyymmdd')
             ),
             storage_format iceberg,
-            partitioned_by a,
+            partitioned_by `a`,
             grains (
                 [a, b],
                 c
@@ -1179,9 +1187,9 @@ def test_time_column():
     """
     )
     model = load_sql_based_model(expressions)
-    assert model.time_column.column == "ds"
+    assert model.time_column.column == exp.to_column("ds", quoted=True)
     assert model.time_column.format == "%Y-%m-%d"
-    assert model.time_column.expression == parse_one("(ds, '%Y-%m-%d')")
+    assert model.time_column.expression == parse_one("(\"ds\", '%Y-%m-%d')")
 
     expressions = d.parse(
         """
@@ -1196,9 +1204,9 @@ def test_time_column():
     """
     )
     model = load_sql_based_model(expressions)
-    assert model.time_column.column == "ds"
+    assert model.time_column.column == exp.to_column("ds", quoted=True)
     assert model.time_column.format == "%Y-%m-%d"
-    assert model.time_column.expression == d.parse_one("(ds, '%Y-%m-%d')")
+    assert model.time_column.expression == d.parse_one("(\"ds\", '%Y-%m-%d')")
 
     expressions = d.parse(
         """
@@ -1214,9 +1222,9 @@ def test_time_column():
     """
     )
     model = load_sql_based_model(expressions)
-    assert model.time_column.column == "ds"
+    assert model.time_column.column == exp.to_column("ds", quoted=True)
     assert model.time_column.format == "%Y-%m"
-    assert model.time_column.expression == d.parse_one("(ds, '%Y-%m')")
+    assert model.time_column.expression == d.parse_one("(\"ds\", '%Y-%m')")
 
 
 def test_default_time_column():
@@ -2031,9 +2039,9 @@ def test_model_normalization():
 
     model = SqlModel.parse_raw(load_sql_based_model(expr).json())
     assert model.name == "foo"
-    assert model.time_column.column == "A"
+    assert model.time_column.column == exp.to_column("A", quoted=True)
     assert model.columns_to_types["A"].sql(dialect="snowflake") == "INT"
-    assert model.partitioned_by[0].sql(dialect="snowflake") == "A"
+    assert model.partitioned_by[0].sql(dialect="snowflake") == '"A"'
     assert model.partitioned_by[1].sql(dialect="snowflake") == 'FOO("ds")'
     assert model.tags == ["pii", "fact"]
     assert model.clustered_by == ["A"]
@@ -2060,8 +2068,8 @@ def test_model_normalization():
         )
         model = SqlModel.parse_raw(load_sql_based_model(expr).json())
         assert model.unique_key == [
-            exp.column("A", quoted=False),
-            exp.func("COALESCE", exp.column("B", quoted=False), "''"),
+            exp.column("A", quoted=True),
+            exp.func("COALESCE", exp.column("B", quoted=True), "''"),
             exp.column("c", quoted=True),
         ]
 
@@ -2077,7 +2085,7 @@ def test_model_normalization():
         """
     )
     model = SqlModel.parse_raw(load_sql_based_model(expr).json())
-    assert model.unique_key == [exp.column("A", quoted=False)]
+    assert model.unique_key == [exp.column("A", quoted=True)]
 
 
 def test_incremental_unmanaged_validation():
@@ -2559,7 +2567,7 @@ def test_scd_type_2_by_time_overrides():
     scd_type_2_model = load_sql_based_model(model_def)
     assert scd_type_2_model.unique_key == [
         exp.column("iD", quoted=True),
-        exp.column("ds", quoted=False),
+        exp.column("ds", quoted=True),
     ]
     assert scd_type_2_model.managed_columns == {
         "test_valid_from": exp.DataType.build("TIMESTAMPTZ"),
@@ -2648,7 +2656,7 @@ def test_scd_type_2_by_column_overrides():
     scd_type_2_model = load_sql_based_model(model_def)
     assert scd_type_2_model.unique_key == [
         exp.column("iD", quoted=True),
-        exp.column("ds", quoted=False),
+        exp.column("ds", quoted=True),
     ]
     assert scd_type_2_model.managed_columns == {
         "test_valid_from": exp.DataType.build("TIMESTAMPTZ"),
@@ -2674,15 +2682,15 @@ def test_scd_type_2_by_column_overrides():
     [
         (
             "col1",
-            [exp.to_column("col1")],
+            [exp.to_column("col1", quoted=True)],
         ),
         (
             "[col1]",
-            [exp.to_column("col1")],
+            [exp.to_column("col1", quoted=True)],
         ),
         (
             "[col1, col2]",
-            [exp.to_column("col1"), exp.to_column("col2")],
+            [exp.to_column("col1", quoted=True), exp.to_column("col2", quoted=True)],
         ),
         (
             '"col1"',
