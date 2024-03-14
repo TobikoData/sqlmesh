@@ -18,6 +18,7 @@ from sqlmesh.engines import commands
 from sqlmesh.schedulers.airflow.operators import targets
 from sqlmesh.utils.date import to_datetime
 
+pytest_plugins = ["tests.schedulers.airflow.operators.fixtures"]
 pytestmark = pytest.mark.airflow
 
 
@@ -29,7 +30,9 @@ def model() -> Model:
     )
 
 
-def test_evaluation_target_execute(mocker: MockerFixture, make_snapshot: t.Callable, model: Model):
+def test_evaluation_target_execute(
+    mocker: MockerFixture, make_snapshot: t.Callable, model: Model, set_airflow_as_library
+):
     interval_ds = to_datetime("2022-01-01")
     logical_ds = to_datetime("2022-01-02")
 
@@ -76,7 +79,9 @@ def test_evaluation_target_execute(mocker: MockerFixture, make_snapshot: t.Calla
     )
 
 
-def test_evaluation_target_execute_seed_model(mocker: MockerFixture, make_snapshot: t.Callable):
+def test_evaluation_target_execute_seed_model(
+    mocker: MockerFixture, make_snapshot: t.Callable, set_airflow_as_library
+):
     interval_ds = to_datetime("2022-01-01")
     logical_ds = to_datetime("2022-01-02")
 
@@ -135,7 +140,9 @@ def test_evaluation_target_execute_seed_model(mocker: MockerFixture, make_snapsh
     )
 
 
-def test_cleanup_target_execute(mocker: MockerFixture, make_snapshot: t.Callable, model: Model):
+def test_cleanup_target_execute(
+    mocker: MockerFixture, make_snapshot: t.Callable, model: Model, set_airflow_as_library
+):
     snapshot = make_snapshot(model)
     snapshot.categorize_as(SnapshotChangeCategory.BREAKING)
 
@@ -181,7 +188,7 @@ def test_cleanup_target_execute(mocker: MockerFixture, make_snapshot: t.Callable
 
 
 def test_cleanup_target_skip_execution(
-    mocker: MockerFixture, make_snapshot: t.Callable, model: Model
+    mocker: MockerFixture, make_snapshot: t.Callable, model: Model, set_airflow_as_library
 ):
     snapshot = make_snapshot(model)
     snapshot.version = "test_version"
