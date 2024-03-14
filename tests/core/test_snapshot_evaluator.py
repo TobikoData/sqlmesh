@@ -154,7 +154,7 @@ def test_evaluate(mocker: MockerFixture, adapter_mock, make_snapshot):
     common_kwargs = dict(
         columns_to_types={"a": exp.DataType.build("int")},
         storage_format="parquet",
-        partitioned_by=[exp.to_column("a")],
+        partitioned_by=[exp.to_column("a", quoted=True)],
         partition_interval_unit=IntervalUnit.DAY,
         clustered_by=[],
         table_properties={},
@@ -1029,7 +1029,7 @@ def test_create_clone_in_dev(mocker: MockerFixture, adapter_mock, make_snapshot)
         f"sqlmesh__test_schema.test_schema__test_model__{snapshot.version}__temp__schema_migration_source",
         columns_to_types={"a": exp.DataType.build("int"), "ds": exp.DataType.build("date")},
         storage_format=None,
-        partitioned_by=[exp.to_column("ds")],
+        partitioned_by=[exp.to_column("ds", quoted=True)],
         partition_interval_unit=IntervalUnit.DAY,
         clustered_by=[],
         table_properties={},
@@ -1080,7 +1080,7 @@ def test_forward_only_snapshot_for_added_model(mocker: MockerFixture, adapter_mo
     common_create_args = dict(
         columns_to_types={"a": exp.DataType.build("int"), "ds": exp.DataType.build("date")},
         storage_format=None,
-        partitioned_by=[exp.to_column("ds")],
+        partitioned_by=[exp.to_column("ds", quoted=True)],
         partition_interval_unit=IntervalUnit.DAY,
         clustered_by=[],
         table_properties={},

@@ -153,53 +153,66 @@ class _ModelKind(PydanticModel, ModelKindMixin):
 
 
 class TimeColumn(PydanticModel):
-    column: str
+    column: exp.Expression
     format: t.Optional[str] = None
 
     @classmethod
     def validator(cls) -> classmethod:
         def _time_column_validator(v: t.Any) -> TimeColumn:
             if isinstance(v, exp.Tuple):
-                kwargs = {
-                    key: v.expressions[i].name
-                    for i, key in enumerate(("column", "format")[: len(v.expressions)])
-                }
-                return TimeColumn(**kwargs)
+                column_expr = v.expressions[0]
+                return TimeColumn(
+                    column=(
+                        exp.column(column_expr)
+                        if isinstance(column_expr, exp.Identifier)
+                        else column_expr
+                    ),
+                    format=v.expressions[1].name if len(v.expressions) > 1 else None,
+                )
 
             if isinstance(v, exp.Expression):
-                return TimeColumn(column=v.name)
+                v = exp.column(v) if isinstance(v, exp.Identifier) else v
+                return TimeColumn(column=v)
 
             if isinstance(v, str):
-                return TimeColumn(column=v)
+                return TimeColumn(column=d.parse_one(v))
+
+            if isinstance(v, dict):
+                column = v["column"]
+                return TimeColumn(
+                    column=d.parse_one(column) if isinstance(column, str) else column,
+                    format=v.get("format"),
+                )
+
             return v
 
         return field_validator("time_column", mode="before")(_time_column_validator)
 
     @field_validator("column", mode="before")
     @classmethod
-    def _column_validator(cls, v: str) -> str:
+    def _column_validator(cls, v: t.Union[str, exp.Expression]) -> exp.Expression:
         if not v:
             raise ConfigError("Time Column cannot be empty.")
+        if isinstance(v, str):
+            return exp.to_column(v)
         return v
 
     @property
-    def expression(self) -> exp.Column | exp.Tuple:
+    def expression(self) -> exp.Expression:
         """Convert this pydantic model into a time_column SQLGlot expression."""
-        column = exp.to_column(self.column)
         if not self.format:
-            return column
+            return self.column
 
-        return exp.Tuple(expressions=[column, exp.Literal.string(self.format)])
+        return exp.Tuple(expressions=[self.column, exp.Literal.string(self.format)])
 
-    def to_expression(self, dialect: str) -> exp.Column | exp.Tuple:
+    def to_expression(self, dialect: str) -> exp.Expression:
         """Convert this pydantic model into a time_column SQLGlot expression."""
-        column = exp.to_column(self.column)
         if not self.format:
-            return column
+            return self.column
 
         return exp.Tuple(
             expressions=[
-                column,
+                self.column,
                 exp.Literal.string(
                     format_time(self.format, d.Dialect.get_or_raise(dialect).INVERSE_TIME_MAPPING)
                 ),

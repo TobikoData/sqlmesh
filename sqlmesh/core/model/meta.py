@@ -271,22 +271,17 @@ class ModelMeta(_Node):
 
             dialect = values.get("dialect")
 
+            def _normalize_and_quote_identifiers(v: exp.Expression) -> exp.Expression:
+                return quote_identifiers(normalize_identifiers(v, dialect=dialect), dialect=dialect)
+
             if hasattr(kind, "time_column"):
-                kind.time_column.column = normalize_identifiers(
-                    kind.time_column.column, dialect=dialect
-                ).name
+                kind.time_column.column = _normalize_and_quote_identifiers(kind.time_column.column)
 
             if hasattr(kind, "unique_key"):
-                kind.unique_key = [
-                    quote_identifiers(normalize_identifiers(key, dialect=dialect), dialect=dialect)
-                    for key in kind.unique_key
-                ]
+                kind.unique_key = [_normalize_and_quote_identifiers(key) for key in kind.unique_key]
 
             if hasattr(kind, "columns") and isinstance(kind.columns, list):
-                kind.columns = [
-                    quote_identifiers(normalize_identifiers(key, dialect=dialect), dialect=dialect)
-                    for key in kind.columns
-                ]
+                kind.columns = [_normalize_and_quote_identifiers(key) for key in kind.columns]
 
         return values
 
@@ -306,9 +301,9 @@ class ModelMeta(_Node):
     @property
     def partitioned_by(self) -> t.List[exp.Expression]:
         if self.time_column and self.time_column.column not in [
-            col.name for col in self._partition_by_columns
+            col for col in self._partition_by_columns
         ]:
-            return [*[exp.to_column(self.time_column.column)], *self.partitioned_by_]
+            return [self.time_column.column, *self.partitioned_by_]
         return self.partitioned_by_
 
     @property

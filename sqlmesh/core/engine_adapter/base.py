@@ -1071,7 +1071,7 @@ class EngineAdapter:
         time_formatter: t.Callable[
             [TimeLike, t.Optional[t.Dict[str, exp.DataType]]], exp.Expression
         ],
-        time_column: TimeColumn | exp.Column | str,
+        time_column: TimeColumn | exp.Expression | str,
         columns_to_types: t.Optional[t.Dict[str, exp.DataType]] = None,
         **kwargs: t.Any,
     ) -> None:
@@ -1083,7 +1083,7 @@ class EngineAdapter:
         if isinstance(time_column, TimeColumn):
             time_column = time_column.column
         where = exp.Between(
-            this=exp.to_column(time_column),
+            this=exp.to_column(time_column) if isinstance(time_column, str) else time_column,
             low=low,
             high=high,
         )

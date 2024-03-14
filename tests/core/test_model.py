@@ -99,7 +99,7 @@ def test_load(assert_exp_eq):
     assert model.owner == "owner_name"
     assert model.dialect == "spark"
     assert model.storage_format == "iceberg"
-    assert [col.sql() for col in model.partitioned_by] == ["a", '"d"']
+    assert [col.sql() for col in model.partitioned_by] == ['"a"', '"d"']
     assert model.clustered_by == ["e"]
     assert model.columns_to_types == {
         "a": exp.DataType.build("int"),
@@ -1179,9 +1179,9 @@ def test_time_column():
     """
     )
     model = load_sql_based_model(expressions)
-    assert model.time_column.column == "ds"
+    assert model.time_column.column == exp.to_column("ds", quoted=True)
     assert model.time_column.format == "%Y-%m-%d"
-    assert model.time_column.expression == parse_one("(ds, '%Y-%m-%d')")
+    assert model.time_column.expression == parse_one("(\"ds\", '%Y-%m-%d')")
 
     expressions = d.parse(
         """
@@ -1196,9 +1196,9 @@ def test_time_column():
     """
     )
     model = load_sql_based_model(expressions)
-    assert model.time_column.column == "ds"
+    assert model.time_column.column == exp.to_column("ds", quoted=True)
     assert model.time_column.format == "%Y-%m-%d"
-    assert model.time_column.expression == d.parse_one("(ds, '%Y-%m-%d')")
+    assert model.time_column.expression == d.parse_one("(\"ds\", '%Y-%m-%d')")
 
     expressions = d.parse(
         """
@@ -1214,9 +1214,9 @@ def test_time_column():
     """
     )
     model = load_sql_based_model(expressions)
-    assert model.time_column.column == "ds"
+    assert model.time_column.column == exp.to_column("ds", quoted=True)
     assert model.time_column.format == "%Y-%m"
-    assert model.time_column.expression == d.parse_one("(ds, '%Y-%m')")
+    assert model.time_column.expression == d.parse_one("(\"ds\", '%Y-%m')")
 
 
 def test_default_time_column():
@@ -2031,9 +2031,9 @@ def test_model_normalization():
 
     model = SqlModel.parse_raw(load_sql_based_model(expr).json())
     assert model.name == "foo"
-    assert model.time_column.column == "A"
+    assert model.time_column.column == exp.to_column("A", quoted=True)
     assert model.columns_to_types["A"].sql(dialect="snowflake") == "INT"
-    assert model.partitioned_by[0].sql(dialect="snowflake") == "A"
+    assert model.partitioned_by[0].sql(dialect="snowflake") == '"A"'
     assert model.partitioned_by[1].sql(dialect="snowflake") == 'FOO("ds")'
     assert model.tags == ["pii", "fact"]
     assert model.clustered_by == ["A"]
