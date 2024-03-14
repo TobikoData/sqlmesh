@@ -33,6 +33,12 @@ package:
 publish: package
 	pip3 install twine && python3 -m twine upload dist/*
 
+package-tests:
+	pip3 install wheel && python3 tests/setup.py sdist bdist_wheel
+
+publish-tests: package-tests
+	pip3 install twine && python3 -m twine upload -r tobiko-private tests/dist/*
+
 develop:
 	python3 setup.py develop
 
