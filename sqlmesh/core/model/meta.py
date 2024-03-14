@@ -7,6 +7,7 @@ from pydantic import Field
 from sqlglot import Dialect, exp
 from sqlglot.helper import ensure_collection, ensure_list
 from sqlglot.optimizer.normalize_identifiers import normalize_identifiers
+from sqlglot.optimizer.qualify_columns import quote_identifiers
 
 from sqlmesh.core import dialect as d
 from sqlmesh.core.dialect import normalize_model_name
@@ -277,7 +278,14 @@ class ModelMeta(_Node):
 
             if hasattr(kind, "unique_key"):
                 kind.unique_key = [
-                    normalize_identifiers(key, dialect=dialect) for key in kind.unique_key
+                    quote_identifiers(normalize_identifiers(key, dialect=dialect), dialect=dialect)
+                    for key in kind.unique_key
+                ]
+
+            if hasattr(kind, "columns") and isinstance(kind.columns, list):
+                kind.columns = [
+                    quote_identifiers(normalize_identifiers(key, dialect=dialect), dialect=dialect)
+                    for key in kind.columns
                 ]
 
         return values

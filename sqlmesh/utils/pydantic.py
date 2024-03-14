@@ -10,6 +10,7 @@ from pydantic.fields import FieldInfo
 from sqlglot import exp, parse_one
 from sqlglot.helper import ensure_list
 from sqlglot.optimizer.normalize_identifiers import normalize_identifiers
+from sqlglot.optimizer.qualify_columns import quote_identifiers
 
 from sqlmesh.core import dialect as d
 from sqlmesh.utils import str_to_bool
@@ -309,10 +310,9 @@ def _get_fields(
     results = []
 
     for expr in expressions:
-        expr = normalize_identifiers(
-            exp.column(expr) if isinstance(expr, exp.Identifier) else expr,
-            dialect=dialect,
-        )
+        expr = exp.column(expr) if isinstance(expr, exp.Identifier) else expr
+        if dialect:
+            expr = quote_identifiers(normalize_identifiers(expr, dialect=dialect), dialect=dialect)
         expr.meta["dialect"] = dialect
         results.append(expr)
 

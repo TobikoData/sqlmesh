@@ -641,8 +641,8 @@ def test_partition_by(sushi_test_project: Project):
         sql="""SELECT 1 AS one, ds FROM foo""",
     )
     date_trunc_expr = model_config.to_sqlmesh(context).partitioned_by[0]
-    assert date_trunc_expr.sql(dialect="bigquery") == "DATE_TRUNC(ds, MONTH)"
-    assert date_trunc_expr.sql() == "DATE_TRUNC('MONTH', ds)"
+    assert date_trunc_expr.sql(dialect="bigquery") == "DATE_TRUNC(`ds`, MONTH)"
+    assert date_trunc_expr.sql() == "DATE_TRUNC('MONTH', \"ds\")"
 
     model_config.partition_by = {"field": "`ds`", "data_type": "datetime", "granularity": "day"}
     datetime_trunc_expr = model_config.to_sqlmesh(context).partitioned_by[0]
@@ -651,8 +651,8 @@ def test_partition_by(sushi_test_project: Project):
 
     model_config.partition_by = {"field": "ds", "data_type": "timestamp", "granularity": "day"}
     timestamp_trunc_expr = model_config.to_sqlmesh(context).partitioned_by[0]
-    assert timestamp_trunc_expr.sql(dialect="bigquery") == "timestamp_trunc(ds, DAY)"
-    assert timestamp_trunc_expr.sql() == "TIMESTAMP_TRUNC(ds, DAY)"
+    assert timestamp_trunc_expr.sql(dialect="bigquery") == "timestamp_trunc(`ds`, DAY)"
+    assert timestamp_trunc_expr.sql() == 'TIMESTAMP_TRUNC("ds", DAY)'
 
     model_config.partition_by = {
         "field": "one",
@@ -661,11 +661,11 @@ def test_partition_by(sushi_test_project: Project):
     }
     assert (
         model_config.to_sqlmesh(context).partitioned_by[0].sql()
-        == "RANGE_BUCKET(one, GENERATE_SERIES(0, 10, 2))"
+        == 'RANGE_BUCKET("one", GENERATE_SERIES(0, 10, 2))'
     )
 
     model_config.partition_by = {"field": "ds", "data_type": "date", "granularity": "day"}
-    assert model_config.to_sqlmesh(context).partitioned_by == [exp.to_column("ds")]
+    assert model_config.to_sqlmesh(context).partitioned_by == [exp.to_column("ds", quoted=True)]
 
 
 @pytest.mark.xdist_group("dbt_manifest")

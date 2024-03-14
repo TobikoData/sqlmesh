@@ -1939,10 +1939,12 @@ class EngineAdapter:
             **kwargs,
         }
 
+        expression = expression.copy()
+
         if quote:
             quote_identifiers(expression)
 
-        return expression.sql(**sql_gen_kwargs)  # type: ignore
+        return expression.sql(**sql_gen_kwargs, copy=False)  # type: ignore
 
     def _get_data_objects(
         self, schema_name: SchemaName, object_names: t.Optional[t.Set[str]] = None
