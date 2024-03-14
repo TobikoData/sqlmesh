@@ -21,6 +21,7 @@ from sqlmesh.core.config.loader import (
     load_config_from_yaml,
     load_configs,
 )
+from sqlmesh.core.config.migration import MigrationConfig
 from sqlmesh.core.config.model import ModelDefaultsConfig
 from sqlmesh.core.config.plan import PlanConfig
 from sqlmesh.core.config.root import Config
