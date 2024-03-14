@@ -59,6 +59,7 @@ from sqlmesh.core.snapshot.definition import (
 from sqlmesh.core.state_sync.base import MIGRATIONS, SCHEMA_VERSION, StateSync, Versions
 from sqlmesh.core.state_sync.common import CommonStateSyncMixin, transactional
 from sqlmesh.utils import major_minor, random_id, unique
+from sqlmesh.utils.dag import DAG
 from sqlmesh.utils.date import TimeLike, now_timestamp, time_like_to_str
 from sqlmesh.utils.errors import SQLMeshError
 from sqlmesh.utils.pydantic import parse_obj_as
@@ -899,7 +900,12 @@ class EngineAdapterStateSync(CommonStateSyncMixin, StateSync):
         )
 
     @transactional()
-    def migrate(self, default_catalog: t.Optional[str], skip_backup: bool = False) -> None:
+    def migrate(
+        self,
+        default_catalog: t.Optional[str],
+        skip_backup: bool = False,
+        promoted_snapshots_only: bool = True,
+    ) -> None:
         """Migrate the state sync to the latest SQLMesh / SQLGlot version."""
         versions = self.get_versions(validate=False)
         migrations = MIGRATIONS[versions.schema_version :]
@@ -919,7 +925,7 @@ class EngineAdapterStateSync(CommonStateSyncMixin, StateSync):
                 logger.info(f"Applying migration {migration}")
                 migration.migrate(self, default_catalog=default_catalog)
 
-            self._migrate_rows()
+            self._migrate_rows(promoted_snapshots_only)
             self._update_versions()
         except Exception as e:
             if skip_backup:
@@ -974,117 +980,55 @@ class EngineAdapterStateSync(CommonStateSyncMixin, StateSync):
                         backup_name, exp.select("*").from_(table), exists=False
                     )
 
-    def _migrate_rows(self) -> None:
-        snapshot_mapping = self._migrate_snapshot_rows()
+    def _migrate_rows(self, promoted_snapshots_only: bool) -> None:
+        logger.info("Fetching environments")
+        environments = self.get_environments()
+        # Only migrate snapshots that are part of at least one environment.
+        snapshots_to_migrate = (
+            {s.snapshot_id for e in environments for s in e.snapshots}
+            if promoted_snapshots_only
+            else None
+        )
+        snapshot_mapping = self._migrate_snapshot_rows(snapshots_to_migrate)
         if not snapshot_mapping:
-            logger.debug("No changes to snapshots detected")
+            logger.info("No changes to snapshots detected")
             return
         self._migrate_seed_rows(snapshot_mapping)
-        self._migrate_environment_rows(snapshot_mapping)
+        self._migrate_environment_rows(environments, snapshot_mapping)
 
-    def _migrate_snapshot_rows(self) -> t.Dict[SnapshotId, SnapshotTableInfo]:
+    def _migrate_snapshot_rows(
+        self, snapshots: t.Optional[t.Set[SnapshotId]]
+    ) -> t.Dict[SnapshotId, SnapshotTableInfo]:
         logger.info("Migrating snapshot rows...")
         raw_snapshots = {
-            SnapshotId(name=name, identifier=identifier): raw_snapshot
+            SnapshotId(name=name, identifier=identifier): json.loads(raw_snapshot)
+            for where in (self._snapshot_id_filter(snapshots) if snapshots is not None else [None])
             for name, identifier, raw_snapshot in self._fetchall(
-                exp.select("name", "identifier", "snapshot").from_(self.snapshots_table).lock()
+                exp.select("name", "identifier", "snapshot")
+                .from_(self.snapshots_table)
+                .where(where)
+                .lock()
             )
         }
         if not raw_snapshots:
             return {}
 
+        dag: DAG[SnapshotId] = DAG()
+        for snapshot_id, raw_snapshot in raw_snapshots.items():
+            parent_ids = [SnapshotId.parse_obj(p_id) for p_id in raw_snapshot.get("parents", [])]
+            dag.add(snapshot_id, [p_id for p_id in parent_ids if p_id in raw_snapshots])
+
+        reversed_dag_raw = dag.reversed.graph
+
         self.console.start_migration_progress(len(raw_snapshots))
 
+        parsed_snapshots = LazilyParsedSnapshots(raw_snapshots)
         all_snapshot_mapping: t.Dict[SnapshotId, SnapshotTableInfo] = {}
+        snapshot_id_mapping: t.Dict[SnapshotId, SnapshotId] = {}
+        new_snapshots: t.Dict[SnapshotId, Snapshot] = {}
+        visited: t.Set[SnapshotId] = set()
 
-        for snapshot_id_batch in self._snapshot_batches(
-            sorted(raw_snapshots), batch_size=self.SNAPSHOT_MIGRATION_BATCH_SIZE
-        ):
-            parsed_snapshots = LazilyParsedSnapshots(raw_snapshots)
-            snapshot_id_mapping: t.Dict[SnapshotId, SnapshotId] = {}
-            new_snapshots: t.Dict[SnapshotId, Snapshot] = {}
-
-            for snapshot_id in snapshot_id_batch:
-                snapshot = parsed_snapshots[snapshot_id]
-
-                seen = set()
-                queue = {snapshot.snapshot_id}
-                node = snapshot.node
-                nodes: t.Dict[str, Node] = {}
-                audits: t.Dict[str, ModelAudit] = {}
-
-                while queue:
-                    snapshot_id = queue.pop()
-
-                    if snapshot_id in seen:
-                        continue
-
-                    seen.add(snapshot_id)
-
-                    s = parsed_snapshots.get(snapshot_id)
-
-                    if not s:
-                        continue
-
-                    queue.update(s.parents)
-                    nodes[s.name] = s.node
-                    for audit in s.audits:
-                        audits[audit.name] = audit
-
-                new_snapshot = deepcopy(snapshot)
-
-                fingerprint_cache: t.Dict[str, SnapshotFingerprint] = {}
-
-                try:
-                    new_snapshot.fingerprint = fingerprint_from_node(
-                        node,
-                        nodes=nodes,
-                        audits=audits,
-                    )
-                    new_snapshot.parents = tuple(
-                        SnapshotId(
-                            name=parent_node.fqn,
-                            identifier=fingerprint_from_node(
-                                parent_node,
-                                nodes=nodes,
-                                audits=audits,
-                                cache=fingerprint_cache,
-                            ).to_identifier(),
-                        )
-                        for parent_node in _parents_from_node(node, nodes).values()
-                    )
-                except Exception:
-                    logger.exception("Could not compute fingerprint for %s", snapshot.snapshot_id)
-                    continue
-
-                new_snapshot.previous_versions = snapshot.all_versions
-                new_snapshot.migrated = True
-                if not new_snapshot.temp_version:
-                    new_snapshot.temp_version = snapshot.fingerprint.to_version()
-
-                self.console.update_migration_progress(1)
-
-                if new_snapshot.fingerprint == snapshot.fingerprint:
-                    logger.debug(f"{new_snapshot.snapshot_id} is unchanged.")
-                    continue
-
-                new_snapshot_id = new_snapshot.snapshot_id
-
-                if new_snapshot_id in raw_snapshots:
-                    # Mapped to an existing snapshot.
-                    new_snapshots[new_snapshot_id] = parsed_snapshots[new_snapshot_id]
-                elif (
-                    new_snapshot_id not in new_snapshots
-                    or new_snapshot.updated_ts > new_snapshots[new_snapshot_id].updated_ts
-                ):
-                    new_snapshots[new_snapshot_id] = new_snapshot
-
-                snapshot_id_mapping[snapshot.snapshot_id] = new_snapshot_id
-                logger.debug(f"{snapshot.snapshot_id} mapped to {new_snapshot_id}.")
-
-            if not new_snapshots:
-                continue
-
+        def _push_new_snapshots() -> None:
             all_snapshot_mapping.update(
                 {
                     from_id: new_snapshots[to_id].table_info
@@ -1097,10 +1041,102 @@ class EngineAdapterStateSync(CommonStateSyncMixin, StateSync):
                 s for s in new_snapshots.values() if s.snapshot_id not in existing_new_snapshots
             ]
             if new_snapshots_to_push:
+                logger.info("Pushing %s migrated snapshots", len(new_snapshots_to_push))
                 self._push_snapshots(new_snapshots_to_push)
+            new_snapshots.clear()
+            snapshot_id_mapping.clear()
 
-            # Force cleanup to free memory.
-            del parsed_snapshots
+        def _visit(
+            snapshot_id: SnapshotId, fingerprint_cache: t.Dict[str, SnapshotFingerprint]
+        ) -> None:
+            if snapshot_id in visited or snapshot_id not in raw_snapshots:
+                return
+            visited.add(snapshot_id)
+
+            snapshot = parsed_snapshots[snapshot_id]
+            node = snapshot.node
+
+            node_seen = set()
+            node_queue = {snapshot_id}
+            nodes: t.Dict[str, Node] = {}
+            audits: t.Dict[str, ModelAudit] = {}
+            while node_queue:
+                next_snapshot_id = node_queue.pop()
+                next_snapshot = parsed_snapshots.get(next_snapshot_id)
+
+                if next_snapshot_id in node_seen or not next_snapshot:
+                    continue
+
+                node_seen.add(next_snapshot_id)
+                node_queue.update(next_snapshot.parents)
+
+                nodes[next_snapshot.name] = next_snapshot.node
+                audits.update({a.name: a for a in next_snapshot.audits})
+
+            new_snapshot = deepcopy(snapshot)
+            try:
+                new_snapshot.fingerprint = fingerprint_from_node(
+                    node,
+                    nodes=nodes,
+                    audits=audits,
+                    cache=fingerprint_cache,
+                )
+                new_snapshot.parents = tuple(
+                    SnapshotId(
+                        name=parent_node.fqn,
+                        identifier=fingerprint_from_node(
+                            parent_node,
+                            nodes=nodes,
+                            audits=audits,
+                            cache=fingerprint_cache,
+                        ).to_identifier(),
+                    )
+                    for parent_node in _parents_from_node(node, nodes).values()
+                )
+            except Exception:
+                logger.exception("Could not compute fingerprint for %s", snapshot.snapshot_id)
+                return
+
+            new_snapshot.previous_versions = snapshot.all_versions
+            new_snapshot.migrated = True
+            if not new_snapshot.temp_version:
+                new_snapshot.temp_version = snapshot.fingerprint.to_version()
+
+            self.console.update_migration_progress(1)
+
+            # Visit children and evict them from the parsed_snapshots cache after.
+            for child in reversed_dag_raw.get(snapshot_id, []):
+                # Make sure to copy the fingerprint cache to avoid sharing it between different child snapshots with the same name.
+                _visit(child, fingerprint_cache.copy())
+                parsed_snapshots.evict(child)
+
+            if new_snapshot.fingerprint == snapshot.fingerprint:
+                logger.debug(f"{new_snapshot.snapshot_id} is unchanged.")
+                return
+
+            new_snapshot_id = new_snapshot.snapshot_id
+
+            if new_snapshot_id in raw_snapshots:
+                # Mapped to an existing snapshot.
+                new_snapshots[new_snapshot_id] = parsed_snapshots[new_snapshot_id]
+                logger.debug("Migrated snapshot %s already exists", new_snapshot_id)
+            elif (
+                new_snapshot_id not in new_snapshots
+                or new_snapshot.updated_ts > new_snapshots[new_snapshot_id].updated_ts
+            ):
+                new_snapshots[new_snapshot_id] = new_snapshot
+
+            snapshot_id_mapping[snapshot.snapshot_id] = new_snapshot_id
+            logger.debug("%s mapped to %s", snapshot.snapshot_id, new_snapshot_id)
+
+            if len(new_snapshots) >= self.SNAPSHOT_MIGRATION_BATCH_SIZE:
+                _push_new_snapshots()
+
+        for root_snapshot_id in dag.roots:
+            _visit(root_snapshot_id, {})
+
+        if new_snapshots:
+            _push_new_snapshots()
 
         return all_snapshot_mapping
 
@@ -1146,10 +1182,11 @@ class EngineAdapterStateSync(CommonStateSyncMixin, StateSync):
             )
 
     def _migrate_environment_rows(
-        self, snapshot_mapping: t.Dict[SnapshotId, SnapshotTableInfo]
+        self,
+        environments: t.List[Environment],
+        snapshot_mapping: t.Dict[SnapshotId, SnapshotTableInfo],
     ) -> None:
         logger.info("Migrating environment rows...")
-        environments = self.get_environments()
 
         updated_prod_environment: t.Optional[Environment] = None
         updated_environments = []
@@ -1355,7 +1392,7 @@ def _snapshot_to_json(snapshot: Snapshot) -> str:
 
 
 class LazilyParsedSnapshots:
-    def __init__(self, raw_snapshots: t.Dict[SnapshotId, str]):
+    def __init__(self, raw_snapshots: t.Dict[SnapshotId, t.Dict[str, t.Any]]):
         self._raw_snapshots = raw_snapshots
         self._parsed_snapshots: t.Dict[SnapshotId, t.Optional[Snapshot]] = {}
 
@@ -1363,10 +1400,13 @@ class LazilyParsedSnapshots:
         if snapshot_id not in self._parsed_snapshots:
             raw_snapshot = self._raw_snapshots.get(snapshot_id)
             if raw_snapshot:
-                self._parsed_snapshots[snapshot_id] = Snapshot.parse_raw(raw_snapshot)
+                self._parsed_snapshots[snapshot_id] = Snapshot.parse_obj(raw_snapshot)
             else:
                 self._parsed_snapshots[snapshot_id] = None
         return self._parsed_snapshots[snapshot_id]
+
+    def evict(self, snapshot_id: SnapshotId) -> None:
+        self._parsed_snapshots.pop(snapshot_id, None)
 
     def __getitem__(self, snapshot_id: SnapshotId) -> Snapshot:
         snapshot = self.get(snapshot_id)

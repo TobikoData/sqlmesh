@@ -1444,7 +1444,10 @@ class GenericContext(BaseContext, t.Generic[C]):
         """
         self.notification_target_manager.notify(NotificationEvent.MIGRATION_START)
         try:
-            self._new_state_sync().migrate(default_catalog=self.default_catalog)
+            self._new_state_sync().migrate(
+                default_catalog=self.default_catalog,
+                promoted_snapshots_only=self.config.migration.promoted_snapshots_only,
+            )
         except Exception as e:
             self.notification_target_manager.notify(
                 NotificationEvent.MIGRATION_FAILURE, traceback.format_exc()

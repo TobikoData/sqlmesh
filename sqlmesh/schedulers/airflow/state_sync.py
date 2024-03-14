@@ -322,7 +322,12 @@ class HttpStateSync(StateSync):
             "Compacting intervals is not supported by the Airflow state sync."
         )
 
-    def migrate(self, default_catalog: t.Optional[str], skip_backup: bool = False) -> None:
+    def migrate(
+        self,
+        default_catalog: t.Optional[str],
+        skip_backup: bool = False,
+        promoted_snapshots_only: bool = True,
+    ) -> None:
         """Migrate the state sync to the latest SQLMesh / SQLGlot version."""
         raise NotImplementedError("Migration is not supported by the Airflow state sync.")
 
