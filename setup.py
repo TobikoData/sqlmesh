@@ -35,9 +35,6 @@ setup(
         "astor",
         "click",
         "croniter",
-        # Issue with Snowflake connector and cryptography 42+
-        # Check here if they have added support: https://github.com/dbt-labs/dbt-snowflake/blob/main/dev-requirements.txt#L12
-        "cryptography~=41.0.7",
         "duckdb",
         "dateparser",
         "hyperscript",
@@ -48,7 +45,7 @@ setup(
         "requests",
         "rich[jupyter]",
         "ruamel.yaml",
-        "sqlglot[rs]~=22.4.0",
+        "sqlglot[rs]~=22.5.0",
     ],
     extras_require={
         "bigquery": [
@@ -65,6 +62,7 @@ setup(
             "agate==1.7.1",
             "beautifulsoup4",
             "black==24.1.1",
+            "cryptography~=41.0.7",
             "dbt-core",
             "dbt-duckdb>=1.7.1",
             "Faker",
@@ -148,6 +146,9 @@ setup(
             "slack_sdk",
         ],
         "snowflake": [
+            # Issue with Snowflake connector and cryptography 42+
+            # Check here if they have added support: https://github.com/dbt-labs/dbt-snowflake/blob/main/dev-requirements.txt#L12
+            "cryptography~=41.0.7",
             "snowflake-connector-python[pandas,secure-local-storage]",
             "pyarrow>=10.0.1,<10.1.0",
         ],
