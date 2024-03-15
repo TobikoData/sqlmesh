@@ -693,6 +693,31 @@ def order_by(
     return expression if evaluator.eval_expression(condition) else None
 
 
+@macro()
+def limit(
+    evaluator: MacroEvaluator,
+    condition: exp.Condition,
+    expression: exp.Limit,
+) -> t.Optional[exp.Limit]:
+    """Inserts LIMIT expression when the condition is True
+
+    Example:
+        >>> from sqlglot import parse_one
+        >>> from sqlmesh.core.macros import MacroEvaluator
+        >>> sql = "select * from city @LIMIT(True) 10"
+        >>> MacroEvaluator().transform(parse_one(sql)).sql()
+        'SELECT * FROM city LIMIT 10'
+
+    Args:
+        evaluator: MacroEvaluator that invoked the macro
+        condition: Condition expression
+        expression: Limit expression
+    Returns:
+        Limit expression if the condition is True; otherwise None
+    """
+    return expression if evaluator.eval_expression(condition) else None
+
+
 @macro("eval")
 def eval_(evaluator: MacroEvaluator, condition: exp.Condition) -> t.Any:
     """Evaluate the given condition in a Python/SQL interpretor.

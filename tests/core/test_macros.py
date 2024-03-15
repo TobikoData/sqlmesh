@@ -273,6 +273,16 @@ def test_ast_correctness(macro_evaluator):
             {"do_order": False},
         ),
         (
+            """select * from city @LIMIT(@do_limit) LIMIT 10""",
+            "SELECT * FROM city LIMIT 10",
+            {"do_limit": True},
+        ),
+        (
+            """select * from city @LIMIT(@do_limit) LIMIT 10""",
+            "SELECT * FROM city",
+            {"do_limit": False},
+        ),
+        (
             """select @if(TRUE, 1, 0)""",
             "SELECT 1",
             {},
