@@ -41,6 +41,7 @@ SourceConfigs = t.Dict[str, SourceConfig]
 MacroConfigs = t.Dict[str, MacroConfig]
 
 
+IGNORED_PACKAGES = {"elementary"}
 BUILTIN_CALLS = {*BUILTIN_GLOBALS, *BUILTIN_FILTERS}
 
 
@@ -193,7 +194,10 @@ class ManifestHelper:
 
     def _load_models_and_seeds(self) -> None:
         for node in self._manifest.nodes.values():
-            if node.resource_type not in ("model", "seed", "snapshot"):
+            if (
+                node.resource_type not in ("model", "seed", "snapshot")
+                or node.package_name in IGNORED_PACKAGES
+            ):
                 continue
 
             macro_references = _macro_references(self._manifest, node)
