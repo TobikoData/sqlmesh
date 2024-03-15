@@ -25,7 +25,7 @@ def run_tests(
     verbosity: int = 1,
     stream: t.TextIO | None = None,
     default_catalog: str | None = None,
-) -> unittest.result.TestResult:
+) -> ModelTextTestResult:
     """Create a test suite of ModelTest objects and run it.
 
     Args:
@@ -47,9 +47,12 @@ def run_tests(
         for metadata in model_test_metadata
     )
 
-    return unittest.TextTestRunner(
-        stream=stream, verbosity=verbosity, resultclass=ModelTextTestResult
-    ).run(suite)
+    return t.cast(
+        ModelTextTestResult,
+        unittest.TextTestRunner(
+            stream=stream, verbosity=verbosity, resultclass=ModelTextTestResult
+        ).run(suite),
+    )
 
 
 def run_model_tests(
@@ -61,7 +64,7 @@ def run_model_tests(
     patterns: list[str] | None = None,
     stream: t.TextIO | None = None,
     default_catalog: t.Optional[str] = None,
-) -> unittest.result.TestResult:
+) -> ModelTextTestResult:
     """Load and run tests.
 
     Args
