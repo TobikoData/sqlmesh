@@ -29,7 +29,7 @@ jobs:
           command: ./.circleci/update-pypirc.sh
       - run:
           name: Publish Python Tests package
-          command: make publish-tests
+          command: unset TWINE_USERNAME TWINE_PASSWORD && make publish-tests
   gh-release:
     docker:
       - image: cimg/node:16.14
