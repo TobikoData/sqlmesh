@@ -432,6 +432,7 @@ class TestResult(BaseModel):
     failures: t.List[TestErrorOrFailure]
     errors: t.List[TestErrorOrFailure]
     skipped: t.List[TestSkipped]
+    successes: t.List[TestCase]
 
 
 class ArtifactChange(BaseModel):

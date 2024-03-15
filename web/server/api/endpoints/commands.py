@@ -183,6 +183,13 @@ async def test(
                 (t.cast(ModelTest, test), reason) for test, reason in result.skipped
             )
         ],
+        successes=[
+            models.TestCase(
+                name=test.test_name,
+                path=test.path_relative_to(context.path),
+            )
+            for test in (t.cast(ModelTest, test) for test in result.successes)
+        ],
         tests_run=result.testsRun,
     )
 

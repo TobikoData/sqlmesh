@@ -94,6 +94,7 @@ from sqlmesh.core.state_sync import (
 )
 from sqlmesh.core.table_diff import TableDiff
 from sqlmesh.core.test import (
+    ModelTextTestResult,
     generate_test,
     get_all_model_tests,
     run_model_tests,
@@ -1307,7 +1308,7 @@ class GenericContext(BaseContext, t.Generic[C]):
         tests: t.Optional[t.List[str]] = None,
         verbose: bool = False,
         stream: t.Optional[t.TextIO] = None,
-    ) -> unittest.result.TestResult:
+    ) -> ModelTextTestResult:
         """Discover and run model tests"""
         if verbose:
             pd.set_option("display.max_columns", None)
