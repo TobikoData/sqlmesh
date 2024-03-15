@@ -1140,12 +1140,19 @@ class DeployabilityIndex(PydanticModel, frozen=True):
 
     def with_non_deployable(self, snapshot: SnapshotIdLike) -> DeployabilityIndex:
         """Creates a new index with the given snapshot marked as non-deployable."""
-        snapshot_id = self._snapshot_id_key(snapshot.snapshot_id)
+        return self._add_snapshot(snapshot, False)
+
+    def with_deployable(self, snapshot: SnapshotIdLike) -> DeployabilityIndex:
+        """Creates a new index with the given snapshot marked as deployable."""
+        return self._add_snapshot(snapshot, True)
+
+    def _add_snapshot(self, snapshot: SnapshotIdLike, deployable: bool) -> DeployabilityIndex:
+        snapshot_id = {self._snapshot_id_key(snapshot.snapshot_id)}
         indexed_ids = self.indexed_ids
         if self.is_opposite_index:
-            indexed_ids = indexed_ids | {snapshot_id}
+            indexed_ids = indexed_ids - snapshot_id if deployable else indexed_ids | snapshot_id
         else:
-            indexed_ids = indexed_ids - {snapshot_id}
+            indexed_ids = indexed_ids | snapshot_id if deployable else indexed_ids - snapshot_id
 
         return DeployabilityIndex(
             indexed_ids=indexed_ids,

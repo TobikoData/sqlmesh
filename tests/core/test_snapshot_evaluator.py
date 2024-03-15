@@ -1583,3 +1583,43 @@ def test_audit_wap(adapter_mock, make_snapshot):
 
     adapter_mock.wap_table_name.assert_called_once_with(snapshot.table_name(), wap_id)
     adapter_mock.wap_publish.assert_called_once_with(snapshot.table_name(), wap_id)
+
+
+def test_create_post_statements_use_deployable_table(
+    mocker: MockerFixture, adapter_mock, make_snapshot
+):
+    evaluator = SnapshotEvaluator(adapter_mock)
+
+    model = load_sql_based_model(
+        parse(  # type: ignore
+            """
+            MODEL (
+                name test_schema.test_model,
+                kind FULL,
+                dialect postgres,
+            );
+
+            CREATE INDEX IF NOT EXISTS test_idx ON test_schema.test_model(a);
+
+            SELECT a::int FROM tbl;
+
+            CREATE INDEX IF NOT EXISTS test_idx ON test_schema.test_model(a);
+            """
+        ),
+    )
+
+    snapshot = make_snapshot(model)
+    snapshot.categorize_as(SnapshotChangeCategory.BREAKING)
+
+    expected_call = f'CREATE INDEX IF NOT EXISTS "test_idx" ON "sqlmesh__test_schema"."test_schema__test_model__{snapshot.version}" /* test_schema.test_model */("a" NULLS FIRST)'
+
+    evaluator.create([snapshot], {}, DeployabilityIndex.none_deployable())
+
+    call_args = adapter_mock.execute.call_args_list
+    pre_calls = call_args[0][0][0]
+    assert len(pre_calls) == 1
+    assert pre_calls[0].sql(dialect="postgres") == expected_call
+
+    post_calls = call_args[1][0][0]
+    assert len(post_calls) == 1
+    assert post_calls[0].sql(dialect="postgres") == expected_call

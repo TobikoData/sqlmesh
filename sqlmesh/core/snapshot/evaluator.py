@@ -598,20 +598,25 @@ class SnapshotEvaluator:
         deployability_index = deployability_index or DeployabilityIndex.all_deployable()
         is_snapshot_deployable = deployability_index.is_deployable(snapshot)
 
-        # Refers to self as non-deployable to successfully create self-referential tables / views.
-        deployability_index = deployability_index.with_non_deployable(snapshot)
-
-        render_kwargs: t.Dict[str, t.Any] = dict(
+        common_render_kwargs: t.Dict[str, t.Any] = dict(
             engine_adapter=self.adapter,
             snapshots=parent_snapshots_by_name,
-            deployability_index=deployability_index,
             runtime_stage=RuntimeStage.CREATING,
+        )
+        pre_post_render_kwargs = dict(
+            **common_render_kwargs,
+            deployability_index=deployability_index.with_deployable(snapshot),
+        )
+        create_render_kwargs = dict(
+            **common_render_kwargs,
+            # Refers to self as non-deployable to successfully create self-referential tables / views.
+            deployability_index=deployability_index.with_non_deployable(snapshot),
         )
 
         evaluation_strategy = _evaluation_strategy(snapshot, self.adapter)
 
         with self.adapter.transaction(), self.adapter.session(snapshot.model.session_properties):
-            self.adapter.execute(snapshot.model.render_pre_statements(**render_kwargs))
+            self.adapter.execute(snapshot.model.render_pre_statements(**pre_post_render_kwargs))
 
             if (
                 snapshot.is_forward_only
@@ -626,7 +631,7 @@ class SnapshotEvaluator:
                 logger.info(f"Cloning table '{source_table_name}' into '{target_table_name}'")
 
                 evaluation_strategy.create(
-                    snapshot, tmp_table_name, False, is_snapshot_deployable, **render_kwargs
+                    snapshot, tmp_table_name, False, is_snapshot_deployable, **create_render_kwargs
                 )
                 try:
                     self.adapter.clone_table(target_table_name, snapshot.table_name(), replace=True)
@@ -643,10 +648,10 @@ class SnapshotEvaluator:
                         snapshot.table_name(is_deployable=is_table_deployable),
                         is_table_deployable,
                         is_snapshot_deployable,
-                        **render_kwargs,
+                        **create_render_kwargs,
                     )
 
-            self.adapter.execute(snapshot.model.render_post_statements(**render_kwargs))
+            self.adapter.execute(snapshot.model.render_post_statements(**pre_post_render_kwargs))
 
         if on_complete is not None:
             on_complete(snapshot)
