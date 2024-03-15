@@ -597,7 +597,7 @@ def test_test_generation(tmp_path: Path) -> None:
     context.plan(auto_apply=True)
 
     input_queries = {
-        "sqlmesh_example.incremental_model": f"SELECT * FROM sqlmesh_example.incremental_model LIMIT 3"
+        "sqlmesh_example.incremental_model": "SELECT * FROM sqlmesh_example.incremental_model LIMIT 3"
     }
 
     with pytest.raises(ConfigError) as ex:
@@ -692,3 +692,11 @@ test_foo:
     ).run()
 
     _check_successful_or_raise(result)
+
+
+def test_successes(sushi_context: Context) -> None:
+    results = sushi_context.test()
+    successful_tests = [success.test_name for success in results.successes]  # type: ignore
+    assert len(successful_tests) == 2
+    assert "test_order_items" in successful_tests
+    assert "test_customer_revenue_by_day" in successful_tests
