@@ -25,6 +25,9 @@ jobs:
           name: Publish Python package
           command: make publish
       - run:
+          name: Update pypirc
+          command: ./.circleci/update-pypirc.sh
+      - run:
           name: Publish Python Tests package
           command: make publish-tests
   gh-release:
