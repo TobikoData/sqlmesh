@@ -16,6 +16,7 @@ setup(
     package_dir={"sqlmesh_tests": ""},
     package_data={"": ["fixtures/**"]},
     use_scm_version={
+        "root": "..",
         "write_to": "_version.py",
         "fallback_version": "0.0.0",
         "local_scheme": "no-local-version",
