@@ -78,6 +78,40 @@ Given an execution `ExecutionContext` "context", you can fetch a DataFrame with 
 df = context.fetchdf("SELECT * FROM my_table")
 ```
 
+## Optional pre/post-statements
+
+Optional pre/post-statements can help prepare the SQL engine for a model and execute "clean-up" actions after it has successfully executed, respectively. For example, you might create temporary views, set permissions, or evict previously cached tables from memory.
+
+However, be careful not to run any statement that could conflict with the execution of another statement if models run concurrently, such as creating a physical table.
+
+Pre- and post-statements are issued with the SQLMesh [`fetchdf` method](../../reference/cli.md#fetchdf) [described above](#execution-context).
+
+Pre-statements may be specified anywhere in the function body before it `return`s or `yield`s. Post-statements must execute after the function completes, so instead of `return`ing a value the function must `yield` the value. The post-statement must be specified after the `yield`.
+
+This example function includes both pre- and post-statements:
+
+``` python linenums="1" hl_lines="9-10 12 17-18"
+def execute(
+    context: ExecutionContext,
+    start: datetime,
+    end: datetime,
+    execution_time: datetime,
+    **kwargs: t.Any,
+) -> pd.DataFrame:
+
+    # pre-statement
+    context.fetchdf("SET GLOBAL parameter = 'value';")
+
+    # post-statement requires using `yield` instead of `return`
+    yield pd.DataFrame([
+        {"id": 1, "name": "name"}
+    ])
+
+    # post-statement
+    context.fetchdf("CREATE INDEX idx ON example.pre_post_statements (id);")
+```
+
+
 ## Dependencies
 In order to fetch data from an upstream model, you first get the table name using `context`'s `table` method. This returns the appropriate table name for the current runtime [environment](../environments.md):
 
