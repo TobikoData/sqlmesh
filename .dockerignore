@@ -1,9 +1,0 @@
-__pycache__
-*.pyc
-*.pyo
-*.pyd
-.Python
-env*
-.env*
-.git
-.mypy_cache

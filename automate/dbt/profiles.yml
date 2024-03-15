@@ -1,0 +1,15 @@
+default:
+  target: default_target
+  outputs:
+    default_target:
+      type: snowflake
+      threads: 8
+      client_session_keep_alive: true
+
+      account: "{{ env_var('DATACOVES__MAIN__ACCOUNT') }}"
+      database: "{{ env_var('DATACOVES__MAIN__DATABASE') }}"
+      schema: "{{ env_var('DATACOVES__MAIN__SCHEMA') }}"
+      user: "{{ env_var('DATACOVES__MAIN__USER') }}"
+      password: "{{ env_var('DATACOVES__MAIN__PASSWORD') }}"
+      role: "{{ env_var('DATACOVES__MAIN__ROLE') }}"
+      warehouse: "{{ env_var('DATACOVES__MAIN__WAREHOUSE') }}"

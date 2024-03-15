@@ -1,4 +1,0 @@
-create database datalake_metastore;
-create database datalake_iceberg_metastore;
-create database testing_metastore;
-create database testing_iceberg_metastore;
