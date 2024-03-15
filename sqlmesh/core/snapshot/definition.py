@@ -135,6 +135,11 @@ class SnapshotNameVersion(PydanticModel, frozen=True):
     name: str
     version: str
 
+    @property
+    def name_version(self) -> SnapshotNameVersion:
+        """Helper method to return self."""
+        return self
+
 
 class SnapshotIntervals(PydanticModel, frozen=True):
     name: str
