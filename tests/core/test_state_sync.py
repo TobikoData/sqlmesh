@@ -50,9 +50,9 @@ pytestmark = pytest.mark.slow
 
 
 @pytest.fixture
-def state_sync(duck_conn):
+def state_sync(duck_conn, tmp_path):
     state_sync = EngineAdapterStateSync(
-        create_engine_adapter(lambda: duck_conn, "duckdb"), schema=c.SQLMESH
+        create_engine_adapter(lambda: duck_conn, "duckdb"), schema=c.SQLMESH, context_path=tmp_path
     )
     state_sync.migrate(default_catalog=None)
     return state_sync
@@ -1289,7 +1289,7 @@ def test_unpause_snapshots_remove_intervals(
     ]
 
 
-def test_version_schema(state_sync: EngineAdapterStateSync) -> None:
+def test_version_schema(state_sync: EngineAdapterStateSync, tmp_path) -> None:
     from sqlmesh import __version__ as SQLMESH_VERSION
 
     # fresh install should not raise
@@ -1301,7 +1301,7 @@ def test_version_schema(state_sync: EngineAdapterStateSync) -> None:
 
     # Start with a clean slate.
     state_sync = EngineAdapterStateSync(
-        create_engine_adapter(duckdb.connect, "duckdb"), schema=c.SQLMESH
+        create_engine_adapter(duckdb.connect, "duckdb"), schema=c.SQLMESH, context_path=tmp_path
     )
 
     with pytest.raises(
@@ -1402,7 +1402,7 @@ def test_empty_versions() -> None:
         assert empty_versions.sqlmesh_version == "0.0.0"
 
 
-def test_migrate(state_sync: EngineAdapterStateSync, mocker: MockerFixture) -> None:
+def test_migrate(state_sync: EngineAdapterStateSync, mocker: MockerFixture, tmp_path) -> None:
     from sqlmesh import __version__ as SQLMESH_VERSION
 
     migrate_rows_mock = mocker.patch("sqlmesh.core.state_sync.EngineAdapterStateSync._migrate_rows")
@@ -1413,7 +1413,7 @@ def test_migrate(state_sync: EngineAdapterStateSync, mocker: MockerFixture) -> N
 
     # Start with a clean slate.
     state_sync = EngineAdapterStateSync(
-        create_engine_adapter(duckdb.connect, "duckdb"), schema=c.SQLMESH
+        create_engine_adapter(duckdb.connect, "duckdb"), schema=c.SQLMESH, context_path=tmp_path
     )
 
     state_sync.migrate(default_catalog=None)
@@ -1462,9 +1462,9 @@ def test_rollback(state_sync: EngineAdapterStateSync, mocker: MockerFixture) -> 
     assert not state_sync.engine_adapter.table_exists(f"{state_sync.schema}._versions_backup")
 
 
-def test_first_migration_failure(duck_conn, mocker: MockerFixture) -> None:
+def test_first_migration_failure(duck_conn, mocker: MockerFixture, tmp_path) -> None:
     state_sync = EngineAdapterStateSync(
-        create_engine_adapter(lambda: duck_conn, "duckdb"), schema=c.SQLMESH
+        create_engine_adapter(lambda: duck_conn, "duckdb"), schema=c.SQLMESH, context_path=tmp_path
     )
     mocker.patch.object(state_sync, "_migrate_rows", side_effect=Exception("mocked error"))
     with pytest.raises(
