@@ -966,7 +966,10 @@ class GenericContext(BaseContext, t.Generic[C]):
         models_override: t.Optional[UniqueKeyDict[str, Model]] = None
         if select_models:
             models_override = model_selector.select_models(
-                select_models, environment, fallback_env_name=create_from or c.PROD
+                select_models,
+                environment,
+                fallback_env_name=create_from or c.PROD,
+                ensure_finalized_snapshots=self.config.plan.use_finalized_state,
             )
             if not backfill_models:
                 # Only backfill selected models unless explicitly specified.
