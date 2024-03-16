@@ -9,7 +9,7 @@ from pydantic import Field
 from sqlglot import exp
 
 from sqlmesh.utils.cron import CroniterCache
-from sqlmesh.utils.date import TimeLike, to_datetime
+from sqlmesh.utils.date import TimeLike, to_datetime, validate_date_range
 from sqlmesh.utils.errors import ConfigError
 from sqlmesh.utils.pydantic import (
     PydanticModel,
@@ -172,6 +172,8 @@ class _Node(PydanticModel):
         start: The earliest date that the node will be executed for. If this is None,
             then the date is inferred by taking the most recent start date of its ancestors.
             The start date can be a static datetime or a relative datetime like "1 year ago"
+        end: The latest date that the model will be executed for. If this is None,
+            the date from the scheduler will be used
         cron: A cron string specifying how often the node should be run, leveraging the
             [croniter](https://github.com/kiorky/croniter) library.
         interval_unit: The duration of an interval for the node. By default, it is computed from the cron expression.
@@ -185,6 +187,7 @@ class _Node(PydanticModel):
     description: t.Optional[str] = None
     owner: t.Optional[str] = None
     start: t.Optional[TimeLike] = None
+    end: t.Optional[TimeLike] = None
     cron: str = "@daily"
     interval_unit_: t.Optional[IntervalUnit] = Field(alias="interval_unit", default=None)
     tags: t.List[str] = []
@@ -207,7 +210,7 @@ class _Node(PydanticModel):
             return v.meta["sql"]
         return str(v)
 
-    @field_validator("start", mode="before")
+    @field_validator("start", "end", mode="before")
     @classmethod
     def _date_validator(cls, v: t.Any) -> t.Optional[TimeLike]:
         if isinstance(v, exp.Expression):
@@ -255,6 +258,7 @@ class _Node(PydanticModel):
                 raise ConfigError(
                     f"Interval unit of '{interval_unit}' is larger than cron period of '{cron}'"
                 )
+        validate_date_range(values.get("start"), values.get("end"))
         return values
 
     @property

@@ -3244,3 +3244,43 @@ def test_depends_on_default_catalog_python():
 
     assert m.default_catalog == "catalog"
     assert m.depends_on == {'"catalog"."other"."table"'}
+
+
+def test_end_date():
+    expressions = d.parse(
+        f"""
+        MODEL (
+            name db.table,
+            kind INCREMENTAL_BY_TIME_RANGE (
+                time_column ts,
+            ),
+            start '2023-01-01',
+            end '2023-06-01'
+        );
+
+        SELECT 1::int AS a, 2::int AS b, now::timestamp as ts
+        """
+    )
+    model = load_sql_based_model(expressions)
+
+    assert model.start == "2023-01-01"
+    assert model.end == "2023-06-01"
+    assert model.interval_unit == IntervalUnit.DAY
+
+    with pytest.raises(ConfigError, match=".*Start date.+can't be greater than end date.*"):
+        load_sql_based_model(
+            d.parse(
+                f"""
+            MODEL (
+                name db.table,
+                kind INCREMENTAL_BY_TIME_RANGE (
+                    time_column ts,
+                ),
+                start '2024-01-01',
+                end '2023-06-01'
+            );
+
+            SELECT 1::int AS a, 2::int AS b, now::timestamp as ts
+            """
+            )
+        )

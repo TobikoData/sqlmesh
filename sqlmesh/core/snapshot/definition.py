@@ -1482,12 +1482,17 @@ def missing_intervals(
             snapshot.intervals = snapshot.intervals.copy()
             snapshot.remove_interval(interval, execution_time)
 
+        missing_interval_end_date = snapshot_end_date
+        node_end_date = snapshot.node.end
+        if node_end_date and (to_datetime(node_end_date) < to_datetime(snapshot_end_date)):
+            missing_interval_end_date = node_end_date
+
         intervals = snapshot.missing_intervals(
             max(
                 to_datetime(snapshot_start_date),
                 to_datetime(start_date(snapshot, snapshots, cache, relative_to=snapshot_end_date)),
             ),
-            snapshot_end_date,
+            missing_interval_end_date,
             execution_time=execution_time,
             deployability_index=deployability_index,
             ignore_cron=ignore_cron,
