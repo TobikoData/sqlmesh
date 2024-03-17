@@ -172,6 +172,8 @@ class TestConfig(GeneralConfig):
         kwargs = {}
         for key, value in self.test_kwargs.items():
             if isinstance(value, str):
+                # Multiline values will end with a newline. Remove it here.
+                value = value.rstrip()
                 # Mimic dbt kwargs logic
                 no_braces = _remove_jinja_braces(value)
                 jinja_function_regex = r"^\s*(env_var|ref|var|source|doc)\s*\(.+\)\s*$"
