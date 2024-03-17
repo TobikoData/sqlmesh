@@ -1,4 +1,5 @@
 import typing as t
+from unittest.mock import MagicMock
 
 import pytest
 from pytest_mock.plugin import MockerFixture
@@ -53,6 +54,36 @@ def test_get_catalog_type(trino_mocked_engine_adapter: TrinoEngineAdapter, mocke
         return_value="system_iceberg",
     )
     assert adapter.current_catalog_type == "iceberg"
+
+
+def test_get_catalog_type_cached(
+    trino_mocked_engine_adapter: TrinoEngineAdapter, mocker: MockerFixture
+):
+    adapter = trino_mocked_engine_adapter
+
+    mocker.stop(t.cast(MagicMock, adapter.get_catalog_type))  # to make mypy happy
+
+    def mock_fetchone(sql):
+        if "iceberg" in sql:
+            return ("iceberg",)
+        return ("hive",)
+
+    mocker.patch(
+        "sqlmesh.core.engine_adapter.trino.TrinoEngineAdapter.fetchone", side_effect=mock_fetchone
+    )
+
+    fetchone_mock = t.cast(MagicMock, adapter.fetchone)  # to make mypy happy
+
+    adapter.get_catalog_type("datalake_iceberg")
+    adapter.get_catalog_type("datalake_iceberg")
+    adapter.get_catalog_type("datalake_iceberg")
+    assert fetchone_mock.call_count == 1
+
+    adapter.get_catalog_type("datalake")
+    assert fetchone_mock.call_count == 2
+
+    adapter.get_catalog_type("datalake_iceberg")
+    assert fetchone_mock.call_count == 2
 
 
 def test_partitioned_by_hive(
