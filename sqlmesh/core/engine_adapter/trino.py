@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import typing as t
+from functools import lru_cache
 
 import pandas as pd
 from pandas.api.types import is_datetime64_any_dtype  # type: ignore
@@ -60,6 +61,7 @@ class TrinoEngineAdapter(
         """Sets the catalog name of the current connection."""
         self.execute(exp.Use(this=schema_(db="information_schema", catalog=catalog)))
 
+    @lru_cache()
     def get_catalog_type(self, catalog: t.Optional[str]) -> str:
         row: t.Tuple = tuple()
         if catalog:
