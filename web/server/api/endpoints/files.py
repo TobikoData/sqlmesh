@@ -25,16 +25,9 @@ router = APIRouter()
 
 
 @router.get("", response_model=models.Directory)
-def get_files(
-    context: t.Optional[Context] = Depends(get_context),
-    settings: Settings = Depends(get_settings),
-) -> models.Directory:
+async def get_files(settings: Settings = Depends(get_settings)) -> models.Directory:
     """Get all project files."""
-    return _get_directory(
-        path=settings.project_path,
-        settings=settings,
-        context=context,
-    )
+    return await _get_directory(settings.project_path, settings)
 
 
 @router.get("/{path:path}", response_model=models.File)
@@ -54,21 +47,26 @@ def get_file(
 @router.post("/{path:path}", response_model=t.Optional[models.File])
 async def write_file(
     response: Response,
+    path: str = Depends(validate_path),
     content: str = Body("", embed=True),
     new_path: t.Optional[str] = Body(None, embed=True),
-    path: str = Depends(validate_path),
     settings: Settings = Depends(get_settings),
-    context: Context = Depends(get_context),
+    context: t.Optional[Context] = Depends(get_context),
 ) -> t.Optional[models.File]:
     """Create, update, or rename a file."""
     path_or_new_path = path
     if new_path:
-        path_or_new_path = validate_path(new_path, context)
+        path_or_new_path = await validate_path(new_path, settings)
         replace_file(settings.project_path / path, settings.project_path / path_or_new_path)
     else:
         full_path = settings.project_path / path
-        config = context.config_for_path(Path(path_or_new_path))
-        if config.ui.format_on_save and content and Path(path_or_new_path).suffix == ".sql":
+        config = context.config_for_path(Path(path_or_new_path)) if context else None
+        if (
+            config
+            and config.ui.format_on_save
+            and content
+            and Path(path_or_new_path).suffix == ".sql"
+        ):
             format_file_status = models.FormatFileStatus(
                 status=models.Status.INIT, path=path_or_new_path
             )
@@ -120,11 +118,8 @@ async def delete_file(
         )
 
 
-def _get_directory(
-    path: str | Path,
-    settings: Settings,
-    context: t.Optional[Context] = None,
-) -> models.Directory:
+async def _get_directory(path: str | Path, settings: Settings) -> models.Directory:
+    context = await get_context(settings)
     ignore_patterns = context.config.ignore_patterns if context else c.IGNORE_PATTERNS
 
     def walk_path(

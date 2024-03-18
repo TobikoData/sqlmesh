@@ -125,3 +125,9 @@ async def get_context_or_raise(settings: Settings = Depends(get_settings)) -> Co
             origin="API -> settings -> get_context",
         )
     return context
+
+
+def invalidate_context_cache() -> None:
+    _get_context.cache_clear()
+    _get_loaded_context.cache_clear()
+    _get_path_to_model_mapping.cache_clear()
