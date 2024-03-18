@@ -20,6 +20,7 @@ Configuration options for SQLMesh model properties. Supported by all model kinds
 | `cron`             | The cron expression specifying how often the model should be refreshed. (Default: `@daily`)                                                                                                                                                                                                                                      |        str        |    N     |
 | `interval_unit`    | The temporal granularity of the model's data intervals. Supported values: `year`, `month`, `day`, `hour`, `half_hour`, `quarter_hour`, `five_minute`. (Default: inferred from `cron`)                                                                                                                                            |        str        |    N     |
 | `start`            | The date/time that determines the earliest date interval that should be processed by a model. Can be a datetime string, epoch time in milliseconds, or a relative datetime such as `1 year ago`.                                                                                                                                 |    str \| int     |    N     |
+| `end`              | The date/time that determines the latest date interval that should be processed by a model. Can be a datetime string, epoch time in milliseconds, or a relative datetime such as `1 year ago`.                                                                                                                                   |    str \| int     |    N     |
 | `batch_size`       | The maximum number of intervals that can be evaluated in a single backfill task. If this is `None`, all intervals will be processed as part of a single task. If this is set, a model's backfill will be chunked such that each individual task only contains jobs with the maximum of `batch_size` intervals. (Default: `None`) |        int        |    N     |
 | `grains`           | The column(s) whose combination uniquely identifies each row in the model                                                                                                                                                                                                                                                        | str \| array[str] |    N     |
 | `references`       | The model column(s) used to join to other models' grains                                                                                                                                                                                                                                                                         | str \| array[str] |    N     |
@@ -43,6 +44,7 @@ The SQLMesh project-level `model_defaults` key supports the following options, d
 - cron
 - owner
 - start
+- end
 - batch_size
 - storage_format
 
