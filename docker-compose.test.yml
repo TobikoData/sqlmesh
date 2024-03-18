@@ -1,0 +1,23 @@
+version: "3.11"
+services:
+  test-sqlmesh-example-basic:
+    image: test-sqlmesh-base
+    container_name: test-sqlmesh-example-basic
+    environment:
+      - PROJECTS=basic
+      - BROWSERS=chromium firefox webkit
+      - PORT=8101
+  test-sqlmesh-example-wursthall:
+    image: test-sqlmesh-base
+    container_name: test-sqlmesh-example-wursthall
+    environment:
+      - PROJECTS=wursthall
+      - BROWSERS=chromium firefox webkit
+      - PORT=8201
+  test-sqlmesh-example-sushi:
+    image: test-sqlmesh-base
+    container_name: test-sqlmesh-example-sushi
+    environment:
+      - PROJECTS=sushi
+      - BROWSERS=chromium firefox webkit
+      - PORT=8301
