@@ -236,7 +236,7 @@ class SourceQuery:
     def __enter__(self) -> Query:
         query = self.query_factory()
         for transform in self._transforms:
-            query = query.transform(transform)
+            query = t.cast(exp.Query, query.transform(transform))
         return query
 
     def __exit__(

@@ -301,7 +301,7 @@ class IncrementalByUniqueKeyKind(_Incremental):
         if not v:
             return v
 
-        return v.transform(replace_table_references)
+        return t.cast(exp.When, v.transform(replace_table_references))
 
 
 class IncrementalUnmanagedKind(_ModelKind):

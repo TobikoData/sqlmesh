@@ -271,7 +271,7 @@ class BaseExpressionRenderer:
                                 logger.warning("Failed to expand the nested model '%s'", name)
                     return node
 
-                expression = expression.transform(_expand, copy=False)
+                expression = expression.transform(_expand, copy=False)  # type: ignore
 
             if mapping:
                 expression = exp.replace_tables(

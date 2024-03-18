@@ -168,9 +168,6 @@ class MacroEvaluator:
         ) -> exp.Expression | t.List[exp.Expression] | None:
             nonlocal changed
 
-            exp.replace_children(
-                node, lambda n: n if isinstance(n, exp.Lambda) else evaluate_macros(n)
-            )
             if isinstance(node, MacroVar):
                 changed = True
                 if node.name not in self.locals:
@@ -198,7 +195,9 @@ class MacroEvaluator:
                 return self.evaluate(node)
             return node
 
-        transformed = evaluate_macros(expression.copy())
+        transformed = exp.replace_tree(
+            expression.copy(), evaluate_macros, prune=lambda n: isinstance(n, exp.Lambda)
+        )
 
         if changed:
             # the transformations could have corrupted the ast, turning this into sql and reparsing ensures
@@ -230,7 +229,7 @@ class MacroEvaluator:
             if isinstance(node.expression, exp.Lambda):
                 _, fn = _norm_var_arg_lambda(self, node.expression)
                 self.macros[normalize_macro_name(node.name)] = lambda _, *args: fn(
-                    list(args) if len(args) <= 1 else exp.Tuple(expressions=list(args))
+                    args[0] if len(args) == 1 else exp.Tuple(expressions=list(args))
                 )
             else:
                 self.locals[node.name] = self.transform(node.expression)
