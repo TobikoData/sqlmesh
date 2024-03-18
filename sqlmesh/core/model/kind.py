@@ -112,7 +112,7 @@ class ModelKindMixin:
     @property
     def only_execution_time(self) -> bool:
         """Whether or not this model only cares about execution time to render."""
-        return self.is_view or self.is_full or self.is_incremental_unmanaged or self.is_scd_type_2
+        return self.is_view or self.is_full or self.is_scd_type_2
 
 
 class ModelKindName(str, ModelKindMixin, Enum):
