@@ -52,6 +52,11 @@ def _sqlmesh_version() -> str:
     is_flag=True,
     help="Display logs in stdout.",
 )
+@click.option(
+    "--log-file-dir",
+    type=str,
+    help="The directory to write log files to.",
+)
 @click.pass_context
 @error_handler
 def cli(
@@ -62,6 +67,7 @@ def cli(
     ignore_warnings: bool = False,
     debug: bool = False,
     log_to_stdout: bool = False,
+    log_file_dir: t.Optional[str] = None,
 ) -> None:
     """SQLMesh command line tool."""
     if "--help" in sys.argv:
@@ -79,7 +85,9 @@ def cli(
 
     configs = load_configs(config, Context.CONFIG_TYPE, paths)
     log_limit = list(configs.values())[0].log_limit
-    configure_logging(debug, ignore_warnings, log_to_stdout, log_limit=log_limit)
+    configure_logging(
+        debug, ignore_warnings, log_to_stdout, log_limit=log_limit, log_file_dir=log_file_dir
+    )
 
     try:
         context = Context(

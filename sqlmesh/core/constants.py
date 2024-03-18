@@ -36,6 +36,9 @@ DEFAULT_MAX_LIMIT = 1000
 DEFAULT_LOG_LIMIT = 20
 """The default number of logs to keep."""
 
+DEFAULT_LOG_FILE_DIR = "logs"
+"""The default directory for log files."""
+
 AUDITS = "audits"
 MACROS = "macros"
 METRICS = "metrics"

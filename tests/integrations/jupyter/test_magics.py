@@ -46,9 +46,11 @@ def notebook(mocker: MockerFixture, ip):
 
 
 @pytest.fixture
-def sushi_context(copy_to_temp_path, notebook) -> Context:
+def sushi_context(copy_to_temp_path, notebook, tmp_path) -> Context:
     sushi_dir = copy_to_temp_path(SUSHI_EXAMPLE_PATH)[0]
-    notebook.run_line_magic(magic_name="context", line=str(sushi_dir))
+    notebook.run_line_magic(
+        magic_name="context", line=f"{str(sushi_dir)} --log-file-dir {tmp_path}"
+    )
     return notebook.user_ns["context"]
 
 
@@ -95,9 +97,11 @@ def get_all_html_output():
     return _convert
 
 
-def test_context(notebook, convert_all_html_output_to_text, get_all_html_output):
+def test_context(notebook, convert_all_html_output_to_text, get_all_html_output, tmp_path):
     with capture_output() as output:
-        notebook.run_line_magic(magic_name="context", line=str(SUSHI_EXAMPLE_PATH))
+        notebook.run_line_magic(
+            magic_name="context", line=f"{str(SUSHI_EXAMPLE_PATH)}  --log-file-dir {tmp_path}"
+        )
 
     assert output.stdout == ""
     assert output.stderr == ""
