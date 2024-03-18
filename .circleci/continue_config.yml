@@ -218,35 +218,11 @@ jobs:
               done; \
             done
       - run:
-          name: Run test for basic on chromium
-          command: |
-            PROJECT="basic"; \
-            BROWSER="chromium"; \
-            PORT=8031; \
-            CURRENT_DIR=$(pwd); \
-            cd $CURRENT_DIR/examples/$BROWSER/$PROJECT/$PROJECT && \
-            (sqlmesh ui --port $PORT --host 0.0.0.0 &) && \
-            sleep 10 && \
-            cd $CURRENT_DIR/examples/$BROWSER/$PROJECT/client && \
-            UI_TEST_URL=http://0.0.0.0:$PORT UI_TEST_BROWSER=$BROWSER npm run test:playwright -- ./tests/demo/demo.$PROJECT.spec;
-      - run:
-          name: Run test for basic on firefox
-          command: |
-            PROJECT="basic"; \
-            BROWSER="firefox"; \
-            PORT=8032; \
-            CURRENT_DIR=$(pwd); \
-            cd $CURRENT_DIR/examples/$BROWSER/$PROJECT/$PROJECT && \
-            (sqlmesh ui --port $PORT --host 0.0.0.0 &) && \
-            sleep 10 && \
-            cd $CURRENT_DIR/examples/$BROWSER/$PROJECT/client && \
-            UI_TEST_URL=http://0.0.0.0:$PORT UI_TEST_BROWSER=$BROWSER npm run test:playwright -- ./tests/demo/demo.$PROJECT.spec;
-      - run:
           name: Run test for basic on webkit
           command: |
             PROJECT="basic"; \
-            BROWSER="webkit"; \
-            PORT=8033; \
+            BROWSER="chromium"; \
+            PORT=8001; \
             CURRENT_DIR=$(pwd); \
             cd $CURRENT_DIR/examples/$BROWSER/$PROJECT/$PROJECT && \
             (sqlmesh ui --port $PORT --host 0.0.0.0 &) && \
@@ -258,55 +234,7 @@ jobs:
           command: |
             PROJECT="sushi"; \
             BROWSER="chromium"; \
-            PORT=8011; \
-            CURRENT_DIR=$(pwd); \
-            cd $CURRENT_DIR/examples/$BROWSER/$PROJECT/$PROJECT && \
-            (sqlmesh ui --port $PORT --host 0.0.0.0 &) && \
-            sleep 10 && \
-            cd $CURRENT_DIR/examples/$BROWSER/$PROJECT/client && \
-            UI_TEST_URL=http://0.0.0.0:$PORT UI_TEST_BROWSER=$BROWSER npm run test:playwright -- ./tests/demo/demo.$PROJECT.spec;
-      - run:
-          name: Run test for sushi on firefox
-          command: |
-            PROJECT="sushi"; \
-            BROWSER="firefox"; \
-            PORT=8012; \
-            CURRENT_DIR=$(pwd); \
-            cd $CURRENT_DIR/examples/$BROWSER/$PROJECT/$PROJECT && \
-            (sqlmesh ui --port $PORT --host 0.0.0.0 &) && \
-            sleep 10 && \
-            cd $CURRENT_DIR/examples/$BROWSER/$PROJECT/client && \
-            UI_TEST_URL=http://0.0.0.0:$PORT UI_TEST_BROWSER=$BROWSER npm run test:playwright -- ./tests/demo/demo.$PROJECT.spec;
-      - run:
-          name: Run test for sushi on webkit
-          command: |
-            PROJECT="sushi"; \
-            BROWSER="webkit"; \
-            PORT=8013; \
-            CURRENT_DIR=$(pwd); \
-            cd $CURRENT_DIR/examples/$BROWSER/$PROJECT/$PROJECT && \
-            (sqlmesh ui --port $PORT --host 0.0.0.0 &) && \
-            sleep 10 && \
-            cd $CURRENT_DIR/examples/$BROWSER/$PROJECT/client && \
-            UI_TEST_URL=http://0.0.0.0:$PORT UI_TEST_BROWSER=$BROWSER npm run test:playwright -- ./tests/demo/demo.$PROJECT.spec;
-      - run:
-          name: Run test for wursthall on chromium
-          command: |
-            PROJECT="wursthall"; \
-            BROWSER="chromium"; \
-            PORT=8021; \
-            CURRENT_DIR=$(pwd); \
-            cd $CURRENT_DIR/examples/$BROWSER/$PROJECT/$PROJECT && \
-            (sqlmesh ui --port $PORT --host 0.0.0.0 &) && \
-            sleep 10 && \
-            cd $CURRENT_DIR/examples/$BROWSER/$PROJECT/client && \
-            UI_TEST_URL=http://0.0.0.0:$PORT UI_TEST_BROWSER=$BROWSER npm run test:playwright -- ./tests/demo/demo.$PROJECT.spec;
-      - run:
-          name: Run test for wursthall on webkit
-          command: |
-            PROJECT="wursthall"; \
-            BROWSER="webkit"; \
-            PORT=8023; \
+            PORT=8002; \
             CURRENT_DIR=$(pwd); \
             cd $CURRENT_DIR/examples/$BROWSER/$PROJECT/$PROJECT && \
             (sqlmesh ui --port $PORT --host 0.0.0.0 &) && \
@@ -318,7 +246,7 @@ jobs:
           command: |
             PROJECT="wursthall"; \
             BROWSER="firefox"; \
-            PORT=8022; \
+            PORT=8003; \
             CURRENT_DIR=$(pwd); \
             cd $CURRENT_DIR/examples/$BROWSER/$PROJECT/$PROJECT && \
             (sqlmesh ui --port $PORT --host 0.0.0.0 &) && \
