@@ -5,7 +5,8 @@ import typing as t
 
 import pandas as pd
 from sqlglot import exp
-from sqlglot.dialects.dialect import DialectType
+from sqlglot.optimizer.normalize_identifiers import normalize_identifiers
+from sqlglot.optimizer.qualify_columns import quote_identifiers
 
 from sqlmesh.utils.pydantic import PydanticModel
 
@@ -106,7 +107,6 @@ class TableDiff:
         target: TableName,
         on: t.List[str] | exp.Condition,
         where: t.Optional[str | exp.Condition] = None,
-        dialect: DialectType = None,
         limit: int = 20,
         source_alias: t.Optional[str] = None,
         target_alias: t.Optional[str] = None,
@@ -115,23 +115,33 @@ class TableDiff:
         self.adapter = adapter
         self.source = source
         self.target = target
-        self.where = exp.condition(where, dialect=dialect) if where else None
+        self.dialect = adapter.dialect
+        self.where = exp.condition(where, dialect=self.dialect) if where else None
         self.limit = limit
+        self.model_name = model_name
+
         # Support environment aliases for diff output improvement in certain cases
         self.source_alias = source_alias
         self.target_alias = target_alias
-        self.model_name = model_name
 
         if isinstance(on, (list, tuple)):
+            s_table = exp.to_identifier("s", quoted=True)
+            t_table = exp.to_identifier("t", quoted=True)
+
             self.on: exp.Condition = exp.and_(
                 *(
-                    exp.column(c, "s").eq(exp.column(c, "t"))
-                    | (exp.column(c, "s").is_(exp.null()) & exp.column(c, "t").is_(exp.null()))
+                    exp.column(c, s_table).eq(exp.column(c, t_table))
+                    | (
+                        exp.column(c, s_table).is_(exp.null())
+                        & exp.column(c, t_table).is_(exp.null())
+                    )
                     for c in on
                 )
             )
         else:
             self.on = on
+
+        normalize_identifiers(self.on, dialect=self.dialect)
 
         self._source_schema: t.Optional[t.Dict[str, exp.DataType]] = None
         self._target_schema: t.Optional[t.Dict[str, exp.DataType]] = None
@@ -234,14 +244,18 @@ class TableDiff:
                 .where(self.where)
             )
 
-            with self.adapter.temp_table(query, name="sqlmesh_temp.diff") as table:
+            query = quote_identifiers(query, dialect=self.dialect)
+            temp_table = exp.table_("diff", db="sqlmesh_temp", quoted=True)
+
+            with self.adapter.temp_table(query, name=temp_table) as table:
                 summary_query = exp.select(
                     exp.func("SUM", "s_exists").as_("s_count"),
                     exp.func("SUM", "t_exists").as_("t_count"),
                     exp.func("SUM", "rows_joined").as_("join_count"),
                     *(exp.func("SUM", name(c)).as_(c.alias) for c in comparisons),
                 ).from_(table)
-                stats_df = self.adapter.fetchdf(summary_query)
+
+                stats_df = self.adapter.fetchdf(summary_query, quote_identifiers=True)
                 stats_df["s_only_count"] = stats_df["s_count"] - stats_df["join_count"]
                 stats_df["t_only_count"] = stats_df["t_count"] - stats_df["join_count"]
                 stats = stats_df.iloc[0].to_dict()
@@ -261,7 +275,7 @@ class TableDiff:
                     .where(exp.column("rows_joined").eq(exp.Literal.number(1)))
                 )
                 column_stats = (
-                    self.adapter.fetchdf(column_stats_query)
+                    self.adapter.fetchdf(column_stats_query, quote_identifiers=True)
                     .T.rename(
                         columns={0: "pct_match"},
                         index=lambda x: str(x).replace("_matches", "") if x else "",
@@ -284,7 +298,7 @@ class TableDiff:
                     )
                     .limit(self.limit)
                 )
-                sample = self.adapter.fetchdf(sample_query)
+                sample = self.adapter.fetchdf(sample_query, quote_identifiers=True)
 
                 joined_sample_cols = [f"s__{c}" for c in index_cols]
                 comparison_cols = [
