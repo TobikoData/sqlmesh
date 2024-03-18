@@ -108,10 +108,15 @@ class SnapshotDagGenerator:
                 f"Can't create a cadence DAG for the paused snapshot {snapshot.snapshot_id}"
             )
 
+        end_date = None
+        if snapshot.node.end:
+            end_date = pendulum.instance(to_datetime(snapshot.node.end))
+
         with DAG(
             dag_id=dag_id,
             schedule_interval=snapshot.node.cron,
             start_date=pendulum.instance(to_datetime(snapshot.unpaused_ts)),
+            end_date=end_date,
             max_active_runs=1,
             catchup=True,
             is_paused_upon_creation=False,
