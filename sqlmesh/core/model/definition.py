@@ -101,6 +101,8 @@ class _Model(ModelMeta, frozen=True):
         start: The earliest date that the model will be backfilled for. If this is None,
             then the date is inferred by taking the most recent start date of its ancestors.
             The start date can be a static datetime or a relative datetime like "1 year ago"
+        end: The date that the model will be backfilled up until. Follows the same syntax as 'start',
+            should be omitted if there is no end date.
         batch_size: The maximum number of incremental intervals that can be run per backfill job. If this is None,
             then backfilling this model will do all of history in one job. If this is set, a model's backfill
             will be chunked such that each individual job will only contain jobs with max `batch_size` intervals.

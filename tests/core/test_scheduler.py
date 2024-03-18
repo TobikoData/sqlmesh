@@ -10,6 +10,7 @@ from sqlmesh.core.model.kind import (
     IncrementalByUniqueKeyKind,
     TimeColumn,
 )
+from sqlmesh.core.node import IntervalUnit
 from sqlmesh.core.scheduler import Scheduler, compute_interval_params
 from sqlmesh.core.snapshot import Snapshot, SnapshotEvaluator
 from sqlmesh.utils.date import to_datetime
@@ -234,3 +235,41 @@ def test_circuit_breaker(scheduler: Scheduler):
             "2022-01-30",
             circuit_breaker=lambda: True,
         )
+
+
+def test_intervals_with_end_date_on_model(mocker: MockerFixture, make_snapshot):
+    snapshot: Snapshot = make_snapshot(
+        SqlModel(
+            name="name",
+            kind=IncrementalByTimeRangeKind(time_column="ds", batch_size=1),
+            interval_unit=IntervalUnit.DAY,
+            start="2023-01-01",
+            end="2023-01-31",
+            query=parse_one("SELECT ds FROM parent.tbl"),
+        )
+    )
+
+    snapshot_evaluator = SnapshotEvaluator(adapter=mocker.MagicMock(), ddl_concurrent_tasks=1)
+    scheduler = Scheduler(
+        snapshots=[snapshot],
+        snapshot_evaluator=snapshot_evaluator,
+        state_sync=mocker.MagicMock(),
+        max_workers=2,
+        default_catalog=None,
+    )
+
+    # generate for 1 year to show that the returned batches should only cover
+    # the range defined on the model itself
+    batches = scheduler.batches(start="2023-01-01", end="2024-01-01")[snapshot]
+
+    assert len(batches) == 31  # days in Jan 2023
+    assert batches[0] == (to_datetime("2023-01-01"), to_datetime("2023-01-02"))
+    assert batches[-1] == (to_datetime("2023-01-31"), to_datetime("2023-02-01"))
+
+    # generate for less than 1 month to ensure that the scheduler end date
+    # takes precedence over the model end date
+    batches = scheduler.batches(start="2023-01-01", end="2023-01-10")[snapshot]
+
+    assert len(batches) == 10
+    assert batches[0] == (to_datetime("2023-01-01"), to_datetime("2023-01-02"))
+    assert batches[-1] == (to_datetime("2023-01-10"), to_datetime("2023-01-11"))
