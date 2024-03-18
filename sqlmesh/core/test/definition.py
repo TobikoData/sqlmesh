@@ -132,17 +132,10 @@ class ModelTest(unittest.TestCase):
             return str(x) if isinstance(x, (dict, list)) else x
 
         if sort:
-            actual = (
-                actual.apply(lambda col: col.map(_to_hashable))
-                .sort_values(by=actual.columns.to_list())
-                .reset_index(drop=True)
-            )
-            expected = (
-                expected.apply(lambda col: col.map(_to_hashable))
-                .sort_values(by=expected.columns.to_list())
-                .reset_index(drop=True)
-            )
-
+            actual = actual.apply(lambda col: col.map(_to_hashable))
+            actual = actual.sort_values(by=actual.columns.to_list()).reset_index(drop=True)
+            expected = expected.apply(lambda col: col.map(_to_hashable))
+            expected = expected.sort_values(by=expected.columns.to_list()).reset_index(drop=True)
         try:
             pd.testing.assert_frame_equal(
                 expected,
