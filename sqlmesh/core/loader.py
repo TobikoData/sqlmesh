@@ -156,7 +156,7 @@ class Loader(abc.ABC):
             True if a modification is found; False otherwise
         """
         return any(
-            path.stat().st_mtime > initial_mtime
+            not path.exists() or path.stat().st_mtime > initial_mtime
             for path, initial_mtime in self._path_mtimes.items()
         )
 

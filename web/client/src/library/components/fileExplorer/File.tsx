@@ -35,7 +35,7 @@ function File({
   const [isDraggable, setIsDraggable] = useState(false)
 
   const attrs = useLongPress(() => setIsDraggable(true), {
-    threshold: 500,
+    threshold: 50,
     onFinish() {
       setIsDraggable(false)
     },

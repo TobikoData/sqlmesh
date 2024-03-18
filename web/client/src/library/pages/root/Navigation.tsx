@@ -14,16 +14,17 @@ export default function PageNavigation(): JSX.Element {
   return (
     <div
       className={clsx(
-        'min-w-[10rem] px-2 min-h-8 max-h-8 w-full flex items-center',
+        'relative min-w-[10rem] px-2 min-h-8 max-h-8 w-full flex items-center',
         modules.showHistoryNavigation ? 'justify-between' : 'justify-end',
       )}
     >
       {modules.showHistoryNavigation && <HistoryNavigation />}
-      {isFetchingModels ? (
-        <LoadingStatus>Loading Models...</LoadingStatus>
-      ) : (
-        modules.hasPlans && <EnvironmentDetails />
+      {isFetchingModels && (
+        <div className="absolute w-full h-full flex justify-center items-center z-10 bg-transparent-20 backdrop-blur-lg">
+          <LoadingStatus>Loading Models...</LoadingStatus>
+        </div>
       )}
+      {modules.hasPlans && <EnvironmentDetails />}
       {modules.hasErrors && <ReportErrors />}
     </div>
   )
