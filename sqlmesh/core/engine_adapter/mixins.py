@@ -146,28 +146,37 @@ class HiveMetastoreTablePropertiesMixin(EngineAdapter):
             properties.append(exp.FileFormatProperty(this=exp.Var(this=storage_format)))
 
         if partitioned_by:
-            for expr in partitioned_by:
-                if not isinstance(expr, exp.Column):
-                    raise SQLMeshError(
-                        f"PARTITIONED BY contains non-column value '{expr.sql(dialect='spark')}'."
-                    )
-
-            property: exp.Property = exp.PartitionedByProperty(
-                this=exp.Schema(expressions=partitioned_by),
-            )
-
             if (
                 self.dialect == "trino"
                 and self.get_catalog_type(catalog_name or self.get_current_catalog()) == "iceberg"
             ):
                 # On the Trino Iceberg catalog, the table property is called "partitioning" - not "partitioned_by"
                 # In addition, partition column transform expressions like `day(col)` or `bucket(col, 5)` are allowed
+                # Also, column names and transforms need to be strings and supplied as an ARRAY[varchar]
                 # ref: https://trino.io/docs/current/connector/iceberg.html#table-properties
-                property = exp.Property(
-                    this=exp.var("PARTITIONING"), value=exp.Schema(expressions=partitioned_by)
+                properties.append(
+                    exp.Property(
+                        this=exp.var("PARTITIONING"),
+                        value=exp.array(
+                            *(
+                                exp.Literal.string(e.sql(dialect=self.dialect))
+                                for e in partitioned_by
+                            )
+                        ),
+                    )
                 )
+            else:
+                for expr in partitioned_by:
+                    if not isinstance(expr, exp.Column):
+                        raise SQLMeshError(
+                            f"PARTITIONED BY contains non-column value '{expr.sql(dialect=self.dialect)}'."
+                        )
 
-            properties.append(property)
+                properties.append(
+                    exp.PartitionedByProperty(
+                        this=exp.Schema(expressions=partitioned_by),
+                    )
+                )
 
         if table_description:
             properties.append(
