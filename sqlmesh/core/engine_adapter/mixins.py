@@ -157,11 +157,11 @@ class HiveMetastoreTablePropertiesMixin(EngineAdapter):
                 properties.append(
                     exp.Property(
                         this=exp.var("PARTITIONING"),
-                        value=exp.Array(
-                            expressions=[
+                        value=exp.array(
+                            *(
                                 exp.Literal.string(e.sql(dialect=self.dialect))
                                 for e in partitioned_by
-                            ]
+                            )
                         ),
                     )
                 )
@@ -169,7 +169,7 @@ class HiveMetastoreTablePropertiesMixin(EngineAdapter):
                 for expr in partitioned_by:
                     if not isinstance(expr, exp.Column):
                         raise SQLMeshError(
-                            f"PARTITIONED BY contains non-column value '{expr.sql(dialect='spark')}'."
+                            f"PARTITIONED BY contains non-column value '{expr.sql(dialect=self.dialect)}'."
                         )
 
                 properties.append(
