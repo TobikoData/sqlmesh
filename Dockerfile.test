@@ -1,8 +1,8 @@
 FROM mcr.microsoft.com/playwright:v1.42.1-jammy 
 
-ENV NODE_ENV=testing
-
 WORKDIR /sqlmesh
+
+ENV NODE_ENV=testing
 
 COPY . .
 
@@ -31,6 +31,7 @@ RUN npm install -g npm@latest && \
     npm --prefix /sqlmesh/web/client run build
 
 CMD for BROWSER in $BROWSERS; do \
+        rm -rf $CURRENT_DIR/examples/$BROWSER; \
         for PROJECT in $PROJECTS; do \
             echo "Testing $PROJECT in $BROWSER browser"; \
             mkdir -p /sqlmesh/examples/$BROWSER/$PROJECT/client && \
