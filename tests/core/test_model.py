@@ -245,17 +245,20 @@ def test_model_qualification():
 
 
 @pytest.mark.parametrize(
-    "partition_by_input, partition_by_output, expected_exception",
+    "partition_by_input, partition_by_output, output_dialect, expected_exception",
     [
-        ("a", ["`a`"], None),
-        ("(a, b)", ["`a`", "`b`"], None),
-        ("TIMESTAMP_TRUNC(`a`, DAY)", ["TIMESTAMP_TRUNC(`a`, DAY)"], None),
-        ("e", "", ConfigError),
-        ("(a, e)", "", ConfigError),
-        ("(a, a)", "", ConfigError),
+        ("a", ["`a`"], "bigquery", None),
+        ("(a, b)", ["`a`", "`b`"], "bigquery", None),
+        ("TIMESTAMP_TRUNC(`a`, DAY)", ["TIMESTAMP_TRUNC(`a`, DAY)"], "bigquery", None),
+        ("e", "", "bigquery", ConfigError),
+        ("(a, e)", "", "bigquery", ConfigError),
+        ("(a, a)", "", "bigquery", ConfigError),
+        ("(day(a),b)", ['DAY("a")', '"b"'], "trino", None),
     ],
 )
-def test_partitioned_by(partition_by_input, partition_by_output, expected_exception):
+def test_partitioned_by(
+    partition_by_input, partition_by_output, output_dialect, expected_exception
+):
     expressions = d.parse(
         f"""
         MODEL (
@@ -280,7 +283,9 @@ def test_partitioned_by(partition_by_input, partition_by_output, expected_except
             model.validate_definition()
     else:
         model.validate_definition()
-        assert [col.sql(dialect="bigquery") for col in model.partitioned_by] == partition_by_output
+        assert [
+            col.sql(dialect=output_dialect) for col in model.partitioned_by
+        ] == partition_by_output
 
 
 def test_no_model_statement():
