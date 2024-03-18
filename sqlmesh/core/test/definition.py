@@ -129,7 +129,9 @@ class ModelTest(unittest.TestCase):
         expected = expected.replace({None: np.nan})
 
         def _to_hashable(x: t.Any) -> t.Any:
-            return str(x) if isinstance(x, (dict, list)) else x
+            if isinstance(x, (list, np.ndarray)):
+                return tuple(x)
+            return str(x) if not isinstance(x, t.Hashable) else x
 
         if sort:
             actual = actual.apply(lambda col: col.map(_to_hashable))
