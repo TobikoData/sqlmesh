@@ -131,7 +131,7 @@ class Rewriter:
         mapping = {v: k for k, v in mapping.items()}
 
         for expr in grain:
-            for node, *_ in expr.walk():
+            for node in expr.walk():
                 if isinstance(node, exp.Column):
                     models = self.graph.models_for_column(name, node.name)
 
