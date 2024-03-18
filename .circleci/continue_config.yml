@@ -207,10 +207,25 @@ jobs:
           name: Run tests
           command: make engine-docker-test
           no_output_timeout: 15m
+  
+  trigger_enterprise_unit_tests:
+      docker: 
+        - image: cimg/base:2021.11
+      resource_class: small
+      steps:
+        - run:
+            name: Trigger enterprise unit tests
+            command: |
+              curl --request POST \
+                --url https://circleci.com/api/v2/project/gh/TobikoData/sqlmesh-enterprise/pipeline \
+                --header "Circle-Token: $ENTERPRISE_CIRCLE_API_TOKEN" \
+                --header "content-type: application/json" \
+                --data '{"branch":"main","parameters":{"run_main_pr":false, "run_core_commit":true, "sqlmesh_version":$CIRCLE_BRANCH}}'
 
 workflows:
   main_pr:
     jobs:
+      - trigger_enterprise_unit_tests
       - doc_tests
       - style_and_slow_tests:
           matrix:
