@@ -220,10 +220,7 @@ jobs:
                 --url https://circleci.com/api/v2/project/gh/TobikoData/sqlmesh-enterprise/pipeline \
                 --header "Circle-Token: $ENTERPRISE_CIRCLE_API_TOKEN" \
                 --header "content-type: application/json" \
-                --data '{"branch":"trigger_workflow_on_post","parameters":{"run_main_pr":false, "run_core_commit":true, "sqlmesh_version":"$CIRCLE_BRANCH"}}'
-        - run:
-            name: Announce params
-            command: echo "$CIRCLE_BRANCH"
+                --data '{"branch":"trigger_workflow_on_post","parameters":{"run_main_pr":false, "run_core_commit":true, "sqlmesh_version":"'"$CIRCLE_BRANCH"'"}}'
 
 workflows:
   main_pr:
