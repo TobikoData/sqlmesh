@@ -263,6 +263,7 @@ The dbt jinja methods that are not currently supported are:
 * schemas
 * graph.nodes.values
 * graph.metrics.values
+* version - learn more about why SQLMesh doesn't support model versions at the [Tobiko Data blog](https://tobikodata.com/the-false-promise-of-dbt-contracts.html)
 
 ## Missing something you need?
 
