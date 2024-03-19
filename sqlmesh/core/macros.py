@@ -539,183 +539,30 @@ def filter_(evaluator: MacroEvaluator, *args: t.Any) -> t.List[t.Any]:
     return list(filter(lambda arg: evaluator.eval_expression(func(arg)), items))
 
 
-@macro("WITH")
-def with_(
+def _optional_expression(
     evaluator: MacroEvaluator,
     condition: exp.Condition,
-    expression: exp.With,
-) -> t.Optional[exp.With]:
-    """Inserts WITH expression when the condition is True
-
-    Example:
-        >>> from sqlglot import parse_one
-        >>> from sqlmesh.core.macros import MacroEvaluator
-        >>> sql = "@WITH(True) all_cities as (select * from city) select all_cities"
-        >>> MacroEvaluator().transform(parse_one(sql)).sql()
-        'WITH all_cities AS (SELECT * FROM city) SELECT all_cities'
+    expression: exp.Expression,
+) -> t.Optional[exp.Expression]:
+    """Inserts expression when the condition is True
 
     Args:
         evaluator: MacroEvaluator that invoked the macro
         condition: Condition expression
         expression: With expression
     Returns:
-        With expression if the conditional is True; otherwise None
+        Expression if the conditional is True; otherwise None
     """
     return expression if evaluator.eval_expression(condition) else None
 
 
-@macro()
-def join(
-    evaluator: MacroEvaluator,
-    condition: exp.Condition,
-    expression: exp.Join,
-) -> t.Optional[exp.Join]:
-    """Inserts JOIN expression when the condition is True
-
-    Example:
-        >>> from sqlglot import parse_one
-        >>> from sqlmesh.core.macros import MacroEvaluator
-        >>> sql = "select * from city @JOIN(True) country on city.country = country.name"
-        >>> MacroEvaluator().transform(parse_one(sql)).sql()
-        'SELECT * FROM city JOIN country ON city.country = country.name'
-
-        >>> sql = "select * from city left outer @JOIN(True) country on city.country = country.name"
-        >>> MacroEvaluator().transform(parse_one(sql)).sql()
-        'SELECT * FROM city LEFT OUTER JOIN country ON city.country = country.name'
-
-    Args:
-        evaluator: MacroEvaluator that invoked the macro
-        condition: Condition expression
-        expression: Join expression
-    Returns:
-        Join expression if the conditional is True; otherwise None
-    """
-    return expression if evaluator.eval_expression(condition) else None
-
-
-@macro()
-def where(
-    evaluator: MacroEvaluator,
-    condition: exp.Condition,
-    expression: exp.Where,
-) -> t.Optional[exp.Where]:
-    """Inserts WHERE expression when the condition is True
-
-    Example:
-        >>> from sqlglot import parse_one
-        >>> from sqlmesh.core.macros import MacroEvaluator
-        >>> sql = "select * from city @WHERE(True) population > 100 and country = 'Mexico'"
-        >>> MacroEvaluator().transform(parse_one(sql)).sql()
-        "SELECT * FROM city WHERE population > 100 AND country = 'Mexico'"
-
-    Args:
-        evaluator: MacroEvaluator that invoked the macro
-        condition: Condition expression
-        expression: Where expression
-    Returns:
-        Where expression if condition is True; otherwise None
-    """
-    return expression if evaluator.eval_expression(condition) else None
-
-
-@macro()
-def group_by(
-    evaluator: MacroEvaluator,
-    condition: exp.Condition,
-    expression: exp.Group,
-) -> t.Optional[exp.Group]:
-    """Inserts GROUP BY expression when the condition is True
-
-    Example:
-        >>> from sqlglot import parse_one
-        >>> from sqlmesh.core.macros import MacroEvaluator, group_by
-        >>> sql = "select * from city @GROUP_BY(True) country, population"
-        >>> MacroEvaluator().transform(parse_one(sql)).sql()
-        'SELECT * FROM city GROUP BY country, population'
-
-    Args:
-        evaluator: MacroEvaluator that invoked the macro
-        condition: Condition expression
-        expression: Group expression
-    Returns:
-        Group expression if the condition is True; otherwise None
-    """
-    return expression if evaluator.eval_expression(condition) else None
-
-
-@macro()
-def having(
-    evaluator: MacroEvaluator,
-    condition: exp.Condition,
-    expression: exp.Having,
-) -> t.Optional[exp.Having]:
-    """Inserts HAVING expression when the condition is True
-
-    Example:
-        >>> from sqlglot import parse_one
-        >>> from sqlmesh.core.macros import MacroEvaluator
-        >>> sql = "select * from city group by country @HAVING(True) population > 100 and country = 'Mexico'"
-        >>> MacroEvaluator().transform(parse_one(sql)).sql()
-        "SELECT * FROM city GROUP BY country HAVING population > 100 AND country = 'Mexico'"
-
-    Args:
-        evaluator: MacroEvaluator that invoked the macro
-        condition: Condition expression
-        expression: Having expression
-    Returns:
-        Having expression if the condition is True; otherwise None
-    """
-    return expression if evaluator.eval_expression(condition) else None
-
-
-@macro()
-def order_by(
-    evaluator: MacroEvaluator,
-    condition: exp.Condition,
-    expression: exp.Order,
-) -> t.Optional[exp.Order]:
-    """Inserts ORDER BY expression when the condition is True
-
-    Example:
-        >>> from sqlglot import parse_one
-        >>> from sqlmesh.core.macros import MacroEvaluator
-        >>> sql = "select * from city @ORDER_BY(True) population, name DESC"
-        >>> MacroEvaluator().transform(parse_one(sql)).sql()
-        'SELECT * FROM city ORDER BY population, name DESC'
-
-    Args:
-        evaluator: MacroEvaluator that invoked the macro
-        condition: Condition expression
-        expression: Order expression
-    Returns:
-        Order expression if the condition is True; otherwise None
-    """
-    return expression if evaluator.eval_expression(condition) else None
-
-
-@macro()
-def limit(
-    evaluator: MacroEvaluator,
-    condition: exp.Condition,
-    expression: exp.Limit,
-) -> t.Optional[exp.Limit]:
-    """Inserts LIMIT expression when the condition is True
-
-    Example:
-        >>> from sqlglot import parse_one
-        >>> from sqlmesh.core.macros import MacroEvaluator
-        >>> sql = "select * from city @LIMIT(True) 10"
-        >>> MacroEvaluator().transform(parse_one(sql)).sql()
-        'SELECT * FROM city LIMIT 10'
-
-    Args:
-        evaluator: MacroEvaluator that invoked the macro
-        condition: Condition expression
-        expression: Limit expression
-    Returns:
-        Limit expression if the condition is True; otherwise None
-    """
-    return expression if evaluator.eval_expression(condition) else None
+with_ = macro("WITH")(_optional_expression)
+join = macro("JOIN")(_optional_expression)
+where = macro("WHERE")(_optional_expression)
+group_by = macro("GROUP_BY")(_optional_expression)
+having = macro("HAVING")(_optional_expression)
+order_by = macro("ORDER_BY")(_optional_expression)
+limit = macro("LIMIT")(_optional_expression)
 
 
 @macro("eval")

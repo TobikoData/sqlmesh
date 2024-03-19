@@ -225,7 +225,7 @@ def _parse_macro(self: Parser, keyword_macro: str = "") -> t.Optional[exp.Expres
     return self.expression(MacroVar, this=field.this)
 
 
-KEYWORD_MACROS = {"WITH", "JOIN", "WHERE", "GROUP_BY", "HAVING", "ORDER_BY", "LIMIT", "TOP"}
+KEYWORD_MACROS = {"WITH", "JOIN", "WHERE", "GROUP_BY", "HAVING", "ORDER_BY", "LIMIT"}
 
 
 def _parse_matching_macro(self: Parser, name: str) -> t.Optional[exp.Expression]:
@@ -253,8 +253,6 @@ def _parse_body_macro(self: Parser) -> t.Tuple[str, t.Optional[exp.Expression]]:
         return ("order", self._parse_order())
     if name == "LIMIT":
         return ("limit", self._parse_limit())
-    if name == "TOP":
-        return ("limit", self._parse_limit(top=True))
     return ("", None)
 
 
@@ -328,13 +326,16 @@ def _parse_order(
 
 
 def _parse_limit(
-    self: Parser, this: t.Optional[exp.Expression] = None, top: bool = False
+    self: Parser,
+    this: t.Optional[exp.Expression] = None,
+    top: bool = False,
+    skip_limit_token: bool = False,
 ) -> t.Optional[exp.Expression]:
-    macro = _parse_matching_macro(self, "LIMIT")
+    macro = _parse_matching_macro(self, "TOP" if top else "LIMIT")
     if not macro:
-        return self.__parse_limit(this, top=top)  # type: ignore
+        return self.__parse_limit(this, top=top, skip_limit_token=skip_limit_token)  # type: ignore
 
-    macro.this.append("expressions", self.__parse_limit(this, top=top))  # type: ignore
+    macro.this.append("expressions", self.__parse_limit(this, top=top, skip_limit_token=True))  # type: ignore
     return macro
 
 
