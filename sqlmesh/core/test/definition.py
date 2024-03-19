@@ -82,13 +82,8 @@ class ModelTest(unittest.TestCase):
             rows = values["rows"]
             if not columns_to_types and rows:
                 for i, v in rows[0].items():
-                    if isinstance(v, dict):
-                        # Since a YAML dict can be interpreted in many ways (e.g. STRUCT, MAP),
-                        # we parse it to figure out what the correct representation is per dialect
-                        v_ast: exp.Expression = exp.maybe_parse(str(v), dialect=self.dialect)
-                    else:
-                        v_ast = exp.convert(v)
-
+                    # TODO: infer the correct type depending on the dialect
+                    v_ast = exp.convert(v)
                     v_type = annotate_types(v_ast).type or type(v).__name__
                     columns_to_types[i] = exp.maybe_parse(
                         v_type, into=exp.DataType, dialect=self.dialect

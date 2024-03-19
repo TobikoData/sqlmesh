@@ -675,7 +675,7 @@ test_foo:
   inputs:
     raw:
       - array: [1, 2, 3]
-        struct: {'x': [1, 2, 3], 'y': 'foo', 'z': 1}
+        # struct: {'x': [1, 2, 3], 'y': 'foo', 'z': 1}
       - array:
         - 2
         - 3
@@ -684,12 +684,12 @@ test_foo:
     query:
       - array: [0, 4, 1]
       - array: [1, 2, 3]
-        struct: {'x': [1, 2, 3], 'y': 'foo', 'z': 1}
+        # struct: {'x': [1, 2, 3], 'y': 'foo', 'z': 1}
       - array: [2, 3]
             """
         ),
         test_name="test_foo",
-        model=_create_model("SELECT array, struct FROM raw"),
+        model=_create_model("SELECT array/*, struct*/ FROM raw"),
         context=Context(config=Config(model_defaults=ModelDefaultsConfig(dialect="duckdb"))),
     ).run()
 

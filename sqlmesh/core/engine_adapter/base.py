@@ -1104,7 +1104,6 @@ class EngineAdapter:
             batch_start=batch_start,
             batch_end=batch_end,
             alias=alias,
-            dialect=self.dialect,
         )
         if contains_json:
             query = t.cast(exp.Select, self._escape_json(query))
