@@ -2,6 +2,8 @@ import typing as t
 
 import pytest
 from pytest_mock import MockFixture
+from pytest_mock.plugin import MockerFixture
+from sqlglot import exp
 from sqlglot.helper import ensure_list
 
 from sqlmesh.core.engine_adapter import PostgresEngineAdapter
@@ -60,3 +62,21 @@ def test_drop_schema_with_catalog(
 
     adapter.drop_schema("test_catalog.test_schema")
     assert "requires that all catalog operations be against a single catalog" in caplog.text
+
+
+def test_comments(make_mocked_engine_adapter: t.Callable, mocker: MockerFixture):
+    adapter = make_mocked_engine_adapter(PostgresEngineAdapter)
+
+    adapter.create_table(
+        "test_table",
+        {"a": exp.DataType.build("INT"), "b": exp.DataType.build("INT")},
+        table_description="\\",
+        column_descriptions={"a": "\\"},
+    )
+
+    sql_calls = to_sql_calls(adapter)
+    assert sql_calls == [
+        'CREATE TABLE IF NOT EXISTS "test_table" ("a" INT, "b" INT)',
+        """COMMENT ON TABLE "test_table" IS '\\'""",
+        """COMMENT ON COLUMN "test_table"."a" IS '\\'""",
+    ]

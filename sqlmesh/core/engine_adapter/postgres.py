@@ -29,6 +29,7 @@ class PostgresEngineAdapter(
     HAS_VIEW_BINDING = True
     CURRENT_CATALOG_EXPRESSION = exp.column("current_catalog")
     SUPPORTS_REPLACE_TABLE = False
+    ESCAPE_COMMENT_BACKSLASH = False
 
     def _fetch_native_df(
         self, query: t.Union[exp.Expression, str], quote_identifiers: bool = False

@@ -87,6 +87,7 @@ class EngineAdapter:
     COMMENT_CREATION_VIEW = CommentCreationView.IN_SCHEMA_DEF_AND_COMMANDS
     MAX_TABLE_COMMENT_LENGTH: t.Optional[int] = None
     MAX_COLUMN_COMMENT_LENGTH: t.Optional[int] = None
+    ESCAPE_COMMENT_BACKSLASH = True
     INSERT_OVERWRITE_STRATEGY = InsertOverwriteStrategy.DELETE_INSERT
     SUPPORTS_MATERIALIZED_VIEWS = False
     SUPPORTS_MATERIALIZED_VIEW_SCHEMA = False
@@ -1919,7 +1920,12 @@ class EngineAdapter:
             return exp.Properties(expressions=properties)
         return None
 
-    def _truncate_comment(self, comment: str, length: t.Optional[int]) -> str:
+    def _truncate_comment(
+        self, comment: str, length: t.Optional[int], escape_backslash: t.Optional[bool] = None
+    ) -> str:
+        escape = escape_backslash if escape_backslash is not None else self.ESCAPE_COMMENT_BACKSLASH
+        if escape:
+            comment = comment.replace("\\", "\\\\")
         return comment[:length] if length else comment
 
     def _truncate_table_comment(self, comment: str) -> str:
