@@ -69,20 +69,17 @@ function useSQLMeshModelExtensions(
   const [isActionMode, setIsActionMode] = useState(false)
 
   const extensions = useMemo(() => {
-    const columns =
+    const columns = new Set(
       isNil(lineage) || isObjectEmpty(lineage)
-        ? new Set<string>(
-            Array.from(new Set(models.values())).flatMap(m =>
-              m.columns.map(c => c.name),
-            ),
+        ? Array.from(new Set(models.values())).flatMap(m =>
+            m.columns.map(c => c.name),
           )
-        : new Set(
-            Object.keys(lineage)
-              .flatMap(
-                modelName => models.get(modelName)?.columns.map(c => c.name),
-              )
-              .filter(Boolean) as string[],
-          )
+        : (Object.keys(lineage)
+            .flatMap(
+              modelName => models.get(modelName)?.columns.map(c => c.name),
+            )
+            .filter(Boolean) as string[]),
+    )
 
     function handleEventModelClick(event: MouseEvent): void {
       if (event.metaKey) {
@@ -106,24 +103,28 @@ function useSQLMeshModelExtensions(
       }
     }
 
-    return [
-      models.size > 0 && isActionMode && HoverTooltip(models),
-      events({
-        keydown: e => {
-          if (e.metaKey) {
-            setIsActionMode(true)
-          }
-        },
-        keyup: e => {
-          if (isFalse(e.metaKey)) {
-            setIsActionMode(false)
-          }
-        },
-      }),
-      isNotNil(handleModelClick) && events({ click: handleEventModelClick }),
-      isNotNil(handleModelColumn) && events({ click: handleEventlColumnClick }),
-      SQLMeshModel(models, columns, isActionMode, model),
-    ].filter(Boolean) as Extension[]
+    return isNil(model)
+      ? []
+      : ([
+          models.size > 0 && isActionMode && HoverTooltip(models),
+          events({
+            keydown: e => {
+              if (e.metaKey) {
+                setIsActionMode(true)
+              }
+            },
+            keyup: e => {
+              if (isFalse(e.metaKey)) {
+                setIsActionMode(false)
+              }
+            },
+          }),
+          isNotNil(handleModelClick) &&
+            events({ click: handleEventModelClick }),
+          isNotNil(handleModelColumn) &&
+            events({ click: handleEventlColumnClick }),
+          SQLMeshModel(models, columns, isActionMode, model),
+        ].filter(Boolean) as Extension[])
   }, [handleModelClick, handleModelColumn, model, models, files, isActionMode])
 
   return extensions
