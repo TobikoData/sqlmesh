@@ -2122,6 +2122,45 @@ def test_model_normalization():
     model = SqlModel.parse_raw(load_sql_based_model(expr).json())
     assert model.unique_key == [exp.column("A", quoted=True)]
 
+    model = create_sql_model(
+        "foo",
+        parse_one("SELECT * FROM bla"),
+        columns={"a": "int"},
+        kind=IncrementalByTimeRangeKind(time_column=exp.column("a"), dialect="snowflake"),
+        dialect="snowflake",
+        grain=[exp.to_column("id"), exp.to_column("ds")],
+        tags=["pii", "fact"],
+        clustered_by=exp.to_column("a"),
+    )
+    assert model.name == "foo"
+    assert model.time_column.column == exp.column("A", quoted=True)
+    assert model.columns_to_types["A"].sql(dialect="snowflake") == "INT"
+    assert model.tags == ["pii", "fact"]
+    assert model.clustered_by == ["A"]
+    assert model.depends_on == {'"BLA"'}
+
+    model = create_sql_model(
+        "foo",
+        parse_one("SELECT * FROM bla"),
+        kind=IncrementalByTimeRangeKind(time_column=exp.to_column("a")),
+        dialect="snowflake",
+        grain=[exp.to_column("id"), exp.to_column("ds")],
+        tags=["pii", "fact"],
+        clustered_by=[exp.column("a"), exp.column("b")],
+    )
+    assert model.clustered_by == ["A", "B"]
+
+    model = create_sql_model(
+        "foo",
+        parse_one("SELECT * FROM bla"),
+        kind=IncrementalByTimeRangeKind(time_column=exp.to_column("a")),
+        dialect="snowflake",
+        grain=[exp.to_column("id"), exp.to_column("ds")],
+        tags=["pii", "fact"],
+        clustered_by=["a", "b"],
+    )
+    assert model.clustered_by == ["A", "B"]
+
 
 def test_incremental_unmanaged_validation():
     model = create_sql_model(
