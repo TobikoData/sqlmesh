@@ -34,6 +34,7 @@ export default function EnvironmentChangesPreview({
       {() => (
         <>
           <span
+            title={headline}
             className={clsx(
               'transition-all flex min-w-[1rem] h-4 text-center mx-0.5 px-1 rounded-full text-[10px] font-black text-neutral-100 cursor-default border border-inherit',
               type === EnumPlanChangeType.Add &&

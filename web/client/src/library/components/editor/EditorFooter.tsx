@@ -50,13 +50,19 @@ export default function EditorFooter({ tab }: { tab: EditorTab }): JSX.Element {
   }
 
   return (
-    <div className="flex w-full items-center px-2 min-h-[2rem]">
+    <div
+      data-testid="editor-footer"
+      className="flex w-full items-center px-2 min-h-[2rem]"
+    >
       {tab.file.isRemote && (
         <EditorIndicator
           className="mr-2"
           text="Saved"
         >
-          <EditorIndicator.Light ok={isFalse(tab.file.isChanged)} />
+          <EditorIndicator.Light
+            title={isFalse(tab.file.isChanged) ? 'saved' : 'unsaved'}
+            ok={isFalse(tab.file.isChanged)}
+          />
         </EditorIndicator>
       )}
       {tab.file.isRemote && tab.file.isSQL && (

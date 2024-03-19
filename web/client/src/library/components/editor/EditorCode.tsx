@@ -220,12 +220,20 @@ function CodeEditorRemoteFile({
 }: {
   path: string
   keymaps?: KeyBinding[]
-  children: (options: { file: ModelFile; keymaps: KeyBinding[] }) => JSX.Element
+  children: (options: {
+    type: FileExtensions
+    keymaps: KeyBinding[]
+    content: string
+  }) => JSX.Element
 }): JSX.Element {
   const client = useQueryClient()
 
   const files = useStoreProject(s => s.files)
   const refreshFiles = useStoreProject(s => s.refreshFiles)
+
+  const file = files.get(path)
+
+  const [content, setContent] = useState('')
 
   const {
     refetch: getFileContent,
@@ -270,13 +278,16 @@ function CodeEditorRemoteFile({
     void getFileContent().then(({ data }) => {
       if (isNil(data)) return
 
-      const file = files.get(data.path)
+      let file = files.get(data.path)
 
       if (isNil(file)) {
-        files.set(path, new ModelFile(data))
+        file = new ModelFile(data)
+        files.set(path, file)
       } else {
         file.update(data)
       }
+
+      setContent(file.content)
 
       refreshFiles()
     })
@@ -286,7 +297,9 @@ function CodeEditorRemoteFile({
     }
   }, [path])
 
-  const file = files.get(path)
+  useEffect(() => {
+    setContent(file?.content ?? '')
+  }, [file?.fingerprint])
 
   return isFetching ? (
     <div className="flex justify-center items-center w-full h-full">
@@ -300,6 +313,6 @@ function CodeEditorRemoteFile({
       <h3 className="text-xl">File Not Found</h3>
     </div>
   ) : (
-    children({ file, keymaps: extensionKeymap })
+    children({ type: file?.extension, keymaps: extensionKeymap, content })
   )
 }

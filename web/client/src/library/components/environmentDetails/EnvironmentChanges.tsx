@@ -33,67 +33,72 @@ export default function EnvironmentChanges(): JSX.Element {
     (isFalse(planOverview.isLatest) || planOverview.isFetching) &&
     planOverviewTracker.hasUpdates
 
-  return shouldShow ? (
-    <span className="flex group items-center bg-neutral-5 dark:bg-neutral-20 px-1 py-1 rounded-full">
-      {(isTrue(planOverviewTracker.hasChanges) ||
-        isTrue(planOverviewTracker.hasBackfills)) && (
-        <ChangesToken className="mr-2">Changes</ChangesToken>
-      )}
-      {isArrayNotEmpty(planOverviewTracker.added) && (
-        <EnvironmentChangesPreview
-          headline="Added"
-          type={EnumPlanChangeType.Add}
-          changes={planOverviewTracker.added}
-          className="-mr-2 group-hover:mr-0 z-[5]"
-        />
-      )}
-      {isArrayNotEmpty(planOverviewTracker.direct) && (
-        <EnvironmentChangesPreview
-          headline="Directly Modified"
-          type={EnumPlanChangeType.Direct}
-          changes={planOverviewTracker.direct}
-          className="-mr-2 group-hover:mr-0 z-[4]"
-        />
-      )}
-      {isArrayNotEmpty(planOverviewTracker.indirect) && (
-        <EnvironmentChangesPreview
-          headline="Indirectly Modified"
-          type={EnumPlanChangeType.Indirect}
-          changes={planOverviewTracker.indirect}
-          className="-mr-2 group-hover:mr-0 z-[3]"
-        />
-      )}
-      {isArrayNotEmpty(planOverviewTracker.metadata) && (
-        <EnvironmentChangesPreview
-          headline="Metadata"
-          type={EnumPlanChangeType.Metadata}
-          changes={planOverviewTracker.metadata}
-          className="-mr-2 group-hover:mr-0 z-[2]"
-        />
-      )}
-      {isArrayNotEmpty(planOverviewTracker.removed) && (
-        <EnvironmentChangesPreview
-          headline="Removed"
-          type={EnumPlanChangeType.Remove}
-          changes={planOverviewTracker.removed}
-          className="-mr-2 group-hover:mr-0 z-[1]"
-        />
-      )}
-      {isArrayNotEmpty(planOverviewTracker.backfills) ? (
-        <EnvironmentChangesPreview
-          headline="Backfills"
-          type={EnumPlanChangeType.Default}
-          changes={planOverviewTracker.backfills}
-          className="ml-4 group-hover:ml-2 z-[6]"
-        />
+  return (
+    <div
+      data-testid="environment-changes"
+      className="py-1 rounded-full bg-neutral-5 dark:bg-neutral-20 text-neutral-500 dark:text-neutral-300"
+    >
+      {shouldShow ? (
+        <span className="flex group items-center px-1">
+          {(isTrue(planOverviewTracker.hasChanges) ||
+            isTrue(planOverviewTracker.hasBackfills)) && (
+            <ChangesToken className="mr-2">Changes</ChangesToken>
+          )}
+          {isArrayNotEmpty(planOverviewTracker.added) && (
+            <EnvironmentChangesPreview
+              headline="Added"
+              type={EnumPlanChangeType.Add}
+              changes={planOverviewTracker.added}
+              className="-mr-2 group-hover:mr-0 z-[5]"
+            />
+          )}
+          {isArrayNotEmpty(planOverviewTracker.direct) && (
+            <EnvironmentChangesPreview
+              headline="Directly Modified"
+              type={EnumPlanChangeType.Direct}
+              changes={planOverviewTracker.direct}
+              className="-mr-2 group-hover:mr-0 z-[4]"
+            />
+          )}
+          {isArrayNotEmpty(planOverviewTracker.indirect) && (
+            <EnvironmentChangesPreview
+              headline="Indirectly Modified"
+              type={EnumPlanChangeType.Indirect}
+              changes={planOverviewTracker.indirect}
+              className="-mr-2 group-hover:mr-0 z-[3]"
+            />
+          )}
+          {isArrayNotEmpty(planOverviewTracker.metadata) && (
+            <EnvironmentChangesPreview
+              headline="Metadata"
+              type={EnumPlanChangeType.Metadata}
+              changes={planOverviewTracker.metadata}
+              className="-mr-2 group-hover:mr-0 z-[2]"
+            />
+          )}
+          {isArrayNotEmpty(planOverviewTracker.removed) && (
+            <EnvironmentChangesPreview
+              headline="Removed"
+              type={EnumPlanChangeType.Remove}
+              changes={planOverviewTracker.removed}
+              className="-mr-2 group-hover:mr-0 z-[1]"
+            />
+          )}
+          {isArrayNotEmpty(planOverviewTracker.backfills) ? (
+            <EnvironmentChangesPreview
+              headline="Backfills"
+              type={EnumPlanChangeType.Default}
+              changes={planOverviewTracker.backfills}
+              className="ml-4 group-hover:ml-2 z-[6]"
+            />
+          ) : (
+            <div className="ml-2 group-hover:ml-2 z-[6]"></div>
+          )}
+        </span>
       ) : (
-        <div className="ml-2 group-hover:ml-2 z-[6]"></div>
+        <ChangesToken className="pr-2 pl-0.5">No Changes</ChangesToken>
       )}
-    </span>
-  ) : (
-    <ChangesToken className="pr-2 pl-0.5 py-1 rounded-full bg-neutral-5 dark:bg-neutral-20 text-neutral-500 dark:text-neutral-300">
-      No Changes
-    </ChangesToken>
+    </div>
   )
 }
 

@@ -37,6 +37,8 @@ export default function ReportErrors(): JSX.Element {
         setIsShow(false)
       }}
       className="flex"
+      title="Errors"
+      data-testid="report-errors"
     >
       {() => (
         <>

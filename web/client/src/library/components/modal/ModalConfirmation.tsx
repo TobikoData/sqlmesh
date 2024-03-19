@@ -35,7 +35,10 @@ function ModalConfirmation({
       onClose={onClose}
       afterLeave={afterLeave}
     >
-      <Dialog.Panel className="min-w-[20rem] max-w-[50rem] transform rounded-xl bg-theme text-left align-middle shadow-xl transition-all overflow-hidden">
+      <Dialog.Panel
+        data-testid="modal-confirmation"
+        className="min-w-[20rem] max-w-[50rem] transform rounded-xl bg-theme text-left align-middle shadow-xl transition-all overflow-hidden"
+      >
         {children}
       </Dialog.Panel>
     </Modal>

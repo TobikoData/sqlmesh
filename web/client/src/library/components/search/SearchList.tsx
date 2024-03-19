@@ -138,6 +138,7 @@ export default function SearchList<
 
   return (
     <div
+      title="Search List"
       className={clsx(
         'px-2 py-1 relative',
         disabled && 'opacity-50 cursor-not-allowed',
@@ -294,6 +295,7 @@ function SearchResult<T extends Record<string, any> = Record<string, any>>({
 }): JSX.Element {
   return (
     <div
+      title="Search List Results"
       onClick={onClick}
       className={clsx(
         'font-normal w-full overflow-hidden whitespace-nowrap overflow-ellipsis px-2',

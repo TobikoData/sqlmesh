@@ -35,7 +35,7 @@ setup(
         "astor",
         "click",
         "croniter",
-        "duckdb",
+        "duckdb==0.9.2",
         "dateparser",
         "hyperscript",
         "ipywidgets",
