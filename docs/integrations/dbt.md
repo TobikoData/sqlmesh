@@ -223,7 +223,7 @@ Finally, replace the contents of `config.py` with:
 >
 > config = sqlmesh_config(
 >     Path(__file__).parent,
->     scheduler=AirflowSchedulerConfig(
+>     default_scheduler=AirflowSchedulerConfig(
 >         airflow_url="https://<Airflow Webserver Host>:<Airflow Webserver Port>/",
 >         username="<Airflow Username>",
 >         password="<Airflow Password>",
