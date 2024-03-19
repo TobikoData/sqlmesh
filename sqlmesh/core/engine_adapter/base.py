@@ -1015,12 +1015,15 @@ class EngineAdapter:
         if cls.ESCAPE_JSON:
             if isinstance(value, str):
                 return double_escape(value)
-            return value.transform(
-                lambda e: (
-                    exp.Literal.string(double_escape(e.name))
-                    if isinstance(e, exp.Literal) and e.args["is_string"]
-                    else e
-                )
+            return t.cast(
+                exp.Query,
+                value.transform(
+                    lambda e: (
+                        exp.Literal.string(double_escape(e.name))
+                        if isinstance(e, exp.Literal) and e.args["is_string"]
+                        else e
+                    )
+                ),
             )
         return value
 

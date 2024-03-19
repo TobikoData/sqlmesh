@@ -129,20 +129,15 @@ class ModelTest(unittest.TestCase):
         expected = expected.replace({None: np.nan})
 
         def _to_hashable(x: t.Any) -> t.Any:
-            return tuple(x) if isinstance(x, list) else x
+            if isinstance(x, (list, np.ndarray)):
+                return tuple(x)
+            return str(x) if not isinstance(x, t.Hashable) else x
 
         if sort:
-            actual = (
-                actual.apply(_to_hashable)
-                .sort_values(by=actual.columns.to_list())
-                .reset_index(drop=True)
-            )
-            expected = (
-                expected.apply(_to_hashable)
-                .sort_values(by=expected.columns.to_list())
-                .reset_index(drop=True)
-            )
-
+            actual = actual.apply(lambda col: col.map(_to_hashable))
+            actual = actual.sort_values(by=actual.columns.to_list()).reset_index(drop=True)
+            expected = expected.apply(lambda col: col.map(_to_hashable))
+            expected = expected.sort_values(by=expected.columns.to_list()).reset_index(drop=True)
         try:
             pd.testing.assert_frame_equal(
                 expected,

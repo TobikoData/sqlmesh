@@ -1,10 +1,14 @@
 import typing as t
+from unittest.mock import MagicMock
 
 import pytest
 from pytest_mock.plugin import MockerFixture
 from sqlglot import exp, parse_one
 
+import sqlmesh.core.dialect as d
 from sqlmesh.core.engine_adapter import TrinoEngineAdapter
+from sqlmesh.core.model import load_sql_based_model
+from sqlmesh.core.model.definition import SqlModel
 from tests.core.engine_adapter import to_sql_calls
 
 pytestmark = [pytest.mark.engine, pytest.mark.trino]
@@ -53,6 +57,36 @@ def test_get_catalog_type(trino_mocked_engine_adapter: TrinoEngineAdapter, mocke
         return_value="system_iceberg",
     )
     assert adapter.current_catalog_type == "iceberg"
+
+
+def test_get_catalog_type_cached(
+    trino_mocked_engine_adapter: TrinoEngineAdapter, mocker: MockerFixture
+):
+    adapter = trino_mocked_engine_adapter
+
+    mocker.stop(t.cast(MagicMock, adapter.get_catalog_type))  # to make mypy happy
+
+    def mock_fetchone(sql):
+        if "iceberg" in sql:
+            return ("iceberg",)
+        return ("hive",)
+
+    mocker.patch(
+        "sqlmesh.core.engine_adapter.trino.TrinoEngineAdapter.fetchone", side_effect=mock_fetchone
+    )
+
+    fetchone_mock = t.cast(MagicMock, adapter.fetchone)  # to make mypy happy
+
+    adapter.get_catalog_type("datalake_iceberg")
+    adapter.get_catalog_type("datalake_iceberg")
+    adapter.get_catalog_type("datalake_iceberg")
+    assert fetchone_mock.call_count == 1
+
+    adapter.get_catalog_type("datalake")
+    assert fetchone_mock.call_count == 2
+
+    adapter.get_catalog_type("datalake_iceberg")
+    assert fetchone_mock.call_count == 2
 
 
 def test_partitioned_by_hive(
@@ -117,26 +151,36 @@ def test_partitioned_by_iceberg_transforms(
         return_value="datalake_iceberg",
     )
 
-    columns_to_types = {
-        "cola": exp.DataType.build("INT"),
-        "colb": exp.DataType.build("TEXT"),
-    }
+    expressions = d.parse(
+        f"""
+        MODEL (
+            name test_table,
+            partitioned_by (day(cola), truncate(colb, 8), colc),
+            kind INCREMENTAL_BY_TIME_RANGE(
+                time_column cola,
+            ),
+        );
+
+        SELECT 1::timestamp AS cola, 2::varchar as colb, 'foo' as colc;
+    """
+    )
+    model: SqlModel = t.cast(SqlModel, load_sql_based_model(expressions))
 
     adapter.create_table(
-        "test_table",
-        columns_to_types,
-        partitioned_by=[exp.to_column("day(cola)"), exp.to_column("truncate(colb, 8)")],
+        table_name=model.view_name,
+        columns_to_types=model.columns_to_types_or_raise,
+        partitioned_by=model.partitioned_by,
     )
 
     adapter.ctas(
-        "test_table",
-        parse_one("select 1"),  # type: ignore
-        partitioned_by=[exp.to_column("day(cola)"), exp.to_column("truncate(colb, 8)")],
+        table_name=model.view_name,
+        query_or_df=t.cast(exp.Query, model.query),
+        partitioned_by=model.partitioned_by,
     )
 
     assert to_sql_calls(adapter) == [
-        """CREATE TABLE IF NOT EXISTS "test_table" ("cola" INTEGER, "colb" VARCHAR) WITH (PARTITIONING=ARRAY['day(cola)', 'truncate(colb, 8)'])""",
-        """CREATE TABLE IF NOT EXISTS "test_table" WITH (PARTITIONING=ARRAY['day(cola)', 'truncate(colb, 8)']) AS SELECT 1""",
+        """CREATE TABLE IF NOT EXISTS "test_table" ("cola" TIMESTAMP, "colb" VARCHAR, "colc" VARCHAR) WITH (PARTITIONING=ARRAY['DAY("cola")', 'TRUNCATE("colb", 8)', '"colc"'])""",
+        """CREATE TABLE IF NOT EXISTS "test_table" WITH (PARTITIONING=ARRAY['DAY("cola")', 'TRUNCATE("colb", 8)', '"colc"']) AS SELECT CAST(1 AS TIMESTAMP) AS "cola", CAST(2 AS VARCHAR) AS "colb", \'foo\' AS "colc\"""",
     ]
 
 

@@ -111,7 +111,7 @@ class MetricMeta(PydanticModel, frozen=True):
         metric_refs = {}
         agg_or_ref = False
 
-        for node, *_ in self.expression.walk():
+        for node in self.expression.walk():
             if isinstance(node, exp.Alias):
                 _raise_metric_config_error(
                     f"Alias found for metric '{self.name}' which is not allowed", self._path
@@ -157,12 +157,15 @@ class Metric(MetricMeta, frozen=True):
         This method removes catalog and schema information from columns.
         """
         return {
-            t.cast(exp.Expression, agg.parent).transform(
-                lambda node: (
-                    exp.column(node.this, table=remove_namespace(node))
-                    if isinstance(node, exp.Column) and node.table
-                    else node
-                )
+            t.cast(
+                exp.AggFunc,
+                t.cast(exp.Expression, agg.parent).transform(
+                    lambda node: (
+                        exp.column(node.this, table=remove_namespace(node))
+                        if isinstance(node, exp.Column) and node.table
+                        else node
+                    )
+                ),
             ): _get_measure_and_dim_tables(agg)
             for agg in self.expanded.find_all(exp.AggFunc)
         }
@@ -207,7 +210,7 @@ def _get_measure_and_dim_tables(expression: exp.Expression) -> MeasureAndDimTabl
             return is_measure(parent)
         return False
 
-    for node, _, key in expression.walk():
+    for node in expression.walk():
         if isinstance(node, exp.Column) and node.table:
             table = ".".join(p.sql() for p in node.parts[:-1])
             tables[table] = True

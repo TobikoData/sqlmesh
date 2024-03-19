@@ -112,7 +112,7 @@ class ModelKindMixin:
     @property
     def only_execution_time(self) -> bool:
         """Whether or not this model only cares about execution time to render."""
-        return self.is_view or self.is_full or self.is_incremental_unmanaged or self.is_scd_type_2
+        return self.is_view or self.is_full or self.is_scd_type_2
 
 
 class ModelKindName(str, ModelKindMixin, Enum):
@@ -301,7 +301,7 @@ class IncrementalByUniqueKeyKind(_Incremental):
         if not v:
             return v
 
-        return v.transform(replace_table_references)
+        return t.cast(exp.When, v.transform(replace_table_references))
 
 
 class IncrementalUnmanagedKind(_ModelKind):
