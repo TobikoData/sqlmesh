@@ -221,6 +221,9 @@ jobs:
                 --header "Circle-Token: $ENTERPRISE_CIRCLE_API_TOKEN" \
                 --header "content-type: application/json" \
                 --data '{"branch":"trigger_workflow_on_post","parameters":{"run_main_pr":false, "run_core_commit":true, "sqlmesh_version":"$CIRCLE_BRANCH"}}'
+        - run:
+            name: Announce params
+            command: echo "$CIRCLE_BRANCH"
 
 workflows:
   main_pr:
