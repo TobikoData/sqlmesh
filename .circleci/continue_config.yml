@@ -214,15 +214,6 @@ jobs:
       resource_class: small
       steps:
         - run:
-            name: Inspect environment variables
-            command: |
-              echo "PR_NUMBER: $CIRCLE_PR_NUMBER"
-              echo "PR_REPONAME: $CIRCLE_PR_REPONAME"
-              echo "PR_USERNAME: $CIRCLE_PR_USERNAME"
-              echo "USERNAME: $CIRCLE_USERNAME"
-              echo "PULL REQUEST: $CIRCLE_PULL_REQUEST"
-              echo "SHA: $CIRCLE_SHA1"
-        - run:
             name: Trigger enterprise unit tests
             command: |
               curl --request POST \
