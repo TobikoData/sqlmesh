@@ -166,7 +166,7 @@ def test_values_to_sql(adapter: t.Callable, mocker: MockerFixture):
     df = pd.DataFrame({"a": [1, 2, 3], "b": [4, 5, 6]})
     result = adapter._values_to_sql(
         values=list(df.itertuples(index=False, name=None)),
-        columns_to_types={"a": "int", "b": "int"},
+        columns_to_types={"a": exp.DataType.build("int"), "b": exp.DataType.build("int")},
         batch_start=0,
         batch_end=2,
     )

@@ -667,15 +667,23 @@ test_foo:
 
 
 def test_nested_data_types() -> None:
+    raw = _create_model(
+        "SELECT array::INT[], struct::STRUCT(x INT[], y VARCHAR, z INT, w STRUCT(a INT)) FROM sushi.unknown",
+        meta="MODEL (name sushi.raw, kind FULL)",
+        default_catalog="memory",
+    )
+    context = Context(config=Config(model_defaults=ModelDefaultsConfig(dialect="duckdb")))
+    context.upsert_model(raw)
+
     result = _create_test(
         body=load_yaml(
             """
 test_foo:
   model: sushi.foo
   inputs:
-    raw:
+    sushi.raw:
       - array: [1, 2, 3]
-        # struct: {'x': [1, 2, 3], 'y': 'foo', 'z': 1}
+        struct: {'x': [1, 2, 3], 'y': 'foo', 'z': 1, 'w': {'a': 5}}
       - array:
         - 2
         - 3
@@ -684,13 +692,13 @@ test_foo:
     query:
       - array: [0, 4, 1]
       - array: [1, 2, 3]
-        # struct: {'x': [1, 2, 3], 'y': 'foo', 'z': 1}
+        struct: {'x': [1, 2, 3], 'y': 'foo', 'z': 1, 'w': {'a': 5}}
       - array: [2, 3]
             """
         ),
         test_name="test_foo",
-        model=_create_model("SELECT array/*, struct*/ FROM raw"),
-        context=Context(config=Config(model_defaults=ModelDefaultsConfig(dialect="duckdb"))),
+        model=_create_model("SELECT array, struct FROM sushi.raw", default_catalog="memory"),
+        context=context,
     ).run()
 
     _check_successful_or_raise(result)

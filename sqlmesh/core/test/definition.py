@@ -82,9 +82,7 @@ class ModelTest(unittest.TestCase):
             rows = values["rows"]
             if not columns_to_types and rows:
                 for i, v in rows[0].items():
-                    # TODO: infer the correct type depending on the dialect
-                    v_ast = exp.convert(v)
-                    v_type = annotate_types(v_ast).type or type(v).__name__
+                    v_type = annotate_types(exp.convert(v)).type or type(v).__name__
                     columns_to_types[i] = exp.maybe_parse(
                         v_type, into=exp.DataType, dialect=self.dialect
                     )
