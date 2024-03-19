@@ -317,6 +317,11 @@ def test_ast_correctness(macro_evaluator):
             "TRUE",
             {},
         ),
+        (
+            """select * from x ORDER BY @EACH(@x, c -> c)""",
+            "SELECT * FROM x ORDER BY a, b",
+            {"x": [exp.column("a"), exp.column("b")]},
+        ),
     ],
 )
 def test_macro_functions(macro_evaluator, assert_exp_eq, sql, expected, args):
