@@ -118,12 +118,12 @@ class ModelMeta(_Node):
     @field_validator("tags", mode="before")
     @field_validator_v1_args
     def _value_or_tuple_validator(cls, v: t.Any, values: t.Dict[str, t.Any]) -> t.Any:
-        return cls._validate_value_or_tuple(v, values)
+        return ensure_list(cls._validate_value_or_tuple(v, values))
 
     @field_validator("clustered_by", mode="before")
     @field_validator_v1_args
     def _normalized_value_or_tuple_validator(cls, v: t.Any, values: t.Dict[str, t.Any]) -> t.Any:
-        return cls._validate_value_or_tuple(v, values, normalize=True)
+        return ensure_list(cls._validate_value_or_tuple(v, values, normalize=True))
 
     @classmethod
     def _validate_value_or_tuple(
@@ -135,10 +135,12 @@ class ModelMeta(_Node):
         if isinstance(v, (exp.Tuple, exp.Array)):
             return [_normalize(e).name for e in v.expressions]
         if isinstance(v, exp.Expression):
-            return [_normalize(v).name]
+            return _normalize(v).name
         if isinstance(v, str):
             value = _normalize(v)
             return value.name if isinstance(value, exp.Expression) else value
+        if isinstance(v, (list, tuple)):
+            return [cls._validate_value_or_tuple(elm, values, normalize=normalize) for elm in v]
 
         return v
 
