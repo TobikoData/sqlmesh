@@ -11,6 +11,7 @@ from sqlmesh.core.config import (
     GatewayConfig,
     ModelDefaultsConfig,
     PlanConfig,
+    PostgresConnectionConfig,
     SparkConnectionConfig,
 )
 from sqlmesh.core.notification_target import (
@@ -149,5 +150,22 @@ environment_catalog_mapping_config = Config(
     environment_catalog_mapping={
         "^prod$": "prod_catalog",
         ".*": "dev_catalog",
+    },
+)
+
+postgresql_config = Config(
+    # default_connection=DuckDBConnectionConfig(database=f"{DATA_DIR}/local.duckdb"),
+    default_connection=DuckDBConnectionConfig(database="gclouddata.duckdb"),
+    model_defaults=ModelDefaultsConfig(dialect="duckdb"),
+    gateways={
+        "my_gateway": GatewayConfig(
+            state_connection=PostgresConnectionConfig(
+                host="35.222.243.76",
+                port=5432,
+                user="unique-glider",
+                password="1d1dWu[NRYV5XUY3",
+                database="sushi-demo",
+            ),
+        ),
     },
 )
