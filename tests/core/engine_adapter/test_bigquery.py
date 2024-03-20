@@ -606,6 +606,13 @@ def test_comments(make_mocked_engine_adapter: t.Callable, mocker: MockerFixture)
         column_descriptions={"a": long_column_comment},
     )
 
+    adapter.create_table(
+        "test_table",
+        {"a": exp.DataType.build("INT"), "b": exp.DataType.build("INT")},
+        table_description="\\",
+        column_descriptions={"a": "\\"},
+    )
+
     adapter.ctas(
         "test_table",
         parse_one("SELECT a, b FROM source_table"),
@@ -628,6 +635,7 @@ def test_comments(make_mocked_engine_adapter: t.Callable, mocker: MockerFixture)
     sql_calls = _to_sql_calls(execute_mock)
     assert sql_calls == [
         f"CREATE TABLE IF NOT EXISTS `test_table` (`a` INT64 OPTIONS (description='{truncated_column_comment}'), `b` INT64) OPTIONS (description='{truncated_table_comment}')",
+        "CREATE TABLE IF NOT EXISTS `test_table` (`a` INT64 OPTIONS (description='\\\\'), `b` INT64) OPTIONS (description='\\\\')",
         f"CREATE TABLE IF NOT EXISTS `test_table` (`a` INT64 OPTIONS (description='{truncated_column_comment}'), `b` INT64) OPTIONS (description='{truncated_table_comment}') AS SELECT `a`, `b` FROM `source_table`",
         f"CREATE OR REPLACE VIEW `test_table` OPTIONS (description='{truncated_table_comment}') AS SELECT `a`, `b` FROM `source_table`",
         f"ALTER TABLE `test_table` SET OPTIONS(description = '{truncated_table_comment}')",
