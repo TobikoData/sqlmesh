@@ -198,7 +198,7 @@ def test_add_interval(snapshot: Snapshot, make_snapshot):
     ]
 
 
-def test_add_interval_dev(snapshot: Snapshot):
+def test_add_interval_dev(snapshot: Snapshot, make_snapshot):
     snapshot.version = "existing_version"
     snapshot.change_category = SnapshotChangeCategory.FORWARD_ONLY
 
@@ -208,6 +208,18 @@ def test_add_interval_dev(snapshot: Snapshot):
     snapshot.add_interval("2020-01-02", "2020-01-02", is_dev=True)
     assert snapshot.intervals == [(to_timestamp("2020-01-01"), to_timestamp("2020-01-02"))]
     assert snapshot.dev_intervals == [(to_timestamp("2020-01-02"), to_timestamp("2020-01-03"))]
+
+    new_snapshot = make_snapshot(snapshot.model)
+    new_snapshot.merge_intervals(snapshot)
+    assert new_snapshot.intervals == [(to_timestamp("2020-01-01"), to_timestamp("2020-01-02"))]
+    assert new_snapshot.dev_intervals == []
+
+    new_snapshot = make_snapshot(snapshot.model)
+    new_snapshot.previous_versions = snapshot.all_versions
+    new_snapshot.migrated = True
+    new_snapshot.merge_intervals(snapshot)
+    assert new_snapshot.intervals == [(to_timestamp("2020-01-01"), to_timestamp("2020-01-02"))]
+    assert new_snapshot.dev_intervals == [(to_timestamp("2020-01-02"), to_timestamp("2020-01-03"))]
 
 
 def test_add_interval_partial(snapshot: Snapshot, make_snapshot):
