@@ -1,9 +1,4 @@
-import {
-  PATH_SEPARATOR,
-  isFalse,
-  isNotNil,
-  isStringEmptyOrNil,
-} from '@utils/index'
+import { isFalse } from '@utils/index'
 import type { Directory, File } from '../api/client'
 import { type InitialArtifact, ModelArtifact } from './artifact'
 import { ModelFile } from './file'
@@ -197,41 +192,5 @@ export class ModelDirectory extends ModelArtifact<InitialDirectory> {
     files.forEach(f => {
       this.addFile(new ModelFile(f, this))
     })
-  }
-
-  static findArtifactByPath(
-    directory: ModelDirectory,
-    path: string,
-  ): ModelArtifact | undefined {
-    return directory.path === path
-      ? directory
-      : directory.allArtifacts.find(artifact => artifact.path === path)
-  }
-
-  static findParentByPath(
-    directory: ModelDirectory,
-    path: string,
-  ): ModelDirectory {
-    const directories = directory.allDirectories
-    const chain = path.split(PATH_SEPARATOR).reduce((acc: string[], path) => {
-      if (acc.length === 0) return [path]
-
-      if (isStringEmptyOrNil(path)) return acc
-
-      const last = acc[acc.length - 1] ?? ''
-
-      acc.push(`${last}${PATH_SEPARATOR}${path}`)
-
-      return acc
-    }, [])
-
-    while (chain.length > 0) {
-      const path = chain.pop()
-      const parent = directories.find(directory => directory.path === path)
-
-      if (isNotNil(parent)) return parent
-    }
-
-    return directory
   }
 }
