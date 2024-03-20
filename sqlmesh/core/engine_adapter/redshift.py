@@ -138,13 +138,12 @@ class RedshiftEngineAdapter(
             )
 
             if plan:
-                select = exp.Select().from_(statement.expression.subquery("_subquery"))
-                statement.expression.replace(select)
+                columns_to_types_from_plan = {}
 
                 for target in plan["targetlist"]:  # type: ignore
                     if target["name"] == "TARGETENTRY":
                         resdom = target["resdom"]
-                        resname = resdom["resname"]
+                        resname: str = resdom["resname"]
                         if resname == "<>":
                             # A synthetic column added by Redshift to compute a window function.
                             continue
@@ -170,17 +169,29 @@ class RedshiftEngineAdapter(
                         else:
                             data_type = REDSHIFT_PLAN_TYPE_MAPPINGS.get(restype)
 
-                        if data_type:
-                            select.select(
-                                exp.cast(
-                                    exp.null(),
-                                    data_type,
-                                    dialect=self.dialect,
-                                ).as_(resname),
-                                copy=False,
+                        if not data_type:
+                            raise SQLMeshError(
+                                f"Unknown data type '{restype}' for column '{resname}'."
                             )
-                        else:
-                            select.select(resname, copy=False)
+
+                        columns_to_types_from_plan[resname] = exp.DataType.build(
+                            data_type, dialect=self.dialect
+                        )
+
+                assert not isinstance(table_name_or_schema, exp.Schema)
+                schema = self._build_schema_exp(
+                    exp.to_table(table_name_or_schema),
+                    columns_to_types_from_plan,
+                )
+                statement = super()._build_create_table_exp(
+                    schema,
+                    None,
+                    exists=exists,
+                    replace=replace,
+                    columns_to_types=columns_to_types_from_plan,
+                    table_description=table_description,
+                    **kwargs,
+                )
 
         return statement
 

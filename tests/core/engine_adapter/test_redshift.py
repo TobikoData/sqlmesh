@@ -82,14 +82,6 @@ def test_create_table_from_query_exists_no_if_not_exists(
                         "restypmod": "- 1",
                     },
                 },
-                {
-                    "name": "TARGETENTRY",
-                    "resdom": {
-                        "resname": "f",
-                        "restype": "0000",  # Unknown type
-                        "restypmod": "- 1",
-                    },
-                },
             ]
         },
     )
@@ -104,9 +96,7 @@ def test_create_table_from_query_exists_no_if_not_exists(
 
     assert to_sql_calls(adapter) == [
         'EXPLAIN VERBOSE CREATE TABLE "test_table" AS SELECT "a", "b", "x" + 1 AS "c", "d" AS "d", "e", "f" FROM (SELECT * FROM "table")',
-        'CREATE TABLE "test_table" AS SELECT CAST(NULL AS VARCHAR(MAX)) AS "a", CAST(NULL AS VARCHAR(60)) AS "b", CAST(NULL '
-        'AS VARCHAR(MAX)) AS "c", CAST(NULL AS VARCHAR(MAX)) AS "d", CAST(NULL AS TIMESTAMP) AS "e", "f" FROM (SELECT "a", "b", "x" + 1 '
-        'AS "c", "d" AS "d", "e", "f" FROM (SELECT * FROM "table" WHERE FALSE LIMIT 0) WHERE "d" > 0 AND FALSE LIMIT 0) AS "_subquery"',
+        'CREATE TABLE "test_table" ("a" VARCHAR(MAX), "b" VARCHAR(60), "c" VARCHAR(MAX), "d" VARCHAR(MAX), "e" TIMESTAMP)',
     ]
 
 
