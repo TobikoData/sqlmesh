@@ -32,3 +32,13 @@ def test_pull_request_synchronized_info(make_event_from_fixture, make_pull_reque
     assert pull_request_info.repo == "Hello-World"
     assert pull_request_info.pr_number == 2
     assert pull_request_info.full_repo_path == "Codertocat/Hello-World"
+
+
+def test_pull_request_synchronized_enterprise(make_event_from_fixture, make_pull_request_info):
+    pull_request_info = make_pull_request_info(
+        make_event_from_fixture("tests/fixtures/github/pull_request_synchronized_enterprise.json")
+    )
+    assert pull_request_info.owner == "org"
+    assert pull_request_info.repo == "repo"
+    assert pull_request_info.pr_number == 3
+    assert pull_request_info.full_repo_path == "org/repo"
