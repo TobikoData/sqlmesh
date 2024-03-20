@@ -130,9 +130,7 @@ class RedshiftEngineAdapter(
                 select_or_union.set("limit", None)
                 select_or_union.set("where", None)
 
-            temp_view_name = exp.to_table(table_name_or_schema)
-            temp_view_name.this.set("this", f"#sqlmesh_{random_id()}")
-
+            temp_view_name = exp.table_(f"#sqlmesh__{random_id()}")
             self.create_view(temp_view_name, select_statement, replace=False)
             columns_to_types_from_view = self.columns(temp_view_name)
 
