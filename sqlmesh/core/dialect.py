@@ -225,7 +225,7 @@ def _parse_macro(self: Parser, keyword_macro: str = "") -> t.Optional[exp.Expres
     return self.expression(MacroVar, this=field.this)
 
 
-KEYWORD_MACROS = {"WITH", "JOIN", "WHERE", "GROUP_BY", "HAVING", "ORDER_BY"}
+KEYWORD_MACROS = {"WITH", "JOIN", "WHERE", "GROUP_BY", "HAVING", "ORDER_BY", "LIMIT"}
 
 
 def _parse_matching_macro(self: Parser, name: str) -> t.Optional[exp.Expression]:
@@ -251,6 +251,8 @@ def _parse_body_macro(self: Parser) -> t.Tuple[str, t.Optional[exp.Expression]]:
         return ("having", self._parse_having())
     if name == "ORDER_BY":
         return ("order", self._parse_order())
+    if name == "LIMIT":
+        return ("limit", self._parse_limit())
     return ("", None)
 
 
@@ -320,6 +322,20 @@ def _parse_order(
         return self.__parse_order(this, skip_order_token=skip_order_token)  # type: ignore
 
     macro.this.append("expressions", self.__parse_order(this, skip_order_token=True))  # type: ignore
+    return macro
+
+
+def _parse_limit(
+    self: Parser,
+    this: t.Optional[exp.Expression] = None,
+    top: bool = False,
+    skip_limit_token: bool = False,
+) -> t.Optional[exp.Expression]:
+    macro = _parse_matching_macro(self, "TOP" if top else "LIMIT")
+    if not macro:
+        return self.__parse_limit(this, top=top, skip_limit_token=skip_limit_token)  # type: ignore
+
+    macro.this.append("expressions", self.__parse_limit(this, top=top, skip_limit_token=True))  # type: ignore
     return macro
 
 
@@ -762,6 +778,7 @@ def extend_sqlglot() -> None:
     _override(Parser, _parse_group)
     _override(Parser, _parse_with)
     _override(Parser, _parse_having)
+    _override(Parser, _parse_limit)
     _override(Parser, _parse_lambda)
     _override(Parser, _parse_types)
     _override(Parser, _parse_if)

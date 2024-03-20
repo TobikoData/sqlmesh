@@ -526,6 +526,7 @@ SQLMesh's macro system has six operators that correspond to different clauses in
 - `@GROUP_BY`: grouping `GROUP BY` clause
 - `@HAVING`: group by filtering `HAVING` clause
 - `@ORDER_BY`: ordering `ORDER BY` clause
+- `@LIMIT`: limiting `LIMIT` clause
 
 Each of these operators is used to dynamically add the code for its corresponding clause to a model's SQL query.
 
@@ -744,6 +745,22 @@ renders to
 SELECT *
 FROM all_cities
 ORDER BY city_pop
+```
+
+#### @LIMIT operator
+
+```sql linenums="1"
+SELECT *
+FROM all_cities
+@LIMIT(True) 10
+```
+
+renders to
+
+```sql linenums="1"
+SELECT *
+FROM all_cities
+LIMIT 10
 ```
 
 ## User-defined macro functions
