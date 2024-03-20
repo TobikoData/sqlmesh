@@ -546,10 +546,28 @@ def _optional_expression(
 ) -> t.Optional[exp.Expression]:
     """Inserts expression when the condition is True
 
+    The following examples express the usage of this function in the context of the macros which wrap it.
+
+    Examples:
+        >>> from sqlglot import parse_one
+        >>> from sqlmesh.core.macros import MacroEvaluator
+        >>> sql = "@WITH(True) all_cities as (select * from city) select all_cities"
+        >>> MacroEvaluator().transform(parse_one(sql)).sql()
+        'WITH all_cities AS (SELECT * FROM city) SELECT all_cities'
+        >>> sql = "select * from city left outer @JOIN(True) country on city.country = country.name"
+        >>> MacroEvaluator().transform(parse_one(sql)).sql()
+        'SELECT * FROM city LEFT OUTER JOIN country ON city.country = country.name'
+        >>> sql = "select * from city @GROUP_BY(True) country, population"
+        >>> MacroEvaluator().transform(parse_one(sql)).sql()
+        'SELECT * FROM city GROUP BY country, population'
+        >>> sql = "select * from city group by country @HAVING(True) population > 100 and country = 'Mexico'"
+        >>> MacroEvaluator().transform(parse_one(sql)).sql()
+        "SELECT * FROM city GROUP BY country HAVING population > 100 AND country = 'Mexico'"
+
     Args:
         evaluator: MacroEvaluator that invoked the macro
         condition: Condition expression
-        expression: With expression
+        expression: SQL expression
     Returns:
         Expression if the conditional is True; otherwise None
     """
