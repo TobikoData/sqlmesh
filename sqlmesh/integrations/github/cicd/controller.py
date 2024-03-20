@@ -67,7 +67,7 @@ class PullRequestInfo(PydanticModel):
 
     @classmethod
     def create_from_pull_request_url(cls, pull_request_url: str) -> PullRequestInfo:
-        _, _, _, _, owner, repo, _, pr_number = pull_request_url.split("/")
+        owner, repo, _, pr_number = pull_request_url.split("/")[-4:]
         return cls(
             owner=owner,
             repo=repo,
