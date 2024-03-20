@@ -1097,6 +1097,8 @@ class EngineAdapterStateSync(CommonStateSyncMixin, StateSync):
                 logger.exception("Could not compute fingerprint for %s", snapshot.snapshot_id)
                 return
 
+            # Reset the effective_from date for the new snapshot to avoid unexpected backfills.
+            new_snapshot.effective_from = None
             new_snapshot.previous_versions = snapshot.all_versions
             new_snapshot.migrated = True
             if not new_snapshot.temp_version:

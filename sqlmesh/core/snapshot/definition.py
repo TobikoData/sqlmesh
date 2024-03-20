@@ -736,7 +736,8 @@ class Snapshot(PydanticModel, SnapshotInfoMixin):
         previous_ids = {s.snapshot_id(self.name) for s in self.previous_versions}
         if self.identifier == other.identifier or (
             # Indirect Non-Breaking snapshots share the dev table with its previous version.
-            self.is_indirect_non_breaking
+            # The same applies to migrated snapshots.
+            (self.is_indirect_non_breaking or self.migrated)
             and other.snapshot_id in previous_ids
         ):
             for start, end in other.dev_intervals:
