@@ -126,10 +126,9 @@ class RedshiftEngineAdapter(
             # this checks the explain plain from redshift and tries to detect when these optimizer
             # bugs occur and force a cast
             explain_statement = statement.copy()
-            for select in explain_statement.find_all(exp.Select):
-                if select.args.get("from"):
-                    select.set("limit", None)
-                    select.set("where", None)
+            for select_or_union in explain_statement.find_all(exp.Select, exp.Union):
+                select_or_union.set("limit", None)
+                select_or_union.set("where", None)
 
             explain_statement_sql = explain_statement.sql(
                 dialect=self.dialect, identify=True, unsupported_level=ErrorLevel.IGNORE, copy=False
