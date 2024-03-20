@@ -28,7 +28,7 @@ import {
 import TabList from '@components/tab/Tab'
 import { getTableDataFromArrowStreamResult } from '@components/table/help'
 import Spinner from '@components/logo/Spinner'
-import { ModelColumns } from '@components/graph/Graph'
+import ModelColumns from '@components/graph/ModelColumns'
 
 const DAY = 24 * 60 * 60 * 1000
 const LIMIT = 1000
@@ -140,10 +140,9 @@ function InspectorModel({
             className="text-xs w-full h-full ring-white ring-opacity-60 ring-offset-2 ring-offset-blue-400 focus:outline-none focus:ring-2 px-2"
           >
             <ModelColumns
-              className="max-h-[15rem]"
-              nodeId={model.name}
+              nodeId={model.fqn}
               columns={model.columns}
-              disabled={model.isModelPython}
+              disabled={isFalse(model.isModelSQL)}
               withHandles={false}
               withSource={false}
               withDescription={true}

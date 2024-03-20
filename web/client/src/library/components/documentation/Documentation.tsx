@@ -1,4 +1,4 @@
-import React, { useEffect } from 'react'
+import React from 'react'
 import { Disclosure } from '@headlessui/react'
 import { MinusCircleIcon, PlusCircleIcon } from '@heroicons/react/24/solid'
 import {
@@ -12,9 +12,7 @@ import {
 } from '@utils/index'
 import clsx from 'clsx'
 import { type ModelSQLMeshModel } from '@models/sqlmesh-model'
-import { ModelColumns } from '@components/graph/Graph'
-import { useApiModel } from '@api/index'
-import { useStoreContext } from '@context/context'
+import ModelColumns from '@components/graph/ModelColumns'
 
 const Documentation = function Documentation({
   model,
@@ -31,26 +29,8 @@ const Documentation = function Documentation({
   withDescription?: boolean
   withColumns?: boolean
 }): JSX.Element {
-  const setLastSelectedModel = useStoreContext(s => s.setLastSelectedModel)
-
-  const { refetch: getModel, cancel: cancelRequestModel } = useApiModel(
-    model.name,
-  )
-
-  useEffect(() => {
-    void getModel().then(({ data }) => {
-      model.update(data)
-
-      setLastSelectedModel(model)
-    })
-
-    return () => {
-      cancelRequestModel()
-    }
-  }, [model.name, model.hash])
-
   return (
-    <Container>
+    <Container className="pt-2">
       {withModel && (
         <Section
           headline="Model"
@@ -102,10 +82,9 @@ const Documentation = function Documentation({
           defaultOpen={true}
         >
           <ModelColumns
-            className="max-h-[15rem]"
-            nodeId={model.name}
+            nodeId={model.fqn}
             columns={model.columns}
-            disabled={model.isModelPython}
+            disabled={isFalse(model.isModelSQL)}
             withHandles={false}
             withSource={false}
             withDescription={true}
@@ -130,7 +109,7 @@ function Headline({ headline }: { headline: string }): JSX.Element {
 
 function NotFound(): JSX.Element {
   return (
-    <Container className="font-bold whitespace-nowrap w-full h-full">
+    <Container className="font-bold whitespace-nowrap">
       <div className="flex items-center justify-center w-full h-full">
         Documentation Not Found
       </div>
@@ -147,10 +126,8 @@ function Container({
 }): JSX.Element {
   return (
     <div className={clsx('w-full h-full rounded-xl', className)}>
-      <div className="w-full h-full rounded-xl">
-        <div className="w-full h-full overflow-scroll scrollbar scrollbar--vertical scrollbar--horizontal">
-          {children}
-        </div>
+      <div className="w-full h-full overflow-auto scrollbar scrollbar--vertical scrollbar--horizontal">
+        {children}
       </div>
     </div>
   )
@@ -187,8 +164,8 @@ function Section({
                 )}
               </div>
             </Disclosure.Button>
-            <Disclosure.Panel className="pb-2 px-2 overflow-hidden">
-              <div className="px-2 mb-2 text-xs">{children}</div>
+            <Disclosure.Panel className="pb-2 px-4 text-xs overflow-hidden">
+              {children}
             </Disclosure.Panel>
           </>
         )}

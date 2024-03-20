@@ -1,21 +1,26 @@
 import { isNil, isArrayNotEmpty, isNotNil, toID, isFalse } from '@utils/index'
 import clsx from 'clsx'
 import { useMemo, useCallback, useState } from 'react'
-import {
-  EnumLineageNodeModelType,
-  ModelColumns,
-  ModelNodeHeaderHandles,
-} from './Graph'
+import { ModelType } from '@api/client'
 import { useLineageFlow } from './context'
 import { type GraphNodeData } from './help'
 import { Position, type NodeProps } from 'reactflow'
 import { type Column } from '@api/client'
+import ModelNodeHeaderHandles from './ModelNodeHeaderHandles'
+import ModelColumns from './ModelColumns'
+
+export const EnumLineageNodeModelType = {
+  ...ModelType,
+  cte: 'cte',
+  unknown: 'unknown',
+} as const
 
 export const EnumColumnType = {
   UNKNOWN: 'UNKNOWN',
   STRUCT: 'STRUCT',
 } as const
 
+export type LineageNodeModelType = KeyOf<typeof EnumLineageNodeModelType>
 export type ColumnType = KeyOf<typeof EnumColumnType>
 
 export default function ModelNode({
@@ -201,13 +206,14 @@ export default function ModelNode({
       />
       {showColumns && (
         <ModelColumns
-          className="max-h-[15rem] rounded-b-lg"
+          className="rounded-b-lg bg-theme-lighter text-xs"
           nodeId={id}
           columns={columns}
           disabled={shouldDisableColumns}
           withHandles={true}
           withSource={true}
           withDescription={false}
+          maxHeight="10rem"
         />
       )}
     </div>
