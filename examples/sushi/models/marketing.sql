@@ -8,7 +8,7 @@ MODEL (
 );
 
 SELECT
-    customer_id::INT AS customer_id, -- customer_id uniquely identifies customers
+    customer_id::INT AS customer_id, -- customer_id uniquely identifies customers \
     status::TEXT AS status,
     updated_at::TIMESTAMP AS updated_at
 FROM

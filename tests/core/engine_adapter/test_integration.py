@@ -1683,7 +1683,7 @@ def test_sushi(mark_gateway: t.Tuple[str, str], ctx: TestContext):
             },
             "marketing": {
                 "table": "Sushi marketing data",
-                "column": {"customer_id": "customer_id uniquely identifies customers"},
+                "column": {"customer_id": "customer_id uniquely identifies customers \\"},
             },
             "orders": {
                 "table": "Table of sushi orders.",
