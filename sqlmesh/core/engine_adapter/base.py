@@ -1921,18 +1921,21 @@ class EngineAdapter:
         return None
 
     def _truncate_comment(
-        self, comment: str, length: t.Optional[int], escape_backslash: t.Optional[bool] = None
+        self, comment: str, length: t.Optional[int], escape_backslash: bool = False
     ) -> str:
-        escape = escape_backslash if escape_backslash is not None else self.ESCAPE_COMMENT_BACKSLASH
-        if escape:
+        if escape_backslash:
             comment = comment.replace("\\", "\\\\")
         return comment[:length] if length else comment
 
     def _truncate_table_comment(self, comment: str) -> str:
-        return self._truncate_comment(comment, self.MAX_TABLE_COMMENT_LENGTH)
+        return self._truncate_comment(
+            comment, self.MAX_TABLE_COMMENT_LENGTH, self.ESCAPE_COMMENT_BACKSLASH
+        )
 
     def _truncate_column_comment(self, comment: str) -> str:
-        return self._truncate_comment(comment, self.MAX_COLUMN_COMMENT_LENGTH)
+        return self._truncate_comment(
+            comment, self.MAX_COLUMN_COMMENT_LENGTH, self.ESCAPE_COMMENT_BACKSLASH
+        )
 
     def _to_sql(self, expression: exp.Expression, quote: bool = True, **kwargs: t.Any) -> str:
         """
