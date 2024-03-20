@@ -62,7 +62,7 @@ def test_create_table_from_query_exists_no_if_not_exists(
     )
 
     assert to_sql_calls(adapter) == [
-        'CREATE VIEW "#sqlmesh__test_random_id" AS SELECT "a", "b", "x" + 1 AS "c", "d" AS "d", "e" FROM (SELECT * FROM "table") WITH NO SCHEMA BINDING',
+        'CREATE VIEW "#sqlmesh__test_random_id" AS SELECT "a", "b", "x" + 1 AS "c", "d" AS "d", "e" FROM (SELECT * FROM "table")',
         'CREATE TABLE "test_schema"."test_table" ("a" VARCHAR(MAX), "b" VARCHAR(60), "c" VARCHAR(MAX), "d" VARCHAR(MAX), "e" TIMESTAMP)',
     ]
 

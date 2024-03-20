@@ -131,7 +131,9 @@ class RedshiftEngineAdapter(
                 select_or_union.set("where", None)
 
             temp_view_name = exp.table_(f"#sqlmesh__{random_id()}")
-            self.create_view(temp_view_name, select_statement, replace=False)
+            self.create_view(
+                temp_view_name, select_statement, replace=False, no_schema_binding=False
+            )
             columns_to_types_from_view = self.columns(temp_view_name)
 
             schema = self._build_schema_exp(
@@ -174,7 +176,7 @@ class RedshiftEngineAdapter(
             materialized,
             table_description=table_description,
             column_descriptions=column_descriptions,
-            no_schema_binding=True,
+            no_schema_binding=create_kwargs.pop("no_schema_binding", True),
             **create_kwargs,
         )
 
