@@ -29,38 +29,38 @@ from sqlmesh.utils.errors import ConfigError
 from tests.utils.test_filesystem import create_temp_file
 
 
-def test_global_config():
-    context = Context(paths="examples/sushi")
+def test_global_config(copy_to_temp_path: t.Callable):
+    context = Context(paths=copy_to_temp_path("examples/sushi"))
     assert context.config.dialect == "duckdb"
     assert context.config.time_column_format == "%Y-%m-%d"
 
 
-def test_named_config():
-    context = Context(paths="examples/sushi", config="local_config")
+def test_named_config(copy_to_temp_path: t.Callable):
+    context = Context(paths=copy_to_temp_path("examples/sushi"), config="local_config")
     assert len(context.config.gateways) == 1
 
 
-def test_invalid_named_config():
+def test_invalid_named_config(copy_to_temp_path: t.Callable):
     with pytest.raises(
         ConfigError,
         match="Config 'blah' was not found.",
     ):
-        Context(paths="examples/sushi", config="blah")
+        Context(paths=copy_to_temp_path("examples/sushi"), config="blah")
 
 
-def test_missing_named_config():
+def test_missing_named_config(copy_to_temp_path: t.Callable):
     with pytest.raises(ConfigError, match=r"Config 'imaginary_config' was not found."):
-        Context(paths="examples/sushi", config="imaginary_config")
+        Context(paths=copy_to_temp_path("examples/sushi"), config="imaginary_config")
 
 
-def test_config_parameter():
+def test_config_parameter(copy_to_temp_path: t.Callable):
     config = Config(model_defaults=ModelDefaultsConfig(dialect="presto"), project="test_project")
-    context = Context(paths="examples/sushi", config=config)
+    context = Context(paths=copy_to_temp_path("examples/sushi"), config=config)
     assert context.config.dialect == "presto"
     assert context.config.project == "test_project"
 
 
-def test_config_not_found():
+def test_config_not_found(copy_to_temp_path: t.Callable):
     with pytest.raises(
         ConfigError,
         match=r".*config could not be found.*",
@@ -81,7 +81,7 @@ def test_dag(sushi_context):
 
 
 @pytest.mark.slow
-def test_render_sql_model(sushi_context, assert_exp_eq):
+def test_render_sql_model(sushi_context, assert_exp_eq, copy_to_temp_path: t.Callable):
     assert_exp_eq(
         sushi_context.render(
             "sushi.waiter_revenue_by_day",
@@ -136,7 +136,7 @@ def test_render_sql_model(sushi_context, assert_exp_eq):
     )
 
     # unpushed render should not expand
-    unpushed = Context(paths="examples/sushi")
+    unpushed = Context(paths=copy_to_temp_path("examples/sushi"))
     assert_exp_eq(
         unpushed.render("sushi.waiter_revenue_by_day"),
         f"""
@@ -325,7 +325,6 @@ def test_plan_apply(sushi_context_pre_scheduling) -> None:
 
 
 def test_project_config_person_config_overrides(tmp_path: pathlib.Path):
-    context = Context(paths="examples/sushi")
     with TemporaryDirectory() as td:
         home_path = pathlib.Path(td)
         create_temp_file(
@@ -372,7 +371,7 @@ model_defaults:
 
 
 @pytest.mark.slow
-def test_physical_schema_override() -> None:
+def test_physical_schema_override(copy_to_temp_path: t.Callable) -> None:
     def get_schemas(context: Context):
         return {
             snapshot.physical_schema for snapshot in context.snapshots.values() if snapshot.is_model
@@ -392,12 +391,13 @@ def test_physical_schema_override() -> None:
             if snapshot.is_model and snapshot.model.schema_name == "sushi"
         }
 
-    no_mapping_context = Context(paths="examples/sushi")
+    project_path = copy_to_temp_path("examples/sushi")
+    no_mapping_context = Context(paths=project_path)
     assert no_mapping_context.config.physical_schema_override == {}
     assert get_schemas(no_mapping_context) == {"sqlmesh__sushi", "sqlmesh__raw"}
     assert get_view_schemas(no_mapping_context) == {"sushi", "raw"}
     no_mapping_fingerprints = get_sushi_fingerprints(no_mapping_context)
-    context = Context(paths="examples/sushi", config="map_config")
+    context = Context(paths=project_path, config="map_config")
     assert context.config.physical_schema_override == {"sushi": "company_internal"}
     assert get_schemas(context) == {"company_internal", "sqlmesh__raw"}
     assert get_view_schemas(context) == {"sushi", "raw"}
@@ -584,7 +584,7 @@ def test_unrestorable_snapshot(sushi_context: Context) -> None:
     assert model_v1_old_snapshot.fingerprint != model_v1_new_snapshot.fingerprint
 
 
-def test_default_catalog_connections(mocker: MockerFixture):
+def test_default_catalog_connections(copy_to_temp_path: t.Callable):
     with patch(
         "sqlmesh.core.engine_adapter.base.EngineAdapter.default_catalog",
         PropertyMock(return_value=None),
@@ -597,5 +597,5 @@ def test_default_catalog_connections(mocker: MockerFixture):
         model_defaults=ModelDefaultsConfig(dialect="presto"),
         default_connection=DuckDBConnectionConfig(catalogs={"catalog": ":memory:"}),
     )
-    context = Context(paths="examples/sushi", config=config)
+    context = Context(paths=copy_to_temp_path("examples/sushi"), config=config)
     assert context.default_catalog == "catalog"

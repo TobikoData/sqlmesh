@@ -12,9 +12,12 @@ import { Position, type Edge, type Node, type XYPosition } from 'reactflow'
 import { type Lineage } from '@context/editor'
 import { type ActiveEdges, type Connections } from './context'
 import { EnumSide } from '~/types/enum'
-import { EnumLineageNodeModelType, type LineageNodeModelType } from './Graph'
 import { type ModelSQLMeshModel } from '@models/sqlmesh-model'
 import { type ConnectedNode } from '~/workers/lineage'
+import {
+  EnumLineageNodeModelType,
+  type LineageNodeModelType,
+} from './ModelNode'
 
 export interface GraphNodeData {
   label: string

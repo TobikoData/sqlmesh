@@ -883,3 +883,37 @@ def test_snowflake_session_properties(sushi_test_project: Project, mocker: Mocke
         expressions=[exp.Literal.string("warehouse").eq(exp.Literal.string("test_warehouse"))]
     )
     assert model_with_warehouse.session_properties == {"warehouse": "test_warehouse"}
+
+
+def test_model_cluster_by():
+    context = DbtContext()
+    context._target = SnowflakeConfig(
+        name="target",
+        schema="test",
+        database="test",
+        account="account",
+        user="user",
+        password="password",
+    )
+
+    model = ModelConfig(
+        name="model",
+        alias="model",
+        package_name="package",
+        target_schema="test",
+        cluster_by="Bar",
+        sql="SELECT * FROM baz",
+        materialized=Materialization.TABLE.value,
+    )
+    assert model.to_sqlmesh(context).clustered_by == ["BAR"]
+
+    model = ModelConfig(
+        name="model",
+        alias="model",
+        package_name="package",
+        target_schema="test",
+        cluster_by=["Bar", "qux"],
+        sql="SELECT * FROM baz",
+        materialized=Materialization.TABLE.value,
+    )
+    assert model.to_sqlmesh(context).clustered_by == ["BAR", "QUX"]

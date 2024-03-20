@@ -73,6 +73,8 @@ class PandasNativeFetchDFSupportMixin(EngineAdapter):
         self, query: t.Union[exp.Expression, str], quote_identifiers: bool = False
     ) -> DF:
         """Fetches a Pandas DataFrame from a SQL query."""
+        from warnings import catch_warnings, filterwarnings
+
         from pandas.io.sql import read_sql_query
 
         sql = (
@@ -81,7 +83,14 @@ class PandasNativeFetchDFSupportMixin(EngineAdapter):
             else query
         )
         logger.debug(f"Executing SQL:\n{sql}")
-        return read_sql_query(sql, self._connection_pool.get())
+        with catch_warnings():
+            filterwarnings(
+                "ignore",
+                category=UserWarning,
+                message=".*pandas only supports SQLAlchemy connectable.*",
+            )
+            df = read_sql_query(sql, self._connection_pool.get())
+        return df
 
 
 class InsertOverwriteWithMergeMixin(EngineAdapter):
@@ -212,11 +221,13 @@ class HiveMetastoreTablePropertiesMixin(EngineAdapter):
             return exp.Properties(expressions=properties)
         return None
 
-    def _truncate_comment(self, comment: str, length: t.Optional[int]) -> str:
+    def _truncate_comment(
+        self, comment: str, length: t.Optional[int], escape_backslash: bool = False
+    ) -> str:
         # iceberg does not have a comment length limit
         if self.current_catalog_type == "iceberg":
             return comment
-        return super()._truncate_comment(comment, length)
+        return super()._truncate_comment(comment, length, escape_backslash)
 
 
 class GetCurrentCatalogFromFunctionMixin(EngineAdapter):

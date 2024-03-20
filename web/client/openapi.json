@@ -2226,6 +2226,15 @@
         "required": ["schema_diff", "row_diff", "on"],
         "title": "TableDiff"
       },
+      "TestCase": {
+        "properties": {
+          "name": { "type": "string", "title": "Name" },
+          "path": { "type": "string", "format": "path", "title": "Path" }
+        },
+        "type": "object",
+        "required": ["name", "path"],
+        "title": "TestCase"
+      },
       "TestErrorOrFailure": {
         "properties": {
           "name": { "type": "string", "title": "Name" },
@@ -2253,10 +2262,15 @@
             "items": { "$ref": "#/components/schemas/TestSkipped" },
             "type": "array",
             "title": "Skipped"
+          },
+          "successes": {
+            "items": { "$ref": "#/components/schemas/TestCase" },
+            "type": "array",
+            "title": "Successes"
           }
         },
         "type": "object",
-        "required": ["tests_run", "failures", "errors", "skipped"],
+        "required": ["tests_run", "failures", "errors", "skipped", "successes"],
         "title": "TestResult"
       },
       "TestSkipped": {

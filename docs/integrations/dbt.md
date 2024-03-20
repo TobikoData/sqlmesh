@@ -223,7 +223,7 @@ Finally, replace the contents of `config.py` with:
 >
 > config = sqlmesh_config(
 >     Path(__file__).parent,
->     scheduler=AirflowSchedulerConfig(
+>     default_scheduler=AirflowSchedulerConfig(
 >         airflow_url="https://<Airflow Webserver Host>:<Airflow Webserver Port>/",
 >         username="<Airflow Username>",
 >         password="<Airflow Password>",
@@ -263,6 +263,7 @@ The dbt jinja methods that are not currently supported are:
 * schemas
 * graph.nodes.values
 * graph.metrics.values
+* version - learn more about why SQLMesh doesn't support model versions at the [Tobiko Data blog](https://tobikodata.com/the-false-promise-of-dbt-contracts.html)
 
 ## Missing something you need?
 
