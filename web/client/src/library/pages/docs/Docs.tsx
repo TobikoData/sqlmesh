@@ -16,7 +16,7 @@ import TabList from '@components/tab/Tab'
 import { Tab } from '@headlessui/react'
 import { EnumFileExtensions } from '@models/file'
 import { useSQLMeshModelExtensions } from '@components/editor/hooks'
-import { useState, type MouseEvent } from 'react'
+import { useEffect, useState, type MouseEvent } from 'react'
 import { Button } from '@components/button/Button'
 import {
   ArrowsPointingOutIcon,
@@ -24,30 +24,50 @@ import {
 } from '@heroicons/react/20/solid'
 import clsx from 'clsx'
 import { EnumSize, EnumVariant } from '~/types/enum'
+import { useApiModel } from '@api/index'
 
 export default function PageDocs(): JSX.Element {
-  const { modelName } = useParams()
+  const { modelName = '' } = useParams()
 
   const navigate = useNavigate()
 
   const models = useStoreContext(s => s.models)
   const lastSelectedModel = useStoreContext(s => s.lastSelectedModel)
+  const setLastSelectedModel = useStoreContext(s => s.setLastSelectedModel)
 
   const [splitPaneH, setSplitPaneH] = useState([65, 35])
   const [splitPaneV, setSplitPaneV] = useState([50, 50])
   const [fullscreenLineage, setFullscreenLineage] = useState(false)
   const [fullscreenQuery, setFullscreenQuery] = useState(false)
 
+  const {
+    refetch: getModel,
+    cancel: cancelRequestModel,
+    isFetching: isFetchingModel,
+  } = useApiModel(modelName)
+
   const model =
     isNil(modelName) || modelName === lastSelectedModel?.name
       ? lastSelectedModel
       : models.get(encodeURI(modelName))
 
-  const modelExtensions = isNil(model)
-    ? []
-    : useSQLMeshModelExtensions(model.path, model => {
-        handleClickModel?.(model.name)
-      })
+  const modelExtensions = useSQLMeshModelExtensions(model?.path, model => {
+    handleClickModel?.(model.name)
+  })
+
+  useEffect(() => {
+    if (isNil(model)) return
+
+    void getModel().then(({ data }) => {
+      model.update(data)
+
+      setLastSelectedModel(model)
+    })
+
+    return () => {
+      cancelRequestModel()
+    }
+  }, [modelName, model?.hash, model?.path, model?.name])
 
   function handleClickModel(modelName: string): void {
     const model = models.get(modelName)
@@ -118,10 +138,7 @@ export default function PageDocs(): JSX.Element {
                       <ArrowsPointingOutIcon className="w-4 h-4" />
                     )}
                   </Button>
-                  <CodeEditorRemoteFile
-                    key={model.path}
-                    path={model.path}
-                  >
+                  <CodeEditorRemoteFile path={model.path}>
                     {({ file }) => (
                       <Tab.Group>
                         <TabList
@@ -131,7 +148,8 @@ export default function PageDocs(): JSX.Element {
                               model.isModelSQL && 'Compiled Query',
                             ].filter(Boolean) as string[]
                           }
-                          className="!justify-center"
+                          disabled={isFetchingModel}
+                          className="justify-center"
                         />
                         <Tab.Panels className="h-full w-full overflow-hidden text-xs">
                           <Tab.Panel
@@ -145,7 +163,10 @@ export default function PageDocs(): JSX.Element {
                             />
                           </Tab.Panel>
                           {model.isModelSQL && (
-                            <Tab.Panel className="w-full h-full">
+                            <Tab.Panel
+                              unmount={false}
+                              className="w-full h-full"
+                            >
                               <CodeEditorDefault
                                 type={EnumFileExtensions.SQL}
                                 content={model.sql ?? ''}

@@ -14,14 +14,15 @@ import SearchList from '@components/search/SearchList'
 import { EnumSize } from '~/types/enum'
 import { EnumRoutes, type Routes } from '~/routes'
 import Page from '../root/Page'
-import SourceList, { SourceListItem } from '@components/sourceList/SourceList'
-import { type LineageNodeModelType } from '@components/graph/Graph'
+import SourceList from '@components/sourceList/SourceList'
 import { getModelNodeTypeTitle } from '@components/graph/help'
 import { Divider } from '@components/divider/Divider'
 import NotFound from '../root/NotFound'
 import { useStoreProject } from '@context/project'
 import LoadingSegment from '@components/loading/LoadingSegment'
 import { useApiModels } from '@api/index'
+import { type LineageNodeModelType } from '@components/graph/ModelNode'
+import SourceListItem from '@components/sourceList/SourceListItem'
 
 export default function PageModels({
   route = EnumRoutes.Home,

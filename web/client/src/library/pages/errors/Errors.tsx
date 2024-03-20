@@ -3,7 +3,8 @@ import {
   useNotificationCenter,
 } from '../root/context/notificationCenter'
 import Page from '../root/Page'
-import SourceList, { SourceListItem } from '@components/sourceList/SourceList'
+import SourceList from '@components/sourceList/SourceList'
+import SourceListItem from '@components/sourceList/SourceListItem'
 import { EnumRoutes } from '~/routes'
 import { Outlet, useLocation, useNavigate } from 'react-router-dom'
 import { EnumSize, EnumVariant } from '~/types/enum'

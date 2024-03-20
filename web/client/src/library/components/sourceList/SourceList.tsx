@@ -3,17 +3,16 @@ import { type Virtualizer, useVirtualizer } from '@tanstack/react-virtual'
 import { isArrayEmpty, isNil, isNotNil, isStringEmptyOrNil } from '@utils/index'
 import clsx from 'clsx'
 import { useEffect, useMemo, useRef, useState } from 'react'
-import { NavLink } from 'react-router-dom'
-import { EnumSize, EnumVariant, type Variant } from '~/types/enum'
+import { EnumSize, EnumVariant } from '~/types/enum'
 import { Button } from '../button/Button'
 
 interface ListItem<
   TListItem extends Record<string, any> = Record<string, any>,
 > {
   id: string
-  to: string
   name: string
   item: TListItem
+  to: string
   description?: string
   text?: string
   disabled?: boolean
@@ -27,15 +26,19 @@ export default function SourceList<
   keyId = 'id',
   keyName = '',
   keyDescription = '',
+  to = '',
   disabled = false,
-  to,
+  withCounter = true,
+  withFilter = true,
   types,
   className,
   isActive,
   listItem,
 }: {
   keyId: string
-  to: string
+  withCounter?: boolean
+  withFilter?: boolean
+  to?: string
   items?: TItem[]
   types?: TType
   keyName?: string
@@ -45,6 +48,8 @@ export default function SourceList<
   isActive?: (id: string) => boolean
   listItem: (listItem: ListItem<TItem>) => React.ReactNode
 }): JSX.Element {
+  const elSourceList = useRef<HTMLDivElement>(null)
+
   const [filter, setFilter] = useState('')
 
   const scrollableAreaRef = useRef<HTMLDivElement>(null)
@@ -136,33 +141,39 @@ export default function SourceList<
 
   return (
     <div
+      ref={elSourceList}
       className={clsx(
         'flex flex-col w-full h-full text-sm text-neutral-600 dark:text-neutral-300',
         className,
       )}
+      style={{ contain: 'strict' }}
     >
-      <div className="p-2 w-full flex justify-between">
-        <Input
-          className="w-full !m-0"
-          size={EnumSize.sm}
-        >
-          {({ className }) => (
-            <Input.Textfield
-              className={clsx(className, 'w-full')}
-              value={filter}
-              placeholder="Filter items"
-              type="search"
-              onInput={(e: React.ChangeEvent<HTMLInputElement>) => {
-                setFilter(e.target.value)
-              }}
-            />
+      {withFilter && (
+        <div className="p-2 w-full flex justify-between">
+          <Input
+            className="w-full !m-0"
+            size={EnumSize.sm}
+          >
+            {({ className }) => (
+              <Input.Textfield
+                className={clsx(className, 'w-full')}
+                value={filter}
+                placeholder="Filter items"
+                type="search"
+                onInput={(e: React.ChangeEvent<HTMLInputElement>) => {
+                  setFilter(e.target.value)
+                }}
+              />
+            )}
+          </Input>
+          {withCounter && (
+            <div className="ml-1 px-3 bg-primary-10 text-primary-500 rounded-full text-xs flex items-center">
+              {filtered.length}
+            </div>
           )}
-        </Input>
-        <div className="ml-1 px-3 bg-primary-10 text-primary-500 rounded-full text-xs flex items-center">
-          {filtered.length}
         </div>
-      </div>
-      <div className="mt-2 w-full h-full relative">
+      )}
+      <div className="w-full h-full relative px-2">
         {shouldShowReturnButton && (
           <Button
             className="absolute left-[50%] translate-x-[-50%] -top-2 z-10 text-ellipsis !block overflow-hidden no-wrap max-w-[90%] !border-neutral-20 shadow-md !bg-theme !hover:bg-theme text-neutral-500 dark:text-neutral-300 !focus:ring-2 !focus:ring-theme-500 !focus:ring-offset-2 !focus:ring-offset-theme-50 !focus:ring-opacity-50 !focus:outline-none !focus:ring-offset-transparent !focus:ring-offset-0 !focus:ring"
@@ -175,17 +186,15 @@ export default function SourceList<
         )}
         <div
           ref={scrollableAreaRef}
-          className="w-full h-full relative overflow-hidden overflow-y-auto hover:scrollbar scrollbar--horizontal scrollbar--vertical pt-2"
+          className="w-full h-full relative overflow-hidden overflow-y-auto hover:scrollbar scrollbar--horizontal scrollbar--vertical"
           style={{ contain: 'strict' }}
         >
           <div
             className="relative w-full"
-            style={{
-              height: totalSize > 0 ? `${totalSize}px` : '100%',
-            }}
+            style={{ height: totalSize > 0 ? `${totalSize}px` : '100%' }}
           >
             <ul
-              className="w-full absolute top-0 left-0 px-2"
+              className="w-full absolute top-0 left-0"
               style={{ transform: `translateY(${rows[0]?.start ?? 0}px)` }}
             >
               {isArrayEmpty(filtered) && (
@@ -231,69 +240,6 @@ export default function SourceList<
         </div>
       </div>
     </div>
-  )
-}
-
-export function SourceListItem({
-  name,
-  description,
-  to,
-  text,
-  variant,
-  disabled = false,
-  handleDelete,
-}: {
-  name: string
-  description?: string
-  to: string
-  variant?: Variant
-  disabled?: boolean
-  text?: string
-  handleDelete?: () => void
-}): JSX.Element {
-  function handleKeyUp(e: React.KeyboardEvent<HTMLAnchorElement>): void {
-    if (e.key === 'Delete' || e.key === 'Backspace') {
-      e.preventDefault()
-      e.stopPropagation()
-
-      handleDelete?.()
-    }
-  }
-
-  return (
-    <NavLink
-      onKeyUp={handleKeyUp}
-      to={to}
-      className={({ isActive }) =>
-        clsx(
-          'block overflow-hidden px-2 py-1.5 rounded-md w-full font-semibold',
-          disabled && 'opacity-50 pointer-events-none',
-          isActive
-            ? variant === EnumVariant.Primary
-              ? 'text-primary-500 bg-primary-10'
-              : variant === EnumVariant.Danger
-              ? 'text-danger-500 bg-danger-5'
-              : 'text-neutral-600 dark:text-neutral-100 bg-neutral-10'
-            : 'hover:bg-neutral-5 text-neutral-500 dark:text-neutral-400',
-        )
-      }
-    >
-      <div className="flex items-center">
-        <span className="whitespace-nowrap overflow-ellipsis overflow-hidden min-w-10">
-          {name}
-        </span>
-        {isNotNil(text) && (
-          <span className=" ml-2 px-2 rounded-md leading-0 text-[0.5rem] bg-neutral-10 text-neutral-700 dark:text-neutral-200">
-            {text}
-          </span>
-        )}
-      </div>
-      {isNotNil(description) && (
-        <p className="text-xs overflow-hidden whitespace-nowrap overflow-ellipsis text-neutral-300 dark:text-neutral-500">
-          {description}
-        </p>
-      )}
-    </NavLink>
   )
 }
 
