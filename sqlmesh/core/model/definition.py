@@ -544,14 +544,14 @@ class _Model(ModelMeta, frozen=True):
                     {col: dtype.sql(dialect=self.dialect) for col, dtype in mapping_schema.items()},
                 )
 
-    @property
+    @cached_property
     def depends_on(self) -> t.Set[str]:
         """All of the upstream dependencies referenced in the model's query, excluding self references.
 
         Returns:
             A list of all the upstream table names.
         """
-        return self.depends_on_ or set()
+        return self._full_depends_on - {self.fqn}
 
     @property
     def columns_to_types(self) -> t.Optional[t.Dict[str, exp.DataType]]:
@@ -617,13 +617,7 @@ class _Model(ModelMeta, frozen=True):
     def depends_on_past(self) -> bool:
         if self.kind.is_incremental_by_unique_key:
             return True
-
-        query = self.render_query(optimize=False)
-        if query is None:
-            return False
-        return self.fqn in d.find_tables(
-            query, default_catalog=self.default_catalog, dialect=self.dialect
-        )
+        return self.fqn in self._full_depends_on
 
     @property
     def forward_only(self) -> bool:
@@ -811,6 +805,18 @@ class _Model(ModelMeta, frozen=True):
     def _additional_metadata(self) -> t.List[str]:
         return []
 
+    @cached_property
+    def _full_depends_on(self) -> t.Set[str]:
+        depends_on = self.depends_on_ or set()
+
+        query = self.render_query(optimize=False)
+        if query is not None:
+            depends_on |= d.find_tables(
+                query, default_catalog=self.default_catalog, dialect=self.dialect
+            )
+
+        return depends_on
+
 
 class _SqlBasedModel(_Model):
     pre_statements_: t.Optional[t.List[exp.Expression]] = Field(
@@ -981,19 +987,6 @@ class SqlModel(_SqlBasedModel):
     @property
     def is_sql(self) -> bool:
         return True
-
-    @cached_property
-    def depends_on(self) -> t.Set[str]:
-        depends_on = self.depends_on_ or set()
-
-        query = self.render_query(optimize=False)
-        if query is not None:
-            depends_on |= d.find_tables(
-                query, default_catalog=self.default_catalog, dialect=self.dialect
-            )
-
-        depends_on -= {self.fqn}
-        return depends_on
 
     @property
     def columns_to_types(self) -> t.Optional[t.Dict[str, exp.DataType]]:
@@ -1225,6 +1218,10 @@ class SeedModel(_SqlBasedModel):
             return self._path.parent / seed_path
         return seed_path
 
+    @cached_property
+    def depends_on(self) -> t.Set[str]:
+        return (self.depends_on_ or set()) - {self.fqn}
+
     @property
     def depends_on_past(self) -> bool:
         return False
@@ -1378,6 +1375,14 @@ class ExternalModel(_Model):
         if not previous.columns_to_types_or_raise.items() - self.columns_to_types_or_raise.items():
             return False
         return None
+
+    @property
+    def depends_on(self) -> t.Set[str]:
+        return set()
+
+    @property
+    def depends_on_past(self) -> bool:
+        return False
 
 
 Model = t.Union[SqlModel, SeedModel, PythonModel, ExternalModel]
