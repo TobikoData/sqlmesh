@@ -434,7 +434,7 @@ def generate_test(
         .name: pandas_timestamp_to_pydatetime(
             engine_adapter.fetchdf(query), models[dep].columns_to_types
         )
-        .map(_convert_dataframe)
+        .apply(lambda col: col.map(_normalize_dataframe))
         .to_dict(orient="records")
         for dep, query in input_queries.items()
     }
@@ -473,7 +473,7 @@ def generate_test(
 
     outputs["query"] = (
         pandas_timestamp_to_pydatetime(output, model.columns_to_types)
-        .map(_convert_dataframe)
+        .apply(lambda col: col.map(_normalize_dataframe))
         .to_dict(orient="records")
     )
 
@@ -500,8 +500,8 @@ def _raise_error(msg: str, path: Path | None = None) -> None:
     raise TestError(msg)
 
 
-def _convert_dataframe(value: t.Any) -> t.Any:
-    """Convert data in a pandas dataframe so ruamel and sqlglot can deal with it."""
+def _normalize_dataframe(value: t.Any) -> t.Any:
+    """Normalize data in a pandas dataframe so ruamel and sqlglot can deal with it."""
     if isinstance(value, np.ndarray):
         return list(value)
     return value
