@@ -1186,7 +1186,9 @@ class GenericContext(BaseContext, t.Generic[C]):
                         on = ref.columns
 
         if not on:
-            raise SQLMeshError("Missing join condition 'on'")
+            raise SQLMeshError(
+                "SQLMesh doesn't know how to join the two tables. Specify the `grains` in each model definition or pass join column names in separate `-o` flags."
+            )
 
         table_diff = TableDiff(
             adapter=self._engine_adapter,
