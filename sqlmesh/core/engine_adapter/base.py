@@ -1376,8 +1376,8 @@ class EngineAdapter:
             )
             valid_from_case_stmt = exp.func(
                 "COALESCE",
-                exp.column(f"t_{valid_from_name}"),
-                update_valid_from_start,
+                exp.cast(exp.column(f"t_{valid_from_name}"), "TIMESTAMPTZ"),
+                exp.cast(update_valid_from_start, "TIMESTAMPTZ"),
             ).as_(valid_from_name)
         else:
             assert updated_at_name is not None
