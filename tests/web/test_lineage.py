@@ -19,19 +19,19 @@ def test_get_lineage(web_sushi_context: Context) -> None:
         '"memory"."sushi"."waiters"': {
             "event_date": {
                 "source": """SELECT DISTINCT
-  CAST(o.event_date AS DATE) AS event_date
-FROM memory.sushi.orders AS o
+  CAST("o"."event_date" AS DATE) AS "event_date"
+FROM "memory"."sushi"."orders" AS "o"
 WHERE
-  o.event_date <= CAST('1970-01-01' AS DATE)
-  AND o.event_date >= CAST('1970-01-01' AS DATE)""",
-                "expression": "CAST(o.event_date AS DATE) AS event_date",
+  "o"."event_date" <= CAST('1970-01-01' AS DATE)
+  AND "o"."event_date" >= CAST('1970-01-01' AS DATE)""",
+                "expression": 'CAST("o"."event_date" AS DATE) AS "event_date"',
                 "models": {'"memory"."sushi"."orders"': ["event_date"]},
             }
         },
         '"memory"."sushi"."orders"': {
             "event_date": {
-                "source": "SELECT\n  CAST(NULL AS DATE) AS event_date\nFROM (VALUES\n  (1)) AS t(dummy)",
-                "expression": "CAST(NULL AS DATE) AS event_date",
+                "source": 'SELECT\n  CAST(NULL AS DATE) AS "event_date"\nFROM (VALUES\n  (1)) AS "t"("dummy")',
+                "expression": 'CAST(NULL AS DATE) AS "event_date"',
                 "models": {},
             }
         },
@@ -42,33 +42,33 @@ WHERE
     assert response.json() == {
         '"memory"."sushi"."customers"': {
             "customer_id": {
-                "expression": "CAST(o.customer_id AS INT) AS customer_id /* customer_id uniquely identifies customers */",
+                "expression": 'CAST("o"."customer_id" AS INT) AS "customer_id" /* customer_id uniquely identifies customers */',
                 "models": {'"memory"."sushi"."orders"': ["customer_id"]},
-                "source": """WITH current_marketing AS (
+                "source": '''WITH "current_marketing" AS (
   SELECT
-    marketing.customer_id AS customer_id,
-    marketing.status AS status
-  FROM memory.sushi.marketing AS marketing
+    "marketing"."customer_id" AS "customer_id",
+    "marketing"."status" AS "status"
+  FROM "memory"."sushi"."marketing" AS "marketing"
   WHERE
-    marketing.valid_to IS NULL
+    "marketing"."valid_to" IS NULL
 )
 SELECT DISTINCT
-  CAST(o.customer_id AS INT) AS customer_id /* customer_id uniquely identifies customers */
-FROM memory.sushi.orders AS o
-LEFT JOIN current_marketing AS m
-  ON m.customer_id = o.customer_id
-LEFT JOIN memory.raw.demographics AS d
-  ON d.customer_id = o.customer_id""",
+  CAST("o"."customer_id" AS INT) AS "customer_id" /* customer_id uniquely identifies customers */
+FROM "memory"."sushi"."orders" AS "o"
+LEFT JOIN "current_marketing" AS "m"
+  ON "m"."customer_id" = "o"."customer_id"
+LEFT JOIN "memory"."raw"."demographics" AS "d"
+  ON "d"."customer_id" = "o"."customer_id"''',
             }
         },
         '"memory"."sushi"."orders"': {
             "customer_id": {
-                "expression": "CAST(NULL AS INT) AS customer_id",
+                "expression": 'CAST(NULL AS INT) AS "customer_id"',
                 "models": {},
                 "source": """SELECT
-  CAST(NULL AS INT) AS customer_id
+  CAST(NULL AS INT) AS "customer_id"
 FROM (VALUES
-  (1)) AS t(dummy)""",
+  (1)) AS "t"("dummy")""",
             }
         },
     }
@@ -81,10 +81,10 @@ def test_get_lineage_managed_columns(web_sushi_context: Context) -> None:
     assert response.json() == {
         '"memory"."sushi"."marketing"': {
             "valid_from": {
-                "source": """SELECT
-  CAST(NULL AS TIMESTAMP) AS valid_from
-FROM memory.sushi.raw_marketing AS raw_marketing""",
-                "expression": "CAST(NULL AS TIMESTAMP) AS valid_from",
+                "source": '''SELECT
+  CAST(NULL AS TIMESTAMP) AS "valid_from"
+FROM "memory"."sushi"."raw_marketing" AS "raw_marketing"''',
+                "expression": 'CAST(NULL AS TIMESTAMP) AS "valid_from"',
                 "models": {},
             }
         }
