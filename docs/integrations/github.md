@@ -213,6 +213,9 @@ on:
     - created
 ```
 
+Note: `issue_comment` event will not work until this change in merged to your main branch. 
+Therefore to enable this you will need to make the change in a branch, merge, and then future branches will support the deploy command. 
+
 ### Desynchronized Production Code and Data Configuration
 
 In order to support this pattern we need to add an additional step to the workflow that will run the `deploy-production` command after the merge to main.
