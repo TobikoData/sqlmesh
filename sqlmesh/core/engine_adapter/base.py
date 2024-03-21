@@ -1331,6 +1331,7 @@ class EngineAdapter:
             update_valid_from_start = execution_ts
         else:
             update_valid_from_start = to_time_column("1970-01-01 00:00:00+00:00", time_data_type)
+        update_valid_from_start = exp.cast(update_valid_from_start, time_data_type)
         insert_valid_from_start = execution_ts if check_columns else exp.column(updated_at_name)  # type: ignore
         # joined._exists IS NULL is saying "if the row is deleted"
         delete_check = (
@@ -1376,8 +1377,8 @@ class EngineAdapter:
             )
             valid_from_case_stmt = exp.func(
                 "COALESCE",
-                exp.cast(exp.column(f"t_{valid_from_name}"), "TIMESTAMPTZ"),
-                exp.cast(update_valid_from_start, "TIMESTAMPTZ"),
+                exp.column(f"t_{valid_from_name}"),
+                update_valid_from_start,
             ).as_(valid_from_name)
         else:
             assert updated_at_name is not None
