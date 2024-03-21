@@ -257,7 +257,7 @@ workflows:
             branches:
               only:
                 - main
-      - trigger_private_tests
+      - trigger_private_tests:
           requires:
             - style_and_slow_tests
           filters:
