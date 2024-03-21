@@ -615,8 +615,9 @@ class _Model(ModelMeta, frozen=True):
 
     @cached_property
     def depends_on_past(self) -> bool:
-        if self.kind.is_incremental_by_unique_key:
-            return True
+        explicit_depends_on_past = getattr(self.kind, "depends_on_past", None)
+        if explicit_depends_on_past is not None:
+            return explicit_depends_on_past
 
         query = self.render_query(optimize=False)
         if query is None:

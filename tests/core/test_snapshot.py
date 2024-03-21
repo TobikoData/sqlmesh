@@ -28,7 +28,7 @@ from sqlmesh.core.model import (
     create_seed_model,
     load_sql_based_model,
 )
-from sqlmesh.core.model.kind import TimeColumn
+from sqlmesh.core.model.kind import FullKind, IncrementalByUniqueKeyKind, TimeColumn
 from sqlmesh.core.snapshot import (
     DeployabilityIndex,
     QualifiedViewName,
@@ -1657,3 +1657,63 @@ def test_display_name(
     )
     input_snapshot = make_snapshot(input_model)
     assert display_name(input_snapshot, environment_naming_info, default_catalog) == expected
+
+
+@pytest.mark.parametrize(
+    "model, expected",
+    (
+        # incremental by time range - no specific setting
+        (
+            SqlModel(
+                name="incremental_no_explicit_depends_on_past",
+                kind=IncrementalByTimeRangeKind(time_column="ds"),
+                query=parse_one("select 1, ds"),
+                default_catalog="default_catalog",
+            ),
+            False,
+        ),
+        # incremental by time range - specifically set to depends_on_past
+        (
+            SqlModel(
+                name="incremental_explicit_depends_on_past",
+                kind=IncrementalByTimeRangeKind(time_column="ds", depends_on_past=True),
+                query=parse_one("select 1, ds"),
+                default_catalog="default_catalog",
+            ),
+            True,
+        ),
+        # incremental by unique key
+        (
+            SqlModel(
+                name="incremental_by_unique_key",
+                kind=IncrementalByUniqueKeyKind(unique_key="ds"),
+                query=parse_one("select 1, ds"),
+                default_catalog="default_catalog",
+            ),
+            True,
+        ),
+        # full
+        (
+            SqlModel(
+                name="full",
+                kind=FullKind(),
+                query=parse_one("select 1, ds"),
+                default_catalog="default_catalog",
+            ),
+            False,
+        ),
+        # self-referential
+        (
+            SqlModel(
+                name="full_self_referential",
+                kind=FullKind(),
+                query=parse_one("select 1, ds from full_self_referential"),
+                default_catalog="default_catalog",
+            ),
+            True,
+        ),
+    ),
+)
+def test_depends_on_past(make_snapshot, model, expected):
+    snapshot: Snapshot = make_snapshot(model)
+    assert snapshot.depends_on_past == expected

@@ -3323,3 +3323,48 @@ def test_end_date():
             """
             )
         )
+
+
+def test_model_explicit_depends_on_past():
+    expressions = d.parse(
+        """
+        MODEL (
+            name db.table,
+            kind INCREMENTAL_BY_TIME_RANGE (
+                time_column x
+            )
+        );
+        SELECT 1 AS x;
+        """
+    )
+    model = load_sql_based_model(expressions)
+    assert model.depends_on_past == False
+
+    expressions = d.parse(
+        """
+        MODEL (
+            name db.table,
+            kind INCREMENTAL_BY_TIME_RANGE (
+                time_column x,
+                depends_on_past True
+            )
+        );
+        SELECT 1 AS x;
+        """
+    )
+    model = load_sql_based_model(expressions)
+    assert model.depends_on_past == True
+
+    expressions = d.parse(
+        """
+        MODEL (
+            name db.table,
+            kind INCREMENTAL_BY_UNIQUE_KEY (
+                unique_key x,
+            )
+        );
+        SELECT 1 AS x;
+        """
+    )
+    model = load_sql_based_model(expressions)
+    assert model.depends_on_past == True
