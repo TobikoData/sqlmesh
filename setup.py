@@ -57,7 +57,7 @@ setup(
             "databricks-cli",
         ],
         "dev": [
-            f"apache-airflow=={os.environ.get('AIRFLOW_VERSION', '2.3.3')}",
+            f"apache-airflow=={os.environ.get('AIRFLOW_VERSION', '2.4.3')}",
             "autoflake==1.7.7",
             "agate==1.7.1",
             "beautifulsoup4",
