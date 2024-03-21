@@ -21,6 +21,8 @@ def trino_mocked_engine_adapter(
     def mock_catalog_type(catalog_name):
         if "iceberg" in catalog_name:
             return "iceberg"
+        if "delta" in catalog_name:
+            return "delta"
         return "hive"
 
     mocker.patch(
@@ -40,6 +42,8 @@ def test_set_current_catalog(trino_mocked_engine_adapter: TrinoEngineAdapter):
     ]
 
 
+@pytest.mark.trino_iceberg
+@pytest.mark.trino_delta
 def test_get_catalog_type(trino_mocked_engine_adapter: TrinoEngineAdapter, mocker: MockerFixture):
     adapter = trino_mocked_engine_adapter
     mocker.patch(
@@ -51,12 +55,14 @@ def test_get_catalog_type(trino_mocked_engine_adapter: TrinoEngineAdapter, mocke
     assert adapter.get_catalog_type("foo") == TrinoEngineAdapter.DEFAULT_CATALOG_TYPE
     assert adapter.get_catalog_type("datalake_hive") == "hive"
     assert adapter.get_catalog_type("datalake_iceberg") == "iceberg"
+    assert adapter.get_catalog_type("datalake_delta") == "delta"
 
-    mocker.patch(
-        "sqlmesh.core.engine_adapter.trino.TrinoEngineAdapter.get_current_catalog",
-        return_value="system_iceberg",
-    )
-    assert adapter.current_catalog_type == "iceberg"
+    for storage_type in ("iceberg", "delta"):
+        mocker.patch(
+            "sqlmesh.core.engine_adapter.trino.TrinoEngineAdapter.get_current_catalog",
+            return_value=f"system_{storage_type}",
+        )
+        assert adapter.current_catalog_type == storage_type
 
 
 def test_get_catalog_type_cached(
@@ -89,32 +95,37 @@ def test_get_catalog_type_cached(
     assert fetchone_mock.call_count == 2
 
 
-def test_partitioned_by_hive(
+@pytest.mark.trino_delta
+def test_partitioned_by_hive_delta(
     trino_mocked_engine_adapter: TrinoEngineAdapter, mocker: MockerFixture
 ):
     adapter = trino_mocked_engine_adapter
 
-    mocker.patch(
-        "sqlmesh.core.engine_adapter.trino.TrinoEngineAdapter.get_current_catalog",
-        return_value="datalake_hive",
-    )
-    assert adapter.get_catalog_type("datalake_hive") == "hive"
+    storage_types = ("hive", "delta")
 
-    columns_to_types = {
-        "cola": exp.DataType.build("INT"),
-        "colb": exp.DataType.build("TEXT"),
-    }
+    for storage_type in storage_types:
+        mocker.patch(
+            "sqlmesh.core.engine_adapter.trino.TrinoEngineAdapter.get_current_catalog",
+            return_value=f"datalake_{storage_type}",
+        )
+        assert adapter.get_catalog_type(f"datalake_{storage_type}") == storage_type
 
-    adapter.create_table("test_table", columns_to_types, partitioned_by=[exp.to_column("colb")])
+        columns_to_types = {
+            "cola": exp.DataType.build("INT"),
+            "colb": exp.DataType.build("TEXT"),
+        }
 
-    adapter.ctas("test_table", parse_one("select 1"), partitioned_by=[exp.to_column("colb")])  # type: ignore
+        adapter.create_table("test_table", columns_to_types, partitioned_by=[exp.to_column("colb")])
 
-    assert to_sql_calls(adapter) == [
+        adapter.ctas("test_table", parse_one("select 1"), partitioned_by=[exp.to_column("colb")])  # type: ignore
+
+    assert to_sql_calls(adapter) == len(storage_types) * [
         """CREATE TABLE IF NOT EXISTS "test_table" ("cola" INTEGER, "colb" VARCHAR) WITH (PARTITIONED_BY=ARRAY['colb'])""",
         """CREATE TABLE IF NOT EXISTS "test_table" WITH (PARTITIONED_BY=ARRAY['colb']) AS SELECT 1""",
     ]
 
 
+@pytest.mark.trino_iceberg
 def test_partitioned_by_iceberg(
     trino_mocked_engine_adapter: TrinoEngineAdapter, mocker: MockerFixture
 ):
@@ -141,6 +152,7 @@ def test_partitioned_by_iceberg(
     ]
 
 
+@pytest.mark.trino_iceberg
 def test_partitioned_by_iceberg_transforms(
     trino_mocked_engine_adapter: TrinoEngineAdapter, mocker: MockerFixture
 ):
@@ -184,6 +196,7 @@ def test_partitioned_by_iceberg_transforms(
     ]
 
 
+@pytest.mark.trino_iceberg
 def test_partitioned_by_with_multiple_catalogs_same_server(
     trino_mocked_engine_adapter: TrinoEngineAdapter, mocker: MockerFixture
 ):
@@ -194,6 +207,11 @@ def test_partitioned_by_with_multiple_catalogs_same_server(
         "colb": exp.DataType.build("TEXT"),
     }
 
+    mocker.patch(
+        "sqlmesh.core.engine_adapter.trino.TrinoEngineAdapter.get_current_catalog",
+        return_value="system",
+    )
+
     adapter.create_table(
         "datalake.test_schema.test_table", columns_to_types, partitioned_by=[exp.to_column("colb")]
     )
@@ -202,6 +220,11 @@ def test_partitioned_by_with_multiple_catalogs_same_server(
         "datalake.test_schema.test_table",
         parse_one("select 1"),  # type: ignore
         partitioned_by=[exp.to_column("colb")],
+    )
+
+    mocker.patch(
+        "sqlmesh.core.engine_adapter.trino.TrinoEngineAdapter.get_current_catalog",
+        return_value="iceberg",
     )
 
     adapter.create_table(
@@ -287,59 +310,64 @@ def test_comments_hive(mocker: MockerFixture, make_mocked_engine_adapter: t.Call
     ]
 
 
-def test_comments_iceberg(mocker: MockerFixture, make_mocked_engine_adapter: t.Callable):
+@pytest.mark.trino_iceberg
+@pytest.mark.trino_delta
+def test_comments_iceberg_delta(mocker: MockerFixture, make_mocked_engine_adapter: t.Callable):
     adapter = make_mocked_engine_adapter(TrinoEngineAdapter)
 
-    current_catalog_mock = mocker.patch(
-        "sqlmesh.core.engine_adapter.trino.TrinoEngineAdapter.get_current_catalog"
-    )
-    current_catalog_mock.return_value = "iceberg"
-    catalog_type_mock = mocker.patch(
-        "sqlmesh.core.engine_adapter.trino.TrinoEngineAdapter.get_catalog_type"
-    )
-    catalog_type_mock.return_value = "iceberg"
+    storage_types = ("iceberg", "delta")
 
-    allowed_table_comment_length = TrinoEngineAdapter.MAX_TABLE_COMMENT_LENGTH
-    truncated_table_comment = "a" * allowed_table_comment_length
-    long_table_comment = truncated_table_comment + "b"
+    for storage_type in storage_types:
+        current_catalog_mock = mocker.patch(
+            "sqlmesh.core.engine_adapter.trino.TrinoEngineAdapter.get_current_catalog"
+        )
+        current_catalog_mock.return_value = storage_type
+        catalog_type_mock = mocker.patch(
+            "sqlmesh.core.engine_adapter.trino.TrinoEngineAdapter.get_catalog_type"
+        )
+        catalog_type_mock.return_value = storage_type
 
-    allowed_column_comment_length = TrinoEngineAdapter.MAX_COLUMN_COMMENT_LENGTH
-    truncated_column_comment = "c" * allowed_column_comment_length
-    long_column_comment = truncated_column_comment + "d"
+        allowed_table_comment_length = TrinoEngineAdapter.MAX_TABLE_COMMENT_LENGTH
+        truncated_table_comment = "a" * allowed_table_comment_length
+        long_table_comment = truncated_table_comment + "b"
 
-    adapter.create_table(
-        "test_table",
-        {"a": exp.DataType.build("INT"), "b": exp.DataType.build("INT")},
-        table_description=long_table_comment,
-        column_descriptions={"a": long_column_comment},
-    )
+        allowed_column_comment_length = TrinoEngineAdapter.MAX_COLUMN_COMMENT_LENGTH
+        truncated_column_comment = "c" * allowed_column_comment_length
+        long_column_comment = truncated_column_comment + "d"
 
-    adapter.ctas(
-        "test_table",
-        parse_one("SELECT a, b FROM source_table"),
-        {"a": exp.DataType.build("INT"), "b": exp.DataType.build("INT")},
-        table_description=long_table_comment,
-        column_descriptions={"a": long_column_comment},
-    )
+        adapter.create_table(
+            "test_table",
+            {"a": exp.DataType.build("INT"), "b": exp.DataType.build("INT")},
+            table_description=long_table_comment,
+            column_descriptions={"a": long_column_comment},
+        )
 
-    adapter.create_view(
-        "test_view",
-        parse_one("SELECT a, b FROM source_table"),
-        table_description=long_table_comment,
-    )
+        adapter.ctas(
+            "test_table",
+            parse_one("SELECT a, b FROM source_table"),
+            {"a": exp.DataType.build("INT"), "b": exp.DataType.build("INT")},
+            table_description=long_table_comment,
+            column_descriptions={"a": long_column_comment},
+        )
 
-    adapter._create_table_comment(
-        "test_table",
-        long_table_comment,
-    )
+        adapter.create_view(
+            "test_view",
+            parse_one("SELECT a, b FROM source_table"),
+            table_description=long_table_comment,
+        )
 
-    adapter._create_column_comments(
-        "test_table",
-        {"a": long_column_comment},
-    )
+        adapter._create_table_comment(
+            "test_table",
+            long_table_comment,
+        )
+
+        adapter._create_column_comments(
+            "test_table",
+            {"a": long_column_comment},
+        )
 
     sql_calls = to_sql_calls(adapter)
-    assert sql_calls == [
+    assert sql_calls == len(storage_types) * [
         f"""CREATE TABLE IF NOT EXISTS "test_table" ("a" INTEGER COMMENT '{long_column_comment}', "b" INTEGER) COMMENT '{long_table_comment}'""",
         f"""CREATE TABLE IF NOT EXISTS "test_table" COMMENT '{long_table_comment}' AS SELECT "a", "b" FROM "source_table\"""",
         f"""COMMENT ON COLUMN "test_table"."a" IS '{long_column_comment}'""",
@@ -348,3 +376,27 @@ def test_comments_iceberg(mocker: MockerFixture, make_mocked_engine_adapter: t.C
         f"""COMMENT ON TABLE "test_table" IS '{long_table_comment}'""",
         f"""COMMENT ON COLUMN "test_table"."a" IS '{long_column_comment}'""",
     ]
+
+
+@pytest.mark.trino_delta
+def test_delta_timestamps(make_mocked_engine_adapter: t.Callable):
+    adapter = make_mocked_engine_adapter(TrinoEngineAdapter)
+
+    ts6 = exp.DataType.build("timestamp(6)")
+    ts3_tz = exp.DataType.build("timestamp(3) with time zone")
+
+    columns_to_types = {
+        "ts": exp.DataType.build("TIMESTAMP"),
+        "ts_1": exp.DataType.build("TIMESTAMP(1)"),
+        "ts_tz": exp.DataType.build("TIMESTAMP WITH TIME ZONE"),
+        "ts_tz_1": exp.DataType.build("TIMESTAMP(1) WITH TIME ZONE"),
+    }
+
+    delta_columns_to_types = adapter.to_delta_ts(columns_to_types)
+
+    assert delta_columns_to_types == {
+        "ts": ts6,
+        "ts_1": ts6,
+        "ts_tz": ts3_tz,
+        "ts_tz_1": ts3_tz,
+    }
