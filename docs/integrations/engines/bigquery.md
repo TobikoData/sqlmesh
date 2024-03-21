@@ -11,25 +11,26 @@ pip install "sqlmesh[bigquery]"
 
 ### Connection options
 
-| Option                          | Description                                                                                                    |  Type  | Required |
-|---------------------------------|----------------------------------------------------------------------------------------------------------------|:------:|:--------:|
-| `type`                          | Engine type name - must be `bigquery`                                                                          | string |    Y     |
-| `method`                        | Connection methods - see [allowed values below](#connection-methods). Default: `oauth`.                        | string |    N     |
-| `project`                       | The name of the GCP project                                                                                    | string |    N     |
-| `location`                      | The location of for the datasets (can be regional or multi-regional)                                           | string |    N     |
-| `keyfile`                       | Path to the keyfile to be used with service-account method                                                     | string |    N     |
-| `keyfile_json`                  | Keyfile information provided inline (not recommended)                                                          |  dict  |    N     |
-| `token`                         | OAuth 2.0 access token                                                                                         | string |    N     |
-| `refresh_token`                 | OAuth 2.0 refresh token                                                                                        | string |    N     |
-| `client_id`                     | OAuth 2.0 client ID                                                                                            | string |    N     |
-| `client_secret`                 | OAuth 2.0 client secret                                                                                        | string |    N     |
-| `token_uri`                     | OAuth 2.0 authorization server's toke endpoint URI                                                             | string |    N     |
-| `scopes`                        | The scopes used to obtain authorization                                                                        |  list  |    N     |
-| `job_creation_timeout_seconds`  | The maximum amount of time, in seconds, to wait for the underlying job to be created.                          |  int   |    N     |
-| `job_execution_timeout_seconds` | The maximum amount of time, in seconds, to wait for the underlying job to complete.                            |  int   |    N     |
-| `job_retries`                   | The number of times to retry the underlying job if it fails. (Default: `1`)                                    |  int   |    N     |
-| `priority`                      | The priority of the underlying job. (Default: `INTERACTIVE`)                                                   | string |    N     |
-| `maximum_bytes_billed`          | The maximum number of bytes to be billed for the underlying job.                                               |  int   |    N     |
+| Option                          | Description                                                                                                                          |  Type  | Required |
+|---------------------------------|--------------------------------------------------------------------------------------------------------------------------------------|:------:|:--------:|
+| `type`                          | Engine type name - must be `bigquery`                                                                                                | string |    Y     |
+| `method`                        | Connection methods - see [allowed values below](#connection-methods). Default: `oauth`.                                              | string |    N     |
+| `project`                       | The name of the GCP project                                                                                                          | string |    N     |
+| `location`                      | The location of for the datasets (can be regional or multi-regional)                                                                 | string |    N     |
+| `execution_project`             | The name of the GCP project to bill for the execution of the models. If not set, the project associated with the model will be used. | string |    N     |
+| `keyfile`                       | Path to the keyfile to be used with service-account method                                                                           | string |    N     |
+| `keyfile_json`                  | Keyfile information provided inline (not recommended)                                                                                |  dict  |    N     |
+| `token`                         | OAuth 2.0 access token                                                                                                               | string |    N     |
+| `refresh_token`                 | OAuth 2.0 refresh token                                                                                                              | string |    N     |
+| `client_id`                     | OAuth 2.0 client ID                                                                                                                  | string |    N     |
+| `client_secret`                 | OAuth 2.0 client secret                                                                                                              | string |    N     |
+| `token_uri`                     | OAuth 2.0 authorization server's toke endpoint URI                                                                                   | string |    N     |
+| `scopes`                        | The scopes used to obtain authorization                                                                                              |  list  |    N     |
+| `job_creation_timeout_seconds`  | The maximum amount of time, in seconds, to wait for the underlying job to be created.                                                |  int   |    N     |
+| `job_execution_timeout_seconds` | The maximum amount of time, in seconds, to wait for the underlying job to complete.                                                  |  int   |    N     |
+| `job_retries`                   | The number of times to retry the underlying job if it fails. (Default: `1`)                                                          |  int   |    N     |
+| `priority`                      | The priority of the underlying job. (Default: `INTERACTIVE`)                                                                         | string |    N     |
+| `maximum_bytes_billed`          | The maximum number of bytes to be billed for the underlying job.                                                                     |  int   |    N     |
 
 ## Airflow Scheduler
 **Engine Name:** `bigquery`
