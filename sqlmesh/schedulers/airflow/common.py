@@ -49,7 +49,7 @@ class PlanApplicationRequest(PydanticModel):
     users: t.List[User]
     is_dev: bool
     forward_only: bool
-    models_to_backfill: t.Optional[t.Set[str]]
+    models_to_backfill: t.Optional[t.Set[str]] = None
     end_bounded: bool
     ensure_finalized_snapshots: bool
     directly_modified_snapshots: t.List[SnapshotId]
