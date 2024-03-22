@@ -74,7 +74,9 @@ Additionally, it's possible to test only a subset of the output columns by setti
           ...
 ```
 
-This is useful when we can't treat the missing columns as `NULL`, but still want to ignore them. When `partial` is set, the rows need to be defined as a mapping under the `rows` key and the tested columns are only those that are referenced in them.
+This is useful when we can't treat the missing columns as `NULL`, but still want to ignore them.
+
+When `partial` is set, the rows need to be defined as a mapping under the `rows` key and the tested columns are only those that are referenced in them.
 
 ### Example
 
@@ -126,9 +128,9 @@ test_example_full_model:
         num_orders: 1
 ```
 
-The `ds` column is redundant in the above test, since it is not referenced in `full_model`, so it may be omitted.
+The `ds` column is not needed in the above test, since it is not referenced in `full_model`, so it may be omitted.
 
-If we were only interested in the `num_orders` column, we could only specify input values for the `id` column of `sqlmesh_example.incremental_model`, thus rewriting the above test more compactly as follows:
+If we were only interested in testing the `num_orders` column, we could only specify input values for the `id` column of `sqlmesh_example.incremental_model`, thus rewriting the above test more compactly as follows:
 
 ```yaml linenums="1"
 test_example_full_model:
@@ -233,7 +235,7 @@ WHERE
 
 ```
 
-Firstly, we need to specify the input data for the upstream model `sqlmesh_example.seed_model`. The `create_test` command starts by executing a user-supplied query against the project's data warehouse and uses the returned data for this purpose.
+Firstly, we need to specify the input data for the upstream model `sqlmesh_example.seed_model`. The `create_test` command starts by executing a user-supplied query against the project's data warehouse and uses the returned data to produce the test's input rows.
 
 For instance, the following query will return three rows from the table corresponding to the model `sqlmesh_example.seed_model`:
 
@@ -245,7 +247,7 @@ Next, notice that `sqlmesh_example.incremental_model` contains a filter which re
 
 To make the generated test deterministic and thus ensure that it will always succeed, we need to define these variables and modify the above query to constrain `ds` accordingly.
 
-If we set `@start_ds` to `'20-01-01'` and `@end_ds` to `'2020-01-04'`, the query becomes:
+If we set `@start_ds` to `'2020-01-01'` and `@end_ds` to `'2020-01-04'`, the query becomes:
 
 ```sql linenums="1"
 SELECT * FROM sqlmesh_example.seed_model WHERE ds BETWEEN '2020-01-01' AND '2020-01-04' LIMIT 3
@@ -341,7 +343,7 @@ Ran 1 test in 0.012s
 FAILED (failures=1)
 ```
 
-Note: when there are many differing columns, the corresponding DataFrame will be truncated by default, but it can be fully rendered using the `-v` (verbose) option of the `sqlmesh test` command.
+Note: when there are many differing columns, the corresponding DataFrame will be truncated by default, but it can be fully displayed using the `-v` (verbose) option of the `sqlmesh test` command.
 
 ### Testing for specific models
 
