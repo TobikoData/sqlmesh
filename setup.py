@@ -63,7 +63,7 @@ setup(
             "beautifulsoup4",
             "black==24.1.1",
             "cryptography~=41.0.7",
-            "dbt_common",
+            "dbt-common",
             "dbt-core",
             "dbt-duckdb>=1.7.1",
             "Faker",
@@ -114,7 +114,7 @@ setup(
         ],
         "dbt": [
             "dbt-core<2",
-            "dbt_common",
+            "dbt-common",
         ],
         "gcppostgres": [
             "cloud-sql-python-connector[pg8000]",

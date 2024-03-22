@@ -44,7 +44,7 @@ class SeedConfig(BaseModelConfig):
 
 
 class Integer(agate.data_types.DataType):
-    def cast(self, d: str) -> int:
+    def cast(self, d: str) -> t.Optional[int]:
         if d is None:
             return d
         try:
