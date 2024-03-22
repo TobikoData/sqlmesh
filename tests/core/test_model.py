@@ -1373,14 +1373,16 @@ def test_parse(assert_exp_eq):
 
         SELECT
           id::INT AS id,
-          ds
+          ds,
+          foo
         FROM x
         WHERE ds BETWEEN '{{ start_ds }}' AND @end_ds
     """
     )
     model = load_sql_based_model(expressions, dialect="hive")
     assert model.columns_to_types == {
-        "ds": exp.DataType.build("unknown"),
+        "foo": exp.DataType.build("unknown"),
+        "ds": exp.DataType.build("timestamp"),
         "id": exp.DataType.build("int"),
     }
     assert not model.annotated
@@ -1392,7 +1394,8 @@ def test_parse(assert_exp_eq):
         """
       SELECT
         CAST("id" AS INT) AS "id",
-        "ds" AS "ds"
+        "ds" AS "ds",
+        "foo" AS "foo"
       FROM "x" AS "x"
       WHERE
         "ds" BETWEEN '1970-01-01' AND '1970-01-01'

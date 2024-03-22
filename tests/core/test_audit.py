@@ -20,7 +20,7 @@ from sqlmesh.utils.metaprogramming import Executable
 def model() -> Model:
     return create_sql_model(
         "db.test_model",
-        parse_one("SELECT a, b, ds"),
+        parse_one("SELECT a, b, ds::varchar"),
         kind=IncrementalByTimeRangeKind(time_column="ds"),
     )
 
@@ -29,7 +29,7 @@ def model() -> Model:
 def model_default_catalog() -> Model:
     return create_sql_model(
         "db.test_model",
-        parse_one("SELECT a, b, ds"),
+        parse_one("SELECT a, b, ds::varchar"),
         kind=IncrementalByTimeRangeKind(time_column="ds"),
         default_catalog="test_catalog",
     )

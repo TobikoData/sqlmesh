@@ -1003,6 +1003,18 @@ class SqlModel(_SqlBasedModel):
                 for select in query.selects
             }
 
+            if self.time_column:
+                time_column_name = self.time_column.column.output_name
+                if self._columns_to_types[time_column_name] == exp.DataType.build(
+                    exp.DataType.Type.UNKNOWN
+                ):
+                    # if the user has specified a time column, but we cant detect its type - assume its a timestamp
+                    # if we assume its "unknown" then in practice gets treated like a string and the incremental model delete queries
+                    # will happily try to filter a timestamp column based on a string literal, which is invalid in some engines
+                    self._columns_to_types[time_column_name] = exp.DataType.build(
+                        exp.DataType.Type.TIMESTAMP
+                    )
+
         if "*" in self._columns_to_types:
             return None
 

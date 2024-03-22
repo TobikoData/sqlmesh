@@ -9,6 +9,7 @@ import sqlmesh.core.dialect as d
 from sqlmesh.core.engine_adapter import TrinoEngineAdapter
 from sqlmesh.core.model import load_sql_based_model
 from sqlmesh.core.model.definition import SqlModel
+from sqlmesh.core.model.kind import TimeColumn
 from tests.core.engine_adapter import to_sql_calls
 
 pytestmark = [pytest.mark.engine, pytest.mark.trino]
@@ -26,6 +27,11 @@ def trino_mocked_engine_adapter(
     mocker.patch(
         "sqlmesh.core.engine_adapter.trino.TrinoEngineAdapter.get_catalog_type",
         side_effect=mock_catalog_type,
+    )
+
+    mocker.patch(
+        "sqlmesh.core.engine_adapter.trino.TrinoEngineAdapter.get_current_catalog",
+        return_value="datalake_iceberg",
     )
 
     return make_mocked_engine_adapter(TrinoEngineAdapter)
@@ -145,11 +151,6 @@ def test_partitioned_by_iceberg_transforms(
     trino_mocked_engine_adapter: TrinoEngineAdapter, mocker: MockerFixture
 ):
     adapter = trino_mocked_engine_adapter
-
-    mocker.patch(
-        "sqlmesh.core.engine_adapter.trino.TrinoEngineAdapter.get_current_catalog",
-        return_value="datalake_iceberg",
-    )
 
     expressions = d.parse(
         f"""
@@ -347,4 +348,43 @@ def test_comments_iceberg(mocker: MockerFixture, make_mocked_engine_adapter: t.C
         f"""COMMENT ON VIEW "test_view" IS '{long_table_comment}'""",
         f"""COMMENT ON TABLE "test_table" IS '{long_table_comment}'""",
         f"""COMMENT ON COLUMN "test_table"."a" IS '{long_column_comment}'""",
+    ]
+
+
+def test_unknown_time_columns_treated_as_timestamp(
+    mocker: MockerFixture, trino_mocked_engine_adapter: TrinoEngineAdapter
+):
+    adapter = trino_mocked_engine_adapter
+
+    expressions = d.parse(
+        f"""
+        MODEL (
+            name test_table,
+            kind INCREMENTAL_BY_TIME_RANGE(
+                time_column cola,
+            )
+        );
+
+        SELECT case when 1=2 then now() else cast('2023-01-01' as timestamp) end AS cola, 2::varchar as colb, 'foo' as colc;
+    """
+    )
+    model: SqlModel = t.cast(SqlModel, load_sql_based_model(expressions))
+
+    assert model.columns_to_types_or_raise["cola"] == exp.DataType.build(
+        exp.DataType.Type.TIMESTAMP
+    )
+
+    adapter.insert_overwrite_by_time_partition(
+        model.name,
+        t.cast(exp.Query, model.query),
+        start="2022-01-01",
+        end="2022-01-02",
+        time_column=t.cast(TimeColumn, model.time_column),
+        time_formatter=model.convert_to_time_column,
+        columns_to_types=model.columns_to_types,
+    )
+
+    assert to_sql_calls(adapter) == [
+        """DELETE FROM "test_table" WHERE "cola" BETWEEN CAST('2022-01-01 00:00:00' AS TIMESTAMP) AND CAST('2022-01-02 23:59:59.999999' AS TIMESTAMP)""",
+        """INSERT INTO "test_table" ("cola", "colb", "colc") SELECT "cola", "colb", "colc" FROM (SELECT CASE WHEN 1 = 2 THEN NOW() ELSE CAST('2023-01-01' AS TIMESTAMP) END AS "cola", CAST(2 AS VARCHAR) AS "colb", 'foo' AS "colc") AS "_subquery" WHERE "cola" BETWEEN CAST('2022-01-01 00:00:00' AS TIMESTAMP) AND CAST('2022-01-02 23:59:59.999999' AS TIMESTAMP)""",
     ]
