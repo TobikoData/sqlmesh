@@ -11,6 +11,7 @@ import { EnumSize, EnumVariant } from '~/types/enum'
 import { useEffect, useMemo } from 'react'
 import { isArrayEmpty, isNil, isNotNil } from '@utils/index'
 import { Button } from '@components/button/Button'
+import { Divider } from '@components/divider/Divider'
 
 export default function PageErrors(): JSX.Element {
   const { pathname } = useLocation()
@@ -46,17 +47,6 @@ export default function PageErrors(): JSX.Element {
     <Page
       sidebar={
         <div className="flex flex-col h-full w-full">
-          {errors.size > 0 && (
-            <div className="flex justify-end m-1">
-              <Button
-                size={EnumSize.sm}
-                variant={EnumVariant.Neutral}
-                onClick={() => clearErrors()}
-              >
-                Clear All
-              </Button>
-            </div>
-          )}
           <SourceList<ErrorIDE>
             keyId="id"
             keyName="key"
@@ -88,6 +78,18 @@ export default function PageErrors(): JSX.Element {
               />
             )}
           />
+          <Divider />
+          {errors.size > 0 && (
+            <div className="flex justify-end">
+              <Button
+                size={EnumSize.sm}
+                variant={EnumVariant.Neutral}
+                onClick={() => clearErrors()}
+              >
+                Clear All
+              </Button>
+            </div>
+          )}
         </div>
       }
       content={<Outlet />}

@@ -1,6 +1,6 @@
 import { type FileContent, type LineageColumn } from '@api/client'
 import { type TableColumn, type TableRow } from '@components/table/help'
-import { isFalse, isNil, isNotNil, uid } from '@utils/index'
+import { isFalse, isNil, uid } from '@utils/index'
 import { create } from 'zustand'
 import useLocalStorage from '~/hooks/useLocalStorage'
 import { ModelFile } from '~/models'
@@ -76,11 +76,7 @@ const [getStoredTabs, setStoredTabs] = useLocalStorage<{
 const { tabs: storedTabs = [], id: storedTabId } = getStoredTabs() ?? {}
 const initialFile = createLocalFile()
 const initialTab: EditorTab = createTab(initialFile)
-const initialTabs = new Map(
-  storedTabs.length > 0 && isNotNil(storedTabId)
-    ? []
-    : [[initialFile, initialTab]],
-)
+const initialTabs = new Map([[initialFile, initialTab]])
 
 export const useStoreEditor = create<EditorStore>((set, get) => ({
   storedTabs,
@@ -134,7 +130,7 @@ export const useStoreEditor = create<EditorStore>((set, get) => ({
 
       tabs.push({
         id: tab.file.id,
-        content: tab.file.isChanged ? tab.file.content : undefined,
+        content: tab.file.content,
       })
     }
 
