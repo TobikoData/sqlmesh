@@ -60,7 +60,7 @@ The `rows` key is optional in the above format, so the following would also be v
 
 ### Omitting Columns
 
-Defining the complete inputs and outputs for wide tables, i.e. tables with many columns, can become cumbersome. Therefore, if certain columns can be safely ignored, they may be omitted from any row and their value will be treated as `NULL` for that row.
+Defining the complete inputs and outputs for wide tables, i.e. tables with many columns, can become cumbersome. Therefore, if certain columns can be safely ignored they may be omitted from any row and their value will be treated as `NULL` for that row.
 
 Additionally, it's possible to test only a subset of the output columns by setting `partial` to `true` for the rows of interest:
 
