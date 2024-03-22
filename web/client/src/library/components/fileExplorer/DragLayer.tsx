@@ -37,13 +37,10 @@ export default function DragLayer(): JSX.Element {
   return (
     <>
       {isDragging && (
-        <div
-          style={layerStyles}
-          className="!cursor-grabbing"
-        >
+        <div style={layerStyles}>
           <div
             style={getItemStyles(currentOffset)}
-            className="!cursor-grabbing"
+            className="!cursor-grabbing !rounded-lg overflow-hidden"
           >
             {artifacts.map(artifact => (
               <span key={artifact.id}>

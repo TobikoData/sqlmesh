@@ -252,9 +252,7 @@ function CodeEditorRemoteFile({
     () =>
       (keymaps ?? []).concat([
         {
-          mac: 'Cmd-s',
-          win: 'Ctrl-s',
-          linux: 'Ctrl-s',
+          key: 'Mod-s',
           preventDefault: true,
           run(view) {
             debouncedSaveChange(view)
