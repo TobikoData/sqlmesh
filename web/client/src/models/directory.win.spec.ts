@@ -1,14 +1,5 @@
-import { describe, test, expect, vi } from 'vitest'
+import { describe, test, expect } from 'vitest'
 import { ModelDirectory } from './directory'
-
-vi.mock('../utils/index', async () => {
-  const actual: any = await vi.importActual('../utils/index')
-
-  return {
-    ...actual,
-    PATH_SEPARATOR: '\\',
-  }
-})
 
 describe('Model Directory', () => {
   test('should create directory with nested atrifacts', () => {
@@ -37,22 +28,6 @@ describe('Model Directory', () => {
 
     expect(folder3).toBeTruthy()
     expect(folder3?.level).toBe(4)
-  })
-
-  test('should find parent by path', () => {
-    const directory = new ModelDirectory(getFakePayloadDirectoryWithChildren())
-
-    let found = ModelDirectory.findParentByPath(directory, '')
-
-    expect(found).toBe(directory)
-    expect(found?.path).toBe('')
-    expect(found?.level).toBe(0)
-
-    found = ModelDirectory.findParentByPath(directory, 'test\\folder_1')
-
-    expect(found).toBe(directory.directories[0]?.directories[0])
-    expect(found?.path).toBe('test\\folder_1')
-    expect(found?.level).toBe(2)
   })
 })
 

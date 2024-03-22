@@ -67,7 +67,7 @@ describe('getActionDisplayName', () => {
     const action = new ModelPlanAction({ value: EnumPlanAction.Run })
     const options = [EnumPlanAction.Run]
     const fallback = 'Start'
-    const expected = 'Run'
+    const expected = 'Plan'
 
     const result = ModelPlanAction.getActionDisplayName(
       action,

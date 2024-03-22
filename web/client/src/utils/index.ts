@@ -1,5 +1,3 @@
-export const PATH_SEPARATOR = navigator.userAgent.includes('Win') ? '\\' : '/'
-
 export function isTrue(value: unknown): boolean {
   return value === true
 }

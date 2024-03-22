@@ -7,7 +7,7 @@ import {
   writeFileApiFilesPathPost,
 } from '@api/client'
 import { useStoreProject } from '@context/project'
-import { ModelArtifact } from '@models/artifact'
+import { type ModelArtifact } from '@models/artifact'
 import { ModelDirectory } from '@models/directory'
 import {
   isArrayNotEmpty,
@@ -116,7 +116,7 @@ export default function FileExplorerProvider({
 
     const name = toUniqueName('new_directory')
 
-    writeDirectoryApiDirectoriesPathPost(`${parent.path}/${name}`, {})
+    writeDirectoryApiDirectoriesPathPost([parent.path, name].join('/'), {})
       .then(created => {
         if (isNil(created)) return
 
@@ -300,7 +300,7 @@ export default function FileExplorerProvider({
         artifact.rename(artifact.copyName())
       }
 
-      const new_path = ModelArtifact.toPath(target.path, artifact.name)
+      const new_path = [target.path, artifact.name].join('/')
 
       if (artifact instanceof ModelDirectory) {
         moveArtifactCallbacks.push(() => {
