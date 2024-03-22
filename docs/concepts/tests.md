@@ -145,7 +145,7 @@ test_example_full_model:
       - num_orders: 3
 ```
 
-Since [omitted columns](#omitting-columns) are treated as `NULL`, this test also implicitly asserts that both the input and the output `item_id` column are `NULL`, which is correct.
+Since [omitted columns](#omitting-columns) are treated as `NULL`, this test also implicitly asserts that both the input and the output `item_id` columns are `NULL`, which is correct.
 
 ### Testing CTEs
 
