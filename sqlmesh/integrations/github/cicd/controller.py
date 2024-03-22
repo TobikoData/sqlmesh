@@ -488,7 +488,7 @@ class GithubController:
             }}
         }}"""
         request = requests.post(
-            "/".join([os.environ["GITHUB_API_URL"], "graphql"]),
+            os.environ["GITHUB_GRAPHQL_URL"],
             json={"query": query},
             headers=headers,
         )
