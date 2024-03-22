@@ -1,4 +1,4 @@
-import { PATH_SEPARATOR, isStringEmptyOrNil, toUniqueName } from '@utils/index'
+import { isStringEmptyOrNil, toUniqueName } from '@utils/index'
 import { type ModelDirectory } from './directory'
 import { ModelInitial } from './initial'
 
@@ -42,7 +42,7 @@ export class ModelArtifact<
   }
 
   get path(): string {
-    return this.toPath(this.name, this._path)
+    return this._path
   }
 
   get isUntitled(): boolean {
@@ -67,23 +67,18 @@ export class ModelArtifact<
 
   rename(newName: string): void {
     if (this.isRemote) {
-      this._path = this.toPath(newName, this._path.replace(this.name, newName))
+      this._path = this._path.replace(this.name, newName)
     }
 
     this._name = newName
   }
 
-  private toPath(name: string, fallback: string = ''): string {
-    return ModelArtifact.toPath(
-      this.withParent
-        ? `${this.parent?.path ?? ''}${PATH_SEPARATOR}${name}`
-        : fallback,
-    )
-  }
-
-  static toPath(...paths: string[]): string {
-    return paths
-      .flatMap(path => path.split(PATH_SEPARATOR).filter(Boolean))
-      .join(PATH_SEPARATOR)
+  static findArtifactByPath(
+    directory: ModelDirectory,
+    path: string,
+  ): ModelArtifact | undefined {
+    return directory.path === path
+      ? directory
+      : directory.allArtifacts.find(artifact => artifact.path === path)
   }
 }

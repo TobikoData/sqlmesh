@@ -2,7 +2,6 @@ import React from 'react'
 import { Disclosure } from '@headlessui/react'
 import { MinusCircleIcon, PlusCircleIcon } from '@heroicons/react/24/solid'
 import {
-  PATH_SEPARATOR,
   isArrayNotEmpty,
   isFalse,
   isString,
@@ -39,10 +38,7 @@ const Documentation = function Documentation({
           <ul className="w-full">
             <DetailsItem
               name="Path"
-              value={model.path
-                .split(PATH_SEPARATOR)
-                .slice(0, -1)
-                .join(PATH_SEPARATOR)}
+              value={model.path}
             />
             <DetailsItem
               name="Name"

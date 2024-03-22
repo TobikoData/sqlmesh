@@ -1,6 +1,6 @@
 import { create } from 'zustand'
 import { ModelDirectory, type ModelFile } from '../models'
-import { type ModelArtifact } from '@models/artifact'
+import { ModelArtifact } from '@models/artifact'
 
 export interface Tests {
   ok: boolean
@@ -28,7 +28,6 @@ interface ProjectStore {
   selectedFile?: ModelFile
   setSelectedFile: (selectedFile?: ModelFile) => void
   findArtifactByPath: (path: string) => ModelArtifact | undefined
-  findParentByPath: (path: string) => ModelDirectory | undefined
   refreshFiles: () => void
   inActiveRange: (artifact: ModelArtifact) => boolean
 }
@@ -82,12 +81,7 @@ export const useStoreProject = create<ProjectStore>((set, get) => ({
   findArtifactByPath(path) {
     const s = get()
 
-    return ModelDirectory.findArtifactByPath(s.project, path)
-  },
-  findParentByPath(path) {
-    const s = get()
-
-    return ModelDirectory.findParentByPath(s.project, path)
+    return ModelArtifact.findArtifactByPath(s.project, path)
   },
   refreshFiles() {
     const s = get()
