@@ -194,7 +194,7 @@ class TrinoEngineAdapter(
         is_view: bool = False,
     ) -> exp.Schema:
         if self.current_catalog_type == "delta_lake":
-            columns_to_types = self.to_delta_ts(columns_to_types)
+            columns_to_types = self._to_delta_ts(columns_to_types)
 
         return super()._build_schema_exp(
             table, columns_to_types, column_descriptions, expressions, is_view
@@ -218,7 +218,7 @@ class TrinoEngineAdapter(
         column_descriptions: t.Optional[t.Dict[str, str]] = None,
     ) -> None:
         if columns_to_types and self.current_catalog_type == "delta_lake":
-            columns_to_types = self.to_delta_ts(columns_to_types)
+            columns_to_types = self._to_delta_ts(columns_to_types)
 
         return super()._scd_type_2(
             target_table,
@@ -244,17 +244,19 @@ class TrinoEngineAdapter(
     # - `timestamp(6)` for non-timezone-aware
     # - `timestamp(3) with time zone` for timezone-aware
     # https://trino.io/docs/current/connector/delta-lake.html#delta-lake-to-trino-type-mapping
-    def to_delta_ts(self, columns_to_types: t.Dict[str, exp.DataType]) -> t.Dict[str, exp.DataType]:
+    def _to_delta_ts(
+        self, columns_to_types: t.Dict[str, exp.DataType]
+    ) -> t.Dict[str, exp.DataType]:
         ts6 = exp.DataType.build("timestamp(6)")
         ts3_tz = exp.DataType.build("timestamp(3) with time zone")
 
         delta_columns_to_types = {
-            k: ts6 if v.is_type(exp.DataType.Type.TIMESTAMP) and not v == ts6 else v
+            k: ts6 if v.is_type(exp.DataType.Type.TIMESTAMP) else v
             for k, v in columns_to_types.items()
         }
 
         delta_columns_to_types = {
-            k: ts3_tz if v.is_type(exp.DataType.Type.TIMESTAMPTZ) and not v == ts3_tz else v
+            k: ts3_tz if v.is_type(exp.DataType.Type.TIMESTAMPTZ) else v
             for k, v in delta_columns_to_types.items()
         }
 

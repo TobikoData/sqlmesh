@@ -60,6 +60,8 @@ services:
     volumes:
       - ./trino/initdb.sql:/docker-entrypoint-initdb.d/initdb.sql
 
+  # A second metastore DB is needed because testing all of hive/iceberg/delta
+  # creates too many connections for a single postgres DB.
   trino_iceberg_delta_metastore_db:
     image: postgres
     hostname: trino_iceberg_delta_metastore_db
