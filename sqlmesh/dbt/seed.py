@@ -3,7 +3,15 @@ from __future__ import annotations
 import typing as t
 
 import agate
-from dbt_common.clients import agate_helper
+
+try:
+    from dbt_common.clients import agate_helper  # type: ignore
+
+    SUPPORTS_DELIMITER = True
+except ImportError:
+    from dbt.clients import agate_helper  # type: ignore
+
+    SUPPORTS_DELIMITER = False
 from sqlglot import exp
 
 from sqlmesh.core.model import Model, SeedKind, create_seed_model
@@ -29,7 +37,11 @@ class SeedConfig(BaseModelConfig):
         seed_path = self.path.absolute().as_posix()
         kwargs = self.sqlmesh_model_kwargs(context)
         if kwargs.get("columns") is None:
-            agate_table = agate_helper.from_csv(seed_path, [], delimiter=self.delimiter)
+            agate_table = (
+                agate_helper.from_csv(seed_path, [], delimiter=self.delimiter)
+                if SUPPORTS_DELIMITER
+                else agate_helper.from_csv(seed_path, [])
+            )
             kwargs["columns"] = {
                 name: AGATE_TYPE_MAPPING[tpe.__class__]
                 for name, tpe in zip(agate_table.column_names, agate_table.column_types)
