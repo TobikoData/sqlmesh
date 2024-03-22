@@ -8,7 +8,7 @@ A comprehensive suite of tests can empower data practitioners to work with confi
 
 ## Creating tests
 
-Test suites are defined using the YAML format. Each suite is a file whose name must begin with `test`, end in either `.yaml` or `.yml`, and is stored within the `tests/` folder of your SQLMesh project.
+Test suites are defined using the YAML format. Each suite is a file whose name must begin with `test`, end in either `.yaml` or `.yml`, and is stored under the `tests/` folder of your SQLMesh project.
 
 Tests within a suite file contain the following attributes:
 
