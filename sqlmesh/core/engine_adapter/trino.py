@@ -237,9 +237,10 @@ class TrinoEngineAdapter(
             column_descriptions,
         )
 
-    # delta_lake only supports two timestamp data types. This method converts other timestamp types to those
-    # for use in DDL statements. Trino automatically converts the data values to the correct type on write,
-    # so we only need to handle the DDL column types.
+    # delta_lake only supports two timestamp data types. This method converts other
+    # timestamp types to those two for use in DDL statements. Trino/delta automatically
+    # converts the data values to the correct type on write, so we only need to handle
+    # the column types in DDL.
     # - `timestamp(6)` for non-timezone-aware
     # - `timestamp(3) with time zone` for timezone-aware
     # https://trino.io/docs/current/connector/delta-lake.html#delta-lake-to-trino-type-mapping
