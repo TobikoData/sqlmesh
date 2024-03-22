@@ -294,6 +294,33 @@ def test_seed_columns():
     assert sqlmesh_seed.column_descriptions == expected_column_descriptions
 
 
+def test_seed_column_inference(tmp_path):
+    seed_csv = tmp_path / "seed.csv"
+    with open(seed_csv, "w") as fd:
+        fd.write("int_col,double_col,datetime_col,date_col,boolean_col,text_col\n")
+        fd.write("1,1.2,2021-01-01 00:00:00,2021-01-01,true,foo\n")
+        fd.write("2,2.3,2021-01-02 00:00:00,2021-01-02,false,bar\n")
+
+    seed = SeedConfig(
+        name="test_model",
+        package="package",
+        path=Path(seed_csv),
+    )
+
+    context = DbtContext()
+    context.project_name = "Foo"
+    context.target = DuckDbConfig(name="target", schema="test")
+    sqlmesh_seed = seed.to_sqlmesh(context)
+    assert sqlmesh_seed.columns_to_types == {
+        "int_col": exp.DataType.build("int"),
+        "double_col": exp.DataType.build("double"),
+        "datetime_col": exp.DataType.build("datetime"),
+        "date_col": exp.DataType.build("date"),
+        "boolean_col": exp.DataType.build("boolean"),
+        "text_col": exp.DataType.build("text"),
+    }
+
+
 @pytest.mark.xdist_group("dbt_manifest")
 @pytest.mark.parametrize(
     "model_fqn", ['"memory"."sushi"."waiters"', '"memory"."sushi"."waiter_names"']
