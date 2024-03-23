@@ -213,8 +213,7 @@ on:
     - created
 ```
 
-Note: `issue_comment` event will not work until this change in merged to your main branch. 
-Therefore to enable this you will need to make the change in a branch, merge, and then future branches will support the deploy command. 
+Note: the `issue_comment` event will not work until this change is merged into your main branch. Therefore, to enable this you will need to make the change in a branch, merge, and then future branches will support the deploy command.
 
 ### Desynchronized Production Code and Data Configuration
 
