@@ -247,7 +247,7 @@ Next, notice that `sqlmesh_example.incremental_model` contains a filter which re
 
 To make the generated test deterministic and thus ensure that it will always succeed, we need to define these variables and modify the above query to constrain `ds` accordingly.
 
-If we set `@start_ds` to `'2020-01-01'` and `@end_ds` to `'2020-01-04'`, the query becomes:
+If we set `@start_ds` to `'2020-01-01'` and `@end_ds` to `'2020-01-04'`, the above query needs to be changed to:
 
 ```sql linenums="1"
 SELECT * FROM sqlmesh_example.seed_model WHERE ds BETWEEN '2020-01-01' AND '2020-01-04' LIMIT 3
