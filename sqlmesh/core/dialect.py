@@ -25,8 +25,6 @@ if t.TYPE_CHECKING:
 
 SQLMESH_MACRO_PREFIX = "@"
 
-JSON_TYPE = exp.DataType.build("json")
-
 TABLES_META = "sqlmesh.tables"
 
 
@@ -942,13 +940,12 @@ def add_table(node: exp.Expression, table: str) -> exp.Expression:
 def transform_values(
     values: t.Tuple[t.Any, ...], columns_to_types: t.Dict[str, exp.DataType]
 ) -> t.Iterator[t.Any]:
-    """Perform transformations on values given columns_to_types.
-
-    Currently, the only transformation is wrapping JSON columns with PARSE_JSON().
-    """
+    """Perform transformations on values given columns_to_types."""
     for value, col_type in zip(values, columns_to_types.values()):
-        if col_type == JSON_TYPE:
+        if col_type.is_type(exp.DataType.Type.JSON):
             yield exp.func("PARSE_JSON", f"'{value}'")
+        elif isinstance(value, dict) and col_type.is_type(*exp.DataType.STRUCT_TYPES):
+            yield _dict_to_struct(value)
         else:
             yield value
 
@@ -994,3 +991,13 @@ def _unquote_schema(schema: t.Dict) -> t.Dict:
     return {
         k.strip('"'): _unquote_schema(v) if isinstance(v, dict) else v for k, v in schema.items()
     }
+
+
+def _dict_to_struct(values: t.Dict) -> exp.Struct:
+    expressions = []
+    for key, value in values.items():
+        key = exp.to_identifier(key)
+        value = _dict_to_struct(value) if isinstance(value, dict) else exp.convert(value)
+        expressions.append(exp.PropertyEQ(this=key, expression=value))
+
+    return exp.Struct(expressions=expressions)

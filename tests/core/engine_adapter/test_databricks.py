@@ -65,7 +65,9 @@ def test_replace_query_pandas_exists(mocker: MockFixture, make_mocked_engine_ada
     )
     adapter = make_mocked_engine_adapter(DatabricksEngineAdapter)
     df = pd.DataFrame({"a": [1, 2, 3], "b": [4, 5, 6]})
-    adapter.replace_query("test_table", df, {"a": "int", "b": "int"})
+    adapter.replace_query(
+        "test_table", df, {"a": exp.DataType.build("int"), "b": exp.DataType.build("int")}
+    )
 
     assert to_sql_calls(adapter) == [
         "INSERT OVERWRITE TABLE `test_table` (`a`, `b`) SELECT CAST(`a` AS INT) AS `a`, CAST(`b` AS INT) AS `b` FROM VALUES (1, 4), (2, 5), (3, 6) AS `t`(`a`, `b`)",
