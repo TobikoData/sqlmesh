@@ -842,9 +842,9 @@ def test_merge_upsert(make_mocked_engine_adapter: t.Callable, assert_exp_eq):
         target_table="target",
         source_table=t.cast(exp.Select, parse_one('SELECT "ID", ts, val FROM source')),
         columns_to_types={
-            "ID": exp.DataType.Type.INT,
-            "ts": exp.DataType.Type.TIMESTAMP,
-            "val": exp.DataType.Type.INT,
+            "ID": exp.DataType.build("int"),
+            "ts": exp.DataType.build("timestamp"),
+            "val": exp.DataType.build("int"),
         },
         unique_key=[exp.to_identifier("ID", quoted=True)],
     )
@@ -873,9 +873,9 @@ MERGE INTO "target" AS "__MERGE_TARGET__" USING (
         target_table="target",
         source_table=parse_one("SELECT id, ts, val FROM source"),
         columns_to_types={
-            "id": exp.DataType.Type.INT,
-            "ts": exp.DataType.Type.TIMESTAMP,
-            "val": exp.DataType.Type.INT,
+            "id": exp.DataType.build("int"),
+            "ts": exp.DataType.build("timestamp"),
+            "val": exp.DataType.build("int"),
         },
         unique_key=[exp.column("id"), exp.column("ts")],
     )
@@ -894,9 +894,9 @@ def test_merge_upsert_pandas(make_mocked_engine_adapter: t.Callable):
         target_table="target",
         source_table=df,
         columns_to_types={
-            "id": exp.DataType.Type.INT,
-            "ts": exp.DataType.Type.TIMESTAMP,
-            "val": exp.DataType.Type.INT,
+            "id": exp.DataType.build("int"),
+            "ts": exp.DataType.build("timestamp"),
+            "val": exp.DataType.build("int"),
         },
         unique_key=[exp.to_identifier("id")],
     )
@@ -911,9 +911,9 @@ def test_merge_upsert_pandas(make_mocked_engine_adapter: t.Callable):
         target_table="target",
         source_table=df,
         columns_to_types={
-            "id": exp.DataType.Type.INT,
-            "ts": exp.DataType.Type.TIMESTAMP,
-            "val": exp.DataType.Type.INT,
+            "id": exp.DataType.build("int"),
+            "ts": exp.DataType.build("timestamp"),
+            "val": exp.DataType.build("int"),
         },
         unique_key=[exp.to_identifier("id"), exp.to_identifier("ts")],
     )
@@ -931,9 +931,9 @@ def test_merge_when_matched(make_mocked_engine_adapter: t.Callable, assert_exp_e
         target_table="target",
         source_table=t.cast(exp.Select, parse_one('SELECT "ID", ts, val FROM source')),
         columns_to_types={
-            "ID": exp.DataType.Type.INT,
-            "ts": exp.DataType.Type.TIMESTAMP,
-            "val": exp.DataType.Type.INT,
+            "ID": exp.DataType.build("int"),
+            "ts": exp.DataType.build("timestamp"),
+            "val": exp.DataType.build("int"),
         },
         unique_key=[exp.to_identifier("ID", quoted=True)],
         when_matched=exp.When(

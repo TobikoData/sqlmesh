@@ -82,10 +82,10 @@ class ModelTest(unittest.TestCase):
             rows = values["rows"]
             if not columns_to_types and rows:
                 for i, v in rows[0].items():
-                    # convert ruamel into python
-                    v = v.real if hasattr(v, "real") else v
                     v_type = annotate_types(exp.convert(v)).type or type(v).__name__
-                    columns_to_types[i] = exp.maybe_parse(v_type, into=exp.DataType)
+                    columns_to_types[i] = exp.maybe_parse(
+                        v_type, into=exp.DataType, dialect=self.dialect
+                    )
 
             test_fixture_table = _fully_qualified_test_fixture_table(table_name, self.dialect)
             if test_fixture_table.db:
@@ -138,6 +138,7 @@ class ModelTest(unittest.TestCase):
             actual = actual.sort_values(by=actual.columns.to_list()).reset_index(drop=True)
             expected = expected.apply(lambda col: col.map(_to_hashable))
             expected = expected.sort_values(by=expected.columns.to_list()).reset_index(drop=True)
+
         try:
             pd.testing.assert_frame_equal(
                 expected,

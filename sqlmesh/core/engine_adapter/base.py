@@ -1000,20 +1000,17 @@ class EngineAdapter:
         )
 
     @t.overload
-    @classmethod
-    def _escape_json(cls, value: Query) -> Query: ...
+    def _escape_json(self, value: Query) -> Query: ...
 
     @t.overload
-    @classmethod
-    def _escape_json(cls, value: str) -> str: ...
+    def _escape_json(self, value: str) -> str: ...
 
-    @classmethod
-    def _escape_json(cls, value: Query | str) -> Query | str:
+    def _escape_json(self, value: Query | str) -> Query | str:
         """
         Some engines need to add an extra escape to literals that contain JSON values. By default we don't do this
         though
         """
-        if cls.ESCAPE_JSON:
+        if self.ESCAPE_JSON:
             if isinstance(value, str):
                 return double_escape(value)
             return t.cast(
@@ -1093,9 +1090,8 @@ class EngineAdapter:
         )
         self._insert_overwrite_by_condition(table_name, source_queries, columns_to_types, where)
 
-    @classmethod
     def _values_to_sql(
-        cls,
+        self,
         values: t.List[PandasNamedTuple],
         columns_to_types: t.Dict[str, exp.DataType],
         batch_start: int,
@@ -1111,7 +1107,7 @@ class EngineAdapter:
             alias=alias,
         )
         if contains_json:
-            query = t.cast(exp.Select, cls._escape_json(query))
+            query = t.cast(exp.Select, self._escape_json(query))
         return query
 
     def _insert_overwrite_by_condition(
