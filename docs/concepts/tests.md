@@ -14,6 +14,7 @@ Tests within a suite file contain the following attributes:
 
 * The unique name of a test
 * The name of the model targeted by this test
+* [Optional] The test's description
 * Test inputs, which are defined per upstream model or external table referenced by the target model. Each test input consists of the following:
     * The name of an upstream model or external table
     * The list of rows defined as a mapping from a column name to a value associated with it
@@ -28,6 +29,7 @@ The YAML format is defined as follows:
 ```yaml linenums="1"
 <unique_test_name>:
   model: <target_model_name>
+  description: <description>  # Optional
   inputs:
     <upstream_model_or_external_table_name>:
       rows:
@@ -49,7 +51,7 @@ The YAML format is defined as follows:
 
 The `rows` key is optional in the above format, so the following would also be valid:
 
-```
+```yaml linenums="1"
 <unique_test_name>:
   model: <target_model_name>
   inputs:
@@ -257,7 +259,7 @@ Finally, combining this query with the proper macro variable definitions, we can
 
 This can be achieved using the following command:
 
-```bash
+```
 $ sqlmesh create_test sqlmesh_example.incremental_model --query sqlmesh_example.seed_model "select * from sqlmesh_example.seed_model where ds between '2020-01-01' and '2020-01-04' limit 3" --var start '2020-01-01' --var end '2020-01-04'
 ```
 
@@ -295,7 +297,7 @@ test_incremental_model:
 
 As shown below, we now have two passing tests. Hooray!
 
-```bash
+```
 $ sqlmesh test
 .
 ----------------------------------------------------------------------
@@ -314,7 +316,7 @@ Tests run automatically every time a new [plan](plans.md) is created.
 
 You can execute tests on demand using the `sqlmesh test` command as follows:
 
-```bash
+```
 $ sqlmesh test
 .
 ----------------------------------------------------------------------
@@ -325,13 +327,13 @@ OK
 
 The command returns a non-zero exit code if there are any failures, and reports them in the standard error stream:
 
-```bash
+```
 $ sqlmesh test
 F
 ======================================================================
 FAIL: test_example_full_model (test/tests/test_full_model.yaml)
 ----------------------------------------------------------------------
-AssertionError: Data differs (exp: expected, act: actual)
+AssertionError: Data mismatch (exp: expected, act: actual)
 
   num_orders
          exp  act
@@ -349,12 +351,12 @@ Note: when there are many differing columns, the corresponding DataFrame will be
 
 To run a specific model test, pass in the suite file name followed by `::` and the name of the test:
 
-```bash
+```
 $ sqlmesh test tests/test_full_model.yaml::test_example_full_model
 ```
 
 You can also run tests that match a pattern or substring using a glob pathname expansion syntax:
 
-```bash
+```
 $ sqlmesh test tests/test_*
 ```
