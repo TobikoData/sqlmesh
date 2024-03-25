@@ -70,7 +70,7 @@ EXAMPLE_FULL_MODEL_DEF = f"""MODEL (
 
 SELECT
   item_id,
-  count(distinct id) AS num_orders,
+  COUNT(DISTINCT id) AS num_orders,
 FROM
     {EXAMPLE_INCREMENTAL_MODEL_NAME}
 GROUP BY item_id
@@ -93,7 +93,7 @@ SELECT
 FROM
     {EXAMPLE_SEED_MODEL_NAME}
 WHERE
-    event_date between @start_date and @end_date
+    event_date BETWEEN @start_date AND @end_date
 """
 
 EXAMPLE_SEED_MODEL_DEF = f"""MODEL (
