@@ -1479,7 +1479,9 @@ def load_sql_based_model(
     if query_or_seed_insert is not None and isinstance(
         query_or_seed_insert, (exp.Query, d.JinjaQuery)
     ):
-        jinja_macro_references.update(extract_macro_references(query_or_seed_insert.sql()))
+        jinja_macro_references.update(
+            extract_macro_references(query_or_seed_insert.sql(dialect=dialect))
+        )
         return create_sql_model(
             name,
             query_or_seed_insert,
