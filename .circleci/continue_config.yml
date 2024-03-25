@@ -213,14 +213,6 @@ jobs:
         - image: cimg/base:2021.11
       resource_class: small
       steps:
-        - run: 
-            name: Echo environment variables
-            command: |
-              echo "'"$CIRCLE_BRANCH"'" && \
-              echo "'$CIRCLE_BRANCH'"
-        - run: 
-            name: Echo pipeline values
-            command: echo "<< pipeline.git.branch >>"
         - run:
             name: Trigger private tests
             command: |
@@ -229,7 +221,7 @@ jobs:
                 --header "Circle-Token: $TOBIKO_PRIVATE_CIRCLECI_KEY" \
                 --header "content-type: application/json" \
                 --data '{
-                  "branch":"debug_webhook_tests",
+                  "branch":"main",
                   "parameters":{
                     "run_main_pr":false, 
                     "run_sqlmesh_commit":true, 
@@ -243,7 +235,6 @@ jobs:
 workflows:
   main_pr:
     jobs:
-      - trigger_private_tests
       - doc_tests
       - style_and_slow_tests:
           matrix:
@@ -266,12 +257,12 @@ workflows:
             branches:
               only:
                 - main
-      # - trigger_private_tests:
-          # requires:
-          #   - doc_tests
-          # filters:
-          #   branches:
-          #     only:
-          #       - main
+      - trigger_private_tests:
+          requires:
+            - style_and_slow_tests
+          filters:
+            branches:
+              only:
+                - main
       - ui_style
       - ui_test
