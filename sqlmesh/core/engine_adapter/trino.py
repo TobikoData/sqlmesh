@@ -24,12 +24,13 @@ from sqlmesh.core.engine_adapter.shared import (
     SourceQuery,
     set_catalog,
 )
+from sqlmesh.utils.date import TimeLike
 
 if t.TYPE_CHECKING:
     from trino.dbapi import Connection as TrinoConnection
 
     from sqlmesh.core._typing import SchemaName, TableName
-    from sqlmesh.core.engine_adapter._typing import DF
+    from sqlmesh.core.engine_adapter._typing import DF, QueryOrDF
 
 
 @set_catalog()
@@ -183,3 +184,80 @@ class TrinoEngineAdapter(
                 df[column] = pd.to_datetime(df[column]).map(lambda x: x.isoformat(" "))  # type: ignore
 
         return super()._df_to_source_queries(df, columns_to_types, batch_size, target_table)
+
+    def _build_schema_exp(
+        self,
+        table: exp.Table,
+        columns_to_types: t.Dict[str, exp.DataType],
+        column_descriptions: t.Optional[t.Dict[str, str]] = None,
+        expressions: t.Optional[t.List[exp.PrimaryKey]] = None,
+        is_view: bool = False,
+    ) -> exp.Schema:
+        if self.current_catalog_type == "delta_lake":
+            columns_to_types = self._to_delta_ts(columns_to_types)
+
+        return super()._build_schema_exp(
+            table, columns_to_types, column_descriptions, expressions, is_view
+        )
+
+    def _scd_type_2(
+        self,
+        target_table: TableName,
+        source_table: QueryOrDF,
+        unique_key: t.Sequence[exp.Expression],
+        valid_from_name: str,
+        valid_to_name: str,
+        execution_time: TimeLike,
+        invalidate_hard_deletes: bool = True,
+        updated_at_name: t.Optional[str] = None,
+        check_columns: t.Optional[t.Union[exp.Star, t.Sequence[exp.Column]]] = None,
+        updated_at_as_valid_from: bool = False,
+        execution_time_as_valid_from: bool = False,
+        columns_to_types: t.Optional[t.Dict[str, exp.DataType]] = None,
+        table_description: t.Optional[str] = None,
+        column_descriptions: t.Optional[t.Dict[str, str]] = None,
+    ) -> None:
+        if columns_to_types and self.current_catalog_type == "delta_lake":
+            columns_to_types = self._to_delta_ts(columns_to_types)
+
+        return super()._scd_type_2(
+            target_table,
+            source_table,
+            unique_key,
+            valid_from_name,
+            valid_to_name,
+            execution_time,
+            invalidate_hard_deletes,
+            updated_at_name,
+            check_columns,
+            updated_at_as_valid_from,
+            execution_time_as_valid_from,
+            columns_to_types,
+            table_description,
+            column_descriptions,
+        )
+
+    # delta_lake only supports two timestamp data types. This method converts other
+    # timestamp types to those two for use in DDL statements. Trino/delta automatically
+    # converts the data values to the correct type on write, so we only need to handle
+    # the column types in DDL.
+    # - `timestamp(6)` for non-timezone-aware
+    # - `timestamp(3) with time zone` for timezone-aware
+    # https://trino.io/docs/current/connector/delta-lake.html#delta-lake-to-trino-type-mapping
+    def _to_delta_ts(
+        self, columns_to_types: t.Dict[str, exp.DataType]
+    ) -> t.Dict[str, exp.DataType]:
+        ts6 = exp.DataType.build("timestamp(6)")
+        ts3_tz = exp.DataType.build("timestamp(3) with time zone")
+
+        delta_columns_to_types = {
+            k: ts6 if v.is_type(exp.DataType.Type.TIMESTAMP) else v
+            for k, v in columns_to_types.items()
+        }
+
+        delta_columns_to_types = {
+            k: ts3_tz if v.is_type(exp.DataType.Type.TIMESTAMPTZ) else v
+            for k, v in delta_columns_to_types.items()
+        }
+
+        return delta_columns_to_types
