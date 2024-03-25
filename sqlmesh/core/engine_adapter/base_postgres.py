@@ -35,10 +35,11 @@ class BasePostgresEngineAdapter(EngineAdapter):
         sql = (
             exp.select("column_name", "data_type")
             .from_(self.COLUMNS_TABLE)
-            .where(
-                f"table_name = '{table.alias_or_name}' AND table_schema = '{table.args['db'].name}'"
-            )
+            .where(f"table_name = '{table.alias_or_name}'")
         )
+        if table.args.get("db"):
+            sql = sql.where(f"table_schema = '{table.args['db'].name}'")
+
         self.execute(sql)
         resp = self.cursor.fetchall()
         if not resp:
