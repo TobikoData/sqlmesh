@@ -1583,6 +1583,26 @@ class GenericContext(BaseContext, t.Generic[C]):
 
         return success
 
+    def table_name(self, model_name: str, dev: bool) -> str:
+        """Returns the name of the pysical table for the given model name.
+
+        Args:
+            model_name: The name of the model.
+            dev: Whether to use the deployability index for the table name.
+
+        Returns:
+            The name of the physical table.
+        """
+        deployability_index = (
+            DeployabilityIndex.create(self.snapshots.values())
+            if dev
+            else DeployabilityIndex.all_deployable()
+        )
+        snapshot = self.get_snapshot(model_name)
+        if not snapshot:
+            raise SQLMeshError(f"Model '{model_name}' was not found.")
+        return snapshot.table_name(is_deployable=deployability_index.is_deployable(snapshot))
+
     def clear_caches(self) -> None:
         for path in self.configs:
             rmtree(path / c.CACHE)
