@@ -220,8 +220,7 @@ jobs:
               echo "'$CIRCLE_BRANCH'"
         - run: 
             name: Echo pipeline values
-              command: |
-                echo "<< pipeline.git.branch >>"
+            command: echo "<< pipeline.git.branch >>"
         # - run:
         #     name: Trigger private tests
         #     command: |
