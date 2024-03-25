@@ -213,24 +213,33 @@ jobs:
         - image: cimg/base:2021.11
       resource_class: small
       steps:
-        - run:
-            name: Trigger private tests
+        - run: 
+            name: Echo environment variables
             command: |
-              curl --request POST \
-                --url $TOBIKO_PRIVATE_CIRCLECI_URL \
-                --header "Circle-Token: $TOBIKO_PRIVATE_CIRCLECI_KEY" \
-                --header "content-type: application/json" \
-                --data '{
-                  "branch":"main",
-                  "parameters":{
-                    "run_main_pr":false, 
-                    "run_sqlmesh_commit":true, 
-                    "sqlmesh_branch":"'"$CIRCLE_BRANCH"'",
-                    "sqlmesh_commit_author":"'"$CIRCLE_USERNAME"'",
-                    "sqlmesh_commit_hash":"'"$CIRCLE_SHA1"'",
-                    "sqlmesh_commit_pr":"'"$CIRCLE_PULL_REQUEST"'"
-                    }
-                }'
+              echo "'"$CIRCLE_BRANCH"'" && \
+              echo "'$CIRCLE_BRANCH'"
+        - run: 
+            name: Echo pipeline values
+              command: |
+                echo "<< pipeline.git.branch >>"
+        # - run:
+        #     name: Trigger private tests
+        #     command: |
+        #       curl --request POST \
+        #         --url $TOBIKO_PRIVATE_CIRCLECI_URL \
+        #         --header "Circle-Token: $TOBIKO_PRIVATE_CIRCLECI_KEY" \
+        #         --header "content-type: application/json" \
+        #         --data '{
+        #           "branch":"main",
+        #           "parameters":{
+        #             "run_main_pr":false, 
+        #             "run_sqlmesh_commit":true, 
+        #             "sqlmesh_branch":"'"$CIRCLE_BRANCH"'",
+        #             "sqlmesh_commit_author":"'"$CIRCLE_USERNAME"'",
+        #             "sqlmesh_commit_hash":"'"$CIRCLE_SHA1"'",
+        #             "sqlmesh_commit_pr":"'"$CIRCLE_PULL_REQUEST"'"
+        #             }
+        #         }'
 
 workflows:
   main_pr:
@@ -259,10 +268,10 @@ workflows:
                 - main
       - trigger_private_tests:
           requires:
-            - style_and_slow_tests
-          filters:
-            branches:
-              only:
-                - main
+            - doc_tests
+          # filters:
+          #   branches:
+          #     only:
+          #       - main
       - ui_style
       - ui_test
