@@ -153,7 +153,7 @@ class ModelTest(unittest.TestCase):
             )
         except AssertionError as e:
             if expected.shape != actual.shape:
-                _raise_if_unknown_columns(expected.columns, actual.columns)
+                _raise_if_unexpected_columns(expected.columns, actual.columns)
 
                 error_msg = "Data mismatch (rows are different)"
 
@@ -489,7 +489,7 @@ def _create_df(
 ) -> pd.DataFrame:
     if columns:
         referenced_columns = {col for row in rows for col in row}
-        _raise_if_unknown_columns(columns, referenced_columns)
+        _raise_if_unexpected_columns(columns, referenced_columns)
 
         if partial:
             columns = list(referenced_columns)
@@ -497,7 +497,7 @@ def _create_df(
     return pd.DataFrame.from_records(rows, columns=columns)
 
 
-def _raise_if_unknown_columns(
+def _raise_if_unexpected_columns(
     expected_cols: t.Collection[str], actual_cols: t.Collection[str]
 ) -> None:
     unique_expected_cols = set(expected_cols)
