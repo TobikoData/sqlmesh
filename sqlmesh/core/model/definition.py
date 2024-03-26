@@ -755,6 +755,7 @@ class _Model(ModelMeta, frozen=True):
             json.dumps(self.column_descriptions, sort_keys=True),
             self.cron,
             str(self.start) if self.start else None,
+            str(self.end) if self.end else None,
             str(self.retention) if self.retention else None,
             str(self.batch_size) if self.batch_size is not None else None,
             json.dumps(self.mapping_schema, sort_keys=True),
