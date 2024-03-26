@@ -1273,7 +1273,11 @@ class EngineAdapter:
             source_table, columns_to_types, target_table=target_table, batch_size=0
         )
         columns_to_types = columns_to_types or self.columns(target_table)
-        if valid_from_name not in columns_to_types or valid_to_name not in columns_to_types:
+        if (
+            valid_from_name not in columns_to_types
+            or valid_to_name not in columns_to_types
+            or not columns_to_types_all_known(columns_to_types)
+        ):
             columns_to_types = self.columns(target_table)
         if not columns_to_types:
             raise SQLMeshError(f"Could not get columns_to_types. Does {target_table} exist?")
