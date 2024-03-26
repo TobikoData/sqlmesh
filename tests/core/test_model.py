@@ -3357,3 +3357,22 @@ def test_end_date():
             """
             )
         )
+
+
+def test_end_no_start():
+    expressions = d.parse(
+        f"""
+        MODEL (
+            name db.table,
+            kind INCREMENTAL_BY_TIME_RANGE (
+                time_column ts,
+            ),
+            end '2023-06-01'
+        );
+
+        SELECT 1::int AS a, 2::int AS b, now::timestamp as ts
+        """
+    )
+    with pytest.raises(ConfigError, match="Must define a start date if an end date is defined"):
+        load_sql_based_model(expressions)
+    load_sql_based_model(expressions, defaults={"start": "2023-01-01"})
