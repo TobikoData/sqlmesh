@@ -370,12 +370,13 @@ class _SCDType2Kind(_ModelKind):
     valid_from_name: SQLGlotString = "valid_from"
     valid_to_name: SQLGlotString = "valid_to"
     invalidate_hard_deletes: SQLGlotBool = False
-    time_data_type: exp.DataType = exp.DataType.build("TIMESTAMP")
+    time_data_type: exp.DataType = Field(exp.DataType.build("TIMESTAMP"), validate_default=True)
 
     forward_only: SQLGlotBool = True
     disable_restatement: SQLGlotBool = True
 
-    @field_validator("time_data_type", mode="before")
+    # always=True can be removed once Pydantic 1 is deprecated
+    @field_validator("time_data_type", mode="before", always=True)
     @classmethod
     def _time_data_type_validator(
         cls, v: t.Union[str, exp.Expression], values: t.Any
@@ -383,7 +384,9 @@ class _SCDType2Kind(_ModelKind):
         values = values if isinstance(values, dict) else values.data
         if isinstance(v, exp.Expression) and not isinstance(v, exp.DataType):
             v = v.name
-        return exp.DataType.build(v, dialect=values.get("dialect"))
+        data_type = exp.DataType.build(v, dialect=values.get("dialect"))
+        data_type.meta["dialect"] = values.get("dialect")
+        return data_type
 
     @property
     def managed_columns(self) -> t.Dict[str, exp.DataType]:
