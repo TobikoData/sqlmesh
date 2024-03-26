@@ -205,12 +205,12 @@ The GitHub Actions workflow needs to be updated to trigger the action based on i
 on:
   pull_request:
     types:
-    - synchronize
-    - opened
+      - synchronize
+      - opened
   # Required if using comments to issue commands to the bot
   issue_comment:
     types:
-    - created
+      - created
 ```
 
 ### Desynchronized Production Code and Data Configuration
