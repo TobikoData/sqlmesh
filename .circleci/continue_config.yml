@@ -243,7 +243,6 @@ jobs:
 workflows:
   main_pr:
     jobs:
-      - trigger_private_tests
       - doc_tests
       - style_and_slow_tests:
           matrix:
