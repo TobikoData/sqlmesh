@@ -599,6 +599,25 @@ class SQLMeshMagics(Magics):
 
     @magic_arguments()
     @argument(
+        "model_name",
+        nargs="?",
+        type=str,
+        help="The name of the model to get the table name for.",
+    )
+    @argument(
+        "--dev",
+        action="store_true",
+        help="Print the name of the snapshot table used for previews in development environments.",
+    )
+    @line_magic
+    @pass_sqlmesh_context
+    def table_name(self, context: Context, line: str) -> None:
+        """Prints the name of the physical table for the given model."""
+        args = parse_argstring(self.table_diff, line)
+        context.console.log_status_update(context.table_name(args.model_name, args.dev))
+
+    @magic_arguments()
+    @argument(
         "--read",
         type=str,
         default="",
