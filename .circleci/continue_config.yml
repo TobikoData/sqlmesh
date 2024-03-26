@@ -228,7 +228,7 @@ jobs:
                     "sqlmesh_branch":"'$CIRCLE_BRANCH'",
                     "sqlmesh_commit_author":"'$CIRCLE_USERNAME'",
                     "sqlmesh_commit_hash":"'$CIRCLE_SHA1'",
-                    "sqlmesh_commit_pr":"'$CIRCLE_PULL_REQUEST'"
+                    "sqlmesh_build_url":"'$CIRCLE_BUILD_URL'"
                     }
                 }'
 
