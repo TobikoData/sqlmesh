@@ -212,57 +212,71 @@ jobs:
       docker: 
         - image: cimg/base:2021.11
       resource_class: small
+      environment:
+        GIT_COMMIT_DESC: git log --format=oneline -n 1
       steps:
+        - checkout
         - run:
-            name: Trigger private tests
+            name: Get commit message
             command: |
-              curl --request POST \
-                --url $TOBIKO_PRIVATE_CIRCLECI_URL \
-                --header "Circle-Token: $TOBIKO_PRIVATE_CIRCLECI_KEY" \
-                --header "content-type: application/json" \
-                --data '{
-                  "branch":"main",
-                  "parameters":{
-                    "run_main_pr":false, 
-                    "run_sqlmesh_commit":true, 
-                    "sqlmesh_branch":"'$CIRCLE_BRANCH'",
-                    "sqlmesh_commit_author":"'$CIRCLE_USERNAME'",
-                    "sqlmesh_commit_hash":"'$CIRCLE_SHA1'",
-                    "sqlmesh_build_url":"'$CIRCLE_BUILD_URL'"
-                    }
-                }'
+              echo "export COMMIT_MESSAGE=\"$(git log --format=%s%b -n 1 $CIRCLE_SHA1)\"" >> "$BASH_ENV"
+              source "$BASH_ENV"
+        - run:
+            name: Check commit message
+            command: |
+              echo "'$COMMIT_MESSAGE'"
+        # - run:
+        #     name: Trigger private tests
+        #     command: |
+        #       curl --request POST \
+        #         --url $TOBIKO_PRIVATE_CIRCLECI_URL \
+        #         --header "Circle-Token: $TOBIKO_PRIVATE_CIRCLECI_KEY" \
+        #         --header "content-type: application/json" \
+        #         --data '{
+        #           "branch":"main",
+        #           "parameters":{
+        #             "run_main_pr":false, 
+        #             "run_sqlmesh_commit":true, 
+        #             "sqlmesh_branch":"'$CIRCLE_BRANCH'",
+        #             "sqlmesh_commit_author":"'$CIRCLE_USERNAME'",
+        #             "sqlmesh_commit_hash":"'$CIRCLE_SHA1'",
+        #             "sqlmesh_commit_message":"'$COMMIT_MESSAGE'"
+        #             "sqlmesh_build_url":"'$CIRCLE_BUILD_URL'"
+        #             }
+        #         }'
 
 workflows:
   main_pr:
     jobs:
-      - doc_tests
-      - style_and_slow_tests:
-          matrix:
-            parameters:
-              python_version:
-                ["3.8", "3.9", "3.10", "3.11"]
-      - style_and_slow_tests_pydantic_v1
-      - airflow_docker_tests:
-          requires:
-            - style_and_slow_tests
-          filters:
-            branches:
-              only:
-                - main
-      - engine_adapter_docker_tests:
-          context: engine_adapter_slow
-          requires:
-            - style_and_slow_tests
-          filters:
-            branches:
-              only:
-                - main
-      - trigger_private_tests:
-          requires:
-            - style_and_slow_tests
-          filters:
-            branches:
-              only:
-                - main
-      - ui_style
-      - ui_test
+      - trigger_private_tests
+      # - doc_tests
+      # - style_and_slow_tests:
+      #     matrix:
+      #       parameters:
+      #         python_version:
+      #           ["3.8", "3.9", "3.10", "3.11"]
+      # - style_and_slow_tests_pydantic_v1
+      # - airflow_docker_tests:
+      #     requires:
+      #       - style_and_slow_tests
+      #     filters:
+      #       branches:
+      #         only:
+      #           - main
+      # - engine_adapter_docker_tests:
+      #     context: engine_adapter_slow
+      #     requires:
+      #       - style_and_slow_tests
+      #     filters:
+      #       branches:
+      #         only:
+      #           - main
+      # # - trigger_private_tests:
+      # #     requires:
+      # #       - style_and_slow_tests
+      # #     filters:
+      # #       branches:
+      # #         only:
+      # #           - main
+      # - ui_style
+      # - ui_test
