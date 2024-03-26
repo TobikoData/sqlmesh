@@ -384,8 +384,9 @@ class _SCDType2Kind(_ModelKind):
         values = values if isinstance(values, dict) else values.data
         if isinstance(v, exp.Expression) and not isinstance(v, exp.DataType):
             v = v.name
-        data_type = exp.DataType.build(v, dialect=values.get("dialect"))
-        data_type.meta["dialect"] = values.get("dialect")
+        dialect = values.get("dialect")
+        data_type = exp.DataType.build(v, dialect=dialect)
+        data_type.meta["dialect"] = dialect
         return data_type
 
     @property
