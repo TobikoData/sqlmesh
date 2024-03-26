@@ -1587,9 +1587,9 @@ class GenericContext(BaseContext, t.Generic[C]):
         for path in self.configs:
             rmtree(path / c.CACHE)
 
-    def _run_tests(self) -> t.Tuple[unittest.result.TestResult, str]:
+    def _run_tests(self, verbose: bool = False) -> t.Tuple[unittest.result.TestResult, str]:
         test_output_io = StringIO()
-        result = self.test(stream=test_output_io)
+        result = self.test(stream=test_output_io, verbose=verbose)
         return result, test_output_io.getvalue()
 
     def _run_plan_tests(

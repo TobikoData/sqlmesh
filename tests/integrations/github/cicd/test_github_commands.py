@@ -68,7 +68,9 @@ def test_run_all_success_with_approvers_approved(
         github_client,
         bot_config=GithubCICDBotConfig(invalidate_environment_after_deploy=False),
     )
-    controller._context._run_tests = mocker.MagicMock(side_effect=lambda: (TestResult(), ""))
+    controller._context._run_tests = mocker.MagicMock(
+        side_effect=lambda **kwargs: (TestResult(), "")
+    )
     controller._context.users = [
         User(username="test", github_username="test_github", roles=[UserRole.REQUIRED_APPROVER])
     ]
@@ -193,7 +195,9 @@ def test_run_all_success_with_approvers_approved_merge_delete(
         github_client,
         bot_config=GithubCICDBotConfig(merge_method=MergeMethod.REBASE),
     )
-    controller._context._run_tests = mocker.MagicMock(side_effect=lambda: (TestResult(), ""))
+    controller._context._run_tests = mocker.MagicMock(
+        side_effect=lambda **kwargs: (TestResult(), "")
+    )
     controller._context.users = [
         User(username="test", github_username="test_github", roles=[UserRole.REQUIRED_APPROVER])
     ]
@@ -320,7 +324,9 @@ def test_run_all_missing_approval(
         github_client,
         bot_config=GithubCICDBotConfig(invalidate_environment_after_deploy=False),
     )
-    controller._context._run_tests = mocker.MagicMock(side_effect=lambda: (TestResult(), ""))
+    controller._context._run_tests = mocker.MagicMock(
+        side_effect=lambda **kwargs: (TestResult(), "")
+    )
     controller._context.users = [
         User(username="test", github_username="test_github", roles=[UserRole.REQUIRED_APPROVER])
     ]
@@ -440,7 +446,7 @@ def test_run_all_test_failed(
     test_result = TestResult()
     test_result.addFailure(TestCase(), (None, None, None))
     controller._context._run_tests = mocker.MagicMock(
-        side_effect=lambda: (test_result, "some error")
+        side_effect=lambda **kwargs: (test_result, "some error")
     )
     controller._context.users = [
         User(username="test", github_username="test_github", roles=[UserRole.REQUIRED_APPROVER])
@@ -561,7 +567,9 @@ def test_pr_update_failure(
         github_client,
         bot_config=GithubCICDBotConfig(merge_method=MergeMethod.REBASE),
     )
-    controller._context._run_tests = mocker.MagicMock(side_effect=lambda: (TestResult(), ""))
+    controller._context._run_tests = mocker.MagicMock(
+        side_effect=lambda **kwargs: (TestResult(), "")
+    )
     controller._context.users = [
         User(username="test", github_username="test_github", roles=[UserRole.REQUIRED_APPROVER])
     ]
@@ -681,7 +689,9 @@ def test_prod_update_failure(
         github_client,
         bot_config=GithubCICDBotConfig(merge_method=MergeMethod.REBASE),
     )
-    controller._context._run_tests = mocker.MagicMock(side_effect=lambda: (TestResult(), ""))
+    controller._context._run_tests = mocker.MagicMock(
+        side_effect=lambda **kwargs: (TestResult(), "")
+    )
     controller._context.users = [
         User(username="test", github_username="test_github", roles=[UserRole.REQUIRED_APPROVER])
     ]
@@ -815,7 +825,9 @@ def test_comment_command_invalid(
         github_client,
         bot_config=GithubCICDBotConfig(merge_method=MergeMethod.REBASE),
     )
-    controller._context._run_tests = mocker.MagicMock(side_effect=lambda: (TestResult(), ""))
+    controller._context._run_tests = mocker.MagicMock(
+        side_effect=lambda **kwargs: (TestResult(), "")
+    )
     controller._context.users = [
         User(username="test", github_username="test_github", roles=[UserRole.REQUIRED_APPROVER])
     ]
@@ -882,7 +894,9 @@ def test_comment_command_deploy_prod(
         github_client,
         bot_config=GithubCICDBotConfig(merge_method=MergeMethod.REBASE, enable_deploy_command=True),
     )
-    controller._context._run_tests = mocker.MagicMock(side_effect=lambda: (TestResult(), ""))
+    controller._context._run_tests = mocker.MagicMock(
+        side_effect=lambda **kwargs: (TestResult(), "")
+    )
     controller._context.users = [
         User(username="test", github_username="test_github", roles=[UserRole.REQUIRED_APPROVER])
     ]
@@ -1002,7 +1016,9 @@ def test_comment_command_deploy_prod_not_enabled(
         github_client,
         bot_config=GithubCICDBotConfig(merge_method=MergeMethod.REBASE),
     )
-    controller._context._run_tests = mocker.MagicMock(side_effect=lambda: (TestResult(), ""))
+    controller._context._run_tests = mocker.MagicMock(
+        side_effect=lambda **kwargs: (TestResult(), "")
+    )
     controller._context.users = []
     controller._context.invalidate_environment = mocker.MagicMock()
 

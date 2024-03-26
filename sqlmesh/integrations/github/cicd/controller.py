@@ -456,7 +456,7 @@ class GithubController:
         """
         Run tests for the PR
         """
-        return self._context._run_tests()
+        return self._context._run_tests(verbose=True)
 
     def _get_or_create_comment(self, header: str = BOT_HEADER_MSG) -> IssueComment:
         comment = seq_get(
