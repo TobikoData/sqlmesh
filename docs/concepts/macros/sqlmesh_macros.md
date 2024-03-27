@@ -154,7 +154,7 @@ MODEL (
 @DEF(area, r -> pi() * r * r);
 @DEF(container_volume, (r, h) -> @area(@r) * h);
 
-SELECT container_id, @container_volume((cont_di / 2), cont_hi) AS area
+SELECT container_id, @container_volume((cont_di / 2), cont_hi) AS volume
 ```
 
 ### User-defined variable quoting
