@@ -432,9 +432,9 @@ def generate_test(
     inputs = {
         models[dep]
         .name: pandas_timestamp_to_pydatetime(
-            engine_adapter.fetchdf(query), models[dep].columns_to_types
+            engine_adapter.fetchdf(query).apply(lambda col: col.map(_normalize_dataframe)),
+            models[dep].columns_to_types,
         )
-        .apply(lambda col: col.map(_normalize_dataframe))
         .to_dict(orient="records")
         for dep, query in input_queries.items()
     }
@@ -471,11 +471,9 @@ def generate_test(
     else:
         output = t.cast(PythonModelTest, test)._execute_model()
 
-    outputs["query"] = (
-        pandas_timestamp_to_pydatetime(output, model.columns_to_types)
-        .apply(lambda col: col.map(_normalize_dataframe))
-        .to_dict(orient="records")
-    )
+    outputs["query"] = pandas_timestamp_to_pydatetime(
+        output.apply(lambda col: col.map(_normalize_dataframe)), model.columns_to_types
+    ).to_dict(orient="records")
 
     test.tearDown()
 
