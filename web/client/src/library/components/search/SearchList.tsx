@@ -139,7 +139,7 @@ export default function SearchList<
   return (
     <div
       className={clsx(
-        'px-2 py-1 relative',
+        'p-1 relative',
         disabled && 'opacity-50 cursor-not-allowed',
         className,
       )}
@@ -185,7 +185,6 @@ export default function SearchList<
         >
           <Popover.Panel
             static
-            focus
             className={clsx(
               'absolute z-50 right-0 transform cursor-pointer rounded-lg bg-theme border-2 border-neutral-200',
               'p-2 bg-theme dark:bg-theme-lighter overflow-auto hover:scrollbar scrollbar--vertical scrollbar--horizontal shadow-2xl',

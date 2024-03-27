@@ -149,7 +149,7 @@ export default function SourceList<
       style={{ contain: 'strict' }}
     >
       {withFilter && (
-        <div className="p-2 w-full flex justify-between">
+        <div className="p-1 w-full flex justify-between">
           <Input
             className="w-full !m-0"
             size={EnumSize.sm}
@@ -173,7 +173,7 @@ export default function SourceList<
           )}
         </div>
       )}
-      <div className="w-full h-full relative px-2">
+      <div className="w-full h-full relative p-1">
         {shouldShowReturnButton && (
           <Button
             className="absolute left-[50%] translate-x-[-50%] -top-2 z-10 text-ellipsis !block overflow-hidden no-wrap max-w-[90%] !border-neutral-20 shadow-md !bg-theme !hover:bg-theme text-neutral-500 dark:text-neutral-300 !focus:ring-2 !focus:ring-theme-500 !focus:ring-offset-2 !focus:ring-offset-theme-50 !focus:ring-opacity-50 !focus:outline-none !focus:ring-offset-transparent !focus:ring-offset-0 !focus:ring"
