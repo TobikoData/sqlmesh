@@ -832,3 +832,41 @@ def test_test_generation_with_array(tmp_path: Path) -> None:
         "sqlmesh_example.bar": [{"array_col": ["value1", "value2"]}]
     }
     assert test["test_foo"]["outputs"] == {"query": [{"array_col": ["value1", "value2"]}]}
+
+
+def test_test_generation_with_timestamp(tmp_path: Path) -> None:
+    init_example_project(tmp_path, dialect="duckdb")
+
+    config = Config(
+        default_connection=DuckDBConnectionConfig(),
+        model_defaults=ModelDefaultsConfig(dialect="duckdb"),
+    )
+    foo_sql_file = tmp_path / "models" / "foo.sql"
+    foo_sql_file.write_text(
+        "MODEL (name sqlmesh_example.foo); SELECT ts_col FROM sqlmesh_example.bar;"
+    )
+    bar_sql_file = tmp_path / "models" / "bar.sql"
+    bar_sql_file.write_text("MODEL (name sqlmesh_example.bar); SELECT ts_col FROM external_table;")
+
+    context = Context(paths=tmp_path, config=config)
+
+    input_queries = {
+        "sqlmesh_example.bar": "SELECT TIMESTAMP '2024-09-20 11:30:00.123456789' AS ts_col"
+    }
+
+    context.create_test(
+        "sqlmesh_example.foo",
+        input_queries=input_queries,
+        overwrite=True,
+    )
+
+    test = load_yaml(context.path / c.TESTS / "test_foo.yaml")
+
+    assert len(test) == 1
+    assert "test_foo" in test
+    assert test["test_foo"]["inputs"] == {
+        "sqlmesh_example.bar": [{"ts_col": datetime.datetime(2024, 9, 20, 11, 30, 0, 123456)}]
+    }
+    assert test["test_foo"]["outputs"] == {
+        "query": [{"ts_col": datetime.datetime(2024, 9, 20, 11, 30, 0, 123456)}]
+    }
