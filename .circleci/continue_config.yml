@@ -212,8 +212,6 @@ jobs:
       docker: 
         - image: cimg/base:2021.11
       resource_class: small
-      environment:
-        GIT_COMMIT_DESC: git log --format=oneline -n 1
       steps:
         - checkout
         - run:
