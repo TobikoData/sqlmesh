@@ -357,14 +357,13 @@ test_foo:
         b: 6
         c: 7
   outputs:
+    partial: true  # Applies to all outputs
     ctes:
       t:
-        partial: true
         rows:
           - c: 3
           - c: 7
     query:
-      partial: true
       rows:
         - a: 1
           b: 2
@@ -378,6 +377,43 @@ test_foo:
     ).run()
 
     _check_successful_or_raise(result)
+
+    result = _create_test(
+        body=load_yaml(
+            """
+test_foo:
+  model: sushi.foo
+  inputs:
+    raw:
+      - a: 1
+        b: 2
+        c: 3
+        d: 4
+      - a: 5
+        b: 6
+        c: 7
+  outputs:
+    ctes:
+      t:
+        partial: true
+        rows:
+          - c: 3
+          - c: 7
+    query:
+      rows:
+        - a: 1
+          b: 2
+          c: 3
+          d: 4
+        - a: 5
+          b: 6
+          c: 7
+            """
+        ),
+        test_name="test_foo",
+        model=_create_model("WITH t AS (SELECT a, b, c, d FROM raw) SELECT a, b, c, d FROM t"),
+        context=Context(config=Config(model_defaults=ModelDefaultsConfig(dialect="duckdb"))),
+    ).run()
 
 
 def test_partial_data_column_order(sushi_context: Context) -> None:
