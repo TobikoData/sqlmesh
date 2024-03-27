@@ -238,35 +238,34 @@ jobs:
 workflows:
   main_pr:
     jobs:
-      - trigger_private_tests
-      # - doc_tests
-      # - style_and_slow_tests:
-      #     matrix:
-      #       parameters:
-      #         python_version:
-      #           ["3.8", "3.9", "3.10", "3.11"]
-      # - style_and_slow_tests_pydantic_v1
-      # - airflow_docker_tests:
-      #     requires:
-      #       - style_and_slow_tests
-      #     filters:
-      #       branches:
-      #         only:
-      #           - main
-      # - engine_adapter_docker_tests:
-      #     context: engine_adapter_slow
-      #     requires:
-      #       - style_and_slow_tests
-      #     filters:
-      #       branches:
-      #         only:
-      #           - main
-      # - trigger_private_tests:
-      #     requires:
-      #       - style_and_slow_tests
-      #     filters:
-      #       branches:
-      #         only:
-      #           - main
-      # - ui_style
-      # - ui_test
+      - doc_tests
+      - style_and_slow_tests:
+          matrix:
+            parameters:
+              python_version:
+                ["3.8", "3.9", "3.10", "3.11"]
+      - style_and_slow_tests_pydantic_v1
+      - airflow_docker_tests:
+          requires:
+            - style_and_slow_tests
+          filters:
+            branches:
+              only:
+                - main
+      - engine_adapter_docker_tests:
+          context: engine_adapter_slow
+          requires:
+            - style_and_slow_tests
+          filters:
+            branches:
+              only:
+                - main
+      - trigger_private_tests:
+          requires:
+            - style_and_slow_tests
+          filters:
+            branches:
+              only:
+                - main
+      - ui_style
+      - ui_test
