@@ -258,7 +258,11 @@ class _Node(PydanticModel):
                 raise ConfigError(
                     f"Interval unit of '{interval_unit}' is larger than cron period of '{cron}'"
                 )
-        validate_date_range(values.get("start"), values.get("end"))
+        start = values.get("start")
+        end = values.get("end")
+        if end is not None and start is None:
+            raise ConfigError("Must define a start date if an end date is defined.")
+        validate_date_range(start, end)
         return values
 
     @property

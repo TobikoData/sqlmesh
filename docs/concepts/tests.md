@@ -14,6 +14,7 @@ Tests within a suite file contain the following attributes:
 
 * The unique name of a test
 * The name of the model targeted by this test
+* [Optional] The test's description
 * Test inputs, which are defined per upstream model or external table referenced by the target model. Each test input consists of the following:
     * The name of an upstream model or external table
     * The list of rows defined as a mapping from a column name to a value associated with it
@@ -28,6 +29,7 @@ The YAML format is defined as follows:
 ```yaml linenums="1"
 <unique_test_name>:
   model: <target_model_name>
+  description: <description>  # Optional
   inputs:
     <upstream_model_or_external_table_name>:
       rows:
@@ -49,7 +51,7 @@ The YAML format is defined as follows:
 
 The `rows` key is optional in the above format, so the following would also be valid:
 
-```
+```yaml linenums="1"
 <unique_test_name>:
   model: <target_model_name>
   inputs:
@@ -97,7 +99,6 @@ SELECT
 FROM
     sqlmesh_example.incremental_model
 GROUP BY item_id
-ORDER BY item_id
 ```
 
 Notice how the query of the model definition above references one upstream model: `sqlmesh_example.incremental_model`.
@@ -109,16 +110,16 @@ test_example_full_model:
   model: sqlmesh_example.full_model
   inputs:
     sqlmesh_example.incremental_model:
-        rows:
-        - id: 1
-          item_id: 1
-          ds: '2020-01-01'
-        - id: 2
-          item_id: 1
-          ds: '2020-01-02'
-        - id: 3
-          item_id: 2
-          ds: '2020-01-03'
+      rows:
+      - id: 1
+        item_id: 1
+        event_date: '2020-01-01'
+      - id: 2
+        item_id: 1
+        event_date: '2020-01-02'
+      - id: 3
+        item_id: 2
+        event_date: '2020-01-03'
   outputs:
     query:
       rows:
@@ -128,7 +129,7 @@ test_example_full_model:
         num_orders: 1
 ```
 
-The `ds` column is not needed in the above test, since it is not referenced in `full_model`, so it may be omitted.
+The `event_date` column is not needed in the above test, since it is not referenced in `full_model`, so it may be omitted.
 
 If we were only interested in testing the `num_orders` column, we could only specify input values for the `id` column of `sqlmesh_example.incremental_model`, thus rewriting the above test more compactly as follows:
 
@@ -165,11 +166,10 @@ WITH filtered_orders_cte AS (
 )
 SELECT
   item_id,
-  COUNT(distinct id) AS num_orders,
+  COUNT(DISTINCT id) AS num_orders,
 FROM
     filtered_orders_cte
 GROUP BY item_id
-ORDER BY item_id
 ```
 
 Below is the example of a test that verifies individual rows returned by the `filtered_orders_cte` CTE before aggregation takes place:
@@ -182,13 +182,13 @@ test_example_full_model:
         rows:
         - id: 1
           item_id: 1
-          ds: '2020-01-01'
+          event_date: '2020-01-01'
         - id: 2
           item_id: 1
-          ds: '2020-01-02'
+          event_date: '2020-01-02'
         - id: 3
           item_id: 2
-          ds: '2020-01-03'
+          event_date: '2020-01-03'
   outputs:
     ctes:
       filtered_orders_cte:
@@ -217,22 +217,21 @@ In this example, we'll show how to generate a test for `sqlmesh_example.incremen
 MODEL (
     name sqlmesh_example.incremental_model,
     kind INCREMENTAL_BY_TIME_RANGE (
-        time_column ds
+        time_column event_date
     ),
     start '2020-01-01',
     cron '@daily',
-    grain (id, ds)
+    grain (id, event_date)
 );
 
 SELECT
     id,
     item_id,
-    ds,
+    event_date,
 FROM
     sqlmesh_example.seed_model
 WHERE
-    ds between @start_ds and @end_ds
-
+    event_date BETWEEN @start_date AND @end_date
 ```
 
 Firstly, we need to specify the input data for the upstream model `sqlmesh_example.seed_model`. The `create_test` command starts by executing a user-supplied query against the project's data warehouse and uses the returned data to produce the test's input rows.
@@ -243,22 +242,22 @@ For instance, the following query will return three rows from the table correspo
 SELECT * FROM sqlmesh_example.seed_model LIMIT 3
 ```
 
-Next, notice that `sqlmesh_example.incremental_model` contains a filter which references the `@start_ds` and `@end_ds` [macro variables](macros/macro_variables.md).
+Next, notice that `sqlmesh_example.incremental_model` contains a filter which references the `@start_date` and `@end_date` [macro variables](macros/macro_variables.md).
 
-To make the generated test deterministic and thus ensure that it will always succeed, we need to define these variables and modify the above query to constrain `ds` accordingly.
+To make the generated test deterministic and thus ensure that it will always succeed, we need to define these variables and modify the above query to constrain `event_date` accordingly.
 
-If we set `@start_ds` to `'2020-01-01'` and `@end_ds` to `'2020-01-04'`, the above query needs to be changed to:
+If we set `@start_date` to `'2020-01-01'` and `@end_date` to `'2020-01-04'`, the above query needs to be changed to:
 
 ```sql linenums="1"
-SELECT * FROM sqlmesh_example.seed_model WHERE ds BETWEEN '2020-01-01' AND '2020-01-04' LIMIT 3
+SELECT * FROM sqlmesh_example.seed_model WHERE event_date BETWEEN '2020-01-01' AND '2020-01-04' LIMIT 3
 ```
 
 Finally, combining this query with the proper macro variable definitions, we can compute the expected output for the model's query in order to generate the complete test.
 
 This can be achieved using the following command:
 
-```bash
-$ sqlmesh create_test sqlmesh_example.incremental_model --query sqlmesh_example.seed_model "select * from sqlmesh_example.seed_model where ds between '2020-01-01' and '2020-01-04' limit 3" --var start '2020-01-01' --var end '2020-01-04'
+```
+$ sqlmesh create_test sqlmesh_example.incremental_model --query sqlmesh_example.seed_model "SELECT * FROM sqlmesh_example.seed_model WHERE event_date BETWEEN '2020-01-01' AND '2020-01-04' LIMIT 3" --var start '2020-01-01' --var end '2020-01-04'
 ```
 
 Running this creates the following new test, located at `tests/test_incremental_model.yaml`:
@@ -270,24 +269,24 @@ test_incremental_model:
     sqlmesh_example.seed_model:
     - id: 1
       item_id: 2
-      ds: '2020-01-01'
+      event_date: 2020-01-01
     - id: 2
       item_id: 1
-      ds: '2020-01-01'
+      event_date: 2020-01-01
     - id: 3
       item_id: 3
-      ds: '2020-01-03'
+      event_date: 2020-01-03
   outputs:
     query:
     - id: 1
       item_id: 2
-      ds: '2020-01-01'
+      event_date: 2020-01-01
     - id: 2
       item_id: 1
-      ds: '2020-01-01'
+      event_date: 2020-01-01
     - id: 3
       item_id: 3
-      ds: '2020-01-03'
+      event_date: 2020-01-03
   vars:
     start: '2020-01-01'
     end: '2020-01-04'
@@ -295,7 +294,7 @@ test_incremental_model:
 
 As shown below, we now have two passing tests. Hooray!
 
-```bash
+```
 $ sqlmesh test
 .
 ----------------------------------------------------------------------
@@ -314,7 +313,7 @@ Tests run automatically every time a new [plan](plans.md) is created.
 
 You can execute tests on demand using the `sqlmesh test` command as follows:
 
-```bash
+```
 $ sqlmesh test
 .
 ----------------------------------------------------------------------
@@ -325,13 +324,13 @@ OK
 
 The command returns a non-zero exit code if there are any failures, and reports them in the standard error stream:
 
-```bash
+```
 $ sqlmesh test
 F
 ======================================================================
 FAIL: test_example_full_model (test/tests/test_full_model.yaml)
 ----------------------------------------------------------------------
-AssertionError: Data differs (exp: expected, act: actual)
+AssertionError: Data mismatch (exp: expected, act: actual)
 
   num_orders
          exp  act
@@ -349,12 +348,12 @@ Note: when there are many differing columns, the corresponding DataFrame will be
 
 To run a specific model test, pass in the suite file name followed by `::` and the name of the test:
 
-```bash
+```
 $ sqlmesh test tests/test_full_model.yaml::test_example_full_model
 ```
 
 You can also run tests that match a pattern or substring using a glob pathname expansion syntax:
 
-```bash
+```
 $ sqlmesh test tests/test_*
 ```

@@ -444,6 +444,40 @@ def test_json_serde():
     assert deserialized_model == model
 
 
+def test_scd_type_2_by_col_serde():
+    expressions = parse(
+        """
+        MODEL(
+            name test_model,
+            KIND SCD_TYPE_2_BY_COLUMN (
+                unique_key a,
+                columns *,
+            ),
+            cron '@daily',
+            owner 'reakman',
+            grain a,
+            dialect bigquery
+        );
+
+        SELECT a, ds FROM `tbl`
+    """,
+        default_dialect="bigquery",
+    )
+
+    model = load_sql_based_model(expressions)
+
+    model_json = model.json()
+    model_json_parsed = json.loads(model.json())
+    assert model_json_parsed["kind"]["dialect"] == "bigquery"
+    assert model_json_parsed["kind"]["unique_key"] == ["`a`"]
+    assert model_json_parsed["kind"]["columns"] == "*"
+    # Bigquery converts TIMESTAMP -> DATETIME
+    assert model_json_parsed["kind"]["time_data_type"] == "DATETIME"
+
+    deserialized_model = SqlModel.parse_raw(model_json)
+    assert deserialized_model.dict() == model.dict()
+
+
 def test_column_descriptions(sushi_context, assert_exp_eq):
     assert sushi_context.models[
         '"memory"."sushi"."customer_revenue_by_day"'
@@ -3323,3 +3357,22 @@ def test_end_date():
             """
             )
         )
+
+
+def test_end_no_start():
+    expressions = d.parse(
+        f"""
+        MODEL (
+            name db.table,
+            kind INCREMENTAL_BY_TIME_RANGE (
+                time_column ts,
+            ),
+            end '2023-06-01'
+        );
+
+        SELECT 1::int AS a, 2::int AS b, now::timestamp as ts
+        """
+    )
+    with pytest.raises(ConfigError, match="Must define a start date if an end date is defined"):
+        load_sql_based_model(expressions)
+    load_sql_based_model(expressions, defaults={"start": "2023-01-01"})

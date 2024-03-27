@@ -356,13 +356,8 @@ def pandas_timestamp_to_pydatetime(
                 exp.DataType.Type.DATE32,
             ):
                 # Sometimes `to_pydatetime()` has already converted to date, so we only extract from datetime objects.
-                # `datetime` is a subclass of `date`, so we must look at the type to differentiate the two.
                 df[column] = df[column].map(
-                    lambda x: (
-                        x.date()
-                        if isinstance(x, datetime) and type(x) is datetime and not pd.isna(x)
-                        else x
-                    )
+                    lambda x: x.date() if type(x) is datetime and not pd.isna(x) else x
                 )
 
     return df

@@ -755,6 +755,7 @@ class _Model(ModelMeta, frozen=True):
             json.dumps(self.column_descriptions, sort_keys=True),
             self.cron,
             str(self.start) if self.start else None,
+            str(self.end) if self.end else None,
             str(self.retention) if self.retention else None,
             str(self.batch_size) if self.batch_size is not None else None,
             json.dumps(self.mapping_schema, sort_keys=True),
@@ -1479,7 +1480,9 @@ def load_sql_based_model(
     if query_or_seed_insert is not None and isinstance(
         query_or_seed_insert, (exp.Query, d.JinjaQuery)
     ):
-        jinja_macro_references.update(extract_macro_references(query_or_seed_insert.sql()))
+        jinja_macro_references.update(
+            extract_macro_references(query_or_seed_insert.sql(dialect=dialect))
+        )
         return create_sql_model(
             name,
             query_or_seed_insert,
