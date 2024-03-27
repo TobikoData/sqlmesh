@@ -76,7 +76,7 @@ Additionally, it's possible to test only a subset of the output columns by setti
           ...
 ```
 
-This is useful when we can't treat the missing columns as `NULL`, but still want to ignore them. In order to apply this setting to _all_ outputs, simply set it directly under the `outputs` key:
+This is useful when we can't treat the missing columns as `NULL`, but still want to ignore them. In order to apply this setting to _all_ outputs, simply set it under the `outputs` key:
 
 ```yaml linenums="1"
   ...
