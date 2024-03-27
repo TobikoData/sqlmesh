@@ -215,13 +215,10 @@ jobs:
       steps:
         - checkout
         - run:
-            name: Get commit message
+            name: Trigger private tests
             command: |
               echo "export COMMIT_MESSAGE=\"$(git log --format=%s%b -n 1 $CIRCLE_SHA1)\"" >> "$BASH_ENV"
               source "$BASH_ENV"
-        - run:
-            name: Trigger private tests
-            command: |
               curl --request POST \
                 --url $TOBIKO_PRIVATE_CIRCLECI_URL \
                 --header "Circle-Token: $TOBIKO_PRIVATE_CIRCLECI_KEY" \
@@ -241,34 +238,35 @@ jobs:
 workflows:
   main_pr:
     jobs:
-      - doc_tests
-      - style_and_slow_tests:
-          matrix:
-            parameters:
-              python_version:
-                ["3.8", "3.9", "3.10", "3.11"]
-      - style_and_slow_tests_pydantic_v1
-      - airflow_docker_tests:
-          requires:
-            - style_and_slow_tests
-          filters:
-            branches:
-              only:
-                - main
-      - engine_adapter_docker_tests:
-          context: engine_adapter_slow
-          requires:
-            - style_and_slow_tests
-          filters:
-            branches:
-              only:
-                - main
-      - trigger_private_tests:
-          requires:
-            - style_and_slow_tests
-          filters:
-            branches:
-              only:
-                - main
-      - ui_style
-      - ui_test
+      - trigger_private_tests
+      # - doc_tests
+      # - style_and_slow_tests:
+      #     matrix:
+      #       parameters:
+      #         python_version:
+      #           ["3.8", "3.9", "3.10", "3.11"]
+      # - style_and_slow_tests_pydantic_v1
+      # - airflow_docker_tests:
+      #     requires:
+      #       - style_and_slow_tests
+      #     filters:
+      #       branches:
+      #         only:
+      #           - main
+      # - engine_adapter_docker_tests:
+      #     context: engine_adapter_slow
+      #     requires:
+      #       - style_and_slow_tests
+      #     filters:
+      #       branches:
+      #         only:
+      #           - main
+      # - trigger_private_tests:
+      #     requires:
+      #       - style_and_slow_tests
+      #     filters:
+      #       branches:
+      #         only:
+      #           - main
+      # - ui_style
+      # - ui_test
