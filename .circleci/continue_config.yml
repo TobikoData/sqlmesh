@@ -231,7 +231,7 @@ jobs:
                     "sqlmesh_branch":"'$CIRCLE_BRANCH'",
                     "sqlmesh_commit_author":"'$CIRCLE_USERNAME'",
                     "sqlmesh_commit_hash":"'$CIRCLE_SHA1'",
-                    "sqlmesh_commit_message":"'$COMMIT_MESSAGE'"
+                    "sqlmesh_commit_message":"'"$COMMIT_MESSAGE"'"
                     }
                 }'
 
