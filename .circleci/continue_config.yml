@@ -213,6 +213,12 @@ jobs:
         - image: cimg/base:2021.11
       resource_class: small
       steps:
+        - checkout
+        - run:
+            name: Get commit message
+            command: |
+              echo "export COMMIT_MESSAGE=\"$(git log --format=%s%b -n 1 $CIRCLE_SHA1)\"" >> "$BASH_ENV"
+              source "$BASH_ENV"
         - run:
             name: Trigger private tests
             command: |
@@ -228,7 +234,7 @@ jobs:
                     "sqlmesh_branch":"'$CIRCLE_BRANCH'",
                     "sqlmesh_commit_author":"'$CIRCLE_USERNAME'",
                     "sqlmesh_commit_hash":"'$CIRCLE_SHA1'",
-                    "sqlmesh_commit_pr":"'$CIRCLE_PULL_REQUEST'"
+                    "sqlmesh_commit_message":"'$COMMIT_MESSAGE'"
                     }
                 }'
 
