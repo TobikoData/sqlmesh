@@ -2,11 +2,13 @@ from __future__ import annotations
 
 import typing as t
 from collections import defaultdict
+from functools import lru_cache
 
 from sqlglot import exp
 from sqlglot.helper import first
 from sqlglot.lineage import Node
 from sqlglot.lineage import lineage as sqlglot_lineage
+from sqlglot.optimizer import Scope, build_scope
 
 from sqlmesh.core.dialect import normalize_mapping_schema, normalize_model_name
 
@@ -17,7 +19,7 @@ if t.TYPE_CHECKING:
 
 def _render_query(model: Model) -> exp.Query:
     """Render a model's query, adding in managed columns"""
-    query = model.render_query_or_raise().copy()
+    query = model.render_query_or_raise()
     if model.managed_columns:
         query.select(
             *[
@@ -26,20 +28,30 @@ def _render_query(model: Model) -> exp.Query:
                 if col not in query.named_selects
             ],
             append=True,
-            copy=False,
         )
     return query
+
+
+@lru_cache()
+def _build_scope(query: exp.Query) -> Scope:
+    return build_scope(query)
 
 
 def lineage(
     column: str | exp.Column,
     model: Model,
+    trim_selects: bool = True,
     **kwargs: t.Any,
 ) -> Node:
+
+    query = _render_query(model)
+
     return sqlglot_lineage(
         column,
-        sql=_render_query(model),
+        sql=query,
         schema=normalize_mapping_schema(model.mapping_schema, dialect=model.dialect),
+        scope=_build_scope(query),
+        trim_selects=trim_selects,
         dialect=model.dialect,
         **{
             "infer_schema": True,
@@ -52,7 +64,7 @@ def column_dependencies(context: Context, model_name: str, column: str) -> t.Dic
     model = context.get_model(model_name)
     parents = defaultdict(set)
 
-    for node in lineage(column, model).walk():
+    for node in lineage(column, model, trim_selects=False).walk():
         if node.downstream:
             continue
 
