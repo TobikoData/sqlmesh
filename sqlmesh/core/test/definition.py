@@ -229,7 +229,7 @@ class ModelTest(unittest.TestCase):
     def _normalize_test(self, dialect: str | None) -> None:
         """Normalizes all identifiers in this test according to the given dialect."""
 
-        def _normalize_rows(values: t.List[Row] | t.Dict) -> t.Dict:
+        def _normalize_rows(values: t.List[Row] | t.Dict, partial: bool = False) -> t.Dict:
             if not isinstance(values, dict):
                 values = {"rows": values}
 
@@ -243,13 +243,16 @@ class ModelTest(unittest.TestCase):
                 }
                 for row in values["rows"]
             ]
+            if partial:
+                values["partial"] = True
+
             return values
 
-        def _normalize_sources(sources: t.Dict) -> t.Dict:
+        def _normalize_sources(sources: t.Dict, partial: bool = False) -> t.Dict:
             return {
                 normalize_model_name(
                     name, default_catalog=self.default_catalog, dialect=dialect
-                ): _normalize_rows(values)
+                ): _normalize_rows(values, partial=partial)
                 for name, values in sources.items()
             }
 
@@ -257,13 +260,14 @@ class ModelTest(unittest.TestCase):
         outputs = self.body["outputs"]
         ctes = outputs.get("ctes")
         query = outputs.get("query")
+        partial = outputs.pop("partial", None)
 
         if inputs:
             self.body["inputs"] = _normalize_sources(inputs)
         if ctes:
-            outputs["ctes"] = _normalize_sources(ctes)
+            outputs["ctes"] = _normalize_sources(ctes, partial=partial)
         if query or query == []:
-            outputs["query"] = _normalize_rows(query)
+            outputs["query"] = _normalize_rows(query, partial=partial)
 
         self.body["model"] = normalize_model_name(
             self.body["model"], default_catalog=self.default_catalog, dialect=dialect

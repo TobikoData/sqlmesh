@@ -76,9 +76,16 @@ Additionally, it's possible to test only a subset of the output columns by setti
           ...
 ```
 
-This is useful when we can't treat the missing columns as `NULL`, but still want to ignore them.
+This is useful when we can't treat the missing columns as `NULL`, but still want to ignore them. In order to apply this setting to _all_ outputs, simply set it directly under the `outputs` key:
 
-When `partial` is set, the rows need to be defined as a mapping under the `rows` key and the tested columns are only those that are referenced in them.
+```yaml linenums="1"
+  ...
+  outputs:
+    partial: true
+    ...
+```
+
+When `partial` is set for a _specific_ output, its rows need to be defined as a mapping under the `rows` key and only the columns referenced in them will be tested.
 
 ### Example
 
