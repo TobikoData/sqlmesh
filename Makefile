@@ -179,4 +179,4 @@ spark-pyspark-test:
 	pytest -n auto -m "spark_pyspark"
 
 trino-test:
-	pytest -n auto -m "trino or trino_iceberg"
+	pytest -n auto -m "trino or trino_iceberg or trino_delta"

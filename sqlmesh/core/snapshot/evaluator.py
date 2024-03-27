@@ -1094,10 +1094,12 @@ class MaterializableStrategy(PromotableStrategy):
                 column_descriptions=model.column_descriptions if is_table_deployable else None,
             )
 
-            # only sql models have queries that can be tested
-            # additionally, we always create temp tables and sometimes
-            # we additionally created prod tables, so we only need to test one.
-            if model.is_sql and not is_table_deployable:
+            # Only sql models have queries that can be tested.
+            # Additionally, we always create temp tables and sometimes we additionally created prod tables,
+            # we need to make sure that we only dry run once.
+            # We also need to make sure that we don't dry run on Redshift because its planner / optimizer sometimes
+            # breaks on our CTAS queries due to us relying on the WHERE FALSE LIMIT 0 combo.
+            if model.is_sql and not is_table_deployable and self.adapter.dialect != "redshift":
                 logger.info("Dry running model '%s'", model.name)
                 self.adapter.fetchall(ctas_query)
         else:

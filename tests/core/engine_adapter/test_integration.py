@@ -450,6 +450,15 @@ def config() -> Config:
             ],
         ),
         pytest.param(
+            "trino_delta",
+            marks=[
+                pytest.mark.docker,
+                pytest.mark.engine,
+                pytest.mark.trino_delta,
+                pytest.mark.xdist_group("engine_integration_trino_delta"),
+            ],
+        ),
+        pytest.param(
             "spark",
             marks=[
                 pytest.mark.docker,

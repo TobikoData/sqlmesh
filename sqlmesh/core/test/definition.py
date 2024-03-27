@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import typing as t
 import unittest
+from collections import Counter
 from pathlib import Path
 
 import numpy as np
@@ -71,6 +72,9 @@ class ModelTest(unittest.TestCase):
 
         super().__init__()
 
+    def shortDescription(self) -> t.Optional[str]:
+        return self.body.get("description")
+
     def setUp(self) -> None:
         """Load all input tables"""
         for table_name, values in self.body.get("inputs", {}).items():
@@ -93,7 +97,7 @@ class ModelTest(unittest.TestCase):
                     schema_(test_fixture_table.args["db"], test_fixture_table.args.get("catalog"))
                 )
 
-            df = self._create_df(rows, columns=columns_to_types)
+            df = _create_df(rows, columns=columns_to_types)
             self.engine_adapter.create_view(test_fixture_table, df, columns_to_types)
 
     def tearDown(self) -> None:
@@ -145,13 +149,27 @@ class ModelTest(unittest.TestCase):
                 actual,
                 check_dtype=False,
                 check_datetimelike_compat=True,
-                check_like=True,  # ignore column order
+                check_like=True,  # Ignore column order
             )
         except AssertionError as e:
-            diff = expected.compare(actual).rename(columns={"self": "exp", "other": "act"})
-            description = self.body.get("description")
-            description = f"\n\n\nTest description: {description}" if description else ""
-            e.args = (f"Data differs (exp: expected, act: actual)\n\n{diff}{description}",)
+            if expected.shape != actual.shape:
+                _raise_if_unexpected_columns(expected.columns, actual.columns)
+
+                error_msg = "Data mismatch (rows are different)"
+
+                missing_rows = _row_difference(expected, actual)
+                if not missing_rows.empty:
+                    error_msg += f"\n\nMissing rows:\n\n{missing_rows}"
+
+                unexpected_rows = _row_difference(actual, expected)
+                if not unexpected_rows.empty:
+                    error_msg += f"\n\nUnexpected rows:\n\n{unexpected_rows}"
+
+                e.args = (error_msg,)
+            else:
+                diff = expected.compare(actual).rename(columns={"self": "exp", "other": "act"})
+                e.args = (f"Data mismatch (exp: expected, act: actual)\n\n{diff}",)
+
             raise e
 
     def runTest(self) -> None:
@@ -251,25 +269,6 @@ class ModelTest(unittest.TestCase):
             self.body["model"], default_catalog=self.default_catalog, dialect=dialect
         )
 
-    def _create_df(
-        self,
-        rows: t.List[Row],
-        columns: t.Optional[t.Iterable] = None,
-        partial: t.Optional[bool] = False,
-    ) -> pd.DataFrame:
-        if columns:
-            referenced_columns = {col for row in rows for col in row}
-            unknown_columns = [col for col in referenced_columns if col not in columns]
-            if unknown_columns:
-                expected_cols = f"Expected column(s): {', '.join(columns)}\n"
-                unknown_cols = f"Unknown column(s): {', '.join(unknown_columns)}"
-                _raise_error(f"Detected unknown column(s)\n\n{expected_cols}{unknown_cols}")
-
-            if partial:
-                columns = list(referenced_columns)
-
-        return pd.DataFrame.from_records(rows, columns=columns)
-
 
 class SqlModelTest(ModelTest):
     def _execute(self, query: exp.Expression) -> pd.DataFrame:
@@ -294,7 +293,7 @@ class SqlModelTest(ModelTest):
                 sort = cte_query.args.get("order") is None
 
                 actual = self._execute(cte_query)
-                expected = self._create_df(rows, columns=cte_query.named_selects, partial=partial)
+                expected = _create_df(rows, columns=cte_query.named_selects, partial=partial)
 
                 self.assert_equal(expected, actual, sort=sort, partial=partial)
 
@@ -324,7 +323,7 @@ class SqlModelTest(ModelTest):
             sort = query.args.get("order") is None
 
             actual = self._execute(query)
-            expected = self._create_df(rows, columns=self.model.columns_to_types, partial=partial)
+            expected = _create_df(rows, columns=self.model.columns_to_types, partial=partial)
 
             self.assert_equal(expected, actual, sort=sort, partial=partial)
 
@@ -380,7 +379,7 @@ class PythonModelTest(ModelTest):
 
             actual_df = self._execute_model()
             actual_df.reset_index(drop=True, inplace=True)
-            expected = self._create_df(rows, columns=self.model.columns_to_types, partial=partial)
+            expected = _create_df(rows, columns=self.model.columns_to_types, partial=partial)
 
             self.assert_equal(expected, actual_df, sort=False, partial=partial)
 
@@ -433,9 +432,9 @@ def generate_test(
     inputs = {
         models[dep]
         .name: pandas_timestamp_to_pydatetime(
-            engine_adapter.fetchdf(query), models[dep].columns_to_types
+            engine_adapter.fetchdf(query).apply(lambda col: col.map(_normalize_dataframe)),
+            models[dep].columns_to_types,
         )
-        .apply(lambda col: col.map(_normalize_dataframe))
         .to_dict(orient="records")
         for dep, query in input_queries.items()
     }
@@ -472,17 +471,58 @@ def generate_test(
     else:
         output = t.cast(PythonModelTest, test)._execute_model()
 
-    outputs["query"] = (
-        pandas_timestamp_to_pydatetime(output, model.columns_to_types)
-        .apply(lambda col: col.map(_normalize_dataframe))
-        .to_dict(orient="records")
-    )
+    outputs["query"] = pandas_timestamp_to_pydatetime(
+        output.apply(lambda col: col.map(_normalize_dataframe)), model.columns_to_types
+    ).to_dict(orient="records")
 
     test.tearDown()
 
     fixture_path.parent.mkdir(exist_ok=True, parents=True)
     with open(fixture_path, "w", encoding="utf-8") as file:
         yaml.dump({test_name: test_body}, file)
+
+
+def _create_df(
+    rows: t.List[Row], columns: t.Optional[t.Collection] = None, partial: t.Optional[bool] = False
+) -> pd.DataFrame:
+    if columns:
+        referenced_columns = {col for row in rows for col in row}
+        _raise_if_unexpected_columns(columns, referenced_columns)
+
+        if partial:
+            columns = list(referenced_columns)
+
+    return pd.DataFrame.from_records(rows, columns=columns)
+
+
+def _raise_if_unexpected_columns(
+    expected_cols: t.Collection[str], actual_cols: t.Collection[str]
+) -> None:
+    unique_expected_cols = set(expected_cols)
+    unknown_cols = [col for col in actual_cols if col not in unique_expected_cols]
+
+    if unknown_cols:
+        expected = f"Expected column(s): {', '.join(list(expected_cols))}\n"
+        unknown = f"Unknown column(s): {', '.join(unknown_cols)}"
+        _raise_error(f"Detected unknown column(s)\n\n{expected}{unknown}")
+
+
+def _row_difference(left: pd.DataFrame, right: pd.DataFrame) -> pd.DataFrame:
+    """Returns all rows in `left` that don't appear in `right`."""
+    rows_missing_from_right = []
+
+    # `None` replaces `np.nan` because `np.nan != np.nan` and this would affect the mapping lookup
+    right_row_count: t.MutableMapping[t.Tuple, int] = Counter(
+        right.replace({np.nan: None}).itertuples(index=False, name=None)
+    )
+    for left_row in left.replace({np.nan: None}).itertuples(index=False):
+        left_row_tuple = tuple(left_row)
+        if right_row_count[left_row_tuple] <= 0:
+            rows_missing_from_right.append(left_row)
+        else:
+            right_row_count[left_row_tuple] -= 1
+
+    return pd.DataFrame(rows_missing_from_right)
 
 
 def _fully_qualified_test_fixture_table(name: str, dialect: str | None) -> exp.Table:

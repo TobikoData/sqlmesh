@@ -17,7 +17,7 @@ pip install "trino[external-authentication-token-cache]"
 
 ### Trino Connector Support
 
-The trino engine adapter has been tested against the [Hive Connector](https://trino.io/docs/current/connector/hive.html) and the [Iceberg Connector](https://trino.io/docs/current/connector/iceberg.html).
+The trino engine adapter has been tested against the [Hive Connector](https://trino.io/docs/current/connector/hive.html), [Iceberg Connector](https://trino.io/docs/current/connector/iceberg.html), and [Delta Lake Connector](https://trino.io/docs/current/connector/delta-lake.html).
 
 Please let us know on [Slack](https://tobikodata.com/slack) if you are wanting to use another connector or have tried another connector.
 
@@ -48,6 +48,17 @@ iceberg.catalog.type=hive_metastore
 **Note**: The Trino Iceberg Connector must be configured with an `iceberg.catalog.type` that supports views. At the time of this writing, this is only `hive_metastore` and `glue`.
 
 The `jdbc`, `rest` and `nessie` catalogs do not support views and are thus incompatible with SQLMesh.
+
+#### Delta Lake Connector Configuration
+
+The Trino adapter Delta Lake connector has only been tested with the Hive metastore catalog type.
+
+The [properties file](https://trino.io/docs/current/connector/delta-lake.html#general-configuration) must include the Hive metastore URI and catalog name in addition to any other [general properties](https://trino.io/docs/current/object-storage/metastores.html#general-metastore-properties).
+
+``` properties linenums="1"
+hive.metastore.uri=thrift://example.net:9083
+delta.hive-catalog-name=datalake_delta # example catalog name, can be any valid string
+```
 
 ### Connection options
 

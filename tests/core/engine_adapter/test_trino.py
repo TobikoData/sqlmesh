@@ -21,6 +21,8 @@ def trino_mocked_engine_adapter(
     def mock_catalog_type(catalog_name):
         if "iceberg" in catalog_name:
             return "iceberg"
+        if "delta" in catalog_name:
+            return "delta"
         return "hive"
 
     mocker.patch(
@@ -40,7 +42,12 @@ def test_set_current_catalog(trino_mocked_engine_adapter: TrinoEngineAdapter):
     ]
 
 
-def test_get_catalog_type(trino_mocked_engine_adapter: TrinoEngineAdapter, mocker: MockerFixture):
+@pytest.mark.trino_iceberg
+@pytest.mark.trino_delta
+@pytest.mark.parametrize("storage_type", ["iceberg", "delta"])
+def test_get_catalog_type(
+    trino_mocked_engine_adapter: TrinoEngineAdapter, mocker: MockerFixture, storage_type: str
+):
     adapter = trino_mocked_engine_adapter
     mocker.patch(
         "sqlmesh.core.engine_adapter.trino.TrinoEngineAdapter.get_current_catalog",
@@ -51,12 +58,13 @@ def test_get_catalog_type(trino_mocked_engine_adapter: TrinoEngineAdapter, mocke
     assert adapter.get_catalog_type("foo") == TrinoEngineAdapter.DEFAULT_CATALOG_TYPE
     assert adapter.get_catalog_type("datalake_hive") == "hive"
     assert adapter.get_catalog_type("datalake_iceberg") == "iceberg"
+    assert adapter.get_catalog_type("datalake_delta") == "delta"
 
     mocker.patch(
         "sqlmesh.core.engine_adapter.trino.TrinoEngineAdapter.get_current_catalog",
-        return_value="system_iceberg",
+        return_value=f"system_{storage_type}",
     )
-    assert adapter.current_catalog_type == "iceberg"
+    assert adapter.current_catalog_type == storage_type
 
 
 def test_get_catalog_type_cached(
@@ -89,16 +97,18 @@ def test_get_catalog_type_cached(
     assert fetchone_mock.call_count == 2
 
 
-def test_partitioned_by_hive(
-    trino_mocked_engine_adapter: TrinoEngineAdapter, mocker: MockerFixture
+@pytest.mark.trino_delta
+@pytest.mark.parametrize("storage_type", ["hive", "delta"])
+def test_partitioned_by_hive_delta(
+    trino_mocked_engine_adapter: TrinoEngineAdapter, mocker: MockerFixture, storage_type: str
 ):
     adapter = trino_mocked_engine_adapter
 
     mocker.patch(
         "sqlmesh.core.engine_adapter.trino.TrinoEngineAdapter.get_current_catalog",
-        return_value="datalake_hive",
+        return_value=f"datalake_{storage_type}",
     )
-    assert adapter.get_catalog_type("datalake_hive") == "hive"
+    assert adapter.get_catalog_type(f"datalake_{storage_type}") == storage_type
 
     columns_to_types = {
         "cola": exp.DataType.build("INT"),
@@ -115,6 +125,7 @@ def test_partitioned_by_hive(
     ]
 
 
+@pytest.mark.trino_iceberg
 def test_partitioned_by_iceberg(
     trino_mocked_engine_adapter: TrinoEngineAdapter, mocker: MockerFixture
 ):
@@ -141,6 +152,7 @@ def test_partitioned_by_iceberg(
     ]
 
 
+@pytest.mark.trino_iceberg
 def test_partitioned_by_iceberg_transforms(
     trino_mocked_engine_adapter: TrinoEngineAdapter, mocker: MockerFixture
 ):
@@ -184,6 +196,7 @@ def test_partitioned_by_iceberg_transforms(
     ]
 
 
+@pytest.mark.trino_iceberg
 def test_partitioned_by_with_multiple_catalogs_same_server(
     trino_mocked_engine_adapter: TrinoEngineAdapter, mocker: MockerFixture
 ):
@@ -194,6 +207,11 @@ def test_partitioned_by_with_multiple_catalogs_same_server(
         "colb": exp.DataType.build("TEXT"),
     }
 
+    mocker.patch(
+        "sqlmesh.core.engine_adapter.trino.TrinoEngineAdapter.get_current_catalog",
+        return_value="system",
+    )
+
     adapter.create_table(
         "datalake.test_schema.test_table", columns_to_types, partitioned_by=[exp.to_column("colb")]
     )
@@ -202,6 +220,11 @@ def test_partitioned_by_with_multiple_catalogs_same_server(
         "datalake.test_schema.test_table",
         parse_one("select 1"),  # type: ignore
         partitioned_by=[exp.to_column("colb")],
+    )
+
+    mocker.patch(
+        "sqlmesh.core.engine_adapter.trino.TrinoEngineAdapter.get_current_catalog",
+        return_value="iceberg",
     )
 
     adapter.create_table(
@@ -287,17 +310,22 @@ def test_comments_hive(mocker: MockerFixture, make_mocked_engine_adapter: t.Call
     ]
 
 
-def test_comments_iceberg(mocker: MockerFixture, make_mocked_engine_adapter: t.Callable):
+@pytest.mark.trino_iceberg
+@pytest.mark.trino_delta
+@pytest.mark.parametrize("storage_type", ["iceberg", "delta"])
+def test_comments_iceberg_delta(
+    mocker: MockerFixture, make_mocked_engine_adapter: t.Callable, storage_type: str
+):
     adapter = make_mocked_engine_adapter(TrinoEngineAdapter)
 
     current_catalog_mock = mocker.patch(
         "sqlmesh.core.engine_adapter.trino.TrinoEngineAdapter.get_current_catalog"
     )
-    current_catalog_mock.return_value = "iceberg"
+    current_catalog_mock.return_value = storage_type
     catalog_type_mock = mocker.patch(
         "sqlmesh.core.engine_adapter.trino.TrinoEngineAdapter.get_catalog_type"
     )
-    catalog_type_mock.return_value = "iceberg"
+    catalog_type_mock.return_value = storage_type
 
     allowed_table_comment_length = TrinoEngineAdapter.MAX_TABLE_COMMENT_LENGTH
     truncated_table_comment = "a" * allowed_table_comment_length
@@ -348,3 +376,27 @@ def test_comments_iceberg(mocker: MockerFixture, make_mocked_engine_adapter: t.C
         f"""COMMENT ON TABLE "test_table" IS '{long_table_comment}'""",
         f"""COMMENT ON COLUMN "test_table"."a" IS '{long_column_comment}'""",
     ]
+
+
+@pytest.mark.trino_delta
+def test_delta_timestamps(make_mocked_engine_adapter: t.Callable):
+    adapter = make_mocked_engine_adapter(TrinoEngineAdapter)
+
+    ts6 = exp.DataType.build("timestamp(6)")
+    ts3_tz = exp.DataType.build("timestamp(3) with time zone")
+
+    columns_to_types = {
+        "ts": exp.DataType.build("TIMESTAMP"),
+        "ts_1": exp.DataType.build("TIMESTAMP(1)"),
+        "ts_tz": exp.DataType.build("TIMESTAMP WITH TIME ZONE"),
+        "ts_tz_1": exp.DataType.build("TIMESTAMP(1) WITH TIME ZONE"),
+    }
+
+    delta_columns_to_types = adapter._to_delta_ts(columns_to_types)
+
+    assert delta_columns_to_types == {
+        "ts": ts6,
+        "ts_1": ts6,
+        "ts_tz": ts3_tz,
+        "ts_tz_1": ts3_tz,
+    }

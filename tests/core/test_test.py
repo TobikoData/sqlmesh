@@ -291,13 +291,13 @@ test_foo:
     model = t.cast(SqlModel, sushi_context.upsert_model(full_model_without_ctes_orderby))
     result = _create_test(body, "test_foo", model, sushi_context).run()
 
-    expected_failure_msg = """AssertionError: Data differs (exp: expected, act: actual)
-
-   id     value      ds    
-  exp act   exp act exp act
-0   2   1     3   2   4   3
-1   1   2     2   3   3   4
-"""
+    expected_failure_msg = (
+        "AssertionError: Data mismatch (exp: expected, act: actual)\n\n"
+        "   id     value      ds    \n"
+        "  exp act   exp act exp act\n"
+        "0   2   1     3   2   4   3\n"
+        "1   1   2     2   3   3   4\n"
+    )
     _check_successful_or_raise(result, expected_msg=expected_failure_msg)
 
 
@@ -485,16 +485,100 @@ test_foo:
     )
     result = _create_test(body, "test_foo", model, sushi_context).run()
 
-    expected_failure_msg = """AssertionError: Data differs (exp: expected, act: actual)
-
-  value      ds    
-    exp act exp act
-0   NaN   2 NaN   3
-
-
-Test description: sushi.foo's output has a missing column (fails intentionally)
-"""
+    expected_failure_msg = (
+        "AssertionError: Data mismatch (exp: expected, act: actual)\n\n"
+        "  value      ds    \n"
+        "    exp act exp act\n"
+        "0   NaN   2 NaN   3\n"
+    )
     _check_successful_or_raise(result, expected_msg=expected_failure_msg)
+
+
+def test_row_difference_failure() -> None:
+    result = _create_test(
+        body=load_yaml(
+            """
+test_foo:
+  model: sushi.foo
+  inputs:
+    raw:
+      - value: 1
+  outputs:
+    query:
+      - value: 1
+      - value: 2
+            """
+        ),
+        test_name="test_foo",
+        model=_create_model("SELECT value FROM raw"),
+        context=Context(config=Config(model_defaults=ModelDefaultsConfig(dialect="duckdb"))),
+    ).run()
+
+    expected_error_msg = (
+        "AssertionError: Data mismatch (rows are different)\n\n"
+        "Missing rows:\n\n"
+        "   value\n"
+        "0      2\n"
+    )
+    _check_successful_or_raise(result, expected_msg=expected_error_msg)
+
+    result = _create_test(
+        body=load_yaml(
+            """
+test_foo:
+  model: sushi.foo
+  inputs:
+    raw:
+      - value: 1
+  outputs:
+    query:
+      - value: 1
+            """
+        ),
+        test_name="test_foo",
+        model=_create_model("SELECT value FROM raw UNION ALL SELECT value + 1 AS value FROM raw"),
+        context=Context(config=Config(model_defaults=ModelDefaultsConfig(dialect="duckdb"))),
+    ).run()
+
+    expected_error_msg = (
+        "AssertionError: Data mismatch (rows are different)\n\n"
+        "Unexpected rows:\n\n"
+        "   value\n"
+        "0      2\n"
+    )
+    _check_successful_or_raise(result, expected_msg=expected_error_msg)
+
+    result = _create_test(
+        body=load_yaml(
+            """
+test_foo:
+  model: sushi.foo
+  inputs:
+    raw:
+      - value: 1
+  outputs:
+    query:
+      - value: 1
+      - value: 3
+      - value: 4
+            """
+        ),
+        test_name="test_foo",
+        model=_create_model("SELECT value FROM raw UNION ALL SELECT value + 1 AS value FROM raw"),
+        context=Context(config=Config(model_defaults=ModelDefaultsConfig(dialect="duckdb"))),
+    ).run()
+
+    expected_error_msg = (
+        "AssertionError: Data mismatch (rows are different)\n\n"
+        "Missing rows:\n\n"
+        "   value\n"
+        "0      3\n"
+        "1      4\n\n"
+        "Unexpected rows:\n\n"
+        "   value\n"
+        "0      2\n"
+    )
+    _check_successful_or_raise(result, expected_msg=expected_error_msg)
 
 
 def test_unknown_column_error() -> None:
@@ -510,18 +594,18 @@ test_foo:
   outputs:
     query:
       - foo: 1
-                """
+            """
         ),
         test_name="test_foo",
         model=_create_model("SELECT id, value FROM raw"),
         context=Context(config=Config(model_defaults=ModelDefaultsConfig(dialect="duckdb"))),
     ).run()
 
-    expected_error_msg = """sqlmesh.core.test.definition.TestError: Detected unknown column(s)
-
-Expected column(s): id, value
-Unknown column(s): foo
-"""
+    expected_error_msg = (
+        "sqlmesh.core.test.definition.TestError: Detected unknown column(s)\n\n"
+        "Expected column(s): id, value\n"
+        "Unknown column(s): foo\n"
+    )
     _check_successful_or_raise(result, expected_msg=expected_error_msg)
 
 
@@ -748,3 +832,41 @@ def test_test_generation_with_array(tmp_path: Path) -> None:
         "sqlmesh_example.bar": [{"array_col": ["value1", "value2"]}]
     }
     assert test["test_foo"]["outputs"] == {"query": [{"array_col": ["value1", "value2"]}]}
+
+
+def test_test_generation_with_timestamp(tmp_path: Path) -> None:
+    init_example_project(tmp_path, dialect="duckdb")
+
+    config = Config(
+        default_connection=DuckDBConnectionConfig(),
+        model_defaults=ModelDefaultsConfig(dialect="duckdb"),
+    )
+    foo_sql_file = tmp_path / "models" / "foo.sql"
+    foo_sql_file.write_text(
+        "MODEL (name sqlmesh_example.foo); SELECT ts_col FROM sqlmesh_example.bar;"
+    )
+    bar_sql_file = tmp_path / "models" / "bar.sql"
+    bar_sql_file.write_text("MODEL (name sqlmesh_example.bar); SELECT ts_col FROM external_table;")
+
+    context = Context(paths=tmp_path, config=config)
+
+    input_queries = {
+        "sqlmesh_example.bar": "SELECT TIMESTAMP '2024-09-20 11:30:00.123456789' AS ts_col"
+    }
+
+    context.create_test(
+        "sqlmesh_example.foo",
+        input_queries=input_queries,
+        overwrite=True,
+    )
+
+    test = load_yaml(context.path / c.TESTS / "test_foo.yaml")
+
+    assert len(test) == 1
+    assert "test_foo" in test
+    assert test["test_foo"]["inputs"] == {
+        "sqlmesh_example.bar": [{"ts_col": datetime.datetime(2024, 9, 20, 11, 30, 0, 123456)}]
+    }
+    assert test["test_foo"]["outputs"] == {
+        "query": [{"ts_col": datetime.datetime(2024, 9, 20, 11, 30, 0, 123456)}]
+    }

@@ -5,6 +5,7 @@ import traceback
 import typing as t
 from datetime import datetime
 
+from sqlmesh.core import constants as c
 from sqlmesh.core.console import Console, get_console
 from sqlmesh.core.environment import EnvironmentNamingInfo
 from sqlmesh.core.model import SeedModel
@@ -243,7 +244,11 @@ class Scheduler:
         else:
             environment_naming_info = environment
 
-        deployability_index = deployability_index or DeployabilityIndex.all_deployable()
+        deployability_index = deployability_index or (
+            DeployabilityIndex.create(self.snapshots.values())
+            if environment_naming_info.name != c.PROD
+            else DeployabilityIndex.all_deployable()
+        )
         execution_time = execution_time or now()
         batches = self.batches(
             start,
