@@ -771,6 +771,9 @@ class Snapshot(PydanticModel, SnapshotInfoMixin):
         Returns:
             A list of all the missing intervals as epoch timestamps.
         """
+        # If the node says that it has an end, and we are wanting to load past it, then we can return no empty intervals
+        if self.node.end and to_datetime(start) > to_datetime(self.node.end):
+            return []
         # If the amount of time being checked is less than the size of a single interval then we
         # know that there can't being missing intervals within that range and return
         validate_date_range(start, end)

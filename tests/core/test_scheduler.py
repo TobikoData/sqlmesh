@@ -273,3 +273,12 @@ def test_intervals_with_end_date_on_model(mocker: MockerFixture, make_snapshot):
     assert len(batches) == 10
     assert batches[0] == (to_datetime("2023-01-01"), to_datetime("2023-01-02"))
     assert batches[-1] == (to_datetime("2023-01-10"), to_datetime("2023-01-11"))
+
+    # generate for the last day of range
+    batches = scheduler.batches(start="2023-01-31", end="2023-01-31")[snapshot]
+    assert len(batches) == 1
+    assert batches[0] == (to_datetime("2023-01-31"), to_datetime("2023-02-01"))
+
+    # generate for future days to ensure no future batches are loaded
+    snapshot_to_batches = scheduler.batches(start="2023-02-01", end="2023-02-28")
+    assert len(snapshot_to_batches) == 0
