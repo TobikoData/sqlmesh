@@ -613,7 +613,7 @@ class SQLMeshMagics(Magics):
     @pass_sqlmesh_context
     def table_name(self, context: Context, line: str) -> None:
         """Prints the name of the physical table for the given model."""
-        args = parse_argstring(self.table_diff, line)
+        args = parse_argstring(self.table_name, line)
         context.console.log_status_update(context.table_name(args.model_name, args.dev))
 
     @magic_arguments()

@@ -671,4 +671,15 @@ revenue      100.0""",
     ]
 
 
-# TODO: Add rewrite test
+@pytest.mark.slow
+@freeze_time(FREEZE_TIME)
+def test_table_name(notebook, loaded_sushi_context, convert_all_html_output_to_text):
+    with capture_output() as output:
+        notebook.run_line_magic(magic_name="table_name", line="sushi.orders")
+
+    assert not output.stdout
+    assert not output.stderr
+    assert len(output.outputs) == 1
+    assert convert_all_html_output_to_text(output)[0].startswith(
+        "memory.sqlmesh__sushi.sushi__orders__"
+    )
