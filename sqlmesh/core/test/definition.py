@@ -471,6 +471,24 @@ def generate_test(
             engine_adapter=test_engine_adapter,
             table_mapping=mapping,
         )
+
+        ctes = {}
+        previous_ctes: t.List[exp.CTE] = []
+        for cte in model_query.ctes:
+            cte_query = cte.this
+            for prev in previous_ctes:
+                cte_query = cte_query.with_(prev.alias, prev.this)
+
+            cte_output = t.cast(SqlModelTest, test)._execute(cte_query)
+            ctes[cte.alias] = pandas_timestamp_to_pydatetime(
+                cte_output.apply(lambda col: col.map(_normalize_dataframe)), cte_query.named_selects
+            ).to_dict(orient="records")
+
+            previous_ctes.append(cte)
+
+        if ctes:
+            outputs["ctes"] = ctes
+
         output = t.cast(SqlModelTest, test)._execute(model_query)
     else:
         output = t.cast(PythonModelTest, test)._execute_model()
