@@ -22,7 +22,7 @@ Tests within a suite file contain the following attributes:
     * The list of rows that are expected to be returned by the model's query defined as a mapping from a column name to a value associated with it
     * [Optional] The list of expected rows per each individual [Common Table Expression](glossary.md#cte) (CTE) defined in the model's query
 * [Optional] The dictionary of values for macro variables that will be set during model testing
-    * There are three special macros that can be overridden, `start`, `end`, and `execution_time`. Overriding each will allow you to override the date macros in your SQL queries. For example, setting `execution_time` to `2022-01-01` means `@execution_ds` will also be equal to that value. Additionally, SQL expressions like `CURRENT_DATE` and `CURRENT_TIMESTAMP` will result in the same datetime value as `execution_time`, when it is set.
+    * There are three special macro variables: `start`, `end`, and `execution_time`. Setting these will allow you to override the date macros in your SQL queries. For example, `@execution_ds` will render to `2022-01-01`, if `execution_time` is set to this value. Additionally, SQL expressions like `CURRENT_DATE` and `CURRENT_TIMESTAMP` will result in the same datetime value as `execution_time`, when it is set.
 
 The YAML format is defined as follows:
 
