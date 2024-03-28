@@ -1261,6 +1261,8 @@ class GenericContext(BaseContext, t.Generic[C]):
             path: filename to save the dag html to
             select_models: A list of model selection strings that should be included in the dag.
         """
+        if not path.endswith(".html"):
+            path += ".html"
 
         with open(path, "w", encoding="utf-8") as file:
             file.write(str(self.get_dag(select_models)))

@@ -246,4 +246,4 @@ To view the DAG, enter the following command:
 
 `sqlmesh dag FILE`
 
-A file containing your project's DAG will be placed at the root of your project folder. Save this file using the `.html` extension and open it in your browser to view.
+An html file containing your project's DAG will be placed at the root of your project folder. The DAG can then be viewed by opening this file in your browser.
