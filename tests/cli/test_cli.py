@@ -610,3 +610,22 @@ def test_clean(runner, tmp_path):
     # Confirm cache was cleared
     assert result.exit_code == 0
     assert not cache_path.exists()
+
+
+def test_table_name(runner, tmp_path):
+    # Create and backfill `prod` environment
+    create_example_project(tmp_path)
+    init_prod_and_backfill(runner, tmp_path)
+    result = runner.invoke(
+        cli,
+        [
+            "--log-file-dir",
+            tmp_path,
+            "--paths",
+            tmp_path,
+            "table_name",
+            "sqlmesh_example.full_model",
+        ],
+    )
+    assert result.exit_code == 0
+    assert result.output.startswith("db.sqlmesh__sqlmesh_example.sqlmesh_example__full_model__")

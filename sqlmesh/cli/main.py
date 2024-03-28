@@ -739,3 +739,18 @@ def prompt(
 def clean(obj: Context) -> None:
     """Clears the SQLMesh cache and any build artifacts."""
     obj.clear_caches()
+
+
+@cli.command("table_name")
+@click.argument("model_name", required=True)
+@click.option(
+    "--dev",
+    is_flag=True,
+    help="Print the name of the snapshot table used for previews in development environments.",
+    default=False,
+)
+@click.pass_obj
+@error_handler
+def table_name(obj: Context, model_name: str, dev: bool) -> None:
+    """Prints the name of the physical table for the given model."""
+    print(obj.table_name(model_name, dev))
