@@ -18,6 +18,8 @@ from sqlmesh.utils.errors import MissingDependencyError
 
 logger = logging.getLogger(__name__)
 
+SKIP_LOAD_COMMANDS = ("create_external_models", "migrate", "rollback")
+
 
 def _sqlmesh_version() -> str:
     try:
@@ -80,7 +82,7 @@ def cli(
         if ctx.invoked_subcommand in ("init", "ui"):
             ctx.obj = path
             return
-        elif ctx.invoked_subcommand in ("create_external_models", "migrate", "rollback"):
+        elif ctx.invoked_subcommand in SKIP_LOAD_COMMANDS:
             load = False
 
     configs = load_configs(config, Context.CONFIG_TYPE, paths)
