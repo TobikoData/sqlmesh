@@ -857,12 +857,13 @@ def test_freeze_time(mocker: MockerFixture) -> None:
             """
 test_foo:
   model: xyz
-  freeze_time: "2023-01-01 12:05:03+00:00"
   outputs:
     query:
       - cur_date: 2023-01-01
         cur_time: 12:05:03
         cur_timestamp: "2023-01-01 12:05:03"
+  vars:
+    execution_time: "2023-01-01 12:05:03+00:00"
             """
         ),
         test_name="test_foo",
@@ -901,11 +902,12 @@ test_foo:
             """
 test_py_model:
   model: py_model
-  freeze_time: "2023-01-01 12:05:03+02:00"
   outputs:
     query:
       - ts1: "2023-01-01 10:05:03"
         ts2: "2023-01-01 10:05:03"
+  vars:
+    execution_time: "2023-01-01 12:05:03+02:00"
             """
         ),
         test_name="test_py_model",

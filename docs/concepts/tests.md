@@ -15,7 +15,6 @@ Tests within a suite file contain the following attributes:
 * The unique name of a test
 * The name of the model targeted by this test
 * [Optional] The test's description
-* [Optional] A datetime value that will be used to "freeze" time in the context of this test
 * Test inputs, which are defined per upstream model or external table referenced by the target model. Each test input consists of the following:
     * The name of an upstream model or external table
     * The list of rows defined as a mapping from a column name to a value associated with it
@@ -23,7 +22,7 @@ Tests within a suite file contain the following attributes:
     * The list of rows that are expected to be returned by the model's query defined as a mapping from a column name to a value associated with it
     * [Optional] The list of expected rows per each individual [Common Table Expression](glossary.md#cte) (CTE) defined in the model's query
 * [Optional] The dictionary of values for macro variables that will be set during model testing
-    * There are three special macros that can be overridden, `start`, `end`, and `execution_time`. Overriding each will allow you to override the date macros in your SQL queries. For example, setting execution_time: 2022-01-01 -> execution_ds in your queries.
+    * There are three special macros that can be overridden, `start`, `end`, and `execution_time`. Overriding each will allow you to override the date macros in your SQL queries. For example, setting `execution_time` to `2022-01-01` means `@execution_ds` will also be equal to that value. Additionally, SQL expressions like `CURRENT_DATE` and `CURRENT_TIMESTAMP` will result in the same datetime value as `execution_time`, when it is set.
 
 The YAML format is defined as follows:
 
@@ -31,7 +30,6 @@ The YAML format is defined as follows:
 <unique_test_name>:
   model: <target_model_name>
   description: <description>  # Optional
-  freeze_time: <datetime>  # Optional
   inputs:
     <upstream_model_or_external_table_name>:
       rows:
@@ -216,9 +214,9 @@ test_example_full_model:
 
 Some models may use SQL expressions that compute datetime values at a given point in time, such as `CURRENT_TIMESTAMP`. Since these expressions are non-deterministic, it wouldn't suffice to simply specify an expected datetime value in the outputs.
 
-The `freeze_time` attribute addresses this problem by setting the current time to the given datetime value, thus making the former deterministic.
+The `execution_time` attribute addresses this problem by setting the current time to the given datetime value, thus making the former deterministic.
 
-The following example demonstrates how `freeze_time` can be used to test a column that is computed using `CURRENT_TIMESTAMP`. The model we're going to test is defined as:
+The following example demonstrates how `execution_time` can be used to test a column that is computed using `CURRENT_TIMESTAMP`. The model we're going to test is defined as:
 
 ```sql linenums="1"
 MODEL (
@@ -236,14 +234,15 @@ And the corresponding test is:
 ```yaml linenums="1"
 test_colors:
   model: colors
-  freeze_time: "2023-01-01 12:05:03"
   outputs:
     query:
       - color: "Yellow"
         created_at: "2023-01-01 12:05:03"
+  vars:
+    execution_time: "2023-01-01 12:05:03"
 ```
 
-It's also possible to set a time zone in the `freeze_time` datetime value, by including it in the timestamp string.
+It's also possible to set a time zone in the `execution_time` datetime value, by including it in the timestamp string.
 
 If a time zone is provided, it is currently required that the expected datetime values are timestamps without time zone, meaning that they need to be offset accordingly.
 
@@ -252,11 +251,12 @@ Here's how we would write the above test if we wanted to freeze the time to UTC+
 ```yaml linenums="1"
 test_colors:
   model: colors
-  freeze_time: "2023-01-01 12:05:03+02:00"
   outputs:
     query:
       - color: "Yellow"
         created_at: "2023-01-01 10:05:03"
+  vars:
+    execution_time: "2023-01-01 12:05:03+02:00"
 ```
 
 ## Automatic test generation

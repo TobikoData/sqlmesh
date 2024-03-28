@@ -76,15 +76,15 @@ class ModelTest(unittest.TestCase):
         self._engine_adapter_dialect = Dialect.get_or_raise(self.engine_adapter.dialect)
         self._transforms = self._engine_adapter_dialect.generator_class.TRANSFORMS
 
-        self._freeze_time = str(self.body.get("freeze_time") or "")
-        if self._freeze_time:
-            freeze_time = exp.Literal.string(self._freeze_time)
+        self._execution_time = str(self.body.get("vars", {}).get("execution_time") or "")
+        if self._execution_time:
+            exec_time = exp.Literal.string(self._execution_time)
             self._transforms = {
                 **self._transforms,
-                exp.CurrentDate: lambda self, _: self.sql(exp.cast(freeze_time, "date")),
-                exp.CurrentDatetime: lambda self, _: self.sql(exp.cast(freeze_time, "datetime")),
-                exp.CurrentTime: lambda self, _: self.sql(exp.cast(freeze_time, "time")),
-                exp.CurrentTimestamp: lambda self, _: self.sql(exp.cast(freeze_time, "timestamp")),
+                exp.CurrentDate: lambda self, _: self.sql(exp.cast(exec_time, "date")),
+                exp.CurrentDatetime: lambda self, _: self.sql(exp.cast(exec_time, "datetime")),
+                exp.CurrentTime: lambda self, _: self.sql(exp.cast(exec_time, "time")),
+                exp.CurrentTimestamp: lambda self, _: self.sql(exp.cast(exec_time, "timestamp")),
             }
 
         super().__init__()
@@ -401,7 +401,7 @@ class PythonModelTest(ModelTest):
     def _execute_model(self) -> pd.DataFrame:
         """Executes the python model and returns a DataFrame."""
         with (
-            freeze_time(self._freeze_time) if self._freeze_time else nullcontext(),  # type: ignore
+            freeze_time(self._execution_time) if self._execution_time else nullcontext(),  # type: ignore
             patch.dict(self._engine_adapter_dialect.generator_class.TRANSFORMS, self._transforms),
         ):
             return t.cast(
