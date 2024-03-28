@@ -4,7 +4,9 @@ import datetime
 import typing as t
 from pathlib import Path
 
+import pandas as pd
 import pytest
+from pytest_mock.plugin import MockerFixture
 from sqlglot import exp
 
 from sqlmesh.cli.example_project import init_example_project
@@ -12,8 +14,8 @@ from sqlmesh.core import constants as c
 from sqlmesh.core.config import Config, DuckDBConnectionConfig, ModelDefaultsConfig
 from sqlmesh.core.context import Context
 from sqlmesh.core.dialect import parse
-from sqlmesh.core.model import SqlModel, load_sql_based_model
-from sqlmesh.core.test.definition import SqlModelTest
+from sqlmesh.core.model import PythonModel, SqlModel, load_sql_based_model, model
+from sqlmesh.core.test.definition import PythonModelTest, SqlModelTest
 from sqlmesh.utils.errors import ConfigError
 from sqlmesh.utils.yaml import load as load_yaml
 
@@ -25,13 +27,21 @@ pytestmark = pytest.mark.slow
 SUSHI_FOO_META = "MODEL (name sushi.foo, kind FULL)"
 
 
+@t.overload
 def _create_test(
-    body: t.Dict[str, t.Any],
-    test_name: str,
-    model: SqlModel,
-    context: Context,
-) -> SqlModelTest:
-    return SqlModelTest(
+    body: t.Dict[str, t.Any], test_name: str, model: SqlModel, context: Context
+) -> SqlModelTest: ...
+
+
+@t.overload
+def _create_test(
+    body: t.Dict[str, t.Any], test_name: str, model: PythonModel, context: Context
+) -> PythonModelTest: ...
+
+
+def _create_test(body, test_name, model, context):
+    test_type = SqlModelTest if isinstance(model, SqlModel) else PythonModelTest
+    return test_type(
         body=body[test_name],
         test_name=test_name,
         model=model,
@@ -839,6 +849,71 @@ test_foo:
     ).run()
 
     _check_successful_or_raise(result)
+
+
+def test_freeze_time(mocker: MockerFixture) -> None:
+    test = _create_test(
+        body=load_yaml(
+            """
+test_foo:
+  model: xyz
+  freeze_time: "2023-01-01 12:05:03+00:00"
+  outputs:
+    query:
+      - cur_date: 2023-01-01
+        cur_time: 12:05:03
+        cur_timestamp: "2023-01-01 12:05:03"
+            """
+        ),
+        test_name="test_foo",
+        model=_create_model(
+            "SELECT CURRENT_DATE AS cur_date, CURRENT_TIME AS cur_time, CURRENT_TIMESTAMP AS cur_timestamp"
+        ),
+        context=Context(config=Config(model_defaults=ModelDefaultsConfig(dialect="duckdb"))),
+    )
+
+    spy_execute = mocker.spy(test.engine_adapter, "_execute")
+    _check_successful_or_raise(test.run())
+
+    spy_execute.assert_called_with(
+        "SELECT "
+        """CAST('2023-01-01 12:05:03+00:00' AS DATE) AS "cur_date", """
+        """CAST('2023-01-01 12:05:03+00:00' AS TIME) AS "cur_time", """
+        '''CAST('2023-01-01 12:05:03+00:00' AS TIMESTAMP) AS "cur_timestamp"''',
+    )
+
+    context = Context(config=Config(model_defaults=ModelDefaultsConfig(dialect="duckdb")))
+
+    @model("py_model", columns={"ts1": "timestamptz", "ts2": "timestamptz"})
+    def execute(context, start, end, execution_time, **kwargs):
+        datetime_now = datetime.datetime.now()
+
+        context.engine_adapter.execute(exp.select("CURRENT_TIMESTAMP"))
+        current_timestamp = context.engine_adapter.cursor.fetchone()[0]
+
+        return pd.DataFrame([{"ts1": datetime_now, "ts2": current_timestamp}])
+
+    py_model = model.get_registry()["py_model"].model(module_path=Path("."), path=Path("."))
+    context.upsert_model(py_model)
+
+    test = _create_test(
+        body=load_yaml(
+            """
+test_py_model:
+  model: py_model
+  freeze_time: "2023-01-01 12:05:03+02:00"
+  outputs:
+    query:
+      - ts1: "2023-01-01 10:05:03"
+        ts2: "2023-01-01 10:05:03"
+            """
+        ),
+        test_name="test_py_model",
+        model=py_model,
+        context=context,
+    )
+
+    _check_successful_or_raise(test.run())
 
 
 def test_successes(sushi_context: Context) -> None:

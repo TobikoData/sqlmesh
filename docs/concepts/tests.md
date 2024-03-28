@@ -15,6 +15,7 @@ Tests within a suite file contain the following attributes:
 * The unique name of a test
 * The name of the model targeted by this test
 * [Optional] The test's description
+* [Optional] A datetime value that will be used to "freeze" time in the context of this test
 * Test inputs, which are defined per upstream model or external table referenced by the target model. Each test input consists of the following:
     * The name of an upstream model or external table
     * The list of rows defined as a mapping from a column name to a value associated with it
@@ -30,6 +31,7 @@ The YAML format is defined as follows:
 <unique_test_name>:
   model: <target_model_name>
   description: <description>  # Optional
+  freeze_time: <datetime>  # Optional
   inputs:
     <upstream_model_or_external_table_name>:
       rows:
@@ -208,6 +210,53 @@ test_example_full_model:
       rows:
       - item_id: 1
         num_orders: 2
+```
+
+### Freezing Time
+
+Some models may use SQL expressions that compute datetime values at a given point in time, such as `CURRENT_TIMESTAMP`. Since these expressions are non-deterministic, it wouldn't suffice to simply specify an expected datetime value in the outputs.
+
+The `freeze_time` attribute addresses this problem by setting the current time to the given datetime value, thus making the former deterministic.
+
+The following example demonstrates how `freeze_time` can be used to test a column that is computed using `CURRENT_TIMESTAMP`. The model we're going to test is defined as:
+
+```sql linenums="1"
+MODEL (
+    name colors,
+    kind FULL
+);
+
+SELECT
+    'Yellow' AS color,
+    CURRENT_TIMESTAMP AS created_at
+```
+
+And the corresponding test is:
+
+```yaml linenums="1"
+test_colors:
+  model: colors
+  freeze_time: "2023-01-01 12:05:03"
+  outputs:
+    query:
+      - color: "Yellow"
+        created_at: "2023-01-01 12:05:03"
+```
+
+It's also possible to set a time zone in the `freeze_time` datetime value, by including it in the timestamp string.
+
+If a time zone is provided, it is currently required that the expected datetime values are timestamps without time zone, meaning that they need to be offset accordingly.
+
+Here's how we would write the above test if we wanted to freeze the time to UTC+2:
+
+```yaml linenums="1"
+test_colors:
+  model: colors
+  freeze_time: "2023-01-01 12:05:03+02:00"
+  outputs:
+    query:
+      - color: "Yellow"
+        created_at: "2023-01-01 10:05:03"
 ```
 
 ## Automatic test generation

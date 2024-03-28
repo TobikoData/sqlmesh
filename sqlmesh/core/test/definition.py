@@ -3,11 +3,14 @@ from __future__ import annotations
 import typing as t
 import unittest
 from collections import Counter
+from contextlib import nullcontext
 from pathlib import Path
+from unittest.mock import patch
 
 import numpy as np
 import pandas as pd
-from sqlglot import exp
+from freezegun import freeze_time
+from sqlglot import Dialect, exp
 from sqlglot.optimizer.annotate_types import annotate_types
 from sqlglot.optimizer.normalize_identifiers import normalize_identifiers
 
@@ -69,6 +72,20 @@ class ModelTest(unittest.TestCase):
         for depends_on in self.model.depends_on:
             if depends_on not in inputs:
                 _raise_error(f"Incomplete test, missing input for table {depends_on}", path)
+
+        self._engine_adapter_dialect = Dialect.get_or_raise(self.engine_adapter.dialect)
+        self._transforms = self._engine_adapter_dialect.generator_class.TRANSFORMS
+
+        self._freeze_time = str(self.body.get("freeze_time") or "")
+        if self._freeze_time:
+            freeze_time = exp.Literal.string(self._freeze_time)
+            self._transforms = {
+                **self._transforms,
+                exp.CurrentDate: lambda self, _: self.sql(exp.cast(freeze_time, "date")),
+                exp.CurrentDatetime: lambda self, _: self.sql(exp.cast(freeze_time, "datetime")),
+                exp.CurrentTime: lambda self, _: self.sql(exp.cast(freeze_time, "time")),
+                exp.CurrentTimestamp: lambda self, _: self.sql(exp.cast(freeze_time, "timestamp")),
+            }
 
         super().__init__()
 
@@ -275,10 +292,6 @@ class ModelTest(unittest.TestCase):
 
 
 class SqlModelTest(ModelTest):
-    def _execute(self, query: exp.Expression) -> pd.DataFrame:
-        """Executes the query with the engine adapter and returns a DataFrame."""
-        return self.engine_adapter.fetchdf(query)
-
     def test_ctes(self, ctes: t.Dict[str, exp.Expression]) -> None:
         """Run CTE queries and compare output to expected output"""
         for cte_name, values in self.body["outputs"].get("ctes", {}).items():
@@ -331,6 +344,11 @@ class SqlModelTest(ModelTest):
 
             self.assert_equal(expected, actual, sort=sort, partial=partial)
 
+    def _execute(self, query: exp.Expression) -> pd.DataFrame:
+        """Executes the query with the engine adapter and returns a DataFrame."""
+        with patch.dict(self._engine_adapter_dialect.generator_class.TRANSFORMS, self._transforms):
+            return self.engine_adapter.fetchdf(query)
+
 
 class PythonModelTest(ModelTest):
     def __init__(
@@ -368,13 +386,6 @@ class PythonModelTest(ModelTest):
             default_catalog=default_catalog,
         )
 
-    def _execute_model(self) -> pd.DataFrame:
-        """Executes the python model and returns a DataFrame."""
-        return t.cast(
-            pd.DataFrame,
-            next(self.model.render(context=self.context, **self.body.get("vars", {}))),
-        )
-
     def runTest(self) -> None:
         values = self.body["outputs"].get("query")
         if values is not None:
@@ -386,6 +397,17 @@ class PythonModelTest(ModelTest):
             expected = _create_df(rows, columns=self.model.columns_to_types, partial=partial)
 
             self.assert_equal(expected, actual_df, sort=False, partial=partial)
+
+    def _execute_model(self) -> pd.DataFrame:
+        """Executes the python model and returns a DataFrame."""
+        with (
+            freeze_time(self._freeze_time) if self._freeze_time else nullcontext(),  # type: ignore
+            patch.dict(self._engine_adapter_dialect.generator_class.TRANSFORMS, self._transforms),
+        ):
+            return t.cast(
+                pd.DataFrame,
+                next(self.model.render(context=self.context, **self.body.get("vars", {}))),
+            )
 
 
 def generate_test(
