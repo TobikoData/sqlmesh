@@ -71,7 +71,7 @@ It compares this set of 84 to the stored set of 60 that we already backfilled to
 
 SQLMesh has two different commands for processing data. If any model has been changed, [`sqlmesh plan`](../reference/cli.md#plan) is used to apply the change to data in a specific environment. If no models have changed, [`sqlmesh run`](../reference/cli.md#run) is used to execute the project's models.
 
-Data accumulation rates and freshness requirements may differ across models. If `sqlmesh run` ran every model whenever it was executed, all models would be held to the same freshness requirements as the most stringent model. This is inefficient and wastes computational resources (and money).
+Data accumulation rates and freshness requirements may differ across models. If `sqlmesh run` ran every model whenever the command was executed, all models would be held to the same freshness requirements as the most stringent model. This is inefficient and wastes computational resources (and money).
 
 Instead, you specify the [`cron` parameter](../concepts/models/overview.md#cron) for each model. `sqlmesh run` uses each model's `cron` to determine whether that model should be executed in a given run.
 
