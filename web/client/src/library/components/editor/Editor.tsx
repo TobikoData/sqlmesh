@@ -95,7 +95,7 @@ function EditorMain({ tab }: { tab: EditorTab }): JSX.Element {
     return [
       ...defaultKeymapsEditorTab,
       {
-        key: 'Ctrl-Enter',
+        key: 'Shift-Mod-Enter',
         preventDefault: true,
         run(view) {
           const sql = view.state.doc.toString()
