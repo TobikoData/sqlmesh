@@ -548,5 +548,5 @@ def _raise_error(msg: str, path: Path | None = None) -> None:
 def _normalize_dataframe(value: t.Any) -> t.Any:
     """Normalize data in a pandas dataframe so ruamel and sqlglot can deal with it."""
     if isinstance(value, np.ndarray):
-        return list(value)
+        return [_normalize_dataframe(v) for v in value]
     return value
