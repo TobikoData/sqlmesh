@@ -217,7 +217,7 @@ jobs:
         - run:
             name: Trigger private tests
             command: |
-              echo "export COMMIT_MESSAGE=\"$(git log --format=%s%b -n 1 $CIRCLE_SHA1)\"" >> "$BASH_ENV"
+              echo "export COMMIT_MESSAGE=\"$(git log --format=%s -n 1 $CIRCLE_SHA1)\"" >> "$BASH_ENV"
               source "$BASH_ENV"
               curl --request POST \
                 --url $TOBIKO_PRIVATE_CIRCLECI_URL \
