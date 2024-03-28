@@ -190,7 +190,7 @@ def test_model_validation(query, error):
     assert error in str(ex.value)
 
 
-def test_model_union_query():
+def test_model_union_query(sushi_context, assert_exp_eq):
     expressions = d.parse(
         """
         MODEL (
@@ -203,6 +203,37 @@ def test_model_union_query():
     )
 
     load_sql_based_model(expressions)
+
+    expressions = d.parse(
+        """
+        MODEL (
+            name sushi.test,
+            kind FULL,
+        );
+
+        @union('all', sushi.marketing, sushi.marketing)
+        """
+    )
+    sushi_context.upsert_model(load_sql_based_model(expressions, default_catalog="memory"))
+    assert_exp_eq(
+        sushi_context.get_model("sushi.test").render_query(),
+        """SELECT
+  CAST("marketing"."customer_id" AS INT) AS "customer_id",
+  CAST("marketing"."status" AS TEXT) AS "status",
+  CAST("marketing"."updated_at" AS TIMESTAMP) AS "updated_at",
+  CAST("marketing"."valid_from" AS TIMESTAMP) AS "valid_from",
+  CAST("marketing"."valid_to" AS TIMESTAMP) AS "valid_to"
+FROM "memory"."sushi"."marketing" AS "marketing"
+UNION ALL
+SELECT
+  CAST("marketing"."customer_id" AS INT) AS "customer_id",
+  CAST("marketing"."status" AS TEXT) AS "status",
+  CAST("marketing"."updated_at" AS TIMESTAMP) AS "updated_at",
+  CAST("marketing"."valid_from" AS TIMESTAMP) AS "valid_from",
+  CAST("marketing"."valid_to" AS TIMESTAMP) AS "valid_to"
+FROM "memory"."sushi"."marketing" AS "marketing"
+        """,
+    )
 
 
 def test_model_validation_union_query():
