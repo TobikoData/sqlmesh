@@ -1477,8 +1477,12 @@ def load_sql_based_model(
         **meta_fields,
     )
 
-    if query_or_seed_insert is not None and isinstance(
-        query_or_seed_insert, (exp.Query, d.JinjaQuery)
+    if query_or_seed_insert is not None and (
+        isinstance(query_or_seed_insert, (exp.Query, d.JinjaQuery))
+        or (
+            isinstance(query_or_seed_insert, d.MacroFunc)
+            and query_or_seed_insert.this.name.lower() == "union"
+        )
     ):
         jinja_macro_references.update(
             extract_macro_references(query_or_seed_insert.sql(dialect=dialect))
@@ -1792,6 +1796,7 @@ def _split_sql_model_statements(
         if (
             isinstance(expression, (exp.Query, d.JinjaQuery))
             or expression == INSERT_SEED_MACRO_CALL
+            or (isinstance(expression, d.MacroFunc) and expression.this.name.lower() == "union")
         ):
             query_positions.append((expression, idx))
 
