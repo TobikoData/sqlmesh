@@ -982,6 +982,94 @@ def test_test_generation_with_array(tmp_path: Path) -> None:
         "query": [{"array_col": [["value1"], ["value2", "value3"]]}]
     }
 
+    # Array of maps
+    input_queries = {
+        "sqlmesh_example.bar": "SELECT [MAP {'key1': 'value1'}, MAP {'key2': 'value2'}] AS array_col"
+    }
+
+    context.create_test(
+        "sqlmesh_example.foo",
+        input_queries=input_queries,
+        overwrite=True,
+        variables={"start": "2020-01-01", "end": "2024-01-01"},
+    )
+
+    test = load_yaml(context.path / c.TESTS / "test_foo.yaml")
+
+    assert len(test) == 1
+    assert "test_foo" in test
+    assert "vars" in test["test_foo"]
+    assert test["test_foo"]["inputs"] == {
+        "sqlmesh_example.bar": [{"array_col": [{"key1": "value1"}, {"key2": "value2"}]}]
+    }
+    assert test["test_foo"]["outputs"] == {
+        "query": [{"array_col": [{"key1": "value1"}, {"key2": "value2"}]}]
+    }
+
+
+def test_test_generation_with_map(tmp_path: Path) -> None:
+    init_example_project(tmp_path, dialect="duckdb")
+
+    config = Config(
+        default_connection=DuckDBConnectionConfig(),
+        model_defaults=ModelDefaultsConfig(dialect="duckdb"),
+    )
+    foo_sql_file = tmp_path / "models" / "foo.sql"
+    foo_sql_file.write_text(
+        "MODEL (name sqlmesh_example.foo); SELECT map_col FROM sqlmesh_example.bar;"
+    )
+    bar_sql_file = tmp_path / "models" / "bar.sql"
+    bar_sql_file.write_text("MODEL (name sqlmesh_example.bar); SELECT map_col FROM external_table;")
+
+    context = Context(paths=tmp_path, config=config)
+
+    input_queries = {
+        "sqlmesh_example.bar": "SELECT MAP {'key1': 'value1', 'key2': 'value2'} AS map_col"
+    }
+
+    context.create_test(
+        "sqlmesh_example.foo",
+        input_queries=input_queries,
+        overwrite=True,
+        variables={"start": "2020-01-01", "end": "2024-01-01"},
+    )
+
+    test = load_yaml(context.path / c.TESTS / "test_foo.yaml")
+
+    assert len(test) == 1
+    assert "test_foo" in test
+    assert "vars" in test["test_foo"]
+    assert test["test_foo"]["inputs"] == {
+        "sqlmesh_example.bar": [{"map_col": {"key1": "value1", "key2": "value2"}}]
+    }
+    assert test["test_foo"]["outputs"] == {
+        "query": [{"map_col": {"key1": "value1", "key2": "value2"}}]
+    }
+
+    # Map with array values
+    input_queries = {
+        "sqlmesh_example.bar": "SELECT MAP {'key1': ['value1'], 'key2': ['value2']} AS map_col"
+    }
+
+    context.create_test(
+        "sqlmesh_example.foo",
+        input_queries=input_queries,
+        overwrite=True,
+        variables={"start": "2020-01-01", "end": "2024-01-01"},
+    )
+
+    test = load_yaml(context.path / c.TESTS / "test_foo.yaml")
+
+    assert len(test) == 1
+    assert "test_foo" in test
+    assert "vars" in test["test_foo"]
+    assert test["test_foo"]["inputs"] == {
+        "sqlmesh_example.bar": [{"map_col": {"key1": ["value1"], "key2": ["value2"]}}]
+    }
+    assert test["test_foo"]["outputs"] == {
+        "query": [{"map_col": {"key1": ["value1"], "key2": ["value2"]}}]
+    }
+
 
 def test_test_generation_with_timestamp(tmp_path: Path) -> None:
     init_example_project(tmp_path, dialect="duckdb")
