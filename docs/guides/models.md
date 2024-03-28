@@ -244,6 +244,6 @@ sudo apt-get install graphviz
 
 To view the DAG, enter the following command:
 
-`sqlmesh dag`
+`sqlmesh dag FILE`
 
-The generated files (.gv and .jpeg formats) will be placed at the root of your project folder.
+An html file containing your project's DAG will be placed at the root of your project folder. The DAG can then be viewed by opening this file in your browser.
