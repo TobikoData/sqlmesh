@@ -104,6 +104,7 @@ Options:
   -n, --name TEXT             The name of the test that will be created. By
                               default, it's inferred based on the model's
                               name.
+  --include-ctes              When true, CTE fixtures will also be generated.
   --help                      Show this message and exit.
 ```
 
