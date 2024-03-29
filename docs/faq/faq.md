@@ -147,14 +147,7 @@
 ## Databases/Engines
 
 ??? question "What databases/engines does SQLMesh work with?"
-    SQLMesh works with BigQuery, Databricks, DuckDB, MySQL, PostgreSQL, GCP PostgreSQL, Redshift, Snowflake, and Spark. See [this page](../integrations/overview.md) for more information.
-
-??? question "When would you use different databases for executing data transformations and storing state information?"
-    SQLMesh requires storing state information about projects and when their transformations were run. By default, it stores this information in the same database where the models run.
-
-    Unlike data transformations, storing state information requires database transactions. Some databases, like BigQuery, aren’t optimized for executing transactions, so storing state information in them can slow down your project. If this occurs, you can store state information in a different database, such as PostgreSQL, that executes transactions more efficiently.
-
-    Learn more about storing state information at the [configuration reference page](../reference/configuration.md#state-connection).
+    See [this page](../integrations/overview.md) for the list of currently supported engines.
 
 ## Scheduling
 
