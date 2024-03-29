@@ -353,6 +353,7 @@ options:
                         will be inferred based on the test's name.
   --name NAME, -n NAME  The name of the test that will be created. By default,
                         it's inferred based on the model's name.
+  --include-ctes        When true, CTE fixtures will also be generated.
 ```
 
 #### run_test

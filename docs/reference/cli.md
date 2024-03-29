@@ -6,15 +6,16 @@ Usage: sqlmesh [OPTIONS] COMMAND [ARGS]...
   SQLMesh command line tool.
 
 Options:
-  --version          Show the version and exit.
-  -p, --paths TEXT   Path(s) to the SQLMesh config/project.
-  --config TEXT      Name of the config object. Only applicable to
-                     configuration defined using Python script.
-  --gateway TEXT     The name of the gateway.
-  --ignore-warnings  Ignore warnings.
-  --debug            Enable debug mode.
-  --log-to-stdout    Display logs in stdout.
-  --help             Show this message and exit.
+  --version            Show the version and exit.
+  -p, --paths TEXT     Path(s) to the SQLMesh config/project.
+  --config TEXT        Name of the config object. Only applicable to
+                       configuration defined using Python script.
+  --gateway TEXT       The name of the gateway.
+  --ignore-warnings    Ignore warnings.
+  --debug              Enable debug mode.
+  --log-to-stdout      Display logs in stdout.
+  --log-file-dir TEXT  The directory to write log files to.
+  --help               Show this message and exit.
 
 Commands:
   audit                   Run audits for the target model(s).
@@ -37,11 +38,13 @@ Commands:
   rollback                Rollback SQLMesh to the previous migration.
   run                     Evaluate missing intervals for the target...
   table_diff              Show the diff between two tables.
+  table_name              Prints the name of the physical table for the...
   test                    Run model unit tests.
   ui                      Start a browser-based SQLMesh UI.
 ```
 
 ## audit
+
 ```
 Usage: sqlmesh audit [OPTIONS]
 
@@ -58,20 +61,29 @@ Options:
 ```
 
 ## clean
+
 ```
 Usage: sqlmesh clean [OPTIONS]
 
   Clears the SQLMesh cache and any build artifacts.
+
+Options:
+  --help  Show this message and exit.
 ```
 
 ## create_external_models
+
 ```
 Usage: sqlmesh create_external_models [OPTIONS]
 
   Create a schema file containing external model schemas.
+
+Options:
+  --help  Show this message and exit.
 ```
 
 ## create_test
+
 ```
 Usage: sqlmesh create_test [OPTIONS] MODEL
 
@@ -92,80 +104,104 @@ Options:
   -n, --name TEXT             The name of the test that will be created. By
                               default, it's inferred based on the model's
                               name.
+  --include-ctes              When true, CTE fixtures will also be generated.
   --help                      Show this message and exit.
 ```
 
 ## dag
+
 ```
 Usage: sqlmesh dag [OPTIONS] FILE
 
   Render the DAG as an html file.
 
 Options:
-  --help               Show this message and exit.
   --select-model TEXT  Select specific models to include in the dag.
+  --help               Show this message and exit.
 ```
 
 ## diff
+
 ```
 Usage: sqlmesh diff [OPTIONS] ENVIRONMENT
 
-  Show the diff between the current context and a given environment.
+  Show the diff between the local state and the target environment.
 
 Options:
   --help  Show this message and exit.
 ```
 
 ## evaluate
+
 ```
 Usage: sqlmesh evaluate [OPTIONS] MODEL
 
   Evaluate a model and return a dataframe with a default limit of 1000.
 
 Options:
-  -s, --start TEXT   The start datetime of the interval for which this
-                     command will be applied.
-  -e, --end TEXT     The end datetime of the interval for which this
-                     command will be applied.
-  --execution-time TEXT The execution time (defaults to now).
-  --limit INTEGER    The number of rows the query should be limited to.
-  --help             Show this message and exit.
+  -s, --start TEXT       The start datetime of the interval for which this
+                         command will be applied.
+  -e, --end TEXT         The end datetime of the interval for which this
+                         command will be applied.
+  --execution-time TEXT  The execution time (defaults to now).
+  --limit INTEGER        The number of rows which the query should be limited
+                         to.
+  --help                 Show this message and exit.
 ```
 
 ## fetchdf
+
 ```
 Usage: sqlmesh fetchdf [OPTIONS] SQL
 
-  Run a SQL query and displays the results.
+  Run a SQL query and display the results.
 
 Options:
   --help  Show this message and exit.
 ```
 
 ## format
+
 ```
 Usage: sqlmesh format [OPTIONS]
 
-  Format all models in a given directory.
+  Format all SQL models.
 
 Options:
-  --help  Show this message and exit.
+  -t, --transpile TEXT        Transpile project models to the specified
+                              dialect.
+  --append-newline            Include a newline at the end of each file.
+  --normalize                 Whether or not to normalize identifiers to
+                              lowercase.
+  --pad INTEGER               Determines the pad size in a formatted string.
+  --indent INTEGER            Determines the indentation size in a formatted
+                              string.
+  --normalize-functions TEXT  Whether or not to normalize all function names.
+                              Possible values are: 'upper', 'lower'
+  --leading-comma             Determines whether or not the comma is leading
+                              or trailing in select expressions. Default is
+                              trailing.
+  --max-text-width INTEGER    The max number of characters in a segment before
+                              creating new lines in pretty mode.
+  --help                      Show this message and exit.
 ```
 
 ## info
+
 ```
 Usage: sqlmesh info [OPTIONS]
 
   Print information about a SQLMesh project.
 
-  Includes counts of project models and macros and connection tests for the data
-  warehouse and test runner.
+  Includes counts of project models and macros and connection tests for the
+  data warehouse and test runner.
 
 Options:
   --help  Show this message and exit.
 ```
 
 ## init
+
 ```
 Usage: sqlmesh init [OPTIONS] [SQL_DIALECT]
 
@@ -178,6 +214,7 @@ Options:
 ```
 
 ## invalidate
+
 ```
 Usage: sqlmesh invalidate [OPTIONS] ENVIRONMENT
 
@@ -193,15 +230,20 @@ Options:
 ```
 
 ## migrate
+
 ```
-Usage: sqlmesh migrate
+Usage: sqlmesh migrate [OPTIONS]
 
   Migrate SQLMesh to the current running version.
 
-  Please contact your SQLMesh administrator before doing this.
+Options:
+  --help  Show this message and exit.
 ```
 
+**Caution**: contact your SQLMesh administrator before running this command.
+
 ## plan
+
 ```
 Usage: sqlmesh plan [OPTIONS] [ENVIRONMENT]
 
@@ -254,6 +296,7 @@ Options:
 ```
 
 ## prompt
+
 ```
 Usage: sqlmesh prompt [OPTIONS] PROMPT
 
@@ -270,26 +313,30 @@ Options:
 ```
 
 ## render
+
 ```
 Usage: sqlmesh render [OPTIONS] MODEL
 
   Render a model's query, optionally expanding referenced models.
 
 Options:
-  -s, --start TEXT   The start datetime of the interval for which this command
-                     will be applied.
-  -e, --end TEXT     The end datetime of the interval for which this command
-                     will be applied.
-  --execution-time TEXT The execution time used (defaults to now).
-  --expand TEXT      Whether or not to expand materialized models (defaults to
-                     False). If True, all referenced models are expanded as
-                     raw queries. Multiple model names can also be specified,
-                     in which case only they will be expanded as raw queries.
-  --dialect TEXT     The SQL dialect to render the query as.
-  --help             Show this message and exit.
+  -s, --start TEXT       The start datetime of the interval for which this
+                         command will be applied.
+  -e, --end TEXT         The end datetime of the interval for which this
+                         command will be applied.
+  --execution-time TEXT  The execution time (defaults to now).
+  --expand TEXT          Whether or not to expand materialized models
+                         (defaults to False). If True, all referenced models
+                         are expanded as raw queries. Multiple model names can
+                         also be specified, in which case only they will be
+                         expanded as raw queries.
+  --dialect TEXT         The SQL dialect to render the query as.
+  --no-format            Disable fancy formatting of the query.
+  --help                 Show this message and exit.
 ```
 
 ## rewrite
+
 ```
 Usage: sqlmesh rewrite [OPTIONS] SQL
 
@@ -304,15 +351,20 @@ Options:
 ```
 
 ## rollback
+
 ```
 Usage: sqlmesh rollback [OPTIONS]
 
   Rollback SQLMesh to the previous migration.
 
-  Please contact your SQLMesh administrator before doing this.
+Options:
+  --help  Show this message and exit.
 ```
 
+**Caution**: contact your SQLMesh administrator before running this command.
+
 ## run
+
 ```
 Usage: sqlmesh run [OPTIONS] [ENVIRONMENT]
 
@@ -324,10 +376,13 @@ Options:
   -e, --end TEXT    The end datetime of the interval for which this command
                     will be applied.
   --skip-janitor    Skip the janitor task.
+  --ignore-cron     Run for all missing intervals, ignoring individual cron
+                    schedules.
   --help            Show this message and exit.
 ```
 
 ## table_diff
+
 ```
 Usage: sqlmesh table_diff [OPTIONS] SOURCE:TARGET [MODEL]
 
@@ -338,10 +393,13 @@ Options:
                    model grain will be used if not specified.
   --where TEXT     An optional where statement to filter results.
   --limit INTEGER  The limit of the sample dataframe.
+  --show-sample    Show a sample of the rows that differ. With many columns,
+                   the output can be very wide.
   --help           Show this message and exit.
 ```
 
 ## table_name
+
 ```
 Usage: sqlmesh table_name [OPTIONS] MODEL_NAME
 
@@ -354,6 +412,7 @@ Options:
 ```
 
 ## test
+
 ```
 Usage: sqlmesh test [OPTIONS] [TESTS]...
 
@@ -366,13 +425,15 @@ Options:
 ```
 
 ## ui
+
 ```
 Usage: sqlmesh ui [OPTIONS]
 
   Start a browser-based SQLMesh UI.
 
 Options:
-  --host TEXT     Bind socket to this host. Default: 127.0.0.1
-  --port INTEGER  Bind socket to this port. Default: 8000
-  --help          Show this message and exit.
+  --host TEXT                     Bind socket to this host. Default: 127.0.0.1
+  --port INTEGER                  Bind socket to this port. Default: 8000
+  --mode [ide|default|docs|plan]  Mode to start the UI in. Default: default
+  --help                          Show this message and exit.
 ```
