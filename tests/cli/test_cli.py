@@ -1,3 +1,5 @@
+import logging
+from contextlib import contextmanager
 from os import path
 from pathlib import Path
 
@@ -16,6 +18,15 @@ pytestmark = pytest.mark.slow
 @pytest.fixture(scope="session")
 def runner() -> CliRunner:
     return CliRunner()
+
+
+@contextmanager
+def disable_logging():
+    logging.disable(logging.CRITICAL)
+    try:
+        yield
+    finally:
+        logging.disable(logging.NOTSET)
 
 
 def create_example_project(temp_dir) -> None:
@@ -569,14 +580,15 @@ def test_run_dev(runner, tmp_path):
 
 
 @freeze_time(FREEZE_TIME)
-def test_run_cron_not_elapsed(runner, tmp_path):
+def test_run_cron_not_elapsed(runner, tmp_path, caplog):
     create_example_project(tmp_path)
     init_prod_and_backfill(runner, tmp_path)
 
     # No error and no output if `prod` environment exists and cron has not elapsed
-    result = runner.invoke(cli, ["--log-file-dir", tmp_path, "--paths", tmp_path, "run"])
+    with disable_logging():
+        result = runner.invoke(cli, ["--log-file-dir", tmp_path, "--paths", tmp_path, "run"])
     assert result.exit_code == 0
-    assert result.output == ""
+    assert result.output.strip() == ""
 
 
 def test_run_cron_elapsed(runner, tmp_path):
@@ -616,16 +628,17 @@ def test_table_name(runner, tmp_path):
     # Create and backfill `prod` environment
     create_example_project(tmp_path)
     init_prod_and_backfill(runner, tmp_path)
-    result = runner.invoke(
-        cli,
-        [
-            "--log-file-dir",
-            tmp_path,
-            "--paths",
-            tmp_path,
-            "table_name",
-            "sqlmesh_example.full_model",
-        ],
-    )
+    with disable_logging():
+        result = runner.invoke(
+            cli,
+            [
+                "--log-file-dir",
+                tmp_path,
+                "--paths",
+                tmp_path,
+                "table_name",
+                "sqlmesh_example.full_model",
+            ],
+        )
     assert result.exit_code == 0
     assert result.output.startswith("db.sqlmesh__sqlmesh_example.sqlmesh_example__full_model__")

@@ -36,8 +36,11 @@ else:
 
 logger = logging.getLogger(__name__)
 
+RECOMMENDED_STATE_SYNC_ENGINES = {"postgres", "gcp_postgres", "mysql"}
+
 
 class ConnectionConfig(abc.ABC, BaseConfig):
+    type_: str
     concurrent_tasks: int
     register_comments: bool
 
@@ -75,6 +78,11 @@ class ConnectionConfig(abc.ABC, BaseConfig):
     def _cursor_init(self) -> t.Optional[t.Callable[[t.Any], None]]:
         """A function that is called to initialize the cursor"""
         return None
+
+    @property
+    def is_recommended_for_state_sync(self) -> bool:
+        """Whether this connection is recommended for being used as a state sync for production state syncs"""
+        return self.type_ in RECOMMENDED_STATE_SYNC_ENGINES
 
     def create_engine_adapter(self, register_comments_override: bool = False) -> EngineAdapter:
         """Returns a new instance of the Engine Adapter."""

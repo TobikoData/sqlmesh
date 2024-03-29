@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import abc
+import logging
 import sys
 import typing as t
 
@@ -31,6 +32,9 @@ if sys.version_info >= (3, 9):
     from typing import Annotated, Literal
 else:
     from typing_extensions import Annotated, Literal
+
+
+logger = logging.getLogger(__name__)
 
 
 class _SchedulerConfig(abc.ABC):
@@ -66,12 +70,18 @@ class _SchedulerConfig(abc.ABC):
 
 class _EngineAdapterStateSyncSchedulerConfig(_SchedulerConfig):
     def create_state_sync(self, context: GenericContext) -> StateSync:
-        state_connection = context.config.get_state_connection(context.gateway)
-        engine_adapter = (state_connection or context._connection_config).create_engine_adapter()
+        state_connection = (
+            context.config.get_state_connection(context.gateway) or context._connection_config
+        )
+        engine_adapter = state_connection.create_engine_adapter()
         if not engine_adapter.SUPPORTS_ROW_LEVEL_OP:
             raise ConfigError(
                 f"The {engine_adapter.DIALECT.upper()} engine cannot be used to store SQLMesh state - please specify a different `state_connection` engine."
                 + " See https://sqlmesh.readthedocs.io/en/stable/reference/configuration/#gateways for more information."
+            )
+        if not state_connection.is_recommended_for_state_sync:
+            logger.warning(
+                f"{state_connection.type_} is not recommended to be used as a state sync for production deployments. Please see documentation ( https://sqlmesh.readthedocs.io/en/latest/guides/configuration/#state-connection) for list of recommended engines to be used for storing state and further details."
             )
         schema = context.config.get_state_schema(context.gateway)
         return EngineAdapterStateSync(
