@@ -110,7 +110,7 @@ class EngineAdapter:
         cursor_init: t.Optional[t.Callable[[t.Any], None]] = None,
         default_catalog: t.Optional[str] = None,
         execute_log_level: int = logging.DEBUG,
-        register_comments: bool = False,
+        register_comments: bool = True,
         **kwargs: t.Any,
     ):
         self.dialect = dialect.lower() or self.DIALECT
