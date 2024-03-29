@@ -883,8 +883,6 @@ test_foo:
         '''CAST('2023-01-01 12:05:03+00:00' AS TIMESTAMP) AS "cur_timestamp"''',
     )
 
-    context = Context(config=Config(model_defaults=ModelDefaultsConfig(dialect="duckdb")))
-
     @model("py_model", columns={"ts1": "timestamptz", "ts2": "timestamptz"})
     def execute(context, start, end, execution_time, **kwargs):
         datetime_now = datetime.datetime.now()
@@ -893,9 +891,6 @@ test_foo:
         current_timestamp = context.engine_adapter.cursor.fetchone()[0]
 
         return pd.DataFrame([{"ts1": datetime_now, "ts2": current_timestamp}])
-
-    py_model = model.get_registry()["py_model"].model(module_path=Path("."), path=Path("."))
-    context.upsert_model(py_model)
 
     test = _create_test(
         body=load_yaml(
@@ -911,8 +906,8 @@ test_py_model:
             """
         ),
         test_name="test_py_model",
-        model=py_model,
-        context=context,
+        model=model.get_registry()["py_model"].model(module_path=Path("."), path=Path(".")),
+        context=Context(config=Config(model_defaults=ModelDefaultsConfig(dialect="duckdb"))),
     )
 
     _check_successful_or_raise(test.run())
