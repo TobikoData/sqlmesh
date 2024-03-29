@@ -82,7 +82,7 @@ df = context.fetchdf("SELECT * FROM my_table")
 
 Optional pre/post-statements allow you to execute SQL commands before and after a model runs, respectively.
 
-For example, post/post-statements might modify settings or create indexes. However, be careful not to run any statement that could conflict with the execution of another statement if models run concurrently, such as creating a physical table.
+For example, pre/post-statements might modify settings or create indexes. However, be careful not to run any statement that could conflict with the execution of another statement if models run concurrently, such as creating a physical table.
 
 Pre- and post-statements are issued with the SQLMesh [`fetchdf` method](../../reference/cli.md#fetchdf) [described above](#execution-context).
 

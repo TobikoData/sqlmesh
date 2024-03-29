@@ -285,7 +285,7 @@ You've now created a new production environment with all of history backfilled.
 
 ## 3. Update a model
 
-Now that we have have populated the `prod` environment, let's modify one of the SQL models.
+Now that we have populated the `prod` environment, let's modify one of the SQL models.
 
 We modify the incremental SQL model by adding a new column to the query. Open the `models/incremental_model.sql` file and add `#!sql 'z' AS new_column` below `item_id` as follows:
 
