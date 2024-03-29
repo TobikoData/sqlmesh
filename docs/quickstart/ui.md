@@ -332,7 +332,7 @@ The output confirms that the tests, virtual update, snapshot table creation, and
 
 ## 3. Make your first update
 
-Now that we have have populated both `prod` and `dev` environments, let's modify one of the SQL models, validate it in `dev`, and push it to `prod`.
+Now that we have populated both `prod` and `dev` environments, let's modify one of the SQL models, validate it in `dev`, and push it to `prod`.
 
 ### 3.1 Edit the model query
 To modify the incremental SQL model, open it in the editor by clicking on it in the project directory pane on the left side of the window.
