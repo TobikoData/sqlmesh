@@ -212,9 +212,9 @@ test_example_full_model:
 
 ### Freezing Time
 
-Some models may use SQL expressions that compute datetime values at a given point in time, such as `CURRENT_TIMESTAMP`. Since these expressions are non-deterministic, simply specifying an expected datetime output value is not enough to test them.
+Some models may use SQL expressions that compute datetime values at a given point in time, such as `CURRENT_TIMESTAMP`. Since these expressions are non-deterministic, it's not enough to simply specify an expected output value in order to test them.
 
-The `execution_time` attribute of a test can address this problem, because it mocks out the current time in the context of the test, thus making its value deterministic.
+The `execution_time` attribute of a test addresses this problem by mocking out the current time in the context of the test, thus making its value deterministic.
 
 The following example demonstrates how `execution_time` can be used to test a column that is computed using `CURRENT_TIMESTAMP`. The model we're going to test is defined as:
 
