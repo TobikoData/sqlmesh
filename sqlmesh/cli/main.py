@@ -478,6 +478,13 @@ def dag(ctx: click.Context, file: str, select_model: t.List[str]) -> None:
     "name",
     help="The name of the test that will be created. By default, it's inferred based on the model's name.",
 )
+@click.option(
+    "--include-ctes",
+    "include_ctes",
+    is_flag=True,
+    default=False,
+    help="When true, CTE fixtures will also be generated.",
+)
 @click.pass_obj
 @error_handler
 def create_test(
@@ -486,8 +493,9 @@ def create_test(
     queries: t.List[t.Tuple[str, str]],
     overwrite: bool = False,
     variables: t.Optional[t.List[t.Tuple[str, str]]] = None,
-    name: t.Optional[str] = None,
     path: t.Optional[str] = None,
+    name: t.Optional[str] = None,
+    include_ctes: bool = False,
 ) -> None:
     """Generate a unit test fixture for a given model."""
     obj.create_test(
@@ -495,8 +503,9 @@ def create_test(
         input_queries=dict(queries),
         overwrite=overwrite,
         variables=dict(variables) if variables else None,
-        name=name,
         path=path,
+        name=name,
+        include_ctes=include_ctes,
     )
 
 
