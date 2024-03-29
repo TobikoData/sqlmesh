@@ -750,6 +750,11 @@ class SQLMeshMagics(Magics):
         type=str,
         help="The name of the test that will be created. By default, it's inferred based on the model's name.",
     )
+    @argument(
+        "--include-ctes",
+        action="store_true",
+        help="When true, CTE fixtures will also be generated.",
+    )
     @line_magic
     @pass_sqlmesh_context
     def create_test(self, context: Context, line: str) -> None:
@@ -762,8 +767,9 @@ class SQLMeshMagics(Magics):
             input_queries={k: v.strip('"') for k, v in dict(zip(queries, queries)).items()},
             overwrite=args.overwrite,
             variables=dict(zip(variables, variables)) if variables else None,
-            name=args.name,
             path=args.path,
+            name=args.name,
+            include_ctes=args.include_ctes,
         )
 
     @magic_arguments()

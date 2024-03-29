@@ -1281,6 +1281,7 @@ class GenericContext(BaseContext, t.Generic[C]):
         variables: t.Optional[t.Dict[str, str]] = None,
         path: t.Optional[str] = None,
         name: t.Optional[str] = None,
+        include_ctes: bool = False,
     ) -> None:
         """Generate a unit test fixture for a given model.
 
@@ -1295,6 +1296,7 @@ class GenericContext(BaseContext, t.Generic[C]):
                 By default, the fixture will be created under the test directory and the file name
                 will be inferred from the test's name.
             name: The name of the test. This is inferred from the model name by default.
+            include_ctes: When true, CTE fixtures will also be generated.
         """
         input_queries = {
             # The get_model here has two purposes: return normalized names & check for missing deps
@@ -1313,6 +1315,7 @@ class GenericContext(BaseContext, t.Generic[C]):
             variables=variables,
             path=path,
             name=name,
+            include_ctes=include_ctes,
         )
 
     def test(

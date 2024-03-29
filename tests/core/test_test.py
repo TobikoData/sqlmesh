@@ -749,6 +749,7 @@ def test_test_generation(tmp_path: Path) -> None:
         input_queries=input_queries,
         overwrite=True,
         variables={"start": "2020-01-01", "end": "2024-01-01"},
+        include_ctes=True,
     )
 
     test = load_yaml(context.path / c.TESTS / "test_full_model.yaml")
@@ -764,12 +765,16 @@ def test_test_generation(tmp_path: Path) -> None:
     _check_successful_or_raise(result)
 
     context.create_test(
-        "sqlmesh_example.full_model", input_queries=input_queries, name="new_name", path="foo/bar"
+        "sqlmesh_example.full_model",
+        input_queries=input_queries,
+        name="new_name",
+        path="foo/bar",
     )
 
     test = load_yaml(context.path / c.TESTS / "foo/bar.yaml")
     assert len(test) == 1
     assert "new_name" in test
+    assert "ctes" not in test["new_name"]["outputs"]
 
 
 def test_source_func() -> None:
