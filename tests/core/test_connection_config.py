@@ -8,6 +8,9 @@ from sqlmesh.core.config.connection import (
     BigQueryConnectionConfig,
     ConnectionConfig,
     DuckDBConnectionConfig,
+    GCPPostgresConnectionConfig,
+    MySQLConnectionConfig,
+    PostgresConnectionConfig,
     SnowflakeConnectionConfig,
     TrinoAuthenticationMethod,
     _connection_config_validator,
@@ -285,6 +288,7 @@ def test_trino(make_config):
     assert config.http_scheme == "https"
     assert config.port == 443
     assert config.get_catalog() == "catalog"
+    assert config.is_recommended_for_state_sync is False
 
     # Validate Basic Auth
     config = make_config(method="basic", password="password", **required_kwargs)
@@ -376,6 +380,7 @@ def test_duckdb(make_config):
         connector_config={"foo": "bar"},
     )
     assert isinstance(config, DuckDBConnectionConfig)
+    assert config.is_recommended_for_state_sync is False
 
 
 @pytest.mark.parametrize(
@@ -531,3 +536,40 @@ def test_bigquery(make_config):
     assert config.project == "project"
     assert config.execution_project == "execution_project"
     assert config.get_catalog() == "project"
+    assert config.is_recommended_for_state_sync is False
+
+
+def test_postgres(make_config):
+    config = make_config(
+        type="postgres",
+        host="host",
+        user="user",
+        password="password",
+        port=5432,
+        database="database",
+    )
+    assert isinstance(config, PostgresConnectionConfig)
+    assert config.is_recommended_for_state_sync is True
+
+
+def test_gcp_postgres(make_config):
+    config = make_config(
+        type="gcp_postgres",
+        instance_connection_string="something",
+        user="user",
+        password="password",
+        db="database",
+    )
+    assert isinstance(config, GCPPostgresConnectionConfig)
+    assert config.is_recommended_for_state_sync is True
+
+
+def test_mysql(make_config):
+    config = make_config(
+        type="mysql",
+        host="host",
+        user="user",
+        password="password",
+    )
+    assert isinstance(config, MySQLConnectionConfig)
+    assert config.is_recommended_for_state_sync is True

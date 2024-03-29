@@ -494,10 +494,26 @@ These pages describe the connection configuration options for each execution eng
 #### State connection
 
 Configuration for the state backend connection if different from the data warehouse connection.
+**Using the same connection for data warehouse and state is only recommended for non-production deployments of SQLMesh.**
+Unlike data transformations, storing state information requires database transactions. Data warehouses aren’t optimized for executing transactions, so storing state information in them can slow down your project. 
+Even worse data corruption can occur with simultaneous writes to the same table.
+Therefore, using your data warehouse is fine for testing but once you start running SQLMesh in production, you should use a dedicated state connection.
+
+Recommended state backend engines for production deployments:
+
+* [Postgres](../integrations/engines/postgres.md)
+* [GCP Postgres](../integrations/engines/gcp-postgres.md)
+
+Other supported state backend engines (less tested than recommended):
+
+* [MySQL](../integrations/engines/mysql.md)
+
+Ineligible state backends even for development:
+
+* [Spark](../integrations/engines/spark.md)
+* [Trino](../integrations/engines/trino.md)
 
 The data warehouse connection is used if the `state_connection` key is not specified, unless the configuration uses an Airflow or Google Cloud Composer scheduler. If using one of those schedulers and no state connection is specified, the state connection defaults to the scheduler's database.
-
-NOTE: Spark and Trino engines may not be used for the state connection.
 
 Example postgres state connection configuration:
 
