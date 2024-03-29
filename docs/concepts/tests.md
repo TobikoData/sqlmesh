@@ -212,9 +212,9 @@ test_example_full_model:
 
 ### Freezing Time
 
-Some models may use SQL expressions that compute datetime values at a given point in time, such as `CURRENT_TIMESTAMP`. Since these expressions are non-deterministic, it wouldn't suffice to simply specify an expected datetime value in the outputs.
+Some models may use SQL expressions that compute datetime values at a given point in time, such as `CURRENT_TIMESTAMP`. Since these expressions are non-deterministic, specifying an expected datetime output value is not enough to test them.
 
-The `execution_time` attribute addresses this problem by setting the current time to the given datetime value, thus making the former deterministic.
+The `execution_time` attribute of a test can address this problem, because it mocks out the current time in the context of the test, thus making its value deterministic.
 
 The following example demonstrates how `execution_time` can be used to test a column that is computed using `CURRENT_TIMESTAMP`. The model we're going to test is defined as:
 
@@ -242,9 +242,9 @@ test_colors:
     execution_time: "2023-01-01 12:05:03"
 ```
 
-It's also possible to set a time zone in the `execution_time` datetime value, by including it in the timestamp string.
+It's also possible to set a time zone for `execution_time`, by including it in the timestamp string.
 
-If a time zone is provided, it is currently required that the expected datetime values are timestamps without time zone, meaning that they need to be offset accordingly.
+If a time zone is provided, it is currently required that the test's _expected_ datetime values are timestamps without time zone, meaning that they need to be offset accordingly.
 
 Here's how we would write the above test if we wanted to freeze the time to UTC+2:
 
