@@ -81,7 +81,7 @@ class _EngineAdapterStateSyncSchedulerConfig(_SchedulerConfig):
             )
         if not state_connection.is_recommended_for_state_sync:
             logger.warning(
-                f"{state_connection.type_} is not recommended to be used as a state sync for production deployments. Please documentation ( https://sqlmesh.readthedocs.io/en/latest/guides/configuration/#state-connection) for list of recommended engines to be used for storing state and further details."
+                f"{state_connection.type_} is not recommended to be used as a state sync for production deployments. Please see documentation ( https://sqlmesh.readthedocs.io/en/latest/guides/configuration/#state-connection) for list of recommended engines to be used for storing state and further details."
             )
         schema = context.config.get_state_schema(context.gateway)
         return EngineAdapterStateSync(

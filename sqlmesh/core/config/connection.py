@@ -36,6 +36,8 @@ else:
 
 logger = logging.getLogger(__name__)
 
+RECOMMENDED_STATE_SYNC_ENGINES = {"postgres", "gcp_postgres", "mysql"}
+
 
 class ConnectionConfig(abc.ABC, BaseConfig):
     type_: str
@@ -80,7 +82,7 @@ class ConnectionConfig(abc.ABC, BaseConfig):
     @property
     def is_recommended_for_state_sync(self) -> bool:
         """Whether this connection is recommended for being used as a state sync for production state syncs"""
-        return False
+        return self.type_ in RECOMMENDED_STATE_SYNC_ENGINES
 
     def create_engine_adapter(self, register_comments_override: bool = False) -> EngineAdapter:
         """Returns a new instance of the Engine Adapter."""
@@ -785,11 +787,6 @@ class GCPPostgresConnectionConfig(ConnectionConfig):
 
         return Connector().connect
 
-    @property
-    def is_recommended_for_state_sync(self) -> bool:
-        """Whether this connection is recommended for being used as a state sync for production state syncs"""
-        return True
-
 
 class RedshiftConnectionConfig(ConnectionConfig):
     """
@@ -926,11 +923,6 @@ class PostgresConnectionConfig(ConnectionConfig):
 
         return connect
 
-    @property
-    def is_recommended_for_state_sync(self) -> bool:
-        """Whether this connection is recommended for being used as a state sync for production state syncs"""
-        return True
-
 
 class MySQLConnectionConfig(ConnectionConfig):
     host: str
@@ -976,11 +968,6 @@ class MySQLConnectionConfig(ConnectionConfig):
         from mysql.connector import connect
 
         return connect
-
-    @property
-    def is_recommended_for_state_sync(self) -> bool:
-        """Whether this connection is recommended for being used as a state sync for production state syncs"""
-        return True
 
 
 class MSSQLConnectionConfig(ConnectionConfig):
