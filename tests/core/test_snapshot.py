@@ -1249,7 +1249,7 @@ def test_inclusive_exclusive_hourly(make_snapshot):
             owner="owner",
             dialect="",
             cron="@hourly",
-            start="1 week ago",
+            start="2023-01-29",
             query=parse_one("SELECT id, @end_ds as ds FROM name"),
         )
     )

@@ -5,12 +5,14 @@ from datetime import date, timedelta
 from tempfile import TemporaryDirectory
 from unittest.mock import PropertyMock, call, patch
 
+import freezegun
 import pytest
 from pytest_mock.plugin import MockerFixture
 from sqlglot import parse_one
 from sqlglot.errors import SchemaError
 
 import sqlmesh.core.constants
+import sqlmesh.core.dialect as d
 from sqlmesh.core.config import (
     Config,
     DuckDBConnectionConfig,
@@ -24,7 +26,13 @@ from sqlmesh.core.dialect import parse, schema_
 from sqlmesh.core.environment import Environment
 from sqlmesh.core.model import load_sql_based_model
 from sqlmesh.core.plan import BuiltInPlanEvaluator, PlanBuilder
-from sqlmesh.utils.date import make_inclusive_end, now, to_date, yesterday_ds
+from sqlmesh.utils.date import (
+    make_inclusive_end,
+    now,
+    to_date,
+    to_timestamp,
+    yesterday_ds,
+)
 from sqlmesh.utils.errors import ConfigError
 from tests.utils.test_filesystem import create_temp_file
 
@@ -480,6 +488,42 @@ def test_plan_default_end(sushi_context_pre_scheduling: Context):
     assert forward_only_dev_plan.end is not None
     assert to_date(make_inclusive_end(forward_only_dev_plan.end)) == plan_end
     assert forward_only_dev_plan.start == plan_end
+
+
+@pytest.mark.slow
+def test_plan_start_ahead_of_end(copy_to_temp_path):
+    path = copy_to_temp_path("examples/sushi")
+    with freezegun.freeze_time("2024-01-02 00:00:00"):
+        context = Context(paths=path, config="local_config")
+        context.plan("prod", no_prompts=True, auto_apply=True)
+        assert context.state_sync.max_interval_end_for_environment("prod") == to_timestamp(
+            "2024-01-02"
+        )
+        context.close()
+    with freezegun.freeze_time("2024-01-03 00:00:00"):
+        context = Context(paths=path, config="local_config")
+        expression = d.parse(
+            """
+                MODEL(
+            name sushi.hourly,
+            KIND FULL,
+            cron '@hourly',
+            start '2024-01-02 12:00:00',
+        );
+
+        SELECT 1"""
+        )
+        model = load_sql_based_model(expression, default_catalog=context.default_catalog)
+        context.upsert_model(model)
+        context.plan("prod", no_prompts=True, auto_apply=True)
+        # Since the new start is ahead of the latest end loaded for prod, the table is deployed as empty
+        # This isn't considered a gap since prod has not loaded these intervals yet
+        # As a results the max interval end is unchanged and the table is empty
+        assert context.state_sync.max_interval_end_for_environment("prod") == to_timestamp(
+            "2024-01-02"
+        )
+        assert context.engine_adapter.fetchone("SELECT COUNT(*) FROM sushi.hourly")[0] == 0
+        context.close()
 
 
 @pytest.mark.slow
