@@ -5,6 +5,7 @@ import typing as t
 from pathlib import Path
 
 import pytest
+from sqlglot import exp
 
 from sqlmesh.cli.example_project import init_example_project
 from sqlmesh.core import constants as c
@@ -712,8 +713,16 @@ def test_test_generation(tmp_path: Path) -> None:
         default_connection=DuckDBConnectionConfig(),
         model_defaults=ModelDefaultsConfig(dialect="duckdb"),
     )
-
     context = Context(paths=tmp_path, config=config)
+
+    query = context.get_model("sqlmesh_example.full_model").render_query()
+    assert isinstance(query, exp.Query)
+
+    context.upsert_model(
+        "sqlmesh_example.full_model",
+        query=exp.select(*query.named_selects).from_("cte").with_("cte", as_=query),
+    )
+
     context.plan(auto_apply=True)
 
     input_queries = {
@@ -733,12 +742,14 @@ def test_test_generation(tmp_path: Path) -> None:
     assert len(test) == 1
     assert "test_example_full_model" in test
     assert "vars" not in test["test_example_full_model"]
+    assert "ctes" not in test["test_example_full_model"]["outputs"]
 
     context.create_test(
         "sqlmesh_example.full_model",
         input_queries=input_queries,
         overwrite=True,
         variables={"start": "2020-01-01", "end": "2024-01-01"},
+        include_ctes=True,
     )
 
     test = load_yaml(context.path / c.TESTS / "test_full_model.yaml")
@@ -747,17 +758,23 @@ def test_test_generation(tmp_path: Path) -> None:
     assert "test_full_model" in test
     assert "vars" in test["test_full_model"]
     assert test["test_full_model"]["vars"] == {"start": "2020-01-01", "end": "2024-01-01"}
+    assert "ctes" in test["test_full_model"]["outputs"]
+    assert "cte" in test["test_full_model"]["outputs"]["ctes"]
 
     result = context.test()
     _check_successful_or_raise(result)
 
     context.create_test(
-        "sqlmesh_example.full_model", input_queries=input_queries, name="new_name", path="foo/bar"
+        "sqlmesh_example.full_model",
+        input_queries=input_queries,
+        name="new_name",
+        path="foo/bar",
     )
 
     test = load_yaml(context.path / c.TESTS / "foo/bar.yaml")
     assert len(test) == 1
     assert "new_name" in test
+    assert "ctes" not in test["new_name"]["outputs"]
 
 
 def test_source_func() -> None:

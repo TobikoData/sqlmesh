@@ -399,6 +399,7 @@ def generate_test(
     variables: t.Optional[t.Dict[str, str]] = None,
     path: t.Optional[str] = None,
     name: t.Optional[str] = None,
+    include_ctes: bool = False,
 ) -> None:
     """Generate a unit test fixture for a given model.
 
@@ -417,6 +418,7 @@ def generate_test(
             By default, the fixture will be created under the test directory and the file name
             will be inferred from the test's name.
         name: The name of the test. This is inferred from the model name by default.
+        include_ctes: When true, CTE fixtures will also be generated.
     """
     test_name = name or f"test_{model.view_name}"
     path = path or f"{test_name}.yaml"
@@ -471,6 +473,26 @@ def generate_test(
             engine_adapter=test_engine_adapter,
             table_mapping=mapping,
         )
+
+        if include_ctes:
+            ctes = {}
+            previous_ctes: t.List[exp.CTE] = []
+            for cte in model_query.ctes:
+                cte_query = cte.this
+                for prev in previous_ctes:
+                    cte_query = cte_query.with_(prev.alias, prev.this)
+
+                cte_output = t.cast(SqlModelTest, test)._execute(cte_query)
+                ctes[cte.alias] = pandas_timestamp_to_pydatetime(
+                    cte_output.apply(lambda col: col.map(_normalize_dataframe)),
+                    cte_query.named_selects,
+                ).to_dict(orient="records")
+
+                previous_ctes.append(cte)
+
+            if ctes:
+                outputs["ctes"] = ctes
+
         output = t.cast(SqlModelTest, test)._execute(model_query)
     else:
         output = t.cast(PythonModelTest, test)._execute_model()
