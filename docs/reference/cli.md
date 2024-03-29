@@ -240,6 +240,8 @@ Options:
   --help  Show this message and exit.
 ```
 
+**Caution**: contact your SQLMesh administrator before running this command.
+
 ## plan
 
 ```
