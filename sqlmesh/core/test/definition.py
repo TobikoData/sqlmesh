@@ -3,7 +3,7 @@ from __future__ import annotations
 import typing as t
 import unittest
 from collections import Counter
-from contextlib import nullcontext
+from contextlib import AbstractContextManager, nullcontext
 from pathlib import Path
 from unittest.mock import patch
 
@@ -400,14 +400,13 @@ class PythonModelTest(ModelTest):
 
     def _execute_model(self) -> pd.DataFrame:
         """Executes the python model and returns a DataFrame."""
-        with (
-            freeze_time(self._execution_time) if self._execution_time else nullcontext(),  # type: ignore
-            patch.dict(self._engine_adapter_dialect.generator_class.TRANSFORMS, self._transforms),
-        ):
-            return t.cast(
-                pd.DataFrame,
-                next(self.model.render(context=self.context, **self.body.get("vars", {}))),
-            )
+        time_ctx = freeze_time(self._execution_time) if self._execution_time else nullcontext()
+        with patch.dict(self._engine_adapter_dialect.generator_class.TRANSFORMS, self._transforms):
+            with t.cast(AbstractContextManager, time_ctx):
+                return t.cast(
+                    pd.DataFrame,
+                    next(self.model.render(context=self.context, **self.body.get("vars", {}))),
+                )
 
 
 def generate_test(
