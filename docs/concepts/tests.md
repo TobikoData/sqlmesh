@@ -214,7 +214,7 @@ test_example_full_model:
 
 Some models may use SQL expressions that compute datetime values at a given point in time, such as `CURRENT_TIMESTAMP`. Since these expressions are non-deterministic, it's not enough to simply specify an expected output value in order to test them.
 
-The `execution_time` attribute of a test addresses this problem by mocking out the current time in the context of the test, thus making its value deterministic.
+Setting the `execution_time` macro variable addresses this problem by mocking out the current time in the context of the test, thus making its value deterministic.
 
 The following example demonstrates how `execution_time` can be used to test a column that is computed using `CURRENT_TIMESTAMP`. The model we're going to test is defined as:
 
