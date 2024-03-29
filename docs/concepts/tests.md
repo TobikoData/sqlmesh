@@ -22,7 +22,7 @@ Tests within a suite file contain the following attributes:
     * The list of rows that are expected to be returned by the model's query defined as a mapping from a column name to a value associated with it
     * [Optional] The list of expected rows per each individual [Common Table Expression](glossary.md#cte) (CTE) defined in the model's query
 * [Optional] The dictionary of values for macro variables that will be set during model testing
-    * There are three special macros that can be overridden, `start`, `end`, and `execution_time`. Overriding each will allow you to override the date macros in your SQL queries. For example, setting execution_time: 2022-01-01 -> execution_ds in your queries.
+    * There are three special macro variables: `start`, `end`, and `execution_time`. Setting these will allow you to override the date macros in your SQL queries. For example, `@execution_ds` will render to `2022-01-01` if `execution_time` is set to this value. Additionally, SQL expressions like `CURRENT_DATE` and `CURRENT_TIMESTAMP` will result in the same datetime value as `execution_time`, when it is set.
 
 The YAML format is defined as follows:
 
@@ -208,6 +208,55 @@ test_example_full_model:
       rows:
       - item_id: 1
         num_orders: 2
+```
+
+### Freezing Time
+
+Some models may use SQL expressions that compute datetime values at a given point in time, such as `CURRENT_TIMESTAMP`. Since these expressions are non-deterministic, it's not enough to simply specify an expected output value in order to test them.
+
+Setting the `execution_time` macro variable addresses this problem by mocking out the current time in the context of the test, thus making its value deterministic.
+
+The following example demonstrates how `execution_time` can be used to test a column that is computed using `CURRENT_TIMESTAMP`. The model we're going to test is defined as:
+
+```sql linenums="1"
+MODEL (
+    name colors,
+    kind FULL
+);
+
+SELECT
+    'Yellow' AS color,
+    CURRENT_TIMESTAMP AS created_at
+```
+
+And the corresponding test is:
+
+```yaml linenums="1"
+test_colors:
+  model: colors
+  outputs:
+    query:
+      - color: "Yellow"
+        created_at: "2023-01-01 12:05:03"
+  vars:
+    execution_time: "2023-01-01 12:05:03"
+```
+
+It's also possible to set a time zone for `execution_time`, by including it in the timestamp string.
+
+If a time zone is provided, it is currently required that the test's _expected_ datetime values are timestamps without time zone, meaning that they need to be offset accordingly.
+
+Here's how we would write the above test if we wanted to freeze the time to UTC+2:
+
+```yaml linenums="1"
+test_colors:
+  model: colors
+  outputs:
+    query:
+      - color: "Yellow"
+        created_at: "2023-01-01 10:05:03"
+  vars:
+    execution_time: "2023-01-01 12:05:03+02:00"
 ```
 
 ## Automatic test generation
