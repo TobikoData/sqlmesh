@@ -200,7 +200,7 @@ Name is ***required*** and must be ***unique***.
 - **WARNING**: SQLMesh may exhibit unexpected behavior if the `columns` property includes columns not returned by the query, omits columns returned by the query, or specifies data types other than the ones returned by the query.
 - NOTE: Specifying column names and data types is required for [Python models](../models/python_models.md) that return DataFrames.
 
-For example, this shows a seed model definition that includes the `columns` key. It specifies the data types for all columns in the file: the `name` column is data type `VARCHAR` and the `date` column is data type `DATE`.
+For example, this shows a seed model definition that includes the `columns` key. It specifies the data types for all columns in the file: the `holiday_name` column is data type `VARCHAR` and the `holiday_date` column is data type `DATE`.
 
 ```sql linenums="1" hl_lines="6-9"
 MODEL (
@@ -209,8 +209,8 @@ MODEL (
     path 'national_holidays.csv'
   ),
   columns (
-    name VARCHAR,
-    date DATE
+    holiday_name VARCHAR,
+    holiday_date DATE
   )
 );
 ```
