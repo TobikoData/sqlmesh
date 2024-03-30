@@ -380,7 +380,7 @@ def test_duckdb(make_config):
         connector_config={"foo": "bar"},
     )
     assert isinstance(config, DuckDBConnectionConfig)
-    assert config.is_recommended_for_state_sync is False
+    assert config.is_recommended_for_state_sync is True
 
 
 @pytest.mark.parametrize(
