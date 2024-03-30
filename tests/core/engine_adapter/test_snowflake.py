@@ -2,7 +2,7 @@ import typing as t
 
 import pytest
 from pytest_mock.plugin import MockerFixture
-from sqlglot import exp
+from sqlglot import exp, parse_one
 
 from sqlmesh.core.dialect import normalize_model_name
 from sqlmesh.core.engine_adapter import SnowflakeEngineAdapter
@@ -97,3 +97,49 @@ def test_session(
         )
 
     assert to_sql_calls(adapter) == expected_calls
+
+
+def test_comments(make_mocked_engine_adapter: t.Callable, mocker: MockerFixture):
+    adapter = make_mocked_engine_adapter(SnowflakeEngineAdapter)
+
+    adapter.create_table(
+        "test_table",
+        {"a": exp.DataType.build("INT"), "b": exp.DataType.build("INT")},
+        table_description="table description",
+        column_descriptions={"a": "a column description"},
+    )
+
+    adapter.ctas(
+        "test_table",
+        parse_one("SELECT a, b FROM source_table"),
+        {"a": exp.DataType.build("INT"), "b": exp.DataType.build("INT")},
+        table_description="table description",
+        column_descriptions={"a": "a column description"},
+    )
+
+    adapter.create_view(
+        "test_view",
+        parse_one("SELECT a, b FROM source_table"),
+        table_description="table description",
+        column_descriptions={"a": "a column description"},
+    )
+
+    adapter._create_table_comment(
+        "test_table",
+        "table description",
+    )
+
+    adapter._create_column_comments(
+        "test_table",
+        {"a": "a column description"},
+    )
+
+    sql_calls = to_sql_calls(adapter)
+    assert sql_calls == [
+        """CREATE TABLE IF NOT EXISTS "test_table" ("a" INT COMMENT 'a column description', "b" INT) COMMENT='table description'""",
+        """CREATE TABLE IF NOT EXISTS "test_table" ("a" INT COMMENT 'a column description', "b" INT) COMMENT='table description' AS SELECT "a", "b" FROM "source_table\"""",
+        """CREATE OR REPLACE VIEW "test_view" COMMENT='table description' AS SELECT "a", "b" FROM "source_table\"""",
+        """ALTER VIEW "test_view" ALTER COLUMN "a" COMMENT 'a column description'""",
+        """COMMENT ON TABLE "test_table" IS 'table description'""",
+        """ALTER TABLE "test_table" ALTER COLUMN "a" COMMENT 'a column description'""",
+    ]

@@ -108,17 +108,13 @@ class CommentCreationView(Enum):
                                    and in post-creation commands
     IN_SCHEMA_DEF_NO_COMMANDS = all comments can be registered in CREATE VIEW schema definitions,
                                   but not in post-creation commands
-    IN_SCHEMA_DEF_NO_COLUMN_COMMAND = all comments can be registered in CREATE VIEW schema definitions,
-                                        view comments can be registered in post-creation commands,
-                                        column comments cannot be registered in post-creation commands
     COMMENT_COMMAND_ONLY = comments can only be registered via a post-creation command like `COMMENT` or `ALTER`
     """
 
     UNSUPPORTED = 1
     IN_SCHEMA_DEF_AND_COMMANDS = 2
     IN_SCHEMA_DEF_NO_COMMANDS = 3
-    IN_SCHEMA_DEF_NO_COLUMN_COMMAND = 4
-    COMMENT_COMMAND_ONLY = 5
+    COMMENT_COMMAND_ONLY = 4
 
     @property
     def is_unsupported(self) -> bool:
@@ -133,10 +129,6 @@ class CommentCreationView(Enum):
         return self == CommentCreationView.IN_SCHEMA_DEF_NO_COMMANDS
 
     @property
-    def is_in_schema_def_no_column_command(self) -> bool:
-        return self == CommentCreationView.IN_SCHEMA_DEF_NO_COLUMN_COMMAND
-
-    @property
     def is_comment_command_only(self) -> bool:
         return self == CommentCreationView.COMMENT_COMMAND_ONLY
 
@@ -149,7 +141,6 @@ class CommentCreationView(Enum):
         return self in (
             CommentCreationView.IN_SCHEMA_DEF_AND_COMMANDS,
             CommentCreationView.IN_SCHEMA_DEF_NO_COMMANDS,
-            CommentCreationView.IN_SCHEMA_DEF_NO_COLUMN_COMMAND,
         )
 
     @property

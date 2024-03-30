@@ -13,7 +13,6 @@ from sqlmesh.core.dialect import to_schema
 from sqlmesh.core.engine_adapter.mixins import GetCurrentCatalogFromFunctionMixin
 from sqlmesh.core.engine_adapter.shared import (
     CatalogSupport,
-    CommentCreationView,
     DataObject,
     DataObjectType,
     SourceQuery,
@@ -41,7 +40,6 @@ class SnowflakeEngineAdapter(GetCurrentCatalogFromFunctionMixin):
     SUPPORTS_CLONING = True
     CATALOG_SUPPORT = CatalogSupport.FULL_SUPPORT
     CURRENT_CATALOG_EXPRESSION = exp.func("current_database")
-    COMMENT_CREATION_VIEW = CommentCreationView.IN_SCHEMA_DEF_NO_COLUMN_COMMAND
 
     @contextlib.contextmanager
     def session(self, properties: SessionProperties) -> t.Iterator[None]:
@@ -189,3 +187,11 @@ class SnowflakeEngineAdapter(GetCurrentCatalogFromFunctionMixin):
 
     def set_current_catalog(self, catalog: str) -> None:
         self.execute(exp.Use(this=exp.to_identifier(catalog)))
+
+    def _build_create_comment_column_exp(
+        self, table: exp.Table, column_name: str, column_comment: str, table_kind: str = "TABLE"
+    ) -> exp.Comment | str:
+        table_sql = table.sql(dialect=self.dialect, identify=True)
+        column_sql = exp.column(column_name).sql(dialect=self.dialect, identify=True)
+
+        return f"ALTER {table_kind} {table_sql} ALTER COLUMN {column_sql} COMMENT '{self._truncate_column_comment(column_comment)}'"

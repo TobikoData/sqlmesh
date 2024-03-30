@@ -304,7 +304,7 @@ class SnowflakeConnectionConfig(ConnectionConfig):
     private_key_passphrase: t.Optional[str] = None
 
     concurrent_tasks: int = 4
-    register_comments: bool = False
+    register_comments: bool = True
 
     type_: Literal["snowflake"] = Field(alias="type", default="snowflake")
 
