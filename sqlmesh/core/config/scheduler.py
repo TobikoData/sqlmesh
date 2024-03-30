@@ -79,7 +79,12 @@ class _EngineAdapterStateSyncSchedulerConfig(_SchedulerConfig):
                 f"The {engine_adapter.DIALECT.upper()} engine cannot be used to store SQLMesh state - please specify a different `state_connection` engine."
                 + " See https://sqlmesh.readthedocs.io/en/stable/reference/configuration/#gateways for more information."
             )
-        if not state_connection.is_recommended_for_state_sync:
+        # We don't want to log warning on duckdb in order to avoid warning when testing out SQLMesh
+        # We assume the user knows that they shouldn't be using duckdb in production
+        if (
+            not state_connection.is_recommended_for_state_sync
+            and state_connection.type_ != "duckdb"
+        ):
             logger.warning(
                 f"{state_connection.type_} is not recommended to be used as a state sync for production deployments. Please see documentation ( https://sqlmesh.readthedocs.io/en/latest/guides/configuration/#state-connection) for list of recommended engines to be used for storing state and further details."
             )
