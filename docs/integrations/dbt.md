@@ -77,7 +77,7 @@ Note that the `--config` option is specified between the word `sqlmesh` and the 
 
 #### Registering comments
 
-SQLMesh automatically registers model descriptions and column comments with the target SQL engine, as described in the [Models Overview documentation](../concepts/models/overview#model-description-and-comments). Comment registration is on by default for all engines that support it (but off by default for Snowflake).
+SQLMesh automatically registers model descriptions and column comments with the target SQL engine, as described in the [Models Overview documentation](../concepts/models/overview#model-description-and-comments). Comment registration is on by default for all engines that support it.
 
 dbt offers similar comment registration functionality via its [`persist_docs` model configuration parameter](https://docs.getdbt.com/reference/resource-configs/persist_docs), specified by model. SQLMesh comment registration is configured at the project level, so it does not use dbt's model-specific `persist_docs` configuration.
 
