@@ -4,8 +4,8 @@ import { useLineageFlow } from '@components/graph/context'
 import { useStoreEditor } from '@context/editor'
 import { type ModelSQLMeshModel } from '@models/sqlmesh-model'
 import { type Column } from '~/api/client'
-import { isFalse, isNil, isNotNil, isObjectEmpty } from '@utils/index'
-import { useMemo, useState } from 'react'
+import { isFalse, isNil, isNotNil, isObjectEmpty, isTrue } from '@utils/index'
+import { useCallback, useMemo, useState } from 'react'
 import { events, HoverTooltip, SQLMeshModel } from './extensions'
 import { findModel, findColumn } from './extensions/help'
 import { useStoreProject } from '@context/project'
@@ -14,6 +14,8 @@ import { useStoreContext } from '@context/context'
 export { useDefaultKeymapsEditorTab, useSQLMeshModelExtensions }
 
 function useDefaultKeymapsEditorTab(): KeyBinding[] {
+  const addConfirmation = useStoreContext(s => s.addConfirmation)
+
   const tab = useStoreEditor(s => s.tab)
   const selectTab = useStoreEditor(s => s.selectTab)
   const closeTab = useStoreEditor(s => s.closeTab)
@@ -22,12 +24,34 @@ function useDefaultKeymapsEditorTab(): KeyBinding[] {
 
   const file = tab?.file
 
+  const closeEditorTabWithConfirmation = useCallback(
+    function closeEditorTabWithConfirmation(): void {
+      if (isNil(file)) return
+
+      if (isTrue(file.isChanged)) {
+        addConfirmation({
+          headline: 'Closing Tab',
+          description:
+            'All unsaved changes will be lost. Do you want to close the tab anyway?',
+          yesText: 'Yes, Close Tab',
+          noText: 'No, Cancel',
+          action: () => {
+            closeTab(file)
+          },
+        })
+      } else {
+        closeTab(file)
+      }
+    },
+    [file],
+  )
+
   const keymaps = useMemo(() => {
     return isNil(file)
       ? []
       : [
           {
-            key: 'Mod-Alt-[',
+            key: 'Shift-Mod-.',
             preventDefault: true,
             run() {
               const newTab = createTab()
@@ -39,10 +63,10 @@ function useDefaultKeymapsEditorTab(): KeyBinding[] {
             },
           },
           {
-            key: 'Mod-Alt-]',
+            key: 'Shift-Mod-,',
             preventDefault: true,
             run() {
-              closeTab(file)
+              closeEditorTabWithConfirmation()
 
               return true
             },
@@ -82,7 +106,7 @@ function useSQLMeshModelExtensions(
     )
 
     function handleEventModelClick(event: MouseEvent): void {
-      if (event.metaKey) {
+      if (event.ctrlKey) {
         const model = findModel(event, models)
 
         if (isNil(model)) return
@@ -92,7 +116,7 @@ function useSQLMeshModelExtensions(
     }
 
     function handleEventlColumnClick(event: MouseEvent): void {
-      if (event.metaKey) {
+      if (event.ctrlKey) {
         if (isNil(model)) return
 
         const column = findColumn(event, model)
@@ -109,12 +133,12 @@ function useSQLMeshModelExtensions(
           models.size > 0 && isActionMode && HoverTooltip(models),
           events({
             keydown: e => {
-              if (e.metaKey) {
+              if (e.ctrlKey) {
                 setIsActionMode(true)
               }
             },
             keyup: e => {
-              if (isFalse(e.metaKey)) {
+              if (isFalse(e.ctrlKey)) {
                 setIsActionMode(false)
               }
             },

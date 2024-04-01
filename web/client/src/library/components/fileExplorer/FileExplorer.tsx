@@ -43,7 +43,7 @@ const FileExplorer = function FileExplorer({
       setActiveRange([])
     }
 
-    if (e.metaKey && e.key === 'Backspace' && activeRange.length > 0) {
+    if (e.ctrlKey && e.key === 'Backspace' && activeRange.length > 0) {
       addConfirmation({
         headline: 'Removing Selected Files/Directories',
         description: `Are you sure you want to remove ${activeRange.length} items?`,
