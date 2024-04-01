@@ -17,7 +17,8 @@ from sqlmesh.utils.pandas import columns_to_types_from_df
 from sqlmesh.utils.yaml import YAML
 from tests.utils.pandas import compare_dataframes, create_df
 
-pytestmark = [pytest.mark.dbt, pytest.mark.slow]
+# Some developers had issues with this test freezing locally so we mark it as cicdonly
+pytestmark = [pytest.mark.dbt, pytest.mark.slow, pytest.mark.cicdonly]
 
 
 class TestType(str, Enum):
