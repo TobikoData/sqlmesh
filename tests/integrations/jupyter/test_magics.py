@@ -345,9 +345,10 @@ def test_run_dag(
         "'Evaluating models ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ 100.0% • 18/18"
     )
     assert not output.stderr
-    assert len(output.outputs) == 1
+    assert len(output.outputs) == 2
     assert convert_all_html_output_to_text(output) == [
         "All model batches have been executed successfully",
+        "Run finished for environment 'prod'",
     ]
     assert get_all_html_output(output) == [
         str(
@@ -360,7 +361,23 @@ def test_run_dag(
                     "All model batches have been executed successfully",
                 ),
             )
-        )
+        ),
+        str(
+            h(
+                "pre",
+                {"style": RICH_PRE_STYLE},
+                h(
+                    "span",
+                    {"style": SUCCESS_STYLE},
+                    "Run finished for environment ",
+                ),
+                h(
+                    "span",
+                    {"style": SUCCESS_STYLE},
+                    "'prod'",
+                ),
+            )
+        ),
     ]
 
 
