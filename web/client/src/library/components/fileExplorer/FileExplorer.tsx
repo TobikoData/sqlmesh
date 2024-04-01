@@ -87,9 +87,9 @@ const FileExplorer = function FileExplorer({
           <FileExplorer.ContextMenu
             key={project.id}
             trigger={
-              <FileExplorer.ContextMenuTrigger className="h-full">
+              <FileExplorer.ContextMenuTrigger className="h-full pb-1">
                 <DndProvider backend={HTML5Backend}>
-                  <div className="w-full relative h-full p-2 overflow-hidden overflow-y-auto hover:scrollbar scrollbar--vertical">
+                  <div className="w-full relative h-full px-1 overflow-hidden overflow-y-auto hover:scrollbar scrollbar--vertical">
                     <DragLayer />
                     <Directory
                       key={project.id}
