@@ -83,7 +83,14 @@ async def watch_project() -> None:
                 ).to_dict()
                 api_console.log_event(event=models.EventName.WARNINGS, data=error)
 
-        if settings.modules.intersection({models.Modules.FILES, models.Modules.DOCS}):
+        if settings.modules.intersection(
+            {
+                models.Modules.FILES,
+                models.Modules.DOCS,
+                models.Modules.PLANS,
+                models.Modules.LINEAGE,
+            }
+        ):
             api_console.log_event(
                 event=models.EventName.FILE,
                 data={"changes": changes, "directories": directories},
