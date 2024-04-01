@@ -518,6 +518,7 @@ class GenericContext(BaseContext, t.Generic[C]):
             self.notification_target_manager.notify(
                 NotificationEvent.RUN_END, environment=environment
             )
+            self.console.log_success(f"Run finished for environment '{environment}'")
         else:
             self.notification_target_manager.notify(
                 NotificationEvent.RUN_FAILURE, "See console logs for details."
