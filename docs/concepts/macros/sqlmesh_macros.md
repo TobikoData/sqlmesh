@@ -1061,6 +1061,22 @@ def some_macro(evaluator):
     ...
 ```
 
+### Accessing variables
+
+[User-defined variables](../../reference/configuration.md#variables) can be accessed within the macro's body using the `evaluator.var` method. For example:
+
+```python linenums="1"
+from sqlmesh.core.macros import macro
+
+@macro()
+def some_macro(evaluator):
+    var_value = evaluator.var("<var_name>")
+    another_var_value = evaluator.var("<another_var_name>", "default_value")
+    ...
+```
+
+
+
 ## Mixing macro systems
 
 SQLMesh supports both SQLMesh and [Jinja](./jinja_macros.md) macro systems. We strongly recommend using only one system in a model - if both are present, they may fail or behave in unintuitive ways.

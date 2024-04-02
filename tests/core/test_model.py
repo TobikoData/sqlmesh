@@ -10,10 +10,11 @@ from pytest_mock.plugin import MockerFixture
 from sqlglot import exp, parse_one
 from sqlglot.schema import MappingSchema
 
-import sqlmesh.core.dialect as d
+from sqlmesh.core import constants as c
+from sqlmesh.core import dialect as d
 from sqlmesh.core.config import Config
 from sqlmesh.core.config.model import ModelDefaultsConfig
-from sqlmesh.core.context import Context
+from sqlmesh.core.context import Context, ExecutionContext
 from sqlmesh.core.dialect import parse
 from sqlmesh.core.macros import MacroEvaluator, macro
 from sqlmesh.core.model import (
@@ -3407,3 +3408,145 @@ def test_end_no_start():
     with pytest.raises(ConfigError, match="Must define a start date if an end date is defined"):
         load_sql_based_model(expressions)
     load_sql_based_model(expressions, defaults={"start": "2023-01-01"})
+
+
+def test_variables():
+    @macro()
+    def test_macro_var(evaluator) -> exp.Expression:
+        return exp.convert(evaluator.var("test_var_d") + 10)
+
+    expressions = parse(
+        """
+        MODEL(
+            name test_model,
+            kind FULL,
+        );
+
+        SELECT @VAR('test_var_a') AS a, @VAR('test_var_b', 'default_value') AS b, @VAR('test_var_c') AS c, @TEST_MACRO_VAR() AS d;
+    """,
+        default_dialect="bigquery",
+    )
+
+    model = load_sql_based_model(
+        expressions, variables={"test_var_a": "test_value", "test_var_d": 1, "test_var_unused": 2}
+    )
+    assert model.python_env[c.VARIABLES] == Executable.value(
+        {"test_var_a": "test_value", "test_var_d": 1}
+    )
+    assert (
+        model.render_query().sql(dialect="bigquery")
+        == "SELECT 'test_value' AS `a`, 'default_value' AS `b`, NULL AS `c`, 11 AS `d`"
+    )
+
+    with pytest.raises(ConfigError, match=r"Macro VAR requires at least one argument.*"):
+        expressions = parse(
+            """
+            MODEL(
+                name test_model,
+            );
+
+            SELECT @VAR() AS a;
+        """,
+            default_dialect="bigquery",
+        )
+        load_sql_based_model(expressions)
+
+    with pytest.raises(
+        ConfigError, match=r"The variable name must be a string literal, '123' was given instead.*"
+    ):
+        expressions = parse(
+            """
+            MODEL(
+                name test_model,
+            );
+
+            SELECT @VAR(123) AS a;
+        """,
+            default_dialect="bigquery",
+        )
+        load_sql_based_model(expressions)
+
+    with pytest.raises(
+        ConfigError,
+        match=r"The variable name must be a string literal, '@VAR_NAME' was given instead.*",
+    ):
+        expressions = parse(
+            """
+            MODEL(
+                name test_model,
+            );
+
+            @DEF(VAR_NAME, 'var_name');
+            SELECT @VAR(@VAR_NAME) AS a;
+        """,
+            default_dialect="bigquery",
+        )
+        load_sql_based_model(expressions)
+
+
+def test_variables_jinja():
+    expressions = parse(
+        """
+        MODEL(
+            name test_model,
+            kind FULL,
+        );
+
+        JINJA_QUERY_BEGIN;
+        SELECT '{{ var('test_var_a') }}' AS a, '{{ var('test_var_b', 'default_value') }}' AS b, '{{ var('test_var_c') }}' AS c, {{ test_macro_var() }} AS d;
+        JINJA_END;
+    """,
+        default_dialect="bigquery",
+    )
+
+    jinja_macros = JinjaMacroRegistry(
+        root_macros={
+            "test_macro_var": MacroInfo(
+                definition="{% macro test_macro_var() %}{{ var('test_var_d') + 10 }}{% endmacro %}",
+                depends_on=[],
+            )
+        },
+    )
+
+    model = load_sql_based_model(
+        expressions,
+        variables={"test_var_a": "test_value", "test_var_d": 1, "test_var_unused": 2},
+        jinja_macros=jinja_macros,
+    )
+    assert model.python_env[c.VARIABLES] == Executable.value(
+        {"test_var_a": "test_value", "test_var_d": 1}
+    )
+    assert (
+        model.render_query().sql(dialect="bigquery")
+        == "SELECT 'test_value' AS `a`, 'default_value' AS `b`, 'None' AS `c`, 11 AS `d`"
+    )
+
+
+def test_variables_python_model(mocker: MockerFixture) -> None:
+    @model(
+        "my_model",
+        kind="full",
+        columns={"a": "string", "b": "string", "c": "string"},
+    )
+    def model_with_variables(context, **kwargs):
+        return pd.DataFrame(
+            [
+                {
+                    "a": context.var("test_var_a"),
+                    "b": context.var("test_var_b", "default_value"),
+                    "c": context.var("test_var_c"),
+                }
+            ]
+        )
+
+    python_model = model.get_registry()["my_model"].model(
+        module_path=Path("."),
+        path=Path("."),
+        variables={"test_var_a": "test_value", "test_var_unused": 2},
+    )
+
+    assert python_model.python_env[c.VARIABLES] == Executable.value({"test_var_a": "test_value"})
+
+    context = ExecutionContext(mocker.Mock(), {}, None, None)
+    df = list(python_model.render(context=context))[0]
+    assert df.to_dict(orient="records") == [{"a": "test_value", "b": "default_value", "c": None}]

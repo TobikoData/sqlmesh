@@ -104,6 +104,7 @@ def test_apply_plan(mocker: MockerFixture, snapshot: Snapshot):
                     "project": "",
                     "storage_format": "parquet",
                     "jinja_macros": {
+                        "create_builtins_module": "sqlmesh.utils.jinja",
                         "global_objs": {},
                         "packages": {},
                         "root_macros": {},

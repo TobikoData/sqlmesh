@@ -1,6 +1,7 @@
 import pytest
 from sqlglot import exp, parse_one
 
+from sqlmesh.core import constants as c
 from sqlmesh.core.audit import (
     BUILT_IN_AUDITS,
     ModelAudit,
@@ -685,4 +686,35 @@ def test_not_constant_audit(model: Model):
     assert (
         rendered_query.sql()
         == """SELECT 1 AS "1" FROM (SELECT COUNT(DISTINCT "x") AS "t_cardinality" FROM (SELECT * FROM "db"."test_model" AS "test_model" WHERE "ds" BETWEEN '1970-01-01' AND '1970-01-01') AS "_q_0" WHERE "x" > 1) AS "r" WHERE "r"."t_cardinality" <= 1"""
+    )
+
+
+def test_variables(assert_exp_eq):
+    expressions = parse(
+        """
+        Audit (
+            name my_audit,
+            dialect bigquery,
+            standalone true,
+        );
+
+        SELECT
+            *
+        FROM
+            db.table
+        WHERE
+            col = @VAR('test_var')
+    """
+    )
+
+    audit = load_audit(
+        expressions,
+        path="/path/to/audit",
+        dialect="bigquery",
+        variables={"test_var": "test_val", "test_var_unused": "unused_val"},
+    )
+    assert audit.python_env[c.VARIABLES] == Executable.value({"test_var": "test_val"})
+    assert (
+        audit.render_query(audit).sql(dialect="bigquery")
+        == "SELECT * FROM `db`.`table` AS `table` WHERE `col` = 'test_val'"
     )
