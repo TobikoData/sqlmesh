@@ -921,7 +921,15 @@ def test_successes(sushi_context: Context) -> None:
     assert "test_customer_revenue_by_day" in successful_tests
 
 
-def test_test_generation_with_array(tmp_path: Path) -> None:
+def test_test_generation_with_data_structures(tmp_path: Path) -> None:
+    def create_test(query: str):
+        context.create_test(
+            "sqlmesh_example.foo",
+            input_queries={"sqlmesh_example.bar": query},
+            overwrite=True,
+        )
+        return load_yaml(context.path / c.TESTS / "test_foo.yaml")
+
     init_example_project(tmp_path, dialect="duckdb")
 
     config = Config(
@@ -930,57 +938,92 @@ def test_test_generation_with_array(tmp_path: Path) -> None:
     )
     foo_sql_file = tmp_path / "models" / "foo.sql"
     foo_sql_file.write_text(
-        "MODEL (name sqlmesh_example.foo); SELECT array_col FROM sqlmesh_example.bar;"
+        "MODEL (name sqlmesh_example.foo); SELECT col FROM sqlmesh_example.bar;"
     )
     bar_sql_file = tmp_path / "models" / "bar.sql"
-    bar_sql_file.write_text(
-        "MODEL (name sqlmesh_example.bar); SELECT array_col FROM external_table;"
-    )
+    bar_sql_file.write_text("MODEL (name sqlmesh_example.bar); SELECT col FROM external_table;")
 
     context = Context(paths=tmp_path, config=config)
 
-    input_queries = {"sqlmesh_example.bar": "SELECT ['value1', 'value2'] AS array_col"}
-
-    context.create_test(
-        "sqlmesh_example.foo",
-        input_queries=input_queries,
-        overwrite=True,
-        variables={"start": "2020-01-01", "end": "2024-01-01"},
-    )
-
-    test = load_yaml(context.path / c.TESTS / "test_foo.yaml")
-
-    assert len(test) == 1
-    assert "test_foo" in test
-    assert "vars" in test["test_foo"]
-    assert test["test_foo"]["inputs"] == {
-        "sqlmesh_example.bar": [{"array_col": ["value1", "value2"]}]
-    }
-    assert test["test_foo"]["outputs"] == {"query": [{"array_col": ["value1", "value2"]}]}
+    # Array of strings
+    test = create_test("SELECT ['value1', 'value2'] AS col")
+    expected_value: t.Any = [{"col": ["value1", "value2"]}]
+    assert test["test_foo"]["inputs"] == {"sqlmesh_example.bar": expected_value}
+    assert test["test_foo"]["outputs"] == {"query": expected_value}
 
     # Array of arrays
-    input_queries = {
-        "sqlmesh_example.bar": "SELECT [['value1'], ['value2', 'value3']] AS array_col"
-    }
+    test = create_test("SELECT [['value1'], ['value2', 'value3']] AS col")
+    expected_value = [{"col": [["value1"], ["value2", "value3"]]}]
+    assert test["test_foo"]["inputs"] == {"sqlmesh_example.bar": expected_value}
+    assert test["test_foo"]["outputs"] == {"query": expected_value}
 
-    context.create_test(
-        "sqlmesh_example.foo",
-        input_queries=input_queries,
-        overwrite=True,
-        variables={"start": "2020-01-01", "end": "2024-01-01"},
+    # Array of maps
+    test = create_test("SELECT [MAP {'key': 'value1'}, MAP {'key': 'value2'}] AS col")
+    expected_value = [{"col": [{"key": "value1"}, {"key": "value2"}]}]
+    assert test["test_foo"]["inputs"] == {"sqlmesh_example.bar": expected_value}
+    assert test["test_foo"]["outputs"] == {"query": expected_value}
+
+    # Array of structs
+    test = create_test("SELECT [{'key': 'value1'}, {'key': 'value2'}] AS col")
+    expected_value = [{"col": [{"key": "value1"}, {"key": "value2"}]}]
+    assert test["test_foo"]["inputs"] == {"sqlmesh_example.bar": expected_value}
+    assert test["test_foo"]["outputs"] == {"query": expected_value}
+
+    # Map of strings
+    test = create_test("SELECT MAP {'key1': 'value1', 'key2': 'value2'} AS col")
+    expected_value = [{"col": {"key1": "value1", "key2": "value2"}}]
+    assert test["test_foo"]["inputs"] == {"sqlmesh_example.bar": expected_value}
+    assert test["test_foo"]["outputs"] == {"query": expected_value}
+
+    # Struct of strings
+    test = create_test("SELECT {'key1': 'value1', 'key2': 'value2'} AS col")
+    expected_value = [{"col": {"key1": "value1", "key2": "value2"}}]
+    assert test["test_foo"]["inputs"] == {"sqlmesh_example.bar": expected_value}
+    assert test["test_foo"]["outputs"] == {"query": expected_value}
+
+    # Map of arrays
+    test = create_test("SELECT MAP {'key1': ['value1'], 'key2': ['value2']} AS col")
+    expected_value = [{"col": {"key1": ["value1"], "key2": ["value2"]}}]
+    assert test["test_foo"]["inputs"] == {"sqlmesh_example.bar": expected_value}
+    assert test["test_foo"]["outputs"] == {"query": expected_value}
+
+    # Struct of arrays
+    test = create_test("SELECT {'key1': ['value1'], 'key2': ['value2']} AS col")
+    expected_value = [{"col": {"key1": ["value1"], "key2": ["value2"]}}]
+    assert test["test_foo"]["inputs"] == {"sqlmesh_example.bar": expected_value}
+    assert test["test_foo"]["outputs"] == {"query": expected_value}
+
+    # Map of maps
+    test = create_test(
+        "SELECT MAP {'key1': MAP {'subkey1': 'value1'}, 'key2': MAP {'subkey2': 'value2'}} AS col"
     )
+    expected_value = [{"col": {"key1": {"subkey1": "value1"}, "key2": {"subkey2": "value2"}}}]
+    assert test["test_foo"]["inputs"] == {"sqlmesh_example.bar": expected_value}
+    assert test["test_foo"]["outputs"] == {"query": expected_value}
 
-    test = load_yaml(context.path / c.TESTS / "test_foo.yaml")
+    # Map of structs
+    test = create_test(
+        "SELECT MAP {'key1': {'subkey': 'value1'}, 'key2': {'subkey': 'value2'}} AS col"
+    )
+    expected_value = [{"col": {"key1": {"subkey": "value1"}, "key2": {"subkey": "value2"}}}]
+    assert test["test_foo"]["inputs"] == {"sqlmesh_example.bar": expected_value}
+    assert test["test_foo"]["outputs"] == {"query": expected_value}
 
-    assert len(test) == 1
-    assert "test_foo" in test
-    assert "vars" in test["test_foo"]
-    assert test["test_foo"]["inputs"] == {
-        "sqlmesh_example.bar": [{"array_col": [["value1"], ["value2", "value3"]]}]
-    }
-    assert test["test_foo"]["outputs"] == {
-        "query": [{"array_col": [["value1"], ["value2", "value3"]]}]
-    }
+    # Struct of structs
+    test = create_test(
+        "SELECT {'key1': {'subkey1': 'value1'}, 'key2': {'subkey2': 'value2'}} AS col"
+    )
+    expected_value = [{"col": {"key1": {"subkey1": "value1"}, "key2": {"subkey2": "value2"}}}]
+    assert test["test_foo"]["inputs"] == {"sqlmesh_example.bar": expected_value}
+    assert test["test_foo"]["outputs"] == {"query": expected_value}
+
+    # Struct of maps
+    test = create_test(
+        "SELECT {'key1': MAP {'subkey1': 'value1'}, 'key2': MAP {'subkey2': 'value2'}} AS col"
+    )
+    expected_value = [{"col": {"key1": {"subkey1": "value1"}, "key2": {"subkey2": "value2"}}}]
+    assert test["test_foo"]["inputs"] == {"sqlmesh_example.bar": expected_value}
+    assert test["test_foo"]["outputs"] == {"query": expected_value}
 
 
 def test_test_generation_with_timestamp(tmp_path: Path) -> None:
