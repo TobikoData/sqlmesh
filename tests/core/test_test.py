@@ -927,7 +927,6 @@ def test_test_generation_with_data_structures(tmp_path: Path) -> None:
             "sqlmesh_example.foo",
             input_queries={"sqlmesh_example.bar": query},
             overwrite=True,
-            variables={"start": "2020-01-01", "end": "2024-01-01"},
         )
         return load_yaml(context.path / c.TESTS / "test_foo.yaml")
 
