@@ -1671,7 +1671,7 @@ def create_python_model(
     # Find dependencies for python models by parsing code if they are not explicitly defined
     # Also remove self-references that are found
     depends_on = (
-        _parse_depends_on(entrypoint, python_env) - {name}
+        _parse_depends_on(python_env) - {name}
         if depends_on is None and python_env is not None
         else depends_on
     )
@@ -1848,42 +1848,41 @@ def _python_env(
     return serialized_env
 
 
-def _parse_depends_on(
-    model_func: str,
-    python_env: t.Dict[str, Executable],
-) -> t.Set[str]:
+def _parse_depends_on(python_env: t.Dict[str, Executable]) -> t.Set[str]:
     """Parses the source of a model function and finds upstream dependencies based on calls to context."""
     env = prepare_env(python_env)
     depends_on = set()
-    executable = python_env[model_func]
 
-    for node in ast.walk(ast.parse(executable.payload)):
-        if not isinstance(node, ast.Call):
+    for executable in python_env.values():
+        if not executable.is_definition:
             continue
+        for node in ast.walk(ast.parse(executable.payload)):
+            if not isinstance(node, ast.Call):
+                continue
 
-        func = node.func
+            func = node.func
 
-        if (
-            isinstance(func, ast.Attribute)
-            and isinstance(func.value, ast.Name)
-            and func.value.id == "context"
-            and func.attr == "table"
-        ):
-            if node.args:
-                table: t.Optional[ast.expr] = node.args[0]
-            else:
-                table = next(
-                    (keyword.value for keyword in node.keywords if keyword.arg == "model_name"),
-                    None,
-                )
+            if (
+                isinstance(func, ast.Attribute)
+                and isinstance(func.value, ast.Name)
+                and func.value.id == "context"
+                and func.attr == "table"
+            ):
+                if node.args:
+                    table: t.Optional[ast.expr] = node.args[0]
+                else:
+                    table = next(
+                        (keyword.value for keyword in node.keywords if keyword.arg == "model_name"),
+                        None,
+                    )
 
-            try:
-                expression = to_source(table)
-                depends_on.add(eval(expression, env))
-            except Exception:
-                raise ConfigError(
-                    f"Error resolving dependencies for '{executable.path}'. References to context must be resolvable at parse time.\n\n{expression}"
-                )
+                try:
+                    expression = to_source(table)
+                    depends_on.add(eval(expression, env))
+                except Exception:
+                    raise ConfigError(
+                        f"Error resolving dependencies for '{executable.path}'. References to context must be resolvable at parse time.\n\n{expression}"
+                    )
 
     return depends_on
 

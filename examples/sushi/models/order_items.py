@@ -15,6 +15,10 @@ from sqlmesh.utils.date import to_date, to_ds
 ITEMS = "sushi.items"
 
 
+def get_items_table(context: ExecutionContext) -> str:
+    return context.table(ITEMS)
+
+
 @model(
     "sushi.order_items",
     kind=IncrementalByTimeRangeKind(
@@ -45,7 +49,7 @@ def execute(
     **kwargs: t.Any,
 ) -> t.Generator[pd.DataFrame, None, None]:
     orders_table = context.table("sushi.orders")
-    items_table = context.table(ITEMS)
+    items_table = get_items_table(context)
 
     rng = random.Random()
 
