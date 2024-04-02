@@ -588,7 +588,7 @@ def test_run_cron_not_elapsed(runner, tmp_path, caplog):
     with disable_logging():
         result = runner.invoke(cli, ["--log-file-dir", tmp_path, "--paths", tmp_path, "run"])
     assert result.exit_code == 0
-    assert result.output.strip() == ""
+    assert result.output.strip() == "Run finished for environment 'prod'"
 
 
 def test_run_cron_elapsed(runner, tmp_path):

@@ -110,7 +110,7 @@ export default function PageModels({
                 displayBy="displayName"
                 to={model => `${to}/${model.name}`}
                 direction="top"
-                className="my-2"
+                className="p-2"
                 isFullWidth
                 disabled={isFetchingModels}
               />

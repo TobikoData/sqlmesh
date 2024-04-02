@@ -1,4 +1,4 @@
-import { lazy, useEffect, useMemo, useState } from 'react'
+import { Suspense, lazy, useEffect, useMemo, useState } from 'react'
 import { Tab } from '@headlessui/react'
 import clsx from 'clsx'
 import { includes, isArrayEmpty, isFalse, isNotNil } from '~/utils'
@@ -20,6 +20,7 @@ import {
   EnumErrorKey,
   useNotificationCenter,
 } from '~/library/pages/root/context/notificationCenter'
+import LoadingSegment from '@components/loading/LoadingSegment'
 
 const ModelLineage = lazy(
   async () => await import('@components/graph/ModelLineage'),
@@ -219,7 +220,13 @@ export default function EditorPreview({
                   'w-full h-full ring-white ring-opacity-60 ring-offset-2 ring-offset-blue-400 focus:outline-none focus:ring-2',
                 )}
               >
-                <ModelLineage model={model} />
+                <Suspense
+                  fallback={
+                    <LoadingSegment>Loading Model page...</LoadingSegment>
+                  }
+                >
+                  <ModelLineage model={model} />
+                </Suspense>
               </Tab.Panel>
             )}
             {isNotNil(previewDiff?.row_diff) && (
