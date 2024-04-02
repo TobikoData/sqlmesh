@@ -41,6 +41,12 @@ The `model_defaults` key is **required** and must contain a value for the `diale
 
 See all the keys allowed in `model_defaults` at the [model configuration reference page](./model_configuration.md#model-defaults).
 
+### Variables
+
+The `variables` key can be used to provide values for user-defined variables which can then be accessed using the `@VAR` macro in model definitions.
+
+This attribute represents a mapping from variable names to their values. Note that supported value types include `int`, `float`, `bool`, `str`, as well as lists and dictionaries.
+
 ## Plan
 
 Configuration for the `sqlmesh plan` command.

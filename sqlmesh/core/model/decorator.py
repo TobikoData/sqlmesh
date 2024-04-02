@@ -71,6 +71,7 @@ class model(registry_decorator):
         physical_schema_override: t.Optional[t.Dict[str, str]] = None,
         project: str = "",
         default_catalog: t.Optional[str] = None,
+        variables: t.Optional[t.Dict[str, t.Any]] = None,
     ) -> Model:
         """Get the model registered by this function."""
         env: t.Dict[str, t.Any] = {}
@@ -86,6 +87,7 @@ class model(registry_decorator):
             physical_schema_override=physical_schema_override,
             project=project,
             default_catalog=default_catalog,
+            variables=variables,
             **self.kwargs,
         )
 

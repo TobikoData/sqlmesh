@@ -10,9 +10,12 @@ from enum import Enum
 from jinja2 import Environment, Template, nodes
 from sqlglot import Dialect, Expression, Parser, TokenType
 
+from sqlmesh.core import constants as c
 from sqlmesh.core import dialect as d
 from sqlmesh.utils import AttributeDict
 from sqlmesh.utils.pydantic import PydanticModel, field_serializer, field_validator
+
+SQLMESH_JINJA_PACKAGE = "sqlmesh.utils.jinja"
 
 
 def environment(**kwargs: t.Any) -> Environment:
@@ -84,7 +87,7 @@ class MacroExtractor(Parser):
                 macro_str = self._find_sql(macro_start, self._next)
                 macros[name] = MacroInfo(
                     definition=macro_str,
-                    depends_on=list(extract_macro_references(macro_str)),
+                    depends_on=list(extract_macro_references_and_variables(macro_str)[0]),
                 )
 
             self._advance()
@@ -143,14 +146,22 @@ def extract_call_names(jinja_str: str) -> t.List[t.Tuple[t.Tuple[str, ...], node
     return list(find_call_names(ENVIRONMENT.parse(jinja_str), set()))
 
 
-def extract_macro_references(jinja_str: str) -> t.Set[MacroReference]:
-    result = set()
-    for call_name, _ in extract_call_names(jinja_str):
-        if len(call_name) == 1:
-            result.add(MacroReference(name=call_name[0]))
-        elif len(call_name) == 2:
-            result.add(MacroReference(package=call_name[0], name=call_name[1]))
-    return result
+def extract_macro_references_and_variables(
+    *jinja_strs: str,
+) -> t.Tuple[t.Set[MacroReference], t.Set[str]]:
+    macro_references = set()
+    variables = set()
+    for jinja_str in jinja_strs:
+        for call_name, node in extract_call_names(jinja_str):
+            if call_name[0] == "var":
+                args = [jinja_call_arg_name(arg) for arg in node.args]
+                if args and args[0]:
+                    variables.add(args[0])
+            elif len(call_name) == 1:
+                macro_references.add(MacroReference(name=call_name[0]))
+            elif len(call_name) == 2:
+                macro_references.add(MacroReference(package=call_name[0], name=call_name[1]))
+    return macro_references, variables
 
 
 JinjaGlobalAttribute = t.Union[str, int, float, bool, AttributeDict]
@@ -174,7 +185,7 @@ class JinjaMacroRegistry(PydanticModel):
     packages: t.Dict[str, t.Dict[str, MacroInfo]] = {}
     root_macros: t.Dict[str, MacroInfo] = {}
     global_objs: t.Dict[str, JinjaGlobalAttribute] = {}
-    create_builtins_module: t.Optional[str] = None
+    create_builtins_module: t.Optional[str] = SQLMESH_JINJA_PACKAGE
     root_package_name: t.Optional[str] = None
     top_level_packages: t.List[str] = []
 
@@ -535,3 +546,26 @@ JINJA_REGEX = re.compile(r"({{|{%)")
 
 def has_jinja(value: str) -> bool:
     return JINJA_REGEX.search(value) is not None
+
+
+def jinja_call_arg_name(node: nodes.Node) -> str:
+    if isinstance(node, nodes.Const):
+        return node.value
+    return ""
+
+
+def create_var(variables: t.Dict[str, t.Any]) -> t.Callable:
+    def _var(var_name: str, default: t.Optional[t.Any] = None) -> t.Optional[t.Any]:
+        return variables.get(var_name, default)
+
+    return _var
+
+
+def create_builtin_globals(
+    jinja_macros: JinjaMacroRegistry, global_vars: t.Dict[str, t.Any], *args: t.Any, **kwargs: t.Any
+) -> t.Dict[str, t.Any]:
+    variables = global_vars.pop(c.VARIABLES, None) or {}
+    return {
+        "var": create_var(variables),
+        **global_vars,
+    }

@@ -143,6 +143,28 @@ def execute(
     context.table("docs_example.another_dependency")
 ```
 
+
+## Variables
+
+[User-defined variables](../../reference/configuration.md#variables) variables can be accessed from within the Python model using the `context.var` method. For example:
+
+```python linenums="1"
+@model(
+    "my_model.name",
+)
+def execute(
+    context: ExecutionContext,
+    start: datetime,
+    end: datetime,
+    execution_time: datetime,
+    **kwargs: t.Any,
+) -> pd.DataFrame:
+    var_value = context.var("<var_name>")
+    another_var_value = context.var("<another_var_name>", "default_value")
+    ...
+```
+
+
 ## Examples
 ### Basic
 The following is an example of a Python model returning a static Pandas DataFrame.

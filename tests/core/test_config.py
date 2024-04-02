@@ -5,6 +5,7 @@ from pathlib import Path
 from unittest import mock
 
 import pytest
+from sqlglot import exp
 
 from sqlmesh.core.config import (
     Config,
@@ -461,3 +462,21 @@ def test_connection_config_serialization():
         "connector_config": {},
         "database": "my_test_db",
     }
+
+
+def test_variables():
+    variables = {
+        "int_var": 1,
+        "str_var": "test_value",
+        "bool_var": True,
+        "float_var": 1.0,
+        "list_var": [1, 2, 3],
+        "dict_var": {"a": "test_value", "b": 2},
+    }
+    config = Config(variables=variables)
+    assert config.variables == variables
+
+    with pytest.raises(
+        ConfigError, match="Unsupported variable value type: <class 'sqlglot.expressions.Column'>"
+    ):
+        Config(variables={"invalid_var": exp.column("sqlglot_expr")})

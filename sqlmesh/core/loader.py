@@ -303,6 +303,7 @@ class SqlMeshLoader(Loader):
                         physical_schema_override=config.physical_schema_override,
                         project=config.project,
                         default_catalog=self._context.default_catalog,
+                        variables=config.variables,
                     )
 
                 model = cache.get_or_load_model(path, _load)
@@ -340,6 +341,7 @@ class SqlMeshLoader(Loader):
                         physical_schema_override=config.physical_schema_override,
                         project=config.project,
                         default_catalog=self._context.default_catalog,
+                        variables=config.variables,
                     )
                     models[model.fqn] = model
 
@@ -363,6 +365,7 @@ class SqlMeshLoader(Loader):
                         jinja_macros=jinja_macros,
                         dialect=config.model_defaults.dialect,
                         default_catalog=self._context.default_catalog,
+                        variables=config.variables,
                     )
                     for audit in audits:
                         audits_by_name[audit.name] = audit

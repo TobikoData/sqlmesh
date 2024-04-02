@@ -45,10 +45,6 @@ def sqlmesh_config(
     model_defaults = kwargs.pop("model_defaults", ModelDefaultsConfig())
     model_defaults.dialect = profile.target.dialect
 
-    loader_kwargs = kwargs.pop("loader_kwargs", {})
-    if variables is not None:
-        loader_kwargs["variables"] = variables
-
     target_to_sqlmesh_args = {}
     if register_comments is not None:
         target_to_sqlmesh_args["register_comments"] = register_comments
@@ -57,15 +53,14 @@ def sqlmesh_config(
         default_gateway=profile.target_name,
         gateways={profile.target_name: GatewayConfig(connection=profile.target.to_sqlmesh(**target_to_sqlmesh_args), state_connection=state_connection)},  # type: ignore
         loader=DbtLoader,
-        loader_kwargs=loader_kwargs,
         model_defaults=model_defaults,
+        variables=variables or {},
         **kwargs,
     )
 
 
 class DbtLoader(Loader):
-    def __init__(self, variables: t.Optional[t.Dict[str, t.Any]] = None) -> None:
-        self._variables = variables
+    def __init__(self) -> None:
         self._projects: t.List[Project] = []
         self._macros_max_mtime: t.Optional[float] = None
         super().__init__()
@@ -156,7 +151,7 @@ class DbtLoader(Loader):
                         target_name=target_name,
                         sqlmesh_config=config,
                     ),
-                    variables=self._variables,
+                    variables=self._context.config.variables,
                 )
 
                 self._projects.append(project)

@@ -100,3 +100,22 @@ Other macro variables:
     * 'creating' - The model tables are being created.
     * 'evaluating' - The models' logic is being evaluated.
 * @gateway - A string value that represents the name of the selected [gateway](../../guides/connections.md).
+
+## User-defined Variables
+
+Users can also pass custom variables in [configuration](../../reference/configuration.md#variables). To access variable values the `@var` macro should be used in model definitions. For example:
+
+```sql linenums="1"
+SELECT *
+FROM table
+WHERE some_value = @var('<var_name>')
+```
+
+The default value can be passed as a second argument to the `@var` macro, which will be used as a fallback when the variable with the given name is missing:
+```sql linenums="1"
+SELECT *
+FROM table
+WHERE some_value = @var('<var_name>', <default_value>)
+```
+
+The similar API is available for [Python models](../models/python_models.md) via the `context.var` method, as well as in [macros](./sqlmesh_macros.md) via `evaluator.var`.
