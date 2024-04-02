@@ -104,6 +104,10 @@ FROM sushi.orders AS o
 GROUP BY o.customer_id;
 ```
 
+A query column may not have both an unregistered comment before its line and a registered comment after its line. If comments are present in both locations, they will be concatenated and registered with the engine.
+
+The `sqlmesh format` command automatically relocates comments to the end of the column's line. Therefore, any comments before a column's line will be moved to the end by `sqlmesh format` and registered with the engine.
+
 #### Comment registration by object type
 
 Only some tables/views have comments registered:
