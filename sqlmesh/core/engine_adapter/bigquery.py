@@ -445,7 +445,7 @@ class BigQueryEngineAdapter(InsertOverwriteWithMergeMixin):
             comment = column_comments.get(table_def["schema"]["fields"][i]["name"], None)
             if comment:
                 table_def["schema"]["fields"][i]["description"] = self._truncate_comment(
-                    comment, self.MAX_COLUMN_COMMENT_LENGTH, escape_backslash=False
+                    comment, self.MAX_COLUMN_COMMENT_LENGTH
                 )
 
         # An "etag" is BQ versioning metadata that changes when an object is updated/modified. `update_table`
