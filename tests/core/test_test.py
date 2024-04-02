@@ -993,6 +993,30 @@ def test_test_generation_with_data_structures(tmp_path: Path) -> None:
     assert test["test_foo"]["inputs"] == {"sqlmesh_example.bar": expected_value}
     assert test["test_foo"]["outputs"] == {"query": expected_value}
 
+    # Map of maps
+    test = create_test("SELECT MAP {'key1': MAP {'subkey1': 'value1'}, 'key2': MAP {'subkey2': 'value2'}} AS col")
+    expected_value = [{"col": {"key1": {"subkey1": "value1"}, "key2": {"subkey2": "value2"}}}]
+    assert test["test_foo"]["inputs"] == {"sqlmesh_example.bar": expected_value}
+    assert test["test_foo"]["outputs"] == {"query": expected_value}
+
+    # Map of structs
+    test = create_test("SELECT MAP {'key1': {'subkey': 'value1'}, 'key2': {'subkey': 'value2'}} AS col")
+    expected_value = [{"col": {"key1": {"subkey": "value1"}, "key2": {"subkey": "value2"}}}]
+    assert test["test_foo"]["inputs"] == {"sqlmesh_example.bar": expected_value}
+    assert test["test_foo"]["outputs"] == {"query": expected_value}
+
+    # Struct of structs
+    test = create_test("SELECT {'key1': {'subkey1': 'value1'}, 'key2': {'subkey2': 'value2'}} AS col")
+    expected_value = [{"col": {"key1": {"subkey1": "value1"}, "key2": {"subkey2": "value2"}}}]
+    assert test["test_foo"]["inputs"] == {"sqlmesh_example.bar": expected_value}
+    assert test["test_foo"]["outputs"] == {"query": expected_value}
+
+    # Struct of maps
+    test = create_test("SELECT {'key1': MAP {'subkey1': 'value1'}, 'key2': MAP {'subkey2': 'value2'}} AS col")
+    expected_value = [{"col": {"key1": {"subkey1": "value1"}, "key2": {"subkey2": "value2"}}}]
+    assert test["test_foo"]["inputs"] == {"sqlmesh_example.bar": expected_value}
+    assert test["test_foo"]["outputs"] == {"query": expected_value}
+
 
 def test_test_generation_with_timestamp(tmp_path: Path) -> None:
     init_example_project(tmp_path, dialect="duckdb")
