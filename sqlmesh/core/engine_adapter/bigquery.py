@@ -45,7 +45,6 @@ class BigQueryEngineAdapter(InsertOverwriteWithMergeMixin):
 
     DIALECT = "bigquery"
     DEFAULT_BATCH_SIZE = 1000
-    ESCAPE_JSON = True
     SUPPORTS_TRANSACTIONS = False
     SUPPORTS_MATERIALIZED_VIEWS = True
     SUPPORTS_CLONING = True

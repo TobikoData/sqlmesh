@@ -231,7 +231,6 @@ class EngineAdapterStateSync(CommonStateSyncMixin, StateSync):
             self.snapshots_table,
             _snapshots_to_df(snapshots_to_store),
             columns_to_types=self._snapshot_columns_to_types,
-            contains_json=True,
         )
 
         if seed_contents:
@@ -239,7 +238,6 @@ class EngineAdapterStateSync(CommonStateSyncMixin, StateSync):
                 self.seeds_table,
                 pd.DataFrame(seed_contents),
                 columns_to_types=self._seed_columns_to_types,
-                contains_json=True,
             )
 
     def _update_versions(
@@ -411,7 +409,6 @@ class EngineAdapterStateSync(CommonStateSyncMixin, StateSync):
             self.environments_table,
             _environment_to_df(environment),
             columns_to_types=self._environment_columns_to_types,
-            contains_json=True,
         )
 
     def _update_snapshot(self, snapshot: Snapshot) -> None:
@@ -421,7 +418,6 @@ class EngineAdapterStateSync(CommonStateSyncMixin, StateSync):
                 self.snapshots_table,
                 {"snapshot": _snapshot_to_json(snapshot), "expiration_ts": snapshot.expiration_ts},
                 where=where,
-                contains_json=True,
             )
 
     def get_environments(self) -> t.List[Environment]:
@@ -1178,7 +1174,6 @@ class EngineAdapterStateSync(CommonStateSyncMixin, StateSync):
                 self.seeds_table,
                 pd.DataFrame(seeds_to_push),
                 columns_to_types=self._seed_columns_to_types,
-                contains_json=True,
             )
 
     def _migrate_environment_rows(

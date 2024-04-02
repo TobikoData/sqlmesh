@@ -50,7 +50,6 @@ logger = logging.getLogger(__name__)
 )
 class SparkEngineAdapter(GetCurrentCatalogFromFunctionMixin, HiveMetastoreTablePropertiesMixin):
     DIALECT = "spark"
-    ESCAPE_JSON = True
     SUPPORTS_TRANSACTIONS = False
     INSERT_OVERWRITE_STRATEGY = InsertOverwriteStrategy.INSERT_OVERWRITE
     CATALOG_SUPPORT = CatalogSupport.FULL_SUPPORT

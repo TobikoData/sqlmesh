@@ -33,7 +33,6 @@ class MySQLEngineAdapter(
 ):
     DEFAULT_BATCH_SIZE = 200
     DIALECT = "mysql"
-    ESCAPE_JSON = True
     SUPPORTS_INDEXES = True
     COMMENT_CREATION_TABLE = CommentCreationTable.IN_SCHEMA_DEF_NO_CTAS
     COMMENT_CREATION_VIEW = CommentCreationView.UNSUPPORTED
