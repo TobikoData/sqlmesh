@@ -976,7 +976,7 @@ def test_test_generation_with_data_structures(tmp_path: Path) -> None:
     assert test["test_foo"]["inputs"] == {"sqlmesh_example.bar": expected_value}
     assert test["test_foo"]["outputs"] == {"query": expected_value}
 
-    # Map of structs
+    # Struct of strings
     test = create_test("SELECT {'key1': 'value1', 'key2': 'value2'} AS col")
     expected_value = [{"col": {"key1": "value1", "key2": "value2"}}]
     assert test["test_foo"]["inputs"] == {"sqlmesh_example.bar": expected_value}
