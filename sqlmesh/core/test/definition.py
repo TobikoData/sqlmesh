@@ -594,8 +594,9 @@ def _normalize_dataframe(value: t.Any) -> t.Any:
         return [_normalize_dataframe(v) for v in value]
     if isinstance(value, dict):
         if "key" in value and "value" in value:
-            # Maps have the following structure: {'key': ['key1', 'key2', 'key3'], 'value': [10, 20, 30]}
+            # Maps returned by DuckDB have the following structure: {'key': ['key1', 'key2', 'key3'], 'value': [10, 20, 30]}
             # so we convert to {'key1': 10, 'key2': 20, 'key3': 30}
+            # TODO: handle more dialects here
             return {k: _normalize_dataframe(v) for k, v in zip(value["key"], value["value"])}
         return {k: _normalize_dataframe(v) for k, v in value.items()}
     return value
