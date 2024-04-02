@@ -86,39 +86,17 @@ We begin this section by briefly describing how SQLMesh's virtual data environme
 
 Each time a SQLMesh `plan` adds or modifies a model, SQLMesh creates a physical layer "snapshot" object to which the virtual layer view points. The snapshot replacement method simply renames the existing table to migrate to the name of the appropriate snapshot table.
 
-For example, consider an existing table named `my_schema.existing_table`. Migrating this table with the snapshot replacement method involves seven steps:
+For example, consider an existing table named `my_schema.existing_table`. Migrating this table with the snapshot replacement method involves five steps:
 
 1. Ensure `my_schema.existing_table` is up to date (has ingested all available source data)
 2. Rename `my_schema.existing_table` to any other name, such as `my_schema.existing_table_temp`.
-3. Initialize an empty [`INCREMENTAL_BY_TIME_RANGE` model](../concepts/models/model_kinds.md#incremental_by_time_range) named `my_schema.existing_table`:
+3. Create and initialize an empty [`INCREMENTAL_BY_TIME_RANGE` model](../concepts/models/model_kinds.md#incremental_by_time_range) named `my_schema.existing_table`:
 - Make the model [forward only](./incremental_time.md#forward-only-models) by setting the `MODEL` DDL key `forward_only` to `true`
-- Specify a query that returns no rows, such as `SELECT 1 as a WHERE 1=2`
-- Run `sqlmesh plan` to create the model in the SQLMesh project
+- Run `sqlmesh plan --skip-backfill` to create the model in the SQLMesh project without backfilling any data
 4. Determine the name of the model's snapshot physical table by running `sqlmesh table_name my_schema.existing_table`. For example, it might return `sqlmesh__my_schema.existing_table_123456`.
 5. Rename the original table `my_schema.existing_table_temp` to `sqlmesh__my_schema.existing_table_123456`
-6. Change the model query to your actual incremental by time query
-7. Run `sqlmesh plan`
 
-During model initialization in step 3 above, the model would have code similar to:
-
-``` sql linenums="1" hl_lines="6"
-MODEL(
-    name my_schema.existing_table,
-    kind INCREMENTAL_BY_TIME_RANGE(
-        time_column table_time_column
-    ),
-    forward_only true
-)
-
-SELECT
-    1 as a
-WHERE
-    1=2;
-```
-
-Note that we specify the model as forward only on line 6.
-
-After `sqlmesh plan` initialized the model and the model query has been updated in step 6 above, the model would have code similar to:
+The model would have code similar to:
 
 ``` sql linenums="1" hl_lines="6"
 MODEL(
@@ -139,4 +117,4 @@ WHERE
     table_time_column BETWEEN @start_ds and @end_ds;
 ```
 
-The model remains forward only in the updated version - it is critical that the model stays forward only so the table is not rebuilt when `sqlmesh plan` is run.
+It is critical that the model stays forward only so the table is not rebuilt when `sqlmesh plan` is run and new data is backfilled.
