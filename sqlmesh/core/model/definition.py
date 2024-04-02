@@ -24,12 +24,7 @@ from sqlmesh.core import constants as c
 from sqlmesh.core import dialect as d
 from sqlmesh.core.macros import MacroRegistry, macro
 from sqlmesh.core.model.common import expression_validator
-from sqlmesh.core.model.kind import (
-    IncrementalByTimeRangeKind,
-    IncrementalByUniqueKeyKind,
-    ModelKindName,
-    SeedKind,
-)
+from sqlmesh.core.model.kind import ModelKindName, SeedKind
 from sqlmesh.core.model.meta import ModelMeta
 from sqlmesh.core.model.seed import CsvSeedReader, Seed, create_seed
 from sqlmesh.core.renderer import ExpressionRenderer, QueryRenderer
@@ -728,12 +723,6 @@ class _Model(ModelMeta, frozen=True):
             data.append(key)
             data.append(gen(value))
 
-        if isinstance(self.kind, IncrementalByTimeRangeKind):
-            data.append(gen(self.kind.time_column.column))
-            data.append(self.kind.time_column.format)
-        elif isinstance(self.kind, IncrementalByUniqueKeyKind):
-            data.extend((gen(k) for k in self.kind.unique_key))
-
         return data  # type: ignore
 
     def metadata_hash(self, audits: t.Dict[str, ModelAudit]) -> str:
@@ -761,8 +750,7 @@ class _Model(ModelMeta, frozen=True):
             json.dumps(self.mapping_schema, sort_keys=True),
             *sorted(self.tags),
             *sorted(ref.json(sort_keys=True) for ref in self.all_references),
-            str(self.forward_only),
-            str(self.disable_restatement),
+            *self.kind.metadata_hash_values,
             self.project,
             str(self.allow_partials),
             gen(self.session_properties_) if self.session_properties_ else None,

@@ -8,6 +8,7 @@ from pydantic import Field
 from sqlglot import exp
 from sqlglot.optimizer.normalize_identifiers import normalize_identifiers
 from sqlglot.optimizer.qualify_columns import quote_identifiers
+from sqlglot.optimizer.simplify import gen
 from sqlglot.time import format_time
 
 from sqlmesh.core import dialect as d
@@ -157,6 +158,10 @@ class _ModelKind(PydanticModel, ModelKindMixin):
     def data_hash_values(self) -> t.List[t.Optional[str]]:
         return [self.name.value]
 
+    @property
+    def metadata_hash_values(self) -> t.List[t.Optional[str]]:
+        return []
+
 
 class TimeColumn(PydanticModel):
     column: exp.Expression
@@ -255,6 +260,23 @@ class _Incremental(_ModelKind):
             raise ValueError("batch_size cannot be less than lookback")
         return values
 
+    @property
+    def data_hash_values(self) -> t.List[t.Optional[str]]:
+        return [
+            *super().data_hash_values,
+            self.dialect,
+            str(self.lookback) if self.lookback is not None else None,
+        ]
+
+    @property
+    def metadata_hash_values(self) -> t.List[t.Optional[str]]:
+        return [
+            *super().metadata_hash_values,
+            str(self.batch_size) if self.batch_size is not None else None,
+            str(self.forward_only),
+            str(self.disable_restatement),
+        ]
+
 
 class IncrementalByTimeRangeKind(_Incremental):
     name: Literal[ModelKindName.INCREMENTAL_BY_TIME_RANGE] = ModelKindName.INCREMENTAL_BY_TIME_RANGE
@@ -264,6 +286,10 @@ class IncrementalByTimeRangeKind(_Incremental):
 
     def to_expression(self, dialect: str = "", **kwargs: t.Any) -> d.ModelKind:
         return super().to_expression(expressions=[self.time_column.to_property(dialect)])
+
+    @property
+    def data_hash_values(self) -> t.List[t.Optional[str]]:
+        return [*super().data_hash_values, gen(self.time_column.column), self.time_column.format]
 
 
 class IncrementalByUniqueKeyKind(_Incremental):
@@ -303,12 +329,28 @@ class IncrementalByUniqueKeyKind(_Incremental):
 
         return t.cast(exp.When, v.transform(replace_table_references))
 
+    @property
+    def data_hash_values(self) -> t.List[t.Optional[str]]:
+        return [
+            *super().data_hash_values,
+            *(gen(k) for k in self.unique_key),
+            gen(self.when_matched) if self.when_matched is not None else None,
+        ]
+
 
 class IncrementalUnmanagedKind(_ModelKind):
     name: Literal[ModelKindName.INCREMENTAL_UNMANAGED] = ModelKindName.INCREMENTAL_UNMANAGED
     insert_overwrite: SQLGlotBool = False
     forward_only: SQLGlotBool = True
     disable_restatement: Literal[True] = True
+
+    @property
+    def data_hash_values(self) -> t.List[t.Optional[str]]:
+        return [*super().data_hash_values, str(self.insert_overwrite)]
+
+    @property
+    def metadata_hash_values(self) -> t.List[t.Optional[str]]:
+        return [*super().metadata_hash_values, str(self.forward_only)]
 
 
 class ViewKind(_ModelKind):
@@ -359,6 +401,10 @@ class SeedKind(_ModelKind):
             *(self.csv_settings or CsvSettings()).dict().values(),
         ]
 
+    @property
+    def metadata_hash_values(self) -> t.List[t.Optional[str]]:
+        return [*super().metadata_hash_values, str(self.batch_size)]
+
 
 class FullKind(_ModelKind):
     name: Literal[ModelKindName.FULL] = ModelKindName.FULL
@@ -396,6 +442,26 @@ class _SCDType2Kind(_ModelKind):
             self.valid_to_name: self.time_data_type,
         }
 
+    @property
+    def data_hash_values(self) -> t.List[t.Optional[str]]:
+        return [
+            *super().data_hash_values,
+            self.dialect,
+            *(gen(k) for k in self.unique_key),
+            self.valid_from_name,
+            self.valid_to_name,
+            str(self.invalidate_hard_deletes),
+            gen(self.time_data_type),
+        ]
+
+    @property
+    def metadata_hash_values(self) -> t.List[t.Optional[str]]:
+        return [
+            *super().metadata_hash_values,
+            str(self.forward_only),
+            str(self.disable_restatement),
+        ]
+
 
 class SCDType2ByTimeKind(_SCDType2Kind):
     name: Literal[ModelKindName.SCD_TYPE_2, ModelKindName.SCD_TYPE_2_BY_TIME] = (
@@ -404,11 +470,24 @@ class SCDType2ByTimeKind(_SCDType2Kind):
     updated_at_name: SQLGlotString = "updated_at"
     updated_at_as_valid_from: SQLGlotBool = False
 
+    @property
+    def data_hash_values(self) -> t.List[t.Optional[str]]:
+        return [*super().data_hash_values, self.updated_at_name, str(self.updated_at_as_valid_from)]
+
 
 class SCDType2ByColumnKind(_SCDType2Kind):
     name: Literal[ModelKindName.SCD_TYPE_2_BY_COLUMN] = ModelKindName.SCD_TYPE_2_BY_COLUMN
     columns: SQLGlotListOfColumnsOrStar
     execution_time_as_valid_from: SQLGlotBool = False
+
+    @property
+    def data_hash_values(self) -> t.List[t.Optional[str]]:
+        columns_sql = (
+            [gen(c) for c in self.columns]
+            if isinstance(self.columns, list)
+            else [gen(self.columns)]
+        )
+        return [*super().data_hash_values, *columns_sql, str(self.execution_time_as_valid_from)]
 
 
 class EmbeddedKind(_ModelKind):
