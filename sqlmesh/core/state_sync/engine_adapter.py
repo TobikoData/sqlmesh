@@ -373,13 +373,7 @@ class EngineAdapterStateSync(CommonStateSyncMixin, StateSync):
             self.engine_adapter.delete_from(self.seeds_table, where=where)
 
     def snapshots_exist(self, snapshot_ids: t.Iterable[SnapshotIdLike]) -> t.Set[SnapshotId]:
-        return {
-            SnapshotId(name=name, identifier=identifier)
-            for where in self._snapshot_id_filter(snapshot_ids)
-            for name, identifier in self._fetchall(
-                exp.select("name", "identifier").from_(self.snapshots_table).where(where)
-            )
-        }
+        return self._snapshot_ids_exist(snapshot_ids, self.snapshots_table)
 
     def nodes_exist(self, names: t.Iterable[str], exclude_external: bool = False) -> t.Set[str]:
         names = set(names)
@@ -1166,19 +1160,23 @@ class EngineAdapterStateSync(CommonStateSyncMixin, StateSync):
             if not seeds:
                 continue
 
-            new_seeds = []
+            new_seeds = {}
             for snapshot_id, content in seeds.items():
                 new_snapshot_id = snapshot_mapping[snapshot_id].snapshot_id
-                new_seeds.append(
-                    {
-                        "name": new_snapshot_id.name,
-                        "identifier": new_snapshot_id.identifier,
-                        "content": content,
-                    }
-                )
+                new_seeds[new_snapshot_id] = {
+                    "name": new_snapshot_id.name,
+                    "identifier": new_snapshot_id.identifier,
+                    "content": content,
+                }
+
+            existing_snapshot_ids = self._snapshot_ids_exist(new_seeds, self.seeds_table)
+            seeds_to_push = [
+                s for s_id, s in new_seeds.items() if s_id not in existing_snapshot_ids
+            ]
+
             self.engine_adapter.insert_append(
                 self.seeds_table,
-                pd.DataFrame(new_seeds),
+                pd.DataFrame(seeds_to_push),
                 columns_to_types=self._seed_columns_to_types,
                 contains_json=True,
             )
@@ -1216,6 +1214,17 @@ class EngineAdapterStateSync(CommonStateSyncMixin, StateSync):
                 self.unpause_snapshots(updated_prod_environment.snapshots, now_timestamp())
             except Exception:
                 logger.warning("Failed to unpause migrated snapshots", exc_info=True)
+
+    def _snapshot_ids_exist(
+        self, snapshot_ids: t.Iterable[SnapshotIdLike], table_name: exp.Table
+    ) -> t.Set[SnapshotId]:
+        return {
+            SnapshotId(name=name, identifier=identifier)
+            for where in self._snapshot_id_filter(snapshot_ids)
+            for name, identifier in self._fetchall(
+                exp.select("name", "identifier").from_(table_name).where(where)
+            )
+        }
 
     def _snapshot_id_filter(
         self,
