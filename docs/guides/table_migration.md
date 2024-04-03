@@ -9,12 +9,12 @@ This guide describes two methods for migrating existing tables into a SQLMesh pr
 SQLMesh does not assume it manages all data sources: SQL models can read from any data source accessible by the SQL engine, treating them as [external models](../concepts/models/model_kinds.md#external) that include column-level lineage or as generic sources. This approach is preferred to migrating existing tables into a SQLMesh project.
 
 You should only migrate a table if both of the following are true:
-1. The table's upstream source is active (i.e., the table is ingesting from a source that will continue generating new data)
+1. The table is ingesting from an upstream source that will continue generating new data
 2. The table is either too large to be rebuilt or cannot be rebuilt because the necessary historical data is unavailable
 
-If the table's source is static and will not accrue more data, there is no ongoing activity for SQLMesh to manage. A SQLMesh model or any other downstream consumer can select directly from the table under its current name.
+If the table's upstream source will not generate more data, there is no ongoing activity for SQLMesh to manage. A SQLMesh model or any other downstream consumer can select directly from the table under its current name.
 
-If the table's source is active, we assume that the table is already being loaded incrementally, as there is no need for migration if the table can be fully rebuilt.
+If the table's upstream source is generating new data, we assume that the table is already being loaded incrementally, as there is no need for migration if the table can be fully rebuilt.
 
 We describe two migration methods below. The stage and union method is preferred and should be used if feasible.
 
