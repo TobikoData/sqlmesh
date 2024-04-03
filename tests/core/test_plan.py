@@ -668,9 +668,7 @@ def test_broken_references(make_snapshot, mocker: MockerFixture):
     snapshot_a = make_snapshot(SqlModel(name="a", query=parse_one("select 1, ds")))
     snapshot_a.categorize_as(SnapshotChangeCategory.BREAKING)
 
-    snapshot_b = make_snapshot(
-        SqlModel(name="b", query=parse_one("select 2, ds FROM a")), nodes={'"a"': snapshot_a.node}
-    )
+    snapshot_b = make_snapshot(SqlModel(name="b", query=parse_one("select 2, ds FROM a")))
     snapshot_b.categorize_as(SnapshotChangeCategory.BREAKING)
 
     context_diff = ContextDiff(
