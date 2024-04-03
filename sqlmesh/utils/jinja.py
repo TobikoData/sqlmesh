@@ -153,10 +153,12 @@ def extract_macro_references_and_variables(
     variables = set()
     for jinja_str in jinja_strs:
         for call_name, node in extract_call_names(jinja_str):
-            if call_name[0] == "var":
+            if call_name[0] == c.VAR:
                 args = [jinja_call_arg_name(arg) for arg in node.args]
                 if args and args[0]:
                     variables.add(args[0])
+            elif call_name[0] == c.GATEWAY:
+                variables.add(c.GATEWAY)
             elif len(call_name) == 1:
                 macro_references.add(MacroReference(name=call_name[0]))
             elif len(call_name) == 2:
@@ -564,8 +566,10 @@ def create_var(variables: t.Dict[str, t.Any]) -> t.Callable:
 def create_builtin_globals(
     jinja_macros: JinjaMacroRegistry, global_vars: t.Dict[str, t.Any], *args: t.Any, **kwargs: t.Any
 ) -> t.Dict[str, t.Any]:
-    variables = global_vars.pop(c.VARIABLES, None) or {}
+    global_vars.pop(c.GATEWAY, None)
+    variables = global_vars.pop(c.SQLMESH_VARS, None) or {}
     return {
-        "var": create_var(variables),
+        c.VAR: create_var(variables),
+        c.GATEWAY: lambda: variables.get(c.GATEWAY, None),
         **global_vars,
     }

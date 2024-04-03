@@ -237,6 +237,11 @@ class ExecutionContext(BaseContext):
     def default_catalog(self) -> t.Optional[str]:
         return self._default_catalog
 
+    @property
+    def gateway(self) -> t.Optional[str]:
+        """Returns the gateway name."""
+        return self.var(c.GATEWAY)
+
     def var(self, var_name: str, default: t.Optional[t.Any] = None) -> t.Optional[t.Any]:
         """Returns a variable value."""
         return self._variables.get(var_name, default)

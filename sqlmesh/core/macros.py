@@ -376,9 +376,14 @@ class MacroEvaluator:
             )
         return self.locals["engine_adapter"]
 
+    @property
+    def gateway(self) -> t.Optional[str]:
+        """Returns the gateway name."""
+        return self.var(c.GATEWAY)
+
     def var(self, var_name: str, default: t.Optional[t.Any] = None) -> t.Optional[t.Any]:
         """Returns the value of the specified variable, or the default value if it doesn't exist."""
-        return (self.locals.get(c.VARIABLES) or {}).get(var_name, default)
+        return (self.locals.get(c.SQLMESH_VARS) or {}).get(var_name, default)
 
 
 class macro(registry_decorator):

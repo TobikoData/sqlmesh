@@ -698,6 +698,7 @@ def test_condition_with_macro_var(model: Model):
     assert (
         rendered_query.sql(dialect="duckdb")
         == """SELECT * FROM (SELECT * FROM "db"."test_model" AS "test_model" WHERE "ds" BETWEEN '1970-01-01' AND '1970-01-01') AS "_q_0" WHERE "x" IS NULL AND "dt" BETWEEN CAST('1970-01-01 00:00:00+00:00' AS TIMESTAMP) AND CAST('1970-01-01 23:59:59.999999+00:00' AS TIMESTAMP)"""
+    )
 
 
 def test_variables(assert_exp_eq):
@@ -724,7 +725,7 @@ def test_variables(assert_exp_eq):
         dialect="bigquery",
         variables={"test_var": "test_val", "test_var_unused": "unused_val"},
     )
-    assert audit.python_env[c.VARIABLES] == Executable.value({"test_var": "test_val"})
+    assert audit.python_env[c.SQLMESH_VARS] == Executable.value({"test_var": "test_val"})
     assert (
         audit.render_query(audit).sql(dialect="bigquery")
         == "SELECT * FROM `db`.`table` AS `table` WHERE `col` = 'test_val'"
