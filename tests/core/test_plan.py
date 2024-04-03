@@ -686,6 +686,10 @@ def test_broken_references(make_snapshot, mocker: MockerFixture):
         previous_finalized_snapshots=None,
     )
 
+    # Make sure the downstream snapshot doesn't have any parents,
+    # since its only parent has been removed from the project.
+    assert not snapshot_b.parents
+
     with pytest.raises(
         PlanError,
         match=r"""Removed '"a"' are referenced in '"b"'.*""",
