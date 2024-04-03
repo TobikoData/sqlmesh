@@ -193,4 +193,7 @@ class SnowflakeEngineAdapter(GetCurrentCatalogFromFunctionMixin):
         table_sql = table.sql(dialect=self.dialect, identify=True)
         column_sql = exp.column(column_name).sql(dialect=self.dialect, identify=True)
 
-        return f"ALTER {table_kind} {table_sql} ALTER COLUMN {column_sql} COMMENT '{self._truncate_column_comment(column_comment)}'"
+        truncated_comment = self._truncate_column_comment(column_comment)
+        comment_sql = exp.Literal.string(truncated_comment).sql(dialect=self.dialect)
+
+        return f"ALTER {table_kind} {table_sql} ALTER COLUMN {column_sql} COMMENT {comment_sql}"
