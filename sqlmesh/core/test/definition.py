@@ -590,7 +590,7 @@ def _raise_error(msg: str, path: Path | None = None) -> None:
 
 def _normalize_dataframe(value: t.Any) -> t.Any:
     """Normalize data in a pandas dataframe so ruamel and sqlglot can deal with it."""
-    if isinstance(value, np.ndarray):
+    if isinstance(value, (list, np.ndarray)):
         return [_normalize_dataframe(v) for v in value]
     if isinstance(value, dict):
         if "key" in value and "value" in value:
