@@ -221,11 +221,13 @@ class HiveMetastoreTablePropertiesMixin(EngineAdapter):
             return exp.Properties(expressions=properties)
         return None
 
-    def _truncate_comment(self, comment: str, length: t.Optional[int]) -> str:
+    def _truncate_comment(
+        self, comment: str, length: t.Optional[int], escape_backslash: bool = False
+    ) -> str:
         # iceberg and delta do not have a comment length limit
         if self.current_catalog_type in ("iceberg", "delta"):
             return comment
-        return super()._truncate_comment(comment, length)
+        return super()._truncate_comment(comment, length, escape_backslash)
 
 
 class GetCurrentCatalogFromFunctionMixin(EngineAdapter):
