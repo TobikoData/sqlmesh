@@ -3430,7 +3430,7 @@ def test_variables():
     model = load_sql_based_model(
         expressions, variables={"test_var_a": "test_value", "test_var_d": 1, "test_var_unused": 2}
     )
-    assert model.python_env[c.VARIABLES] == Executable.value(
+    assert model.python_env[c.VARS] == Executable.value(
         {"test_var_a": "test_value", "test_var_d": 1}
     )
     assert (
@@ -3513,7 +3513,7 @@ def test_variables_jinja():
         variables={"test_var_a": "test_value", "test_var_d": 1, "test_var_unused": 2},
         jinja_macros=jinja_macros,
     )
-    assert model.python_env[c.VARIABLES] == Executable.value(
+    assert model.python_env[c.VARS] == Executable.value(
         {"test_var_a": "test_value", "test_var_d": 1}
     )
     assert (
@@ -3524,7 +3524,7 @@ def test_variables_jinja():
 
 def test_variables_python_model(mocker: MockerFixture) -> None:
     @model(
-        "my_model",
+        "test_variables_python_model",
         kind="full",
         columns={"a": "string", "b": "string", "c": "string"},
     )
@@ -3539,14 +3539,88 @@ def test_variables_python_model(mocker: MockerFixture) -> None:
             ]
         )
 
-    python_model = model.get_registry()["my_model"].model(
+    python_model = model.get_registry()["test_variables_python_model"].model(
         module_path=Path("."),
         path=Path("."),
         variables={"test_var_a": "test_value", "test_var_unused": 2},
     )
 
-    assert python_model.python_env[c.VARIABLES] == Executable.value({"test_var_a": "test_value"})
+    assert python_model.python_env[c.VARS] == Executable.value({"test_var_a": "test_value"})
 
     context = ExecutionContext(mocker.Mock(), {}, None, None)
     df = list(python_model.render(context=context))[0]
     assert df.to_dict(orient="records") == [{"a": "test_value", "b": "default_value", "c": None}]
+
+
+def test_gateway_macro() -> None:
+    model = load_sql_based_model(
+        parse(
+            """
+        MODEL(name sushi.test_gateway_macro);
+        SELECT @gateway AS gateway
+        """
+        ),
+        variables={c.GATEWAY_VAR_NAME: "in_memory"},
+    )
+
+    assert model.python_env[c.VARS] == Executable.value({c.GATEWAY_VAR_NAME: "in_memory"})
+    assert model.render_query_or_raise().sql() == "SELECT 'in_memory' AS \"gateway\""
+
+    @macro()
+    def macro_uses_gateway(evaluator) -> exp.Expression:
+        return exp.convert(evaluator.gateway + "_from_macro")
+
+    model = load_sql_based_model(
+        parse(
+            """
+        MODEL(name sushi.test_gateway_macro);
+        SELECT @macro_uses_gateway() AS gateway_from_macro
+        """
+        ),
+        variables={c.GATEWAY_VAR_NAME: "in_memory"},
+    )
+
+    assert model.python_env[c.VARS] == Executable.value({c.GATEWAY_VAR_NAME: "in_memory"})
+    assert (
+        model.render_query_or_raise().sql()
+        == "SELECT 'in_memory_from_macro' AS \"gateway_from_macro\""
+    )
+
+
+def test_gateway_macro_jinja() -> None:
+    model = load_sql_based_model(
+        parse(
+            """
+        MODEL(name sushi.test_gateway_macro_jinja);
+        JINJA_QUERY_BEGIN;
+        SELECT '{{ gateway() }}' AS gateway_jinja;
+        JINJA_END;
+        """
+        ),
+        variables={c.GATEWAY_VAR_NAME: "in_memory"},
+    )
+
+    assert model.python_env[c.VARS] == Executable.value({c.GATEWAY_VAR_NAME: "in_memory"})
+    assert model.render_query_or_raise().sql() == "SELECT 'in_memory' AS \"gateway_jinja\""
+
+
+def test_gateway_python_model(mocker: MockerFixture) -> None:
+    @model(
+        "test_gateway_python_model",
+        kind="full",
+        columns={"gateway_python": "string"},
+    )
+    def model_with_variables(context, **kwargs):
+        return pd.DataFrame([{"gateway_python": context.gateway + "_from_python"}])
+
+    python_model = model.get_registry()["test_gateway_python_model"].model(
+        module_path=Path("."),
+        path=Path("."),
+        variables={c.GATEWAY_VAR_NAME: "in_memory"},
+    )
+
+    assert python_model.python_env[c.VARS] == Executable.value({c.GATEWAY_VAR_NAME: "in_memory"})
+
+    context = ExecutionContext(mocker.Mock(), {}, None, None)
+    df = list(python_model.render(context=context))[0]
+    assert df.to_dict(orient="records") == [{"gateway_python": "in_memory_from_python"}]

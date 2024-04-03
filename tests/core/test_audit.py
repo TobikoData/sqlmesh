@@ -713,7 +713,7 @@ def test_variables(assert_exp_eq):
         dialect="bigquery",
         variables={"test_var": "test_val", "test_var_unused": "unused_val"},
     )
-    assert audit.python_env[c.VARIABLES] == Executable.value({"test_var": "test_val"})
+    assert audit.python_env[c.VARS] == Executable.value({"test_var": "test_val"})
     assert (
         audit.render_query(audit).sql(dialect="bigquery")
         == "SELECT * FROM `db`.`table` AS `table` WHERE `col` = 'test_val'"

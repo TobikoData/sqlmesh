@@ -30,7 +30,7 @@ from sqlmesh.utils import UniqueKeyDict
 from sqlmesh.utils.dag import DAG
 from sqlmesh.utils.errors import ConfigError
 from sqlmesh.utils.jinja import JinjaMacroRegistry, MacroExtractor
-from sqlmesh.utils.metaprogramming import Executable, import_python_file
+from sqlmesh.utils.metaprogramming import import_python_file
 from sqlmesh.utils.yaml import YAML
 
 if t.TYPE_CHECKING:
@@ -247,10 +247,6 @@ class SqlMeshLoader(Loader):
         macros = macro.get_registry()
         macro.set_registry(standard_macros)
 
-        gateway_name = self._context.gateway or self._context.config.default_gateway_name
-        macros["gateway"] = Executable.value(gateway_name)
-        jinja_macros.add_globals({"gateway": gateway_name})
-
         return macros, jinja_macros
 
     def _load_models(
@@ -303,7 +299,7 @@ class SqlMeshLoader(Loader):
                         physical_schema_override=config.physical_schema_override,
                         project=config.project,
                         default_catalog=self._context.default_catalog,
-                        variables=config.variables,
+                        variables=self._variables(config),
                     )
 
                 model = cache.get_or_load_model(path, _load)
@@ -341,7 +337,7 @@ class SqlMeshLoader(Loader):
                         physical_schema_override=config.physical_schema_override,
                         project=config.project,
                         default_catalog=self._context.default_catalog,
-                        variables=config.variables,
+                        variables=self._variables(config),
                     )
                     models[model.fqn] = model
 
@@ -365,7 +361,7 @@ class SqlMeshLoader(Loader):
                         jinja_macros=jinja_macros,
                         dialect=config.model_defaults.dialect,
                         default_catalog=self._context.default_catalog,
-                        variables=config.variables,
+                        variables=self._variables(config),
                     )
                     for audit in audits:
                         audits_by_name[audit.name] = audit
@@ -412,6 +408,12 @@ class SqlMeshLoader(Loader):
                     break
             else:
                 yield filepath
+
+    def _variables(self, config: Config) -> t.Dict[str, t.Any]:
+        return {
+            c.GATEWAY_VAR_NAME: self._context.gateway or self._context.config.default_gateway_name,
+            **config.variables,
+        }
 
     class _Cache:
         def __init__(self, loader: SqlMeshLoader, context_path: Path):

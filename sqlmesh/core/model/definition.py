@@ -1320,7 +1320,7 @@ class PythonModel(_Model):
         execution_time = to_datetime(execution_time or c.EPOCH)
         try:
             df_or_iter = env[self.entrypoint](
-                context=context.with_variables(env.get(c.VARIABLES, {})),
+                context=context.with_variables(env.get(c.VARS, {})),
                 start=start,
                 end=end,
                 execution_time=execution_time,
@@ -1706,7 +1706,7 @@ def create_python_model(
 
     variables = {k: v for k, v in (variables or {}).items() if k in referenced_variables}
     if variables:
-        python_env[c.VARIABLES] = Executable.value(variables)
+        python_env[c.VARS] = Executable.value(variables)
 
     return _create_model(
         PythonModel,
@@ -1862,7 +1862,7 @@ def _python_env(
                     name = macro_func_or_var.this.name.lower()
                     if name in macros:
                         used_macros[name] = macros[name]
-                        if name == "var":
+                        if name == c.VAR:
                             args = macro_func_or_var.this.expressions
                             if len(args) < 1:
                                 raise_config_error("Macro VAR requires at least one argument", path)
@@ -1876,6 +1876,8 @@ def _python_env(
                     name = macro_func_or_var.name
                     if name in macros:
                         used_macros[name] = macros[name]
+                    elif name == c.GATEWAY:
+                        used_variables.add(c.GATEWAY_VAR_NAME)
 
     for macro_ref in jinja_macro_references or set():
         if macro_ref.package is None and macro_ref.name in macros:
@@ -1894,7 +1896,9 @@ def _python_env(
 
     variables = {k: v for k, v in (variables or {}).items() if k in used_variables}
     if variables:
-        serialized_env[c.VARIABLES] = Executable.value(variables)
+        serialized_env[c.VARS] = Executable.value(variables)
+    if c.GATEWAY_VAR_NAME in variables:
+        serialized_env[c.GATEWAY] = Executable.value(variables[c.GATEWAY_VAR_NAME])
 
     return serialized_env
 
@@ -1916,38 +1920,44 @@ def _parse_dependencies(python_env: t.Dict[str, Executable]) -> t.Tuple[t.Set[st
         if not executable.is_definition:
             continue
         for node in ast.walk(ast.parse(executable.payload)):
-            if not isinstance(node, ast.Call):
-                continue
+            if isinstance(node, ast.Call):
+                func = node.func
+                if not isinstance(func, ast.Attribute) or not isinstance(func.value, ast.Name):
+                    continue
 
-            func = node.func
-            if not isinstance(func, ast.Attribute) or not isinstance(func.value, ast.Name):
-                continue
+                def get_first_arg(keyword_arg_name: str) -> t.Any:
+                    if node.args:
+                        table: t.Optional[ast.expr] = node.args[0]
+                    else:
+                        table = next(
+                            (
+                                keyword.value
+                                for keyword in node.keywords
+                                if keyword.arg == keyword_arg_name
+                            ),
+                            None,
+                        )
 
-            def get_first_arg(keyword_arg_name: str) -> t.Any:
-                if node.args:
-                    table: t.Optional[ast.expr] = node.args[0]
-                else:
-                    table = next(
-                        (
-                            keyword.value
-                            for keyword in node.keywords
-                            if keyword.arg == keyword_arg_name
-                        ),
-                        None,
-                    )
+                    try:
+                        expression = to_source(table)
+                        return eval(expression, env)
+                    except Exception:
+                        raise ConfigError(
+                            f"Error resolving dependencies for '{executable.path}'. References to context / evaluator must be resolvable at parse time.\n\n{expression}"
+                        )
 
-                try:
-                    expression = to_source(table)
-                    return eval(expression, env)
-                except Exception:
-                    raise ConfigError(
-                        f"Error resolving dependencies for '{executable.path}'. References to context / evaluator must be resolvable at parse time.\n\n{expression}"
-                    )
-
-            if func.value.id == "context" and func.attr == "table":
-                depends_on.add(get_first_arg("model_name"))
-            elif func.value.id in ("context", "evaluator") and func.attr == "var":
-                variables.add(get_first_arg("var_name"))
+                if func.value.id == "context" and func.attr == "table":
+                    depends_on.add(get_first_arg("model_name"))
+                elif func.value.id in ("context", "evaluator") and func.attr == c.VAR:
+                    variables.add(get_first_arg("var_name"))
+            elif (
+                isinstance(node, ast.Attribute)
+                and isinstance(node.value, ast.Name)
+                and node.value.id in ("context", "evaluator")
+                and node.attr == c.GATEWAY
+            ):
+                # Check whether the gateway attribute is referenced.
+                variables.add(c.GATEWAY_VAR_NAME)
 
     return depends_on, variables
 

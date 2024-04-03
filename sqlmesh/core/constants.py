@@ -51,4 +51,7 @@ SCHEMA_YAML = "schema.yaml"
 
 DEFAULT_SCHEMA = "default"
 
-VARIABLES = "vars"
+VARS = "vars"
+VAR = "var"
+GATEWAY = "gateway"
+GATEWAY_VAR_NAME = "__sqlmesh_gateway__"
