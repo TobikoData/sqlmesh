@@ -34,7 +34,7 @@ We'd love to join you on your data journey. Connect with us in the following way
 
 * Join the [Tobiko Slack community](https://tobikodata.com/slack) to ask questions, or just to say hi!
 * File an issue on our [GitHub](https://github.com/TobikoData/sqlmesh/issues/new).
-* Send us an email at [hello@tobikodata.com](hello@tobikodata.com) with your questions or feedback.
+* Send us an email at [hello@tobikodata.com](mailto:hello@tobikodata.com) with your questions or feedback.
 
 ## Contribution
 Contributions in the form of issues or pull requests are greatly appreciated. [Read more](https://sqlmesh.readthedocs.io/en/stable/development/) about how to develop for SQLMesh.
