@@ -385,10 +385,15 @@ class ModelConfig(BaseModelConfig):
             database="{{ target.database }}",
         )
 
+        data_type = data_type.upper()
+        default_value = "NULL"
+        if data_type in ("DATE", "DATETIME", "TIMESTAMP"):
+            default_value = f"CAST('1970-01-01' AS {data_type})"
+
         return f"""
 {{% if is_incremental() %}}
-  DECLARE _dbt_max_partition {data_type.upper()} DEFAULT (
-    {select_max_partition_expr}
+  DECLARE _dbt_max_partition {data_type} DEFAULT (
+    COALESCE(({select_max_partition_expr}), {default_value})
   );
 {{% endif %}}
 """
