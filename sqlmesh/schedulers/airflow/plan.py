@@ -58,7 +58,6 @@ class PlanDagState:
             self._plan_dags_table,
             df,
             columns_to_types=self._plan_dag_columns_to_types,
-            contains_json=True,
         )
 
     def get_dag_specs(self) -> t.List[common.PlanDagSpec]:

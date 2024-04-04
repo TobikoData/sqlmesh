@@ -189,13 +189,6 @@ def word_characters_only(s: str, replacement_char: str = "_") -> str:
     return re.sub(r"\W", replacement_char, s)
 
 
-def double_escape(s: str) -> str:
-    """
-    Replace backslashes with another backslash.
-    """
-    return s.replace("\\", "\\\\")
-
-
 def str_to_bool(s: t.Optional[str]) -> bool:
     """
     Convert a string to a boolean. disutils is being deprecated and it is recommended to implement your own version:

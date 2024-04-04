@@ -40,7 +40,6 @@ class TrinoEngineAdapter(
     GetCurrentCatalogFromFunctionMixin,
 ):
     DIALECT = "trino"
-    ESCAPE_JSON = False
     INSERT_OVERWRITE_STRATEGY = InsertOverwriteStrategy.INTO_IS_OVERWRITE
     CATALOG_SUPPORT = CatalogSupport.FULL_SUPPORT
     # Trino does technically support transactions but it doesn't work correctly with partition overwrite so we

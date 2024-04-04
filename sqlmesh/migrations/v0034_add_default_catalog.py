@@ -165,7 +165,6 @@ def migrate(state_sync, default_catalog: t.Optional[str], **kwargs):  # type: ig
                 "snapshot": exp.DataType.build("text"),
                 "kind_name": exp.DataType.build(index_type),
             },
-            contains_json=True,
         )
 
     new_environments = []
@@ -251,7 +250,6 @@ def migrate(state_sync, default_catalog: t.Optional[str], **kwargs):  # type: ig
                 "promoted_snapshot_ids": exp.DataType.build("text"),
                 "suffix_target": exp.DataType.build("text"),
             },
-            contains_json=True,
         )
 
         # We update environment to not be finalized in order to force them to update their views
@@ -327,7 +325,6 @@ def migrate(state_sync, default_catalog: t.Optional[str], **kwargs):  # type: ig
                 "is_removed": exp.DataType.build("boolean"),
                 "is_compacted": exp.DataType.build("boolean"),
             },
-            contains_json=False,
         )
 
     new_seeds = []
@@ -364,5 +361,4 @@ def migrate(state_sync, default_catalog: t.Optional[str], **kwargs):  # type: ig
                 "identifier": exp.DataType.build(index_type),
                 "content": exp.DataType.build("text"),
             },
-            contains_json=False,
         )

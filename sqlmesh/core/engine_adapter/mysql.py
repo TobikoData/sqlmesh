@@ -33,7 +33,6 @@ class MySQLEngineAdapter(
 ):
     DEFAULT_BATCH_SIZE = 200
     DIALECT = "mysql"
-    ESCAPE_JSON = True
     SUPPORTS_INDEXES = True
     COMMENT_CREATION_TABLE = CommentCreationTable.IN_SCHEMA_DEF_NO_CTAS
     COMMENT_CREATION_VIEW = CommentCreationView.UNSUPPORTED
@@ -104,7 +103,10 @@ class MySQLEngineAdapter(
     ) -> exp.Comment | str:
         table_sql = table.sql(dialect=self.dialect, identify=True)
 
-        return f"ALTER TABLE {table_sql} COMMENT = '{self._truncate_table_comment(table_comment)}'"
+        truncated_comment = self._truncate_table_comment(table_comment)
+        comment_sql = exp.Literal.string(truncated_comment).sql(dialect=self.dialect)
+
+        return f"ALTER TABLE {table_sql} COMMENT = {comment_sql}"
 
     def _create_column_comments(
         self,

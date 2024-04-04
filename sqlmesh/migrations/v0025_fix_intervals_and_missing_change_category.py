@@ -91,7 +91,6 @@ def migrate(state_sync, **kwargs):  # type: ignore
                 "snapshot": exp.DataType.build("text"),
                 "kind_name": exp.DataType.build(index_type),
             },
-            contains_json=True,
         )
 
         if new_intervals:
@@ -110,7 +109,6 @@ def migrate(state_sync, **kwargs):  # type: ignore
                     "is_removed": exp.DataType.build("boolean"),
                     "is_compacted": exp.DataType.build("boolean"),
                 },
-                contains_json=False,
             )
 
 
