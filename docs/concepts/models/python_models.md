@@ -144,9 +144,9 @@ def execute(
 ```
 
 
-## Variables
+## Global variables
 
-[User-defined variables](../../reference/configuration.md#variables) variables can be accessed from within the Python model using the `context.var` method. For example:
+[User-defined global variables](../../reference/configuration.md#variables) can be accessed from within the Python model using the `context.var` method. For example:
 
 ```python linenums="1"
 @model(
