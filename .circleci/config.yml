@@ -98,11 +98,11 @@ workflows:
           <<: *on_tag_filter
           requires:
             - gh-release
-      - trigger_private_renovate:
-          <<: *on_tag_filter
-          requires:
-            - gh-release
       - publish:
           <<: *on_tag_filter
           requires:
             - ui-build
+      - trigger_private_renovate:
+          <<: *on_tag_filter
+          requires:
+            - publish
