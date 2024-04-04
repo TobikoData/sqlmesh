@@ -1170,11 +1170,12 @@ class EngineAdapterStateSync(CommonStateSyncMixin, StateSync):
                 s for s_id, s in new_seeds.items() if s_id not in existing_snapshot_ids
             ]
 
-            self.engine_adapter.insert_append(
-                self.seeds_table,
-                pd.DataFrame(seeds_to_push),
-                columns_to_types=self._seed_columns_to_types,
-            )
+            if seeds_to_push:
+                self.engine_adapter.insert_append(
+                    self.seeds_table,
+                    pd.DataFrame(seeds_to_push),
+                    columns_to_types=self._seed_columns_to_types,
+                )
 
     def _migrate_environment_rows(
         self,
