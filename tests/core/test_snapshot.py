@@ -19,6 +19,7 @@ from sqlmesh.core.context import Context
 from sqlmesh.core.dialect import parse, parse_one
 from sqlmesh.core.environment import EnvironmentNamingInfo
 from sqlmesh.core.model import (
+    FullKind,
     IncrementalByTimeRangeKind,
     Model,
     Seed,
@@ -39,6 +40,7 @@ from sqlmesh.core.snapshot import (
     earliest_start_date,
     fingerprint_from_node,
     has_paused_forward_only,
+    missing_intervals,
 )
 from sqlmesh.core.snapshot.definition import display_name
 from sqlmesh.utils import AttributeDict
@@ -1657,3 +1659,35 @@ def test_display_name(
     )
     input_snapshot = make_snapshot(input_model)
     assert display_name(input_snapshot, environment_naming_info, default_catalog) == expected
+
+
+def test_missing_intervals_node_start_end(make_snapshot):
+    input_model = SqlModel(
+        name="test_model",
+        query=parse_one("SELECT 1, ds"),
+        kind=FullKind(),
+        start="2024-03-12",
+        end="2024-03-12",
+    )
+    snapshot = make_snapshot(input_model)
+    assert missing_intervals([snapshot])[snapshot] == [
+        (to_timestamp("2024-03-12"), to_timestamp("2024-03-13"))
+    ]
+    assert missing_intervals([snapshot], start="2024-03-12")[snapshot] == [
+        (to_timestamp("2024-03-12"), to_timestamp("2024-03-13"))
+    ]
+    assert missing_intervals([snapshot], start="2024-03-12", end="2024-03-12")[snapshot] == [
+        (to_timestamp("2024-03-12"), to_timestamp("2024-03-13"))
+    ]
+    assert missing_intervals([snapshot], start="2024-03-12", end="2024-03-14")[snapshot] == [
+        (to_timestamp("2024-03-12"), to_timestamp("2024-03-13"))
+    ]
+    assert missing_intervals([snapshot], start="2024-03-01", end="2024-03-30")[snapshot] == [
+        (to_timestamp("2024-03-12"), to_timestamp("2024-03-13"))
+    ]
+    assert missing_intervals([snapshot], start="2024-03-11", end=to_datetime("2024-03-12")) == {}
+    assert missing_intervals([snapshot], start="2024-03-12", end=to_datetime("2024-03-12")) == {}
+    assert missing_intervals([snapshot], start="2024-03-01", end=to_datetime("2024-03-12")) == {}
+    assert missing_intervals([snapshot], start="2024-03-01", end=to_datetime("2024-03-10")) == {}
+    assert missing_intervals([snapshot], start="2024-03-13", end="2024-03-14") == {}
+    assert missing_intervals([snapshot], start="2024-03-14", end="2024-03-30") == {}

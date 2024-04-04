@@ -760,7 +760,7 @@ class Snapshot(PydanticModel, SnapshotInfoMixin):
 
         Args:
             start: The start date/time of the interval (inclusive)
-            end: The end date/time of the interval (inclusive)
+            end: The end date/time of the interval (inclusive if the type is date, exclusive otherwise)
             execution_time: The date/time time reference to use for execution time. Defaults to now.
             restatements: A set of snapshot names being restated
             deployability_index: Determines snapshots that are deployable in the context of this evaluation.
@@ -777,6 +777,10 @@ class Snapshot(PydanticModel, SnapshotInfoMixin):
             self.node.start and to_datetime(self.node.start) > to_datetime(end)
         ):
             return []
+        if self.node.start and to_datetime(start) < to_datetime(self.node.start):
+            start = self.node.start
+        if self.node.end and make_inclusive_end(end) > make_inclusive_end(self.node.end):
+            end = self.node.end
         # If the amount of time being checked is less than the size of a single interval then we
         # know that there can't being missing intervals within that range and return
         validate_date_range(start, end)
