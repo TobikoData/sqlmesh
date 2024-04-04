@@ -55,5 +55,4 @@ def migrate(state_sync, **kwargs):  # type: ignore
                 "dag_id": exp.DataType.build(index_type),
                 "dag_spec": exp.DataType.build("text"),
             },
-            contains_json=True,
         )

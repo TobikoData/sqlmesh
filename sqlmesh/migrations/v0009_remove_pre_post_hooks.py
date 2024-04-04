@@ -58,5 +58,4 @@ def migrate(state_sync, **kwargs):  # type: ignore
                 "version": exp.DataType.build(index_type),
                 "snapshot": exp.DataType.build("text"),
             },
-            contains_json=True,
         )

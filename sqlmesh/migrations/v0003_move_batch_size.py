@@ -31,5 +31,4 @@ def migrate(state_sync, **kwargs):  # type: ignore
                         snapshots_table,
                         {"snapshot": json.dumps(snapshot)},
                         where=f"name = '{name}' and identifier = '{identifier}'",
-                        contains_json=True,
                     )

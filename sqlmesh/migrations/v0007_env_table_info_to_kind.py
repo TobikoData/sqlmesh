@@ -95,5 +95,4 @@ def migrate(state_sync, **kwargs):  # type: ignore
                 "expiration_ts": exp.DataType.build("bigint"),
                 "finalized_ts": exp.DataType.build("bigint"),
             },
-            contains_json=True,
         )

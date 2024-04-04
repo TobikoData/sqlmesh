@@ -34,7 +34,6 @@ class RedshiftEngineAdapter(
     NonTransactionalTruncateMixin,
 ):
     DIALECT = "redshift"
-    ESCAPE_JSON = True
     COLUMNS_TABLE = "svv_columns"  # Includes late-binding views
     CURRENT_CATALOG_EXPRESSION = exp.func("current_database")
     # Redshift doesn't support comments for VIEWs WITH NO SCHEMA BINDING (which we always use)

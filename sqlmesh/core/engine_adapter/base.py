@@ -39,7 +39,7 @@ from sqlmesh.core.engine_adapter.shared import (
 )
 from sqlmesh.core.model.kind import TimeColumn
 from sqlmesh.core.schema_diff import SchemaDiffer
-from sqlmesh.utils import columns_to_types_all_known, double_escape, random_id
+from sqlmesh.utils import columns_to_types_all_known, random_id
 from sqlmesh.utils.connection_pool import create_connection_pool
 from sqlmesh.utils.date import TimeLike, make_inclusive, to_time_column
 from sqlmesh.utils.errors import SQLMeshError, UnsupportedCatalogOperationError
@@ -80,14 +80,12 @@ class EngineAdapter:
     DIALECT = ""
     DEFAULT_BATCH_SIZE = 10000
     DATA_OBJECT_FILTER_BATCH_SIZE = 4000
-    ESCAPE_JSON = False
     SUPPORTS_TRANSACTIONS = True
     SUPPORTS_INDEXES = False
     COMMENT_CREATION_TABLE = CommentCreationTable.IN_SCHEMA_DEF_CTAS
     COMMENT_CREATION_VIEW = CommentCreationView.IN_SCHEMA_DEF_AND_COMMANDS
     MAX_TABLE_COMMENT_LENGTH: t.Optional[int] = None
     MAX_COLUMN_COMMENT_LENGTH: t.Optional[int] = None
-    ESCAPE_COMMENT_BACKSLASH = True
     INSERT_OVERWRITE_STRATEGY = InsertOverwriteStrategy.DELETE_INSERT
     SUPPORTS_MATERIALIZED_VIEWS = False
     SUPPORTS_MATERIALIZED_VIEW_SCHEMA = False
@@ -990,64 +988,31 @@ class EngineAdapter:
         table_name: TableName,
         query_or_df: QueryOrDF,
         columns_to_types: t.Optional[t.Dict[str, exp.DataType]] = None,
-        contains_json: bool = False,
     ) -> None:
         source_queries, columns_to_types = self._get_source_queries_and_columns_to_types(
             query_or_df, columns_to_types, target_table=table_name
         )
-        self._insert_append_source_queries(
-            table_name, source_queries, columns_to_types, contains_json
-        )
-
-    @t.overload
-    def _escape_json(self, value: Query) -> Query: ...
-
-    @t.overload
-    def _escape_json(self, value: str) -> str: ...
-
-    def _escape_json(self, value: Query | str) -> Query | str:
-        """
-        Some engines need to add an extra escape to literals that contain JSON values. By default we don't do this
-        though
-        """
-        if self.ESCAPE_JSON:
-            if isinstance(value, str):
-                return double_escape(value)
-            return t.cast(
-                exp.Query,
-                value.transform(
-                    lambda e: (
-                        exp.Literal.string(double_escape(e.name))
-                        if isinstance(e, exp.Literal) and e.args["is_string"]
-                        else e
-                    )
-                ),
-            )
-        return value
+        self._insert_append_source_queries(table_name, source_queries, columns_to_types)
 
     def _insert_append_source_queries(
         self,
         table_name: TableName,
         source_queries: t.List[SourceQuery],
         columns_to_types: t.Optional[t.Dict[str, exp.DataType]] = None,
-        contains_json: bool = False,
     ) -> None:
         with self.transaction(condition=len(source_queries) > 0):
             columns_to_types = columns_to_types or self.columns(table_name)
             for source_query in source_queries:
                 with source_query as query:
-                    self._insert_append_query(table_name, query, columns_to_types, contains_json)
+                    self._insert_append_query(table_name, query, columns_to_types)
 
     def _insert_append_query(
         self,
         table_name: TableName,
         query: Query,
         columns_to_types: t.Dict[str, exp.DataType],
-        contains_json: bool = False,
         order_projections: bool = True,
     ) -> None:
-        if contains_json:
-            query = self._escape_json(query)
         if order_projections:
             query = self._order_projections_and_filter(query, columns_to_types)
         self.execute(exp.insert(query, table_name, columns=list(columns_to_types)))
@@ -1097,18 +1062,14 @@ class EngineAdapter:
         batch_start: int,
         batch_end: int,
         alias: str = "t",
-        contains_json: bool = False,
     ) -> Query:
-        query = select_from_values_for_batch_range(
+        return select_from_values_for_batch_range(
             values=values,
             columns_to_types=columns_to_types,
             batch_start=batch_start,
             batch_end=batch_end,
             alias=alias,
         )
-        if contains_json:
-            query = t.cast(exp.Select, self._escape_json(query))
-        return query
 
     def _insert_overwrite_by_condition(
         self,
@@ -1159,15 +1120,7 @@ class EngineAdapter:
         table_name: TableName,
         properties: t.Dict[str, t.Any],
         where: t.Optional[str | exp.Condition] = None,
-        contains_json: bool = False,
     ) -> None:
-        if contains_json and properties:
-            properties = {
-                k: (
-                    self._escape_json(v) if isinstance(v, (str, exp.Query, exp.DerivedTable)) else v
-                )
-                for k, v in properties.items()
-            }
         self.execute(exp.update(table_name, properties, where=where))
 
     def _merge(
@@ -1920,22 +1873,14 @@ class EngineAdapter:
             return exp.Properties(expressions=properties)
         return None
 
-    def _truncate_comment(
-        self, comment: str, length: t.Optional[int], escape_backslash: bool = False
-    ) -> str:
-        if escape_backslash:
-            comment = comment.replace("\\", "\\\\")
+    def _truncate_comment(self, comment: str, length: t.Optional[int]) -> str:
         return comment[:length] if length else comment
 
     def _truncate_table_comment(self, comment: str) -> str:
-        return self._truncate_comment(
-            comment, self.MAX_TABLE_COMMENT_LENGTH, self.ESCAPE_COMMENT_BACKSLASH
-        )
+        return self._truncate_comment(comment, self.MAX_TABLE_COMMENT_LENGTH)
 
     def _truncate_column_comment(self, comment: str) -> str:
-        return self._truncate_comment(
-            comment, self.MAX_COLUMN_COMMENT_LENGTH, self.ESCAPE_COMMENT_BACKSLASH
-        )
+        return self._truncate_comment(comment, self.MAX_COLUMN_COMMENT_LENGTH)
 
     def _to_sql(self, expression: exp.Expression, quote: bool = True, **kwargs: t.Any) -> str:
         """
