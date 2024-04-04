@@ -577,7 +577,10 @@ class BigQueryEngineAdapter(InsertOverwriteWithMergeMixin):
     ) -> exp.Comment | str:
         table_sql = table.sql(dialect=self.dialect, identify=True)
 
-        return f"ALTER {table_kind} {table_sql} SET OPTIONS(description = '{self._truncate_table_comment(table_comment)}')"
+        truncated_comment = self._truncate_table_comment(table_comment)
+        comment_sql = exp.Literal.string(truncated_comment).sql(dialect=self.dialect)
+
+        return f"ALTER {table_kind} {table_sql} SET OPTIONS(description = {comment_sql})"
 
     def _build_create_comment_column_exp(
         self, table: exp.Table, column_name: str, column_comment: str, table_kind: str = "TABLE"
@@ -585,7 +588,10 @@ class BigQueryEngineAdapter(InsertOverwriteWithMergeMixin):
         table_sql = table.sql(dialect=self.dialect, identify=True)
         column_sql = exp.column(column_name).sql(dialect=self.dialect, identify=True)
 
-        return f"ALTER {table_kind} {table_sql} ALTER COLUMN {column_sql} SET OPTIONS(description = '{self._truncate_column_comment(column_comment)}')"
+        truncated_comment = self._truncate_column_comment(column_comment)
+        comment_sql = exp.Literal.string(truncated_comment).sql(dialect=self.dialect)
+
+        return f"ALTER {table_kind} {table_sql} ALTER COLUMN {column_sql} SET OPTIONS(description = {comment_sql})"
 
     def create_state_table(
         self,
