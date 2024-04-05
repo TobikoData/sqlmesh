@@ -3,6 +3,7 @@ from __future__ import annotations
 import typing as t
 from enum import Enum
 from functools import reduce
+from itertools import chain
 from string import Template
 
 import sqlglot
@@ -177,7 +178,15 @@ class MacroEvaluator:
                     return node
 
                 value = self.locals[node.name]
-                return exp.convert(tuple(value) if isinstance(value, list) else value)
+                if isinstance(value, list):
+                    return exp.convert(
+                        tuple(
+                            self.transform(v) if isinstance(v, exp.Expression) else v for v in value
+                        )
+                    )
+                return exp.convert(
+                    self.transform(value) if isinstance(value, exp.Expression) else value
+                )
             if isinstance(node, exp.Identifier):
                 text = self.template(node.this, self.locals)
                 if node.this != text:
@@ -222,7 +231,25 @@ class MacroEvaluator:
         Returns:
            The rendered string.
         """
-        return MacroStrTemplate(str(text)).safe_substitute(self.locals, **local_variables)
+        mapping = {}
+
+        for k, v in chain(self.locals.items(), local_variables.items()):
+            # try to convert all variables into sqlglot expressions
+            # because they're going to be converted into strings in sql
+            # we use bare Exception instead of ValueError because there's
+            # a recursive error with MagicMock.
+            # we don't convert strings because that would result in adding quotes
+            if not isinstance(v, str):
+                try:
+                    v = exp.convert(v)
+                except Exception:
+                    pass
+
+            if isinstance(v, exp.Expression):
+                v = v.sql(dialect=self.dialect)
+            mapping[k] = v
+
+        return MacroStrTemplate(str(text)).safe_substitute(mapping)
 
     def evaluate(self, node: MacroFunc) -> exp.Expression | t.List[exp.Expression] | None:
         if isinstance(node, MacroDef):

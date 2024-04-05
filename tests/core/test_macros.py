@@ -332,6 +332,13 @@ def test_ast_correctness(macro_evaluator):
             "SELECT * FROM x ORDER BY a, b",
             {"x": [exp.column("a"), exp.column("b")]},
         ),
+        (
+            """select @SQL('@x')""",
+            "SELECT VAR_MAP('a', 1)",
+            {
+                "x": {"a": 1},
+            },
+        ),
     ],
 )
 def test_macro_functions(macro_evaluator, assert_exp_eq, sql, expected, args):
