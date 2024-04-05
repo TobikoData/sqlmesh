@@ -906,7 +906,7 @@ def or_(evaluator: MacroEvaluator, *expressions: t.Optional[exp.Expression]) -> 
 
 @macro("VAR")
 def var(
-    evaluator: MacroEvaluator, var_name: exp.Expression, default: exp.Expression = exp.null()
+    evaluator: MacroEvaluator, var_name: exp.Expression, default: t.Optional[exp.Expression] = None
 ) -> exp.Expression:
     """Returns the value of a variable or the default value if the variable is not set."""
     if not var_name.is_string:

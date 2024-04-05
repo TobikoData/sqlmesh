@@ -3581,7 +3581,7 @@ def test_variables_python_model(mocker: MockerFixture) -> None:
 
 def test_named_variables_python_model(mocker: MockerFixture) -> None:
     @model(
-        "test_variables_python_model",
+        "test_named_variables_python_model",
         kind="full",
         columns={"a": "string", "b": "string", "c": "string"},
     )
@@ -3590,7 +3590,7 @@ def test_named_variables_python_model(mocker: MockerFixture) -> None:
     ):
         return pd.DataFrame([{"a": test_var_a, "b": test_var_b, "start": start.strftime("%Y-%m-%d")}])  # type: ignore
 
-    python_model = model.get_registry()["test_variables_python_model"].model(
+    python_model = model.get_registry()["test_named_variables_python_model"].model(
         module_path=Path("."),
         path=Path("."),
         # Passing `start` in variables to make sure that built-in arguments can't be overridden.
