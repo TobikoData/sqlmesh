@@ -1455,9 +1455,9 @@ def load_sql_based_model(
         )
 
     jinja_macro_references, used_variables = extract_macro_references_and_variables(
-        *(e.sql(dialect=dialect) for e in pre_statements),
-        *(e.sql(dialect=dialect) for e in post_statements),
-        *([query_or_seed_insert.sql(dialect=dialect)] if query_or_seed_insert is not None else []),
+        *(gen(e) for e in pre_statements),
+        *(gen(e) for e in post_statements),
+        *([gen(query_or_seed_insert)] if query_or_seed_insert is not None else []),
     )
 
     jinja_macros = (jinja_macros or JinjaMacroRegistry()).trim(jinja_macro_references)

@@ -9,6 +9,7 @@ from pathlib import Path
 from pydantic import Field
 from sqlglot import exp
 from sqlglot.optimizer.qualify_columns import quote_identifiers
+from sqlglot.optimizer.simplify import gen
 
 from sqlmesh.core import constants as c
 from sqlmesh.core import dialect as d
@@ -354,7 +355,7 @@ class StandaloneAudit(_Node, AuditMixin):
         ]
 
         query = self.render_query(self) or self.query
-        data.append(query.sql(dialect=self.dialect, comments=False))
+        data.append(gen(query))
 
         return hash_data(data)
 
@@ -520,8 +521,8 @@ def load_audit(
     extra_kwargs: t.Dict[str, t.Any] = {}
     if is_standalone:
         jinja_macro_refrences, used_variables = extract_macro_references_and_variables(
-            *(s.sql(dialect=dialect) for s in statements),
-            query.sql(dialect=dialect),
+            *(gen(s) for s in statements),
+            gen(query),
         )
         jinja_macros = (jinja_macros or JinjaMacroRegistry()).trim(jinja_macro_refrences)
         for jinja_macro in jinja_macros.root_macros.values():
