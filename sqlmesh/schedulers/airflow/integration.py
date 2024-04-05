@@ -144,7 +144,7 @@ class SQLMeshAirflow:
                 self._create_janitor_dag(),
             ]
 
-            return system_dags + cadence_dags + plan_application_dags
+            return system_dags + cadence_dags + [d for d in plan_application_dags if d]
 
     def _create_janitor_dag(self) -> DAG:
         dag = self._create_system_dag(common.JANITOR_DAG_ID, self._janitor_interval)

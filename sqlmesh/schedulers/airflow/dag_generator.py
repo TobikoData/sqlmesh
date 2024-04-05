@@ -90,8 +90,12 @@ class SnapshotDagGenerator:
                 dags.append(self._create_cadence_dag_for_snapshot(snapshot, snapshots))
         return dags
 
-    def generate_plan_application_dag(self, spec: common.PlanDagSpec) -> DAG:
-        return self._create_plan_application_dag(spec)
+    def generate_plan_application_dag(self, spec: common.PlanDagSpec) -> t.Optional[DAG]:
+        try:
+            return self._create_plan_application_dag(spec)
+        except Exception:
+            logger.exception("Failed to generate the plan application DAG '%s'", spec.request_id)
+            return None
 
     def _create_cadence_dag_for_snapshot(
         self, snapshot: Snapshot, snapshots: t.Dict[SnapshotId, Snapshot]
