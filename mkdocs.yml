@@ -20,6 +20,7 @@ nav:
       - guides/scheduling.md
       - guides/notifications.md
       - guides/migrations.md
+      - guides/table_migration.md
     - Project content:
       - guides/models.md
       - guides/incremental_time.md

@@ -141,8 +141,8 @@ MODEL (
     name sqlmesh_example.new_model,
     kind INCREMENTAL_BY_TIME_RANGE (
         time_column (model_time_column, '%Y-%m-%d'),
-    ),
-    forward_only true -- All changes will be forward only
+        forward_only true -- All changes will be forward only
+    )
 );
 
 SELECT
