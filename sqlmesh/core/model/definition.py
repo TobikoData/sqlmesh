@@ -1318,13 +1318,18 @@ class PythonModel(_Model):
         env = prepare_env(self.python_env)
         start, end = make_inclusive(start or c.EPOCH, end or c.EPOCH)
         execution_time = to_datetime(execution_time or c.EPOCH)
+        variables = env.get(c.SQLMESH_VARS, {})
         try:
+            kwargs = {
+                **variables,
+                **kwargs,
+                "start": start,
+                "end": end,
+                "execution_time": execution_time,
+                "latest": execution_time,  # TODO: Preserved for backward compatibility. Remove in 1.0.0.
+            }
             df_or_iter = env[self.entrypoint](
-                context=context.with_variables(env.get(c.SQLMESH_VARS, {})),
-                start=start,
-                end=end,
-                execution_time=execution_time,
-                latest=execution_time,  # TODO: Preserved for backward compatibility. Remove in 1.0.0.
+                context=context.with_variables(variables),
                 **kwargs,
             )
 
@@ -1699,7 +1704,7 @@ def create_python_model(
     # Find dependencies for python models by parsing code if they are not explicitly defined
     # Also remove self-references that are found
     parsed_depends_on, referenced_variables = (
-        _parse_dependencies(python_env) if python_env is not None else (set(), set())
+        _parse_dependencies(python_env, entrypoint) if python_env is not None else (set(), set())
     )
     if depends_on is None:
         depends_on = parsed_depends_on - {name}
@@ -1849,6 +1854,7 @@ def _python_env(
     path: t.Optional[str | Path] = None,
 ) -> t.Dict[str, Executable]:
     python_env: t.Dict[str, Executable] = {}
+    variables = variables or {}
 
     used_macros = {}
     used_variables = (used_variables or set()).copy()
@@ -1873,11 +1879,11 @@ def _python_env(
                                 )
                             used_variables.add(args[0].this)
                 elif macro_func_or_var.__class__ is d.MacroVar:
-                    name = macro_func_or_var.name
+                    name = macro_func_or_var.name.lower()
                     if name in macros:
                         used_macros[name] = macros[name]
-                    elif name == c.GATEWAY:
-                        used_variables.add(c.GATEWAY)
+                    elif name in variables:
+                        used_variables.add(name)
 
     for macro_ref in jinja_macro_references or set():
         if macro_ref.package is None and macro_ref.name in macros:
@@ -1891,19 +1897,19 @@ def _python_env(
 
     serialized_env.update(serialize_env(python_env, path=module_path))
 
-    _, python_used_variables = _parse_dependencies(serialized_env)
+    _, python_used_variables = _parse_dependencies(serialized_env, None)
     used_variables |= python_used_variables
 
     variables = {k: v for k, v in (variables or {}).items() if k in used_variables}
     if variables:
         serialized_env[c.SQLMESH_VARS] = Executable.value(variables)
-    if c.GATEWAY in variables:
-        serialized_env[c.GATEWAY] = Executable.value(variables[c.GATEWAY])
 
     return serialized_env
 
 
-def _parse_dependencies(python_env: t.Dict[str, Executable]) -> t.Tuple[t.Set[str], t.Set[str]]:
+def _parse_dependencies(
+    python_env: t.Dict[str, Executable], entrypoint: t.Optional[str]
+) -> t.Tuple[t.Set[str], t.Set[str]]:
     """Parses the source of a model function and finds upstream table dependencies and referenced variables based on calls to context / evaluator.
 
     Args:
@@ -1958,6 +1964,8 @@ def _parse_dependencies(python_env: t.Dict[str, Executable]) -> t.Tuple[t.Set[st
             ):
                 # Check whether the gateway attribute is referenced.
                 variables.add(c.GATEWAY)
+            elif isinstance(node, ast.FunctionDef) and node.name == entrypoint:
+                variables.update([arg.arg for arg in node.args.args if arg.arg != "context"])
 
     return depends_on, variables
 

@@ -172,13 +172,14 @@ class MacroEvaluator:
 
             if isinstance(node, MacroVar):
                 changed = True
-                if node.name not in self.locals:
+                variables = self.locals.get(c.SQLMESH_VARS, {})
+                if node.name not in self.locals and node.name.lower() not in variables:
                     if not isinstance(node.parent, StagedFilePath):
                         raise SQLMeshError(f"Macro variable '{node.name}' is undefined.")
 
                     return node
 
-                value = self.locals[node.name]
+                value = self.locals.get(node.name, variables.get(node.name.lower()))
                 if isinstance(value, list):
                     return exp.convert(
                         tuple(

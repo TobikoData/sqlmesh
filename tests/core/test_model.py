@@ -1,5 +1,6 @@
 import json
 import logging
+import typing as t
 from datetime import date
 from pathlib import Path
 from unittest.mock import patch
@@ -36,7 +37,7 @@ from sqlmesh.core.model.kind import _model_kind_validator
 from sqlmesh.core.model.seed import CsvSettings
 from sqlmesh.core.node import IntervalUnit, _Node
 from sqlmesh.core.snapshot import SnapshotChangeCategory
-from sqlmesh.utils.date import to_datetime, to_timestamp
+from sqlmesh.utils.date import TimeLike, to_datetime, to_ds, to_timestamp
 from sqlmesh.utils.errors import ConfigError, SQLMeshError
 from sqlmesh.utils.jinja import JinjaMacroRegistry, MacroInfo
 from sqlmesh.utils.metaprogramming import Executable
@@ -3484,6 +3485,32 @@ def test_variables():
         load_sql_based_model(expressions)
 
 
+def test_named_variable_macros() -> None:
+    model = load_sql_based_model(
+        parse(
+            """
+        MODEL(name sushi.test_gateway_macro);
+        @DEF(overridden_var, 'overridden_value');
+        SELECT @gateway AS gateway, @test_var_a AS test_var_a, @overridden_var AS overridden_var
+        """
+        ),
+        variables={
+            c.GATEWAY: "in_memory",
+            "test_var_a": "test_value",
+            "test_var_unused": "unused",
+            "overridden_var": "initial_value",
+        },
+    )
+
+    assert model.python_env[c.SQLMESH_VARS] == Executable.value(
+        {c.GATEWAY: "in_memory", "test_var_a": "test_value", "overridden_var": "initial_value"}
+    )
+    assert (
+        model.render_query_or_raise().sql()
+        == "SELECT 'in_memory' AS \"gateway\", 'test_value' AS \"test_var_a\", 'overridden_value' AS \"overridden_var\""
+    )
+
+
 def test_variables_jinja():
     expressions = parse(
         """
@@ -3550,6 +3577,37 @@ def test_variables_python_model(mocker: MockerFixture) -> None:
     context = ExecutionContext(mocker.Mock(), {}, None, None)
     df = list(python_model.render(context=context))[0]
     assert df.to_dict(orient="records") == [{"a": "test_value", "b": "default_value", "c": None}]
+
+
+def test_named_variables_python_model(mocker: MockerFixture) -> None:
+    @model(
+        "test_variables_python_model",
+        kind="full",
+        columns={"a": "string", "b": "string", "c": "string"},
+    )
+    def model_with_named_variables(
+        context, start: TimeLike, test_var_a: str, test_var_b: t.Optional[str] = None, **kwargs
+    ):
+        return pd.DataFrame([{"a": test_var_a, "b": test_var_b, "start": start.strftime("%Y-%m-%d")}])  # type: ignore
+
+    python_model = model.get_registry()["test_variables_python_model"].model(
+        module_path=Path("."),
+        path=Path("."),
+        # Passing `start` in variables to make sure that built-in arguments can't be overridden.
+        variables={
+            "test_var_a": "test_value",
+            "test_var_unused": 2,
+            "start": "2024-01-01",
+        },
+    )
+
+    assert python_model.python_env[c.SQLMESH_VARS] == Executable.value(
+        {"test_var_a": "test_value", "start": "2024-01-01"}
+    )
+
+    context = ExecutionContext(mocker.Mock(), {}, None, None)
+    df = list(python_model.render(context=context))[0]
+    assert df.to_dict(orient="records") == [{"a": "test_value", "b": None, "start": to_ds(c.EPOCH)}]
 
 
 def test_gateway_macro() -> None:

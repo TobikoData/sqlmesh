@@ -155,6 +155,8 @@ class Config(BaseConfig):
     @field_validator("variables", mode="before")
     @classmethod
     def _validate_variables(cls, value: t.Dict[str, t.Any]) -> t.Dict[str, t.Any]:
+        if not isinstance(value, dict):
+            raise ConfigError(f"Variables must be a dictionary, not {type(value)}")
 
         def _validate_type(v: t.Any) -> None:
             if isinstance(v, list):
@@ -167,7 +169,7 @@ class Config(BaseConfig):
                 raise ConfigError(f"Unsupported variable value type: {type(v)}")
 
         _validate_type(value)
-        return value
+        return {k.lower(): v for k, v in value.items()}
 
     @model_validator(mode="before")
     @model_validator_v1_args
