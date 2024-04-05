@@ -230,15 +230,10 @@ More information to come on quoting behavior when quotes are included/excluded i
 
 ## Macro operators
 
-SQLMesh's macro system has multiple operators that allow different forms of dynamism in models.
+SQLMesh's macro system has multiple operators that allow different forms of dynamic behavior in models.
 
-### Control flow operators
+### @EACH
 
-Macro systems use control flow operators such as `for` loops and `if` statements to enable powerful dynamic SQL code.
-
-This section describes how SQLMesh's control flow operators `@EACH` and `@IF` work.
-
-#### @EACH introduction
 Before diving into the `@EACH` operator, let's dissect a `for` loop to understand its components.
 
 `for` loops have two primary parts: a collection of items and an action that should be taken for each item. For example, here is a `for` loop in Python:
@@ -265,7 +260,6 @@ The second line tells Python what action should be taken for each item. In this 
 
 The loop executes one time for each item in the list, substituting in the item for the word `number` in the code. For example, the first time through the loop the code would execute as `print(4)` and the second time as `print(5)`.
 
-#### @EACH basics
 The SQLMesh `@EACH` operator is used to implement the equivalent of a `for` loop in SQLMesh macros.
 
 `@EACH` gets its name from the fact that a loop performs the action "for each" item in the collection. It is fundamentally equivalent to the Python loop above, but you specify the two loop components differently.
@@ -297,8 +291,6 @@ SELECT
     6
 FROM table
 ```
-
-#### @EACH string substitution
 
 The basic example above is too simple to be useful. Many uses of `@EACH` will involve using the values as one or both of a literal value and an identifier.
 
@@ -377,10 +369,9 @@ FROM table
 
 This syntax works regardless of whether the array values are quoted or not.
 
-
 NOTE: SQLMesh macros support placing macro values at the end of a column name simply using `column_@x`. However if you wish to substitute the variable anywhere else in the identifier, you need to use the more explicit substitution syntax `@{}`. This avoids ambiguity. These are valid `@{x}_column` or `my_@{x}_column`.
 
-#### @IF
+### @IF
 
 SQLMesh's `@IF` macro allows components of a SQL query to change based on the result of a logical condition.
 
@@ -487,7 +478,7 @@ ORDER BY item_id;
 
 NOTE: we can also, say, alter the type of a column if the `@runtime_stage` is `'creating'`, but that will only have meaningful effects if the corresponding model is of an incremental kind, since `FULL` models are rebuilt on each evaluation and hence any changes made at their creation stage will be overwritten.
 
-#### @EVAL
+### @EVAL
 
 `@EVAL` evaluates its arguments with SQLGlot's SQL executor.
 
@@ -515,15 +506,9 @@ SELECT
 FROM table
 ```
 
-### Helper macros
+### @FILTER
 
-SQLMesh's macro system includes two helper operators that do not directly act on the SQL query's semantic representation. Instead, they manipulate arrays of values that are used by other SQLMesh macro operators like `@EACH`.
-
-Like [`@EACH`](#each-basics), they take two arguments: an array of items in brackets `[]` and an anonymous function specifying what actions to take with the items.
-
-#### @FILTER
-
-`@FILTER` is used to subset an input array of items to only those meeting the logical condition specified in the anonymous function. Its output can be consumed by other macro operators such as [`@EACH`](#each-basics) or [`@REDUCE`](#reduce).
+`@FILTER` is used to subset an input array of items to only those meeting the logical condition specified in the anonymous function. Its output can be consumed by other macro operators such as [`@EACH`](#each) or [`@REDUCE`](#reduce).
 
 The user-specified anonymous function must evaluate to `TRUE` or `FALSE`. `@FILTER` applies the function to each item in the array, only including the item in the output array if it meets the condition.
 
@@ -537,7 +522,7 @@ For example, consider this `@FILTER` call:
 
 It applies the condition `x > 1` to each item in the input array `[1,2,3]` and returns `[2,3]`.
 
-#### @REDUCE
+### @REDUCE
 
 `@REDUCE` is used to combine the items in an array.
 
@@ -583,6 +568,250 @@ WHERE
   )
 ```
 
+### @STAR
+
+`@STAR` is used to return a list of projections for the given relation. It supports the following arguments, in this order:
+
+- `relation`: The relation to select star from
+- `alias` (optional): The alias of the relation
+- `except` (optional): A list of columns to exclude
+- `prefix` (optional): A prefix to use for all selected columns
+- `suffix` (optional): A suffix to use for all selected columns
+- `quote_identifiers` (optional): Whether to quote the resulting identifiers, defaults to true
+
+For example, consider the following query:
+
+```sql linenums="1"
+SELECT
+  @STAR(foo, bar, [c], 'baz_')
+FROM foo AS bar
+```
+
+Let's assume that `foo` is a table that contains four columns: `a` (`TEXT`), `b` (`TEXT`), `c` (`TEXT`) and `d` (`INT`). Then, the query would be rendered as:
+
+```sql linenums="1"
+SELECT
+  CAST("bar"."a" AS TEXT) AS "baz_a",
+  CAST("bar"."b" AS TEXT) AS "baz_b",
+  CAST("bar"."d" AS INT) AS "baz_d"
+FROM foo AS bar
+```
+
+### @GENERATE_SURROGATE_KEY
+
+`@GENERATE_SURROGATE_KEY` is used to generate a surrogate key for a sequence of fields that are passed as arguments to it.
+
+For example, the following query:
+
+```sql linenums="1"
+SELECT
+  @GENERATE_SURROGATE_KEY(a, b, c)
+FROM foo
+```
+
+would be rendered as:
+
+```sql linenums="1"
+SELECT
+  MD5(
+    CONCAT(
+        COALESCE(CAST(a AS TEXT), '_sqlmesh_surrogate_key_null_'),
+        '|',
+        COALESCE(CAST(b AS TEXT), '_sqlmesh_surrogate_key_null_'),
+        '|',
+        COALESCE(CAST(c AS TEXT), '_sqlmesh_surrogate_key_null_')
+    )
+  )
+FROM foo
+```
+
+### @SAFE_ADD
+
+`@SAFE_ADD` adds two or more operands, substituting `NULL`s with `0`s. It returns `NULL` if all operands are `NULL`.
+
+For example, the following query:
+
+```sql linenums="1"
+SELECT
+  @SAFE_ADD(a, b)
+FROM foo
+```
+would be rendered as:
+
+```sql linenums="1"
+SELECT
+  CASE WHEN a IS NULL AND b IS NULL THEN NULL ELSE COALESCE(a, 0) + COALESCE(b, 0) END
+FROM foo
+```
+
+### @SAFE_SUB
+
+`@SAFE_SUB` subtracts two or more operands, substituting `NULL`s with `0`s. It returns `NULL` if all operands are `NULL`.
+
+For example, the following query:
+
+```sql linenums="1"
+SELECT
+  @SAFE_SUB(a, b)
+FROM foo
+```
+would be rendered as:
+
+```sql linenums="1"
+SELECT
+  CASE WHEN a IS NULL AND b IS NULL THEN NULL ELSE COALESCE(a, 0) - COALESCE(b, 0) END
+FROM foo
+```
+
+### @SAFE_DIV
+
+`@SAFE_DIV` divides two numbers, returning `NULL` if the denominator is `0`.
+
+For example, the following query:
+
+```sql linenums="1"
+SELECT
+  @SAFE_DIV(a, b)
+FROM foo
+```
+would be rendered as:
+
+```sql linenums="1"
+SELECT
+  a / NULLIF(b, 0)
+FROM foo
+```
+
+### @UNION
+
+`@UNION` returns a `UNION` query that selects all columns from the given tables which have the same name and type.
+
+Its first argument is the `UNION` "type", i.e. `'ALL'` or `'DISTINCT`, and after it come the tables to be combined.
+
+Let's assume that:
+
+- `foo` is a table that contains three columns: `a` (`INT`), `b` (`TEXT`), `c` (`TEXT`)
+- `bar` is a table that contains three columns: `a` (`INT`), `b` (`INT`), `c` (`TEXT`)
+
+Then, the following expression:
+
+```sql linenums="1"
+@UNION('distinct', foo, bar)
+```
+
+would be rendered as:
+
+```sql linenums="1"
+SELECT
+  CAST(a AS INT) AS a,
+  CAST(c AS TEXT) AS c
+FROM foo
+UNION
+SELECT
+  CAST(a AS INT) AS a,
+  CAST(c AS TEXT) AS c
+FROM bar
+```
+
+### @HAVERSINE_DISTANCE
+
+`@HAVERSINE_DISTANCE` returns the [haversine distance](https://en.wikipedia.org/wiki/Haversine_formula) between two points.
+
+It supports the following arguments, in this order:
+
+- `lat1`: Latitude of the first point
+- `lon1`: Longitude of the first point
+- `lat2`: Latitude of the second point
+- `lon2`: Longitude of the second point
+- `unit` (optional): The measurement unit, currently only `'mi'` (miles, default) and `'km'` (kilometers) are supported
+
+For example, the following query:
+
+```sql linenums="1"
+SELECT
+  @HAVERSINE_DISTANCE(driver_y, driver_x, passenger_y, passenger_x, 'mi') AS dist
+FROM rides
+```
+
+would be rendered as:
+
+```sql linenums="1"
+SELECT
+  7922 * ASIN(SQRT((POWER(SIN(RADIANS((passenger_y - driver_y) / 2)), 2)) + (COS(RADIANS(driver_y)) * COS(RADIANS(passenger_y)) * POWER(SIN(RADIANS((passenger_x - driver_x) / 2)), 2)))) * 1.0 AS dist
+FROM rides
+```
+
+### @PIVOT
+
+`@PIVOT` returns a list of projections as a result of pivoting the given column on the given values.
+
+It supports the following arguments, in this order:
+
+- `column`: The column to pivot
+- `values`: The values to be used for pivoting
+- `alias`: Whether to create aliases for the resulting columns, defaults to true
+- `agg` (optional): The aggregation function to use, defaults to `SUM`
+- `cmp` (optional): The comparison operator to use for comparing the column values, defaults to `=`
+- `prefix` (optional): A prefix to use for all aliases
+- `suffix` (optional): A suffix to use for all aliases
+- `then_value` (optional): The value to be used if the comparison succeeds, defaults to `1`
+- `else_value` (optional): The value to be used if the comparison fails, defaults to `0`
+- `quote` (optional): Whether to quote the resulting aliases, defaults to true
+- `distinct`: Whether to apply a `DISTINCT` clause for the aggregation function, defaults to false
+
+For example, the following query:
+
+```sql linenums="1"
+SELECT
+  date_day,
+  @PIVOT(status, ['cancelled', 'completed'])
+FROM rides
+GROUP BY 1
+```
+
+would be rendered as:
+
+```sql linenums="1"
+SELECT
+  date_day,
+  SUM(CASE WHEN status = 'cancelled' THEN 1 ELSE 0 END) AS "'cancelled'",
+  SUM(CASE WHEN status = 'completed' THEN 1 ELSE 0 END) AS "'completed'"
+FROM rides
+GROUP BY 1
+```
+
+### @AND
+
+`@AND` combines a sequence of operands using the `AND` operator, filtering out any NULL expressions.
+
+For example, the following expression:
+
+```sql linenums="1"
+@AND(TRUE, NULL)
+```
+
+would be rendered as:
+
+```sql linenums="1"
+TRUE
+```
+
+### @OR
+
+`@OR` combines a sequence of operands using the `OR` operator, filtering out any NULL expressions.
+
+For example, the following expression:
+
+```sql linenums="1"
+@OR(TRUE, NULL)
+```
+
+would be rendered as:
+
+```sql linenums="1"
+TRUE
+```
+
 ### SQL clause operators
 
 SQLMesh's macro system has six operators that correspond to different clauses in SQL syntax. They are:
@@ -598,6 +827,7 @@ SQLMesh's macro system has six operators that correspond to different clauses in
 Each of these operators is used to dynamically add the code for its corresponding clause to a model's SQL query.
 
 #### How SQL clause operators work
+
 The SQL clause operators take a single argument that determines whether the clause is generated.
 
 If the argument is `TRUE` the clause code is generated, if `FALSE` the code is not. The argument should be written *in SQL* and its value is evaluated with [SQLGlot's](https://github.com/tobymao/sqlglot) SQL engine.
