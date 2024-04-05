@@ -869,7 +869,7 @@ def pivot(
         >>> from sqlmesh.core.macros import MacroEvaluator
         >>> sql = "SELECT date_day, @PIVOT(status, ['cancelled', 'completed']) FROM rides GROUP BY 1"
         >>> MacroEvaluator().transform(parse_one(sql)).sql()
-        'SELECT date_day, SUM(CASE WHEN status = \'cancelled\' THEN 1 ELSE 0 END) AS "\'cancelled\'", SUM(CASE WHEN status = \'completed\' THEN 1 ELSE 0 END) AS "\'completed\'" FROM rides GROUP BY 1'
+        'SELECT date_day, SUM(CASE WHEN status = \\'cancelled\\' THEN 1 ELSE 0 END) AS "\\'cancelled\\'", SUM(CASE WHEN status = \\'completed\\' THEN 1 ELSE 0 END) AS "\\'completed\\'" FROM rides GROUP BY 1'
     """
     aggregates: t.List[exp.Expression] = []
     for value in values.expressions:
