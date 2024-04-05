@@ -686,3 +686,15 @@ def test_not_constant_audit(model: Model):
         rendered_query.sql()
         == """SELECT 1 AS "1" FROM (SELECT COUNT(DISTINCT "x") AS "t_cardinality" FROM (SELECT * FROM "db"."test_model" AS "test_model" WHERE "ds" BETWEEN '1970-01-01' AND '1970-01-01') AS "_q_0" WHERE "x" > 1) AS "r" WHERE "r"."t_cardinality" <= 1"""
     )
+
+
+def test_condition_with_macro_var(model: Model):
+    rendered_query = builtin.not_null_audit.render_query(
+        model,
+        columns=[exp.column("x")],
+        condition=exp.condition("dt BETWEEN @start_dt AND @end_dt"),
+    )
+    assert (
+        rendered_query.sql(dialect="duckdb")
+        == """SELECT * FROM (SELECT * FROM "db"."test_model" AS "test_model" WHERE "ds" BETWEEN '1970-01-01' AND '1970-01-01') AS "_q_0" WHERE "x" IS NULL AND "dt" BETWEEN CAST('1970-01-01 00:00:00+00:00' AS TIMESTAMP) AND CAST('1970-01-01 23:59:59.999999+00:00' AS TIMESTAMP)"""
+    )
