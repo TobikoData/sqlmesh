@@ -123,7 +123,7 @@ class ModelTest(unittest.TestCase):
         """Drop all fixture tables."""
         for table in self.body.get("inputs", {}):
             self.engine_adapter.drop_view(
-                self._test_fixture_table(table).sql() if table in self.models else table
+                self._test_fixture_table(table) if table in self.models else table
             )
 
     def assert_equal(
