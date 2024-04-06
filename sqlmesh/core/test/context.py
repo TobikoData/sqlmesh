@@ -5,7 +5,7 @@ import typing as t
 from sqlmesh import Model
 from sqlmesh.core.context import ExecutionContext
 from sqlmesh.core.engine_adapter import EngineAdapter
-from sqlmesh.core.test.definition import _fully_qualified_test_fixture_name
+from sqlmesh.core.test.definition import ModelTest
 from sqlmesh.utils import UniqueKeyDict
 
 
@@ -21,17 +21,17 @@ class TestExecutionContext(ExecutionContext):
         self,
         engine_adapter: EngineAdapter,
         models: UniqueKeyDict[str, Model],
-        default_dialect: t.Optional[str],
+        test: ModelTest,
+        default_dialect: t.Optional[str] = None,
         default_catalog: t.Optional[str] = None,
     ):
-        self.is_dev = True
         self._engine_adapter = engine_adapter
-        self.__model_tables = {
-            name: _fully_qualified_test_fixture_name(name, model.dialect)
-            for name, model in models.items()
-        }
         self._default_catalog = default_catalog
         self._default_dialect = default_dialect
+
+        self.__model_tables = {
+            name: test._test_fixture_table(name).sql() for name, model in models.items()
+        }
 
     @property
     def _model_tables(self) -> t.Dict[str, str]:

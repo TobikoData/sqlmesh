@@ -18,7 +18,7 @@ from sqlmesh.core import constants as c
 from sqlmesh.core.dialect import normalize_model_name, schema_
 from sqlmesh.core.engine_adapter import EngineAdapter
 from sqlmesh.core.model import Model, PythonModel, SqlModel
-from sqlmesh.utils import UniqueKeyDict, yaml
+from sqlmesh.utils import UniqueKeyDict, random_id, yaml
 from sqlmesh.utils.date import pandas_timestamp_to_pydatetime
 from sqlmesh.utils.errors import ConfigError, SQLMeshError
 
@@ -87,6 +87,8 @@ class ModelTest(unittest.TestCase):
                 exp.CurrentTimestamp: lambda self, _: self.sql(exp.cast(exec_time, "timestamp")),
             }
 
+        self._fixture_table_cache: t.Dict[str, exp.Table] = {}
+
         super().__init__()
 
     def shortDescription(self) -> t.Optional[str]:
@@ -108,7 +110,7 @@ class ModelTest(unittest.TestCase):
                         v_type, into=exp.DataType, dialect=self.dialect
                     )
 
-            test_fixture_table = _fully_qualified_test_fixture_table(table_name, self.dialect)
+            test_fixture_table = self._test_fixture_table(table_name)
             if test_fixture_table.db:
                 self.engine_adapter.create_schema(
                     schema_(test_fixture_table.args["db"], test_fixture_table.args.get("catalog"))
@@ -121,9 +123,7 @@ class ModelTest(unittest.TestCase):
         """Drop all fixture tables."""
         for table in self.body.get("inputs", {}):
             self.engine_adapter.drop_view(
-                _fully_qualified_test_fixture_name(table, self.dialect)
-                if table in self.models
-                else table
+                self._test_fixture_table(table).sql() if table in self.models else table
             )
 
     def assert_equal(
@@ -290,6 +290,15 @@ class ModelTest(unittest.TestCase):
             self.body["model"], default_catalog=self.default_catalog, dialect=dialect
         )
 
+    def _test_fixture_table(self, name: str) -> exp.Table:
+        table = self._fixture_table_cache.get(name)
+        if not table:
+            table = exp.to_table(name, dialect=self.dialect)
+            table.this.set("this", f"{table.this.this}__fixture__{random_id(short=True)}")
+            self._fixture_table_cache[name] = table
+
+        return table
+
 
 class SqlModelTest(ModelTest):
     def test_ctes(self, ctes: t.Dict[str, exp.Expression]) -> None:
@@ -317,7 +326,7 @@ class SqlModelTest(ModelTest):
     def runTest(self) -> None:
         # For tests we just use the model name for the table reference and we don't want to expand
         mapping = {
-            name: _fully_qualified_test_fixture_name(name, dialect=self.dialect)
+            name: self._test_fixture_table(name).sql()
             for name in [
                 normalize_model_name(name, self.default_catalog, self.dialect)
                 for name in self.models.keys() | self.body.get("inputs", {}).keys()
@@ -382,6 +391,7 @@ class PythonModelTest(ModelTest):
         self.context = TestExecutionContext(
             engine_adapter=engine_adapter,
             models=models,
+            test=self,
             default_dialect=dialect,
             default_catalog=default_catalog,
         )
@@ -486,8 +496,7 @@ def generate_test(
 
     if isinstance(model, SqlModel):
         mapping = {
-            name: _fully_qualified_test_fixture_name(name, test_engine_adapter.dialect)
-            for name in models.keys() | inputs.keys()
+            name: test._test_fixture_table(name).sql() for name in models.keys() | inputs.keys()
         }
         model_query = model.render_query_or_raise(
             **t.cast(t.Dict[str, t.Any], variables),
@@ -570,16 +579,6 @@ def _row_difference(left: pd.DataFrame, right: pd.DataFrame) -> pd.DataFrame:
             right_row_count[left_row_tuple] -= 1
 
     return pd.DataFrame(rows_missing_from_right)
-
-
-def _fully_qualified_test_fixture_table(name: str, dialect: str | None) -> exp.Table:
-    fqt = exp.to_table(name, dialect=dialect)
-    fqt.this.set("this", f"{fqt.this.this}__fixture")
-    return fqt
-
-
-def _fully_qualified_test_fixture_name(name: str, dialect: str | None) -> str:
-    return _fully_qualified_test_fixture_table(name, dialect).sql()
 
 
 def _raise_error(msg: str, path: Path | None = None) -> None:
