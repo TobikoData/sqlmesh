@@ -87,6 +87,7 @@ class ModelTest(unittest.TestCase):
                 exp.CurrentTimestamp: lambda self, _: self.sql(exp.cast(exec_time, "timestamp")),
             }
 
+        self._test_id = random_id(short=True)
         self._fixture_table_cache: t.Dict[str, exp.Table] = {}
 
         super().__init__()
@@ -294,7 +295,7 @@ class ModelTest(unittest.TestCase):
         table = self._fixture_table_cache.get(name)
         if not table:
             table = exp.to_table(name, dialect=self.dialect)
-            table.this.set("this", f"{table.this.this}__fixture__{random_id(short=True)}")
+            table.this.set("this", f"{table.this.this}__fixture__{self._test_id}")
             self._fixture_table_cache[name] = table
 
         return table

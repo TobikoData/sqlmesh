@@ -135,8 +135,15 @@ test_foo:
     end: 2022-01-01
         """
     )
-    result = _create_test(body, "test_foo", model, sushi_context).run()
-    _check_successful_or_raise(result)
+    test = _create_test(body, "test_foo", model, sushi_context)
+
+    random_id = "jzngz56a"
+    test._test_id = random_id
+    _check_successful_or_raise(test.run())
+
+    assert len(test._fixture_table_cache) == len(sushi_context.models) + 1
+    for table in test._fixture_table_cache.values():
+        assert table.name.endswith(f"__fixture__{random_id}")
 
 
 def test_ctes_only(sushi_context: Context, full_model_with_two_ctes: SqlModel) -> None:
