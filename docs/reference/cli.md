@@ -419,9 +419,11 @@ Usage: sqlmesh test [OPTIONS] [TESTS]...
   Run model unit tests.
 
 Options:
-  -k TEXT        Only run tests that match the pattern of substring.
-  -v, --verbose  Verbose output.
-  --help         Show this message and exit.
+  -k TEXT             Only run tests that match the pattern of substring.
+  -v, --verbose       Verbose output.
+  --persist-fixtures  Persist the fixture tables in the testing database,
+                      useful for debugging.
+  --help              Show this message and exit.
 ```
 
 ## ui

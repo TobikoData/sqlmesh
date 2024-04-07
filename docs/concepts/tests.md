@@ -413,3 +413,9 @@ You can also run tests that match a pattern or substring using a glob pathname e
 ```
 $ sqlmesh test tests/test_*
 ```
+
+### Debugging tests
+
+By default, SQLMesh drops all input fixtures in the testing database after running a test.
+
+It's possible to persist these fixtures using the `--persist-fixtures` option of the `sqlmesh test` command, which can be helpful when debugging a test failure post-hoc.
