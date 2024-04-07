@@ -206,8 +206,8 @@ class ExecutionContext(BaseContext):
         self,
         engine_adapter: EngineAdapter,
         snapshots: t.Dict[str, Snapshot],
-        deployability_index: t.Optional[DeployabilityIndex],
-        default_dialect: t.Optional[str],
+        deployability_index: t.Optional[DeployabilityIndex] = None,
+        default_dialect: t.Optional[str] = None,
         default_catalog: t.Optional[str] = None,
     ):
         self.snapshots = snapshots
