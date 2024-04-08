@@ -783,9 +783,9 @@ class SQLMeshMagics(Magics):
     )
     @argument("--verbose", "-v", action="store_true", help="Verbose output.")
     @argument(
-        "--persist-fixtures",
+        "--preserve-fixtures",
         action="store_true",
-        help="Persist the fixture tables in the testing database, useful for debugging.",
+        help="Preserve the fixture tables in the testing database, useful for debugging.",
     )
     @line_magic
     @pass_sqlmesh_context
@@ -796,7 +796,7 @@ class SQLMeshMagics(Magics):
             match_patterns=args.pattern,
             tests=args.tests,
             verbose=args.verbose,
-            persist_fixtures=args.persist_fixtures,
+            preserve_fixtures=args.preserve_fixtures,
         )
 
     @magic_arguments()

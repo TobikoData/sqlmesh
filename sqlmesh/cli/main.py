@@ -513,10 +513,10 @@ def create_test(
 @opt.match_pattern
 @opt.verbose
 @click.option(
-    "--persist-fixtures",
+    "--preserve-fixtures",
     is_flag=True,
     default=False,
-    help="Persist the fixture tables in the testing database, useful for debugging.",
+    help="Preserve the fixture tables in the testing database, useful for debugging.",
 )
 @click.argument("tests", nargs=-1)
 @click.pass_obj
@@ -525,7 +525,7 @@ def test(
     obj: Context,
     k: t.List[str],
     verbose: bool,
-    persist_fixtures: bool,
+    preserve_fixtures: bool,
     tests: t.List[str],
 ) -> None:
     """Run model unit tests."""
@@ -533,7 +533,7 @@ def test(
         match_patterns=k,
         tests=tests,
         verbose=verbose,
-        persist_fixtures=persist_fixtures,
+        preserve_fixtures=preserve_fixtures,
     )
     if not result.wasSuccessful():
         exit(1)

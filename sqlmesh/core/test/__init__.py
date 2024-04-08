@@ -23,7 +23,7 @@ def run_tests(
     engine_adapter: EngineAdapter,
     dialect: str | None = None,
     verbosity: int = 1,
-    persist_fixtures: bool = False,
+    preserve_fixtures: bool = False,
     stream: t.TextIO | None = None,
     default_catalog: str | None = None,
 ) -> ModelTextTestResult:
@@ -34,7 +34,7 @@ def run_tests(
         models: All models to use for expansion and mapping of physical locations.
         engine_adapter: The engine adapter to use.
         verbosity: The verbosity level.
-        persist_fixtures: Persist the fixture tables in the testing database, useful for debugging.
+        preserve_fixtures: Preserve the fixture tables in the testing database, useful for debugging.
     """
     suite = unittest.TestSuite(
         ModelTest.create_test(
@@ -45,7 +45,7 @@ def run_tests(
             dialect=dialect,
             path=metadata.path,
             default_catalog=default_catalog,
-            persist_fixtures=persist_fixtures,
+            preserve_fixtures=preserve_fixtures,
         )
         for metadata in model_test_metadata
     )
@@ -65,7 +65,7 @@ def run_model_tests(
     dialect: str | None = None,
     verbosity: int = 1,
     patterns: list[str] | None = None,
-    persist_fixtures: bool = False,
+    preserve_fixtures: bool = False,
     stream: t.TextIO | None = None,
     default_catalog: t.Optional[str] = None,
 ) -> ModelTextTestResult:
@@ -77,7 +77,7 @@ def run_model_tests(
         engine_adapter: The engine adapter to use.
         verbosity: The verbosity level.
         patterns: A list of patterns to match against.
-        persist_fixtures: Persist the fixture tables in the testing database, useful for debugging.
+        preserve_fixtures: Preserve the fixture tables in the testing database, useful for debugging.
     """
     loaded_tests = []
     for test in tests:
@@ -98,7 +98,7 @@ def run_model_tests(
         engine_adapter,
         dialect=dialect,
         verbosity=verbosity,
-        persist_fixtures=persist_fixtures,
+        preserve_fixtures=preserve_fixtures,
         stream=stream,
         default_catalog=default_catalog,
     )

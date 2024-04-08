@@ -1326,7 +1326,7 @@ class GenericContext(BaseContext, t.Generic[C]):
         match_patterns: t.Optional[t.List[str]] = None,
         tests: t.Optional[t.List[str]] = None,
         verbose: bool = False,
-        persist_fixtures: bool = False,
+        preserve_fixtures: bool = False,
         stream: t.Optional[t.TextIO] = None,
     ) -> ModelTextTestResult:
         """Discover and run model tests"""
@@ -1345,7 +1345,7 @@ class GenericContext(BaseContext, t.Generic[C]):
                     dialect=self.default_dialect,
                     verbosity=verbosity,
                     patterns=match_patterns,
-                    persist_fixtures=persist_fixtures,
+                    preserve_fixtures=preserve_fixtures,
                     default_catalog=self.default_catalog,
                 )
             else:
@@ -1366,7 +1366,7 @@ class GenericContext(BaseContext, t.Generic[C]):
                     engine_adapter=self._test_engine_adapter,
                     dialect=self.default_dialect,
                     verbosity=verbosity,
-                    persist_fixtures=persist_fixtures,
+                    preserve_fixtures=preserve_fixtures,
                     stream=stream,
                     default_catalog=self.default_catalog,
                 )

@@ -41,7 +41,7 @@ class ModelTest(unittest.TestCase):
         engine_adapter: EngineAdapter,
         dialect: str | None = None,
         path: Path | None = None,
-        persist_fixtures: bool = False,
+        preserve_fixtures: bool = False,
         default_catalog: str | None = None,
     ) -> None:
         """ModelTest encapsulates a unit test for a model.
@@ -54,7 +54,7 @@ class ModelTest(unittest.TestCase):
             engine_adapter: The engine adapter to use.
             dialect: The models' dialect, used for normalization purposes.
             path: An optional path to the test definition yaml file.
-            persist_fixtures: Persist the fixture tables in the testing database, useful for debugging.
+            preserve_fixtures: Preserve the fixture tables in the testing database, useful for debugging.
         """
         self.body = body
         self.test_name = test_name
@@ -62,7 +62,7 @@ class ModelTest(unittest.TestCase):
         self.models = models
         self.engine_adapter = engine_adapter
         self.path = path
-        self.persist_fixtures = persist_fixtures
+        self.preserve_fixtures = preserve_fixtures
         self.default_catalog = default_catalog
         self.dialect = dialect
 
@@ -125,7 +125,7 @@ class ModelTest(unittest.TestCase):
 
     def tearDown(self) -> None:
         """Drop all fixture tables."""
-        if not self.persist_fixtures:
+        if not self.preserve_fixtures:
             for table_name in self.body.get("inputs", {}):
                 self.engine_adapter.drop_view(self._fixture_table_cache[table_name])
 
@@ -207,7 +207,7 @@ class ModelTest(unittest.TestCase):
         engine_adapter: EngineAdapter,
         dialect: str | None,
         path: Path | None,
-        persist_fixtures: bool = False,
+        preserve_fixtures: bool = False,
         default_catalog: str | None = None,
     ) -> ModelTest:
         """Create a SqlModelTest or a PythonModelTest.
@@ -219,7 +219,7 @@ class ModelTest(unittest.TestCase):
             engine_adapter: The engine adapter to use.
             dialect: The models' dialect, used for normalization purposes.
             path: An optional path to the test definition yaml file.
-            persist_fixtures: Persist the fixture tables in the testing database, useful for debugging.
+            preserve_fixtures: Preserve the fixture tables in the testing database, useful for debugging.
         """
         if "model" not in body:
             _raise_error("Incomplete test, missing model name", path)
@@ -243,7 +243,7 @@ class ModelTest(unittest.TestCase):
                 engine_adapter,
                 dialect,
                 path,
-                persist_fixtures,
+                preserve_fixtures,
                 default_catalog,
             )
         if isinstance(model, PythonModel):
@@ -255,7 +255,7 @@ class ModelTest(unittest.TestCase):
                 engine_adapter,
                 dialect,
                 path,
-                persist_fixtures,
+                preserve_fixtures,
                 default_catalog,
             )
 
@@ -390,7 +390,7 @@ class PythonModelTest(ModelTest):
         engine_adapter: EngineAdapter,
         dialect: str | None = None,
         path: Path | None = None,
-        persist_fixtures: bool = False,
+        preserve_fixtures: bool = False,
         default_catalog: str | None = None,
     ) -> None:
         """PythonModelTest encapsulates a unit test for a Python model.
@@ -403,7 +403,7 @@ class PythonModelTest(ModelTest):
             engine_adapter: The engine adapter to use.
             dialect: The models' dialect, used for normalization purposes.
             path: An optional path to the test definition yaml file.
-            persist_fixtures: Persist the fixture tables in the testing database, useful for debugging.
+            preserve_fixtures: Preserve the fixture tables in the testing database, useful for debugging.
         """
         from sqlmesh.core.test.context import TestExecutionContext
 
@@ -415,7 +415,7 @@ class PythonModelTest(ModelTest):
             engine_adapter,
             dialect,
             path,
-            persist_fixtures,
+            preserve_fixtures,
             default_catalog,
         )
 
