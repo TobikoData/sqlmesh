@@ -29,6 +29,7 @@ class TestExecutionContext(ExecutionContext):
     ):
         self._engine_adapter = engine_adapter
         self._models = models
+        self._test = test
         self._default_catalog = default_catalog
         self._default_dialect = default_dialect
         self._variables = variables or {}
@@ -37,8 +38,7 @@ class TestExecutionContext(ExecutionContext):
     def _model_tables(self) -> t.Dict[str, str]:
         """Returns a mapping of model names to tables."""
         return {
-            name: test._test_fixture_table(name).sql()
-            for name, model in self._models.items()
+            name: self._test._test_fixture_table(name).sql() for name, model in self._models.items()
         }
 
     def with_variables(self, variables: t.Dict[str, t.Any]) -> TestExecutionContext:
@@ -46,6 +46,7 @@ class TestExecutionContext(ExecutionContext):
         return TestExecutionContext(
             self._engine_adapter,
             self._models,
+            self._test,
             self._default_dialect,
             self._default_catalog,
             variables=variables,
