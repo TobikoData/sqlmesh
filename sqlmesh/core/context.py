@@ -552,7 +552,9 @@ class GenericContext(BaseContext, t.Generic[C]):
         """
         if isinstance(model_or_snapshot, str):
             normalized_name = normalize_model_name(
-                model_or_snapshot, dialect=self.config.dialect, default_catalog=self.default_catalog
+                model_or_snapshot,
+                dialect=self.default_dialect,
+                default_catalog=self.default_catalog,
             )
             model = self._models.get(normalized_name)
         elif isinstance(model_or_snapshot, Snapshot):
@@ -595,7 +597,7 @@ class GenericContext(BaseContext, t.Generic[C]):
         if isinstance(node_or_snapshot, str) and not self.standalone_audits.get(node_or_snapshot):
             node_or_snapshot = normalize_model_name(
                 node_or_snapshot,
-                dialect=self.config.dialect,
+                dialect=self.default_dialect,
                 default_catalog=self.default_catalog,
             )
         fqn = node_or_snapshot if isinstance(node_or_snapshot, str) else node_or_snapshot.fqn
@@ -1339,7 +1341,7 @@ class GenericContext(BaseContext, t.Generic[C]):
                     tests=tests,
                     models=self._models,
                     engine_adapter=self._test_engine_adapter,
-                    dialect=self.config.dialect,
+                    dialect=self.default_dialect,
                     verbosity=verbosity,
                     patterns=match_patterns,
                     default_catalog=self.default_catalog,
@@ -1360,7 +1362,7 @@ class GenericContext(BaseContext, t.Generic[C]):
                     test_meta,
                     models=self._models,
                     engine_adapter=self._test_engine_adapter,
-                    dialect=self.config.dialect,
+                    dialect=self.default_dialect,
                     verbosity=verbosity,
                     stream=stream,
                     default_catalog=self.default_catalog,
@@ -1452,7 +1454,7 @@ class GenericContext(BaseContext, t.Generic[C]):
             sql,
             graph=ReferenceGraph(self.models.values()),
             metrics=self._metrics,
-            dialect=dialect or self.config.dialect,
+            dialect=dialect or self.default_dialect,
         )
 
     def migrate(self) -> None:
@@ -1783,7 +1785,7 @@ class GenericContext(BaseContext, t.Generic[C]):
             self._models,
             context_path=self.path,
             default_catalog=self.default_catalog,
-            dialect=self.config.dialect,
+            dialect=self.default_dialect,
         )
 
     def _register_notification_targets(self) -> None:
