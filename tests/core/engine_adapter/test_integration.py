@@ -2035,8 +2035,6 @@ def test_dialects(ctx: TestContext):
             None,
             {
                 "default": pd.Timestamp("2020-01-01 00:00:00+00:00"),
-                # https://github.com/pymssql/pymssql/issues/649
-                "tsql": b"\x00\x00\x00\x00\x00\x00\x00\x005\xab\x00\x00\x00\x00\x07\xe0",
                 "mysql": pd.Timestamp("2020-01-01 00:00:00"),
                 "spark": pd.Timestamp("2020-01-01 00:00:00"),
             },
