@@ -7,12 +7,12 @@ NOTE: Spark may not be used for the SQLMesh [state connection](../../reference/c
 
 ### Connection options
 
-| Option          | Description                                               |  Type  | Required |
-|-----------------|-----------------------------------------------------------|:------:|:--------:|
-| `type`          | Engine type name - must be `spark`                        | string |    Y     |
-| `config_dir`    | Value to set for `SPARK_CONFIG_DIR`                       | string |    N     |
-| `catalog`       | Spark 3.4+ Only. The catalog to use when issuing commands | string |    N     |
-| `config`        | Key/value pairs to set for the Spark Configuration.       |  dict  |    N     |
+| Option       | Description                                                                                   |  Type  | Required |
+|--------------|-----------------------------------------------------------------------------------------------|:------:|:--------:|
+| `type`       | Engine type name - must be `spark`                                                            | string |    Y     |
+| `config_dir` | Value to set for `SPARK_CONFIG_DIR`                                                           | string |    N     |
+| `catalog`    | The catalog to use when issuing commands. See [Catalog Support](#catalog-support) for details | string |    N     |
+| `config`     | Key/value pairs to set for the Spark Configuration.                                           |  dict  |    N     |
 
 ## Airflow Scheduler
 **Engine Name:** `spark`
@@ -42,3 +42,14 @@ Similarly, the `engine_operator_args` parameter can be used to override other jo
 <br><br>
 
 Each Spark job submitted by SQLMesh is a PySpark application that depends on the SQLMesh library in its Driver process (but not in Executors). This means that if the Airflow connection is configured to submit jobs in `cluster` mode as opposed to `client` mode, the user must ensure that the SQLMesh Python library is installed on each node of a cluster where Spark jobs are submitted. This is because there is no way to know in advance which specific node to which a Driver process will be scheduled. No additional configuration is required if the deploy mode is set to `client`.
+
+
+## Catalog Support
+
+SQLMesh's Spark integration is only designed/tested with a single catalog usage in mind. 
+Therefore all SQLMesh models must be defined with a single catalog.
+
+If `catalog` is not set, then the behavior changes based on spark release:
+
+* If >=3.4, then the default catalog is determined at runtime
+* If <3.4, then the default catalog is `spark_catalog` 
