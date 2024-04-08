@@ -33,7 +33,7 @@ from sqlmesh.core.snapshot import (
 )
 from sqlmesh.core.test import ModelTest
 from sqlmesh.utils import rich as srich
-from sqlmesh.utils.date import to_date, yesterday_ds
+from sqlmesh.utils.date import time_like_to_str, to_date, yesterday_ds
 
 if t.TYPE_CHECKING:
     import ipywidgets as widgets
@@ -821,22 +821,20 @@ class TerminalConsole(Console):
             if not plan_builder.override_start:
                 if is_forward_only_dev:
                     if plan.effective_from:
-                        blank_meaning = (
-                            f"to preview starting from the effective date ('{plan.effective_from}')"
-                        )
+                        blank_meaning = f"to preview starting from the effective date ('{time_like_to_str(plan.effective_from)}')"
                         default_start = plan.effective_from
                     else:
                         blank_meaning = "to preview starting from yesterday"
                         default_start = yesterday_ds()
                 else:
                     if plan.provided_start:
-                        blank_meaning = f"to backfill starting from '{plan.provided_start}'"
+                        blank_meaning = f"starting from '{time_like_to_str(plan.provided_start)}'"
                     else:
-                        blank_meaning = "to backfill from the beginning of history"
+                        blank_meaning = "from the beginning of history"
                     default_start = None
 
                 start = self._prompt(
-                    f"Enter the {backfill_or_preview} start date (eg. '1 year', '2020-01-01') or blank {blank_meaning}",
+                    f"Enter the {backfill_or_preview} start date (eg. '1 year', '2020-01-01') or blank to backfill {blank_meaning}",
                 )
                 if start:
                     plan_builder.set_start(start)
@@ -844,8 +842,12 @@ class TerminalConsole(Console):
                     plan_builder.set_start(default_start)
 
             if not plan_builder.override_end:
+                if plan.provided_end:
+                    blank_meaning = f"'{time_like_to_str(plan.provided_end)}'"
+                else:
+                    blank_meaning = "now"
                 end = self._prompt(
-                    f"Enter the {backfill_or_preview} end date (eg. '1 month ago', '2020-01-01') or blank to {backfill_or_preview} up until now",
+                    f"Enter the {backfill_or_preview} end date (eg. '1 month ago', '2020-01-01') or blank to {backfill_or_preview} up until {blank_meaning}",
                 )
                 if end:
                     plan_builder.set_end(end)
