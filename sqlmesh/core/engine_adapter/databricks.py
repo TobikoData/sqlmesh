@@ -8,6 +8,7 @@ from sqlglot import exp
 
 from sqlmesh.core.engine_adapter.shared import (
     CatalogSupport,
+    DataObject,
     InsertOverwriteStrategy,
     set_catalog,
 )
@@ -17,13 +18,17 @@ from sqlmesh.utils import classproperty
 from sqlmesh.utils.errors import SQLMeshError
 
 if t.TYPE_CHECKING:
-    from sqlmesh.core._typing import TableName
+    from sqlmesh.core._typing import SchemaName, TableName
     from sqlmesh.core.engine_adapter._typing import DF, PySparkSession
 
 logger = logging.getLogger(__name__)
 
 
-@set_catalog()
+@set_catalog(
+    {
+        "_get_data_objects": CatalogSupport.REQUIRES_SET_CATALOG,
+    }
+)
 class DatabricksEngineAdapter(SparkEngineAdapter):
     DIALECT = "databricks"
     INSERT_OVERWRITE_STRATEGY = InsertOverwriteStrategy.INSERT_OVERWRITE
@@ -162,6 +167,11 @@ class DatabricksEngineAdapter(SparkEngineAdapter):
                 super().set_current_catalog(catalog_name)
             except (Py4JError, SparkConnectGrpcException):
                 pass
+
+    def _get_data_objects(
+        self, schema_name: SchemaName, object_names: t.Optional[t.Set[str]] = None
+    ) -> t.List[DataObject]:
+        return super()._get_data_objects(schema_name, object_names=object_names)
 
     def clone_table(
         self,
