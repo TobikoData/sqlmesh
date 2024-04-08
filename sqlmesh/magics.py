@@ -782,12 +782,22 @@ class SQLMeshMagics(Magics):
         help="Only run tests that match the pattern of substring.",
     )
     @argument("--verbose", "-v", action="store_true", help="Verbose output.")
+    @argument(
+        "--preserve-fixtures",
+        action="store_true",
+        help="Preserve the fixture tables in the testing database, useful for debugging.",
+    )
     @line_magic
     @pass_sqlmesh_context
     def run_test(self, context: Context, line: str) -> None:
         """Run unit test(s)."""
         args = parse_argstring(self.run_test, line)
-        context.test(match_patterns=args.pattern, tests=args.tests, verbose=args.verbose)
+        context.test(
+            match_patterns=args.pattern,
+            tests=args.tests,
+            verbose=args.verbose,
+            preserve_fixtures=args.preserve_fixtures,
+        )
 
     @magic_arguments()
     @argument(

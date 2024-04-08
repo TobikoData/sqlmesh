@@ -512,13 +512,29 @@ def create_test(
 @cli.command("test")
 @opt.match_pattern
 @opt.verbose
+@click.option(
+    "--preserve-fixtures",
+    is_flag=True,
+    default=False,
+    help="Preserve the fixture tables in the testing database, useful for debugging.",
+)
 @click.argument("tests", nargs=-1)
 @click.pass_obj
 @error_handler
-def test(obj: Context, k: t.List[str], verbose: bool, tests: t.List[str]) -> None:
+def test(
+    obj: Context,
+    k: t.List[str],
+    verbose: bool,
+    preserve_fixtures: bool,
+    tests: t.List[str],
+) -> None:
     """Run model unit tests."""
-    # Set Python unittest verbosity level
-    result = obj.test(match_patterns=k, tests=tests, verbose=verbose)
+    result = obj.test(
+        match_patterns=k,
+        tests=tests,
+        verbose=verbose,
+        preserve_fixtures=preserve_fixtures,
+    )
     if not result.wasSuccessful():
         exit(1)
 
