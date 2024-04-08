@@ -14,6 +14,7 @@ from sqlmesh.cicd.config import CICDBotConfig
 from sqlmesh.core import constants as c
 from sqlmesh.core.config import EnvironmentSuffixTarget
 from sqlmesh.core.config.base import BaseConfig, UpdateStrategy
+from sqlmesh.core.config.common import variables_validator
 from sqlmesh.core.config.connection import (
     ConnectionConfig,
     DuckDBConnectionConfig,
@@ -72,6 +73,7 @@ class Config(BaseConfig):
         feature_flags: Feature flags to enable/disable certain features.
         plan: The plan configuration.
         migration: The migration configuration.
+        variables: A dictionary of variables that can be used in models / macros.
     """
 
     gateways: t.Dict[str, GatewayConfig] = {"": GatewayConfig()}
@@ -108,6 +110,7 @@ class Config(BaseConfig):
     feature_flags: FeatureFlag = FeatureFlag()
     plan: PlanConfig = PlanConfig()
     migration: MigrationConfig = MigrationConfig()
+    variables: t.Dict[str, t.Any] = {}
 
     _FIELD_UPDATE_STRATEGY: t.ClassVar[t.Dict[str, UpdateStrategy]] = {
         "gateways": UpdateStrategy.KEY_UPDATE,
@@ -126,6 +129,7 @@ class Config(BaseConfig):
     }
 
     _connection_config_validator = connection_config_validator
+    _variables_validator = variables_validator
 
     @field_validator("gateways", mode="before", always=True)
     @classmethod

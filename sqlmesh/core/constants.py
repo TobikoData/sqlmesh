@@ -50,3 +50,7 @@ SCHEMA_YAML = "schema.yaml"
 
 
 DEFAULT_SCHEMA = "default"
+
+SQLMESH_VARS = "__sqlmesh__vars__"
+VAR = "var"
+GATEWAY = "gateway"

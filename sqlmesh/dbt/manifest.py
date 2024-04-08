@@ -26,7 +26,12 @@ from sqlmesh.dbt.target import TargetConfig
 from sqlmesh.dbt.test import TestConfig
 from sqlmesh.dbt.util import DBT_VERSION
 from sqlmesh.utils.errors import ConfigError
-from sqlmesh.utils.jinja import MacroInfo, MacroReference, extract_call_names, nodes
+from sqlmesh.utils.jinja import (
+    MacroInfo,
+    MacroReference,
+    extract_call_names,
+    jinja_call_arg_name,
+)
 
 if t.TYPE_CHECKING:
     from dbt.contracts.graph.manifest import Macro, Manifest
@@ -360,19 +365,19 @@ class ManifestHelper:
             if call_name[0] == "config":
                 continue
             elif call_name[0] == "source":
-                args = [_jinja_call_arg_name(arg) for arg in node.args]
+                args = [jinja_call_arg_name(arg) for arg in node.args]
                 if args and all(arg for arg in args):
                     source = ".".join(args)
                     if not self._is_disabled_source(source):
                         dependencies.sources.add(source)
             elif call_name[0] == "ref":
-                args = [_jinja_call_arg_name(arg) for arg in node.args]
+                args = [jinja_call_arg_name(arg) for arg in node.args]
                 if args and all(arg for arg in args):
                     ref = ".".join(args)
                     if not self._is_disabled_ref(ref):
                         dependencies.refs.add(ref)
             elif call_name[0] == "var":
-                args = [_jinja_call_arg_name(arg) for arg in node.args]
+                args = [jinja_call_arg_name(arg) for arg in node.args]
                 if args and args[0]:
                     dependencies.variables.add(args[0])
             elif len(call_name) == 1:
@@ -475,9 +480,3 @@ def _convert_jinja_test_to_macro(test_jinja: str) -> str:
 
     macro = "{% macro test_" + test_jinja[match.span()[-1] :]
     return re.sub(ENDTEST_REGEX, "{% endmacro %}", macro)
-
-
-def _jinja_call_arg_name(node: nodes.Node) -> str:
-    if isinstance(node, nodes.Const):
-        return node.value
-    return ""

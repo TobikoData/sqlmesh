@@ -29,7 +29,7 @@ It uses the following five step approach to accomplish this:
 2. Examine the placeholder values to classify them as one of the following types:
 
     - Creation of user-defined macro variables with the `@DEF` operator (see more about [user-defined macro variables](#user-defined-variables))
-    - Macro variables, both [SQLMesh pre-defined](./macro_variables.md) and [user-defined](#User-defined-variables)
+    - Macro variables: [SQLMesh pre-defined](./macro_variables.md), [user-defined local](#local-variables), and [user-defined global](#global-variables)
     - Macro functions, both [SQLMesh's](#sqlmesh-macro-operators) and [user-defined](#user-defined-macro-functions)
 
 3. Substitute macro variable values where they are detected. In most cases, this is direct string substitution as with a templating system.
@@ -41,7 +41,74 @@ It uses the following five step approach to accomplish this:
 
 ## User-defined variables
 
-Define your own macro variables with the `@DEF` macro operator. For example, you could set the macro variable `macro_var` to the value `1` with:
+SQLMesh supports two kinds of user-defined macro variables: global and local.
+
+Global macro variables are defined in the project configuration file and can be accessed in any project model.
+
+Local macro variables are defined in a model definition and can only be accessed in that model.
+
+### Global variables
+
+Global variables are defined in the project configuration file [`variables` key](../../reference/configuration.md#variables).
+
+Global variable values may be any of the following data types or lists or dictionaries containing these types: `int`, `float`, `bool`, `str`.
+
+Access global variable values in a model definition using the `@<VAR_NAME>` macro or the `@VAR()` macro function. The latter function requires the name of the variable _in single quotes_ as the first argument and an optional default value as the second argument. The default value is a safety mechanism used if the variable name is not found in the project configuration file.
+
+For example, this SQLMesh configuration key defines six variables of different data types:
+
+```yaml linenums="1"
+variables:
+    int_var: 1
+    float_var: 2.0
+    bool_var: true
+    str_var: "cat"
+    list_var: [1, 2, 3]
+    dict_var:
+        key1: 1
+        key2: 2
+```
+
+Additionally, variables can be configured as part of the gateway, in which case individual variable values take precedence over values with the same key in the root configuration:
+```yaml linenums="1"
+gateways:
+    my_gateway:
+        variables:
+            my_var: 1
+        ...
+```
+
+A model definition could access the `int_var` value in a `WHERE` clause like this:
+
+```sql linenums="1"
+SELECT *
+FROM table
+WHERE int_variable = @INT_VAR
+```
+
+Alternatively, the same variable can be accessed by passing the variable name into the `@VAR()` macro function. Note that the variable name is in single quotes in the call `@VAR('int_var')`:
+
+```sql linenums="1"
+SELECT *
+FROM table
+WHERE int_variable = @VAR('int_var')
+```
+
+A default value can be passed as a second argument to the `@VAR()` macro function, which will be used as a fallback value if the variable is missing from the configuration file.
+
+In this example, the `WHERE` clause would render to `WHERE some_value = 0` because no variable named `missing_var` was defined in the project configuration file:
+
+```sql linenums="1"
+SELECT *
+FROM table
+WHERE some_value = @VAR('missing_var', 0)
+```
+
+A similar API is available for [Python macro functions](#accessing-global-variable-values) via the `evaluator.var` method and [Python models](../models/python_models.md#global-variables) via the `context.var` method.
+
+### Local variables
+
+Define your own local macro variables with the `@DEF` macro operator. For example, you could set the macro variable `macro_var` to the value `1` with:
 
 ```sql linenums="1"
 @DEF(macro_var, 1);
@@ -889,9 +956,9 @@ Note that in the call `@make_indicators(vehicle, [truck, bus])` none of the thre
 
 Because they are unquoted, SQLGlot will parse them all as `Column` expressions. In the places we used single quotes when building the string (`'{value}'`), they will be single-quoted in the output. In the places we did not quote them (`{string_column} = ` and `{string_column}_{value}`), they will not.
 
-#### Accessing macro variable values
+#### Accessing predefined and local variable values
 
-Both predefined and user-defined macro variables can be accessed within a Python macro function.
+[Pre-defined variables](./macro_variables.md#predefined-variables) and [user-defined local variables](#local-variables) can be accessed within the macro's body via the `evaluator.locals` attribute.
 
 The first argument to every macro function, the macro evaluation context `evaluator`, contains macro variable values in its `locals` attribute. `evaluator.locals` is a dictionary whose key:value pairs are macro variables names and the associated values.
 
@@ -913,9 +980,9 @@ SELECT
 FROM table
 ```
 
-The same approach works for user-defined macro variables, where the key `"execution_epoch"` would be replaced with the name of the user-defined variable to be accessed.
+The same approach works for user-defined local macro variables, where the key `"execution_epoch"` would be replaced with the name of the user-defined variable to be accessed.
 
-One downside of that approach to accessing user-defined variables is that the name of the variable is hard-coded into the function. A more flexible approach is to pass the name of the macro variable as a function argument:
+One downside of that approach to accessing user-defined local variables is that the name of the variable is hard-coded into the function. A more flexible approach is to pass the name of the local macro variable as a function argument:
 
 ```python linenums="1"
 from sqlmesh import macro
@@ -925,12 +992,12 @@ def get_macro_var(evaluator, macro_var):
     return evaluator.locals[macro_var]
 ```
 
-We could define a macro variable `my_macro_var` with a value of 1 and pass it to the `get_macro_var` function like this:
+We could define a local macro variable `my_macro_var` with a value of 1 and pass it to the `get_macro_var` function like this:
 
 ```sql linenums="1"
 MODEL (...);
 
-@DEF(my_macro_var, 1); -- Define macro variable 'my_macro_var'
+@DEF(my_macro_var, 1); -- Define local macro variable 'my_macro_var'
 
 SELECT
   @get_macro_var('my_macro_var') as macro_var_value -- Access my_macro_var value from Python macro function
@@ -945,51 +1012,21 @@ SELECT
 FROM table
 ```
 
-#### Using SQLGlot expressions
+#### Accessing global variable values
 
-SQLMesh automatically parses strings returned by Python macro functions into [SQLGlot](https://github.com/tobymao/sqlglot) expressions so they can be incorporated into the model query's semantic representation. Functions can also return SQLGlot expressions directly.
+[User-defined global variables](#global-variables) can be accessed within the macro's body using the `evaluator.var` method.
 
-For example, consider a macro function that uses the `BETWEEN` operator in the predicate of a `WHERE` clause. A function returning the predicate as a string might look like this, where the function arguments are substituted into a Python f-string:
-
-```python linenums="1"
-from sqlmesh import macro
-
-@macro()
-def between_where(evaluator, column_name, low_val, high_val):
-    return f"{column_name} BETWEEN {low_val} AND {high_val}"
-```
-
-The function could then be called in a query:
-
-```sql linenums="1"
-SELECT
-  a
-FROM table
-WHERE @between_where(a, 1, 3)
-```
-
-And it would render to:
-
-```sql linenums="1"
-SELECT
-  a
-FROM table
-WHERE a BETWEEN 1 and 3
-```
-
-Alternatively, the function could return a [SQLGLot expression](https://github.com/tobymao/sqlglot/blob/main/sqlglot/expressions.py) equivalent to that string by using SQLGlot's expression methods for building semantic representations:
+For example:
 
 ```python linenums="1"
-from sqlmesh import macro
+from sqlmesh.core.macros import macro
 
 @macro()
-def between_where(evaluator, column, low_val, high_val):
-    return column.between(low_val, high_val)
+def some_macro(evaluator):
+    var_value = evaluator.var("<var_name>")
+    another_var_value = evaluator.var("<another_var_name>", "default_value")
+    ...
 ```
-
-The methods are available because the `column` argument is parsed as a SQLGlot [Column expression](https://sqlglot.com/sqlglot/expressions.html#Column) when the macro function is executed.
-
-Column expressions are sub-classes of the [Condition class](https://sqlglot.com/sqlglot/expressions.html#Condition), so they have builder methods like [`between`](https://sqlglot.com/sqlglot/expressions.html#Condition.between) and [`like`](https://sqlglot.com/sqlglot/expressions.html#Condition.like).
 
 #### Accessing model schemas
 
@@ -1043,7 +1080,7 @@ Having access to the schema of an upstream model can be useful for various reaso
 
 Thus, leveraging `columns_to_types` can also enable one to write code according to the [DRY](https://en.wikipedia.org/wiki/Don%27t_repeat_yourself) principle, as they can implement these transformations in a single function instead of duplicating them in each model of interest.
 
-### Accessing snapshots
+#### Accessing snapshots
 
 After a SQLMesh project has been successfully loaded, its snapshots can be accessed in Python macro functions and Python models that generate SQL through the `get_snapshot` method of `MacroEvaluator`.
 
@@ -1060,6 +1097,53 @@ def some_macro(evaluator):
         ...
     ...
 ```
+
+#### Using SQLGlot expressions
+
+SQLMesh automatically parses strings returned by Python macro functions into [SQLGlot](https://github.com/tobymao/sqlglot) expressions so they can be incorporated into the model query's semantic representation. Functions can also return SQLGlot expressions directly.
+
+For example, consider a macro function that uses the `BETWEEN` operator in the predicate of a `WHERE` clause. A function returning the predicate as a string might look like this, where the function arguments are substituted into a Python f-string:
+
+```python linenums="1"
+from sqlmesh import macro
+
+@macro()
+def between_where(evaluator, column_name, low_val, high_val):
+    return f"{column_name} BETWEEN {low_val} AND {high_val}"
+```
+
+The function could then be called in a query:
+
+```sql linenums="1"
+SELECT
+  a
+FROM table
+WHERE @between_where(a, 1, 3)
+```
+
+And it would render to:
+
+```sql linenums="1"
+SELECT
+  a
+FROM table
+WHERE a BETWEEN 1 and 3
+```
+
+Alternatively, the function could return a [SQLGLot expression](https://github.com/tobymao/sqlglot/blob/main/sqlglot/expressions.py) equivalent to that string by using SQLGlot's expression methods for building semantic representations:
+
+```python linenums="1"
+from sqlmesh import macro
+
+@macro()
+def between_where(evaluator, column, low_val, high_val):
+    return column.between(low_val, high_val)
+```
+
+The methods are available because the `column` argument is parsed as a SQLGlot [Column expression](https://sqlglot.com/sqlglot/expressions.html#Column) when the macro function is executed.
+
+Column expressions are sub-classes of the [Condition class](https://sqlglot.com/sqlglot/expressions.html#Condition), so they have builder methods like [`between`](https://sqlglot.com/sqlglot/expressions.html#Condition.between) and [`like`](https://sqlglot.com/sqlglot/expressions.html#Condition.like).
+
 
 ## Mixing macro systems
 

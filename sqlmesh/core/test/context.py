@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import typing as t
+from functools import cached_property
 
 from sqlmesh import Model
 from sqlmesh.core.context import ExecutionContext
@@ -24,16 +25,29 @@ class TestExecutionContext(ExecutionContext):
         test: ModelTest,
         default_dialect: t.Optional[str] = None,
         default_catalog: t.Optional[str] = None,
+        variables: t.Optional[t.Dict[str, t.Any]] = None,
     ):
         self._engine_adapter = engine_adapter
+        self._models = models
+        self._test = test
         self._default_catalog = default_catalog
         self._default_dialect = default_dialect
+        self._variables = variables or {}
 
-        self.__model_tables = {
-            name: test._test_fixture_table(name).sql() for name, model in models.items()
-        }
-
-    @property
+    @cached_property
     def _model_tables(self) -> t.Dict[str, str]:
         """Returns a mapping of model names to tables."""
-        return self.__model_tables
+        return {
+            name: self._test._test_fixture_table(name).sql() for name, model in self._models.items()
+        }
+
+    def with_variables(self, variables: t.Dict[str, t.Any]) -> TestExecutionContext:
+        """Returns a new TestExecutionContext with additional variables."""
+        return TestExecutionContext(
+            self._engine_adapter,
+            self._models,
+            self._test,
+            self._default_dialect,
+            self._default_catalog,
+            variables=variables,
+        )

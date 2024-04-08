@@ -14,6 +14,7 @@ from sqlglot.executor.python import Python
 from sqlglot.helper import csv, ensure_collection
 from sqlglot.schema import MappingSchema
 
+from sqlmesh.core import constants as c
 from sqlmesh.core.dialect import (
     SQLMESH_MACRO_PREFIX,
     MacroDef,
@@ -171,13 +172,14 @@ class MacroEvaluator:
 
             if isinstance(node, MacroVar):
                 changed = True
-                if node.name not in self.locals:
+                variables = self.locals.get(c.SQLMESH_VARS, {})
+                if node.name not in self.locals and node.name.lower() not in variables:
                     if not isinstance(node.parent, StagedFilePath):
                         raise SQLMeshError(f"Macro variable '{node.name}' is undefined.")
 
                     return node
 
-                value = self.locals[node.name]
+                value = self.locals.get(node.name, variables.get(node.name.lower()))
                 if isinstance(value, list):
                     return exp.convert(
                         tuple(
@@ -374,6 +376,15 @@ class MacroEvaluator:
                 " You can gate these calls by checking in Python: evaluator.runtime_stage != 'loading' or SQL: @runtime_stage <> 'loading'."
             )
         return self.locals["engine_adapter"]
+
+    @property
+    def gateway(self) -> t.Optional[str]:
+        """Returns the gateway name."""
+        return self.var(c.GATEWAY)
+
+    def var(self, var_name: str, default: t.Optional[t.Any] = None) -> t.Optional[t.Any]:
+        """Returns the value of the specified variable, or the default value if it doesn't exist."""
+        return (self.locals.get(c.SQLMESH_VARS) or {}).get(var_name.lower(), default)
 
 
 class macro(registry_decorator):
@@ -891,6 +902,17 @@ def or_(evaluator: MacroEvaluator, *expressions: t.Optional[exp.Expression]) -> 
         return exp.true()
 
     return exp.or_(*conditions, dialect=evaluator.dialect)
+
+
+@macro("VAR")
+def var(
+    evaluator: MacroEvaluator, var_name: exp.Expression, default: t.Optional[exp.Expression] = None
+) -> exp.Expression:
+    """Returns the value of a variable or the default value if the variable is not set."""
+    if not var_name.is_string:
+        raise SQLMeshError(f"Invalid variable name '{var_name.sql()}'. Expected a string literal.")
+
+    return exp.convert(evaluator.var(var_name.this, default))
 
 
 def normalize_macro_name(name: str) -> str:

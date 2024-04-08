@@ -1,5 +1,6 @@
 import json
 import logging
+import typing as t
 from datetime import date
 from pathlib import Path
 from unittest.mock import patch
@@ -10,10 +11,11 @@ from pytest_mock.plugin import MockerFixture
 from sqlglot import exp, parse_one
 from sqlglot.schema import MappingSchema
 
-import sqlmesh.core.dialect as d
+from sqlmesh.core import constants as c
+from sqlmesh.core import dialect as d
 from sqlmesh.core.config import Config
 from sqlmesh.core.config.model import ModelDefaultsConfig
-from sqlmesh.core.context import Context
+from sqlmesh.core.context import Context, ExecutionContext
 from sqlmesh.core.dialect import parse
 from sqlmesh.core.macros import MacroEvaluator, macro
 from sqlmesh.core.model import (
@@ -35,7 +37,7 @@ from sqlmesh.core.model.kind import _model_kind_validator
 from sqlmesh.core.model.seed import CsvSettings
 from sqlmesh.core.node import IntervalUnit, _Node
 from sqlmesh.core.snapshot import SnapshotChangeCategory
-from sqlmesh.utils.date import to_datetime, to_timestamp
+from sqlmesh.utils.date import TimeLike, to_datetime, to_ds, to_timestamp
 from sqlmesh.utils.errors import ConfigError, SQLMeshError
 from sqlmesh.utils.jinja import JinjaMacroRegistry, MacroInfo
 from sqlmesh.utils.metaprogramming import Executable
@@ -3407,3 +3409,276 @@ def test_end_no_start():
     with pytest.raises(ConfigError, match="Must define a start date if an end date is defined"):
         load_sql_based_model(expressions)
     load_sql_based_model(expressions, defaults={"start": "2023-01-01"})
+
+
+def test_variables():
+    @macro()
+    def test_macro_var(evaluator) -> exp.Expression:
+        return exp.convert(evaluator.var("TEST_VAR_D") + 10)
+
+    expressions = parse(
+        """
+        MODEL(
+            name test_model,
+            kind FULL,
+        );
+
+        SELECT @VAR('TEST_VAR_A') AS a, @VAR('test_var_b', 'default_value') AS b, @VAR('test_var_c') AS c, @TEST_MACRO_VAR() AS d;
+    """,
+        default_dialect="bigquery",
+    )
+
+    model = load_sql_based_model(
+        expressions, variables={"test_var_a": "test_value", "test_var_d": 1, "test_var_unused": 2}
+    )
+    assert model.python_env[c.SQLMESH_VARS] == Executable.value(
+        {"test_var_a": "test_value", "test_var_d": 1}
+    )
+    assert (
+        model.render_query().sql(dialect="bigquery")
+        == "SELECT 'test_value' AS `a`, 'default_value' AS `b`, NULL AS `c`, 11 AS `d`"
+    )
+
+    with pytest.raises(ConfigError, match=r"Macro VAR requires at least one argument.*"):
+        expressions = parse(
+            """
+            MODEL(
+                name test_model,
+            );
+
+            SELECT @VAR() AS a;
+        """,
+            default_dialect="bigquery",
+        )
+        load_sql_based_model(expressions)
+
+    with pytest.raises(
+        ConfigError, match=r"The variable name must be a string literal, '123' was given instead.*"
+    ):
+        expressions = parse(
+            """
+            MODEL(
+                name test_model,
+            );
+
+            SELECT @VAR(123) AS a;
+        """,
+            default_dialect="bigquery",
+        )
+        load_sql_based_model(expressions)
+
+    with pytest.raises(
+        ConfigError,
+        match=r"The variable name must be a string literal, '@VAR_NAME' was given instead.*",
+    ):
+        expressions = parse(
+            """
+            MODEL(
+                name test_model,
+            );
+
+            @DEF(VAR_NAME, 'var_name');
+            SELECT @VAR(@VAR_NAME) AS a;
+        """,
+            default_dialect="bigquery",
+        )
+        load_sql_based_model(expressions)
+
+
+def test_named_variable_macros() -> None:
+    model = load_sql_based_model(
+        parse(
+            """
+        MODEL(name sushi.test_gateway_macro);
+        @DEF(overridden_var, 'overridden_value');
+        SELECT @gateway AS gateway, @TEST_VAR_A AS test_var_a, @overridden_var AS overridden_var
+        """
+        ),
+        variables={
+            c.GATEWAY: "in_memory",
+            "test_var_a": "test_value",
+            "test_var_unused": "unused",
+            "overridden_var": "initial_value",
+        },
+    )
+
+    assert model.python_env[c.SQLMESH_VARS] == Executable.value(
+        {c.GATEWAY: "in_memory", "test_var_a": "test_value", "overridden_var": "initial_value"}
+    )
+    assert (
+        model.render_query_or_raise().sql()
+        == "SELECT 'in_memory' AS \"gateway\", 'test_value' AS \"test_var_a\", 'overridden_value' AS \"overridden_var\""
+    )
+
+
+def test_variables_jinja():
+    expressions = parse(
+        """
+        MODEL(
+            name test_model,
+            kind FULL,
+        );
+
+        JINJA_QUERY_BEGIN;
+        SELECT '{{ var('TEST_VAR_A') }}' AS a, '{{ var('test_var_b', 'default_value') }}' AS b, '{{ var('test_var_c') }}' AS c, {{ test_macro_var() }} AS d;
+        JINJA_END;
+    """,
+        default_dialect="bigquery",
+    )
+
+    jinja_macros = JinjaMacroRegistry(
+        root_macros={
+            "test_macro_var": MacroInfo(
+                definition="{% macro test_macro_var() %}{{ var('test_var_d') + 10 }}{% endmacro %}",
+                depends_on=[],
+            )
+        },
+    )
+
+    model = load_sql_based_model(
+        expressions,
+        variables={"test_var_a": "test_value", "test_var_d": 1, "test_var_unused": 2},
+        jinja_macros=jinja_macros,
+    )
+    assert model.python_env[c.SQLMESH_VARS] == Executable.value(
+        {"test_var_a": "test_value", "test_var_d": 1}
+    )
+    assert (
+        model.render_query().sql(dialect="bigquery")
+        == "SELECT 'test_value' AS `a`, 'default_value' AS `b`, 'None' AS `c`, 11 AS `d`"
+    )
+
+
+def test_variables_python_model(mocker: MockerFixture) -> None:
+    @model(
+        "test_variables_python_model",
+        kind="full",
+        columns={"a": "string", "b": "string", "c": "string"},
+    )
+    def model_with_variables(context, **kwargs):
+        return pd.DataFrame(
+            [
+                {
+                    "a": context.var("TEST_VAR_A"),
+                    "b": context.var("test_var_b", "default_value"),
+                    "c": context.var("test_var_c"),
+                }
+            ]
+        )
+
+    python_model = model.get_registry()["test_variables_python_model"].model(
+        module_path=Path("."),
+        path=Path("."),
+        variables={"test_var_a": "test_value", "test_var_unused": 2},
+    )
+
+    assert python_model.python_env[c.SQLMESH_VARS] == Executable.value({"test_var_a": "test_value"})
+
+    context = ExecutionContext(mocker.Mock(), {}, None, None)
+    df = list(python_model.render(context=context))[0]
+    assert df.to_dict(orient="records") == [{"a": "test_value", "b": "default_value", "c": None}]
+
+
+def test_named_variables_python_model(mocker: MockerFixture) -> None:
+    @model(
+        "test_named_variables_python_model",
+        kind="full",
+        columns={"a": "string", "b": "string", "c": "string"},
+    )
+    def model_with_named_variables(
+        context, start: TimeLike, test_var_a: str, test_var_b: t.Optional[str] = None, **kwargs
+    ):
+        return pd.DataFrame([{"a": test_var_a, "b": test_var_b, "start": start.strftime("%Y-%m-%d")}])  # type: ignore
+
+    python_model = model.get_registry()["test_named_variables_python_model"].model(
+        module_path=Path("."),
+        path=Path("."),
+        # Passing `start` in variables to make sure that built-in arguments can't be overridden.
+        variables={
+            "test_var_a": "test_value",
+            "test_var_unused": 2,
+            "start": "2024-01-01",
+        },
+    )
+
+    assert python_model.python_env[c.SQLMESH_VARS] == Executable.value(
+        {"test_var_a": "test_value", "start": "2024-01-01"}
+    )
+
+    context = ExecutionContext(mocker.Mock(), {}, None, None)
+    df = list(python_model.render(context=context))[0]
+    assert df.to_dict(orient="records") == [{"a": "test_value", "b": None, "start": to_ds(c.EPOCH)}]
+
+
+def test_gateway_macro() -> None:
+    model = load_sql_based_model(
+        parse(
+            """
+        MODEL(name sushi.test_gateway_macro);
+        SELECT @gateway AS gateway
+        """
+        ),
+        variables={c.GATEWAY: "in_memory"},
+    )
+
+    assert model.python_env[c.SQLMESH_VARS] == Executable.value({c.GATEWAY: "in_memory"})
+    assert model.render_query_or_raise().sql() == "SELECT 'in_memory' AS \"gateway\""
+
+    @macro()
+    def macro_uses_gateway(evaluator) -> exp.Expression:
+        return exp.convert(evaluator.gateway + "_from_macro")
+
+    model = load_sql_based_model(
+        parse(
+            """
+        MODEL(name sushi.test_gateway_macro);
+        SELECT @macro_uses_gateway() AS gateway_from_macro
+        """
+        ),
+        variables={c.GATEWAY: "in_memory"},
+    )
+
+    assert model.python_env[c.SQLMESH_VARS] == Executable.value({c.GATEWAY: "in_memory"})
+    assert (
+        model.render_query_or_raise().sql()
+        == "SELECT 'in_memory_from_macro' AS \"gateway_from_macro\""
+    )
+
+
+def test_gateway_macro_jinja() -> None:
+    model = load_sql_based_model(
+        parse(
+            """
+        MODEL(name sushi.test_gateway_macro_jinja);
+        JINJA_QUERY_BEGIN;
+        SELECT '{{ gateway() }}' AS gateway_jinja;
+        JINJA_END;
+        """
+        ),
+        variables={c.GATEWAY: "in_memory"},
+    )
+
+    assert model.python_env[c.SQLMESH_VARS] == Executable.value({c.GATEWAY: "in_memory"})
+    assert model.render_query_or_raise().sql() == "SELECT 'in_memory' AS \"gateway_jinja\""
+
+
+def test_gateway_python_model(mocker: MockerFixture) -> None:
+    @model(
+        "test_gateway_python_model",
+        kind="full",
+        columns={"gateway_python": "string"},
+    )
+    def model_with_variables(context, **kwargs):
+        return pd.DataFrame([{"gateway_python": context.gateway + "_from_python"}])
+
+    python_model = model.get_registry()["test_gateway_python_model"].model(
+        module_path=Path("."),
+        path=Path("."),
+        variables={c.GATEWAY: "in_memory"},
+    )
+
+    assert python_model.python_env[c.SQLMESH_VARS] == Executable.value({c.GATEWAY: "in_memory"})
+
+    context = ExecutionContext(mocker.Mock(), {}, None, None)
+    df = list(python_model.render(context=context))[0]
+    assert df.to_dict(orient="records") == [{"gateway_python": "in_memory_from_python"}]
