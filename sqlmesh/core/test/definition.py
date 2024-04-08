@@ -122,8 +122,10 @@ class ModelTest(unittest.TestCase):
 
     def tearDown(self) -> None:
         """Drop all fixture tables."""
-        for table in self._fixture_table_cache.values():
-            self.engine_adapter.drop_view(table)
+        for table_name in self.body.get("inputs", {}):
+            table = self._fixture_table_cache.get(table_name)
+            if table:
+                self.engine_adapter.drop_view(table)
 
     def assert_equal(
         self,
