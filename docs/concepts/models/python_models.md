@@ -144,11 +144,29 @@ def execute(
 ```
 
 
-## Variables
+## Global variables
 
-[User-defined variables](../../reference/configuration.md#variables) variables can be accessed from within the Python model using the `context.var` method. For example:
+[User-defined global variables](../../reference/configuration.md#variables) can be accessed from within the Python model using function arguments, where the name of the argument represents a variable key. For example:
 
-```python linenums="1"
+```python linenums="1" hl_lines="9"
+@model(
+    "my_model.name",
+)
+def execute(
+    context: ExecutionContext,
+    start: datetime,
+    end: datetime,
+    execution_time: datetime,
+    my_var: Optional[str] = None,
+    **kwargs: t.Any,
+) -> pd.DataFrame:
+    ...
+```
+
+Make sure to assign a default value to such arguments if you anticipate a missing variable key. Please note that arguments must be specified explicitly; in other words, variables can be accessed using `kwargs`.
+
+Alternatively, variables can be accessed using the `context.var` method. For example:
+```python linenums="1" hl_lines="11 12"
 @model(
     "my_model.name",
 )
@@ -163,8 +181,6 @@ def execute(
     another_var_value = context.var("<another_var_name>", "default_value")
     ...
 ```
-
-
 ## Examples
 ### Basic
 The following is an example of a Python model returning a static Pandas DataFrame.

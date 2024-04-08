@@ -53,6 +53,46 @@ JINJA_END;
 
 ## User-defined variables
 
+SQLMesh supports two kinds of user-defined macro variables: global and local.
+
+Global macro variables are defined in the project configuration file and can be accessed in any project model.
+
+Local macro variables are defined in a model definition and can only be accessed in that model.
+
+### Global variables
+
+Learn more about defining global variables in the [SQLMesh macros documentation](./sqlmesh_macros.md#global-variables).
+
+Access global variable values in a model definition using the `{{ var() }}` jinja function. The function requires the name of the variable _in single quotes_ as the first argument and an optional default value as the second argument. The default value is a safety mechanism used if the variable name is not found in the project configuration file.
+
+For example, a model would access a global variable named `int_var` like this:
+
+```sql linenums="1"
+JINJA_QUERY_BEGIN;
+
+SELECT *
+FROM table
+WHERE int_variable = {{ var('int_var') }};
+
+JINJA_END;
+```
+
+A default value can be passed as a second argument to the `{{ var() }}` jinja function, which will be used as a fallback value if the variable is missing from the configuration file.
+
+In this example, the `WHERE` clause would render to `WHERE some_value = 0` if no variable named `missing_var` was defined in the project configuration file:
+
+```sql linenums="1"
+JINJA_QUERY_BEGIN;
+
+SELECT *
+FROM table
+WHERE some_value = {{ var('missing_var', 0) }};
+
+JINJA_END;
+```
+
+### Local variables
+
 Define your own variables with the Jinja statement `{% set ... %}`. For example, we could specify the name of the `num_orders` column in the `sqlmesh_example.full_model` like this:
 
 ```sql linenums="1"

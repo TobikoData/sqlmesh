@@ -25,7 +25,7 @@ class GatewayConfig(BaseConfig):
         state_schema: Schema name to use for the state tables. If None or empty string are provided
             then no schema name is used and therefore the default schema defined for the connection will be used
         variables: A dictionary of gateway-specific variables that can be used in models / macros. This overrides
-            config-level variables by key.
+            root-level variables by key.
     """
 
     connection: t.Optional[SerializableConnectionConfig] = None
