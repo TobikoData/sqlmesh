@@ -19,6 +19,7 @@ from sqlglot.helper import ensure_list
 
 from sqlmesh.core.config import DuckDBConnectionConfig
 from sqlmesh.core.context import Context
+from sqlmesh.core.engine_adapter import SparkEngineAdapter
 from sqlmesh.core.engine_adapter.base import EngineAdapter
 from sqlmesh.core.macros import macro
 from sqlmesh.core.model import model
@@ -336,11 +337,17 @@ def make_mocked_engine_adapter(mocker: MockerFixture) -> t.Callable:
         cursor_mock = mocker.Mock()
         connection_mock.cursor.return_value = cursor_mock
         cursor_mock.connection.return_value = connection_mock
-        return klass(
+        adapter = klass(
             lambda: connection_mock,
             dialect=dialect or klass.DIALECT,
             register_comments=register_comments,
         )
+        if isinstance(adapter, SparkEngineAdapter):
+            mocker.patch(
+                "sqlmesh.core.engine_adapter.spark.SparkEngineAdapter._spark_major_minor",
+                new_callable=PropertyMock(return_value=(3, 5)),
+            )
+        return adapter
 
     return _make_function
 
