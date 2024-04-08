@@ -344,8 +344,8 @@ def make_mocked_engine_adapter(mocker: MockerFixture) -> t.Callable:
         )
         if isinstance(adapter, SparkEngineAdapter):
             mocker.patch(
-                "sqlmesh.core.engine_adapter.spark.SparkEngineAdapter._spark_semver",
-                new_callable=PropertyMock(return_value=(3, 5, 0)),
+                "sqlmesh.core.engine_adapter.spark.SparkEngineAdapter._spark_major_minor",
+                new_callable=PropertyMock(return_value=(3, 5)),
             )
         return adapter
 

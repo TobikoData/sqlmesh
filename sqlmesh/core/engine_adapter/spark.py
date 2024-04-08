@@ -330,23 +330,19 @@ class SparkEngineAdapter(GetCurrentCatalogFromFunctionMixin, HiveMetastoreTableP
         ]
 
     @property
-    def _spark_semver(self) -> t.Tuple[int, int, int]:
-        return tuple(int(x) for x in self.spark.version.split(".")[:3])  # type: ignore
+    def _spark_major_minor(self) -> t.Tuple[int, int]:
+        return tuple(int(x) for x in self.spark.version.split(".")[:2])  # type: ignore
 
     def get_current_catalog(self) -> t.Optional[str]:
-        # Spark 3.4+ API
         if self._use_spark_session:
-            major, minor, _ = self._spark_semver
-            if major > 3 or (major == 3 and minor >= 4):
+            if self._spark_major_minor >= (3, 4):
                 return self.spark.catalog.currentCatalog()
             else:
                 return self._default_catalog or "spark_catalog"
         return super().get_current_catalog()
 
     def set_current_catalog(self, catalog_name: str) -> None:
-        # Spark 3.4+ API
-        major, minor, _ = self._spark_semver
-        if major > 3 or (major == 3 and minor >= 4):
+        if self._spark_major_minor >= (3, 4):
             return self.spark.catalog.setCurrentCatalog(catalog_name)
         current_catalog = self.get_current_catalog()
         if current_catalog != catalog_name:
