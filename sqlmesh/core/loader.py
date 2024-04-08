@@ -269,6 +269,7 @@ class SqlMeshLoader(Loader):
         models: UniqueKeyDict[str, Model] = UniqueKeyDict("models")
         for context_path, config in self._context.configs.items():
             cache = SqlMeshLoader._Cache(self, context_path)
+            variables = self._variables(config)
 
             for path in self._glob_paths(context_path / c.MODELS, config=config, extension=".sql"):
                 if not os.path.getsize(path):
@@ -299,7 +300,7 @@ class SqlMeshLoader(Loader):
                         physical_schema_override=config.physical_schema_override,
                         project=config.project,
                         default_catalog=self._context.default_catalog,
-                        variables=self._variables(config),
+                        variables=variables,
                     )
 
                 model = cache.get_or_load_model(path, _load)
@@ -319,6 +320,7 @@ class SqlMeshLoader(Loader):
         registered: t.Set[str] = set()
 
         for context_path, config in self._context.configs.items():
+            variables = self._variables(config)
             for path in self._glob_paths(context_path / c.MODELS, config=config, extension=".py"):
                 if not os.path.getsize(path):
                     continue
@@ -337,7 +339,7 @@ class SqlMeshLoader(Loader):
                         physical_schema_override=config.physical_schema_override,
                         project=config.project,
                         default_catalog=self._context.default_catalog,
-                        variables=self._variables(config),
+                        variables=variables,
                     )
                     models[model.fqn] = model
 
@@ -349,6 +351,7 @@ class SqlMeshLoader(Loader):
         """Loads all the model audits."""
         audits_by_name: UniqueKeyDict[str, Audit] = UniqueKeyDict("audits")
         for context_path, config in self._context.configs.items():
+            variables = self._variables(config)
             for path in self._glob_paths(context_path / c.AUDITS, config=config, extension=".sql"):
                 self._track_file(path)
                 with open(path, "r", encoding="utf-8") as file:
@@ -361,7 +364,7 @@ class SqlMeshLoader(Loader):
                         jinja_macros=jinja_macros,
                         dialect=config.model_defaults.dialect,
                         default_catalog=self._context.default_catalog,
-                        variables=self._variables(config),
+                        variables=variables,
                     )
                     for audit in audits:
                         audits_by_name[audit.name] = audit
@@ -410,9 +413,16 @@ class SqlMeshLoader(Loader):
                 yield filepath
 
     def _variables(self, config: Config) -> t.Dict[str, t.Any]:
+        gateway_name = self._context.gateway or self._context.config.default_gateway_name
+        try:
+            gateway = config.get_gateway(gateway_name)
+        except ConfigError:
+            logger.warning("Gateway '%s' not found in project '%s'", gateway_name, config.project)
+            gateway = None
         return {
-            c.GATEWAY: self._context.gateway or self._context.config.default_gateway_name,
             **config.variables,
+            **(gateway.variables if gateway else {}),
+            c.GATEWAY: gateway_name,
         }
 
     class _Cache:

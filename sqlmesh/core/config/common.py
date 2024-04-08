@@ -61,3 +61,28 @@ http_headers_validator = field_validator(
     mode="before",
     check_fields=False,
 )(_http_headers_validator)
+
+
+def _variables_validator(value: t.Dict[str, t.Any]) -> t.Dict[str, t.Any]:
+    if not isinstance(value, dict):
+        raise ConfigError(f"Variables must be a dictionary, not {type(value)}")
+
+    def _validate_type(v: t.Any) -> None:
+        if isinstance(v, list):
+            for item in v:
+                _validate_type(item)
+        elif isinstance(v, dict):
+            for item in v.values():
+                _validate_type(item)
+        elif v is not None and not isinstance(v, (str, int, float, bool)):
+            raise ConfigError(f"Unsupported variable value type: {type(v)}")
+
+    _validate_type(value)
+    return {k.lower(): v for k, v in value.items()}
+
+
+variables_validator = field_validator(
+    "variables",
+    mode="before",
+    check_fields=False,
+)(_variables_validator)

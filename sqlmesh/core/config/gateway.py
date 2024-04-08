@@ -4,6 +4,7 @@ import typing as t
 
 from sqlmesh.core import constants as c
 from sqlmesh.core.config.base import BaseConfig
+from sqlmesh.core.config.common import variables_validator
 from sqlmesh.core.config.connection import (
     SerializableConnectionConfig,
     connection_config_validator,
@@ -23,6 +24,8 @@ class GatewayConfig(BaseConfig):
         scheduler: The scheduler configuration.
         state_schema: Schema name to use for the state tables. If None or empty string are provided
             then no schema name is used and therefore the default schema defined for the connection will be used
+        variables: A dictionary of gateway-specific variables that can be used in models / macros. This overrides
+            config-level variables by key.
     """
 
     connection: t.Optional[SerializableConnectionConfig] = None
@@ -30,5 +33,7 @@ class GatewayConfig(BaseConfig):
     test_connection: t.Optional[SerializableConnectionConfig] = None
     scheduler: t.Optional[SchedulerConfig] = None
     state_schema: t.Optional[str] = c.SQLMESH
+    variables: t.Dict[str, t.Any] = {}
 
     _connection_config_validator = connection_config_validator
+    _variables_validator = variables_validator

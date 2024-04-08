@@ -473,8 +473,14 @@ def test_variables():
         "list_var": [1, 2, 3],
         "dict_var": {"a": "test_value", "b": 2},
     }
-    config = Config(variables=variables)
+    gateway_variables = {
+        "UPPERCASE_VAR": 2,
+    }
+    config = Config(
+        variables=variables, gateways={"local": GatewayConfig(variables=gateway_variables)}
+    )
     assert config.variables == variables
+    assert config.get_gateway("local").variables == {"uppercase_var": 2}
 
     with pytest.raises(
         ConfigError, match="Unsupported variable value type: <class 'sqlglot.expressions.Column'>"

@@ -14,6 +14,7 @@ from sqlmesh.cicd.config import CICDBotConfig
 from sqlmesh.core import constants as c
 from sqlmesh.core.config import EnvironmentSuffixTarget
 from sqlmesh.core.config.base import BaseConfig, UpdateStrategy
+from sqlmesh.core.config.common import variables_validator
 from sqlmesh.core.config.connection import (
     ConnectionConfig,
     DuckDBConnectionConfig,
@@ -128,6 +129,7 @@ class Config(BaseConfig):
     }
 
     _connection_config_validator = connection_config_validator
+    _variables_validator = variables_validator
 
     @field_validator("gateways", mode="before", always=True)
     @classmethod
@@ -151,25 +153,6 @@ class Config(BaseConfig):
             except re.error:
                 raise ConfigError(f"`{k}` is not a valid regular expression.")
         return compiled_regexes
-
-    @field_validator("variables", mode="before")
-    @classmethod
-    def _validate_variables(cls, value: t.Dict[str, t.Any]) -> t.Dict[str, t.Any]:
-        if not isinstance(value, dict):
-            raise ConfigError(f"Variables must be a dictionary, not {type(value)}")
-
-        def _validate_type(v: t.Any) -> None:
-            if isinstance(v, list):
-                for item in v:
-                    _validate_type(item)
-            elif isinstance(v, dict):
-                for item in v.values():
-                    _validate_type(item)
-            elif v is not None and not isinstance(v, (str, int, float, bool)):
-                raise ConfigError(f"Unsupported variable value type: {type(v)}")
-
-        _validate_type(value)
-        return {k.lower(): v for k, v in value.items()}
 
     @model_validator(mode="before")
     @model_validator_v1_args
