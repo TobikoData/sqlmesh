@@ -573,11 +573,11 @@ def _create_df(
     rows: t.List[Row], columns: t.Optional[t.Collection] = None, partial: t.Optional[bool] = False
 ) -> pd.DataFrame:
     if columns:
-        referenced_columns = {col for row in rows for col in row}
+        referenced_columns = list(dict.fromkeys(col for row in rows for col in row))
         _raise_if_unexpected_columns(columns, referenced_columns)
 
         if partial:
-            columns = list(referenced_columns)
+            columns = referenced_columns
 
     return pd.DataFrame.from_records(rows, columns=columns)
 
