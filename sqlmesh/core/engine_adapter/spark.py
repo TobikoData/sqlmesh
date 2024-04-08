@@ -41,13 +41,7 @@ if t.TYPE_CHECKING:
 logger = logging.getLogger(__name__)
 
 
-@set_catalog(
-    override_mapping={
-        "_get_data_objects": CatalogSupport.REQUIRES_SET_CATALOG,
-        "create_schema": CatalogSupport.REQUIRES_SET_CATALOG,
-        "drop_schema": CatalogSupport.REQUIRES_SET_CATALOG,
-    }
-)
+@set_catalog()
 class SparkEngineAdapter(GetCurrentCatalogFromFunctionMixin, HiveMetastoreTablePropertiesMixin):
     DIALECT = "spark"
     SUPPORTS_TRANSACTIONS = False
@@ -323,7 +317,8 @@ class SparkEngineAdapter(GetCurrentCatalogFromFunctionMixin, HiveMetastoreTableP
         return [
             DataObject(
                 catalog=self.get_current_catalog(),
-                schema=schema_name,
+                # This varies between Spark and Databricks
+                schema=row.asDict().get("namespace") or row["database"],
                 name=row["tableName"],
                 type=(
                     DataObjectType.VIEW
@@ -334,38 +329,31 @@ class SparkEngineAdapter(GetCurrentCatalogFromFunctionMixin, HiveMetastoreTableP
             for row in results  # type: ignore
         ]
 
+    @property
+    def _spark_major_minor(self) -> t.Tuple[int, int]:
+        return tuple(int(x) for x in self.spark.version.split(".")[:2])  # type: ignore
+
     def get_current_catalog(self) -> t.Optional[str]:
-        # Spark 3.4+ API
         if self._use_spark_session:
-            return self.spark.catalog.currentCatalog()
+            if self._spark_major_minor >= (3, 4):
+                return self.spark.catalog.currentCatalog()
+            else:
+                return self._default_catalog or "spark_catalog"
         return super().get_current_catalog()
 
     def set_current_catalog(self, catalog_name: str) -> None:
-        # Spark 3.4+ API
-        self.spark.catalog.setCurrentCatalog(catalog_name)
+        if self._spark_major_minor >= (3, 4):
+            return self.spark.catalog.setCurrentCatalog(catalog_name)
+        current_catalog = self.get_current_catalog()
+        if current_catalog != catalog_name:
+            logger.warning(
+                "Spark <3.4 does not support certain cross catalog queries since the default catalog cannot be set <3.4"
+            )
 
     def get_current_database(self) -> str:
         if self._use_spark_session:
             return self.spark.catalog.currentDatabase()
         return self.fetchone(exp.select(exp.func("current_database")))[0]
-
-    def create_schema(
-        self,
-        schema_name: SchemaName,
-        ignore_if_exists: bool = True,
-        warn_on_error: bool = True,
-    ) -> None:
-        super().create_schema(
-            schema_name, ignore_if_exists=ignore_if_exists, warn_on_error=warn_on_error
-        )
-
-    def drop_schema(
-        self,
-        schema_name: SchemaName,
-        ignore_if_not_exists: bool = True,
-        cascade: bool = False,
-    ) -> None:
-        super().drop_schema(schema_name, ignore_if_not_exists=ignore_if_not_exists, cascade=cascade)
 
     def create_state_table(
         self,
