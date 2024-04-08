@@ -39,8 +39,9 @@ class ModelTest(unittest.TestCase):
         model: Model,
         models: UniqueKeyDict[str, Model],
         engine_adapter: EngineAdapter,
-        dialect: str | None,
-        path: Path | None,
+        dialect: str | None = None,
+        path: Path | None = None,
+        preserve_fixtures: bool = False,
         default_catalog: str | None = None,
     ) -> None:
         """ModelTest encapsulates a unit test for a model.
@@ -53,6 +54,7 @@ class ModelTest(unittest.TestCase):
             engine_adapter: The engine adapter to use.
             dialect: The models' dialect, used for normalization purposes.
             path: An optional path to the test definition yaml file.
+            preserve_fixtures: Preserve the fixture tables in the testing database, useful for debugging.
         """
         self.body = body
         self.test_name = test_name
@@ -60,6 +62,7 @@ class ModelTest(unittest.TestCase):
         self.models = models
         self.engine_adapter = engine_adapter
         self.path = path
+        self.preserve_fixtures = preserve_fixtures
         self.default_catalog = default_catalog
         self.dialect = dialect
 
@@ -122,8 +125,9 @@ class ModelTest(unittest.TestCase):
 
     def tearDown(self) -> None:
         """Drop all fixture tables."""
-        for table_name in self.body.get("inputs", {}):
-            self.engine_adapter.drop_view(self._fixture_table_cache[table_name])
+        if not self.preserve_fixtures:
+            for table_name in self.body.get("inputs", {}):
+                self.engine_adapter.drop_view(self._fixture_table_cache[table_name])
 
     def assert_equal(
         self,
@@ -203,6 +207,7 @@ class ModelTest(unittest.TestCase):
         engine_adapter: EngineAdapter,
         dialect: str | None,
         path: Path | None,
+        preserve_fixtures: bool = False,
         default_catalog: str | None = None,
     ) -> ModelTest:
         """Create a SqlModelTest or a PythonModelTest.
@@ -214,6 +219,7 @@ class ModelTest(unittest.TestCase):
             engine_adapter: The engine adapter to use.
             dialect: The models' dialect, used for normalization purposes.
             path: An optional path to the test definition yaml file.
+            preserve_fixtures: Preserve the fixture tables in the testing database, useful for debugging.
         """
         if "model" not in body:
             _raise_error("Incomplete test, missing model name", path)
@@ -230,11 +236,27 @@ class ModelTest(unittest.TestCase):
         model = models[model_name]
         if isinstance(model, SqlModel):
             return SqlModelTest(
-                body, test_name, model, models, engine_adapter, dialect, path, default_catalog
+                body,
+                test_name,
+                model,
+                models,
+                engine_adapter,
+                dialect,
+                path,
+                preserve_fixtures,
+                default_catalog,
             )
         if isinstance(model, PythonModel):
             return PythonModelTest(
-                body, test_name, model, models, engine_adapter, dialect, path, default_catalog
+                body,
+                test_name,
+                model,
+                models,
+                engine_adapter,
+                dialect,
+                path,
+                preserve_fixtures,
+                default_catalog,
             )
 
         raise TestError(f"Model '{model_name}' is an unsupported model type for testing at {path}")
@@ -366,8 +388,9 @@ class PythonModelTest(ModelTest):
         model: PythonModel,
         models: UniqueKeyDict[str, Model],
         engine_adapter: EngineAdapter,
-        dialect: str | None,
-        path: Path | None,
+        dialect: str | None = None,
+        path: Path | None = None,
+        preserve_fixtures: bool = False,
         default_catalog: str | None = None,
     ) -> None:
         """PythonModelTest encapsulates a unit test for a Python model.
@@ -380,11 +403,20 @@ class PythonModelTest(ModelTest):
             engine_adapter: The engine adapter to use.
             dialect: The models' dialect, used for normalization purposes.
             path: An optional path to the test definition yaml file.
+            preserve_fixtures: Preserve the fixture tables in the testing database, useful for debugging.
         """
         from sqlmesh.core.test.context import TestExecutionContext
 
         super().__init__(
-            body, test_name, model, models, engine_adapter, dialect, path, default_catalog
+            body,
+            test_name,
+            model,
+            models,
+            engine_adapter,
+            dialect,
+            path,
+            preserve_fixtures,
+            default_catalog,
         )
 
         self.context = TestExecutionContext(

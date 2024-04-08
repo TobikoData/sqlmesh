@@ -23,6 +23,7 @@ def run_tests(
     engine_adapter: EngineAdapter,
     dialect: str | None = None,
     verbosity: int = 1,
+    preserve_fixtures: bool = False,
     stream: t.TextIO | None = None,
     default_catalog: str | None = None,
 ) -> ModelTextTestResult:
@@ -33,6 +34,7 @@ def run_tests(
         models: All models to use for expansion and mapping of physical locations.
         engine_adapter: The engine adapter to use.
         verbosity: The verbosity level.
+        preserve_fixtures: Preserve the fixture tables in the testing database, useful for debugging.
     """
     suite = unittest.TestSuite(
         ModelTest.create_test(
@@ -43,6 +45,7 @@ def run_tests(
             dialect=dialect,
             path=metadata.path,
             default_catalog=default_catalog,
+            preserve_fixtures=preserve_fixtures,
         )
         for metadata in model_test_metadata
     )
@@ -62,17 +65,19 @@ def run_model_tests(
     dialect: str | None = None,
     verbosity: int = 1,
     patterns: list[str] | None = None,
+    preserve_fixtures: bool = False,
     stream: t.TextIO | None = None,
     default_catalog: t.Optional[str] = None,
 ) -> ModelTextTestResult:
     """Load and run tests.
 
-    Args
+    Args:
         tests: A list of tests to run, e.g. [tests/test_orders.yaml::test_single_order]
         models: All models to use for expansion and mapping of physical locations.
         engine_adapter: The engine adapter to use.
         verbosity: The verbosity level.
         patterns: A list of patterns to match against.
+        preserve_fixtures: Preserve the fixture tables in the testing database, useful for debugging.
     """
     loaded_tests = []
     for test in tests:
@@ -91,8 +96,9 @@ def run_model_tests(
         loaded_tests,
         models,
         engine_adapter,
-        dialect,
-        verbosity,
-        stream,
+        dialect=dialect,
+        verbosity=verbosity,
+        preserve_fixtures=preserve_fixtures,
+        stream=stream,
         default_catalog=default_catalog,
     )

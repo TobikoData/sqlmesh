@@ -358,7 +358,7 @@ options:
 
 #### run_test
 ```
-%run_test [--pattern [PATTERN ...]] [--verbose] [tests ...]
+%run_test [--pattern [PATTERN ...]] [--verbose] [--preserve-fixtures] [tests ...]
 
 Run unit test(s).
 
@@ -369,6 +369,8 @@ options:
   --pattern <[PATTERN ...]>, -k <[PATTERN ...]>
                         Only run tests that match the pattern of substring.
   --verbose, -v         Verbose output.
+  --preserve-fixtures   Preserve the fixture tables in the testing database,
+                        useful for debugging.
 ```
 
 #### audit
