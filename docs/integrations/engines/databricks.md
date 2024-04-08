@@ -10,7 +10,7 @@ pip install "sqlmesh[databricks]"
 
 ### Connection info
 
-If you are always running SQLMesh commands directly on a Databricks Cluster (like in a Databricks Notebook) then the only relevant configuration is `catalog` and it is optional.
+If you are always running SQLMesh commands directly on a Databricks Cluster (like in a Databricks Notebook using the [notebook magic commands](../../reference/notebook.md)) then the only relevant configuration is `catalog` and it is optional.
 The SparkSession provided by Databricks will be used to execute all SQLMesh commands.
 
 Otherwise SQLMesh's Databricks implementation uses the [Databricks SQL Connector](https://docs.databricks.com/dev-tools/python-sql-connector.html) to connect to Databricks by default.
