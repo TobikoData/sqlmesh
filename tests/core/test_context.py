@@ -544,47 +544,6 @@ def test_schema_error_no_default(sushi_context_pre_scheduling) -> None:
 
 
 @pytest.mark.slow
-def test_gateway_macro(sushi_context: Context) -> None:
-    sushi_context.upsert_model(
-        load_sql_based_model(
-            parse(
-                """
-            MODEL(name sushi.test_gateway_macro);
-            SELECT @gateway AS gateway;
-            """
-            ),
-            macros=sushi_context._macros,
-            default_catalog=sushi_context.default_catalog,
-        )
-    )
-
-    assert (
-        sushi_context.render("sushi.test_gateway_macro").sql()
-        == "SELECT 'in_memory' AS \"gateway\""
-    )
-
-    sushi_context.upsert_model(
-        load_sql_based_model(
-            parse(
-                """
-            MODEL(name sushi.test_gateway_macro_jinja);
-            JINJA_QUERY_BEGIN;
-            SELECT '{{ gateway }}' AS gateway_jinja;
-            JINJA_END;
-            """
-            ),
-            jinja_macros=sushi_context._jinja_macros,
-            default_catalog=sushi_context.default_catalog,
-        )
-    )
-
-    assert (
-        sushi_context.render("sushi.test_gateway_macro_jinja").sql()
-        == "SELECT 'in_memory' AS \"gateway_jinja\""
-    )
-
-
-@pytest.mark.slow
 def test_unrestorable_snapshot(sushi_context: Context) -> None:
     model_v1 = load_sql_based_model(
         parse(

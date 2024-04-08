@@ -9,6 +9,7 @@ from pathlib import Path
 from pydantic import Field
 from sqlglot import exp
 from sqlglot.optimizer.qualify_columns import quote_identifiers
+from sqlglot.optimizer.simplify import gen
 
 from sqlmesh.core import constants as c
 from sqlmesh.core import dialect as d
@@ -25,7 +26,10 @@ from sqlmesh.core.renderer import QueryRenderer
 from sqlmesh.utils.date import TimeLike
 from sqlmesh.utils.errors import AuditConfigError, SQLMeshError, raise_config_error
 from sqlmesh.utils.hashing import hash_data
-from sqlmesh.utils.jinja import JinjaMacroRegistry, extract_macro_references
+from sqlmesh.utils.jinja import (
+    JinjaMacroRegistry,
+    extract_macro_references_and_variables,
+)
 from sqlmesh.utils.metaprogramming import Executable
 from sqlmesh.utils.pydantic import (
     PydanticModel,
@@ -36,7 +40,6 @@ from sqlmesh.utils.pydantic import (
 
 if t.TYPE_CHECKING:
     from sqlmesh.core.snapshot import DeployabilityIndex, Node, Snapshot
-    from sqlmesh.utils.jinja import MacroReference
 
 if sys.version_info >= (3, 9):
     from typing import Literal
@@ -352,7 +355,7 @@ class StandaloneAudit(_Node, AuditMixin):
         ]
 
         query = self.render_query(self) or self.query
-        data.append(query.sql(comments=False))
+        data.append(gen(query))
 
         return hash_data(data)
 
@@ -462,6 +465,7 @@ def load_audit(
     jinja_macros: t.Optional[JinjaMacroRegistry] = None,
     dialect: t.Optional[str] = None,
     default_catalog: t.Optional[str] = None,
+    variables: t.Optional[t.Dict[str, t.Any]] = None,
 ) -> Audit:
     """Load an audit from a parsed SQLMesh audit file.
 
@@ -516,19 +520,22 @@ def load_audit(
 
     extra_kwargs: t.Dict[str, t.Any] = {}
     if is_standalone:
-        jinja_macro_refrences: t.Set[MacroReference] = {
-            r
-            for references in [
-                *[extract_macro_references(s.sql()) for s in statements],
-                extract_macro_references(query.sql()),
-            ]
-            for r in references
-        }
-        extra_kwargs["python_env"] = _python_env(
-            [*statements, query], jinja_macro_refrences, module_path, macros or macro.get_registry()
+        jinja_macro_refrences, used_variables = extract_macro_references_and_variables(
+            *(gen(s) for s in statements),
+            gen(query),
         )
-        extra_kwargs["jinja_macros"] = (jinja_macros or JinjaMacroRegistry()).trim(
-            jinja_macro_refrences
+        jinja_macros = (jinja_macros or JinjaMacroRegistry()).trim(jinja_macro_refrences)
+        for jinja_macro in jinja_macros.root_macros.values():
+            used_variables.update(extract_macro_references_and_variables(jinja_macro.definition)[1])
+
+        extra_kwargs["jinja_macros"] = jinja_macros
+        extra_kwargs["python_env"] = _python_env(
+            [*statements, query],
+            jinja_macro_refrences,
+            module_path,
+            macros or macro.get_registry(),
+            variables=variables,
+            used_variables=used_variables,
         )
         extra_kwargs["default_catalog"] = default_catalog
 
@@ -557,6 +564,7 @@ def load_multiple_audits(
     jinja_macros: t.Optional[JinjaMacroRegistry] = None,
     dialect: t.Optional[str] = None,
     default_catalog: t.Optional[str] = None,
+    variables: t.Optional[t.Dict[str, t.Any]] = None,
 ) -> t.Generator[Audit, None, None]:
     audit_block: t.List[exp.Expression] = []
     for expression in expressions:
@@ -570,6 +578,7 @@ def load_multiple_audits(
                     jinja_macros=jinja_macros,
                     dialect=dialect,
                     default_catalog=default_catalog,
+                    variables=variables,
                 )
                 audit_block.clear()
         audit_block.append(expression)
@@ -578,6 +587,7 @@ def load_multiple_audits(
         path=path,
         dialect=dialect,
         default_catalog=default_catalog,
+        variables=variables,
     )
 
 

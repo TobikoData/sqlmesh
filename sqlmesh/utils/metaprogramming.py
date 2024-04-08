@@ -280,7 +280,11 @@ def build_env(
         # is accessible through the `__wrapped__` attribute added by functools.wraps
         env[name] = obj.__wrapped__ if getattr(obj, "__sqlmesh_macro__", None) else obj
 
-        if obj_module and _is_relative_to(obj_module.__file__, path):
+        if (
+            obj_module
+            and hasattr(obj_module, "__file__")
+            and _is_relative_to(obj_module.__file__, path)
+        ):
             walk(env[name])
     elif env[name] != obj:
         raise SQLMeshError(
@@ -362,7 +366,7 @@ def serialize_env(env: t.Dict[str, t.Any], path: Path) -> t.Dict[str, Executable
                 )
         elif inspect.ismodule(v):
             name = v.__name__
-            if _is_relative_to(v.__file__, path):
+            if hasattr(v, "__file__") and _is_relative_to(v.__file__, path):
                 raise SQLMeshError(
                     f"Cannot serialize 'import {name}'. Use 'from {name} import ...' instead."
                 )

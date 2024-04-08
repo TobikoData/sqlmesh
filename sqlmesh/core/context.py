@@ -42,6 +42,7 @@ import traceback
 import typing as t
 import unittest.result
 from datetime import timedelta
+from functools import cached_property
 from io import StringIO
 from pathlib import Path
 from shutil import rmtree
@@ -209,13 +210,14 @@ class ExecutionContext(BaseContext):
         deployability_index: t.Optional[DeployabilityIndex] = None,
         default_dialect: t.Optional[str] = None,
         default_catalog: t.Optional[str] = None,
+        variables: t.Optional[t.Dict[str, t.Any]] = None,
     ):
         self.snapshots = snapshots
         self.deployability_index = deployability_index
         self._engine_adapter = engine_adapter
-        self.__model_tables = to_table_mapping(snapshots.values(), deployability_index)
         self._default_catalog = default_catalog
         self._default_dialect = default_dialect
+        self._variables = variables or {}
 
     @property
     def default_dialect(self) -> t.Optional[str]:
@@ -226,14 +228,34 @@ class ExecutionContext(BaseContext):
         """Returns an engine adapter."""
         return self._engine_adapter
 
-    @property
+    @cached_property
     def _model_tables(self) -> t.Dict[str, str]:
         """Returns a mapping of model names to tables."""
-        return self.__model_tables
+        return to_table_mapping(self.snapshots.values(), self.deployability_index)
 
     @property
     def default_catalog(self) -> t.Optional[str]:
         return self._default_catalog
+
+    @property
+    def gateway(self) -> t.Optional[str]:
+        """Returns the gateway name."""
+        return self.var(c.GATEWAY)
+
+    def var(self, var_name: str, default: t.Optional[t.Any] = None) -> t.Optional[t.Any]:
+        """Returns a variable value."""
+        return self._variables.get(var_name.lower(), default)
+
+    def with_variables(self, variables: t.Dict[str, t.Any]) -> ExecutionContext:
+        """Returns a new ExecutionContext with additional variables."""
+        return ExecutionContext(
+            self._engine_adapter,
+            self.snapshots,
+            self.deployability_index,
+            self._default_dialect,
+            self._default_catalog,
+            variables=variables,
+        )
 
 
 class GenericContext(BaseContext, t.Generic[C]):

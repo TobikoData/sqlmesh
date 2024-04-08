@@ -119,6 +119,7 @@ def test_json(snapshot: Snapshot):
             "owner": "owner",
             "query": "SELECT @EACH([1, 2], x -> x), ds FROM parent.tbl",
             "jinja_macros": {
+                "create_builtins_module": "sqlmesh.utils.jinja",
                 "global_objs": {},
                 "packages": {},
                 "root_macros": {},
