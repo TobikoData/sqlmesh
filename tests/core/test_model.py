@@ -3414,7 +3414,7 @@ def test_end_no_start():
 def test_variables():
     @macro()
     def test_macro_var(evaluator) -> exp.Expression:
-        return exp.convert(evaluator.var("test_var_d") + 10)
+        return exp.convert(evaluator.var("TEST_VAR_D") + 10)
 
     expressions = parse(
         """
@@ -3423,7 +3423,7 @@ def test_variables():
             kind FULL,
         );
 
-        SELECT @VAR('test_var_a') AS a, @VAR('test_var_b', 'default_value') AS b, @VAR('test_var_c') AS c, @TEST_MACRO_VAR() AS d;
+        SELECT @VAR('TEST_VAR_A') AS a, @VAR('test_var_b', 'default_value') AS b, @VAR('test_var_c') AS c, @TEST_MACRO_VAR() AS d;
     """,
         default_dialect="bigquery",
     )
@@ -3491,7 +3491,7 @@ def test_named_variable_macros() -> None:
             """
         MODEL(name sushi.test_gateway_macro);
         @DEF(overridden_var, 'overridden_value');
-        SELECT @gateway AS gateway, @test_var_a AS test_var_a, @overridden_var AS overridden_var
+        SELECT @gateway AS gateway, @TEST_VAR_A AS test_var_a, @overridden_var AS overridden_var
         """
         ),
         variables={
@@ -3520,7 +3520,7 @@ def test_variables_jinja():
         );
 
         JINJA_QUERY_BEGIN;
-        SELECT '{{ var('test_var_a') }}' AS a, '{{ var('test_var_b', 'default_value') }}' AS b, '{{ var('test_var_c') }}' AS c, {{ test_macro_var() }} AS d;
+        SELECT '{{ var('TEST_VAR_A') }}' AS a, '{{ var('test_var_b', 'default_value') }}' AS b, '{{ var('test_var_c') }}' AS c, {{ test_macro_var() }} AS d;
         JINJA_END;
     """,
         default_dialect="bigquery",
@@ -3559,7 +3559,7 @@ def test_variables_python_model(mocker: MockerFixture) -> None:
         return pd.DataFrame(
             [
                 {
-                    "a": context.var("test_var_a"),
+                    "a": context.var("TEST_VAR_A"),
                     "b": context.var("test_var_b", "default_value"),
                     "c": context.var("test_var_c"),
                 }

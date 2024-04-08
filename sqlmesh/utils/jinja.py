@@ -156,7 +156,7 @@ def extract_macro_references_and_variables(
             if call_name[0] == c.VAR:
                 args = [jinja_call_arg_name(arg) for arg in node.args]
                 if args and args[0]:
-                    variables.add(args[0])
+                    variables.add(args[0].lower())
             elif call_name[0] == c.GATEWAY:
                 variables.add(c.GATEWAY)
             elif len(call_name) == 1:
@@ -558,7 +558,7 @@ def jinja_call_arg_name(node: nodes.Node) -> str:
 
 def create_var(variables: t.Dict[str, t.Any]) -> t.Callable:
     def _var(var_name: str, default: t.Optional[t.Any] = None) -> t.Optional[t.Any]:
-        return variables.get(var_name, default)
+        return variables.get(var_name.lower(), default)
 
     return _var
 

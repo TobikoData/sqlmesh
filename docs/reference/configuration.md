@@ -45,7 +45,7 @@ See all the keys allowed in `model_defaults` at the [model configuration referen
 
 The `variables` key can be used to provide values for user-defined variables, accessed using the [`@VAR` macro function](../concepts/macros/sqlmesh_macros.md#global-variables) in SQL model definitions, [`context.var` method](../concepts/models/python_models.md#global-variables) in Python model definitions, and [`evaluator.var` method](../concepts/macros/sqlmesh_macros.md#accessing-global-variable-values) in Python macro functions.
 
-The `variables` key consists of a mapping of variable names to their values - see an example on the [SQLMesh macros concepts page](../concepts/macros/sqlmesh_macros.md#global-variables).
+The `variables` key consists of a mapping of variable names to their values - see an example on the [SQLMesh macros concepts page](../concepts/macros/sqlmesh_macros.md#global-variables). Note that keys are case insensitive.
 
 Global variable values may be any of the data types in the table below or lists or dictionaries containing those types.
 

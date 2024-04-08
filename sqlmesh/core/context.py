@@ -244,7 +244,7 @@ class ExecutionContext(BaseContext):
 
     def var(self, var_name: str, default: t.Optional[t.Any] = None) -> t.Optional[t.Any]:
         """Returns a variable value."""
-        return self._variables.get(var_name, default)
+        return self._variables.get(var_name.lower(), default)
 
     def with_variables(self, variables: t.Dict[str, t.Any]) -> ExecutionContext:
         """Returns a new ExecutionContext with additional variables."""

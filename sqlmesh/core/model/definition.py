@@ -1877,7 +1877,7 @@ def _python_env(
                                     f"The variable name must be a string literal, '{args[0].sql()}' was given instead",
                                     path,
                                 )
-                            used_variables.add(args[0].this)
+                            used_variables.add(args[0].this.lower())
                 elif macro_func_or_var.__class__ is d.MacroVar:
                     name = macro_func_or_var.name.lower()
                     if name in macros:
@@ -1955,7 +1955,7 @@ def _parse_dependencies(
                 if func.value.id == "context" and func.attr == "table":
                     depends_on.add(get_first_arg("model_name"))
                 elif func.value.id in ("context", "evaluator") and func.attr == c.VAR:
-                    variables.add(get_first_arg("var_name"))
+                    variables.add(get_first_arg("var_name").lower())
             elif (
                 isinstance(node, ast.Attribute)
                 and isinstance(node.value, ast.Name)
