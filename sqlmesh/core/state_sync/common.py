@@ -195,7 +195,7 @@ class CommonStateSyncMixin(StateSync):
         Args:
             environment: The target environment to finalize.
         """
-        logger.info("Finalizing environment '%s'", environment)
+        logger.info("Finalizing environment '%s'", environment.name)
 
         stored_environment = self._get_environment(environment.name, lock_for_update=True)
         if stored_environment and stored_environment.plan_id != environment.plan_id:
