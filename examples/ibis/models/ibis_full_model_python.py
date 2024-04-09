@@ -17,7 +17,7 @@ from sqlmesh.core.model import FullKind
         "num_orders": "int",
     },
     audits=["assert_positive_order_ids"],
-    description="This model uses ibis to generate and run a query",
+    description="This model uses ibis to transform a `table` object and return a dataframe",
 )
 def execute(
     context: ExecutionContext,
@@ -26,11 +26,14 @@ def execute(
     execution_time: datetime,
     **kwargs: t.Any,
 ) -> pd.DataFrame:
+    # get physical table name
+    table_name = context.table("ibis.incremental_model").split(".")
+
     # connect ibis to database
     con = ibis.duckdb.connect(DB_PATH)
 
     # retrieve table
-    incremental_model = con.table("incremental_model", schema="ibis")
+    incremental_model = con.table(name=table_name[-1], schema=table_name[-2])
 
     # build query
     count = incremental_model.id.nunique()
