@@ -9,10 +9,7 @@ from pathlib import Path
 from sqlglot import exp, parse
 from sqlglot.errors import SqlglotError
 from sqlglot.optimizer.annotate_types import annotate_types
-from sqlglot.optimizer.normalize_identifiers import normalize_identifiers
 from sqlglot.optimizer.qualify import qualify
-from sqlglot.optimizer.qualify_columns import quote_identifiers
-from sqlglot.optimizer.qualify_tables import qualify_tables
 from sqlglot.optimizer.simplify import simplify
 
 from sqlmesh.core import constants as c
@@ -297,11 +294,10 @@ class BaseExpressionRenderer:
 
     @contextmanager
     def _normalize_and_quote(self, query: E) -> t.Iterator[E]:
-        qualify_tables(query, catalog=self._default_catalog, dialect=self._dialect)
-        normalize_identifiers(query, dialect=self._dialect)
-        yield query
-        if self._quote_identifiers:
-            quote_identifiers(query, dialect=self._dialect)
+        with d.normalize_and_quote(
+            query, self._dialect, self._default_catalog, quote=self._quote_identifiers
+        ) as query:
+            yield query
 
 
 class ExpressionRenderer(BaseExpressionRenderer):

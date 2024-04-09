@@ -1009,8 +1009,11 @@ def _dict_to_struct(values: t.Dict) -> exp.Struct:
 
 
 @contextmanager
-def normalize_and_quote(query: E, dialect: str, default_catalog: t.Optional[str]) -> t.Iterator[E]:
+def normalize_and_quote(
+    query: E, dialect: str, default_catalog: t.Optional[str], quote: bool = True
+) -> t.Iterator[E]:
     qualify_tables(query, catalog=default_catalog, dialect=dialect)
     normalize_identifiers(query, dialect=dialect)
     yield query
-    quote_identifiers(query, dialect=dialect)
+    if quote:
+        quote_identifiers(query, dialect=dialect)
