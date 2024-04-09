@@ -3682,3 +3682,47 @@ def test_gateway_python_model(mocker: MockerFixture) -> None:
     context = ExecutionContext(mocker.Mock(), {}, None, None)
     df = list(python_model.render(context=context))[0]
     assert df.to_dict(orient="records") == [{"gateway_python": "in_memory_from_python"}]
+
+
+@pytest.mark.parametrize("dialect", ["spark", "trino"])
+def test_view_render_no_quote_identifiers(dialect: str) -> None:
+    expressions = d.parse(
+        """
+        MODEL (
+            name db.table,
+            kind VIEW,
+        );
+        SELECT a, b, c FROM source_table;
+        """
+    )
+    model = load_sql_based_model(expressions, dialect=dialect)
+    assert (
+        model.render_query_or_raise().sql(dialect=dialect)
+        == "SELECT a AS a, b AS b, c AS c FROM source_table AS source_table"
+    )
+
+
+@pytest.mark.parametrize(
+    "dialect,kind",
+    [
+        ("spark", "FULL"),
+        ("trino", "FULL"),
+        ("duckdb", "VIEW"),
+        ("duckdb", "FULL"),
+    ],
+)
+def test_render_quote_identifiers(dialect: str, kind: str) -> None:
+    expressions = d.parse(
+        f"""
+        MODEL (
+            name db.table,
+            kind {kind},
+        );
+        SELECT a, b, c FROM source_table;
+        """
+    )
+    model = load_sql_based_model(expressions, dialect=dialect)
+    assert (
+        model.render_query_or_raise().sql(dialect="duckdb")
+        == 'SELECT "a" AS "a", "b" AS "b", "c" AS "c" FROM "source_table" AS "source_table"'
+    )

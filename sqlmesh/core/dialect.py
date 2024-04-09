@@ -4,6 +4,7 @@ import functools
 import re
 import sys
 import typing as t
+from contextlib import contextmanager
 from difflib import unified_diff
 from enum import Enum, auto
 
@@ -12,6 +13,8 @@ from sqlglot import Dialect, Generator, ParseError, Parser, Tokenizer, TokenType
 from sqlglot.dialects.dialect import DialectType
 from sqlglot.dialects.snowflake import Snowflake
 from sqlglot.optimizer.normalize_identifiers import normalize_identifiers
+from sqlglot.optimizer.qualify_columns import quote_identifiers
+from sqlglot.optimizer.qualify_tables import qualify_tables
 from sqlglot.optimizer.scope import traverse_scope
 from sqlglot.schema import MappingSchema
 from sqlglot.tokens import Token
@@ -21,6 +24,8 @@ from sqlmesh.utils.errors import SQLMeshError
 from sqlmesh.utils.pandas import columns_to_types_from_df
 
 if t.TYPE_CHECKING:
+    from sqlglot._typing import E
+
     from sqlmesh.utils.pandas import PandasNamedTuple
 
 SQLMESH_MACRO_PREFIX = "@"
@@ -1007,3 +1012,14 @@ def _dict_to_struct(values: t.Dict) -> exp.Struct:
         expressions.append(exp.PropertyEQ(this=key, expression=value))
 
     return exp.Struct(expressions=expressions)
+
+
+@contextmanager
+def normalize_and_quote(
+    query: E, dialect: str, default_catalog: t.Optional[str], quote: bool = True
+) -> t.Iterator[E]:
+    qualify_tables(query, catalog=default_catalog, dialect=dialect)
+    normalize_identifiers(query, dialect=dialect)
+    yield query
+    if quote:
+        quote_identifiers(query, dialect=dialect)

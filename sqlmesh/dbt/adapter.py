@@ -8,9 +8,8 @@ import pandas as pd
 from dbt.contracts.relation import Policy
 from sqlglot import exp, parse_one
 
-from sqlmesh.core.dialect import normalize_model_name
+from sqlmesh.core.dialect import normalize_and_quote, normalize_model_name
 from sqlmesh.core.engine_adapter import EngineAdapter
-from sqlmesh.core.renderer import _normalize_and_quote
 from sqlmesh.core.snapshot import DeployabilityIndex, Snapshot, to_table_mapping
 from sqlmesh.utils.errors import ConfigError, ParsetimeAdapterCallError
 from sqlmesh.utils.jinja import JinjaMacroRegistry, MacroReference
@@ -289,7 +288,7 @@ class RuntimeAdapter(BaseAdapter):
         )
 
         expression = parse_one(sql, read=self.dialect)
-        with _normalize_and_quote(
+        with normalize_and_quote(
             expression, t.cast(str, self.dialect), self.engine_adapter.default_catalog
         ) as expression:
             expression = exp.replace_tables(

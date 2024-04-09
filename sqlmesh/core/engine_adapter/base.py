@@ -97,6 +97,7 @@ class EngineAdapter:
     HAS_VIEW_BINDING = False
     SUPPORTS_REPLACE_TABLE = True
     DEFAULT_CATALOG_TYPE = DIALECT
+    QUOTE_IDENTIFIERS_IN_VIEWS = True
 
     def __init__(
         self,
@@ -877,7 +878,8 @@ class EngineAdapter:
                     replace=replace,
                     expression=query,
                     **create_kwargs,
-                )
+                ),
+                quote_identifiers=self.QUOTE_IDENTIFIERS_IN_VIEWS,
             )
 
         # Register table comment with commands if the engine doesn't support doing it in CREATE
