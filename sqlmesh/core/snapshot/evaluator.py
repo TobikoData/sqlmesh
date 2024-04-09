@@ -49,6 +49,7 @@ from sqlmesh.core.model import (
 )
 from sqlmesh.core.snapshot import (
     DeployabilityIndex,
+    Intervals,
     QualifiedViewName,
     Snapshot,
     SnapshotChangeCategory,
@@ -845,7 +846,7 @@ class EvaluationStrategy(abc.ABC):
         name: str,
         query_or_df: QueryOrDF,
         snapshots: t.Dict[str, Snapshot],
-        deployability_index: t.Optional[DeployabilityIndex],
+        deployability_index: DeployabilityIndex,
         **kwargs: t.Any,
     ) -> None:
         """Inserts the given query or a DataFrame into the target table or replaces a view.
@@ -865,7 +866,7 @@ class EvaluationStrategy(abc.ABC):
         table_name: str,
         query_or_df: QueryOrDF,
         snapshots: t.Dict[str, Snapshot],
-        deployability_index: t.Optional[DeployabilityIndex],
+        deployability_index: DeployabilityIndex,
         **kwargs: t.Any,
     ) -> None:
         """Appends the given query or a DataFrame to the existing table.
@@ -952,6 +953,27 @@ class EvaluationStrategy(abc.ABC):
             environment_naming_info: Naming information for the target environment.
         """
 
+    def _replace_query_for_model(self, model: Model, name: str, query_or_df: QueryOrDF) -> None:
+        """Replaces the table for the given model.
+
+        Args:
+            model: The target model.
+            name: The name of the target table.
+            query_or_df: The query or DataFrame to replace the target table with.
+        """
+        self.adapter.replace_query(
+            name,
+            query_or_df,
+            columns_to_types=model.columns_to_types if model.annotated else None,
+            storage_format=model.storage_format,
+            partitioned_by=model.partitioned_by,
+            partition_interval_unit=model.interval_unit,
+            clustered_by=model.clustered_by,
+            table_properties=model.table_properties,
+            table_description=model.description,
+            column_descriptions=model.column_descriptions,
+        )
+
 
 class SymbolicStrategy(EvaluationStrategy):
     def insert(
@@ -960,7 +982,7 @@ class SymbolicStrategy(EvaluationStrategy):
         name: str,
         query_or_df: QueryOrDF,
         snapshots: t.Dict[str, Snapshot],
-        deployability_index: t.Optional[DeployabilityIndex],
+        deployability_index: DeployabilityIndex,
         **kwargs: t.Any,
     ) -> None:
         pass
@@ -971,7 +993,7 @@ class SymbolicStrategy(EvaluationStrategy):
         table_name: str,
         query_or_df: QueryOrDF,
         snapshots: t.Dict[str, Snapshot],
-        deployability_index: t.Optional[DeployabilityIndex],
+        deployability_index: DeployabilityIndex,
         **kwargs: t.Any,
     ) -> None:
         pass
@@ -1063,7 +1085,7 @@ class MaterializableStrategy(PromotableStrategy):
         table_name: str,
         query_or_df: QueryOrDF,
         snapshots: t.Dict[str, Snapshot],
-        deployability_index: t.Optional[DeployabilityIndex],
+        deployability_index: DeployabilityIndex,
         **kwargs: t.Any,
     ) -> None:
         model = snapshot.model
@@ -1138,7 +1160,7 @@ class IncrementalByTimeRangeStrategy(MaterializableStrategy):
         name: str,
         query_or_df: QueryOrDF,
         snapshots: t.Dict[str, Snapshot],
-        deployability_index: t.Optional[DeployabilityIndex],
+        deployability_index: DeployabilityIndex,
         **kwargs: t.Any,
     ) -> None:
         model = snapshot.model
@@ -1160,17 +1182,20 @@ class IncrementalByUniqueKeyStrategy(MaterializableStrategy):
         name: str,
         query_or_df: QueryOrDF,
         snapshots: t.Dict[str, Snapshot],
-        deployability_index: t.Optional[DeployabilityIndex],
+        deployability_index: DeployabilityIndex,
         **kwargs: t.Any,
     ) -> None:
         model = snapshot.model
-        self.adapter.merge(
-            name,
-            query_or_df,
-            columns_to_types=model.columns_to_types,
-            unique_key=model.unique_key,
-            when_matched=model.when_matched,
-        )
+        if not _intervals(snapshot, deployability_index):
+            self._replace_query_for_model(model, name, query_or_df)
+        else:
+            self.adapter.merge(
+                name,
+                query_or_df,
+                columns_to_types=model.columns_to_types,
+                unique_key=model.unique_key,
+                when_matched=model.when_matched,
+            )
 
     def append(
         self,
@@ -1198,11 +1223,13 @@ class IncrementalUnmanagedStrategy(MaterializableStrategy):
         name: str,
         query_or_df: QueryOrDF,
         snapshots: t.Dict[str, Snapshot],
-        deployability_index: t.Optional[DeployabilityIndex],
+        deployability_index: DeployabilityIndex,
         **kwargs: t.Any,
     ) -> None:
         model = snapshot.model
-        if isinstance(model.kind, IncrementalUnmanagedKind) and model.kind.insert_overwrite:
+        if not _intervals(snapshot, deployability_index):
+            self._replace_query_for_model(model, name, query_or_df)
+        elif isinstance(model.kind, IncrementalUnmanagedKind) and model.kind.insert_overwrite:
             self.adapter.insert_overwrite_by_partition(
                 name,
                 query_or_df,
@@ -1227,22 +1254,11 @@ class FullRefreshStrategy(MaterializableStrategy):
         name: str,
         query_or_df: QueryOrDF,
         snapshots: t.Dict[str, Snapshot],
-        deployability_index: t.Optional[DeployabilityIndex],
+        deployability_index: DeployabilityIndex,
         **kwargs: t.Any,
     ) -> None:
         model = snapshot.model
-        self.adapter.replace_query(
-            name,
-            query_or_df,
-            columns_to_types=model.columns_to_types if model.annotated else None,
-            storage_format=model.storage_format,
-            partitioned_by=model.partitioned_by,
-            partition_interval_unit=model.interval_unit,
-            clustered_by=model.clustered_by,
-            table_properties=model.table_properties,
-            table_description=model.description,
-            column_descriptions=model.column_descriptions,
-        )
+        self._replace_query_for_model(model, name, query_or_df)
 
 
 class SCDType2Strategy(MaterializableStrategy):
@@ -1290,10 +1306,11 @@ class SCDType2Strategy(MaterializableStrategy):
         name: str,
         query_or_df: QueryOrDF,
         snapshots: t.Dict[str, Snapshot],
-        deployability_index: t.Optional[DeployabilityIndex],
+        deployability_index: DeployabilityIndex,
         **kwargs: t.Any,
     ) -> None:
         model = snapshot.model
+        truncate = not _intervals(snapshot, deployability_index)
         if isinstance(model.kind, SCDType2ByTimeKind):
             self.adapter.scd_type_2_by_time(
                 target_table=name,
@@ -1307,6 +1324,7 @@ class SCDType2Strategy(MaterializableStrategy):
                 columns_to_types=model.columns_to_types,
                 table_description=model.description,
                 column_descriptions=model.column_descriptions,
+                truncate=truncate,
                 **kwargs,
             )
         elif isinstance(model.kind, SCDType2ByColumnKind):
@@ -1322,6 +1340,7 @@ class SCDType2Strategy(MaterializableStrategy):
                 execution_time_as_valid_from=model.kind.execution_time_as_valid_from,
                 table_description=model.description,
                 column_descriptions=model.column_descriptions,
+                truncate=truncate,
                 **kwargs,
             )
         else:
@@ -1335,7 +1354,7 @@ class SCDType2Strategy(MaterializableStrategy):
         table_name: str,
         query_or_df: QueryOrDF,
         snapshots: t.Dict[str, Snapshot],
-        deployability_index: t.Optional[DeployabilityIndex],
+        deployability_index: DeployabilityIndex,
         **kwargs: t.Any,
     ) -> None:
         model = snapshot.model
@@ -1382,7 +1401,7 @@ class ViewStrategy(PromotableStrategy):
         name: str,
         query_or_df: QueryOrDF,
         snapshots: t.Dict[str, Snapshot],
-        deployability_index: t.Optional[DeployabilityIndex],
+        deployability_index: DeployabilityIndex,
         **kwargs: t.Any,
     ) -> None:
         model = snapshot.model
@@ -1425,7 +1444,7 @@ class ViewStrategy(PromotableStrategy):
         table_name: str,
         query_or_df: QueryOrDF,
         snapshots: t.Dict[str, Snapshot],
-        deployability_index: t.Optional[DeployabilityIndex],
+        deployability_index: DeployabilityIndex,
         **kwargs: t.Any,
     ) -> None:
         raise ConfigError(f"Cannot append to a view '{table_name}'.")
@@ -1485,3 +1504,11 @@ class ViewStrategy(PromotableStrategy):
 
     def _is_materialized_view(self, model: Model) -> bool:
         return isinstance(model.kind, ViewKind) and model.kind.materialized
+
+
+def _intervals(snapshot: Snapshot, deployability_index: DeployabilityIndex) -> Intervals:
+    return (
+        snapshot.intervals
+        if deployability_index.is_deployable(snapshot)
+        else snapshot.dev_intervals
+    )
