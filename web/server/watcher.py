@@ -30,7 +30,7 @@ async def watch_project() -> None:
     ]
     ignore_entity_patterns = context.config.ignore_patterns if context else c.IGNORE_PATTERNS
     ignore_entity_patterns.append("^\\.DS_Store$")
-    ignore_entity_patterns.append("^.*\.db(\.wal)?$")
+    ignore_entity_patterns.append("^.*\\.db(\\.wal)?$")
     ignore_paths = [str((settings.project_path / c.CACHE).resolve())]
     watch_filter = DefaultFilter(
         ignore_paths=ignore_paths, ignore_entity_patterns=ignore_entity_patterns
