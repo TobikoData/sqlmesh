@@ -10,7 +10,7 @@ from sqlmesh.core.model import model
     is_sql=True,
     kind="FULL",
     audits=["assert_positive_order_ids"],
-    description="This model uses ibis to generate a SQL string",
+    description="This model uses ibis to generate and return a SQL string",
 )
 def entrypoint(evaluator: MacroEvaluator) -> str:
     # create table reference
