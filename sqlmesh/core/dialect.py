@@ -390,7 +390,7 @@ def _parse_table_parts(
         # Macro functions are not part of the staged file syntax, so we can safely parse them
         if "(" in table_arg.name:
             self._retreat(index)
-            return Parser._parse_table_parts(self, schema=schema, is_db_reference=is_db_reference)  # type: ignore
+            return Parser._parse_table_parts(self, schema=schema, is_db_reference=is_db_reference)
 
         table_arg.replace(MacroVar(this=table_arg.name[1:]))
         return StagedFilePath(**table.args)
