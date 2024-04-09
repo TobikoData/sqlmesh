@@ -207,6 +207,19 @@ def test_parse():
     assert isinstance(expressions[1], exp.Select)
     assert expressions[0].expressions[2].args["value"] == exp.to_identifier("metric")
 
+    expressions = parse(
+        """
+        MODEL(
+          name model1,
+          dialect snowflake
+        );
+
+        SELECT a FROM @if(true, m2, m3)
+        """,
+    )
+    assert len(expressions) == 2
+    assert expressions[1].sql(dialect="snowflake") == "SELECT a FROM @IF(TRUE, m2, m3)"
+
 
 def test_parse_jinja_with_semicolons():
     expressions = parse(
