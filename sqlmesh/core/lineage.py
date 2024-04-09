@@ -7,6 +7,7 @@ from sqlglot import exp
 from sqlglot.helper import first
 from sqlglot.lineage import Node
 from sqlglot.lineage import lineage as sqlglot_lineage
+from sqlglot.optimizer import Scope, build_scope, qualify
 
 from sqlmesh.core.dialect import normalize_mapping_schema, normalize_model_name
 
@@ -15,36 +16,55 @@ if t.TYPE_CHECKING:
     from sqlmesh.core.model import Model
 
 
-def _render_query(model: Model) -> exp.Query:
-    """Render a model's query, adding in managed columns"""
-    query = model.render_query_or_raise().copy()
-    if model.managed_columns:
-        query.select(
-            *[
-                exp.alias_(exp.cast(exp.Null(), to=col_type), col)
-                for col, col_type in model.managed_columns.items()
-                if col not in query.named_selects
-            ],
-            append=True,
-            copy=False,
-        )
-    return query
+CACHE: t.Dict[str, t.Tuple[int, exp.Expression, Scope]] = {}
 
 
 def lineage(
     column: str | exp.Column,
     model: Model,
+    trim_selects: bool = True,
     **kwargs: t.Any,
 ) -> Node:
+    query = None
+    scope = None
+
+    if model.name in CACHE:
+        obj_id, query, scope = CACHE[model.name]
+
+        if obj_id != id(model):
+            query = None
+            scope = None
+
+    if not query or not scope:
+        query = model.render_query_or_raise()
+
+        if model.managed_columns:
+            query = query.select(
+                *(
+                    exp.alias_(exp.cast(exp.Null(), to=col_type), col)
+                    for col, col_type in model.managed_columns.items()
+                    if col not in query.named_selects
+                )
+            )
+
+        query = qualify.qualify(
+            query,
+            dialect=model.dialect,
+            schema=normalize_mapping_schema(model.mapping_schema, dialect=model.dialect),
+            **{"validate_qualify_columns": False, "infer_schema": True, **kwargs},
+        )
+
+        scope = build_scope(query)
+
+        if scope:
+            CACHE[model.name] = (id(model), query, scope)
+
     return sqlglot_lineage(
         column,
-        sql=_render_query(model),
-        schema=normalize_mapping_schema(model.mapping_schema, dialect=model.dialect),
+        sql=query,
+        scope=scope,
+        trim_selects=trim_selects,
         dialect=model.dialect,
-        **{
-            "infer_schema": True,
-            **kwargs,
-        },
     )
 
 
@@ -52,7 +72,7 @@ def column_dependencies(context: Context, model_name: str, column: str) -> t.Dic
     model = context.get_model(model_name)
     parents = defaultdict(set)
 
-    for node in lineage(column, model).walk():
+    for node in lineage(column, model, trim_selects=False).walk():
         if node.downstream:
             continue
 
