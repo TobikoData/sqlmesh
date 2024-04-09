@@ -234,46 +234,57 @@ SQLMesh's macro system has multiple operators that allow different forms of dyna
 
 ### @EACH
 
-Before diving into the `@EACH` operator, let's dissect a `for` loop to understand its components.
+`@EACH` is used to transform a list of items by applying a function to each of them, analogous to a `for` loop.
 
-`for` loops have two primary parts: a collection of items and an action that should be taken for each item. For example, here is a `for` loop in Python:
+??? info "Learn more about `for` loops and `@EACH`"
 
-```python linenums="1"
-for number in [4, 5, 6]:
-    print(number)
+    Before diving into the `@EACH` operator, let's dissect a `for` loop to understand its components.
+
+    `for` loops have two primary parts: a collection of items and an action that should be taken for each item. For example, here is a `for` loop in Python:
+
+    ```python linenums="1"
+    for number in [4, 5, 6]:
+        print(number)
+    ```
+
+    This for loop prints each number present in the brackets:
+
+    ```python linenums="1"
+    4
+    5
+    6
+    ```
+
+    The first line of the example sets up the loop, doing two things:
+
+    1. Telling Python that code inside the loop will refer to each item as `number`
+    2. Telling Python to step through the list of items in brackets
+
+    The second line tells Python what action should be taken for each item. In this case, it prints the item.
+
+    The loop executes one time for each item in the list, substituting in the item for the word `number` in the code. For example, the first time through the loop the code would execute as `print(4)` and the second time as `print(5)`.
+
+    The SQLMesh `@EACH` operator is used to implement the equivalent of a `for` loop in SQLMesh macros.
+
+    `@EACH` gets its name from the fact that a loop performs the action "for each" item in the collection. It is fundamentally equivalent to the Python loop above, but you specify the two loop components differently.
+
+`@EACH` takes two arguments: a list of items and a function definition.
+
+```sql linenums="1"
+@EACH([list of items], [function definition])
 ```
 
-This for loop prints each number present in the brackets:
-
-```python linenums="1"
-4
-5
-6
-```
-
-The first line of the example sets up the loop, doing two things:
-
-1. Telling Python that code inside the loop will refer to each item as `number`
-2. Telling Python to step through the list of items in brackets
-
-The second line tells Python what action should be taken for each item. In this case, it prints the item.
-
-The loop executes one time for each item in the list, substituting in the item for the word `number` in the code. For example, the first time through the loop the code would execute as `print(4)` and the second time as `print(5)`.
-
-The SQLMesh `@EACH` operator is used to implement the equivalent of a `for` loop in SQLMesh macros.
-
-`@EACH` gets its name from the fact that a loop performs the action "for each" item in the collection. It is fundamentally equivalent to the Python loop above, but you specify the two loop components differently.
-
-This example accomplishes a similar task to the Python example above:
+The function definition is specified inline. This example specifies the identity function, returning the input unmodified:
 
 ```sql linenums="1"
 SELECT
     @EACH([4, 5, 6], number -> number)
 FROM table
 ```
+
 The loop is set up by the first argument: `@EACH([4, 5, 6]` tells SQLMesh to step through the list of items in brackets.
 
-The second argument `number -> number` tells SQLMesh what action should be taken for each item using an "anonymous" function (aka "lambda" function). The left side of the arrow states what name the code on the right side will refer to each item as, just like `for number` in the Python example.
+The second argument `number -> number` tells SQLMesh what action should be taken for each item using an "anonymous" function (aka "lambda" function). The left side of the arrow states what name the code on the right side will refer to each item as (like `name` in `for [name] in [items]` in a Python `for` loop).
 
 The right side of the arrow specifies what should be done to each item in the list. `number -> number` tells `@EACH` that for each item `number` it should return that item (e.g., `1`).
 
@@ -282,7 +293,7 @@ SQLMesh macros use their semantic understanding of SQL code to take automatic ac
 1. It prints the item
 2. It knows fields are separated by commas in `SELECT`, so it automatically separates the printed items with commas
 
-Because of the automatic print and comma-separation, the anonymous function `number -> number` tells `@EACH` that for each item `number` it should print the item and separate the items with commas. Therefore, the complete output from the example above is:
+Because of the automatic print and comma-separation, the anonymous function `number -> number` tells `@EACH` that for each item `number` it should print the item and separate the items with commas. Therefore, the complete output from the example is:
 
 ```sql linenums="1"
 SELECT
@@ -292,7 +303,7 @@ SELECT
 FROM table
 ```
 
-The basic example above is too simple to be useful. Many uses of `@EACH` will involve using the values as one or both of a literal value and an identifier.
+This basic example is too simple to be useful. Many uses of `@EACH` will involve using the values as one or both of a literal value and an identifier.
 
 For example, a column `favorite_number` in our data might contain values `4`, `5`, and `6`, and we want to unpack that column into three indicator (i.e., binary, dummy, one-hot encoded) columns. We could write that by hand as:
 
@@ -304,7 +315,7 @@ SELECT
 FROM table
 ```
 
-In this code each number is being used in two distinct ways. For example, `4` is being used:
+In that SQL query each number is being used in two distinct ways. For example, `4` is being used:
 
 1. As a literal numeric value in `favorite_number = 4`
 2. As part of a column name in `favorite_4`
@@ -349,7 +360,7 @@ SELECT
 FROM table
 ```
 
-Now we can place the array values at the end of a column name by using the SQLMesh macro operator `@` inside the `@EACH` operator:
+We can place the array values at the end of a column name by using the SQLMesh macro operator `@` inside the `@EACH` function definition:
 
 ```sql linenums="1"
 SELECT
@@ -369,7 +380,7 @@ FROM table
 
 This syntax works regardless of whether the array values are quoted or not.
 
-NOTE: SQLMesh macros support placing macro values at the end of a column name simply using `column_@x`. However if you wish to substitute the variable anywhere else in the identifier, you need to use the more explicit substitution syntax `@{}`. This avoids ambiguity. These are valid `@{x}_column` or `my_@{x}_column`.
+NOTE: SQLMesh macros support placing macro values at the end of a column name simply using `column_@x`. However if you wish to substitute the variable anywhere else in the identifier, you need to use the more explicit substitution syntax `@{}`. This avoids ambiguity. These are valid uses: `@{x}_column` or `my_@{x}_column`.
 
 ### @IF
 
@@ -389,15 +400,7 @@ These elements are specified as:
 
 The value to return if the condition is `FALSE` is optional - if it is not provided and the condition is `FALSE`, then the macro has no effect on the resulting query.
 
-It's also possible to use this macro in order to conditionally execute pre/post-statements:
-
-```sql linenums="1"
-@IF([logical condition], [statement to execute if TRUE]);
-```
-
-The `@IF` pre/post-statement itself must end with a semi-colon, but the inner statement argument must not.
-
-The logical condition should be written *in SQL* and is evaluated with [SQLGlot's](https://github.com/tobymao/sqlglot) SQL engine. It supports the following operators:
+The logical condition should be written *in SQL* and is evaluated with [SQLGlot's](https://github.com/tobymao/sqlglot) SQL executor. It supports the following operators:
 
 - Equality: `=` for equals, `!=` or `<>` for not equals
 - Comparison: `<`, `>`, `<=`, `>=`,
@@ -451,9 +454,19 @@ SELECT
 FROM table
 ```
 
-Another example is conditionally executing a pre/post-statement depending on the current [runtime stage](./macro_variables.md#predefined-variables). For instance, the following `@IF` post-statement will only be executed at model evaluation time:
+#### Pre/post-statements
+
+`@IF` may be used to conditionally execute pre/post-statements:
 
 ```sql linenums="1"
+@IF([logical condition], [statement to execute if TRUE]);
+```
+
+The `@IF` statement itself must end with a semi-colon, but the inner statement argument must not.
+
+This example conditionally executes a pre/post-statement depending on the model's [runtime stage](./macro_variables.md#predefined-variables), accessed via the pre-defined macro variable `@runtime_stage`. The `@IF` post-statement will only be executed at model evaluation time:
+
+```sql linenums="1" hl_lines="17-20"
 MODEL (
   name sqlmesh_example.full_model,
   kind FULL,
@@ -476,7 +489,7 @@ ORDER BY item_id;
 );
 ```
 
-NOTE: we can also, say, alter the type of a column if the `@runtime_stage` is `'creating'`, but that will only have meaningful effects if the corresponding model is of an incremental kind, since `FULL` models are rebuilt on each evaluation and hence any changes made at their creation stage will be overwritten.
+NOTE: alternatively, we could alter a column's type if the `@runtime_stage = 'creating'`, but that would only be useful if the model is incremental and the alteration would persist. `FULL` models are rebuilt on each evaluation, so changes made at their creation stage will be overwritten each time the model is evaluated.
 
 ### @EVAL
 
@@ -512,7 +525,7 @@ FROM table
 
 The user-specified anonymous function must evaluate to `TRUE` or `FALSE`. `@FILTER` applies the function to each item in the array, only including the item in the output array if it meets the condition.
 
-The anonymous function should be written *in SQL* and is evaluated with [SQLGlot's](https://github.com/tobymao/sqlglot) SQL engine. It supports standard SQL equality and comparison operators - see [`@IF`](#if) above for more information about supported operators.
+The anonymous function should be written *in SQL* and is evaluated with [SQLGlot's](https://github.com/tobymao/sqlglot) SQL executor. It supports standard SQL equality and comparison operators - see [`@IF`](#if) above for more information about supported operators.
 
 For example, consider this `@FILTER` call:
 
@@ -532,7 +545,7 @@ For example, an anonymous function for `@EACH` might be specified `x -> x + 1`. 
 
 Because the `@REDUCE` anonymous function takes two arguments, the text to the left of the arrow must contain two comma-separated names in parentheses. For example, `(x, y) -> x + y` tells SQLMesh that items will be referred to as `x` and `y` in the code to the right of the arrow.
 
-Note that even though the anonymous function takes only two arguments the input array can contain as many items as necessary.
+Even though the anonymous function takes only two arguments, the input array can contain as many items as necessary.
 
 Consider the anonymous function `(x, y) -> x + y`. Conceptually, only the `y` argument corresponds to items in the array; the `x` argument is a temporary value created when the function is evaluated.
 
@@ -554,7 +567,7 @@ WHERE
   col1 = 1 and col2 = 1 and col3 = 1
 ```
 
-We can use `@EACH` to build each column's predicate (`col1 = 1`) and `@REDUCE` to combine them into a single statement:
+We can use `@EACH` to build each column's predicate (e.g., `col1 = 1`) and `@REDUCE` to combine them into a single statement:
 
 ```sql linenums="1"
 SELECT
@@ -570,36 +583,87 @@ WHERE
 
 ### @STAR
 
-`@STAR` is used to return a list of projections for the given relation. It supports the following arguments, in this order:
+`@STAR` is used to return a set of column selections in a query.
 
-- `relation`: The relation to select star from
-- `alias` (optional): The alias of the relation
+`@STAR` is named after SQL's star operator `*`, but it allows you to programmatically generate a set of column selections and aliases instead of just selecting all available columns. A query may use more than one `@STAR` and may also include explicit column selections.
+
+`@STAR` uses SQLMesh's knowledge of each table's columns and data types to generate the appropriate column list. The resulting query always `CAST`s columns to their data type in the source table.
+
+`@STAR` supports the following arguments, in this order:
+
+- `relation`: The relation/table whose columns are being selected
+- `alias` (optional): The alias of the relation (if it has one)
 - `except` (optional): A list of columns to exclude
-- `prefix` (optional): A prefix to use for all selected columns
-- `suffix` (optional): A suffix to use for all selected columns
+- `prefix` (optional): A string to use as a prefix for all selected column names
+- `suffix` (optional): A string to use as a suffix for all selected column names
 - `quote_identifiers` (optional): Whether to quote the resulting identifiers, defaults to true
 
 For example, consider the following query:
 
 ```sql linenums="1"
 SELECT
-  @STAR(foo, bar, [c], 'baz_')
+  @STAR(relation=foo, alias=bar, except=[c], prefix='baz_', suffix='_qux')
 FROM foo AS bar
 ```
 
-Let's assume that `foo` is a table that contains four columns: `a` (`TEXT`), `b` (`TEXT`), `c` (`TEXT`) and `d` (`INT`). Then, the query would be rendered as:
+The arguments to `@STAR` are:
+1. The name of the table `foo` (from the query's `FROM foo`)
+2. The table alias `bar` (from the query's `AS bar`)
+3. A list of columns to exclude from the selection, containing one column `c`
+4. A string `baz_` to use as a prefix for all column names
+5. A string `_qux` to use as a suffix for all column names
+
+`foo` is a table that contains four columns: `a` (`TEXT`), `b` (`TEXT`), `c` (`TEXT`) and `d` (`INT`). After macro expansion, the query would be rendered as:
 
 ```sql linenums="1"
 SELECT
-  CAST("bar"."a" AS TEXT) AS "baz_a",
-  CAST("bar"."b" AS TEXT) AS "baz_b",
-  CAST("bar"."d" AS INT) AS "baz_d"
+  CAST("bar"."a" AS TEXT) AS "baz_a_qux",
+  CAST("bar"."b" AS TEXT) AS "baz_b_qux",
+  CAST("bar"."d" AS INT) AS "baz_d_qux"
 FROM foo AS bar
 ```
 
+Note these aspects of the rendered query:
+- Each column is `CAST` to its data type in the table `foo` (e.g., `a` to `TEXT`)
+- Each column selection uses the alias `bar` (e.g., `"bar"."a"`)
+- Column `c` is not present because it was passed to `@STAR`'s `except` argument
+- Each column alias is prefixed with `baz_` and suffixed with `_qux` (e.g., `"baz_a_qux"`)
+
+Now consider a more complex example that provides different pre/suffixes to `a` and `b` than to `d` and includes an explicit column `my_column`:
+
+```sql linenums="1"
+SELECT
+  @STAR(relation=foo, alias=bar, except=[c, d], prefix='ab_pre_', suffix='_ab_suf'),
+  @STAR(relation=foo, alias=bar, except=[a, b, c], prefix='d_pre_', suffix='_d_suf'),
+  my_column
+FROM foo AS bar
+```
+
+As before, `foo` is a table that contains four columns: `a` (`TEXT`), `b` (`TEXT`), `c` (`TEXT`) and `d` (`INT`). After macro expansion, the query would be rendered as:
+
+```sql linenums="1"
+SELECT
+  CAST("bar"."a" AS TEXT) AS "ab_pre_a_ab_suf",
+  CAST("bar"."b" AS TEXT) AS "ab_pre_b_ab_suf",
+  CAST("bar"."d" AS INT) AS "d_pre_d_d_suf",
+  my_column
+FROM foo AS bar
+```
+
+Note these aspects of the rendered query:
+- Columns `a` and `b` have the prefix `"ab_pre_"` and suffix `"_ab_suf"`, while column `d` has the prefix `"d_pre_"` and suffix `"_d_suf"`
+- Column `c` is not present because it was passed to the `except` argument in both `@STAR` calls
+- `my_column` is present in the query
+
 ### @GENERATE_SURROGATE_KEY
 
-`@GENERATE_SURROGATE_KEY` is used to generate a surrogate key for a sequence of fields that are passed as arguments to it.
+`@GENERATE_SURROGATE_KEY` generates a surrogate key from a set of columns. The surrogate key is a sequence of alphanumeric digits returned by the [`MD5` hash function](https://en.wikipedia.org/wiki/MD5) on the concatenated column values.
+
+The surrogate key is created by:
+1. `CAST`ing each column's value to `TEXT` (or the SQL engine's equivalent type)
+2. Replacing `NULL` values with the text `'_sqlmesh_surrogate_key_null_'` for each column
+3. Concatenating the column values after steps (1) and (2)
+4. Applying the [`MD5()` hash function](https://en.wikipedia.org/wiki/MD5) to the concatenated value returned by step (3)
 
 For example, the following query:
 
@@ -633,14 +697,14 @@ For example, the following query:
 
 ```sql linenums="1"
 SELECT
-  @SAFE_ADD(a, b)
+  @SAFE_ADD(a, b, c)
 FROM foo
 ```
 would be rendered as:
 
 ```sql linenums="1"
 SELECT
-  CASE WHEN a IS NULL AND b IS NULL THEN NULL ELSE COALESCE(a, 0) + COALESCE(b, 0) END
+  CASE WHEN a IS NULL AND b IS NULL AND c IS NULL THEN NULL ELSE COALESCE(a, 0) + COALESCE(b, 0) + COALESCE(c, 0) END
 FROM foo
 ```
 
@@ -652,14 +716,14 @@ For example, the following query:
 
 ```sql linenums="1"
 SELECT
-  @SAFE_SUB(a, b)
+  @SAFE_SUB(a, b, c)
 FROM foo
 ```
 would be rendered as:
 
 ```sql linenums="1"
 SELECT
-  CASE WHEN a IS NULL AND b IS NULL THEN NULL ELSE COALESCE(a, 0) - COALESCE(b, 0) END
+  CASE WHEN a IS NULL AND b IS NULL AND c IS NULL THEN NULL ELSE COALESCE(a, 0) - COALESCE(b, 0) - COALESCE(c, 0) END
 FROM foo
 ```
 
@@ -684,9 +748,9 @@ FROM foo
 
 ### @UNION
 
-`@UNION` returns a `UNION` query that selects all columns from the given tables which have the same name and type.
+`@UNION` returns a `UNION` query that selects all columns with matching names and data types from the tables.
 
-Its first argument is the `UNION` "type", i.e. `'ALL'` or `'DISTINCT`, and after it come the tables to be combined.
+Its first argument is the `UNION` "type", `'DISTINCT` (removing duplicated rows) or `'ALL'` (returning all rows). Subsequent arguments are the tables to be combined.
 
 Let's assume that:
 
@@ -715,7 +779,7 @@ FROM bar
 
 ### @HAVERSINE_DISTANCE
 
-`@HAVERSINE_DISTANCE` returns the [haversine distance](https://en.wikipedia.org/wiki/Haversine_formula) between two points.
+`@HAVERSINE_DISTANCE` returns the [haversine distance](https://en.wikipedia.org/wiki/Haversine_formula) between two geographic points.
 
 It supports the following arguments, in this order:
 
@@ -743,12 +807,12 @@ FROM rides
 
 ### @PIVOT
 
-`@PIVOT` returns a list of projections as a result of pivoting the given column on the given values.
+`@PIVOT` returns a set of columns as a result of pivoting an input column on the specified values. This operation is sometimes described a pivoting from a "long" format (multiple values in a single column) to a "wide" format (one value in each of multiple columns).
 
 It supports the following arguments, in this order:
 
 - `column`: The column to pivot
-- `values`: The values to be used for pivoting
+- `values`: The values to use for pivoting (one column is created for each value in `values`)
 - `alias`: Whether to create aliases for the resulting columns, defaults to true
 - `agg` (optional): The aggregation function to use, defaults to `SUM`
 - `cmp` (optional): The comparison operator to use for comparing the column values, defaults to `=`
@@ -871,7 +935,7 @@ GROUP BY item_id
 
 If the `@WHERE` argument were instead set to `FALSE` the `WHERE` clause would be omitted from the query.
 
-These operators aren't too useful if the argument's value is hard-coded. Instead, the argument can consist of code executable by the SQLGlot SQL engine.
+These operators aren't too useful if the argument's value is hard-coded. Instead, the argument can consist of code executable by the SQLGlot SQL executor.
 
 For example, the `WHERE` clause will be included in this query because 1 less than 2:
 
