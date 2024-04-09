@@ -4,6 +4,7 @@ from datetime import datetime
 import ibis  # type: ignore
 import pandas as pd
 from constants import DB_PATH  # type: ignore
+from sqlglot import exp
 
 from sqlmesh import ExecutionContext, model
 from sqlmesh.core.model import FullKind
@@ -27,13 +28,12 @@ def execute(
     **kwargs: t.Any,
 ) -> pd.DataFrame:
     # get physical table name
-    table_name = context.table("ibis.incremental_model").split(".")
-
+    upstream_model = exp.to_table(context.table("ibis.incremental_model"))
     # connect ibis to database
     con = ibis.duckdb.connect(DB_PATH)
 
     # retrieve table
-    incremental_model = con.table(name=table_name[-1], schema=table_name[-2])
+    incremental_model = con.table(name=upstream_model.name, schema=upstream_model.db)
 
     # build query
     count = incremental_model.id.nunique()
