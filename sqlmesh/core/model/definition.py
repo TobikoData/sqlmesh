@@ -1094,6 +1094,7 @@ class SqlModel(_SqlBasedModel):
 
     @cached_property
     def _query_renderer(self) -> QueryRenderer:
+        no_quote_identifiers = self.kind.is_view and self.dialect in ("trino", "spark")
         return QueryRenderer(
             self.query,
             self.dialect,
@@ -1105,6 +1106,7 @@ class SqlModel(_SqlBasedModel):
             python_env=self.python_env,
             only_execution_time=self.kind.only_execution_time,
             default_catalog=self.default_catalog,
+            quote_identifiers=not no_quote_identifiers,
         )
 
     @property

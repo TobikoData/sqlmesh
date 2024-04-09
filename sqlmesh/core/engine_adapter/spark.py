@@ -53,6 +53,7 @@ class SparkEngineAdapter(GetCurrentCatalogFromFunctionMixin, HiveMetastoreTableP
     # Note: Some formats (like Delta and Iceberg) support REPLACE TABLE but since we don't
     # currently check for storage formats we say we don't support REPLACE TABLE
     SUPPORTS_REPLACE_TABLE = False
+    QUOTE_IDENTIFIERS_IN_VIEWS = False
 
     WAP_PREFIX = "wap_"
     BRANCH_PREFIX = "branch_"
