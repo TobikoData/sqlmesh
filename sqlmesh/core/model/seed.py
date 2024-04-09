@@ -76,6 +76,7 @@ class CsvSeedReader:
                 StringIO(self.content),
                 index_col=False,
                 on_bad_lines="error",
+                low_memory=False,
                 **{k: v for k, v in self.settings.dict().items() if v is not None},
             )
             self._df = self._df.rename(
