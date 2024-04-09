@@ -120,7 +120,7 @@ def test_create_view_properties(make_mocked_engine_adapter: t.Callable):
 
     adapter.create_view("test_view", parse_one("SELECT a FROM tbl"), table_properties={"a": exp.convert(1)})  # type: ignore
     adapter.cursor.execute.assert_called_once_with(
-        "CREATE OR REPLACE VIEW `test_view` TBLPROPERTIES ('a'=1) AS SELECT `a` FROM `tbl`"
+        "CREATE OR REPLACE VIEW test_view TBLPROPERTIES ('a'=1) AS SELECT a FROM tbl"
     )
 
 
@@ -906,7 +906,7 @@ def test_comments_hive(mocker: MockerFixture, make_mocked_engine_adapter: t.Call
         f"CREATE TABLE IF NOT EXISTS `test_table` (`a` INT COMMENT '{truncated_column_comment}', `b` INT) COMMENT '{truncated_table_comment}'",
         f"CREATE TABLE IF NOT EXISTS `test_table` COMMENT '{truncated_table_comment}' AS SELECT `a`, `b` FROM `source_table`",
         f"ALTER TABLE `test_table` ALTER COLUMN `a` COMMENT '{truncated_column_comment}'",
-        f"CREATE OR REPLACE VIEW `test_view` COMMENT '{truncated_table_comment}' AS SELECT `a`, `b` FROM `source_table`",
+        f"CREATE OR REPLACE VIEW test_view COMMENT '{truncated_table_comment}' AS SELECT a, b FROM source_table",
         f"COMMENT ON TABLE `test_table` IS '{truncated_table_comment}'",
         f"ALTER TABLE `test_table` ALTER COLUMN `a` COMMENT '{truncated_column_comment}'",
     ]
@@ -964,7 +964,7 @@ def test_comments_iceberg(mocker: MockerFixture, make_mocked_engine_adapter: t.C
         f"CREATE TABLE IF NOT EXISTS `test_table` (`a` INT COMMENT '{long_column_comment}', `b` INT) COMMENT '{long_table_comment}'",
         f"CREATE TABLE IF NOT EXISTS `test_table` COMMENT '{long_table_comment}' AS SELECT `a`, `b` FROM `source_table`",
         f"ALTER TABLE `test_table` ALTER COLUMN `a` COMMENT '{long_column_comment}'",
-        f"CREATE OR REPLACE VIEW `test_view` COMMENT '{long_table_comment}' AS SELECT `a`, `b` FROM `source_table`",
+        f"CREATE OR REPLACE VIEW test_view COMMENT '{long_table_comment}' AS SELECT a, b FROM source_table",
         f"COMMENT ON TABLE `test_table` IS '{long_table_comment}'",
         f"ALTER TABLE `test_table` ALTER COLUMN `a` COMMENT '{long_column_comment}'",
     ]

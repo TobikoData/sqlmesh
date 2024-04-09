@@ -52,6 +52,7 @@ class BaseExpressionRenderer:
         only_execution_time: bool = False,
         schema: t.Optional[t.Dict[str, t.Any]] = None,
         default_catalog: t.Optional[str] = None,
+        quote_identifiers: bool = True,
     ):
         self._expression = expression
         self._dialect = dialect
@@ -61,6 +62,7 @@ class BaseExpressionRenderer:
         self._python_env = python_env or {}
         self._only_execution_time = only_execution_time
         self._default_catalog = default_catalog
+        self._quote_identifiers = quote_identifiers
         self.update_schema({} if schema is None else schema)
         self._cache: t.Dict[CacheKey, t.List[t.Optional[exp.Expression]]] = {}
 
@@ -171,16 +173,16 @@ class BaseExpressionRenderer:
                     raise_config_error(f"Failed to resolve macro for expression. {ex}", self._path)
 
                 if expression:
-                    with _normalize_and_quote(
-                        expression, self._dialect, self._default_catalog
-                    ) as expression:
+                    with self._normalize_and_quote(expression) as expression:
                         if hasattr(expression, "selects"):
                             for select in expression.selects:
                                 if not isinstance(select, exp.Alias) and select.output_name not in (
                                     "*",
                                     "",
                                 ):
-                                    alias = exp.alias_(select, select.output_name, quoted=True)
+                                    alias = exp.alias_(
+                                        select, select.output_name, quoted=self._quote_identifiers
+                                    )
                                     comments = alias.this.comments
                                     if comments:
                                         alias.add_comments(comments)
@@ -227,7 +229,7 @@ class BaseExpressionRenderer:
         from sqlmesh.core.snapshot import to_table_mapping
 
         expression = expression.copy()
-        with _normalize_and_quote(expression, self._dialect, self._default_catalog) as expression:
+        with self._normalize_and_quote(expression) as expression:
             snapshots = snapshots or {}
             table_mapping = table_mapping or {}
             mapping = {**to_table_mapping(snapshots.values(), deployability_index), **table_mapping}
@@ -293,6 +295,14 @@ class BaseExpressionRenderer:
             runtime_stage,
         )
 
+    @contextmanager
+    def _normalize_and_quote(self, query: E) -> t.Iterator[E]:
+        qualify_tables(query, catalog=self._default_catalog, dialect=self._dialect)
+        normalize_identifiers(query, dialect=self._dialect)
+        yield query
+        if self._quote_identifiers:
+            quote_identifiers(query, dialect=self._dialect)
+
 
 class ExpressionRenderer(BaseExpressionRenderer):
     def render(
@@ -348,6 +358,7 @@ class QueryRenderer(BaseExpressionRenderer):
         python_env: t.Optional[t.Dict[str, Executable]] = None,
         only_execution_time: bool = False,
         default_catalog: t.Optional[str] = None,
+        quote_identifiers: bool = True,
     ):
         super().__init__(
             expression=query,
@@ -359,6 +370,7 @@ class QueryRenderer(BaseExpressionRenderer):
             only_execution_time=only_execution_time,
             schema=schema,
             default_catalog=default_catalog,
+            quote_identifiers=quote_identifiers,
         )
 
         self._model_fqn = model_fqn
@@ -509,6 +521,7 @@ class QueryRenderer(BaseExpressionRenderer):
                             schema=self.schema,
                             infer_schema=False,
                             catalog=self._default_catalog,
+                            quote_identifiers=self._quote_identifiers,
                         ),
                         schema=self.schema,
                     )
@@ -525,11 +538,3 @@ class QueryRenderer(BaseExpressionRenderer):
                 annotate_types(select)
 
         return query
-
-
-@contextmanager
-def _normalize_and_quote(query: E, dialect: str, default_catalog: t.Optional[str]) -> t.Iterator[E]:
-    qualify_tables(query, catalog=default_catalog, dialect=dialect)
-    normalize_identifiers(query, dialect=dialect)
-    yield query
-    quote_identifiers(query, dialect=dialect)

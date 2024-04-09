@@ -52,6 +52,7 @@ class TrinoEngineAdapter(
     COMMENT_CREATION_VIEW = CommentCreationView.COMMENT_COMMAND_ONLY
     SUPPORTS_REPLACE_TABLE = False
     DEFAULT_CATALOG_TYPE = "hive"
+    QUOTE_IDENTIFIERS_IN_VIEWS = False
 
     @property
     def connection(self) -> TrinoConnection:
