@@ -133,7 +133,7 @@ For this reason, the `plan` command supports the `--restate-model`, which allows
 
 Application of a plan will trigger a cascading backfill for all specified models (other than external tables), as well as all models downstream from them. The plan's date range determines the data intervals that will be affected.
 
-Please note that models of kinds [INCREMENTAL_BY_UNIQUE_KEY](models/model_kinds.md#INCREMENTAL_BY_UNIQUE_KEY), [SCD_TYPE_2_BY_TIME](models/model_kinds.md#scd-type-2), and [SCD_TYPE_2_BY_COLUMN](models/model_kinds.md#scd-type-2) cannot be partially restated. Therefore, such models will be fully refreshed regardless of the start/end dates provided by a user in the plan.
+Please note that models of kinds [INCREMENTAL_BY_UNIQUE_KEY](models/model_kinds.md#INCREMENTAL_BY_UNIQUE_KEY), [SCD_TYPE_2_BY_TIME](models/model_kinds.md#scd-type-2), and [SCD_TYPE_2_BY_COLUMN](models/model_kinds.md#scd-type-2) cannot be partially restated. Therefore, such models will be fully refreshed regardless of the start/end dates provided by a user in the plan. To prevent such models from ever being restated, set the [disable_restatement](models/overview.md#disable_restatement) attribute to `true`.
 
 See examples below for how to restate both based on model names and model tags.
 
