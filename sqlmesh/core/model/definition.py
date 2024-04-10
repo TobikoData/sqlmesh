@@ -1010,7 +1010,7 @@ class SqlModel(_SqlBasedModel):
             return {}
 
         return {
-            select.alias_or_name: "\n".join(comment.strip() for comment in select.comments)
+            select.alias_or_name: select.comments[-1].strip()
             for select in query.selects
             if select.comments
         }
