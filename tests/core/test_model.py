@@ -528,6 +528,7 @@ def test_column_descriptions(sushi_context, assert_exp_eq):
         );
 
         SELECT
+          -- this is the id column, used in ...
           id::int, -- primary key
           foo::int, -- bar
         FROM table
@@ -539,11 +540,13 @@ def test_column_descriptions(sushi_context, assert_exp_eq):
         model.query,
         """
         SELECT
+          -- this is the id column, used in ...
           id::int, -- primary key
           foo::int, -- bar
         FROM table
-    """,
+        """,
     )
+    assert model.column_descriptions == {"id": "primary key", "foo": "bar"}
 
 
 def test_model_jinja_macro_reference_extraction():
