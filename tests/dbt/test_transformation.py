@@ -126,11 +126,50 @@ def test_model_kind():
     assert ModelConfig(
         materialized=Materialization.INCREMENTAL, unique_key=["bar"], incremental_strategy="merge"
     ).model_kind(context) == IncrementalByUniqueKeyKind(
-        unique_key=["bar"], dialect="duckdb", forward_only=True
+        unique_key=["bar"], dialect="duckdb", forward_only=True, disable_restatement=False
     )
+
     assert ModelConfig(materialized=Materialization.INCREMENTAL, unique_key=["bar"]).model_kind(
         context
-    ) == IncrementalByUniqueKeyKind(unique_key=["bar"], dialect="duckdb", forward_only=True)
+    ) == IncrementalByUniqueKeyKind(
+        unique_key=["bar"], dialect="duckdb", forward_only=True, disable_restatement=False
+    )
+
+    assert ModelConfig(
+        materialized=Materialization.INCREMENTAL, unique_key=["bar"], full_refresh=False
+    ).model_kind(context) == IncrementalByUniqueKeyKind(
+        unique_key=["bar"], dialect="duckdb", forward_only=True, disable_restatement=True
+    )
+
+    assert ModelConfig(
+        materialized=Materialization.INCREMENTAL, unique_key=["bar"], full_refresh=True
+    ).model_kind(context) == IncrementalByUniqueKeyKind(
+        unique_key=["bar"], dialect="duckdb", forward_only=True, disable_restatement=False
+    )
+
+    assert ModelConfig(
+        materialized=Materialization.INCREMENTAL, unique_key=["bar"], disable_restatement=True
+    ).model_kind(context) == IncrementalByUniqueKeyKind(
+        unique_key=["bar"], dialect="duckdb", forward_only=True, disable_restatement=True
+    )
+
+    assert ModelConfig(
+        materialized=Materialization.INCREMENTAL,
+        unique_key=["bar"],
+        disable_restatement=True,
+        full_refresh=True,
+    ).model_kind(context) == IncrementalByUniqueKeyKind(
+        unique_key=["bar"], dialect="duckdb", forward_only=True, disable_restatement=True
+    )
+
+    assert ModelConfig(
+        materialized=Materialization.INCREMENTAL,
+        unique_key=["bar"],
+        disable_restatement=True,
+        full_refresh=False,
+    ).model_kind(context) == IncrementalByUniqueKeyKind(
+        unique_key=["bar"], dialect="duckdb", forward_only=True, disable_restatement=True
+    )
 
     assert ModelConfig(
         materialized=Materialization.INCREMENTAL, time_column="foo", incremental_strategy="merge"
@@ -159,24 +198,53 @@ def test_model_kind():
         materialized=Materialization.INCREMENTAL,
         incremental_strategy="insert_overwrite",
         partition_by={"field": "bar"},
-    ).model_kind(context) == IncrementalUnmanagedKind(insert_overwrite=True)
+    ).model_kind(context) == IncrementalUnmanagedKind(
+        insert_overwrite=True, disable_restatement=False
+    )
 
     assert ModelConfig(materialized=Materialization.INCREMENTAL).model_kind(
         context
-    ) == IncrementalUnmanagedKind(insert_overwrite=True)
+    ) == IncrementalUnmanagedKind(insert_overwrite=True, disable_restatement=False)
 
-    assert (
-        ModelConfig(
-            materialized=Materialization.INCREMENTAL, incremental_strategy="append"
-        ).model_kind(context)
-        == IncrementalUnmanagedKind()
+    assert ModelConfig(
+        materialized=Materialization.INCREMENTAL, incremental_strategy="append"
+    ).model_kind(context) == IncrementalUnmanagedKind(disable_restatement=False)
+
+    assert ModelConfig(
+        materialized=Materialization.INCREMENTAL,
+        incremental_strategy="insert_overwrite",
+        partition_by={"field": "bar", "data_type": "int64"},
+    ).model_kind(context) == IncrementalUnmanagedKind(
+        insert_overwrite=True, disable_restatement=False
     )
 
     assert ModelConfig(
         materialized=Materialization.INCREMENTAL,
         incremental_strategy="insert_overwrite",
         partition_by={"field": "bar", "data_type": "int64"},
-    ).model_kind(context) == IncrementalUnmanagedKind(insert_overwrite=True)
+        full_refresh=False,
+    ).model_kind(context) == IncrementalUnmanagedKind(
+        insert_overwrite=True, disable_restatement=True
+    )
+
+    assert ModelConfig(
+        materialized=Materialization.INCREMENTAL,
+        incremental_strategy="insert_overwrite",
+        partition_by={"field": "bar", "data_type": "int64"},
+        disable_restatement=True,
+        full_refresh=True,
+    ).model_kind(context) == IncrementalUnmanagedKind(
+        insert_overwrite=True, disable_restatement=True
+    )
+
+    assert ModelConfig(
+        materialized=Materialization.INCREMENTAL,
+        incremental_strategy="insert_overwrite",
+        partition_by={"field": "bar", "data_type": "int64"},
+        disable_restatement=True,
+    ).model_kind(context) == IncrementalUnmanagedKind(
+        insert_overwrite=True, disable_restatement=True
+    )
 
     with pytest.raises(ConfigError) as exception:
         ModelConfig(

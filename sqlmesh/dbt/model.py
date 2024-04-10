@@ -84,6 +84,7 @@ class ModelConfig(BaseModelConfig):
     sql_header: t.Optional[str] = None
     unique_key: t.Optional[t.List[str]] = None
     partition_by: t.Optional[t.Union[t.List[str], t.Dict[str, t.Any]]] = None
+    full_refresh: t.Optional[bool] = None
 
     # Snapshot (SCD Type 2) Fields
     updated_at: t.Optional[str] = None
@@ -184,8 +185,8 @@ class ModelConfig(BaseModelConfig):
         if materialization == Materialization.VIEW:
             return ViewKind()
         if materialization == Materialization.INCREMENTAL:
-            incremental_kwargs = {"dialect": context.dialect}
-            for field in ("batch_size", "lookback", "forward_only", "disable_restatement"):
+            incremental_kwargs: t.Dict[str, t.Any] = {"dialect": context.dialect}
+            for field in ("batch_size", "lookback", "forward_only"):
                 field_val = getattr(self, field, None) or self.meta.get(field, None)
                 if field_val:
                     incremental_kwargs[field] = field_val
@@ -205,7 +206,16 @@ class ModelConfig(BaseModelConfig):
 
                 return IncrementalByTimeRangeKind(
                     time_column=self.time_column,
+                    disable_restatement=(
+                        self.disable_restatement if self.disable_restatement is not None else False
+                    ),
                     **incremental_kwargs,
+                )
+
+            disable_restatement = self.disable_restatement
+            if disable_restatement is None:
+                disable_restatement = (
+                    not self.full_refresh if self.full_refresh is not None else False
                 )
 
             if self.unique_key:
@@ -220,7 +230,11 @@ class ModelConfig(BaseModelConfig):
                         f"{self.canonical_name(context)}: SQLMesh incremental by unique key strategy is not compatible with '{strategy}'"
                         f" incremental strategy. Supported strategies include {collection_to_str(INCREMENTAL_BY_UNIQUE_KEY_STRATEGIES)}."
                     )
-                return IncrementalByUniqueKeyKind(unique_key=self.unique_key, **incremental_kwargs)
+                return IncrementalByUniqueKeyKind(
+                    unique_key=self.unique_key,
+                    disable_restatement=disable_restatement,
+                    **incremental_kwargs,
+                )
 
             logger.warning(
                 "Using unmanaged incremental materialization for model '%s'. Some features might not be available. Consider adding either a time_column (%s) or a unique_key (%s) configuration to mitigate this",
@@ -234,6 +248,7 @@ class ModelConfig(BaseModelConfig):
             return IncrementalUnmanagedKind(
                 insert_overwrite=strategy in INCREMENTAL_BY_TIME_STRATEGIES,
                 forward_only=incremental_kwargs.get("forward_only", True),
+                disable_restatement=disable_restatement,
             )
         if materialization == Materialization.EPHEMERAL:
             return EmbeddedKind()
