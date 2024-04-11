@@ -79,14 +79,15 @@ SQLMesh will automatically register comments if the engine supports it and the [
 
 SQLMesh will register a comment specified before the `MODEL` DDL block as the table comment in the underlying SQL engine. If the [`MODEL` DDL `description` field](#description) is also specified, SQLMesh will register it with the engine instead.
 
-If a comment is present on the same file line as a column definition in the model's SQL query, SQLMesh will automatically register the comment as a column comment in the underlying SQL engine.
+SQLMesh will automatically detect comments in a query's column selections and register each column's final comment in the underlying SQL engine.
 
 For example, the physical table created for the following model definition would have:
 
 1. The value of its `MODEL` DDL `description` field, "Revenue data for each customer", registered as a table comment in the SQL engine
-2. The comment on the same line as the `customer_id` column definition in the SQL query, "Customer's unique ID", registered as a column comment for the table's `customer_id` column
+2. The comment on the `customer_id` column definition, "Customer's unique ID", registered as a column comment for the table's `customer_id` column
+3. The second comment on the `revenue` column definition, "Revenue from customer orders", registered as a column comment for the table's `revenue` column
 
-```sql linenums="1" hl_lines="7 11"
+```sql linenums="1" hl_lines="7 11 13"
 -- The MODEL DDL 'description' field is present, so this comment will not be registered with the SQL engine
 MODEL (
   name sushi.customer_total_revenue,
@@ -98,8 +99,8 @@ MODEL (
 
 SELECT
   o.customer_id::TEXT, -- Customer's unique ID
-  -- This comment is between column definition lines so will not be registered with the SQL engine
-  SUM(o.amount)::DOUBLE AS revenue
+  -- This comment will not be registered because another `revenue` comment is present
+  SUM(o.amount)::DOUBLE AS revenue -- Revenue from customer orders
 FROM sushi.orders AS o
 GROUP BY o.customer_id;
 ```
