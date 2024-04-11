@@ -115,6 +115,13 @@ class ModelKindMixin:
         """Whether or not this model only cares about execution time to render."""
         return self.is_view or self.is_full or self.is_scd_type_2
 
+    @property
+    def full_history_restatement_only(self) -> bool:
+        """Whether or not this model only supports restatement of full history."""
+        return (
+            self.is_incremental_unmanaged or self.is_incremental_by_unique_key or self.is_scd_type_2
+        )
+
 
 class ModelKindName(str, ModelKindMixin, Enum):
     """The kind of model, determining how this data is computed and stored in the warehouse."""
@@ -342,7 +349,7 @@ class IncrementalUnmanagedKind(_ModelKind):
     name: Literal[ModelKindName.INCREMENTAL_UNMANAGED] = ModelKindName.INCREMENTAL_UNMANAGED
     insert_overwrite: SQLGlotBool = False
     forward_only: SQLGlotBool = True
-    disable_restatement: Literal[True] = True
+    disable_restatement: SQLGlotBool = True
 
     @property
     def data_hash_values(self) -> t.List[t.Optional[str]]:

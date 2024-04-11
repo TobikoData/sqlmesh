@@ -166,7 +166,7 @@ WHERE
   event_date BETWEEN @start_date AND @end_date;
 ```
 
-**Note:** Models of the `INCREMENTAL_BY_UNIQUE_KEY` kind are inherently [non-idempotent](../glossary.md#idempotency), which should be taken into consideration during data [restatement](../plans.md#restatement-plans).
+**Note:** Models of the `INCREMENTAL_BY_UNIQUE_KEY` kind are inherently [non-idempotent](../glossary.md#idempotency), which should be taken into consideration during data [restatement](../plans.md#restatement-plans). As a result, partial data restatement is not supported for this model kind, which means that the entire table will be recreated from scratch if restated.
 
 ### Unique Key Expressions
 
@@ -320,7 +320,9 @@ SQLMesh achieves this by adding a `valid_from` and `valid_to` column to your mod
 
 Therefore you can use these models to not only tell you what the latest value is for a given record but also what the values were anytime in the past. Note that maintaining this history does come at a cost of increased storage and compute and this may not be a good fit for sources that change frequently since the history could get very large.
 
-There are two ways to tracking changes: By Time (Recommended) or By Column. 
+**Note**: Partial data [restatement](../plans.md#restatement-plans) is not supported for this model kind, which means that the entire table will be recreated from scratch if restated. This may lead to data loss, which is why data restatement is disabled for models of this kind by default.
+
+There are two ways to tracking changes: By Time (Recommended) or By Column.
 
 ### SCD Type 2 By Time (Recommended)
 

@@ -30,6 +30,7 @@ from sqlmesh.core.model import (
 from sqlmesh.core.node import IntervalUnit
 from sqlmesh.core.snapshot import (
     DeployabilityIndex,
+    Intervals,
     Snapshot,
     SnapshotChangeCategory,
     SnapshotEvaluator,
@@ -487,7 +488,7 @@ def test_evaluate_materialized_view_with_execution_time_macro(
 
 
 @pytest.mark.parametrize("insert_overwrite", [False, True])
-def test_evaluate_incremental_unmanaged(
+def test_evaluate_incremental_unmanaged_with_intervals(
     mocker: MockerFixture, make_snapshot, adapter_mock, insert_overwrite
 ):
     model = SqlModel(
@@ -498,6 +499,7 @@ def test_evaluate_incremental_unmanaged(
     )
     snapshot = make_snapshot(model)
     snapshot.categorize_as(SnapshotChangeCategory.BREAKING)
+    snapshot.intervals = [(to_timestamp("2020-01-01"), to_timestamp("2020-01-02"))]
 
     evaluator = SnapshotEvaluator(adapter_mock)
     evaluator.evaluate(
@@ -521,6 +523,42 @@ def test_evaluate_incremental_unmanaged(
             model.render_query(),
             columns_to_types=model.columns_to_types,
         )
+
+
+@pytest.mark.parametrize("insert_overwrite", [False, True])
+def test_evaluate_incremental_unmanaged_no_intervals(
+    mocker: MockerFixture, make_snapshot, adapter_mock, insert_overwrite
+):
+    model = SqlModel(
+        name="test_schema.test_model",
+        query=parse_one("SELECT 1, ds FROM tbl_a"),
+        kind=IncrementalUnmanagedKind(insert_overwrite=insert_overwrite),
+        partitioned_by=["ds"],
+    )
+    snapshot = make_snapshot(model)
+    snapshot.categorize_as(SnapshotChangeCategory.BREAKING)
+
+    evaluator = SnapshotEvaluator(adapter_mock)
+    evaluator.evaluate(
+        snapshot,
+        start="2020-01-01",
+        end="2020-01-02",
+        execution_time="2020-01-02",
+        snapshots={},
+    )
+
+    adapter_mock.replace_query.assert_called_once_with(
+        snapshot.table_name(),
+        model.render_query(),
+        clustered_by=[],
+        column_descriptions={},
+        columns_to_types=None,
+        partition_interval_unit=model.interval_unit,
+        partitioned_by=model.partitioned_by,
+        storage_format=None,
+        table_description=None,
+        table_properties={},
+    )
 
 
 def test_create_tables_exists(mocker: MockerFixture, adapter_mock, make_snapshot):
@@ -1199,7 +1237,16 @@ def test_create_ctas_scd_type_2_by_time(adapter_mock, make_snapshot):
     )
 
 
-def test_insert_into_scd_type_2_by_time(adapter_mock, make_snapshot):
+@pytest.mark.parametrize(
+    "intervals,truncate",
+    [
+        ([(to_timestamp("2024-01-01"), to_timestamp("2024-01-02"))], False),
+        ([], True),
+    ],
+)
+def test_insert_into_scd_type_2_by_time(
+    adapter_mock, make_snapshot, intervals: Intervals, truncate: bool
+):
     evaluator = SnapshotEvaluator(adapter_mock)
     model = load_sql_based_model(
         parse(  # type: ignore
@@ -1218,6 +1265,7 @@ def test_insert_into_scd_type_2_by_time(adapter_mock, make_snapshot):
 
     snapshot = make_snapshot(model)
     snapshot.categorize_as(SnapshotChangeCategory.BREAKING)
+    snapshot.intervals = intervals
 
     evaluator.evaluate(
         snapshot,
@@ -1249,6 +1297,7 @@ def test_insert_into_scd_type_2_by_time(adapter_mock, make_snapshot):
         table_description=None,
         column_descriptions={},
         updated_at_as_valid_from=False,
+        truncate=truncate,
     )
 
 
@@ -1355,7 +1404,16 @@ def test_create_ctas_scd_type_2_by_column(adapter_mock, make_snapshot):
     )
 
 
-def test_insert_into_scd_type_2_by_column(adapter_mock, make_snapshot):
+@pytest.mark.parametrize(
+    "intervals,truncate",
+    [
+        ([(to_timestamp("2024-01-01"), to_timestamp("2024-01-02"))], False),
+        ([], True),
+    ],
+)
+def test_insert_into_scd_type_2_by_column(
+    adapter_mock, make_snapshot, intervals: Intervals, truncate: bool
+):
     evaluator = SnapshotEvaluator(adapter_mock)
     model = load_sql_based_model(
         parse(  # type: ignore
@@ -1375,6 +1433,7 @@ def test_insert_into_scd_type_2_by_column(adapter_mock, make_snapshot):
 
     snapshot = make_snapshot(model)
     snapshot.categorize_as(SnapshotChangeCategory.BREAKING)
+    snapshot.intervals = intervals
 
     evaluator.evaluate(
         snapshot,
@@ -1405,6 +1464,7 @@ def test_insert_into_scd_type_2_by_column(adapter_mock, make_snapshot):
         invalidate_hard_deletes=False,
         table_description=None,
         column_descriptions={},
+        truncate=truncate,
     )
 
 
@@ -1428,6 +1488,7 @@ def test_create_incremental_by_unique_key_updated_at_exp(adapter_mock, make_snap
 
     snapshot = make_snapshot(model)
     snapshot.categorize_as(SnapshotChangeCategory.BREAKING)
+    snapshot.intervals = [(to_timestamp("2020-01-01"), to_timestamp("2020-01-02"))]
 
     evaluator.evaluate(
         snapshot,
@@ -1463,6 +1524,48 @@ def test_create_incremental_by_unique_key_updated_at_exp(adapter_mock, make_snap
                 ],
             ),
         ),
+    )
+
+
+def test_create_incremental_by_unique_no_intervals(adapter_mock, make_snapshot):
+    evaluator = SnapshotEvaluator(adapter_mock)
+    model = load_sql_based_model(
+        parse(  # type: ignore
+            """
+            MODEL (
+                name test_schema.test_model,
+                kind INCREMENTAL_BY_UNIQUE_KEY (
+                    unique_key [id],
+                )
+            );
+
+            SELECT id::int, name::string, updated_at::timestamp FROM tbl;
+            """
+        )
+    )
+
+    snapshot = make_snapshot(model)
+    snapshot.categorize_as(SnapshotChangeCategory.BREAKING)
+
+    evaluator.evaluate(
+        snapshot,
+        start="2020-01-01",
+        end="2020-01-02",
+        execution_time="2020-01-02",
+        snapshots={},
+    )
+
+    adapter_mock.replace_query.assert_called_once_with(
+        snapshot.table_name(),
+        model.render_query(),
+        clustered_by=[],
+        column_descriptions={},
+        columns_to_types=model.columns_to_types,
+        partition_interval_unit=model.interval_unit,
+        partitioned_by=model.partitioned_by,
+        storage_format=None,
+        table_description=None,
+        table_properties={},
     )
 
 

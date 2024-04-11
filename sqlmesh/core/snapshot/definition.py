@@ -675,7 +675,13 @@ class Snapshot(PydanticModel, SnapshotInfoMixin):
         *,
         strict: bool = True,
     ) -> Interval:
-        end = execution_time or now() if self.depends_on_past else end
+        end = (
+            execution_time or now()
+            if self.depends_on_past or self.full_history_restatement_only
+            else end
+        )
+        if self.full_history_restatement_only and self.intervals:
+            start = self.intervals[0][0]
         return self.inclusive_exclusive(start, end, strict)
 
     def inclusive_exclusive(
