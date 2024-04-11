@@ -208,15 +208,15 @@ The `source` and `target` aliases are required when using the `when_matched` exp
 ### Materialization strategy
 Depending on the target engine, models of the `INCREMENTAL_BY_UNIQUE_KEY` kind are materialized using the following strategies:
 
-| Engine     | Strategy            |
-|------------|---------------------|
-| Spark      | not supported       |
-| Databricks | MERGE ON unique key |
-| Snowflake  | MERGE ON unique key |
-| BigQuery   | MERGE ON unique key |
-| Redshift   | MERGE ON unique key |
-| Postgres   | MERGE ON unique key |
-| DuckDB     | not supported       |
+| Engine     | Strategy                            |
+|------------|-------------------------------------|
+| Spark      | not supported                       |
+| Databricks | MERGE ON unique key                 |
+| Snowflake  | MERGE ON unique key                 |
+| BigQuery   | MERGE ON unique key                 |
+| Redshift   | MERGE ON unique key                 |
+| Postgres   | MERGE ON unique key                 |
+| DuckDB     | DELETE ON matched + INSERT new rows |
 
 ## FULL
 Models of the `FULL` kind cause the dataset associated with a model to be fully refreshed (rewritten) upon each model evaluation.
@@ -392,7 +392,7 @@ TABLE db.menu_items (
 
 ### SCD Type 2 By Column
 
-SCD Type 2 By Column supports sourcing from tables that do not have an "Updated At" timestamp defined in the table. 
+SCD Type 2 By Column supports sourcing from tables that do not have an "Updated At" timestamp defined in the table.
 Instead, it will check the columns defined in the `columns` field to see if their value has changed and if so it will record the `valid_from` time as the execution time when the change was detected.
 
 This example specifies a `SCD_TYPE_2_BY_COLUMN` model kind:
@@ -425,7 +425,7 @@ TABLE db.menu_items (
 ```
 
 ### Change Column Names
-SQLMesh will automatically add the `valid_from` and `valid_to` columns to your table. 
+SQLMesh will automatically add the `valid_from` and `valid_to` columns to your table.
 If you would like to specify the names of these columns you can do so by adding the following to your model definition:
 ```sql linenums="1" hl_lines="5-6"
 MODEL (
@@ -470,7 +470,7 @@ When a record is added back, the new record will be inserted into the table with
 * SCD_TYPE_2_BY_COLUMN: the `execution_time` when the record was detected again
 
 One way to think about `invalidate_hard_deletes` is that, if enabled, deletes are most accurately tracked in the SCD Type 2 table since it records when the delete occurred.
-As a result though, you can have gaps between records if the there is a gap of time between when it was deleted and added back. 
+As a result though, you can have gaps between records if the there is a gap of time between when it was deleted and added back.
 If you would prefer to not have gaps, and a result consider missing records in source as still "valid", then you can set `invalidate_hard_deletes` to `false`.
 
 ### Example of SCD Type 2 By Time in Action
@@ -543,9 +543,9 @@ Target table will be updated with the following data:
 | 4  | Milkshake           | 3.99  | 2020-01-02 00:00:00 | 2020-01-02 00:00:00 | 2020-01-03 00:00:00 |
 | 4  | Chocolate Milkshake | 3.99  | 2020-01-03 00:00:00 | 2020-01-03 00:00:00 |        NULL         |
 
-**Note:** `Cheeseburger` was deleted from `2020-01-02 11:00:00` to `2020-01-03 00:00:00` meaning if you queried the table during that time range then you would not see `Cheeseburger` in the menu. 
-This is the most accurate representation of the menu based on the source data provided. 
-If `Cheeseburger` were added back to the menu with it's original updated at timestamp of `2020-01-01 00:00:00` then the `valid_from` timestamp of the new record would have been `2020-01-02 11:00:00` resulting in no period of time where the item was deleted. 
+**Note:** `Cheeseburger` was deleted from `2020-01-02 11:00:00` to `2020-01-03 00:00:00` meaning if you queried the table during that time range then you would not see `Cheeseburger` in the menu.
+This is the most accurate representation of the menu based on the source data provided.
+If `Cheeseburger` were added back to the menu with it's original updated at timestamp of `2020-01-01 00:00:00` then the `valid_from` timestamp of the new record would have been `2020-01-02 11:00:00` resulting in no period of time where the item was deleted.
 Since in this case the updated at timestamp did not change it is likely the item was removed in error and this again most accurately represents the menu based on the source data.
 
 
@@ -621,8 +621,8 @@ Assuming your pipeline ran at `2020-01-03 11:00:00`, Target table will be update
 | 4  | Milkshake           | 3.99  | 2020-01-02 11:00:00 | 2020-01-03 11:00:00 |
 | 4  | Chocolate Milkshake | 3.99  | 2020-01-03 11:00:00 |        NULL         |
 
-**Note:** `Cheeseburger` was deleted from `2020-01-02 11:00:00` to `2020-01-03 11:00:00` meaning if you queried the table during that time range then you would not see `Cheeseburger` in the menu. 
-This is the most accurate representation of the menu based on the source data provided. 
+**Note:** `Cheeseburger` was deleted from `2020-01-02 11:00:00` to `2020-01-03 11:00:00` meaning if you queried the table during that time range then you would not see `Cheeseburger` in the menu.
+This is the most accurate representation of the menu based on the source data provided.
 
 ### Shared Configuration Options
 
@@ -651,7 +651,7 @@ This is the most accurate representation of the menu based on the source data pr
 
 #### Querying the current version of a record
 
-Although SCD Type 2 models support history, it is still very easy to query for just the latest version of a record. Simply query the model as you would any other table. 
+Although SCD Type 2 models support history, it is still very easy to query for just the latest version of a record. Simply query the model as you would any other table.
 For example, if you wanted to query the latest version of the `menu_items` table you would simply run:
 
 ```sql linenums="1"
