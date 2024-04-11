@@ -60,32 +60,7 @@ The `rows` key is optional in the above format, so the following would also be v
 ...
 ```
 
-### Omitting Columns
-
-Defining the complete inputs and outputs for wide tables, i.e. tables with many columns, can become cumbersome. Therefore, if certain columns can be safely ignored they may be omitted from any row and their value will be treated as `NULL` for that row.
-
-Additionally, it's possible to test only a subset of the output columns by setting `partial` to `true` for the rows of interest:
-
-```yaml linenums="1"
-  ...
-  outputs:
-    query:
-      partial: true
-      rows:
-        - <column_name>: <column_value>
-          ...
-```
-
-This is useful when we can't treat the missing columns as `NULL`, but still want to ignore them. In order to apply this setting to _all_ outputs, simply set it under the `outputs` key:
-
-```yaml linenums="1"
-  ...
-  outputs:
-    partial: true
-    ...
-```
-
-When `partial` is set for a _specific_ output, its rows need to be defined as a mapping under the `rows` key and only the columns referenced in them will be tested.
+Note: the columns in each row of an expected output must appear in the same relative order as they are selected in the corresponding query.
 
 ### Example
 
@@ -155,7 +130,7 @@ test_example_full_model:
       - num_orders: 3
 ```
 
-Since [omitted columns](#omitting-columns) are treated as `NULL`, this test also implicitly asserts that both the input and the output `item_id` columns are `NULL`, which is correct.
+Since [omitted columns](#omitting-columns) are treated as `NULL`, this test also implicitly asserts that both the input and the expected output `item_id` columns are `NULL`, which is correct.
 
 ### Testing CTEs
 
@@ -209,6 +184,33 @@ test_example_full_model:
       - item_id: 1
         num_orders: 2
 ```
+
+### Omitting Columns
+
+Defining the complete inputs and expected outputs for wide tables, i.e. tables with many columns, can become cumbersome. Therefore, if certain columns can be safely ignored they may be omitted from any row and their value will be treated as `NULL` for that row.
+
+Additionally, it's possible to test only a subset of the expected output columns by setting `partial` to `true` for the rows of interest:
+
+```yaml linenums="1"
+  ...
+  outputs:
+    query:
+      partial: true
+      rows:
+        - <column_name>: <column_value>
+          ...
+```
+
+This is useful when we can't treat the missing columns as `NULL`, but still want to ignore them. In order to apply this setting to _all_ expected outputs, simply set it under the `outputs` key:
+
+```yaml linenums="1"
+  ...
+  outputs:
+    partial: true
+    ...
+```
+
+When `partial` is set for a _specific_ expected output, its rows need to be defined as a mapping under the `rows` key and only the columns referenced in them will be tested.
 
 ### Freezing Time
 
