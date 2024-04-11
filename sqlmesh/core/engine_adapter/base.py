@@ -1159,6 +1159,7 @@ class EngineAdapter:
         columns_to_types: t.Optional[t.Dict[str, exp.DataType]] = None,
         table_description: t.Optional[str] = None,
         column_descriptions: t.Optional[t.Dict[str, str]] = None,
+        truncate: bool = False,
         **kwargs: t.Any,
     ) -> None:
         self._scd_type_2(
@@ -1174,6 +1175,7 @@ class EngineAdapter:
             columns_to_types=columns_to_types,
             table_description=table_description,
             column_descriptions=column_descriptions,
+            truncate=truncate,
         )
 
     def scd_type_2_by_column(
@@ -1190,6 +1192,7 @@ class EngineAdapter:
         columns_to_types: t.Optional[t.Dict[str, exp.DataType]] = None,
         table_description: t.Optional[str] = None,
         column_descriptions: t.Optional[t.Dict[str, str]] = None,
+        truncate: bool = False,
         **kwargs: t.Any,
     ) -> None:
         self._scd_type_2(
@@ -1205,6 +1208,7 @@ class EngineAdapter:
             execution_time_as_valid_from=execution_time_as_valid_from,
             table_description=table_description,
             column_descriptions=column_descriptions,
+            truncate=truncate,
         )
 
     def _scd_type_2(
@@ -1223,6 +1227,7 @@ class EngineAdapter:
         columns_to_types: t.Optional[t.Dict[str, exp.DataType]] = None,
         table_description: t.Optional[str] = None,
         column_descriptions: t.Optional[t.Dict[str, str]] = None,
+        truncate: bool = False,
     ) -> None:
         source_queries, columns_to_types = self._get_source_queries_and_columns_to_types(
             source_table, columns_to_types, target_table=target_table, batch_size=0
@@ -1366,6 +1371,11 @@ class EngineAdapter:
                 .when(exp.column(f"t_{valid_from_name}").is_(exp.Null()), update_valid_from_start)
                 .else_(exp.column(f"t_{valid_from_name}"))
             ).as_(valid_from_name)
+
+        existing_rows_query = exp.select(*table_columns).from_(target_table)
+        if truncate:
+            existing_rows_query = existing_rows_query.limit(0)
+
         with source_queries[0] as source_query:
             query = (
                 exp.Select()  # type: ignore
@@ -1378,16 +1388,12 @@ class EngineAdapter:
                 # Historical Records that Do Not Change
                 .with_(
                     "static",
-                    exp.select(*table_columns)
-                    .from_(target_table)
-                    .where(f"{valid_to_name} IS NOT NULL"),
+                    existing_rows_query.where(f"{valid_to_name} IS NOT NULL"),
                 )
                 # Latest Records that can be updated
                 .with_(
                     "latest",
-                    exp.select(*table_columns)
-                    .from_(target_table)
-                    .where(f"{valid_to_name} IS NULL"),
+                    existing_rows_query.where(f"{valid_to_name} IS NULL"),
                 )
                 # Deleted records which can be used to determine `valid_from` for undeleted source records
                 .with_(

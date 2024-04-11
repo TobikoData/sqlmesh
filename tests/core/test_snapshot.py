@@ -21,6 +21,7 @@ from sqlmesh.core.environment import EnvironmentNamingInfo
 from sqlmesh.core.model import (
     FullKind,
     IncrementalByTimeRangeKind,
+    IncrementalUnmanagedKind,
     Model,
     Seed,
     SeedKind,
@@ -598,6 +599,29 @@ def test_remove_intervals(snapshot: Snapshot):
     ]
     snapshot.remove_interval(snapshot.get_removal_interval("2019-01-01", "2022-01-01"))
     assert snapshot.intervals == []
+
+
+def test_get_removal_intervals_full_history_restatement_model(make_snapshot):
+    execution_time = to_timestamp("2024-01-02")
+    model = SqlModel(
+        name="name",
+        kind=IncrementalUnmanagedKind(),
+        query=parse_one("SELECT 1"),
+    )
+    snapshot = make_snapshot(model)
+    snapshot.add_interval("2020-01-01", "2024-01-01")
+
+    interval = snapshot.get_removal_interval(
+        "2023-01-01", "2023-01-01", execution_time=execution_time
+    )
+    assert interval == (to_timestamp("2020-01-01"), execution_time)
+    snapshot.remove_interval(interval)
+
+    assert not snapshot.intervals
+    interval = snapshot.get_removal_interval(
+        "2023-01-01", "2023-01-01", execution_time=execution_time
+    )
+    assert interval == (to_timestamp("2023-01-01"), execution_time)
 
 
 each_macro = lambda: "test"
