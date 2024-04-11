@@ -293,7 +293,9 @@ class CommonStateSyncMixin(StateSync):
                 end = prev_snapshot.intervals[-1][1]
 
                 if start < end:
-                    missing_intervals = target_snapshot.missing_intervals(start, end)
+                    missing_intervals = target_snapshot.missing_intervals(
+                        start, end, end_bounded=True
+                    )
 
                     if missing_intervals:
                         raise SQLMeshError(
