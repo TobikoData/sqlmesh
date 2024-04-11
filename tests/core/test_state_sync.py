@@ -6,6 +6,7 @@ from unittest.mock import call, patch
 import duckdb
 import pandas as pd
 import pytest
+from freezegun import freeze_time
 from pytest_mock.plugin import MockerFixture
 from sqlglot import exp
 
@@ -831,6 +832,36 @@ def test_promote_snapshots_no_gaps(state_sync: EngineAdapterStateSync, make_snap
         no_gaps=True,
         no_gaps_snapshot_names=set(),
     )
+
+
+@freeze_time("2023-01-08 16:00:00")
+def test_promote_snapshots_no_gaps_lookback(
+    state_sync: EngineAdapterStateSync, make_snapshot: t.Callable
+):
+    model = SqlModel(
+        name="a",
+        cron="@hourly",
+        query=parse_one("select 1, ds"),
+        kind=IncrementalByTimeRangeKind(time_column="ds", lookback=1),
+        start="2023-01-01",
+    )
+
+    snapshot = make_snapshot(model, version="a")
+    snapshot.change_category = SnapshotChangeCategory.BREAKING
+    state_sync.push_snapshots([snapshot])
+    state_sync.add_interval(snapshot, "2023-01-01", "2023-01-08 15:00:00")
+    promote_snapshots(state_sync, [snapshot], "prod", no_gaps=True)
+
+    assert now_timestamp() == to_timestamp("2023-01-08 16:00:00")
+
+    new_snapshot_same_version = make_snapshot(model, version="b")
+    new_snapshot_same_version.change_category = SnapshotChangeCategory.BREAKING
+    new_snapshot_same_version.fingerprint = snapshot.fingerprint.copy(
+        update={"data_hash": "new_snapshot_same_version"}
+    )
+    state_sync.push_snapshots([new_snapshot_same_version])
+    state_sync.add_interval(new_snapshot_same_version, "2023-01-01", "2023-01-08 15:00:00")
+    promote_snapshots(state_sync, [new_snapshot_same_version], "prod", no_gaps=True)
 
 
 def test_finalize(state_sync: EngineAdapterStateSync, make_snapshot: t.Callable):
