@@ -36,7 +36,7 @@ def lineage(
             scope = None
 
     if not query or not scope:
-        query = model.render_query_or_raise()
+        query = t.cast(exp.Query, model.render_query_or_raise().copy())
 
         if model.managed_columns:
             query = query.select(
@@ -44,7 +44,8 @@ def lineage(
                     exp.alias_(exp.cast(exp.Null(), to=col_type), col)
                     for col, col_type in model.managed_columns.items()
                     if col not in query.named_selects
-                )
+                ),
+                copy=False,
             )
 
         query = qualify.qualify(
