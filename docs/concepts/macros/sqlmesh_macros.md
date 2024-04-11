@@ -224,10 +224,6 @@ MODEL (
 SELECT container_id, @container_volume((cont_di / 2), cont_hi) AS volume
 ```
 
-### User-defined variable quoting
-
-More information to come on quoting behavior when quotes are included/excluded in the value passed to `@DEF()`.
-
 ## Macro operators
 
 SQLMesh's macro system has multiple operators that allow different forms of dynamic behavior in models.
@@ -598,11 +594,13 @@ WHERE
 - `suffix` (optional): A string to use as a suffix for all selected column names
 - `quote_identifiers` (optional): Whether to quote the resulting identifiers, defaults to true
 
+SQLMesh macro operators do not accept named arguments. For example, `@STAR(relation=a)` will error.
+
 For example, consider the following query:
 
 ```sql linenums="1"
 SELECT
-  @STAR(relation=foo, alias=bar, except=[c], prefix='baz_', suffix='_qux')
+  @STAR(foo, bar, [c], 'baz_', '_qux')
 FROM foo AS bar
 ```
 
@@ -629,12 +627,12 @@ Note these aspects of the rendered query:
 - Column `c` is not present because it was passed to `@STAR`'s `except` argument
 - Each column alias is prefixed with `baz_` and suffixed with `_qux` (e.g., `"baz_a_qux"`)
 
-Now consider a more complex example that provides different pre/suffixes to `a` and `b` than to `d` and includes an explicit column `my_column`:
+Now consider a more complex example that provides different prefixes to `a` and `b` than to `d` and includes an explicit column `my_column`:
 
 ```sql linenums="1"
 SELECT
-  @STAR(relation=foo, alias=bar, except=[c, d], prefix='ab_pre_', suffix='_ab_suf'),
-  @STAR(relation=foo, alias=bar, except=[a, b, c], prefix='d_pre_', suffix='_d_suf'),
+  @STAR(foo, bar, except=[c, d], 'ab_pre_'),
+  @STAR(foo, bar, except=[a, b, c], 'd_pre_'),
   my_column
 FROM foo AS bar
 ```
@@ -643,15 +641,15 @@ As before, `foo` is a table that contains four columns: `a` (`TEXT`), `b` (`TEXT
 
 ```sql linenums="1"
 SELECT
-  CAST("bar"."a" AS TEXT) AS "ab_pre_a_ab_suf",
-  CAST("bar"."b" AS TEXT) AS "ab_pre_b_ab_suf",
-  CAST("bar"."d" AS INT) AS "d_pre_d_d_suf",
+  CAST("bar"."a" AS TEXT) AS "ab_pre_a",
+  CAST("bar"."b" AS TEXT) AS "ab_pre_b",
+  CAST("bar"."d" AS INT) AS "d_pre_d",
   my_column
 FROM foo AS bar
 ```
 
 Note these aspects of the rendered query:
-- Columns `a` and `b` have the prefix `"ab_pre_"` and suffix `"_ab_suf"`, while column `d` has the prefix `"d_pre_"` and suffix `"_d_suf"`
+- Columns `a` and `b` have the prefix `"ab_pre_"` , while column `d` has the prefix `"d_pre_"`
 - Column `c` is not present because it was passed to the `except` argument in both `@STAR` calls
 - `my_column` is present in the query
 
@@ -789,6 +787,8 @@ It supports the following arguments, in this order:
 - `lon2`: Longitude of the second point
 - `unit` (optional): The measurement unit, currently only `'mi'` (miles, default) and `'km'` (kilometers) are supported
 
+SQLMesh macro operators do not accept named arguments. For example, `@HAVERSINE_DISTANCE(lat1=lat_column)` will error.
+
 For example, the following query:
 
 ```sql linenums="1"
@@ -821,7 +821,9 @@ It supports the following arguments, in this order:
 - `then_value` (optional): The value to be used if the comparison succeeds, defaults to `1`
 - `else_value` (optional): The value to be used if the comparison fails, defaults to `0`
 - `quote` (optional): Whether to quote the resulting aliases, defaults to true
-- `distinct`: Whether to apply a `DISTINCT` clause for the aggregation function, defaults to false
+- `distinct` (optional): Whether to apply a `DISTINCT` clause for the aggregation function, defaults to false
+
+SQLMesh macro operators do not accept named arguments. For example, `@PIVOT(column=column_to_pivot)` will error.
 
 For example, the following query:
 
