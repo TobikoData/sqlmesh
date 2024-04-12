@@ -71,16 +71,6 @@ class SparkSessionConnection:
         except NotImplementedError:
             # Databricks Connect does not support accessing the SparkContext
             pass
-        if self.catalog:
-            # Note: Spark 3.4+ Only API
-            from py4j.protocol import Py4JError
-
-            try:
-                self.spark.catalog.setCurrentCatalog(self.catalog)
-            # Databricks does not support `setCurrentCatalog` with Unity catalog
-            # and shared clusters so we use the Databricks Unity only SQL command instead
-            except Py4JError:
-                self.spark.sql(f"USE CATALOG {self.catalog}")
         self.spark.conf.set("spark.sql.sources.partitionOverwriteMode", "dynamic")
         self.spark.conf.set("hive.exec.dynamic.partition", "true")
         self.spark.conf.set("hive.exec.dynamic.partition.mode", "nonstrict")
