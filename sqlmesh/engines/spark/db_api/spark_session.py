@@ -93,7 +93,6 @@ class SparkSessionConnection:
             # Databricks Connect does not support accessing the SparkContext
             pass
         if self.catalog:
-            # Note: Spark 3.4+ Only API
             from py4j.protocol import Py4JError
 
             try:

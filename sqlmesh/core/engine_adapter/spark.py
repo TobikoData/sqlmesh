@@ -324,7 +324,8 @@ class SparkEngineAdapter(GetCurrentCatalogFromFunctionMixin, HiveMetastoreTableP
             DataObject(
                 catalog=self.get_current_catalog(),
                 # This varies between Spark and Databricks
-                schema=row.asDict().get("namespace") or row["database"],
+                schema=(row.asDict() if not isinstance(row, dict) else row).get("namespace")
+                or row["database"],
                 name=row["tableName"],
                 type=(
                     DataObjectType.VIEW
