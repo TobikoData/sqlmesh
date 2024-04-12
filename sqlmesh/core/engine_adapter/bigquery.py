@@ -18,6 +18,7 @@ from sqlmesh.core.engine_adapter.shared import (
 )
 from sqlmesh.core.node import IntervalUnit
 from sqlmesh.core.schema_diff import SchemaDiffer
+from sqlmesh.utils import classproperty
 from sqlmesh.utils.date import to_datetime
 from sqlmesh.utils.errors import SQLMeshError
 
@@ -54,8 +55,8 @@ class BigQueryEngineAdapter(InsertOverwriteWithMergeMixin):
 
     # SQL is not supported for adding columns to structs: https://cloud.google.com/bigquery/docs/managing-table-schemas#api_1
     # Can explore doing this with the API in the future
-    SCHEMA_DIFFER = SchemaDiffer(
-        compatible_types={
+    SCHEMA_DIFFER_ARGS: t.Dict[str, t.Any] = {
+        "compatible_types": {
             exp.DataType.build("INT64", dialect=DIALECT): {
                 exp.DataType.build("NUMERIC", dialect=DIALECT),
                 exp.DataType.build("FLOAT64", dialect=DIALECT),
@@ -72,8 +73,13 @@ class BigQueryEngineAdapter(InsertOverwriteWithMergeMixin):
                 exp.DataType.build("DATETIME", dialect=DIALECT),
             },
         },
-        support_coercing_compatible_types=True,
-    )
+        "support_coercing_compatible_types": True,
+    }
+    SCHEMA_DIFFER = SchemaDiffer(**SCHEMA_DIFFER_ARGS)
+
+    @classproperty
+    def schema_differ_args(cls) -> t.Dict[str, t.Any]:
+        return cls.SCHEMA_DIFFER_ARGS
 
     @property
     def client(self) -> BigQueryClient:
