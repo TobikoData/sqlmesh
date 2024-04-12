@@ -787,7 +787,7 @@ FROM `inserted_rows`
 
 def test_wap_prepare(make_mocked_engine_adapter: t.Callable, mocker: MockerFixture):
     adapter = make_mocked_engine_adapter(SparkEngineAdapter)
-    adapter.spark.catalog.currentCatalog.return_value = "spark_catalog"
+    adapter.connection.get_current_catalog.return_value = "spark_catalog"
     adapter.spark.catalog.currentDatabase.return_value = "default"
 
     table_name = "test_db.test_table"
@@ -805,7 +805,7 @@ def test_wap_publish(make_mocked_engine_adapter: t.Callable, mocker: MockerFixtu
     iceberg_snapshot_id = 123
 
     adapter = make_mocked_engine_adapter(SparkEngineAdapter)
-    adapter.spark.catalog.currentCatalog.return_value = "spark_catalog"
+    adapter.connection.get_current_catalog.return_value = "spark_catalog"
     adapter.spark.catalog.currentDatabase.return_value = "default"
     adapter.cursor.fetchall.return_value = [(iceberg_snapshot_id,)]
 

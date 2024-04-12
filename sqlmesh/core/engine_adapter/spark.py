@@ -22,6 +22,7 @@ from sqlmesh.core.engine_adapter.shared import (
     SourceQuery,
     set_catalog,
 )
+from sqlmesh.engines.spark.db_api.spark_session import SparkSessionConnection
 from sqlmesh.utils import classproperty
 from sqlmesh.utils.errors import SQLMeshError
 
@@ -59,8 +60,12 @@ class SparkEngineAdapter(GetCurrentCatalogFromFunctionMixin, HiveMetastoreTableP
     BRANCH_PREFIX = "branch_"
 
     @property
+    def connection(self) -> SparkSessionConnection:
+        return self._connection_pool.get()
+
+    @property
     def spark(self) -> PySparkSession:
-        return self._connection_pool.get().spark
+        return self.connection.spark
 
     @property
     def _use_spark_session(self) -> bool:
@@ -319,7 +324,8 @@ class SparkEngineAdapter(GetCurrentCatalogFromFunctionMixin, HiveMetastoreTableP
             DataObject(
                 catalog=self.get_current_catalog(),
                 # This varies between Spark and Databricks
-                schema=row.asDict().get("namespace") or row["database"],
+                schema=(row.asDict() if not isinstance(row, dict) else row).get("namespace")
+                or row["database"],
                 name=row["tableName"],
                 type=(
                     DataObjectType.VIEW
@@ -330,26 +336,13 @@ class SparkEngineAdapter(GetCurrentCatalogFromFunctionMixin, HiveMetastoreTableP
             for row in results  # type: ignore
         ]
 
-    @property
-    def _spark_major_minor(self) -> t.Tuple[int, int]:
-        return tuple(int(x) for x in self.spark.version.split(".")[:2])  # type: ignore
-
     def get_current_catalog(self) -> t.Optional[str]:
         if self._use_spark_session:
-            if self._spark_major_minor >= (3, 4):
-                return self.spark.catalog.currentCatalog()
-            else:
-                return self._default_catalog or "spark_catalog"
+            return self.connection.get_current_catalog()
         return super().get_current_catalog()
 
     def set_current_catalog(self, catalog_name: str) -> None:
-        if self._spark_major_minor >= (3, 4):
-            return self.spark.catalog.setCurrentCatalog(catalog_name)
-        current_catalog = self.get_current_catalog()
-        if current_catalog != catalog_name:
-            logger.warning(
-                "Spark <3.4 does not support certain cross catalog queries since the default catalog cannot be set <3.4"
-            )
+        self.connection.set_current_catalog(catalog_name)
 
     def get_current_database(self) -> str:
         if self._use_spark_session:
