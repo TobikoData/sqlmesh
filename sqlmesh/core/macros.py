@@ -655,6 +655,7 @@ def star(
         prefix: A prefix to use for all selections
         suffix: A suffix to use for all selections
         quote_identifiers: Whether or not quote the resulting aliases, defaults to true
+
     Returns:
         An array of columns.
 
@@ -828,6 +829,7 @@ def haversine_distance(
         conversion_rate = 1.60934
     else:
         raise SQLMeshError(f"Invalid unit '{unit}'. Expected 'mi' or 'km'.")
+
     return (
         2
         * 3961
@@ -867,7 +869,7 @@ def pivot(
         >>> from sqlmesh.core.macros import MacroEvaluator
         >>> sql = "SELECT date_day, @PIVOT(status, ['cancelled', 'completed']) FROM rides GROUP BY 1"
         >>> MacroEvaluator().transform(parse_one(sql)).sql()
-        "SELECT date_day, SUM(CASE WHEN status = 'cancelled' THEN 1 ELSE 0 END), SUM(CASE WHEN status = 'completed' THEN 1 ELSE 0 END) FROM rides GROUP BY 1"
+        'SELECT date_day, SUM(CASE WHEN status = \\'cancelled\\' THEN 1 ELSE 0 END) AS "\\'cancelled\\'", SUM(CASE WHEN status = \\'completed\\' THEN 1 ELSE 0 END) AS "\\'completed\\'" FROM rides GROUP BY 1'
     """
     aggregates: t.List[exp.Expression] = []
     for value in values.expressions:
@@ -877,7 +879,7 @@ def pivot(
         proj += f"CASE WHEN {column} {cmp.this} {value} THEN {then_value} ELSE {else_value} END) "
         node = evaluator.parse_one(proj)
         if alias.this:
-            node.as_(f"{prefix.this}{value}{suffix.this}", quoted=quote.this, copy=False)
+            node = node.as_(f"{prefix.this}{value}{suffix.this}", quoted=quote.this, copy=False)
         aggregates.append(node)
     return aggregates
 
