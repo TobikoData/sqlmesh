@@ -22,7 +22,6 @@ from sqlmesh.core.engine_adapter.shared import (
     SourceQuery,
     set_catalog,
 )
-from sqlmesh.engines.spark.db_api.spark_session import SparkSessionConnection
 from sqlmesh.utils import classproperty
 from sqlmesh.utils.errors import SQLMeshError
 
@@ -37,6 +36,7 @@ if t.TYPE_CHECKING:
         Query,
     )
     from sqlmesh.core.engine_adapter.base import QueryOrDF
+    from sqlmesh.engines.spark.db_api.spark_session import SparkSessionConnection
 
 
 logger = logging.getLogger(__name__)
