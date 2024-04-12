@@ -1,3 +1,4 @@
+import logging
 import typing as t
 from threading import get_ident
 
@@ -5,6 +6,8 @@ from pyspark.sql import DataFrame, SparkSession
 from pyspark.sql.types import Row
 
 from sqlmesh.engines.spark.db_api.errors import NotSupportedError, ProgrammingError
+
+logger = logging.getLogger(__name__)
 
 
 class SparkSessionCursor:
@@ -65,12 +68,40 @@ class SparkSessionConnection:
         self.spark = spark
         self.catalog = catalog
 
+    @property
+    def _spark_major_minor(self) -> t.Tuple[int, int]:
+        return tuple(int(x) for x in self.spark.version.split(".")[:2])  # type: ignore
+
+    def get_current_catalog(self) -> t.Optional[str]:
+        if self._spark_major_minor >= (3, 4):
+            return self.spark.catalog.currentCatalog()
+        return self.catalog or "spark_catalog"
+
+    def set_current_catalog(self, catalog_name: str) -> None:
+        if self._spark_major_minor >= (3, 4):
+            return self.spark.catalog.setCurrentCatalog(catalog_name)
+        current_catalog = self.get_current_catalog()
+        if current_catalog != catalog_name:
+            logger.warning(
+                "Spark <3.4 does not support certain cross catalog queries since the default catalog cannot be set <3.4"
+            )
+
     def cursor(self) -> SparkSessionCursor:
         try:
             self.spark.sparkContext.setLocalProperty("spark.scheduler.pool", f"pool_{get_ident()}")
         except NotImplementedError:
             # Databricks Connect does not support accessing the SparkContext
             pass
+        if self.catalog:
+            # Note: Spark 3.4+ Only API
+            from py4j.protocol import Py4JError
+
+            try:
+                self.set_current_catalog(self.catalog)
+            # Databricks does not support `setCurrentCatalog` with Unity catalog
+            # and shared clusters so we use the Databricks Unity only SQL command instead
+            except Py4JError:
+                self.spark.sql(f"USE CATALOG {self.catalog}")
         self.spark.conf.set("spark.sql.sources.partitionOverwriteMode", "dynamic")
         self.spark.conf.set("hive.exec.dynamic.partition", "true")
         self.spark.conf.set("hive.exec.dynamic.partition.mode", "nonstrict")
