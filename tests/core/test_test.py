@@ -598,6 +598,32 @@ test_child:
     )
 
 
+def test_uninferrable_schema() -> None:
+    result = _create_test(
+        body=load_yaml(
+            """
+test_foo:
+  model: sushi.foo
+  inputs:
+    raw:
+      - value: null
+  outputs:
+    query:
+      - value: null
+            """
+        ),
+        test_name="test_foo",
+        model=_create_model("SELECT value FROM raw"),
+        context=Context(config=Config(model_defaults=ModelDefaultsConfig(dialect="duckdb"))),
+    ).run()
+
+    expected_failure_msg = (
+        "TestError: Failed to infer the data type of column 'value' for the input fixture "
+        """'"raw"'. Try to cast it to the target type or set the model's 'columns' property"""
+    )
+    _check_successful_or_raise(result, expected_msg=expected_failure_msg)
+
+
 def test_missing_column_failure(sushi_context: Context, full_model_without_ctes: SqlModel) -> None:
     _check_successful_or_raise(
         _create_test(
