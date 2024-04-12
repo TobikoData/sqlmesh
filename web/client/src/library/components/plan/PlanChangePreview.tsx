@@ -129,7 +129,7 @@ function PlanChangePreviewDirect({
   disabled?: boolean
 }): JSX.Element {
   const dispatch = usePlanDispatch()
-  const { categories, change_categorization } = usePlan()
+  const { categories } = usePlan()
 
   const models = useStoreContext(s => s.models)
 
@@ -137,9 +137,9 @@ function PlanChangePreviewDirect({
     dispatch(
       changes.map(change => ({
         type: EnumPlanActions.Category,
-        category:
-          change_categorization.get(change.name)?.category ??
-          categories.find(({ value }) => value === change.change_category),
+        category: categories.find(
+          ({ value }) => value === change.change_category,
+        ),
         change,
       })),
     )
