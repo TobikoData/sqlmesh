@@ -917,7 +917,7 @@ def test_forward_only_models(make_snapshot, mocker: MockerFixture):
     snapshot = make_snapshot(
         SqlModel(
             name="a",
-            query=parse_one("select 1, ds"),
+            query=parse_one("select 1, ds"), dialect="duckdb",
             kind=IncrementalByTimeRangeKind(time_column="ds", forward_only=True),
         )
     )
@@ -926,7 +926,10 @@ def test_forward_only_models(make_snapshot, mocker: MockerFixture):
         SqlModel(
             name="a",
             query=parse_one("select 3, ds"),
-            kind=IncrementalByTimeRangeKind(time_column="ds", forward_only=True),
+            kind=IncrementalByTimeRangeKind(
+                time_column="ds", forward_only=True, additive_only=False
+            ),
+            dialect="duckdb",
         )
     )
     updated_snapshot.previous_versions = snapshot.all_versions

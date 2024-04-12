@@ -270,6 +270,7 @@ class _Incremental(_ModelKind):
     batch_concurrency: t.Optional[SQLGlotPositiveInt] = None
     lookback: t.Optional[SQLGlotPositiveInt] = None
     forward_only: SQLGlotBool = False
+    additive_only: SQLGlotBool = True
     disable_restatement: SQLGlotBool = False
 
     _dialect_validator = kind_dialect_validator
@@ -288,6 +289,7 @@ class _Incremental(_ModelKind):
             *super().metadata_hash_values,
             str(self.batch_size) if self.batch_size is not None else None,
             str(self.forward_only),
+            str(self.additive_only),
             str(self.disable_restatement),
         ]
 
@@ -357,7 +359,8 @@ class IncrementalUnmanagedKind(_ModelKind):
     name: Literal[ModelKindName.INCREMENTAL_UNMANAGED] = ModelKindName.INCREMENTAL_UNMANAGED
     insert_overwrite: SQLGlotBool = False
     forward_only: SQLGlotBool = True
-    disable_restatement: SQLGlotBool = True
+    additive_only: SQLGlotBool = True
+    disable_restatement: Literal[True] = True
 
     @property
     def data_hash_values(self) -> t.List[t.Optional[str]]:
@@ -365,7 +368,7 @@ class IncrementalUnmanagedKind(_ModelKind):
 
     @property
     def metadata_hash_values(self) -> t.List[t.Optional[str]]:
-        return [*super().metadata_hash_values, str(self.forward_only)]
+        return [*super().metadata_hash_values, str(self.forward_only), str(self.additive_only)]
 
 
 class ViewKind(_ModelKind):
@@ -434,6 +437,7 @@ class _SCDType2Kind(_ModelKind):
     time_data_type: exp.DataType = Field(exp.DataType.build("TIMESTAMP"), validate_default=True)
 
     forward_only: SQLGlotBool = True
+    additive_only: SQLGlotBool = True
     disable_restatement: SQLGlotBool = True
 
     _dialect_validator = kind_dialect_validator
@@ -479,6 +483,7 @@ class _SCDType2Kind(_ModelKind):
         return [
             *super().metadata_hash_values,
             str(self.forward_only),
+            str(self.additive_only),
             str(self.disable_restatement),
         ]
 

@@ -39,7 +39,7 @@ from sqlmesh.core.engine_adapter.shared import (
 )
 from sqlmesh.core.model.kind import TimeColumn
 from sqlmesh.core.schema_diff import SchemaDiffer
-from sqlmesh.utils import columns_to_types_all_known, random_id
+from sqlmesh.utils import classproperty, columns_to_types_all_known, random_id
 from sqlmesh.utils.connection_pool import create_connection_pool
 from sqlmesh.utils.date import TimeLike, make_inclusive, to_time_column
 from sqlmesh.utils.errors import SQLMeshError, UnsupportedCatalogOperationError
@@ -89,7 +89,6 @@ class EngineAdapter:
     SUPPORTS_MATERIALIZED_VIEWS = False
     SUPPORTS_MATERIALIZED_VIEW_SCHEMA = False
     SUPPORTS_CLONING = False
-    SCHEMA_DIFFER = SchemaDiffer()
     SUPPORTS_TUPLE_IN = True
     CATALOG_SUPPORT = CatalogSupport.UNSUPPORTED
     SUPPORTS_ROW_LEVEL_OP = True
@@ -97,6 +96,8 @@ class EngineAdapter:
     SUPPORTS_REPLACE_TABLE = True
     DEFAULT_CATALOG_TYPE = DIALECT
     QUOTE_IDENTIFIERS_IN_VIEWS = True
+    SCHEMA_DIFFER_ARGS: t.Dict[str, t.Any] = {}
+    SCHEMA_DIFFER = SchemaDiffer(**SCHEMA_DIFFER_ARGS)
 
     def __init__(
         self,
@@ -137,6 +138,10 @@ class EngineAdapter:
         adapter._connection_pool = self._connection_pool
 
         return adapter
+
+    @classproperty
+    def schema_differ_args(cls) -> t.Dict[str, t.Any]:
+        return cls.SCHEMA_DIFFER_ARGS
 
     @property
     def cursor(self) -> t.Any:

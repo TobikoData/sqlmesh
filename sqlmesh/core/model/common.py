@@ -128,6 +128,7 @@ bool_validator = field_validator(
     "skip",
     "blocking",
     "forward_only",
+    "additive_only",
     "disable_restatement",
     "insert_overwrite",
     "allow_partials",

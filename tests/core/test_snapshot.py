@@ -108,6 +108,7 @@ def test_json(snapshot: Snapshot):
                 "time_column": {"column": "`ds`"},
                 "batch_size": 30,
                 "forward_only": False,
+                "additive_only": True,
                 "disable_restatement": False,
                 "dialect": "spark",
             },

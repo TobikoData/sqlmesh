@@ -8,6 +8,8 @@ from collections import defaultdict
 from datetime import datetime
 from functools import cached_property
 
+from sqlglot import exp
+
 from sqlmesh.core.console import Console, get_console
 from sqlmesh.core.config import (
     AutoCategorizationMode,
@@ -15,8 +17,10 @@ from sqlmesh.core.config import (
     EnvironmentSuffixTarget,
 )
 from sqlmesh.core.context_diff import ContextDiff
+from sqlmesh.core.engine_adapter import DIALECT_TO_ENGINE_ADAPTER
 from sqlmesh.core.environment import EnvironmentNamingInfo
 from sqlmesh.core.plan.definition import Plan, SnapshotMapping, earliest_interval_start
+from sqlmesh.core.schema_diff import SchemaDiffer
 from sqlmesh.core.snapshot import (
     DeployabilityIndex,
     Snapshot,
@@ -455,6 +459,31 @@ class PlanBuilder:
                         else:
                             snapshot.categorize_as(SnapshotChangeCategory.NON_BREAKING)
                     elif self._is_forward_only_change(s_id) and is_directly_modified:
+                        # If a forward-only model is additive_only, error if the change requires a DROP operation
+                        new, old = self._context_diff.modified_snapshots[s_id.name]
+
+                        schema_differ_args = getattr(
+                            DIALECT_TO_ENGINE_ADAPTER[new.model.dialect], "schema_differ_args"
+                        )
+                        schema_differ = SchemaDiffer(**schema_differ_args)
+
+                        schema_diff = schema_differ.compare_columns(
+                            new.model.name,
+                            t.cast(t.Dict[str, exp.DataType], old.model.columns_to_types),
+                            t.cast(t.Dict[str, exp.DataType], new.model.columns_to_types),
+                        )
+                        has_drop = any(
+                            [
+                                isinstance(x, exp.Drop)
+                                for actions in schema_diff
+                                for x in actions.args.get("actions", [])
+                            ]
+                        )
+                        if has_drop and new.model.additive_only:
+                            raise PlanError(
+                                f"Model '{new.name}' is `additive_only`, but the current changes require dropping a column. Please modify the changes, specify `additive_only false` in the MODEL kind specification,  or pass the `--allow-destructive` argument to the `sqlmesh plan` command."
+                            )
+
                         self._set_choice(
                             snapshot,
                             SnapshotChangeCategory.FORWARD_ONLY,
