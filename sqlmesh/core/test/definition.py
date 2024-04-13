@@ -144,8 +144,8 @@ class ModelTest(unittest.TestCase):
             actual_types, errors="ignore"
         )
 
-        actual = actual.replace({None: np.nan})
-        expected = expected.replace({None: np.nan})
+        actual = actual.replace({np.nan: None})
+        expected = expected.replace({np.nan: None})
 
         def _to_hashable(x: t.Any) -> t.Any:
             if isinstance(x, (list, np.ndarray)):
