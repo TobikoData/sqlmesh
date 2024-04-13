@@ -410,7 +410,7 @@ class PythonModelTest(ModelTest):
         self,
         body: t.Dict[str, t.Any],
         test_name: str,
-        model: PythonModel,
+        model: Model,
         models: UniqueKeyDict[str, Model],
         engine_adapter: EngineAdapter,
         dialect: str | None = None,
