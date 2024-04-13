@@ -20,13 +20,9 @@ from sqlmesh.core.engine_adapter import EngineAdapter
 from sqlmesh.core.model import Model, PythonModel, SqlModel
 from sqlmesh.utils import UniqueKeyDict, random_id, yaml
 from sqlmesh.utils.date import pandas_timestamp_to_pydatetime
-from sqlmesh.utils.errors import ConfigError, SQLMeshError
+from sqlmesh.utils.errors import ConfigError, TestError
 
 Row = t.Dict[str, t.Any]
-
-
-class TestError(SQLMeshError):
-    pass
 
 
 class ModelTest(unittest.TestCase):
