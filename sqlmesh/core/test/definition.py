@@ -26,7 +26,7 @@ Row = t.Dict[str, t.Any]
 
 
 class TestError(SQLMeshError):
-    """Test error"""
+    pass
 
 
 class ModelTest(unittest.TestCase):
@@ -66,19 +66,19 @@ class ModelTest(unittest.TestCase):
         self.default_catalog = default_catalog
         self.dialect = dialect
 
-        self._normalize_test(dialect)
+        self._fixture_table_cache: t.Dict[str, exp.Table] = {}
+        self._normalized_column_name_cache: t.Dict[str, str] = {}
+        self._normalized_model_name_cache: t.Dict[t.Tuple[str, bool], str] = {}
 
-        inputs = [
-            normalize_model_name(input, default_catalog=default_catalog, dialect=dialect)
-            for input in self.body.get("inputs", {})
-        ]
-        for depends_on in self.model.depends_on:
-            if depends_on not in inputs:
-                _raise_error(f"Incomplete test, missing input for table {depends_on}", path)
+        self._validate_and_normalize_test()
+
+        # This ID is appended to each input fixture name to avoid concurrency issues
+        self._test_id = random_id(short=True)
 
         self._engine_adapter_dialect = Dialect.get_or_raise(self.engine_adapter.dialect)
         self._transforms = self._engine_adapter_dialect.generator_class.TRANSFORMS
 
+        # When execution_time is set, we mock the CURRENT_* SQL expressions so they always return it
         self._execution_time = str(self.body.get("vars", {}).get("execution_time") or "")
         if self._execution_time:
             exec_time = exp.Literal.string(self._execution_time)
@@ -90,9 +90,6 @@ class ModelTest(unittest.TestCase):
                 exp.CurrentTimestamp: lambda self, _: self.sql(exp.cast(exec_time, "timestamp")),
             }
 
-        self._test_id = random_id(short=True)
-        self._fixture_table_cache: t.Dict[str, exp.Table] = {}
-
         super().__init__()
 
     def shortDescription(self) -> t.Optional[str]:
@@ -100,11 +97,13 @@ class ModelTest(unittest.TestCase):
 
     def setUp(self) -> None:
         """Load all input tables"""
-        for table_name, values in self.body.get("inputs", {}).items():
-            columns_to_types: t.Dict[str, exp.DataType] = {}
-            if table_name in self.models:
-                model = self.models[table_name]
-                columns_to_types = model.columns_to_types if model.annotated else {}
+        for name, values in self.body.get("inputs", {}).items():
+            # Types specified in the test take precedence over the corresponding inferred ones
+            model = self.models.get(name)
+            columns_to_types = {
+                **(model.columns_to_types if model and model.annotated else {}),
+                **values.get("columns", {}),
+            }
 
             rows = values["rows"]
             if not columns_to_types and rows:
@@ -114,7 +113,7 @@ class ModelTest(unittest.TestCase):
                         v_type, into=exp.DataType, dialect=self.dialect
                     )
 
-            test_fixture_table = self._test_fixture_table(table_name)
+            test_fixture_table = self._test_fixture_table(name)
             if test_fixture_table.db:
                 self.engine_adapter.create_schema(
                     schema_(test_fixture_table.args["db"], test_fixture_table.args.get("catalog"))
@@ -126,8 +125,8 @@ class ModelTest(unittest.TestCase):
     def tearDown(self) -> None:
         """Drop all fixture tables."""
         if not self.preserve_fixtures:
-            for table_name in self.body.get("inputs", {}):
-                self.engine_adapter.drop_view(self._fixture_table_cache[table_name])
+            for name in self.body.get("inputs", {}):
+                self.engine_adapter.drop_view(self._fixture_table_cache[name])
 
     def assert_equal(
         self,
@@ -221,64 +220,55 @@ class ModelTest(unittest.TestCase):
             path: An optional path to the test definition yaml file.
             preserve_fixtures: Preserve the fixture tables in the testing database, useful for debugging.
         """
-        if "model" not in body:
-            _raise_error("Incomplete test, missing model name", path)
+        name = normalize_model_name(body["model"], default_catalog=default_catalog, dialect=dialect)
+        model = models.get(name)
+        if not model:
+            _raise_error(f"Model '{name}' was not found", path)
 
-        if "outputs" not in body:
-            _raise_error("Incomplete test, missing outputs", path)
-
-        model_name = normalize_model_name(
-            body["model"], default_catalog=default_catalog, dialect=dialect
-        )
-        if model_name not in models:
-            _raise_error(f"Model '{model_name}' was not found", path)
-
-        model = models[model_name]
         if isinstance(model, SqlModel):
-            return SqlModelTest(
-                body,
-                test_name,
-                model,
-                models,
-                engine_adapter,
-                dialect,
-                path,
-                preserve_fixtures,
-                default_catalog,
-            )
-        if isinstance(model, PythonModel):
-            return PythonModelTest(
-                body,
-                test_name,
-                model,
-                models,
-                engine_adapter,
-                dialect,
-                path,
-                preserve_fixtures,
-                default_catalog,
-            )
+            test_type: t.Type[ModelTest] = SqlModelTest
+        elif isinstance(model, PythonModel):
+            test_type = PythonModelTest
+        else:
+            _raise_error(f"Model '{name}' is an unsupported model type for testing", path)
 
-        raise TestError(f"Model '{model_name}' is an unsupported model type for testing at {path}")
+        return test_type(
+            body,
+            test_name,
+            t.cast(Model, model),
+            models,
+            engine_adapter,
+            dialect,
+            path,
+            preserve_fixtures,
+            default_catalog,
+        )
 
     def __str__(self) -> str:
         return f"{self.test_name} ({self.path})"
 
-    def _normalize_test(self, dialect: str | None) -> None:
-        """Normalizes all identifiers in this test according to the given dialect."""
+    def _validate_and_normalize_test(self) -> None:
+        inputs = self.body.get("inputs")
+        outputs = self.body.get("outputs", {})
 
-        def _normalize_rows(values: t.List[Row] | t.Dict, partial: bool = False) -> t.Dict:
+        if not outputs:
+            _raise_error("Incomplete test, missing outputs", self.path)
+
+        ctes = outputs.get("ctes")
+        query = outputs.get("query")
+        partial = outputs.pop("partial", None)
+
+        def _normalize_rows(
+            values: t.List[Row] | t.Dict, name: str, partial: bool = False
+        ) -> t.Dict:
             if not isinstance(values, dict):
                 values = {"rows": values}
 
             if "rows" not in values:
-                _raise_error("Incomplete test, missing row data for table", self.path)
+                _raise_error(f"Incomplete test, missing row data for '{name}'", self.path)
 
             values["rows"] = [
-                {
-                    normalize_identifiers(column, dialect=dialect).name: value
-                    for column, value in row.items()
-                }
+                {self._normalize_column_name(column): value for column, value in row.items()}
                 for row in values["rows"]
             ]
             if partial:
@@ -286,30 +276,47 @@ class ModelTest(unittest.TestCase):
 
             return values
 
-        def _normalize_sources(sources: t.Dict, partial: bool = False) -> t.Dict:
+        def _normalize_sources(
+            sources: t.Dict, partial: bool = False, with_default_catalog: bool = True
+        ) -> t.Dict:
             return {
-                normalize_model_name(
-                    name, default_catalog=self.default_catalog, dialect=dialect
-                ): _normalize_rows(values, partial=partial)
+                self._normalize_model_name(
+                    name, with_default_catalog=with_default_catalog
+                ): _normalize_rows(values, name, partial=partial)
                 for name, values in sources.items()
             }
 
-        inputs = self.body.get("inputs")
-        outputs = self.body["outputs"]
-        ctes = outputs.get("ctes")
-        query = outputs.get("query")
-        partial = outputs.pop("partial", None)
-
         if inputs:
-            self.body["inputs"] = _normalize_sources(inputs)
-        if ctes:
-            outputs["ctes"] = _normalize_sources(ctes, partial=partial)
-        if query or query == []:
-            outputs["query"] = _normalize_rows(query, partial=partial)
+            inputs = _normalize_sources(inputs)
+            for name, values in inputs.items():
+                columns = values.get("columns")
+                if columns is None:
+                    continue
 
-        self.body["model"] = normalize_model_name(
-            self.body["model"], default_catalog=self.default_catalog, dialect=dialect
-        )
+                if not isinstance(columns, dict):
+                    _raise_error(
+                        f"Invalid test, columns for model '{name}' need to be a mapping name -> type",
+                        self.path,
+                    )
+
+                values["columns"] = {
+                    self._normalize_column_name(c): exp.DataType.build(t, dialect=self.dialect)
+                    for c, t in columns.items()
+                }
+
+            for depends_on in self.model.depends_on:
+                if depends_on not in inputs:
+                    _raise_error(f"Incomplete test, missing input model '{depends_on}'", self.path)
+
+            self.body["inputs"] = inputs
+
+        if ctes:
+            outputs["ctes"] = _normalize_sources(ctes, partial=partial, with_default_catalog=False)
+
+        if query or query == []:
+            outputs["query"] = _normalize_rows(query, self.model.name, partial=partial)
+
+        self.body["model"] = self._normalize_model_name(self.body["model"])
 
     def _test_fixture_table(self, name: str) -> exp.Table:
         table = self._fixture_table_cache.get(name)
@@ -319,6 +326,25 @@ class ModelTest(unittest.TestCase):
             self._fixture_table_cache[name] = table
 
         return table
+
+    def _normalize_model_name(self, name: str, with_default_catalog: bool = True) -> str:
+        normalized_name = self._normalized_model_name_cache.get((name, with_default_catalog))
+        if normalized_name is None:
+            default_catalog = self.default_catalog if with_default_catalog else None
+            normalized_name = normalize_model_name(
+                name, default_catalog=default_catalog, dialect=self.dialect
+            )
+            self._normalized_model_name_cache[(name, with_default_catalog)] = normalized_name
+
+        return normalized_name
+
+    def _normalize_column_name(self, name: str) -> str:
+        normalized_name = self._normalized_column_name_cache.get(name)
+        if normalized_name is None:
+            normalized_name = normalize_identifiers(name, dialect=self.dialect).name
+            self._normalized_column_name_cache[name] = normalized_name
+
+        return normalized_name
 
 
 class SqlModelTest(ModelTest):
@@ -349,7 +375,7 @@ class SqlModelTest(ModelTest):
         mapping = {
             name: self._test_fixture_table(name).sql()
             for name in [
-                normalize_model_name(name, self.default_catalog, self.dialect)
+                self._normalize_model_name(name)
                 for name in self.models.keys() | self.body.get("inputs", {}).keys()
             ]
         }
@@ -360,7 +386,10 @@ class SqlModelTest(ModelTest):
         )
 
         self.test_ctes(
-            {normalize_model_name(cte.alias, None, self.dialect): cte for cte in query.ctes}
+            {
+                self._normalize_model_name(cte.alias, with_default_catalog=False): cte
+                for cte in query.ctes
+            }
         )
 
         values = self.body["outputs"].get("query")
