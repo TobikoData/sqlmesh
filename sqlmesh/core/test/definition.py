@@ -570,10 +570,14 @@ def generate_test(
                     cte_query = cte_query.with_(prev.alias, prev.this)
 
                 cte_output = t.cast(SqlModelTest, test)._execute(cte_query)
-                ctes[cte.alias] = pandas_timestamp_to_pydatetime(
-                    cte_output.apply(lambda col: col.map(_normalize_df_value)),
-                    cte_query.named_selects,
-                ).replace({np.nan: None}).to_dict(orient="records")
+                ctes[cte.alias] = (
+                    pandas_timestamp_to_pydatetime(
+                        cte_output.apply(lambda col: col.map(_normalize_df_value)),
+                        cte_query.named_selects,
+                    )
+                    .replace({np.nan: None})
+                    .to_dict(orient="records")
+                )
 
                 previous_ctes.append(cte)
 
@@ -584,9 +588,13 @@ def generate_test(
     else:
         output = t.cast(PythonModelTest, test)._execute_model()
 
-    outputs["query"] = pandas_timestamp_to_pydatetime(
-        output.apply(lambda col: col.map(_normalize_df_value)), model.columns_to_types
-    ).replace({np.nan: None}).to_dict(orient="records")
+    outputs["query"] = (
+        pandas_timestamp_to_pydatetime(
+            output.apply(lambda col: col.map(_normalize_df_value)), model.columns_to_types
+        )
+        .replace({np.nan: None})
+        .to_dict(orient="records")
+    )
 
     test.tearDown()
 
