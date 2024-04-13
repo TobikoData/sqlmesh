@@ -656,7 +656,7 @@ test_foo:
     ).run()
 
     expected_error_msg = (
-        "from sqlmesh.utils.errors.TestError: Detected unknown column(s)\n\n"
+        "sqlmesh.utils.errors.TestError: Detected unknown column(s)\n\n"
         "Expected column(s): id, value\n"
         "Unknown column(s): foo\n"
     )
