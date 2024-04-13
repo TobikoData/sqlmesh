@@ -295,7 +295,7 @@ class ModelTest(unittest.TestCase):
 
                 if not isinstance(columns, dict):
                     _raise_error(
-                        f"Invalid test, columns for model '{name}' need to be a mapping name -> type",
+                        f"Invalid 'columns' value for model '{name}', expected a mapping name -> type",
                         self.path,
                     )
 
