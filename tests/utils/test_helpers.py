@@ -63,6 +63,10 @@ from sqlmesh.utils import columns_to_types_all_known
             },
             False,
         ),
+        (
+            {"a": expressions.DataType.build("VARCHAR(MAX)", dialect="redshift")},
+            True,
+        ),
     ],
 )
 def test_columns_to_types_all_known(columns_to_types, expected) -> None:
