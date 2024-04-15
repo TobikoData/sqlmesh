@@ -117,7 +117,7 @@ class ModelTest(unittest.TestCase):
 
                         if not type_is_known(v_type):
                             _raise_error(
-                                f"Failed to infer the data type of column '{col}' for the input fixture '{table_name}'. "
+                                f"Failed to infer the data type of column '{col}' for the input fixture '{name}'. "
                                 f"Try to cast it to the target type or set the model's 'columns' property",
                                 self.path,
                             )
