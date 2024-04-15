@@ -100,6 +100,10 @@ class AuditError(SQLMeshError):
         return self.query.sql(dialect=dialect or self.adapter_dialect, **opts)
 
 
+class TestError(SQLMeshError):
+    pass
+
+
 class NotificationTargetError(SQLMeshError):
     pass
 
