@@ -93,7 +93,7 @@ class BasePostgresEngineAdapter(EngineAdapter):
         """
         with self.transaction():
             if replace:
-                self.drop_view(view_name, materialized=materialized, cascade=True)
+                self.drop_view(view_name, materialized=materialized)
             super().create_view(
                 view_name,
                 query_or_df,
@@ -104,6 +104,21 @@ class BasePostgresEngineAdapter(EngineAdapter):
                 column_descriptions=column_descriptions,
                 **create_kwargs,
             )
+
+    def drop_view(
+        self,
+        view_name: TableName,
+        ignore_if_not_exists: bool = True,
+        materialized: bool = False,
+        **kwargs: t.Any,
+    ) -> None:
+        kwargs["cascade"] = kwargs.get("cascade", True)
+        return super().drop_view(
+            view_name,
+            ignore_if_not_exists=ignore_if_not_exists,
+            materialized=materialized,
+            **kwargs,
+        )
 
     def _get_data_objects(
         self, schema_name: SchemaName, object_names: t.Optional[t.Set[str]] = None
