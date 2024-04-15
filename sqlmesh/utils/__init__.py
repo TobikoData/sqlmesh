@@ -326,6 +326,8 @@ def columns_to_types_all_known(columns_to_types: t.Dict[str, exp.DataType]) -> b
             if not d_type.kind:
                 return False
             d_type = d_type.kind
+        if isinstance(d_type, exp.DataTypeParam):
+            return True
         if d_type.is_type(exp.DataType.Type.UNKNOWN, exp.DataType.Type.NULL):
             return False
         if d_type.expressions:
