@@ -1138,17 +1138,21 @@ class GenericContext(BaseContext, t.Generic[C]):
         else:
             self.console.log_success(f"Environment '{name}' has been invalidated.")
 
-    def diff(self, environment: t.Optional[str] = None, detailed: bool = False) -> None:
+    def diff(self, environment: t.Optional[str] = None, detailed: bool = False) -> bool:
         """Show a diff of the current context with a given environment.
 
         Args:
             environment: The environment to diff against.
             detailed: Show the actual SQL differences if True.
+
+        Returns:
+            True if there are changes, False otherwise.
         """
         environment = environment or self.config.default_target_environment
         environment = Environment.normalize_name(environment)
+        context_diff = self._context_diff(environment)
         self.console.show_model_difference_summary(
-            self._context_diff(environment),
+            context_diff,
             EnvironmentNamingInfo.from_environment_catalog_mapping(
                 self.config.environment_catalog_mapping,
                 name=environment,
@@ -1157,6 +1161,7 @@ class GenericContext(BaseContext, t.Generic[C]):
             self.default_catalog,
             no_diff=not detailed,
         )
+        return context_diff.has_changes
 
     def table_diff(
         self,

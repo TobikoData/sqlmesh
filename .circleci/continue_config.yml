@@ -107,6 +107,20 @@ jobs:
           name: Run slow tests
           command: make cicd-test
 
+  migration_test:
+    docker:
+      - image: cimg/python:3.10
+    resource_class: small
+    steps:
+      - halt_unless_core
+      - checkout
+      - run:
+          name: Install dependencies
+          command: make install-dev
+      - run:
+          name: Run the migration test
+          command: ./.circleci/test_migration.sh
+
   ui_style:
     docker:
       - image: cimg/python:3.8
@@ -207,9 +221,9 @@ jobs:
           name: Run tests
           command: make engine-docker-test
           no_output_timeout: 15m
-  
+
   trigger_private_tests:
-      docker: 
+      docker:
         - image: cimg/base:2021.11
       resource_class: small
       steps:
@@ -226,8 +240,8 @@ jobs:
                 --data '{
                   "branch":"main",
                   "parameters":{
-                    "run_main_pr":false, 
-                    "run_sqlmesh_commit":true, 
+                    "run_main_pr":false,
+                    "run_sqlmesh_commit":true,
                     "sqlmesh_branch":"'$CIRCLE_BRANCH'",
                     "sqlmesh_commit_author":"'$CIRCLE_USERNAME'",
                     "sqlmesh_commit_hash":"'$CIRCLE_SHA1'",
@@ -269,3 +283,4 @@ workflows:
                 - main
       - ui_style
       - ui_test
+      - migration_test
