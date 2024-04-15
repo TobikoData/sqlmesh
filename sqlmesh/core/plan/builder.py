@@ -28,7 +28,7 @@ from sqlmesh.core.snapshot import (
     categorize_change,
 )
 from sqlmesh.core.snapshot.definition import Interval, SnapshotId, start_date
-from sqlmesh.utils import random_id
+from sqlmesh.utils import columns_to_types_all_known, random_id
 from sqlmesh.utils.dag import DAG
 from sqlmesh.utils.date import TimeLike, now, to_datetime, yesterday_ds
 from sqlmesh.utils.errors import NoChangesPlanError, PlanError, SQLMeshError
@@ -459,30 +459,44 @@ class PlanBuilder:
                         else:
                             snapshot.categorize_as(SnapshotChangeCategory.NON_BREAKING)
                     elif self._is_forward_only_change(s_id) and is_directly_modified:
-                        # If a forward-only model is additive_only, error if the change requires a DROP operation
                         new, old = self._context_diff.modified_snapshots[s_id.name]
 
-                        schema_differ_args = getattr(
-                            DIALECT_TO_ENGINE_ADAPTER[new.model.dialect], "schema_differ_args"
-                        )
-                        schema_differ = SchemaDiffer(**schema_differ_args)
+                        # If a forward-only model is additive_only, error if the change requires a DROP operation
+                        if new.model.additive_only:
+                            # We must know all columns_to_types to determine whether a change is destructive
+                            old_columns_to_types = old.model.columns_to_types
+                            new_columns_to_types = new.model.columns_to_types
+                            if (
+                                not old_columns_to_types
+                                or not columns_to_types_all_known(old_columns_to_types)
+                                or not new_columns_to_types
+                                or not columns_to_types_all_known(new_columns_to_types)
+                            ):
+                                raise PlanError(
+                                    f"Model '{new.name}' is `additive_only`, but SQLMesh cannot infer all the model's column types (which is necessary to determine whether a change is destructive). Please add explicit types to all projections in the outermost SELECT statement, specify the `columns` model attribute (https://sqlmesh.readthedocs.io/en/stable/concepts/models/overview/#columns), permanently allow destructive changes by setting `additive_only false` in the MODEL kind specification, or temporarily allow destructive changes by passing the `--allow-destructive` argument to the `sqlmesh plan` command."
+                                )
 
-                        schema_diff = schema_differ.compare_columns(
-                            new.model.name,
-                            t.cast(t.Dict[str, exp.DataType], old.model.columns_to_types),
-                            t.cast(t.Dict[str, exp.DataType], new.model.columns_to_types),
-                        )
-                        has_drop = any(
-                            [
-                                isinstance(x, exp.Drop)
-                                for actions in schema_diff
-                                for x in actions.args.get("actions", [])
-                            ]
-                        )
-                        if has_drop and new.model.additive_only:
-                            raise PlanError(
-                                f"Model '{new.name}' is `additive_only`, but the current changes require dropping a column. Please modify the changes, specify `additive_only false` in the MODEL kind specification,  or pass the `--allow-destructive` argument to the `sqlmesh plan` command."
+                            schema_differ_args = getattr(
+                                DIALECT_TO_ENGINE_ADAPTER[new.model.dialect], "schema_differ_args"
                             )
+                            schema_differ = SchemaDiffer(**schema_differ_args)
+
+                            schema_diff = schema_differ.compare_columns(
+                                new.model.name,
+                                old_columns_to_types,
+                                new_columns_to_types,
+                            )
+                            has_drop = any(
+                                [
+                                    isinstance(action, exp.Drop)
+                                    for actions in schema_diff
+                                    for action in actions.args.get("actions", [])
+                                ]
+                            )
+                            if has_drop:
+                                raise PlanError(
+                                    f"Model '{new.name}' is `additive_only`, but the current changes require dropping a column. Please modify the changes, permanently allow destructive changes by setting `additive_only false` in the MODEL kind specification, or temporarily allow destructive changes by passing the `--allow-destructive` argument to the `sqlmesh plan` command."
+                                )
 
                         self._set_choice(
                             snapshot,
