@@ -261,6 +261,26 @@ def test_promote(mocker: MockerFixture, adapter_mock, make_snapshot):
     )
 
 
+def test_demote(mocker: MockerFixture, adapter_mock, make_snapshot):
+    evaluator = SnapshotEvaluator(adapter_mock)
+
+    model = SqlModel(
+        name="test_schema.test_model",
+        kind=ViewKind(),
+        query=parse_one("SELECT a FROM tbl"),
+    )
+
+    snapshot = make_snapshot(model)
+    snapshot.categorize_as(SnapshotChangeCategory.BREAKING)
+
+    evaluator.demote([snapshot], EnvironmentNamingInfo(name="test_env"))
+
+    adapter_mock.drop_view.assert_called_once_with(
+        "test_schema__test_env.test_model",
+        cascade=False,
+    )
+
+
 def test_promote_default_catalog(adapter_mock, make_snapshot):
     evaluator = SnapshotEvaluator(adapter_mock)
 

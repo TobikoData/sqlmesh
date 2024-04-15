@@ -1047,7 +1047,7 @@ class EmbeddedStrategy(SymbolicStrategy):
     ) -> None:
         target_name = view_name.for_environment(environment_naming_info)
         logger.info("Dropping view '%s' for non-materialized table", target_name)
-        self.adapter.drop_view(target_name)
+        self.adapter.drop_view(target_name, cascade=False)
 
 
 class PromotableStrategy(EvaluationStrategy):
@@ -1075,7 +1075,7 @@ class PromotableStrategy(EvaluationStrategy):
     ) -> None:
         target_name = view_name.for_environment(environment_naming_info)
         logger.info("Dropping view '%s'", target_name)
-        self.adapter.drop_view(target_name)
+        self.adapter.drop_view(target_name, cascade=False)
 
 
 class MaterializableStrategy(PromotableStrategy):
