@@ -19,9 +19,6 @@ class ModelDefaultsConfig(BaseConfig):
         start: The earliest date that the model will be backfilled for. If this is None,
             then the date is inferred by taking the most recent start date of its ancestors.
             The start date can be a static datetime or a relative datetime like "1 year ago"
-        batch_size: The maximum number of intervals that can be run per backfill job. If this is None,
-            then backfilling this model will do all of history in one job. If this is set, a model's backfill
-            will be chunked such that each individual job will only contain jobs with max `batch_size` intervals.
         storage_format: The storage format used to store the physical table, only applicable in certain engines.
             (eg. 'parquet')
     """
@@ -31,7 +28,6 @@ class ModelDefaultsConfig(BaseConfig):
     cron: t.Optional[str] = None
     owner: t.Optional[str] = None
     start: t.Optional[TimeLike] = None
-    batch_size: t.Optional[int] = None
     storage_format: t.Optional[str] = None
 
     _model_kind_validator = model_kind_validator

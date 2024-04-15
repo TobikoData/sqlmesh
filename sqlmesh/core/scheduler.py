@@ -361,6 +361,10 @@ class Scheduler:
                         for i, interval in enumerate(p_intervals):
                             upstream_dependencies.append((p_sid.name, (interval, i)))
 
+            batch_concurrency = snapshot.node.batch_concurrency
+            if snapshot.depends_on_past:
+                batch_concurrency = 1
+
             for i, interval in enumerate(intervals):
                 node = (snapshot.name, (interval, i))
                 dag.add(node, upstream_dependencies)
@@ -368,8 +372,17 @@ class Scheduler:
                 if len(intervals) > 1:
                     dag.add((snapshot.name, terminal_node), [node])
 
-                if snapshot.depends_on_past and i > 0:
-                    dag.add(node, [(snapshot.name, (intervals[i - 1], i - 1))])
+                if batch_concurrency and i >= batch_concurrency:
+                    batch_idx_to_wait_for = i - batch_concurrency
+                    dag.add(
+                        node,
+                        [
+                            (
+                                snapshot.name,
+                                (intervals[batch_idx_to_wait_for], batch_idx_to_wait_for),
+                            )
+                        ],
+                    )
         return dag
 
 

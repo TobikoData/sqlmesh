@@ -254,6 +254,7 @@ class TimeColumn(PydanticModel):
 class _Incremental(_ModelKind):
     dialect: str = ""
     batch_size: t.Optional[SQLGlotPositiveInt] = None
+    batch_concurrency: t.Optional[SQLGlotPositiveInt] = None
     lookback: t.Optional[SQLGlotPositiveInt] = None
     forward_only: SQLGlotBool = False
     disable_restatement: SQLGlotBool = False

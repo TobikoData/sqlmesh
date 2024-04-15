@@ -1,3 +1,5 @@
+import typing as t
+
 import pytest
 from pytest_mock.plugin import MockerFixture
 from sqlglot import parse_one
@@ -224,6 +226,142 @@ def test_incremental_time_self_reference_dag(mocker: MockerFixture, make_snapsho
             ]
         ),
     }
+
+
+@pytest.mark.parametrize(
+    "batch_size, batch_concurrency, expected_graph",
+    [
+        (
+            2,
+            2,
+            {
+                (
+                    '"test_model"',
+                    ((to_datetime("2023-01-01"), to_datetime("2023-01-03")), 0),
+                ): set(),
+                (
+                    '"test_model"',
+                    ((to_datetime("2023-01-03"), to_datetime("2023-01-05")), 1),
+                ): set(),
+                ('"test_model"', ((to_datetime("2023-01-05"), to_datetime("2023-01-07")), 2)): {
+                    ('"test_model"', ((to_datetime("2023-01-01"), to_datetime("2023-01-03")), 0)),
+                },
+            },
+        ),
+        (
+            1,
+            3,
+            {
+                (
+                    '"test_model"',
+                    ((to_datetime("2023-01-01"), to_datetime("2023-01-02")), 0),
+                ): set(),
+                (
+                    '"test_model"',
+                    ((to_datetime("2023-01-02"), to_datetime("2023-01-03")), 1),
+                ): set(),
+                (
+                    '"test_model"',
+                    ((to_datetime("2023-01-03"), to_datetime("2023-01-04")), 2),
+                ): set(),
+                ('"test_model"', ((to_datetime("2023-01-04"), to_datetime("2023-01-05")), 3)): {
+                    ('"test_model"', ((to_datetime("2023-01-01"), to_datetime("2023-01-02")), 0)),
+                },
+                ('"test_model"', ((to_datetime("2023-01-05"), to_datetime("2023-01-06")), 4)): {
+                    ('"test_model"', ((to_datetime("2023-01-02"), to_datetime("2023-01-03")), 1)),
+                },
+                ('"test_model"', ((to_datetime("2023-01-06"), to_datetime("2023-01-07")), 5)): {
+                    ('"test_model"', ((to_datetime("2023-01-03"), to_datetime("2023-01-04")), 2)),
+                },
+            },
+        ),
+        (
+            1,
+            10,
+            {
+                (
+                    '"test_model"',
+                    ((to_datetime("2023-01-01"), to_datetime("2023-01-02")), 0),
+                ): set(),
+                (
+                    '"test_model"',
+                    ((to_datetime("2023-01-02"), to_datetime("2023-01-03")), 1),
+                ): set(),
+                (
+                    '"test_model"',
+                    ((to_datetime("2023-01-03"), to_datetime("2023-01-04")), 2),
+                ): set(),
+                (
+                    '"test_model"',
+                    ((to_datetime("2023-01-04"), to_datetime("2023-01-05")), 3),
+                ): set(),
+                (
+                    '"test_model"',
+                    ((to_datetime("2023-01-05"), to_datetime("2023-01-06")), 4),
+                ): set(),
+                (
+                    '"test_model"',
+                    ((to_datetime("2023-01-06"), to_datetime("2023-01-07")), 5),
+                ): set(),
+            },
+        ),
+        (
+            10,
+            10,
+            {
+                (
+                    '"test_model"',
+                    ((to_datetime("2023-01-01"), to_datetime("2023-01-07")), 0),
+                ): set(),
+            },
+        ),
+        (
+            10,
+            1,
+            {
+                (
+                    '"test_model"',
+                    ((to_datetime("2023-01-01"), to_datetime("2023-01-07")), 0),
+                ): set(),
+            },
+        ),
+    ],
+)
+def test_incremental_batch_concurrency(
+    mocker: MockerFixture,
+    make_snapshot,
+    batch_size: int,
+    batch_concurrency: int,
+    expected_graph: t.Dict[str, t.Any],
+):
+    start = to_datetime("2023-01-01")
+    end = to_datetime("2023-01-07")
+    snapshot: Snapshot = make_snapshot(
+        SqlModel(
+            name="test_model",
+            kind=IncrementalByTimeRangeKind(
+                time_column="ds", batch_size=batch_size, batch_concurrency=batch_concurrency
+            ),
+            cron="@daily",
+            start=start,
+            query=parse_one("SELECT 1, ds FROM source"),
+        ),
+    )
+
+    snapshot_evaluator = SnapshotEvaluator(adapter=mocker.MagicMock(), ddl_concurrent_tasks=1)
+    mock_state_sync = mocker.MagicMock()
+    scheduler = Scheduler(
+        snapshots=[snapshot],
+        snapshot_evaluator=snapshot_evaluator,
+        state_sync=mock_state_sync,
+        max_workers=4,
+        default_catalog=None,
+    )
+
+    batches = scheduler.batches(start, end, end)
+    dag = scheduler._dag(batches)
+    graph = {k: v for k, v in dag.graph.items() if k[1][1] != -1}  # exclude the terminal node.}
+    assert graph == expected_graph
 
 
 def test_circuit_breaker(scheduler: Scheduler):
