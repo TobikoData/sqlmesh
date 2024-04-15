@@ -946,7 +946,7 @@ class EngineAdapter:
         view_name: TableName,
         ignore_if_not_exists: bool = True,
         materialized: bool = False,
-        cascade: bool = False,
+        **kwargs: t.Any,
     ) -> None:
         """Drop a view."""
         self.execute(
@@ -954,8 +954,8 @@ class EngineAdapter:
                 this=exp.to_table(view_name),
                 exists=ignore_if_not_exists,
                 materialized=materialized and self.SUPPORTS_MATERIALIZED_VIEWS,
-                cascade=cascade,
                 kind="VIEW",
+                **kwargs,
             )
         )
 
