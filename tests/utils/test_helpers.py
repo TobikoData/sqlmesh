@@ -1,5 +1,6 @@
 import pytest
 from sqlglot import expressions
+from sqlglot.optimizer.annotate_types import annotate_types
 
 from sqlmesh.utils import columns_to_types_all_known
 
@@ -62,6 +63,10 @@ from sqlmesh.utils import columns_to_types_all_known
                 "b": expressions.DataType.build("MAP<INT, UNKNOWN>"),
             },
             False,
+        ),
+        (
+            {"a": annotate_types(expressions.DataType.build("VARCHAR(MAX)", dialect="redshift"))},
+            True,
         ),
     ],
 )
