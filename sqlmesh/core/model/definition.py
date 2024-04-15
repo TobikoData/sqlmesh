@@ -1057,11 +1057,11 @@ class SqlModel(_SqlBasedModel):
             if count > 1:
                 raise_config_error(f"Found duplicate outer select name '{name}'", self._path)
 
-        if self.depends_on_past and not self.annotated:
-            raise_config_error(
-                "Self-referencing models require inferrable column types. There are three options available to mitigate this issue: add explicit types to all projections in the outermost SELECT statement, leverage external models (https://sqlmesh.readthedocs.io/en/stable/concepts/models/external_models/), or use the `columns` model attribute (https://sqlmesh.readthedocs.io/en/stable/concepts/models/overview/#columns).",
-                self._path,
-            )
+        # if self.depends_on_past and not self.annotated:
+        #    raise_config_error(
+        #        "Self-referencing models require inferrable column types. There are three options available to mitigate this issue: add explicit types to all projections in the outermost SELECT statement, leverage external models (https://sqlmesh.readthedocs.io/en/stable/concepts/models/external_models/), or use the `columns` model attribute (https://sqlmesh.readthedocs.io/en/stable/concepts/models/overview/#columns).",
+        #        self._path,
+        #    )
 
         super().validate_definition()
 
