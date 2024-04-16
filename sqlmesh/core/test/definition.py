@@ -103,13 +103,15 @@ class ModelTest(unittest.TestCase):
                 known_columns_to_types = {
                     c: t for c, t in inferred_columns_to_types.items() if type_is_known(t)
                 }
-                all_types_are_known = len(known_columns_to_types) == len(inferred_columns_to_types)
+                all_types_are_known = bool(inferred_columns_to_types) and (
+                    len(known_columns_to_types) == len(inferred_columns_to_types)
+                )
 
             # Types specified in the test take precedence over the corresponding inferred ones
             known_columns_to_types.update(values.get("columns", {}))
 
             rows = values["rows"]
-            if (not all_types_are_known or not known_columns_to_types) and rows:
+            if not all_types_are_known and rows:
                 for col, value in rows[0].items():
                     if col not in known_columns_to_types:
                         v_type = annotate_types(exp.convert(value)).type or type(value).__name__
