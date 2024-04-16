@@ -73,7 +73,6 @@ class _Model(ModelMeta, frozen=True):
             name           sushi.order_items,
             owner          jen,
             cron           '@daily',
-            batch_size     30,
             start          '2020-01-01',
             partitioned_by ds
         );
@@ -101,9 +100,6 @@ class _Model(ModelMeta, frozen=True):
             The start date can be a static datetime or a relative datetime like "1 year ago"
         end: The date that the model will be backfilled up until. Follows the same syntax as 'start',
             should be omitted if there is no end date.
-        batch_size: The maximum number of incremental intervals that can be run per backfill job. If this is None,
-            then backfilling this model will do all of history in one job. If this is set, a model's backfill
-            will be chunked such that each individual job will only contain jobs with max `batch_size` intervals.
         lookback: The number of previous incremental intervals in the lookback window.
         storage_format: The storage format used to store the physical table, only applicable in certain engines.
             (eg. 'parquet')
@@ -750,6 +746,7 @@ class _Model(ModelMeta, frozen=True):
             str(self.end) if self.end else None,
             str(self.retention) if self.retention else None,
             str(self.batch_size) if self.batch_size is not None else None,
+            str(self.batch_concurrency) if self.batch_concurrency is not None else None,
             json.dumps(self.mapping_schema, sort_keys=True),
             *sorted(self.tags),
             *sorted(ref.json(sort_keys=True) for ref in self.all_references),
@@ -2024,7 +2021,6 @@ def _refs_to_sql(values: t.Any) -> exp.Expression:
 META_FIELD_CONVERTER: t.Dict[str, t.Callable] = {
     "start": lambda value: exp.Literal.string(value),
     "cron": lambda value: exp.Literal.string(value),
-    "batch_size": lambda value: exp.Literal.number(value),
     "partitioned_by_": _single_expr_or_tuple,
     "clustered_by": _single_value_or_tuple,
     "depends_on_": lambda value: exp.Tuple(expressions=sorted(value)),

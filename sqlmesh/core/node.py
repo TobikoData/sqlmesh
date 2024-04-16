@@ -271,6 +271,11 @@ class _Node(PydanticModel):
         return None
 
     @property
+    def batch_concurrency(self) -> t.Optional[int]:
+        """The maximal number of batches that can run concurrently for a backfill."""
+        return None
+
+    @property
     def data_hash(self) -> str:
         """
         Computes the data hash for the node.
