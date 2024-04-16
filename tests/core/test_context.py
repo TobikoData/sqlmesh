@@ -68,6 +68,18 @@ def test_config_parameter(copy_to_temp_path: t.Callable):
     assert context.config.project == "test_project"
 
 
+def test_generate_table_name_in_dialect(mocker: MockerFixture, copy_to_temp_path: t.Callable):
+    config = Config(model_defaults=ModelDefaultsConfig(dialect="bigquery"))
+    context = Context(paths=copy_to_temp_path("examples/sushi"), config=config)
+
+    mocker.patch(
+        "sqlmesh.core.context.GenericContext._model_tables",
+        PropertyMock(return_value={'"project-id"."dataset"."table"': '"project-id".dataset.table'}),
+    )
+
+    assert context.table('"project-id"."dataset"."table"') == "`project-id`.dataset.table"
+
+
 def test_config_not_found(copy_to_temp_path: t.Callable):
     with pytest.raises(
         ConfigError,
