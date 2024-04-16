@@ -189,7 +189,7 @@ class MacroEvaluator:
                 return exp.convert(
                     self.transform(value) if isinstance(value, exp.Expression) else value
                 )
-            if isinstance(node, exp.Identifier):
+            if isinstance(node, exp.Identifier) and "@" in node.this:
                 text = self.template(node.this, self.locals)
                 if node.this != text:
                     changed = True
