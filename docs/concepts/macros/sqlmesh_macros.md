@@ -41,11 +41,11 @@ It uses the following five step approach to accomplish this:
 
 ## User-defined variables
 
-SQLMesh supports two kinds of user-defined macro variables: global and local.
+SQLMesh supports three kinds of user-defined macro variables: [global](#global-variables), [gateway](#gateway-variables), and [local](#local-variables).
 
-Global macro variables are defined in the project configuration file and can be accessed in any project model.
+Global and gateway macro variables are defined in the project configuration file and can be accessed in any project model. Local macro variables are defined in a model definition and can only be accessed in that model.
 
-Local macro variables are defined in a model definition and can only be accessed in that model.
+Macro variables with the same name may be specified at any or all of the global, gateway, and local levels. When variables are specified at multiple levels, the value of the most specific level takes precedence. For example, the value of a local variable takes precedence over the value of a gateway variable with the same name, and the value of a gateway variable takes precedence over the value of a global variable.
 
 ### Global variables
 
@@ -67,15 +67,6 @@ variables:
     dict_var:
         key1: 1
         key2: 2
-```
-
-Additionally, variables can be configured as part of the gateway, in which case individual variable values take precedence over values with the same key in the root configuration:
-```yaml linenums="1"
-gateways:
-    my_gateway:
-        variables:
-            my_var: 1
-        ...
 ```
 
 A model definition could access the `int_var` value in a `WHERE` clause like this:
@@ -106,7 +97,25 @@ WHERE some_value = @VAR('missing_var', 0)
 
 A similar API is available for [Python macro functions](#accessing-global-variable-values) via the `evaluator.var` method and [Python models](../models/python_models.md#global-variables) via the `context.var` method.
 
+### Gateway variables
+
+Like global variables, gateway variables are defined in the project configuration file. However, they are specified in a specific gateway's `variables` key:
+
+```yaml linenums="1"
+gateways:
+    my_gateway:
+        variables:
+            int_var: 1
+        ...
+```
+
+Access them in models using the same methods as [global variables](#global-variables).
+
+Gateway-specific variable values take precedence over variables with the same name specified in the root `variables` key.
+
 ### Local variables
+
+Local macro variables are defined in a model. Local variable values take precedence over [global](#global-variables) or [gateway-specific](#gateway-variables) variables with the same name.
 
 Define your own local macro variables with the `@DEF` macro operator. For example, you could set the macro variable `macro_var` to the value `1` with:
 
