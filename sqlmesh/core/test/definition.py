@@ -109,7 +109,7 @@ class ModelTest(unittest.TestCase):
             known_columns_to_types.update(values.get("columns", {}))
 
             rows = values["rows"]
-            if not all_types_are_known and rows:
+            if (not all_types_are_known or not known_columns_to_types) and rows:
                 for col, value in rows[0].items():
                     if col not in known_columns_to_types:
                         v_type = annotate_types(exp.convert(value)).type or type(value).__name__
@@ -120,7 +120,7 @@ class ModelTest(unittest.TestCase):
                                 f"Failed to infer the data type of column '{col}' for '{name}'. This issue can be "
                                 "mitigated by casting the column in the model definition, setting its type in "
                                 "schema.yaml if it's an external model, setting the model's 'columns' property, "
-                                "or setting its 'columns' mapping in the test itself"
+                                "or setting its 'columns' mapping in the test itself",
                                 self.path,
                             )
 
