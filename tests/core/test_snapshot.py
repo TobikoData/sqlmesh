@@ -1382,7 +1382,7 @@ def test_is_valid_start(make_snapshot):
         ),
     )
     snapshot.categorize_as(SnapshotChangeCategory.BREAKING)
-    assert snapshot.depends_on_past
+    assert snapshot.depends_on_self
     assert snapshot.is_valid_start("2023-01-01", "2023-01-01")
     assert snapshot.is_valid_start("2023-01-01", "2023-01-02")
     assert snapshot.is_valid_start("2023-01-02", "2023-01-01 10:00:00")

@@ -172,7 +172,7 @@ def test_model_multiple_select_statements():
     "query, error",
     [
         ("y::int, x::int AS y", "duplicate"),
-        # ("* FROM db.table", "require inferrable column types"),
+        ("* FROM db.table", "require inferrable column types"),
     ],
 )
 def test_model_validation(query, error):

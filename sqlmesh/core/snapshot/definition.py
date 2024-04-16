@@ -685,11 +685,7 @@ class Snapshot(PydanticModel, SnapshotInfoMixin):
         *,
         strict: bool = True,
     ) -> Interval:
-        end = (
-            execution_time or now()
-            if self.depends_on_past or self.full_history_restatement_only
-            else end
-        )
+        end = execution_time or now() if self.depends_on_past else end
         if self.full_history_restatement_only and self.intervals:
             start = self.intervals[0][0]
         return self.inclusive_exclusive(start, end, strict)
@@ -1051,8 +1047,18 @@ class Snapshot(PydanticModel, SnapshotInfoMixin):
 
     @property
     def depends_on_past(self) -> bool:
-        """Whether or not this models depends on past intervals to be accurate before loading following intervals."""
-        return self.is_model and self.model.depends_on_past
+        """Whether or not this models depends on past intervals to be populated before loading following intervals.
+
+        This represents a superset of the following types of models:
+        1. Models that depend on themselves but can be restated from an arbitrary point in time (any start date) as long as interval batches are processed sequentially.
+        2. Models that can only be restated from the beginning of history *and* their interval batches must be processed sequentially.
+        """
+        return self.depends_on_self or self.full_history_restatement_only
+
+    @property
+    def depends_on_self(self) -> bool:
+        """Whether or not this models depends on self."""
+        return self.is_model and self.model.depends_on_self
 
     @property
     def audits_with_args(self) -> t.List[t.Tuple[Audit, t.Dict[str, exp.Expression]]]:

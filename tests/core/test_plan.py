@@ -1133,7 +1133,7 @@ def test_revert_to_previous_value(make_snapshot, mocker: MockerFixture):
 
 test_add_restatement_fixtures = [
     (
-        "No dependencies single depends on past",
+        "No dependencies single depends on self",
         {
             '"a"': {},
             '"b"': {},
@@ -1149,7 +1149,7 @@ test_add_restatement_fixtures = [
         },
     ),
     (
-        "Simple dependency with leaf depends on past",
+        "Simple dependency with leaf depends on self",
         {
             '"a"': {},
             '"b"': {'"a"'},
@@ -1165,7 +1165,7 @@ test_add_restatement_fixtures = [
         },
     ),
     (
-        "Simple dependency with root depends on past",
+        "Simple dependency with root depends on self",
         {
             '"a"': {},
             '"b"': {'"a"'},
@@ -1181,7 +1181,7 @@ test_add_restatement_fixtures = [
         },
     ),
     (
-        "Two unrelated subgraphs with root depends on past",
+        "Two unrelated subgraphs with root depends on self",
         {
             '"a"': {},
             '"b"': {},
@@ -1201,7 +1201,7 @@ test_add_restatement_fixtures = [
         },
     ),
     (
-        "Simple root depends on past with adjusted execution time",
+        "Simple root depends on self with adjusted execution time",
         {
             '"a"': {},
             '"b"': {'"a"'},
@@ -1221,7 +1221,7 @@ test_add_restatement_fixtures = [
         a -> c -> d
         b -> c -> e -> g
         b -> f -> g
-        c depends on past
+        c depends on self
         restate a and b
         """,
         {
@@ -1253,7 +1253,7 @@ test_add_restatement_fixtures = [
         a -> c -> d
         b -> c -> e -> g
         b -> f -> g
-        c depends on past
+        c depends on self
         restate e
         """,
         {
@@ -1279,13 +1279,13 @@ test_add_restatement_fixtures = [
 
 
 @pytest.mark.parametrize(
-    "graph,depends_on_past_names,restatement_names,start,end,execution_time,expected",
+    "graph,depends_on_self_names,restatement_names,start,end,execution_time,expected",
     [test[1:] for test in test_add_restatement_fixtures],
     ids=[test[0] for test in test_add_restatement_fixtures],
 )
 def test_add_restatements(
     graph: t.Dict[str, t.Set[str]],
-    depends_on_past_names: t.Set[str],
+    depends_on_self_names: t.Set[str],
     restatement_names: t.Set[str],
     start: str,
     end: str,
@@ -1306,7 +1306,7 @@ def test_add_restatements(
                 start="1 week ago",
                 query=parse_one(
                     f"SELECT 1 FROM {snapshot_name}"
-                    if snapshot_name in depends_on_past_names
+                    if snapshot_name in depends_on_self_names
                     else "SELECT 1"
                 ),
                 depends_on=depends_on,
@@ -1352,7 +1352,7 @@ def test_dev_plan_depends_past(make_snapshot, mocker: MockerFixture):
     snapshot = make_snapshot(
         SqlModel(
             name="a",
-            # self reference query so it depends_on_past
+            # self reference query so it depends_on_self
             query=parse_one("select 1, ds FROM a"),
             start="2023-01-01",
             kind=IncrementalByTimeRangeKind(time_column="ds"),
@@ -1378,9 +1378,9 @@ def test_dev_plan_depends_past(make_snapshot, mocker: MockerFixture):
         ),
     )
     unrelated_snapshot.categorize_as(SnapshotChangeCategory.BREAKING)
-    assert snapshot.depends_on_past
-    assert not snapshot_child.depends_on_past
-    assert not unrelated_snapshot.depends_on_past
+    assert snapshot.depends_on_self
+    assert not snapshot_child.depends_on_self
+    assert not unrelated_snapshot.depends_on_self
     assert snapshot_child.model.depends_on == {'"a"'}
     assert snapshot_child.parents == (snapshot.snapshot_id,)
     assert unrelated_snapshot.model.depends_on == set()
@@ -1442,7 +1442,7 @@ def test_dev_plan_depends_past_non_deployable(make_snapshot, mocker: MockerFixtu
     snapshot = make_snapshot(
         SqlModel(
             name="a",
-            # self reference query so it depends_on_past
+            # self reference query so it depends_on_self
             query=parse_one("select 1, ds FROM a"),
             start="2023-01-01",
             kind=IncrementalByTimeRangeKind(time_column="ds"),
@@ -1480,9 +1480,9 @@ def test_dev_plan_depends_past_non_deployable(make_snapshot, mocker: MockerFixtu
     )
     unrelated_snapshot.categorize_as(SnapshotChangeCategory.BREAKING)
 
-    assert updated_snapshot.depends_on_past
-    assert not snapshot_child.depends_on_past
-    assert not unrelated_snapshot.depends_on_past
+    assert updated_snapshot.depends_on_self
+    assert not snapshot_child.depends_on_self
+    assert not unrelated_snapshot.depends_on_self
     assert snapshot_child.model.depends_on == {'"a"'}
     assert snapshot_child.parents == (updated_snapshot.snapshot_id,)
     assert unrelated_snapshot.model.depends_on == set()
