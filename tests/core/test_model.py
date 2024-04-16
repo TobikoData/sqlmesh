@@ -172,7 +172,7 @@ def test_model_multiple_select_statements():
     "query, error",
     [
         ("y::int, x::int AS y", "duplicate"),
-        # ("* FROM db.table", "require inferrable column types"),
+        ("* FROM db.table", "require inferrable column types"),
     ],
 )
 def test_model_validation(query, error):
@@ -191,6 +191,24 @@ def test_model_validation(query, error):
     with pytest.raises(ConfigError) as ex:
         model.validate_definition()
     assert error in str(ex.value)
+
+
+def test_model_with_depends_on_self():
+    expressions = d.parse(
+        f"""
+        MODEL (
+            name db.table,
+            kind FULL,
+            depends_on  [db.table],
+        );
+
+        SELECT x
+        from y
+        """
+    )
+
+    model = load_sql_based_model(expressions)
+    model.validate_definition()
 
 
 def test_model_union_query(sushi_context, assert_exp_eq):

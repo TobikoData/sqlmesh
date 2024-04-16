@@ -611,11 +611,15 @@ class _Model(ModelMeta, frozen=True):
     def is_seed(self) -> bool:
         return False
 
-    @cached_property
+    @property
     def depends_on_past(self) -> bool:
         if self.kind.is_incremental_by_unique_key:
             return True
         return self.fqn in self._full_depends_on
+
+    @property
+    def depends_on_self(self) -> bool:
+        return self.fqn in self._references
 
     @property
     def forward_only(self) -> bool:
@@ -799,15 +803,14 @@ class _Model(ModelMeta, frozen=True):
 
     @cached_property
     def _full_depends_on(self) -> t.Set[str]:
-        depends_on = self.depends_on_ or set()
+        return (self.depends_on_ or set()) | self._references
 
+    @cached_property
+    def _references(self) -> t.Set[str]:
         query = self.render_query(optimize=False)
-        if query is not None:
-            depends_on |= d.find_tables(
-                query, default_catalog=self.default_catalog, dialect=self.dialect
-            )
-
-        return depends_on
+        if query:
+            return d.find_tables(query, default_catalog=self.default_catalog, dialect=self.dialect)
+        return set()
 
 
 class _SqlBasedModel(_Model):
@@ -1057,11 +1060,11 @@ class SqlModel(_SqlBasedModel):
             if count > 1:
                 raise_config_error(f"Found duplicate outer select name '{name}'", self._path)
 
-        # if self.depends_on_past and not self.annotated:
-        #    raise_config_error(
-        #        "Self-referencing models require inferrable column types. There are three options available to mitigate this issue: add explicit types to all projections in the outermost SELECT statement, leverage external models (https://sqlmesh.readthedocs.io/en/stable/concepts/models/external_models/), or use the `columns` model attribute (https://sqlmesh.readthedocs.io/en/stable/concepts/models/overview/#columns).",
-        #        self._path,
-        #    )
+        if self.depends_on_self and not self.annotated:
+            raise_config_error(
+                "Self-referencing models require inferrable column types. There are three options available to mitigate this issue: add explicit types to all projections in the outermost SELECT statement, leverage external models (https://sqlmesh.readthedocs.io/en/stable/concepts/models/external_models/), or use the `columns` model attribute (https://sqlmesh.readthedocs.io/en/stable/concepts/models/overview/#columns).",
+                self._path,
+            )
 
         super().validate_definition()
 
