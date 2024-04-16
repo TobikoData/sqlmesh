@@ -353,7 +353,7 @@ model_defaults:
             "'^dev$': dev_catalog\n    '[': other_catalog",
             {},
             "duckdb",
-            "`\[` is not a valid regular expression.",
+            "`\\[` is not a valid regular expression.",
         ),
         (
             "'^prod$': prod_catalog",
