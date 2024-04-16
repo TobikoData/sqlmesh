@@ -1051,6 +1051,7 @@ class Snapshot(PydanticModel, SnapshotInfoMixin):
 
         This represents a superset of the following types of models:
         1. Models that depend on themselves but can be restated from an arbitrary point in time (any start date) as long as interval batches are processed sequentially.
+           An example of this can be an INCREMENTAL_BY_TIME_RANGE model that references previous records from itself.
         2. Models that can only be restated from the beginning of history *and* their interval batches must be processed sequentially.
         """
         return self.depends_on_self or self.full_history_restatement_only
