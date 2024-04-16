@@ -1110,9 +1110,7 @@ class GenericContext(BaseContext, t.Generic[C]):
             NotificationEvent.APPLY_START, environment=plan.environment_naming_info.name
         )
         try:
-            self._scheduler.create_plan_evaluator(self).evaluate(
-                plan, circuit_breaker=circuit_breaker
-            )
+            self._apply(plan, circuit_breaker)
         except Exception as e:
             self.notification_target_manager.notify(
                 NotificationEvent.APPLY_FAILURE, traceback.format_exc()
@@ -1621,6 +1619,9 @@ class GenericContext(BaseContext, t.Generic[C]):
                 )
 
         return success
+
+    def _apply(self, plan: Plan, circuit_breaker: t.Optional[t.Callable[[], bool]]) -> None:
+        self._scheduler.create_plan_evaluator(self).evaluate(plan, circuit_breaker=circuit_breaker)
 
     def table_name(self, model_name: str, dev: bool) -> str:
         """Returns the name of the pysical table for the given model name.
