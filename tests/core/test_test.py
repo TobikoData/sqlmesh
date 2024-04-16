@@ -548,6 +548,84 @@ test_foo:
     )
 
 
+def test_partially_inferred_schemas(sushi_context: Context, mocker: MockerFixture) -> None:
+    parent = _create_model(
+        "SELECT a, b, s::ROW(d DATE) AS s FROM sushi.unknown",
+        meta="MODEL (name sushi.parent, kind FULL, dialect trino)",
+        default_catalog="memory",
+    )
+    parent = t.cast(SqlModel, sushi_context.upsert_model(parent))
+
+    child = _create_model(
+        "SELECT a, b, s.d AS d FROM sushi.parent",
+        meta="MODEL (name sushi.child, kind FULL)",
+        default_catalog="memory",
+    )
+    child = t.cast(SqlModel, sushi_context.upsert_model(child))
+
+    body = load_yaml(
+        """
+test_child:
+  model: sushi.child
+  inputs:
+    sushi.parent:
+      - a: 1
+        b: bla
+        s:
+          d: 2020-01-01
+  outputs:
+    query:
+      - a: 1
+        b: bla
+        d: 2020-01-01
+        """
+    )
+    test = _create_test(body, "test_child", child, sushi_context)
+
+    random_id = "jzngz56a"
+    test._test_id = random_id
+
+    spy_execute = mocker.spy(test.engine_adapter, "_execute")
+    _check_successful_or_raise(test.run())
+
+    spy_execute.assert_any_call(
+        f'CREATE OR REPLACE VIEW "memory"."sushi"."parent__fixture__{random_id}" ("s", "a", "b") AS '
+        "SELECT "
+        'CAST("s" AS STRUCT("d" DATE)) AS "s", '
+        'CAST("a" AS INT) AS "a", '
+        'CAST("b" AS TEXT) AS "b" '
+        """FROM (VALUES ({'d': CAST('2020-01-01' AS DATE)}, 1, 'bla')) AS "t"("s", "a", "b")"""
+    )
+
+
+def test_uninferrable_schema() -> None:
+    _check_successful_or_raise(
+        _create_test(
+            body=load_yaml(
+                """
+test_foo:
+  model: sushi.foo
+  inputs:
+    raw:
+      - value: null
+  outputs:
+    query:
+      - value: null
+                """
+            ),
+            test_name="test_foo",
+            model=_create_model("SELECT value FROM raw"),
+            context=Context(config=Config(model_defaults=ModelDefaultsConfig(dialect="duckdb"))),
+        ).run(),
+        expected_msg=(
+            """Failed to infer the data type of column 'value' for '"raw"'. This issue can """
+            "be mitigated by casting the column in the model definition, setting its type in "
+            "schema.yaml if it's an external model, setting the model's 'columns' property, "
+            "or setting its 'columns' mapping in the test itself\n"
+        ),
+    )
+
+
 def test_missing_column_failure(sushi_context: Context, full_model_without_ctes: SqlModel) -> None:
     _check_successful_or_raise(
         _create_test(
