@@ -316,22 +316,21 @@ def columns_to_types_to_struct(
     )
 
 
-def columns_to_types_all_known(columns_to_types: t.Dict[str, exp.DataType]) -> bool:
-    """
-    Checks that all column types are known and not NULL.
-    """
-
-    def check_expression_unknown(d_type: t.Union[exp.DataType, exp.ColumnDef]) -> bool:
-        if isinstance(d_type, exp.ColumnDef):
-            if not d_type.kind:
-                return False
-            d_type = d_type.kind
-        if isinstance(d_type, exp.DataTypeParam):
-            return True
-        if d_type.is_type(exp.DataType.Type.UNKNOWN, exp.DataType.Type.NULL):
+def type_is_known(d_type: t.Union[exp.DataType, exp.ColumnDef]) -> bool:
+    """Checks that a given column type is known and not NULL."""
+    if isinstance(d_type, exp.ColumnDef):
+        if not d_type.kind:
             return False
-        if d_type.expressions:
-            return all(check_expression_unknown(expression) for expression in d_type.expressions)
+        d_type = d_type.kind
+    if isinstance(d_type, exp.DataTypeParam):
         return True
+    if d_type.is_type(exp.DataType.Type.UNKNOWN, exp.DataType.Type.NULL):
+        return False
+    if d_type.expressions:
+        return all(type_is_known(expression) for expression in d_type.expressions)
+    return True
 
-    return all(check_expression_unknown(expression) for expression in columns_to_types.values())
+
+def columns_to_types_all_known(columns_to_types: t.Dict[str, exp.DataType]) -> bool:
+    """Checks that all column types are known and not NULL."""
+    return all(type_is_known(expression) for expression in columns_to_types.values())
