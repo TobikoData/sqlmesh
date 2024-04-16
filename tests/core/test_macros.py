@@ -348,3 +348,9 @@ def test_macro_functions(macro_evaluator, assert_exp_eq, sql, expected, args):
 
 def test_macro_returns_none(macro_evaluator):
     assert macro_evaluator.transform(parse_one("@NOOP()")) is None
+
+
+def test_transform_no_template(mocker, macro_evaluator):
+    spy = mocker.spy(macro_evaluator, "template")
+    macro_evaluator.transform(parse_one("select a, b"))
+    spy.assert_not_called()
