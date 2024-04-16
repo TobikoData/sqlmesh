@@ -608,9 +608,7 @@ class _Model(ModelMeta, frozen=True):
         return False
 
     @cached_property
-    def depends_on_past(self) -> bool:
-        if self.kind.is_incremental_by_unique_key:
-            return True
+    def depends_on_self(self) -> bool:
         return self.fqn in self._full_depends_on
 
     @property
@@ -1054,11 +1052,11 @@ class SqlModel(_SqlBasedModel):
             if count > 1:
                 raise_config_error(f"Found duplicate outer select name '{name}'", self._path)
 
-        # if self.depends_on_past and not self.annotated:
-        #    raise_config_error(
-        #        "Self-referencing models require inferrable column types. There are three options available to mitigate this issue: add explicit types to all projections in the outermost SELECT statement, leverage external models (https://sqlmesh.readthedocs.io/en/stable/concepts/models/external_models/), or use the `columns` model attribute (https://sqlmesh.readthedocs.io/en/stable/concepts/models/overview/#columns).",
-        #        self._path,
-        #    )
+        if self.depends_on_self and not self.annotated:
+            raise_config_error(
+                "Self-referencing models require inferrable column types. There are three options available to mitigate this issue: add explicit types to all projections in the outermost SELECT statement, leverage external models (https://sqlmesh.readthedocs.io/en/stable/concepts/models/external_models/), or use the `columns` model attribute (https://sqlmesh.readthedocs.io/en/stable/concepts/models/overview/#columns).",
+                self._path,
+            )
 
         super().validate_definition()
 
@@ -1220,7 +1218,7 @@ class SeedModel(_SqlBasedModel):
         return (self.depends_on_ or set()) - {self.fqn}
 
     @property
-    def depends_on_past(self) -> bool:
+    def depends_on_self(self) -> bool:
         return False
 
     @property
@@ -1383,7 +1381,7 @@ class ExternalModel(_Model):
         return set()
 
     @property
-    def depends_on_past(self) -> bool:
+    def depends_on_self(self) -> bool:
         return False
 
 

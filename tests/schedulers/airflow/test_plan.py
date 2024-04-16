@@ -47,7 +47,7 @@ def snapshot(make_snapshot, random_name) -> Snapshot:
 
 
 @pytest.fixture
-def depends_on_past_snapshot(make_snapshot, random_name) -> Snapshot:
+def depends_on_self_snapshot(make_snapshot, random_name) -> Snapshot:
     name = random_name()
     result = make_snapshot(
         create_sql_model(
@@ -67,7 +67,7 @@ def depends_on_past_snapshot(make_snapshot, random_name) -> Snapshot:
         ("snapshot", [(to_datetime("2022-01-01"), to_datetime("2022-01-05"))], False),
         ("snapshot", [(to_datetime("2022-01-01"), to_datetime("2022-01-05"))], True),
         (
-            "depends_on_past_snapshot",
+            "depends_on_self_snapshot",
             [
                 (to_datetime("2022-01-01"), to_datetime("2022-01-02")),
                 (to_datetime("2022-01-02"), to_datetime("2022-01-03")),
@@ -204,7 +204,7 @@ def test_create_plan_dag_spec(
             [(to_datetime("2022-01-02"), to_datetime("2022-01-04"))],
         ),
         (
-            "depends_on_past_snapshot",
+            "depends_on_self_snapshot",
             [
                 (to_datetime("2022-01-02"), to_datetime("2022-01-03")),
                 (to_datetime("2022-01-03"), to_datetime("2022-01-04")),

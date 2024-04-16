@@ -2006,16 +2006,16 @@ def test_ignored_snapshots(context_fixture: Context, request):
     context = request.getfixturevalue(context_fixture)
     environment = "dev"
     apply_to_environment(context, environment)
-    # Make breaking change to model upstream of a depends_on_past model
+    # Make breaking change to model upstream of a depends_on_self model
     context.upsert_model("sushi.order_items", stamp="1")
-    # Apply the change starting at a date later then the beginning of the downstream depends_on_past model
+    # Apply the change starting at a date later then the beginning of the downstream depends_on_self model
     plan = apply_to_environment(
         context, environment, choice=SnapshotChangeCategory.BREAKING, plan_start="2 days ago"
     )
     revenue_lifetime_snapshot = context.get_snapshot(
         "sushi.customer_revenue_lifetime", raise_if_missing=True
     )
-    # Validate that the depends_on_past model is ignored
+    # Validate that the depends_on_self model is ignored
     assert plan.ignored == {revenue_lifetime_snapshot.snapshot_id}
     # Validate that the table was really ignored
     metadata = DuckDBMetadata.from_context(context)
