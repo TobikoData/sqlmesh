@@ -163,8 +163,8 @@ class ModelTest(unittest.TestCase):
             actual_types, errors="ignore"
         )
 
-        actual = actual.replace({None: np.nan})
-        expected = expected.replace({None: np.nan})
+        actual = actual.replace({np.nan: None})
+        expected = expected.replace({np.nan: None})
 
         def _to_hashable(x: t.Any) -> t.Any:
             if isinstance(x, (list, np.ndarray)):
@@ -544,9 +544,10 @@ def generate_test(
     inputs = {
         models[dep]
         .name: pandas_timestamp_to_pydatetime(
-            engine_adapter.fetchdf(query).apply(lambda col: col.map(_normalize_dataframe)),
+            engine_adapter.fetchdf(query).apply(lambda col: col.map(_normalize_df_value)),
             models[dep].columns_to_types,
         )
+        .replace({np.nan: None})
         .to_dict(orient="records")
         for dep, query in input_queries.items()
     }
@@ -588,10 +589,14 @@ def generate_test(
                     cte_query = cte_query.with_(prev.alias, prev.this)
 
                 cte_output = t.cast(SqlModelTest, test)._execute(cte_query)
-                ctes[cte.alias] = pandas_timestamp_to_pydatetime(
-                    cte_output.apply(lambda col: col.map(_normalize_dataframe)),
-                    cte_query.named_selects,
-                ).to_dict(orient="records")
+                ctes[cte.alias] = (
+                    pandas_timestamp_to_pydatetime(
+                        cte_output.apply(lambda col: col.map(_normalize_df_value)),
+                        cte_query.named_selects,
+                    )
+                    .replace({np.nan: None})
+                    .to_dict(orient="records")
+                )
 
                 previous_ctes.append(cte)
 
@@ -602,9 +607,13 @@ def generate_test(
     else:
         output = t.cast(PythonModelTest, test)._execute_model()
 
-    outputs["query"] = pandas_timestamp_to_pydatetime(
-        output.apply(lambda col: col.map(_normalize_dataframe)), model.columns_to_types
-    ).to_dict(orient="records")
+    outputs["query"] = (
+        pandas_timestamp_to_pydatetime(
+            output.apply(lambda col: col.map(_normalize_df_value)), model.columns_to_types
+        )
+        .replace({np.nan: None})
+        .to_dict(orient="records")
+    )
 
     test.tearDown()
 
@@ -662,14 +671,14 @@ def _raise_error(msg: str, path: Path | None = None) -> None:
     raise TestError(msg)
 
 
-def _normalize_dataframe(value: t.Any) -> t.Any:
+def _normalize_df_value(value: t.Any) -> t.Any:
     """Normalize data in a pandas dataframe so ruamel and sqlglot can deal with it."""
     if isinstance(value, (list, np.ndarray)):
-        return [_normalize_dataframe(v) for v in value]
+        return [_normalize_df_value(v) for v in value]
     if isinstance(value, dict):
         if "key" in value and "value" in value:
             # Maps returned by DuckDB look like: {'key': ['key1', 'key2'], 'value': [10, 20]}
             # so we convert to {'key1': 10, 'key2': 20} (TODO: handle more dialects here)
-            return {k: _normalize_dataframe(v) for k, v in zip(value["key"], value["value"])}
-        return {k: _normalize_dataframe(v) for k, v in value.items()}
+            return {k: _normalize_df_value(v) for k, v in zip(value["key"], value["value"])}
+        return {k: _normalize_df_value(v) for k, v in value.items()}
     return value
