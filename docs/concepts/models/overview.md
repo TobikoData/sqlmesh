@@ -250,6 +250,9 @@ For models that are incremental, the following parameters can be specified in th
 ### batch_size
 - Batch size is used to optimize backfilling incremental data. It determines the maximum number of intervals to run in a single job. For example, if a model specifies a cron of `@hourly` and a batch_size of `12`, when backfilling 3 days of data, the scheduler will spawn 6 jobs. (3 days * 24 hours/day = 72 hour intervals to fill. 72 intervals / 12 intervals per job = 6 jobs.)
 
+### batch_concurrency
+- The maximum number of [batches](#batch_size) that can run concurrently for this model. If not specified, the concurrency is only constrained by the number of concurrent tasks set in the connection settings.
+
 ### forward_only
 - Set this to true to indicate that all changes to this model should be [forward-only](../plans.md#forward-only-plans).
 

@@ -6,7 +6,7 @@ import typing as t
 
 import pendulum
 from airflow import DAG
-from airflow.models import BaseOperator, baseoperator
+from airflow.models import BaseOperator
 from airflow.operators.python import PythonOperator
 from airflow.sensors.base import BaseSensorOperator
 
@@ -437,7 +437,7 @@ class SnapshotDagGenerator:
             snapshot = snapshots[sid]
             sanitized_model_name = sanitize_name(snapshot.node.name)
 
-            snapshot_intervals_chain: t.List[t.Union[BaseOperator, t.List[BaseOperator]]] = []
+            snapshot_task_pairs: t.List[t.Tuple[BaseOperator, BaseOperator]] = []
 
             snapshot_start_task = EmptyOperator(
                 task_id=f"snapshot_backfill__{sanitized_model_name}__{snapshot.identifier}__start"
@@ -457,32 +457,30 @@ class SnapshotDagGenerator:
                     deployability_index=deployability_index,
                     plan_id=plan_id,
                 )
-
                 external_sensor_task = self._create_hwm_external_sensor(
                     snapshot, start=start, end=end
                 )
                 if external_sensor_task:
-                    if snapshot.depends_on_past:
-                        snapshot_intervals_chain.extend([external_sensor_task, evaluation_task])
-                    else:
-                        (
-                            snapshot_start_task
-                            >> external_sensor_task
-                            >> evaluation_task
-                            >> snapshot_end_task
-                        )
+                    (
+                        snapshot_start_task
+                        >> external_sensor_task
+                        >> evaluation_task
+                        >> snapshot_end_task
+                    )
+                    snapshot_task_pairs.append((external_sensor_task, evaluation_task))
                 else:
-                    if snapshot.depends_on_past:
-                        snapshot_intervals_chain.append(evaluation_task)
-                    else:
-                        snapshot_start_task >> evaluation_task >> snapshot_end_task
+                    snapshot_start_task >> evaluation_task >> snapshot_end_task
+                    snapshot_task_pairs.append((evaluation_task, evaluation_task))
 
+            batch_concurrency = snapshot.node.batch_concurrency
             if snapshot.depends_on_past:
-                baseoperator.chain(
-                    snapshot_start_task, *snapshot_intervals_chain, snapshot_end_task
-                )
-            elif not intervals_per_snapshot.intervals:
+                batch_concurrency = 1
+
+            if not intervals_per_snapshot.intervals:
                 snapshot_start_task >> snapshot_end_task
+            elif batch_concurrency:
+                for i in range(batch_concurrency, len(snapshot_task_pairs)):
+                    snapshot_task_pairs[i - batch_concurrency][1] >> snapshot_task_pairs[i][0]
 
             snapshot_to_tasks[snapshot.snapshot_id] = (
                 snapshot_start_task,

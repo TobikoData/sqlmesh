@@ -254,6 +254,7 @@ class TimeColumn(PydanticModel):
 class _Incremental(_ModelKind):
     dialect: str = ""
     batch_size: t.Optional[SQLGlotPositiveInt] = None
+    batch_concurrency: t.Optional[SQLGlotPositiveInt] = None
     lookback: t.Optional[SQLGlotPositiveInt] = None
     forward_only: SQLGlotBool = False
     disable_restatement: SQLGlotBool = False
@@ -303,6 +304,7 @@ class IncrementalByUniqueKeyKind(_Incremental):
     name: Literal[ModelKindName.INCREMENTAL_BY_UNIQUE_KEY] = ModelKindName.INCREMENTAL_BY_UNIQUE_KEY
     unique_key: SQLGlotListOfFields
     when_matched: t.Optional[exp.When] = None
+    batch_concurrency: Literal[1] = 1
 
     @field_validator("when_matched", mode="before")
     @field_validator_v1_args

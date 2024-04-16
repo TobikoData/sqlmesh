@@ -315,6 +315,11 @@ class ModelMeta(_Node):
         """The maximal number of units in a single task for a backfill."""
         return getattr(self.kind, "batch_size", None)
 
+    @property
+    def batch_concurrency(self) -> t.Optional[int]:
+        """The maximal number of batches that can run concurrently for a backfill."""
+        return getattr(self.kind, "batch_concurrency", None)
+
     @cached_property
     def table_properties(self) -> t.Dict[str, exp.Expression]:
         """A dictionary of table properties."""
