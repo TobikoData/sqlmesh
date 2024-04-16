@@ -261,7 +261,8 @@ def format(ctx: click.Context, **kwargs: t.Any) -> None:
 @error_handler
 def diff(ctx: click.Context, environment: t.Optional[str] = None) -> None:
     """Show the diff between the local state and the target environment."""
-    ctx.obj.diff(environment)
+    if ctx.obj.diff(environment, detailed=True):
+        exit(1)
 
 
 @cli.command("plan")
