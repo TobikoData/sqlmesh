@@ -18,7 +18,7 @@ from sqlmesh.core import constants as c
 from sqlmesh.core.dialect import normalize_model_name, schema_
 from sqlmesh.core.engine_adapter import EngineAdapter
 from sqlmesh.core.model import Model, PythonModel, SqlModel
-from sqlmesh.utils import UniqueKeyDict, random_id, yaml
+from sqlmesh.utils import UniqueKeyDict, random_id, type_is_known, yaml
 from sqlmesh.utils.date import pandas_timestamp_to_pydatetime
 from sqlmesh.utils.errors import ConfigError, TestError
 
@@ -94,20 +94,39 @@ class ModelTest(unittest.TestCase):
     def setUp(self) -> None:
         """Load all input tables"""
         for name, values in self.body.get("inputs", {}).items():
-            # Types specified in the test take precedence over the corresponding inferred ones
+            all_types_are_known = False
+            known_columns_to_types: t.Dict[str, exp.DataType] = {}
+
             model = self.models.get(name)
-            columns_to_types = {
-                **(model.columns_to_types if model and model.annotated else {}),
-                **values.get("columns", {}),
-            }
+            if model:
+                inferred_columns_to_types = model.columns_to_types or {}
+                known_columns_to_types = {
+                    c: t for c, t in inferred_columns_to_types.items() if type_is_known(t)
+                }
+                all_types_are_known = bool(inferred_columns_to_types) and (
+                    len(known_columns_to_types) == len(inferred_columns_to_types)
+                )
+
+            # Types specified in the test take precedence over the corresponding inferred ones
+            known_columns_to_types.update(values.get("columns", {}))
 
             rows = values["rows"]
-            if not columns_to_types and rows:
-                for i, v in rows[0].items():
-                    v_type = annotate_types(exp.convert(v)).type or type(v).__name__
-                    columns_to_types[i] = exp.maybe_parse(
-                        v_type, into=exp.DataType, dialect=self.dialect
-                    )
+            if not all_types_are_known and rows:
+                for col, value in rows[0].items():
+                    if col not in known_columns_to_types:
+                        v_type = annotate_types(exp.convert(value)).type or type(value).__name__
+                        v_type = exp.maybe_parse(v_type, into=exp.DataType, dialect=self.dialect)
+
+                        if not type_is_known(v_type):
+                            _raise_error(
+                                f"Failed to infer the data type of column '{col}' for '{name}'. This issue can be "
+                                "mitigated by casting the column in the model definition, setting its type in "
+                                "schema.yaml if it's an external model, setting the model's 'columns' property, "
+                                "or setting its 'columns' mapping in the test itself",
+                                self.path,
+                            )
+
+                        known_columns_to_types[col] = v_type
 
             test_fixture_table = self._test_fixture_table(name)
             if test_fixture_table.db:
@@ -115,8 +134,8 @@ class ModelTest(unittest.TestCase):
                     schema_(test_fixture_table.args["db"], test_fixture_table.args.get("catalog"))
                 )
 
-            df = _create_df(rows, columns=columns_to_types)
-            self.engine_adapter.create_view(test_fixture_table, df, columns_to_types)
+            df = _create_df(rows, columns=known_columns_to_types)
+            self.engine_adapter.create_view(test_fixture_table, df, known_columns_to_types)
 
     def tearDown(self) -> None:
         """Drop all fixture tables."""
