@@ -573,9 +573,9 @@ test_foo:
         ).run(),
         expected_msg=(
             "AssertionError: Data mismatch (exp: expected, act: actual)\n\n"
-            "  value      ds    \n"
-            "    exp act exp act\n"
-            "0   NaN   2 NaN   3\n"
+            "  value        ds    \n"
+            "    exp act   exp act\n"
+            "0  None   2  None   3\n"
         ),
     )
 
