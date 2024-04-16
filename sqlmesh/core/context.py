@@ -63,6 +63,7 @@ from sqlmesh.core.dialect import (
     normalize_model_name,
     pandas_to_sql,
     parse,
+    parse_one,
 )
 from sqlmesh.core.engine_adapter import EngineAdapter
 from sqlmesh.core.environment import Environment, EnvironmentNamingInfo
@@ -163,7 +164,10 @@ class BaseContext(abc.ABC):
             The physical table name.
         """
         model_name = normalize_model_name(model_name, self.default_catalog, self.default_dialect)
-        return self._model_tables[model_name]
+
+        # We generate SQL for the default dialect because the table name may be used in a
+        # fetchdf call and so the quotes need to be correct (eg. backticks for bigquery)
+        return parse_one(self._model_tables[model_name]).sql(dialect=self.default_dialect)
 
     def fetchdf(
         self, query: t.Union[exp.Expression, str], quote_identifiers: bool = False
