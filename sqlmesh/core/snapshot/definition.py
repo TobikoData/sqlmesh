@@ -124,6 +124,16 @@ class SnapshotId(PydanticModel, frozen=True):
         """Helper method to return self."""
         return self
 
+    def __eq__(self, other: t.Any) -> bool:
+        return (
+            isinstance(other, self.__class__)
+            and self.name == other.name
+            and self.identifier == other.identifier
+        )
+
+    def __hash__(self) -> int:
+        return hash((self.__class__, self.name, self.identifier))
+
     def __lt__(self, other: SnapshotId) -> bool:
         return self.name < other.name
 
