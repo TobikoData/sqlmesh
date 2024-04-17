@@ -73,4 +73,4 @@ SQLMesh's unique approach to environment that allows it to provide both environm
 Term used to describe a plan that can be applied without having to load any additional data or build any additional tables. See [Virtual Update](plans.md#virtual-update) for more information.
 
 ## Virtual Preview
-Term used to describe the ability to create an environment without having to build any additional tables. By comparing the version of models in the repo against what currently exists, SQLMesh can create an environment that exactly represents what is in the repo without by just updating views.
+Term used to describe the ability to create an environment without having to build any additional tables. By comparing the version of models in the repo against what currently exists, SQLMesh can create an environment that exactly represents what is in the repo by just updating views.
