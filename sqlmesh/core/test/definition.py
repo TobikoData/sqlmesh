@@ -366,6 +366,7 @@ class ModelTest(unittest.TestCase):
         if not table:
             table = exp.to_table(name, dialect=self.dialect)
             table.set("db", exp.to_identifier(f"sqlmesh_test_{self._test_id}"))
+            table.set("catalog", exp.to_identifier(self.default_catalog))
             self._fixture_table_cache[name] = table
 
         return table

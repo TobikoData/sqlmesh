@@ -104,9 +104,10 @@ def full_model_with_two_ctes(request) -> SqlModel:
 
 
 def test_ctes(sushi_context: Context, full_model_with_two_ctes: SqlModel) -> None:
-    test = _create_test(
-        body=load_yaml(
-            """
+    _check_successful_or_raise(
+        _create_test(
+            body=load_yaml(
+                """
 test_foo:
   model: sushi.foo
   inputs:
@@ -123,20 +124,13 @@ test_foo:
   vars:
     start: 2022-01-01
     end: 2022-01-01
-            """
-        ),
-        test_name="test_foo",
-        model=sushi_context.upsert_model(full_model_with_two_ctes),
-        context=sushi_context,
+                """
+            ),
+            test_name="test_foo",
+            model=sushi_context.upsert_model(full_model_with_two_ctes),
+            context=sushi_context,
+        ).run()
     )
-
-    random_id = "jzngz56a"
-    test._test_id = random_id
-    _check_successful_or_raise(test.run())
-
-    assert len(test._fixture_table_cache) == len(sushi_context.models) + 1
-    for table in test._fixture_table_cache.values():
-        assert table.db == f"sqlmesh_test_{random_id}"
 
 
 def test_ctes_only(sushi_context: Context, full_model_with_two_ctes: SqlModel) -> None:
@@ -969,6 +963,35 @@ def test_successes(sushi_context: Context) -> None:
     assert len(successful_tests) == 3
     assert "test_order_items" in successful_tests
     assert "test_customer_revenue_by_day" in successful_tests
+
+
+def test_create_external_model_fixture(sushi_context: Context) -> None:
+    test = _create_test(
+        body=load_yaml(
+            """
+test_foo:
+  model: sushi.foo
+  inputs:
+    c.db.external:
+      - c: 1
+  outputs:
+    query:
+      - c: 1
+            """
+        ),
+        test_name="test_foo",
+        model=_create_model("SELECT c FROM c.db.external"),
+        context=sushi_context,
+    )
+
+    random_id = "jzngz56a"
+    test._test_id = random_id
+    _check_successful_or_raise(test.run())
+
+    assert len(test._fixture_table_cache) == len(sushi_context.models) + 1
+    for table in test._fixture_table_cache.values():
+        assert table.catalog == "memory"
+        assert table.db == f"sqlmesh_test_{random_id}"
 
 
 def test_test_generation(tmp_path: Path) -> None:
