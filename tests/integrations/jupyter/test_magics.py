@@ -540,7 +540,7 @@ def test_info(notebook, sushi_context, convert_all_html_output_to_text, get_all_
     assert not output.stderr
     assert len(output.outputs) == 4
     assert convert_all_html_output_to_text(output) == [
-        "Models: 14",
+        "Models: 16",
         "Macros: 3",
         "Data warehouse connection succeeded",
         "Test connection succeeded",
@@ -556,7 +556,7 @@ def test_info(notebook, sushi_context, convert_all_html_output_to_text, get_all_
                         "span",
                         # "color: #008000; text-decoration-color: #008000"
                         {"style": f"{NEUTRAL_STYLE}; font-weight: bold"},
-                        "14",
+                        "16",
                     )
                 ),
             )
