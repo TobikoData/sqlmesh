@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import datetime
 import typing as t
 import unittest
 from collections import Counter
@@ -10,6 +11,7 @@ from unittest.mock import patch
 import numpy as np
 import pandas as pd
 from freezegun import freeze_time
+from pandas.api.types import is_object_dtype
 from sqlglot import Dialect, exp
 from sqlglot.optimizer.annotate_types import annotate_types
 from sqlglot.optimizer.normalize_identifiers import normalize_identifiers
@@ -162,6 +164,29 @@ class ModelTest(unittest.TestCase):
         expected = expected.astype(actual_types, errors="ignore").astype(
             actual_types, errors="ignore"
         )
+
+        # The `actual` df's dtypes will almost always be pd.Timestamp for datetime values,
+        # but in some scenarios (e.g., DuckDB >=0.10.2) it will be a pandas `object` type
+        # containing python `datetime.xxx` values.
+        #
+        # Pandas `object` columns result in a noop for the `astype` call above. Because any
+        # quoted YAML value is a string, we must manually convert the `expected` df string
+        # values to the correct `datetime.xxx` type.
+        #
+        # We determine the type from a single sentinel value, but since the `actual` df is
+        # coming from a database query, it is safe to assume that the column contains only
+        # a single type.
+        object_sentinel_values = {
+            col: actual[col][0] for col in actual_types if is_object_dtype(actual_types[col])
+        }
+        for col, value in object_sentinel_values.items():
+            # can't use `isinstance()` here - https://stackoverflow.com/a/68743663/1707525
+            if type(value) is datetime.date:
+                expected[col] = pd.to_datetime(expected[col], errors="ignore").dt.date  # type: ignore
+            elif type(value) is datetime.time:
+                expected[col] = pd.to_datetime(expected[col], errors="ignore").dt.time  # type: ignore
+            elif type(value) is datetime.datetime:
+                expected[col] = pd.to_datetime(expected[col], errors="ignore").dt.to_pydatetime()  # type: ignore
 
         actual = actual.replace({np.nan: None})
         expected = expected.replace({np.nan: None})
