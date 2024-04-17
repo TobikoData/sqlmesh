@@ -25,6 +25,7 @@ from sqlmesh.core.context import Context
 from sqlmesh.core.dialect import parse, schema_
 from sqlmesh.core.environment import Environment
 from sqlmesh.core.model import load_sql_based_model
+from sqlmesh.core.model.kind import ModelKindName
 from sqlmesh.core.plan import BuiltInPlanEvaluator, PlanBuilder
 from sqlmesh.utils.date import (
     make_inclusive_end,
@@ -611,3 +612,24 @@ def test_default_catalog_connections(copy_to_temp_path: t.Callable):
     )
     context = Context(paths=copy_to_temp_path("examples/sushi"), config=config)
     assert context.default_catalog == "catalog"
+
+
+def test_load_external_models(copy_to_temp_path):
+    path = copy_to_temp_path("examples/sushi")
+
+    context = Context(paths=path, config="local_config")
+
+    external_model_names = [
+        m.name for m in context.models.values() if m.kind.name == ModelKindName.EXTERNAL
+    ]
+
+    assert len(external_model_names) > 0
+
+    # from schema.yaml in root dir
+    assert "raw.demographics" in external_model_names
+
+    # from external_models/model1.yaml
+    assert "raw.model1" in external_model_names
+
+    # from external_models/model2.yaml
+    assert "raw.model2" in external_model_names
