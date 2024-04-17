@@ -3,9 +3,6 @@
 ## Abstract Syntax Tree
 A tree representation of the syntactic structure of source code. Each tree node represents a construct that occurs. The tree is abstract because it does not represent every detail appearing in the actual syntax; it also does not have a standard representation.
 
-## Automatic Data Rebasing
-When merging in changes from another branch, SQLMesh automatically reads the history of changes and applies the changes and determines what needs to be rebuilt (if anything). This is done by leveraging the change category of each change to determine the lineage of breaking/non-breaking changes and where there might be overlap.
-
 ## Catalog
 A catalog is a collection of schemas. A schema is a collection of database objects such as tables and views.
 

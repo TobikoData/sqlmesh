@@ -80,7 +80,6 @@ def test_apply_plan(mocker: MockerFixture, snapshot: Snapshot):
                 "created_ts": 1665014400000,
                 "ttl": "in 1 week",
                 "fingerprint": snapshot.fingerprint.dict(),
-                "indirect_versions": {},
                 "intervals": [],
                 "dev_intervals": [],
                 "node": {
