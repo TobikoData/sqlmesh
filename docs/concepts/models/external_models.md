@@ -40,6 +40,8 @@ The following sections demonstrate how to create an external model containing `e
 
 All of a SQLMesh project's external models are defined in a single `schema.yaml` file, so the files created below might also include column information for other external models.
 
+Alternatively, additional external models can also be defined in the [external_models/](#using-the-external_models-directory) folder.
+
 ### Writing YAML by hand
 
 This example demonstrates the structure of a `schema.yaml` file:
