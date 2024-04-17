@@ -1,0 +1,5 @@
+- name: raw.model2
+  description: External table defined in an additional schema file
+  columns:
+    customer_id: int
+    zip: text

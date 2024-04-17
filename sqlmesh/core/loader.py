@@ -182,9 +182,17 @@ class Loader(abc.ABC):
     def _load_external_models(self) -> UniqueKeyDict[str, Model]:
         models: UniqueKeyDict[str, Model] = UniqueKeyDict("models")
         for context_path, config in self._context.configs.items():
-            path = Path(context_path / c.SCHEMA_YAML)
+            schema_path = Path(context_path / c.SCHEMA_YAML)
+            external_models_path = context_path / c.EXTERNAL_MODELS
 
-            if path.exists():
+            paths_to_load = []
+            if schema_path.exists():
+                paths_to_load.append(schema_path)
+
+            if external_models_path.exists() and external_models_path.is_dir():
+                paths_to_load.extend(external_models_path.glob("*.yaml"))
+
+            for path in paths_to_load:
                 self._track_file(path)
 
                 with open(path, "r", encoding="utf-8") as file:
