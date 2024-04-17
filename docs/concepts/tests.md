@@ -18,6 +18,7 @@ Tests within a suite file contain the following attributes:
 * Test inputs, which are defined per upstream model or external table referenced by the target model. Each test input consists of the following:
     * The name of an upstream model or external table
     * The list of rows defined as a mapping from a column name to a value associated with it
+    * [Optional] The table's schema, defined as a mapping from a column name to its type, represented as a string. Any number of columns may be omitted from this mapping, in which case their types will be inferred by SQLMesh, when possible
 * Expected outputs, which are defined as follows:
     * The list of rows that are expected to be returned by the model's query defined as a mapping from a column name to a value associated with it
     * [Optional] The list of expected rows per each individual [Common Table Expression](glossary.md#cte) (CTE) defined in the model's query
@@ -32,6 +33,8 @@ The YAML format is defined as follows:
   description: <description>  # Optional
   inputs:
     <upstream_model_or_external_table_name>:
+      columns:  # Optional
+        <column_name>: <column_type>
       rows:
         - <column_name>: <column_value>
   outputs:
@@ -185,7 +188,7 @@ test_example_full_model:
         num_orders: 2
 ```
 
-### Omitting Columns
+### Omitting columns
 
 Defining the complete inputs and expected outputs for wide tables, i.e. tables with many columns, can become cumbersome. Therefore, if certain columns can be safely ignored they may be omitted from any row and their value will be treated as `NULL` for that row.
 
@@ -212,7 +215,7 @@ This is useful when we can't treat the missing columns as `NULL`, but still want
 
 When `partial` is set for a _specific_ expected output, its rows need to be defined as a mapping under the `rows` key and only the columns referenced in them will be tested.
 
-### Freezing Time
+### Freezing time
 
 Some models may use SQL expressions that compute datetime values at a given point in time, such as `CURRENT_TIMESTAMP`. Since these expressions are non-deterministic, it's not enough to simply specify an expected output value in order to test them.
 
@@ -363,11 +366,9 @@ OK
 
 ## Running tests
 
-### Automatic testing with plan
+Tests run automatically every time a new [plan](plans.md) is created, but they can also be executed on demand as described in the following sections.
 
-Tests run automatically every time a new [plan](plans.md) is created.
-
-### Manual testing with the CLI
+### Testing using the CLI
 
 You can execute tests on demand using the `sqlmesh test` command as follows:
 
@@ -400,9 +401,7 @@ Ran 1 test in 0.012s
 FAILED (failures=1)
 ```
 
-Note: when there are many differing columns, the corresponding DataFrame will be truncated by default, but it can be fully displayed using the `-v` (verbose) option of the `sqlmesh test` command.
-
-### Testing for specific models
+Note: when there are many differing columns, the corresponding DataFrame will be truncated by default. In order to fully display them, use the `-v` (verbose) option of the `sqlmesh test` command.
 
 To run a specific model test, pass in the suite file name followed by `::` and the name of the test:
 
@@ -416,8 +415,37 @@ You can also run tests that match a pattern or substring using a glob pathname e
 $ sqlmesh test tests/test_*
 ```
 
-### Debugging tests
+### Testing using notebooks
 
-By default, SQLMesh drops all input fixtures in the testing database after running a test.
+You can execute tests on demand using the `%run_test` notebook magic as follows:
 
-It's possible to preserve these fixtures using the `--preserve-fixtures` option of the `sqlmesh test` command, which can be helpful when debugging a test failure.
+```
+# This import will register all needed notebook magics
+In [1]: import sqlmesh
+        %run_test
+
+        ----------------------------------------------------------------------
+        Ran 1 test in 0.018s
+
+        OK
+```
+
+The `%run_test` magic supports the same options as the corresponding [CLI command](#testing-using-the-CLI).
+
+## Troubleshooting Issues
+
+When executing unit tests, SQLMesh creates input fixtures as views within the testing connection.
+
+These fixtures are dropped by default after the execution completes, but it is possible to preserve them using the `--preserve-fixtures` option available in both the `sqlmesh test` CLI command and the `%run_test` notebook magic.
+
+This can be helpful when debugging a test failure, because for example it's possible to query the fixture tables directly and verify that they are populated correctly.
+
+### Type Mismatches
+
+It's not always possible to correctly interpret certain column values in a unit test without additional context. For example, a YAML dictionary can be used to represent both a `STRUCT` and a `MAP` value.
+
+To avoid this ambiguity, SQLMesh needs to know the column's type. This is possible either by relying on its type inference, which can be enhanced by `CAST`ing the model's columns, or by defining the model's schema:
+
+- in the [`schema.yaml`](models/external_models.md#generating-an-external-models-schema-file) file
+- using the [`columns`](models/overview.md#columns) model property
+- using the [`columns`](#creating_tests) field in the unit test itself

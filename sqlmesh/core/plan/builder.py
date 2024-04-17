@@ -538,29 +538,29 @@ class PlanBuilder:
             else:
                 child_snapshot.categorize_as(SnapshotChangeCategory.INDIRECT_NON_BREAKING)
 
-            snapshot.indirect_versions[child_s_id.name] = tuple(
-                v.indirect_version for v in child_snapshot.all_versions
-            )
-
             for upstream_id in directly_modified:
+                if (
+                    upstream_id == snapshot.snapshot_id
+                    or child_s_id not in indirectly_modified.get(upstream_id, set())
+                ):
+                    continue
+
                 upstream = self._context_diff.snapshots[upstream_id]
-                if child_s_id.name in upstream.indirect_versions:
-                    indirect_version = upstream.indirect_versions[child_s_id.name][-1]
-                    if indirect_version.change_category == SnapshotChangeCategory.INDIRECT_BREAKING:
-                        # If any other snapshot specified breaking this child, then that child
-                        # needs to be backfilled as a part of the plan.
-                        child_snapshot.categorize_as(
-                            SnapshotChangeCategory.FORWARD_ONLY
-                            if is_forward_only_child
-                            else SnapshotChangeCategory.INDIRECT_BREAKING
-                        )
-                        break
-                    elif (
-                        indirect_version.change_category == SnapshotChangeCategory.FORWARD_ONLY
-                        and child_snapshot.is_indirect_non_breaking
-                    ):
-                        # FORWARD_ONLY takes precedence over INDIRECT_NON_BREAKING.
-                        child_snapshot.categorize_as(SnapshotChangeCategory.FORWARD_ONLY)
+                if upstream.change_category == SnapshotChangeCategory.BREAKING:
+                    # If any other snapshot specified breaking this child, then that child
+                    # needs to be backfilled as a part of the plan.
+                    child_snapshot.categorize_as(
+                        SnapshotChangeCategory.FORWARD_ONLY
+                        if is_forward_only_child
+                        else SnapshotChangeCategory.INDIRECT_BREAKING
+                    )
+                    break
+                elif (
+                    upstream.change_category == SnapshotChangeCategory.FORWARD_ONLY
+                    and child_snapshot.is_indirect_non_breaking
+                ):
+                    # FORWARD_ONLY takes precedence over INDIRECT_NON_BREAKING.
+                    child_snapshot.categorize_as(SnapshotChangeCategory.FORWARD_ONLY)
 
     def _apply_effective_from(self) -> None:
         if self._effective_from:

@@ -98,6 +98,7 @@ Configuration options for [`INCREMENTAL_BY_UNIQUE_KEY` models](../concepts/model
 | Option                | Description                                                                                                                             |       Type       | Required |
 | --------------------- | --------------------------------------------------------------------------------------------------------------------------------------- | :--------------: | :------: |
 | `unique_key`          | The model column(s) containing each row's unique key.                                                                                   | str \| list[str] |    Y     |
+| `when_matched`        | SQL logic used to update columns when a match occurs - only available on engines that support `MERGE`. (Default: update all columns)    |       str        |    N     |
 | `forward_only`        | Whether the model's changes should always be classified as [forward-only](../concepts/plans.md#forward-only-change). (Default: `False`) |       bool       |    N     |
 | `disable_restatement` | Whether [restatements](../concepts/plans.md#restatement-plans) should be disabled for the model. (Default: `False`)                     |       bool       |    N     |
 

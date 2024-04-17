@@ -240,7 +240,7 @@ Options:
   --help  Show this message and exit.
 ```
 
-**Caution**: contact your SQLMesh administrator before running this command.
+**Caution**: this command affects all SQLMesh users. Contact your SQLMesh administrator before running.
 
 ## plan
 
@@ -361,7 +361,7 @@ Options:
   --help  Show this message and exit.
 ```
 
-**Caution**: contact your SQLMesh administrator before running this command.
+**Caution**: this command affects all SQLMesh users. Contact your SQLMesh administrator before running.
 
 ## run
 
