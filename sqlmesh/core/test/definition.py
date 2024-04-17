@@ -70,7 +70,7 @@ class ModelTest(unittest.TestCase):
 
         self._validate_and_normalize_test()
 
-        # This ID is appended to each input fixture name to avoid concurrency issues
+        # This ID is appended to the test schema to avoid concurrency issues
         self._test_id = random_id(short=True)
 
         self._engine_adapter_dialect = Dialect.get_or_raise(self.engine_adapter.dialect)
@@ -131,10 +131,9 @@ class ModelTest(unittest.TestCase):
                         known_columns_to_types[col] = v_type
 
             test_fixture_table = self._test_fixture_table(name)
-            if test_fixture_table.db:
-                self.engine_adapter.create_schema(
-                    schema_(test_fixture_table.args["db"], test_fixture_table.args.get("catalog"))
-                )
+            self.engine_adapter.create_schema(
+                schema_(test_fixture_table.args["db"], test_fixture_table.args.get("catalog"))
+            )
 
             df = _create_df(rows, columns=known_columns_to_types)
             self.engine_adapter.create_view(test_fixture_table, df, known_columns_to_types)
@@ -366,7 +365,7 @@ class ModelTest(unittest.TestCase):
         table = self._fixture_table_cache.get(name)
         if not table:
             table = exp.to_table(name, dialect=self.dialect)
-            table.this.set("this", f"{table.this.this}__fixture__{self._test_id}")
+            table.set("db", exp.to_identifier(f"sqlmesh_test_{self._test_id}"))
             self._fixture_table_cache[name] = table
 
         return table

@@ -136,7 +136,7 @@ test_foo:
 
     assert len(test._fixture_table_cache) == len(sushi_context.models) + 1
     for table in test._fixture_table_cache.values():
-        assert table.name.endswith(f"__fixture__{random_id}")
+        assert table.db == f"sqlmesh_test_{random_id}"
 
 
 def test_ctes_only(sushi_context: Context, full_model_with_two_ctes: SqlModel) -> None:
@@ -589,7 +589,7 @@ test_child:
     _check_successful_or_raise(test.run())
 
     spy_execute.assert_any_call(
-        f'CREATE OR REPLACE VIEW "memory"."sushi"."parent__fixture__{random_id}" ("s", "a", "b") AS '
+        f'CREATE OR REPLACE VIEW "memory"."sqlmesh_test_{random_id}"."parent" ("s", "a", "b") AS '
         "SELECT "
         'CAST("s" AS STRUCT("d" DATE)) AS "s", '
         'CAST("a" AS INT) AS "a", '
