@@ -973,14 +973,14 @@ test_foo:
   model: sushi.foo
   inputs:
     c.db.external:
-      - c: 1
+      - x: 1
   outputs:
     query:
-      - c: 1
+      - x: 1
             """
         ),
         test_name="test_foo",
-        model=_create_model("SELECT c FROM c.db.external"),
+        model=_create_model("SELECT x FROM c.db.external"),
         context=sushi_context,
     )
 
