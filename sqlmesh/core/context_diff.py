@@ -15,13 +15,7 @@ from __future__ import annotations
 import typing as t
 from functools import cached_property
 
-from sqlmesh.core.snapshot import (
-    Snapshot,
-    SnapshotChangeCategory,
-    SnapshotId,
-    SnapshotIndirectVersion,
-    SnapshotTableInfo,
-)
+from sqlmesh.core.snapshot import Snapshot, SnapshotId, SnapshotTableInfo
 from sqlmesh.utils.errors import SQLMeshError
 from sqlmesh.utils.pydantic import PydanticModel
 
@@ -148,9 +142,6 @@ class ContextDiff(PydanticModel):
         merged_snapshots = {}
         modified_snapshots = {}
         new_snapshots = {}
-        snapshot_remote_versions: t.Dict[
-            str, t.Tuple[t.Tuple[SnapshotIndirectVersion, ...], int]
-        ] = {}
 
         for snapshot in snapshots.values():
             s_id = snapshot.snapshot_id
@@ -171,16 +162,6 @@ class ContextDiff(PydanticModel):
                         existing_snapshot,
                         stored[modified_snapshot_info.snapshot_id],
                     )
-                    for child_name, versions in existing_snapshot.indirect_versions.items():
-                        existing_versions = snapshot_remote_versions.get(child_name)
-                        if (
-                            not existing_versions
-                            or existing_versions[1] < existing_snapshot.created_ts
-                        ):
-                            snapshot_remote_versions[child_name] = (
-                                versions,
-                                existing_snapshot.created_ts,
-                            )
             else:
                 snapshot = snapshot.copy()
                 merged_snapshots[s_id] = snapshot
@@ -191,25 +172,6 @@ class ContextDiff(PydanticModel):
                         snapshot,
                         stored[modified_snapshot_info.snapshot_id],
                     )
-
-        for snapshot in new_snapshots.values():
-            if (
-                snapshot.name in snapshot_remote_versions
-                and snapshot.previous_version
-                and snapshot.data_hash_matches(snapshot.previous_version)
-            ):
-                remote_versions = snapshot_remote_versions[snapshot.name][0]
-                remote_head = remote_versions[-1]
-                local_head = snapshot.previous_version
-
-                if remote_head.version in (local.version for local in snapshot.previous_versions):
-                    snapshot.version = local_head.version
-                    snapshot.change_category = local_head.change_category
-                elif local_head.version in (remote.version for remote in remote_versions):
-                    snapshot.version = remote_head.version
-                    snapshot.change_category = remote_head.change_category
-                else:
-                    snapshot.categorize_as(SnapshotChangeCategory.BREAKING)
 
         return ContextDiff(
             environment=environment,
