@@ -10,7 +10,6 @@ from sqlmesh.core.snapshot.definition import (
     SnapshotFingerprint,
     SnapshotId,
     SnapshotIdLike,
-    SnapshotIndirectVersion,
     SnapshotInfoLike,
     SnapshotIntervals,
     SnapshotNameVersion,
