@@ -485,15 +485,7 @@ def config() -> Config:
                 pytest.mark.xdist_group("engine_integration_databricks"),
             ],
         ),
-        pytest.param(
-            "motherduck",
-            marks=[
-                pytest.mark.motherduck,
-                pytest.mark.engine,
-                pytest.mark.remote,
-                pytest.mark.xdist_group("engine_integration_motherduck"),
-            ],
-        ),
+        # TODO: add motherduck tests once they support DuckDB>=0.10.0
         pytest.param(
             "redshift",
             marks=[
