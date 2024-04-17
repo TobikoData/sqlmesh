@@ -190,7 +190,7 @@ class Loader(abc.ABC):
                 paths_to_load.append(schema_path)
 
             if external_models_path.exists() and external_models_path.is_dir():
-                paths_to_load.extend(p for p in external_models_path.glob("*.yaml"))
+                paths_to_load.extend(external_models_path.glob("*.yaml"))
 
             for path in paths_to_load:
                 self._track_file(path)
