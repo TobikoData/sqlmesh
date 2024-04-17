@@ -70,8 +70,8 @@ class ModelTest(unittest.TestCase):
 
         self._validate_and_normalize_test()
 
-        # This ID is appended to the test schema to avoid concurrency issues
-        self._test_id = random_id(short=True)
+        # The test schema name is randomized to avoid concurrency issues
+        self._test_schema = f"sqlmesh_test_{random_id(short=True)}"
 
         self._engine_adapter_dialect = Dialect.get_or_raise(self.engine_adapter.dialect)
         self._transforms = self._engine_adapter_dialect.generator_class.TRANSFORMS
@@ -365,7 +365,7 @@ class ModelTest(unittest.TestCase):
         table = self._fixture_table_cache.get(name)
         if not table:
             table = exp.to_table(name, dialect=self.dialect)
-            table.set("db", exp.to_identifier(f"sqlmesh_test_{self._test_id}"))
+            table.set("db", exp.to_identifier(self._test_schema))
             table.set("catalog", exp.to_identifier(self.default_catalog))
             self._fixture_table_cache[name] = table
 

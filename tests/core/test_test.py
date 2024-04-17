@@ -575,15 +575,13 @@ test_child:
         """
     )
     test = _create_test(body, "test_child", child, sushi_context)
-
-    random_id = "jzngz56a"
-    test._test_id = random_id
+    test._test_schema = "sqlmesh_test_jzngz56a"
 
     spy_execute = mocker.spy(test.engine_adapter, "_execute")
     _check_successful_or_raise(test.run())
 
     spy_execute.assert_any_call(
-        f'CREATE OR REPLACE VIEW "memory"."sqlmesh_test_{random_id}"."parent" ("s", "a", "b") AS '
+        f'CREATE OR REPLACE VIEW "memory"."sqlmesh_test_jzngz56a"."parent" ("s", "a", "b") AS '
         "SELECT "
         'CAST("s" AS STRUCT("d" DATE)) AS "s", '
         'CAST("a" AS INT) AS "a", '
@@ -983,15 +981,13 @@ test_foo:
         model=_create_model("SELECT x FROM c.db.external"),
         context=sushi_context,
     )
-
-    random_id = "jzngz56a"
-    test._test_id = random_id
+    test._test_schema = f"sqlmesh_test_jzngz56a"
     _check_successful_or_raise(test.run())
 
     assert len(test._fixture_table_cache) == len(sushi_context.models) + 1
     for table in test._fixture_table_cache.values():
         assert table.catalog == "memory"
-        assert table.db == f"sqlmesh_test_{random_id}"
+        assert table.db == f"sqlmesh_test_jzngz56a"
 
 
 def test_test_generation(tmp_path: Path) -> None:
