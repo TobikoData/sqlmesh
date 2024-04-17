@@ -977,20 +977,20 @@ def test_scd_type_2_by_time(make_mocked_engine_adapter: t.Callable):
     adapter.scd_type_2_by_time(
         target_table="target",
         source_table=t.cast(
-            exp.Select, parse_one("SELECT id, name, price, test_updated_at FROM source")
+            exp.Select, parse_one("SELECT id, name, price, test_UPDATED_at FROM source")
         ),
         unique_key=[
             parse_one("""COALESCE("id", '') || '|' || COALESCE("name", '')"""),
             parse_one("""COALESCE("name", '')"""),
         ],
-        valid_from_name="test_valid_from",
-        valid_to_name="test_valid_to",
-        updated_at_name="test_updated_at",
+        valid_from_col=exp.column("test_valid_from", quoted=True),
+        valid_to_col=exp.column("test_valid_to", quoted=True),
+        updated_at_col=exp.column("test_UPDATED_at", quoted=True),
         columns_to_types={
             "id": exp.DataType.build("INT"),
             "name": exp.DataType.build("VARCHAR"),
             "price": exp.DataType.build("DOUBLE"),
-            "test_updated_at": exp.DataType.build("TIMESTAMP"),
+            "test_UPDATED_at": exp.DataType.build("TIMESTAMP"),
             "test_valid_from": exp.DataType.build("TIMESTAMP"),
             "test_valid_to": exp.DataType.build("TIMESTAMP"),
         },
@@ -1008,13 +1008,13 @@ WITH "source" AS (
     "id",
     "name",
     "price",
-    CAST("test_updated_at" AS TIMESTAMP) AS "test_updated_at"
+    CAST("test_UPDATED_at" AS TIMESTAMP) AS "test_UPDATED_at"
   FROM (
     SELECT
       "id",
       "name",
       "price",
-      "test_updated_at"
+      "test_UPDATED_at"
     FROM "source"
   ) AS "raw_source"
 ), "static" AS (
@@ -1022,7 +1022,7 @@ WITH "source" AS (
     "id",
     "name",
     "price",
-    "test_updated_at",
+    "test_UPDATED_at",
     "test_valid_from",
     "test_valid_to"
   FROM "target"
@@ -1033,7 +1033,7 @@ WITH "source" AS (
     "id",
     "name",
     "price",
-    "test_updated_at",
+    "test_UPDATED_at",
     "test_valid_from",
     "test_valid_to"
   FROM "target"
@@ -1044,7 +1044,7 @@ WITH "source" AS (
     "static"."id",
     "static"."name",
     "static"."price",
-    "static"."test_updated_at",
+    "static"."test_UPDATED_at",
     "static"."test_valid_from",
     "static"."test_valid_to"
   FROM "static"
@@ -1073,13 +1073,13 @@ WITH "source" AS (
     "latest"."id" AS "t_id",
     "latest"."name" AS "t_name",
     "latest"."price" AS "t_price",
-    "latest"."test_updated_at" AS "t_test_updated_at",
+    "latest"."test_UPDATED_at" AS "t_test_UPDATED_at",
     "latest"."test_valid_from" AS "t_test_valid_from",
     "latest"."test_valid_to" AS "t_test_valid_to",
     "source"."id" AS "id",
     "source"."name" AS "name",
     "source"."price" AS "price",
-    "source"."test_updated_at" AS "test_updated_at"
+    "source"."test_UPDATED_at" AS "test_UPDATED_at"
   FROM "latest"
   LEFT JOIN "source"
     ON (
@@ -1094,13 +1094,13 @@ WITH "source" AS (
     "latest"."id" AS "t_id",
     "latest"."name" AS "t_name",
     "latest"."price" AS "t_price",
-    "latest"."test_updated_at" AS "t_test_updated_at",
+    "latest"."test_UPDATED_at" AS "t_test_UPDATED_at",
     "latest"."test_valid_from" AS "t_test_valid_from",
     "latest"."test_valid_to" AS "t_test_valid_to",
     "source"."id" AS "id",
     "source"."name" AS "name",
     "source"."price" AS "price",
-    "source"."test_updated_at" AS "test_updated_at"
+    "source"."test_UPDATED_at" AS "test_UPDATED_at"
   FROM "latest"
   RIGHT JOIN "source"
     ON (
@@ -1114,21 +1114,21 @@ WITH "source" AS (
     COALESCE("joined"."t_id", "joined"."id") AS "id",
     COALESCE("joined"."t_name", "joined"."name") AS "name",
     COALESCE("joined"."t_price", "joined"."price") AS "price",
-    COALESCE("joined"."t_test_updated_at", "joined"."test_updated_at") AS "test_updated_at",
+    COALESCE("joined"."t_test_UPDATED_at", "joined"."test_UPDATED_at") AS "test_UPDATED_at",
     CASE
       WHEN "t_test_valid_from" IS NULL AND NOT "latest_deleted"."_exists" IS NULL
       THEN CASE
-        WHEN "latest_deleted"."test_valid_to" > "test_updated_at"
+        WHEN "latest_deleted"."test_valid_to" > "test_UPDATED_at"
         THEN "latest_deleted"."test_valid_to"
-        ELSE "test_updated_at"
+        ELSE "test_UPDATED_at"
       END
       WHEN "t_test_valid_from" IS NULL
       THEN CAST('1970-01-01 00:00:00' AS TIMESTAMP)
       ELSE "t_test_valid_from"
     END AS "test_valid_from",
     CASE
-      WHEN "test_updated_at" > "t_test_updated_at"
-      THEN "test_updated_at"
+      WHEN "test_UPDATED_at" > "t_test_UPDATED_at"
+      THEN "test_UPDATED_at"
       WHEN "joined"."_exists" IS NULL
       THEN CAST('2020-01-01 00:00:00' AS TIMESTAMP)
       ELSE "t_test_valid_to"
@@ -1144,18 +1144,18 @@ WITH "source" AS (
     "id",
     "name",
     "price",
-    "test_updated_at",
-    "test_updated_at" AS "test_valid_from",
+    "test_UPDATED_at",
+    "test_UPDATED_at" AS "test_valid_from",
     CAST(NULL AS TIMESTAMP) AS "test_valid_to"
   FROM "joined"
   WHERE
-    "test_updated_at" > "t_test_updated_at"
+    "test_UPDATED_at" > "t_test_UPDATED_at"
 )
 SELECT
   "id",
   "name",
   "price",
-  "test_updated_at",
+  "test_UPDATED_at",
   "test_valid_from",
   "test_valid_to"
 FROM "static"
@@ -1164,7 +1164,7 @@ SELECT
   "id",
   "name",
   "price",
-  "test_updated_at",
+  "test_UPDATED_at",
   "test_valid_from",
   "test_valid_to"
 FROM "updated_rows"
@@ -1173,7 +1173,7 @@ SELECT
   "id",
   "name",
   "price",
-  "test_updated_at",
+  "test_UPDATED_at",
   "test_valid_from",
   "test_valid_to"
 FROM "inserted_rows"
@@ -1191,9 +1191,9 @@ def test_scd_type_2_by_time_no_invalidate_hard_deletes(make_mocked_engine_adapte
             exp.Select, parse_one("SELECT id, name, price, test_updated_at FROM source")
         ),
         unique_key=[exp.func("COALESCE", "id", "''")],
-        valid_from_name="test_valid_from",
-        valid_to_name="test_valid_to",
-        updated_at_name="test_updated_at",
+        valid_from_col=exp.column("test_valid_from", quoted=True),
+        valid_to_col=exp.column("test_valid_to", quoted=True),
+        updated_at_col=exp.column("test_updated_at", quoted=True),
         invalidate_hard_deletes=False,
         columns_to_types={
             "id": exp.DataType.build("INT"),
@@ -1385,9 +1385,9 @@ def test_merge_scd_type_2_pandas(make_mocked_engine_adapter: t.Callable):
         target_table="target",
         source_table=df,
         unique_key=[exp.column("id1"), exp.column("id2")],
-        valid_from_name="test_valid_from",
-        valid_to_name="test_valid_to",
-        updated_at_name="test_updated_at",
+        valid_from_col=exp.column("test_valid_from", quoted=True),
+        valid_to_col=exp.column("test_valid_to", quoted=True),
+        updated_at_col=exp.column("test_updated_at", quoted=True),
         columns_to_types={
             "id1": exp.DataType.build("INT"),
             "id2": exp.DataType.build("INT"),
@@ -1594,14 +1594,14 @@ def test_scd_type_2_by_column(make_mocked_engine_adapter: t.Callable):
         target_table="target",
         source_table=t.cast(exp.Select, parse_one("SELECT id, name, price FROM source")),
         unique_key=[exp.column("id")],
-        valid_from_name="test_valid_from",
-        valid_to_name="test_valid_to",
+        valid_from_col=exp.column("test_VALID_from", quoted=True),
+        valid_to_col=exp.column("test_valid_to", quoted=True),
         check_columns=[exp.column("name"), exp.column("price")],
         columns_to_types={
             "id": exp.DataType.build("INT"),
             "name": exp.DataType.build("VARCHAR"),
             "price": exp.DataType.build("DOUBLE"),
-            "test_valid_from": exp.DataType.build("TIMESTAMP"),
+            "test_VALID_from": exp.DataType.build("TIMESTAMP"),
             "test_valid_to": exp.DataType.build("TIMESTAMP"),
         },
         execution_time=datetime(2020, 1, 1, 0, 0, 0),
@@ -1630,7 +1630,7 @@ WITH "source" AS (
     "id",
     "name",
     "price",
-    "test_valid_from",
+    "test_VALID_from",
     "test_valid_to"
   FROM "target"
   WHERE
@@ -1640,7 +1640,7 @@ WITH "source" AS (
     "id",
     "name",
     "price",
-    "test_valid_from",
+    "test_VALID_from",
     "test_valid_to"
   FROM "target"
   WHERE
@@ -1650,7 +1650,7 @@ WITH "source" AS (
     "static"."id",
     "static"."name",
     "static"."price",
-    "static"."test_valid_from",
+    "static"."test_VALID_from",
     "static"."test_valid_to"
   FROM "static"
   LEFT JOIN "latest"
@@ -1671,7 +1671,7 @@ WITH "source" AS (
     "latest"."id" AS "t_id",
     "latest"."name" AS "t_name",
     "latest"."price" AS "t_price",
-    "latest"."test_valid_from" AS "t_test_valid_from",
+    "latest"."test_VALID_from" AS "t_test_VALID_from",
     "latest"."test_valid_to" AS "t_test_valid_to",
     "source"."id" AS "id",
     "source"."name" AS "name",
@@ -1685,7 +1685,7 @@ WITH "source" AS (
     "latest"."id" AS "t_id",
     "latest"."name" AS "t_name",
     "latest"."price" AS "t_price",
-    "latest"."test_valid_from" AS "t_test_valid_from",
+    "latest"."test_VALID_from" AS "t_test_VALID_from",
     "latest"."test_valid_to" AS "t_test_valid_to",
     "source"."id" AS "id",
     "source"."name" AS "name",
@@ -1698,7 +1698,7 @@ WITH "source" AS (
     COALESCE("joined"."t_id", "joined"."id") AS "id",
     COALESCE("joined"."t_name", "joined"."name") AS "name",
     COALESCE("joined"."t_price", "joined"."price") AS "price",
-    COALESCE("t_test_valid_from", CAST('1970-01-01 00:00:00' AS TIMESTAMP)) AS "test_valid_from",
+    COALESCE("t_test_VALID_from", CAST('1970-01-01 00:00:00' AS TIMESTAMP)) AS "test_VALID_from",
     CASE
       WHEN "joined"."_exists" IS NULL
       OR (
@@ -1733,7 +1733,7 @@ WITH "source" AS (
     "id",
     "name",
     "price",
-    CAST('2020-01-01 00:00:00' AS TIMESTAMP) AS "test_valid_from",
+    CAST('2020-01-01 00:00:00' AS TIMESTAMP) AS "test_VALID_from",
     CAST(NULL AS TIMESTAMP) AS "test_valid_to"
   FROM "joined"
   WHERE
@@ -1761,7 +1761,7 @@ SELECT
   "id",
   "name",
   "price",
-  "test_valid_from",
+  "test_VALID_from",
   "test_valid_to"
 FROM "static"
 UNION ALL
@@ -1769,7 +1769,7 @@ SELECT
   "id",
   "name",
   "price",
-  "test_valid_from",
+  "test_VALID_from",
   "test_valid_to"
 FROM "updated_rows"
 UNION ALL
@@ -1777,7 +1777,7 @@ SELECT
   "id",
   "name",
   "price",
-  "test_valid_from",
+  "test_VALID_from",
   "test_valid_to"
 FROM "inserted_rows"
     """
@@ -1792,8 +1792,8 @@ def test_scd_type_2_truncate(make_mocked_engine_adapter: t.Callable):
         target_table="target",
         source_table=t.cast(exp.Select, parse_one("SELECT id, name, price FROM source")),
         unique_key=[exp.column("id")],
-        valid_from_name="test_valid_from",
-        valid_to_name="test_valid_to",
+        valid_from_col=exp.column("test_valid_from", quoted=True),
+        valid_to_col=exp.column("test_valid_to", quoted=True),
         check_columns=[exp.column("name"), exp.column("price")],
         columns_to_types={
             "id": exp.DataType.build("INT"),
@@ -1993,8 +1993,8 @@ def test_scd_type_2_by_column_star_check(make_mocked_engine_adapter: t.Callable)
         target_table="target",
         source_table=t.cast(exp.Select, parse_one("SELECT id, name, price FROM source")),
         unique_key=[exp.column("id")],
-        valid_from_name="test_valid_from",
-        valid_to_name="test_valid_to",
+        valid_from_col=exp.column("test_valid_from", quoted=True),
+        valid_to_col=exp.column("test_valid_to", quoted=True),
         check_columns=exp.Star(),
         columns_to_types={
             "id": exp.DataType.build("INT"),
@@ -2205,8 +2205,8 @@ def test_scd_type_2_by_column_no_invalidate_hard_deletes(make_mocked_engine_adap
         target_table="target",
         source_table=t.cast(exp.Select, parse_one("SELECT id, name, price FROM source")),
         unique_key=[exp.column("id")],
-        valid_from_name="test_valid_from",
-        valid_to_name="test_valid_to",
+        valid_from_col=exp.column("test_valid_from", quoted=True),
+        valid_to_col=exp.column("test_valid_to", quoted=True),
         invalidate_hard_deletes=False,
         check_columns=[exp.column("name"), exp.column("price")],
         columns_to_types={

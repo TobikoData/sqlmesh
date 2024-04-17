@@ -585,9 +585,9 @@ def test_scd_type_2_by_time(
             exp.Select, parse_one("SELECT id, name, price, test_updated_at FROM db.source")
         ),
         unique_key=[exp.func("COALESCE", "id", "''")],
-        valid_from_name="test_valid_from",
-        valid_to_name="test_valid_to",
-        updated_at_name="test_updated_at",
+        valid_from_col=exp.column("test_valid_from", quoted=True),
+        valid_to_col=exp.column("test_valid_to", quoted=True),
+        updated_at_col=exp.column("test_updated_at", quoted=True),
         columns_to_types={
             "id": exp.DataType.build("INT"),
             "name": exp.DataType.build("VARCHAR"),

@@ -290,6 +290,27 @@ def positive_int_validator(v: t.Any) -> int:
     return v
 
 
+def _get_field(
+    v: t.Any,
+    values: t.Any,
+) -> exp.Expression:
+    values = values if isinstance(values, dict) else values.data
+    dialect = values.get("dialect")
+
+    if isinstance(v, exp.Expression):
+        expression = v
+    else:
+        expression = parse_one(v, dialect=dialect)
+
+    expression = exp.column(expression) if isinstance(expression, exp.Identifier) else expression
+    expression = quote_identifiers(
+        normalize_identifiers(expression, dialect=dialect), dialect=dialect
+    )
+    expression.meta["dialect"] = dialect
+
+    return expression
+
+
 def _get_fields(
     v: t.Any,
     values: t.Any,
@@ -310,16 +331,20 @@ def _get_fields(
     results = []
 
     for expr in expressions:
-        expr = exp.column(expr) if isinstance(expr, exp.Identifier) else expr
-        expr = quote_identifiers(normalize_identifiers(expr, dialect=dialect), dialect=dialect)
-        expr.meta["dialect"] = dialect
-        results.append(expr)
+        results.append(_get_field(expr, values))
 
     return results
 
 
 def list_of_fields_validator(v: t.Any, values: t.Any) -> t.List[exp.Expression]:
     return _get_fields(v, values)
+
+
+def column_validator(v: t.Any, values: t.Any) -> exp.Column:
+    expression = _get_field(v, values)
+    if not isinstance(expression, exp.Column):
+        raise ValueError(f"Invalid column {expression}. Value must be a column")
+    return expression
 
 
 def list_of_columns_or_star_validator(
@@ -336,6 +361,7 @@ if t.TYPE_CHECKING:
     SQLGlotString = str
     SQLGlotBool = bool
     SQLGlotPositiveInt = int
+    SQLGlotColumn = exp.Column
     SQLGlotListOfFields = t.List[exp.Expression]
     SQLGlotListOfColumnsOrStar = t.Union[t.List[exp.Column], exp.Star]
 elif PYDANTIC_MAJOR_VERSION >= 2:
@@ -345,6 +371,7 @@ elif PYDANTIC_MAJOR_VERSION >= 2:
     SQLGlotString = Annotated[str, BeforeValidator(validate_string)]
     SQLGlotBool = Annotated[bool, BeforeValidator(bool_validator)]
     SQLGlotPositiveInt = Annotated[int, BeforeValidator(positive_int_validator)]
+    SQLGlotColumn = Annotated[exp.Expression, BeforeValidator(column_validator)]
     SQLGlotListOfFields = Annotated[
         t.List[exp.Expression], BeforeValidator(list_of_fields_validator)
     ]
@@ -371,6 +398,9 @@ else:
 
     class SQLGlotPositiveInt(PydanticTypeProxy[int]):
         validate = positive_int_validator
+
+    class SQLGlotColumn(PydanticTypeProxy[exp.Expression]):
+        validate = column_validator
 
     class SQLGlotListOfFields(PydanticTypeProxy[t.List[exp.Expression]]):
         validate = list_of_fields_validator
