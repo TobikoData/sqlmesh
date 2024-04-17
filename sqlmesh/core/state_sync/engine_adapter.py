@@ -907,15 +907,16 @@ class EngineAdapterStateSync(CommonStateSyncMixin, StateSync):
         ):
             return
 
-        if not skip_backup:
+        migrate_rows = migrations or major_minor(SQLGLOT_VERSION) != versions.minor_sqlglot_version
+        if not skip_backup and migrate_rows:
             self._backup_state()
 
         try:
             for migration in migrations:
                 logger.info(f"Applying migration {migration}")
                 migration.migrate(self, default_catalog=default_catalog)
-
-            self._migrate_rows(promoted_snapshots_only)
+            if migrate_rows:
+                self._migrate_rows(promoted_snapshots_only)
             self._update_versions()
         except Exception as e:
             if skip_backup:
