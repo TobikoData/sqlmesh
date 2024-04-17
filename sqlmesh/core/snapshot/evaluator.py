@@ -1276,7 +1276,7 @@ class SCDType2Strategy(MaterializableStrategy):
             logger.info("Creating table '%s'", name)
             columns_to_types = model.columns_to_types_or_raise
             if isinstance(model.kind, SCDType2ByTimeKind):
-                columns_to_types[model.kind.updated_at_name] = model.kind.time_data_type
+                columns_to_types[model.kind.updated_at_name.name] = model.kind.time_data_type
             self.adapter.create_table(
                 name,
                 columns_to_types=columns_to_types,
@@ -1316,9 +1316,9 @@ class SCDType2Strategy(MaterializableStrategy):
                 target_table=name,
                 source_table=query_or_df,
                 unique_key=model.unique_key,
-                valid_from_name=model.kind.valid_from_name,
-                valid_to_name=model.kind.valid_to_name,
-                updated_at_name=model.kind.updated_at_name,
+                valid_from_col=model.kind.valid_from_name,
+                valid_to_col=model.kind.valid_to_name,
+                updated_at_col=model.kind.updated_at_name,
                 invalidate_hard_deletes=model.kind.invalidate_hard_deletes,
                 updated_at_as_valid_from=model.kind.updated_at_as_valid_from,
                 columns_to_types=model.columns_to_types,
@@ -1332,8 +1332,8 @@ class SCDType2Strategy(MaterializableStrategy):
                 target_table=name,
                 source_table=query_or_df,
                 unique_key=model.unique_key,
-                valid_from_name=model.kind.valid_from_name,
-                valid_to_name=model.kind.valid_to_name,
+                valid_from_col=model.kind.valid_from_name,
+                valid_to_col=model.kind.valid_to_name,
                 check_columns=model.kind.columns,
                 columns_to_types=model.columns_to_types,
                 invalidate_hard_deletes=model.kind.invalidate_hard_deletes,
@@ -1363,9 +1363,9 @@ class SCDType2Strategy(MaterializableStrategy):
                 target_table=table_name,
                 source_table=query_or_df,
                 unique_key=model.unique_key,
-                valid_from_name=model.kind.valid_from_name,
-                valid_to_name=model.kind.valid_to_name,
-                updated_at_name=model.kind.updated_at_name,
+                valid_from_col=model.kind.valid_from_name,
+                valid_to_col=model.kind.valid_to_name,
+                updated_at_col=model.kind.updated_at_name,
                 invalidate_hard_deletes=model.kind.invalidate_hard_deletes,
                 updated_at_as_valid_from=model.kind.updated_at_as_valid_from,
                 columns_to_types=model.columns_to_types,
@@ -1378,8 +1378,8 @@ class SCDType2Strategy(MaterializableStrategy):
                 target_table=table_name,
                 source_table=query_or_df,
                 unique_key=model.unique_key,
-                valid_from_name=model.kind.valid_from_name,
-                valid_to_name=model.kind.valid_to_name,
+                valid_from_col=model.kind.valid_from_name,
+                valid_to_col=model.kind.valid_to_name,
                 check_columns=model.kind.columns,
                 columns_to_types=model.columns_to_types,
                 invalidate_hard_deletes=model.kind.invalidate_hard_deletes,

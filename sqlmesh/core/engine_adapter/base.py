@@ -1150,10 +1150,10 @@ class EngineAdapter:
         target_table: TableName,
         source_table: QueryOrDF,
         unique_key: t.Sequence[exp.Expression],
-        valid_from_name: str,
-        valid_to_name: str,
+        valid_from_col: exp.Column,
+        valid_to_col: exp.Column,
         execution_time: TimeLike,
-        updated_at_name: str,
+        updated_at_col: exp.Column,
         invalidate_hard_deletes: bool = True,
         updated_at_as_valid_from: bool = False,
         columns_to_types: t.Optional[t.Dict[str, exp.DataType]] = None,
@@ -1166,10 +1166,10 @@ class EngineAdapter:
             target_table=target_table,
             source_table=source_table,
             unique_key=unique_key,
-            valid_from_name=valid_from_name,
-            valid_to_name=valid_to_name,
+            valid_from_col=valid_from_col,
+            valid_to_col=valid_to_col,
             execution_time=execution_time,
-            updated_at_name=updated_at_name,
+            updated_at_col=updated_at_col,
             invalidate_hard_deletes=invalidate_hard_deletes,
             updated_at_as_valid_from=updated_at_as_valid_from,
             columns_to_types=columns_to_types,
@@ -1183,8 +1183,8 @@ class EngineAdapter:
         target_table: TableName,
         source_table: QueryOrDF,
         unique_key: t.Sequence[exp.Expression],
-        valid_from_name: str,
-        valid_to_name: str,
+        valid_from_col: exp.Column,
+        valid_to_col: exp.Column,
         execution_time: TimeLike,
         check_columns: t.Union[exp.Star, t.Sequence[exp.Column]],
         invalidate_hard_deletes: bool = True,
@@ -1199,8 +1199,8 @@ class EngineAdapter:
             target_table=target_table,
             source_table=source_table,
             unique_key=unique_key,
-            valid_from_name=valid_from_name,
-            valid_to_name=valid_to_name,
+            valid_from_col=valid_from_col,
+            valid_to_col=valid_to_col,
             execution_time=execution_time,
             check_columns=check_columns,
             columns_to_types=columns_to_types,
@@ -1216,11 +1216,11 @@ class EngineAdapter:
         target_table: TableName,
         source_table: QueryOrDF,
         unique_key: t.Sequence[exp.Expression],
-        valid_from_name: str,
-        valid_to_name: str,
+        valid_from_col: exp.Column,
+        valid_to_col: exp.Column,
         execution_time: TimeLike,
         invalidate_hard_deletes: bool = True,
-        updated_at_name: t.Optional[str] = None,
+        updated_at_col: t.Optional[exp.Column] = None,
         check_columns: t.Optional[t.Union[exp.Star, t.Sequence[exp.Column]]] = None,
         updated_at_as_valid_from: bool = False,
         execution_time_as_valid_from: bool = False,
@@ -1233,6 +1233,9 @@ class EngineAdapter:
             source_table, columns_to_types, target_table=target_table, batch_size=0
         )
         columns_to_types = columns_to_types or self.columns(target_table)
+        valid_from_name = valid_from_col.name
+        valid_to_name = valid_to_col.name
+        updated_at_name = updated_at_col.name if updated_at_col else None
         if (
             valid_from_name not in columns_to_types
             or valid_to_name not in columns_to_types
@@ -1243,7 +1246,7 @@ class EngineAdapter:
             raise SQLMeshError(f"Could not get columns_to_types. Does {target_table} exist?")
         if not unique_key:
             raise SQLMeshError("unique_key must be provided for SCD Type 2")
-        if check_columns and updated_at_name:
+        if check_columns and updated_at_col:
             raise SQLMeshError(
                 "Cannot use both `check_columns` and `updated_at_name` for SCD Type 2"
             )
@@ -1270,7 +1273,7 @@ class EngineAdapter:
         table_columns = [exp.column(c, quoted=True) for c in columns_to_types]
         if updated_at_name:
             select_source_columns.append(
-                exp.cast(updated_at_name, time_data_type).as_(updated_at_name)
+                exp.cast(updated_at_col, time_data_type).as_(updated_at_col.this)  # type: ignore
             )
 
         # If a star is provided, we include all unmanaged columns in the check.
@@ -1282,25 +1285,29 @@ class EngineAdapter:
             check_columns = [exp.column(col) for col in unmanaged_columns]
         execution_ts = to_time_column(execution_time, time_data_type)
         if updated_at_as_valid_from:
-            if not updated_at_name:
+            if not updated_at_col:
                 raise SQLMeshError(
                     "Cannot use `updated_at_as_valid_from` without `updated_at_name` for SCD Type 2"
                 )
-            update_valid_from_start: t.Union[str, exp.Expression] = updated_at_name
+            update_valid_from_start: t.Union[str, exp.Expression] = updated_at_col
         elif execution_time_as_valid_from:
             update_valid_from_start = execution_ts
         else:
             update_valid_from_start = to_time_column("1970-01-01 00:00:00+00:00", time_data_type)
-        insert_valid_from_start = execution_ts if check_columns else exp.column(updated_at_name)  # type: ignore
+        insert_valid_from_start = execution_ts if check_columns else updated_at_col  # type: ignore
         # joined._exists IS NULL is saying "if the row is deleted"
         delete_check = (
             exp.column("_exists", "joined").is_(exp.Null()) if invalidate_hard_deletes else None
         )
+        prefixed_valid_to_col = valid_to_col.copy()
+        prefixed_valid_to_col.this.set("this", f"t_{prefixed_valid_to_col.name}")
+        prefixed_valid_from_col = valid_from_col.copy()
+        prefixed_valid_from_col.this.set("this", f"t_{valid_from_col.name}")
         if check_columns:
             row_check_conditions = []
             for col in check_columns:
                 t_col = col.copy()
-                t_col.set("this", exp.to_identifier(f"t_{col.name}"))
+                t_col.this.set("this", f"t_{col.name}")
                 row_check_conditions.extend(
                     [
                         col.neq(t_col),
@@ -1312,7 +1319,7 @@ class EngineAdapter:
             unique_key_conditions = []
             for col in unique_key:
                 t_col = col.copy()
-                t_col.set("this", exp.to_identifier(f"t_{col.name}"))
+                t_col.this.set("this", f"t_{col.name}")
                 unique_key_conditions.extend(
                     [t_col.is_(exp.Null()).not_(), col.is_(exp.Null()).not_()]
                 )
@@ -1331,52 +1338,62 @@ class EngineAdapter:
                     ),
                     execution_ts,
                 )
-                .else_(exp.column(f"t_{valid_to_name}"))
-                .as_(valid_to_name)
+                .else_(prefixed_valid_to_col)
+                .as_(valid_to_col.this)
             )
             valid_from_case_stmt = exp.func(
                 "COALESCE",
-                exp.column(f"t_{valid_from_name}"),
+                prefixed_valid_from_col,
                 update_valid_from_start,
-            ).as_(valid_from_name)
+            ).as_(valid_from_col.this)
         else:
-            assert updated_at_name is not None
-            updated_row_filter = exp.column(updated_at_name) > exp.column(f"t_{updated_at_name}")
+            assert updated_at_col is not None
+            prefixed_updated_at_col = updated_at_col.copy()
+            prefixed_updated_at_col.this.set("this", f"t_{updated_at_col.name}")
+            updated_row_filter = updated_at_col > prefixed_updated_at_col
 
-            valid_to_case_stmt_builder = exp.Case().when(
-                updated_row_filter, exp.column(updated_at_name)
-            )
+            valid_to_case_stmt_builder = exp.Case().when(updated_row_filter, updated_at_col)
             if delete_check:
                 valid_to_case_stmt_builder = valid_to_case_stmt_builder.when(
                     delete_check, execution_ts
                 )
-            valid_to_case_stmt = valid_to_case_stmt_builder.else_(
-                exp.column(f"t_{valid_to_name}")
-            ).as_(valid_to_name)
+            valid_to_case_stmt = valid_to_case_stmt_builder.else_(prefixed_valid_to_col).as_(
+                valid_to_col.this
+            )
 
             valid_from_case_stmt = (
                 exp.Case()
                 .when(
                     exp.and_(
-                        exp.column(f"t_{valid_from_name}").is_(exp.Null()),
+                        prefixed_valid_from_col.is_(exp.Null()),
                         exp.column("_exists", "latest_deleted").is_(exp.Null()).not_(),
                     ),
                     exp.Case()
                     .when(
-                        exp.column(valid_to_name, "latest_deleted") > exp.column(updated_at_name),
-                        exp.column(valid_to_name, "latest_deleted"),
+                        exp.column(valid_to_col.this, "latest_deleted") > updated_at_col,
+                        exp.column(valid_to_col.this, "latest_deleted"),
                     )
-                    .else_(exp.column(updated_at_name)),
+                    .else_(updated_at_col),
                 )
-                .when(exp.column(f"t_{valid_from_name}").is_(exp.Null()), update_valid_from_start)
-                .else_(exp.column(f"t_{valid_from_name}"))
-            ).as_(valid_from_name)
+                .when(prefixed_valid_from_col.is_(exp.Null()), update_valid_from_start)
+                .else_(prefixed_valid_from_col)
+            ).as_(valid_from_col.this)
 
         existing_rows_query = exp.select(*table_columns).from_(target_table)
         if truncate:
             existing_rows_query = existing_rows_query.limit(0)
 
         with source_queries[0] as source_query:
+            prefixed_columns_to_types = []
+            for column in columns_to_types:
+                prefixed_col = exp.column(column).copy()
+                prefixed_col.this.set("this", f"t_{prefixed_col.name}")
+                prefixed_columns_to_types.append(prefixed_col)
+            prefixed_unmanaged_columns = []
+            for column in unmanaged_columns:
+                prefixed_col = exp.column(column).copy()
+                prefixed_col.this.set("this", f"t_{prefixed_col.name}")
+                prefixed_unmanaged_columns.append(prefixed_col)
             query = (
                 exp.Select()  # type: ignore
                 .with_(
@@ -1388,17 +1405,17 @@ class EngineAdapter:
                 # Historical Records that Do Not Change
                 .with_(
                     "static",
-                    existing_rows_query.where(f"{valid_to_name} IS NOT NULL"),
+                    existing_rows_query.where(valid_to_col.is_(exp.Null()).not_()),
                 )
                 # Latest Records that can be updated
                 .with_(
                     "latest",
-                    existing_rows_query.where(f"{valid_to_name} IS NULL"),
+                    existing_rows_query.where(valid_to_col.is_(exp.Null())),
                 )
                 # Deleted records which can be used to determine `valid_from` for undeleted source records
                 .with_(
                     "deleted",
-                    exp.select(*[f"static.{col}" for col in columns_to_types])
+                    exp.select(*[exp.column(col, "static") for col in columns_to_types])
                     .from_("static")
                     .join(
                         "latest",
@@ -1410,7 +1427,7 @@ class EngineAdapter:
                         ),
                         join_type="left",
                     )
-                    .where(f"latest.{valid_to_name} IS NULL"),
+                    .where(exp.column(valid_to_col.this, "latest").is_(exp.Null())),
                 )
                 # Get the latest `valid_to` deleted record for each unique key
                 .with_(
@@ -1418,7 +1435,7 @@ class EngineAdapter:
                     exp.select(
                         exp.true().as_("_exists"),
                         *(part.as_(f"_key{i}") for i, part in enumerate(unique_key)),
-                        f"MAX({valid_to_name}) AS {valid_to_name}",
+                        exp.Max(this=valid_to_col).as_(valid_to_col.this),
                     )
                     .from_("deleted")
                     .group_by(*unique_key),
@@ -1430,8 +1447,8 @@ class EngineAdapter:
                     exp.select(
                         exp.column("_exists", table="source"),
                         *(
-                            exp.column(col, table="latest").as_(f"t_{col}")
-                            for col in columns_to_types
+                            exp.column(col, table="latest").as_(prefixed_columns_to_types[i].this)
+                            for i, col in enumerate(columns_to_types)
                         ),
                         *(exp.column(col, table="source").as_(col) for col in unmanaged_columns),
                     )
@@ -1450,8 +1467,10 @@ class EngineAdapter:
                         exp.select(
                             exp.column("_exists", table="source"),
                             *(
-                                exp.column(col, table="latest").as_(f"t_{col}")
-                                for col in columns_to_types
+                                exp.column(col, table="latest").as_(
+                                    prefixed_columns_to_types[i].this
+                                )
+                                for i, col in enumerate(columns_to_types)
                             ),
                             *(
                                 exp.column(col, table="source").as_(col)
@@ -1478,10 +1497,10 @@ class EngineAdapter:
                         *(
                             exp.func(
                                 "COALESCE",
-                                exp.column(f"t_{col}", table="joined"),
+                                exp.column(prefixed_unmanaged_columns[i].this, table="joined"),
                                 exp.column(col, table="joined"),
                             ).as_(col)
-                            for col in unmanaged_columns
+                            for i, col in enumerate(unmanaged_columns)
                         ),
                         valid_from_case_stmt,
                         valid_to_case_stmt,
@@ -1505,8 +1524,8 @@ class EngineAdapter:
                     "inserted_rows",
                     exp.select(
                         *unmanaged_columns,
-                        insert_valid_from_start.as_(valid_from_name),
-                        to_time_column(exp.null(), time_data_type).as_(valid_to_name),
+                        insert_valid_from_start.as_(valid_from_col.this),  # type: ignore
+                        to_time_column(exp.null(), time_data_type).as_(valid_to_col.this),
                     )
                     .from_("joined")
                     .where(updated_row_filter),

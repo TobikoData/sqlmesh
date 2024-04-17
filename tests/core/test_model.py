@@ -2672,9 +2672,9 @@ def test_scd_type_2_by_time_defaults():
         "valid_from": exp.DataType.build("TIMESTAMP"),
         "valid_to": exp.DataType.build("TIMESTAMP"),
     }
-    assert scd_type_2_model.kind.updated_at_name == "updated_at"
-    assert scd_type_2_model.kind.valid_from_name == "valid_from"
-    assert scd_type_2_model.kind.valid_to_name == "valid_to"
+    assert scd_type_2_model.kind.updated_at_name == exp.column("updated_at", quoted=True)
+    assert scd_type_2_model.kind.valid_from_name == exp.column("valid_from", quoted=True)
+    assert scd_type_2_model.kind.valid_to_name == exp.column("valid_to", quoted=True)
     assert not scd_type_2_model.kind.updated_at_as_valid_from
     assert scd_type_2_model.kind.is_scd_type_2_by_time
     assert scd_type_2_model.kind.is_scd_type_2
@@ -2699,6 +2699,7 @@ def test_scd_type_2_by_time_overrides():
                 disable_restatement False,
                 invalidate_hard_deletes False,
             ),
+            dialect snowflake
         );
         SELECT
             1 as "iD",
@@ -2712,15 +2713,15 @@ def test_scd_type_2_by_time_overrides():
     scd_type_2_model = load_sql_based_model(model_def)
     assert scd_type_2_model.unique_key == [
         exp.column("iD", quoted=True),
-        exp.column("ds", quoted=True),
+        exp.column("DS", quoted=True),
     ]
     assert scd_type_2_model.managed_columns == {
-        "test_valid_from": exp.DataType.build("TIMESTAMPTZ"),
-        "test_valid_to": exp.DataType.build("TIMESTAMPTZ"),
+        "TEST_VALID_FROM": exp.DataType.build("TIMESTAMPTZ"),
+        "TEST_VALID_TO": exp.DataType.build("TIMESTAMPTZ"),
     }
-    assert scd_type_2_model.kind.updated_at_name == "test_updated_at"
-    assert scd_type_2_model.kind.valid_from_name == "test_valid_from"
-    assert scd_type_2_model.kind.valid_to_name == "test_valid_to"
+    assert scd_type_2_model.kind.updated_at_name == exp.column("TEST_UPDATED_AT", quoted=True)
+    assert scd_type_2_model.kind.valid_from_name == exp.column("TEST_VALID_FROM", quoted=True)
+    assert scd_type_2_model.kind.valid_to_name == exp.column("TEST_VALID_TO", quoted=True)
     assert scd_type_2_model.kind.updated_at_as_valid_from
     assert scd_type_2_model.kind.is_scd_type_2_by_time
     assert scd_type_2_model.kind.is_scd_type_2
@@ -2764,8 +2765,8 @@ def test_scd_type_2_by_column_defaults():
         "valid_from": exp.DataType.build("TIMESTAMP"),
         "valid_to": exp.DataType.build("TIMESTAMP"),
     }
-    assert scd_type_2_model.kind.valid_from_name == "valid_from"
-    assert scd_type_2_model.kind.valid_to_name == "valid_to"
+    assert scd_type_2_model.kind.valid_from_name == exp.column("valid_from", quoted=True)
+    assert scd_type_2_model.kind.valid_to_name == exp.column("valid_to", quoted=True)
     assert not scd_type_2_model.kind.execution_time_as_valid_from
     assert scd_type_2_model.kind.is_scd_type_2_by_column
     assert scd_type_2_model.kind.is_scd_type_2
@@ -2807,8 +2808,8 @@ def test_scd_type_2_by_column_overrides():
         "test_valid_from": exp.DataType.build("TIMESTAMPTZ"),
         "test_valid_to": exp.DataType.build("TIMESTAMPTZ"),
     }
-    assert scd_type_2_model.kind.valid_from_name == "test_valid_from"
-    assert scd_type_2_model.kind.valid_to_name == "test_valid_to"
+    assert scd_type_2_model.kind.valid_from_name == exp.column("test_valid_from", quoted=True)
+    assert scd_type_2_model.kind.valid_to_name == exp.column("test_valid_to", quoted=True)
     assert scd_type_2_model.kind.execution_time_as_valid_from
     assert scd_type_2_model.kind.is_scd_type_2_by_column
     assert scd_type_2_model.kind.is_scd_type_2
