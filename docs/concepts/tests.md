@@ -436,7 +436,7 @@ The `%run_test` magic supports the same options as the corresponding [CLI comman
 
 When executing unit tests, SQLMesh creates input fixtures as views within the testing connection.
 
-These fixtures are dropped by default after the execution completes, but it is possible to preserve them using the `--preserve-fixtures` option available in both the `sqlmesh test` CLI command and the `%run_test` notebook magic.
+These fixtures are dropped by default after the execution completes, but it is possible to preserve them using the `--preserve-fixtures` option available for both the `sqlmesh test` CLI command and the `%run_test` notebook magic.
 
 This can be helpful when debugging a test failure, because for example it's possible to query the fixture tables directly and verify that they are populated correctly.
 
