@@ -399,7 +399,7 @@ else:
     class SQLGlotPositiveInt(PydanticTypeProxy[int]):
         validate = positive_int_validator
 
-    class SQLGlotColumn(PydanticTypeProxy[exp.Expression]):
+    class SQLGlotColumn(PydanticTypeProxy[exp.Column]):
         validate = column_validator
 
     class SQLGlotListOfFields(PydanticTypeProxy[t.List[exp.Expression]]):

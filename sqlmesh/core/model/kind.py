@@ -23,6 +23,7 @@ from sqlmesh.utils.pydantic import (
     SQLGlotListOfFields,
     SQLGlotPositiveInt,
     SQLGlotString,
+    column_validator,
     field_validator,
     field_validator_v1_args,
     model_validator,
@@ -431,6 +432,11 @@ class _SCDType2Kind(_ModelKind):
     forward_only: SQLGlotBool = True
     disable_restatement: SQLGlotBool = True
 
+    # Remove once Pydantic 1 is deprecated
+    _always_validate_column = field_validator(
+        "valid_from_name", "valid_to_name", mode="before", always=True
+    )(column_validator)
+
     # always=True can be removed once Pydantic 1 is deprecated
     @field_validator("time_data_type", mode="before", always=True)
     @classmethod
@@ -447,7 +453,6 @@ class _SCDType2Kind(_ModelKind):
 
     @property
     def managed_columns(self) -> t.Dict[str, exp.DataType]:
-        self.valid_from_name.meta.get("dialect")
         return {
             self.valid_from_name.name: self.time_data_type,
             self.valid_to_name.name: self.time_data_type,
@@ -480,6 +485,11 @@ class SCDType2ByTimeKind(_SCDType2Kind):
     )
     updated_at_name: SQLGlotColumn = Field(exp.column("updated_at"), validate_default=True)
     updated_at_as_valid_from: SQLGlotBool = False
+
+    # Remove once Pydantic 1 is deprecated
+    _always_validate_updated_at = field_validator("updated_at_name", mode="before", always=True)(
+        column_validator
+    )
 
     @property
     def data_hash_values(self) -> t.List[t.Optional[str]]:
