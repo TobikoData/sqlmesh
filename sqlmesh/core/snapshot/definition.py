@@ -163,11 +163,6 @@ class SnapshotIntervals(PydanticModel, frozen=True):
         return SnapshotId(name=self.name, identifier=self.identifier)
 
 
-class SnapshotIndirectVersion(PydanticModel, frozen=True):
-    version: str
-    change_category: t.Optional[SnapshotChangeCategory] = None
-
-
 class SnapshotDataVersion(PydanticModel, frozen=True):
     fingerprint: SnapshotFingerprint
     version: str
@@ -192,13 +187,6 @@ class SnapshotDataVersion(PydanticModel, frozen=True):
     def is_new_version(self) -> bool:
         """Returns whether or not this version is new and requires a backfill."""
         return self.fingerprint.to_version() == self.version
-
-    @property
-    def indirect_version(self) -> SnapshotIndirectVersion:
-        return SnapshotIndirectVersion(
-            version=self.version,
-            change_category=self.change_category,
-        )
 
 
 class QualifiedViewName(PydanticModel, frozen=True):
@@ -482,7 +470,6 @@ class Snapshot(PydanticModel, SnapshotInfoMixin):
     updated_ts: int
     ttl: str
     previous_versions: t.Tuple[SnapshotDataVersion, ...] = ()
-    indirect_versions: t.Dict[str, t.Tuple[SnapshotIndirectVersion, ...]] = {}
     version: t.Optional[str] = None
     temp_version: t.Optional[str] = None
     change_category: t.Optional[SnapshotChangeCategory] = None
