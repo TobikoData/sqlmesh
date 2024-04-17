@@ -144,7 +144,7 @@ class DatabricksEngineAdapter(SparkEngineAdapter):
 
             try:
                 # Note: Spark 3.4+ Only API
-                return super().get_current_catalog()
+                return self.spark.catalog.currentCatalog()
             except (Py4JError, SparkConnectGrpcException):
                 pass
         result = self.fetchone(exp.select(self.CURRENT_CATALOG_EXPRESSION))
@@ -164,7 +164,7 @@ class DatabricksEngineAdapter(SparkEngineAdapter):
 
             try:
                 # Note: Spark 3.4+ Only API
-                super().set_current_catalog(catalog_name)
+                self.spark.catalog.setCurrentCatalog(catalog_name)
             except (Py4JError, SparkConnectGrpcException):
                 pass
 
