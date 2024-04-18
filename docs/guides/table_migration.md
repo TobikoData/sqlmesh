@@ -1,4 +1,4 @@
-# Table migration
+# Table migration guide
 
 SQLMesh projects can read directly from tables not managed by SQLMesh, but in some scenarios it may be useful to migrate an existing table into a SQLMesh project.
 
@@ -9,6 +9,7 @@ This guide describes two methods for migrating existing tables into a SQLMesh pr
 SQLMesh does not assume it manages all data sources: SQL models can read from any data source accessible by the SQL engine, treating them as [external models](../concepts/models/model_kinds.md#external) that include column-level lineage or as generic sources. This approach is preferred to migrating existing tables into a SQLMesh project.
 
 You should only migrate a table if both of the following are true:
+
 1. The table is ingesting from an upstream source that will continue generating new data
 2. The table is either too large to be rebuilt or cannot be rebuilt because the necessary historical data is unavailable
 
