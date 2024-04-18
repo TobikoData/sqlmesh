@@ -646,24 +646,24 @@ class GithubController:
         """
 
         def conclusion_handler(
-            _: GithubCheckConclusion, result: unittest.result.TestResult, output: str
+            conclusion: GithubCheckConclusion, result: unittest.result.TestResult, output: str
         ) -> t.Tuple[GithubCheckConclusion, str, t.Optional[str]]:
-            if not result:
-                return GithubCheckConclusion.SKIPPED, "Skipped Tests", None
-
-            # Clear out console
-            self._console.consume_captured_output()
-            self._console.log_test_results(
-                result, output, self._context._test_engine_adapter.dialect
-            )
-            test_summary = self._console.consume_captured_output()
-            test_title = "Tests Passed" if result.wasSuccessful() else "Tests Failed"
-            test_conclusion = (
-                GithubCheckConclusion.SUCCESS
-                if result.wasSuccessful()
-                else GithubCheckConclusion.FAILURE
-            )
-            return test_conclusion, test_title, test_summary
+            if result:
+                # Clear out console
+                self._console.consume_captured_output()
+                self._console.log_test_results(
+                    result, output, self._context._test_engine_adapter.dialect
+                )
+                test_summary = self._console.consume_captured_output()
+                test_title = "Tests Passed" if result.wasSuccessful() else "Tests Failed"
+                test_conclusion = (
+                    GithubCheckConclusion.SUCCESS
+                    if result.wasSuccessful()
+                    else GithubCheckConclusion.FAILURE
+                )
+                return test_conclusion, test_title, test_summary
+            test_title = "Skipped Tests" if conclusion.is_skipped else "Tests Failed"
+            return conclusion, test_title, output
 
         self._update_check_handler(
             check_name="SQLMesh - Run Unit Tests",

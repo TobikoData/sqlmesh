@@ -16,7 +16,7 @@ from sqlmesh.integrations.github.cicd.controller import (
     GithubCheckConclusion,
     GithubCheckStatus,
 )
-from sqlmesh.utils.errors import PlanError
+from sqlmesh.utils.errors import PlanError, TestError
 
 pytest_plugins = ["tests.integrations.github.cicd.fixtures"]
 pytestmark = [
@@ -444,6 +444,7 @@ def test_run_all_test_failed(
         bot_config=GithubCICDBotConfig(merge_method=MergeMethod.MERGE),
     )
     test_result = TestResult()
+    test_result.testsRun += 1
     test_result.addFailure(TestCase(), (None, None, None))
     controller._context._run_tests = mocker.MagicMock(
         side_effect=lambda **kwargs: (test_result, "some error")
@@ -465,6 +466,144 @@ def test_run_all_test_failed(
     assert GithubCheckStatus(test_checks_runs[1]["status"]).is_in_progress
     assert GithubCheckStatus(test_checks_runs[2]["status"]).is_completed
     assert GithubCheckConclusion(test_checks_runs[2]["conclusion"]).is_failure
+    assert test_checks_runs[2]["output"]["title"] == "Tests Failed"
+    assert (
+        test_checks_runs[2]["output"]["summary"]
+        == """**Num Successful Tests: 0**
+
+
+```some error```
+
+
+"""
+    )
+
+    assert "SQLMesh - Prod Plan Preview" in controller._check_run_mapping
+    prod_plan_preview_checks_runs = controller._check_run_mapping[
+        "SQLMesh - Prod Plan Preview"
+    ].all_kwargs
+    assert len(prod_plan_preview_checks_runs) == 2
+    assert GithubCheckStatus(prod_plan_preview_checks_runs[0]["status"]).is_queued
+    assert GithubCheckStatus(prod_plan_preview_checks_runs[1]["status"]).is_completed
+    assert GithubCheckConclusion(prod_plan_preview_checks_runs[1]["conclusion"]).is_skipped
+    assert (
+        prod_plan_preview_checks_runs[1]["output"]["title"]
+        == "Skipped generating prod plan preview since PR was not synchronized"
+    )
+    assert (
+        prod_plan_preview_checks_runs[1]["output"]["summary"]
+        == "Unit Test(s) Failed so skipping creating prod plan"
+    )
+
+    assert "SQLMesh - PR Environment Synced" in controller._check_run_mapping
+    pr_checks_runs = controller._check_run_mapping["SQLMesh - PR Environment Synced"].all_kwargs
+    assert len(pr_checks_runs) == 2
+    assert GithubCheckStatus(pr_checks_runs[0]["status"]).is_queued
+    assert GithubCheckStatus(pr_checks_runs[1]["status"]).is_completed
+    assert GithubCheckConclusion(pr_checks_runs[1]["conclusion"]).is_skipped
+    assert pr_checks_runs[1]["output"]["title"] == "PR Virtual Data Environment: hello_world_2"
+
+    assert "SQLMesh - Prod Environment Synced" in controller._check_run_mapping
+    prod_checks_runs = controller._check_run_mapping["SQLMesh - Prod Environment Synced"].all_kwargs
+    assert len(prod_checks_runs) == 2
+    assert GithubCheckStatus(prod_checks_runs[0]["status"]).is_queued
+    assert GithubCheckStatus(prod_checks_runs[1]["status"]).is_completed
+    assert GithubCheckConclusion(prod_checks_runs[1]["conclusion"]).is_skipped
+
+    assert "SQLMesh - Has Required Approval" in controller._check_run_mapping
+    approval_checks_runs = controller._check_run_mapping[
+        "SQLMesh - Has Required Approval"
+    ].all_kwargs
+    assert len(approval_checks_runs) == 3
+    assert GithubCheckStatus(approval_checks_runs[0]["status"]).is_queued
+    assert GithubCheckStatus(approval_checks_runs[1]["status"]).is_in_progress
+    assert GithubCheckStatus(approval_checks_runs[2]["status"]).is_completed
+    assert GithubCheckConclusion(approval_checks_runs[2]["conclusion"]).is_success
+
+    assert len(controller._context.apply.call_args_list) == 0
+
+    assert not mock_pull_request.merge.called
+    assert not controller._context.invalidate_environment.called
+
+    assert len(created_comments) == 0
+
+    with open(github_output_file, "r") as f:
+        output = f.read()
+        assert (
+            output
+            == "run_unit_tests=failure\nhas_required_approval=success\npr_environment_name=hello_world_2\npr_environment_synced=skipped\nprod_plan_preview=skipped\nprod_environment_synced=skipped\n"
+        )
+
+
+def test_run_all_test_exception(
+    github_client,
+    make_controller,
+    make_mock_check_run,
+    make_mock_issue_comment,
+    make_pull_request_review,
+    tmp_path: pathlib.Path,
+    mocker: MockerFixture,
+):
+    """
+    Scenario:
+    - PR is not merged
+    - PR has been approved by a required reviewer
+    - Test had an exception (didn't fail but rather had an exception while trying to run)
+    - PR Merge Method defined
+    - Delete environment is enabled
+    """
+    mock_repo = github_client.get_repo()
+    mock_repo.create_check_run = mocker.MagicMock(
+        side_effect=lambda **kwargs: make_mock_check_run(**kwargs)
+    )
+
+    created_comments = []
+    mock_issue = mock_repo.get_issue()
+    mock_issue.create_comment = mocker.MagicMock(
+        side_effect=lambda comment: make_mock_issue_comment(
+            comment=comment, created_comments=created_comments
+        )
+    )
+    mock_issue.get_comments = mocker.MagicMock(side_effect=lambda: created_comments)
+
+    mock_pull_request = mock_repo.get_pull()
+    mock_pull_request.get_reviews = mocker.MagicMock(
+        side_effect=lambda: [make_pull_request_review(username="test_github", state="APPROVED")]
+    )
+    mock_pull_request.merged = False
+    mock_pull_request.merge = mocker.MagicMock()
+
+    controller = make_controller(
+        "tests/fixtures/github/pull_request_synchronized.json",
+        github_client,
+        bot_config=GithubCICDBotConfig(merge_method=MergeMethod.MERGE),
+    )
+    test_result = TestResult()
+    test_result.addFailure(TestCase(), (None, None, None))
+    controller._context._run_tests = mocker.MagicMock(side_effect=TestError("some error"))
+    controller._context.users = [
+        User(username="test", github_username="test_github", roles=[UserRole.REQUIRED_APPROVER])
+    ]
+    controller._context.invalidate_environment = mocker.MagicMock()
+
+    github_output_file = tmp_path / "github_output.txt"
+
+    with mock.patch.dict(os.environ, {"GITHUB_OUTPUT": str(github_output_file)}):
+        command._run_all(controller)
+
+    assert "SQLMesh - Run Unit Tests" in controller._check_run_mapping
+    test_checks_runs = controller._check_run_mapping["SQLMesh - Run Unit Tests"].all_kwargs
+    assert len(test_checks_runs) == 3
+    assert GithubCheckStatus(test_checks_runs[0]["status"]).is_queued
+    assert GithubCheckStatus(test_checks_runs[1]["status"]).is_in_progress
+    assert GithubCheckStatus(test_checks_runs[2]["status"]).is_completed
+    assert GithubCheckConclusion(test_checks_runs[2]["conclusion"]).is_failure
+    assert test_checks_runs[2]["output"]["title"] == "Tests Failed"
+    assert (
+        test_checks_runs[2]["output"]["summary"]
+        .strip()
+        .endswith("sqlmesh.utils.errors.TestError: some error")
+    )
 
     assert "SQLMesh - Prod Plan Preview" in controller._check_run_mapping
     prod_plan_preview_checks_runs = controller._check_run_mapping[

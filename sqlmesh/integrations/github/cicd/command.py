@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import logging
+import traceback
 
 import click
 
@@ -65,7 +66,9 @@ def _run_tests(controller: GithubController) -> bool:
         return result.wasSuccessful()
     except Exception:
         controller.update_test_check(
-            status=GithubCheckStatus.COMPLETED, conclusion=GithubCheckConclusion.FAILURE
+            status=GithubCheckStatus.COMPLETED,
+            conclusion=GithubCheckConclusion.FAILURE,
+            output=traceback.format_exc(),
         )
         return False
 
