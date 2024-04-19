@@ -25,10 +25,36 @@ def test_format_model_expressions():
     references (
      a,
      (b, c) as d,
-     )
+     ),
+     audits [
+    not_null(columns=[
+      foo_id,
+      foo_normalised,
+      bar_normalised,
+      total_weight,
+      overall_rank,
+      cumulative_total_weight_share,
+      market_rank,
+      market_cumulative_total_weight_share,
+      total_weight_decile,
+      tier,
+    ]),
+
+    unique_values(columns=[foo_id]),
+
+    accepted_range(column=foo_normalised, min_v=0, max_v=100),
+    accepted_range(column=bar_normalised, min_v=0, max_v=100),
+    accepted_range(column=total_weight, min_v=0, max_v=100),
+    accepted_range(column=cumulative_total_weight_share, min_v=0, max_v=1),
+    accepted_range(column=market_cumulative_total_weight_share, min_v=0, max_v=1),
+
+    accepted_values(column=tier, is_in=['Tier 1', 'Tier 2', 'Tier 3', 'Long Tail']),
+    accepted_values(column=total_weight_decile, is_in=['Decile_01', 'Decile_02','Decile_03','Decile_04','Decile_05','Decile_06','Decile_07','Decile_08','Decile_09','Decile_10']),
+  ],
     )
     ;
 
+    /* comment */
     @DEF(x
     , 1);
 
@@ -59,9 +85,48 @@ def test_format_model_expressions():
         == """MODEL (
   name a.b,
   kind FULL,
-  references (a, (b, c) AS d)
+  references (a, (b, c) AS d),
+  audits ARRAY(
+    NOT_NULL(
+      columns = ARRAY(
+        foo_id,
+        foo_normalised,
+        bar_normalised,
+        total_weight,
+        overall_rank,
+        cumulative_total_weight_share,
+        market_rank,
+        market_cumulative_total_weight_share,
+        total_weight_decile,
+        tier
+      )
+    ),
+    UNIQUE_VALUES(columns = ARRAY(foo_id)),
+    ACCEPTED_RANGE(column = foo_normalised, min_v = 0, max_v = 100),
+    ACCEPTED_RANGE(column = bar_normalised, min_v = 0, max_v = 100),
+    ACCEPTED_RANGE(column = total_weight, min_v = 0, max_v = 100),
+    ACCEPTED_RANGE(column = cumulative_total_weight_share, min_v = 0, max_v = 1),
+    ACCEPTED_RANGE(column = market_cumulative_total_weight_share, min_v = 0, max_v = 1),
+    ACCEPTED_VALUES(column = tier, is_in = ARRAY('Tier 1', 'Tier 2', 'Tier 3', 'Long Tail')),
+    ACCEPTED_VALUES(
+      column = total_weight_decile,
+      is_in = ARRAY(
+        'Decile_01',
+        'Decile_02',
+        'Decile_03',
+        'Decile_04',
+        'Decile_05',
+        'Decile_06',
+        'Decile_07',
+        'Decile_08',
+        'Decile_09',
+        'Decile_10'
+      )
+    )
+  )
 );
 
+/* comment */
 @DEF(x, 1);
 
 SELECT
