@@ -48,6 +48,15 @@ While iterating on forward-only changes in the development environment, the mode
 
 This category is assigned by SQLMesh automatically either when a user opts into using a [forward-only plan](#forward-only-plans) or when a model is explicitly configured to be forward-only.
 
+### Summary
+
+| Change Category                      | Change Type                                                                                | Behaviour                                          |
+|--------------------------------------|--------------------------------------------------------------------------------------------|----------------------------------------------------|
+| [Breaking](#breaking-change)         | [Direct](glossary.md#direct-modification) or [Indirect](glossary.md#indirect-modification) | [Backfill](glossary.md#backfill)                   |
+| [Non-breaking](#non-breaking-change) | [Direct](glossary.md#direct-modification)                                                  | [Backfill](glossary.md#backfill)                   |
+| [Non-breaking](#non-breaking-change) | [Indirect](glossary.md#indirect-modification)                                              | [No Backfill](glossary.md#backfill)                |
+| [Forward-only](#forward-only-change) | [Direct](glossary.md#direct-modification) or [Indirect](glossary.md#indirect-modification) | [No Backfill](glossary.md#backfill), schema change |
+
 ## Plan application
 Once a plan has been created and reviewed, it is then applied to the target [environment](environments.md) in order for its changes to take effect.
 
