@@ -92,7 +92,6 @@ class BaseExpressionRenderer:
         Returns:
             The rendered expressions.
         """
-
         cache_key = self._cache_key(start, end, execution_time, runtime_stage)
 
         if cache_key not in self._cache:
@@ -114,6 +113,16 @@ class BaseExpressionRenderer:
                 table_mapping=table_mapping,
                 deployability_index=deployability_index,
                 default_catalog=self._default_catalog,
+                table=lambda e, comments=True: self._resolve_tables(
+                    exp.to_table(e, dialect=self._dialect),
+                    snapshots=snapshots,
+                    table_mapping=table_mapping,
+                    deployability_index=deployability_index,
+                    start=start,
+                    end=end,
+                    execution_time=execution_time,
+                    runtime_stage=runtime_stage,
+                ).sql(dialect=self._dialect, comments=comments),
             )
 
             if isinstance(self._expression, d.Jinja):
@@ -319,6 +328,7 @@ class ExpressionRenderer(BaseExpressionRenderer):
                 execution_time=execution_time,
                 snapshots=snapshots,
                 deployability_index=deployability_index,
+                table_mapping=table_mapping,
                 **kwargs,
             )
         except ParsetimeAdapterCallError:
