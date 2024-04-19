@@ -195,6 +195,7 @@ def _parse_macro(self: Parser, keyword_macro: str = "") -> t.Optional[exp.Expres
     if self._prev.text != SQLMESH_MACRO_PREFIX:
         return self._parse_parameter()
 
+    comments = self._prev.comments
     index = self._index
     field = self._parse_primary() or self._parse_function(functions={}) or self._parse_id_var()
 
@@ -207,25 +208,37 @@ def _parse_macro(self: Parser, keyword_macro: str = "") -> t.Optional[exp.Expres
         if isinstance(field, exp.Anonymous):
             if macro_name == "DEF":
                 return self.expression(
-                    MacroDef, this=field.expressions[0], expression=field.expressions[1]
+                    MacroDef,
+                    this=field.expressions[0],
+                    expression=field.expressions[1],
+                    comments=comments,
                 )
             if macro_name == "SQL":
                 into = field.expressions[1].this.lower() if len(field.expressions) > 1 else None
-                return self.expression(MacroSQL, this=field.expressions[0], into=into)
+                return self.expression(
+                    MacroSQL, this=field.expressions[0], into=into, comments=comments
+                )
         else:
-            field = exp.Anonymous(this=field.sql_name(), expressions=list(field.args.values()))
+            field = self.expression(
+                exp.Anonymous,
+                this=field.sql_name(),
+                expressions=list(field.args.values()),
+                comments=comments,
+            )
 
-        return self.expression(MacroFunc, this=field)
+        return self.expression(MacroFunc, this=field, comments=comments)
 
     if field is None:
         return None
 
     if field.is_string or (isinstance(field, exp.Identifier) and field.quoted):
-        return self.expression(MacroStrReplace, this=exp.Literal.string(field.this))
+        return self.expression(
+            MacroStrReplace, this=exp.Literal.string(field.this), comments=comments
+        )
 
     if "@" in field.this:
         return field
-    return self.expression(MacroVar, this=field.this)
+    return self.expression(MacroVar, this=field.this, comments=comments)
 
 
 KEYWORD_MACROS = {"WITH", "JOIN", "WHERE", "GROUP_BY", "HAVING", "ORDER_BY", "LIMIT"}
@@ -778,7 +791,11 @@ def extend_sqlglot() -> None:
                 }
             )
 
-            generator.WITH_SEPARATED_COMMENTS = (*generator.WITH_SEPARATED_COMMENTS, Model)
+            generator.WITH_SEPARATED_COMMENTS = (
+                *generator.WITH_SEPARATED_COMMENTS,
+                Model,
+                MacroDef,
+            )
 
     _override(Parser, _parse_statement)
     _override(Parser, _parse_join)
