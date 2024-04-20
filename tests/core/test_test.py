@@ -3,6 +3,7 @@ from __future__ import annotations
 import datetime
 import typing as t
 from pathlib import Path
+from unittest.mock import call
 
 import pandas as pd
 import pytest
@@ -914,15 +915,21 @@ test_foo:
         ),
         context=Context(config=Config(model_defaults=ModelDefaultsConfig(dialect="duckdb"))),
     )
+    test._test_schema = f"sqlmesh_test_jzngz56a"
 
     spy_execute = mocker.spy(test.engine_adapter, "_execute")
     _check_successful_or_raise(test.run())
 
-    spy_execute.assert_called_with(
-        "SELECT "
-        """CAST('2023-01-01 12:05:03+00:00' AS DATE) AS "cur_date", """
-        """CAST('2023-01-01 12:05:03+00:00' AS TIME) AS "cur_time", """
-        '''CAST('2023-01-01 12:05:03+00:00' AS TIMESTAMP) AS "cur_timestamp"''',
+    spy_execute.assert_has_calls(
+        [
+            call(
+                "SELECT "
+                """CAST('2023-01-01 12:05:03+00:00' AS DATE) AS "cur_date", """
+                """CAST('2023-01-01 12:05:03+00:00' AS TIME) AS "cur_time", """
+                '''CAST('2023-01-01 12:05:03+00:00' AS TIMESTAMP) AS "cur_timestamp"'''
+            ),
+            call('DROP SCHEMA IF EXISTS "sqlmesh_test_jzngz56a" CASCADE'),
+        ]
     )
 
     @model("py_model", columns={"ts1": "timestamptz", "ts2": "timestamptz"})
