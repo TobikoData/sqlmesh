@@ -12,6 +12,7 @@ another remote environment and determine if nodes have been added, removed, or m
 
 from __future__ import annotations
 
+import logging
 import typing as t
 from functools import cached_property
 
@@ -21,6 +22,8 @@ from sqlmesh.utils.pydantic import PydanticModel
 
 if t.TYPE_CHECKING:
     from sqlmesh.core.state_sync import StateReader
+
+logger = logging.getLogger(__name__)
 
 
 class ContextDiff(PydanticModel):
@@ -334,4 +337,8 @@ class ContextDiff(PydanticModel):
             return ""
 
         new, old = self.modified_snapshots[name]
-        return old.node.text_diff(new.node)
+        try:
+            return old.node.text_diff(new.node)
+        except SQLMeshError as e:
+            logger.warning("Failed to diff model '%s': %s", name, str(e))
+            return ""
