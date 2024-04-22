@@ -3731,3 +3731,31 @@ def test_render_quote_identifiers(dialect: str, kind: str) -> None:
         model.render_query_or_raise().sql(dialect="duckdb")
         == 'SELECT "a" AS "a", "b" AS "b", "c" AS "c" FROM "source_table" AS "source_table"'
     )
+
+
+def test_this_model() -> None:
+    expressions = d.parse(
+        """
+        MODEL (
+            name db.table,
+        );
+
+        JINJA_STATEMENT_BEGIN;
+        COPY {{ this_model }} TO 'a';
+        JINJA_END;
+
+        JINJA_QUERY_BEGIN;
+        SELECT '{{ this_model }}' as x
+        JINJA_END;
+
+        JINJA_STATEMENT_BEGIN;
+        COPY {{ this_model }} TO 'b';
+        JINJA_END;
+        """
+    )
+    model = load_sql_based_model(expressions)
+
+    assert model.render_query_or_raise().sql() == '''SELECT '"db"."table"' AS "x"'''
+
+    assert model.render_pre_statements()[0].sql() == """COPY "db"."table" TO 'a'"""
+    assert model.render_post_statements()[0].sql() == """COPY "db"."table" TO 'b'"""
