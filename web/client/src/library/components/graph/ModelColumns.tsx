@@ -721,7 +721,7 @@ function ColumnSource({
           <CodeEditorDefault
             content={source as string}
             type={EnumFileExtensions.SQL}
-            className="w-full h-full text-xs rounded-lg scrollbar scrollbar--vertical scrollbar--horizontal overflow-auto max-w-[40rem] h-[25rem]"
+            className="w-full h-[25rem] text-xs rounded-lg scrollbar scrollbar--vertical scrollbar--horizontal overflow-auto max-w-[40rem]"
             extensions={modelExtensions}
           />
         </Popover.Panel>

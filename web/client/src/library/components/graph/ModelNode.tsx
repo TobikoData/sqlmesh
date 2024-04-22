@@ -206,7 +206,7 @@ export default function ModelNode({
       />
       {showColumns && (
         <ModelColumns
-          className="rounded-b-lg bg-theme-lighter text-xs"
+          className="nowheel rounded-b-lg bg-theme-lighter text-xs"
           nodeId={id}
           columns={columns}
           disabled={shouldDisableColumns}
