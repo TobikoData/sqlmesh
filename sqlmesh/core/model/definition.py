@@ -902,6 +902,7 @@ class _SqlBasedModel(_Model):
                 python_env=self.python_env,
                 only_execution_time=self.kind.only_execution_time,
                 default_catalog=self.default_catalog,
+                model_fqn=self.fqn,
             )
         return self.__statement_renderers[expression_key]
 
