@@ -1670,7 +1670,7 @@ def create_seed_model(
         path=path,
         seed=seed,
         kind=seed_kind,
-        depends_on=kwargs.pop("depends_on", set()),
+        depends_on=kwargs.pop("depends_on", None),
         python_env=python_env,
         jinja_macros=jinja_macros,
         pre_statements=pre_statements,
