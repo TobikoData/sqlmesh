@@ -3,7 +3,7 @@ import typing as t
 from unittest import mock
 
 import pytest
-from sqlglot import exp, parse_one
+from sqlglot import MappingSchema, exp, parse_one
 
 from sqlmesh.core.dialect import StagedFilePath
 from sqlmesh.core.macros import MacroEvaluator, macro
@@ -33,7 +33,15 @@ def macro_evaluator() -> MacroEvaluator:
     )
 
 
-def test_case(macro_evaluator):
+def test_star(assert_exp_eq) -> None:
+    sql = """SELECT @STAR(foo) FROM foo"""
+    expected_sql = """SELECT CAST([foo].[a] AS DATETIMEOFFSET) AS [a] FROM foo"""
+    schema = MappingSchema({"foo": {"a": "datetimeoffset"}}, dialect="tsql")
+    evaluator = MacroEvaluator(schema=schema, dialect="tsql")
+    assert_exp_eq(evaluator.transform(parse_one(sql, read="tsql")), expected_sql, dialect="tsql")
+
+
+def test_case(macro_evaluator: MacroEvaluator) -> None:
     assert macro.get_registry()["upper"]
 
 
