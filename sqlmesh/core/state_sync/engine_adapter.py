@@ -917,6 +917,8 @@ class EngineAdapterStateSync(CommonStateSyncMixin, StateSync):
                 migration.migrate(self, default_catalog=default_catalog)
             if migrate_rows:
                 self._migrate_rows(promoted_snapshots_only)
+                # Cleanup plan DAGs since we currently don't migrate snapshot records that are in there.
+                self.engine_adapter.delete_from(self.plan_dags_table, "TRUE")
             self._update_versions()
         except Exception as e:
             if skip_backup:
