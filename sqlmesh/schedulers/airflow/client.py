@@ -208,7 +208,7 @@ class AirflowClient(BaseAirflowClient):
             no_gaps=no_gaps,
             skip_backfill=skip_backfill,
             request_id=request_id,
-            restatements=restatements or {},
+            restatements={s.name: i for s, i in (restatements or {}).items()},
             notification_targets=notification_targets or [],
             backfill_concurrent_tasks=backfill_concurrent_tasks,
             ddl_concurrent_tasks=ddl_concurrent_tasks,
