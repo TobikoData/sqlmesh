@@ -22,25 +22,37 @@ if t.TYPE_CHECKING:
 
 class BasePostgresEngineAdapter(EngineAdapter):
     DEFAULT_BATCH_SIZE = 400
-    COLUMNS_TABLE = "information_schema.columns"
     CATALOG_SUPPORT = CatalogSupport.SINGLE_CATALOG_ONLY
     COMMENT_CREATION_TABLE = CommentCreationTable.COMMENT_COMMAND_ONLY
     COMMENT_CREATION_VIEW = CommentCreationView.COMMENT_COMMAND_ONLY
+
+    def _columns_query(self, table: exp.Table) -> exp.Select:
+        sql = (
+            exp.select(
+                "attname AS column_name",
+                "pg_catalog.format_type(atttypid, atttypmod) AS data_type",
+            )
+            .from_("pg_catalog.pg_attribute")
+            .join("pg_catalog.pg_class", on="oid = attrelid")
+            .join("pg_catalog.pg_namespace", on="oid = relnamespace")
+            .where(
+                exp.and_(
+                    "attnum > 0",
+                    "NOT attisdropped",
+                    exp.column("nspname").eq(table.alias_or_name),
+                )
+            )
+        )
+        if table.args.get("db"):
+            sql = sql.where(exp.column("relname").eq(table.args["db"].name))
+        return sql
 
     def columns(
         self, table_name: TableName, include_pseudo_columns: bool = False
     ) -> t.Dict[str, exp.DataType]:
         """Fetches column names and types for the target table."""
         table = exp.to_table(table_name)
-        sql = (
-            exp.select("column_name", "data_type")
-            .from_(self.COLUMNS_TABLE)
-            .where(f"table_name = '{table.alias_or_name}'")
-        )
-        if table.args.get("db"):
-            sql = sql.where(f"table_schema = '{table.args['db'].name}'")
-
-        self.execute(sql)
+        self.execute(self._columns_query(table))
         resp = self.cursor.fetchall()
         if not resp:
             raise SQLMeshError("Could not get columns for table '%s'. Table not found.", table_name)

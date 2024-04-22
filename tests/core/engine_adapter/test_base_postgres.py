@@ -16,7 +16,12 @@ def test_columns(make_mocked_engine_adapter: t.Callable):
 
     resp = adapter.columns("db.table")
     adapter.cursor.execute.assert_called_once_with(
-        """SELECT "column_name", "data_type" FROM "information_schema"."columns" WHERE "table_name" = 'table' AND "table_schema" = 'db'"""
+        'SELECT "attname" AS "column_name", '
+        '"pg_catalog".FORMAT_TYPE("atttypid", "atttypmod") AS "data_type" '
+        'FROM "pg_catalog"."pg_attribute" '
+        'JOIN "pg_catalog"."pg_class" ON "oid" = "attrelid" '
+        'JOIN "pg_catalog"."pg_namespace" ON "oid" = "relnamespace" '
+        """WHERE ("attnum" > 0 AND NOT "attisdropped" AND "nspname" = 'table') AND "relname" = 'db'"""
     )
     assert resp == {"col": exp.DataType.build("INT")}
 
