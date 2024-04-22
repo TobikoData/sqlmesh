@@ -3,6 +3,9 @@
 ## Abstract Syntax Tree
 A tree representation of the syntactic structure of source code. Each tree node represents a construct that occurs. The tree is abstract because it does not represent every detail appearing in the actual syntax; it also does not have a standard representation.
 
+## Backfill
+Load or refresh model data, triggered by a sqlmesh plan command.
+
 ## Catalog
 A catalog is a collection of schemas. A schema is a collection of database objects such as tables and views.
 
@@ -27,6 +30,9 @@ Data transformation is the process of converting data from one format to another
 ## Data warehouse
 The repository that houses the single source of truth where data is stored, which is integrated from various sources. This repository, normally a relational database, is optimized for handling large volumes of data.
 
+## Direct Modification
+A change to a model's definition from the user instead of being inherited from an upstream dependency like [Indirect Modification](#indirect-modification).
+
 ## ELT
 Acronym for Extract, Load, and Transform. The process of retrieving data from various sources, loading it into a data warehouse, and then transforming it into a usable and reliable resource for data practitioners.
 
@@ -41,6 +47,9 @@ The property that, given a particular operation, the same outputs will be produc
 
 ## Incremental Loads
 Incremental loads are a type of data refresh that only updates the data that has changed since the last refresh. This is significantly faster and more efficient than a full refresh loads. SQLMesh encourages developers to incrementally load when possible by offering easy to use variables and macros to help define your incremental models. See [Model Kinds](models/model_kinds.md) for more information.
+
+## Indirect Modification
+A change to model's upstream dependency and not to the model itself like a [Direct Modification](#direct-modification).
 
 ## Integration
 Combining data from various sources (such as from a data warehouse) into one unified view.
