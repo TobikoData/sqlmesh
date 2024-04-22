@@ -682,9 +682,9 @@ def star(
     quoted = quote_identifiers.this
 
     return [
-        exp.cast(exp.column(column, table=alias.name, quoted=quoted), type_).as_(
-            f"{prefix.this}{column}{suffix.this}", quoted=quoted
-        )
+        exp.cast(
+            exp.column(column, table=alias.name, quoted=quoted), type_, dialect=evaluator.dialect
+        ).as_(f"{prefix.this}{column}{suffix.this}", quoted=quoted)
         for column, type_ in evaluator.columns_to_types(relation).items()
         if column not in exclude
     ]
@@ -794,7 +794,7 @@ def union(
     }
 
     projections = [
-        exp.cast(column, type_).as_(column)
+        exp.cast(column, type_, dialect=evaluator.dialect).as_(column)
         for column, type_ in evaluator.columns_to_types(tables[0]).items()
         if column in columns
     ]
