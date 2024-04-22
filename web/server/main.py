@@ -2,6 +2,8 @@ import asyncio
 import mimetypes
 import pathlib
 import threading
+from collections.abc import AsyncIterator
+from contextlib import asynccontextmanager
 
 from fastapi import FastAPI, Request
 from fastapi.responses import HTMLResponse, JSONResponse
@@ -14,20 +16,9 @@ from web.server.exceptions import ApiException
 from web.server.settings import get_context_or_raise, get_settings
 from web.server.watcher import watch_project
 
-app = FastAPI()
 
-app.include_router(api_router, prefix="/api")
-WEB_DIRECTORY = pathlib.Path(__file__).parent.parent
-
-# Starlette uses mimetypes.guess_type to determine a file response's content type. Since this method
-# is not consistent across different computers, operating systems, etc., we enumerate some of the
-# more common ones we use here.
-mimetypes.add_type("application/javascript", ".js")
-mimetypes.add_type("text/css", ".css")
-
-
-@app.on_event("startup")
-async def startup_event() -> None:
+@asynccontextmanager
+async def lifespan(app: FastAPI) -> AsyncIterator:
     async def dispatch() -> None:
         while True:
             item = await api_console.queue.get()
@@ -40,13 +31,24 @@ async def startup_event() -> None:
     app.state.watch_task = asyncio.create_task(watch_project())
     app.state.circuit_breaker = threading.Event()
 
+    yield
 
-@app.on_event("shutdown")
-async def shutdown_event() -> None:
     app.state.dispatch_task.cancel()
     app.state.watch_task.cancel()
     context = await get_context_or_raise(settings=get_settings())
     context.close()
+
+
+app = FastAPI(lifespan=lifespan)
+
+app.include_router(api_router, prefix="/api")
+WEB_DIRECTORY = pathlib.Path(__file__).parent.parent
+
+# Starlette uses mimetypes.guess_type to determine a file response's content type. Since this method
+# is not consistent across different computers, operating systems, etc., we enumerate some of the
+# more common ones we use here.
+mimetypes.add_type("application/javascript", ".js")
+mimetypes.add_type("text/css", ".css")
 
 
 @app.exception_handler(ApiException)
