@@ -34,11 +34,20 @@ class RedshiftEngineAdapter(
     NonTransactionalTruncateMixin,
 ):
     DIALECT = "redshift"
-    COLUMNS_TABLE = "svv_columns"  # Includes late-binding views
     CURRENT_CATALOG_EXPRESSION = exp.func("current_database")
     # Redshift doesn't support comments for VIEWs WITH NO SCHEMA BINDING (which we always use)
     COMMENT_CREATION_VIEW = CommentCreationView.UNSUPPORTED
     SUPPORTS_REPLACE_TABLE = False
+
+    def _columns_query(self, table: exp.Table) -> exp.Select:
+        sql = (
+            exp.select("column_name", "data_type")
+            .from_("svv_columns")  # Includes late-binding views
+            .where(exp.column("table_name").eq(table.alias_or_name))
+        )
+        if table.args.get("db"):
+            sql = sql.where(exp.column("table_schema").eq(table.args["db"].name))
+        return sql
 
     @property
     def cursor(self) -> t.Any:
