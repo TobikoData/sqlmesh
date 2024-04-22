@@ -3,6 +3,7 @@ from __future__ import annotations
 import datetime
 import typing as t
 from pathlib import Path
+from unittest.mock import call
 
 import pandas as pd
 import pytest
@@ -104,9 +105,10 @@ def full_model_with_two_ctes(request) -> SqlModel:
 
 
 def test_ctes(sushi_context: Context, full_model_with_two_ctes: SqlModel) -> None:
-    test = _create_test(
-        body=load_yaml(
-            """
+    _check_successful_or_raise(
+        _create_test(
+            body=load_yaml(
+                """
 test_foo:
   model: sushi.foo
   inputs:
@@ -123,20 +125,13 @@ test_foo:
   vars:
     start: 2022-01-01
     end: 2022-01-01
-            """
-        ),
-        test_name="test_foo",
-        model=sushi_context.upsert_model(full_model_with_two_ctes),
-        context=sushi_context,
+                """
+            ),
+            test_name="test_foo",
+            model=sushi_context.upsert_model(full_model_with_two_ctes),
+            context=sushi_context,
+        ).run()
     )
-
-    random_id = "jzngz56a"
-    test._test_id = random_id
-    _check_successful_or_raise(test.run())
-
-    assert len(test._fixture_table_cache) == len(sushi_context.models) + 1
-    for table in test._fixture_table_cache.values():
-        assert table.name.endswith(f"__fixture__{random_id}")
 
 
 def test_ctes_only(sushi_context: Context, full_model_with_two_ctes: SqlModel) -> None:
@@ -581,15 +576,13 @@ test_child:
         """
     )
     test = _create_test(body, "test_child", child, sushi_context)
-
-    random_id = "jzngz56a"
-    test._test_id = random_id
+    test._test_schema = "sqlmesh_test_jzngz56a"
 
     spy_execute = mocker.spy(test.engine_adapter, "_execute")
     _check_successful_or_raise(test.run())
 
     spy_execute.assert_any_call(
-        f'CREATE OR REPLACE VIEW "memory"."sushi"."parent__fixture__{random_id}" ("s", "a", "b") AS '
+        f'CREATE OR REPLACE VIEW "memory"."sqlmesh_test_jzngz56a"."memory__sushi__parent" ("s", "a", "b") AS '
         "SELECT "
         'CAST("s" AS STRUCT("d" DATE)) AS "s", '
         'CAST("a" AS INT) AS "a", '
@@ -922,15 +915,21 @@ test_foo:
         ),
         context=Context(config=Config(model_defaults=ModelDefaultsConfig(dialect="duckdb"))),
     )
+    test._test_schema = f"sqlmesh_test_jzngz56a"
 
     spy_execute = mocker.spy(test.engine_adapter, "_execute")
     _check_successful_or_raise(test.run())
 
-    spy_execute.assert_called_with(
-        "SELECT "
-        """CAST('2023-01-01 12:05:03+00:00' AS DATE) AS "cur_date", """
-        """CAST('2023-01-01 12:05:03+00:00' AS TIME) AS "cur_time", """
-        '''CAST('2023-01-01 12:05:03+00:00' AS TIMESTAMP) AS "cur_timestamp"''',
+    spy_execute.assert_has_calls(
+        [
+            call(
+                "SELECT "
+                """CAST('2023-01-01 12:05:03+00:00' AS DATE) AS "cur_date", """
+                """CAST('2023-01-01 12:05:03+00:00' AS TIME) AS "cur_time", """
+                '''CAST('2023-01-01 12:05:03+00:00' AS TIMESTAMP) AS "cur_timestamp"'''
+            ),
+            call('DROP SCHEMA IF EXISTS "sqlmesh_test_jzngz56a" CASCADE'),
+        ]
     )
 
     @model("py_model", columns={"ts1": "timestamptz", "ts2": "timestamptz"})
@@ -969,6 +968,33 @@ def test_successes(sushi_context: Context) -> None:
     assert len(successful_tests) == 3
     assert "test_order_items" in successful_tests
     assert "test_customer_revenue_by_day" in successful_tests
+
+
+def test_create_external_model_fixture(sushi_context: Context) -> None:
+    test = _create_test(
+        body=load_yaml(
+            """
+test_foo:
+  model: sushi.foo
+  inputs:
+    c.db.external:
+      - x: 1
+  outputs:
+    query:
+      - x: 1
+            """
+        ),
+        test_name="test_foo",
+        model=_create_model("SELECT x FROM c.db.external"),
+        context=sushi_context,
+    )
+    test._test_schema = f"sqlmesh_test_jzngz56a"
+    _check_successful_or_raise(test.run())
+
+    assert len(test._fixture_table_cache) == len(sushi_context.models) + 1
+    for table in test._fixture_table_cache.values():
+        assert table.catalog == "memory"
+        assert table.db == f"sqlmesh_test_jzngz56a"
 
 
 def test_test_generation(tmp_path: Path) -> None:

@@ -70,8 +70,8 @@ class ModelTest(unittest.TestCase):
 
         self._validate_and_normalize_test()
 
-        # This ID is appended to each input fixture name to avoid concurrency issues
-        self._test_id = random_id(short=True)
+        # The test schema name is randomized to avoid concurrency issues
+        self._test_schema = f"sqlmesh_test_{random_id(short=True)}"
 
         self._engine_adapter_dialect = Dialect.get_or_raise(self.engine_adapter.dialect)
         self._transforms = self._engine_adapter_dialect.generator_class.TRANSFORMS
@@ -131,10 +131,9 @@ class ModelTest(unittest.TestCase):
                         known_columns_to_types[col] = v_type
 
             test_fixture_table = self._test_fixture_table(name)
-            if test_fixture_table.db:
-                self.engine_adapter.create_schema(
-                    schema_(test_fixture_table.args["db"], test_fixture_table.args.get("catalog"))
-                )
+            self.engine_adapter.create_schema(
+                schema_(test_fixture_table.args["db"], test_fixture_table.args.get("catalog"))
+            )
 
             df = _create_df(rows, columns=known_columns_to_types)
             self.engine_adapter.create_view(test_fixture_table, df, known_columns_to_types)
@@ -142,8 +141,7 @@ class ModelTest(unittest.TestCase):
     def tearDown(self) -> None:
         """Drop all fixture tables."""
         if not self.preserve_fixtures:
-            for name in self.body.get("inputs", {}):
-                self.engine_adapter.drop_view(self._fixture_table_cache[name])
+            self.engine_adapter.drop_schema(self._test_schema, cascade=True)
 
     def assert_equal(
         self,
@@ -366,7 +364,12 @@ class ModelTest(unittest.TestCase):
         table = self._fixture_table_cache.get(name)
         if not table:
             table = exp.to_table(name, dialect=self.dialect)
-            table.this.set("this", f"{table.this.this}__fixture__{self._test_id}")
+
+            # We change both the schema and the catalog, so we need to ensure there are no name clashes
+            table.this.set("this", "__".join(part.name for part in table.parts))
+            table.set("db", exp.to_identifier(self._test_schema))
+            table.set("catalog", exp.to_identifier(self.default_catalog))
+
             self._fixture_table_cache[name] = table
 
         return table
