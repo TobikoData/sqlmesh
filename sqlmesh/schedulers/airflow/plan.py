@@ -87,6 +87,13 @@ def create_plan_dag_spec(
     stored_snapshots = state_sync.get_snapshots([*new_snapshots, *request.environment.snapshots])
     all_snapshots = {**new_snapshots, **stored_snapshots}
 
+    all_snaphots_by_name = {s.name: s for s in all_snapshots.values()}
+    restatements = {
+        all_snaphots_by_name[n].snapshot_id: i
+        for n, i in request.restatements.items()
+        if n in all_snaphots_by_name
+    }
+
     duplicated_snapshots = set(stored_snapshots).intersection(new_snapshots)
     if duplicated_snapshots:
         raise SQLMeshError(
@@ -102,9 +109,9 @@ def create_plan_dag_spec(
 
     if request.restatements:
         intervals_to_remove = [
-            (s, request.restatements[s.snapshot_id])
+            (s, restatements[s.snapshot_id])
             for s in all_snapshots.values()
-            if s.snapshot_id in request.restatements and s.snapshot_id not in new_snapshots
+            if s.snapshot_id in restatements and s.snapshot_id not in new_snapshots
         ]
         state_sync.remove_interval(
             intervals_to_remove,
@@ -125,7 +132,7 @@ def create_plan_dag_spec(
             end=end,
             execution_time=now(),
             deployability_index=deployability_index_for_evaluation,
-            restatements=request.restatements,
+            restatements=restatements,
             end_bounded=request.end_bounded,
         )
     else:
