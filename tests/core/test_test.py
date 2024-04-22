@@ -966,7 +966,7 @@ test_py_model:
 def test_successes(sushi_context: Context) -> None:
     results = sushi_context.test()
     successful_tests = [success.test_name for success in results.successes]  # type: ignore
-    assert len(successful_tests) == 2
+    assert len(successful_tests) == 3
     assert "test_order_items" in successful_tests
     assert "test_customer_revenue_by_day" in successful_tests
 

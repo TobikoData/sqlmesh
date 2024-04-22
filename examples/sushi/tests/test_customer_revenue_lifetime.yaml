@@ -1,0 +1,27 @@
+test_customer_revenue_lifetime:
+  model: sushi.customer_revenue_lifetime
+  inputs:
+    sushi.order_items:
+      rows:
+        - order_id: 1
+          item_id: 12
+          quantity: 1
+          event_date: 2000-01-02
+    sushi.items:
+      rows:
+        - id: 12
+          price: 3.99
+          event_date: 2000-01-02
+    sushi.orders:
+      rows:
+        - id: 1
+          customer_id: 123
+          event_date: 2000-01-02
+  outputs:
+    query:
+      rows:
+        - customer_id: 123
+          revenue: 3.99
+          event_date: 2000-01-02
+  vars:
+    end: 2000-01-02

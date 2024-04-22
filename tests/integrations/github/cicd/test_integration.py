@@ -129,7 +129,7 @@ def test_merge_pr_has_non_breaking_change(
     assert test_checks_runs[2]["output"]["title"] == "Tests Passed"
     assert (
         test_checks_runs[2]["output"]["summary"].strip()
-        == "**Successfully Ran `2` Tests Against `duckdb`**"
+        == "**Successfully Ran `3` Tests Against `duckdb`**"
     )
 
     assert "SQLMesh - PR Environment Synced" in controller._check_run_mapping
@@ -327,7 +327,7 @@ def test_merge_pr_has_non_breaking_change_diff_start(
     assert test_checks_runs[2]["output"]["title"] == "Tests Passed"
     assert (
         test_checks_runs[2]["output"]["summary"].strip()
-        == "**Successfully Ran `2` Tests Against `duckdb`**"
+        == "**Successfully Ran `3` Tests Against `duckdb`**"
     )
 
     assert "SQLMesh - PR Environment Synced" in controller._check_run_mapping
@@ -529,7 +529,7 @@ def test_merge_pr_has_non_breaking_change_no_categorization(
     assert test_checks_runs[2]["output"]["title"] == "Tests Passed"
     assert (
         test_checks_runs[2]["output"]["summary"].strip()
-        == "**Successfully Ran `2` Tests Against `duckdb`**"
+        == "**Successfully Ran `3` Tests Against `duckdb`**"
     )
 
     assert "SQLMesh - PR Environment Synced" in controller._check_run_mapping
@@ -676,7 +676,7 @@ def test_merge_pr_has_no_changes(
     assert test_checks_runs[2]["output"]["title"] == "Tests Passed"
     assert (
         test_checks_runs[2]["output"]["summary"].strip()
-        == "**Successfully Ran `2` Tests Against `duckdb`**"
+        == "**Successfully Ran `3` Tests Against `duckdb`**"
     )
 
     assert "SQLMesh - PR Environment Synced" in controller._check_run_mapping
@@ -842,7 +842,7 @@ def test_no_merge_since_no_deploy_signal(
     assert test_checks_runs[2]["output"]["title"] == "Tests Passed"
     assert (
         test_checks_runs[2]["output"]["summary"].strip()
-        == "**Successfully Ran `2` Tests Against `duckdb`**"
+        == "**Successfully Ran `3` Tests Against `duckdb`**"
     )
 
     assert "SQLMesh - PR Environment Synced" in controller._check_run_mapping
@@ -1025,7 +1025,7 @@ def test_no_merge_since_no_deploy_signal_no_approvers_defined(
     assert test_checks_runs[2]["output"]["title"] == "Tests Passed"
     assert (
         test_checks_runs[2]["output"]["summary"].strip()
-        == "**Successfully Ran `2` Tests Against `duckdb`**"
+        == "**Successfully Ran `3` Tests Against `duckdb`**"
     )
 
     assert "SQLMesh - PR Environment Synced" in controller._check_run_mapping
@@ -1201,7 +1201,7 @@ def test_deploy_comment_pre_categorized(
     assert test_checks_runs[2]["output"]["title"] == "Tests Passed"
     assert (
         test_checks_runs[2]["output"]["summary"].strip()
-        == "**Successfully Ran `2` Tests Against `duckdb`**"
+        == "**Successfully Ran `3` Tests Against `duckdb`**"
     )
 
     assert "SQLMesh - PR Environment Synced" in controller._check_run_mapping
@@ -1378,7 +1378,7 @@ def test_error_msg_when_applying_plan_with_bug(
     assert test_checks_runs[2]["output"]["title"] == "Tests Passed"
     assert (
         test_checks_runs[2]["output"]["summary"].strip()
-        == "**Successfully Ran `2` Tests Against `duckdb`**"
+        == "**Successfully Ran `3` Tests Against `duckdb`**"
     )
 
     assert "SQLMesh - PR Environment Synced" in controller._check_run_mapping
@@ -1539,7 +1539,7 @@ def test_overlapping_changes_models(
     assert test_checks_runs[2]["output"]["title"] == "Tests Passed"
     assert (
         test_checks_runs[2]["output"]["summary"].strip()
-        == "**Successfully Ran `2` Tests Against `duckdb`**"
+        == "**Successfully Ran `3` Tests Against `duckdb`**"
     )
 
     assert "SQLMesh - PR Environment Synced" in controller._check_run_mapping
@@ -1760,7 +1760,7 @@ def test_capture_console_errors(
     assert test_checks_runs[2]["output"]["title"] == "Tests Passed"
     assert (
         test_checks_runs[2]["output"]["summary"].strip()
-        == "**Successfully Ran `2` Tests Against `duckdb`**"
+        == "**Successfully Ran `3` Tests Against `duckdb`**"
     )
 
     assert "SQLMesh - PR Environment Synced" in controller._check_run_mapping
