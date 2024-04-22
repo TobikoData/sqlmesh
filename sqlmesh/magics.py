@@ -159,12 +159,14 @@ class SQLMeshMagics(Magics):
     def model(self, context: Context, line: str, sql: t.Optional[str] = None) -> None:
         """Renders the model and automatically fills in an editable cell with the model definition."""
         args = parse_argstring(self.model, line)
+
         model = context.get_model(args.model, raise_if_missing=True)
+        config = context.config_for_node(model)
 
         if sql:
-            config = context.config_for_node(model)
+            expressions = parse(sql, default_dialect=config.dialect)
             loaded = load_sql_based_model(
-                parse(sql, default_dialect=config.dialect),
+                expressions,
                 macros=context._macros,
                 jinja_macros=context._jinja_macros,
                 path=model._path,
@@ -176,11 +178,13 @@ class SQLMeshMagics(Magics):
 
             if loaded.name == args.model:
                 model = loaded
+        else:
+            with open(model._path, "r", encoding="utf-8") as file:
+                expressions = parse(file.read(), default_dialect=config.dialect)
 
-        context.upsert_model(model)
-        expressions = model.render_definition(include_python=False)
-
-        formatted = format_model_expressions(expressions, model.dialect)
+        formatted = format_model_expressions(
+            expressions, model.dialect, **config.format.generator_options
+        )
 
         self._shell.set_next_input(
             "\n".join(
