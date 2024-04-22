@@ -68,6 +68,9 @@ def test_apply_plan(mocker: MockerFixture, snapshot: Snapshot):
         request_id,
         models_to_backfill={'"test_model"'},
         directly_modified_snapshots=[snapshot.snapshot_id],
+        restatements={
+            snapshot.snapshot_id: (to_timestamp("2024-01-01"), to_timestamp("2024-01-02"))
+        },
     )
 
     apply_plan_mock.assert_called_once()
@@ -169,7 +172,10 @@ def test_apply_plan(mocker: MockerFixture, snapshot: Snapshot):
         "directly_modified_snapshots": [{"identifier": "2298286125", "name": '"test_model"'}],
         "indirectly_modified_snapshots": {},
         "removed_snapshots": [],
+        "restatements": {'"test_model"': [to_timestamp("2024-01-01"), to_timestamp("2024-01-02")]},
     }
+
+    common.PlanApplicationRequest.parse_raw(data["data"])
 
 
 def snapshot_url(snapshot_ids, key="ids") -> str:
