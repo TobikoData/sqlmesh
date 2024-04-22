@@ -326,6 +326,9 @@ class ModelTest(unittest.TestCase):
                 for name, values in sources.items()
             }
 
+        normalized_model_name = self._normalize_model_name(self.body["model"])
+        self.body["model"] = normalized_model_name
+
         if inputs:
             inputs = _normalize_sources(inputs)
             for name, values in inputs.items():
@@ -348,6 +351,9 @@ class ModelTest(unittest.TestCase):
                 if depends_on not in inputs:
                     _raise_error(f"Incomplete test, missing input model '{depends_on}'", self.path)
 
+            if self.model.depends_on_self and normalized_model_name not in inputs:
+                inputs[normalized_model_name] = {"rows": []}
+
             self.body["inputs"] = inputs
 
         if ctes:
@@ -355,8 +361,6 @@ class ModelTest(unittest.TestCase):
 
         if query or query == []:
             outputs["query"] = _normalize_rows(query, self.model.name, partial=partial)
-
-        self.body["model"] = self._normalize_model_name(self.body["model"])
 
     def _test_fixture_table(self, name: str) -> exp.Table:
         table = self._fixture_table_cache.get(name)

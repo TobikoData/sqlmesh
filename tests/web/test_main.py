@@ -513,7 +513,7 @@ def test_test(web_sushi_context: Context) -> None:
     response = client.get("/api/commands/test")
     assert response.status_code == 200
     response_json = response.json()
-    assert response_json["tests_run"] == 2
+    assert response_json["tests_run"] == 3
     assert response_json["failures"] == []
 
     # Single test
