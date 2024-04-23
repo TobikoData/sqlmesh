@@ -472,6 +472,9 @@ class PlanBuilder:
                                     indirectly_modified,
                                 )
 
+                # set to breaking if an indirect child has no directly modified parents
+                # that need a decision. this can happen when a revert to a parent causes
+                # an indirectly modified snapshot to be created because of a new parent
                 if (
                     not is_directly_modified
                     and not snapshot.version
@@ -481,18 +484,11 @@ class PlanBuilder:
                         for upstream in dag.upstream(s_id)
                     )
                 ):
-                    if self._context_diff.indirectly_modified(snapshot.name):
-                        # Set to breaking if an indirect child has no directly modified parents
-                        # that need a decision. this can happen when a revert to a parent causes
-                        # an indirectly modified snapshot to be created because of a new parent
-                        snapshot.categorize_as(
-                            SnapshotChangeCategory.FORWARD_ONLY
-                            if self._is_forward_only_model(s_id)
-                            else SnapshotChangeCategory.INDIRECT_BREAKING
-                        )
-                    else:
-                        # Metadata updated.
-                        snapshot.categorize_as(SnapshotChangeCategory.FORWARD_ONLY)
+                    snapshot.categorize_as(
+                        SnapshotChangeCategory.FORWARD_ONLY
+                        if self._is_forward_only_model(s_id)
+                        else SnapshotChangeCategory.INDIRECT_BREAKING
+                    )
 
             elif s_id in self._context_diff.added and self._is_new_snapshot(snapshot):
                 snapshot.categorize_as(
