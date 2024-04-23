@@ -33,18 +33,18 @@ class BasePostgresEngineAdapter(EngineAdapter):
                 "pg_catalog.format_type(atttypid, atttypmod) AS data_type",
             )
             .from_("pg_catalog.pg_attribute")
-            .join("pg_catalog.pg_class", on="oid = attrelid")
-            .join("pg_catalog.pg_namespace", on="oid = relnamespace")
+            .join("pg_catalog.pg_class", on="pg_class.oid = attrelid")
+            .join("pg_catalog.pg_namespace", on="pg_namespace.oid = relnamespace")
             .where(
                 exp.and_(
                     "attnum > 0",
                     "NOT attisdropped",
-                    exp.column("nspname").eq(table.alias_or_name),
+                    exp.column("relname").eq(table.alias_or_name),
                 )
             )
         )
         if table.args.get("db"):
-            sql = sql.where(exp.column("relname").eq(table.args["db"].name))
+            sql = sql.where(exp.column("nspname").eq(table.args["db"].name))
         return sql
 
     def columns(
