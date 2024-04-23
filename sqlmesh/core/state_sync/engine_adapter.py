@@ -645,26 +645,38 @@ class EngineAdapterStateSync(CommonStateSyncMixin, StateSync):
         execution_time: t.Optional[TimeLike] = None,
         remove_shared_versions: bool = False,
     ) -> None:
+        intervals_to_remove: t.Sequence[
+            t.Tuple[t.Union[SnapshotInfoLike, SnapshotIntervals], Interval]
+        ] = snapshot_intervals
         if remove_shared_versions:
-            name_version_mapping = {
-                s.name_version: (s, interval) for s, interval in snapshot_intervals
-            }
-            all_snapshots = self._get_snapshots_with_same_version(
-                [s[0] for s in snapshot_intervals]
-            )
-            snapshot_intervals = [
-                (snapshot, name_version_mapping[snapshot.name_version][1])
+            name_version_mapping = {s.name_version: interval for s, interval in snapshot_intervals}
+            all_snapshots = []
+            for where in self._snapshot_name_version_filter(name_version_mapping, alias=None):
+                all_snapshots.extend(
+                    [
+                        SnapshotIntervals(
+                            name=r[0], identifier=r[1], version=r[2], intervals=[], dev_intervals=[]
+                        )
+                        for r in self._fetchall(
+                            exp.select("name", "identifier", "version")
+                            .from_(self.intervals_table)
+                            .where(where)
+                        )
+                    ]
+                )
+            intervals_to_remove = [
+                (snapshot, name_version_mapping[snapshot.name_version])
                 for snapshot in all_snapshots
             ]
 
         if logger.isEnabledFor(logging.INFO):
-            snapshot_ids = ", ".join(str(s.snapshot_id) for s, _ in snapshot_intervals)
+            snapshot_ids = ", ".join(str(s.snapshot_id) for s, _ in intervals_to_remove)
             logger.info("Removing interval for snapshots: %s", snapshot_ids)
 
         for is_dev in (True, False):
             self.engine_adapter.insert_append(
                 self.intervals_table,
-                _intervals_to_df(snapshot_intervals, is_dev=is_dev, is_removed=True),
+                _intervals_to_df(intervals_to_remove, is_dev=is_dev, is_removed=True),
                 columns_to_types=self._interval_columns_to_types,
             )
 
@@ -1262,7 +1274,9 @@ class EngineAdapterStateSync(CommonStateSyncMixin, StateSync):
                 )
 
     def _snapshot_name_version_filter(
-        self, snapshot_name_versions: t.Iterable[SnapshotNameVersionLike], alias: str = "snapshots"
+        self,
+        snapshot_name_versions: t.Iterable[SnapshotNameVersionLike],
+        alias: t.Optional[str] = "snapshots",
     ) -> t.Iterator[exp.Condition]:
         name_versions = sorted({(s.name, s.version) for s in snapshot_name_versions})
         batches = self._snapshot_batches(name_versions)
@@ -1305,7 +1319,7 @@ class EngineAdapterStateSync(CommonStateSyncMixin, StateSync):
 
 
 def _intervals_to_df(
-    snapshot_intervals: t.Sequence[t.Tuple[SnapshotInfoLike, Interval]],
+    snapshot_intervals: t.Sequence[t.Tuple[t.Union[SnapshotInfoLike, SnapshotIntervals], Interval]],
     is_dev: bool,
     is_removed: bool,
 ) -> pd.DataFrame:

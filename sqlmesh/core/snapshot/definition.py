@@ -162,6 +162,10 @@ class SnapshotIntervals(PydanticModel, frozen=True):
     def snapshot_id(self) -> SnapshotId:
         return SnapshotId(name=self.name, identifier=self.identifier)
 
+    @property
+    def name_version(self) -> SnapshotNameVersion:
+        return SnapshotNameVersion(name=self.name, version=self.version)
+
 
 class SnapshotDataVersion(PydanticModel, frozen=True):
     fingerprint: SnapshotFingerprint

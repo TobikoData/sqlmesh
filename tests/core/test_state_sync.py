@@ -330,6 +330,49 @@ def test_remove_interval(state_sync: EngineAdapterStateSync, make_snapshot: t.Ca
     ]
 
 
+def test_remove_interval_missing_snapshot(
+    state_sync: EngineAdapterStateSync, make_snapshot: t.Callable
+) -> None:
+    snapshot_a = make_snapshot(
+        SqlModel(
+            name="a",
+            cron="@daily",
+            query=parse_one("select 1, ds"),
+        ),
+        version="a",
+    )
+    snapshot_b = make_snapshot(
+        SqlModel(
+            name="a",
+            cron="@daily",
+            query=parse_one("select 2::INT, '2022-01-01'::TEXT AS ds"),
+        ),
+        version="a",
+    )
+    # Only add snapshot_a to simulate that snapshot_b is missing
+    state_sync.push_snapshots([snapshot_a])
+    state_sync.add_interval(snapshot_a, "2020-01-01", "2020-01-10")
+    state_sync.add_interval(snapshot_b, "2020-01-11", "2020-01-30")
+
+    snapshots = state_sync.get_snapshots([snapshot_a, snapshot_b])
+    assert len(snapshots) == 1
+    assert snapshots[snapshot_a.snapshot_id].intervals == [
+        (to_timestamp("2020-01-01"), to_timestamp("2020-01-31")),
+    ]
+
+    state_sync.remove_interval(
+        [(snapshot_a, snapshot_a.inclusive_exclusive("2020-01-15", "2020-01-17"))],
+        remove_shared_versions=True,
+    )
+
+    snapshots = state_sync.get_snapshots([snapshot_a, snapshot_b])
+    assert len(snapshots) == 1
+    assert snapshots[snapshot_a.snapshot_id].intervals == [
+        (to_timestamp("2020-01-01"), to_timestamp("2020-01-15")),
+        (to_timestamp("2020-01-18"), to_timestamp("2020-01-31")),
+    ]
+
+
 def test_refresh_snapshot_intervals(
     state_sync: EngineAdapterStateSync, make_snapshot: t.Callable
 ) -> None:
