@@ -222,3 +222,12 @@ class MSSQLEngineAdapter(
     def _to_sql(self, expression: exp.Expression, quote: bool = True, **kwargs: t.Any) -> str:
         sql = super()._to_sql(expression, quote=quote, **kwargs)
         return f"{sql};"
+
+    def _rename_table(
+        self,
+        old_table_name: TableName,
+        new_table_name: TableName,
+    ) -> None:
+        # The function that renames tables in MSSQL takes string literals as arguments instead of identifiers,
+        # so we shouldn't quote the identifiers.
+        self.execute(exp.rename_table(old_table_name, new_table_name), quote_identifiers=False)
