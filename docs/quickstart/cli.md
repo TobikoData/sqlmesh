@@ -347,7 +347,7 @@ Directly Modified: sqlmesh_example__dev.incremental_model (Non-breaking)
 └── Indirectly Modified Children:
     └── sqlmesh_example__dev.full_model (Indirect Non-breaking)
 Models needing backfill (missing dates):
-└── sqlmesh_example__dev.incremental_model: 2020-01-01 - 2024-01-22
+└── sqlmesh_example__dev.incremental_model: 2020-01-01 - 2023-05-31
 Enter the backfill start date (eg. '1 year', '2020-01-01') or blank to backfill from the beginning of history:
 ```
 
