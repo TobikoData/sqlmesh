@@ -217,6 +217,123 @@ SELECT
 FROM table"""
     )
 
+@pytest.mark.slow
+def test_model(notebook, sushi_context):
+    with capture_output():
+        test_model_path = sushi_context.path / "models" / "test_model.sql"
+        test_model_path.write_text("MODEL(name db.test); SELECT 1 AS foo FROM table")
+        sushi_context.load()
+    assert test_model_path.read_text() == "MODEL(name db.test); SELECT 1 AS foo FROM table"
+    with capture_output() as output:
+        notebook.run_line_magic(magic_name="model", line="db.test")
+
+    assert not output.stdout
+    assert not output.stderr
+    assert len(output.outputs) == 1
+    assert (
+        test_model_path.read_text()
+        == """MODEL (
+  name db.test
+);
+
+SELECT
+  1 AS foo
+FROM table"""
+    )
+
+@pytest.mark.slow
+def test_view_model(notebook, sushi_context):
+    with capture_output():
+        test_model_path = sushi_context.path / "models" / "test_model.sql"
+        test_model_path.write_text("MODEL(name db.test, kind VIEW); SELECT 1::int AS foo FROM table")
+        sushi_context.load()
+    assert test_model_path.read_text() == "MODEL(name db.test, kind VIEW); SELECT 1::int AS foo FROM table"
+    with capture_output() as output:
+        notebook.run_line_magic(magic_name="model", line="db.test")
+
+    assert not output.stdout
+    assert not output.stderr
+    assert len(output.outputs) == 1
+    assert (
+        test_model_path.read_text()
+        == """MODEL (
+  name db.test,
+  kind VIEW
+);
+
+SELECT
+  1::INT AS foo
+FROM table"""
+    )
+
+@pytest.mark.slow
+def test_full_model(notebook, sushi_context):
+    with capture_output():
+        test_model_path = sushi_context.path / "models" / "test_model.sql"
+        test_model_path.write_text("MODEL(name db.test, kind FULL); SELECT 1::int AS foo FROM table")
+        sushi_context.load()
+    assert test_model_path.read_text() == "MODEL(name db.test, kind FULL); SELECT 1::int AS foo FROM table"
+    with capture_output() as output:
+        notebook.run_line_magic(magic_name="model", line="db.test")
+
+    assert not output.stdout
+    assert not output.stderr
+    assert len(output.outputs) == 1
+    assert (
+        test_model_path.read_text()
+        == """MODEL (
+  name db.test,
+  kind FULL
+);
+
+SELECT
+  1::INT AS foo
+FROM table"""
+    )
+
+SIMPLE_SEED_DATA = """id,item_id,event_date
+1,2,2020-01-01
+2,1,2020-01-01
+3,3,2020-01-03
+4,1,2020-01-04
+5,1,2020-01-05
+6,1,2020-01-06
+7,1,2020-01-07
+"""
+
+@pytest.fixture
+def simple_seed_data():
+    return SIMPLE_SEED_DATA
+
+@pytest.mark.slow
+def test_seed_model(notebook, sushi_context, simple_seed_data):
+    with capture_output():
+        test_seed_path = sushi_context.path / "seeds" / "test_seed.csv"
+        test_seed_path.write_text(simple_seed_data)
+        test_model_path = sushi_context.path / "models" / "test_seed.sql"
+        test_model_path.write_text("MODEL(name db.seed_model, kind SEED (path '../seeds/test_seed.csv'), columns (id INTEGER, item_id INTEGER, event_date DATE), grain (id, event_date));")
+        sushi_context.load()
+    assert test_model_path.read_text() == "MODEL(name db.seed_model, kind SEED (path '../seeds/test_seed.csv'), columns (id INTEGER, item_id INTEGER, event_date DATE), grain (id, event_date));"
+    with capture_output() as output:
+        notebook.run_line_magic(magic_name="model", line="db.seed_model")
+
+    assert not output.stdout
+    assert not output.stderr
+    assert len(output.outputs) == 1
+    assert (
+        test_model_path.read_text() == """MODEL (
+  name db.seed_model,
+  kind SEED (
+    path '../seeds/test_seed.csv'
+  ),
+  columns (
+    id INT,
+    item_id INT,
+    event_date DATE
+  ),
+  grain (id, event_date)
+)"""
+    )
 
 @pytest.mark.slow
 def test_diff(sushi_context, notebook, convert_all_html_output_to_text, get_all_html_output):
