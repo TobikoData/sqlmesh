@@ -9,7 +9,7 @@ The experience of developing and deploying data pipelines is more uncertain and 
 Here are some challenges that data teams run into, especially when data sizes increase or the number of data users expands:
 
 1. Data pipelines are fragmented and fragile
-    * Data pipelines generally consist of Python or SQL scripts that implicitly depend upon each other through tables. Changes to upstream scripts that break downstream dependencies are usually only detected at run time.
+    * Data pipelines generally consist of Python or SQL scripts that implicitly depend upon each other through tables. Changes to upstream scripts that break downstream consumers are usually only detected at run time.
 
 1. Data quality checks are not sufficient
     * The data community has settled on data quality checks as the "solution" for testing data pipelines. Although data quality checks are great for detecting large unexpected data changes, they are expensive to run, and they have trouble validating exact logic.
