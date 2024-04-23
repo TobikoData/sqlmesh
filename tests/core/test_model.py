@@ -3516,6 +3516,32 @@ def test_named_variable_macros() -> None:
     )
 
 
+def test_variables_in_templates() -> None:
+    model = load_sql_based_model(
+        parse(
+            """
+        MODEL(name sushi.test_gateway_macro);
+        @DEF(overridden_var, overridden_value);
+        SELECT 'gateway' AS col_@gateway, 'test_var_a' AS @{test_var_a}_col, 'overridden_var' AS col_@{overridden_var}_col
+        """
+        ),
+        variables={
+            c.GATEWAY: "in_memory",
+            "test_var_a": "test_value",
+            "test_var_unused": "unused",
+            "overridden_var": "initial_value",
+        },
+    )
+
+    assert model.python_env[c.SQLMESH_VARS] == Executable.value(
+        {c.GATEWAY: "in_memory", "test_var_a": "test_value", "overridden_var": "initial_value"}
+    )
+    assert (
+        model.render_query_or_raise().sql()
+        == "SELECT 'gateway' AS \"col_in_memory\", 'test_var_a' AS \"test_value_col\", 'overridden_var' AS \"col_overridden_value_col\""
+    )
+
+
 def test_variables_jinja():
     expressions = parse(
         """
@@ -3759,3 +3785,28 @@ def test_this_model() -> None:
 
     assert model.render_pre_statements()[0].sql() == """COPY "db"."table" TO 'a'"""
     assert model.render_post_statements()[0].sql() == """COPY "db"."table" TO 'b'"""
+
+
+def test_macros_in_model_statement(sushi_context, assert_exp_eq):
+    expressions = d.parse(
+        """
+        MODEL (
+            name @{gateway}.test_model,
+            kind INCREMENTAL_BY_TIME_RANGE (
+                time_column @{time_column}
+
+            ),
+            start @IF(@gateway = 'test_gateway', '2023-01-01', '2024-01-02')
+        );
+
+        SELECT a, b UNION SELECT c, c
+        """
+    )
+
+    model = load_sql_based_model(
+        expressions, variables={"gateway": "test_gateway", "time_column": "a"}
+    )
+    assert model.name == "test_gateway.test_model"
+    assert model.time_column
+    assert model.time_column.column == exp.column("a", quoted=True)
+    assert model.start == "2023-01-01"
