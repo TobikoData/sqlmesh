@@ -938,7 +938,7 @@ def test_render_definition():
             owner owner_name,
             dialect spark,
             kind INCREMENTAL_BY_TIME_RANGE (
-                time_column (a, 'yyyymmdd')
+                time_column (`a`, 'yyyymmdd')
             ),
             storage_format iceberg,
             partitioned_by `a`,

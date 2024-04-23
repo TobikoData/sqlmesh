@@ -1435,6 +1435,39 @@ def load_sql_based_model(
             path,
         )
 
+    unrendered_signals = None
+    for prop in meta.expressions:
+        if prop.name.lower() == "signals":
+            unrendered_signals = prop.args.get("value")
+
+    meta_python_env = _python_env(
+        expressions=meta,
+        jinja_macro_references=None,
+        module_path=module_path,
+        macros=macros or macro.get_registry(),
+        variables=variables,
+        path=path,
+    )
+    meta_renderer = ExpressionRenderer(
+        meta,
+        dialect,
+        [],
+        path=path,
+        jinja_macro_registry=jinja_macros,
+        python_env=meta_python_env,
+        only_execution_time=True,
+        default_catalog=default_catalog,
+        quote_identifiers=False,
+    )
+    rendered_meta_exprs = meta_renderer.render()
+    if rendered_meta_exprs is None or len(rendered_meta_exprs) != 1:
+        raise_config_error(
+            f"Invalid MODEL statement:\n{meta.sql(dialect=dialect, pretty=True)}",
+            path,
+        )
+        raise
+    rendered_meta = rendered_meta_exprs[0]
+
     # Extract the query and any pre/post statements
     query_or_seed_insert, pre_statements, post_statements = _split_sql_model_statements(
         expressions[1:], path
@@ -1443,11 +1476,16 @@ def load_sql_based_model(
     meta_fields: t.Dict[str, t.Any] = {
         "dialect": dialect,
         "description": (
-            "\n".join(comment.strip() for comment in meta.comments) if meta.comments else None
+            "\n".join(comment.strip() for comment in rendered_meta.comments)
+            if rendered_meta.comments
+            else None
         ),
-        **{prop.name.lower(): prop.args.get("value") for prop in meta.expressions},
+        **{prop.name.lower(): prop.args.get("value") for prop in rendered_meta.expressions},
         **kwargs,
     }
+    if unrendered_signals:
+        # Signals must remain unrendered, so that they can be rendered later at evaluation runtime.
+        meta_fields["signals"] = unrendered_signals
 
     name = meta_fields.pop("name", "")
     if not name:
@@ -1465,8 +1503,8 @@ def load_sql_based_model(
     )
 
     jinja_macros = (jinja_macros or JinjaMacroRegistry()).trim(jinja_macro_references)
-    for macro in jinja_macros.root_macros.values():
-        used_variables.update(extract_macro_references_and_variables(macro.definition)[1])
+    for jinja_macro in jinja_macros.root_macros.values():
+        used_variables.update(extract_macro_references_and_variables(jinja_macro.definition)[1])
 
     common_kwargs = dict(
         pre_statements=pre_statements,
