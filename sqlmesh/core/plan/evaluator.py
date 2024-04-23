@@ -99,9 +99,8 @@ class BuiltInPlanEvaluator(PlanEvaluator):
                 after_promote_snapshots = all_names - before_promote_snapshots
                 deployability_index_for_evaluation = DeployabilityIndex.all_deployable()
 
-            update_intervals_for_new_snapshots(plan.new_snapshots, self.state_sync)
-
             self._push(plan, deployability_index_for_creation)
+            update_intervals_for_new_snapshots(plan.new_snapshots, self.state_sync)
             self._restate(plan)
             self._backfill(
                 plan,
