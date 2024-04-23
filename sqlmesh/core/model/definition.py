@@ -1413,6 +1413,7 @@ def load_sql_based_model(
     expressions: t.List[exp.Expression],
     *,
     defaults: t.Optional[t.Dict[str, t.Any]] = None,
+    kind_specific_defaults: t.Optional[t.Dict[str, t.Any]] = None,
     path: Path = Path(),
     module_path: Path = Path(),
     time_column_format: str = c.DEFAULT_TIME_COLUMN_FORMAT,
@@ -1430,6 +1431,7 @@ def load_sql_based_model(
     Args:
         expressions: Model, *Statements, Query.
         defaults: Definition default values.
+        kind_specific_defaults: Default values only applicable to some model kinds.
         path: An optional path to the model definition file.
         module_path: The python module path to serialize macros for.
         time_column_format: The default time column format to use if no model time column is configured.
@@ -1554,6 +1556,7 @@ def load_sql_based_model(
             name,
             query_or_seed_insert,
             time_column_format=time_column_format,
+            kind_specific_defaults=kind_specific_defaults,
             **common_kwargs,
         )
     else:
@@ -1581,6 +1584,7 @@ def create_sql_model(
     pre_statements: t.Optional[t.List[exp.Expression]] = None,
     post_statements: t.Optional[t.List[exp.Expression]] = None,
     defaults: t.Optional[t.Dict[str, t.Any]] = None,
+    kind_specific_defaults: t.Optional[t.Dict[str, t.Any]] = None,
     path: Path = Path(),
     module_path: Path = Path(),
     time_column_format: str = c.DEFAULT_TIME_COLUMN_FORMAT,
@@ -1603,6 +1607,7 @@ def create_sql_model(
         pre_statements: The list of SQL statements that precede the model's query.
         post_statements: The list of SQL statements that follow after the model's query.
         defaults: Definition default values.
+        kind_specific_defaults: Default values only applicable to some model kinds.
         path: An optional path to the model definition file.
         module_path: The python module path to serialize macros for.
         time_column_format: The default time column format to use if no model time column is configured.
@@ -1644,6 +1649,7 @@ def create_sql_model(
         SqlModel,
         name,
         defaults=defaults,
+        kind_specific_defaults=kind_specific_defaults,
         path=path,
         time_column_format=time_column_format,
         python_env=python_env,
@@ -1744,6 +1750,7 @@ def create_python_model(
     python_env: t.Dict[str, Executable],
     *,
     defaults: t.Optional[t.Dict[str, t.Any]] = None,
+    kind_specific_defaults: t.Optional[t.Dict[str, t.Any]] = None,
     path: Path = Path(),
     time_column_format: str = c.DEFAULT_TIME_COLUMN_FORMAT,
     depends_on: t.Optional[t.Set[str]] = None,
@@ -1759,6 +1766,7 @@ def create_python_model(
         entrypoint: The name of a Python function which contains the data fetching / transformation logic.
         python_env: The Python environment of all objects referenced by the model implementation.
         defaults: Definition default values.
+        kind_specific_defaults: t.Optional[t.Dict[str, t.Any]] = None,
         path: An optional path to the model definition file.
         time_column_format: The default time column format to use if no model time column is configured.
         depends_on: The custom set of model's upstream dependencies.
@@ -1779,6 +1787,7 @@ def create_python_model(
         PythonModel,
         name,
         defaults=defaults,
+        kind_specific_defaults=kind_specific_defaults,
         path=path,
         time_column_format=time_column_format,
         depends_on=depends_on,
@@ -1819,6 +1828,7 @@ def _create_model(
     name: TableName,
     *,
     defaults: t.Optional[t.Dict[str, t.Any]] = None,
+    kind_specific_defaults: t.Optional[t.Dict[str, t.Any]] = None,
     path: Path = Path(),
     time_column_format: str = c.DEFAULT_TIME_COLUMN_FORMAT,
     jinja_macros: t.Optional[JinjaMacroRegistry] = None,
@@ -1848,6 +1858,7 @@ def _create_model(
                 "physical_schema_override": physical_schema_override.get(
                     exp.to_table(name, dialect=dialect).db
                 ),
+                "kind_specific_defaults": kind_specific_defaults,
                 **kwargs,
             },
         )
