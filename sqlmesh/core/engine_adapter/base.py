@@ -1611,7 +1611,7 @@ class EngineAdapter:
                 raise UnsupportedCatalogOperationError(
                     "Tried to rename table across catalogs which is not supported"
                 )
-        self.execute(exp.rename_table(old_table_name, new_table_name))
+        self._rename_table(old_table_name, new_table_name)
 
     def get_data_objects(
         self, schema_name: SchemaName, object_names: t.Optional[t.Set[str]] = None
@@ -2028,6 +2028,13 @@ class EngineAdapter:
                     f"Column comments for table '{table.alias_or_name}' not registered - this may be due to limited permissions.",
                     exc_info=True,
                 )
+
+    def _rename_table(
+        self,
+        old_table_name: TableName,
+        new_table_name: TableName,
+    ) -> None:
+        self.execute(exp.rename_table(old_table_name, new_table_name))
 
     @classmethod
     def _select_columns(cls, columns: t.Iterable[str]) -> exp.Select:

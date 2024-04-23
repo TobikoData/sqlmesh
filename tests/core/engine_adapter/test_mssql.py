@@ -516,3 +516,16 @@ def test_df_dates(make_mocked_engine_adapter: t.Callable):
             }
         )
     )
+
+
+def test_rename_table(make_mocked_engine_adapter: t.Callable, mocker: MockerFixture):
+    adapter = make_mocked_engine_adapter(MSSQLEngineAdapter)
+
+    adapter.rename_table("test_schema.old_name", "new_name")
+    adapter.rename_table("old_name", "new_name")
+
+    sql_calls = to_sql_calls(adapter)
+    assert sql_calls == [
+        "EXEC sp_rename 'test_schema.old_name', 'new_name';",
+        "EXEC sp_rename 'old_name', 'new_name';",
+    ]

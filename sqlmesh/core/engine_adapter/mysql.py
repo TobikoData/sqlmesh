@@ -142,3 +142,16 @@ class MySQLEngineAdapter(
                 f"Column comments for table '{table.alias_or_name}' not registered - this may be due to limited permissions.",
                 exc_info=True,
             )
+
+    def _rename_table(
+        self,
+        old_table_name: TableName,
+        new_table_name: TableName,
+    ) -> None:
+        old_table = exp.to_table(old_table_name)
+        new_table = exp.to_table(new_table_name)
+        if not new_table.db and old_table.db:
+            # In MySQL you need to provide the full target table name.
+            # Therefore we use the old schema name if one is not provided explicitly in the new name.
+            new_table.set("db", old_table.args["db"])
+        return super()._rename_table(old_table, new_table)
