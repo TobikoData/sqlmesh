@@ -61,16 +61,16 @@ EXAMPLE_INCREMENTAL_MODEL_NAME = f"{EXAMPLE_SCHEMA_NAME}.incremental_model"
 EXAMPLE_SEED_MODEL_NAME = f"{EXAMPLE_SCHEMA_NAME}.seed_model"
 
 EXAMPLE_FULL_MODEL_DEF = f"""MODEL (
-  name {EXAMPLE_FULL_MODEL_NAME},
-  kind FULL,
-  cron '@daily',
-  grain item_id,
-  audits (assert_positive_order_ids),
+    name {EXAMPLE_FULL_MODEL_NAME},
+    kind FULL,
+    cron '@daily',
+    grain item_id,
+    audits (assert_positive_order_ids),
 );
 
 SELECT
-  item_id,
-  COUNT(DISTINCT id) AS num_orders,
+    item_id,
+    COUNT(DISTINCT id) AS num_orders,
 FROM
     {EXAMPLE_INCREMENTAL_MODEL_NAME}
 GROUP BY item_id
