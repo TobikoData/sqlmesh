@@ -19,9 +19,9 @@ def test_columns(make_mocked_engine_adapter: t.Callable):
         'SELECT "attname" AS "column_name", '
         '"pg_catalog".FORMAT_TYPE("atttypid", "atttypmod") AS "data_type" '
         'FROM "pg_catalog"."pg_attribute" '
-        'JOIN "pg_catalog"."pg_class" ON "oid" = "attrelid" '
-        'JOIN "pg_catalog"."pg_namespace" ON "oid" = "relnamespace" '
-        """WHERE ("attnum" > 0 AND NOT "attisdropped" AND "nspname" = 'table') AND "relname" = 'db'"""
+        'JOIN "pg_catalog"."pg_class" ON "pg_class"."oid" = "attrelid" '
+        'JOIN "pg_catalog"."pg_namespace" ON "pg_namespace"."oid" = "relnamespace" '
+        """WHERE ("attnum" > 0 AND NOT "attisdropped" AND "relname" = 'table') AND "nspname" = 'db'"""
     )
     assert resp == {"col": exp.DataType.build("INT")}
 
