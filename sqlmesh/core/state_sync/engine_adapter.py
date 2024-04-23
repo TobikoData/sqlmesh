@@ -144,7 +144,7 @@ class EngineAdapterStateSync(CommonStateSyncMixin, StateSync):
 
         self._seed_columns_to_types = {
             "name": exp.DataType.build("text"),
-            "identifier": exp.DataType.build("text"),
+            "version": exp.DataType.build("text"),
             "content": exp.DataType.build("text"),
         }
 
@@ -220,7 +220,7 @@ class EngineAdapterStateSync(CommonStateSyncMixin, StateSync):
                 seed_contents.append(
                     {
                         "name": snapshot.name,
-                        "identifier": snapshot.identifier,
+                        "version": snapshot.version,
                         "content": seed_model.seed.content,
                     }
                 )
@@ -341,6 +341,10 @@ class EngineAdapterStateSync(CommonStateSyncMixin, StateSync):
                         )
                     )
 
+        seed_deletion_candidates = [t.snapshot for t in cleanup_targets if not t.dev_table_only]
+        if seed_deletion_candidates:
+            self._delete_seeds(seed_deletion_candidates)
+
         return cleanup_targets
 
     def delete_expired_environments(self) -> t.List[Environment]:
@@ -368,7 +372,6 @@ class EngineAdapterStateSync(CommonStateSyncMixin, StateSync):
     def delete_snapshots(self, snapshot_ids: t.Iterable[SnapshotIdLike]) -> None:
         for where in self._snapshot_id_filter(snapshot_ids):
             self.engine_adapter.delete_from(self.snapshots_table, where=where)
-            self.engine_adapter.delete_from(self.seeds_table, where=where)
 
     def snapshots_exist(self, snapshot_ids: t.Iterable[SnapshotIdLike]) -> t.Set[SnapshotId]:
         return self._snapshot_ids_exist(snapshot_ids, self.snapshots_table)
@@ -486,8 +489,8 @@ class EngineAdapterStateSync(CommonStateSyncMixin, StateSync):
                     exp.to_table(self.seeds_table).as_("seeds"),
                     on=exp.and_(
                         exp.column("name", table="snapshots").eq(exp.column("name", table="seeds")),
-                        exp.column("identifier", table="snapshots").eq(
-                            exp.column("identifier", table="seeds")
+                        exp.column("version", table="snapshots").eq(
+                            exp.column("version", table="seeds")
                         ),
                     ),
                     join_type="left",
@@ -998,7 +1001,6 @@ class EngineAdapterStateSync(CommonStateSyncMixin, StateSync):
         if not snapshot_mapping:
             logger.info("No changes to snapshots detected")
             return
-        self._migrate_seed_rows(snapshot_mapping)
         self._migrate_environment_rows(environments, snapshot_mapping)
 
     def _migrate_snapshot_rows(
@@ -1147,51 +1149,6 @@ class EngineAdapterStateSync(CommonStateSyncMixin, StateSync):
 
         return all_snapshot_mapping
 
-    def _migrate_seed_rows(self, snapshot_mapping: t.Dict[SnapshotId, SnapshotTableInfo]) -> None:
-        # FIXME: This migration won't be necessary if the primary key of the seeds table is changed to
-        # (name, version) instead of (name, identifier).
-        seed_snapshot_ids = [
-            s_id for s_id, table_info in snapshot_mapping.items() if table_info.is_seed
-        ]
-        if not seed_snapshot_ids:
-            logger.info("No seed rows to migrate")
-            return
-
-        logger.info("Migrating seed rows...")
-
-        for where in self._snapshot_id_filter(
-            seed_snapshot_ids, batch_size=self.SNAPSHOT_SEED_MIGRATION_BATCH_SIZE
-        ):
-            seeds = {
-                SnapshotId(name=name, identifier=identifier): content
-                for name, identifier, content in self._fetchall(
-                    exp.select("name", "identifier", "content").from_(self.seeds_table).where(where)
-                )
-            }
-            if not seeds:
-                continue
-
-            new_seeds = {}
-            for snapshot_id, content in seeds.items():
-                new_snapshot_id = snapshot_mapping[snapshot_id].snapshot_id
-                new_seeds[new_snapshot_id] = {
-                    "name": new_snapshot_id.name,
-                    "identifier": new_snapshot_id.identifier,
-                    "content": content,
-                }
-
-            existing_snapshot_ids = self._snapshot_ids_exist(new_seeds, self.seeds_table)
-            seeds_to_push = [
-                s for s_id, s in new_seeds.items() if s_id not in existing_snapshot_ids
-            ]
-
-            if seeds_to_push:
-                self.engine_adapter.insert_append(
-                    self.seeds_table,
-                    pd.DataFrame(seeds_to_push),
-                    columns_to_types=self._seed_columns_to_types,
-                )
-
     def _migrate_environment_rows(
         self,
         environments: t.List[Environment],
@@ -1225,6 +1182,10 @@ class EngineAdapterStateSync(CommonStateSyncMixin, StateSync):
                 self.unpause_snapshots(updated_prod_environment.snapshots, now_timestamp())
             except Exception:
                 logger.warning("Failed to unpause migrated snapshots", exc_info=True)
+
+    def _delete_seeds(self, snapshots: t.Iterable[SnapshotNameVersionLike]) -> None:
+        for where in self._snapshot_name_version_filter(snapshots, alias=None):
+            self.engine_adapter.delete_from(self.seeds_table, where=where)
 
     def _snapshot_ids_exist(
         self, snapshot_ids: t.Iterable[SnapshotIdLike], table_name: exp.Table
