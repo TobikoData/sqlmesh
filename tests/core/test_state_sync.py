@@ -1045,6 +1045,40 @@ def test_delete_expired_snapshots(state_sync: EngineAdapterStateSync, make_snaps
     assert not state_sync.get_snapshots(None)
 
 
+def test_delete_expired_snapshots_seed(
+    state_sync: EngineAdapterStateSync, make_snapshot: t.Callable
+):
+    now_ts = now_timestamp()
+
+    snapshot = make_snapshot(
+        SeedModel(
+            name="a",
+            kind=SeedKind(path="./path/to/seed"),
+            seed=Seed(content="header\n1\n2"),
+            column_hashes={"header": "hash"},
+            depends_on=set(),
+        ),
+    )
+    snapshot.ttl = "in 10 seconds"
+    snapshot.categorize_as(SnapshotChangeCategory.BREAKING)
+    snapshot.updated_ts = now_ts - 15000
+
+    state_sync.push_snapshots([snapshot])
+    assert set(state_sync.get_snapshots(None)) == {snapshot.snapshot_id}
+    assert state_sync.engine_adapter.fetchall(
+        "SELECT name, version, content FROM sqlmesh._seeds"
+    ) == [
+        (snapshot.name, snapshot.version, snapshot.model.seed.content),
+    ]
+
+    assert state_sync.delete_expired_snapshots() == [
+        SnapshotTableCleanupTask(snapshot=snapshot.table_info, dev_table_only=False),
+    ]
+
+    assert not state_sync.get_snapshots(None)
+    assert not state_sync.engine_adapter.fetchall("SELECT * FROM sqlmesh._seeds")
+
+
 def test_delete_expired_snapshots_batching(
     state_sync: EngineAdapterStateSync, make_snapshot: t.Callable
 ):
@@ -1581,6 +1615,8 @@ def test_migrate_rows(state_sync: EngineAdapterStateSync, mocker: MockerFixture)
             "expiration_ts": exp.DataType.build("bigint"),
         },
     )
+
+    state_sync.engine_adapter.drop_table("sqlmesh._seeds")
 
     old_snapshots = state_sync.engine_adapter.fetchdf("select * from sqlmesh._snapshots")
     old_environments = state_sync.engine_adapter.fetchdf("select * from sqlmesh._environments")
@@ -2125,28 +2161,29 @@ def test_snapshot_batching(state_sync, mocker, make_snapshot):
     state_sync.SNAPSHOT_BATCH_SIZE = 2
     state_sync.engine_adapter = mock
 
+    snapshot_a = make_snapshot(SqlModel(name="a", query=parse_one("select 1")), "1")
+    snapshot_b = make_snapshot(SqlModel(name="a", query=parse_one("select 2")), "2")
+    snapshot_c = make_snapshot(SqlModel(name="a", query=parse_one("select 3")), "3")
+
     state_sync.delete_snapshots(
         (
-            SnapshotId(name="a", identifier="1"),
-            SnapshotId(name="a", identifier="2"),
-            SnapshotId(name="a", identifier="3"),
+            snapshot_a,
+            snapshot_b,
+            snapshot_c,
         )
     )
     calls = mock.delete_from.call_args_list
     assert mock.delete_from.call_args_list == [
         call(
             exp.to_table("sqlmesh._snapshots"),
-            where=parse_one("(name, identifier) in (('a', '1'), ('a', '2'))"),
-        ),
-        call(
-            exp.to_table("sqlmesh._seeds"),
-            where=parse_one("(name, identifier) in (('a', '1'), ('a', '2'))"),
+            where=parse_one(
+                f"(name, identifier) in (('\"a\"', '{snapshot_b.identifier}'), ('\"a\"', '{snapshot_a.identifier}'))"
+            ),
         ),
         call(
             exp.to_table("sqlmesh._snapshots"),
-            where=parse_one("(name, identifier) in (('a', '3'))"),
+            where=parse_one(f"(name, identifier) in (('\"a\"', '{snapshot_c.identifier}'))"),
         ),
-        call(exp.to_table("sqlmesh._seeds"), where=parse_one("(name, identifier) in (('a', '3'))")),
     ]
 
     mock.fetchall.side_effect = [
