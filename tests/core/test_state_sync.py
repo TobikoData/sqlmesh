@@ -349,10 +349,11 @@ def test_remove_interval_missing_snapshot(
         ),
         version="a",
     )
-    # Only add snapshot_a to simulate that snapshot_b is missing
-    state_sync.push_snapshots([snapshot_a])
+    state_sync.push_snapshots([snapshot_a, snapshot_b])
     state_sync.add_interval(snapshot_a, "2020-01-01", "2020-01-10")
     state_sync.add_interval(snapshot_b, "2020-01-11", "2020-01-30")
+    # Remove snapshot b in order to test the scenario where it is missing
+    state_sync.delete_snapshots([snapshot_b.snapshot_id])
 
     snapshots = state_sync.get_snapshots([snapshot_a, snapshot_b])
     assert len(snapshots) == 1
