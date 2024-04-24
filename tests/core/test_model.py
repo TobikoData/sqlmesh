@@ -3815,7 +3815,7 @@ def test_macros_in_model_statement(sushi_context, assert_exp_eq):
     expressions = d.parse(
         """
         MODEL (
-            name @{gateway}.test_model,
+            name @{gateway}__@{gateway}.test_model,
             kind INCREMENTAL_BY_TIME_RANGE (
                 time_column @{time_column}
 
@@ -3830,7 +3830,7 @@ def test_macros_in_model_statement(sushi_context, assert_exp_eq):
     model = load_sql_based_model(
         expressions, variables={"gateway": "test_gateway", "time_column": "a"}
     )
-    assert model.name == "test_gateway.test_model"
+    assert model.name == "test_gateway__test_gateway.test_model"
     assert model.time_column
     assert model.time_column.column == exp.column("a", quoted=True)
     assert model.start == "2023-01-01"

@@ -1905,7 +1905,7 @@ def _python_env(
     for expression in expressions:
         if not isinstance(expression, d.Jinja):
             for macro_func_or_var in expression.find_all(d.MacroFunc, d.MacroVar, exp.Identifier):
-                if isinstance(macro_func_or_var, d.MacroFunc):
+                if macro_func_or_var.__class__ is d.MacroFunc:
                     name = macro_func_or_var.this.name.lower()
                     if name in macros:
                         used_macros[name] = macros[name]
@@ -1919,7 +1919,7 @@ def _python_env(
                                     path,
                                 )
                             used_variables.add(args[0].this.lower())
-                elif isinstance(macro_func_or_var, d.MacroVar):
+                elif macro_func_or_var.__class__ is d.MacroVar:
                     name = macro_func_or_var.name.lower()
                     if name in macros:
                         used_macros[name] = macros[name]
@@ -1928,8 +1928,10 @@ def _python_env(
                 elif (
                     isinstance(macro_func_or_var, exp.Identifier) and "@" in macro_func_or_var.this
                 ):
-                    for m in MacroStrTemplate.pattern.findall(macro_func_or_var.this):
-                        var_name = m[2] or m[1]
+                    for _, identifier, braced_identifier, _ in MacroStrTemplate.pattern.findall(
+                        macro_func_or_var.this
+                    ):
+                        var_name = braced_identifier or identifier
                         if var_name in variables:
                             used_variables.add(var_name)
 
