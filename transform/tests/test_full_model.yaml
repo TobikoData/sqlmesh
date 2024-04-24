@@ -1,0 +1,21 @@
+test_example_full_model:
+  model: sqlmesh_example.full_model
+  inputs:
+    sqlmesh_example.incremental_model:
+      rows:
+      - id: 1
+        item_id: 1
+        event_date: '2020-01-01'
+      - id: 2
+        item_id: 1
+        event_date: '2020-01-02'
+      - id: 3
+        item_id: 2
+        event_date: '2020-01-03'
+  outputs:
+    query:
+      rows:
+      - item_id: 1
+        num_orders: 2
+      - item_id: 2
+        num_orders: 1

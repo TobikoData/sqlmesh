@@ -1,0 +1,14 @@
+# Username and password are stored in ~/.sqlmesh/config.yaml
+gateways:
+    local:
+        connection:
+            type: snowflake
+            account: datacoves-main
+            warehouse: WH_TRANSFORMING_SQLMESH
+            database: SUSHI_DB
+            role: SQLMESH_ANALYST
+
+default_gateway: local
+
+model_defaults:
+    dialect: snowflake

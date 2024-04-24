@@ -1,0 +1,55 @@
+name: SQLMesh Bot
+run-name: 🚀SQLMesh Bot 🚀
+on:
+  pull_request:
+    types:
+      - synchronize
+      - opened
+
+
+# The latest commit is the one that will be used to create the PR environment and deploy to production
+concurrency:
+  group: ${{ github.workflow }}-${{ github.head_ref || github.ref_name }}
+  cancel-in-progress: true
+jobs:
+  sqlmesh:
+    name: SQLMesh Actions Workflow
+    runs-on: ubuntu-latest
+    permissions:
+      # Required to access code in PR
+      contents: write
+      # Required to post comments
+      issues: write
+      # Required to update check runs
+      checks: write
+      # Required to merge
+      pull-requests: write
+    steps:
+      - name: Setup Python
+        uses: actions/setup-python@v4
+      - name: Checkout PR branch
+        uses: actions/checkout@v4
+        # Add if statement so we don't checkout merged PR but instead main branch
+        if: github.event.pull_request.merged == false
+        with:
+          ref: refs/pull/${{ github.event.issue.pull_request && github.event.issue.number || github.event.pull_request.number  }}/merge
+      - name: Checkout main branch
+        # Add if statement so we use main when merged
+        if: github.event.pull_request.merged == true
+        uses: actions/checkout@v4
+        with:
+          ref: main
+          path: transform
+
+      - name: Install SQLMesh + Dependencies
+        run: pip install -r requirements.txt
+        shell: bash
+      - name: Run CI/CD Bot
+        run: |
+          sqlmesh_cicd -p ${{ github.workspace }} github --token ${{ secrets.GITHUB_TOKEN }} run-all
+
+      - name: Deploy to Production
+          # `main` should be the name of your branch that represents production
+        if: github.event.pull_request.merged == true && github.event.pull_request.base.ref == 'main'
+        run: |
+          sqlmesh_cicd -p ${{ github.workspace }} github --token ${{ secrets.GITHUB_TOKEN }} deploy-production
