@@ -10,7 +10,10 @@ from sqlglot.optimizer.normalize_identifiers import normalize_identifiers
 from sqlglot.optimizer.qualify_columns import quote_identifiers
 
 from sqlmesh.core.dialect import to_schema
-from sqlmesh.core.engine_adapter.mixins import GetCurrentCatalogFromFunctionMixin
+from sqlmesh.core.engine_adapter.mixins import (
+    GetCurrentCatalogFromFunctionMixin,
+    RenameTableFullTargetNameMixin,
+)
 from sqlmesh.core.engine_adapter.shared import (
     CatalogSupport,
     DataObject,
@@ -32,7 +35,7 @@ if t.TYPE_CHECKING:
         "drop_schema": CatalogSupport.REQUIRES_SET_CATALOG,
     }
 )
-class SnowflakeEngineAdapter(GetCurrentCatalogFromFunctionMixin):
+class SnowflakeEngineAdapter(GetCurrentCatalogFromFunctionMixin, RenameTableFullTargetNameMixin):
     DIALECT = "snowflake"
     SUPPORTS_MATERIALIZED_VIEWS = True
     SUPPORTS_MATERIALIZED_VIEW_SCHEMA = True
