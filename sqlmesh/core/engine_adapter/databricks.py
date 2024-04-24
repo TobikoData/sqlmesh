@@ -6,6 +6,7 @@ import typing as t
 import pandas as pd
 from sqlglot import exp
 
+from sqlmesh.core.engine_adapter.mixins import RenameTableFullTargetNameMixin
 from sqlmesh.core.engine_adapter.shared import (
     CatalogSupport,
     DataObject,
@@ -29,7 +30,7 @@ logger = logging.getLogger(__name__)
         "_get_data_objects": CatalogSupport.REQUIRES_SET_CATALOG,
     }
 )
-class DatabricksEngineAdapter(SparkEngineAdapter):
+class DatabricksEngineAdapter(SparkEngineAdapter, RenameTableFullTargetNameMixin):
     DIALECT = "databricks"
     INSERT_OVERWRITE_STRATEGY = InsertOverwriteStrategy.INSERT_OVERWRITE
     SUPPORTS_CLONING = True
