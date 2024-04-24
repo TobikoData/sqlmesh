@@ -235,7 +235,9 @@ class MacroEvaluator:
         """
         mapping = {}
 
-        for k, v in chain(self.locals.items(), local_variables.items()):
+        variables = self.locals.get(c.SQLMESH_VARS, {})
+
+        for k, v in chain(variables.items(), self.locals.items(), local_variables.items()):
             # try to convert all variables into sqlglot expressions
             # because they're going to be converted into strings in sql
             # we use bare Exception instead of ValueError because there's
