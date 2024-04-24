@@ -243,7 +243,6 @@ jobs:
       uses: actions/checkout@v4
       with:
         ref: main
-        path: wursthall
     ...
     - name: Run CI/CD Bot
       # Add if statement so we don't run-all on merged PR
@@ -392,8 +391,9 @@ Commands:
   update-pr-environment     Creates or updates the PR environments
 ```
 
-## Example Full Workflow
-This workflow involves configuring a SQLMesh connection to Databricks and configuring access to GCP to talk to Cloud Composer (Airflow)
+## Example Synchronized Full Workflow
+This workflow involves configuring a SQLMesh connection to Databricks and configuring access to GCP to talk to Cloud Composer (Airflow).
+
 ```yaml
 name: SQLMesh Bot
 run-name: 🚀SQLMesh Bot 🚀
