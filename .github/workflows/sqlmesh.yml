@@ -24,6 +24,11 @@ jobs:
       checks: write
       # Required to merge
       pull-requests: write
+
+    env:
+      SQLMESH__GATEWAYS__SNOWFLAKE__CONNECTION__USER: ${{ secrets.USER }}
+      SQLMESH__GATEWAYS__SNOWFLAKE__CONNECTION__PASSWORD: ${{ secrets.PASSWORD }}
+
     steps:
       - name: Setup Python
         uses: actions/setup-python@v4
