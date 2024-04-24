@@ -141,8 +141,7 @@ def test_run_all_success_with_approvers_approved(
 <details>
   <summary>Prod Plan Being Applied</summary>
 
-
-**Models needing backfill (missing dates):**"""
+**New environment `prod` will be created from `prod`**"""
     )
     with open(github_output_file, "r", encoding="utf-8") as f:
         output = f.read()
@@ -268,8 +267,7 @@ def test_run_all_success_with_approvers_approved_merge_delete(
 <details>
   <summary>Prod Plan Being Applied</summary>
 
-
-**Models needing backfill (missing dates):**"""
+**New environment `prod` will be created from `prod`**"""
     )
     with open(github_output_file, "r", encoding="utf-8") as f:
         output = f.read()
@@ -907,8 +905,7 @@ def test_prod_update_failure(
 <details>
   <summary>Prod Plan Being Applied</summary>
 
-
-**Models needing backfill (missing dates):**"""
+**New environment `prod` will be created from `prod`**"""
     )
 
     with open(github_output_file, "r", encoding="utf-8") as f:
@@ -1101,8 +1098,7 @@ def test_comment_command_deploy_prod(
 <details>
   <summary>Prod Plan Being Applied</summary>
 
-
-**Models needing backfill (missing dates):**"""
+**New environment `prod` will be created from `prod`**"""
     )
 
     with open(github_output_file, "r", encoding="utf-8") as f:
