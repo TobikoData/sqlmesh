@@ -246,3 +246,18 @@ class NonTransactionalTruncateMixin(EngineAdapter):
         if self._connection_pool.is_transaction_active:
             return self.execute(exp.Delete(this=exp.to_table(table_name)))
         super()._truncate_table(table_name)
+
+
+class RenameTableFullTargetNameMixin(EngineAdapter):
+    def _rename_table(
+        self,
+        old_table_name: TableName,
+        new_table_name: TableName,
+    ) -> None:
+        old_table = exp.to_table(old_table_name)
+        new_table = exp.to_table(new_table_name)
+        if not new_table.db and old_table.db:
+            # In MySQL and Snowflake you need to provide the full target table name.
+            # Therefore we use the old schema name if one is not provided explicitly in the new name.
+            new_table.set("db", old_table.args["db"])
+        return super()._rename_table(old_table, new_table)
