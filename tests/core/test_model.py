@@ -763,14 +763,14 @@ def test_seed_model_diff(tmp_path):
     model_a_csv_path = (tmp_path / "model_a.csv").absolute()
     model_b_csv_path = (tmp_path / "model_b.csv").absolute()
 
-    with open(model_a_csv_path, "w") as fd:
+    with open(model_a_csv_path, "w", encoding="utf-8") as fd:
         fd.write(
             """key,value
 1,value_a
 """
         )
 
-    with open(model_b_csv_path, "w") as fd:
+    with open(model_b_csv_path, "w", encoding="utf-8") as fd:
         fd.write(
             """key,value
 2,value_b
@@ -860,7 +860,7 @@ def test_seed_pre_statements_only():
 def test_seed_model_custom_types(tmp_path):
     model_csv_path = (tmp_path / "model.csv").absolute()
 
-    with open(model_csv_path, "w") as fd:
+    with open(model_csv_path, "w", encoding="utf-8") as fd:
         fd.write(
             """key,ds_date,ds_timestamp,b_a,b_b,i,i_str
 123,2022-01-01,2022-01-01,false,0,321,321

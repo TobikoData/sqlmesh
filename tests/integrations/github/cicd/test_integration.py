@@ -241,7 +241,7 @@ Directly Modified: sushi.waiter_revenue_by_day (Non-breaking)
 """
     )
 
-    with open(github_output_file, "r") as f:
+    with open(github_output_file, "r", encoding="utf-8") as f:
         output = f.read()
         assert (
             output
@@ -446,7 +446,7 @@ Directly Modified: sushi.waiter_revenue_by_day (Non-breaking)
 """
     )
 
-    with open(github_output_file, "r") as f:
+    with open(github_output_file, "r", encoding="utf-8") as f:
         output = f.read()
         assert (
             output
@@ -599,7 +599,7 @@ def test_merge_pr_has_non_breaking_change_no_categorization(
 
     assert len(created_comments) == 0
 
-    with open(github_output_file, "r") as f:
+    with open(github_output_file, "r", encoding="utf-8") as f:
         output = f.read()
         assert (
             output
@@ -758,7 +758,7 @@ def test_merge_pr_has_no_changes(
 """
     )
 
-    with open(github_output_file, "r") as f:
+    with open(github_output_file, "r", encoding="utf-8") as f:
         output = f.read()
         assert (
             output
@@ -941,7 +941,7 @@ Directly Modified: sushi.waiter_revenue_by_day (Non-breaking)
 - PR Virtual Data Environment: hello_world_2"""
     )
 
-    with open(github_output_file, "r") as f:
+    with open(github_output_file, "r", encoding="utf-8") as f:
         output = f.read()
         assert (
             output
@@ -1107,7 +1107,7 @@ Directly Modified: sushi.waiter_revenue_by_day (Non-breaking)
 - PR Virtual Data Environment: hello_world_2"""
     )
 
-    with open(github_output_file, "r") as f:
+    with open(github_output_file, "r", encoding="utf-8") as f:
         output = f.read()
         assert (
             output
@@ -1294,7 +1294,7 @@ Directly Modified: sushi.waiter_revenue_by_day (Non-breaking)
 """
     )
 
-    with open(github_output_file, "r") as f:
+    with open(github_output_file, "r", encoding="utf-8") as f:
         output = f.read()
         assert (
             output
@@ -1446,7 +1446,7 @@ def test_error_msg_when_applying_plan_with_bug(
 
     assert len(created_comments) == 0
 
-    with open(github_output_file, "r") as f:
+    with open(github_output_file, "r", encoding="utf-8") as f:
         output = f.read()
         assert (
             output
@@ -1669,7 +1669,7 @@ Directly Modified: sushi.waiter_names (Breaking)
 """
     )
 
-    with open(github_output_file, "r") as f:
+    with open(github_output_file, "r", encoding="utf-8") as f:
         output = f.read()
         assert (
             output
@@ -1832,7 +1832,7 @@ FAILED processing snapshot "memory"."sushi"."waiter_revenue_by_day"
 
     assert len(created_comments) == 0
 
-    with open(github_output_file, "r") as f:
+    with open(github_output_file, "r", encoding="utf-8") as f:
         output = f.read()
         assert (
             output

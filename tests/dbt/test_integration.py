@@ -106,7 +106,7 @@ class TestSCDType2:
 
                         {{% endsnapshot %}}"""
             snapshot_file = dbt_snapshot_dir / "marketing.sql"
-            with open(snapshot_file, "w") as f:
+            with open(snapshot_file, "w", encoding="utf-8") as f:
                 f.write(snapshot_file_contents)
             dbt_project_config = {
                 "name": "scd_type_2",
@@ -117,7 +117,7 @@ class TestSCDType2:
                 "models": {"start": "Jan 1 2020"},
             }
             dbt_project_file = dbt_project_dir / "dbt_project.yml"
-            with open(dbt_project_file, "w") as f:
+            with open(dbt_project_file, "w", encoding="utf-8") as f:
                 yaml.dump(dbt_project_config, f)
             dbt_data_dir = tmp_path / "dbt_data"
             dbt_data_dir.mkdir()
@@ -129,11 +129,11 @@ class TestSCDType2:
                 }
             }
             dbt_profile_file = dbt_project_dir / "profiles.yml"
-            with open(dbt_profile_file, "w") as f:
+            with open(dbt_profile_file, "w", encoding="utf-8") as f:
                 yaml.dump(dbt_profile_config, f)
             if include_dbt_adapter_support:
                 sqlmesh_config_file = dbt_project_dir / "config.py"
-                with open(sqlmesh_config_file, "w") as f:
+                with open(sqlmesh_config_file, "w", encoding="utf-8") as f:
                     f.write(
                         """from pathlib import Path
 
@@ -177,7 +177,7 @@ test_config = config"""
         updated_at::TIMESTAMP AS updated_at
     FROM
         sushi.raw_marketing"""
-            with open(project_root / "models" / "marketing.sql", "w") as f:
+            with open(project_root / "models" / "marketing.sql", "w", encoding="utf-8") as f:
                 f.write(snapshot_def)
             data_dir = tmp_path / "sqlm_data"
             data_dir.mkdir()
