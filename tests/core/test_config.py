@@ -28,7 +28,7 @@ from tests.utils.test_filesystem import create_temp_file
 @pytest.fixture(scope="session")
 def yaml_config_path(tmp_path_factory) -> Path:
     config_path = tmp_path_factory.mktemp("yaml_config") / "config.yaml"
-    with open(config_path, "w") as fd:
+    with open(config_path, "w", encoding="utf-8") as fd:
         fd.write(
             """
 gateways:
@@ -47,7 +47,7 @@ model_defaults:
 @pytest.fixture(scope="session")
 def python_config_path(tmp_path_factory) -> Path:
     config_path = tmp_path_factory.mktemp("python_config") / "config.py"
-    with open(config_path, "w") as fd:
+    with open(config_path, "w", encoding="utf-8") as fd:
         fd.write(
             """from sqlmesh.core.config import Config, DuckDBConnectionConfig, GatewayConfig, ModelDefaultsConfig
 config = Config(gateways=GatewayConfig(connection=DuckDBConnectionConfig()), model_defaults=ModelDefaultsConfig(dialect=''))
@@ -163,11 +163,11 @@ def test_load_config_from_paths(yaml_config_path: Path, python_config_path: Path
 
 def test_load_config_multiple_config_files_in_folder(tmp_path):
     config_a_path = tmp_path / "config.yaml"
-    with open(config_a_path, "w") as fd:
+    with open(config_a_path, "w", encoding="utf-8") as fd:
         fd.write("project: project_a")
 
     config_b_path = tmp_path / "config.yml"
-    with open(config_b_path, "w") as fd:
+    with open(config_b_path, "w", encoding="utf-8") as fd:
         fd.write("project: project_b")
 
     with pytest.raises(ConfigError, match=r"^Multiple configuration files found in folder.*"):
@@ -285,7 +285,7 @@ def test_load_config_from_env_invalid_variable_name():
 
 def test_load_config_from_python_module_missing_config(tmp_path):
     config_path = tmp_path / "missing_config.py"
-    with open(config_path, "w") as fd:
+    with open(config_path, "w", encoding="utf-8") as fd:
         fd.write("from sqlmesh.core.config import Config")
 
     with pytest.raises(ConfigError, match="Config 'config' was not found."):
@@ -294,7 +294,7 @@ def test_load_config_from_python_module_missing_config(tmp_path):
 
 def test_load_config_from_python_module_invalid_config_object(tmp_path):
     config_path = tmp_path / "invalid_config.py"
-    with open(config_path, "w") as fd:
+    with open(config_path, "w", encoding="utf-8") as fd:
         fd.write("config = None")
 
     with pytest.raises(
@@ -306,7 +306,7 @@ def test_load_config_from_python_module_invalid_config_object(tmp_path):
 
 def test_cloud_composer_scheduler_config(tmp_path_factory):
     config_path = tmp_path_factory.mktemp("yaml_config") / "config.yaml"
-    with open(config_path, "w") as fd:
+    with open(config_path, "w", encoding="utf-8") as fd:
         fd.write(
             """
 gateways:
@@ -365,7 +365,7 @@ model_defaults:
 )
 def test_environment_catalog_mapping(tmp_path_factory, mapping, expected, dialect, raise_error):
     config_path = tmp_path_factory.mktemp("yaml_config") / "config.yaml"
-    with open(config_path, "w") as fd:
+    with open(config_path, "w", encoding="utf-8") as fd:
         fd.write(
             f"""
 gateways:
@@ -395,7 +395,7 @@ environment_catalog_mapping:
 
 def test_load_feature_flag(tmp_path_factory):
     config_path = tmp_path_factory.mktemp("yaml_config") / "config.yaml"
-    with open(config_path, "w") as fd:
+    with open(config_path, "w", encoding="utf-8") as fd:
         fd.write(
             """
 gateways:

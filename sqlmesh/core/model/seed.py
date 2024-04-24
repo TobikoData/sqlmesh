@@ -102,5 +102,5 @@ class Seed(PydanticModel):
 
 
 def create_seed(path: str | Path) -> Seed:
-    with open(Path(path), "r") as fd:
+    with open(Path(path), "r", encoding="utf-8") as fd:
         return Seed(content=fd.read())

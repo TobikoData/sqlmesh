@@ -215,7 +215,7 @@ class GithubEvent:
 
     @classmethod
     def from_path(cls, path: t.Union[str, pathlib.Path]) -> GithubEvent:
-        with open(pathlib.Path(path)) as f:
+        with open(pathlib.Path(path), "r", encoding="utf-8") as f:
             return cls.from_obj(json.load(f))
 
     @classmethod
@@ -435,7 +435,7 @@ class GithubController:
         Appends the given key/value to output so they can be read by following steps
         """
         logger.debug(f"Setting output. Key: {key}, Value: {value}")
-        with open(os.environ["GITHUB_OUTPUT"], "a") as fh:
+        with open(os.environ["GITHUB_OUTPUT"], "a", encoding="utf-8") as fh:
             print(f"{key}={value}", file=fh)
 
     def get_plan_summary(self, plan: Plan) -> str:

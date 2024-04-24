@@ -126,7 +126,7 @@ def test_no_internal_model_conversion(tmp_path: Path, make_snapshot, mocker: Moc
         "bigquery",
     )
 
-    with open(schema_file, "r") as fd:
+    with open(schema_file, "r", encoding="utf8") as fd:
         schema = YAML().load(fd)
 
     assert len(schema) == 2
@@ -152,6 +152,6 @@ def test_missing_table(tmp_path: Path):
         )
     assert """Unable to get schema for '"tbl_source"'""" in mock_logger.call_args[0][0]
 
-    with open(schema_file, "r") as fd:
+    with open(schema_file, "r", encoding="utf8") as fd:
         schema = YAML().load(fd)
     assert len(schema) == 0

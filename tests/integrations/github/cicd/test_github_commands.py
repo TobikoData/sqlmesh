@@ -144,7 +144,7 @@ def test_run_all_success_with_approvers_approved(
 
 **Models needing backfill (missing dates):**"""
     )
-    with open(github_output_file, "r") as f:
+    with open(github_output_file, "r", encoding="utf-8") as f:
         output = f.read()
         assert (
             output
@@ -271,7 +271,7 @@ def test_run_all_success_with_approvers_approved_merge_delete(
 
 **Models needing backfill (missing dates):**"""
     )
-    with open(github_output_file, "r") as f:
+    with open(github_output_file, "r", encoding="utf-8") as f:
         output = f.read()
         assert (
             output
@@ -392,7 +392,7 @@ def test_run_all_missing_approval(
         created_comments[0].body
         == """**SQLMesh Bot Info**\n- PR Virtual Data Environment: hello_world_2"""
     )
-    with open(github_output_file, "r") as f:
+    with open(github_output_file, "r", encoding="utf-8") as f:
         output = f.read()
         assert (
             output
@@ -527,7 +527,7 @@ def test_run_all_test_failed(
 
     assert len(created_comments) == 0
 
-    with open(github_output_file, "r") as f:
+    with open(github_output_file, "r", encoding="utf-8") as f:
         output = f.read()
         assert (
             output
@@ -654,7 +654,7 @@ def test_run_all_test_exception(
 
     assert len(created_comments) == 0
 
-    with open(github_output_file, "r") as f:
+    with open(github_output_file, "r", encoding="utf-8") as f:
         output = f.read()
         assert (
             output
@@ -776,7 +776,7 @@ def test_pr_update_failure(
 
     assert len(created_comments) == 0
 
-    with open(github_output_file, "r") as f:
+    with open(github_output_file, "r", encoding="utf-8") as f:
         output = f.read()
         assert (
             output
@@ -911,7 +911,7 @@ def test_prod_update_failure(
 **Models needing backfill (missing dates):**"""
     )
 
-    with open(github_output_file, "r") as f:
+    with open(github_output_file, "r", encoding="utf-8") as f:
         output = f.read()
         assert (
             output
@@ -986,7 +986,7 @@ def test_comment_command_invalid(
 
     assert len(created_comments) == 0
 
-    with open(github_output_file, "r") as f:
+    with open(github_output_file, "r", encoding="utf-8") as f:
         output = f.read()
         assert output == ""
 
@@ -1105,7 +1105,7 @@ def test_comment_command_deploy_prod(
 **Models needing backfill (missing dates):**"""
     )
 
-    with open(github_output_file, "r") as f:
+    with open(github_output_file, "r", encoding="utf-8") as f:
         output = f.read()
         assert (
             output
@@ -1177,6 +1177,6 @@ def test_comment_command_deploy_prod_not_enabled(
 
     assert len(created_comments) == 0
 
-    with open(github_output_file, "r") as f:
+    with open(github_output_file, "r", encoding="utf-8") as f:
         output = f.read()
         assert output == ""

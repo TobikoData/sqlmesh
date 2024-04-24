@@ -76,7 +76,7 @@ class SQLMeshSparkSubmitOperator(BaseOperator):
         command_payload = self._target.serialized_command_payload(context)
         with tempfile.TemporaryDirectory() as tmp:
             payload_file_path = os.path.join(tmp, commands.COMMAND_PAYLOAD_FILE_NAME)
-            with open(payload_file_path, "w") as payload_fd:
+            with open(payload_file_path, "w", encoding="utf-8") as payload_fd:
                 payload_fd.write(command_payload)
 
             if self._hook is None:

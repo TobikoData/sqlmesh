@@ -528,7 +528,7 @@ class SQLMeshMagics(Magics):
         args = parse_argstring(self.dag, line)
         dag = context.get_dag(args.select_model)
         if args.file:
-            with open(args.file, "w") as file:
+            with open(args.file, "w", encoding="utf-8") as file:
                 file.write(str(dag))
         # TODO: Have this go through console instead of calling display directly
         self.display(dag)

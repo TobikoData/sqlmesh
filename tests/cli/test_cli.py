@@ -36,7 +36,7 @@ def create_example_project(temp_dir) -> None:
         - Overwriting the config.yaml file so the duckdb database file will be created in the temp_dir directory
     """
     init_example_project(temp_dir, "duckdb")
-    with open(temp_dir / "config.yaml", "w") as f:
+    with open(temp_dir / "config.yaml", "w", encoding="utf-8") as f:
         f.write(
             f"""gateways:
     local:
@@ -53,7 +53,7 @@ model_defaults:
 
 
 def update_incremental_model(temp_dir) -> None:
-    with open(temp_dir / "models" / "incremental_model.sql", "w") as f:
+    with open(temp_dir / "models" / "incremental_model.sql", "w", encoding="utf-8") as f:
         f.write(
             """
 MODEL (
@@ -80,7 +80,7 @@ WHERE
 
 
 def update_full_model(temp_dir) -> None:
-    with open(temp_dir / "models" / "full_model.sql", "w") as f:
+    with open(temp_dir / "models" / "full_model.sql", "w", encoding="utf-8") as f:
         f.write(
             """
 MODEL (
