@@ -1023,7 +1023,7 @@ def test_categorize_change_seed(make_snapshot, tmp_path):
     seed_path = tmp_path / "seed.csv"
     model_kind = SeedKind(path=str(seed_path.absolute()))
 
-    with open(seed_path, "w") as fd:
+    with open(seed_path, "w", encoding="utf-8") as fd:
         fd.write(
             """
 col_a,col_b,col_c
@@ -1034,7 +1034,7 @@ col_a,col_b,col_c
     original_snapshot = make_snapshot(create_seed_model(model_name, model_kind))
 
     # New column.
-    with open(seed_path, "w") as fd:
+    with open(seed_path, "w", encoding="utf-8") as fd:
         fd.write(
             """
 col_a,col_d,col_b,col_c
@@ -1052,7 +1052,7 @@ col_a,col_d,col_b,col_c
     )
 
     # Column removed.
-    with open(seed_path, "w") as fd:
+    with open(seed_path, "w", encoding="utf-8") as fd:
         fd.write(
             """
 col_a,col_c
@@ -1070,7 +1070,7 @@ col_a,col_c
     )
 
     # Column renamed.
-    with open(seed_path, "w") as fd:
+    with open(seed_path, "w", encoding="utf-8") as fd:
         fd.write(
             """
 col_a,col_b,col_d
@@ -1088,7 +1088,7 @@ col_a,col_b,col_d
     )
 
     # New row.
-    with open(seed_path, "w") as fd:
+    with open(seed_path, "w", encoding="utf-8") as fd:
         fd.write(
             """
 col_a,col_b,col_c
@@ -1107,7 +1107,7 @@ col_a,col_b,col_c
     )
 
     # Deleted row.
-    with open(seed_path, "w") as fd:
+    with open(seed_path, "w", encoding="utf-8") as fd:
         fd.write(
             """
 col_a,col_b,col_c
@@ -1124,7 +1124,7 @@ col_a,col_b,col_c
     )
 
     # Numeric column changed.
-    with open(seed_path, "w") as fd:
+    with open(seed_path, "w", encoding="utf-8") as fd:
         fd.write(
             """
 col_a,col_b,col_c
@@ -1142,7 +1142,7 @@ col_a,col_b,col_c
     )
 
     # Text column changed.
-    with open(seed_path, "w") as fd:
+    with open(seed_path, "w", encoding="utf-8") as fd:
         fd.write(
             """
 col_a,col_b,col_c
@@ -1160,7 +1160,7 @@ col_a,col_b,col_c
     )
 
     # Column type changed.
-    with open(seed_path, "w") as fd:
+    with open(seed_path, "w", encoding="utf-8") as fd:
         fd.write(
             """
 col_a,col_b,col_c

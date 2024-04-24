@@ -37,7 +37,7 @@ def snowflake_key_no_passphrase_path() -> str:
 
 @pytest.fixture
 def snowflake_key_no_passphrase_pem(snowflake_key_no_passphrase_path) -> str:
-    with open(snowflake_key_no_passphrase_path, "r") as key:
+    with open(snowflake_key_no_passphrase_path, "r", encoding="utf-8") as key:
         return key.read()
 
 
@@ -58,7 +58,7 @@ def snowflake_key_passphrase_path() -> str:
 
 @pytest.fixture
 def snowflake_key_passphrase_pem(snowflake_key_passphrase_path) -> str:
-    with open(snowflake_key_passphrase_path, "r") as key:
+    with open(snowflake_key_passphrase_path, "r", encoding="utf-8") as key:
         return key.read()
 
 

@@ -388,7 +388,7 @@ def test_duckdb_threads(tmp_path):
 
     copytree(dbt_project_dir, temp_dir, symlinks=True)
 
-    with open(temp_dir / "profiles.yml", "w") as f:
+    with open(temp_dir / "profiles.yml", "w", encoding="utf-8") as f:
         f.write(
             """
             sushi:

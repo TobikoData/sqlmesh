@@ -91,7 +91,7 @@ class SQLMeshDatabricksSubmitOperator(DatabricksSubmitRunOperator):
         command_payload = self._target.serialized_command_payload(context)
         with tempfile.TemporaryDirectory() as tmp:
             local_payload_path = os.path.join(tmp, commands.COMMAND_PAYLOAD_FILE_NAME)
-            with open(local_payload_path, "w") as payload_fd:
+            with open(local_payload_path, "w", encoding="utf-8") as payload_fd:
                 payload_fd.write(command_payload)
             remote_payload_path = os.path.join(
                 self._dbfs_location, commands.COMMAND_PAYLOAD_FILE_NAME
