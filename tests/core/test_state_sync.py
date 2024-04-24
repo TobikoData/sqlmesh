@@ -1065,18 +1065,20 @@ def test_delete_expired_snapshots_seed(
 
     state_sync.push_snapshots([snapshot])
     assert set(state_sync.get_snapshots(None)) == {snapshot.snapshot_id}
-    assert state_sync.engine_adapter.fetchall(
-        "SELECT name, version, content FROM sqlmesh._seeds"
-    ) == [
-        (snapshot.name, snapshot.version, snapshot.model.seed.content),
-    ]
+    snapshots = state_sync.get_snapshots(None, hydrate_seeds=True)
+    assert len(snapshots) == 1
+    assert snapshot.snapshot_id in snapshots
+    stored_snapshot = snapshots[snapshot.snapshot_id]
+    assert isinstance(stored_snapshot.model, SeedModel)
+    assert stored_snapshot.name == snapshot.name
+    assert stored_snapshot.version == snapshot.version
+    assert stored_snapshot.model.seed.content == snapshot.model.seed.content
 
     assert state_sync.delete_expired_snapshots() == [
         SnapshotTableCleanupTask(snapshot=snapshot.table_info, dev_table_only=False),
     ]
 
     assert not state_sync.get_snapshots(None)
-    assert not state_sync.engine_adapter.fetchall("SELECT * FROM sqlmesh._seeds")
 
 
 def test_delete_expired_snapshots_batching(
@@ -2242,14 +2244,10 @@ def test_seed_model_metadata_update(
     snapshot.categorize_as(SnapshotChangeCategory.BREAKING)
 
     state_sync.push_snapshots([snapshot])
-
-    seed_query = (
-        exp.select("COUNT(*)")
-        .from_("sqlmesh._seeds")
-        .where(exp.column("version").eq(snapshot.version))
-    )
-
-    assert state_sync.engine_adapter.fetchone(seed_query)[0] == 1
+    stored_snapshots = state_sync.get_snapshots(None)
+    assert len(stored_snapshots) == 1
+    stored_snapshot = stored_snapshots[snapshot.snapshot_id]
+    assert stored_snapshot.version == snapshot.version
 
     model = model.copy(update={"owner": "jen"})
     new_snapshot = make_snapshot(model)
@@ -2260,5 +2258,4 @@ def test_seed_model_metadata_update(
     assert snapshot.version == new_snapshot.version
 
     state_sync.push_snapshots([new_snapshot])
-    assert state_sync.engine_adapter.fetchone(seed_query)[0] == 1
     assert len(state_sync.get_snapshots([new_snapshot, snapshot])) == 2
