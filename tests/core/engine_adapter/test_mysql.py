@@ -62,18 +62,3 @@ def test_comments(make_mocked_engine_adapter: t.Callable, mocker: MockerFixture)
         f"ALTER TABLE `test_table` COMMENT = '{truncated_table_comment}'",
         f"ALTER TABLE `test_table` MODIFY `a` INT COMMENT '{truncated_column_comment}'",
     ]
-
-
-def test_rename_table(make_mocked_engine_adapter: t.Callable, mocker: MockerFixture):
-    adapter = make_mocked_engine_adapter(MySQLEngineAdapter)
-
-    adapter.rename_table("test_schema.old_name", "new_name")
-    adapter.rename_table("test_schema.old_name", "new_test_schema.new_name")
-    adapter.rename_table("old_name", "new_name")
-
-    sql_calls = to_sql_calls(adapter)
-    assert sql_calls == [
-        "ALTER TABLE `test_schema`.`old_name` RENAME TO `test_schema`.`new_name`",
-        "ALTER TABLE `test_schema`.`old_name` RENAME TO `new_test_schema`.`new_name`",
-        "ALTER TABLE `old_name` RENAME TO `new_name`",
-    ]

@@ -54,4 +54,4 @@ def migrate(state_sync, **kwargs):  # type: ignore
 
     engine_adapter.insert_append(new_seeds_table, query)
     engine_adapter.drop_table(seeds_table)
-    engine_adapter.rename_table(new_seeds_table, "_seeds")
+    engine_adapter.rename_table(new_seeds_table, seeds_table)

@@ -10,7 +10,6 @@ from sqlmesh.core.engine_adapter.mixins import (
     LogicalMergeMixin,
     NonTransactionalTruncateMixin,
     PandasNativeFetchDFSupportMixin,
-    RenameTableFullTargetNameMixin,
 )
 from sqlmesh.core.engine_adapter.shared import (
     CommentCreationTable,
@@ -31,7 +30,6 @@ class MySQLEngineAdapter(
     LogicalMergeMixin,
     PandasNativeFetchDFSupportMixin,
     NonTransactionalTruncateMixin,
-    RenameTableFullTargetNameMixin,
 ):
     DEFAULT_BATCH_SIZE = 200
     DIALECT = "mysql"
