@@ -83,16 +83,21 @@ HAVING COUNT(*) <= @threshold
 # ))
 forall_audit = ModelAudit(
     name="forall",
+    defaults={"condition": exp.null()},
     query="""
 SELECT *
 FROM @this_model
-WHERE @REDUCE(
-  @EACH(
-    @criteria,
-    c -> NOT (c)
-  ),
-  (l, r) -> l OR r
-)
+WHERE
+  @AND(
+    @REDUCE(
+      @EACH(
+        @criteria,
+        c -> NOT (c)
+      ),
+      (l, r) -> l OR r
+    ),
+    @condition,
+  )
     """,
 )
 
