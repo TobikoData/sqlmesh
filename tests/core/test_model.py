@@ -3748,9 +3748,7 @@ def test_this_model() -> None:
         SELECT '{{ this_model }}' as x
         JINJA_END;
 
-        JINJA_STATEMENT_BEGIN;
-        COPY {{ this_model }} TO 'b';
-        JINJA_END;
+        DELETE FROM db.other_table WHERE col IN (SELECT x FROM @this_model);
         """
     )
     model = load_sql_based_model(expressions)
@@ -3758,4 +3756,7 @@ def test_this_model() -> None:
     assert model.render_query_or_raise().sql() == '''SELECT '"db"."table"' AS "x"'''
 
     assert model.render_pre_statements()[0].sql() == """COPY "db"."table" TO 'a'"""
-    assert model.render_post_statements()[0].sql() == """COPY "db"."table" TO 'b'"""
+    assert (
+        model.render_post_statements()[0].sql()
+        == """DELETE FROM "db"."other_table" WHERE "col" IN (SELECT "x" FROM "db"."table")"""
+    )

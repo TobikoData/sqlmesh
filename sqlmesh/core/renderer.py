@@ -101,11 +101,12 @@ class BaseExpressionRenderer:
 
         if self._model_fqn and "this_model" not in kwargs:
             if snapshots:
-                kwargs["this_model"] = self._to_table_mapping(
-                    [snapshots[self._model_fqn]], deployability_index
-                )
+                mapping = self._to_table_mapping([snapshots[self._model_fqn]], deployability_index)
+                resolved_name = next(iter(mapping.values())) if mapping else self._model_fqn
             else:
-                kwargs["this_model"] = self._model_fqn
+                resolved_name = self._model_fqn
+
+            kwargs["this_model"] = exp.to_table(resolved_name)
 
         expressions = [self._expression]
 
