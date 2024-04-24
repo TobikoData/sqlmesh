@@ -3541,6 +3541,30 @@ def test_variables_in_templates() -> None:
         == "SELECT 'gateway' AS \"col_in_memory\", 'test_var_a' AS \"test_value_col\", 'overridden_var' AS \"col_overridden_value_col\""
     )
 
+    model = load_sql_based_model(
+        parse(
+            """
+        MODEL(name sushi.test_gateway_macro);
+        @DEF(overridden_var, overridden_value);
+        SELECT 'combo' AS col_@{test_var_a}_@{overridden_var}_col_@gateway
+        """
+        ),
+        variables={
+            c.GATEWAY: "in_memory",
+            "test_var_a": "test_value",
+            "test_var_unused": "unused",
+            "overridden_var": "initial_value",
+        },
+    )
+
+    assert model.python_env[c.SQLMESH_VARS] == Executable.value(
+        {c.GATEWAY: "in_memory", "test_var_a": "test_value", "overridden_var": "initial_value"}
+    )
+    assert (
+        model.render_query_or_raise().sql()
+        == "SELECT 'combo' AS \"col_test_value_overridden_value_col_in_memory\""
+    )
+
 
 def test_variables_jinja():
     expressions = parse(

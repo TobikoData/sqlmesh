@@ -22,7 +22,7 @@ from sqlglot.time import format_time
 
 from sqlmesh.core import constants as c
 from sqlmesh.core import dialect as d
-from sqlmesh.core.macros import MacroRegistry, macro
+from sqlmesh.core.macros import MacroRegistry, MacroStrTemplate, macro
 from sqlmesh.core.model.common import expression_validator
 from sqlmesh.core.model.kind import ModelKindName, SeedKind
 from sqlmesh.core.model.meta import ModelMeta
@@ -1905,7 +1905,7 @@ def _python_env(
     for expression in expressions:
         if not isinstance(expression, d.Jinja):
             for macro_func_or_var in expression.find_all(d.MacroFunc, d.MacroVar, exp.Identifier):
-                if macro_func_or_var.__class__ is d.MacroFunc:
+                if isinstance(macro_func_or_var, d.MacroFunc):
                     name = macro_func_or_var.this.name.lower()
                     if name in macros:
                         used_macros[name] = macros[name]
@@ -1919,26 +1919,19 @@ def _python_env(
                                     path,
                                 )
                             used_variables.add(args[0].this.lower())
-                elif macro_func_or_var.__class__ is d.MacroVar:
+                elif isinstance(macro_func_or_var, d.MacroVar):
                     name = macro_func_or_var.name.lower()
                     if name in macros:
                         used_macros[name] = macros[name]
                     elif name in variables:
                         used_variables.add(name)
                 elif (
-                    macro_func_or_var.__class__ is exp.Identifier and "@" in macro_func_or_var.this
+                    isinstance(macro_func_or_var, exp.Identifier) and "@" in macro_func_or_var.this
                 ):
-                    var_name = None
-                    macro_template = macro_func_or_var.this
-                    at_idx = macro_template.index("@")
-                    if at_idx + 1 < len(macro_template) and macro_template[at_idx + 1] == "{":
-                        block_end_idx = macro_template.find("}", at_idx + 2)
-                        if block_end_idx > 0:
-                            var_name = macro_template[at_idx + 2 : block_end_idx]
-                    else:
-                        var_name = macro_template[at_idx + 1 :]
-                    if var_name is not None and var_name in variables:
-                        used_variables.add(var_name)
+                    for m in MacroStrTemplate.pattern.findall(macro_func_or_var.this):
+                        var_name = m[2] or m[1]
+                        if var_name in variables:
+                            used_variables.add(var_name)
 
     for macro_ref in jinja_macro_references or set():
         if macro_ref.package is None and macro_ref.name in macros:
