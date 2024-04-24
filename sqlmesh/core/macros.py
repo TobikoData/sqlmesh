@@ -2,10 +2,13 @@ from __future__ import annotations
 
 import inspect
 import logging
+import sys
+import types
 import typing as t
 from enum import Enum
-from functools import reduce, wraps
+from functools import reduce
 from itertools import chain
+from pathlib import Path
 from string import Template
 
 import sqlglot
@@ -42,6 +45,13 @@ if t.TYPE_CHECKING:
     from sqlmesh.core._typing import TableName
     from sqlmesh.core.engine_adapter import EngineAdapter
     from sqlmesh.core.snapshot import Snapshot
+
+
+if sys.version_info >= (3, 10):
+    UNION_TYPES = (t.Union, types.UnionType)
+else:
+    UNION_TYPES = (t.Union,)
+
 
 logger = logging.getLogger(__name__)
 
@@ -130,6 +140,7 @@ class MacroEvaluator:
         resolve_tables: t.Optional[t.Callable[[exp.Expression], exp.Expression]] = None,
         snapshots: t.Optional[t.Dict[str, Snapshot]] = None,
         default_catalog: t.Optional[str] = None,
+        path: Path = Path(),
     ):
         self.dialect = dialect
         self.generator = MacroDialect().generator()
@@ -146,6 +157,7 @@ class MacroEvaluator:
         self.columns_to_types_called = False
         self._snapshots = snapshots if snapshots is not None else {}
         self.default_catalog = default_catalog
+        self._path = path
 
         prepare_env(self.python_env, self.env)
         for k, v in self.python_env.items():
@@ -157,7 +169,7 @@ class MacroEvaluator:
                 self.locals[k] = self.env[k]
 
     def send(
-        self, name: str, *args: t.Any
+        self, name: str, *args: t.Any, **kwargs: t.Any
     ) -> t.Union[None, exp.Expression, t.List[exp.Expression]]:
         func = self.macros.get(normalize_macro_name(name))
 
@@ -165,7 +177,33 @@ class MacroEvaluator:
             raise SQLMeshError(f"Macro '{name}' does not exist.")
 
         try:
-            return func(self, *args)
+            annotations = t.get_type_hints(func)
+        except NameError as e:  # forward references aren't handled
+            annotations = {}
+
+        if annotations:
+            spec = inspect.getfullargspec(func)
+            callargs = inspect.getcallargs(func, self, *args, **kwargs)
+            new_args = []
+
+            for arg, value in callargs.items():
+                typ = annotations.get(arg)
+
+                if value is self:
+                    continue
+                if arg == spec.varargs:
+                    for v in value:
+                        new_args.append(self._coerce(v, typ))
+                elif arg == spec.varkw:
+                    for k, v in value.items():
+                        kwargs[k] = self._coerce(v, typ)
+                else:
+                    new_args.append(self._coerce(value, typ))
+
+            args = new_args  # type: ignore
+
+        try:
+            return func(self, *args, **kwargs)
         except Exception as e:
             print_exception(e, self.python_env)
             raise MacroEvalError("Error trying to eval macro.") from e
@@ -406,7 +444,7 @@ class MacroEvaluator:
                 return expr
             base = t.get_origin(typ) or typ
             # We need to handle t.Union first since we cannot use isinstance with it
-            if base is t.Union:
+            if base in UNION_TYPES:
                 for branch in t.get_args(typ):
                     try:
                         return self._coerce(expr, branch, True)
@@ -459,11 +497,11 @@ class MacroEvaluator:
         except Exception:
             if strict:
                 raise
-            logger.warning(
-                "Coercion of expression '%s' to type '%s' failed. Using non coerced expression.",
+            logger.error(
+                "Coercion of expression '%s' to type '%s' failed. Using non coerced expression at '%s'",
                 expr,
                 typ,
-                exc_info=True,
+                self._path,
             )
             return expr
 
@@ -490,33 +528,9 @@ class macro(registry_decorator):
     def __call__(
         self, func: t.Callable[..., DECORATOR_RETURN_TYPE]
     ) -> t.Callable[..., DECORATOR_RETURN_TYPE]:
-        @wraps(func)
-        def _typed_func(
-            evaluator: MacroEvaluator, *args_: t.Any, **kwargs_: t.Any
-        ) -> DECORATOR_RETURN_TYPE:
-            spec = inspect.getfullargspec(func)
-            annotations = t.get_type_hints(func)
-            kwargs = inspect.getcallargs(func, evaluator, *args_, **kwargs_)
-            for param, value in kwargs.items():
-                coercible_type = annotations.get(param)
-                if not coercible_type:
-                    continue
-                kwargs[param] = evaluator._coerce(value, coercible_type)
-            args = [kwargs.pop(k) for k in spec.args if k in kwargs]
-            if spec.varargs:
-                args.extend(kwargs.pop(spec.varargs, []))
-            return func(*args, **kwargs)
+        wrapper = super().__call__(func)
 
-        try:
-            annotated = any(t.get_type_hints(func).keys() - {"return"})
-        except TypeError:
-            annotated = False
-
-        wrapper = super().__call__(
-            func if not annotated else t.cast(t.Callable[..., DECORATOR_RETURN_TYPE], _typed_func)
-        )
-
-        # This is useful to identify macros at runtime
+        # This is used to identify macros at runtime to unwrap during serialization.
         setattr(wrapper, "__sqlmesh_macro__", True)
         return wrapper
 
@@ -740,12 +754,13 @@ def eval_(evaluator: MacroEvaluator, condition: exp.Condition) -> t.Any:
     return evaluator.eval_expression(condition)
 
 
+# macros with union types need to use t.Union since | isn't available until 3.9
 @macro()
 def star(
     evaluator: MacroEvaluator,
     relation: exp.Table,
     alias: exp.Column = t.cast(exp.Column, exp.column("")),
-    except_: exp.Array | exp.Tuple = exp.Tuple(this=[]),
+    except_: t.Union[exp.Array, exp.Tuple] = exp.Tuple(this=[]),
     prefix: exp.Literal = exp.Literal.string(""),
     suffix: exp.Literal = exp.Literal.string(""),
     quote_identifiers: exp.Boolean = exp.true(),
@@ -808,7 +823,7 @@ def star(
 
 
 @macro()
-def generate_surrogate_key(_: MacroEvaluator, *fields: exp.Column) -> exp.Func:
+def generate_surrogate_key(_: MacroEvaluator, *fields: exp.Expression) -> exp.Func:
     """Generates a surrogate key for the given fields.
 
     Example:
@@ -833,7 +848,7 @@ def generate_surrogate_key(_: MacroEvaluator, *fields: exp.Column) -> exp.Func:
 
 
 @macro()
-def safe_add(_: MacroEvaluator, *fields: exp.Column) -> exp.Case:
+def safe_add(_: MacroEvaluator, *fields: exp.Expression) -> exp.Case:
     """Adds numbers together, substitutes nulls for 0s and only returns null if all fields are null.
 
     Example:
@@ -886,7 +901,7 @@ def safe_div(_: MacroEvaluator, numerator: exp.Expression, denominator: exp.Expr
 def union(
     evaluator: MacroEvaluator,
     type_: exp.Literal = exp.Literal.string("ALL"),
-    *tables: exp.Column,  # These represent tables but the ast node will be columns
+    *tables: exp.Table,
 ) -> exp.Query:
     """Returns a UNION of the given tables. Only choosing columns that have the same name and type.
 
@@ -968,7 +983,7 @@ def haversine_distance(
 def pivot(
     evaluator: MacroEvaluator,
     column: exp.Column,
-    values: exp.Array | exp.Tuple,
+    values: t.Union[exp.Array, exp.Tuple],
     alias: exp.Boolean = exp.true(),
     agg: exp.Literal = exp.Literal.string("SUM"),
     cmp: exp.Literal = exp.Literal.string("="),

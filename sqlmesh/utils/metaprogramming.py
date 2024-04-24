@@ -276,8 +276,7 @@ def build_env(
     if name not in env:
         # We only need to add the undecorated code of @macro() functions in env, which
         # is accessible through the `__wrapped__` attribute added by functools.wraps
-        # We account for the case where the function is wrapped multiple times too
-        env[name] = inspect.unwrap(obj) if hasattr(obj, "__sqlmesh_macro__") else obj
+        env[name] = obj.__wrapped__ if hasattr(obj, "__sqlmesh_macro__") else obj
 
         if (
             obj_module

@@ -8,6 +8,12 @@ MODEL (
   grain waiter_id
 );
 
+WITH test_macros AS (
+    SELECT
+      @ADD_ONE(1) AS lit_two,
+      @IS_POSITIVE(revenue) AS sql_exp,
+    FROM sushi.waiter_revenue_by_day
+)
 SELECT
   waiter_id::INT AS waiter_id,
   revenue::DOUBLE AS revenue

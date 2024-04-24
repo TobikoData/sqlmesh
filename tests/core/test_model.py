@@ -1248,6 +1248,31 @@ def test_render_query(assert_exp_eq, sushi_context):
     with pytest.raises(SQLMeshError, match=r"Macro 'times4' does not exist.*"):
         model.render_query()
 
+    assert_exp_eq(
+        sushi_context.models['"memory"."sushi"."top_waiters"'].render_query().sql(),
+        """
+        WITH "test_macros" AS (
+          SELECT
+            2 AS "lit_two",
+            "waiter_revenue_by_day"."revenue" > 0 AS "sql_exp"
+          FROM "memory"."sushi"."waiter_revenue_by_day" AS "waiter_revenue_by_day"
+        )
+        SELECT
+          CAST("waiter_revenue_by_day"."waiter_id" AS INT) AS "waiter_id",
+          CAST("waiter_revenue_by_day"."revenue" AS DOUBLE) AS "revenue"
+        FROM "memory"."sushi"."waiter_revenue_by_day" AS "waiter_revenue_by_day"
+        WHERE
+          "waiter_revenue_by_day"."event_date" = (
+            SELECT
+              MAX("waiter_revenue_by_day"."event_date") AS "_col_0"
+            FROM "memory"."sushi"."waiter_revenue_by_day" AS "waiter_revenue_by_day"
+          )
+        ORDER BY
+          "revenue" DESC
+        LIMIT 10
+        """,
+    )
+
 
 def test_time_column():
     expressions = d.parse(

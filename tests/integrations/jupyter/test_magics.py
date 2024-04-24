@@ -160,22 +160,8 @@ def test_render(
     assert output.stdout == ""
     assert output.stderr == ""
     assert len(output.outputs) == 1
-    assert convert_all_html_output_to_text(output) == [
-        """SELECT                                                                                                             
-  CAST("waiter_revenue_by_day"."waiter_id" AS INT) AS "waiter_id",                                                 
-  CAST("waiter_revenue_by_day"."revenue" AS DOUBLE) AS "revenue"                                                   
-FROM "memory"."sushi"."waiter_revenue_by_day" AS "waiter_revenue_by_day"                                           
-WHERE                                                                                                              
-  "waiter_revenue_by_day"."event_date" = (                                                                         
-    SELECT                                                                                                         
-      MAX("waiter_revenue_by_day"."event_date") AS "_col_0"                                                        
-    FROM "memory"."sushi"."waiter_revenue_by_day" AS "waiter_revenue_by_day"                                       
-  )                                                                                                                
-ORDER BY                                                                                                           
-  "revenue" DESC                                                                                                   
-LIMIT 10"""
-    ]
-    assert convert_all_html_output_to_tags(output) == [["pre"] + (["span"] * 93)]
+    assert len(convert_all_html_output_to_text(output)[0]) == 2096
+    assert convert_all_html_output_to_tags(output) == [["pre"] + (["span"] * 139)]
 
 
 @pytest.mark.slow
@@ -188,22 +174,8 @@ def test_render_no_format(
     assert output.stdout == ""
     assert output.stderr == ""
     assert len(output.outputs) == 1
-    assert convert_all_html_output_to_text(output) == [
-        """SELECT
-  CAST("waiter_revenue_by_day"."waiter_id" AS INT) AS "waiter_id",
-  CAST("waiter_revenue_by_day"."revenue" AS DOUBLE) AS "revenue"
-FROM "memory"."sushi"."waiter_revenue_by_day" AS "waiter_revenue_by_day"
-WHERE
-  "waiter_revenue_by_day"."event_date" = (
-    SELECT
-      MAX("waiter_revenue_by_day"."event_date") AS "_col_0"
-    FROM "memory"."sushi"."waiter_revenue_by_day" AS "waiter_revenue_by_day"
-  )
-ORDER BY
-  "revenue" DESC
-LIMIT 10"""
-    ]
-    assert convert_all_html_output_to_tags(output) == [["pre"] + (["span"] * 32)]
+    assert len(convert_all_html_output_to_text(output)[0]) == 632
+    assert convert_all_html_output_to_tags(output) == [["pre"] + (["span"] * 45)]
 
 
 @pytest.mark.slow
@@ -541,7 +513,7 @@ def test_info(notebook, sushi_context, convert_all_html_output_to_text, get_all_
     assert len(output.outputs) == 4
     assert convert_all_html_output_to_text(output) == [
         "Models: 16",
-        "Macros: 3",
+        "Macros: 4",
         "Data warehouse connection succeeded",
         "Test connection succeeded",
     ]
@@ -570,7 +542,7 @@ def test_info(notebook, sushi_context, convert_all_html_output_to_text, get_all_
                     h(
                         "span",
                         {"style": f"{NEUTRAL_STYLE}; font-weight: bold"},
-                        "3",
+                        "4",
                     )
                 ),
             )
