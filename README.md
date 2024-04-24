@@ -1,10 +1,10 @@
-![SQLMesh logo](sqlmesh.svg)
+![SQLMesh logo](sqlmesh.png)
 
-SQLMesh is a next-generation data transformation and modeling framework that is backwards compatible with dbt. It aims to be easy to use, correct, and efficient. 
+SQLMesh is a next-generation data transformation and modeling framework that is backwards compatible with dbt. It aims to be easy to use, correct, and efficient.
 
 SQLMesh enables data practitioners to efficiently run and deploy data transformations written in SQL or Python.
 
-Although SQLMesh will make your dbt projects more efficient, reliable, and maintainable, it is more than just a [dbt alternative](https://tobikodata.com/sqlmesh_for_dbt_1.html). 
+Although SQLMesh will make your dbt projects more efficient, reliable, and maintainable, it is more than just a [dbt alternative](https://tobikodata.com/sqlmesh_for_dbt_1.html).
 
 ## Select Features
 * [Semantic Understanding of SQL](https://tobikodata.com/semantic-understanding-of-sql.html)
