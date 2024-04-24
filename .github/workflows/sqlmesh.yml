@@ -49,6 +49,8 @@ jobs:
         run: pip install -r requirements.txt
         shell: bash
       - name: Run CI/CD Bot
+          # Add if statement so we don't run-all on merged PR
+        if: github.event.pull_request.merged == false
         run: |
           sqlmesh_cicd -p ${{ github.workspace }}/transform github --token ${{ secrets.GITHUB_TOKEN }} run-all
 
