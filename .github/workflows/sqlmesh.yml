@@ -5,7 +5,7 @@ on:
     types:
       - synchronize
       - opened
-
+      - closed
 
 # The latest commit is the one that will be used to create the PR environment and deploy to production
 concurrency:
