@@ -2225,3 +2225,40 @@ def test_snapshot_batching(state_sync, mocker, make_snapshot):
     assert len(snapshots) == 3
     calls = mock.fetchall.call_args_list
     assert len(calls) == 2
+
+
+def test_seed_model_metadata_update(
+    state_sync: EngineAdapterStateSync,
+    make_snapshot: t.Callable,
+):
+    model = SeedModel(
+        name="a",
+        kind=SeedKind(path="./path/to/seed"),
+        seed=Seed(content="header\n1\n2"),
+        column_hashes={"header": "hash"},
+        depends_on=set(),
+    )
+    snapshot = make_snapshot(model)
+    snapshot.categorize_as(SnapshotChangeCategory.BREAKING)
+
+    state_sync.push_snapshots([snapshot])
+
+    seed_query = (
+        exp.select("COUNT(*)")
+        .from_("sqlmesh._seeds")
+        .where(exp.column("version").eq(snapshot.version))
+    )
+
+    assert state_sync.engine_adapter.fetchone(seed_query)[0] == 1
+
+    model = model.copy(update={"owner": "jen"})
+    new_snapshot = make_snapshot(model)
+    new_snapshot.previous_versions = snapshot.all_versions
+    new_snapshot.categorize_as(SnapshotChangeCategory.FORWARD_ONLY)
+
+    assert snapshot.fingerprint != new_snapshot.fingerprint
+    assert snapshot.version == new_snapshot.version
+
+    state_sync.push_snapshots([new_snapshot])
+    assert state_sync.engine_adapter.fetchone(seed_query)[0] == 1
+    assert len(state_sync.get_snapshots([new_snapshot, snapshot])) == 2

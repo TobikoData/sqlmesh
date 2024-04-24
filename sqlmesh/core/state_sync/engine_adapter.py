@@ -39,6 +39,7 @@ from sqlmesh.core.snapshot import (
     Intervals,
     Node,
     Snapshot,
+    SnapshotChangeCategory,
     SnapshotFingerprint,
     SnapshotId,
     SnapshotIdLike,
@@ -215,7 +216,10 @@ class EngineAdapterStateSync(CommonStateSyncMixin, StateSync):
         snapshots_to_store = []
 
         for snapshot in snapshots:
-            if isinstance(snapshot.node, SeedModel):
+            if isinstance(snapshot.node, SeedModel) and snapshot.change_category in (
+                SnapshotChangeCategory.BREAKING,
+                SnapshotChangeCategory.NON_BREAKING,
+            ):
                 seed_model = t.cast(SeedModel, snapshot.node)
                 seed_contents.append(
                     {
