@@ -7,6 +7,17 @@ gateways:
             warehouse: WH_TRANSFORMING_SQLMESH
             database: SUSHI_DB
             role: SQLMESH_ANALYST
+            user: env("USERNAME")
+    airflow:
+        connection:
+            type: snowflake
+            account: datacoves-main
+            warehouse: WH_TRANSFORMING_SQLMESH
+            database: SUSHI_DB
+            role: SQLMESH_ANALYST
+            user: env("USERNAME")
+            password: env("USERNAME")
+
 
 default_gateway: snowflake
 
@@ -15,4 +26,3 @@ model_defaults:
 
 cicd_bot:
     type: github
-    merge_method: squash
