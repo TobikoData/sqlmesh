@@ -158,6 +158,7 @@ class BaseExpressionRenderer:
             ),
             snapshots=snapshots,
             default_catalog=self._default_catalog,
+            path=self._path,
         )
 
         for definition in self._macro_definitions:

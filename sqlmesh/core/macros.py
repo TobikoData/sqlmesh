@@ -1,14 +1,19 @@
 from __future__ import annotations
 
+import inspect
+import logging
+import sys
+import types
 import typing as t
 from enum import Enum
 from functools import reduce
 from itertools import chain
+from pathlib import Path
 from string import Template
 
 import sqlglot
 from jinja2 import Environment
-from sqlglot import Generator, exp
+from sqlglot import Generator, exp, parse_one
 from sqlglot.executor.env import ENV
 from sqlglot.executor.python import Python
 from sqlglot.helper import csv, ensure_collection
@@ -17,6 +22,7 @@ from sqlglot.schema import MappingSchema
 from sqlmesh.core import constants as c
 from sqlmesh.core.dialect import (
     SQLMESH_MACRO_PREFIX,
+    Dialect,
     MacroDef,
     MacroFunc,
     MacroSQL,
@@ -41,6 +47,15 @@ if t.TYPE_CHECKING:
     from sqlmesh.core.snapshot import Snapshot
 
 
+if sys.version_info >= (3, 10):
+    UNION_TYPES = (t.Union, types.UnionType)
+else:
+    UNION_TYPES = (t.Union,)
+
+
+logger = logging.getLogger(__name__)
+
+
 class RuntimeStage(Enum):
     LOADING = "loading"
     CREATING = "creating"
@@ -52,6 +67,7 @@ class MacroStrTemplate(Template):
 
 
 EXPRESSIONS_NAME_MAP = {}
+SQL = t.NewType("SQL", str)
 
 for klass in sqlglot.Parser.EXPRESSION_PARSERS:
     name = klass if isinstance(klass, str) else klass.__name__  # type: ignore
@@ -125,6 +141,7 @@ class MacroEvaluator:
         resolve_tables: t.Optional[t.Callable[[exp.Expression], exp.Expression]] = None,
         snapshots: t.Optional[t.Dict[str, Snapshot]] = None,
         default_catalog: t.Optional[str] = None,
+        path: Path = Path(),
     ):
         self.dialect = dialect
         self.generator = MacroDialect().generator()
@@ -132,7 +149,12 @@ class MacroEvaluator:
             "runtime_stage": runtime_stage.value,
             "default_catalog": default_catalog,
         }
-        self.env = {**ENV, "self": self}
+        self.env = {
+            **ENV,
+            "self": self,
+            "SQL": SQL,
+            "MacroEvaluator": MacroEvaluator,
+        }
         self.python_env = python_env or {}
         self._jinja_env: t.Optional[Environment] = jinja_env
         self.macros = {normalize_macro_name(k): v.func for k, v in macro.get_registry().items()}
@@ -141,6 +163,7 @@ class MacroEvaluator:
         self.columns_to_types_called = False
         self._snapshots = snapshots if snapshots is not None else {}
         self.default_catalog = default_catalog
+        self._path = path
 
         prepare_env(self.python_env, self.env)
         for k, v in self.python_env.items():
@@ -152,7 +175,7 @@ class MacroEvaluator:
                 self.locals[k] = self.env[k]
 
     def send(
-        self, name: str, *args: t.Any
+        self, name: str, *args: t.Any, **kwargs: t.Any
     ) -> t.Union[None, exp.Expression, t.List[exp.Expression]]:
         func = self.macros.get(normalize_macro_name(name))
 
@@ -160,7 +183,33 @@ class MacroEvaluator:
             raise SQLMeshError(f"Macro '{name}' does not exist.")
 
         try:
-            return func(self, *args)
+            annotations = t.get_type_hints(func)
+        except NameError:  # forward references aren't handled
+            annotations = {}
+
+        if annotations:
+            spec = inspect.getfullargspec(func)
+            callargs = inspect.getcallargs(func, self, *args, **kwargs)
+            new_args = []
+
+            for arg, value in callargs.items():
+                typ = annotations.get(arg)
+
+                if value is self:
+                    continue
+                if arg == spec.varargs:
+                    for v in value:
+                        new_args.append(self._coerce(v, typ))
+                elif arg == spec.varkw:
+                    for k, v in value.items():
+                        kwargs[k] = self._coerce(v, typ)
+                else:
+                    new_args.append(self._coerce(value, typ))
+
+            args = new_args  # type: ignore
+
+        try:
+            return func(self, *args, **kwargs)
         except Exception as e:
             print_exception(e, self.python_env)
             raise MacroEvalError("Error trying to eval macro.") from e
@@ -393,6 +442,81 @@ class MacroEvaluator:
         """Returns the value of the specified variable, or the default value if it doesn't exist."""
         return (self.locals.get(c.SQLMESH_VARS) or {}).get(var_name.lower(), default)
 
+    def _coerce(self, expr: exp.Expression, typ: t.Any, strict: bool = False) -> t.Any:
+        """Coerces the given expression to the specified type on a best-effort basis."""
+        base_err_msg = f"Failed to coerce expression '{expr}' to type '{typ}'."
+        try:
+            if typ is None or typ is t.Any:
+                return expr
+            base = t.get_origin(typ) or typ
+
+            # We need to handle Union and TypeVars first since we cannot use isinstance with it
+            if base in UNION_TYPES:
+                for branch in t.get_args(typ):
+                    try:
+                        return self._coerce(expr, branch, True)
+                    except Exception:
+                        pass
+                raise SQLMeshError(base_err_msg)
+            if base is SQL and isinstance(expr, exp.Expression):
+                return expr.sql(self.dialect)
+
+            if isinstance(expr, base):
+                return expr
+            if issubclass(base, exp.Expression):
+                d = Dialect.get_or_raise(self.dialect)
+                into = base if base in d.parser().EXPRESSION_PARSERS else None
+                if into is None:
+                    if isinstance(expr, exp.Literal):
+                        coerced = parse_one(expr.this)
+                    else:
+                        raise SQLMeshError(
+                            f"{base_err_msg} Coercion to {base} requires a literal expression."
+                        )
+                else:
+                    coerced = parse_one(
+                        expr.this if isinstance(expr, exp.Literal) else expr.sql(), into=into
+                    )
+                if isinstance(coerced, base):
+                    return coerced
+                raise SQLMeshError(base_err_msg)
+
+            if base in (int, float, str) and isinstance(expr, exp.Literal):
+                return base(expr.this)
+            if base is str and isinstance(expr, exp.Column) and not expr.table:
+                return expr.name
+            if base is bool and isinstance(expr, exp.Boolean):
+                return expr.this
+            # if base is str and isinstance(expr, exp.Expression):
+            #    return expr.sql(self.dialect)
+            if base is tuple and isinstance(expr, (exp.Tuple, exp.Array)):
+                generic = t.get_args(typ)
+                if not generic:
+                    return tuple(expr.expressions)
+                if generic[-1] is ...:
+                    return tuple(self._coerce(expr, generic[0]) for expr in expr.expressions)
+                elif len(generic) == len(expr.expressions):
+                    return tuple(
+                        self._coerce(expr, generic[i]) for i, expr in enumerate(expr.expressions)
+                    )
+                raise SQLMeshError(f"{base_err_msg} Expected {len(generic)} items.")
+            if base is list and isinstance(expr, (exp.Array, exp.Tuple)):
+                generic = t.get_args(typ)
+                if not generic:
+                    return expr.expressions
+                return [self._coerce(expr, generic[0]) for expr in expr.expressions]
+            raise SQLMeshError(base_err_msg)
+        except Exception:
+            if strict:
+                raise
+            logger.error(
+                "Coercion of expression '%s' to type '%s' failed. Using non coerced expression at '%s'",
+                expr,
+                typ,
+                self._path,
+            )
+            return expr
+
 
 class macro(registry_decorator):
     """Specifies a function is a macro and registers it the global MACROS registry.
@@ -418,7 +542,7 @@ class macro(registry_decorator):
     ) -> t.Callable[..., DECORATOR_RETURN_TYPE]:
         wrapper = super().__call__(func)
 
-        # This is useful to identify macros at runtime
+        # This is used to identify macros at runtime to unwrap during serialization.
         setattr(wrapper, "__sqlmesh_macro__", True)
         return wrapper
 
@@ -642,12 +766,13 @@ def eval_(evaluator: MacroEvaluator, condition: exp.Condition) -> t.Any:
     return evaluator.eval_expression(condition)
 
 
+# macros with union types need to use t.Union since | isn't available until 3.9
 @macro()
 def star(
     evaluator: MacroEvaluator,
     relation: exp.Table,
     alias: exp.Column = t.cast(exp.Column, exp.column("")),
-    except_: exp.Array | exp.Tuple = exp.Tuple(this=[]),
+    except_: t.Union[exp.Array, exp.Tuple] = exp.Tuple(this=[]),
     prefix: exp.Literal = exp.Literal.string(""),
     suffix: exp.Literal = exp.Literal.string(""),
     quote_identifiers: exp.Boolean = exp.true(),
@@ -710,7 +835,7 @@ def star(
 
 
 @macro()
-def generate_surrogate_key(_: MacroEvaluator, *fields: exp.Column) -> exp.Func:
+def generate_surrogate_key(_: MacroEvaluator, *fields: exp.Expression) -> exp.Func:
     """Generates a surrogate key for the given fields.
 
     Example:
@@ -735,7 +860,7 @@ def generate_surrogate_key(_: MacroEvaluator, *fields: exp.Column) -> exp.Func:
 
 
 @macro()
-def safe_add(_: MacroEvaluator, *fields: exp.Column) -> exp.Case:
+def safe_add(_: MacroEvaluator, *fields: exp.Expression) -> exp.Case:
     """Adds numbers together, substitutes nulls for 0s and only returns null if all fields are null.
 
     Example:
@@ -788,7 +913,7 @@ def safe_div(_: MacroEvaluator, numerator: exp.Expression, denominator: exp.Expr
 def union(
     evaluator: MacroEvaluator,
     type_: exp.Literal = exp.Literal.string("ALL"),
-    *tables: exp.Column,  # These represent tables but the ast node will be columns
+    *tables: exp.Table,
 ) -> exp.Query:
     """Returns a UNION of the given tables. Only choosing columns that have the same name and type.
 
@@ -870,7 +995,7 @@ def haversine_distance(
 def pivot(
     evaluator: MacroEvaluator,
     column: exp.Column,
-    values: exp.Array | exp.Tuple,
+    values: t.Union[exp.Array, exp.Tuple],
     alias: exp.Boolean = exp.true(),
     agg: exp.Literal = exp.Literal.string("SUM"),
     cmp: exp.Literal = exp.Literal.string("="),
