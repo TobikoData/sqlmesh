@@ -17,7 +17,12 @@ from sqlmesh.core.snapshot import (
     merge_intervals,
     missing_intervals,
 )
-from sqlmesh.core.snapshot.definition import Interval, SnapshotId, format_intervals
+from sqlmesh.core.snapshot.definition import (
+    Interval,
+    SnapshotId,
+    SnapshotTableInfo,
+    format_intervals,
+)
 from sqlmesh.utils.date import TimeLike, now, to_datetime, to_timestamp
 from sqlmesh.utils.pydantic import PydanticModel
 
@@ -123,7 +128,7 @@ class Plan(PydanticModel, frozen=True):
         }
 
     @cached_property
-    def modified_snapshots(self) -> t.Dict[SnapshotId, Snapshot]:
+    def modified_snapshots(self) -> t.Dict[SnapshotId, t.Union[Snapshot, SnapshotTableInfo]]:
         """Returns the modified (either directly or indirectly) snapshots."""
         return {
             **{s_id: self.context_diff.snapshots[s_id] for s_id in sorted(self.directly_modified)},
@@ -132,6 +137,7 @@ class Plan(PydanticModel, frozen=True):
                 for downstream_s_ids in self.indirectly_modified.values()
                 for s_id in sorted(downstream_s_ids)
             },
+            **self.context_diff.removed_snapshots,
         }
 
     @property

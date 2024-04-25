@@ -1406,16 +1406,16 @@ class MarkdownConsole(CaptureTerminalConsole):
         ignored_snapshot_ids = ignored_snapshot_ids or set()
         if context_diff.is_new_environment:
             self._print(
-                f"**New environment `{context_diff.environment}` will be created from `{context_diff.create_from}`**\n\n"
+                f"**New environment `{context_diff.environment}` will be created from `{context_diff.create_from}`**\n"
             )
             if not context_diff.has_snapshot_changes:
                 return
 
         if not context_diff.has_changes:
-            self._print(f"**No differences when compared to `{context_diff.environment}`**\n\n")
+            self._print(f"**No differences when compared to `{context_diff.environment}`**\n")
             return
 
-        self._print(f"**Summary of differences against `{context_diff.environment}`:**\n\n")
+        self._print(f"**Summary of differences against `{context_diff.environment}`:**\n")
 
         added_snapshots = {
             context_diff.snapshots[s_id]
@@ -1424,21 +1424,19 @@ class MarkdownConsole(CaptureTerminalConsole):
         }
         added_snapshot_models = {s for s in added_snapshots if s.is_model}
         if added_snapshot_models:
-            self._print(f"**Added Models:**\n")
-            for snapshot in added_snapshot_models:
+            self._print(f"\n**Added Models:**")
+            for snapshot in sorted(added_snapshot_models):
                 self._print(
-                    f"- {snapshot.display_name(environment_naming_info, default_catalog)}\n"
+                    f"- `{snapshot.display_name(environment_naming_info, default_catalog)}`"
                 )
-            self._print("\n")
 
         added_snapshot_audits = {s for s in added_snapshots if s.is_audit}
         if added_snapshot_audits:
-            self._print(f"**Added Standalone Audits:**\n")
-            for snapshot in added_snapshot_audits:
+            self._print(f"\n**Added Standalone Audits:**")
+            for snapshot in sorted(added_snapshot_audits):
                 self._print(
-                    f"- {snapshot.display_name(environment_naming_info, default_catalog)}\n"
+                    f"- `{snapshot.display_name(environment_naming_info, default_catalog)}`"
                 )
-            self._print("\n")
 
         removed_snapshot_table_infos = {
             snapshot_table_info
@@ -1447,21 +1445,19 @@ class MarkdownConsole(CaptureTerminalConsole):
         }
         removed_model_snapshot_table_infos = {s for s in removed_snapshot_table_infos if s.is_model}
         if removed_model_snapshot_table_infos:
-            self._print(f"**Removed Models:**\n")
-            for snapshot_table_info in removed_model_snapshot_table_infos:
+            self._print(f"\n**Removed Models:**")
+            for snapshot_table_info in sorted(removed_model_snapshot_table_infos):
                 self._print(
-                    f"- {snapshot_table_info.display_name(environment_naming_info, default_catalog)}\n"
+                    f"- `{snapshot_table_info.display_name(environment_naming_info, default_catalog)}`"
                 )
-            self._print("\n")
 
         removed_audit_snapshot_table_infos = {s for s in removed_snapshot_table_infos if s.is_audit}
         if removed_audit_snapshot_table_infos:
-            self._print(f"**Removed Standalone Audits:**\n")
-            for snapshot_table_info in removed_audit_snapshot_table_infos:
+            self._print(f"\n**Removed Standalone Audits:**")
+            for snapshot_table_info in sorted(removed_audit_snapshot_table_infos):
                 self._print(
-                    f"- {snapshot_table_info.display_name(environment_naming_info, default_catalog)}\n"
+                    f"- `{snapshot_table_info.display_name(environment_naming_info, default_catalog)}`"
                 )
-            self._print("\n")
 
         modified_snapshots = {
             current_snapshot
@@ -1480,43 +1476,39 @@ class MarkdownConsole(CaptureTerminalConsole):
                 elif context_diff.metadata_updated(snapshot.name):
                     metadata_modified.append(snapshot)
             if directly_modified:
-                self._print(f"**Directly Modified:**\n")
-                for snapshot in directly_modified:
+                self._print(f"\n**Directly Modified:**")
+                for snapshot in sorted(directly_modified):
                     self._print(
-                        f"- `{snapshot.display_name(environment_naming_info, default_catalog)}`\n"
+                        f"- `{snapshot.display_name(environment_naming_info, default_catalog)}`"
                     )
                     if not no_diff:
-                        self._print(f"```diff\n{context_diff.text_diff(snapshot.name)}\n```\n")
-                self._print("\n")
+                        self._print(f"```diff\n{context_diff.text_diff(snapshot.name)}\n```")
             if indirectly_modified:
-                self._print(f"**Indirectly Modified:**\n")
-                for snapshot in indirectly_modified:
+                self._print(f"\n**Indirectly Modified:**")
+                for snapshot in sorted(indirectly_modified):
                     self._print(
-                        f"- `{snapshot.display_name(environment_naming_info, default_catalog)}`\n"
+                        f"- `{snapshot.display_name(environment_naming_info, default_catalog)}`"
                     )
-                self._print("\n")
             if metadata_modified:
-                self._print(f"**Metadata Updated:**\n")
-                for snapshot in metadata_modified:
+                self._print(f"\n**Metadata Updated:**")
+                for snapshot in sorted(metadata_modified):
                     self._print(
-                        f"- `{snapshot.display_name(environment_naming_info, default_catalog)}`\n"
+                        f"- `{snapshot.display_name(environment_naming_info, default_catalog)}`"
                     )
-                self._print("\n")
         if ignored_snapshot_ids:
-            self._print(f"**Ignored Models (Expected Plan Start):**\n")
-            for s_id in ignored_snapshot_ids:
+            self._print(f"\n**Ignored Models (Expected Plan Start):**")
+            for s_id in sorted(ignored_snapshot_ids):
                 snapshot = context_diff.snapshots[s_id]
                 self._print(
-                    f"- `{snapshot.display_name(environment_naming_info, default_catalog)}` ({snapshot.get_latest(start_date(snapshot, context_diff.snapshots.values()))})\n"
+                    f"- `{snapshot.display_name(environment_naming_info, default_catalog)}` ({snapshot.get_latest(start_date(snapshot, context_diff.snapshots.values()))})"
                 )
-            self._print("\n")
 
     def _show_missing_dates(self, plan: Plan, default_catalog: t.Optional[str]) -> None:
         """Displays the models with missing dates."""
         missing_intervals = plan.missing_intervals
         if not missing_intervals:
             return
-        self._print("**Models needing backfill (missing dates):**\n\n")
+        self._print("\n**Models needing backfill (missing dates):**")
         for missing in missing_intervals:
             snapshot = plan.context_diff.snapshots[missing.snapshot_id]
             if not snapshot.is_model:
@@ -1527,9 +1519,8 @@ class MarkdownConsole(CaptureTerminalConsole):
                 preview_modifier = " (**preview**)"
 
             self._print(
-                f"* `{snapshot.display_name(plan.environment_naming_info, default_catalog)}`: {missing.format_intervals(snapshot.node.interval_unit)}{preview_modifier}\n"
+                f"* `{snapshot.display_name(plan.environment_naming_info, default_catalog)}`: {missing.format_intervals(snapshot.node.interval_unit)}{preview_modifier}"
             )
-        self._print("\n")
 
     def _show_categorized_snapshots(self, plan: Plan, default_catalog: t.Optional[str]) -> None:
         context_diff = plan.context_diff
