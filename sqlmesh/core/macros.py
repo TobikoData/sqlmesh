@@ -25,7 +25,12 @@ from sqlmesh.core.dialect import (
     StagedFilePath,
     normalize_model_name,
 )
-from sqlmesh.utils import DECORATOR_RETURN_TYPE, UniqueKeyDict, registry_decorator
+from sqlmesh.utils import (
+    DECORATOR_RETURN_TYPE,
+    UniqueKeyDict,
+    columns_to_types_all_known,
+    registry_decorator,
+)
 from sqlmesh.utils.errors import MacroEvalError, SQLMeshError
 from sqlmesh.utils.jinja import JinjaMacroRegistry, has_jinja
 from sqlmesh.utils.metaprogramming import Executable, prepare_env, print_exception
@@ -662,11 +667,11 @@ def star(
         An array of columns.
 
     Example:
-        >>> from sqlglot import parse_one
+        >>> from sqlglot import parse_one, exp
         >>> from sqlglot.schema import MappingSchema
         >>> from sqlmesh.core.macros import MacroEvaluator
         >>> sql = "SELECT @STAR(foo, bar, [c], 'baz_') FROM foo AS bar"
-        >>> MacroEvaluator(schema=MappingSchema({"foo": {"a": "string", "b": "string", "c": "string", "d": "int"}})).transform(parse_one(sql)).sql()
+        >>> MacroEvaluator(schema=MappingSchema({"foo": {"a": exp.DataType.build("string"), "b": exp.DataType.build("string"), "c": exp.DataType.build("string"), "d": exp.DataType.build("int")}})).transform(parse_one(sql)).sql()
         'SELECT CAST("bar"."a" AS TEXT) AS "baz_a", CAST("bar"."b" AS TEXT) AS "baz_b", CAST("bar"."d" AS INT) AS "baz_d" FROM foo AS bar'
     """
     if alias and not isinstance(alias, (exp.Identifier, exp.Column)):
@@ -684,14 +689,23 @@ def star(
     quoted = quote_identifiers.this
     table_identifier = alias.name or relation.name
 
+    columns_to_types = {
+        k: v for k, v in evaluator.columns_to_types(relation).items() if k not in exclude
+    }
+    if columns_to_types_all_known(columns_to_types):
+        return [
+            exp.cast(
+                exp.column(column, table=table_identifier, quoted=quoted),
+                dtype,
+                dialect=evaluator.dialect,
+            ).as_(f"{prefix.this}{column}{suffix.this}", quoted=quoted)
+            for column, dtype in columns_to_types.items()
+        ]
     return [
-        exp.cast(
-            exp.column(column, table=table_identifier, quoted=quoted),
-            type_,
-            dialect=evaluator.dialect,
-        ).as_(f"{prefix.this}{column}{suffix.this}", quoted=quoted)
+        exp.column(column, table=table_identifier, quoted=quoted).as_(
+            f"{prefix.this}{column}{suffix.this}", quoted=quoted
+        )
         for column, type_ in evaluator.columns_to_types(relation).items()
-        if column not in exclude
     ]
 
 
