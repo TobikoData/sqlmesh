@@ -60,6 +60,10 @@ MODEL (
 
 This is useful when you want to keep all seed CSV files in a top-level directory such as `seeds/` but don't want to keep track of or manage a bunch of relative paths.
 
+### Encoding
+
+SQLMesh expects seed files to be encoded according to the [UTF-8](https://en.wikipedia.org/wiki/UTF-8) standard. Using a different encoding may lead to unexpected behavior.
+
 ## Example
 
 In this example, we use the model definition from the previous section saved in the `models/national_holidays.sql` file of the SQLMesh project.

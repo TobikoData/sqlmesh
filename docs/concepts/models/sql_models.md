@@ -53,11 +53,13 @@ UNCACHE TABLE countries;
 ```
 
 ### `MODEL` DDL
+
 The `MODEL` DDL is used to specify metadata about the model such as its name, [kind](./model_kinds.md), owner, cron, and others. This should be the first statement in your SQL-based model's file.
 
 Refer to `MODEL` [properties](./overview.md#properties) for the full list of allowed properties.
 
 ### Optional pre/post-statements
+
 Optional pre/post-statements allow you to execute SQL commands before and after a model runs, respectively.
 
 For example, post/post-statements might modify settings or create indexes. However, be careful not to run any statement that could conflict with the execution of another statement if the models run concurrently, such as creating a physical table.
@@ -65,6 +67,7 @@ For example, post/post-statements might modify settings or create indexes. Howev
 Pre/post-statements are evaluated twice: when a model's table is created and when its query logic is evaluated. Since executing such statements more than once can have unintended side-effects, it is also possible to [conditionally execute](../macros/sqlmesh_macros.md#if) them depending on SQLMesh's [runtime stage](../macros/macro_variables.md#predefined-variables).
 
 ### The model query
+
 The model must contain a standalone query, which can be a single `SELECT` expression, or multiple `SELECT` expressions combined with the `UNION`, `INTERSECT`, or `EXCEPT` operators. The result of this query will be used to populate the model's table or view.
 
 ## Python-based definition
@@ -113,6 +116,7 @@ The `@model` decorator is the Python equivalent of the `MODEL` DDL. In addition 
 **Note:** All of the [metadata](./overview.md#properties) field names are the same as those in the `MODEL` DDL.
 
 ## Automatic dependencies
+
 SQLMesh parses your SQL, so it understands what the code does and how it relates to other models. There is no need for you to manually specify dependencies to other models with special tags or commands.
 
 For example, consider a model with this query:
@@ -131,14 +135,21 @@ External dependencies not defined in SQLMesh are also supported. SQLMesh can eit
 Although automatic dependency detection works most of the time, there may be specific cases for which you want to define dependencies manually. You can do so in the `MODEL` DDL with the [dependencies property](./overview.md#properties).
 
 ## Conventions
+
 SQLMesh encourages explicitly specifying the data types of a model's columns through casting. This allows SQLMesh to understand the data types in your models, and it prevents incorrect type inference. SQLMesh supports the casting format `<column name>::<data type>` in models of any SQL dialect.
 
 ### Explicit SELECTs
+
 Although `SELECT *` is convenient, it is dangerous because a model's results can change due to external factors (e.g., an upstream source adding or removing a column). In general, we encourage listing out every column you need or using [`create_external_models`](../../reference/cli.md#create_external_models) to capture the schema of an external data source.
 
 If you select from an external source, `SELECT *` will prevent SQLMesh from performing some optimization steps and from determining upstream column-level lineage. Use an [`external` model kind](./model_kinds.md#external) to enable optimizations and upstream column-level lineage for external sources.
 
+### Encoding
+
+SQLMesh expects files containing SQL models to be encoded according to the [UTF-8](https://en.wikipedia.org/wiki/UTF-8) standard. Using a different encoding may lead to unexpected behavior.
+
 ## Transpilation
+
 SQLMesh leverages [SQLGlot](https://github.com/tobymao/sqlglot) to parse and transpile SQL. Therefore, you can write your SQL in any supported dialect and transpile it into another supported dialect.
 
 You can also use advanced syntax that may not be available in your engine of choice. For example, `x::int` is equivalent to `CAST(x as INT)`, but is only supported in some dialects. SQLGlot allows you to use this feature regardless of what engine you're using.
@@ -146,6 +157,7 @@ You can also use advanced syntax that may not be available in your engine of cho
 Additionally, you won't have to worry about minor formatting differences such as trailing commas, as SQLGlot will remove them at parse time.
 
 ## Macros
+
 Although standard SQL is very powerful, complex data systems often require running SQL queries with dynamic components such as date filters. For example, you may want to change the date ranges in a `between` statement so that you can get the latest batch of data. SQLMesh provides these dates automatically through [macro variables](../macros/macro_variables.md).
 
 Additionally, large queries can be difficult to read and maintain. In order to make queries more compact, SQLMesh supports a powerful [macro syntax](../macros/overview.md) as well as [Jinja](https://jinja.palletsprojects.com/en/3.1.x/), allowing you to write macros that make your SQL queries easier to manage.
