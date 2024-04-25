@@ -719,3 +719,36 @@ def test_drop_schema(
     sql_calls = _to_sql_calls(execute_mock)
 
     assert sql_calls == ensure_list(expected)
+
+
+def test_view_table_properties(make_mocked_engine_adapter: t.Callable, mocker: MockerFixture):
+    adapter = make_mocked_engine_adapter(BigQueryEngineAdapter)
+    execute_mock = mocker.patch(
+        "sqlmesh.core.engine_adapter.bigquery.BigQueryEngineAdapter.execute"
+    )
+
+    adapter.create_view(
+        "test_table",
+        parse_one("SELECT 1"),
+        table_description="some description",
+        table_properties={
+            "labels": exp.Array(
+                expressions=[
+                    exp.Tuple(
+                        expressions=[
+                            exp.Literal.string("test-label"),
+                            exp.Literal.string("label-value"),
+                        ]
+                    )
+                ]
+            ),
+        },
+    )
+
+    adapter.create_view("test_table", parse_one("SELECT 1"), table_properties={})
+
+    sql_calls = _to_sql_calls(execute_mock)
+    assert sql_calls == [
+        "CREATE OR REPLACE VIEW `test_table` OPTIONS (description='some description', labels=[('test-label', 'label-value')]) AS SELECT 1",
+        "CREATE OR REPLACE VIEW `test_table` AS SELECT 1",
+    ]
