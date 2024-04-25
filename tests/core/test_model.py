@@ -517,6 +517,7 @@ def test_column_descriptions(sushi_context, assert_exp_eq):
         '"memory"."sushi"."customer_revenue_by_day"'
     ].column_descriptions == {
         "customer_id": "Customer id",
+        "country code": "Customer country code, used for testing spaces",
         "revenue": "Revenue from orders made by this customer",
         "event_date": "Date",
     }
@@ -1254,7 +1255,8 @@ def test_render_query(assert_exp_eq, sushi_context):
         WITH "test_macros" AS (
           SELECT
             2 AS "lit_two",
-            "waiter_revenue_by_day"."revenue" > 0 AS "sql_exp"
+            "waiter_revenue_by_day"."revenue" > 0 AS "sql_exp",
+            CAST("waiter_revenue_by_day"."revenue" AS TEXT) AS "sql_lit"
           FROM "memory"."sushi"."waiter_revenue_by_day" AS "waiter_revenue_by_day"
         )
         SELECT

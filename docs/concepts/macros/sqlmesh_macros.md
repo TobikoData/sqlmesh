@@ -1487,10 +1487,11 @@ This macro takes two arguments: `text` of type `str` and `count` of type `int`, 
 
 SQLMesh supports common Python types for typed macros including:
 
-- `str`
+- `str` -- This handles string literals and basic identifiers, but won't coerce anything more complicated.
 - `int`
 - `float`
 - `bool`
+- `SQL` -- When you want the SQL string representation of the argument that's passed in
 - `List[T]` - where `T` is any supported type including sqlglot expressions
 - `Tuple[T]` - where `T` is any supported type including sqlglot expressions
 - `Union[T1, T2, ...]` - where `T1`, `T2`, etc. are any supported types including sqlglot expressions

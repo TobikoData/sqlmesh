@@ -7,7 +7,7 @@ import pytest
 from sqlglot import MappingSchema, exp, parse_one
 
 from sqlmesh.core.dialect import StagedFilePath
-from sqlmesh.core.macros import MacroEvaluator, macro
+from sqlmesh.core.macros import SQL, MacroEvaluator, macro
 from sqlmesh.utils.errors import SQLMeshError
 from sqlmesh.utils.metaprogramming import Executable, ExecutableKind
 
@@ -497,16 +497,15 @@ def test_macro_coercion(macro_evaluator: MacroEvaluator, assert_exp_eq):
 
     # Simply ask for a string, and always get a string
     assert coerce(exp.column("order"), str) == "order"
-    assert (
-        coerce(parse_one("SELECT x FROM UNNEST(y) AS x WHERE 1 = 1"), str)
-        == "SELECT x FROM UNNEST(y) AS x WHERE 1 = 1"
-    )
+
+    # this is not legal since select is too complex
+    assert isinstance(coerce(parse_one("SELECT 1"), str), exp.Select)
 
     # From a string literal to a Select should parse the string literal, and the inverse operation works as well
     assert_exp_eq(
         coerce(exp.Literal.string("SELECT 1 FROM a"), exp.Select), parse_one("SELECT 1 FROM a")
     )
-    assert coerce(parse_one("SELECT 1 FROM a"), str) == "SELECT 1 FROM a"
+    assert coerce(parse_one("SELECT 1 FROM a"), SQL) == "SELECT 1 FROM a"
 
     # Get a list of exp directly instead of an exp.Array
     assert coerce(parse_one("[1, 2, 3]"), list) == [

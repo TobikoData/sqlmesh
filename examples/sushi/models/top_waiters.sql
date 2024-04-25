@@ -12,6 +12,7 @@ WITH test_macros AS (
     SELECT
       @ADD_ONE(1) AS lit_two,
       @IS_POSITIVE(revenue) AS sql_exp,
+      @SQL_LITERAL(revenue::text, 'x', 'y', a, "b", c.d) AS sql_lit,
     FROM sushi.waiter_revenue_by_day
 )
 SELECT

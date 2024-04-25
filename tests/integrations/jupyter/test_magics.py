@@ -160,8 +160,8 @@ def test_render(
     assert output.stdout == ""
     assert output.stderr == ""
     assert len(output.outputs) == 1
-    assert len(convert_all_html_output_to_text(output)[0]) == 2096
-    assert convert_all_html_output_to_tags(output) == [["pre"] + (["span"] * 139)]
+    assert len(convert_all_html_output_to_text(output)[0]) == 2212
+    assert convert_all_html_output_to_tags(output) == [["pre"] + (["span"] * 153)]
 
 
 @pytest.mark.slow
@@ -174,8 +174,8 @@ def test_render_no_format(
     assert output.stdout == ""
     assert output.stderr == ""
     assert len(output.outputs) == 1
-    assert len(convert_all_html_output_to_text(output)[0]) == 632
-    assert convert_all_html_output_to_tags(output) == [["pre"] + (["span"] * 45)]
+    assert len(convert_all_html_output_to_text(output)[0]) == 698
+    assert convert_all_html_output_to_tags(output) == [["pre"] + (["span"] * 51)]
 
 
 @pytest.mark.slow
@@ -513,7 +513,7 @@ def test_info(notebook, sushi_context, convert_all_html_output_to_text, get_all_
     assert len(output.outputs) == 4
     assert convert_all_html_output_to_text(output) == [
         "Models: 16",
-        "Macros: 4",
+        "Macros: 5",
         "Data warehouse connection succeeded",
         "Test connection succeeded",
     ]
@@ -542,7 +542,7 @@ def test_info(notebook, sushi_context, convert_all_html_output_to_text, get_all_
                     h(
                         "span",
                         {"style": f"{NEUTRAL_STYLE}; font-weight: bold"},
-                        "4",
+                        "5",
                     )
                 ),
             )

@@ -67,6 +67,7 @@ class MacroStrTemplate(Template):
 
 
 EXPRESSIONS_NAME_MAP = {}
+SQL = t.NewType("SQL", str)
 
 for klass in sqlglot.Parser.EXPRESSION_PARSERS:
     name = klass if isinstance(klass, str) else klass.__name__  # type: ignore
@@ -148,7 +149,12 @@ class MacroEvaluator:
             "runtime_stage": runtime_stage.value,
             "default_catalog": default_catalog,
         }
-        self.env = {**ENV, "self": self}
+        self.env = {
+            **ENV,
+            "self": self,
+            "SQL": SQL,
+            "MacroEvaluator": MacroEvaluator,
+        }
         self.python_env = python_env or {}
         self._jinja_env: t.Optional[Environment] = jinja_env
         self.macros = {normalize_macro_name(k): v.func for k, v in macro.get_registry().items()}
@@ -178,7 +184,7 @@ class MacroEvaluator:
 
         try:
             annotations = t.get_type_hints(func)
-        except NameError as e:  # forward references aren't handled
+        except NameError:  # forward references aren't handled
             annotations = {}
 
         if annotations:
@@ -443,7 +449,8 @@ class MacroEvaluator:
             if typ is None or typ is t.Any:
                 return expr
             base = t.get_origin(typ) or typ
-            # We need to handle t.Union first since we cannot use isinstance with it
+
+            # We need to handle Union and TypeVars first since we cannot use isinstance with it
             if base in UNION_TYPES:
                 for branch in t.get_args(typ):
                     try:
@@ -451,6 +458,9 @@ class MacroEvaluator:
                     except Exception:
                         pass
                 raise SQLMeshError(base_err_msg)
+            if base is SQL and isinstance(expr, exp.Expression):
+                return expr.sql(self.dialect)
+
             if isinstance(expr, base):
                 return expr
             if issubclass(base, exp.Expression):
@@ -473,10 +483,12 @@ class MacroEvaluator:
 
             if base in (int, float, str) and isinstance(expr, exp.Literal):
                 return base(expr.this)
+            if base is str and isinstance(expr, exp.Column) and not expr.table:
+                return expr.name
             if base is bool and isinstance(expr, exp.Boolean):
                 return expr.this
-            if base is str and isinstance(expr, exp.Expression):
-                return expr.sql(self.dialect)
+            # if base is str and isinstance(expr, exp.Expression):
+            #    return expr.sql(self.dialect)
             if base is tuple and isinstance(expr, (exp.Tuple, exp.Array)):
                 generic = t.get_args(typ)
                 if not generic:
