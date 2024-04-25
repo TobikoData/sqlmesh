@@ -22,7 +22,13 @@ from sqlmesh.core.console import SNAPSHOT_CHANGE_CATEGORY_STR, MarkdownConsole
 from sqlmesh.core.context import Context
 from sqlmesh.core.environment import Environment
 from sqlmesh.core.plan import Plan, PlanBuilder
-from sqlmesh.core.snapshot.definition import Snapshot, SnapshotId, format_intervals
+from sqlmesh.core.snapshot.definition import (
+    Snapshot,
+    SnapshotChangeCategory,
+    SnapshotId,
+    SnapshotTableInfo,
+    format_intervals,
+)
 from sqlmesh.core.user import User
 from sqlmesh.integrations.github.cicd.config import GithubCICDBotConfig
 from sqlmesh.utils import word_characters_only
@@ -426,8 +432,12 @@ class GithubController:
         return bot_config
 
     @property
-    def modified_snapshots(self) -> t.Dict[SnapshotId, Snapshot]:
+    def modified_snapshots(self) -> t.Dict[SnapshotId, t.Union[Snapshot, SnapshotTableInfo]]:
         return self.prod_plan_with_gaps.modified_snapshots
+
+    @property
+    def removed_snapshots(self) -> t.Set[SnapshotId]:
+        return set(self.prod_plan_with_gaps.context_diff.removed_snapshots)
 
     @classmethod
     def _append_output(cls, key: str, value: str) -> None:
@@ -442,13 +452,19 @@ class GithubController:
         try:
             # Clear out any output that might exist from prior steps
             self._console.clear_captured_outputs()
-            self._console._show_categorized_snapshots(plan, self._context.default_catalog)
-            catagorized_snapshots = self._console.consume_captured_output()
+            self._console.show_model_difference_summary(
+                context_diff=plan.context_diff,
+                environment_naming_info=plan.environment_naming_info,
+                default_catalog=self._context.default_catalog,
+                no_diff=False,
+                ignored_snapshot_ids=plan.ignored,
+            )
+            difference_summary = self._console.consume_captured_output()
             self._console._show_missing_dates(plan, self._context.default_catalog)
             missing_dates = self._console.consume_captured_output()
-            if not catagorized_snapshots and not missing_dates:
+            if not difference_summary and not missing_dates:
                 return "No changes to apply."
-            return f"{catagorized_snapshots}\n{missing_dates}"
+            return f"{difference_summary}\n{missing_dates}"
         except PlanError as e:
             return f"Plan failed to generate. Check for pending or unresolved changes. Error: {e}"
 
@@ -759,22 +775,32 @@ class GithubController:
                         # We don't want to display indirect non-breaking since to users these are effectively no-op changes
                         if modified_snapshot.is_indirect_non_breaking:
                             continue
-                        model_name = modified_snapshot.node.name
-                        change_category = (
-                            "Uncategorized"
-                            if not modified_snapshot.change_category
-                            else SNAPSHOT_CHANGE_CATEGORY_STR[modified_snapshot.change_category]
-                        )
-                        intervals = (
-                            modified_snapshot.dev_intervals
-                            if modified_snapshot.is_forward_only
-                            else modified_snapshot.intervals
-                        )
-                        interval_output = (
-                            format_intervals(intervals, modified_snapshot.node.interval_unit)
-                            if intervals
-                            else "N/A"
-                        )
+                        if modified_snapshot.snapshot_id in self.removed_snapshots:
+                            # This will be an FQN since we don't have access to node name from a snapshot table info
+                            # which is what a removed snapshot is
+                            model_name = modified_snapshot.name
+                            change_category = SNAPSHOT_CHANGE_CATEGORY_STR[
+                                SnapshotChangeCategory.BREAKING
+                            ]
+                            interval_output = "REMOVED"
+                        else:
+                            assert isinstance(modified_snapshot, Snapshot)
+                            model_name = modified_snapshot.node.name
+                            change_category = (
+                                "Uncategorized"
+                                if not modified_snapshot.change_category
+                                else SNAPSHOT_CHANGE_CATEGORY_STR[modified_snapshot.change_category]
+                            )
+                            intervals = (
+                                modified_snapshot.dev_intervals
+                                if modified_snapshot.is_forward_only
+                                else modified_snapshot.intervals
+                            )
+                            interval_output = (
+                                format_intervals(intervals, modified_snapshot.node.interval_unit)
+                                if intervals
+                                else "N/A"
+                            )
                         body_rows.append(
                             [
                                 h("td", model_name),
@@ -865,8 +891,6 @@ class GithubController:
             title = conclusion_to_title.get(
                 conclusion, f"Got an unexpected conclusion: {conclusion.value}"
             )
-            if conclusion.is_success and summary:
-                summary = "**Preview of Prod Plan**\n" + summary
             return conclusion, title, summary
 
         self._update_check_handler(

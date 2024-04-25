@@ -154,7 +154,12 @@ def test_merge_pr_has_non_breaking_change(
     assert GithubCheckStatus(prod_plan_preview_checks_runs[1]["status"]).is_in_progress
     assert GithubCheckStatus(prod_plan_preview_checks_runs[2]["status"]).is_completed
     assert GithubCheckConclusion(prod_plan_preview_checks_runs[2]["conclusion"]).is_success
-    expected_prod_plan_summary = """```diff
+    expected_prod_plan_summary = """**Summary of differences against `prod`:**
+
+
+**Directly Modified:**
+- `sushi.waiter_revenue_by_day`
+```diff
 --- 
 
 +++ 
@@ -172,20 +177,12 @@ def test_merge_pr_has_non_breaking_change(
    ON o.id = oi.order_id AND o.event_date = oi.event_date
 ```
 
-```
-
-Directly Modified: sushi.waiter_revenue_by_day (Non-breaking)
-└── Indirectly Modified Children:
-    └── sushi.top_waiters (Indirect Non-breaking)
-
-```
+**Indirectly Modified:**
+- `sushi.top_waiters`
 
 """
     assert prod_plan_preview_checks_runs[2]["output"]["title"] == "Prod Plan Preview"
-    assert (
-        prod_plan_preview_checks_runs[2]["output"]["summary"]
-        == "**Preview of Prod Plan**\n" + expected_prod_plan_summary
-    )
+    assert prod_plan_preview_checks_runs[2]["output"]["summary"] == expected_prod_plan_summary
 
     assert "SQLMesh - Prod Environment Synced" in controller._check_run_mapping
     prod_checks_runs = controller._check_run_mapping["SQLMesh - Prod Environment Synced"].all_kwargs
@@ -353,7 +350,12 @@ def test_merge_pr_has_non_breaking_change_diff_start(
     assert GithubCheckStatus(prod_plan_preview_checks_runs[2]["status"]).is_completed
     assert GithubCheckConclusion(prod_plan_preview_checks_runs[2]["conclusion"]).is_success
     assert prod_plan_preview_checks_runs[2]["output"]["title"] == "Prod Plan Preview"
-    expected_prod_plan = """```diff
+    expected_prod_plan = """**Summary of differences against `prod`:**
+
+
+**Directly Modified:**
+- `sushi.waiter_revenue_by_day`
+```diff
 --- 
 
 +++ 
@@ -371,26 +373,14 @@ def test_merge_pr_has_non_breaking_change_diff_start(
    ON o.id = oi.order_id AND o.event_date = oi.event_date
 ```
 
-```
+**Indirectly Modified:**
+- `sushi.top_waiters`
 
-Directly Modified: sushi.waiter_revenue_by_day (Non-breaking)
-└── Indirectly Modified Children:
-    └── sushi.top_waiters (Indirect Non-breaking)
-
-```
 
 **Models needing backfill (missing dates):**
-
-
 * `sushi.waiter_revenue_by_day`: 2022-12-25 - 2022-12-28
-
-
-
 """
-    assert (
-        prod_plan_preview_checks_runs[2]["output"]["summary"]
-        == "**Preview of Prod Plan**\n" + expected_prod_plan
-    )
+    assert prod_plan_preview_checks_runs[2]["output"]["summary"] == expected_prod_plan
 
     assert "SQLMesh - Prod Environment Synced" in controller._check_run_mapping
     prod_checks_runs = controller._check_run_mapping["SQLMesh - Prod Environment Synced"].all_kwargs
@@ -701,12 +691,9 @@ def test_merge_pr_has_no_changes(
     assert GithubCheckStatus(prod_plan_preview_checks_runs[1]["status"]).is_in_progress
     assert GithubCheckStatus(prod_plan_preview_checks_runs[2]["status"]).is_completed
     assert GithubCheckConclusion(prod_plan_preview_checks_runs[2]["conclusion"]).is_success
-    expected_prod_plan_summary = "No changes to apply."
+    expected_prod_plan_summary = "**No differences when compared to `prod`**\n\n\n"
     assert prod_plan_preview_checks_runs[2]["output"]["title"] == "Prod Plan Preview"
-    assert (
-        prod_plan_preview_checks_runs[2]["output"]["summary"]
-        == "**Preview of Prod Plan**\n" + expected_prod_plan_summary
-    )
+    assert prod_plan_preview_checks_runs[2]["output"]["summary"] == expected_prod_plan_summary
 
     assert "SQLMesh - Prod Environment Synced" in controller._check_run_mapping
     prod_checks_runs = controller._check_run_mapping["SQLMesh - Prod Environment Synced"].all_kwargs
@@ -867,7 +854,12 @@ def test_no_merge_since_no_deploy_signal(
     assert GithubCheckStatus(prod_plan_preview_checks_runs[1]["status"]).is_in_progress
     assert GithubCheckStatus(prod_plan_preview_checks_runs[2]["status"]).is_completed
     assert GithubCheckConclusion(prod_plan_preview_checks_runs[2]["conclusion"]).is_success
-    expected_prod_plan = """```diff
+    expected_prod_plan = """**Summary of differences against `prod`:**
+
+
+**Directly Modified:**
+- `sushi.waiter_revenue_by_day`
+```diff
 --- 
 
 +++ 
@@ -885,20 +877,12 @@ def test_no_merge_since_no_deploy_signal(
    ON o.id = oi.order_id AND o.event_date = oi.event_date
 ```
 
-```
-
-Directly Modified: sushi.waiter_revenue_by_day (Non-breaking)
-└── Indirectly Modified Children:
-    └── sushi.top_waiters (Indirect Non-breaking)
-
-```
+**Indirectly Modified:**
+- `sushi.top_waiters`
 
 """
     assert prod_plan_preview_checks_runs[2]["output"]["title"] == "Prod Plan Preview"
-    assert (
-        prod_plan_preview_checks_runs[2]["output"]["summary"]
-        == "**Preview of Prod Plan**\n" + expected_prod_plan
-    )
+    assert prod_plan_preview_checks_runs[2]["output"]["summary"] == expected_prod_plan
 
     assert "SQLMesh - Prod Environment Synced" in controller._check_run_mapping
     prod_checks_runs = controller._check_run_mapping["SQLMesh - Prod Environment Synced"].all_kwargs
@@ -1050,7 +1034,12 @@ def test_no_merge_since_no_deploy_signal_no_approvers_defined(
     assert GithubCheckStatus(prod_plan_preview_checks_runs[1]["status"]).is_in_progress
     assert GithubCheckStatus(prod_plan_preview_checks_runs[2]["status"]).is_completed
     assert GithubCheckConclusion(prod_plan_preview_checks_runs[2]["conclusion"]).is_success
-    expected_prod_plan = """```diff
+    expected_prod_plan = """**Summary of differences against `prod`:**
+
+
+**Directly Modified:**
+- `sushi.waiter_revenue_by_day`
+```diff
 --- 
 
 +++ 
@@ -1068,27 +1057,15 @@ def test_no_merge_since_no_deploy_signal_no_approvers_defined(
    ON o.id = oi.order_id AND o.event_date = oi.event_date
 ```
 
-```
+**Indirectly Modified:**
+- `sushi.top_waiters`
 
-Directly Modified: sushi.waiter_revenue_by_day (Non-breaking)
-└── Indirectly Modified Children:
-    └── sushi.top_waiters (Indirect Non-breaking)
-
-```
 
 **Models needing backfill (missing dates):**
-
-
 * `sushi.waiter_revenue_by_day`: 2022-12-25 - 2022-12-29
-
-
-
 """
     assert prod_plan_preview_checks_runs[2]["output"]["title"] == "Prod Plan Preview"
-    assert (
-        prod_plan_preview_checks_runs[2]["output"]["summary"]
-        == "**Preview of Prod Plan**\n" + expected_prod_plan
-    )
+    assert prod_plan_preview_checks_runs[2]["output"]["summary"] == expected_prod_plan
 
     assert "SQLMesh - Prod Environment Synced" not in controller._check_run_mapping
     assert "SQLMesh - Has Required Approval" not in controller._check_run_mapping
@@ -1226,7 +1203,12 @@ def test_deploy_comment_pre_categorized(
     assert GithubCheckStatus(prod_plan_preview_checks_runs[1]["status"]).is_in_progress
     assert GithubCheckStatus(prod_plan_preview_checks_runs[2]["status"]).is_completed
     assert GithubCheckConclusion(prod_plan_preview_checks_runs[2]["conclusion"]).is_success
-    expected_prod_plan = """```diff
+    expected_prod_plan = """**Summary of differences against `prod`:**
+
+
+**Directly Modified:**
+- `sushi.waiter_revenue_by_day`
+```diff
 --- 
 
 +++ 
@@ -1244,20 +1226,12 @@ def test_deploy_comment_pre_categorized(
    ON o.id = oi.order_id AND o.event_date = oi.event_date
 ```
 
-```
-
-Directly Modified: sushi.waiter_revenue_by_day (Non-breaking)
-└── Indirectly Modified Children:
-    └── sushi.top_waiters (Indirect Non-breaking)
-
-```
+**Indirectly Modified:**
+- `sushi.top_waiters`
 
 """
     assert prod_plan_preview_checks_runs[2]["output"]["title"] == "Prod Plan Preview"
-    assert (
-        prod_plan_preview_checks_runs[2]["output"]["summary"]
-        == "**Preview of Prod Plan**\n" + expected_prod_plan
-    )
+    assert prod_plan_preview_checks_runs[2]["output"]["summary"] == expected_prod_plan
 
     assert "SQLMesh - Prod Environment Synced" in controller._check_run_mapping
     prod_checks_runs = controller._check_run_mapping["SQLMesh - Prod Environment Synced"].all_kwargs
@@ -1564,7 +1538,12 @@ def test_overlapping_changes_models(
     assert GithubCheckStatus(prod_plan_preview_checks_runs[1]["status"]).is_in_progress
     assert GithubCheckStatus(prod_plan_preview_checks_runs[2]["status"]).is_completed
     assert GithubCheckConclusion(prod_plan_preview_checks_runs[2]["conclusion"]).is_success
-    expected_prod_plan_summary = """```diff
+    expected_prod_plan_summary = """**Summary of differences against `prod`:**
+
+
+**Directly Modified:**
+- `sushi.customers`
+```diff
 --- 
 
 +++ 
@@ -1581,14 +1560,7 @@ def test_overlapping_changes_models(
  LEFT JOIN current_marketing AS m
    ON o.customer_id = m.customer_id
 ```
-
-```
-
-Directly Modified: sushi.customers (Non-breaking)
-└── Indirectly Modified Children:
-    └── sushi.waiter_as_customer_by_day (Indirect Breaking)
-
-```
+- `sushi.waiter_names`
 ```diff
 --- 
 
@@ -1602,20 +1574,12 @@ Directly Modified: sushi.customers (Non-breaking)
 +10,Trey
 ```
 
-```
-
-Directly Modified: sushi.waiter_names (Breaking)
-└── Indirectly Modified Children:
-    └── sushi.waiter_as_customer_by_day (Indirect Breaking)
-
-```
+**Indirectly Modified:**
+- `sushi.waiter_as_customer_by_day`
 
 """
     assert prod_plan_preview_checks_runs[2]["output"]["title"] == "Prod Plan Preview"
-    assert (
-        prod_plan_preview_checks_runs[2]["output"]["summary"]
-        == "**Preview of Prod Plan**\n" + expected_prod_plan_summary
-    )
+    assert prod_plan_preview_checks_runs[2]["output"]["summary"] == expected_prod_plan_summary
 
     assert "SQLMesh - Prod Environment Synced" in controller._check_run_mapping
     prod_checks_runs = controller._check_run_mapping["SQLMesh - Prod Environment Synced"].all_kwargs
@@ -1678,7 +1642,7 @@ Directly Modified: sushi.waiter_names (Breaking)
 
 
 @freeze_time("2023-01-01 15:00:00")
-def test_capture_console_errors(
+def test_pr_delete_model(
     github_client,
     make_controller,
     make_mock_check_run,
@@ -1688,7 +1652,7 @@ def test_capture_console_errors(
     mocker: MockerFixture,
 ):
     """
-    PR with a non-breaking change and auto-categorization will be backfilled, merged, and deployed to prod
+    PR with a removed model and auto-categorization will be backfilled, merged, and deployed to prod
 
     Scenario:
     - PR is not merged
@@ -1735,10 +1699,10 @@ def test_capture_console_errors(
     controller._context.users = [
         User(username="test", github_username="test_github", roles=[UserRole.REQUIRED_APPROVER])
     ]
-    # Make a non-breaking change
-    model = controller._context.get_model("sushi.waiter_revenue_by_day").copy()
-    model.query.select(exp.alias_("1", "new_col"), copy=False)
-    controller._context.upsert_model(model)
+    # Remove a model
+    model = controller._context.get_model("sushi.top_waiters").copy()
+    del controller._context._models[model.fqn]
+    controller._context.dag = controller._context.dag.prune(*controller._context._models.keys())
 
     github_output_file = tmp_path / "github_output.txt"
 
@@ -1769,42 +1733,45 @@ def test_capture_console_errors(
     assert GithubCheckStatus(pr_checks_runs[0]["status"]).is_queued
     assert GithubCheckStatus(pr_checks_runs[1]["status"]).is_in_progress
     assert GithubCheckStatus(pr_checks_runs[2]["status"]).is_completed
-    assert not GithubCheckConclusion(pr_checks_runs[2]["conclusion"]).is_success
+    assert GithubCheckConclusion(pr_checks_runs[2]["conclusion"]).is_success
     assert pr_checks_runs[2]["output"]["title"] == "PR Virtual Data Environment: hello_world_2"
-    assert pr_checks_runs[2]["output"]["summary"].startswith(
-        """:x: Failed to create or update PR Environment `hello_world_2`.
-**Errors:**
-```
-FAILED processing snapshot "memory"."sushi"."waiter_revenue_by_day"
-"""
+    assert (
+        pr_checks_runs[2]["output"]["summary"]
+        == """<table><thead><tr><th colspan="3">PR Environment Summary</th></tr><tr><th>Model</th><th>Change Type</th><th>Dates Loaded</th></tr></thead><tbody><tr><td>"memory"."sushi"."top_waiters"</td><td>Breaking</td><td>REMOVED</td></tr></tbody></table>"""
     )
+
+    expected_prod_plan_summary = """**Summary of differences against `prod`:**
+
+
+**Removed Models:**
+- `sushi.top_waiters`
+
+"""
 
     assert "SQLMesh - Prod Plan Preview" in controller._check_run_mapping
     prod_plan_preview_checks_runs = controller._check_run_mapping[
         "SQLMesh - Prod Plan Preview"
     ].all_kwargs
-    assert len(prod_plan_preview_checks_runs) == 2
+    assert len(prod_plan_preview_checks_runs) == 3
     assert GithubCheckStatus(prod_plan_preview_checks_runs[0]["status"]).is_queued
-    assert GithubCheckStatus(prod_plan_preview_checks_runs[1]["status"]).is_completed
-    assert GithubCheckConclusion(prod_plan_preview_checks_runs[1]["conclusion"]).is_skipped
-    assert (
-        prod_plan_preview_checks_runs[1]["output"]["title"]
-        == "Skipped generating prod plan preview since PR was not synchronized"
-    )
-    assert (
-        prod_plan_preview_checks_runs[1]["output"]["summary"]
-        == "Skipped generating prod plan preview since PR was not synchronized"
-    )
+    assert GithubCheckStatus(prod_plan_preview_checks_runs[1]["status"]).is_in_progress
+    assert GithubCheckStatus(prod_plan_preview_checks_runs[2]["status"]).is_completed
+    assert GithubCheckConclusion(prod_plan_preview_checks_runs[2]["conclusion"]).is_success
+    assert prod_plan_preview_checks_runs[2]["output"]["title"] == "Prod Plan Preview"
+    assert prod_plan_preview_checks_runs[2]["output"]["summary"] == expected_prod_plan_summary
 
     assert "SQLMesh - Prod Environment Synced" in controller._check_run_mapping
     prod_checks_runs = controller._check_run_mapping["SQLMesh - Prod Environment Synced"].all_kwargs
-    assert len(prod_checks_runs) == 2
+    assert len(prod_checks_runs) == 3
     assert GithubCheckStatus(prod_checks_runs[0]["status"]).is_queued
-    assert GithubCheckStatus(prod_checks_runs[1]["status"]).is_completed
-    assert GithubCheckConclusion(prod_checks_runs[1]["conclusion"]).is_skipped
-    skip_reason = "Skipped Deploying to Production because the PR environment was not updated"
-    assert prod_checks_runs[1]["output"]["title"] == skip_reason
-    assert prod_checks_runs[1]["output"]["summary"] == skip_reason
+    assert GithubCheckStatus(prod_checks_runs[1]["status"]).is_in_progress
+    assert GithubCheckStatus(prod_checks_runs[2]["status"]).is_completed
+    assert GithubCheckConclusion(prod_checks_runs[2]["conclusion"]).is_success
+    assert prod_checks_runs[2]["output"]["title"] == "Deployed to Prod"
+    assert (
+        prod_checks_runs[2]["output"]["summary"]
+        == "**Generated Prod Plan**\n" + expected_prod_plan_summary
+    )
 
     assert "SQLMesh - Has Required Approval" in controller._check_run_mapping
     approval_checks_runs = controller._check_run_mapping[
@@ -1828,13 +1795,25 @@ FAILED processing snapshot "memory"."sushi"."waiter_revenue_by_day"
 
     assert len(get_environment_objects(controller, "hello_world_2")) == 0
 
-    assert not mock_pull_request.merge.called
+    assert mock_pull_request.merge.called
 
-    assert len(created_comments) == 0
+    assert len(created_comments) == 1
+    assert (
+        created_comments[0].body
+        == f"""**SQLMesh Bot Info**
+- PR Virtual Data Environment: hello_world_2
+<details>
+  <summary>Prod Plan Being Applied</summary>
+
+{expected_prod_plan_summary}
+</details>
+
+"""
+    )
 
     with open(github_output_file, "r", encoding="utf-8") as f:
         output = f.read()
         assert (
             output
-            == "run_unit_tests=success\nhas_required_approval=success\npr_environment_name=hello_world_2\npr_environment_synced=failure\nprod_plan_preview=skipped\nprod_environment_synced=skipped\n"
+            == "run_unit_tests=success\nhas_required_approval=success\ncreated_pr_environment=true\npr_environment_name=hello_world_2\npr_environment_synced=success\nprod_plan_preview=success\nprod_environment_synced=success\n"
         )
