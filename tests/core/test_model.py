@@ -36,7 +36,7 @@ from sqlmesh.core.model.common import parse_expression
 from sqlmesh.core.model.kind import _model_kind_validator
 from sqlmesh.core.model.seed import CsvSettings
 from sqlmesh.core.node import IntervalUnit, _Node
-from sqlmesh.core.snapshot import SnapshotChangeCategory
+from sqlmesh.core.snapshot import Snapshot, SnapshotChangeCategory
 from sqlmesh.utils.date import TimeLike, to_datetime, to_ds, to_timestamp
 from sqlmesh.utils.errors import ConfigError, SQLMeshError
 from sqlmesh.utils.jinja import JinjaMacroRegistry, MacroInfo
@@ -3809,6 +3809,15 @@ def test_this_model() -> None:
 
     assert model.render_pre_statements()[0].sql() == """COPY "db"."table" TO 'a'"""
     assert model.render_post_statements()[0].sql() == """COPY "db"."table" TO 'b'"""
+
+    snapshot = Snapshot.from_node(model, nodes={})
+    assert (
+        model.render_query_or_raise(
+            start="2020-01-01",
+            snapshots={snapshot.name: snapshot},
+        ).sql()
+        == '''SELECT '"db"."table"' AS "x"'''
+    )
 
 
 def test_macros_in_model_statement(sushi_context, assert_exp_eq):
