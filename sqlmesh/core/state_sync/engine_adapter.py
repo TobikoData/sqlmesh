@@ -908,24 +908,6 @@ class EngineAdapterStateSync(CommonStateSyncMixin, StateSync):
             new_table_name=table_name,
         )
 
-    def apply_migrations(
-        self,
-        default_catalog: t.Optional[str],
-        skip_backup: bool,
-    ) -> bool:
-        versions = self.get_versions(validate=False)
-        migrations = MIGRATIONS[versions.schema_version :]
-
-        migrate_rows = migrations or major_minor(SQLGLOT_VERSION) != versions.minor_sqlglot_version
-        if not skip_backup and migrate_rows:
-            self._backup_state()
-
-        for migration in migrations:
-            logger.info(f"Applying migration {migration}")
-            migration.migrate(self, default_catalog=default_catalog)
-
-        return bool(migrate_rows)
-
     @transactional()
     def migrate(
         self,
@@ -937,7 +919,7 @@ class EngineAdapterStateSync(CommonStateSyncMixin, StateSync):
         versions = self.get_versions(validate=False)
 
         try:
-            migrate_rows = self.apply_migrations(default_catalog, skip_backup)
+            migrate_rows = self._apply_migrations(default_catalog, skip_backup)
 
             if not migrate_rows and major_minor(SQLMESH_VERSION) == versions.minor_sqlmesh_version:
                 return
@@ -999,6 +981,24 @@ class EngineAdapterStateSync(CommonStateSyncMixin, StateSync):
                     self.engine_adapter.ctas(
                         backup_name, exp.select("*").from_(table), exists=False
                     )
+
+    def _apply_migrations(
+        self,
+        default_catalog: t.Optional[str],
+        skip_backup: bool,
+    ) -> bool:
+        versions = self.get_versions(validate=False)
+        migrations = MIGRATIONS[versions.schema_version :]
+
+        migrate_rows = migrations or major_minor(SQLGLOT_VERSION) != versions.minor_sqlglot_version
+        if not skip_backup and migrate_rows:
+            self._backup_state()
+
+        for migration in migrations:
+            logger.info(f"Applying migration {migration}")
+            migration.migrate(self, default_catalog=default_catalog)
+
+        return bool(migrate_rows)
 
     def _migrate_rows(self, promoted_snapshots_only: bool) -> None:
         logger.info("Fetching environments")
