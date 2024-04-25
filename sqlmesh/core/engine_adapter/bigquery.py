@@ -568,6 +568,8 @@ class BigQueryEngineAdapter(InsertOverwriteWithMergeMixin):
                 ),
             )
 
+        properties.extend(self._table_properties_to_expressions(table_properties))
+
         if properties:
             return exp.Properties(expressions=properties)
         return None
