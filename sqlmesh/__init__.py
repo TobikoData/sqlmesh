@@ -21,7 +21,7 @@ from sqlmesh.core import constants as c
 from sqlmesh.core.config import Config
 from sqlmesh.core.context import Context, ExecutionContext
 from sqlmesh.core.engine_adapter import EngineAdapter
-from sqlmesh.core.macros import macro
+from sqlmesh.core.macros import SQL, macro
 from sqlmesh.core.model import Model, model
 from sqlmesh.core.snapshot import Snapshot
 from sqlmesh.utils import debug_mode_enabled, enable_debug_mode
