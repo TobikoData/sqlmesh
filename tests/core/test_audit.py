@@ -490,6 +490,16 @@ def test_forall_audit(model: Model):
         == """SELECT * FROM (SELECT * FROM "db"."test_model" AS "test_model" WHERE "ds" BETWEEN '1970-01-01' AND '1970-01-01') AS "_q_0" WHERE NOT ("a" >= "b") OR NOT ("c" + "d" - "e" < 1.0)"""
     )
 
+    rendered_query_a = builtin.forall_audit.render_query(
+        model,
+        criteria=[parse_one("a >= b"), parse_one("c + d - e < 1.0")],
+        condition=parse_one("f = 42"),
+    )
+    assert (
+        rendered_query_a.sql()
+        == """SELECT * FROM (SELECT * FROM "db"."test_model" AS "test_model" WHERE "ds" BETWEEN '1970-01-01' AND '1970-01-01') AS "_q_0" WHERE (NOT ("a" >= "b") OR NOT ("c" + "d" - "e" < 1.0)) AND "f" = 42"""
+    )
+
 
 def test_accepted_range_audit(model: Model):
     rendered_query = builtin.accepted_range_audit.render_query(
