@@ -517,7 +517,6 @@ def test_column_descriptions(sushi_context, assert_exp_eq):
         '"memory"."sushi"."customer_revenue_by_day"'
     ].column_descriptions == {
         "customer_id": "Customer id",
-        "country code": "Customer country code, used for testing spaces",
         "revenue": "Revenue from orders made by this customer",
         "event_date": "Date",
     }
