@@ -592,7 +592,9 @@ WHERE
 
 `@STAR` is named after SQL's star operator `*`, but it allows you to programmatically generate a set of column selections and aliases instead of just selecting all available columns. A query may use more than one `@STAR` and may also include explicit column selections.
 
-`@STAR` uses SQLMesh's knowledge of each table's columns and data types to generate the appropriate column list. The resulting query always `CAST`s columns to their data type in the source table.
+`@STAR` uses SQLMesh's knowledge of each table's columns and data types to generate the appropriate column list. 
+If the column data types are known then the resulting query `CAST`s columns to their data type in the source table.
+Otherwise, the columns will be listed without any casting. 
 
 `@STAR` supports the following arguments, in this order:
 
