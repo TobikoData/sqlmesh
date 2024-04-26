@@ -16,6 +16,7 @@ from pathlib import Path
 
 from astor import to_source
 
+from sqlmesh.core import constants as c
 from sqlmesh.utils import format_exception, unique
 from sqlmesh.utils.errors import SQLMeshError
 from sqlmesh.utils.pydantic import PydanticModel
@@ -276,7 +277,7 @@ def build_env(
     if name not in env:
         # We only need to add the undecorated code of @macro() functions in env, which
         # is accessible through the `__wrapped__` attribute added by functools.wraps
-        env[name] = obj.__wrapped__ if hasattr(obj, "__sqlmesh_macro__") else obj
+        env[name] = obj.__wrapped__ if hasattr(obj, c.SQLMESH_MACRO) else obj
 
         if (
             obj_module

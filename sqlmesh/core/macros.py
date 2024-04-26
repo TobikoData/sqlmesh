@@ -169,7 +169,7 @@ class MacroEvaluator:
         for k, v in self.python_env.items():
             if v.is_definition:
                 self.macros[normalize_macro_name(k)] = self.env[v.name or k]
-            elif v.is_import and getattr(self.env.get(k), "__sqlmesh_macro__", None):
+            elif v.is_import and getattr(self.env.get(k), c.SQLMESH_MACRO, None):
                 self.macros[normalize_macro_name(k)] = self.env[k]
             elif v.is_value:
                 self.locals[k] = self.env[k]
@@ -543,7 +543,7 @@ class macro(registry_decorator):
         wrapper = super().__call__(func)
 
         # This is used to identify macros at runtime to unwrap during serialization.
-        setattr(wrapper, "__sqlmesh_macro__", True)
+        setattr(wrapper, c.SQLMESH_MACRO, True)
         return wrapper
 
 
@@ -1064,3 +1064,7 @@ def var(
 def normalize_macro_name(name: str) -> str:
     """Prefix macro name with @ and upcase"""
     return f"@{name.upper()}"
+
+
+for m in macro.get_registry().values():
+    setattr(m, c.SQLMESH_BUILTIN, True)

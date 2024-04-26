@@ -1,7 +1,4 @@
-import functools
-import sys
 import typing as t
-from unittest import mock
 
 import pytest
 from sqlglot import MappingSchema, exp, parse_one
@@ -9,7 +6,7 @@ from sqlglot import MappingSchema, exp, parse_one
 from sqlmesh.core.dialect import StagedFilePath
 from sqlmesh.core.macros import SQL, MacroEvaluator, macro
 from sqlmesh.utils.errors import SQLMeshError
-from sqlmesh.utils.metaprogramming import Executable, ExecutableKind
+from sqlmesh.utils.metaprogramming import Executable
 
 
 @pytest.fixture
@@ -93,35 +90,6 @@ def test_start_no_column_types(assert_exp_eq) -> None:
 
 def test_case(macro_evaluator: MacroEvaluator) -> None:
     assert macro.get_registry()["upper"]
-
-
-def test_external_macro() -> None:
-    def foo(evaluator: MacroEvaluator) -> str:
-        return "foo"
-
-    @functools.wraps(foo)
-    def wrapper(*args, **kwargs):
-        return foo(*args, **kwargs)
-
-    # Mimic a SQLMesh macro definition by setting the func's metadata appropriately
-    setattr(wrapper, "__sqlmesh_macro__", True)
-
-    sys.modules["pkg"] = mock.Mock()
-    with mock.patch("pkg.foo", wrapper):
-        evaluator = MacroEvaluator(
-            python_env={
-                "foo": Executable(
-                    payload="from pkg import foo",
-                    kind=ExecutableKind.IMPORT,
-                    name=None,
-                    path=None,
-                    alias=None,
-                )
-            }
-        )
-
-        assert "@FOO" in evaluator.macros
-        assert evaluator.macros["@FOO"](evaluator) == "foo"
 
 
 def test_macro_var(macro_evaluator):

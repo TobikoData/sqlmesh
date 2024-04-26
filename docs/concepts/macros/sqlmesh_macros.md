@@ -1514,7 +1514,7 @@ def stamped(evaluator, query: exp.Select) -> exp.Subquery:
 # SELECT * FROM @stamped('SELECT a, b, c')
 ```
 
-When coercion fails, there will always be a warning logged but we will not crash. We believe the macro should be flexible by default, meaning the default behavior is preserved if we cannot coerce. Give that, the user can express whatever level of additional checks they want. For example, if you would like to raise an error when the coercion fails, you can use an `assert` statement. For example:
+When coercion fails, there will always be a warning logged but we will not crash. We believe the macro system should be flexible by default, meaning the default behavior is preserved if we cannot coerce. Given that, the user can express whatever level of additional checks they want. For example, if you would like to raise an error when the coercion fails, you can use an `assert` statement. For example:
 
 ```python linenums="1"
 @macro()
