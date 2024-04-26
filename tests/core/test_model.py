@@ -3814,7 +3814,8 @@ def test_this_model() -> None:
     expressions = d.parse(
         """
         MODEL (
-            name db.table,
+            name `project-1.table`,
+            dialect bigquery,
         );
 
         JINJA_STATEMENT_BEGIN;
@@ -3832,18 +3833,38 @@ def test_this_model() -> None:
     )
     model = load_sql_based_model(expressions)
 
-    assert model.render_query_or_raise().sql() == '''SELECT '"db"."table"' AS "x"'''
+    assert (
+        model.render_query_or_raise().sql(dialect="bigquery")
+        == """SELECT '`project-1`.`table`' AS `x`"""
+    )
 
-    assert model.render_pre_statements()[0].sql() == """COPY "db"."table" TO 'a'"""
-    assert model.render_post_statements()[0].sql() == """COPY "db"."table" TO 'b'"""
+    assert (
+        model.render_pre_statements()[0].sql(dialect="bigquery")
+        == """COPY `project-1`.`table` TO 'a'"""
+    )
+    assert (
+        model.render_post_statements()[0].sql(dialect="bigquery")
+        == """COPY `project-1`.`table` TO 'b'"""
+    )
 
     snapshot = Snapshot.from_node(model, nodes={})
+
     assert (
         model.render_query_or_raise(
             start="2020-01-01",
             snapshots={snapshot.name: snapshot},
-        ).sql()
-        == '''SELECT '"db"."table"' AS "x"'''
+        ).sql(dialect="bigquery")
+        == """SELECT '`project-1`.`table`' AS `x`"""
+    )
+
+    snapshot.categorize_as(SnapshotChangeCategory.BREAKING)
+
+    assert (
+        model.render_query_or_raise(
+            start="2020-01-01",
+            snapshots={snapshot.name: snapshot},
+        ).sql(dialect="bigquery")
+        == "SELECT '`sqlmesh__project-1`.`project_1__table__1178373199`' AS `x`"
     )
 
 
