@@ -592,9 +592,9 @@ WHERE
 
 `@STAR` is named after SQL's star operator `*`, but it allows you to programmatically generate a set of column selections and aliases instead of just selecting all available columns. A query may use more than one `@STAR` and may also include explicit column selections.
 
-`@STAR` uses SQLMesh's knowledge of each table's columns and data types to generate the appropriate column list. 
-If the column data types are known then the resulting query `CAST`s columns to their data type in the source table.
-Otherwise, the columns will be listed without any casting. 
+`@STAR` uses SQLMesh's knowledge of each table's columns and data types to generate the appropriate column list.
+
+If the column data types are known, the resulting query `CAST`s columns to their data type in the source table. Otherwise, the columns will be listed without any casting.
 
 `@STAR` supports the following arguments, in this order:
 
@@ -605,9 +605,9 @@ Otherwise, the columns will be listed without any casting.
 - `suffix` (optional): A string to use as a suffix for all selected column names
 - `quote_identifiers` (optional): Whether to quote the resulting identifiers, defaults to true
 
-SQLMesh macro operators do not accept named arguments. For example, `@STAR(relation=a)` will error.
+Like all SQLMesh macro functions, omitting an argument when calling `@STAR` requires passing all subsequent arguments with their name and the special `:=` keyword operator. For example, we might omit the `alias` argument with `@STAR(foo, except := [c])`. Learn more about macro function arguments [below](#macro-function-arguments).
 
-For example, consider the following query:
+As a `@STAR` example, consider the following query:
 
 ```sql linenums="1"
 SELECT
@@ -622,7 +622,7 @@ The arguments to `@STAR` are:
 4. A string `baz_` to use as a prefix for all column names
 5. A string `_qux` to use as a suffix for all column names
 
-`foo` is a table that contains four columns: `a` (`TEXT`), `b` (`TEXT`), `c` (`TEXT`) and `d` (`INT`). After macro expansion, the query would be rendered as:
+`foo` is a table that contains four columns: `a` (`TEXT`), `b` (`TEXT`), `c` (`TEXT`) and `d` (`INT`). After macro expansion, if the column types are known the query would be rendered as:
 
 ```sql linenums="1"
 SELECT
@@ -1210,26 +1210,25 @@ SELECT
 FROM table
 ```
 
-#### Vararg and kwarg arguments
-Varargs (variable arguments) and kwargs (keyword arguments) are possible to use in Python macros definitions. Kwargs can be used in SQL with the property assignment operator `:=`. 
+#### Macro function arguments
+
+Most macro functions provide arguments so users can supply custom values when the function is called.
+
+Arguments can be provided by position if none are skipped. For example, consider the `add_args()` function - it has three arguments with default values provided in the function definition:
 
 ```python linenums="1"
 from sqlmesh import macro
 
 @macro()
-def kwarg_macro(evaluator, a, b=None, c=None):
-  if b:
-    return b
-  if c:
-    return c
-  return a
+def add_args(evaluator, argument_1=1, argument_2=2, argument_3=3):
+  return argument_1 + argument_2 + argument_3
 ```
 
-```sql linenums="1"
-SELECT
-  @kwarg_macro('hello', c := 'world')
-FROM table
-```
+An `@add_args` call providing values for all arguments accepts positional arguments like this: `@add_args(5, 6, 7)` (which returns 5 + 6 + 7 = `18`). A call omitting and using the default value for the the final `argument_3` can also use positional arguments: `@add_args(5, 6)` (which returns 5 + 6 + 3 = `14`)
+
+However, skipping an argument requires providing all subsequent argument names (i.e., using "keyword arguments"). For example, skipping the second argument above by just omitting it - `@add_args(5, , 7)` - results in an error.
+
+Unlike Python, SQLMesh keyword arguments must use the special operator `:=`. To skip and use the default value for the second argument above, the call must name the third argument: `@add_args(5, argument_3 := 8)` (which returns 5 + 2 + 8 = `15`).
 
 #### Returning more than one value
 
