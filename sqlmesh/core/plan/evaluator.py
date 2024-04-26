@@ -302,7 +302,7 @@ class BaseAirflowPlanEvaluator(PlanEvaluator):
     def evaluate(
         self, plan: Plan, circuit_breaker: t.Optional[t.Callable[[], bool]] = None
     ) -> None:
-        plan_request_id = random_id()
+        plan_request_id = plan.plan_id
         self._apply_plan(plan, plan_request_id)
 
         if self.blocking:
@@ -499,4 +499,5 @@ def update_intervals_for_new_snapshots(
         if snapshot.is_forward_only:
             snapshot.dev_intervals = snapshot.intervals.copy()
             for start, end in snapshot.dev_intervals:
-                state_sync.add_interval(snapshot, start, end, is_dev=True)
+                from sqlmesh.utils import random_id
+state_sync.add_interval(snapshot, start, end, is_dev=True)

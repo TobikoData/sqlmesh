@@ -114,23 +114,29 @@ class BaseNotificationTarget(PydanticModel, frozen=True):
         """
 
     @notify(NotificationEvent.APPLY_START)
-    def notify_apply_start(self, environment: str) -> None:
+    def notify_apply_start(self, environment: str, plan_id: str) -> None:
         """Notify when an apply starts.
 
         Args:
             environment: The target environment of the plan.
+            plan_id: plan_id that is being applied.
         """
-        self.send(NotificationStatus.INFO, f"Plan apply started for environment `{environment}`.")
+        self.send(
+            NotificationStatus.INFO,
+            f"Plan {plan_id} apply started for environment `{environment}`.",
+        )
 
     @notify(NotificationEvent.APPLY_END)
-    def notify_apply_end(self, environment: str) -> None:
+    def notify_apply_end(self, environment: str, plan_id: str) -> None:
         """Notify when an apply ends.
 
         Args:
             environment: The target environment of the plan.
+            plan_id: plan_id that was applied.
         """
         self.send(
-            NotificationStatus.SUCCESS, f"Plan apply finished for environment `{environment}`."
+            NotificationStatus.SUCCESS,
+            f"Plan {plan_id} apply finished for environment `{environment}`.",
         )
 
     @notify(NotificationEvent.RUN_START)
@@ -164,13 +170,19 @@ class BaseNotificationTarget(PydanticModel, frozen=True):
         self.send(NotificationStatus.SUCCESS, "SQLMesh migration finished.")
 
     @notify(NotificationEvent.APPLY_FAILURE)
-    def notify_apply_failure(self, exc: str) -> None:
+    def notify_apply_failure(self, environment: str, plan_id: str, exc: str) -> None:
         """Notify in the case of an apply failure.
 
         Args:
+            environment: The target environment of the run.
+            plan_id: The plan id of the failed apply
             exc: The exception stack trace.
         """
-        self.send(NotificationStatus.FAILURE, "Plan apply failed.", exc=exc)
+        self.send(
+            NotificationStatus.FAILURE,
+            f"Plan {plan_id} in environment `{environment}` apply failed.",
+            exc=exc,
+        )
 
     @notify(NotificationEvent.RUN_FAILURE)
     def notify_run_failure(self, exc: str) -> None:

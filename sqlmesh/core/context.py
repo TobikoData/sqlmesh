@@ -1111,18 +1111,25 @@ class GenericContext(BaseContext, t.Generic[C]):
         if plan.uncategorized:
             raise UncategorizedPlanError("Can't apply a plan with uncategorized changes.")
         self.notification_target_manager.notify(
-            NotificationEvent.APPLY_START, environment=plan.environment_naming_info.name
+            NotificationEvent.APPLY_START,
+            environment=plan.environment_naming_info.name,
+            plan_id=plan.plan_id,
         )
         try:
             self._apply(plan, circuit_breaker)
         except Exception as e:
             self.notification_target_manager.notify(
-                NotificationEvent.APPLY_FAILURE, traceback.format_exc()
+                NotificationEvent.APPLY_FAILURE,
+                environment=plan.environment_naming_info.name,
+                plan_id=plan.plan_id,
+                exc=traceback.format_exc(),
             )
             logger.error(f"Apply Failure: {traceback.format_exc()}")
             raise e
         self.notification_target_manager.notify(
-            NotificationEvent.APPLY_END, environment=plan.environment_naming_info.name
+            NotificationEvent.APPLY_END,
+            environment=plan.environment_naming_info.name,
+            plan_id=plan.plan_id,
         )
 
     def invalidate_environment(self, name: str, sync: bool = False) -> None:
