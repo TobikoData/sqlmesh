@@ -32,7 +32,6 @@ from sqlmesh.core.user import User
 from sqlmesh.schedulers.airflow import common as airflow_common
 from sqlmesh.schedulers.airflow.client import AirflowClient, BaseAirflowClient
 from sqlmesh.schedulers.airflow.mwaa_client import MWAAClient
-from sqlmesh.utils import random_id
 from sqlmesh.utils.errors import SQLMeshError
 
 logger = logging.getLogger(__name__)
@@ -302,7 +301,7 @@ class BaseAirflowPlanEvaluator(PlanEvaluator):
     def evaluate(
         self, plan: Plan, circuit_breaker: t.Optional[t.Callable[[], bool]] = None
     ) -> None:
-        plan_request_id = random_id()
+        plan_request_id = plan.plan_id
         self._apply_plan(plan, plan_request_id)
 
         if self.blocking:
