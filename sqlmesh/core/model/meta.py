@@ -144,9 +144,16 @@ class ModelMeta(_Node):
 
         return v
 
-    @field_validator("dialect", "storage_format", mode="before")
-    def _string_validator(cls, v: t.Any) -> t.Optional[str]:
+    @field_validator("storage_format", mode="before")
+    def _storage_format_validator(cls, v: t.Any) -> t.Optional[str]:
         return str_or_exp_to_str(v)
+
+    @field_validator("dialect", mode="before")
+    def _dialect_validator(cls, v: t.Any) -> t.Optional[str]:
+        # dialects are parsed as identifiers and may get normalized as uppercase,
+        # so this ensures they'll be stored as lowercase
+        dialect = str_or_exp_to_str(v)
+        return dialect and dialect.lower()
 
     @field_validator("partitioned_by_", mode="before")
     @field_validator_v1_args
