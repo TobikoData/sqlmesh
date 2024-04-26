@@ -34,37 +34,43 @@ def notification_target_manager_with_spy(mocker) -> tuple[NotificationTargetMana
 
 def test_notify(notification_target_manager_with_spy):
     notification_target_manager, spy = notification_target_manager_with_spy
-    notification_target_manager.notify(NotificationEvent.APPLY_START, "prod")
+    notification_target_manager.notify(NotificationEvent.APPLY_START, "prod", "a-plan-id")
     spy.assert_called_once_with(
         mock.ANY,
         NotificationStatus.INFO,
-        "Plan apply started for environment `prod`.",
+        "Plan a-plan-id apply started for environment `prod`.",
     )
 
     spy.reset_mock()
-    notification_target_manager.notify(NotificationEvent.APPLY_END, "prod")
+    notification_target_manager.notify(NotificationEvent.APPLY_END, "prod", "a-plan-id")
     spy.assert_called_once_with(
         mock.ANY,
         NotificationStatus.SUCCESS,
-        "Plan apply finished for environment `prod`.",
+        "Plan a-plan-id apply finished for environment `prod`.",
     )
 
     # No notification target configured for APPLY_FAILURE event
     spy.reset_mock()
-    notification_target_manager.notify(NotificationEvent.APPLY_FAILURE, ValueError())
+    notification_target_manager.notify(
+        NotificationEvent.APPLY_FAILURE, "prod", "a-plan-id", ValueError()
+    )
     spy.assert_not_called()
 
 
 def test_notify_user(notification_target_manager_with_spy):
     notification_target_manager, spy = notification_target_manager_with_spy
-    notification_target_manager.notify_user(NotificationEvent.APPLY_START, "test_user", "prod")
+    notification_target_manager.notify_user(
+        NotificationEvent.APPLY_START, "test_user", "prod", "a-plan-id"
+    )
     spy.assert_called_once_with(
         mock.ANY,
         NotificationStatus.INFO,
-        "Plan apply started for environment `prod`.",
+        "Plan a-plan-id apply started for environment `prod`.",
     )
 
     # No notification target configured for APPLY_END event for test_user
     spy.reset_mock()
-    notification_target_manager.notify_user(NotificationEvent.APPLY_END, "test_user", "prod")
+    notification_target_manager.notify_user(
+        NotificationEvent.APPLY_END, "test_user", "prod", "a-plan-id"
+    )
     spy.assert_not_called()
