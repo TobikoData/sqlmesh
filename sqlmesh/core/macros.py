@@ -402,14 +402,12 @@ class MacroEvaluator:
             self.columns_to_types_called = True
             return {"__schema_unavailable_at_load__": exp.DataType.build("unknown")}
 
-        if isinstance(model_name, exp.Column):
-            model_name = exp.table_(
-                model_name.this,
-                db=model_name.args.get("table"),
-                catalog=model_name.args.get("db"),
-            )
-
-        columns_to_types = self._schema.find(exp.to_table(model_name))
+        normalized_model_name = normalize_model_name(
+            model_name,
+            default_catalog=self.default_catalog,
+            dialect=self.dialect,
+        )
+        columns_to_types = self._schema.find(exp.to_table(normalized_model_name))
         if columns_to_types is None:
             raise SQLMeshError(f"Schema for model '{model_name}' can't be statically determined.")
 
