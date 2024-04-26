@@ -1210,6 +1210,27 @@ SELECT
 FROM table
 ```
 
+#### Vararg and kwarg arguments
+Varargs (variable arguments) and kwargs (keyword arguments) are possible to use in Python macros definitions. Kwargs can be used in SQL with the property assignment operator `:=`. 
+
+```python linenums="1"
+from sqlmesh import macro
+
+@macro()
+def kwarg_macro(evaluator, a, b=None, c=None):
+  if b:
+    return b
+  if c:
+    return c
+  return a
+```
+
+```sql linenums="1"
+SELECT
+  @kwarg_macro('hello', c := 'world')
+FROM table
+```
+
 #### Returning more than one value
 
 Macro functions are a convenient way to tidy model code by creating multiple outputs from one function call. Python macro functions do this by returning a list of strings or SQLGlot expressions.
@@ -1412,10 +1433,10 @@ SQLMesh automatically parses strings returned by Python macro functions into [SQ
 For example, consider a macro function that uses the `BETWEEN` operator in the predicate of a `WHERE` clause. A function returning the predicate as a string might look like this, where the function arguments are substituted into a Python f-string:
 
 ```python linenums="1"
-from sqlmesh import macro
+from sqlmesh import macro, SQL
 
 @macro()
-def between_where(evaluator, column_name, low_val, high_val):
+def between_where(evaluator, column_name: SQL, low_val: SQL, high_val: SQL):
     return f"{column_name} BETWEEN {low_val} AND {high_val}"
 ```
 

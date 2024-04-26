@@ -190,7 +190,7 @@ class MacroEvaluator:
         if annotations:
             spec = inspect.getfullargspec(func)
             callargs = inspect.getcallargs(func, self, *args, **kwargs)
-            new_args = []
+            new_args: t.List[t.Any] = []
 
             for arg, value in callargs.items():
                 typ = annotations.get(arg)
@@ -198,11 +198,12 @@ class MacroEvaluator:
                 if value is self:
                     continue
                 if arg == spec.varargs:
-                    for v in value:
-                        new_args.append(self._coerce(v, typ))
+                    new_args.extend(self._coerce(v, typ) for v in value)
                 elif arg == spec.varkw:
                     for k, v in value.items():
                         kwargs[k] = self._coerce(v, typ)
+                elif arg in kwargs:
+                    kwargs[arg] = self._coerce(value, typ)
                 else:
                     new_args.append(self._coerce(value, typ))
 
@@ -326,7 +327,21 @@ class MacroEvaluator:
             )
         else:
             func = t.cast(exp.Anonymous, node.this)
-            result = self.send(func.name, *func.expressions)
+
+            args = []
+            kwargs = {}
+            for e in func.expressions:
+                if isinstance(e, exp.PropertyEQ):
+                    kwargs[e.this.name] = e.expression
+                else:
+                    if kwargs:
+                        raise MacroEvalError(
+                            f"Positional argument cannot follow keyword argument.\n  {func.sql(dialect=self.dialect)} at '{self._path}'"
+                        )
+
+                    args.append(e)
+
+            result = self.send(func.name, *args, **kwargs)
 
         if result is None:
             return None
