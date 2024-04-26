@@ -1802,6 +1802,12 @@ def test_case_sensitivity(assert_exp_eq):
         """,
     )
 
+    model = load_sql_based_model(
+        d.parse("MODEL (name test, dialect hive); SELECT 1 AS c"),
+        dialect="snowflake",
+    )
+    assert model.dialect == "hive"
+
 
 def test_batch_size_validation():
     expressions = d.parse(
