@@ -55,3 +55,6 @@ DEFAULT_SCHEMA = "default"
 SQLMESH_VARS = "__sqlmesh__vars__"
 VAR = "var"
 GATEWAY = "gateway"
+
+SQLMESH_MACRO = "__sqlmesh__macro__"
+SQLMESH_BUILTIN = "__sqlmesh__builtin__"

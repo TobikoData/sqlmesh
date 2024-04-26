@@ -1942,7 +1942,7 @@ def _python_env(
     for name, macro in used_macros.items():
         if isinstance(macro, Executable):
             serialized_env[name] = macro
-        elif not macro.func.__module__.startswith("sqlmesh."):
+        elif not hasattr(macro, c.SQLMESH_BUILTIN):
             build_env(macro.func, env=python_env, name=name, path=module_path)
 
     serialized_env.update(serialize_env(python_env, path=module_path))
