@@ -222,7 +222,6 @@ class SqlMeshLoader(Loader):
         """Loads all user defined macros."""
         # Store a copy of the macro registry
         standard_macros = macro.get_registry()
-
         jinja_macros = JinjaMacroRegistry()
         extractor = MacroExtractor()
 
