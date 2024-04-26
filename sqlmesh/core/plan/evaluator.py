@@ -499,5 +499,4 @@ def update_intervals_for_new_snapshots(
         if snapshot.is_forward_only:
             snapshot.dev_intervals = snapshot.intervals.copy()
             for start, end in snapshot.dev_intervals:
-                from sqlmesh.utils import random_id
-state_sync.add_interval(snapshot, start, end, is_dev=True)
+                state_sync.add_interval(snapshot, start, end, is_dev=True)
