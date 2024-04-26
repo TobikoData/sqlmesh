@@ -32,7 +32,6 @@ from sqlmesh.core.user import User
 from sqlmesh.schedulers.airflow import common as airflow_common
 from sqlmesh.schedulers.airflow.client import AirflowClient, BaseAirflowClient
 from sqlmesh.schedulers.airflow.mwaa_client import MWAAClient
-from sqlmesh.utils import random_id
 from sqlmesh.utils.errors import SQLMeshError
 
 logger = logging.getLogger(__name__)
