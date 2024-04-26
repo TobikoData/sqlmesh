@@ -4,7 +4,7 @@ import pytest
 from sqlglot import MappingSchema, exp, parse_one
 
 from sqlmesh.core.dialect import StagedFilePath
-from sqlmesh.core.macros import SQL, MacroEvaluator, macro
+from sqlmesh.core.macros import SQL, MacroEvalError, MacroEvaluator, macro
 from sqlmesh.utils.errors import SQLMeshError
 from sqlmesh.utils.metaprogramming import Executable
 
@@ -39,6 +39,18 @@ def macro_evaluator() -> MacroEvaluator:
         if multi is True:
             return (expr,) * times
         return expr * times
+
+    @macro()
+    def join_str(evaluator: MacroEvaluator, arg: str, *args: str, **kwargs: str):
+        return exp.Literal.string(
+            "-".join(
+                [
+                    arg,
+                    *args,
+                    *(f"{k}:{v}" for k, v in kwargs.items()),
+                ]
+            )
+        )
 
     @macro()
     def split(evaluator: MacroEvaluator, string: str, sep: str = ","):
@@ -418,6 +430,16 @@ def test_ast_correctness(macro_evaluator):
                 "x": {"a": 1},
             },
         ),
+        (
+            """select @repeated(x, multi := True)""",
+            "SELECT x, x",
+            {},
+        ),
+        (
+            """select @JOIN_STR(a1, b1, c2, d := d1, e := e2)""",
+            "SELECT 'a1-b1-c2-d:d1-e:e2'",
+            {},
+        ),
     ],
 )
 def test_macro_functions(macro_evaluator: MacroEvaluator, assert_exp_eq, sql, expected, args):
@@ -506,3 +528,8 @@ def test_macro_coercion(macro_evaluator: MacroEvaluator, assert_exp_eq):
             t.Union[exp.Column, exp.Identifier],
             strict=True,
         )
+
+
+def test_positional_follows_kwargs(macro_evaluator: MacroEvaluator):
+    with pytest.raises(MacroEvalError, match="Positional argument cannot follow"):
+        macro_evaluator.evaluate(parse_one("@repeated(x, multi := True, 3)"))  # type: ignore
