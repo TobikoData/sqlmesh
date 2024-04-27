@@ -328,27 +328,33 @@ class SqlMeshLoader(Loader):
 
         for context_path, config in self._context.configs.items():
             variables = self._variables(config)
-            for path in self._glob_paths(context_path / c.MODELS, config=config, extension=".py"):
-                if not os.path.getsize(path):
-                    continue
+            model_registry._dialect = config.model_defaults.dialect
+            try:
+                for path in self._glob_paths(
+                    context_path / c.MODELS, config=config, extension=".py"
+                ):
+                    if not os.path.getsize(path):
+                        continue
 
-                self._track_file(path)
-                import_python_file(path, context_path)
-                new = registry.keys() - registered
-                registered |= new
-                for name in new:
-                    model = registry[name].model(
-                        path=path,
-                        module_path=context_path,
-                        defaults=config.model_defaults.dict(),
-                        dialect=config.model_defaults.dialect,
-                        time_column_format=config.time_column_format,
-                        physical_schema_override=config.physical_schema_override,
-                        project=config.project,
-                        default_catalog=self._context.default_catalog,
-                        variables=variables,
-                    )
-                    models[model.fqn] = model
+                    self._track_file(path)
+                    import_python_file(path, context_path)
+                    new = registry.keys() - registered
+                    registered |= new
+                    for name in new:
+                        model = registry[name].model(
+                            path=path,
+                            module_path=context_path,
+                            defaults=config.model_defaults.dict(),
+                            dialect=config.model_defaults.dialect,
+                            time_column_format=config.time_column_format,
+                            physical_schema_override=config.physical_schema_override,
+                            project=config.project,
+                            default_catalog=self._context.default_catalog,
+                            variables=variables,
+                        )
+                        models[model.fqn] = model
+            finally:
+                model_registry._dialect = None
 
         return models
 

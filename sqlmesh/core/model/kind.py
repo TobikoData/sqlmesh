@@ -26,6 +26,9 @@ from sqlmesh.utils.pydantic import (
     column_validator,
     field_validator,
     field_validator_v1_args,
+    get_dialect,
+    model_validator,
+    model_validator_v1_args,
 )
 
 if sys.version_info >= (3, 9):
@@ -177,8 +180,8 @@ class TimeColumn(PydanticModel):
     @classmethod
     def validator(cls) -> classmethod:
         def _time_column_validator(v: t.Any, values: t.Any) -> TimeColumn:
-            values = values if isinstance(values, dict) else values.data
-            dialect = values.get("dialect")
+            dialect = get_dialect(values)
+
             if isinstance(v, exp.Tuple):
                 column_expr = v.expressions[0]
                 column = (
@@ -203,7 +206,8 @@ class TimeColumn(PydanticModel):
                 )
                 format = v.get("format")
             elif isinstance(v, TimeColumn):
-                return v
+                column = v.column
+                format = v.format
             else:
                 raise ConfigError(f"Invalid time_column: '{v}'.")
 
@@ -252,7 +256,7 @@ class TimeColumn(PydanticModel):
 
 
 class _Incremental(_ModelKind):
-    dialect: str = ""
+    dialect: t.Optional[str] = None
     batch_size: t.Optional[SQLGlotPositiveInt] = None
     batch_concurrency: t.Optional[SQLGlotPositiveInt] = None
     lookback: t.Optional[SQLGlotPositiveInt] = None
@@ -322,7 +326,7 @@ class IncrementalByUniqueKeyKind(_Incremental):
             return expression
 
         if isinstance(v, str):
-            return t.cast(exp.When, d.parse_one(v, into=exp.When))
+            return t.cast(exp.When, d.parse_one(v, into=exp.When, dialect=get_dialect(values)))
 
         if not v:
             return v
@@ -411,7 +415,7 @@ class FullKind(_ModelKind):
 
 
 class _SCDType2Kind(_ModelKind):
-    dialect: str = ""
+    dialect: t.Optional[str] = None
     unique_key: SQLGlotListOfFields
     valid_from_name: SQLGlotColumn = Field(exp.column("valid_from"), validate_default=True)
     valid_to_name: SQLGlotColumn = Field(exp.column("valid_to"), validate_default=True)
@@ -432,10 +436,9 @@ class _SCDType2Kind(_ModelKind):
     def _time_data_type_validator(
         cls, v: t.Union[str, exp.Expression], values: t.Any
     ) -> exp.Expression:
-        values = values if isinstance(values, dict) else values.data
         if isinstance(v, exp.Expression) and not isinstance(v, exp.DataType):
             v = v.name
-        dialect = values.get("dialect")
+        dialect = get_dialect(values)
         data_type = exp.DataType.build(v, dialect=dialect)
         data_type.meta["dialect"] = dialect
         return data_type
@@ -552,7 +555,7 @@ def model_kind_type_from_name(name: t.Optional[str]) -> t.Type[ModelKind]:
 
 @field_validator_v1_args
 def _model_kind_validator(cls: t.Type, v: t.Any, values: t.Dict[str, t.Any]) -> ModelKind:
-    dialect = values.get("dialect")
+    dialect = get_dialect(values)
 
     if isinstance(v, _ModelKind):
         return t.cast(ModelKind, v)

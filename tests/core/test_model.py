@@ -3897,3 +3897,41 @@ def test_macros_in_model_statement(sushi_context, assert_exp_eq):
     assert model.time_column
     assert model.time_column.column == exp.column("a", quoted=True)
     assert model.start == "2023-01-01"
+
+
+def test_python_model_dialect():
+    model._dialect = "snowflake"
+
+    @model(
+        name="a",
+        kind=IncrementalByTimeRangeKind(time_column=TimeColumn(column="x", format="YYMMDD")),
+        columns={},
+    )
+    def test(context, **kwargs):
+        return None
+
+    m = model.get_registry()["a"].model(
+        module_path=Path("."),
+        path=Path("."),
+        dialect="snowflake",
+    )
+
+    assert m.time_column.json() == '{"column":"\\"X\\"","format":"%y%m%d"}'
+
+    @model(
+        name="b",
+        kind=IncrementalByTimeRangeKind(time_column="y"),
+        columns={},
+    )
+    def test(context, **kwargs):
+        return None
+
+    m = model.get_registry()["b"].model(
+        module_path=Path("."),
+        path=Path("."),
+        dialect="snowflake",
+    )
+
+    assert m.time_column.json() == '{"column":"\\"Y\\"","format":"%Y-%m-%d"}'
+
+    model._dialect = None
