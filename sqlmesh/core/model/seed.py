@@ -41,7 +41,9 @@ class CsvSettings(PydanticModel):
             return v
         return v.this
 
-
+def clean_csv_column(col: str) -> str:
+    # return col
+    return col.replace(".","")
 class CsvSeedReader:
     def __init__(self, content: str, dialect: str, settings: CsvSettings):
         self.content = content
@@ -81,7 +83,7 @@ class CsvSeedReader:
             )
             self._df = self._df.rename(
                 columns={
-                    col: normalize_identifiers(col, dialect=self.dialect).name
+                    col: clean_csv_column(normalize_identifiers(col, dialect=self.dialect).name)
                     for col in self._df.columns
                 },
             )
