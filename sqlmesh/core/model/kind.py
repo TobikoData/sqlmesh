@@ -27,8 +27,6 @@ from sqlmesh.utils.pydantic import (
     field_validator,
     field_validator_v1_args,
     get_dialect,
-    model_validator,
-    model_validator_v1_args,
 )
 
 if sys.version_info >= (3, 9):
