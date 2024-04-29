@@ -791,6 +791,29 @@ test_foo:
         ).run()
     )
 
+    _check_successful_or_raise(
+        _create_test(
+            body=load_yaml(
+                """
+test_a:
+  model: a
+  inputs:
+    b:
+      columns:
+        x: "array(int)"
+      rows: []
+  outputs:
+    query: []
+                """
+            ),
+            test_name="test_a",
+            model=sushi_context.upsert_model(
+                _create_model("SELECT x FROM b", default_catalog="memory")
+            ),
+            context=Context(config=Config(model_defaults=ModelDefaultsConfig(dialect="duckdb"))),
+        ).run()
+    )
+
 
 @pytest.mark.parametrize("full_model_without_ctes", ["snowflake"], indirect=True)
 def test_normalization(full_model_without_ctes: SqlModel) -> None:

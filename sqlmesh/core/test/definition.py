@@ -175,7 +175,9 @@ class ModelTest(unittest.TestCase):
         # coming from a database query, it is safe to assume that the column contains only
         # a single type.
         object_sentinel_values = {
-            col: actual[col][0] for col in actual_types if is_object_dtype(actual_types[col])
+            col: actual[col][0]
+            for col in actual_types
+            if is_object_dtype(actual_types[col]) and len(actual[col]) != 0
         }
         for col, value in object_sentinel_values.items():
             # can't use `isinstance()` here - https://stackoverflow.com/a/68743663/1707525
