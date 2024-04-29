@@ -26,8 +26,6 @@ from sqlmesh.utils.pydantic import (
     column_validator,
     field_validator,
     field_validator_v1_args,
-    model_validator,
-    model_validator_v1_args,
 )
 
 if sys.version_info >= (3, 9):
@@ -260,15 +258,6 @@ class _Incremental(_ModelKind):
     lookback: t.Optional[SQLGlotPositiveInt] = None
     forward_only: SQLGlotBool = False
     disable_restatement: SQLGlotBool = False
-
-    @model_validator(mode="after")
-    @model_validator_v1_args
-    def _kind_validator(cls, values: t.Dict[str, t.Any]) -> t.Dict[str, t.Any]:
-        batch_size = values.get("batch_size")
-        lookback = values.get("lookback") or 0
-        if batch_size and batch_size < lookback:
-            raise ValueError("batch_size cannot be less than lookback")
-        return values
 
     @property
     def data_hash_values(self) -> t.List[t.Optional[str]]:
