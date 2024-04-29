@@ -259,7 +259,9 @@ def _kind_dialect_validator(cls: t.Type, v: t.Optional[str]) -> str:
     return v
 
 
-kind_dialect_validator = field_validator("dialect", mode="before")(_kind_dialect_validator)
+kind_dialect_validator = field_validator("dialect", mode="before", always=True)(
+    _kind_dialect_validator
+)
 
 
 class _Incremental(_ModelKind):
