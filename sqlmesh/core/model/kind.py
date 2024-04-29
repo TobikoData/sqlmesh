@@ -558,6 +558,8 @@ def _model_kind_validator(cls: t.Type, v: t.Any, values: t.Dict[str, t.Any]) -> 
     dialect = get_dialect(values)
 
     if isinstance(v, _ModelKind):
+        if hasattr(v, "dialect") and v.dialect is None:
+            v.dialect = dialect
         return t.cast(ModelKind, v)
 
     if isinstance(v, (d.ModelKind, dict)):

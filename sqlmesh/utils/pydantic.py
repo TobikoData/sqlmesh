@@ -79,8 +79,8 @@ def get_dialect(values: t.Any) -> str:
     """Extracts dialect from a dict or pydantic obj, defaulting to the globally set dialect.
 
     Python models allow users to instantiate pydantic models by hand. This is problematic
-    because the validators kick in with the SQLGLot dialect. To default Pydantic Models used
-    in python models to the project default dialect, we set a class variable on the model
+    because the validators kick in with the SQLGLot dialect. To instantiate Pydantic Models used
+    in python models using the project default dialect, we set a class variable on the model
     registry and use that here.
     """
 
