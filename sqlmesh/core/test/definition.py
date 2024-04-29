@@ -365,10 +365,12 @@ class ModelTest(unittest.TestCase):
         if not table:
             table = exp.to_table(name, dialect=self.dialect)
 
-            # We change both the schema and the catalog, so we need to ensure there are no name clashes
+            # We change the table path below, so this ensures there are no name clashes
             table.this.set("this", "__".join(part.name for part in table.parts))
+
             table.set("db", exp.to_identifier(self._test_schema))
-            table.set("catalog", exp.to_identifier(self.default_catalog))
+            if self.default_catalog:
+                table.set("catalog", exp.parse_identifier(self.default_catalog))
 
             self._fixture_table_cache[name] = table
 
