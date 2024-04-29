@@ -17,7 +17,13 @@ pytestmark = pytest.mark.dbt
 def test_manifest_helper(caplog):
     project_path = Path("tests/fixtures/dbt/sushi_test")
     profile = Profile.load(DbtContext(project_path))
-    helper = ManifestHelper(project_path, project_path, "sushi", profile.target)
+    helper = ManifestHelper(
+        project_path,
+        project_path,
+        "sushi",
+        profile.target,
+        variable_overrides={"start": "2020-01-01"},
+    )
 
     assert helper.models()["top_waiters"].dependencies == Dependencies(
         refs={"sushi.waiter_revenue_by_day", "waiter_revenue_by_day"},
@@ -96,7 +102,13 @@ def test_manifest_helper(caplog):
 def test_tests_referencing_disabled_models():
     project_path = Path("tests/fixtures/dbt/sushi_test")
     profile = Profile.load(DbtContext(project_path))
-    helper = ManifestHelper(project_path, project_path, "sushi", profile.target)
+    helper = ManifestHelper(
+        project_path,
+        project_path,
+        "sushi",
+        profile.target,
+        variable_overrides={"start": "2020-01-01"},
+    )
 
     assert "disabled_model" not in helper.models()
     assert "not_null_disabled_model_one" not in helper.tests()
@@ -107,7 +119,13 @@ def test_variable_override():
     project_path = Path("tests/fixtures/dbt/sushi_test")
     profile = Profile.load(DbtContext(project_path))
 
-    helper = ManifestHelper(project_path, project_path, "sushi", profile.target)
+    helper = ManifestHelper(
+        project_path,
+        project_path,
+        "sushi",
+        profile.target,
+        variable_overrides={"start": "2020-01-01"},
+    )
     assert helper.models()["top_waiters"].limit_value == 10
 
     helper = ManifestHelper(
@@ -115,6 +133,6 @@ def test_variable_override():
         project_path,
         "sushi",
         profile.target,
-        variable_overrides={"top_waiters:limit": 1},
+        variable_overrides={"top_waiters:limit": 1, "start": "2020-01-01"},
     )
     assert helper.models()["top_waiters"].limit_value == 1

@@ -20,7 +20,7 @@ clean-targets:         # directories to be removed by `dbt clean`
 # Full documentation: https://docs.getdbt.com/docs/configuring-models
 
 models:
-  +start: Jan 1 2022
+  +start: "{{ var('start') }}"
   sushi:
     +materialized: table
     +pre-hook:
