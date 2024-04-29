@@ -277,11 +277,11 @@ class ManifestHelper:
         return manifest
 
     def _load_project(self, profile: Profile) -> Project:
-        project_renderer = DbtProjectYamlRenderer(profile)
+        project_renderer = DbtProjectYamlRenderer(profile, cli_vars=self.variable_overrides)
         return Project.from_project_root(str(self.project_path), project_renderer)
 
     def _load_profile(self) -> Profile:
-        profile_renderer = ProfileRenderer({})
+        profile_renderer = ProfileRenderer(cli_vars=self.variable_overrides)
         raw_profiles = read_profile(str(self.profiles_path))
         return Profile.from_raw_profiles(
             raw_profiles=raw_profiles,
