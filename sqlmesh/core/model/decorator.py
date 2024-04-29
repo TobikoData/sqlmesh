@@ -4,6 +4,7 @@ import typing as t
 from pathlib import Path
 
 from sqlglot import exp
+from sqlglot.dialects.dialect import DialectType
 
 from sqlmesh.core import constants as c
 from sqlmesh.core.dialect import MacroFunc
@@ -17,6 +18,7 @@ class model(registry_decorator):
     """Specifies a function is a python based model."""
 
     registry_name = "python_models"
+    _dialect: DialectType = None
 
     def __init__(self, name: str, is_sql: bool = False, **kwargs: t.Any) -> None:
         if not name:
