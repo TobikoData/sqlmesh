@@ -284,6 +284,7 @@ def test_variables(assert_exp_eq, sushi_test_project):
 
     # Finally, check that variable scoping & overwriting (some_var) works as expected
     expected_sushi_variables = {
+        "start": "Jan 1 2022",
         "yet_another_var": 1,
         "top_waiters:limit": 10,
         "top_waiters:revenue": "revenue",
@@ -295,6 +296,7 @@ def test_variables(assert_exp_eq, sushi_test_project):
         "yet_another_var": 1,
         "customers:bla": False,
         "customers:customer_id": "customer_id",
+        "start": "Jan 1 2022",
         "top_waiters:limit": 10,
         "top_waiters:revenue": "revenue",
         "customers:boo": ["a", "b"],
@@ -745,6 +747,7 @@ def test_db_type_to_quote_policy():
 def test_variable_override():
     project_root = "tests/fixtures/dbt/sushi_test"
     project = Project.load(
-        DbtContext(project_root=Path(project_root)), variables={"yet_another_var": 2}
+        DbtContext(project_root=Path(project_root)),
+        variables={"yet_another_var": 2, "start": "2021-01-01"},
     )
     assert project.packages["sushi"].variables["yet_another_var"] == 2
