@@ -253,13 +253,24 @@ class TimeColumn(PydanticModel):
         return exp.Property(this="time_column", value=self.to_expression(dialect))
 
 
+def _kind_dialect_validator(cls: t.Type, v: t.Optional[str]) -> str:
+    if v is None:
+        return get_dialect({})
+    return v
+
+
+kind_dialect_validator = field_validator("dialect", mode="before")(_kind_dialect_validator)
+
+
 class _Incremental(_ModelKind):
-    dialect: t.Optional[str] = None
+    dialect: t.Optional[str] = Field(None, validate_default=True)
     batch_size: t.Optional[SQLGlotPositiveInt] = None
     batch_concurrency: t.Optional[SQLGlotPositiveInt] = None
     lookback: t.Optional[SQLGlotPositiveInt] = None
     forward_only: SQLGlotBool = False
     disable_restatement: SQLGlotBool = False
+
+    _dialect_validator = kind_dialect_validator
 
     @property
     def data_hash_values(self) -> t.List[t.Optional[str]]:
@@ -413,7 +424,7 @@ class FullKind(_ModelKind):
 
 
 class _SCDType2Kind(_ModelKind):
-    dialect: t.Optional[str] = None
+    dialect: t.Optional[str] = Field(None, validate_default=True)
     unique_key: SQLGlotListOfFields
     valid_from_name: SQLGlotColumn = Field(exp.column("valid_from"), validate_default=True)
     valid_to_name: SQLGlotColumn = Field(exp.column("valid_to"), validate_default=True)
@@ -423,6 +434,7 @@ class _SCDType2Kind(_ModelKind):
     forward_only: SQLGlotBool = True
     disable_restatement: SQLGlotBool = True
 
+    _dialect_validator = kind_dialect_validator
     # Remove once Pydantic 1 is deprecated
     _always_validate_column = field_validator(
         "valid_from_name", "valid_to_name", mode="before", always=True
@@ -556,8 +568,6 @@ def _model_kind_validator(cls: t.Type, v: t.Any, values: t.Dict[str, t.Any]) -> 
     dialect = get_dialect(values)
 
     if isinstance(v, _ModelKind):
-        if hasattr(v, "dialect") and v.dialect is None:
-            v.dialect = dialect
         return t.cast(ModelKind, v)
 
     if isinstance(v, (d.ModelKind, dict)):

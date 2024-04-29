@@ -109,7 +109,6 @@ def test_json(snapshot: Snapshot):
                 "batch_size": 30,
                 "forward_only": False,
                 "disable_restatement": False,
-                "dialect": "spark",
             },
             "mapping_schema": {},
             "start": "2020-01-01",
@@ -631,7 +630,7 @@ def test_fingerprint(model: Model, parent_model: Model):
     fingerprint = fingerprint_from_node(model, nodes={})
 
     original_fingerprint = SnapshotFingerprint(
-        data_hash="3582214120",
+        data_hash="3163676913",
         metadata_hash="892368116",
     )
 
