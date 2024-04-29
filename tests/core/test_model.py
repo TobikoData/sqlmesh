@@ -3916,7 +3916,8 @@ def test_python_model_dialect():
         dialect="snowflake",
     )
 
-    assert m.time_column.json() == '{"column":"\\"X\\"","format":"%y%m%d"}'
+    assert m.time_column.column.sql() == '"X"'
+    assert m.time_column.format == "%y%m%d"
 
     @model(
         name="b",
@@ -3932,6 +3933,7 @@ def test_python_model_dialect():
         dialect="snowflake",
     )
 
-    assert m.time_column.json() == '{"column":"\\"Y\\"","format":"%Y-%m-%d"}'
+    assert m.time_column.column.sql() == '"Y"'
+    assert m.time_column.format == "%Y-%m-%d"
 
     model._dialect = None
