@@ -109,7 +109,6 @@ def test_json(snapshot: Snapshot):
                 "batch_size": 30,
                 "forward_only": False,
                 "disable_restatement": False,
-                "dialect": "",
             },
             "mapping_schema": {},
             "start": "2020-01-01",
@@ -730,7 +729,7 @@ def test_fingerprint_jinja_macros(model: Model):
         }
     )
     original_fingerprint = SnapshotFingerprint(
-        data_hash="2664333317",
+        data_hash="2973224250",
         metadata_hash="892368116",
     )
 
