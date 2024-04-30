@@ -1255,7 +1255,7 @@ def test_render_query(assert_exp_eq, sushi_context):
         WITH "test_macros" AS (
           SELECT
             2 AS "lit_two",
-            "waiter_revenue_by_day"."revenue" > 0 AS "sql_exp",
+            "waiter_revenue_by_day"."revenue" * 2.0 AS "sql_exp",
             CAST("waiter_revenue_by_day"."revenue" AS TEXT) AS "sql_lit"
           FROM "memory"."sushi"."waiter_revenue_by_day" AS "waiter_revenue_by_day"
         )
@@ -3825,7 +3825,7 @@ def test_this_model() -> None:
         );
 
         JINJA_STATEMENT_BEGIN;
-        COPY {{ this_model }} TO 'a';
+        VACUUM {{ this_model }} TO 'a';
         JINJA_END;
 
         JINJA_QUERY_BEGIN;
@@ -3833,7 +3833,7 @@ def test_this_model() -> None:
         JINJA_END;
 
         JINJA_STATEMENT_BEGIN;
-        COPY {{ this_model }} TO 'b';
+        VACUUM {{ this_model }} TO 'b';
         JINJA_END;
         """
     )
@@ -3846,11 +3846,11 @@ def test_this_model() -> None:
 
     assert (
         model.render_pre_statements()[0].sql(dialect="bigquery")
-        == """COPY `project-1`.`table` TO 'a'"""
+        == """VACUUM `project-1`.`table` TO 'a'"""
     )
     assert (
         model.render_post_statements()[0].sql(dialect="bigquery")
-        == """COPY `project-1`.`table` TO 'b'"""
+        == """VACUUM `project-1`.`table` TO 'b'"""
     )
 
     snapshot = Snapshot.from_node(model, nodes={})
@@ -3870,7 +3870,7 @@ def test_this_model() -> None:
             start="2020-01-01",
             snapshots={snapshot.name: snapshot},
         ).sql(dialect="bigquery")
-        == "SELECT '`sqlmesh__project-1`.`project_1__table__1178373199`' AS `x`"
+        == "SELECT '`sqlmesh__project-1`.`project_1__table__2235533348`' AS `x`"
     )
 
 

@@ -529,6 +529,13 @@ def test_macro_coercion(macro_evaluator: MacroEvaluator, assert_exp_eq):
             strict=True,
         )
 
+    with pytest.raises(SQLMeshError):
+        _ = coerce(
+            exp.column("a", "b"),
+            str,
+            strict=True,
+        )
+
 
 def test_positional_follows_kwargs(macro_evaluator: MacroEvaluator):
     with pytest.raises(MacroEvalError, match="Positional argument cannot follow"):

@@ -1163,7 +1163,7 @@ def test_merge(ctx: TestContext):
 
 
 def test_scd_type_2_by_time(ctx: TestContext):
-    time_type = "timestamp"
+    time_type = exp.DataType.build("timestamp")
 
     ctx.columns_to_types = {
         "id": "int",
@@ -1306,7 +1306,7 @@ def test_scd_type_2_by_time(ctx: TestContext):
 
 
 def test_scd_type_2_by_column(ctx: TestContext):
-    time_type = "datetime" if ctx.dialect == "bigquery" else "timestamp"
+    time_type = exp.DataType.build("timestamp")
 
     ctx.columns_to_types = {
         "id": "int",
