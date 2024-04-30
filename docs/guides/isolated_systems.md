@@ -62,7 +62,7 @@ This example demonstrates conditioning the model schema name on the current gate
 
 ```sql linenums="1"
 MODEL (
-    name @IF(@gateway = 'production', 'prod_schema', 'dev_schema').my_model
+    name @IF(@gateway = 'production', prod_schema, dev_schema).my_model
 )
 ```
 
