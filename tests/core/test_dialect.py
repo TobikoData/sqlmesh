@@ -318,13 +318,21 @@ def test_seed():
         """
         MODEL (
             kind SEED (
-                path '..\..\..\data\data.csv',
+                path '..\..\..\data\data.csv', -- c
             ),
         );
     """
     )
     assert len(expressions) == 1
     assert "../../../data/data.csv" in expressions[0].sql()
+    assert (
+        format_model_expressions(expressions)
+        == """MODEL (
+  kind SEED (
+    path '../../../data/data.csv' /* c */
+  )
+)"""
+    )
 
 
 def test_select_from_values_for_batch_range_json():

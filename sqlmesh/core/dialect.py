@@ -499,14 +499,9 @@ def _create_parser(parser_type: t.Type[exp.Expression], table_keys: t.List[str])
             if isinstance(value, exp.Expression):
                 value.meta["sql"] = self._find_sql(start, self._prev)
 
-            if self._match(TokenType.COMMA):
-                expressions.append(
-                    self.expression(
-                        exp.Property, this=key, value=value, comments=self._prev.comments
-                    )
-                )
-            else:
-                expressions.append(self.expression(exp.Property, this=key, value=value))
+            expressions.append(self.expression(exp.Property, this=key, value=value))
+
+            if not self._match(TokenType.COMMA, expression=expressions[-1]):
                 break
 
         return self.expression(parser_type, expressions=expressions)
@@ -521,24 +516,26 @@ PARSERS = {
 }
 
 
-def _sqlmesh_ddl_sql(self: Generator, expression: Model | Audit | Metric, name: str) -> str:
+def _props_sql(self: Generator, expressions: t.List[exp.Expression]) -> str:
     props = []
-    size = len(expression.expressions)
+    size = len(expressions)
 
-    for i, prop in enumerate(expression.expressions):
+    for i, prop in enumerate(expressions):
         sql = self.indent(f"{prop.name} {self.sql(prop, 'value')}")
 
         if i < size - 1:
             sql += ","
         props.append(self.maybe_comment(sql, expression=prop))
 
-    return "\n".join([f"{name} (", "\n".join(props), ")"])
+    return "\n".join(props)
+
+
+def _sqlmesh_ddl_sql(self: Generator, expression: Model | Audit | Metric, name: str) -> str:
+    return "\n".join([f"{name} (", _props_sql(self, expression.expressions), ")"])
 
 
 def _model_kind_sql(self: Generator, expression: ModelKind) -> str:
-    props = ",\n".join(
-        self.indent(f"{prop.this} {self.sql(prop, 'value')}") for prop in expression.expressions
-    )
+    props = _props_sql(self, expression.expressions)
     if props:
         return "\n".join([f"{expression.this} (", props, ")"])
     return expression.name.upper()
