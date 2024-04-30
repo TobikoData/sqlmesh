@@ -1256,7 +1256,7 @@ def arg_in_123(evaluator, my_arg: int): # Type annotation `my_arg: int`
 
 Now the macro call will return `SELECT TRUE` because the value is coerced to a Python integer before the function code executes and `1` is in `[1,2,3]`.
 
-Type annotations should **always** be specified for arguments with a default value because, in contrast to user-supplied values, the default is not parsed by SQLGlot before the function code executes. Type annotation ensures that both default and user-supplied argument values are of the same type in the function body.
+If an argument has a default value, the value is not parsed by SQLGlot before the function code executes. Therefore, take care to ensure that the default's data type matches that of a user-supplied argument by adding a type annotation, making the default value a SQLGlot expression, or making the default value `None`.
 
 #### Positional and keyword arguments
 
