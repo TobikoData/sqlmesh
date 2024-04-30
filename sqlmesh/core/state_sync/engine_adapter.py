@@ -207,7 +207,9 @@ class EngineAdapterStateSync(CommonStateSyncMixin, StateSync):
         if snapshots:
             self._push_snapshots(snapshots)
 
-    def _push_snapshots(self, snapshots: t.Iterable[Snapshot], overwrite: bool = False) -> None:
+    def _push_snapshots(
+        self, snapshots: t.Iterable[Snapshot], overwrite: bool = False, push_seeds: bool = True
+    ) -> None:
         if overwrite:
             snapshots = tuple(snapshots)
             self.delete_snapshots(snapshots)
@@ -221,13 +223,14 @@ class EngineAdapterStateSync(CommonStateSyncMixin, StateSync):
                 SnapshotChangeCategory.NON_BREAKING,
             ):
                 seed_model = t.cast(SeedModel, snapshot.node)
-                seed_contents.append(
-                    {
-                        "name": snapshot.name,
-                        "version": snapshot.version,
-                        "content": seed_model.seed.content,
-                    }
-                )
+                if push_seeds:
+                    seed_contents.append(
+                        {
+                            "name": snapshot.name,
+                            "version": snapshot.version,
+                            "content": seed_model.seed.content,
+                        }
+                    )
                 snapshot = snapshot.copy(update={"node": seed_model.to_dehydrated()})
             snapshots_to_store.append(snapshot)
 
@@ -237,7 +240,7 @@ class EngineAdapterStateSync(CommonStateSyncMixin, StateSync):
             columns_to_types=self._snapshot_columns_to_types,
         )
 
-        if seed_contents:
+        if push_seeds and seed_contents:
             self.engine_adapter.insert_append(
                 self.seeds_table,
                 pd.DataFrame(seed_contents),
@@ -1061,7 +1064,7 @@ class EngineAdapterStateSync(CommonStateSyncMixin, StateSync):
             ]
             if new_snapshots_to_push:
                 logger.info("Pushing %s migrated snapshots", len(new_snapshots_to_push))
-                self._push_snapshots(new_snapshots_to_push)
+                self._push_snapshots(new_snapshots_to_push, push_seeds=False)
             new_snapshots.clear()
             snapshot_id_mapping.clear()
 
