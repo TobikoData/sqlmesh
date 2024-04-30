@@ -3870,7 +3870,7 @@ def test_this_model() -> None:
             start="2020-01-01",
             snapshots={snapshot.name: snapshot},
         ).sql(dialect="bigquery")
-        == "SELECT '`sqlmesh__project-1`.`project_1__table__2235533348`' AS `x`"
+        == f"SELECT '`sqlmesh__project-1`.`project_1__table__{snapshot.version}`' AS `x`"
     )
 
 
