@@ -592,9 +592,9 @@ WHERE
 
 `@STAR` is named after SQL's star operator `*`, but it allows you to programmatically generate a set of column selections and aliases instead of just selecting all available columns. A query may use more than one `@STAR` and may also include explicit column selections.
 
-`@STAR` uses SQLMesh's knowledge of each table's columns and data types to generate the appropriate column list. 
-If the column data types are known then the resulting query `CAST`s columns to their data type in the source table.
-Otherwise, the columns will be listed without any casting. 
+`@STAR` uses SQLMesh's knowledge of each table's columns and data types to generate the appropriate column list.
+
+If the column data types are known, the resulting query `CAST`s columns to their data type in the source table. Otherwise, the columns will be listed without any casting.
 
 `@STAR` supports the following arguments, in this order:
 
@@ -605,9 +605,9 @@ Otherwise, the columns will be listed without any casting.
 - `suffix` (optional): A string to use as a suffix for all selected column names
 - `quote_identifiers` (optional): Whether to quote the resulting identifiers, defaults to true
 
-SQLMesh macro operators do not accept named arguments. For example, `@STAR(relation=a)` will error.
+Like all SQLMesh macro functions, omitting an argument when calling `@STAR` requires passing all subsequent arguments with their name and the special `:=` keyword operator. For example, we might omit the `alias` argument with `@STAR(foo, except := [c])`. Learn more about macro function arguments [below](#positional-and-keyword-arguments).
 
-For example, consider the following query:
+As a `@STAR` example, consider the following query:
 
 ```sql linenums="1"
 SELECT
@@ -622,7 +622,7 @@ The arguments to `@STAR` are:
 4. A string `baz_` to use as a prefix for all column names
 5. A string `_qux` to use as a suffix for all column names
 
-`foo` is a table that contains four columns: `a` (`TEXT`), `b` (`TEXT`), `c` (`TEXT`) and `d` (`INT`). After macro expansion, the query would be rendered as:
+`foo` is a table that contains four columns: `a` (`TEXT`), `b` (`TEXT`), `c` (`TEXT`) and `d` (`INT`). After macro expansion, if the column types are known the query would be rendered as:
 
 ```sql linenums="1"
 SELECT
@@ -1148,6 +1148,8 @@ SQLMesh supports user-defined macro functions written in two languages - SQL and
 
 ### Python macro functions
 
+#### Setup
+
 Python macro functions should be placed in `.py` files in the SQLMesh project's `macros` directory. Multiple functions can be defined in one `.py` file, or they can be distributed across multiple files.
 
 An empty `__init__.py` file must be present in the SQLMesh project's `macros` directory. It will be created automatically when the project scaffold is created with `sqlmesh init`.
@@ -1156,11 +1158,13 @@ Each `.py` file containing a macro definition must import SQLMesh's `macro` deco
 
 Python macros are defined as regular python functions adorned with the SQLMesh `@macro()` decorator. The first argument to the function must be `evaluator`, which provides the macro evaluation context in which the macro function will run.
 
-Python macros will parse all arguments with SQLGlot before they are used in the function body. Therefore, the function code exclusively processes SQLGlot expressions and may need to extract the expression's attributes/contents for use.
+#### Inputs and outputs
+
+Python macros parse all arguments passed to the macro call with SQLGlot before they are used in the function body. Therefore, unless [argument type annotations are provided](#argument-data-types) in the function definition, the macro function code must process SQLGlot expressions and may need to extract the expression's attributes/contents for use.
 
 Python macro functions may return values of either `string` or SQLGlot `expression` types. SQLMesh will automatically parse returned strings into a SQLGlot expression after the function is executed so they can be incorporated into the model query's semantic representation.
 
-Macro functions may return a list of strings or expressions that all play the same role in the query (e.g., specifying column definitions). For example, a list containing multiple `CASE WHEN` statements would be incorporated into the query properly, but a list containing both `CASE WHEN` statements and a `WHERE` clause would not.
+Macro functions may [return a list of strings or expressions](#returning-more-than-one-value) that all play the same role in the query (e.g., specifying column definitions). For example, a list containing multiple `CASE WHEN` statements would be incorporated into the query properly, but a list containing both `CASE WHEN` statements and a `WHERE` clause would not.
 
 #### Macro function basics
 
@@ -1190,7 +1194,7 @@ SELECT
 FROM table
 ```
 
-Note that the python function returned a string `'text'`, but the rendered query uses `text` as a column name. That is due to the function's returned text being parsed as SQL code and integrated into the query's semantic representation.
+Note that the python function returned a string `'text'`, but the rendered query uses `text` as a column name. That is due to the function's returned text being parsed as SQL code by SQLGlot and integrated into the query's semantic representation.
 
 The rendered query will treat `text` as a string if we double-quote the single-quoted value in the function definition as `"'text'"`:
 
@@ -1199,7 +1203,7 @@ from sqlmesh import macro
 
 @macro()
 def print_text(evaluator):
-  return "'text'"
+    return "'text'"
 ```
 
 When run in the same model query as before, this will render to:
@@ -1210,26 +1214,92 @@ SELECT
 FROM table
 ```
 
-#### Vararg and kwarg arguments
-Varargs (variable arguments) and kwargs (keyword arguments) are possible to use in Python macros definitions. Kwargs can be used in SQL with the property assignment operator `:=`. 
+#### Argument data types
+
+Most macro functions provide arguments so users can supply custom values when the function is called. The data type of the argument plays a key role in how the macro code processes its value, and providing type annotations in the macro definition ensures that the macro code receives the data type it expects. This section provides a brief description of SQLMesh macro type annotation - find additional information [below](#typed-macros).
+
+As [mentioned above](#inputs-and-outputs), argument values passed to the macro call are parsed by SQLGlot before they become available to the function code. If an argument does not have a type annotation in the macro function definition, its value will always be a SQLGlot expression in the function body. Therefore, the macro function code must operate directly on the expression (and may need to extract information from it before usage).
+
+If an argument does have a type annotation in the macro function definition, the value passed to the macro call will be coerced to that type after parsing by SQLGlot and before the values are used in the function body. Essentially, SQLMesh will extract the relevant information of the annotated data type from the expression for you (if possible).
+
+For example, this macro function determines whether an argument's value is any of the integers 1, 2, or 3:
 
 ```python linenums="1"
 from sqlmesh import macro
 
 @macro()
-def kwarg_macro(evaluator, a, b=None, c=None):
-  if b:
-    return b
-  if c:
-    return c
-  return a
+def arg_in_123(evaluator, my_arg):
+    return my_arg in [1,2,3]
 ```
 
-```sql linenums="1"
+When this macro is called, it will return `FALSE` even if an integer was passed in the call. Consider this macro call:
+
+``` sql linenums="1"
 SELECT
-  @kwarg_macro('hello', c := 'world')
-FROM table
+    @arg_in_123(1)
 ```
+
+It returns `SELECT FALSE` because:
+
+1. The passed value `1` is parsed by SQLGlot into a SQLGlot expression before the function code executes and
+2. There is no matching SQLGlot expression in `[1,2,3]`
+
+However, the macro will treat the argument like a normal Python function does if we annotate `my_arg` with the integer `int` type in the function definition:
+
+```python linenums="1"
+from sqlmesh import macro
+
+@macro()
+def arg_in_123(evaluator, my_arg: int): # Type annotation `my_arg: int`
+    return my_arg in [1,2,3]
+```
+
+Now the macro call will return `SELECT TRUE` because the value is coerced to a Python integer before the function code executes and `1` is in `[1,2,3]`.
+
+If an argument has a default value, the value is not parsed by SQLGlot before the function code executes. Therefore, take care to ensure that the default's data type matches that of a user-supplied argument by adding a type annotation, making the default value a SQLGlot expression, or making the default value `None`.
+
+#### Positional and keyword arguments
+
+In a macro call, the arguments may be provided by position if none are skipped. For example, consider the `add_args()` function - it has three arguments with default values provided in the function definition:
+
+```python linenums="1"
+from sqlmesh import macro
+
+@macro()
+def add_args(
+    evaluator,
+    argument_1: int = 1,
+    argument_2: int = 2,
+    argument_3: int = 3
+  ):
+    return argument_1 + argument_2 + argument_3
+```
+
+An `@add_args` call providing values for all arguments accepts positional arguments like this: `@add_args(5, 6, 7)` (which returns 5 + 6 + 7 = `18`). A call omitting and using the default value for the the final `argument_3` can also use positional arguments: `@add_args(5, 6)` (which returns 5 + 6 + 3 = `14`).
+
+However, skipping an argument requires providing all subsequent argument names (i.e., using "keyword arguments"). For example, skipping the second argument above by just omitting it - `@add_args(5, , 7)` - results in an error.
+
+Unlike Python, SQLMesh keyword arguments must use the special operator `:=`. To skip and use the default value for the second argument above, the call must name the third argument: `@add_args(5, argument_3 := 8)` (which returns 5 + 2 + 8 = `15`).
+
+#### Variable-length arguments
+
+The `add_args()` macro defined in the [previous section](#positional-and-keyword-arguments) accepts only three arguments and requires that all three have a value. This greatly limits the macro's flexibility because users may want to add any number of values together.
+
+The macro can be improved by allowing users to provide any number of arguments at call time. We use Python's "variable-length arguments" to accomplish this:
+
+```python linenums="1"
+from sqlmesh import macro
+
+@macro()
+def add_args(evaluator, *args: int): # Variable-length arguments of integer type `*args: int`
+  return sum(args)
+```
+
+This macro can be called with one or more arguments. For example:
+
+- `@add_args(1)` returns 1
+- `@add_args(1, 2)` returns 3
+- `@add_args(1, 2, 3)` returns 6
 
 #### Returning more than one value
 
@@ -1344,6 +1414,8 @@ FROM table
 
 [User-defined global variables](#global-variables) can be accessed within the macro's body using the `evaluator.var` method.
 
+If a global variable is not defined, the method will return a Python `None` value. You may provide a different default value as the method's second argument.
+
 For example:
 
 ```python linenums="1"
@@ -1351,24 +1423,23 @@ from sqlmesh.core.macros import macro
 
 @macro()
 def some_macro(evaluator):
-    var_value = evaluator.var("<var_name>")
-    another_var_value = evaluator.var("<another_var_name>", "default_value")
+    var_value = evaluator.var("<var_name>") # Default value is `None`
+    another_var_value = evaluator.var("<another_var_name>", "default_value") # Default value is `"default_value"`
     ...
 ```
 
 #### Accessing model schemas
 
-Model schemas can be accessed within a Python macro function through its evaluation context's `column_to_types` method, when they can be statically determined. For instance, a schema of an [external model](../models/external_models.md) can be accessed only after the `sqlmesh create_external_models` command has been executed.
+Model schemas can be accessed within a Python macro function through its evaluation context's `column_to_types()` method, if the column types can be statically determined. For instance, a schema of an [external model](../models/external_models.md) can be accessed only after the `sqlmesh create_external_models` command has been executed.
 
-As an example, consider the following macro function which aims to rename the columns of a target model by adding a prefix to them:
+This macro function renames the columns of an upstream model by adding a prefix to them:
 
 ```python linenums="1"
 from sqlglot import exp
 from sqlmesh.core.macros import macro
 
 @macro()
-def prefix_columns(evaluator, model_name, prefix):
-    prefix = prefix.name
+def prefix_columns(evaluator, model_name, prefix: str):
     renamed_projections = []
 
     # The following converts `model_name`, which is a SQLGlot expression, into a lookup key,
@@ -1384,7 +1455,7 @@ def prefix_columns(evaluator, model_name, prefix):
     return renamed_projections
 ```
 
-This can then be used in a SQL model as shown below:
+This can then be used in a SQL model like this:
 
 ```sql linenums="1"
 MODEL (
@@ -1398,15 +1469,15 @@ FROM
   schema.parent
 ```
 
-Note that `columns_to_types` expects an _unquoted model name_, such as `schema.parent`. Since macro arguments are SQLGlot expressions, they need to be processed accordingly in order to extract meaningful information from them. For instance, the lookup key in the above macro definition is extracted by generating the SQL code for `model_name` using the `sql` method.
+Note that `columns_to_types` expects an _unquoted model name_, such as `schema.parent`. Since macro arguments without type annotations are SQLGlot expressions, the macro code must extract meaningful information from them. For instance, the lookup key in the above macro definition is extracted by generating the SQL code for `model_name` using the `sql()` method.
 
-Having access to the schema of an upstream model can be useful for various reasons:
+Accessing the schema of an upstream model can be useful for various reasons. For example:
 
 - Renaming columns so that downstream consumers are not tightly coupled to external or source tables
 - Selecting only a subset of columns that satisfy some criteria (e.g. columns whose names start with a specific prefix)
 - Applying transformations to columns, such as masking PII or computing various statistics based on the column types
 
-Thus, leveraging `columns_to_types` can also enable one to write code according to the [DRY](https://en.wikipedia.org/wiki/Don%27t_repeat_yourself) principle, as they can implement these transformations in a single function instead of duplicating them in each model of interest.
+Thus, leveraging `columns_to_types` can also enable one to write code according to the [DRY](https://en.wikipedia.org/wiki/Don%27t_repeat_yourself) principle, as a single macro function can implement the transformations instead of creating a different macro for each model of interest.
 
 #### Accessing snapshots
 
@@ -1472,17 +1543,17 @@ The methods are available because the `column` argument is parsed as a SQLGlot [
 
 Column expressions are sub-classes of the [Condition class](https://sqlglot.com/sqlglot/expressions.html#Condition), so they have builder methods like [`between`](https://sqlglot.com/sqlglot/expressions.html#Condition.between) and [`like`](https://sqlglot.com/sqlglot/expressions.html#Condition.like).
 
-## Typed Macros
+### Typed Macros
 
 Typed macros in SQLMesh bring the power of type hints from Python, enhancing readability, maintainability, and usability of your SQL macros. These macros enable developers to specify expected types for arguments, making the macros more intuitive and less error-prone.
 
-### Benefits of Typed Macros
+#### Benefits of Typed Macros
 
 1. **Improved Readability**: By specifying types, the intent of the macro is clearer to other developers or future you.
 2. **Reduced Boilerplate**: No need for manual type conversion within the macro function, allowing you to focus on the core logic.
 3. **Enhanced Autocompletion**: IDEs can provide better autocompletion and documentation based on the specified types.
 
-### Defining a Typed Macro
+#### Defining a Typed Macro
 
 Typed macros in SQLMesh use Python's type hints. Here's a simple example of a typed macro that repeats a string a given number of times:
 
@@ -1504,7 +1575,7 @@ FROM some_table;
 
 This macro takes two arguments: `text` of type `str` and `count` of type `int`, and it returns a string. Without type hints, the inputs to the macro would have been two `exp.Literal` objects you would have had to convert to strings and integers manually.
 
-### Supported Types
+#### Supported Types
 
 SQLMesh supports common Python types for typed macros including:
 
@@ -1554,7 +1625,7 @@ def my_macro(evaluator, table: exp.Table) -> exp.Column:
 
 In using assert this way, you still get the benefits of reducing/removing the boilerplate needed to coerce types; but you **also** get guarantees about the type of the input. This is a useful pattern and is user-defined, so you can use it as you see fit. It ultimately allows you to keep the macro definition clean and focused on the core business logic.
 
-### Advanced Typed Macros
+#### Advanced Typed Macros
 
 You can create more complex macros using advanced Python features like generics. For example, a macro that accepts a list of integers and returns their sum:
 
@@ -1577,9 +1648,9 @@ FROM some_table;
 
 Generics can be nested and are resolved recursively allowing for fairly robust type hinting.
 
-See examples of the coercion function in action in the test suite [here](../../../tests/core/test_macros.py).
+See examples of the coercion function in action in the test suite [here](https://github.com/TobikoData/sqlmesh/blob/main/tests/core/test_macros.py).
 
-### Conclusion
+#### Conclusion
 
 Typed macros in SQLMesh not only enhance the development experience by making macros more readable and easier to use but also contribute to more robust and maintainable code. By leveraging Python's type hinting system, developers can create powerful and intuitive macros for their SQL queries, further bridging the gap between SQL and Python.
 
