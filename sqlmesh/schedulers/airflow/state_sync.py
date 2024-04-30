@@ -219,6 +219,16 @@ class HttpStateSync(StateSync):
         """
         raise NotImplementedError("Adding intervals is not supported by the Airflow state sync.")
 
+    def add_inclusive_exclusive_interval(
+        self,
+        snapshot_id: SnapshotId,
+        snapshot_version: str,
+        start_ts: int,
+        end_ts: int,
+        is_dev: bool = False,
+    ) -> None:
+        raise NotImplementedError("Adding intervals is not supported by the Airflow state sync.")
+
     def remove_interval(
         self,
         snapshot_intervals: t.Sequence[t.Tuple[SnapshotInfoLike, Interval]],

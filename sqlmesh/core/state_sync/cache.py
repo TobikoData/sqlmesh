@@ -129,15 +129,18 @@ class CachingStateSync(DelegatingStateSync):
         self.snapshot_cache.clear()
         return self.state_sync.delete_expired_snapshots()
 
-    def add_interval(
+    def add_inclusive_exclusive_interval(
         self,
-        snapshot: Snapshot,
-        start: TimeLike,
-        end: TimeLike,
+        snapshot_id: SnapshotId,
+        snapshot_version: str,
+        start_ts: int,
+        end_ts: int,
         is_dev: bool = False,
     ) -> None:
-        self.snapshot_cache.pop(snapshot.snapshot_id, None)
-        self.state_sync.add_interval(snapshot, start, end, is_dev)
+        self.snapshot_cache.pop(snapshot_id, None)
+        self.state_sync.add_inclusive_exclusive_interval(
+            snapshot_id, snapshot_version, start_ts, end_ts, is_dev
+        )
 
     def remove_interval(
         self,

@@ -624,13 +624,23 @@ class EngineAdapterStateSync(CommonStateSyncMixin, StateSync):
         end: TimeLike,
         is_dev: bool = False,
     ) -> None:
-        start_ts, end_ts = snapshot.inclusive_exclusive(start, end, strict=False)
+        super().add_interval(snapshot, start, end, is_dev)
+
+    @transactional()
+    def add_inclusive_exclusive_interval(
+        self,
+        snapshot_id: SnapshotId,
+        snapshot_version: str,
+        start_ts: int,
+        end_ts: int,
+        is_dev: bool = False,
+    ) -> None:
         if start_ts >= end_ts:
             logger.info(
                 "Skipping partial interval (%s, %s) for snapshot %s",
-                start,
-                end,
-                snapshot.snapshot_id,
+                start_ts,
+                end_ts,
+                snapshot_id,
             )
             return
 
@@ -639,12 +649,21 @@ class EngineAdapterStateSync(CommonStateSyncMixin, StateSync):
             "dev interval" if is_dev else "interval",
             start_ts,
             end_ts,
-            snapshot.snapshot_id,
+            snapshot_id,
         )
-
+        snapshot_intervals = SnapshotIntervals(
+            name=snapshot_id.name,
+            identifier=snapshot_id.identifier,
+            version=snapshot_version,
+            # These are ignored since the intervals explicitly provided are the ones added
+            intervals=[],
+            dev_intervals=[],
+        )
         self.engine_adapter.insert_append(
             self.intervals_table,
-            _intervals_to_df([(snapshot, (start_ts, end_ts))], is_dev, False),
+            _intervals_to_df(
+                [(snapshot_intervals, (start_ts, end_ts))], is_dev=is_dev, is_removed=False
+            ),
             columns_to_types=self._interval_columns_to_types,
         )
 

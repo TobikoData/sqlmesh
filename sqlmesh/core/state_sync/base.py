@@ -304,23 +304,22 @@ class StateSync(StateReader, abc.ABC):
         """
 
     @abc.abstractmethod
-    def add_interval(
+    def add_inclusive_exclusive_interval(
         self,
-        snapshot: Snapshot,
-        start: TimeLike,
-        end: TimeLike,
+        snapshot_id: SnapshotId,
+        snapshot_version: str,
+        start_ts: int,
+        end_ts: int,
         is_dev: bool = False,
     ) -> None:
-        """Add an interval to a snapshot and sync it to the store.
-
-        Snapshots must be pushed before adding intervals to them.
+        """Add an inclusive-exclusive interval to a snapshot and sync it to the store.
 
         Args:
-            snapshot: The snapshot like object to add an interval to.
-            start: The start of the interval to add.
-            end: The end of the interval to add.
-            is_dev: Indicates whether the given interval is being added while in
-                development mode.is_dev.
+            snapshot_id: The snapshot id to add an interval to.
+            snapshot_version: The snapshot version to add an interval to.
+            start_ts: The inclusive start of the interval to add.
+            end_ts: The exclusive end of the interval to add.
+            is_dev: Indicates whether the given interval is being added while in development mode
         """
 
     @abc.abstractmethod
@@ -428,6 +427,28 @@ class StateSync(StateReader, abc.ABC):
     @abc.abstractmethod
     def rollback(self) -> None:
         """Rollback to previous backed up state."""
+
+    def add_interval(
+        self,
+        snapshot: Snapshot,
+        start: TimeLike,
+        end: TimeLike,
+        is_dev: bool = False,
+    ) -> None:
+        """Add an interval to a snapshot and sync it to the store.
+
+        Args:
+            snapshot: The snapshot like object to add an interval to.
+            start: The start of the interval to add.
+            end: The end of the interval to add.
+            is_dev: Indicates whether the given interval is being added while in development mode
+        """
+        start_ts, end_ts = snapshot.inclusive_exclusive(start, end, strict=False)
+        if not snapshot.version:
+            raise SQLMeshError("Snapshot version must be set to add an interval.")
+        self.add_inclusive_exclusive_interval(
+            snapshot.snapshot_id, snapshot.version, start_ts, end_ts, is_dev
+        )
 
 
 class DelegatingStateSync(StateSync):
