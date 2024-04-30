@@ -20,12 +20,12 @@ def test_format_model_expressions():
         parse(
             """
     MODEL(
-    name a.b,
-    kind full,
+    name a.b, -- a
+    kind full, -- b
     references (
      a,
      (b, c) as d,
-     ),
+     ),  -- c
      audits [
     not_null(columns=[
       foo_id,
@@ -83,9 +83,9 @@ def test_format_model_expressions():
     assert (
         x
         == """MODEL (
-  name a.b,
-  kind FULL,
-  references (a, (b, c) AS d),
+  name a.b, /* a */
+  kind FULL, /* b */
+  references (a, (b, c) AS d), /* c */
   audits ARRAY(
     NOT_NULL(
       columns = ARRAY(
