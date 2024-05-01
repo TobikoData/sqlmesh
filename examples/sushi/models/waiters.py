@@ -3,13 +3,13 @@ from sqlglot import exp
 
 from sqlmesh import model
 from sqlmesh.core.macros import MacroEvaluator
-from sqlmesh.core.model import EmbeddedKind
+from sqlmesh.core.model.kind import ModelKindName
 
 
 @model(
     "sushi.waiters",
     is_sql=True,
-    kind=EmbeddedKind(),
+    kind=dict(name=ModelKindName.EMBEDDED),
     owner="jen",
     cron="@daily",
 )

@@ -8,13 +8,13 @@ from helper import iter_dates  # type: ignore
 from sqlglot import exp
 
 from sqlmesh import ExecutionContext, model
-from sqlmesh.core.model import FullKind
+from sqlmesh.core.model.kind import ModelKindName
 
 
 @model(
     "sushi.raw_marketing",
     description="Table of marketing status.",
-    kind=FullKind(),
+    kind=dict(name=ModelKindName.FULL),
     start="1 week ago",
     cron="@daily",
     grains=[

@@ -19,6 +19,7 @@ from sqlmesh.core.context import Context, ExecutionContext
 from sqlmesh.core.dialect import parse
 from sqlmesh.core.macros import MacroEvaluator, macro
 from sqlmesh.core.model import (
+    FullKind,
     IncrementalByTimeRangeKind,
     IncrementalUnmanagedKind,
     ModelCache,
@@ -26,6 +27,7 @@ from sqlmesh.core.model import (
     SeedKind,
     SqlModel,
     TimeColumn,
+    ViewKind,
     create_external_model,
     create_seed_model,
     create_sql_model,
@@ -33,7 +35,7 @@ from sqlmesh.core.model import (
     model,
 )
 from sqlmesh.core.model.common import parse_expression
-from sqlmesh.core.model.kind import _model_kind_validator
+from sqlmesh.core.model.kind import ModelKindName, _model_kind_validator
 from sqlmesh.core.model.seed import CsvSettings
 from sqlmesh.core.node import IntervalUnit, _Node
 from sqlmesh.core.snapshot import Snapshot, SnapshotChangeCategory
@@ -1614,6 +1616,76 @@ def test_python_models_returning_sql(assert_exp_eq) -> None:
         ) AS "MODEL1"
         """,
     )
+
+
+def test_python_model_decorator_kind() -> None:
+    logger = logging.getLogger("sqlmesh.core.model.decorator")
+
+    # no kind specified -> default View kind
+    @model("default_kind", columns={'"COL"': "int"})
+    def a_model(context):
+        pass
+
+    python_model = model.get_registry()["default_kind"].model(
+        module_path=Path("."),
+        path=Path("."),
+    )
+
+    assert isinstance(python_model.kind, ViewKind)
+
+    # string kind name specified
+    @model("kind_string", kind="full", columns={'"COL"': "int"})
+    def b_model(context):
+        pass
+
+    python_model = model.get_registry()["kind_string"].model(
+        module_path=Path("."),
+        path=Path("."),
+    )
+
+    assert isinstance(python_model.kind, FullKind)
+
+    # error if kind dict with no `name` key
+    with pytest.raises(ConfigError, match="`kind` dictionary must contain a `name` key"):
+
+        @model("kind_empty_dict", kind=dict(), columns={'"COL"': "int"})
+        def my_model(context):
+            pass
+
+    # error if kind dict with `name` key whose type is not a ModelKindName enum
+    with pytest.raises(ConfigError, match="with a valid ModelKindName enum value"):
+
+        @model("kind_dict_badname", kind=dict(name="test"), columns={'"COL"': "int"})
+        def my_model(context):
+            pass
+
+    # warning if kind is ModelKind instance
+    with patch.object(logger, "warning") as mock_logger:
+
+        @model("kind_instance", kind=FullKind(), columns={'"COL"': "int"})
+        def my_model(context):
+            pass
+
+        assert (
+            mock_logger.call_args[0][0]
+            == """Python model "kind_instance"'s `kind` argument was passed a SQLMesh `FullKind` object. This may result in unexpected behavior - provide a dictionary instead."""
+        )
+
+    # no warning with valid kind dict
+    with patch.object(logger, "warning") as mock_logger:
+
+        @model("kind_valid_dict", kind=dict(name=ModelKindName.FULL), columns={'"COL"': "int"})
+        def my_model(context):
+            pass
+
+        python_model = model.get_registry()["kind_valid_dict"].model(
+            module_path=Path("."),
+            path=Path("."),
+        )
+
+        assert isinstance(python_model.kind, FullKind)
+
+        assert not mock_logger.call_args
 
 
 def test_star_expansion(assert_exp_eq) -> None:

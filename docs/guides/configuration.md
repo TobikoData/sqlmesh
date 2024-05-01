@@ -495,7 +495,7 @@ These pages describe the connection configuration options for each execution eng
 
 Configuration for the state backend connection if different from the data warehouse connection.
 **Using the same connection for data warehouse and state is only recommended for non-production deployments of SQLMesh.**
-Unlike data transformations, storing state information requires database transactions. Data warehouses aren’t optimized for executing transactions, so storing state information in them can slow down your project. 
+Unlike data transformations, storing state information requires database transactions. Data warehouses aren’t optimized for executing transactions, so storing state information in them can slow down your project.
 Even worse data corruption can occur with simultaneous writes to the same table.
 Therefore, using your data warehouse is fine for testing but once you start running SQLMesh in production, you should use a dedicated state connection.
 
@@ -937,11 +937,12 @@ This example demonstrates how to specify an incremental by time range model kind
 
     ```python linenums="1"
     from sqlmesh import ExecutionContext, model
-    from sqlmesh.core.model import IncrementalByTimeRangeKind
+    from sqlmesh.core.model.kind import ModelKindName
 
     @model(
         "docs_example.incremental_model",
-        kind=IncrementalByTimeRangeKind(
+        kind=dict(
+            name=ModelKindName.INCREMENTAL_BY_TIME_RANGE,
             time_column="ds"
         )
     )
