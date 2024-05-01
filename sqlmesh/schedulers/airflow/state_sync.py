@@ -12,7 +12,7 @@ from sqlmesh.core.snapshot import (
     SnapshotInfoLike,
     SnapshotTableCleanupTask,
 )
-from sqlmesh.core.snapshot.definition import Interval
+from sqlmesh.core.snapshot.definition import Interval, SnapshotIntervals
 from sqlmesh.core.state_sync import StateSync, Versions
 from sqlmesh.core.state_sync.base import PromotionResult
 from sqlmesh.schedulers.airflow.client import AirflowClient
@@ -217,6 +217,9 @@ class HttpStateSync(StateSync):
             is_dev: Indicates whether the given interval is being added while in
                 development mode.
         """
+        raise NotImplementedError("Adding intervals is not supported by the Airflow state sync.")
+
+    def _add_snapshot_intervals(self, snapshot_intervals: SnapshotIntervals) -> None:
         raise NotImplementedError("Adding intervals is not supported by the Airflow state sync.")
 
     def remove_interval(
