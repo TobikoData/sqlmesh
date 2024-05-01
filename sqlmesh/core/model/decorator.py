@@ -35,7 +35,7 @@ class model(registry_decorator):
         if kind is not None:
             if isinstance(kind, _ModelKind):
                 logger.warning(
-                    f"""Python model "{name}"'s `kind` argument was passed a SQLMesh `{type(kind).__name__}` object. This is no longer supported - provide a dictionary instead."""
+                    f"""Python model "{name}"'s `kind` argument was passed a SQLMesh `{type(kind).__name__}` object. This may result in unexpected behavior - provide a dictionary instead."""
                 )
             elif isinstance(kind, dict):
                 if not "name" in kind or not isinstance(kind.get("name"), ModelKindName):

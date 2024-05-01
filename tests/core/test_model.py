@@ -1668,7 +1668,7 @@ def test_python_model_decorator_kind() -> None:
 
         assert (
             mock_logger.call_args[0][0]
-            == """Python model "kind_instance"'s `kind` argument was passed a SQLMesh `FullKind` object. This is no longer supported - provide a dictionary instead."""
+            == """Python model "kind_instance"'s `kind` argument was passed a SQLMesh `FullKind` object. This may result in unexpected behavior - provide a dictionary instead."""
         )
 
     # no warning with valid kind dict
