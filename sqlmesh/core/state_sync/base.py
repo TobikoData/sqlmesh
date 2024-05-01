@@ -18,7 +18,7 @@ from sqlmesh.core.snapshot import (
     SnapshotTableCleanupTask,
     SnapshotTableInfo,
 )
-from sqlmesh.core.snapshot.definition import Interval
+from sqlmesh.core.snapshot.definition import Interval, SnapshotIntervals
 from sqlmesh.utils import major_minor
 from sqlmesh.utils.date import TimeLike
 from sqlmesh.utils.errors import SQLMeshError
@@ -304,25 +304,6 @@ class StateSync(StateReader, abc.ABC):
         """
 
     @abc.abstractmethod
-    def add_inclusive_exclusive_interval(
-        self,
-        snapshot_id: SnapshotId,
-        snapshot_version: str,
-        start_ts: int,
-        end_ts: int,
-        is_dev: bool = False,
-    ) -> None:
-        """Add an inclusive-exclusive interval to a snapshot and sync it to the store.
-
-        Args:
-            snapshot_id: The snapshot id to add an interval to.
-            snapshot_version: The snapshot version to add an interval to.
-            start_ts: The inclusive start of the interval to add.
-            end_ts: The exclusive end of the interval to add.
-            is_dev: Indicates whether the given interval is being added while in development mode
-        """
-
-    @abc.abstractmethod
     def remove_interval(
         self,
         snapshot_intervals: t.Sequence[t.Tuple[SnapshotInfoLike, Interval]],
@@ -428,6 +409,14 @@ class StateSync(StateReader, abc.ABC):
     def rollback(self) -> None:
         """Rollback to previous backed up state."""
 
+    @abc.abstractmethod
+    def _add_snapshot_intervals(self, snapshot_intervals: SnapshotIntervals) -> None:
+        """Add snapshot intervals to state
+
+        Args:
+            snapshot_intervals: The snapshot intervals to add.
+        """
+
     def add_interval(
         self,
         snapshot: Snapshot,
@@ -446,9 +435,15 @@ class StateSync(StateReader, abc.ABC):
         start_ts, end_ts = snapshot.inclusive_exclusive(start, end, strict=False)
         if not snapshot.version:
             raise SQLMeshError("Snapshot version must be set to add an interval.")
-        self.add_inclusive_exclusive_interval(
-            snapshot.snapshot_id, snapshot.version, start_ts, end_ts, is_dev
+        intervals = [(start_ts, end_ts)]
+        snapshot_intervals = SnapshotIntervals(
+            name=snapshot.name,
+            identifier=snapshot.identifier,
+            version=snapshot.version,
+            intervals=intervals if not is_dev else [],
+            dev_intervals=intervals if is_dev else [],
         )
+        self._add_snapshot_intervals(snapshot_intervals)
 
 
 class DelegatingStateSync(StateSync):
