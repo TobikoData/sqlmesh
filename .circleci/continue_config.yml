@@ -242,7 +242,7 @@ jobs:
                   "branch":"main",
                   "parameters":{
                     "run_main_pr":false,
-                    "run_sqlmesh_commit":false,
+                    "run_sqlmesh_commit":true,
                     "sqlmesh_branch":"'$CIRCLE_BRANCH'",
                     "sqlmesh_commit_author":"'$CIRCLE_USERNAME'",
                     "sqlmesh_commit_hash":"'$CIRCLE_SHA1'",
