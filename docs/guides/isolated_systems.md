@@ -1,16 +1,18 @@
 # Isolated systems guide
 
-SQLMesh assumes that production and non-production data systems can access one another, but that is not always the case.
+SQLMesh is optimized for use in systems where developers have access to production data.
 
-Some architectures isolate systems from one another, preventing production data from being accessed in non-production systems. This isolation is usually motivated by information security concerns, as non-production systems may be accessible to more users and/or have looser security restrictions.
+Writing code against partial or unrepresentative data can be problematic because developers don't become aware of changes in production data until errors have already occurred. Other data products, such as machine learning models, may depend on the distribution of values in the training data - building them on unrepresentative data may lead to different behavior in production than in development.
+
+However, some companies store production and non-production data in different data warehouses that can't talk to one another ("isolated systems"). This is usually motivated by information security concerns, as the non-production warehouse may be accessible to more users and/or have looser security restrictions.
 
 This guide explains how to use SQLMesh with isolated systems. It also clarifies how isolating systems affects SQLMesh's behavior and why the systems still enjoy the benefits of many SQLMesh features.
 
 ## Terminology
 
-Isolated systems are sometimes referred to as "isolated environments," but that term is ambiguous.
+Isolated systems are sometimes referred to as "isolated environments," but we avoid that term because "environments" has a specific meaning in SQLMesh.
 
-In this context, the things being isolated are servers and databases, and the isolation is enforced by limiting network communications between the systems. We will refer to these as "isolated systems" - the "production system" and "non-production system."
+Instead, we will refer to them as isolated systems - the "production system" and "non-production system."
 
 When we refer to "environments," we are always talking about [SQLMesh environments](../concepts/environments.md) - the isolated namespaces created and managed by SQLMesh.
 
@@ -18,9 +20,9 @@ When we refer to "environments," we are always talking about [SQLMesh environmen
 
 ### Separate state data
 
-SQLMesh maintains a record of every model version, to which it compares updated models. The records are called "state" data, as in "the state of the model at that point in time."
+SQLMesh maintains a record of every model version so it can identify changes when models are updated. Those records are called "state" data, as in "the state of the model at that point in time."
 
-State data can be stored alongside model data in the primary data warehouse or in a [separate database](./connections.md#state-connection). (We recommend using a separate transactional database for projects running on cloud SQL engines.)
+State data can be stored alongside other data in the primary data warehouse or in a [separate database](./connections.md#state-connection). (We recommend using a separate transactional database for projects running on cloud SQL engines.)
 
 Isolated systems must use a **separate** state database for each system. The state of models and other objects in the non-production system is not accurate for the production system, and sharing state data will prevent the project from running correctly.
 
