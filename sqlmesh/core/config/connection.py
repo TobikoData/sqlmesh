@@ -8,6 +8,7 @@ import pathlib
 import sys
 import typing as t
 from enum import Enum
+from functools import partial
 
 from pydantic import Field
 from sqlglot import exp
@@ -84,15 +85,21 @@ class ConnectionConfig(abc.ABC, BaseConfig):
         """Whether this connection is recommended for being used as a state sync for production state syncs"""
         return self.type_ in RECOMMENDED_STATE_SYNC_ENGINES
 
+    @property
+    def _connection_factory_with_kwargs(self) -> t.Callable[[], t.Any]:
+        """A function that is called to return a connection object for the given Engine Adapter"""
+        return partial(
+            self._connection_factory,
+            **{
+                **self._static_connection_kwargs,
+                **{k: v for k, v in self.dict().items() if k in self._connection_kwargs_keys},
+            },
+        )
+
     def create_engine_adapter(self, register_comments_override: bool = False) -> EngineAdapter:
         """Returns a new instance of the Engine Adapter."""
         return self._engine_adapter(
-            lambda: self._connection_factory(
-                **{
-                    **self._static_connection_kwargs,
-                    **{k: v for k, v in self.dict().items() if k in self._connection_kwargs_keys},
-                }
-            ),
+            self._connection_factory_with_kwargs,
             multithreaded=self.concurrent_tasks > 1,
             cursor_kwargs=self._cursor_kwargs,
             default_catalog=self.get_catalog(),
