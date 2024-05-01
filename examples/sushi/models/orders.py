@@ -6,7 +6,7 @@ import pandas as pd
 from helper import iter_dates  # type: ignore
 
 from sqlmesh import ExecutionContext, model
-from sqlmesh.core.model import IncrementalByTimeRangeKind
+from sqlmesh.core.model.kind import ModelKindName
 from sqlmesh.utils.date import to_date
 
 CUSTOMERS = list(range(0, 100))
@@ -16,7 +16,9 @@ WAITERS = list(range(0, 10))
 @model(
     "sushi.orders",
     description="Table of sushi orders.",
-    kind=IncrementalByTimeRangeKind(time_column="event_date", batch_size=30),
+    kind=dict(
+        name=ModelKindName.INCREMENTAL_BY_TIME_RANGE, time_column="event_date", batch_size=30
+    ),
     start="1 week ago",
     cron="@daily",
     grains=[

@@ -9,7 +9,7 @@ from sqlglot import exp
 from sqlglot.expressions import to_column
 
 from sqlmesh import ExecutionContext, model
-from sqlmesh.core.model import IncrementalByTimeRangeKind
+from sqlmesh.core.model.kind import ModelKindName
 from sqlmesh.utils.date import to_date, to_ds
 
 ITEMS = "sushi.items"
@@ -21,7 +21,8 @@ def get_items_table(context: ExecutionContext) -> str:
 
 @model(
     "sushi.order_items",
-    kind=IncrementalByTimeRangeKind(
+    kind=dict(
+        name=ModelKindName.INCREMENTAL_BY_TIME_RANGE,
         time_column="event_date",
         batch_size=30,
     ),

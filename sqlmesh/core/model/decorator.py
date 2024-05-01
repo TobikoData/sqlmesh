@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import logging
 import typing as t
 from pathlib import Path
 
@@ -9,9 +10,12 @@ from sqlglot.dialects.dialect import DialectType
 from sqlmesh.core import constants as c
 from sqlmesh.core.dialect import MacroFunc
 from sqlmesh.core.model.definition import Model, create_python_model, create_sql_model
+from sqlmesh.core.model.kind import ModelKindName, _ModelKind
 from sqlmesh.utils import registry_decorator
 from sqlmesh.utils.errors import ConfigError
 from sqlmesh.utils.metaprogramming import build_env, serialize_env
+
+logger = logging.getLogger(__name__)
 
 
 class model(registry_decorator):
@@ -26,6 +30,18 @@ class model(registry_decorator):
 
         if not is_sql and "columns" not in kwargs:
             raise ConfigError("Python model must define column schema.")
+
+        kind = kwargs.get("kind", None)
+        if kind is not None:
+            if isinstance(kind, _ModelKind):
+                logger.warning(
+                    f"""Python model "{name}"'s `kind` argument was passed a SQLMesh `{type(kind).__name__}` object. This may result in unexpected behavior - provide a dictionary instead."""
+                )
+            elif isinstance(kind, dict):
+                if not "name" in kind or not isinstance(kind.get("name"), ModelKindName):
+                    raise ConfigError(
+                        f"""Python model "{name}"'s `kind` dictionary must contain a `name` key with a valid ModelKindName enum value."""
+                    )
 
         self.name = name
         self.is_sql = is_sql

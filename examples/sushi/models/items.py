@@ -8,7 +8,7 @@ from helper import iter_dates  # type: ignore
 from sqlglot.expressions import to_column
 
 from sqlmesh import ExecutionContext, model
-from sqlmesh.core.model import IncrementalByTimeRangeKind
+from sqlmesh.core.model.kind import ModelKindName
 from sqlmesh.utils.date import to_date
 
 ITEMS = [
@@ -49,7 +49,9 @@ ITEMS = [
 
 @model(
     "sushi.items",
-    kind=IncrementalByTimeRangeKind(time_column="event_date", batch_size=30),
+    kind=dict(
+        name=ModelKindName.INCREMENTAL_BY_TIME_RANGE, time_column="event_date", batch_size=30
+    ),
     start="1 week ago",
     cron="@daily",
     columns={
