@@ -4,6 +4,7 @@ import logging
 import typing as t
 
 from sqlglot import exp
+from sqlglot.errors import SqlglotError
 from sqlglot.helper import ensure_list
 
 from sqlmesh.core import dialect as d
@@ -300,7 +301,12 @@ class ModelConfig(BaseModelConfig):
     def _big_query_partition_by_expr(self, context: DbtContext) -> exp.Expression:
         assert isinstance(self.partition_by, dict)
         data_type = self.partition_by["data_type"].lower()
-        field = d.parse_one(self.partition_by["field"], dialect="bigquery")
+        raw_field = self.partition_by["field"]
+        try:
+            field = d.parse_one(raw_field, dialect="bigquery")
+        except SqlglotError as e:
+            raise ConfigError(f"Failed to parse partition_by field '{raw_field}': {e}") from e
+
         if data_type == "date" and self.partition_by["granularity"].lower() == "day":
             return field
 
@@ -346,9 +352,13 @@ class ModelConfig(BaseModelConfig):
             )
 
         if self.cluster_by:
-            optional_kwargs["clustered_by"] = [
-                d.parse_one(c, dialect=dialect).name for c in self.cluster_by
-            ]
+            clustered_by = []
+            for c in self.cluster_by:
+                try:
+                    clustered_by.append(d.parse_one(c, dialect=dialect).name)
+                except SqlglotError as e:
+                    raise ConfigError(f"Failed to parse cluster_by field '{c}': {e}") from e
+            optional_kwargs["clustered_by"] = clustered_by
 
         model_kwargs = self.sqlmesh_model_kwargs(context)
         if self.sql_header:
