@@ -43,7 +43,7 @@ The arguments provided in the `@model` specification have the same names as thos
 
 Python model `kind`s are specified with a Python dictionary containing the kind's name and arguments. All model kind arguments are listed in the [models configuration reference page](../../reference/model_configuration.md#model-kind-properties).
 
-The model `kind` dictionary must contain a `name` key whose value is a member of the [`ModelKindName` enum class](https://sqlmesh.readthedocs.io/en/stable/_readthedocs/html/sqlmesh/core/model/kind.html#ModelKindName). The `ModelKindName` class must be imported at the beginning of the model definition file before use in the `@model` specification.
+The model `kind` dictionary must contain a `name` key whose value is a member of the [`ModelKindName` enum class](https://sqlmesh.readthedocs.io/en/stable/_readthedocs/html/sqlmesh/core/model/kind.html#ModelKindName). The `ModelKindName` class must be imported at the beginning of the model definition file before used in the `@model` specification.
 
 Supported `kind` dictionary `name` values are:
 
