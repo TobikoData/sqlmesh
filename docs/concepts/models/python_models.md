@@ -41,29 +41,32 @@ If the function output is too large, it can also be returned in chunks using Pyt
 
 The arguments provided in the `@model` specification have the same names as those provided in a SQL model's `MODEL` DDL.
 
-Most of the arguments are simply Python-formatted equivalents of the SQL version, but Python model `kind`s are specified with model kind objects. All model kind arguments are listed in the [models configuration reference page](../../reference/model_configuration.md#model-kind-properties). A model's `kind` object must be imported at the beginning of the model definition file before use in the model specification.
+Python model `kind`s are specified with a Python dictionary containing the kind's name and arguments. All model kind arguments are listed in the [models configuration reference page](../../reference/model_configuration.md#model-kind-properties).
 
-Supported model kind objects include:
+The model `kind` dictionary must contain a `name` key whose value is a member of the [`ModelKindName` enum class](https://sqlmesh.readthedocs.io/en/stable/_readthedocs/html/sqlmesh/core/model/kind.html#ModelKindName). The `ModelKindName` class must be imported at the beginning of the model definition file before use in the `@model` specification.
 
-- [ViewKind()](https://sqlmesh.readthedocs.io/en/stable/_readthedocs/html/sqlmesh/core/model/kind.html#ViewKind)
-- [FullKind()](https://sqlmesh.readthedocs.io/en/stable/_readthedocs/html/sqlmesh/core/model/kind.html#FullKind)
-- [SeedKind()](https://sqlmesh.readthedocs.io/en/stable/_readthedocs/html/sqlmesh/core/model/kind.html#SeedKind)
-- [IncrementalByTimeRangeKind()](https://sqlmesh.readthedocs.io/en/stable/_readthedocs/html/sqlmesh/core/model/kind.html#IncrementalByTimeRangeKind)
-- [IncrementalByUniqueKeyKind()](https://sqlmesh.readthedocs.io/en/stable/_readthedocs/html/sqlmesh/core/model/kind.html#IncrementalByUniqueKeyKind)
-- [SCDType2KindByTimeKind()](https://sqlmesh.readthedocs.io/en/stable/_readthedocs/html/sqlmesh/core/model/kind.html#SCDType2ByTimeKind)
-- [SCDType2KindByColumnKind()](https://sqlmesh.readthedocs.io/en/stable/_readthedocs/html/sqlmesh/core/model/kind.html#SCDType2ByColumnKind)
-- [EmbeddedKind()](https://sqlmesh.readthedocs.io/en/stable/_readthedocs/html/sqlmesh/core/model/kind.html#EmbeddedKind)
-- [ExternalKind()](https://sqlmesh.readthedocs.io/en/stable/_readthedocs/html/sqlmesh/core/model/kind.html#ExternalKind)
+Supported `kind` dictionary `name` values are:
+
+- `ModelKindName.VIEW`
+- `ModelKindName.FULL`
+- `ModelKindName.SEED`
+- `ModelKindName.INCREMENTAL_BY_TIME_RANGE`
+- `ModelKindName.INCREMENTAL_BY_UNIQUE_KEY`
+- `ModelKindName.SCD_TYPE_2_BY_TIME`
+- `ModelKindName.SCD_TYPE_2_BY_COLUMN`
+- `ModelKindName.EMBEDDED`
+- `ModelKindName.EXTERNAL`
 
 This example demonstrates how to specify an incremental by time range model kind in Python:
 
 ```python linenums="1"
 from sqlmesh import ExecutionContext, model
-from sqlmesh.core.model import IncrementalByTimeRangeKind
+from sqlmesh.core.model.kind import ModelKindName
 
 @model(
     "docs_example.incremental_model",
-    kind=IncrementalByTimeRangeKind(
+    kind=dict(
+        name=ModelKindName.INCREMENTAL_BY_TIME_RANGE,
         time_column="model_time_column"
     )
 )

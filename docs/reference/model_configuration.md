@@ -60,13 +60,13 @@ Configuration options for models of the [`VIEW` kind](../concepts/models/model_k
 | -------------- | ---------------------------------------------------------------------------------------------------- | :--: | :------: |
 | `materialized` | Whether views should be materialized (for engines supporting materialized views). (Default: `False`) | bool |    N     |
 
-Python model configuration object: [ViewKind()](https://sqlmesh.readthedocs.io/en/stable/_readthedocs/html/sqlmesh/core/model/kind.html#ViewKind)
+Python model kind `name` enum value: [ModelKindName.VIEW](https://sqlmesh.readthedocs.io/en/stable/_readthedocs/html/sqlmesh/core/model/kind.html#ModelKindName)
 
 ### `FULL` models
 
 The [`FULL` model kind](../concepts/models/model_kinds.md#full) does not support any configuration options other than the [general model properties listed above](#general-model-properties).
 
-Python model configuration object: [FullKind()](https://sqlmesh.readthedocs.io/en/stable/_readthedocs/html/sqlmesh/core/model/kind.html#FullKind)
+Python model kind `name` enum value: [ModelKindName.FULL](https://sqlmesh.readthedocs.io/en/stable/_readthedocs/html/sqlmesh/core/model/kind.html#ModelKindName)
 
 ### Incremental models
 
@@ -89,7 +89,7 @@ Configuration options for [`INCREMENTAL_BY_TIME_RANGE` models](../concepts/model
 | `forward_only`        | Whether the model's changes should always be classified as [forward-only](../concepts/plans.md#forward-only-change). (Default: `False`) | bool |    N     |
 | `disable_restatement` | Whether [restatements](../concepts/plans.md#restatement-plans) should be disabled for the model. (Default: `False`)                     | bool |    N     |
 
-Python model configuration object: [IncrementalByTimeRangeKind()](https://sqlmesh.readthedocs.io/en/stable/_readthedocs/html/sqlmesh/core/model/kind.html#IncrementalByTimeRangeKind)
+Python model kind `name` enum value: [ModelKindName.INCREMENTAL_BY_TIME_RANGE](https://sqlmesh.readthedocs.io/en/stable/_readthedocs/html/sqlmesh/core/model/kind.html#ModelKindName)
 
 #### Incremental by unique key
 
@@ -102,7 +102,7 @@ Configuration options for [`INCREMENTAL_BY_UNIQUE_KEY` models](../concepts/model
 | `forward_only`        | Whether the model's changes should always be classified as [forward-only](../concepts/plans.md#forward-only-change). (Default: `False`) |       bool       |    N     |
 | `disable_restatement` | Whether [restatements](../concepts/plans.md#restatement-plans) should be disabled for the model. (Default: `False`)                     |       bool       |    N     |
 
-Python model configuration object: [IncrementalByUniqueKeyKind()](https://sqlmesh.readthedocs.io/en/stable/_readthedocs/html/sqlmesh/core/model/kind.html#IncrementalByUniqueKeyKind)
+Python model kind `name` enum value: [ModelKindName.INCREMENTAL_BY_UNIQUE_KEY](https://sqlmesh.readthedocs.io/en/stable/_readthedocs/html/sqlmesh/core/model/kind.html#ModelKindName)
 
 #### SCD Type 2 models
 
@@ -124,6 +124,8 @@ Configuration options for [`SCD_TYPE_2_BY_TIME` models](../concepts/models/model
 | `updated_at_name`          | The model column containing each row's updated at date. (Default: `updated_at`)                                                                                                  | str  |    N     |
 | `updated_at_as_valid_from` | By default, for new rows the `valid_from` column is set to 1970-01-01 00:00:00. This sets `valid_from` to the value of `updated_at` when the row is inserted. (Default: `False`) | bool |    N     |
 
+Python model kind `name` enum value: [ModelKindName.SCD_TYPE_2_BY_TIME](https://sqlmesh.readthedocs.io/en/stable/_readthedocs/html/sqlmesh/core/model/kind.html#ModelKindName)
+
 ##### SCD Type 2 By Column
 
 Configuration options for [`SCD_TYPE_2_BY_COLUMN` models](../concepts/models/model_kinds.md#scd-type-2) (in addition to [general model properties](#general-model-properties), [incremental model properties](#incremental-models), and [SCD Type 2 properties](#scd-type-2-models)).
@@ -133,7 +135,7 @@ Configuration options for [`SCD_TYPE_2_BY_COLUMN` models](../concepts/models/mod
 | `columns`                      | Columns whose changed data values indicate a data update (instead of an `updated_at` column). `*` to represent that all columns should be checked.                          | str \| array[str] |    Y     |
 | `execution_time_as_valid_from` | By default, for new rows `valid_from` is set to 1970-01-01 00:00:00. This changes the behavior to set it to the execution_time of when the pipeline ran. (Default: `False`) |       bool        |    N     |
 
-Python model configuration object: [SCDType2Kind()](https://sqlmesh.readthedocs.io/en/stable/_readthedocs/html/sqlmesh/core/model/kind.html#SCDType2Kind)
+Python model kind `name` enum value: [ModelKindName.SCD_TYPE_2_BY_COLUMN](https://sqlmesh.readthedocs.io/en/stable/_readthedocs/html/sqlmesh/core/model/kind.html#ModelKindName)
 
 ### `SEED` models
 
@@ -172,4 +174,4 @@ Options specified within the `kind` property's `csv_settings` property (override
 | `lineterminator`   | Character used to denote a line break. More information at the [Pandas documentation](https://pandas.pydata.org/pandas-docs/stable/reference/api/pandas.read_csv.html).                                                                                                             | str  | N        |
 | `encoding`         | Encoding to use for UTF when reading/writing (ex. 'utf-8'). More information at the [Pandas documentation](https://pandas.pydata.org/pandas-docs/stable/reference/api/pandas.read_csv.html).                                                                                        | str  | N        |
 
-Python model configuration object: [SeedKind()](https://sqlmesh.readthedocs.io/en/stable/_readthedocs/html/sqlmesh/core/model/kind.html#SeedKind)
+Python model kind `name` enum value: [ModelKindName.SEED](https://sqlmesh.readthedocs.io/en/stable/_readthedocs/html/sqlmesh/core/model/kind.html#ModelKindName)
