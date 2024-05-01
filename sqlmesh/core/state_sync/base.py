@@ -181,6 +181,10 @@ class StateReader(abc.ABC):
     def close(self) -> None:
         """Closes all open connections and releases all allocated resources."""
 
+    @abc.abstractmethod
+    def state_type(self) -> str:
+        """Returns the type of state sync."""
+
     def get_versions(self, validate: bool = True) -> Versions:
         """Get the current versions of the SQLMesh schema and libraries.
 

@@ -294,8 +294,8 @@ class GithubController:
 
         logger.debug(f"Initializing GithubController with paths: {paths} and config: {config}")
 
+        self.config = config
         self._paths = paths
-        self._config = config
         self._token = token
         self._event = event or GithubEvent.from_env()
         logger.debug(f"Github event: {json.dumps(self._event.payload)}")
@@ -325,7 +325,7 @@ class GithubController:
         logger.debug(f"Approvers: {', '.join(self._approvers)}")
         self._context: Context = Context(
             paths=self._paths,
-            config=self._config,
+            config=self.config,
             console=self._console,
         )
 
@@ -397,6 +397,7 @@ class GithubController:
                 skip_backfill=self.bot_config.skip_pr_backfill,
                 include_unmodified=self.bot_config.pr_include_unmodified,
             )
+        assert self._pr_plan_builder
         return self._pr_plan_builder.build()
 
     @property
@@ -409,6 +410,7 @@ class GithubController:
                 categorizer_config=self.bot_config.auto_categorize_changes,
                 run=self.bot_config.run_on_deploy_to_prod,
             )
+        assert self._prod_plan_builder
         return self._prod_plan_builder.build()
 
     @property
@@ -421,6 +423,7 @@ class GithubController:
                 skip_tests=True,
                 run=self.bot_config.run_on_deploy_to_prod,
             )
+        assert self._prod_plan_with_gaps_builder
         return self._prod_plan_with_gaps_builder.build()
 
     @property

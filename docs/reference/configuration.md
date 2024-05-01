@@ -268,3 +268,19 @@ Example enabling debug mode for the CLI command `sqlmesh plan`:
     C:\> set SQLMESH_DEBUG=1
     C:\> sqlmesh plan
     ```
+
+## Anonymized usage information
+
+We strive to make SQLMesh the best data transformation tool on the market. Part of accomplishing that is continually fixing bugs, adding features, and improving SQLMesh's performance.
+
+We prioritize our development work based on the needs of SQLMesh users. Some users share their needs via our Slack or Github communities, but many do not. We have added some simple anonymized usage information (telemetry) to SQLMesh to ensure the needs of all users are heard.
+
+All information is anonymized with hash functions, so we could not link data to a specific company, user, or project even if we wanted to (which we don't!). No information is related to credentials or authentication.
+
+We collect anonymized information about SQLMesh project complexity and usage - for example, number of models, count of model kinds, project load time, whether an error occurred during a plan/run (no stacktraces or error message), and names (but not values) of the arguments passed to CLI commands.
+
+You can disable collection of anonymized usage information with these methods:
+
+- Set the root `disable_anonymized_analytics: true` key in your SQLMesh project configuration file
+- Execute SQLMesh commands with an environment variable `SQLMESH__DISABLE_ANONYMIZED_ANALYTICS` set to `1`, `true`, `t`, `yes`, or `y`
+- Execute SQLMesh commands with an environment variable `DO_NOT_TRACK` set to `1`, `true`, `t`, `yes`, or `y`

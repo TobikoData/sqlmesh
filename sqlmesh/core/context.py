@@ -52,7 +52,9 @@ import pandas as pd
 from sqlglot import exp
 from sqlglot.lineage import GraphHTML
 
+from sqlmesh.core import analytics
 from sqlmesh.core import constants as c
+from sqlmesh.core.analytics import python_api_analytics
 from sqlmesh.core.audit import Audit, StandaloneAudit
 from sqlmesh.core.config import CategorizerConfig, Config, load_configs
 from sqlmesh.core.config.loader import C
@@ -314,6 +316,9 @@ class GenericContext(BaseContext, t.Generic[C]):
 
         self.path, self.config = t.cast(t.Tuple[Path, C], next(iter(self.configs.items())))
 
+        if self.config.disable_anonymized_analytics:
+            analytics.disable_analytics()
+
         self.gateway = gateway
         self._scheduler = self.config.get_scheduler(self.gateway)
         self.environment_ttl = self.config.environment_ttl
@@ -382,6 +387,7 @@ class GenericContext(BaseContext, t.Generic[C]):
             default_catalog=self.default_catalog,
         )
 
+    @python_api_analytics
     def upsert_model(self, model: t.Union[str, Model], **kwargs: t.Any) -> Model:
         """Update or insert a model.
 
@@ -467,6 +473,7 @@ class GenericContext(BaseContext, t.Generic[C]):
 
     def load(self, update_schemas: bool = True) -> GenericContext[C]:
         """Load all files in the context's path."""
+        load_start_ts = time.perf_counter()
         with sys_path(*self.configs):
             gc.disable()
             project = self._loader.load(self, update_schemas)
@@ -490,8 +497,23 @@ class GenericContext(BaseContext, t.Generic[C]):
                     f"Models and Standalone audits cannot have the same name: {duplicates}"
                 )
 
+        analytics.collector.on_project_loaded(
+            project_type=(
+                "dbt" if type(self._loader).__name__.lower().startswith("dbt") else "native"
+            ),
+            models_count=len(self._models),
+            audits_count=len(self._audits),
+            standalone_audits_count=len(self._standalone_audits),
+            macros_count=len(self._macros),
+            jinja_macros_count=len(self._jinja_macros.root_macros),
+            load_time_sec=time.perf_counter() - load_start_ts,
+            state_sync_fingerprint=self._scheduler.state_sync_fingerprint(self),
+            project_name=self.config.project,
+        )
+
         return self
 
+    @python_api_analytics
     def run(
         self,
         environment: t.Optional[str] = None,
@@ -675,6 +697,7 @@ class GenericContext(BaseContext, t.Generic[C]):
             self._default_catalog = self._scheduler.get_default_catalog(self)
         return self._default_catalog
 
+    @python_api_analytics
     def render(
         self,
         model_or_snapshot: ModelOrSnapshot,
@@ -735,6 +758,7 @@ class GenericContext(BaseContext, t.Generic[C]):
             **kwargs,
         )
 
+    @python_api_analytics
     def evaluate(
         self,
         model_or_snapshot: ModelOrSnapshot,
@@ -771,6 +795,7 @@ class GenericContext(BaseContext, t.Generic[C]):
 
         return df
 
+    @python_api_analytics
     def format(
         self,
         transpile: t.Optional[str] = None,
@@ -806,6 +831,7 @@ class GenericContext(BaseContext, t.Generic[C]):
                     file.write("\n")
                 file.truncate()
 
+    @python_api_analytics
     def plan(
         self,
         environment: t.Optional[str] = None,
@@ -906,6 +932,7 @@ class GenericContext(BaseContext, t.Generic[C]):
 
         return plan_builder.build()
 
+    @python_api_analytics
     def plan_builder(
         self,
         environment: t.Optional[str] = None,
@@ -1129,6 +1156,7 @@ class GenericContext(BaseContext, t.Generic[C]):
             plan_id=plan.plan_id,
         )
 
+    @python_api_analytics
     def invalidate_environment(self, name: str, sync: bool = False) -> None:
         """Invalidates the target environment by setting its expiration timestamp to now.
 
@@ -1144,6 +1172,7 @@ class GenericContext(BaseContext, t.Generic[C]):
         else:
             self.console.log_success(f"Environment '{name}' has been invalidated.")
 
+    @python_api_analytics
     def diff(self, environment: t.Optional[str] = None, detailed: bool = False) -> bool:
         """Show a diff of the current context with a given environment.
 
@@ -1169,6 +1198,7 @@ class GenericContext(BaseContext, t.Generic[C]):
         )
         return context_diff.has_changes
 
+    @python_api_analytics
     def table_diff(
         self,
         source: str,
@@ -1242,6 +1272,7 @@ class GenericContext(BaseContext, t.Generic[C]):
             self.console.show_row_diff(table_diff.row_diff(), show_sample=show_sample)
         return table_diff
 
+    @python_api_analytics
     def get_dag(
         self, select_models: t.Optional[t.Collection[str]] = None, **options: t.Any
     ) -> GraphHTML:
@@ -1290,6 +1321,7 @@ class GenericContext(BaseContext, t.Generic[C]):
             },
         )
 
+    @python_api_analytics
     def render_dag(self, path: str, select_models: t.Optional[t.Collection[str]] = None) -> None:
         """Render the dag as HTML and save it to a file.
 
@@ -1309,6 +1341,7 @@ class GenericContext(BaseContext, t.Generic[C]):
         with open(path, "w", encoding="utf-8") as file:
             file.write(str(self.get_dag(select_models)))
 
+    @python_api_analytics
     def create_test(
         self,
         model: str,
@@ -1360,6 +1393,7 @@ class GenericContext(BaseContext, t.Generic[C]):
         finally:
             test_adapter.close()
 
+    @python_api_analytics
     def test(
         self,
         match_patterns: t.Optional[t.List[str]] = None,
@@ -1416,6 +1450,7 @@ class GenericContext(BaseContext, t.Generic[C]):
 
         return result
 
+    @python_api_analytics
     def audit(
         self,
         start: TimeLike,
@@ -1482,6 +1517,7 @@ class GenericContext(BaseContext, t.Generic[C]):
 
         self.console.log_status_update("Done.")
 
+    @python_api_analytics
     def rewrite(self, sql: str, dialect: str = "") -> exp.Expression:
         """Rewrite a sql expression with semantic references into an executable query.
 
@@ -1501,6 +1537,7 @@ class GenericContext(BaseContext, t.Generic[C]):
             dialect=dialect or self.default_dialect,
         )
 
+    @python_api_analytics
     def migrate(self) -> None:
         """Migrates SQLMesh to the current running version.
 
@@ -1519,6 +1556,7 @@ class GenericContext(BaseContext, t.Generic[C]):
             raise e
         self.notification_target_manager.notify(NotificationEvent.MIGRATION_END)
 
+    @python_api_analytics
     def rollback(self) -> None:
         """Rolls back SQLMesh to the previous migration.
 
@@ -1526,6 +1564,7 @@ class GenericContext(BaseContext, t.Generic[C]):
         """
         self._new_state_sync().rollback()
 
+    @python_api_analytics
     def create_external_models(self) -> None:
         """Create a schema file with all external models.
 
@@ -1552,6 +1591,7 @@ class GenericContext(BaseContext, t.Generic[C]):
                 max_workers=self.concurrent_tasks,
             )
 
+    @python_api_analytics
     def print_info(self) -> None:
         """Prints information about connections, models, macros, etc. to the console."""
         self.console.log_status_update(f"Models: {len(self.models)}")
@@ -1642,6 +1682,7 @@ class GenericContext(BaseContext, t.Generic[C]):
     def _apply(self, plan: Plan, circuit_breaker: t.Optional[t.Callable[[], bool]]) -> None:
         self._scheduler.create_plan_evaluator(self).evaluate(plan, circuit_breaker=circuit_breaker)
 
+    @python_api_analytics
     def table_name(self, model_name: str, dev: bool) -> str:
         """Returns the name of the pysical table for the given model name.
 

@@ -58,3 +58,7 @@ GATEWAY = "gateway"
 
 SQLMESH_MACRO = "__sqlmesh__macro__"
 SQLMESH_BUILTIN = "__sqlmesh__builtin__"
+
+
+BUILTIN = "builtin"
+AIRFLOW = "airflow"

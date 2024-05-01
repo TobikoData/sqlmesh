@@ -42,3 +42,15 @@ class GithubCICDBotConfig(BaseConfig):
         if values.get("command_namespace") and not values.get("enable_deploy_command"):
             raise ValueError("enable_deploy_command must be set if command_namespace is set")
         return values
+
+    FIELDS_FOR_ANALYTICS: t.ClassVar[t.Set[str]] = {
+        "invalidate_environment_after_deploy",
+        "enable_deploy_command",
+        "merge_method",
+        "command_namespace",
+        "auto_categorize_changes",
+        "default_pr_start",
+        "skip_pr_backfill",
+        "pr_include_unmodified",
+        "run_on_deploy_to_prod",
+    }
