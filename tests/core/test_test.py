@@ -1021,7 +1021,7 @@ test_foo:
         assert table.db == f"sqlmesh_test_jzngz56a"
 
 
-def test_runtime_stage(mocker: MockerFixture) -> None:
+def test_runtime_stage() -> None:
     @macro()
     def test_macro(evaluator: MacroEvaluator) -> t.List[bool]:
         return [evaluator.runtime_stage == "testing", evaluator.runtime_stage == "loading"]
