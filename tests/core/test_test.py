@@ -1102,7 +1102,6 @@ def test_gateway(copy_to_temp_path: t.Callable, mocker: MockerFixture) -> None:
 
     _check_successful_or_raise(context.test())
 
->>>>>>> 8cdefe4b (Feat: add ability to override the engine adapter of a unit test)
 
 def test_test_generation(tmp_path: Path) -> None:
     init_example_project(tmp_path, dialect="duckdb")
