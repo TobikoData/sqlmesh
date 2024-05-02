@@ -175,5 +175,5 @@ gateways:
 ...
 ```
 
-Even if you do not have a need for multiple repos now, it is probably a good idea to add a `project` key so that you can easily support multiple repos in the future.
+Even if you do not have a need for multiple repos now, consider adding a `project` key so that you can easily support multiple repos in the future.
 
