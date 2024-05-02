@@ -173,6 +173,27 @@ JINJA_QUERY_BEGIN;
 JINJA_END;"""
     )
 
+    x = format_model_expressions(
+        parse(
+            """
+            MODEL(name a.b, kind FULL, dialect bigquery);
+            SELECT SAFE_CAST('bla' AS INT64) AS FOO
+            """
+        ),
+        dialect="bigquery",
+    )
+    assert (
+        x
+        == """MODEL (
+  name a.b,
+  kind FULL,
+  dialect bigquery
+);
+
+SELECT
+  SAFE_CAST('bla' AS INT64) AS FOO"""
+    )
+
 
 def test_macro_format():
     assert parse_one("@EACH(ARRAY(1,2), x -> x)").sql() == "@EACH(ARRAY(1, 2), x -> x)"
