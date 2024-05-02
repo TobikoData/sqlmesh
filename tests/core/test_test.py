@@ -15,6 +15,7 @@ from sqlmesh.core import constants as c
 from sqlmesh.core.config import Config, DuckDBConnectionConfig, ModelDefaultsConfig
 from sqlmesh.core.context import Context
 from sqlmesh.core.dialect import parse
+from sqlmesh.core.macros import MacroEvaluator, macro
 from sqlmesh.core.model import Model, SqlModel, load_sql_based_model, model
 from sqlmesh.core.test.definition import ModelTest, PythonModelTest, SqlModelTest
 from sqlmesh.utils.errors import ConfigError
@@ -1018,6 +1019,29 @@ test_foo:
     for table in test._fixture_table_cache.values():
         assert table.catalog == "memory"
         assert table.db == f"sqlmesh_test_jzngz56a"
+
+
+def test_runtime_stage() -> None:
+    @macro()
+    def test_macro(evaluator: MacroEvaluator) -> t.List[bool]:
+        return [evaluator.runtime_stage == "testing", evaluator.runtime_stage == "loading"]
+
+    _check_successful_or_raise(
+        _create_test(
+            body=load_yaml(
+                """
+test_foo:
+  model: foo
+  outputs:
+    query:
+      - c: [true, false]
+                """
+            ),
+            test_name="test_foo",
+            model=_create_model("SELECT [@test_macro()] AS c"),
+            context=Context(config=Config(model_defaults=ModelDefaultsConfig(dialect="duckdb"))),
+        ).run()
+    )
 
 
 def test_test_generation(tmp_path: Path) -> None:
