@@ -60,6 +60,7 @@ class RuntimeStage(Enum):
     LOADING = "loading"
     CREATING = "creating"
     EVALUATING = "evaluating"
+    TESTING = "testing"
 
 
 class MacroStrTemplate(Template):

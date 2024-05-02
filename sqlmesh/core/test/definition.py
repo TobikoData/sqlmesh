@@ -19,6 +19,7 @@ from sqlglot.optimizer.normalize_identifiers import normalize_identifiers
 from sqlmesh.core import constants as c
 from sqlmesh.core.dialect import normalize_model_name, schema_
 from sqlmesh.core.engine_adapter import EngineAdapter
+from sqlmesh.core.macros import RuntimeStage
 from sqlmesh.core.model import Model, PythonModel, SqlModel
 from sqlmesh.utils import UniqueKeyDict, random_id, type_is_known, yaml
 from sqlmesh.utils.date import pandas_timestamp_to_pydatetime
@@ -434,6 +435,7 @@ class SqlModelTest(ModelTest):
             **self.body.get("vars", {}),
             engine_adapter=self.engine_adapter,
             table_mapping=mapping,
+            runtime_stage=RuntimeStage.TESTING,
         )
 
         self.test_ctes(
@@ -614,6 +616,7 @@ def generate_test(
             **t.cast(t.Dict[str, t.Any], variables),
             engine_adapter=test_engine_adapter,
             table_mapping=mapping,
+            runtime_stage=RuntimeStage.TESTING,
         )
 
         if include_ctes:
