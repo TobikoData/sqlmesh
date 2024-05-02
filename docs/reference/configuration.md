@@ -19,6 +19,7 @@ Configuration options for SQLMesh project directories.
 | Option            | Description                                                                                                        |     Type     | Required |
 | ----------------- | ------------------------------------------------------------------------------------------------------------------ | :----------: | :------: |
 | `ignore_patterns` | Files that match glob patterns specified in this list are ignored when scanning the project folder (Default: `[]`) | list[string] |    N     |
+| `project`         | The project name of this config. Used for [multi-repo setups](../guides/multi_repo.md).                            | string       |    N     |
 
 ### Environments
 
