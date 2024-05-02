@@ -1023,11 +1023,8 @@ test_foo:
 
 def test_runtime_stage(mocker: MockerFixture) -> None:
     @macro()
-    def test_macro(evaluator: MacroEvaluator) -> t.List[exp.Expression]:
-        return [
-            exp.convert(evaluator.runtime_stage == "testing"),
-            exp.convert(evaluator.runtime_stage == "loading"),
-        ]
+    def test_macro(evaluator: MacroEvaluator) -> t.List[bool]:
+        return [evaluator.runtime_stage == "testing", evaluator.runtime_stage == "loading"]
 
     _check_successful_or_raise(
         _create_test(

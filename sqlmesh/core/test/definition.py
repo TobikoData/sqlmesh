@@ -526,12 +526,10 @@ class PythonModelTest(ModelTest):
         time_ctx = freeze_time(self._execution_time) if self._execution_time else nullcontext()
         with patch.dict(self._engine_adapter_dialect.generator_class.TRANSFORMS, self._transforms):
             with t.cast(AbstractContextManager, time_ctx):
-                df = self.model.render(
-                    context=self.context,
-                    runtime_stage=RuntimeStage.TESTING,
-                    **self.body.get("vars", {}),
+                return t.cast(
+                    pd.DataFrame,
+                    next(self.model.render(context=self.context, **self.body.get("vars", {}))),
                 )
-                return t.cast(pd.DataFrame, next(df))
 
 
 def generate_test(
