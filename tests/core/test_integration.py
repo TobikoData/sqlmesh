@@ -1924,6 +1924,7 @@ def apply_to_environment(
         environment,
         start=plan_start or start(context) if environment != c.PROD else None,
         forward_only=choice == SnapshotChangeCategory.FORWARD_ONLY,
+        allow_destructive_models=["*"],
         include_unmodified=True,
     )
     if environment != c.PROD:

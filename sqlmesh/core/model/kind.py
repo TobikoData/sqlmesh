@@ -154,6 +154,7 @@ class ModelKindName(str, ModelKindMixin, Enum):
 
 class _ModelKind(PydanticModel, ModelKindMixin):
     name: ModelKindName
+    _kind_specific_defaults: t.ClassVar[t.Dict[str, t.Any]] = {}
 
     @property
     def model_kind_name(self) -> t.Optional[ModelKindName]:
@@ -270,8 +271,11 @@ class _Incremental(_ModelKind):
     batch_concurrency: t.Optional[SQLGlotPositiveInt] = None
     lookback: t.Optional[SQLGlotPositiveInt] = None
     forward_only: SQLGlotBool = False
-    additive_only: SQLGlotBool = True
+    additive_only: t.Optional[SQLGlotBool] = None
     disable_restatement: SQLGlotBool = False
+    _kind_specific_defaults: t.ClassVar[t.Dict[str, t.Any]] = {
+        "additive_only": True,
+    }
 
     _dialect_validator = kind_dialect_validator
 
@@ -359,8 +363,11 @@ class IncrementalUnmanagedKind(_ModelKind):
     name: Literal[ModelKindName.INCREMENTAL_UNMANAGED] = ModelKindName.INCREMENTAL_UNMANAGED
     insert_overwrite: SQLGlotBool = False
     forward_only: SQLGlotBool = True
-    additive_only: SQLGlotBool = True
+    additive_only: t.Optional[SQLGlotBool] = None
     disable_restatement: Literal[True] = True
+    _kind_specific_defaults: t.ClassVar[t.Dict[str, t.Any]] = {
+        "additive_only": True,
+    }
 
     @property
     def data_hash_values(self) -> t.List[t.Optional[str]]:
@@ -437,10 +444,14 @@ class _SCDType2Kind(_ModelKind):
     time_data_type: exp.DataType = Field(exp.DataType.build("TIMESTAMP"), validate_default=True)
 
     forward_only: SQLGlotBool = True
-    additive_only: SQLGlotBool = True
+    additive_only: t.Optional[SQLGlotBool] = None
     disable_restatement: SQLGlotBool = True
 
     _dialect_validator = kind_dialect_validator
+    _kind_specific_defaults: t.ClassVar[t.Dict[str, t.Any]] = {
+        "additive_only": True,
+    }
+
     # Remove once Pydantic 1 is deprecated
     _always_validate_column = field_validator(
         "valid_from_name", "valid_to_name", mode="before", always=True
@@ -573,6 +584,7 @@ def model_kind_type_from_name(name: t.Optional[str]) -> t.Type[ModelKind]:
 @field_validator_v1_args
 def _model_kind_validator(cls: t.Type, v: t.Any, values: t.Dict[str, t.Any]) -> ModelKind:
     dialect = get_dialect(values)
+    user_kind_specific_defaults = values.get("kind_specific_defaults") or {}
 
     if isinstance(v, _ModelKind):
         return t.cast(ModelKind, v)
@@ -590,8 +602,24 @@ def _model_kind_validator(cls: t.Type, v: t.Any, values: t.Dict[str, t.Any]) -> 
         # instead of `SCD_TYPE_2_BY_TIME`.
         props["name"] = name
         kind_type = model_kind_type_from_name(name)
-        if "dialect" in kind_type.all_fields() and props.get("dialect") is None:
+        kind_type_fields = kind_type.all_fields()
+
+        if "dialect" in kind_type_fields and props.get("dialect") is None:
             props["dialect"] = dialect
+
+        user_defaults_to_set = {
+            k: val
+            for k, val in user_kind_specific_defaults.items()
+            if k in kind_type_fields and not k in props
+        }
+        sqlmesh_defaults_to_set = {
+            k: val
+            for k, val in kind_type._kind_specific_defaults.items()
+            if k in kind_type_fields and not k in props and not k in user_defaults_to_set
+        }
+        props.update(user_defaults_to_set)
+        props.update(sqlmesh_defaults_to_set)
+
         return kind_type(**props)
 
     name = (v.name if isinstance(v, exp.Expression) else str(v)).upper()

@@ -621,7 +621,7 @@ class _Model(ModelMeta, frozen=True):
 
     @property
     def additive_only(self) -> bool:
-        return getattr(self.kind, "additive_only", True)
+        return getattr(self.kind, "additive_only")
 
     @property
     def disable_restatement(self) -> bool:

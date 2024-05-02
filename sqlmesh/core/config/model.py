@@ -34,4 +34,5 @@ class ModelDefaultsConfig(BaseConfig):
     additive_only: t.Optional[bool] = None
     session_properties: t.Optional[t.Dict[str, t.Any]] = None
 
+    _kind_specific_fields = ["additive_only"]
     _model_kind_validator = model_kind_validator
