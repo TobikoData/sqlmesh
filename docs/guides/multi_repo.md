@@ -166,7 +166,7 @@ SQLMesh correctly detects a breaking change and allows you to perform a multi-re
 
 ## Configuring projects with multiple repositories
 
-To add support for multiple repos, add a `project` key to the config of each of the respective repos. 
+To add support for multiple repositories, add a `project` key to the config file in each of the respective repos. 
 
 ```yaml
 project: repo_1
