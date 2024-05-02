@@ -163,3 +163,17 @@ The target environment has been updated successfully
 ```
 
 SQLMesh correctly detects a breaking change and allows you to perform a multi-repo backfill.
+
+## Configuring projects with multiple repositories
+
+To add support for multiple repositories, add a `project` key to the config file in each of the respective repos. 
+
+```yaml
+project: repo_1
+
+gateways:
+...
+```
+
+Even if you do not have a need for multiple repos now, consider adding a `project` key so that you can easily support multiple repos in the future.
+
