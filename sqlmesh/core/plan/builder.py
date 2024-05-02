@@ -432,7 +432,7 @@ class PlanBuilder:
                             snapshot.categorize_as(SnapshotChangeCategory.FORWARD_ONLY)
                         else:
                             snapshot.categorize_as(SnapshotChangeCategory.NON_BREAKING)
-                    elif self._is_forward_only_model(s_id) and is_directly_modified:
+                    elif self._is_forward_only_change(s_id) and is_directly_modified:
                         self._set_choice(
                             snapshot,
                             SnapshotChangeCategory.FORWARD_ONLY,
@@ -487,7 +487,7 @@ class PlanBuilder:
                         # an indirectly modified snapshot to be created because of a new parent
                         snapshot.categorize_as(
                             SnapshotChangeCategory.FORWARD_ONLY
-                            if self._is_forward_only_model(s_id)
+                            if self._is_forward_only_change(s_id)
                             else SnapshotChangeCategory.INDIRECT_BREAKING
                         )
                     else:
@@ -497,7 +497,7 @@ class PlanBuilder:
             elif s_id in self._context_diff.added and self._is_new_snapshot(snapshot):
                 snapshot.categorize_as(
                     SnapshotChangeCategory.FORWARD_ONLY
-                    if self._is_forward_only_model(s_id)
+                    if self._is_forward_only_change(s_id)
                     else SnapshotChangeCategory.BREAKING
                 )
 
@@ -529,7 +529,7 @@ class PlanBuilder:
             if not self._is_new_snapshot(child_snapshot):
                 continue
 
-            is_forward_only_child = self._is_forward_only_model(child_s_id)
+            is_forward_only_child = self._is_forward_only_change(child_s_id)
 
             if is_breaking_choice:
                 child_snapshot.categorize_as(
@@ -577,8 +577,13 @@ class PlanBuilder:
             if not snapshot.disable_restatement:
                 snapshot.effective_from = self._effective_from
 
-    def _is_forward_only_model(self, s_id: SnapshotId) -> bool:
+    def _is_forward_only_change(self, s_id: SnapshotId) -> bool:
         snapshot = self._context_diff.snapshots[s_id]
+        if snapshot.name in self._context_diff.modified_snapshots:
+            _, old = self._context_diff.modified_snapshots[snapshot.name]
+            # If the model kind has changed, then we should not consider this to be a forward-only change.
+            if snapshot.is_model and old.model.kind.name != snapshot.model.kind.name:
+                return False
         return (
             snapshot.is_model
             and snapshot.model.forward_only

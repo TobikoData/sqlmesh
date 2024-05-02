@@ -582,7 +582,13 @@ def format_model_expressions(
     *statements, query = expressions
 
     def cast_to_colon(node: exp.Expression) -> exp.Expression:
-        if isinstance(node, exp.Cast) and not node.args.get("format"):
+        if isinstance(node, exp.Cast) and not any(
+            # Only convert CAST into :: if it doesn't have additional args set, otherwise this
+            # conversion could alter the semantics (eg. changing SAFE_CAST in BigQuery to CAST)
+            arg
+            for name, arg in node.args.items()
+            if name not in ("this", "to")
+        ):
             this = node.this
 
             if not isinstance(this, (exp.Binary, exp.Unary)) or isinstance(this, exp.Paren):

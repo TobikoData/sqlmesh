@@ -50,7 +50,7 @@ def execute(
         for _ in range(random.choice(range(10, 20))):
             customer_details.append(
                 CustomerDetails(
-                    id=faker.uuid4(),
+                    id=str(faker.uuid4()),
                     name=faker.name(),
                     phone=faker.phone_number(),
                     email=faker.ascii_email(),
