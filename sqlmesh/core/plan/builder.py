@@ -56,6 +56,7 @@ class PlanBuilder:
         skip_backfill: Whether to skip the backfill step.
         is_dev: Whether this plan is for development purposes.
         forward_only: Whether the purpose of the plan is to make forward only changes.
+        allow_destructive_models: A list of fully qualified model names whose forward-only changes are allowed to be destructive.
         environment_ttl: The period of time that a development environment should exist before being deleted.
         categorizer_config: Auto categorization settings.
         auto_categorization_enabled: Whether to apply auto categorization.
@@ -85,6 +86,7 @@ class PlanBuilder:
         skip_backfill: bool = False,
         is_dev: bool = False,
         forward_only: bool = False,
+        allow_destructive_models: t.Optional[t.Iterable[str]] = None,
         environment_ttl: t.Optional[str] = None,
         environment_suffix_target: EnvironmentSuffixTarget = EnvironmentSuffixTarget.default,
         environment_catalog_mapping: t.Optional[t.Dict[re.Pattern, str]] = None,
@@ -104,6 +106,7 @@ class PlanBuilder:
         self._skip_backfill = skip_backfill
         self._is_dev = is_dev
         self._forward_only = forward_only
+        self._allow_destructive_models = set(allow_destructive_models or [])
         self._enable_preview = enable_preview
         self._end_bounded = end_bounded
         self._ensure_finalized_snapshots = ensure_finalized_snapshots
@@ -242,6 +245,7 @@ class PlanBuilder:
             skip_backfill=self._skip_backfill,
             no_gaps=self._no_gaps,
             forward_only=self._forward_only,
+            allow_destructive_models=self._allow_destructive_models,
             include_unmodified=self._include_unmodified,
             environment_ttl=self._environment_ttl,
             environment_naming_info=self.environment_naming_info,
@@ -455,48 +459,21 @@ class PlanBuilder:
                         # previous version for non-seed models.
                         # New snapshots of seed models are considered non-breaking ones.
                         if not snapshot.is_seed:
+                            if (
+                                snapshot.is_model
+                                and not snapshot.name in self._allow_destructive_models
+                            ):
+                                self._validate_additive_only(snapshot)
+
                             snapshot.categorize_as(SnapshotChangeCategory.FORWARD_ONLY)
                         else:
                             snapshot.categorize_as(SnapshotChangeCategory.NON_BREAKING)
                     elif self._is_forward_only_change(s_id) and is_directly_modified:
-                        new, old = self._context_diff.modified_snapshots[s_id.name]
-
-                        # If a forward-only model is additive_only, error if the change requires a DROP operation
-                        if new.model.additive_only:
-                            # We must know all columns_to_types to determine whether a change is destructive
-                            old_columns_to_types = old.model.columns_to_types
-                            new_columns_to_types = new.model.columns_to_types
-                            if (
-                                not old_columns_to_types
-                                or not columns_to_types_all_known(old_columns_to_types)
-                                or not new_columns_to_types
-                                or not columns_to_types_all_known(new_columns_to_types)
-                            ):
-                                raise PlanError(
-                                    f"Model '{new.name}' is `additive_only`, but SQLMesh cannot infer all the model's column types (which is necessary to determine whether a change is destructive). Please add explicit types to all projections in the outermost SELECT statement, specify the `columns` model attribute (https://sqlmesh.readthedocs.io/en/stable/concepts/models/overview/#columns), permanently allow destructive changes by setting `additive_only false` in the MODEL kind specification, or temporarily allow destructive changes by passing the `--allow-destructive` argument to the `sqlmesh plan` command."
-                                )
-
-                            schema_differ_args = getattr(
-                                DIALECT_TO_ENGINE_ADAPTER[new.model.dialect], "schema_differ_args"
-                            )
-                            schema_differ = SchemaDiffer(**schema_differ_args)
-
-                            schema_diff = schema_differ.compare_columns(
-                                new.model.name,
-                                old_columns_to_types,
-                                new_columns_to_types,
-                            )
-                            has_drop = any(
-                                [
-                                    isinstance(action, exp.Drop)
-                                    for actions in schema_diff
-                                    for action in actions.args.get("actions", [])
-                                ]
-                            )
-                            if has_drop:
-                                raise PlanError(
-                                    f"Model '{new.name}' is `additive_only`, but the current changes require dropping a column. Please modify the changes, permanently allow destructive changes by setting `additive_only false` in the MODEL kind specification, or temporarily allow destructive changes by passing the `--allow-destructive` argument to the `sqlmesh plan` command."
-                                )
+                        if (
+                            snapshot.is_model
+                            and not snapshot.name in self._allow_destructive_models
+                        ):
+                            self._validate_additive_only(snapshot)
 
                         self._set_choice(
                             snapshot,
@@ -597,6 +574,9 @@ class PlanBuilder:
             is_forward_only_child = self._is_forward_only_change(child_s_id)
 
             if is_breaking_choice:
+                if is_forward_only_child:
+                    self._validate_additive_only(snapshot, child_snapshot)
+
                 child_snapshot.categorize_as(
                     SnapshotChangeCategory.FORWARD_ONLY
                     if is_forward_only_child
@@ -715,6 +695,57 @@ class PlanBuilder:
             raise NoChangesPlanError(
                 "No changes were detected. Make a change or run with --include-unmodified to create a new environment without changes."
             )
+
+    def _validate_additive_only(
+        self, snapshot: Snapshot, indirect_child_snapshot: t.Optional[Snapshot] = None
+    ) -> None:
+        new, old = self._context_diff.modified_snapshots[snapshot.name]
+        error_display_name = getattr(indirect_child_snapshot, "name", None) or snapshot.name
+
+        # If a forward-only model is additive_only, error if the change requires a DROP operation
+        if new.model.additive_only or indirect_child_snapshot:
+            # We must know all columns_to_types to determine whether a change is destructive
+            old_columns_to_types = old.model.columns_to_types
+            new_columns_to_types = new.model.columns_to_types
+            if (
+                not old_columns_to_types
+                or not columns_to_types_all_known(old_columns_to_types)
+                or not new_columns_to_types
+                or not columns_to_types_all_known(new_columns_to_types)
+            ):
+                indirect_error_msg = (
+                    f"upstream model {snapshot.name}'s "
+                    if indirect_child_snapshot
+                    else f"{error_display_name}'s "
+                )
+                raise PlanError(
+                    f"Model '{error_display_name}' is `additive_only`, so SQLMesh must confirm that no destructive changes are made to it. That requires knowing column types, but SQLMesh cannot infer all of {indirect_error_msg}column types. Please add explicit types to all projections in its outermost SELECT statement, specify the `columns` model attribute (https://sqlmesh.readthedocs.io/en/stable/concepts/models/overview/#columns), permanently allow destructive changes to {error_display_name} by setting `additive_only false` in the MODEL kind specification, or temporarily allow destructive changes by passing {error_display_name} to the `--allow-destructive-model` argument of the `sqlmesh plan` command."
+                )
+
+            schema_differ_args = getattr(
+                DIALECT_TO_ENGINE_ADAPTER[new.model.dialect], "schema_differ_args"
+            )
+            schema_differ = SchemaDiffer(**schema_differ_args)
+
+            schema_diff = schema_differ.compare_columns(
+                new.model.name,
+                old_columns_to_types,
+                new_columns_to_types,
+            )
+            has_drop = any(
+                [
+                    isinstance(action, exp.Drop)
+                    for actions in schema_diff
+                    for action in actions.args.get("actions", [])
+                ]
+            )
+            if has_drop:
+                # TODO: confirm that child selects column that is dropped
+
+                indirect_error_msg = f"to {snapshot.name} " if indirect_child_snapshot else ""
+                raise PlanError(
+                    f"Model {error_display_name} is `additive_only`, but the current changes {indirect_error_msg}require dropping a column. Please modify the changes, permanently allow destructive changes by setting `additive_only false` in {error_display_name}'s kind specification, or temporarily allow destructive changes by passing {error_display_name} to the `--allow-destructive-model` argument of the `sqlmesh plan` command."
+                )
 
     @cached_property
     def _forward_only_preview_needed(self) -> bool:

@@ -633,7 +633,7 @@ def test_fingerprint(model: Model, parent_model: Model):
 
     original_fingerprint = SnapshotFingerprint(
         data_hash="3582214120",
-        metadata_hash="892368116",
+        metadata_hash="329022593",
     )
 
     assert fingerprint == original_fingerprint
@@ -732,7 +732,7 @@ def test_fingerprint_jinja_macros(model: Model):
     )
     original_fingerprint = SnapshotFingerprint(
         data_hash="2973224250",
-        metadata_hash="892368116",
+        metadata_hash="329022593",
     )
 
     fingerprint = fingerprint_from_node(model, nodes={})

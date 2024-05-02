@@ -72,7 +72,7 @@ def test_forward_only_plan_sets_version(make_snapshot, mocker: MockerFixture):
         previous_finalized_snapshots=None,
     )
 
-    plan_builder = PlanBuilder(context_diff, forward_only=True)
+    plan_builder = PlanBuilder(context_diff, forward_only=True, allow_destructive_models=['"b"'])
 
     plan_builder.build()
     assert snapshot_b.version == "test_version"
@@ -119,7 +119,9 @@ def test_forward_only_dev(make_snapshot, mocker: MockerFixture):
     mocker.patch("sqlmesh.core.plan.builder.now").return_value = expected_end
     mocker.patch("sqlmesh.core.plan.definition.now").return_value = expected_end
 
-    plan = PlanBuilder(context_diff, forward_only=True, is_dev=True).build()
+    plan = PlanBuilder(
+        context_diff, forward_only=True, allow_destructive_models=['"a"'], is_dev=True
+    ).build()
 
     assert plan.restatements == {
         snapshot_a.snapshot_id: (to_timestamp(expected_start), expected_interval_end)
@@ -201,6 +203,100 @@ def test_paused_forward_only_parent(make_snapshot, mocker: MockerFixture):
 
     PlanBuilder(context_diff, forward_only=False).build()
     assert snapshot_b.change_category == SnapshotChangeCategory.BREAKING
+
+
+def test_forward_only_allow_destructive_models(make_snapshot):
+    # forward-only model, not forward-only plan
+    snapshot_a_old = make_snapshot(
+        SqlModel(
+            name="a",
+            dialect="duckdb",
+            query=parse_one("select 1 as one, '2022-01-01' ds"),
+            kind=IncrementalByTimeRangeKind(
+                time_column="ds", forward_only=True, additive_only=True
+            ),
+        )
+    )
+
+    snapshot_a = make_snapshot(
+        SqlModel(
+            name="a",
+            dialect="duckdb",
+            query=parse_one("select '2022-01-01' ds"),
+            kind=IncrementalByTimeRangeKind(
+                time_column="ds", forward_only=True, additive_only=True
+            ),
+        )
+    )
+    snapshot_a.previous_versions = (
+        SnapshotDataVersion(
+            fingerprint=SnapshotFingerprint(
+                data_hash="test_data_hash",
+                metadata_hash="test_metadata_hash",
+            ),
+            version="test_version",
+            change_category=SnapshotChangeCategory.FORWARD_ONLY,
+        ),
+    )
+
+    context_diff = ContextDiff(
+        environment="prod",
+        is_new_environment=False,
+        is_unfinalized_environment=False,
+        create_from="prod",
+        added=set(),
+        removed_snapshots={},
+        modified_snapshots={snapshot_a.name: (snapshot_a, snapshot_a_old)},
+        snapshots={snapshot_a.snapshot_id: snapshot_a, snapshot_a_old.snapshot_id: snapshot_a_old},
+        new_snapshots={snapshot_a.snapshot_id: snapshot_a},
+        previous_plan_id=None,
+        previously_promoted_snapshot_ids=set(),
+        previous_finalized_snapshots=None,
+    )
+
+    with pytest.raises(PlanError, match="is `additive_only`, but"):
+        PlanBuilder(context_diff, forward_only=False).build()
+
+    assert PlanBuilder(context_diff, forward_only=False, allow_destructive_models=['"a"']).build()
+
+    # forward-only plan, no forward-only model
+    snapshot_b_old = make_snapshot(
+        SqlModel(
+            name="b",
+            dialect="duckdb",
+            query=parse_one("select 1 as one, '2022-01-01' ds"),
+            kind=IncrementalByTimeRangeKind(time_column="ds"),
+        )
+    )
+
+    snapshot_b = make_snapshot(
+        SqlModel(
+            name="b",
+            dialect="duckdb",
+            query=parse_one("select '2022-01-01' ds"),
+            kind=IncrementalByTimeRangeKind(time_column="ds"),
+        )
+    )
+
+    context_diff = ContextDiff(
+        environment="prod",
+        is_new_environment=False,
+        is_unfinalized_environment=False,
+        create_from="prod",
+        added=set(),
+        removed_snapshots={},
+        modified_snapshots={snapshot_b.name: (snapshot_b, snapshot_b_old)},
+        snapshots={snapshot_b.snapshot_id: snapshot_b, snapshot_b_old.snapshot_id: snapshot_b_old},
+        new_snapshots={snapshot_b.snapshot_id: snapshot_b},
+        previous_plan_id=None,
+        previously_promoted_snapshot_ids=set(),
+        previous_finalized_snapshots=None,
+    )
+
+    with pytest.raises(PlanError, match="is `additive_only`, but"):
+        PlanBuilder(context_diff, forward_only=True).build()
+
+    assert PlanBuilder(context_diff, forward_only=True, allow_destructive_models=['"b"']).build()
 
 
 def test_missing_intervals_lookback(make_snapshot, mocker: MockerFixture):

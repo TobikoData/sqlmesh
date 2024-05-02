@@ -593,6 +593,7 @@ def test_unrestorable_snapshot(sushi_context: Context) -> None:
         """
         ),
         default_catalog=sushi_context.default_catalog,
+        dialect=sushi_context.default_dialect,
     )
     model_v2 = load_sql_based_model(
         parse(
@@ -602,6 +603,7 @@ def test_unrestorable_snapshot(sushi_context: Context) -> None:
         """
         ),
         default_catalog=sushi_context.default_catalog,
+        dialect=sushi_context.default_dialect,
     )
 
     sushi_context.upsert_model(model_v1)
@@ -611,10 +613,14 @@ def test_unrestorable_snapshot(sushi_context: Context) -> None:
     )
 
     sushi_context.upsert_model(model_v2)
-    sushi_context.plan(auto_apply=True, no_prompts=True, forward_only=True)
+    sushi_context.plan(
+        auto_apply=True, no_prompts=True, forward_only=True, allow_destructive_models=["*"]
+    )
 
     sushi_context.upsert_model(model_v1)
-    sushi_context.plan(auto_apply=True, no_prompts=True, forward_only=True)
+    sushi_context.plan(
+        auto_apply=True, no_prompts=True, forward_only=True, allow_destructive_models=["*"]
+    )
     model_v1_new_snapshot = sushi_context.get_snapshot(
         "memory.sushi.test_unrestorable", raise_if_missing=True
     )

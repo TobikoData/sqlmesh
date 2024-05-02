@@ -53,6 +53,7 @@ class ModelMeta(_Node):
 
     dialect: str = ""
     name: str
+    kind_specific_defaults: t.Optional[t.Dict[str, t.Any]] = None
     kind: ModelKind = ViewKind()
     retention: t.Optional[int] = None  # not implemented yet
     storage_format: t.Optional[str] = None

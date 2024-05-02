@@ -84,6 +84,7 @@ class model(registry_decorator):
         module_path: Path,
         path: Path,
         defaults: t.Optional[t.Dict[str, t.Any]] = None,
+        kind_specific_defaults: t.Optional[t.Dict[str, t.Any]] = None,
         dialect: t.Optional[str] = None,
         time_column_format: str = c.DEFAULT_TIME_COLUMN_FORMAT,
         physical_schema_override: t.Optional[t.Dict[str, str]] = None,
@@ -99,6 +100,7 @@ class model(registry_decorator):
 
         common_kwargs = dict(
             defaults=defaults,
+            kind_specific_defaults=kind_specific_defaults,
             path=path,
             time_column_format=time_column_format,
             python_env=serialize_env(env, path=module_path),
