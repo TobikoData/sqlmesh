@@ -164,7 +164,7 @@ The target environment has been updated successfully
 
 SQLMesh correctly detects a breaking change and allows you to perform a multi-repo backfill.
 
-## Configuration for multiple projects
+## Configuring projects with multiple repositories
 
 To add support for multiple repos, add a `project` key to the config of each of the respective repos. 
 
