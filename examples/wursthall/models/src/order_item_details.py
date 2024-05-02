@@ -79,7 +79,7 @@ def execute(
         faker = Faker()
         order_ds = order_date.strftime("%Y-%m-%d")
         for _ in range(random.choice(range(50, 100))):
-            order_item_id = faker.uuid4()
+            order_item_id = str(faker.uuid4())
             table_id = np.random.choice(range(0, 20))
             is_registered_customer = np.random.choice([True, False], p=[0.1, 0.9])
             if is_registered_customer:
