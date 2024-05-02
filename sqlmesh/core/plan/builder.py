@@ -581,9 +581,8 @@ class PlanBuilder:
         snapshot = self._context_diff.snapshots[s_id]
         if snapshot.name in self._context_diff.modified_snapshots:
             _, old = self._context_diff.modified_snapshots[snapshot.name]
-            # If the model kind has been changed from non-materialized to materialized,
-            # then we should not consider this to be a forward-only change.
-            if not old.is_materialized:
+            # If the model kind has changed, then we should not consider this to be a forward-only change.
+            if snapshot.is_model and old.model.kind.name != snapshot.model.kind.name:
                 return False
         return (
             snapshot.is_model

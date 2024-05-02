@@ -15,7 +15,6 @@ from sqlmesh.core.model import (
     SeedKind,
     SeedModel,
     SqlModel,
-    ViewKind,
 )
 from sqlmesh.core.model.seed import Seed
 from sqlmesh.core.plan import Plan, PlanBuilder, SnapshotIntervals
@@ -865,7 +864,13 @@ def test_new_environment_with_changes(make_snapshot, mocker: MockerFixture):
 
 
 def test_forward_only_models(make_snapshot, mocker: MockerFixture):
-    snapshot = make_snapshot(SqlModel(name="a", query=parse_one("select 1, ds"), kind=FullKind()))
+    snapshot = make_snapshot(
+        SqlModel(
+            name="a",
+            query=parse_one("select 1, ds"),
+            kind=IncrementalByTimeRangeKind(time_column="ds", forward_only=True),
+        )
+    )
     snapshot.categorize_as(SnapshotChangeCategory.BREAKING)
     updated_snapshot = make_snapshot(
         SqlModel(
@@ -905,8 +910,8 @@ def test_forward_only_models(make_snapshot, mocker: MockerFixture):
     assert updated_snapshot.change_category == SnapshotChangeCategory.FORWARD_ONLY
 
 
-def test_forward_only_models_change_from_non_materialized(make_snapshot, mocker: MockerFixture):
-    snapshot = make_snapshot(SqlModel(name="a", query=parse_one("select 1, ds"), kind=ViewKind()))
+def test_forward_only_models_model_kind_changed(make_snapshot, mocker: MockerFixture):
+    snapshot = make_snapshot(SqlModel(name="a", query=parse_one("select 1, ds"), kind=FullKind()))
     snapshot.categorize_as(SnapshotChangeCategory.BREAKING)
     updated_snapshot = make_snapshot(
         SqlModel(
