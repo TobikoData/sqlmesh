@@ -9,7 +9,13 @@ from sqlglot import parse_one
 from sqlmesh.core.context import Context
 from sqlmesh.core.context_diff import ContextDiff
 from sqlmesh.core.environment import EnvironmentNamingInfo
-from sqlmesh.core.model import IncrementalByTimeRangeKind, SeedKind, SeedModel, SqlModel
+from sqlmesh.core.model import (
+    FullKind,
+    IncrementalByTimeRangeKind,
+    SeedKind,
+    SeedModel,
+    SqlModel,
+)
 from sqlmesh.core.model.seed import Seed
 from sqlmesh.core.plan import Plan, PlanBuilder, SnapshotIntervals
 from sqlmesh.core.snapshot import (
@@ -858,7 +864,13 @@ def test_new_environment_with_changes(make_snapshot, mocker: MockerFixture):
 
 
 def test_forward_only_models(make_snapshot, mocker: MockerFixture):
-    snapshot = make_snapshot(SqlModel(name="a", query=parse_one("select 1, ds")))
+    snapshot = make_snapshot(
+        SqlModel(
+            name="a",
+            query=parse_one("select 1, ds"),
+            kind=IncrementalByTimeRangeKind(time_column="ds", forward_only=True),
+        )
+    )
     snapshot.categorize_as(SnapshotChangeCategory.BREAKING)
     updated_snapshot = make_snapshot(
         SqlModel(
@@ -896,6 +908,37 @@ def test_forward_only_models(make_snapshot, mocker: MockerFixture):
     updated_snapshot.version = None
     PlanBuilder(context_diff, forward_only=True).build()
     assert updated_snapshot.change_category == SnapshotChangeCategory.FORWARD_ONLY
+
+
+def test_forward_only_models_model_kind_changed(make_snapshot, mocker: MockerFixture):
+    snapshot = make_snapshot(SqlModel(name="a", query=parse_one("select 1, ds"), kind=FullKind()))
+    snapshot.categorize_as(SnapshotChangeCategory.BREAKING)
+    updated_snapshot = make_snapshot(
+        SqlModel(
+            name="a",
+            query=parse_one("select 3, ds"),
+            kind=IncrementalByTimeRangeKind(time_column="ds", forward_only=True),
+        )
+    )
+    updated_snapshot.previous_versions = snapshot.all_versions
+
+    context_diff = ContextDiff(
+        environment="test_environment",
+        is_new_environment=True,
+        is_unfinalized_environment=False,
+        create_from="prod",
+        added=set(),
+        removed_snapshots={},
+        modified_snapshots={updated_snapshot.name: (updated_snapshot, snapshot)},
+        snapshots={updated_snapshot.snapshot_id: updated_snapshot},
+        new_snapshots={updated_snapshot.snapshot_id: updated_snapshot},
+        previous_plan_id=None,
+        previously_promoted_snapshot_ids=set(),
+        previous_finalized_snapshots=None,
+    )
+
+    PlanBuilder(context_diff, is_dev=True).build()
+    assert updated_snapshot.change_category == SnapshotChangeCategory.BREAKING
 
 
 def test_indirectly_modified_forward_only_model(make_snapshot, mocker: MockerFixture):
