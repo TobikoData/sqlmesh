@@ -12,13 +12,20 @@ from sqlglot import exp
 
 from sqlmesh.cli.example_project import init_example_project
 from sqlmesh.core import constants as c
-from sqlmesh.core.config import Config, DuckDBConnectionConfig, ModelDefaultsConfig
+from sqlmesh.core.config import (
+    Config,
+    DuckDBConnectionConfig,
+    GatewayConfig,
+    ModelDefaultsConfig,
+)
 from sqlmesh.core.context import Context
 from sqlmesh.core.dialect import parse
+from sqlmesh.core.engine_adapter import EngineAdapter
 from sqlmesh.core.macros import MacroEvaluator, macro
 from sqlmesh.core.model import Model, SqlModel, load_sql_based_model, model
 from sqlmesh.core.test.definition import ModelTest, PythonModelTest, SqlModelTest
 from sqlmesh.utils.errors import ConfigError
+from sqlmesh.utils.yaml import dump as dump_yaml
 from sqlmesh.utils.yaml import load as load_yaml
 
 if t.TYPE_CHECKING:
@@ -576,8 +583,9 @@ test_child:
         d: 2020-01-01
         """
     )
+
+    mocker.patch("sqlmesh.core.test.definition.random_id", return_value="jzngz56a")
     test = _create_test(body, "test_child", child, sushi_context)
-    test._test_schema = "sqlmesh_test_jzngz56a"
 
     spy_execute = mocker.spy(test.engine_adapter, "_execute")
     _check_successful_or_raise(test.run())
@@ -919,6 +927,7 @@ test_foo:
 
 
 def test_freeze_time(mocker: MockerFixture) -> None:
+    mocker.patch("sqlmesh.core.test.definition.random_id", return_value="jzngz56a")
     test = _create_test(
         body=load_yaml(
             """
@@ -939,20 +948,20 @@ test_foo:
         ),
         context=Context(config=Config(model_defaults=ModelDefaultsConfig(dialect="duckdb"))),
     )
-    test._test_schema = f"sqlmesh_test_jzngz56a"
 
     spy_execute = mocker.spy(test.engine_adapter, "_execute")
     _check_successful_or_raise(test.run())
 
     spy_execute.assert_has_calls(
         [
+            call('CREATE SCHEMA IF NOT EXISTS "memory"."sqlmesh_test_jzngz56a"'),
             call(
                 "SELECT "
                 """CAST('2023-01-01 12:05:03+00:00' AS DATE) AS "cur_date", """
                 """CAST('2023-01-01 12:05:03+00:00' AS TIME) AS "cur_time", """
                 '''CAST('2023-01-01 12:05:03+00:00' AS TIMESTAMP) AS "cur_timestamp"'''
             ),
-            call('DROP SCHEMA IF EXISTS "sqlmesh_test_jzngz56a" CASCADE'),
+            call('DROP SCHEMA IF EXISTS "memory"."sqlmesh_test_jzngz56a" CASCADE'),
         ]
     )
 
@@ -994,7 +1003,8 @@ def test_successes(sushi_context: Context) -> None:
     assert "test_customer_revenue_by_day" in successful_tests
 
 
-def test_create_external_model_fixture(sushi_context: Context) -> None:
+def test_create_external_model_fixture(sushi_context: Context, mocker: MockerFixture) -> None:
+    mocker.patch("sqlmesh.core.test.definition.random_id", return_value="jzngz56a")
     test = _create_test(
         body=load_yaml(
             """
@@ -1012,7 +1022,6 @@ test_foo:
         model=_create_model("SELECT x FROM c.db.external"),
         context=sushi_context,
     )
-    test._test_schema = f"sqlmesh_test_jzngz56a"
     _check_successful_or_raise(test.run())
 
     assert len(test._fixture_table_cache) == len(sushi_context.models) + 1
@@ -1043,6 +1052,57 @@ test_foo:
         ).run()
     )
 
+
+def test_gateway(copy_to_temp_path: t.Callable, mocker: MockerFixture) -> None:
+    path = Path(copy_to_temp_path("examples/sushi")[0])
+    db_db_path = str(path / "db.db")
+    test_db_path = str(path / "test.db")
+
+    config = Config(
+        gateways={
+            "main": GatewayConfig(connection=DuckDBConnectionConfig(database=db_db_path)),
+            "test": GatewayConfig(test_connection=DuckDBConnectionConfig(database=test_db_path)),
+        },
+        default_gateway="main",
+        model_defaults=ModelDefaultsConfig(dialect="duckdb"),
+    )
+
+    context = Context(paths=path, config=config)
+
+    test_path = path / c.TESTS / "test_customer_revenue_by_day.yaml"
+    test_dict = load_yaml(test_path)
+    test_dict["test_customer_revenue_by_day"]["gateway"] = "test"
+
+    with open(test_path, "w", encoding="utf-8") as file:
+        dump_yaml(test_dict, file)
+
+    spy_execute = mocker.spy(EngineAdapter, "_execute")
+    mocker.patch("sqlmesh.core.test.definition.random_id", return_value="jzngz56a")
+
+    result = context.test(tests=[f"{test_path}::test_customer_revenue_by_day"])
+    _check_successful_or_raise(result)
+
+    expected_view_sql = (
+        'CREATE OR REPLACE VIEW "test"."sqlmesh_test_jzngz56a"."db__sushi__orders" '
+        '("id", "customer_id", "waiter_id", "start_ts", "end_ts", "event_date") AS '
+        "SELECT "
+        'CAST("id" AS INT) AS "id", '
+        'CAST("customer_id" AS INT) AS "customer_id", '
+        'CAST("waiter_id" AS INT) AS "waiter_id", '
+        'CAST("start_ts" AS INT) AS "start_ts", '
+        'CAST("end_ts" AS INT) AS "end_ts", '
+        'CAST("event_date" AS DATE) AS "event_date" '
+        "FROM (VALUES "
+        "(1, 1, 1, 1641002340, 1641004140, CAST('2022-01-01' AS DATE)), "
+        "(2, 1, 2, 1641007740, 1641009540, CAST('2022-01-01' AS DATE))) "
+        'AS "t"("id", "customer_id", "waiter_id", "start_ts", "end_ts", "event_date")'
+    )
+    test_adapter = t.cast(ModelTest, result.successes[0]).engine_adapter
+    assert call(test_adapter, expected_view_sql) in spy_execute.mock_calls
+
+    _check_successful_or_raise(context.test())
+
+>>>>>>> 8cdefe4b (Feat: add ability to override the engine adapter of a unit test)
 
 def test_test_generation(tmp_path: Path) -> None:
     init_example_project(tmp_path, dialect="duckdb")

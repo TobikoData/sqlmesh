@@ -1372,42 +1372,46 @@ class GenericContext(BaseContext, t.Generic[C]):
         else:
             verbosity = 1
 
-        try:
-            if tests:
-                result = run_model_tests(
-                    tests=tests,
-                    models=self._models,
-                    engine_adapter=self._test_engine_adapter,
-                    dialect=self.default_dialect,
-                    verbosity=verbosity,
-                    patterns=match_patterns,
-                    preserve_fixtures=preserve_fixtures,
-                    default_catalog=self.default_catalog,
-                )
-            else:
-                test_meta = []
+        if tests:
+            result = run_model_tests(
+                tests=tests,
+                models=self._models,
+                engine_adapter=self._test_engine_adapter,
+                config=self.config,
+                gateway=self.gateway,
+                dialect=self.default_dialect,
+                verbosity=verbosity,
+                patterns=match_patterns,
+                preserve_fixtures=preserve_fixtures,
+                stream=stream,
+                default_catalog=self.default_catalog,
+                default_catalog_dialect=self.engine_adapter.DIALECT,
+            )
+        else:
+            test_meta = []
 
-                for path, config in self.configs.items():
-                    test_meta.extend(
-                        get_all_model_tests(
-                            path / c.TESTS,
-                            patterns=match_patterns,
-                            ignore_patterns=config.ignore_patterns,
-                        )
+            for path, config in self.configs.items():
+                test_meta.extend(
+                    get_all_model_tests(
+                        path / c.TESTS,
+                        patterns=match_patterns,
+                        ignore_patterns=config.ignore_patterns,
                     )
-
-                result = run_tests(
-                    test_meta,
-                    models=self._models,
-                    engine_adapter=self._test_engine_adapter,
-                    dialect=self.default_dialect,
-                    verbosity=verbosity,
-                    preserve_fixtures=preserve_fixtures,
-                    stream=stream,
-                    default_catalog=self.default_catalog,
                 )
-        finally:
-            self._test_engine_adapter.close()
+
+            result = run_tests(
+                model_test_metadata=test_meta,
+                models=self._models,
+                engine_adapter=self._test_engine_adapter,
+                config=self.config,
+                gateway=self.gateway,
+                dialect=self.default_dialect,
+                verbosity=verbosity,
+                preserve_fixtures=preserve_fixtures,
+                stream=stream,
+                default_catalog=self.default_catalog,
+                default_catalog_dialect=self.engine_adapter.DIALECT,
+            )
 
         return result
 

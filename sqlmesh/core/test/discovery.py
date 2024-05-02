@@ -26,9 +26,7 @@ class ModelTestMetadata(PydanticModel):
         return self.fully_qualified_test_name.__hash__()
 
 
-def load_model_test_file(
-    path: pathlib.Path,
-) -> dict[str, ModelTestMetadata]:
+def load_model_test_file(path: pathlib.Path) -> dict[str, ModelTestMetadata]:
     """Load a single model test file.
 
     Args:
