@@ -1279,7 +1279,7 @@ class EngineAdapterStateSync(CommonStateSyncMixin, StateSync):
         batches = self._snapshot_batches(name_versions)
 
         if not name_versions:
-            yield exp.false()
+            return exp.false()
         elif self.engine_adapter.SUPPORTS_TUPLE_IN:
             for versions in batches:
                 yield t.cast(
