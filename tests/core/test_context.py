@@ -262,7 +262,7 @@ def test_plan_execution_time():
             parse(
                 """
                 MODEL(
-                    name db.x, 
+                    name db.x,
                     start '2024-01-01',
                     kind FULL
                 );
