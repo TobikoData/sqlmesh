@@ -858,9 +858,9 @@ class EngineAdapter:
                 schema = schema.this
 
         create_view_properties = self._build_view_properties_exp(
-            view_properties or
-            create_kwargs.pop("physical_properties", None) or
-            create_kwargs.pop("table_properties", None),
+            view_properties
+            or create_kwargs.pop("physical_properties", None)
+            or create_kwargs.pop("table_properties", None),
             (
                 table_description
                 if self.COMMENT_CREATION_VIEW.supports_schema_def and self.comments_enabled

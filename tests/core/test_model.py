@@ -2597,17 +2597,17 @@ def test_model_physical_properties_labels() -> None:
         )
     )
     assert sql_model.physical_properties == {
-            "labels": exp.Array(
-                expressions=[
-                    exp.Tuple(
-                        expressions=[
-                            exp.Literal.string("test-label"),
-                            exp.Literal.string("label-value"),
-                        ]
-                    )
-                ]
-            ),
-        }        
+        "labels": exp.Array(
+            expressions=[
+                exp.Tuple(
+                    expressions=[
+                        exp.Literal.string("test-label"),
+                        exp.Literal.string("label-value"),
+                    ]
+                )
+            ]
+        ),
+    }
 
 
 def test_physical_and_virtual_table_properties() -> None:
@@ -2700,9 +2700,7 @@ def test_model_table_properties() -> None:
     assert sql_model.physical_properties == {
         "partition_expiration_days": exp.convert(7),
     }
-    assert sql_model.physical_properties_ == d.parse_one(
-        """(partition_expiration_days = 7,)"""
-    )
+    assert sql_model.physical_properties_ == d.parse_one("""(partition_expiration_days = 7,)""")
 
 
 def test_model_table_properties_conflicts() -> None:
@@ -2725,7 +2723,7 @@ def test_model_table_properties_conflicts() -> None:
                 """
             )
         )
-        sql_model.physical_properties()
+        sql_model.physical_properties
 
 
 def test_model_session_properties(sushi_context):

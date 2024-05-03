@@ -352,8 +352,8 @@ class ModelMeta(_Node):
             for expression in self.physical_properties_.expressions:
                 physical_properties[expression.this.name] = expression.expression
             return physical_properties
-        return {}    
-    
+        return {}
+
     @cached_property
     def virtual_properties(self) -> t.Dict[str, exp.Expression]:
         """A dictionary of properties that will be applied to the virtual layer."""
