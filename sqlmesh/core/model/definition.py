@@ -1457,7 +1457,6 @@ def load_sql_based_model(
         python_env=meta_python_env,
         default_catalog=default_catalog,
         quote_identifiers=False,
-        normalize_identifiers=False,
     )
     rendered_meta_exprs = meta_renderer.render()
     if rendered_meta_exprs is None or len(rendered_meta_exprs) != 1:

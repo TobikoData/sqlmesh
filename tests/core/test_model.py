@@ -2289,10 +2289,7 @@ def test_model_normalization():
         MODEL (
             name foo,
             dialect snowflake,
-            kind INCREMENTAL_BY_UNIQUE_KEY(unique_key a),
-              audits (
-                not_null(COLUMNS := id)
-            ),
+            kind INCREMENTAL_BY_UNIQUE_KEY(unique_key a)
         );
 
         SELECT x.a AS a FROM test.x AS x
@@ -2300,8 +2297,6 @@ def test_model_normalization():
     )
     model = SqlModel.parse_raw(load_sql_based_model(expr).json())
     assert model.unique_key == [exp.column("A", quoted=True)]
-    # we should never normalize the model meta, additionally, we should force lower case
-    assert model.audits[0][1] == {"columns": exp.column("id")}
 
     model = create_sql_model(
         "foo",
