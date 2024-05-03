@@ -8,7 +8,7 @@ MODEL (
   owner jen,
   cron '@daily',
   audits (
-    NUMBER_OF_ROWS(threshold=0)
+    NUMBER_OF_ROWS(threshold := 0)
   ),
   grain (waiter_id, event_date)
 );
