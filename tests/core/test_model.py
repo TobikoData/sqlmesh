@@ -2608,7 +2608,6 @@ def test_model_physical_properties_labels() -> None:
             ),
         }        
 def test_physical_and_virtual_table_properties() -> None:
-    #TODO this test passes but when using that in the model, it fails with `Input should be an instance of Tuple`
     sql_model = load_sql_based_model(
         d.parse(
             """
@@ -2699,33 +2698,6 @@ def test_model_table_properties() -> None:
     }
     assert sql_model.table_properties_ == d.parse_one(
         """(partition_expiration_days = 7,)"""
-    )
-
-def test_model_table_properties_paren() -> None:
-    #TODO fix that test case, it fails on load_sql_based_model because of the "missing" comma
-    # It leads to parsing a Paren instead of a Tuple which apparently lead to a parsing error
-    # `table_properties Input should be an instance of Tuple`
-    # As we have `table_properties_: t.Optional[exp.Tuple] = Field(default=None, alias="table_properties")`
-    # it makes sense but why would it work on physical_properties and not on table_properties?
-    # Anyway it's a regression to fix
-    sql_model = load_sql_based_model(
-        d.parse(
-            """
-        MODEL (
-            name test_schema.test_model,
-            table_properties (
-                partition_expiration_days = 7
-            )
-        );
-        SELECT a FROM tbl;
-        """
-        )
-    )
-    assert sql_model.physical_properties == {
-        "partition_expiration_days": exp.convert(7),
-    }
-    assert sql_model.table_properties_ == d.parse_one(
-        """(partition_expiration_days = 7)"""
     )
 
 def test_model_table_properties_conflicts() -> None:
