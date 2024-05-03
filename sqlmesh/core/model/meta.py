@@ -93,7 +93,7 @@ class ModelMeta(_Node):
                     raise ConfigError(
                         f"Function '{func}' must be called with key-value arguments like {func}(arg := value)."
                     )
-                kwargs[arg.left.name] = arg.right
+                kwargs[arg.left.name.lower()] = arg.right
             return func.lower(), kwargs
 
         if isinstance(v, (exp.Tuple, exp.Array)):
