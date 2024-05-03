@@ -48,6 +48,7 @@ class BaseExpressionRenderer:
         default_catalog: t.Optional[str] = None,
         quote_identifiers: bool = True,
         model_fqn: t.Optional[str] = None,
+        normalize_identifiers: bool = True,
     ):
         self._expression = expression
         self._dialect = dialect
@@ -57,6 +58,7 @@ class BaseExpressionRenderer:
         self._python_env = python_env or {}
         self._only_execution_time = only_execution_time
         self._default_catalog = default_catalog
+        self._normalize_identifiers = normalize_identifiers
         self._quote_identifiers = quote_identifiers
         self.update_schema({} if schema is None else schema)
         self._cache: t.List[t.Optional[exp.Expression]] = []
@@ -288,9 +290,12 @@ class BaseExpressionRenderer:
 
     @contextmanager
     def _normalize_and_quote(self, query: E) -> t.Iterator[E]:
-        with d.normalize_and_quote(
-            query, self._dialect, self._default_catalog, quote=self._quote_identifiers
-        ) as query:
+        if self._normalize_identifiers:
+            with d.normalize_and_quote(
+                query, self._dialect, self._default_catalog, quote=self._quote_identifiers
+            ) as query:
+                yield query
+        else:
             yield query
 
     def _should_cache(self, runtime_stage: RuntimeStage, *args: t.Any) -> bool:
