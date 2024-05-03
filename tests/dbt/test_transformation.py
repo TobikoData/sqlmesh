@@ -874,7 +874,7 @@ JINJA_END;""".strip()
 
 
 @pytest.mark.xdist_group("dbt_manifest")
-def test_bigquery_table_properties(sushi_test_project: Project, mocker: MockerFixture):
+def test_bigquery_physical_properties(sushi_test_project: Project, mocker: MockerFixture):
     context = sushi_test_project.context
     context.target = BigQueryConfig(
         name="test_target", schema="test_schema", database="test-project"
@@ -890,24 +890,24 @@ def test_bigquery_table_properties(sushi_test_project: Project, mocker: MockerFi
         sql="SELECT 1 AS one FROM tbl_a",
     )
 
-    assert base_config.to_sqlmesh(context).table_properties == {}
+    assert base_config.to_sqlmesh(context).physical_properties == {}
 
     assert base_config.copy(
         update={"require_partition_filter": True, "partition_expiration_days": 7}
-    ).to_sqlmesh(context).table_properties == {
+    ).to_sqlmesh(context).physical_properties == {
         "require_partition_filter": exp.convert(True),
         "partition_expiration_days": exp.convert(7),
     }
 
     assert base_config.copy(update={"require_partition_filter": True}).to_sqlmesh(
         context
-    ).table_properties == {
+    ).physical_properties == {
         "require_partition_filter": exp.convert(True),
     }
 
     assert base_config.copy(update={"partition_expiration_days": 7}).to_sqlmesh(
         context
-    ).table_properties == {
+    ).physical_properties == {
         "partition_expiration_days": exp.convert(7),
     }
 

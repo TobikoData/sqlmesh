@@ -716,7 +716,7 @@ class _Model(ModelMeta, frozen=True):
             data.append(column_name)
             data.append(column_type.sql())
 
-        for key, value in (self.table_properties or {}).items():
+        for key, value in (self.physical_properties or {}).items():
             data.append(key)
             data.append(gen(value))
 
@@ -2080,6 +2080,8 @@ META_FIELD_CONVERTER: t.Dict[str, t.Callable] = {
     "grains": _refs_to_sql,
     "references": _refs_to_sql,
     "table_properties_": lambda value: value,
+    "physical_properties_": lambda value: value,
+    "virtual_properties_": lambda value: value,
     "session_properties_": lambda value: value,
     "allow_partials": exp.convert,
     "signals": lambda values: exp.Tuple(expressions=values),

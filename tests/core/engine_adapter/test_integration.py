@@ -1631,7 +1631,7 @@ def test_sushi(mark_gateway: t.Tuple[str, str], ctx: TestContext):
 
         cust_rev_by_day_model_tbl_props = context._models[cust_rev_by_day_key].copy(
             update={
-                "table_properties": {
+                "physical_properties": {
                     "delta.columnMapping.mode": exp.Literal(this="name", is_string=True)
                 }
             }

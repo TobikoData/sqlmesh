@@ -573,7 +573,7 @@ def test_create_table_table_options(make_mocked_engine_adapter: t.Callable, mock
     adapter.create_table(
         "test_table",
         {"a": exp.DataType.build("int"), "b": exp.DataType.build("int")},
-        table_properties={
+        physical_properties={
             "partition_expiration_days": exp.convert(7),
         },
     )
@@ -721,7 +721,7 @@ def test_drop_schema(
     assert sql_calls == ensure_list(expected)
 
 
-def test_view_table_properties(make_mocked_engine_adapter: t.Callable, mocker: MockerFixture):
+def test_view_properties(make_mocked_engine_adapter: t.Callable, mocker: MockerFixture):
     adapter = make_mocked_engine_adapter(BigQueryEngineAdapter)
     execute_mock = mocker.patch(
         "sqlmesh.core.engine_adapter.bigquery.BigQueryEngineAdapter.execute"
@@ -731,7 +731,7 @@ def test_view_table_properties(make_mocked_engine_adapter: t.Callable, mocker: M
         "test_table",
         parse_one("SELECT 1"),
         table_description="some description",
-        table_properties={
+        physical_properties={
             "labels": exp.Array(
                 expressions=[
                     exp.Tuple(
@@ -745,10 +745,29 @@ def test_view_table_properties(make_mocked_engine_adapter: t.Callable, mocker: M
         },
     )
 
-    adapter.create_view("test_table", parse_one("SELECT 1"), table_properties={})
+    adapter.create_view(
+        "test_table",
+        parse_one("SELECT 1"),
+        table_description="some description",
+        view_properties={
+            "labels": exp.Array(
+                expressions=[
+                    exp.Tuple(
+                        expressions=[
+                            exp.Literal.string("test-view-label"),
+                            exp.Literal.string("label-view-value"),
+                        ]
+                    )
+                ]
+            ),
+        },
+    )
+
+    adapter.create_view("test_table", parse_one("SELECT 1"), physical_properties={})
 
     sql_calls = _to_sql_calls(execute_mock)
     assert sql_calls == [
         "CREATE OR REPLACE VIEW `test_table` OPTIONS (description='some description', labels=[('test-label', 'label-value')]) AS SELECT 1",
+        "CREATE OR REPLACE VIEW `test_table` OPTIONS (description='some description', labels=[('test-view-label', 'label-view-value')]) AS SELECT 1",
         "CREATE OR REPLACE VIEW `test_table` AS SELECT 1",
     ]

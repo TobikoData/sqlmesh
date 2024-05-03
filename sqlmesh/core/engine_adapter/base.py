@@ -701,7 +701,7 @@ class EngineAdapter:
                 catalog_name = table_name_or_schema.this.catalog
 
         properties = (
-            self._build_table_properties_exp(
+            self._build_physical_properties_exp(
                 **kwargs, catalog_name=catalog_name, columns_to_types=columns_to_types
             )
             if kwargs
@@ -804,6 +804,7 @@ class EngineAdapter:
         materialized: bool = False,
         table_description: t.Optional[str] = None,
         column_descriptions: t.Optional[t.Dict[str, str]] = None,
+        view_properties: t.Optional[t.Dict[str, exp.Expression]] = None,
         **create_kwargs: t.Any,
     ) -> None:
         """Create a view with a query or dataframe.
@@ -819,6 +820,7 @@ class EngineAdapter:
             materialized: Whether to create a a materialized view. Only used for engines that support this feature.
             table_description: Optional table description from MODEL DDL.
             column_descriptions: Optional column descriptions from model query.
+            view_properties: Optional view properties to add to the view.
             create_kwargs: Additional kwargs to pass into the Create expression
         """
         if self.is_pandas_df(query_or_df):
@@ -856,6 +858,8 @@ class EngineAdapter:
                 schema = schema.this
 
         create_view_properties = self._build_view_properties_exp(
+            view_properties or
+            create_kwargs.pop("physical_properties", None) or
             create_kwargs.pop("table_properties", None),
             (
                 table_description
@@ -1847,23 +1851,24 @@ class EngineAdapter:
             finally:
                 self.drop_table(table)
 
-    def _table_properties_to_expressions(
-        self, table_properties: t.Optional[t.Dict[str, exp.Expression]] = None
+    def _model_properties_to_expressions(
+        self, model_properties: t.Optional[t.Dict[str, exp.Expression]] = None
     ) -> t.List[exp.Property]:
-        if not table_properties:
+        """Converts model properties (either physical or virtual) to a list of property expressions."""
+        if not model_properties:
             return []
         return [
-            exp.Property(this=key, value=value.copy()) for key, value in table_properties.items()
+            exp.Property(this=key, value=value.copy()) for key, value in model_properties.items()
         ]
 
-    def _build_table_properties_exp(
+    def _build_physical_properties_exp(
         self,
         catalog_name: t.Optional[str] = None,
         storage_format: t.Optional[str] = None,
         partitioned_by: t.Optional[t.List[exp.Expression]] = None,
         partition_interval_unit: t.Optional[IntervalUnit] = None,
         clustered_by: t.Optional[t.List[str]] = None,
-        table_properties: t.Optional[t.Dict[str, exp.Expression]] = None,
+        physical_properties: t.Optional[t.Dict[str, exp.Expression]] = None,
         columns_to_types: t.Optional[t.Dict[str, exp.DataType]] = None,
         table_description: t.Optional[str] = None,
     ) -> t.Optional[exp.Properties]:
@@ -1883,7 +1888,7 @@ class EngineAdapter:
 
     def _build_view_properties_exp(
         self,
-        table_properties: t.Optional[t.Dict[str, exp.Expression]] = None,
+        view_properties: t.Optional[t.Dict[str, exp.Expression]] = None,
         table_description: t.Optional[str] = None,
     ) -> t.Optional[exp.Properties]:
         """Creates a SQLGlot table properties expression for view"""

@@ -26,12 +26,12 @@ def test_create_view(make_mocked_engine_adapter: t.Callable):
     adapter = make_mocked_engine_adapter(EngineAdapter)
     adapter.create_view("test_view", parse_one("SELECT a FROM tbl"))
     adapter.create_view("test_view", parse_one("SELECT a FROM tbl"), replace=False)
-    # Test that `table_properties` are ignored for base engine adapter
+    # Test that `physical_properties` are ignored for base engine adapter
     adapter.create_view(
         "test_view",
         parse_one("SELECT a FROM tbl"),
         replace=True,
-        table_properties={"a": exp.convert(1)},
+        physical_properties={"a": exp.convert(1)},
     )
 
     assert to_sql_calls(adapter) == [
@@ -48,7 +48,7 @@ def test_create_view_pandas(make_mocked_engine_adapter: t.Callable):
         "test_view",
         pd.DataFrame({"a": [1, 2, 3]}),
         replace=True,
-        table_properties={"a": exp.convert(1)},
+        physical_properties={"a": exp.convert(1)},
     )
 
     assert to_sql_calls(adapter) == [
@@ -377,7 +377,7 @@ def test_create_table(make_mocked_engine_adapter: t.Callable):
     )
 
 
-def test_create_table_properties(make_mocked_engine_adapter: t.Callable):
+def test_create_physical_properties(make_mocked_engine_adapter: t.Callable):
     adapter = make_mocked_engine_adapter(EngineAdapter)
 
     columns_to_types = {

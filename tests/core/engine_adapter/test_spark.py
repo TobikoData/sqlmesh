@@ -17,7 +17,7 @@ from tests.core.engine_adapter import to_sql_calls
 pytestmark = [pytest.mark.engine, pytest.mark.spark]
 
 
-def test_create_table_properties(make_mocked_engine_adapter: t.Callable):
+def test_create_physical_properties(make_mocked_engine_adapter: t.Callable):
     adapter = make_mocked_engine_adapter(SparkEngineAdapter)
 
     columns_to_types = {
@@ -58,7 +58,7 @@ def test_create_table_properties(make_mocked_engine_adapter: t.Callable):
         )
 
 
-def test_replace_query_table_properties_not_exists(
+def test_replace_query_physical_properties_not_exists(
     mocker: MockerFixture, make_mocked_engine_adapter: t.Callable
 ):
     mocker.patch(
@@ -78,7 +78,7 @@ def test_replace_query_table_properties_not_exists(
         columns_to_types=columns_to_types,
         partitioned_by=[exp.to_column("colb")],
         storage_format="ICEBERG",
-        table_properties={"a": exp.convert(1)},
+        physical_properties={"a": exp.convert(1)},
     )
 
     assert to_sql_calls(adapter) == [
@@ -87,7 +87,7 @@ def test_replace_query_table_properties_not_exists(
     ]
 
 
-def test_replace_query_table_properties_exists(
+def test_replace_query_physical_properties_exists(
     mocker: MockerFixture, make_mocked_engine_adapter: t.Callable
 ):
     mocker.patch(
@@ -107,7 +107,7 @@ def test_replace_query_table_properties_exists(
         columns_to_types=columns_to_types,
         partitioned_by=[exp.to_column("colb")],
         storage_format="ICEBERG",
-        table_properties={"a": exp.convert(1)},
+        physical_properties={"a": exp.convert(1)},
     )
 
     assert to_sql_calls(adapter) == [
@@ -118,7 +118,7 @@ def test_replace_query_table_properties_exists(
 def test_create_view_properties(make_mocked_engine_adapter: t.Callable):
     adapter = make_mocked_engine_adapter(SparkEngineAdapter)
 
-    adapter.create_view("test_view", parse_one("SELECT a FROM tbl"), table_properties={"a": exp.convert(1)})  # type: ignore
+    adapter.create_view("test_view", parse_one("SELECT a FROM tbl"), physical_properties={"a": exp.convert(1)})  # type: ignore
     adapter.cursor.execute.assert_called_once_with(
         "CREATE OR REPLACE VIEW test_view TBLPROPERTIES ('a'=1) AS SELECT a FROM tbl"
     )
@@ -334,7 +334,7 @@ def test_create_table_table_options(make_mocked_engine_adapter: t.Callable):
     adapter.create_table(
         "test_table",
         {"a": exp.DataType.build("int"), "b": exp.DataType.build("int")},
-        table_properties={
+        physical_properties={
             "test.conf.key": exp.convert("value"),
         },
     )

@@ -138,14 +138,14 @@ class HiveMetastoreTablePropertiesMixin(EngineAdapter):
     MAX_TABLE_COMMENT_LENGTH = 4000
     MAX_COLUMN_COMMENT_LENGTH = 4000
 
-    def _build_table_properties_exp(
+    def _build_physical_properties_exp(
         self,
         catalog_name: t.Optional[str] = None,
         storage_format: t.Optional[str] = None,
         partitioned_by: t.Optional[t.List[exp.Expression]] = None,
         partition_interval_unit: t.Optional[IntervalUnit] = None,
         clustered_by: t.Optional[t.List[str]] = None,
-        table_properties: t.Optional[t.Dict[str, exp.Expression]] = None,
+        physical_properties: t.Optional[t.Dict[str, exp.Expression]] = None,
         columns_to_types: t.Optional[t.Dict[str, exp.DataType]] = None,
         table_description: t.Optional[str] = None,
     ) -> t.Optional[exp.Properties]:
@@ -194,7 +194,7 @@ class HiveMetastoreTablePropertiesMixin(EngineAdapter):
                 )
             )
 
-        properties.extend(self._table_properties_to_expressions(table_properties))
+        properties.extend(self._model_properties_to_expressions(physical_properties))
 
         if properties:
             return exp.Properties(expressions=properties)
@@ -202,7 +202,7 @@ class HiveMetastoreTablePropertiesMixin(EngineAdapter):
 
     def _build_view_properties_exp(
         self,
-        table_properties: t.Optional[t.Dict[str, exp.Expression]] = None,
+        view_properties: t.Optional[t.Dict[str, exp.Expression]] = None,
         table_description: t.Optional[str] = None,
     ) -> t.Optional[exp.Properties]:
         """Creates a SQLGlot table properties expression for view"""
@@ -215,7 +215,7 @@ class HiveMetastoreTablePropertiesMixin(EngineAdapter):
                 )
             )
 
-        properties.extend(self._table_properties_to_expressions(table_properties))
+        properties.extend(self._model_properties_to_expressions(view_properties))
 
         if properties:
             return exp.Properties(expressions=properties)

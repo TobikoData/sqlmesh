@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import logging
 import typing as t
 from functools import cached_property
 
@@ -44,6 +45,8 @@ if t.TYPE_CHECKING:
 
 AuditReference = t.Tuple[str, t.Dict[str, exp.Expression]]
 
+logger = logging.getLogger(__name__)
+
 
 class ModelMeta(_Node):
     """Metadata for models which can be defined in SQL."""
@@ -64,6 +67,8 @@ class ModelMeta(_Node):
     references: t.List[exp.Expression] = []
     physical_schema_override: t.Optional[str] = None
     table_properties_: t.Optional[exp.Tuple] = Field(default=None, alias="table_properties")
+    physical_properties_: t.Optional[exp.Tuple] = Field(default=None, alias="physical_properties")
+    virtual_properties_: t.Optional[exp.Tuple] = Field(default=None, alias="virtual_properties")
     session_properties_: t.Optional[exp.Tuple] = Field(default=None, alias="session_properties")
     allow_partials: bool = False
     signals: t.List[exp.Tuple] = []
@@ -328,13 +333,35 @@ class ModelMeta(_Node):
         return getattr(self.kind, "batch_concurrency", None)
 
     @cached_property
-    def table_properties(self) -> t.Dict[str, exp.Expression]:
-        """A dictionary of table properties."""
+    def physical_properties(self) -> t.Dict[str, exp.Expression]:
+        """A dictionary of properties that will be applied to the physical layer. It replaces table_properties which is deprecated."""
+        if self.physical_properties_:
+            if self.table_properties_:
+                raise ConfigError(
+                    "Both table_properties and physical_properties are set. Use only physical_properties."
+                )
+            physical_properties = {}
+            for expression in self.physical_properties_.expressions:
+                physical_properties[expression.this.name] = expression.expression
+            return physical_properties
         if self.table_properties_:
+            logger.warning(
+                f"""Python model "{self.name}"'s is using `physical_properties` property which is deprecated. Please use `physical_properties` instead."""
+            )
             table_properties = {}
             for expression in self.table_properties_.expressions:
                 table_properties[expression.this.name] = expression.expression
             return table_properties
+        return {}
+    
+    @cached_property
+    def virtual_properties(self) -> t.Dict[str, exp.Expression]:
+        """A dictionary of properties that will be applied to the virtual layer."""
+        if self.virtual_properties_:
+            virtual_properties = {}
+            for expression in self.virtual_properties_.expressions:
+                virtual_properties[expression.this.name] = expression.expression
+            return virtual_properties
         return {}
 
     @property
