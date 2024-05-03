@@ -110,3 +110,5 @@ SQLMesh provides two other predefined variables used to modify model behavior ba
 Some predefined variables are only supported in [SQLMesh audit definitions](../audits.md).
 
 * @this_model - used to create [generic audits](../audits.md#generic-audits)
+
+The `{{ this_model }}` Jinja macro variable may be used in model definitions for the rare cases when SQLGlot cannot fully parse a statement and you need to reference the model's underlying physical table directly. We recommend against using it unless absolutely required.
