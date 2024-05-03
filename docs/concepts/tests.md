@@ -400,7 +400,7 @@ The test would then be updated as follows:
 ```yaml linenums="1"
 test_example_full_model:
   gateway: spark_testing
-  # ... the other test attributes remain tne same
+  # ... the other test attributes remain the same
 ```
 
 ## Running tests
