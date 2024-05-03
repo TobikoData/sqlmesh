@@ -2596,18 +2596,7 @@ def test_model_physical_properties_labels() -> None:
         """
         )
     )
-    assert sql_model.physical_properties == {
-        "labels": exp.Array(
-            expressions=[
-                exp.Tuple(
-                    expressions=[
-                        exp.Literal.string("test-label"),
-                        exp.Literal.string("label-value"),
-                    ]
-                )
-            ]
-        ),
-    }
+    assert sql_model.physical_properties == {"labels": exp.array("('test-label', 'label-value')")}
 
 
 def test_physical_and_virtual_table_properties() -> None:
