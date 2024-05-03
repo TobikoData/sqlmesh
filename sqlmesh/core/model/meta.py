@@ -66,7 +66,6 @@ class ModelMeta(_Node):
     grains: t.List[exp.Expression] = []
     references: t.List[exp.Expression] = []
     physical_schema_override: t.Optional[str] = None
-    table_properties_: t.Optional[exp.Tuple] = Field(default=None, alias="table_properties")
     physical_properties_: t.Optional[exp.Tuple] = Field(default=None, alias="physical_properties")
     virtual_properties_: t.Optional[exp.Tuple] = Field(default=None, alias="virtual_properties")
     session_properties_: t.Optional[exp.Tuple] = Field(default=None, alias="session_properties")
@@ -266,6 +265,19 @@ class ModelMeta(_Node):
                     f"Cannot use argument 'grain' ({grain}) with 'grains' ({grains}), use only grains"
                 )
             values["grains"] = ensure_list(grain)
+
+        table_properties = values.pop("table_properties", None)
+        if table_properties:
+            model_name = values.get("name")
+            logger.warning(
+                f"""Python model "{model_name}"'s is using `physical_properties` property which is deprecated. Please use `physical_properties` instead."""
+            )
+            physical_properties = values.get("physical_properties")
+            if physical_properties:
+                raise ConfigError(
+                    f"Cannot use argument 'table_properties' ({table_properties}) with 'physical_properties' ({physical_properties}), use only physical_properties."
+                )
+            values["physical_properties"] = table_properties
         return values
 
     @model_validator(mode="after")
@@ -336,23 +348,11 @@ class ModelMeta(_Node):
     def physical_properties(self) -> t.Dict[str, exp.Expression]:
         """A dictionary of properties that will be applied to the physical layer. It replaces table_properties which is deprecated."""
         if self.physical_properties_:
-            if self.table_properties_:
-                raise ConfigError(
-                    "Both table_properties and physical_properties are set. Use only physical_properties."
-                )
             physical_properties = {}
             for expression in self.physical_properties_.expressions:
                 physical_properties[expression.this.name] = expression.expression
             return physical_properties
-        if self.table_properties_:
-            logger.warning(
-                f"""Python model "{self.name}"'s is using `physical_properties` property which is deprecated. Please use `physical_properties` instead."""
-            )
-            table_properties = {}
-            for expression in self.table_properties_.expressions:
-                table_properties[expression.this.name] = expression.expression
-            return table_properties
-        return {}
+        return {}    
     
     @cached_property
     def virtual_properties(self) -> t.Dict[str, exp.Expression]:

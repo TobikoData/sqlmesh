@@ -138,7 +138,6 @@ bool_validator = field_validator(
 
 properties_validator = field_validator(
     "physical_properties_",
-    "table_properties_",
     "virtual_properties_",
     "session_properties_",
     mode="before",

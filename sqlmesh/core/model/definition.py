@@ -1808,7 +1808,7 @@ def _create_model(
     physical_schema_override: t.Optional[t.Dict[str, str]] = None,
     **kwargs: t.Any,
 ) -> Model:
-    _validate_model_fields(klass, {"name", *kwargs} - {"grain"}, path)
+    _validate_model_fields(klass, {"name", *kwargs} - {"grain", "table_properties"}, path)
 
     dialect = dialect or ""
     physical_schema_override = physical_schema_override or {}
@@ -2079,7 +2079,6 @@ META_FIELD_CONVERTER: t.Dict[str, t.Callable] = {
     "tags": _single_value_or_tuple,
     "grains": _refs_to_sql,
     "references": _refs_to_sql,
-    "table_properties_": lambda value: value,
     "physical_properties_": lambda value: value,
     "virtual_properties_": lambda value: value,
     "session_properties_": lambda value: value,

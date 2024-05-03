@@ -2581,6 +2581,7 @@ def test_model_physical_properties() -> None:
             )
         )
 
+
 def test_model_physical_properties_labels() -> None:
     sql_model = load_sql_based_model(
         d.parse(
@@ -2607,6 +2608,8 @@ def test_model_physical_properties_labels() -> None:
                 ]
             ),
         }        
+
+
 def test_physical_and_virtual_table_properties() -> None:
     sql_model = load_sql_based_model(
         d.parse(
@@ -2652,6 +2655,7 @@ def test_physical_and_virtual_table_properties() -> None:
         ),
     }
 
+
 def test_model_table_properties() -> None:
     # Ensure backward compatibility to table_properties.
     sql_model = load_sql_based_model(
@@ -2676,7 +2680,7 @@ def test_model_table_properties() -> None:
         "key_c": exp.convert(True),
         "key_d": exp.convert(2.0),
     }
-    assert sql_model.table_properties_ == d.parse_one(
+    assert sql_model.physical_properties_ == d.parse_one(
         """(key_a = 'value_a', 'key_b' = 1, key_c = TRUE, "key_d" = 2.0)"""
     )
 
@@ -2696,13 +2700,14 @@ def test_model_table_properties() -> None:
     assert sql_model.physical_properties == {
         "partition_expiration_days": exp.convert(7),
     }
-    assert sql_model.table_properties_ == d.parse_one(
+    assert sql_model.physical_properties_ == d.parse_one(
         """(partition_expiration_days = 7,)"""
     )
 
+
 def test_model_table_properties_conflicts() -> None:
     # Throw an error on conflicting usage of table_properties and physical_properties.
-    with pytest.raises(ConfigError, match="Both table_properties and physical_properties are set. Use only physical_properties."):
+    with pytest.raises(ConfigError, match=r"Cannot use argument 'table_properties'*"):
         sql_model = load_sql_based_model(
             d.parse(
                 """
