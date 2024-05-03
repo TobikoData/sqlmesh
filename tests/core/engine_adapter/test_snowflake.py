@@ -1,5 +1,6 @@
 import typing as t
 
+import pandas as pd
 import pytest
 from pytest_mock.plugin import MockerFixture
 from sqlglot import exp, parse_one
@@ -143,3 +144,28 @@ def test_comments(make_mocked_engine_adapter: t.Callable, mocker: MockerFixture)
         """COMMENT ON TABLE "test_table" IS 'table description'""",
         """ALTER TABLE "test_table" ALTER COLUMN "a" COMMENT 'a column description'""",
     ]
+
+
+def test_df_to_source_queries_use_schema(
+    make_mocked_engine_adapter: t.Callable, mocker: MockerFixture
+):
+    mocker.patch(
+        "sqlmesh.core.engine_adapter.snowflake.SnowflakeEngineAdapter.table_exists",
+        return_value=False,
+    )
+    mocker.patch("snowflake.connector.pandas_tools.write_pandas", return_value=None)
+    adapter = make_mocked_engine_adapter(SnowflakeEngineAdapter)
+    adapter.DEFAULT_BATCH_SIZE = 1
+
+    df = pd.DataFrame({"a": [1, 2, 3], "b": [4, 5, 6]})
+    adapter.replace_query(
+        "other_db.test_table", df, {"a": exp.DataType.build("INT"), "b": exp.DataType.build("INT")}
+    )
+    assert 'USE SCHEMA "other_db"' in to_sql_calls(adapter)
+
+    adapter.replace_query(
+        "other_catalog.other_db.test_table",
+        df,
+        {"a": exp.DataType.build("INT"), "b": exp.DataType.build("INT")},
+    )
+    assert 'USE SCHEMA "other_catalog"."other_db"' in to_sql_calls(adapter)
