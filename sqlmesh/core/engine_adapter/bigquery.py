@@ -469,14 +469,14 @@ class BigQueryEngineAdapter(InsertOverwriteWithMergeMixin):
             value=exp.Literal.string(trunc_method(description)),
         )
 
-    def _build_physical_properties_exp(
+    def _build_table_properties_exp(
         self,
         catalog_name: t.Optional[str] = None,
         storage_format: t.Optional[str] = None,
         partitioned_by: t.Optional[t.List[exp.Expression]] = None,
         partition_interval_unit: t.Optional[IntervalUnit] = None,
         clustered_by: t.Optional[t.List[str]] = None,
-        physical_properties: t.Optional[t.Dict[str, exp.Expression]] = None,
+        table_properties: t.Optional[t.Dict[str, exp.Expression]] = None,
         columns_to_types: t.Optional[t.Dict[str, exp.DataType]] = None,
         table_description: t.Optional[str] = None,
     ) -> t.Optional[exp.Properties]:
@@ -529,7 +529,7 @@ class BigQueryEngineAdapter(InsertOverwriteWithMergeMixin):
                 ),
             )
 
-        properties.extend(self._model_properties_to_expressions(physical_properties))
+        properties.extend(self._model_properties_to_expressions(table_properties))
 
         if properties:
             return exp.Properties(expressions=properties)

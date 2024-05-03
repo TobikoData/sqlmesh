@@ -701,7 +701,7 @@ class EngineAdapter:
                 catalog_name = table_name_or_schema.this.catalog
 
         properties = (
-            self._build_physical_properties_exp(
+            self._build_table_properties_exp(
                 **kwargs, catalog_name=catalog_name, columns_to_types=columns_to_types
             )
             if kwargs
@@ -858,9 +858,7 @@ class EngineAdapter:
                 schema = schema.this
 
         create_view_properties = self._build_view_properties_exp(
-            view_properties
-            or create_kwargs.pop("physical_properties", None)
-            or create_kwargs.pop("table_properties", None),
+            view_properties or create_kwargs.pop("table_properties", None),
             (
                 table_description
                 if self.COMMENT_CREATION_VIEW.supports_schema_def and self.comments_enabled
@@ -1861,14 +1859,14 @@ class EngineAdapter:
             exp.Property(this=key, value=value.copy()) for key, value in model_properties.items()
         ]
 
-    def _build_physical_properties_exp(
+    def _build_table_properties_exp(
         self,
         catalog_name: t.Optional[str] = None,
         storage_format: t.Optional[str] = None,
         partitioned_by: t.Optional[t.List[exp.Expression]] = None,
         partition_interval_unit: t.Optional[IntervalUnit] = None,
         clustered_by: t.Optional[t.List[str]] = None,
-        physical_properties: t.Optional[t.Dict[str, exp.Expression]] = None,
+        table_properties: t.Optional[t.Dict[str, exp.Expression]] = None,
         columns_to_types: t.Optional[t.Dict[str, exp.DataType]] = None,
         table_description: t.Optional[str] = None,
     ) -> t.Optional[exp.Properties]:

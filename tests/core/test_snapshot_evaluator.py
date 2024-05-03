@@ -158,7 +158,7 @@ def test_evaluate(mocker: MockerFixture, adapter_mock, make_snapshot):
         partitioned_by=[exp.to_column("a", quoted=True)],
         partition_interval_unit=IntervalUnit.DAY,
         clustered_by=[],
-        physical_properties={},
+        table_properties={},
         table_description=None,
     )
 
@@ -463,7 +463,7 @@ def test_evaluate_materialized_view(
             model.render_query(),
             model.columns_to_types,
             materialized=True,
-            physical_properties={},
+            table_properties={},
             table_description=None,
             column_descriptions={},
         )
@@ -505,7 +505,7 @@ def test_evaluate_materialized_view_with_execution_time_macro(
         model.render_query(execution_time="2020-01-02"),
         model.columns_to_types,
         materialized=True,
-        physical_properties={},
+        table_properties={},
         table_description=None,
         column_descriptions={},
     )
@@ -581,7 +581,7 @@ def test_evaluate_incremental_unmanaged_no_intervals(
         partitioned_by=model.partitioned_by,
         storage_format=None,
         table_description=None,
-        physical_properties={},
+        table_properties={},
     )
 
 
@@ -657,7 +657,7 @@ def test_create_only_dev_table_exists(mocker: MockerFixture, adapter_mock, make_
 
     common_kwargs = dict(
         materialized=False,
-        physical_properties={},
+        table_properties={},
         table_description=None,
     )
     rendered_query = model.render_query()
@@ -707,7 +707,7 @@ def test_create_materialized_view(mocker: MockerFixture, adapter_mock, make_snap
 
     common_kwargs = dict(
         materialized=True,
-        physical_properties={},
+        table_properties={},
         table_description=None,
     )
 
@@ -737,7 +737,7 @@ def test_create_view_with_properties(mocker: MockerFixture, adapter_mock, make_s
                 kind VIEW (
                     materialized true
                 ),
-                physical_properties (
+                table_properties (
                     "key" = 'value'
                 )
             );
@@ -754,7 +754,7 @@ def test_create_view_with_properties(mocker: MockerFixture, adapter_mock, make_s
 
     common_kwargs = dict(
         materialized=True,
-        physical_properties={
+        table_properties={
             "key": exp.convert("value"),
         },
         table_description=None,
@@ -1095,7 +1095,7 @@ def test_create_clone_in_dev(mocker: MockerFixture, adapter_mock, make_snapshot)
         partitioned_by=[exp.to_column("ds", quoted=True)],
         partition_interval_unit=IntervalUnit.DAY,
         clustered_by=[],
-        physical_properties={},
+        table_properties={},
         table_description=None,
         column_descriptions=None,
     )
@@ -1146,7 +1146,7 @@ def test_forward_only_snapshot_for_added_model(mocker: MockerFixture, adapter_mo
         partitioned_by=[exp.to_column("ds", quoted=True)],
         partition_interval_unit=IntervalUnit.DAY,
         clustered_by=[],
-        physical_properties={},
+        table_properties={},
         table_description=None,
     )
     adapter_mock.create_table.assert_has_calls(
@@ -1196,7 +1196,7 @@ def test_create_scd_type_2_by_time(adapter_mock, make_snapshot):
         partitioned_by=[],
         partition_interval_unit=IntervalUnit.DAY,
         clustered_by=[],
-        physical_properties={},
+        table_properties={},
         table_description=None,
     )
 
@@ -1244,7 +1244,7 @@ def test_create_ctas_scd_type_2_by_time(adapter_mock, make_snapshot):
         partitioned_by=[],
         partition_interval_unit=IntervalUnit.DAY,
         clustered_by=[],
-        physical_properties={},
+        table_properties={},
         table_description=None,
     )
 
@@ -1362,7 +1362,7 @@ def test_create_scd_type_2_by_column(adapter_mock, make_snapshot):
         partitioned_by=[],
         partition_interval_unit=IntervalUnit.DAY,
         clustered_by=[],
-        physical_properties={},
+        table_properties={},
         table_description=None,
     )
 
@@ -1410,7 +1410,7 @@ def test_create_ctas_scd_type_2_by_column(adapter_mock, make_snapshot):
         partitioned_by=[],
         partition_interval_unit=IntervalUnit.DAY,
         clustered_by=[],
-        physical_properties={},
+        table_properties={},
         table_description=None,
     )
 
@@ -1590,7 +1590,7 @@ def test_create_incremental_by_unique_no_intervals(adapter_mock, make_snapshot):
         partitioned_by=model.partitioned_by,
         storage_format=None,
         table_description=None,
-        physical_properties={},
+        table_properties={},
     )
 
 

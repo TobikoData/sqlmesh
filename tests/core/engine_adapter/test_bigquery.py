@@ -573,7 +573,7 @@ def test_create_table_table_options(make_mocked_engine_adapter: t.Callable, mock
     adapter.create_table(
         "test_table",
         {"a": exp.DataType.build("int"), "b": exp.DataType.build("int")},
-        physical_properties={
+        table_properties={
             "partition_expiration_days": exp.convert(7),
         },
     )
@@ -731,7 +731,7 @@ def test_view_properties(make_mocked_engine_adapter: t.Callable, mocker: MockerF
         "test_table",
         parse_one("SELECT 1"),
         table_description="some description",
-        physical_properties={
+        table_properties={
             "labels": exp.Array(
                 expressions=[
                     exp.Tuple(

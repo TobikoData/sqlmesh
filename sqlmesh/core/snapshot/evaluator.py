@@ -969,7 +969,7 @@ class EvaluationStrategy(abc.ABC):
             partitioned_by=model.partitioned_by,
             partition_interval_unit=model.interval_unit,
             clustered_by=model.clustered_by,
-            physical_properties=model.physical_properties,
+            table_properties=model.physical_properties,
             table_description=model.description,
             column_descriptions=model.column_descriptions,
         )
@@ -1112,7 +1112,7 @@ class MaterializableStrategy(PromotableStrategy):
                 partitioned_by=model.partitioned_by,
                 partition_interval_unit=model.interval_unit,
                 clustered_by=model.clustered_by,
-                physical_properties=model.physical_properties,
+                table_properties=model.physical_properties,
                 table_description=model.description if is_table_deployable else None,
                 column_descriptions=model.column_descriptions if is_table_deployable else None,
             )
@@ -1134,7 +1134,7 @@ class MaterializableStrategy(PromotableStrategy):
                 partitioned_by=model.partitioned_by,
                 partition_interval_unit=model.interval_unit,
                 clustered_by=model.clustered_by,
-                physical_properties=model.physical_properties,
+                table_properties=model.physical_properties,
                 table_description=model.description if is_table_deployable else None,
                 column_descriptions=model.column_descriptions if is_table_deployable else None,
             )
@@ -1285,7 +1285,7 @@ class SCDType2Strategy(MaterializableStrategy):
                 partitioned_by=model.partitioned_by,
                 partition_interval_unit=model.interval_unit,
                 clustered_by=model.clustered_by,
-                physical_properties=model.physical_properties,
+                table_properties=model.physical_properties,
                 table_description=model.description if is_table_deployable else None,
                 column_descriptions=model.column_descriptions if is_table_deployable else None,
             )
@@ -1434,7 +1434,7 @@ class ViewStrategy(PromotableStrategy):
             query_or_df,
             model.columns_to_types,
             materialized=self._is_materialized_view(model),
-            physical_properties=model.physical_properties,
+            table_properties=model.physical_properties,
             table_description=model.description,
             column_descriptions=model.column_descriptions,
         )
@@ -1465,7 +1465,7 @@ class ViewStrategy(PromotableStrategy):
             name,
             model.render_query_or_raise(**render_kwargs),
             materialized=self._is_materialized_view(model),
-            physical_properties=model.physical_properties,
+            table_properties=model.physical_properties,
             table_description=model.description if is_table_deployable else None,
             column_descriptions=model.column_descriptions if is_table_deployable else None,
         )
@@ -1486,7 +1486,7 @@ class ViewStrategy(PromotableStrategy):
             ),
             model.columns_to_types,
             materialized=self._is_materialized_view(model),
-            physical_properties=model.physical_properties,
+            table_properties=model.physical_properties,
             table_description=model.description,
             column_descriptions=model.column_descriptions,
         )
