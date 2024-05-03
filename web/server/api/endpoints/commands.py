@@ -154,7 +154,7 @@ async def test(
             origin="API -> commands -> test",
         )
     context.console.log_test_results(
-        result, test_output.getvalue(), context._test_engine_adapter.dialect
+        result, test_output.getvalue(), context._test_connection_config._engine_adapter.DIALECT
     )
     return models.TestResult(
         errors=[

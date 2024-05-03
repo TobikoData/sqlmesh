@@ -23,7 +23,6 @@ if t.TYPE_CHECKING:
 def run_tests(
     model_test_metadata: list[ModelTestMetadata],
     models: UniqueKeyDict[str, Model],
-    engine_adapter: EngineAdapter,
     config: C,
     gateway: t.Optional[str] = None,
     dialect: str | None = None,
@@ -38,12 +37,11 @@ def run_tests(
     Args:
         model_test_metadata: A list of ModelTestMetadata named tuples.
         models: All models to use for expansion and mapping of physical locations.
-        engine_adapter: The engine adapter to use.
         verbosity: The verbosity level.
         preserve_fixtures: Preserve the fixture tables in the testing database, useful for debugging.
     """
+    testing_adapter_by_gateway: t.Dict[str, EngineAdapter] = {}
     default_gateway = gateway or config.default_gateway
-    testing_adapter_by_gateway = {default_gateway: engine_adapter}
 
     try:
         tests = []
@@ -88,7 +86,6 @@ def run_tests(
 def run_model_tests(
     tests: list[str],
     models: UniqueKeyDict[str, Model],
-    engine_adapter: EngineAdapter,
     config: C,
     gateway: t.Optional[str] = None,
     dialect: str | None = None,
@@ -104,7 +101,6 @@ def run_model_tests(
     Args:
         tests: A list of tests to run, e.g. [tests/test_orders.yaml::test_single_order]
         models: All models to use for expansion and mapping of physical locations.
-        engine_adapter: The engine adapter to use.
         verbosity: The verbosity level.
         patterns: A list of patterns to match against.
         preserve_fixtures: Preserve the fixture tables in the testing database, useful for debugging.
@@ -125,7 +121,6 @@ def run_model_tests(
     return run_tests(
         loaded_tests,
         models,
-        engine_adapter,
         config,
         gateway=gateway,
         dialect=dialect,

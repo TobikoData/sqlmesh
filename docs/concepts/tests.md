@@ -15,6 +15,7 @@ Tests within a suite file contain the following attributes:
 * The unique name of a test
 * The name of the model targeted by this test
 * [Optional] The test's description
+* [Optional] The test's gateway
 * Test inputs, which are defined per upstream model or external table referenced by the target model. Each test input consists of the following:
     * The name of an upstream model or external table
     * The list of rows defined as a mapping from a column name to a value associated with it
@@ -31,6 +32,7 @@ The YAML format is defined as follows:
 <unique_test_name>:
   model: <target_model_name>
   description: <description>  # Optional
+  gateway: <gateway>  # Optional
   inputs:
     <upstream_model_or_external_table_name>:
       columns:  # Optional
@@ -188,7 +190,7 @@ test_example_full_model:
         num_orders: 2
 ```
 
-### Omitting columns
+## Omitting columns
 
 Defining the complete inputs and expected outputs for wide tables, i.e. tables with many columns, can become cumbersome. Therefore, if certain columns can be safely ignored they may be omitted from any row and their value will be treated as `NULL` for that row.
 
@@ -215,7 +217,7 @@ This is useful when we can't treat the missing columns as `NULL`, but still want
 
 When `partial` is set for a _specific_ expected output, its rows need to be defined as a mapping under the `rows` key and only the columns referenced in them will be tested.
 
-### Freezing time
+## Freezing time
 
 Some models may use SQL expressions that compute datetime values at a given point in time, such as `CURRENT_TIMESTAMP`. Since these expressions are non-deterministic, it's not enough to simply specify an expected output value in order to test them.
 
@@ -362,6 +364,43 @@ $ sqlmesh test
 Ran 2 tests in 0.024s
 
 OK
+```
+
+## Using a different testing connection
+
+The testing connection can be changed for a given test. This may be useful when, e.g., the model being tested cannot be correctly transpiled to the dialect of the default testing engine.
+
+The following example demonstrates this by modifying `test_example_full_model`, so that it runs against a single-threaded local Spark process, defined as the `test_connection` of the `spark_testing` gateway in the project's `config.yaml` file:
+
+```yaml linenums="1"
+gateways:
+  local:
+    connection:
+      type: duckdb
+      database: db.db
+  spark_testing:
+    test_connection:
+      type: spark
+      config:
+        # Run Spark locally with one worker thread
+        "spark.master": "local"
+
+        # Move data under /tmp so that it is only temporarily persisted
+        "spark.sql.warehouse.dir": "/tmp/data_dir"
+        "spark.driver.extraJavaOptions": "-Dderby.system.home=/tmp/derby_dir"
+
+default_gateway: local
+
+model_defaults:
+  dialect: duckdb
+```
+
+The test would then be updated as follows:
+
+```yaml linenums="1"
+test_example_full_model:
+  gateway: spark_testing
+  # ... the other test attributes remain tne same
 ```
 
 ## Running tests

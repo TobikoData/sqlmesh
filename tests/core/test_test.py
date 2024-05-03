@@ -45,7 +45,9 @@ def _create_test(
         test_name=test_name,
         model=model,
         models=context._models,
-        engine_adapter=context._test_engine_adapter,
+        engine_adapter=context._test_connection_config.create_engine_adapter(
+            register_comments_override=False
+        ),
         dialect=context.config.dialect,
         path=None,
         default_catalog=context.default_catalog,
@@ -284,9 +286,7 @@ test_foo:
 
 
 def test_row_order(sushi_context: Context, full_model_without_ctes: SqlModel) -> None:
-    model = t.cast(SqlModel, sushi_context.upsert_model(full_model_without_ctes))
-
-    # input and output rows are in different orders
+    # Input and output rows are in different orders
     body = load_yaml(
         """
 test_foo:
@@ -313,26 +313,36 @@ test_foo:
         """
     )
 
-    # model query without ORDER BY should pass unit test
-    result = _create_test(body, "test_foo", model, sushi_context).run()
-    _check_successful_or_raise(result)
+    # Model query without ORDER BY should pass unit test
+    _check_successful_or_raise(
+        _create_test(
+            body=body,
+            test_name="test_foo",
+            model=sushi_context.upsert_model(full_model_without_ctes),
+            context=sushi_context,
+        ).run()
+    )
 
-    # model query with ORDER BY should fail unit test
     full_model_without_ctes_dict = full_model_without_ctes.dict()
     full_model_without_ctes_dict["query"] = full_model_without_ctes.query.order_by("id")  # type: ignore
     full_model_without_ctes_orderby = SqlModel(**full_model_without_ctes_dict)
 
-    model = t.cast(SqlModel, sushi_context.upsert_model(full_model_without_ctes_orderby))
-    result = _create_test(body, "test_foo", model, sushi_context).run()
-
-    expected_failure_msg = (
-        "AssertionError: Data mismatch (exp: expected, act: actual)\n\n"
-        "   id     value      ds    \n"
-        "  exp act   exp act exp act\n"
-        "0   2   1     3   2   4   3\n"
-        "1   1   2     2   3   3   4\n"
+    # Model query with ORDER BY should fail unit test
+    _check_successful_or_raise(
+        _create_test(
+            body=body,
+            test_name="test_foo",
+            model=sushi_context.upsert_model(full_model_without_ctes_orderby),
+            context=sushi_context,
+        ).run(),
+        expected_msg=(
+            "AssertionError: Data mismatch (exp: expected, act: actual)\n\n"
+            "   id     value      ds    \n"
+            "  exp act   exp act exp act\n"
+            "0   2   1     3   2   4   3\n"
+            "1   1   2     2   3   3   4\n"
+        ),
     )
-    _check_successful_or_raise(result, expected_msg=expected_failure_msg)
 
 
 def test_partial_data(sushi_context: Context) -> None:
@@ -1158,8 +1168,7 @@ def test_test_generation(tmp_path: Path) -> None:
     assert "ctes" in test["test_full_model"]["outputs"]
     assert "cte" in test["test_full_model"]["outputs"]["ctes"]
 
-    result = context.test()
-    _check_successful_or_raise(result)
+    _check_successful_or_raise(context.test())
 
     context.create_test(
         "sqlmesh_example.full_model",
