@@ -537,3 +537,41 @@ def test_get_lineage_nested_cte_union_downstream(project_context: Context) -> No
         '"external_table2"': ["col"],
         '"external_table3"': ["col"],
     }
+
+
+def test_get_lineage_subquery(project_context: Context) -> None:
+    project_tmp_path = project_context.path
+    models_dir = project_tmp_path / "models"
+    models_dir.mkdir()
+    foo_sql_file = models_dir / "foo.sql"
+    foo_sql_file.write_text(
+        """MODEL (name foo);
+           SELECT col FROM (SELECT col FROM bar) my_subquery;"""
+    )
+    bar_sql_file = models_dir / "bar.sql"
+    bar_sql_file.write_text(
+        """MODEL (name bar);
+           SELECT col FROM baz;"""
+    )
+    baz_sql_file = models_dir / "baz.sql"
+    baz_sql_file.write_text(
+        """MODEL (name baz);
+           SELECT col FROM external_table;"""
+    )
+    project_context.load()
+
+    response = client.get("/api/lineage/foo/col")
+    assert response.status_code == 200, response.json()
+    response_json = response.json()
+    assert response_json['"foo"']["col"]["models"] == {"my_subquery": ["col"]}
+    assert response_json["my_subquery"]["col"]["models"] == {'"bar"': ["col"]}
+    assert response_json['"bar"']["col"]["models"] == {'"baz"': ["col"]}
+    assert response_json['"baz"']["col"]["models"] == {'"external_table"': ["col"]}
+
+    # Models only
+    response = client.get("/api/lineage/foo/col?models_only=1")
+    assert response.status_code == 200, response.json()
+    response_json = response.json()
+    assert response_json['"foo"']["col"]["models"] == {'"bar"': ["col"]}
+    assert response_json['"bar"']["col"]["models"] == {'"baz"': ["col"]}
+    assert response_json['"baz"']["col"]["models"] == {'"external_table"': ["col"]}
