@@ -90,7 +90,10 @@ class SnowflakeEngineAdapter(GetCurrentCatalogFromFunctionMixin):
                 #
                 # The above issue has already been fixed upstream, but we keep the following
                 # line anyway in order to support a wider range of Snowflake versions.
-                self.cursor.execute(f'USE SCHEMA "{temp_table.db}"')
+                schema = f'"{temp_table.db}"'
+                if temp_table.catalog:
+                    schema = f'"{temp_table.catalog}".{schema}'
+                self.cursor.execute(f"USE SCHEMA {schema}")
 
                 # See: https://stackoverflow.com/a/75627721
                 for column, kind in columns_to_types.items():
