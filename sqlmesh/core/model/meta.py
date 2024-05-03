@@ -89,9 +89,9 @@ class ModelMeta(_Node):
                 return v.name.lower(), {}
 
             for arg in args:
-                if not isinstance(arg, exp.EQ):
+                if not isinstance(arg, (exp.PropertyEQ, exp.EQ)):
                     raise ConfigError(
-                        f"Function '{func}' must be called with key-value arguments like {func}(arg=value)."
+                        f"Function '{func}' must be called with key-value arguments like {func}(arg := value)."
                     )
                 kwargs[arg.left.name] = arg.right
             return func.lower(), kwargs
