@@ -15,7 +15,7 @@ Tests within a suite file contain the following attributes:
 * The unique name of a test
 * The name of the model targeted by this test
 * [Optional] The test's description
-* [Optional] The test's gateway
+* [Optional] The gateway whose `test_connection` will be used to run this test
 * Test inputs, which are defined per upstream model or external table referenced by the target model. Each test input consists of the following:
     * The name of an upstream model or external table
     * The list of rows defined as a mapping from a column name to a value associated with it
