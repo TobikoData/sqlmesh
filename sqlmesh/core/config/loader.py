@@ -7,6 +7,7 @@ from pathlib import Path
 from sqlglot.helper import ensure_list
 
 from sqlmesh.core import constants as c
+from sqlmesh.core.config.model import ModelDefaultsConfig
 from sqlmesh.core.config.root import Config
 from sqlmesh.utils import env_vars, merge_dicts, sys_path
 from sqlmesh.utils.errors import ConfigError
@@ -113,9 +114,19 @@ def load_config_from_paths(
             "SQLMesh config could not be found. Point the cli to the right path with `sqlmesh -p`. If you haven't set up SQLMesh, run `sqlmesh init`."
         )
 
-    no_dialect_err_msg = "Default model SQL dialect is a required configuration parameter. Set it in the `model_defaults` `dialect` key in your config file."
+    def _check_model_defaults_keys(model_defaults_dict: t.Dict[str, t.Any]) -> None:
+        supported_model_defaults = ModelDefaultsConfig.all_fields()
+        for default in model_defaults_dict:
+            if not default in supported_model_defaults:
+                raise ConfigError(
+                    f"'{default}' is not a valid model default configuration key. Please remove it from the `model_defaults` specification in your config file."
+                )
 
-    non_python_config = config_type.parse_obj(merge_dicts(*non_python_configs))
+    non_python_config_dict = merge_dicts(*non_python_configs)
+    _check_model_defaults_keys(non_python_config_dict.get("model_defaults", {}))
+    non_python_config = config_type.parse_obj(non_python_config_dict)
+
+    no_dialect_err_msg = "Default model SQL dialect is a required configuration parameter. Set it in the `model_defaults` `dialect` key in your config file."
     if python_config:
         model_defaults = python_config.model_defaults
         if model_defaults.dialect is None:

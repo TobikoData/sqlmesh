@@ -214,6 +214,29 @@ config = Config(default_connection=DuckDBConnectionConfig())
         load_config_from_paths(Config, project_paths=[tmp_path / "config.py"])
 
 
+def test_load_config_bad_model_default_key(tmp_path):
+    create_temp_file(
+        tmp_path,
+        pathlib.Path("config.yaml"),
+        """
+gateways:
+    local:
+        connection:
+            type: duckdb
+            database: db.db
+
+model_defaults:
+    dialect: ''
+    test: 1
+""",
+    )
+
+    with pytest.raises(
+        ConfigError, match=r"^'test' is not a valid model default configuration key.*"
+    ):
+        load_config_from_paths(Config, project_paths=[tmp_path / "config.yaml"])
+
+
 def test_load_config_unsupported_extension(tmp_path):
     config_path = tmp_path / "config.txt"
     config_path.touch()
