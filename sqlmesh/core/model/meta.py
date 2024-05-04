@@ -268,7 +268,7 @@ class ModelMeta(_Node):
 
         table_properties = values.pop("table_properties", None)
         if table_properties:
-            model_name = values.get("name")
+            model_name = values["name"]
             logger.warning(
                 f"""Python model "{model_name}"'s is using `physical_properties` property which is deprecated. Please use `physical_properties` instead."""
             )
@@ -348,20 +348,14 @@ class ModelMeta(_Node):
     def physical_properties(self) -> t.Dict[str, exp.Expression]:
         """A dictionary of properties that will be applied to the physical layer. It replaces table_properties which is deprecated."""
         if self.physical_properties_:
-            physical_properties = {}
-            for expression in self.physical_properties_.expressions:
-                physical_properties[expression.this.name] = expression.expression
-            return physical_properties
+            return {e.this.name: e.expression for e in self.physical_properties_.expressions}
         return {}
 
     @cached_property
     def virtual_properties(self) -> t.Dict[str, exp.Expression]:
         """A dictionary of properties that will be applied to the virtual layer."""
         if self.virtual_properties_:
-            virtual_properties = {}
-            for expression in self.virtual_properties_.expressions:
-                virtual_properties[expression.this.name] = expression.expression
-            return virtual_properties
+            return {e.this.name: e.expression for e in self.virtual_properties_.expressions}
         return {}
 
     @property

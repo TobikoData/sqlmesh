@@ -732,16 +732,7 @@ def test_view_properties(make_mocked_engine_adapter: t.Callable, mocker: MockerF
         parse_one("SELECT 1"),
         table_description="some description",
         table_properties={
-            "labels": exp.Array(
-                expressions=[
-                    exp.Tuple(
-                        expressions=[
-                            exp.Literal.string("test-label"),
-                            exp.Literal.string("label-value"),
-                        ]
-                    )
-                ]
-            ),
+            "labels": exp.array("('test-label', 'label-value')"),
         },
     )
 
@@ -750,16 +741,7 @@ def test_view_properties(make_mocked_engine_adapter: t.Callable, mocker: MockerF
         parse_one("SELECT 1"),
         table_description="some description",
         view_properties={
-            "labels": exp.Array(
-                expressions=[
-                    exp.Tuple(
-                        expressions=[
-                            exp.Literal.string("test-view-label"),
-                            exp.Literal.string("label-view-value"),
-                        ]
-                    )
-                ]
-            ),
+            "labels": exp.array("('test-view-label', 'label-view-value')"),
         },
     )
 

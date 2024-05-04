@@ -220,7 +220,7 @@ MODEL (
 - Optional description of the model. Automatically registered as a table description/comment with the underlying SQL engine (if supported by the engine).
 
 ### physical_properties (previously table_properties)
-- A key-value of arbitrary table properties specific to the target engine applied on SQLMesh physical layer. For example:
+- A key-value mapping of arbitrary table properties specific to the target engine applied on SQLMesh's physical layer. For example:
 
 ```sql linenums="1"
 MODEL (
@@ -234,7 +234,7 @@ MODEL (
 ```
 
 ### virtual_properties
-- A key-value of arbitrary table properties specific to the target engine applied on SQLMesh virtual layer. For example:
+- A key-value mapping of arbitrary table properties specific to the target engine applied on SQLMesh's virtual layer. For example:
 
 ```sql linenums="1"
 MODEL (

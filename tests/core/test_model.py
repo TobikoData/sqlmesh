@@ -2619,29 +2619,11 @@ def test_physical_and_virtual_table_properties() -> None:
     )
     assert sql_model.physical_properties == {
         "partition_expiration_days": exp.convert(7),
-        "labels": exp.Array(
-            expressions=[
-                exp.Tuple(
-                    expressions=[
-                        exp.Literal.string("test-physical-label"),
-                        exp.Literal.string("label-physical-value"),
-                    ]
-                )
-            ]
-        ),
+        "labels": exp.array("('test-physical-label', 'label-physical-value')"),
     }
 
     assert sql_model.virtual_properties == {
-        "labels": exp.Array(
-            expressions=[
-                exp.Tuple(
-                    expressions=[
-                        exp.Literal.string("test-virtual-label"),
-                        exp.Literal.string("label-virtual-value"),
-                    ]
-                )
-            ]
-        ),
+        "labels": exp.array("('test-virtual-label', 'label-virtual-value')"),
     }
 
 
