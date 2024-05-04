@@ -96,17 +96,17 @@ The simplest version of the workflow is:
 
 1. Developers modify project code
 
-    a. Each developer makes their own copy of the production SQLMesh project files
+    a. Developers clone the production code repository
 
-    b. Developers update code in their copy of the project files
+    b. Developers update code in local git branches
 
     c. Developers create SQLMesh environments and validate their code updates
 
 2. Update production project code
 
-    a. A set of code updates is selected for deployment to production
+    a. A set of git branches are selected for deployment to production
 
-    b. The production SQLMesh project files are modified with the updates
+    b. The changes in the selected git branches are merged into the production branch
 
 3. Deploy to production
 
@@ -122,15 +122,9 @@ In the workflow described in the previous section, individual code modifications
 
 A common expansion of the simple workflow (that we recommend) is to add a staging environment where the set of changes can be evaluated before deploying to production.
 
-The single system workflow with a staging environment is:
+The single system workflow with a staging environment is the same as the [generic workflow above](#workflow-with-one-system), but with additional `staging` environment creation and validation in step 2:
 
-1. Developers modify project code
-
-    a. Each developer makes their own copy of the production SQLMesh project files
-
-    b. Developers update code in their copy of the project files
-
-    c. Developers create SQLMesh environments and validate their code updates
+1. [Same as [above](#workflow-with-one-system)]
 
 2. Update production project code
 
@@ -142,13 +136,11 @@ The single system workflow with a staging environment is:
 
     d. Developers validate the set of code updates in the `staging` environment
 
-3. Deploy to production
-
-    a. Execute the `sqlmesh plan` command to apply the updates to the `prod` environment
+3. [Same as [above](#workflow-with-one-system)]
 
 ![Standard SQLMesh workflow with staging environment](./isolated_systems/isolated-systems_standard-workflow-staging.png)
 
-Because the code updates have run in the `staging` environment, the deployment to the `prod` environment (step 3) will not require additional computation due to SQLMesh's virtual data environments. The deployment only requires updates to views so will be very rapid.
+Because the code updates have run in the `staging` environment, the deployment to the `prod` environment will not require additional computation due to SQLMesh's virtual data environments. The deployment only requires updates to views so will be very rapid.
 
 ### Workflow with isolated systems
 
@@ -158,25 +150,11 @@ The primary difference from the single-system workflows described above is that 
 
 In some isolated system implementations, the data in the non-production system is different from that in the production system. For example, columns containing sensitive information may be masked or altered in the non-production system's data. These potential differences increase the likelihood of unintentional errors, so we describe (and recommend) a workflow with staging environments.
 
-In the steps below, we assume that the non-production system is the default gateway. The isolated system workflow with staging environments is:
+In the steps below, we assume that the non-production system is the default gateway. The isolated system workflow with staging environments begins like the [staging workflow above](#staging-environment), but with additional staging environment creation and validation in the production system after validation in the default non-production system:
 
-1. Developers modify project code in the non-production environment
+1. [Same as [above](#staging-environment)]
 
-    a. Each developer makes their own copy of the production SQLMesh project files
-
-    b. Developers update code in their copy of the project files
-
-    c. Developers create SQLMesh environments and validate their code updates
-
-2. Update production project code and validate in the non-production system
-
-    a. A set of code updates is selected for deployment to production
-
-    b. The production SQLMesh project files are modified with the updates
-
-    c. Execute the `sqlmesh plan` command to apply the updates to its `prod` environment (or another environment of your choosing)
-
-    d. Developers validate the set of code updates in the non-production system `prod` environment
+2. [Same as [above](#staging-environment)]
 
 3. Deploy to production system `staging` environment
 
@@ -189,6 +167,8 @@ In the steps below, we assume that the non-production system is the default gate
     a. Execute the `sqlmesh  --gateway production plan` command to apply the updates to the production system's `prod` environment
 
 ![Isolated systems SQLMesh workflow with staging environments](./isolated_systems/isolated-systems_isolated-systems-workflow.png)
+
+The classification of changes as breaking/non-breaking in the non-production system plan (step 2) will not be available to the production system plan (step 3) because the systems do not share SQLMesh state data. Therefore, the classification must occur again in the production system.
 
 In isolated systems, SQLMesh's virtual data environments will operate normally *within* each system, but not across systems. For example, when the non-production system's staging environment is created (step 2c), any computations previously run in a developer's personal environment will not run again.
 
