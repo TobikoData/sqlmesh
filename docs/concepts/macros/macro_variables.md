@@ -103,6 +103,7 @@ SQLMesh provides two other predefined variables used to modify model behavior ba
     * 'loading' - The project is currently being loaded into SQLMesh's runtime context.
     * 'creating' - The model tables are being created.
     * 'evaluating' - The models' logic is being evaluated.
+    * 'testing' - The models' logic is being evaluated in the context of a unit test.
 * @gateway - A string value that represents the name of the selected [gateway](../../guides/connections.md).
 
 ### Audit-only variables
