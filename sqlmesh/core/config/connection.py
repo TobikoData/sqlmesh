@@ -177,7 +177,10 @@ class BaseDuckDBConnectionConfig(ConnectionConfig):
 
                     if isinstance(path, AttachOptions):
                         attach_path = path.path
-                        options.append(path.type)
+                        # 'duckdb' is actually not a supported type, but we'd like to allow it for
+                        # fully qualified attach options or integration testing, similar to duckdb-dbt
+                        if path.type != "duckdb":
+                            options.append(path.type)
 
                         if path.read_only:
                             options.append("READ_ONLY")
