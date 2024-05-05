@@ -172,7 +172,21 @@ class BaseDuckDBConnectionConfig(ConnectionConfig):
                     identify=True, dialect="duckdb"
                 )
                 try:
-                    cursor.execute(f"""ATTACH '{path}' AS {alias}""")
+                    attach_patch = path
+                    options = []
+
+                    if isinstance(path, AttachOptions):
+                        attach_patch = path.path
+                        options.append(path.type)
+
+                        if path.read_only:
+                            options.append("READ_ONLY")
+
+                    query = f"ATTACH '{attach_patch}' AS {alias}"
+                    if options:
+                        query += f" ({', '.join(options)})"
+
+                    cursor.execute(query)
                 except BinderException as e:
                     # If a user tries to create a catalog pointing at `:memory:` and with the name `memory`
                     # then we don't want to raise since this happens by default. They are just doing this to
@@ -214,6 +228,12 @@ class MotherDuckConnectionConfig(BaseDuckDBConnectionConfig):
         return {"database": connection_str}
 
 
+class AttachOptions(BaseConfig):
+    type: str
+    path: str
+    read_only: bool = False
+
+
 class DuckDBConnectionConfig(BaseDuckDBConnectionConfig):
     """Configuration for the DuckDB connection.
 
@@ -223,7 +243,8 @@ class DuckDBConnectionConfig(BaseDuckDBConnectionConfig):
     """
 
     database: t.Optional[str] = None
-    catalogs: t.Optional[t.Dict[str, str]] = None
+    catalogs: t.Optional[t.Dict[str, t.Union[str, AttachOptions]]] = None
+    # catalogs: t.Optional[t.Dict[str, str]] = None
 
     type_: Literal["duckdb"] = Field(alias="type", default="duckdb")
 
@@ -253,18 +274,19 @@ class DuckDBConnectionConfig(BaseDuckDBConnectionConfig):
             data_files.add(self.database)
         data_files.discard(":memory:")
         for data_file in data_files:
-            if adapter := DuckDBConnectionConfig._data_file_to_adapter.get(data_file):
-                logger.info(
-                    f"Using existing DuckDB adapter due to overlapping data file: {data_file}"
-                )
+            key = data_file if isinstance(data_file, str) else data_file.path
+            if adapter := DuckDBConnectionConfig._data_file_to_adapter.get(key):
+                logger.info(f"Using existing DuckDB adapter due to overlapping data file: {key}")
                 return adapter
+
         if data_files:
             logger.info(f"Creating new DuckDB adapter for data files: {data_files}")
         else:
             logger.info("Creating new DuckDB adapter for in-memory database")
         adapter = super().create_engine_adapter(register_comments_override)
         for data_file in data_files:
-            DuckDBConnectionConfig._data_file_to_adapter[data_file] = adapter
+            key = data_file if isinstance(data_file, str) else data_file.path
+            DuckDBConnectionConfig._data_file_to_adapter[key] = adapter
         return adapter
 
     def get_catalog(self) -> t.Optional[str]:
@@ -1258,7 +1280,9 @@ CONNECTION_CONFIG_TO_TYPE = {
     # Map all subclasses of ConnectionConfig to the value of their `type_` field.
     tpe.all_field_infos()["type_"].default: tpe
     for tpe in subclasses(
-        __name__, ConnectionConfig, exclude=(ConnectionConfig, BaseDuckDBConnectionConfig)
+        __name__,
+        ConnectionConfig,
+        exclude=(ConnectionConfig, BaseDuckDBConnectionConfig),
     )
 }
 

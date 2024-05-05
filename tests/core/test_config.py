@@ -203,12 +203,14 @@ config = Config(default_connection=DuckDBConnectionConfig())
     )
 
     with pytest.raises(
-        ConfigError, match=r"^Default model SQL dialect is a required configuration parameter.*"
+        ConfigError,
+        match=r"^Default model SQL dialect is a required configuration parameter.*",
     ):
         load_config_from_paths(Config, project_paths=[tmp_path / "config.yaml"])
 
     with pytest.raises(
-        ConfigError, match=r"^Default model SQL dialect is a required configuration parameter.*"
+        ConfigError,
+        match=r"^Default model SQL dialect is a required configuration parameter.*",
     ):
         load_config_from_paths(Config, project_paths=[tmp_path / "config.py"])
 
@@ -339,7 +341,10 @@ model_defaults:
     [
         (
             "'^dev$': dev_catalog\n    '^other$': other_catalog",
-            {re.compile("^dev$"): "dev_catalog", re.compile("^other$"): "other_catalog"},
+            {
+                re.compile("^dev$"): "dev_catalog",
+                re.compile("^other$"): "other_catalog",
+            },
             "duckdb",
             "",
         ),
@@ -477,12 +482,43 @@ def test_variables():
         "UPPERCASE_VAR": 2,
     }
     config = Config(
-        variables=variables, gateways={"local": GatewayConfig(variables=gateway_variables)}
+        variables=variables,
+        gateways={"local": GatewayConfig(variables=gateway_variables)},
     )
     assert config.variables == variables
     assert config.get_gateway("local").variables == {"uppercase_var": 2}
 
     with pytest.raises(
-        ConfigError, match="Unsupported variable value type: <class 'sqlglot.expressions.Column'>"
+        ConfigError,
+        match="Unsupported variable value type: <class 'sqlglot.expressions.Column'>",
     ):
         Config(variables={"invalid_var": exp.column("sqlglot_expr")})
+
+
+def test_load_duckdb_attach_config(tmp_path_factory):
+    config_path = tmp_path_factory.mktemp("yaml_config") / "config_duckdb_attach.yaml"
+    with open(config_path, "w", encoding="utf-8") as fd:
+        fd.write(
+            """
+gateways:
+    another_gateway:
+        connection:
+            type: duckdb
+            catalogs:
+              memory: ':memory:'
+              sqlite:
+                type: 'sqlite'
+                path: 'test.db'
+              postgres:
+                type: 'postgres'
+                path: 'dbname=postgres user=postgres host=127.0.0.1'
+                read_only: true
+model_defaults:
+    dialect: ''
+        """
+        )
+
+    assert load_config_from_paths(
+        Config,
+        project_paths=[config_path],
+    )
