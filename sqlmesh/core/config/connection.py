@@ -165,30 +165,20 @@ class BaseDuckDBConnectionConfig(ConnectionConfig):
                 except Exception as e:
                     raise ConfigError(f"Failed to set connector config {field} to {setting}: {e}")
 
-            for i, (alias, path) in enumerate((getattr(self, "catalogs", None) or {}).items()):
+            for i, (alias, path_options) in enumerate(
+                (getattr(self, "catalogs", None) or {}).items()
+            ):
                 # we parse_identifier and generate to ensure that `alias` has exactly one set of quotes
                 # regardless of whether it comes in quoted or not
                 alias = exp.parse_identifier(alias, dialect="duckdb").sql(
                     identify=True, dialect="duckdb"
                 )
                 try:
-                    attach_path = path
-                    options = []
-
-                    if isinstance(path, AttachOptions):
-                        attach_path = path.path
-                        # 'duckdb' is actually not a supported type, but we'd like to allow it for
-                        # fully qualified attach options or integration testing, similar to duckdb-dbt
-                        if path.type != "duckdb":
-                            options.append(path.type)
-
-                        if path.read_only:
-                            options.append("READ_ONLY")
-
-                    query = f"ATTACH '{attach_path}' AS {alias}"
-                    if options:
-                        query += f" ({', '.join(options)})"
-
+                    query = (
+                        path_options.to_sql(alias)
+                        if isinstance(path_options, DuckDBAttachOptions)
+                        else f"ATTACH '{path_options}' AS {alias}"
+                    )
                     cursor.execute(query)
                 except BinderException as e:
                     # If a user tries to create a catalog pointing at `:memory:` and with the name `memory`
@@ -196,7 +186,7 @@ class BaseDuckDBConnectionConfig(ConnectionConfig):
                     # set it as the default catalog.
                     if not (
                         'database with name "memory" already exists' in str(e)
-                        and path == ":memory:"
+                        and path_options == ":memory:"
                     ):
                         raise e
                 if i == 0 and not getattr(self, "database", None):
@@ -231,10 +221,21 @@ class MotherDuckConnectionConfig(BaseDuckDBConnectionConfig):
         return {"database": connection_str}
 
 
-class AttachOptions(BaseConfig):
+class DuckDBAttachOptions(BaseConfig):
     type: str
     path: str
     read_only: bool = False
+
+    def to_sql(self, alias: str) -> str:
+        options = []
+        # 'duckdb' is actually not a supported type, but we'd like to allow it for
+        # fully qualified attach options or integration testing, similar to duckdb-dbt
+        if self.type != "duckdb":
+            options.append(f"TYPE {self.type.upper()}")
+        if self.read_only:
+            options.append("READ_ONLY")
+        options_sql = f" ({', '.join(options)})" if options else ""
+        return f"ATTACH '{self.path}' AS {alias}{options_sql}"
 
 
 class DuckDBConnectionConfig(BaseDuckDBConnectionConfig):
@@ -246,7 +247,7 @@ class DuckDBConnectionConfig(BaseDuckDBConnectionConfig):
     """
 
     database: t.Optional[str] = None
-    catalogs: t.Optional[t.Dict[str, t.Union[str, AttachOptions]]] = None
+    catalogs: t.Optional[t.Dict[str, t.Union[str, DuckDBAttachOptions]]] = None
     # catalogs: t.Optional[t.Dict[str, str]] = None
 
     type_: Literal["duckdb"] = Field(alias="type", default="duckdb")

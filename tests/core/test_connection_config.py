@@ -7,6 +7,7 @@ from _pytest.fixtures import FixtureRequest
 from sqlmesh.core.config.connection import (
     BigQueryConnectionConfig,
     ConnectionConfig,
+    DuckDBAttachOptions,
     DuckDBConnectionConfig,
     GCPPostgresConnectionConfig,
     MySQLConnectionConfig,
@@ -523,6 +524,41 @@ def test_duckdb_shared(make_config, caplog, kwargs1, kwargs2, shared_adapter):
         assert id(adapter1) != id(adapter2)
         assert "Creating new DuckDB adapter" in caplog.messages[0]
         assert "Creating new DuckDB adapter" in caplog.messages[1]
+
+
+def test_duckdb_attach_catalog(make_config):
+    config = make_config(
+        type="duckdb",
+        catalogs={
+            "test1": "test1.duckdb",
+            "test2": DuckDBAttachOptions(
+                type="duckdb",
+                path="test2.duckdb",
+            ),
+        },
+    )
+    assert isinstance(config, DuckDBConnectionConfig)
+    assert config.get_catalog() == "test1"
+
+    assert config.catalogs.get("test2").read_only is False
+    assert config.catalogs.get("test2").path == "test2.duckdb"
+    assert config.is_recommended_for_state_sync is True
+
+
+def test_duckdb_attach_options():
+
+    options = DuckDBAttachOptions(
+        type="postgres", path="dbname=postgres user=postgres host=127.0.0.1", read_only=True
+    )
+
+    assert (
+        options.to_sql(alias="db")
+        == "ATTACH 'dbname=postgres user=postgres host=127.0.0.1' AS db (TYPE POSTGRES, READ_ONLY)"
+    )
+
+    options = DuckDBAttachOptions(type="duckdb", path="test.db", read_only=False)
+
+    assert options.to_sql(alias="db") == "ATTACH 'test.db' AS db"
 
 
 def test_bigquery(make_config):
