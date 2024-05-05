@@ -172,17 +172,17 @@ class BaseDuckDBConnectionConfig(ConnectionConfig):
                     identify=True, dialect="duckdb"
                 )
                 try:
-                    attach_patch = path
+                    attach_path = path
                     options = []
 
                     if isinstance(path, AttachOptions):
-                        attach_patch = path.path
+                        attach_path = path.path
                         options.append(path.type)
 
                         if path.read_only:
                             options.append("READ_ONLY")
 
-                    query = f"ATTACH '{attach_patch}' AS {alias}"
+                    query = f"ATTACH '{attach_path}' AS {alias}"
                     if options:
                         query += f" ({', '.join(options)})"
 
