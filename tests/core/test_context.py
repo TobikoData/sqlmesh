@@ -613,14 +613,10 @@ def test_unrestorable_snapshot(sushi_context: Context) -> None:
     )
 
     sushi_context.upsert_model(model_v2)
-    sushi_context.plan(
-        auto_apply=True, no_prompts=True, forward_only=True, allow_destructive_models=["*"]
-    )
+    sushi_context.plan(auto_apply=True, no_prompts=True, forward_only=True)
 
     sushi_context.upsert_model(model_v1)
-    sushi_context.plan(
-        auto_apply=True, no_prompts=True, forward_only=True, allow_destructive_models=["*"]
-    )
+    sushi_context.plan(auto_apply=True, no_prompts=True, forward_only=True)
     model_v1_new_snapshot = sushi_context.get_snapshot(
         "memory.sushi.test_unrestorable", raise_if_missing=True
     )

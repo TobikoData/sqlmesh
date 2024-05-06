@@ -295,22 +295,9 @@ class SqlMeshLoader(Loader):
                                 f"Failed to parse a model definition at '{path}': {ex}."
                             )
 
-                    model_defaults = config.model_defaults.dict()
-                    defaults = {
-                        k: v
-                        for k, v in model_defaults.items()
-                        if not k in config.model_defaults._kind_specific_fields
-                    }
-                    kind_specific_defaults = {
-                        k: v
-                        for k, v in model_defaults.items()
-                        if k in config.model_defaults._kind_specific_fields
-                    }
-
                     return load_sql_based_model(
                         expressions,
-                        defaults=defaults,
-                        kind_specific_defaults=kind_specific_defaults,
+                        defaults=config.model_defaults.dict(),
                         macros=macros,
                         jinja_macros=jinja_macros,
                         path=Path(path).absolute(),
@@ -342,16 +329,6 @@ class SqlMeshLoader(Loader):
         for context_path, config in self._context.configs.items():
             variables = self._variables(config)
             model_registry._dialect = config.model_defaults.dialect
-            defaults = {
-                k: v
-                for k, v in config.model_defaults.dict().items()
-                if not k in config.model_defaults._kind_specific_fields
-            }
-            kind_specific_defaults = {
-                k: v
-                for k, v in config.model_defaults.dict().items()
-                if k in config.model_defaults._kind_specific_fields
-            }
             try:
                 for path in self._glob_paths(
                     context_path / c.MODELS, config=config, extension=".py"
@@ -367,8 +344,7 @@ class SqlMeshLoader(Loader):
                         model = registry[name].model(
                             path=path,
                             module_path=context_path,
-                            defaults=defaults,
-                            kind_specific_defaults=kind_specific_defaults,
+                            defaults=config.model_defaults.dict(),
                             dialect=config.model_defaults.dialect,
                             time_column_format=config.time_column_format,
                             physical_schema_override=config.physical_schema_override,

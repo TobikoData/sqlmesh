@@ -1,5 +1,7 @@
+import logging
 import typing as t
 from datetime import timedelta
+from unittest.mock import patch
 
 import pytest
 from freezegun import freeze_time
@@ -16,6 +18,7 @@ from sqlmesh.core.model import (
     SeedModel,
     SqlModel,
 )
+from sqlmesh.core.model.kind import OnSchemaChange
 from sqlmesh.core.model.seed import Seed
 from sqlmesh.core.plan import Plan, PlanBuilder, SnapshotIntervals
 from sqlmesh.core.snapshot import (
@@ -72,7 +75,7 @@ def test_forward_only_plan_sets_version(make_snapshot, mocker: MockerFixture):
         previous_finalized_snapshots=None,
     )
 
-    plan_builder = PlanBuilder(context_diff, forward_only=True, allow_destructive_models=['"b"'])
+    plan_builder = PlanBuilder(context_diff, forward_only=True)
 
     plan_builder.build()
     assert snapshot_b.version == "test_version"
@@ -86,6 +89,7 @@ def test_forward_only_dev(make_snapshot, mocker: MockerFixture):
     snapshot_a = make_snapshot(
         SqlModel(
             name="a",
+            dialect="duckdb",
             query=parse_one("select 1, ds"),
             kind=IncrementalByTimeRangeKind(time_column="ds"),
         )
@@ -119,9 +123,7 @@ def test_forward_only_dev(make_snapshot, mocker: MockerFixture):
     mocker.patch("sqlmesh.core.plan.builder.now").return_value = expected_end
     mocker.patch("sqlmesh.core.plan.definition.now").return_value = expected_end
 
-    plan = PlanBuilder(
-        context_diff, forward_only=True, allow_destructive_models=['"a"'], is_dev=True
-    ).build()
+    plan = PlanBuilder(context_diff, forward_only=True, is_dev=True).build()
 
     assert plan.restatements == {
         snapshot_a.snapshot_id: (to_timestamp(expected_start), expected_interval_end)
@@ -213,7 +215,7 @@ def test_forward_only_allow_destructive_models(make_snapshot):
             dialect="duckdb",
             query=parse_one("select 1 as one, '2022-01-01' ds"),
             kind=IncrementalByTimeRangeKind(
-                time_column="ds", forward_only=True, additive_only=True
+                time_column="ds", forward_only=True, on_schema_change=OnSchemaChange.ERROR
             ),
         )
     )
@@ -224,7 +226,7 @@ def test_forward_only_allow_destructive_models(make_snapshot):
             dialect="duckdb",
             query=parse_one("select '2022-01-01' ds"),
             kind=IncrementalByTimeRangeKind(
-                time_column="ds", forward_only=True, additive_only=True
+                time_column="ds", forward_only=True, on_schema_change=OnSchemaChange.ERROR
             ),
         )
     )
@@ -254,7 +256,7 @@ def test_forward_only_allow_destructive_models(make_snapshot):
         previous_finalized_snapshots=None,
     )
 
-    with pytest.raises(PlanError, match="is `additive_only`, but"):
+    with pytest.raises(PlanError, match="Plan results in a destructive change to forward-only"):
         PlanBuilder(context_diff, forward_only=False).build()
 
     assert PlanBuilder(context_diff, forward_only=False, allow_destructive_models=['"a"']).build()
@@ -293,8 +295,13 @@ def test_forward_only_allow_destructive_models(make_snapshot):
         previous_finalized_snapshots=None,
     )
 
-    with pytest.raises(PlanError, match="is `additive_only`, but"):
+    logger = logging.getLogger("sqlmesh.core.plan.builder")
+    with patch.object(logger, "warning") as mock_logger:
         PlanBuilder(context_diff, forward_only=True).build()
+        assert (
+            mock_logger.call_args[0][0]
+            == """PLAN TIME CHECK: Plan results in a destructive change to forward-only model '"b"'s schema."""
+        )
 
     assert PlanBuilder(context_diff, forward_only=True, allow_destructive_models=['"b"']).build()
 
@@ -1013,7 +1020,8 @@ def test_forward_only_models(make_snapshot, mocker: MockerFixture):
     snapshot = make_snapshot(
         SqlModel(
             name="a",
-            query=parse_one("select 1, ds"), dialect="duckdb",
+            query=parse_one("select 1, ds"),
+            dialect="duckdb",
             kind=IncrementalByTimeRangeKind(time_column="ds", forward_only=True),
         )
     )
@@ -1022,9 +1030,7 @@ def test_forward_only_models(make_snapshot, mocker: MockerFixture):
         SqlModel(
             name="a",
             query=parse_one("select 3, ds"),
-            kind=IncrementalByTimeRangeKind(
-                time_column="ds", forward_only=True, additive_only=False
-            ),
+            kind=IncrementalByTimeRangeKind(time_column="ds", forward_only=True),
             dialect="duckdb",
         )
     )
@@ -1098,6 +1104,7 @@ def test_indirectly_modified_forward_only_model(make_snapshot, mocker: MockerFix
 
     snapshot_b = make_snapshot(
         SqlModel(
+            dialect="duckdb",
             name="b",
             query=parse_one("select a, ds from a"),
             kind=IncrementalByTimeRangeKind(time_column="ds", forward_only=True),

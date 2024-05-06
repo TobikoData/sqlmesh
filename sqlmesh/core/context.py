@@ -1017,11 +1017,11 @@ class GenericContext(BaseContext, t.Generic[C]):
         model_selector = self._new_selector()
 
         if allow_destructive_models:
-            allow_destructive_models = model_selector.expand_model_selections(
+            expanded_destructive_models = model_selector.expand_model_selections(
                 allow_destructive_models
             )
         else:
-            allow_destructive_models = None
+            expanded_destructive_models = None
 
         if backfill_models:
             backfill_models = model_selector.expand_model_selections(backfill_models)
@@ -1100,7 +1100,7 @@ class GenericContext(BaseContext, t.Generic[C]):
             forward_only=(
                 forward_only if forward_only is not None else self.config.plan.forward_only
             ),
-            allow_destructive_models=allow_destructive_models,
+            allow_destructive_models=expanded_destructive_models,
             environment_ttl=environment_ttl,
             environment_suffix_target=self.config.environment_suffix_target,
             environment_catalog_mapping=self.config.environment_catalog_mapping,
