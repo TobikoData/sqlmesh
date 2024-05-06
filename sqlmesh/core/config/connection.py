@@ -248,7 +248,6 @@ class DuckDBConnectionConfig(BaseDuckDBConnectionConfig):
 
     database: t.Optional[str] = None
     catalogs: t.Optional[t.Dict[str, t.Union[str, DuckDBAttachOptions]]] = None
-    # catalogs: t.Optional[t.Dict[str, str]] = None
 
     type_: Literal["duckdb"] = Field(alias="type", default="duckdb")
 
@@ -1284,9 +1283,7 @@ CONNECTION_CONFIG_TO_TYPE = {
     # Map all subclasses of ConnectionConfig to the value of their `type_` field.
     tpe.all_field_infos()["type_"].default: tpe
     for tpe in subclasses(
-        __name__,
-        ConnectionConfig,
-        exclude=(ConnectionConfig, BaseDuckDBConnectionConfig),
+        __name__, ConnectionConfig, exclude=(ConnectionConfig, BaseDuckDBConnectionConfig)
     )
 }
 

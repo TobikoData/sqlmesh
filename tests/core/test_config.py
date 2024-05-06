@@ -204,14 +204,12 @@ config = Config(default_connection=DuckDBConnectionConfig())
     )
 
     with pytest.raises(
-        ConfigError,
-        match=r"^Default model SQL dialect is a required configuration parameter.*",
+        ConfigError, match=r"^Default model SQL dialect is a required configuration parameter.*"
     ):
         load_config_from_paths(Config, project_paths=[tmp_path / "config.yaml"])
 
     with pytest.raises(
-        ConfigError,
-        match=r"^Default model SQL dialect is a required configuration parameter.*",
+        ConfigError, match=r"^Default model SQL dialect is a required configuration parameter.*"
     ):
         load_config_from_paths(Config, project_paths=[tmp_path / "config.py"])
 
@@ -342,10 +340,7 @@ model_defaults:
     [
         (
             "'^dev$': dev_catalog\n    '^other$': other_catalog",
-            {
-                re.compile("^dev$"): "dev_catalog",
-                re.compile("^other$"): "other_catalog",
-            },
+            {re.compile("^dev$"): "dev_catalog", re.compile("^other$"): "other_catalog"},
             "duckdb",
             "",
         ),
@@ -483,15 +478,13 @@ def test_variables():
         "UPPERCASE_VAR": 2,
     }
     config = Config(
-        variables=variables,
-        gateways={"local": GatewayConfig(variables=gateway_variables)},
+        variables=variables, gateways={"local": GatewayConfig(variables=gateway_variables)}
     )
     assert config.variables == variables
     assert config.get_gateway("local").variables == {"uppercase_var": 2}
 
     with pytest.raises(
-        ConfigError,
-        match="Unsupported variable value type: <class 'sqlglot.expressions.Column'>",
+        ConfigError, match="Unsupported variable value type: <class 'sqlglot.expressions.Column'>"
     ):
         Config(variables={"invalid_var": exp.column("sqlglot_expr")})
 
