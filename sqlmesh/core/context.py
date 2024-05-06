@@ -324,11 +324,8 @@ class GenericContext(BaseContext, t.Generic[C]):
         self.concurrent_tasks = concurrent_tasks or self._connection_config.concurrent_tasks
         self._engine_adapter = engine_adapter or self._connection_config.create_engine_adapter()
 
-        test_connection_config = self.config.get_test_connection(
+        self._test_connection_config = self.config.get_test_connection(
             self.gateway, self.default_catalog, default_catalog_dialect=self.engine_adapter.DIALECT
-        )
-        self._test_engine_adapter = test_connection_config.create_engine_adapter(
-            register_comments_override=False
         )
 
         self._snapshot_evaluator: t.Optional[SnapshotEvaluator] = None
@@ -1343,19 +1340,25 @@ class GenericContext(BaseContext, t.Generic[C]):
             for dep, query in input_queries.items()
         }
 
-        generate_test(
-            model=self.get_model(model, raise_if_missing=True),
-            input_queries=input_queries,
-            models=self._models,
-            engine_adapter=self._engine_adapter,
-            test_engine_adapter=self._test_engine_adapter,
-            project_path=self.path,
-            overwrite=overwrite,
-            variables=variables,
-            path=path,
-            name=name,
-            include_ctes=include_ctes,
-        )
+        try:
+            test_adapter = self._test_connection_config.create_engine_adapter(
+                register_comments_override=False
+            )
+            generate_test(
+                model=self.get_model(model, raise_if_missing=True),
+                input_queries=input_queries,
+                models=self._models,
+                engine_adapter=self._engine_adapter,
+                test_engine_adapter=test_adapter,
+                project_path=self.path,
+                overwrite=overwrite,
+                variables=variables,
+                path=path,
+                name=name,
+                include_ctes=include_ctes,
+            )
+        finally:
+            test_adapter.close()
 
     def test(
         self,
@@ -1372,42 +1375,44 @@ class GenericContext(BaseContext, t.Generic[C]):
         else:
             verbosity = 1
 
-        try:
-            if tests:
-                result = run_model_tests(
-                    tests=tests,
-                    models=self._models,
-                    engine_adapter=self._test_engine_adapter,
-                    dialect=self.default_dialect,
-                    verbosity=verbosity,
-                    patterns=match_patterns,
-                    preserve_fixtures=preserve_fixtures,
-                    default_catalog=self.default_catalog,
-                )
-            else:
-                test_meta = []
+        if tests:
+            result = run_model_tests(
+                tests=tests,
+                models=self._models,
+                config=self.config,
+                gateway=self.gateway,
+                dialect=self.default_dialect,
+                verbosity=verbosity,
+                patterns=match_patterns,
+                preserve_fixtures=preserve_fixtures,
+                stream=stream,
+                default_catalog=self.default_catalog,
+                default_catalog_dialect=self.engine_adapter.DIALECT,
+            )
+        else:
+            test_meta = []
 
-                for path, config in self.configs.items():
-                    test_meta.extend(
-                        get_all_model_tests(
-                            path / c.TESTS,
-                            patterns=match_patterns,
-                            ignore_patterns=config.ignore_patterns,
-                        )
+            for path, config in self.configs.items():
+                test_meta.extend(
+                    get_all_model_tests(
+                        path / c.TESTS,
+                        patterns=match_patterns,
+                        ignore_patterns=config.ignore_patterns,
                     )
-
-                result = run_tests(
-                    test_meta,
-                    models=self._models,
-                    engine_adapter=self._test_engine_adapter,
-                    dialect=self.default_dialect,
-                    verbosity=verbosity,
-                    preserve_fixtures=preserve_fixtures,
-                    stream=stream,
-                    default_catalog=self.default_catalog,
                 )
-        finally:
-            self._test_engine_adapter.close()
+
+            result = run_tests(
+                model_test_metadata=test_meta,
+                models=self._models,
+                config=self.config,
+                gateway=self.gateway,
+                dialect=self.default_dialect,
+                verbosity=verbosity,
+                preserve_fixtures=preserve_fixtures,
+                stream=stream,
+                default_catalog=self.default_catalog,
+                default_catalog_dialect=self.engine_adapter.DIALECT,
+            )
 
         return result
 
@@ -1558,8 +1563,6 @@ class GenericContext(BaseContext, t.Generic[C]):
         if state_connection:
             self._try_connection("state backend", state_connection.create_engine_adapter())
 
-        self._try_connection("test", self._test_engine_adapter)
-
     def close(self) -> None:
         """Releases all resources allocated by this context."""
         self.snapshot_evaluator.close()
@@ -1671,11 +1674,11 @@ class GenericContext(BaseContext, t.Generic[C]):
     def _run_plan_tests(
         self, skip_tests: bool = False
     ) -> t.Tuple[t.Optional[unittest.result.TestResult], t.Optional[str]]:
-        if self._test_engine_adapter and not skip_tests:
+        if not skip_tests:
             result, test_output = self._run_tests()
             if result.testsRun > 0:
                 self.console.log_test_results(
-                    result, test_output, self._test_engine_adapter.dialect
+                    result, test_output, self._test_connection_config._engine_adapter.DIALECT
                 )
             if not result.wasSuccessful():
                 raise PlanError(

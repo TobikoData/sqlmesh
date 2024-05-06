@@ -194,7 +194,7 @@ Usage: sqlmesh info [OPTIONS]
   Print information about a SQLMesh project.
 
   Includes counts of project models and macros and connection tests for the
-  data warehouse and test runner.
+  data warehouse.
 
 Options:
   --help  Show this message and exit.

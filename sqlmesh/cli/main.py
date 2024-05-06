@@ -580,7 +580,7 @@ def info(obj: Context) -> None:
     """
     Print information about a SQLMesh project.
 
-    Includes counts of project models and macros and connection tests for the data warehouse and test runner.
+    Includes counts of project models and macros and connection tests for the data warehouse.
     """
     obj.print_info()
 
