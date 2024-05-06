@@ -13,6 +13,7 @@ from sqlmesh.core.config import (
     GatewayConfig,
     ModelDefaultsConfig,
 )
+from sqlmesh.core.config.connection import DuckDBAttachOptions
 from sqlmesh.core.config.feature_flag import DbtFeatureFlag, FeatureFlag
 from sqlmesh.core.config.loader import (
     load_config_from_env,
@@ -486,3 +487,48 @@ def test_variables():
         ConfigError, match="Unsupported variable value type: <class 'sqlglot.expressions.Column'>"
     ):
         Config(variables={"invalid_var": exp.column("sqlglot_expr")})
+
+
+def test_load_duckdb_attach_config(tmp_path):
+    config_path = tmp_path / "config_duckdb_attach.yaml"
+    with open(config_path, "w", encoding="utf-8") as fd:
+        fd.write(
+            """
+gateways:
+    another_gateway:
+        connection:
+            type: duckdb
+            catalogs:
+              memory: ':memory:'
+              sqlite:
+                type: 'sqlite'
+                path: 'test.db'
+              postgres:
+                type: 'postgres'
+                path: 'dbname=postgres user=postgres host=127.0.0.1'
+                read_only: true
+model_defaults:
+    dialect: ''
+        """
+        )
+
+    config = load_config_from_paths(
+        Config,
+        project_paths=[config_path],
+    )
+
+    assert config.gateways["another_gateway"].connection.catalogs.get("memory") == ":memory:"
+
+    attach_config_1 = config.gateways["another_gateway"].connection.catalogs.get("sqlite")
+
+    assert isinstance(attach_config_1, DuckDBAttachOptions)
+    assert attach_config_1.type == "sqlite"
+    assert attach_config_1.path == "test.db"
+    assert attach_config_1.read_only is False
+
+    attach_config_2 = config.gateways["another_gateway"].connection.catalogs.get("postgres")
+
+    assert isinstance(attach_config_2, DuckDBAttachOptions)
+    assert attach_config_2.type == "postgres"
+    assert attach_config_2.path == "dbname=postgres user=postgres host=127.0.0.1"
+    assert attach_config_2.read_only is True
