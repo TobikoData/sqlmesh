@@ -1600,6 +1600,20 @@ def test_deployability_index_uncategorized_forward_only_model(make_snapshot):
     assert not deplyability_index.is_representative(snapshot_b)
 
 
+def test_deployability_index_missing_parent(make_snapshot):
+    snapshot_a = make_snapshot(SqlModel(name="a", query=parse_one("SELECT 1")))
+    snapshot_a.categorize_as(SnapshotChangeCategory.BREAKING)
+
+    snapshot_b = make_snapshot(SqlModel(name="b", query=parse_one("SELECT 1")))
+    snapshot_b.categorize_as(SnapshotChangeCategory.FORWARD_ONLY)
+    snapshot_b.parents = (snapshot_a.snapshot_id,)
+
+    deplyability_index = DeployabilityIndex.create({snapshot_b.snapshot_id: snapshot_b})
+
+    assert not deplyability_index.is_deployable(snapshot_b)
+    assert not deplyability_index.is_deployable(snapshot_a)
+
+
 @pytest.mark.parametrize(
     "model_name, environment_naming_info, default_catalog, expected",
     (
