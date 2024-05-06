@@ -24,7 +24,7 @@ from sqlmesh.core import constants as c
 from sqlmesh.core import dialect as d
 from sqlmesh.core.macros import MacroRegistry, MacroStrTemplate, macro
 from sqlmesh.core.model.common import expression_validator
-from sqlmesh.core.model.kind import ModelKindName, SeedKind
+from sqlmesh.core.model.kind import ModelKindName, OnSchemaChange, SeedKind
 from sqlmesh.core.model.meta import ModelMeta
 from sqlmesh.core.model.seed import CsvSeedReader, Seed, create_seed
 from sqlmesh.core.renderer import ExpressionRenderer, QueryRenderer
@@ -620,8 +620,8 @@ class _Model(ModelMeta, frozen=True):
         return getattr(self.kind, "forward_only", False)
 
     @property
-    def additive_only(self) -> bool:
-        return getattr(self.kind, "additive_only")
+    def on_schema_change(self) -> OnSchemaChange:
+        return getattr(self.kind, "on_schema_change", OnSchemaChange.IGNORE)
 
     @property
     def disable_restatement(self) -> bool:
@@ -1408,7 +1408,6 @@ def load_sql_based_model(
     expressions: t.List[exp.Expression],
     *,
     defaults: t.Optional[t.Dict[str, t.Any]] = None,
-    kind_specific_defaults: t.Optional[t.Dict[str, t.Any]] = None,
     path: Path = Path(),
     module_path: Path = Path(),
     time_column_format: str = c.DEFAULT_TIME_COLUMN_FORMAT,
@@ -1426,7 +1425,6 @@ def load_sql_based_model(
     Args:
         expressions: Model, *Statements, Query.
         defaults: Definition default values.
-        kind_specific_defaults: Default values only applicable to some model kinds.
         path: An optional path to the model definition file.
         module_path: The python module path to serialize macros for.
         time_column_format: The default time column format to use if no model time column is configured.
@@ -1551,7 +1549,6 @@ def load_sql_based_model(
             name,
             query_or_seed_insert,
             time_column_format=time_column_format,
-            kind_specific_defaults=kind_specific_defaults,
             **common_kwargs,
         )
     else:
@@ -1579,7 +1576,6 @@ def create_sql_model(
     pre_statements: t.Optional[t.List[exp.Expression]] = None,
     post_statements: t.Optional[t.List[exp.Expression]] = None,
     defaults: t.Optional[t.Dict[str, t.Any]] = None,
-    kind_specific_defaults: t.Optional[t.Dict[str, t.Any]] = None,
     path: Path = Path(),
     module_path: Path = Path(),
     time_column_format: str = c.DEFAULT_TIME_COLUMN_FORMAT,
@@ -1602,7 +1598,6 @@ def create_sql_model(
         pre_statements: The list of SQL statements that precede the model's query.
         post_statements: The list of SQL statements that follow after the model's query.
         defaults: Definition default values.
-        kind_specific_defaults: Default values only applicable to some model kinds.
         path: An optional path to the model definition file.
         module_path: The python module path to serialize macros for.
         time_column_format: The default time column format to use if no model time column is configured.
@@ -1644,7 +1639,6 @@ def create_sql_model(
         SqlModel,
         name,
         defaults=defaults,
-        kind_specific_defaults=kind_specific_defaults,
         path=path,
         time_column_format=time_column_format,
         python_env=python_env,
@@ -1745,7 +1739,6 @@ def create_python_model(
     python_env: t.Dict[str, Executable],
     *,
     defaults: t.Optional[t.Dict[str, t.Any]] = None,
-    kind_specific_defaults: t.Optional[t.Dict[str, t.Any]] = None,
     path: Path = Path(),
     time_column_format: str = c.DEFAULT_TIME_COLUMN_FORMAT,
     depends_on: t.Optional[t.Set[str]] = None,
@@ -1761,7 +1754,6 @@ def create_python_model(
         entrypoint: The name of a Python function which contains the data fetching / transformation logic.
         python_env: The Python environment of all objects referenced by the model implementation.
         defaults: Definition default values.
-        kind_specific_defaults: t.Optional[t.Dict[str, t.Any]] = None,
         path: An optional path to the model definition file.
         time_column_format: The default time column format to use if no model time column is configured.
         depends_on: The custom set of model's upstream dependencies.
@@ -1782,7 +1774,6 @@ def create_python_model(
         PythonModel,
         name,
         defaults=defaults,
-        kind_specific_defaults=kind_specific_defaults,
         path=path,
         time_column_format=time_column_format,
         depends_on=depends_on,
@@ -1823,7 +1814,6 @@ def _create_model(
     name: TableName,
     *,
     defaults: t.Optional[t.Dict[str, t.Any]] = None,
-    kind_specific_defaults: t.Optional[t.Dict[str, t.Any]] = None,
     path: Path = Path(),
     time_column_format: str = c.DEFAULT_TIME_COLUMN_FORMAT,
     jinja_macros: t.Optional[JinjaMacroRegistry] = None,
@@ -1842,11 +1832,18 @@ def _create_model(
     dialect = dialect or ""
     physical_schema_override = physical_schema_override or {}
 
+    # Assumption: any specified default that is not a ModelMeta field is kind-specific.
+    # _model_kind_validator ensures that kind-specific defaults passed to kind constructor
+    # are valid for the kind.
+    meta_fields = ModelMeta.all_fields()
+    model_defaults = {k: v for k, v in (defaults or {}).items() if k in meta_fields}
+    kind_specific_defaults = {k: v for k, v in (defaults or {}).items() if not k in meta_fields}
+
     try:
         model = klass(
             name=name,
             **{
-                **(defaults or {}),
+                **model_defaults,
                 "jinja_macros": jinja_macros or JinjaMacroRegistry(),
                 "dialect": dialect,
                 "depends_on": depends_on,

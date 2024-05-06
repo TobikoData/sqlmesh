@@ -152,9 +152,28 @@ class ModelKindName(str, ModelKindMixin, Enum):
         return str(self)
 
 
+class OnSchemaChange(str, Enum):
+    """What should happen when a forward-only model change requires a destructive schema change."""
+
+    ERROR = "ERROR"
+    WARN = "WARN"
+    IGNORE = "IGNORE"
+
+    @property
+    def is_error(self) -> bool:
+        return self == OnSchemaChange.ERROR
+
+    @property
+    def is_warn(self) -> bool:
+        return self == OnSchemaChange.WARN
+
+    @property
+    def is_ignore(self) -> bool:
+        return self == OnSchemaChange.IGNORE
+
+
 class _ModelKind(PydanticModel, ModelKindMixin):
     name: ModelKindName
-    _kind_specific_defaults: t.ClassVar[t.Dict[str, t.Any]] = {}
 
     @property
     def model_kind_name(self) -> t.Optional[ModelKindName]:
@@ -271,11 +290,8 @@ class _Incremental(_ModelKind):
     batch_concurrency: t.Optional[SQLGlotPositiveInt] = None
     lookback: t.Optional[SQLGlotPositiveInt] = None
     forward_only: SQLGlotBool = False
-    additive_only: t.Optional[SQLGlotBool] = None
+    on_schema_change: OnSchemaChange = OnSchemaChange.WARN
     disable_restatement: SQLGlotBool = False
-    _kind_specific_defaults: t.ClassVar[t.Dict[str, t.Any]] = {
-        "additive_only": True,
-    }
 
     _dialect_validator = kind_dialect_validator
 
@@ -293,7 +309,7 @@ class _Incremental(_ModelKind):
             *super().metadata_hash_values,
             str(self.batch_size) if self.batch_size is not None else None,
             str(self.forward_only),
-            str(self.additive_only),
+            str(self.on_schema_change),
             str(self.disable_restatement),
         ]
 
@@ -363,11 +379,8 @@ class IncrementalUnmanagedKind(_ModelKind):
     name: Literal[ModelKindName.INCREMENTAL_UNMANAGED] = ModelKindName.INCREMENTAL_UNMANAGED
     insert_overwrite: SQLGlotBool = False
     forward_only: SQLGlotBool = True
-    additive_only: t.Optional[SQLGlotBool] = None
+    on_schema_change: OnSchemaChange = OnSchemaChange.WARN
     disable_restatement: Literal[True] = True
-    _kind_specific_defaults: t.ClassVar[t.Dict[str, t.Any]] = {
-        "additive_only": True,
-    }
 
     @property
     def data_hash_values(self) -> t.List[t.Optional[str]]:
@@ -375,7 +388,7 @@ class IncrementalUnmanagedKind(_ModelKind):
 
     @property
     def metadata_hash_values(self) -> t.List[t.Optional[str]]:
-        return [*super().metadata_hash_values, str(self.forward_only), str(self.additive_only)]
+        return [*super().metadata_hash_values, str(self.forward_only), str(self.on_schema_change)]
 
 
 class ViewKind(_ModelKind):
@@ -444,13 +457,10 @@ class _SCDType2Kind(_ModelKind):
     time_data_type: exp.DataType = Field(exp.DataType.build("TIMESTAMP"), validate_default=True)
 
     forward_only: SQLGlotBool = True
-    additive_only: t.Optional[SQLGlotBool] = None
+    on_schema_change: OnSchemaChange = OnSchemaChange.WARN
     disable_restatement: SQLGlotBool = True
 
     _dialect_validator = kind_dialect_validator
-    _kind_specific_defaults: t.ClassVar[t.Dict[str, t.Any]] = {
-        "additive_only": True,
-    }
 
     # Remove once Pydantic 1 is deprecated
     _always_validate_column = field_validator(
@@ -494,7 +504,7 @@ class _SCDType2Kind(_ModelKind):
         return [
             *super().metadata_hash_values,
             str(self.forward_only),
-            str(self.additive_only),
+            str(self.on_schema_change),
             str(self.disable_restatement),
         ]
 
@@ -584,7 +594,6 @@ def model_kind_type_from_name(name: t.Optional[str]) -> t.Type[ModelKind]:
 @field_validator_v1_args
 def _model_kind_validator(cls: t.Type, v: t.Any, values: t.Dict[str, t.Any]) -> ModelKind:
     dialect = get_dialect(values)
-    user_kind_specific_defaults = values.get("kind_specific_defaults") or {}
 
     if isinstance(v, _ModelKind):
         return t.cast(ModelKind, v)
@@ -596,6 +605,7 @@ def _model_kind_validator(cls: t.Type, v: t.Any, values: t.Dict[str, t.Any]) -> 
             else v
         )
         name = v.this if isinstance(v, d.ModelKind) else props.get("name")
+
         # We want to ensure whatever name is provided to construct the class is the same name that will be
         # found inside the class itself in order to avoid a change during plan/apply for legacy aliases.
         # Ex: Pass in `SCD_TYPE_2` then we want to ensure we get `SCD_TYPE_2` as the kind name
@@ -608,17 +618,20 @@ def _model_kind_validator(cls: t.Type, v: t.Any, values: t.Dict[str, t.Any]) -> 
             props["dialect"] = dialect
 
         user_defaults_to_set = {
-            k: val
-            for k, val in user_kind_specific_defaults.items()
+            k: v
+            for k, v in (values.get("kind_specific_defaults") or {}).items()
             if k in kind_type_fields and not k in props
         }
-        sqlmesh_defaults_to_set = {
-            k: val
-            for k, val in kind_type._kind_specific_defaults.items()
-            if k in kind_type_fields and not k in props and not k in user_defaults_to_set
-        }
         props.update(user_defaults_to_set)
-        props.update(sqlmesh_defaults_to_set)
+
+        # OnSchemaChange: convert string or exp.Identifier to enum
+        on_schema_change = props.get("on_schema_change", None)
+        if on_schema_change and not isinstance(on_schema_change, OnSchemaChange):
+            props["on_schema_change"] = OnSchemaChange(
+                on_schema_change.this.upper()
+                if isinstance(on_schema_change, exp.Identifier)
+                else on_schema_change.upper()
+            )
 
         return kind_type(**props)
 

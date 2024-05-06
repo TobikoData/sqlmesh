@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import logging
 import re
 import sys
 import typing as t
@@ -32,6 +33,8 @@ from sqlmesh.utils import columns_to_types_all_known, random_id
 from sqlmesh.utils.dag import DAG
 from sqlmesh.utils.date import TimeLike, now, to_datetime, yesterday_ds
 from sqlmesh.utils.errors import NoChangesPlanError, PlanError, SQLMeshError
+
+logger = logging.getLogger(__name__)
 
 
 logger = logging.getLogger(__name__)
@@ -138,6 +141,8 @@ class PlanBuilder:
         )
 
         self._latest_plan: t.Optional[Plan] = None
+
+        self._snapshot_change_is_destructive: t.Dict[str, t.Optional[bool]] = {}
 
     @property
     def is_start_and_end_allowed(self) -> bool:
@@ -463,7 +468,11 @@ class PlanBuilder:
                                 snapshot.is_model
                                 and not snapshot.name in self._allow_destructive_models
                             ):
-                                self._validate_additive_only(snapshot)
+                                self._validate_schema_change(
+                                    s_id,
+                                    self._upstream_directly_modified(s_id, directly_modified, dag),
+                                    True,
+                                )
 
                             snapshot.categorize_as(SnapshotChangeCategory.FORWARD_ONLY)
                         else:
@@ -473,13 +482,17 @@ class PlanBuilder:
                             snapshot.is_model
                             and not snapshot.name in self._allow_destructive_models
                         ):
-                            self._validate_additive_only(snapshot)
+                            self._validate_schema_change(
+                                s_id,
+                                self._upstream_directly_modified(s_id, directly_modified, dag),
+                            )
 
                         self._set_choice(
                             snapshot,
                             SnapshotChangeCategory.FORWARD_ONLY,
                             directly_modified,
                             indirectly_modified,
+                            dag,
                         )
                     elif self._auto_categorization_enabled and is_directly_modified:
                         s_id_with_missing_columns: t.Optional[SnapshotId] = None
@@ -500,7 +513,11 @@ class PlanBuilder:
                             )
                             if change_category is not None:
                                 self._set_choice(
-                                    new, change_category, directly_modified, indirectly_modified
+                                    new,
+                                    change_category,
+                                    directly_modified,
+                                    indirectly_modified,
+                                    dag,
                                 )
                         else:
                             mode = self._categorizer_config.dict().get(
@@ -512,6 +529,7 @@ class PlanBuilder:
                                     SnapshotChangeCategory.BREAKING,
                                     directly_modified,
                                     indirectly_modified,
+                                    dag,
                                 )
 
                 if (
@@ -549,6 +567,7 @@ class PlanBuilder:
         choice: SnapshotChangeCategory,
         directly_modified: t.Set[SnapshotId],
         indirectly_modified: SnapshotMapping,
+        dag: t.Optional[DAG[SnapshotId]] = None,
     ) -> None:
         if self._forward_only:
             raise PlanError("Choice setting is not supported by a forward-only plan.")
@@ -573,10 +592,26 @@ class PlanBuilder:
 
             is_forward_only_child = self._is_forward_only_change(child_s_id)
 
-            if is_breaking_choice:
-                if is_forward_only_child:
-                    self._validate_additive_only(snapshot, child_snapshot)
+            if (
+                is_forward_only_child
+                and not child_snapshot.model.on_schema_change.is_ignore
+                and not child_snapshot.name in self._allow_destructive_models
+            ):
+                if not dag:
+                    logger.info(
+                        f"Unable to evaluate model '{child_s_id.name}'s upstream parents for destructive schema changes."
+                    )
 
+                self._validate_schema_change(
+                    child_s_id,
+                    (
+                        self._upstream_directly_modified(child_s_id, directly_modified, dag)
+                        if dag
+                        else []
+                    ),
+                )
+
+            if is_breaking_choice:
                 child_snapshot.categorize_as(
                     SnapshotChangeCategory.FORWARD_ONLY
                     if is_forward_only_child
@@ -696,55 +731,75 @@ class PlanBuilder:
                 "No changes were detected. Make a change or run with --include-unmodified to create a new environment without changes."
             )
 
-    def _validate_additive_only(
-        self, snapshot: Snapshot, indirect_child_snapshot: t.Optional[Snapshot] = None
+    def _upstream_directly_modified(
+        self, s_id: SnapshotId, directly_modified: t.Set[SnapshotId], dag: DAG[SnapshotId]
+    ) -> t.List[SnapshotId]:
+        return [
+            upstream_id for upstream_id in dag.upstream(s_id) if upstream_id in directly_modified
+        ]
+
+    def _validate_schema_change(
+        self,
+        s_id: SnapshotId,
+        upstream_snapshot_ids: t.List[SnapshotId] = [],
+        use_kind_default: bool = False,
     ) -> None:
-        new, old = self._context_diff.modified_snapshots[snapshot.name]
-        error_display_name = getattr(indirect_child_snapshot, "name", None) or snapshot.name
+        """Determine if a schema change requires a DROP operation"""
+        s_id_snapshot = t.cast(Snapshot, self._context_diff.snapshots.get(s_id))
 
-        # If a forward-only model is additive_only, error if the change requires a DROP operation
-        if new.model.additive_only or indirect_child_snapshot:
-            # We must know all columns_to_types to determine whether a change is destructive
-            old_columns_to_types = old.model.columns_to_types
-            new_columns_to_types = new.model.columns_to_types
-            if (
-                not old_columns_to_types
-                or not columns_to_types_all_known(old_columns_to_types)
-                or not new_columns_to_types
-                or not columns_to_types_all_known(new_columns_to_types)
-            ):
-                indirect_error_msg = (
-                    f"upstream model {snapshot.name}'s "
-                    if indirect_child_snapshot
-                    else f"{error_display_name}'s "
-                )
-                raise PlanError(
-                    f"Model '{error_display_name}' is `additive_only`, so SQLMesh must confirm that no destructive changes are made to it. That requires knowing column types, but SQLMesh cannot infer all of {indirect_error_msg}column types. Please add explicit types to all projections in its outermost SELECT statement, specify the `columns` model attribute (https://sqlmesh.readthedocs.io/en/stable/concepts/models/overview/#columns), permanently allow destructive changes to {error_display_name} by setting `additive_only false` in the MODEL kind specification, or temporarily allow destructive changes by passing {error_display_name} to the `--allow-destructive-model` argument of the `sqlmesh plan` command."
-                )
-
+        if not s_id_snapshot.model.on_schema_change.is_ignore:
             schema_differ_args = getattr(
-                DIALECT_TO_ENGINE_ADAPTER[new.model.dialect], "schema_differ_args"
+                DIALECT_TO_ENGINE_ADAPTER[s_id_snapshot.model.dialect], "schema_differ_args"
             )
             schema_differ = SchemaDiffer(**schema_differ_args)
 
-            schema_diff = schema_differ.compare_columns(
-                new.model.name,
-                old_columns_to_types,
-                new_columns_to_types,
-            )
-            has_drop = any(
-                [
-                    isinstance(action, exp.Drop)
-                    for actions in schema_diff
-                    for action in actions.args.get("actions", [])
-                ]
-            )
-            if has_drop:
-                # TODO: confirm that child selects column that is dropped
+            subdag = [s_id, *upstream_snapshot_ids]
 
-                indirect_error_msg = f"to {snapshot.name} " if indirect_child_snapshot else ""
-                raise PlanError(
-                    f"Model {error_display_name} is `additive_only`, but the current changes {indirect_error_msg}require dropping a column. Please modify the changes, permanently allow destructive changes by setting `additive_only false` in {error_display_name}'s kind specification, or temporarily allow destructive changes by passing {error_display_name} to the `--allow-destructive-model` argument of the `sqlmesh plan` command."
+            for id in subdag:
+                if not id.name in self._snapshot_change_is_destructive:
+                    snapshot = t.cast(
+                        Snapshot,
+                        s_id_snapshot if id == s_id else self._context_diff.snapshots.get(id),
+                    )
+                    new, old = self._context_diff.modified_snapshots[snapshot.name]
+
+                    # We must know all columns_to_types to determine whether a change is destructive
+                    old_columns_to_types = old.model.columns_to_types
+                    new_columns_to_types = new.model.columns_to_types
+                    if (
+                        not old_columns_to_types
+                        or not columns_to_types_all_known(old_columns_to_types)
+                        or not new_columns_to_types
+                        or not columns_to_types_all_known(new_columns_to_types)
+                    ):
+                        self._snapshot_change_is_destructive[id.name] = None
+                        continue
+
+                    schema_diff = schema_differ.compare_columns(
+                        new.model.name,
+                        old_columns_to_types,
+                        new_columns_to_types,
+                    )
+
+                    self._snapshot_change_is_destructive[snapshot.name] = any(
+                        [
+                            isinstance(action, exp.Drop)
+                            for actions in schema_diff
+                            for action in actions.args.get("actions", [])
+                        ]
+                    )
+
+            if any(self._snapshot_change_is_destructive[id.name] for id in subdag):
+                msg = f"PLAN TIME CHECK: Plan results in a destructive change to forward-only model '{s_id_snapshot.name}'s schema."
+                if s_id_snapshot.model.on_schema_change.is_error:
+                    raise PlanError(
+                        f"{msg} To allow this, change the model's `on_schema_change` setting to `warn` or `ignore` or include it in the plan's `--allow-destructive-model` option."
+                    )
+                else:
+                    logger.warning(msg)
+            elif any(self._snapshot_change_is_destructive[id.name] is None for id in subdag):
+                logger.info(
+                    f"Unable to determine at plan time if changes cause a destructive schema change to model '{s_id.name}'."
                 )
 
     @cached_property

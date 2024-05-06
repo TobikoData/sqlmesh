@@ -3,7 +3,7 @@ from __future__ import annotations
 import typing as t
 
 from sqlmesh.core.config.base import BaseConfig
-from sqlmesh.core.model.kind import ModelKind, model_kind_validator
+from sqlmesh.core.model.kind import ModelKind, OnSchemaChange, model_kind_validator
 from sqlmesh.utils.date import TimeLike
 
 
@@ -21,8 +21,7 @@ class ModelDefaultsConfig(BaseConfig):
             The start date can be a static datetime or a relative datetime like "1 year ago"
         storage_format: The storage format used to store the physical table, only applicable in certain engines.
             (eg. 'parquet')
-        additive_only: Whether forward-only models should allow only additive changes, erroring if a change
-            destroys existing data (e.g., by dropping a column).
+        on_schema_change: What should happen when a forward-only model requires a destructive schema change.
     """
 
     kind: t.Optional[ModelKind] = None
@@ -31,8 +30,7 @@ class ModelDefaultsConfig(BaseConfig):
     owner: t.Optional[str] = None
     start: t.Optional[TimeLike] = None
     storage_format: t.Optional[str] = None
-    additive_only: t.Optional[bool] = None
+    on_schema_change: t.Optional[OnSchemaChange | str] = None
     session_properties: t.Optional[t.Dict[str, t.Any]] = None
 
-    _kind_specific_fields = ["additive_only"]
     _model_kind_validator = model_kind_validator
