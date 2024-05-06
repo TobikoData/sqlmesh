@@ -48,6 +48,7 @@ export default function ModelLineage({
   highlightedNodes?: HighlightedNodes
 }): JSX.Element {
   const {
+    setActiveNodes,
     setActiveEdges,
     setConnections,
     setLineage,
@@ -100,6 +101,7 @@ export default function ModelLineage({
         handleError?.(error)
       })
       .finally(() => {
+        setActiveNodes(new Set())
         setActiveEdges(new Map())
         setConnections(new Map())
         setSelectedNodes(new Set())
