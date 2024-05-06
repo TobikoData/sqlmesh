@@ -510,12 +510,11 @@ def test_info(notebook, sushi_context, convert_all_html_output_to_text, get_all_
 
     assert not output.stdout
     assert not output.stderr
-    assert len(output.outputs) == 4
+    assert len(output.outputs) == 3
     assert convert_all_html_output_to_text(output) == [
         "Models: 16",
         "Macros: 5",
         "Data warehouse connection succeeded",
-        "Test connection succeeded",
     ]
     assert get_all_html_output(output) == [
         str(
@@ -552,20 +551,6 @@ def test_info(notebook, sushi_context, convert_all_html_output_to_text, get_all_
                 "pre",
                 {"style": RICH_PRE_STYLE},
                 "Data warehouse connection "
-                + str(
-                    h(
-                        "span",
-                        {"style": SUCCESS_STYLE},
-                        "succeeded",
-                    )
-                ),
-            )
-        ),
-        str(
-            h(
-                "pre",
-                {"style": RICH_PRE_STYLE},
-                "Test connection "
                 + str(
                     h(
                         "span",

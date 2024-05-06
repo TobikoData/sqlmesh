@@ -16,65 +16,91 @@ from sqlmesh.core.test.discovery import (
 from sqlmesh.core.test.result import ModelTextTestResult
 from sqlmesh.utils import UniqueKeyDict
 
+if t.TYPE_CHECKING:
+    from sqlmesh.core.config.loader import C
+
 
 def run_tests(
     model_test_metadata: list[ModelTestMetadata],
     models: UniqueKeyDict[str, Model],
-    engine_adapter: EngineAdapter,
+    config: C,
+    gateway: t.Optional[str] = None,
     dialect: str | None = None,
     verbosity: int = 1,
     preserve_fixtures: bool = False,
     stream: t.TextIO | None = None,
     default_catalog: str | None = None,
+    default_catalog_dialect: str = "",
 ) -> ModelTextTestResult:
     """Create a test suite of ModelTest objects and run it.
 
     Args:
         model_test_metadata: A list of ModelTestMetadata named tuples.
         models: All models to use for expansion and mapping of physical locations.
-        engine_adapter: The engine adapter to use.
         verbosity: The verbosity level.
         preserve_fixtures: Preserve the fixture tables in the testing database, useful for debugging.
     """
-    suite = unittest.TestSuite(
-        ModelTest.create_test(
-            body=metadata.body,
-            test_name=metadata.test_name,
-            models=models,
-            engine_adapter=engine_adapter,
-            dialect=dialect,
-            path=metadata.path,
-            default_catalog=default_catalog,
-            preserve_fixtures=preserve_fixtures,
-        )
-        for metadata in model_test_metadata
-    )
+    testing_adapter_by_gateway: t.Dict[str, EngineAdapter] = {}
+    default_gateway = gateway or config.default_gateway
 
-    return t.cast(
-        ModelTextTestResult,
-        unittest.TextTestRunner(
-            stream=stream, verbosity=verbosity, resultclass=ModelTextTestResult
-        ).run(suite),
-    )
+    try:
+        tests = []
+        for metadata in model_test_metadata:
+            body = metadata.body
+            gateway = body.get("gateway") or default_gateway
+            testing_engine_adapter = testing_adapter_by_gateway.get(gateway)
+            if not testing_engine_adapter:
+                testing_engine_adapter = config.get_test_connection(
+                    gateway,
+                    default_catalog,
+                    default_catalog_dialect,
+                ).create_engine_adapter(register_comments_override=False)
+                testing_adapter_by_gateway[gateway] = testing_engine_adapter
+
+            tests.append(
+                ModelTest.create_test(
+                    body=body,
+                    test_name=metadata.test_name,
+                    models=models,
+                    engine_adapter=testing_engine_adapter,
+                    dialect=dialect,
+                    path=metadata.path,
+                    default_catalog=default_catalog,
+                    preserve_fixtures=preserve_fixtures,
+                )
+            )
+
+        result = t.cast(
+            ModelTextTestResult,
+            unittest.TextTestRunner(
+                stream=stream, verbosity=verbosity, resultclass=ModelTextTestResult
+            ).run(unittest.TestSuite(tests)),
+        )
+    finally:
+        for testing_engine_adapter in testing_adapter_by_gateway.values():
+            testing_engine_adapter.close()
+
+    return result
 
 
 def run_model_tests(
     tests: list[str],
     models: UniqueKeyDict[str, Model],
-    engine_adapter: EngineAdapter,
+    config: C,
+    gateway: t.Optional[str] = None,
     dialect: str | None = None,
     verbosity: int = 1,
     patterns: list[str] | None = None,
     preserve_fixtures: bool = False,
     stream: t.TextIO | None = None,
     default_catalog: t.Optional[str] = None,
+    default_catalog_dialect: str = "",
 ) -> ModelTextTestResult:
     """Load and run tests.
 
     Args:
         tests: A list of tests to run, e.g. [tests/test_orders.yaml::test_single_order]
         models: All models to use for expansion and mapping of physical locations.
-        engine_adapter: The engine adapter to use.
         verbosity: The verbosity level.
         patterns: A list of patterns to match against.
         preserve_fixtures: Preserve the fixture tables in the testing database, useful for debugging.
@@ -95,10 +121,12 @@ def run_model_tests(
     return run_tests(
         loaded_tests,
         models,
-        engine_adapter,
+        config,
+        gateway=gateway,
         dialect=dialect,
         verbosity=verbosity,
         preserve_fixtures=preserve_fixtures,
         stream=stream,
         default_catalog=default_catalog,
+        default_catalog_dialect=default_catalog_dialect,
     )

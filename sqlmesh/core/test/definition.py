@@ -69,16 +69,25 @@ class ModelTest(unittest.TestCase):
         self._normalized_column_name_cache: t.Dict[str, str] = {}
         self._normalized_model_name_cache: t.Dict[t.Tuple[str, bool], str] = {}
 
+        self._test_adapter_dialect = Dialect.get_or_raise(self.engine_adapter.dialect)
+
         self._validate_and_normalize_test()
 
-        # The test schema name is randomized to avoid concurrency issues
-        self._test_schema = f"sqlmesh_test_{random_id(short=True)}"
+        if self.engine_adapter.default_catalog:
+            self._fixture_catalog: t.Optional[exp.Identifier] = exp.parse_identifier(
+                self.engine_adapter.default_catalog, dialect=self._test_adapter_dialect
+            )
+        else:
+            self._fixture_catalog = None
 
-        self._engine_adapter_dialect = Dialect.get_or_raise(self.engine_adapter.dialect)
-        self._transforms = self._engine_adapter_dialect.generator_class.TRANSFORMS
+        # The test schema name is randomized to avoid concurrency issues
+        self._fixture_schema = exp.to_identifier(f"sqlmesh_test_{random_id(short=True)}")
+        self._qualified_fixture_schema = schema_(self._fixture_schema, self._fixture_catalog)
+
+        self._transforms = self._test_adapter_dialect.generator_class.TRANSFORMS
+        self._execution_time = str(self.body.get("vars", {}).get("execution_time") or "")
 
         # When execution_time is set, we mock the CURRENT_* SQL expressions so they always return it
-        self._execution_time = str(self.body.get("vars", {}).get("execution_time") or "")
         if self._execution_time:
             exec_time = exp.Literal.string(self._execution_time)
             self._transforms = {
@@ -96,6 +105,8 @@ class ModelTest(unittest.TestCase):
 
     def setUp(self) -> None:
         """Load all input tables"""
+        self.engine_adapter.create_schema(self._qualified_fixture_schema)
+
         for name, values in self.body.get("inputs", {}).items():
             all_types_are_known = False
             known_columns_to_types: t.Dict[str, exp.DataType] = {}
@@ -118,7 +129,9 @@ class ModelTest(unittest.TestCase):
                 for col, value in rows[0].items():
                     if col not in known_columns_to_types:
                         v_type = annotate_types(exp.convert(value)).type or type(value).__name__
-                        v_type = exp.maybe_parse(v_type, into=exp.DataType, dialect=self.dialect)
+                        v_type = exp.maybe_parse(
+                            v_type, into=exp.DataType, dialect=self._test_adapter_dialect
+                        )
 
                         if not type_is_known(v_type):
                             _raise_error(
@@ -131,18 +144,15 @@ class ModelTest(unittest.TestCase):
 
                         known_columns_to_types[col] = v_type
 
-            test_fixture_table = self._test_fixture_table(name)
-            self.engine_adapter.create_schema(
-                schema_(test_fixture_table.args["db"], test_fixture_table.args.get("catalog"))
-            )
-
             df = _create_df(rows, columns=known_columns_to_types)
-            self.engine_adapter.create_view(test_fixture_table, df, known_columns_to_types)
+            self.engine_adapter.create_view(
+                self._test_fixture_table(name), df, known_columns_to_types
+            )
 
     def tearDown(self) -> None:
         """Drop all fixture tables."""
         if not self.preserve_fixtures:
-            self.engine_adapter.drop_schema(self._test_schema, cascade=True)
+            self.engine_adapter.drop_schema(self._qualified_fixture_schema, cascade=True)
 
     def assert_equal(
         self,
@@ -344,7 +354,9 @@ class ModelTest(unittest.TestCase):
                     )
 
                 values["columns"] = {
-                    self._normalize_column_name(c): exp.DataType.build(t, dialect=self.dialect)
+                    self._normalize_column_name(c): exp.DataType.build(
+                        t, dialect=self._test_adapter_dialect
+                    )
                     for c, t in columns.items()
                 }
 
@@ -366,14 +378,14 @@ class ModelTest(unittest.TestCase):
     def _test_fixture_table(self, name: str) -> exp.Table:
         table = self._fixture_table_cache.get(name)
         if not table:
-            table = exp.to_table(name, dialect=self.dialect)
+            table = exp.to_table(name, dialect=self._test_adapter_dialect)
 
             # We change the table path below, so this ensures there are no name clashes
             table.this.set("this", "__".join(part.name for part in table.parts))
 
-            table.set("db", exp.to_identifier(self._test_schema))
-            if self.default_catalog:
-                table.set("catalog", exp.parse_identifier(self.default_catalog))
+            table.set("db", self._fixture_schema.copy())
+            if self._fixture_catalog:
+                table.set("catalog", self._fixture_catalog.copy())
 
             self._fixture_table_cache[name] = table
 
@@ -426,10 +438,10 @@ class SqlModelTest(ModelTest):
         # For tests we just use the model name for the table reference and we don't want to expand
         mapping = {
             name: self._test_fixture_table(name).sql()
-            for name in [
+            for name in (
                 self._normalize_model_name(name)
                 for name in self.models.keys() | self.body.get("inputs", {}).keys()
-            ]
+            )
         }
         query = self.model.render_query_or_raise(
             **self.body.get("vars", {}),
@@ -458,7 +470,7 @@ class SqlModelTest(ModelTest):
 
     def _execute(self, query: exp.Expression) -> pd.DataFrame:
         """Executes the query with the engine adapter and returns a DataFrame."""
-        with patch.dict(self._engine_adapter_dialect.generator_class.TRANSFORMS, self._transforms):
+        with patch.dict(self._test_adapter_dialect.generator_class.TRANSFORMS, self._transforms):
             return self.engine_adapter.fetchdf(query)
 
 
@@ -524,7 +536,7 @@ class PythonModelTest(ModelTest):
     def _execute_model(self) -> pd.DataFrame:
         """Executes the python model and returns a DataFrame."""
         time_ctx = freeze_time(self._execution_time) if self._execution_time else nullcontext()
-        with patch.dict(self._engine_adapter_dialect.generator_class.TRANSFORMS, self._transforms):
+        with patch.dict(self._test_adapter_dialect.generator_class.TRANSFORMS, self._transforms):
             with t.cast(AbstractContextManager, time_ctx):
                 return t.cast(
                     pd.DataFrame,
