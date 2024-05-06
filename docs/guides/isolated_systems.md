@@ -110,7 +110,7 @@ The simplest version of the workflow is:
 
 3. Deploy to production
 
-    a. Execute the `sqlmesh plan` command to apply the updates to the `prod` environment
+    a. Execute the `sqlmesh plan` command or use the [SQLMesh CI/CD bot](../integrations/github.md) to apply the updates to the `prod` environment
 
 ![Standard SQLMesh workflow](./isolated_systems/isolated-systems_standard-workflow-staging.png)
 
@@ -158,13 +158,13 @@ In the steps below, we assume that the non-production system is the default gate
 
 3. Deploy to production system `staging` environment
 
-    a. Execute the `sqlmesh --gateway production plan staging` command to apply the updates to the production system `staging` environment. Note that your production system's gateway may have a different name and that you may choose any environment name other than `prod`.
+    a. Execute the `sqlmesh --gateway production plan staging` command to apply the updates to the production system `staging` environment. Note that your production system's gateway may have a different name and that you may choose any environment name (other than the reserved name `prod`).
 
     b. Developers validate the set of code updates in the production system `staging` environment
 
 4. Deploy to production
 
-    a. Execute the `sqlmesh  --gateway production plan` command to apply the updates to the production system's `prod` environment
+    a. Execute the `sqlmesh --gateway production plan` command or use the [SQLMesh CI/CD bot](../integrations/github.md) to apply the updates to the production system's `prod` environment
 
 ![Isolated systems SQLMesh workflow with staging environments](./isolated_systems/isolated-systems_isolated-systems-workflow.png)
 
