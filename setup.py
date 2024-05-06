@@ -58,12 +58,12 @@ setup(
             "databricks-cli",
         ],
         "dev": [
-            f"apache-airflow=={os.environ.get('AIRFLOW_VERSION', '2.4.3')}",
+            f"apache-airflow=={os.environ.get('AIRFLOW_VERSION', '2.9.1')}",
             "autoflake==1.7.7",
             "agate==1.7.1",
             "beautifulsoup4",
-            "black==24.1.1",
-            "cryptography~=41.0.7",
+            "black==24.4.2",
+            "cryptography~=42.0.4",
             "dbt-core",
             "dbt-duckdb>=1.7.1",
             "Faker",
@@ -72,19 +72,11 @@ setup(
             "google-cloud-bigquery-storage",
             "isort==5.10.1",
             "mypy~=1.8.0",
-            # Pendulum 3.0.0 contains a breaking change for Airflow.
-            # To test if this is fixed with future versions, check if this line works:
-            # https://github.com/apache/airflow/blob/main/airflow/settings.py#L59
-            # `TIMEZONE = pendulum.tz.timezone("UTC")`
-            "pendulum<3.0.0",
+            "pendulum>=3.0.0",
             "pre-commit",
             "pandas-stubs",
             "psycopg2-binary",
-            "pyarrow>=10.0.1,<10.1.0",
-            # All Airflow releases require flast-appbuilder==4.3.10 and
-            # 4.3.10 requires email-validator==1.3.1
-            # https://github.com/apache/airflow/blob/main/pyproject.toml#L685
-            # https://github.com/dpgaspar/Flask-AppBuilder/blob/master/requirements.txt#L25
+            "pyarrow",
             "pydantic<2.6.0",
             "PyGithub",
             "pytest",
@@ -146,11 +138,10 @@ setup(
             "slack_sdk",
         ],
         "snowflake": [
-            # Issue with Snowflake connector and cryptography 42+
-            # Check here if they have added support: https://github.com/dbt-labs/dbt-snowflake/blob/main/dev-requirements.txt#L12
-            "cryptography~=41.0.7",
+            # https://github.com/dbt-labs/dbt-snowflake/blob/main/dev-requirements.txt#L12
+            "cryptography~=42.0.4",
             "snowflake-connector-python[pandas,secure-local-storage]",
-            "pyarrow>=10.0.1,<10.1.0",
+            "pyarrow",
         ],
         "trino": [
             "trino",
