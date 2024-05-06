@@ -194,7 +194,7 @@ class HiveMetastoreTablePropertiesMixin(EngineAdapter):
                 )
             )
 
-        properties.extend(self._model_properties_to_expressions(table_properties))
+        properties.extend(self._table_or_view_properties_to_expressions(table_properties))
 
         if properties:
             return exp.Properties(expressions=properties)
@@ -215,7 +215,7 @@ class HiveMetastoreTablePropertiesMixin(EngineAdapter):
                 )
             )
 
-        properties.extend(self._model_properties_to_expressions(view_properties))
+        properties.extend(self._table_or_view_properties_to_expressions(view_properties))
 
         if properties:
             return exp.Properties(expressions=properties)

@@ -1849,14 +1849,15 @@ class EngineAdapter:
             finally:
                 self.drop_table(table)
 
-    def _model_properties_to_expressions(
-        self, model_properties: t.Optional[t.Dict[str, exp.Expression]] = None
+    def _table_or_view_properties_to_expressions(
+        self, table_or_view_properties: t.Optional[t.Dict[str, exp.Expression]] = None
     ) -> t.List[exp.Property]:
         """Converts model properties (either physical or virtual) to a list of property expressions."""
-        if not model_properties:
+        if not table_or_view_properties:
             return []
         return [
-            exp.Property(this=key, value=value.copy()) for key, value in model_properties.items()
+            exp.Property(this=key, value=value.copy())
+            for key, value in table_or_view_properties.items()
         ]
 
     def _build_table_properties_exp(
