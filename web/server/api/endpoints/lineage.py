@@ -41,6 +41,8 @@ def create_lineage_adjacency_list(
 ) -> t.Dict[str, t.Dict[str, LineageColumn]]:
     """Create an adjacency list representation of a column's lineage graph including CTEs"""
     graph: t.Dict[str, t.Dict[str, LineageColumn]] = defaultdict(dict)
+    visited = set()
+    visited.add((model_name, column_name))
     nodes = [(model_name, column_name)]
     while nodes:
         model_name, column = nodes.pop(0)
@@ -76,8 +78,9 @@ def create_lineage_adjacency_list(
                 if table:
                     column_name = get_column_name(d)
                     dependencies[table].add(column_name)
-                    if not d.downstream:
+                    if not d.downstream and (table, column_name) not in visited:
                         nodes.append((table, column_name))
+                        visited.add((table, column_name))
 
             graph[node_name][node_column] = LineageColumn(
                 expression=node.expression.sql(pretty=True, dialect=model.dialect),
