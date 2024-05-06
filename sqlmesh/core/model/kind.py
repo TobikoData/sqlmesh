@@ -317,11 +317,8 @@ class _IncrementalBy(_Incremental):
     batch_concurrency: t.Optional[SQLGlotPositiveInt] = None
     lookback: t.Optional[SQLGlotPositiveInt] = None
     forward_only: SQLGlotBool = False
-    additive_only: t.Optional[SQLGlotBool] = None
+    on_schema_change: OnSchemaChange = OnSchemaChange.WARN
     disable_restatement: SQLGlotBool = False
-    _kind_specific_defaults: t.ClassVar[t.Dict[str, t.Any]] = {
-        "additive_only": True,
-    }
 
     _dialect_validator = kind_dialect_validator
 
@@ -339,7 +336,7 @@ class _IncrementalBy(_Incremental):
             *super().metadata_hash_values,
             str(self.batch_size) if self.batch_size is not None else None,
             str(self.forward_only),
-            str(self.additive_only),
+            str(self.on_schema_change),
             str(self.disable_restatement),
         ]
 
@@ -409,11 +406,8 @@ class IncrementalUnmanagedKind(_Incremental):
     name: Literal[ModelKindName.INCREMENTAL_UNMANAGED] = ModelKindName.INCREMENTAL_UNMANAGED
     insert_overwrite: SQLGlotBool = False
     forward_only: SQLGlotBool = True
-    additive_only: t.Optional[SQLGlotBool] = None
+    on_schema_change: OnSchemaChange = OnSchemaChange.WARN
     disable_restatement: Literal[True] = True
-    _kind_specific_defaults: t.ClassVar[t.Dict[str, t.Any]] = {
-        "additive_only": True,
-    }
 
     @property
     def data_hash_values(self) -> t.List[t.Optional[str]]:
@@ -421,7 +415,7 @@ class IncrementalUnmanagedKind(_Incremental):
 
     @property
     def metadata_hash_values(self) -> t.List[t.Optional[str]]:
-        return [*super().metadata_hash_values, str(self.forward_only), str(self.additive_only)]
+        return [*super().metadata_hash_values, str(self.forward_only), str(self.on_schema_change)]
 
 
 class ViewKind(_ModelKind):
@@ -490,7 +484,7 @@ class _SCDType2Kind(_Incremental):
     time_data_type: exp.DataType = Field(exp.DataType.build("TIMESTAMP"), validate_default=True)
 
     forward_only: SQLGlotBool = True
-    additive_only: t.Optional[SQLGlotBool] = None
+    on_schema_change: OnSchemaChange = OnSchemaChange.WARN
     disable_restatement: SQLGlotBool = True
 
     _dialect_validator = kind_dialect_validator
@@ -537,7 +531,7 @@ class _SCDType2Kind(_Incremental):
         return [
             *super().metadata_hash_values,
             str(self.forward_only),
-            str(self.additive_only),
+            str(self.on_schema_change),
             str(self.disable_restatement),
         ]
 
@@ -627,7 +621,6 @@ def model_kind_type_from_name(name: t.Optional[str]) -> t.Type[ModelKind]:
 @field_validator_v1_args
 def _model_kind_validator(cls: t.Type, v: t.Any, values: t.Dict[str, t.Any]) -> ModelKind:
     dialect = get_dialect(values)
-    user_kind_specific_defaults = values.get("kind_specific_defaults") or {}
 
     if isinstance(v, _ModelKind):
         return t.cast(ModelKind, v)
