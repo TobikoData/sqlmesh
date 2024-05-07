@@ -268,10 +268,12 @@ class ModelMeta(_Node):
 
         table_properties = values.pop("table_properties", None)
         if table_properties:
-            model_name = values["name"]
-            logger.warning(
-                f"""Python model "{model_name}"'s is using `physical_properties` property which is deprecated. Please use `physical_properties` instead."""
-            )
+            if not isinstance(table_properties, str):
+                # Do not warn when deserializing from the state.
+                model_name = values["name"]
+                logger.warning(
+                    f"Model '{model_name}' is using the `table_properties` attribute which is deprecated. Please use `physical_properties` instead."
+                )
             physical_properties = values.get("physical_properties")
             if physical_properties:
                 raise ConfigError(
