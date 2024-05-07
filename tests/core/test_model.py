@@ -4067,6 +4067,13 @@ def test_this_model() -> None:
 
 
 def test_macros_in_model_statement(sushi_context, assert_exp_eq):
+    @macro()
+    def session_properties(evaluator, value):
+        return exp.Property(
+            this=exp.var("session_properties"),
+            value=exp.convert([exp.convert("foo").eq(exp.var(f"bar_{value}"))]),
+        )
+
     expressions = d.parse(
         """
         MODEL (
@@ -4075,7 +4082,8 @@ def test_macros_in_model_statement(sushi_context, assert_exp_eq):
                 time_column @{time_column}
 
             ),
-            start @IF(@gateway = 'test_gateway', '2023-01-01', '2024-01-02')
+            start @IF(@gateway = 'test_gateway', '2023-01-01', '2024-01-02'),
+            @session_properties(baz)
         );
 
         SELECT a, b UNION SELECT c, c
@@ -4089,6 +4097,7 @@ def test_macros_in_model_statement(sushi_context, assert_exp_eq):
     assert model.time_column
     assert model.time_column.column == exp.column("a", quoted=True)
     assert model.start == "2023-01-01"
+    assert model.session_properties == {"foo": exp.column("bar_baz", quoted=False)}
 
 
 def test_python_model_dialect():
