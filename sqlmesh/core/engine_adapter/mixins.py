@@ -194,7 +194,7 @@ class HiveMetastoreTablePropertiesMixin(EngineAdapter):
                 )
             )
 
-        properties.extend(self._table_properties_to_expressions(table_properties))
+        properties.extend(self._table_or_view_properties_to_expressions(table_properties))
 
         if properties:
             return exp.Properties(expressions=properties)
@@ -202,7 +202,7 @@ class HiveMetastoreTablePropertiesMixin(EngineAdapter):
 
     def _build_view_properties_exp(
         self,
-        table_properties: t.Optional[t.Dict[str, exp.Expression]] = None,
+        view_properties: t.Optional[t.Dict[str, exp.Expression]] = None,
         table_description: t.Optional[str] = None,
     ) -> t.Optional[exp.Properties]:
         """Creates a SQLGlot table properties expression for view"""
@@ -215,7 +215,7 @@ class HiveMetastoreTablePropertiesMixin(EngineAdapter):
                 )
             )
 
-        properties.extend(self._table_properties_to_expressions(table_properties))
+        properties.extend(self._table_or_view_properties_to_expressions(view_properties))
 
         if properties:
             return exp.Properties(expressions=properties)

@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import logging
 import typing as t
 from functools import cached_property
 
@@ -44,6 +45,8 @@ if t.TYPE_CHECKING:
 
 AuditReference = t.Tuple[str, t.Dict[str, exp.Expression]]
 
+logger = logging.getLogger(__name__)
+
 
 class ModelMeta(_Node):
     """Metadata for models which can be defined in SQL."""
@@ -63,7 +66,8 @@ class ModelMeta(_Node):
     grains: t.List[exp.Expression] = []
     references: t.List[exp.Expression] = []
     physical_schema_override: t.Optional[str] = None
-    table_properties_: t.Optional[exp.Tuple] = Field(default=None, alias="table_properties")
+    physical_properties_: t.Optional[exp.Tuple] = Field(default=None, alias="physical_properties")
+    virtual_properties_: t.Optional[exp.Tuple] = Field(default=None, alias="virtual_properties")
     session_properties_: t.Optional[exp.Tuple] = Field(default=None, alias="session_properties")
     allow_partials: bool = False
     signals: t.List[exp.Tuple] = []
@@ -261,6 +265,19 @@ class ModelMeta(_Node):
                     f"Cannot use argument 'grain' ({grain}) with 'grains' ({grains}), use only grains"
                 )
             values["grains"] = ensure_list(grain)
+
+        table_properties = values.pop("table_properties", None)
+        if table_properties:
+            model_name = values["name"]
+            logger.warning(
+                f"""Python model "{model_name}"'s is using `physical_properties` property which is deprecated. Please use `physical_properties` instead."""
+            )
+            physical_properties = values.get("physical_properties")
+            if physical_properties:
+                raise ConfigError(
+                    f"Cannot use argument 'table_properties' ({table_properties}) with 'physical_properties' ({physical_properties}), use only physical_properties."
+                )
+            values["physical_properties"] = table_properties
         return values
 
     @model_validator(mode="after")
@@ -328,13 +345,17 @@ class ModelMeta(_Node):
         return getattr(self.kind, "batch_concurrency", None)
 
     @cached_property
-    def table_properties(self) -> t.Dict[str, exp.Expression]:
-        """A dictionary of table properties."""
-        if self.table_properties_:
-            table_properties = {}
-            for expression in self.table_properties_.expressions:
-                table_properties[expression.this.name] = expression.expression
-            return table_properties
+    def physical_properties(self) -> t.Dict[str, exp.Expression]:
+        """A dictionary of properties that will be applied to the physical layer. It replaces table_properties which is deprecated."""
+        if self.physical_properties_:
+            return {e.this.name: e.expression for e in self.physical_properties_.expressions}
+        return {}
+
+    @cached_property
+    def virtual_properties(self) -> t.Dict[str, exp.Expression]:
+        """A dictionary of properties that will be applied to the virtual layer."""
+        if self.virtual_properties_:
+            return {e.this.name: e.expression for e in self.virtual_properties_.expressions}
         return {}
 
     @property

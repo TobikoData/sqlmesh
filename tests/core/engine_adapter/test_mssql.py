@@ -249,7 +249,7 @@ def test_create_table(make_mocked_engine_adapter: t.Callable):
     )
 
 
-def test_create_table_properties(make_mocked_engine_adapter: t.Callable):
+def test_create_physical_properties(make_mocked_engine_adapter: t.Callable):
     adapter = make_mocked_engine_adapter(MSSQLEngineAdapter)
 
     columns_to_types = {

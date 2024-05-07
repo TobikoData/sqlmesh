@@ -453,7 +453,7 @@ def test_json_serde():
             cron '@daily',
             storage_format parquet,
             partitioned_by a,
-            table_properties (
+            physical_properties (
                 key_a = 'value_a',
                 'key_b' = 1,
                 key_c = true,
@@ -2420,13 +2420,13 @@ def test_custom_interval_unit():
         )
 
 
-def test_model_table_properties() -> None:
+def test_model_physical_properties() -> None:
     # Validate python model table properties
     @model(
         "my_model",
         kind="full",
         columns={"id": "int"},
-        table_properties={
+        physical_properties={
             "format": "PARQUET",
             "bucket_count": 0,
             "orc_bloom_filter_fpp": 0.05,
@@ -2441,7 +2441,7 @@ def test_model_table_properties() -> None:
         path=Path("."),
     )
 
-    assert python_model.table_properties == {
+    assert python_model.physical_properties == {
         "format": exp.Literal.string("PARQUET"),
         "bucket_count": exp.Literal.number(0),
         "orc_bloom_filter_fpp": exp.Literal.number(0.05),
@@ -2449,6 +2449,186 @@ def test_model_table_properties() -> None:
     }
 
     # Validate a tuple.
+    sql_model = load_sql_based_model(
+        d.parse(
+            """
+        MODEL (
+            name test_schema.test_model,
+            physical_properties (
+                key_a = 'value_a',
+                'key_b' = 1,
+                key_c = true,
+                "key_d" = 2.0,
+            )
+        );
+        SELECT a FROM tbl;
+        """
+        )
+    )
+    assert sql_model.physical_properties == {
+        "key_a": exp.convert("value_a"),
+        "key_b": exp.convert(1),
+        "key_c": exp.convert(True),
+        "key_d": exp.convert(2.0),
+    }
+    assert sql_model.physical_properties_ == d.parse_one(
+        """(key_a = 'value_a', 'key_b' = 1, key_c = TRUE, "key_d" = 2.0)"""
+    )
+
+    # Validate a tuple with one item.
+    sql_model = load_sql_based_model(
+        d.parse(
+            """
+            MODEL (
+                name test_schema.test_model,
+                physical_properties (key_a = 'value_a')
+            );
+            SELECT a FROM tbl;
+            """
+        )
+    )
+    assert sql_model.physical_properties == {"key_a": exp.convert("value_a")}
+    assert (
+        sql_model.physical_properties_.sql()  # type: ignore
+        == exp.Tuple(expressions=[d.parse_one("key_a = 'value_a'")]).sql()
+    )
+
+    # Validate an array.
+    sql_model = load_sql_based_model(
+        d.parse(
+            """
+        MODEL (
+            name test_schema.test_model,
+            physical_properties [
+                key_a = 'value_a',
+                'key_b' = 1,
+            ]
+        );
+        SELECT a FROM tbl;
+        """
+        )
+    )
+    assert sql_model.physical_properties == {
+        "key_a": exp.convert("value_a"),
+        "key_b": exp.convert(1),
+    }
+    assert sql_model.physical_properties_ == d.parse_one("""(key_a = 'value_a', 'key_b' = 1)""")
+
+    # Validate empty.
+    sql_model = load_sql_based_model(
+        d.parse(
+            """
+        MODEL (
+            name test_schema.test_model
+        );
+        SELECT a FROM tbl;
+        """
+        )
+    )
+    assert sql_model.physical_properties == {}
+    assert sql_model.physical_properties_ is None
+
+    # Validate sql expression.
+    sql_model = load_sql_based_model(
+        d.parse(
+            """
+        MODEL (
+            name test_schema.test_model,
+            physical_properties [
+                key = ['value']
+            ]
+        );
+        SELECT a FROM tbl;
+        """
+        )
+    )
+    assert sql_model.physical_properties == {"key": d.parse_one("['value']")}
+    assert sql_model.physical_properties_ == exp.Tuple(expressions=[d.parse_one("key = ['value']")])
+
+    # Validate dict parsing.
+    sql_model = create_sql_model(
+        name="test_schema.test_model",
+        query=d.parse_one("SELECT a FROM tbl"),
+        physical_properties={
+            "key_a": exp.Literal.string("value_a"),
+            "key_b": exp.Literal.number(1),
+            "key_c": exp.true(),
+            "key_d": exp.Literal.number(2.0),
+        },
+    )
+    assert sql_model.physical_properties == {
+        "key_a": exp.convert("value_a"),
+        "key_b": exp.convert(1),
+        "key_c": exp.convert(True),
+        "key_d": exp.convert(2.0),
+    }
+    assert sql_model.physical_properties_ == d.parse_one(
+        """('key_a' = 'value_a', 'key_b' = 1, 'key_c' = TRUE, 'key_d' = 2.0)"""
+    )
+
+    with pytest.raises(ConfigError, match=r"Invalid property 'invalid'.*"):
+        load_sql_based_model(
+            d.parse(
+                """
+                MODEL (
+                    name test_schema.test_model,
+                    physical_properties [
+                        invalid
+                    ]
+                );
+                SELECT a FROM tbl;
+                """
+            )
+        )
+
+
+def test_model_physical_properties_labels() -> None:
+    sql_model = load_sql_based_model(
+        d.parse(
+            """
+        MODEL (
+            name test_schema.test_model,
+            physical_properties [
+                labels = [('test-label', 'label-value')]
+            ]
+        );
+        SELECT a FROM tbl;
+        """
+        )
+    )
+    assert sql_model.physical_properties == {"labels": exp.array("('test-label', 'label-value')")}
+
+
+def test_physical_and_virtual_table_properties() -> None:
+    sql_model = load_sql_based_model(
+        d.parse(
+            """
+        MODEL (
+            name test_schema.test_model,
+            physical_properties (
+                partition_expiration_days = 7,
+                labels = [('test-physical-label', 'label-physical-value')],
+            ),
+            virtual_properties (
+                labels = [('test-virtual-label', 'label-virtual-value')],
+            )
+        );
+        SELECT a FROM tbl;
+        """
+        )
+    )
+    assert sql_model.physical_properties == {
+        "partition_expiration_days": exp.convert(7),
+        "labels": exp.array("('test-physical-label', 'label-physical-value')"),
+    }
+
+    assert sql_model.virtual_properties == {
+        "labels": exp.array("('test-virtual-label', 'label-virtual-value')"),
+    }
+
+
+def test_model_table_properties() -> None:
+    # Ensure backward compatibility to table_properties.
     sql_model = load_sql_based_model(
         d.parse(
             """
@@ -2465,121 +2645,56 @@ def test_model_table_properties() -> None:
         """
         )
     )
-    assert sql_model.table_properties == {
+    assert sql_model.physical_properties == {
         "key_a": exp.convert("value_a"),
         "key_b": exp.convert(1),
         "key_c": exp.convert(True),
         "key_d": exp.convert(2.0),
     }
-    assert sql_model.table_properties_ == d.parse_one(
+    assert sql_model.physical_properties_ == d.parse_one(
         """(key_a = 'value_a', 'key_b' = 1, key_c = TRUE, "key_d" = 2.0)"""
     )
 
-    # Validate a tuple with one item.
-    sql_model = load_sql_based_model(
-        d.parse(
-            """
-            MODEL (
-                name test_schema.test_model,
-                table_properties (key_a = 'value_a')
-            );
-            SELECT a FROM tbl;
-            """
-        )
-    )
-    assert sql_model.table_properties == {"key_a": exp.convert("value_a")}
-    assert (
-        sql_model.table_properties_.sql()  # type: ignore
-        == exp.Tuple(expressions=[d.parse_one("key_a = 'value_a'")]).sql()
-    )
-
-    # Validate an array.
     sql_model = load_sql_based_model(
         d.parse(
             """
         MODEL (
             name test_schema.test_model,
-            table_properties [
-                key_a = 'value_a',
-                'key_b' = 1,
-            ]
+            table_properties (
+                partition_expiration_days = 7,
+            )
         );
         SELECT a FROM tbl;
         """
         )
     )
-    assert sql_model.table_properties == {
-        "key_a": exp.convert("value_a"),
-        "key_b": exp.convert(1),
+    assert sql_model.physical_properties == {
+        "partition_expiration_days": exp.convert(7),
     }
-    assert sql_model.table_properties_ == d.parse_one("""(key_a = 'value_a', 'key_b' = 1)""")
+    assert sql_model.physical_properties_ == d.parse_one("""(partition_expiration_days = 7,)""")
 
-    # Validate empty.
-    sql_model = load_sql_based_model(
-        d.parse(
-            """
-        MODEL (
-            name test_schema.test_model
-        );
-        SELECT a FROM tbl;
-        """
-        )
-    )
-    assert sql_model.table_properties == {}
-    assert sql_model.table_properties_ is None
 
-    # Validate sql expression.
-    sql_model = load_sql_based_model(
-        d.parse(
-            """
-        MODEL (
-            name test_schema.test_model,
-            table_properties [
-                key = ['value']
-            ]
-        );
-        SELECT a FROM tbl;
-        """
-        )
-    )
-    assert sql_model.table_properties == {"key": d.parse_one("['value']")}
-    assert sql_model.table_properties_ == exp.Tuple(expressions=[d.parse_one("key = ['value']")])
-
-    # Validate dict parsing.
-    sql_model = create_sql_model(
-        name="test_schema.test_model",
-        query=d.parse_one("SELECT a FROM tbl"),
-        table_properties={
-            "key_a": exp.Literal.string("value_a"),
-            "key_b": exp.Literal.number(1),
-            "key_c": exp.true(),
-            "key_d": exp.Literal.number(2.0),
-        },
-    )
-    assert sql_model.table_properties == {
-        "key_a": exp.convert("value_a"),
-        "key_b": exp.convert(1),
-        "key_c": exp.convert(True),
-        "key_d": exp.convert(2.0),
-    }
-    assert sql_model.table_properties_ == d.parse_one(
-        """('key_a' = 'value_a', 'key_b' = 1, 'key_c' = TRUE, 'key_d' = 2.0)"""
-    )
-
-    with pytest.raises(ConfigError, match=r"Invalid property 'invalid'.*"):
-        load_sql_based_model(
+def test_model_table_properties_conflicts() -> None:
+    # Throw an error on conflicting usage of table_properties and physical_properties.
+    with pytest.raises(ConfigError, match=r"Cannot use argument 'table_properties'*"):
+        sql_model = load_sql_based_model(
             d.parse(
                 """
                 MODEL (
                     name test_schema.test_model,
-                    table_properties [
-                        invalid
-                    ]
+                    table_properties (
+                        key_a = 'value_a',
+                        'key_b' = 1,
+                        key_c = true,
+                        "key_d" = 2.0,
+                    ),
+                    physical_properties (key_a = 'value_a')
                 );
                 SELECT a FROM tbl;
                 """
             )
         )
+        sql_model.physical_properties
 
 
 def test_model_session_properties(sushi_context):

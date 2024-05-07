@@ -804,6 +804,7 @@ class EngineAdapter:
         materialized: bool = False,
         table_description: t.Optional[str] = None,
         column_descriptions: t.Optional[t.Dict[str, str]] = None,
+        view_properties: t.Optional[t.Dict[str, exp.Expression]] = None,
         **create_kwargs: t.Any,
     ) -> None:
         """Create a view with a query or dataframe.
@@ -819,6 +820,7 @@ class EngineAdapter:
             materialized: Whether to create a a materialized view. Only used for engines that support this feature.
             table_description: Optional table description from MODEL DDL.
             column_descriptions: Optional column descriptions from model query.
+            view_properties: Optional view properties to add to the view.
             create_kwargs: Additional kwargs to pass into the Create expression
         """
         if self.is_pandas_df(query_or_df):
@@ -856,7 +858,7 @@ class EngineAdapter:
                 schema = schema.this
 
         create_view_properties = self._build_view_properties_exp(
-            create_kwargs.pop("table_properties", None),
+            view_properties or create_kwargs.pop("table_properties", None),
             (
                 table_description
                 if self.COMMENT_CREATION_VIEW.supports_schema_def and self.comments_enabled
@@ -1847,13 +1849,15 @@ class EngineAdapter:
             finally:
                 self.drop_table(table)
 
-    def _table_properties_to_expressions(
-        self, table_properties: t.Optional[t.Dict[str, exp.Expression]] = None
+    def _table_or_view_properties_to_expressions(
+        self, table_or_view_properties: t.Optional[t.Dict[str, exp.Expression]] = None
     ) -> t.List[exp.Property]:
-        if not table_properties:
+        """Converts model properties (either physical or virtual) to a list of property expressions."""
+        if not table_or_view_properties:
             return []
         return [
-            exp.Property(this=key, value=value.copy()) for key, value in table_properties.items()
+            exp.Property(this=key, value=value.copy())
+            for key, value in table_or_view_properties.items()
         ]
 
     def _build_table_properties_exp(
@@ -1883,7 +1887,7 @@ class EngineAdapter:
 
     def _build_view_properties_exp(
         self,
-        table_properties: t.Optional[t.Dict[str, exp.Expression]] = None,
+        view_properties: t.Optional[t.Dict[str, exp.Expression]] = None,
         table_description: t.Optional[str] = None,
     ) -> t.Optional[exp.Properties]:
         """Creates a SQLGlot table properties expression for view"""
