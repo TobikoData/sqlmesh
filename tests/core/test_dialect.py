@@ -339,7 +339,7 @@ def test_seed():
         """
         MODEL (
             kind SEED (
-                path '..\..\..\data\data.csv', -- c
+                path '..\\..\\..\\data\\data.csv', -- c
             ),
         );
     """

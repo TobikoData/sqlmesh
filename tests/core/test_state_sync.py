@@ -1855,7 +1855,7 @@ def test_cache(state_sync, make_snapshot, mocker):
     now_timestamp.return_value = to_timestamp("2023-01-01 00:00:05")
     with patch.object(state_sync, "get_snapshots") as mock:
         assert cache.get_snapshots([snapshot.snapshot_id])
-        mock.not_called()
+        mock.assert_not_called()
 
     # no cache hit
     now_timestamp.return_value = to_timestamp("2023-01-01 00:00:11")
