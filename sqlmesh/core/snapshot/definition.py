@@ -1211,7 +1211,7 @@ class DeployabilityIndex(PydanticModel, frozen=True):
             ):
                 return
 
-            if deployable:
+            if deployable and node in snapshots:
                 snapshot = snapshots[node]
                 # Capture uncategorized snapshot which represents a forward-only model.
                 is_forward_only_model = (
