@@ -186,6 +186,7 @@ class RedshiftEngineAdapter(
             table_description=table_description,
             column_descriptions=column_descriptions,
             no_schema_binding=create_kwargs.pop("no_schema_binding", True),
+            view_properties=view_properties,
             **create_kwargs,
         )
 

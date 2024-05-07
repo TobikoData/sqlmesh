@@ -463,7 +463,7 @@ def test_evaluate_materialized_view(
             model.render_query(),
             model.columns_to_types,
             materialized=True,
-            table_properties={},
+            view_properties={},
             table_description=None,
             column_descriptions={},
         )
@@ -505,7 +505,7 @@ def test_evaluate_materialized_view_with_execution_time_macro(
         model.render_query(execution_time="2020-01-02"),
         model.columns_to_types,
         materialized=True,
-        table_properties={},
+        view_properties={},
         table_description=None,
         column_descriptions={},
     )
@@ -657,7 +657,7 @@ def test_create_only_dev_table_exists(mocker: MockerFixture, adapter_mock, make_
 
     common_kwargs = dict(
         materialized=False,
-        table_properties={},
+        view_properties={},
         table_description=None,
     )
     rendered_query = model.render_query()
@@ -707,7 +707,7 @@ def test_create_materialized_view(mocker: MockerFixture, adapter_mock, make_snap
 
     common_kwargs = dict(
         materialized=True,
-        table_properties={},
+        view_properties={},
         table_description=None,
     )
 
@@ -737,7 +737,7 @@ def test_create_view_with_properties(mocker: MockerFixture, adapter_mock, make_s
                 kind VIEW (
                     materialized true
                 ),
-                table_properties (
+                physical_properties (
                     "key" = 'value'
                 )
             );
@@ -754,7 +754,7 @@ def test_create_view_with_properties(mocker: MockerFixture, adapter_mock, make_s
 
     common_kwargs = dict(
         materialized=True,
-        table_properties={
+        view_properties={
             "key": exp.convert("value"),
         },
         table_description=None,
