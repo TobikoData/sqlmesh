@@ -4311,7 +4311,7 @@ def test_forward_only_on_destructive_change_config() -> None:
     context_model = context.get_model("memory.db.table")
     assert context_model.on_schema_change.is_error
 
-    # error specified as default in user config
+    # error specified as model default
     config = Config(model_defaults=ModelDefaultsConfig(dialect="duckdb"))
     context = Context(config=config)
 

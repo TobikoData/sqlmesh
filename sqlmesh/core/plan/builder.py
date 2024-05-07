@@ -655,9 +655,10 @@ class PlanBuilder:
                 and not child_snapshot.model.on_schema_change.is_ignore
                 and not child_snapshot.name in self._allow_destructive_models
             ):
+                # no DAG if manual categorization
                 if not dag:
                     logger.info(
-                        f"Unable to evaluate model '{child_s_id.name}'s upstream parents for destructive schema changes."
+                        f"Unable to evaluate model '{child_s_id.name}'s upstream parents for destructive schema changes at plan time."
                     )
 
                 self._validate_schema_change(
@@ -800,12 +801,12 @@ class PlanBuilder:
         self,
         s_id: SnapshotId,
         upstream_snapshot_ids: t.List[SnapshotId] = [],
-        use_kind_default: bool = False,
+        force_warn: bool = False,
     ) -> None:
         """Determine if a schema change requires a DROP operation"""
         s_id_snapshot = t.cast(Snapshot, self._context_diff.snapshots.get(s_id))
 
-        if not s_id_snapshot.model.on_schema_change.is_ignore:
+        if not s_id_snapshot.model.on_schema_change.is_ignore or force_warn:
             schema_differ_args = getattr(
                 DIALECT_TO_ENGINE_ADAPTER[s_id_snapshot.model.dialect], "schema_differ_args"
             )
@@ -813,52 +814,60 @@ class PlanBuilder:
 
             subdag = [s_id, *upstream_snapshot_ids]
 
-            for id in subdag:
-                if not id.name in self._snapshot_change_is_destructive:
-                    snapshot = t.cast(
-                        Snapshot,
-                        s_id_snapshot if id == s_id else self._context_diff.snapshots.get(id),
-                    )
-                    new, old = self._context_diff.modified_snapshots[snapshot.name]
+            # if we already know that the change is destructive, we don't need to evaluate any more snapshots
+            warning_msg = f"PLAN TIME CHECK: Plan results in a destructive change to forward-only model '{s_id_snapshot.name}'s schema."
+            error_msg = f"{warning_msg} To allow this, change the model's `on_schema_change` setting to `warn` or `ignore` or include it in the plan's `--allow-destructive-model` option."
 
-                    # We must know all columns_to_types to determine whether a change is destructive
-                    old_columns_to_types = old.model.columns_to_types
-                    new_columns_to_types = new.model.columns_to_types
-                    if (
-                        not old_columns_to_types
-                        or not columns_to_types_all_known(old_columns_to_types)
-                        or not new_columns_to_types
-                        or not columns_to_types_all_known(new_columns_to_types)
-                    ):
-                        self._snapshot_change_is_destructive[id.name] = None
-                        continue
-
-                    schema_diff = schema_differ.compare_columns(
-                        new.model.name,
-                        old_columns_to_types,
-                        new_columns_to_types,
-                    )
-
-                    self._snapshot_change_is_destructive[snapshot.name] = any(
-                        [
-                            isinstance(action, exp.Drop)
-                            for actions in schema_diff
-                            for action in actions.args.get("actions", [])
-                        ]
-                    )
-
-            if any(self._snapshot_change_is_destructive[id.name] for id in subdag):
-                msg = f"PLAN TIME CHECK: Plan results in a destructive change to forward-only model '{s_id_snapshot.name}'s schema."
+            if any(self._snapshot_change_is_destructive.get(id.name, None) for id in subdag):
                 if s_id_snapshot.model.on_schema_change.is_error:
-                    raise PlanError(
-                        f"{msg} To allow this, change the model's `on_schema_change` setting to `warn` or `ignore` or include it in the plan's `--allow-destructive-model` option."
-                    )
+                    raise PlanError(error_msg)
                 else:
-                    logger.warning(msg)
-            elif any(self._snapshot_change_is_destructive[id.name] is None for id in subdag):
-                logger.info(
-                    f"Unable to determine at plan time if changes cause a destructive schema change to model '{s_id.name}'."
-                )
+                    logger.warning(warning_msg)
+            else:
+                for id in subdag:
+                    # if we already evaluated this snapshot, we don't need to evaluate it again
+                    if not id.name in self._snapshot_change_is_destructive:
+                        snapshot = t.cast(
+                            Snapshot,
+                            s_id_snapshot if id == s_id else self._context_diff.snapshots.get(id),
+                        )
+                        new, old = self._context_diff.modified_snapshots[snapshot.name]
+
+                        # We must know all columns_to_types to determine whether a change is destructive
+                        old_columns_to_types = old.model.columns_to_types
+                        new_columns_to_types = new.model.columns_to_types
+                        if (
+                            not old_columns_to_types
+                            or not columns_to_types_all_known(old_columns_to_types)
+                            or not new_columns_to_types
+                            or not columns_to_types_all_known(new_columns_to_types)
+                        ):
+                            self._snapshot_change_is_destructive[id.name] = None
+                            continue
+
+                        schema_diff = schema_differ.compare_columns(
+                            new.model.name,
+                            old_columns_to_types,
+                            new_columns_to_types,
+                        )
+
+                        self._snapshot_change_is_destructive[snapshot.name] = any(
+                            [
+                                isinstance(action, exp.Drop)
+                                for actions in schema_diff
+                                for action in actions.args.get("actions", [])
+                            ]
+                        )
+
+                if any(self._snapshot_change_is_destructive[id.name] for id in subdag):
+                    if s_id_snapshot.model.on_schema_change.is_error:
+                        raise PlanError(error_msg)
+                    else:
+                        logger.warning(warning_msg)
+                elif any(self._snapshot_change_is_destructive[id.name] is None for id in subdag):
+                    logger.info(
+                        f"Unable to determine at plan time if changes cause a destructive schema change to model '{s_id.name}'."
+                    )
 
     @cached_property
     def _forward_only_preview_needed(self) -> bool:
