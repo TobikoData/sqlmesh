@@ -1,4 +1,4 @@
-AIRFLOW_VERSION ?= 2.4.3
+AIRFLOW_VERSION ?= 2.9.1
 AIRFLOW_IMAGE_NAME ?= airflow-sqlmesh
 AIRFLOW_UID ?= $(shell id -u)
 

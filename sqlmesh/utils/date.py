@@ -54,7 +54,7 @@ def now(minute_floor: bool = True) -> datetime:
     Returns:
         A datetime object with tz utc.
     """
-    now = datetime.utcnow()
+    now = datetime.now(tz=UTC)
     if minute_floor:
         return now.replace(second=0, microsecond=0, tzinfo=UTC)
     return now.replace(tzinfo=UTC)
