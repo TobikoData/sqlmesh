@@ -1107,7 +1107,6 @@ class EngineAdapter:
                         insert_exp = exp.insert(
                             query,
                             table,
-                            # Change once Databricks supports REPLACE WHERE with columns
                             columns=(
                                 list(columns_to_types)
                                 if not insert_overwrite_strategy.is_replace_where
@@ -1116,7 +1115,7 @@ class EngineAdapter:
                             overwrite=insert_overwrite_strategy.is_insert_overwrite,
                         )
                         if insert_overwrite_strategy.is_replace_where:
-                            insert_exp.set("where", where)
+                            insert_exp.set("where", where or exp.true())
                         self.execute(insert_exp)
 
     def update_table(
