@@ -379,8 +379,8 @@ class IncrementalUnmanagedKind(_ModelKind):
     name: Literal[ModelKindName.INCREMENTAL_UNMANAGED] = ModelKindName.INCREMENTAL_UNMANAGED
     insert_overwrite: SQLGlotBool = False
     forward_only: SQLGlotBool = True
+    disable_restatement: SQLGlotBool = True
     on_schema_change: OnSchemaChange = OnSchemaChange.WARN
-    disable_restatement: Literal[True] = True
 
     @property
     def data_hash_values(self) -> t.List[t.Optional[str]]:
