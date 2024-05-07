@@ -25,7 +25,10 @@ from sqlmesh.utils import UniqueKeyDict, random_id, type_is_known, yaml
 from sqlmesh.utils.date import pandas_timestamp_to_pydatetime
 from sqlmesh.utils.errors import ConfigError, TestError
 
-Row = t.Dict[str, t.Any]
+if t.TYPE_CHECKING:
+    from sqlglot.dialects.dialect import DialectType
+
+    Row = t.Dict[str, t.Any]
 
 
 class ModelTest(unittest.TestCase):
