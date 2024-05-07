@@ -43,7 +43,6 @@ The SQLMesh project-level `model_defaults` key supports the following options, d
 - cron
 - owner
 - start
-- end
 - storage_format
 
 ## Model kind properties
