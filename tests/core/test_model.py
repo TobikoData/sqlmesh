@@ -4265,7 +4265,7 @@ def test_python_model_dialect():
 
 
 def test_forward_only_on_schema_change_config() -> None:
-    # unspecified: kind-specific default
+    # nothing specified in either MODEL kind or model defaults: kind-specific default
     config = Config(model_defaults=ModelDefaultsConfig(dialect="duckdb"))
     context = Context(config=config)
 
@@ -4311,7 +4311,7 @@ def test_forward_only_on_schema_change_config() -> None:
     context_model = context.get_model("memory.db.table")
     assert context_model.on_schema_change.is_error
 
-    # error specified as default in user config
+    # error specified as model default
     config = Config(model_defaults=ModelDefaultsConfig(dialect="duckdb"))
     context = Context(config=config)
 
