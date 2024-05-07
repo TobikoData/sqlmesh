@@ -72,11 +72,9 @@ setup(
             "google-cloud-bigquery-storage",
             "isort==5.10.1",
             "mypy~=1.8.0",
-            "pendulum>=3.0.0",
             "pre-commit",
             "pandas-stubs",
             "psycopg2-binary",
-            "pyarrow",
             "pydantic<2.6.0",
             "PyGithub",
             "pytest",
@@ -141,7 +139,6 @@ setup(
             # https://github.com/dbt-labs/dbt-snowflake/blob/main/dev-requirements.txt#L12
             "cryptography~=42.0.4",
             "snowflake-connector-python[pandas,secure-local-storage]",
-            "pyarrow",
         ],
         "trino": [
             "trino",
@@ -149,9 +146,9 @@ setup(
         "web": [
             "fastapi==0.110.2",
             "watchfiles>=0.19.0",
-            "pyarrow>=10.0.1",
             "uvicorn[standard]==0.22.0",
             "sse-starlette>=0.2.2",
+            "pyarrow",
         ],
     },
     classifiers=[
