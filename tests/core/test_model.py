@@ -3956,9 +3956,7 @@ def test_macros_in_model_statement(sushi_context, assert_exp_eq):
     def session_properties(evaluator, value):
         return exp.Property(
             this=exp.var("session_properties"),
-            value=exp.convert(
-                [exp.convert("foo").eq(exp.var(f'bar_{value}'))]
-            )
+            value=exp.convert([exp.convert("foo").eq(exp.var(f"bar_{value}"))]),
         )
 
     expressions = d.parse(
