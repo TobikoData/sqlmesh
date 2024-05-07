@@ -307,7 +307,6 @@ class StateSync(StateReader, abc.ABC):
     def remove_interval(
         self,
         snapshot_intervals: t.Sequence[t.Tuple[SnapshotInfoLike, Interval]],
-        execution_time: t.Optional[TimeLike] = None,
         remove_shared_versions: bool = False,
     ) -> None:
         """Remove an interval from a list of snapshots and sync it to the store.

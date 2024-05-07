@@ -673,7 +673,6 @@ class EngineAdapterStateSync(CommonStateSyncMixin, StateSync):
     def remove_interval(
         self,
         snapshot_intervals: t.Sequence[t.Tuple[SnapshotInfoLike, Interval]],
-        execution_time: t.Optional[TimeLike] = None,
         remove_shared_versions: bool = False,
     ) -> None:
         intervals_to_remove: t.Sequence[

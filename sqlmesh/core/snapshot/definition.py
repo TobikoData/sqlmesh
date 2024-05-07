@@ -656,14 +656,11 @@ class Snapshot(PydanticModel, SnapshotInfoMixin):
         else:
             self.intervals = merged_intervals
 
-    def remove_interval(
-        self, interval: Interval, execution_time: t.Optional[TimeLike] = None
-    ) -> None:
+    def remove_interval(self, interval: Interval) -> None:
         """Remove an interval from the snapshot.
 
         Args:
             interval: The interval to remove.
-            execution_time: The date/time time reference to use for execution time. Defaults to now.
         """
         self.intervals = remove_interval(self.intervals, *interval)
         self.dev_intervals = remove_interval(self.dev_intervals, *interval)
@@ -1504,7 +1501,7 @@ def missing_intervals(
             snapshot_start_date, snapshot_end_date = (to_datetime(i) for i in interval)
             snapshot = snapshot.copy()
             snapshot.intervals = snapshot.intervals.copy()
-            snapshot.remove_interval(interval, execution_time)
+            snapshot.remove_interval(interval)
 
         missing_interval_end_date = snapshot_end_date
         node_end_date = snapshot.node.end

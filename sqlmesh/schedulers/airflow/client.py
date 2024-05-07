@@ -17,6 +17,7 @@ from sqlmesh.core.state_sync import Versions
 from sqlmesh.core.user import User
 from sqlmesh.schedulers.airflow import common
 from sqlmesh.utils import unique
+from sqlmesh.utils.date import TimeLike
 from sqlmesh.utils.errors import (
     ApiClientError,
     ApiServerError,
@@ -201,6 +202,7 @@ class AirflowClient(BaseAirflowClient):
         directly_modified_snapshots: t.Optional[t.List[SnapshotId]] = None,
         indirectly_modified_snapshots: t.Optional[t.Dict[str, t.List[SnapshotId]]] = None,
         removed_snapshots: t.Optional[t.List[SnapshotId]] = None,
+        execution_time: t.Optional[TimeLike] = None,
     ) -> None:
         request = common.PlanApplicationRequest(
             new_snapshots=list(new_snapshots),
@@ -221,6 +223,7 @@ class AirflowClient(BaseAirflowClient):
             directly_modified_snapshots=directly_modified_snapshots or [],
             indirectly_modified_snapshots=indirectly_modified_snapshots or {},
             removed_snapshots=removed_snapshots or [],
+            execution_time=execution_time,
         )
 
         response = self._session.post(
