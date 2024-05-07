@@ -23,9 +23,16 @@ from sqlmesh.core.context import Context
 from sqlmesh.core.engine_adapter import SparkEngineAdapter
 from sqlmesh.core.engine_adapter.base import EngineAdapter
 from sqlmesh.core.macros import macro
-from sqlmesh.core.model import model
+from sqlmesh.core.model import IncrementalByTimeRangeKind, SqlModel, model
+from sqlmesh.core.model.kind import OnSchemaChange
 from sqlmesh.core.plan import BuiltInPlanEvaluator, Plan
-from sqlmesh.core.snapshot import Node, Snapshot
+from sqlmesh.core.snapshot import (
+    Node,
+    Snapshot,
+    SnapshotChangeCategory,
+    SnapshotDataVersion,
+    SnapshotFingerprint,
+)
 from sqlmesh.utils import random_id
 from sqlmesh.utils.date import TimeLike, to_date
 
@@ -314,6 +321,51 @@ def make_snapshot() -> t.Callable:
             },
             version=version,
         )
+
+    return _make_function
+
+
+@pytest.fixture
+def make_snapshot_on_schema_change(make_snapshot: t.Callable) -> t.Callable:
+    def _make_function(
+        name: str = "a",
+        old_query: str = "select '1' as one, '2022-01-01' ds",
+        new_query: str = "select 1 as one, '2022-01-01' ds",
+        on_schema_change: OnSchemaChange = OnSchemaChange.WARN,
+    ) -> t.Tuple[Snapshot, Snapshot]:
+        snapshot_old = make_snapshot(
+            SqlModel(
+                name=name,
+                dialect="duckdb",
+                query=parse_one(old_query),
+                kind=IncrementalByTimeRangeKind(
+                    time_column="ds", forward_only=True, on_schema_change=on_schema_change
+                ),
+            )
+        )
+
+        snapshot = make_snapshot(
+            SqlModel(
+                name=name,
+                dialect="duckdb",
+                query=parse_one(new_query),
+                kind=IncrementalByTimeRangeKind(
+                    time_column="ds", forward_only=True, on_schema_change=on_schema_change
+                ),
+            )
+        )
+        snapshot.previous_versions = (
+            SnapshotDataVersion(
+                fingerprint=SnapshotFingerprint(
+                    data_hash="test_data_hash",
+                    metadata_hash="test_metadata_hash",
+                ),
+                version="test_version",
+                change_category=SnapshotChangeCategory.FORWARD_ONLY,
+            ),
+        )
+
+        return snapshot_old, snapshot
 
     return _make_function
 

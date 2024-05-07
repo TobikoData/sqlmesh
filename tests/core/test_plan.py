@@ -41,10 +41,14 @@ from sqlmesh.utils.errors import PlanError
 
 
 def test_forward_only_plan_sets_version(make_snapshot, mocker: MockerFixture):
-    snapshot_a = make_snapshot(SqlModel(name="a", query=parse_one("select 1, ds")))
+    snapshot_a = make_snapshot(
+        SqlModel(name="a", query=parse_one("select 1, ds"), dialect="duckdb")
+    )
     snapshot_a.categorize_as(SnapshotChangeCategory.BREAKING)
 
-    snapshot_b = make_snapshot(SqlModel(name="b", query=parse_one("select 2, ds")))
+    snapshot_b = make_snapshot(
+        SqlModel(name="b", query=parse_one("select 2, ds"), dialect="duckdb")
+    )
     snapshot_b.previous_versions = (
         SnapshotDataVersion(
             fingerprint=SnapshotFingerprint(
@@ -133,10 +137,13 @@ def test_forward_only_dev(make_snapshot, mocker: MockerFixture):
 
 
 def test_forward_only_plan_added_models(make_snapshot, mocker: MockerFixture):
-    snapshot_a = make_snapshot(SqlModel(name="a", query=parse_one("select 1 as a, ds")))
+    snapshot_a = make_snapshot(
+        SqlModel(name="a", query=parse_one("select 1 as a, ds"), dialect="duckdb")
+    )
 
     snapshot_b = make_snapshot(
-        SqlModel(name="b", query=parse_one("select a, ds from a")), nodes={"a": snapshot_a.node}
+        SqlModel(name="b", query=parse_one("select a, ds from a"), dialect="duckdb"),
+        nodes={"a": snapshot_a.node},
     )
 
     context_diff = ContextDiff(
@@ -207,38 +214,10 @@ def test_paused_forward_only_parent(make_snapshot, mocker: MockerFixture):
     assert snapshot_b.change_category == SnapshotChangeCategory.BREAKING
 
 
-def test_forward_only_allow_destructive_models(make_snapshot):
+def test_forward_only_plan_allow_destructive_models(make_snapshot, make_snapshot_on_schema_change):
     # forward-only model, not forward-only plan
-    snapshot_a_old = make_snapshot(
-        SqlModel(
-            name="a",
-            dialect="duckdb",
-            query=parse_one("select 1 as one, '2022-01-01' ds"),
-            kind=IncrementalByTimeRangeKind(
-                time_column="ds", forward_only=True, on_schema_change=OnSchemaChange.ERROR
-            ),
-        )
-    )
-
-    snapshot_a = make_snapshot(
-        SqlModel(
-            name="a",
-            dialect="duckdb",
-            query=parse_one("select '2022-01-01' ds"),
-            kind=IncrementalByTimeRangeKind(
-                time_column="ds", forward_only=True, on_schema_change=OnSchemaChange.ERROR
-            ),
-        )
-    )
-    snapshot_a.previous_versions = (
-        SnapshotDataVersion(
-            fingerprint=SnapshotFingerprint(
-                data_hash="test_data_hash",
-                metadata_hash="test_metadata_hash",
-            ),
-            version="test_version",
-            change_category=SnapshotChangeCategory.FORWARD_ONLY,
-        ),
+    snapshot_a_old, snapshot_a = make_snapshot_on_schema_change(
+        on_schema_change=OnSchemaChange.ERROR
     )
 
     context_diff = ContextDiff(
@@ -266,7 +245,7 @@ def test_forward_only_allow_destructive_models(make_snapshot):
         SqlModel(
             name="b",
             dialect="duckdb",
-            query=parse_one("select 1 as one, '2022-01-01' ds"),
+            query=parse_one("select '1' as one, '2022-01-01' ds"),
             kind=IncrementalByTimeRangeKind(time_column="ds"),
         )
     )
@@ -275,7 +254,7 @@ def test_forward_only_allow_destructive_models(make_snapshot):
         SqlModel(
             name="b",
             dialect="duckdb",
-            query=parse_one("select '2022-01-01' ds"),
+            query=parse_one("select 1 as one, '2022-01-01' ds"),
             kind=IncrementalByTimeRangeKind(time_column="ds"),
         )
     )
@@ -303,7 +282,274 @@ def test_forward_only_allow_destructive_models(make_snapshot):
             == """PLAN TIME CHECK: Plan results in a destructive change to forward-only model '"b"'s schema."""
         )
 
-    assert PlanBuilder(context_diff, forward_only=True, allow_destructive_models=['"b"']).build()
+    with patch.object(logger, "warning") as mock_logger:
+        PlanBuilder(context_diff, forward_only=True, allow_destructive_models=['"b"']).build()
+        assert mock_logger.call_count == 0
+
+
+def test_forward_only_plan_non_forward_only_model(make_snapshot):
+    snapshot_a_old = make_snapshot(
+        SqlModel(
+            name="a",
+            dialect="duckdb",
+            query=parse_one("select '1' as one, '2022-01-01' ds"),
+            kind=IncrementalByTimeRangeKind(time_column="ds"),
+        )
+    )
+
+    snapshot_a = make_snapshot(
+        SqlModel(
+            name="a",
+            dialect="duckdb",
+            query=parse_one("select 1 as one, '2022-01-01' ds"),
+            kind=IncrementalByTimeRangeKind(time_column="ds"),
+        )
+    )
+
+    context_diff = ContextDiff(
+        environment="prod",
+        is_new_environment=False,
+        is_unfinalized_environment=False,
+        create_from="prod",
+        added=set(),
+        removed_snapshots={},
+        modified_snapshots={snapshot_a.name: (snapshot_a, snapshot_a_old)},
+        snapshots={snapshot_a.snapshot_id: snapshot_a, snapshot_a_old.snapshot_id: snapshot_a_old},
+        new_snapshots={snapshot_a.snapshot_id: snapshot_a},
+        previous_plan_id=None,
+        previously_promoted_snapshot_ids=set(),
+        previous_finalized_snapshots=None,
+    )
+
+    logger = logging.getLogger("sqlmesh.core.plan.builder")
+    with patch.object(logger, "warning") as mock_logger:
+        PlanBuilder(context_diff, forward_only=True).build()
+        assert (
+            mock_logger.call_args[0][0]
+            == """PLAN TIME CHECK: Plan results in a destructive change to forward-only model '"a"'s schema."""
+        )
+
+    with patch.object(logger, "warning") as mock_logger:
+        PlanBuilder(context_diff, forward_only=True, allow_destructive_models=['"a"']).build()
+        assert mock_logger.call_count == 0
+
+
+def test_forward_only_model_on_schema_change(make_snapshot, make_snapshot_on_schema_change):
+    # direct change to A: warning
+    snapshot_a_old, snapshot_a = make_snapshot_on_schema_change()
+
+    context_diff_1 = ContextDiff(
+        environment="prod",
+        is_new_environment=False,
+        is_unfinalized_environment=False,
+        create_from="prod",
+        added=set(),
+        removed_snapshots={},
+        modified_snapshots={
+            snapshot_a.name: (snapshot_a, snapshot_a_old),
+        },
+        snapshots={
+            snapshot_a.snapshot_id: snapshot_a,
+            snapshot_a_old.snapshot_id: snapshot_a_old,
+        },
+        new_snapshots={
+            snapshot_a.snapshot_id: snapshot_a,
+        },
+        previous_plan_id=None,
+        previously_promoted_snapshot_ids=set(),
+        previous_finalized_snapshots=None,
+    )
+
+    logger = logging.getLogger("sqlmesh.core.plan.builder")
+    with patch.object(logger, "warning") as mock_logger:
+        PlanBuilder(context_diff_1, forward_only=False).build()
+        assert (
+            mock_logger.call_args[0][0]
+            == """PLAN TIME CHECK: Plan results in a destructive change to forward-only model '"a"'s schema."""
+        )
+
+    # indirect change to B: warning
+    snapshot_a_old2, snapshot_a2 = make_snapshot_on_schema_change(
+        on_schema_change=OnSchemaChange.IGNORE
+    )
+
+    snapshot_b_old2 = make_snapshot(
+        SqlModel(
+            name="b",
+            dialect="duckdb",
+            query=parse_one("select one, '2022-01-01' ds from a"),
+            kind=IncrementalByTimeRangeKind(
+                time_column="ds", forward_only=True, on_schema_change=OnSchemaChange.WARN
+            ),
+        ),
+        nodes={'"a"': snapshot_a_old2.model},
+    )
+    snapshot_b2 = make_snapshot(snapshot_b_old2.model, nodes={'"a"': snapshot_a2.model})
+    snapshot_b2.previous_versions = (
+        SnapshotDataVersion(
+            fingerprint=SnapshotFingerprint(
+                data_hash="test_data_hash",
+                metadata_hash="test_metadata_hash",
+            ),
+            version="test_version",
+        ),
+    )
+
+    context_diff_2 = ContextDiff(
+        environment="prod",
+        is_new_environment=False,
+        is_unfinalized_environment=False,
+        create_from="prod",
+        added=set(),
+        removed_snapshots={},
+        modified_snapshots={
+            snapshot_a2.name: (snapshot_a2, snapshot_a_old2),
+            snapshot_b2.name: (snapshot_b2, snapshot_b_old2),
+        },
+        snapshots={
+            snapshot_a2.snapshot_id: snapshot_a2,
+            snapshot_a_old2.snapshot_id: snapshot_a_old2,
+            snapshot_b2.snapshot_id: snapshot_b2,
+            snapshot_b_old2.snapshot_id: snapshot_b_old2,
+        },
+        new_snapshots={
+            snapshot_a2.snapshot_id: snapshot_a2,
+            snapshot_b2.snapshot_id: snapshot_b2,
+        },
+        previous_plan_id=None,
+        previously_promoted_snapshot_ids=set(),
+        previous_finalized_snapshots=None,
+    )
+
+    with patch.object(logger, "warning") as mock_logger:
+        PlanBuilder(context_diff_2, forward_only=False).build()
+        assert (
+            mock_logger.call_args[0][0]
+            == """PLAN TIME CHECK: Plan results in a destructive change to forward-only model '"b"'s schema."""
+        )
+
+    # indirect change to C: error
+    snapshot_a_old3, snapshot_a3 = make_snapshot_on_schema_change(
+        on_schema_change=OnSchemaChange.IGNORE
+    )
+
+    snapshot_b_old3 = make_snapshot(
+        SqlModel(
+            name="b",
+            dialect="duckdb",
+            query=parse_one("select one, '2022-01-01' ds from a"),
+            kind=IncrementalByTimeRangeKind(
+                time_column="ds", forward_only=True, on_schema_change=OnSchemaChange.IGNORE
+            ),
+        ),
+        nodes={'"a"': snapshot_a_old3.model},
+    )
+    snapshot_b3 = make_snapshot(snapshot_b_old3.model, nodes={'"a"': snapshot_a3.model})
+    snapshot_b3.previous_versions = (
+        SnapshotDataVersion(
+            fingerprint=SnapshotFingerprint(
+                data_hash="test_data_hash",
+                metadata_hash="test_metadata_hash",
+            ),
+            version="test_version",
+        ),
+    )
+
+    snapshot_c_old3 = make_snapshot(
+        SqlModel(
+            name="c",
+            dialect="duckdb",
+            query=parse_one("select one, '2022-01-01' ds from b"),
+            kind=IncrementalByTimeRangeKind(
+                time_column="ds", forward_only=True, on_schema_change=OnSchemaChange.ERROR
+            ),
+        ),
+        nodes={'"a"': snapshot_a_old3.model, '"b"': snapshot_b_old3.model},
+    )
+    snapshot_c3 = make_snapshot(
+        snapshot_c_old3.model, nodes={'"a"': snapshot_a3.model, '"b"': snapshot_b3.model}
+    )
+    snapshot_c3.previous_versions = (
+        SnapshotDataVersion(
+            fingerprint=SnapshotFingerprint(
+                data_hash="test_data_hash",
+                metadata_hash="test_metadata_hash",
+            ),
+            version="test_version",
+        ),
+    )
+
+    context_diff_3 = ContextDiff(
+        environment="prod",
+        is_new_environment=False,
+        is_unfinalized_environment=False,
+        create_from="prod",
+        added=set(),
+        removed_snapshots={},
+        modified_snapshots={
+            snapshot_a3.name: (snapshot_a3, snapshot_a_old3),
+            snapshot_b3.name: (snapshot_b3, snapshot_b_old3),
+            snapshot_c3.name: (snapshot_c3, snapshot_c_old3),
+        },
+        snapshots={
+            snapshot_a3.snapshot_id: snapshot_a3,
+            snapshot_a_old3.snapshot_id: snapshot_a_old3,
+            snapshot_b3.snapshot_id: snapshot_b3,
+            snapshot_b_old3.snapshot_id: snapshot_b_old3,
+            snapshot_c3.snapshot_id: snapshot_c3,
+            snapshot_c_old3.snapshot_id: snapshot_c_old3,
+        },
+        new_snapshots={
+            snapshot_a3.snapshot_id: snapshot_a3,
+            snapshot_b3.snapshot_id: snapshot_b3,
+            snapshot_c3.snapshot_id: snapshot_c3,
+        },
+        previous_plan_id=None,
+        previously_promoted_snapshot_ids=set(),
+        previous_finalized_snapshots=None,
+    )
+
+    with pytest.raises(
+        PlanError,
+        match="""Plan results in a destructive change to forward-only model '"c"'s schema.""",
+    ):
+        PlanBuilder(context_diff_3, forward_only=False).build()
+
+
+def test_forward_only_model_on_schema_change_no_column_types(make_snapshot_on_schema_change):
+    snapshot_a_old, snapshot_a = make_snapshot_on_schema_change(
+        old_query="select 1 as one, '2022-01-01' ds", new_query="select one, '2022-01-01' ds"
+    )
+
+    context_diff_1 = ContextDiff(
+        environment="prod",
+        is_new_environment=False,
+        is_unfinalized_environment=False,
+        create_from="prod",
+        added=set(),
+        removed_snapshots={},
+        modified_snapshots={
+            snapshot_a.name: (snapshot_a, snapshot_a_old),
+        },
+        snapshots={
+            snapshot_a.snapshot_id: snapshot_a,
+            snapshot_a_old.snapshot_id: snapshot_a_old,
+        },
+        new_snapshots={
+            snapshot_a.snapshot_id: snapshot_a,
+        },
+        previous_plan_id=None,
+        previously_promoted_snapshot_ids=set(),
+        previous_finalized_snapshots=None,
+    )
+
+    logger = logging.getLogger("sqlmesh.core.plan.builder")
+    with patch.object(logger, "info") as mock_logger:
+        PlanBuilder(context_diff_1, forward_only=False).build()
+        assert (
+            mock_logger.call_args[0][0]
+            == """Unable to determine at plan time if changes cause a destructive schema change to model '"a"'."""
+        )
 
 
 def test_missing_intervals_lookback(make_snapshot, mocker: MockerFixture):
@@ -858,13 +1104,17 @@ def test_broken_references(make_snapshot, mocker: MockerFixture):
 
 def test_effective_from(make_snapshot, mocker: MockerFixture):
     snapshot = make_snapshot(
-        SqlModel(name="a", query=parse_one("select 1, ds FROM b"), start="2023-01-01")
+        SqlModel(
+            name="a", query=parse_one("select 1, ds FROM b"), start="2023-01-01", dialect="duckdb"
+        )
     )
     snapshot.categorize_as(SnapshotChangeCategory.BREAKING)
     snapshot.add_interval("2023-01-01", "2023-03-01")
 
     updated_snapshot = make_snapshot(
-        SqlModel(name="a", query=parse_one("select 2, ds FROM b"), start="2023-01-01")
+        SqlModel(
+            name="a", query=parse_one("select 2, ds FROM b"), start="2023-01-01", dialect="duckdb"
+        )
     )
     updated_snapshot.previous_versions = snapshot.all_versions
 
