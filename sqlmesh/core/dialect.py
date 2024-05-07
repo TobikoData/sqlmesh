@@ -12,6 +12,7 @@ import pandas as pd
 from sqlglot import Dialect, Generator, ParseError, Parser, Tokenizer, TokenType, exp
 from sqlglot.dialects.dialect import DialectType
 from sqlglot.dialects.snowflake import Snowflake
+from sqlglot.helper import seq_get
 from sqlglot.optimizer.normalize_identifiers import normalize_identifiers
 from sqlglot.optimizer.qualify_columns import quote_identifiers
 from sqlglot.optimizer.qualify_tables import qualify_tables
@@ -449,13 +450,21 @@ def _create_parser(parser_type: t.Type[exp.Expression], table_keys: t.List[str])
     def parse(self: Parser) -> t.Optional[exp.Expression]:
         from sqlmesh.core.model.kind import ModelKindName
 
-        expressions = []
+        expressions: t.List[exp.Expression] = []
 
         while True:
-            key_expression = self._parse_id_var(any_token=True)
+            prev_property = seq_get(expressions, -1)
+            if not self._match(TokenType.COMMA, expression=prev_property) and expressions:
+                break
 
+            key_expression = self._parse_id_var(any_token=True)
             if not key_expression:
                 break
+
+            # This allows macro functions that programmaticaly generate the property key-value pair
+            if isinstance(key_expression, MacroFunc):
+                expressions.append(key_expression)
+                continue
 
             key = key_expression.name.lower()
 
@@ -500,9 +509,6 @@ def _create_parser(parser_type: t.Type[exp.Expression], table_keys: t.List[str])
                 value.meta["sql"] = self._find_sql(start, self._prev)
 
             expressions.append(self.expression(exp.Property, this=key, value=value))
-
-            if not self._match(TokenType.COMMA, expression=expressions[-1]):
-                break
 
         return self.expression(parser_type, expressions=expressions)
 
