@@ -685,20 +685,11 @@ function ColumnSource({
 
   return (
     <Popover
-      onMouseLeave={() => {
-        setIsShowing(false)
-      }}
-      onClick={e => {
-        e.stopPropagation()
-      }}
+      onMouseLeave={() => setIsShowing(false)}
+      onMouseOver={() => setIsShowing(true)}
       className="flex"
     >
       <InformationCircleIcon
-        onClick={(e: React.MouseEvent<SVGSVGElement>) => {
-          e.stopPropagation()
-
-          setIsShowing(true)
-        }}
         className={clsx(
           'inline-block mr-3 w-4 h-4',
           isShowing ? 'text-inherit' : 'text-prose',
@@ -717,6 +708,7 @@ function ColumnSource({
         <Popover.Panel
           ref={elSourceContainer}
           className="fixed -translate-x-[100%] -translate-y-[50%] z-10 content transform cursor-pointer rounded-lg bg-theme border-4 border-neutral-200 dark:border-neutral-600"
+          onClick={e => e.stopPropagation()}
         >
           <CodeEditorDefault
             content={source as string}
