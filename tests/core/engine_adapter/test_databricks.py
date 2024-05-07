@@ -36,7 +36,7 @@ def test_replace_query_exists(mocker: MockFixture, make_mocked_engine_adapter: t
     adapter.replace_query("test_table", parse_one("SELECT a FROM tbl"), {"a": "int"})
 
     assert to_sql_calls(adapter) == [
-        "INSERT OVERWRITE TABLE `test_table` (`a`) SELECT `a` FROM `tbl`",
+        "INSERT INTO `test_table` REPLACE WHERE TRUE SELECT `a` FROM `tbl`",
     ]
 
 
@@ -70,7 +70,7 @@ def test_replace_query_pandas_exists(mocker: MockFixture, make_mocked_engine_ada
     )
 
     assert to_sql_calls(adapter) == [
-        "INSERT OVERWRITE TABLE `test_table` (`a`, `b`) SELECT CAST(`a` AS INT) AS `a`, CAST(`b` AS INT) AS `b` FROM VALUES (1, 4), (2, 5), (3, 6) AS `t`(`a`, `b`)",
+        "INSERT INTO `test_table` REPLACE WHERE TRUE SELECT CAST(`a` AS INT) AS `a`, CAST(`b` AS INT) AS `b` FROM VALUES (1, 4), (2, 5), (3, 6) AS `t`(`a`, `b`)",
     ]
 
 

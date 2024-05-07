@@ -31,7 +31,7 @@ logger = logging.getLogger(__name__)
 )
 class DatabricksEngineAdapter(SparkEngineAdapter):
     DIALECT = "databricks"
-    INSERT_OVERWRITE_STRATEGY = InsertOverwriteStrategy.INSERT_OVERWRITE
+    INSERT_OVERWRITE_STRATEGY = InsertOverwriteStrategy.REPLACE_WHERE
     SUPPORTS_CLONING = True
     SUPPORTS_MATERIALIZED_VIEWS = True
     SUPPORTS_MATERIALIZED_VIEW_SCHEMA = True
