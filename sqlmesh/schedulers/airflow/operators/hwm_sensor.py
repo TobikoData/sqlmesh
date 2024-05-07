@@ -49,7 +49,10 @@ class HighWaterMarkSensor(BaseSensorOperator):
         else:
             current_high_water_mark = None
 
-        target_high_water_mark = self._compute_target_high_water_mark(dag_run, target_snapshot)
+        target_high_water_mark = self._compute_target_high_water_mark(
+            dag_run,  # type: ignore
+            target_snapshot,
+        )
 
         logger.info(
             "The current high water mark for snapshot %s is '%s' (target is '%s')",
@@ -97,8 +100,8 @@ class HighWaterMarkExternalSensor(BaseSensorOperator):
         interval_unit = self.snapshot.node.interval_unit
         dag_run = context["dag_run"]
         signals = self.snapshot.model.render_signals(
-            start=interval_unit.cron_floor(self.start or dag_run.data_interval_start),
-            end=interval_unit.cron_floor(self.end or dag_run.data_interval_end),
+            start=interval_unit.cron_floor(self.start or dag_run.data_interval_start),  # type: ignore
+            end=interval_unit.cron_floor(self.end or dag_run.data_interval_end),  # type: ignore
             execution_time=now(minute_floor=False),
         )
         delegates = [self.external_table_sensor_factory(signal) for signal in signals]

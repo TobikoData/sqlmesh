@@ -166,7 +166,7 @@ class SnapshotEvaluationTarget(BaseTarget[commands.EvaluateCommandPayload], Pyda
         if self.start:
             return self.start
 
-        start = self.snapshot.node.interval_unit.cron_floor(context["dag_run"].data_interval_start)
+        start = self.snapshot.node.interval_unit.cron_floor(context["dag_run"].data_interval_start)  # type: ignore
         if not self.snapshot.is_model:
             return start
 
@@ -174,7 +174,7 @@ class SnapshotEvaluationTarget(BaseTarget[commands.EvaluateCommandPayload], Pyda
 
     def _get_end(self, context: Context) -> TimeLike:
         return self.end or self.snapshot.node.interval_unit.cron_floor(
-            context["dag_run"].data_interval_end
+            context["dag_run"].data_interval_end  # type: ignore
         )
 
     def _get_execution_time(self, context: Context) -> TimeLike:

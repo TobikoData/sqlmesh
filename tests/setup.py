@@ -1,5 +1,6 @@
 import os
-from distutils.core import run_setup, setup
+
+from setuptools import run_setup, setup
 
 os.chdir(os.path.join(os.path.dirname(__file__), ".."))
 sqlmesh_dist = run_setup("setup.py", stop_after="init")
