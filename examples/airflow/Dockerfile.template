@@ -52,10 +52,12 @@ ENV AIRFLOW__SCHEDULER__MIN_FILE_PROCESS_INTERVAL=3
 USER airflow
 
 # Install Spark provider for Airflow
-RUN pip install apache-airflow-providers-apache-spark==4.8.0 \
-                apache-airflow-providers-databricks==6.4.0 \
+# skip install pyspark since it's part of the image
+RUN pip install apache-airflow-providers-apache-spark==4.8.0 --no-deps
+RUN pip install apache-airflow-providers-databricks==6.4.0 \
                 apache-airflow-providers-github==2.6.0 \
-                apache-airflow-providers-common-sql==1.13.0
+                apache-airflow-providers-common-sql==1.13.0 \
+                pandas==1.5.2  # python 3.8 spark 3.4 and pandas 2.0 have issues with casting timestamp
 
 # Install Deps
 USER root
