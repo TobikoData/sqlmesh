@@ -38,7 +38,7 @@ def test_notify(notification_target_manager_with_spy):
     spy.assert_called_once_with(
         mock.ANY,
         NotificationStatus.INFO,
-        "Plan a-plan-id apply started for environment `prod`.",
+        "Plan `a-plan-id` apply started for environment `prod`.",
     )
 
     spy.reset_mock()
@@ -46,7 +46,7 @@ def test_notify(notification_target_manager_with_spy):
     spy.assert_called_once_with(
         mock.ANY,
         NotificationStatus.SUCCESS,
-        "Plan a-plan-id apply finished for environment `prod`.",
+        "Plan `a-plan-id` apply finished for environment `prod`.",
     )
 
     # No notification target configured for APPLY_FAILURE event
@@ -65,7 +65,7 @@ def test_notify_user(notification_target_manager_with_spy):
     spy.assert_called_once_with(
         mock.ANY,
         NotificationStatus.INFO,
-        "Plan a-plan-id apply started for environment `prod`.",
+        "Plan `a-plan-id` apply started for environment `prod`.",
     )
 
     # No notification target configured for APPLY_END event for test_user

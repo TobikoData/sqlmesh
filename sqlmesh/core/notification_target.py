@@ -123,7 +123,7 @@ class BaseNotificationTarget(PydanticModel, frozen=True):
         """
         self.send(
             NotificationStatus.INFO,
-            f"Plan {plan_id} apply started for environment `{environment}`.",
+            f"Plan `{plan_id}` apply started for environment `{environment}`.",
         )
 
     @notify(NotificationEvent.APPLY_END)
@@ -136,7 +136,7 @@ class BaseNotificationTarget(PydanticModel, frozen=True):
         """
         self.send(
             NotificationStatus.SUCCESS,
-            f"Plan {plan_id} apply finished for environment `{environment}`.",
+            f"Plan `{plan_id}` apply finished for environment `{environment}`.",
         )
 
     @notify(NotificationEvent.RUN_START)
@@ -180,7 +180,7 @@ class BaseNotificationTarget(PydanticModel, frozen=True):
         """
         self.send(
             NotificationStatus.FAILURE,
-            f"Plan {plan_id} in environment `{environment}` apply failed.",
+            f"Plan `{plan_id}` in environment `{environment}` apply failed.",
             exc=exc,
         )
 
