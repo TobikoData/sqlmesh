@@ -217,6 +217,8 @@ class DbtLoader(Loader):
         return result
 
     class _Cache:
+        MAX_ENTRY_NAME_LENGTH = 200
+
         def __init__(
             self,
             loader: DbtLoader,
@@ -249,7 +251,10 @@ class DbtLoader(Loader):
                 )
             except ValueError:
                 path_for_name = target_path
-            return "__".join(path_for_name.parts).replace(path_for_name.suffix, "")
+            name = "__".join(path_for_name.parts).replace(path_for_name.suffix, "")
+            if len(name) > self.MAX_ENTRY_NAME_LENGTH:
+                return name[len(name) - self.MAX_ENTRY_NAME_LENGTH :]
+            return name
 
         def _cache_entry_id(self, target_path: Path) -> str:
             max_mtime = self._max_mtime_for_path(target_path)
