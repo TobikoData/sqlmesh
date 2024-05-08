@@ -6,14 +6,14 @@ import unittest
 
 from sqlmesh.core.engine_adapter import EngineAdapter
 from sqlmesh.core.model import Model
-from sqlmesh.core.test.definition import ModelTest, generate_test
+from sqlmesh.core.test.definition import ModelTest as ModelTest, generate_test as generate_test
 from sqlmesh.core.test.discovery import (
-    ModelTestMetadata,
-    filter_tests_by_patterns,
-    get_all_model_tests,
-    load_model_test_file,
+    ModelTestMetadata as ModelTestMetadata,
+    filter_tests_by_patterns as filter_tests_by_patterns,
+    get_all_model_tests as get_all_model_tests,
+    load_model_test_file as load_model_test_file,
 )
-from sqlmesh.core.test.result import ModelTextTestResult
+from sqlmesh.core.test.result import ModelTextTestResult as ModelTextTestResult
 from sqlmesh.utils import UniqueKeyDict
 
 if t.TYPE_CHECKING:

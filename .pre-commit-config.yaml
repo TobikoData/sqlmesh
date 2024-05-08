@@ -1,34 +1,20 @@
 repos:
   - repo: local
     hooks:
-      - id: autoflake
-        name: autoflake
-        entry: autoflake
-        language: system
-        "types": [python]
+      - id: ruff
+        name: ruff
+        entry: ruff check --force-exclude --fix --ignore E721 --ignore E741
+        language: python
+        types_or: [python, pyi]
         require_serial: true
         files: &files ^(sqlmesh/|tests/|web/|examples/|setup.py)
-      - id: isort
-        name: isort
-        entry: isort
-        language: system
-        "types": [python]
-        files: *files
-        require_serial: true
-      - id: black
-        name: black
-        language: system
-        args:
-          - --target-version
-          - py37
-          - --line-length
-          - "100"
-        entry: black
+      - id: ruff-format
+        name: ruff-format
+        entry: ruff format --force-exclude --line-length 100
+        language: python
+        types_or: [python, pyi]
         require_serial: true
         files: *files
-        types_or:
-          - python
-          - pyi
       - id: mypy
         name: mypy
         language: system

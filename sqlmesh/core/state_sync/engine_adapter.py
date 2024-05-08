@@ -397,7 +397,7 @@ class EngineAdapterStateSync(CommonStateSyncMixin, StateSync):
         )
         if exclude_external:
             query = query.where(exp.column("kind_name").neq(ModelKindName.EXTERNAL.value))
-        return {name for name, in self._fetchall(query)}
+        return {name for (name,) in self._fetchall(query)}
 
     def reset(self, default_catalog: t.Optional[str]) -> None:
         """Resets the state store to the state when it was first initialized."""
@@ -1279,7 +1279,7 @@ class EngineAdapterStateSync(CommonStateSyncMixin, StateSync):
         batches = self._snapshot_batches(name_versions)
 
         if not name_versions:
-            return exp.false()
+            yield exp.false()
         elif self.engine_adapter.SUPPORTS_TUPLE_IN:
             for versions in batches:
                 yield t.cast(

@@ -237,9 +237,7 @@ def test_text_diff():
 -  *
 -FROM x
 +  1
-+FROM y""" in text_diff(
-        parse("SELECT * FROM x"), parse("SELECT 1 FROM y")
-    )
++FROM y""" in text_diff(parse("SELECT * FROM x"), parse("SELECT 1 FROM y"))
 
 
 def test_parse():

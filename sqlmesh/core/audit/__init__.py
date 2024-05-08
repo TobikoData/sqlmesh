@@ -4,12 +4,12 @@ from types import ModuleType
 
 from sqlmesh.core.audit import builtin
 from sqlmesh.core.audit.definition import (
-    Audit,
-    AuditResult,
-    ModelAudit,
-    StandaloneAudit,
-    load_audit,
-    load_multiple_audits,
+    Audit as Audit,
+    AuditResult as AuditResult,
+    ModelAudit as ModelAudit,
+    StandaloneAudit as StandaloneAudit,
+    load_audit as load_audit,
+    load_multiple_audits as load_multiple_audits,
 )
 
 

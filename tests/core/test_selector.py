@@ -48,7 +48,7 @@ def test_select_models(mocker: MockerFixture, make_snapshot, default_catalog: t.
         default_catalog=default_catalog,
     )
     standalone_audit = StandaloneAudit(
-        name="test_audit", query=d.parse_one(f"SELECT * FROM added_model WHERE a IS NULL")
+        name="test_audit", query=d.parse_one("SELECT * FROM added_model WHERE a IS NULL")
     )
 
     modified_model_v1_snapshot = make_snapshot(modified_model_v1)

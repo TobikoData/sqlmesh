@@ -358,7 +358,7 @@ def test_hourly_model_with_lookback_no_backfill_in_dev(init_and_plan_context: t.
     top_waiters_model = add_projection_to_model(t.cast(SqlModel, top_waiters_model), literal=True)
     context.upsert_model(top_waiters_model)
 
-    snapshot = context.get_snapshot(model, raise_if_missing=True)
+    context.get_snapshot(model, raise_if_missing=True)
     top_waiters_snapshot = context.get_snapshot("sushi.top_waiters", raise_if_missing=True)
 
     with freeze_time(now() + timedelta(hours=2)):

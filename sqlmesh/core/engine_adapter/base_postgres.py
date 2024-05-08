@@ -171,7 +171,10 @@ class BasePostgresEngineAdapter(EngineAdapter):
         df = self.fetchdf(query)
         return [
             DataObject(
-                catalog=catalog, schema=row.schema_name, name=row.name, type=DataObjectType.from_str(row.type)  # type: ignore
+                catalog=catalog,
+                schema=row.schema_name,
+                name=row.name,
+                type=DataObjectType.from_str(row.type),  # type: ignore
             )
             for row in df.itertuples()
         ]

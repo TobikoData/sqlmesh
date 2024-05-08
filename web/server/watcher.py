@@ -78,7 +78,7 @@ async def watch_project() -> None:
             except Exception:
                 error = ApiException(
                     message="Error updating file",
-                    origin=f"API -> watcher -> watch_project",
+                    origin="API -> watcher -> watch_project",
                     trigger=path_str,
                 ).to_dict()
                 api_console.log_event(event=models.EventName.WARNINGS, data=error)

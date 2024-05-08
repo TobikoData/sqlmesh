@@ -91,14 +91,11 @@ def test_run(sushi_context_fixed_date: Context, scheduler: Scheduler):
         "2022-01-30",
     )
 
-    assert (
-        adapter.fetchone(
-            f"""
+    assert adapter.fetchone(
+        f"""
         SELECT id, name, price FROM sqlmesh__sushi.sushi__items__{snapshot.version} ORDER BY event_date LIMIT 1
     """
-        )
-        == (0, "Hotate", 5.99)
-    )
+    ) == (0, "Hotate", 5.99)
 
 
 def test_incremental_by_unique_key_kind_dag(mocker: MockerFixture, make_snapshot):

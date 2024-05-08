@@ -645,8 +645,7 @@ def generate_test(
     # ruamel.yaml does not support pandas Timestamps, so we must convert them to python
     # datetime or datetime.date objects based on column type
     inputs = {
-        models[dep]
-        .name: pandas_timestamp_to_pydatetime(
+        models[dep].name: pandas_timestamp_to_pydatetime(
             engine_adapter.fetchdf(query).apply(lambda col: col.map(_normalize_df_value)),
             models[dep].columns_to_types,
         )

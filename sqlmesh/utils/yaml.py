@@ -14,7 +14,7 @@ JINJA_METHODS = {
     "env_var": lambda key, default=None: getenv(key, default),
 }
 
-YAML = lambda: yaml.YAML(typ="safe")
+YAML = lambda: yaml.YAML(typ="safe")  # noqa: E731
 
 
 def load(

@@ -384,7 +384,9 @@ def _parse_types(
     allow_identifiers: bool = True,
 ) -> t.Optional[exp.Expression]:
     start = self._curr
-    parsed_type = self.__parse_types(check_func=check_func, schema=schema, allow_identifiers=allow_identifiers)  # type: ignore
+    parsed_type = self.__parse_types(  # type: ignore
+        check_func=check_func, schema=schema, allow_identifiers=allow_identifiers
+    )
 
     if schema and parsed_type:
         parsed_type.meta["sql"] = self._find_sql(start, self._prev)
@@ -798,7 +800,8 @@ def extend_sqlglot() -> None:
                     DColonCast: lambda self, e: f"{self.sql(e, 'this')}::{self.sql(e, 'to')}",
                     Jinja: lambda self, e: e.name,
                     JinjaQuery: lambda self, e: f"{JINJA_QUERY_BEGIN};\n{e.name}\n{JINJA_END};",
-                    JinjaStatement: lambda self, e: f"{JINJA_STATEMENT_BEGIN};\n{e.name}\n{JINJA_END};",
+                    JinjaStatement: lambda self,
+                    e: f"{JINJA_STATEMENT_BEGIN};\n{e.name}\n{JINJA_END};",
                     MacroDef: lambda self, e: f"@DEF({self.sql(e.this)}, {self.sql(e.expression)})",
                     MacroFunc: _macro_func_sql,
                     MacroStrReplace: lambda self, e: f"@{self.sql(e.this)}",

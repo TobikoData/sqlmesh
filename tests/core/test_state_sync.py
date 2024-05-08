@@ -215,7 +215,6 @@ def test_snapshots_exists(state_sync: EngineAdapterStateSync, snapshots: t.List[
 
 @pytest.fixture
 def get_snapshot_intervals(state_sync) -> t.Callable[[Snapshot], t.Optional[SnapshotIntervals]]:
-
     def _get_snapshot_intervals(snapshot: Snapshot) -> t.Optional[SnapshotIntervals]:
         intervals = state_sync._get_snapshot_intervals([snapshot])[-1]
         return intervals[0] if intervals else None

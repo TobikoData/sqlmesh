@@ -78,7 +78,7 @@ def macro_evaluator() -> MacroEvaluator:
 
     return MacroEvaluator(
         "hive",
-        {"test": Executable(name="test", payload=f"def test(_):\n    return 'test'")},
+        {"test": Executable(name="test", payload="def test(_):\n    return 'test'")},
     )
 
 
