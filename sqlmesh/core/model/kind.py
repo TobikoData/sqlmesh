@@ -317,7 +317,7 @@ class _IncrementalBy(_Incremental):
     batch_concurrency: t.Optional[SQLGlotPositiveInt] = None
     lookback: t.Optional[SQLGlotPositiveInt] = None
     forward_only: SQLGlotBool = False
-    on_schema_change: OnSchemaChange = OnSchemaChange.WARN
+    on_destructive_change: OnDestructiveChange = OnDestructiveChange.ERROR
     disable_restatement: SQLGlotBool = False
 
     _dialect_validator = kind_dialect_validator
@@ -336,7 +336,7 @@ class _IncrementalBy(_Incremental):
             *super().metadata_hash_values,
             str(self.batch_size) if self.batch_size is not None else None,
             str(self.forward_only),
-            str(self.on_schema_change),
+            str(self.on_destructive_change),
             str(self.disable_restatement),
         ]
 
@@ -407,7 +407,7 @@ class IncrementalUnmanagedKind(_Incremental):
     insert_overwrite: SQLGlotBool = False
     forward_only: SQLGlotBool = True
     disable_restatement: SQLGlotBool = True
-    on_schema_change: OnSchemaChange = OnSchemaChange.WARN
+    on_destructive_change: OnDestructiveChange = OnDestructiveChange.ERROR
 
     @property
     def data_hash_values(self) -> t.List[t.Optional[str]]:
@@ -415,7 +415,11 @@ class IncrementalUnmanagedKind(_Incremental):
 
     @property
     def metadata_hash_values(self) -> t.List[t.Optional[str]]:
-        return [*super().metadata_hash_values, str(self.forward_only), str(self.on_schema_change)]
+        return [
+            *super().metadata_hash_values,
+            str(self.forward_only),
+            str(self.on_destructive_change),
+        ]
 
 
 class ViewKind(_ModelKind):
@@ -484,7 +488,7 @@ class _SCDType2Kind(_Incremental):
     time_data_type: exp.DataType = Field(exp.DataType.build("TIMESTAMP"), validate_default=True)
 
     forward_only: SQLGlotBool = True
-    on_schema_change: OnSchemaChange = OnSchemaChange.WARN
+    on_destructive_change: OnDestructiveChange = OnDestructiveChange.ERROR
     disable_restatement: SQLGlotBool = True
 
     _dialect_validator = kind_dialect_validator
@@ -531,7 +535,7 @@ class _SCDType2Kind(_Incremental):
         return [
             *super().metadata_hash_values,
             str(self.forward_only),
-            str(self.on_schema_change),
+            str(self.on_destructive_change),
             str(self.disable_restatement),
         ]
 

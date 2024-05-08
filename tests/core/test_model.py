@@ -4285,8 +4285,8 @@ def test_forward_only_on_destructive_change_config() -> None:
     context.upsert_model(model)
     context_model = context.get_model("memory.db.table")
     assert (
-        context_model.on_schema_change
-        == IncrementalByTimeRangeKind.all_field_infos()["on_schema_change"].default
+        context_model.on_destructive_change
+        == IncrementalByTimeRangeKind.all_field_infos()["on_destructive_change"].default
     )
 
     # error specified in MODEL kind
@@ -4300,7 +4300,7 @@ def test_forward_only_on_destructive_change_config() -> None:
             kind INCREMENTAL_BY_TIME_RANGE (
                 time_column c,
                 forward_only True,
-                on_schema_change error
+                on_destructive_change error
             ),
         );
         SELECT a, b, c FROM source_table;
@@ -4309,7 +4309,7 @@ def test_forward_only_on_destructive_change_config() -> None:
     model = load_sql_based_model(expressions, dialect=config.model_defaults.dialect)
     context.upsert_model(model)
     context_model = context.get_model("memory.db.table")
-    assert context_model.on_schema_change.is_error
+    assert context_model.on_destructive_change.is_error
 
     # error specified as model default
     config = Config(model_defaults=ModelDefaultsConfig(dialect="duckdb"))
@@ -4330,7 +4330,7 @@ def test_forward_only_on_destructive_change_config() -> None:
     model = load_sql_based_model(
         expressions,
         dialect=config.model_defaults.dialect,
-        kind_specific_defaults={"on_schema_change": exp.Identifier(this="error")},
+        kind_specific_defaults={"on_destructive_change": exp.Identifier(this="error")},
     )
     context.upsert_model(model)
     context_model = context.get_model("memory.db.table")

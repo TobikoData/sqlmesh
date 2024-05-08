@@ -24,7 +24,7 @@ from sqlmesh.core import constants as c
 from sqlmesh.core import dialect as d
 from sqlmesh.core.macros import MacroRegistry, MacroStrTemplate, macro
 from sqlmesh.core.model.common import expression_validator
-from sqlmesh.core.model.kind import ModelKindName, OnSchemaChange, SeedKind
+from sqlmesh.core.model.kind import ModelKindName, OnDestructiveChange, SeedKind
 from sqlmesh.core.model.meta import ModelMeta
 from sqlmesh.core.model.seed import CsvSeedReader, Seed, create_seed
 from sqlmesh.core.renderer import ExpressionRenderer, QueryRenderer
@@ -625,8 +625,8 @@ class _Model(ModelMeta, frozen=True):
         return getattr(self.kind, "forward_only", False)
 
     @property
-    def on_schema_change(self) -> OnSchemaChange:
-        return getattr(self.kind, "on_schema_change", OnSchemaChange.IGNORE)
+    def on_destructive_change(self) -> OnDestructiveChange:
+        return getattr(self.kind, "on_destructive_change", OnDestructiveChange.IGNORE)
 
     @property
     def disable_restatement(self) -> bool:
