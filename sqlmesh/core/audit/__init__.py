@@ -1,3 +1,4 @@
+# ruff: noqa: F401
 import inspect
 import typing as t
 from types import ModuleType

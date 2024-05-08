@@ -1,3 +1,4 @@
+# ruff: noqa: F401
 from sqlmesh.core.model.cache import ModelCache, OptimizedQueryCache
 from sqlmesh.core.model.decorator import model
 from sqlmesh.core.model.definition import (

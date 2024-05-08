@@ -60,7 +60,7 @@ X = 1
 Y = 2
 Z = 3
 
-my_lambda = lambda: print("z")
+my_lambda = lambda: print("z")  # noqa: E731
 
 KLASS_X = 1
 KLASS_Y = 2
@@ -163,7 +163,7 @@ def test_normalize_source() -> None:
 
 
 def test_serialize_env_error() -> None:
-    with pytest.raises(SQLMeshError) as e:
+    with pytest.raises(SQLMeshError):
         # pretend to be the module pandas
         serialize_env({"test_date": test_date}, path=Path("tests/utils"))
 
@@ -231,7 +231,7 @@ class DataClass:
         "my_lambda": Executable(
             name="my_lambda",
             path="test_metaprogramming.py",
-            payload=f"my_lambda = lambda : print('z')",
+            payload="my_lambda = lambda : print('z')",
         ),
         "other_func": Executable(
             name="other_func",

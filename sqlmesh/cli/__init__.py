@@ -17,7 +17,7 @@ logger = logging.getLogger(__name__)
 
 
 def error_handler(
-    func: t.Callable[..., DECORATOR_RETURN_TYPE]
+    func: t.Callable[..., DECORATOR_RETURN_TYPE],
 ) -> t.Callable[..., DECORATOR_RETURN_TYPE]:
     @wraps(func)
     def wrapper(*args: t.List[t.Any], **kwargs: t.Any) -> DECORATOR_RETURN_TYPE:

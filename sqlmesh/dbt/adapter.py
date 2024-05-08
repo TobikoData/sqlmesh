@@ -327,7 +327,6 @@ class RuntimeAdapter(BaseAdapter):
         return exp.to_table(physical_table_name, dialect=self.dialect)
 
     def _relation_to_table(self, relation: BaseRelation) -> exp.Table:
-        table = exp.to_table(relation.render(), dialect=self.dialect)
         return exp.to_table(relation.render(), dialect=self.dialect)
 
     def _table_to_relation(self, table: exp.Table) -> BaseRelation:

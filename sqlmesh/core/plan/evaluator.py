@@ -343,7 +343,6 @@ class BaseAirflowPlanEvaluator(PlanEvaluator):
 
 
 class StateBasedAirflowPlanEvaluator(BaseAirflowPlanEvaluator):
-
     backfill_concurrent_tasks: int
     ddl_concurrent_tasks: int
     notification_targets: t.Optional[t.List[NotificationTarget]]

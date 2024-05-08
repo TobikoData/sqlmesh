@@ -622,7 +622,7 @@ def test_get_removal_intervals_full_history_restatement_model(make_snapshot):
     assert interval == (to_timestamp("2023-01-01"), execution_time)
 
 
-each_macro = lambda: "test"
+each_macro = lambda: "test"  # noqa: E731
 
 
 def test_fingerprint(model: Model, parent_model: Model):

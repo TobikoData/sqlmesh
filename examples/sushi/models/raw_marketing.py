@@ -4,7 +4,6 @@ from datetime import datetime
 
 import numpy as np
 import pandas as pd
-from helper import iter_dates  # type: ignore
 from sqlglot import exp
 
 from sqlmesh import ExecutionContext, model

@@ -7,10 +7,6 @@ import warnings
 
 from pandas.api.types import is_datetime64_any_dtype  # type: ignore
 
-warnings.filterwarnings(
-    "ignore",
-    message="The localize method is no longer necessary, as this time zone supports the fold attribute",
-)
 from datetime import date, datetime, timedelta, timezone
 
 import dateparser
@@ -28,10 +24,16 @@ DATE_INT_FMT = "%Y%m%d"
 if t.TYPE_CHECKING:
     from sqlmesh.core.scheduler import Interval
 
+warnings.filterwarnings(
+    "ignore",
+    message="The localize method is no longer necessary, as this time zone supports the fold attribute",
+)
+
 
 # The Freshness Date Data Parser doesn't support plural units so we add the `s?` to the expression
 freshness_date_parser_module.PATTERN = re.compile(
-    r"(\d+[.,]?\d*)\s*(%s)s?\b" % freshness_date_parser_module._UNITS, re.I | re.S | re.U  # type: ignore
+    r"(\d+[.,]?\d*)\s*(%s)s?\b" % freshness_date_parser_module._UNITS,  # type: ignore
+    re.I | re.S | re.U,  # type: ignore
 )
 DAY_SHORTCUT_EXPRESSIONS = {"today", "yesterday", "tomorrow"}
 TIME_UNITS = {"hours", "minutes", "seconds"}

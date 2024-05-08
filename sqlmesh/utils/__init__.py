@@ -169,9 +169,7 @@ def sys_path(*paths: Path) -> t.Iterator[None]:
 
 def format_exception(exception: BaseException) -> t.List[str]:
     if sys.version_info < (3, 10):
-        return traceback.format_exception(
-            type(exception), exception, exception.__traceback__
-        )  # type: ignore
+        return traceback.format_exception(type(exception), exception, exception.__traceback__)  # type: ignore
     else:
         return traceback.format_exception(exception)  # type: ignore
 
@@ -302,7 +300,7 @@ def groupby(
 
 
 def columns_to_types_to_struct(
-    columns_to_types: t.Union[t.Dict[str, exp.DataType], t.Dict[str, str]]
+    columns_to_types: t.Union[t.Dict[str, exp.DataType], t.Dict[str, str]],
 ) -> exp.DataType:
     """
     Converts a dict of column names to types to a struct.

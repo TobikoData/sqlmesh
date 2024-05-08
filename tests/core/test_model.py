@@ -1,3 +1,4 @@
+# ruff: noqa: F811
 import json
 import logging
 import typing as t
@@ -3547,7 +3548,7 @@ def test_default_catalog_external_model():
 
 def test_user_cannot_set_default_catalog():
     expressions = d.parse(
-        f"""
+        """
         MODEL (
             name db.table,
             default_catalog some_catalog
@@ -3584,7 +3585,7 @@ def test_depends_on_default_catalog_python():
 
 def test_end_date():
     expressions = d.parse(
-        f"""
+        """
         MODEL (
             name db.table,
             kind INCREMENTAL_BY_TIME_RANGE (
@@ -3606,7 +3607,7 @@ def test_end_date():
     with pytest.raises(ConfigError, match=".*Start date.+can't be greater than end date.*"):
         load_sql_based_model(
             d.parse(
-                f"""
+                """
             MODEL (
                 name db.table,
                 kind INCREMENTAL_BY_TIME_RANGE (
@@ -3624,7 +3625,7 @@ def test_end_date():
 
 def test_end_no_start():
     expressions = d.parse(
-        f"""
+        """
         MODEL (
             name db.table,
             kind INCREMENTAL_BY_TIME_RANGE (
@@ -3868,7 +3869,9 @@ def test_named_variables_python_model(mocker: MockerFixture) -> None:
     def model_with_named_variables(
         context, start: TimeLike, test_var_a: str, test_var_b: t.Optional[str] = None, **kwargs
     ):
-        return pd.DataFrame([{"a": test_var_a, "b": test_var_b, "start": start.strftime("%Y-%m-%d")}])  # type: ignore
+        return pd.DataFrame(
+            [{"a": test_var_a, "b": test_var_b, "start": start.strftime("%Y-%m-%d")}]  # type: ignore
+        )
 
     python_model = model.get_registry()["test_named_variables_python_model"].model(
         module_path=Path("."),

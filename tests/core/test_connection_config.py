@@ -546,7 +546,6 @@ def test_duckdb_attach_catalog(make_config):
 
 
 def test_duckdb_attach_options():
-
     options = DuckDBAttachOptions(
         type="postgres", path="dbname=postgres user=postgres host=127.0.0.1", read_only=True
     )

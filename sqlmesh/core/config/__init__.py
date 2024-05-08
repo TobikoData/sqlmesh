@@ -1,3 +1,4 @@
+# ruff: noqa: F401
 from sqlmesh.core.config.categorizer import AutoCategorizationMode, CategorizerConfig
 from sqlmesh.core.config.common import EnvironmentSuffixTarget
 from sqlmesh.core.config.connection import (

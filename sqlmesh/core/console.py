@@ -464,7 +464,7 @@ class TerminalConsole(Console):
         """Indicates that a new migration progress has begun."""
         if self.migration_progress is None:
             self.migration_progress = Progress(
-                TextColumn(f"[bold blue]Migrating snapshots", justify="right"),
+                TextColumn("[bold blue]Migrating snapshots", justify="right"),
                 BarColumn(bar_width=40),
                 "[progress.percentage]{task.percentage:>3.1f}%",
                 "•",
@@ -476,7 +476,7 @@ class TerminalConsole(Console):
 
             self.migration_progress.start()
             self.migration_task = self.migration_progress.add_task(
-                f"Migrating snapshots...",
+                "Migrating snapshots...",
                 total=total_tasks,
             )
 
@@ -590,7 +590,7 @@ class TerminalConsole(Console):
         environment_naming_info: EnvironmentNamingInfo,
         default_catalog: t.Optional[str],
     ) -> Tree:
-        ignored = Tree(f"[bold][ignored]Ignored Models (Expected Plan Start):")
+        ignored = Tree("[bold][ignored]Ignored Models (Expected Plan Start):")
         for s_id in ignored_snapshot_ids:
             snapshot = snapshots[s_id]
             ignored.add(
@@ -642,7 +642,7 @@ class TerminalConsole(Console):
 
         tree = Tree(f"[bold]{header}:")
         if added_snapshot_ids:
-            added_tree = Tree(f"[bold][added]Added:")
+            added_tree = Tree("[bold][added]Added:")
             for s_id in added_snapshot_ids:
                 snapshot = context_diff.snapshots[s_id]
                 added_tree.add(
@@ -650,7 +650,7 @@ class TerminalConsole(Console):
                 )
             tree.add(added_tree)
         if removed_snapshot_ids:
-            removed_tree = Tree(f"[bold][removed]Removed:")
+            removed_tree = Tree("[bold][removed]Removed:")
             for s_id in removed_snapshot_ids:
                 snapshot_table_info = context_diff.removed_snapshots[s_id]
                 removed_tree.add(
@@ -658,9 +658,9 @@ class TerminalConsole(Console):
                 )
             tree.add(removed_tree)
         if modified_snapshot_ids:
-            direct = Tree(f"[bold][direct]Directly Modified:")
-            indirect = Tree(f"[bold][indirect]Indirectly Modified:")
-            metadata = Tree(f"[bold][metadata]Metadata Updated:")
+            direct = Tree("[bold][direct]Directly Modified:")
+            indirect = Tree("[bold][indirect]Indirectly Modified:")
+            metadata = Tree("[bold][metadata]Metadata Updated:")
             for s_id in modified_snapshot_ids:
                 name = s_id.name
                 display_name = context_diff.snapshots[s_id].display_name(
@@ -745,7 +745,7 @@ class TerminalConsole(Console):
             for child_sid in sorted(plan.indirectly_modified.get(snapshot.snapshot_id, set())):
                 child_snapshot = plan.context_diff.snapshots[child_sid]
                 if not indirect_tree:
-                    indirect_tree = Tree(f"[indirect]Indirectly Modified Children:")
+                    indirect_tree = Tree("[indirect]Indirectly Modified Children:")
                     tree.add(indirect_tree)
                 indirect_tree.add(
                     f"[indirect]{child_snapshot.display_name(plan.environment_naming_info, default_catalog)}"
@@ -771,7 +771,7 @@ class TerminalConsole(Console):
             for child_sid in sorted(plan.indirectly_modified.get(snapshot.snapshot_id, set())):
                 child_snapshot = context_diff.snapshots[child_sid]
                 if not indirect_tree:
-                    indirect_tree = Tree(f"[indirect]Indirectly Modified Children:")
+                    indirect_tree = Tree("[indirect]Indirectly Modified Children:")
                     tree.add(indirect_tree)
                 child_category_str = SNAPSHOT_CHANGE_CATEGORY_STR[child_snapshot.change_category]
                 indirect_tree.add(
@@ -868,7 +868,7 @@ class TerminalConsole(Console):
 
     def _prompt_promote(self, plan_builder: PlanBuilder) -> None:
         if self._confirm(
-            f"Apply - Virtual Update",
+            "Apply - Virtual Update",
         ):
             plan_builder.apply()
 
@@ -1072,10 +1072,12 @@ class NotebookMagicConsole(TerminalConsole):
         **kwargs: t.Any,
     ) -> None:
         import ipywidgets as widgets
+        from IPython import get_ipython
         from IPython.display import display as ipython_display
 
         super().__init__(console, **kwargs)
-        self.display = display or get_ipython().user_ns.get("display", ipython_display)  # type: ignore
+
+        self.display = display or get_ipython().user_ns.get("display", ipython_display)
         self.missing_dates_output = widgets.Output()
         self.dynamic_options_after_categorization_output = widgets.VBox()
 
@@ -1424,7 +1426,7 @@ class MarkdownConsole(CaptureTerminalConsole):
         }
         added_snapshot_models = {s for s in added_snapshots if s.is_model}
         if added_snapshot_models:
-            self._print(f"\n**Added Models:**")
+            self._print("\n**Added Models:**")
             for snapshot in sorted(added_snapshot_models):
                 self._print(
                     f"- `{snapshot.display_name(environment_naming_info, default_catalog)}`"
@@ -1432,7 +1434,7 @@ class MarkdownConsole(CaptureTerminalConsole):
 
         added_snapshot_audits = {s for s in added_snapshots if s.is_audit}
         if added_snapshot_audits:
-            self._print(f"\n**Added Standalone Audits:**")
+            self._print("\n**Added Standalone Audits:**")
             for snapshot in sorted(added_snapshot_audits):
                 self._print(
                     f"- `{snapshot.display_name(environment_naming_info, default_catalog)}`"
@@ -1445,7 +1447,7 @@ class MarkdownConsole(CaptureTerminalConsole):
         }
         removed_model_snapshot_table_infos = {s for s in removed_snapshot_table_infos if s.is_model}
         if removed_model_snapshot_table_infos:
-            self._print(f"\n**Removed Models:**")
+            self._print("\n**Removed Models:**")
             for snapshot_table_info in sorted(removed_model_snapshot_table_infos):
                 self._print(
                     f"- `{snapshot_table_info.display_name(environment_naming_info, default_catalog)}`"
@@ -1453,7 +1455,7 @@ class MarkdownConsole(CaptureTerminalConsole):
 
         removed_audit_snapshot_table_infos = {s for s in removed_snapshot_table_infos if s.is_audit}
         if removed_audit_snapshot_table_infos:
-            self._print(f"\n**Removed Standalone Audits:**")
+            self._print("\n**Removed Standalone Audits:**")
             for snapshot_table_info in sorted(removed_audit_snapshot_table_infos):
                 self._print(
                     f"- `{snapshot_table_info.display_name(environment_naming_info, default_catalog)}`"
@@ -1476,7 +1478,7 @@ class MarkdownConsole(CaptureTerminalConsole):
                 elif context_diff.metadata_updated(snapshot.name):
                     metadata_modified.append(snapshot)
             if directly_modified:
-                self._print(f"\n**Directly Modified:**")
+                self._print("\n**Directly Modified:**")
                 for snapshot in sorted(directly_modified):
                     self._print(
                         f"- `{snapshot.display_name(environment_naming_info, default_catalog)}`"
@@ -1484,19 +1486,19 @@ class MarkdownConsole(CaptureTerminalConsole):
                     if not no_diff:
                         self._print(f"```diff\n{context_diff.text_diff(snapshot.name)}\n```")
             if indirectly_modified:
-                self._print(f"\n**Indirectly Modified:**")
+                self._print("\n**Indirectly Modified:**")
                 for snapshot in sorted(indirectly_modified):
                     self._print(
                         f"- `{snapshot.display_name(environment_naming_info, default_catalog)}`"
                     )
             if metadata_modified:
-                self._print(f"\n**Metadata Updated:**")
+                self._print("\n**Metadata Updated:**")
                 for snapshot in sorted(metadata_modified):
                     self._print(
                         f"- `{snapshot.display_name(environment_naming_info, default_catalog)}`"
                     )
         if ignored_snapshot_ids:
-            self._print(f"\n**Ignored Models (Expected Plan Start):**")
+            self._print("\n**Ignored Models (Expected Plan Start):**")
             for s_id in sorted(ignored_snapshot_ids):
                 snapshot = context_diff.snapshots[s_id]
                 self._print(
@@ -1536,7 +1538,7 @@ class MarkdownConsole(CaptureTerminalConsole):
             for child_sid in sorted(plan.indirectly_modified.get(snapshot.snapshot_id, set())):
                 child_snapshot = context_diff.snapshots[child_sid]
                 if not indirect_tree:
-                    indirect_tree = Tree(f"[indirect]Indirectly Modified Children:")
+                    indirect_tree = Tree("[indirect]Indirectly Modified Children:")
                     tree.add(indirect_tree)
                 child_category_str = SNAPSHOT_CHANGE_CATEGORY_STR[child_snapshot.change_category]
                 indirect_tree.add(
@@ -1651,7 +1653,7 @@ class DatabricksMagicConsole(CaptureTerminalConsole):
     ) -> None:
         """Indicates that a new creation progress has begun."""
         self.model_creation_status = (0, total_tasks)
-        print(f"Starting Creating New Model Versions")
+        print("Starting Creating New Model Versions")
 
     def update_creation_progress(self, snapshot: SnapshotInfoLike) -> None:
         """Update the snapshot creation progress."""
@@ -1692,7 +1694,7 @@ class DatabricksMagicConsole(CaptureTerminalConsole):
     def start_migration_progress(self, total_tasks: int) -> None:
         """Indicates that a new migration progress has begun."""
         self.migration_status = (0, total_tasks)
-        print(f"Starting Migration")
+        print("Starting Migration")
 
     def update_migration_progress(self, num_tasks: int) -> None:
         """Update the migration progress."""

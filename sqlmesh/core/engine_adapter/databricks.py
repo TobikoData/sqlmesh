@@ -54,7 +54,7 @@ class DatabricksEngineAdapter(SparkEngineAdapter):
         if RuntimeEnv.get().is_databricks:
             return True
         try:
-            from databricks.connect import DatabricksSession  # type: ignore
+            from databricks.connect import DatabricksSession  # noqa
 
             return True
         except ImportError:

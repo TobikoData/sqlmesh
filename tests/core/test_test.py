@@ -601,7 +601,7 @@ test_child:
     _check_successful_or_raise(test.run())
 
     spy_execute.assert_any_call(
-        f'CREATE OR REPLACE VIEW "memory"."sqlmesh_test_jzngz56a"."memory__sushi__parent" ("s", "a", "b") AS '
+        'CREATE OR REPLACE VIEW "memory"."sqlmesh_test_jzngz56a"."memory__sushi__parent" ("s", "a", "b") AS '
         "SELECT "
         'CAST("s" AS STRUCT("d" DATE)) AS "s", '
         'CAST("a" AS INT) AS "a", '
@@ -1037,7 +1037,7 @@ test_foo:
     assert len(test._fixture_table_cache) == len(sushi_context.models) + 1
     for table in test._fixture_table_cache.values():
         assert table.catalog == "memory"
-        assert table.db == f"sqlmesh_test_jzngz56a"
+        assert table.db == "sqlmesh_test_jzngz56a"
 
 
 def test_runtime_stage() -> None:

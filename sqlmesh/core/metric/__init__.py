@@ -1,3 +1,4 @@
+# ruff: noqa: F401
 from sqlmesh.core.metric.definition import (
     Metric,
     MetricMeta,

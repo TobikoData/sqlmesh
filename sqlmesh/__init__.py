@@ -1,3 +1,4 @@
+# ruff: noqa: F401, E402
 """
 .. include:: ../README.md
 """

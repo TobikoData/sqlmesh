@@ -217,7 +217,7 @@ def sushi_context_pre_scheduling(init_and_plan_context: t.Callable) -> Context:
 def sushi_context_fixed_date(init_and_plan_context: t.Callable) -> Context:
     context, plan = init_and_plan_context("examples/sushi")
 
-    for model in context.models.values():
+    for model in context.models.values():  # noqa: F402
         if model.start:
             context.upsert_model(model.name, start="2022-01-01")
 
@@ -365,7 +365,7 @@ def copy_to_temp_path(tmp_path: Path) -> t.Callable:
         return []
 
     def _make_function(
-        paths: t.Union[t.Union[str, Path], t.Collection[t.Union[str, Path]]]
+        paths: t.Union[t.Union[str, Path], t.Collection[t.Union[str, Path]]],
     ) -> t.List[Path]:
         paths = ensure_list(paths)
         temp_dirs = []

@@ -1,3 +1,4 @@
+# ruff: noqa: F401
 from sqlmesh.core.snapshot.categorizer import categorize_change
 from sqlmesh.core.snapshot.definition import (
     DeployabilityIndex,

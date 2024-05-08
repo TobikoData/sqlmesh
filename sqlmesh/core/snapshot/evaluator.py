@@ -30,6 +30,7 @@ from contextlib import contextmanager
 from functools import reduce
 
 import pandas as pd
+from pyspark.sql.dataframe import DataFrame as PyDataFrame
 from sqlglot import exp, select
 from sqlglot.executor import execute
 
@@ -543,14 +544,20 @@ class SnapshotEvaluator:
 
             if limit is not None:
                 query_or_df = next(queries_or_dfs)
-                if isinstance(query_or_df, exp.Select):
-                    existing_limit = query_or_df.args.get("limit")
-                    if existing_limit:
-                        limit = min(
-                            limit,
-                            execute(exp.select(existing_limit.expression)).rows[0][0],
-                        )
-                return query_or_df.head(limit) if hasattr(query_or_df, "head") else self.adapter._fetch_native_df(query_or_df.limit(limit))  # type: ignore
+                if isinstance(query_or_df, PyDataFrame):
+                    return query_or_df.limit(limit)
+                if isinstance(query_or_df, pd.DataFrame):
+                    return query_or_df.head(limit)
+
+                assert isinstance(query_or_df, exp.Query)
+
+                existing_limit = query_or_df.args.get("limit")
+                if existing_limit:
+                    limit = min(limit, execute(exp.select(existing_limit.expression)).rows[0][0])
+                    assert limit is not None
+
+                return self.adapter._fetch_native_df(query_or_df.limit(limit))
+
             # DataFrames, unlike SQL expressions, can provide partial results by yielding dataframes. As a result,
             # if the engine supports INSERT OVERWRITE or REPLACE WHERE and the snapshot is incremental by time range, we risk
             # having a partial result since each dataframe write can re-truncate partitions. To avoid this, we

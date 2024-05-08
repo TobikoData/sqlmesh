@@ -131,11 +131,13 @@ class MSSQLEngineAdapter(
                 # _get_data_objects is catalog-specific, so these can't accidentally drop view/tables in another catalog
                 if obj.type == DataObjectType.VIEW:
                     self.drop_view(
-                        ".".join([obj.schema_name, obj.name]), ignore_if_not_exists=ignore_if_not_exists  # type: ignore
+                        ".".join([obj.schema_name, obj.name]),
+                        ignore_if_not_exists=ignore_if_not_exists,
                     )
                 else:
                     self.drop_table(
-                        ".".join([obj.schema_name, obj.name]), exists=ignore_if_not_exists  # type: ignore
+                        ".".join([obj.schema_name, obj.name]),
+                        exists=ignore_if_not_exists,
                     )
         super().drop_schema(schema_name, ignore_if_not_exists=ignore_if_not_exists, cascade=False)
 
@@ -175,7 +177,9 @@ class MSSQLEngineAdapter(
                 columns_to_types_create = columns_to_types.copy()
                 self._convert_df_datetime(df, columns_to_types_create)
                 self.create_table(temp_table, columns_to_types_create)
-                rows: t.List[t.Tuple[t.Any, ...]] = list(df.replace({np.nan: None}).itertuples(index=False, name=None))  # type: ignore
+                rows: t.List[t.Tuple[t.Any, ...]] = list(
+                    df.replace({np.nan: None}).itertuples(index=False, name=None)
+                )  # type: ignore
                 conn = self._connection_pool.get()
                 conn.bulk_copy(temp_table.sql(dialect=self.dialect), rows)
             return exp.select(*self._casted_columns(columns_to_types)).from_(temp_table)  # type: ignore

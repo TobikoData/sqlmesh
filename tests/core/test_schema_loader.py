@@ -148,7 +148,11 @@ def test_missing_table(tmp_path: Path):
     logger = logging.getLogger("sqlmesh.core.schema_loader")
     with patch.object(logger, "warning") as mock_logger:
         create_schema_file(
-            schema_file, {"a": model}, context.engine_adapter, context.state_reader, ""  # type: ignore
+            schema_file,
+            {"a": model},  # type: ignore
+            context.engine_adapter,
+            context.state_reader,
+            "",
         )
     assert """Unable to get schema for '"tbl_source"'""" in mock_logger.call_args[0][0]
 

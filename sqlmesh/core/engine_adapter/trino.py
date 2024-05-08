@@ -176,11 +176,16 @@ class TrinoEngineAdapter(
         batch_size: int,
         target_table: TableName,
     ) -> t.List[SourceQuery]:
+        assert isinstance(df, pd.DataFrame)
+
         # Trino does not accept timestamps in ISOFORMAT that include the "T". `execution_time` is stored in
         # Pandas with that format, so we convert the column to a string with the proper format and CAST to
         # timestamp in Trino.
         for column, kind in (columns_to_types or {}).items():
-            if is_datetime64_any_dtype(df.dtypes[column]) and getattr(df.dtypes[column], "tz", None) is not None:  # type: ignore
+            if (
+                is_datetime64_any_dtype(df.dtypes[column])
+                and getattr(df.dtypes[column], "tz", None) is not None
+            ):  # type: ignore
                 df[column] = pd.to_datetime(df[column]).map(lambda x: x.isoformat(" "))  # type: ignore
 
         return super()._df_to_source_queries(df, columns_to_types, batch_size, target_table)
