@@ -153,8 +153,8 @@ def test_get_lineage_cte(project_context: Context) -> None:
     response = client.get("/api/lineage/foo/col")
     assert response.status_code == 200, response.json()
     response_json = response.json()
-    assert response_json['"foo"']["col"]["models"] == {"my_cte": ["col"]}
-    assert response_json["my_cte"]["col"]["models"] == {'"bar"': ["col"]}
+    assert response_json['"foo"']["col"]["models"] == {'"foo": my_cte': ["col"]}
+    assert response_json['"foo": my_cte']["col"]["models"] == {'"bar"': ["col"]}
     assert response_json['"bar"']["col"]["models"] == {'"baz"': ["col"]}
     assert response_json['"baz"']["col"]["models"] == {'"external_table"': ["col"]}
 
@@ -195,8 +195,8 @@ def test_get_lineage_cte_downstream(project_context: Context) -> None:
     assert response.status_code == 200, response.json()
     response_json = response.json()
     assert response_json['"foo"']["col"]["models"] == {'"bar"': ["col"]}
-    assert response_json['"bar"']["col"]["models"] == {"my_cte": ["col"]}
-    assert response_json["my_cte"]["col"]["models"] == {'"baz"': ["col"]}
+    assert response_json['"bar"']["col"]["models"] == {'"bar": my_cte': ["col"]}
+    assert response_json['"bar": my_cte']["col"]["models"] == {'"baz"': ["col"]}
     assert response_json['"baz"']["col"]["models"] == {'"external_table"': ["col"]}
 
     # Models only
@@ -372,8 +372,8 @@ def test_get_lineage_cte_union(project_context: Context) -> None:
     response = client.get("/api/lineage/foo/col")
     assert response.status_code == 200, response.json()
     response_json = response.json()
-    assert response_json['"foo"']["col"]["models"] == {"my_cte": ["col"]}
-    assert response_json["my_cte"]["col"]["models"] == {'"bar"': ["col"], '"baz"': ["col"]}
+    assert response_json['"foo"']["col"]["models"] == {'"foo": my_cte': ["col"]}
+    assert response_json['"foo": my_cte']["col"]["models"] == {'"bar"': ["col"], '"baz"': ["col"]}
     assert response_json['"bar"']["col"]["models"] == {'"external_bar"': ["col"]}
     assert response_json['"baz"']["col"]["models"] == {'"external_baz"': ["col"]}
 
@@ -421,8 +421,8 @@ def test_get_lineage_cte_union_downstream(project_context: Context) -> None:
     assert response.status_code == 200, response.json()
     response_json = response.json()
     assert response_json['"foo"']["col"]["models"] == {'"bar"': ["col"]}
-    assert response_json['"bar"']["col"]["models"] == {"my_cte": ["col"]}
-    assert response_json["my_cte"]["col"]["models"] == {'"baz"': ["col"], '"qwe"': ["col"]}
+    assert response_json['"bar"']["col"]["models"] == {'"bar": my_cte': ["col"]}
+    assert response_json['"bar": my_cte']["col"]["models"] == {'"baz"': ["col"], '"qwe"': ["col"]}
     assert response_json['"baz"']["col"]["models"] == {'"external_baz"': ["col"]}
     assert response_json['"qwe"']["col"]["models"] == {'"external_qwe"': ["col"]}
 
@@ -466,8 +466,8 @@ def test_get_lineage_cte_downstream_union_downstream(project_context: Context) -
     assert response.status_code == 200, response.json()
     response_json = response.json()
     assert response_json['"foo"']["col"]["models"] == {'"bar"': ["col"]}
-    assert response_json['"bar"']["col"]["models"] == {"my_cte": ["col"]}
-    assert response_json["my_cte"]["col"]["models"] == {'"baz"': ["col"]}
+    assert response_json['"bar"']["col"]["models"] == {'"bar": my_cte': ["col"]}
+    assert response_json['"bar": my_cte']["col"]["models"] == {'"baz"': ["col"]}
     assert response_json['"baz"']["col"]["models"] == {
         '"external_table1"': ["col"],
         '"external_table2"': ["col"],
@@ -514,12 +514,12 @@ def test_get_lineage_nested_cte_union_downstream(project_context: Context) -> No
     response = client.get("/api/lineage/foo/col")
     assert response.status_code == 200, response.json()
     response_json = response.json()
-    assert response_json['"foo"']["col"]["models"] == {"my_cte1": ["col"]}
-    assert response_json["my_cte1"]["col"]["models"] == {
-        "my_cte2": ["col"],
+    assert response_json['"foo"']["col"]["models"] == {'"foo": my_cte1': ["col"]}
+    assert response_json['"foo": my_cte1']["col"]["models"] == {
+        '"foo": my_cte2': ["col"],
         '"external_table1"': ["col"],
     }
-    assert response_json["my_cte2"]["col"]["models"] == {'"bar"': ["col"]}
+    assert response_json['"foo": my_cte2']["col"]["models"] == {'"bar"': ["col"]}
     assert response_json['"bar"']["col"]["models"] == {
         '"external_table2"': ["col"],
         '"external_table3"': ["col"],
@@ -546,7 +546,7 @@ def test_get_lineage_subquery(project_context: Context) -> None:
     foo_sql_file = models_dir / "foo.sql"
     foo_sql_file.write_text(
         """MODEL (name foo);
-           SELECT col FROM (SELECT col FROM bar) my_subquery;"""
+           SELECT col FROM (SELECT col FROM bar) my_dt;"""
     )
     bar_sql_file = models_dir / "bar.sql"
     bar_sql_file.write_text(
@@ -563,9 +563,93 @@ def test_get_lineage_subquery(project_context: Context) -> None:
     response = client.get("/api/lineage/foo/col")
     assert response.status_code == 200, response.json()
     response_json = response.json()
-    assert response_json['"foo"']["col"]["models"] == {"my_subquery": ["col"]}
-    assert response_json["my_subquery"]["col"]["models"] == {'"bar"': ["col"]}
+    assert response_json['"foo"']["col"]["models"] == {'"foo": my_dt': ["col"]}
+    assert response_json['"foo": my_dt']["col"]["models"] == {'"bar"': ["col"]}
     assert response_json['"bar"']["col"]["models"] == {'"baz"': ["col"]}
+    assert response_json['"baz"']["col"]["models"] == {'"external_table"': ["col"]}
+
+    # Models only
+    response = client.get("/api/lineage/foo/col?models_only=1")
+    assert response.status_code == 200, response.json()
+    response_json = response.json()
+    assert response_json['"foo"']["col"]["models"] == {'"bar"': ["col"]}
+    assert response_json['"bar"']["col"]["models"] == {'"baz"': ["col"]}
+    assert response_json['"baz"']["col"]["models"] == {'"external_table"': ["col"]}
+
+
+def test_get_lineage_cte_name_collision(project_context: Context) -> None:
+    project_tmp_path = project_context.path
+    models_dir = project_tmp_path / "models"
+    models_dir.mkdir()
+    foo_sql_file = models_dir / "foo.sql"
+    foo_sql_file.write_text(
+        """MODEL (name foo);
+           WITH my_cte AS (
+               SELECT col FROM bar
+           )
+           SELECT col FROM my_cte;"""
+    )
+    bar_sql_file = models_dir / "bar.sql"
+    bar_sql_file.write_text(
+        """MODEL (name bar);
+           WITH my_cte AS (
+               SELECT col FROM baz
+           )
+           SELECT col FROM my_cte;"""
+    )
+    baz_sql_file = models_dir / "baz.sql"
+    baz_sql_file.write_text(
+        """MODEL (name baz);
+           SELECT col FROM external_table;"""
+    )
+    project_context.load()
+
+    response = client.get("/api/lineage/foo/col")
+    assert response.status_code == 200, response.json()
+    response_json = response.json()
+    assert response_json['"foo"']["col"]["models"] == {'"foo": my_cte': ["col"]}
+    assert response_json['"foo": my_cte']["col"]["models"] == {'"bar"': ["col"]}
+    assert response_json['"bar"']["col"]["models"] == {'"bar": my_cte': ["col"]}
+    assert response_json['"bar": my_cte']["col"]["models"] == {'"baz"': ["col"]}
+    assert response_json['"baz"']["col"]["models"] == {'"external_table"': ["col"]}
+
+    # Models only
+    response = client.get("/api/lineage/foo/col?models_only=1")
+    assert response.status_code == 200, response.json()
+    response_json = response.json()
+    assert response_json['"foo"']["col"]["models"] == {'"bar"': ["col"]}
+    assert response_json['"bar"']["col"]["models"] == {'"baz"': ["col"]}
+    assert response_json['"baz"']["col"]["models"] == {'"external_table"': ["col"]}
+
+
+def test_get_lineage_derived_table_alias_collision(project_context: Context) -> None:
+    project_tmp_path = project_context.path
+    models_dir = project_tmp_path / "models"
+    models_dir.mkdir()
+    foo_sql_file = models_dir / "foo.sql"
+    foo_sql_file.write_text(
+        """MODEL (name foo);
+           SELECT col FROM (SELECT col FROM bar) my_dt;"""
+    )
+    bar_sql_file = models_dir / "bar.sql"
+    bar_sql_file.write_text(
+        """MODEL (name bar);
+           SELECT col FROM (SELECT col FROM baz) my_dt;"""
+    )
+    baz_sql_file = models_dir / "baz.sql"
+    baz_sql_file.write_text(
+        """MODEL (name baz);
+           SELECT col FROM external_table;"""
+    )
+    project_context.load()
+
+    response = client.get("/api/lineage/foo/col")
+    assert response.status_code == 200, response.json()
+    response_json = response.json()
+    assert response_json['"foo"']["col"]["models"] == {'"foo": my_dt': ["col"]}
+    assert response_json['"foo": my_dt']["col"]["models"] == {'"bar"': ["col"]}
+    assert response_json['"bar"']["col"]["models"] == {'"bar": my_dt': ["col"]}
+    assert response_json['"bar": my_dt']["col"]["models"] == {'"baz"': ["col"]}
     assert response_json['"baz"']["col"]["models"] == {'"external_table"': ["col"]}
 
     # Models only
