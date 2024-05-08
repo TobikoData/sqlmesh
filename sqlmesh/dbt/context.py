@@ -99,10 +99,7 @@ class DbtContext:
     def set_and_render_variables(self, variables: t.Dict[str, t.Any], package: str) -> None:
         self.variables = variables
 
-        jinja_registry = JinjaMacroRegistry(
-            create_builtins_module=SQLMESH_DBT_PACKAGE, top_level_packages=["dbt", package]
-        )
-        jinja_environment = jinja_registry.build_environment(**self.jinja_globals)
+        jinja_environment = self.jinja_macros.build_environment(**self.jinja_globals)
 
         def _render_var(value: t.Any) -> t.Any:
             if isinstance(value, str):
