@@ -173,7 +173,7 @@ class TestContext:
         df = self.engine_adapter.fetchdf(exp.select("*").from_(table), quote_identifiers=True)
         if self.dialect == "snowflake" and "id" in df.columns:
             df["id"] = df["id"].apply(lambda x: x if pd.isna(x) else int(x))
-        return df
+        return self._format_df(df)
 
     def compare_with_current(self, table: exp.Table, expected: pd.DataFrame) -> None:
         compare_dataframes(
