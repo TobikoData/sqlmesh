@@ -30,7 +30,7 @@ from contextlib import contextmanager
 from functools import reduce
 
 import pandas as pd
-from pyspark.sql.dataframe import DataFrame as PyDataFrame
+from pyspark.sql.dataframe import DataFrame as PySparkDataFrame
 from sqlglot import exp, select
 from sqlglot.executor import execute
 
@@ -544,7 +544,7 @@ class SnapshotEvaluator:
 
             if limit is not None:
                 query_or_df = next(queries_or_dfs)
-                if isinstance(query_or_df, PyDataFrame):
+                if isinstance(query_or_df, PySparkDataFrame):
                     return query_or_df.limit(limit)
                 if isinstance(query_or_df, pd.DataFrame):
                     return query_or_df.head(limit)
