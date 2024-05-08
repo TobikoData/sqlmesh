@@ -1119,6 +1119,7 @@ class GenericContext(BaseContext, t.Generic[C]):
             ),
             end_bounded=not run,
             ensure_finalized_snapshots=self.config.plan.use_finalized_state,
+            engine_schema_differ=self.engine_adapter.SCHEMA_DIFFER,
             console=self.console,
         )
 
