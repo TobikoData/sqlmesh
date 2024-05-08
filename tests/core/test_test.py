@@ -24,7 +24,7 @@ from sqlmesh.core.engine_adapter import EngineAdapter
 from sqlmesh.core.macros import MacroEvaluator, macro
 from sqlmesh.core.model import Model, SqlModel, load_sql_based_model, model
 from sqlmesh.core.test.definition import ModelTest, PythonModelTest, SqlModelTest
-from sqlmesh.utils.errors import ConfigError
+from sqlmesh.utils.errors import ConfigError, TestError
 from sqlmesh.utils.yaml import dump as dump_yaml
 from sqlmesh.utils.yaml import load as load_yaml
 
@@ -1111,6 +1111,58 @@ def test_gateway(copy_to_temp_path: t.Callable, mocker: MockerFixture) -> None:
     assert call(test_adapter, expected_view_sql) in spy_execute.mock_calls
 
     _check_successful_or_raise(context.test())
+
+
+def test_generate_input_data_using_sql(mocker: MockerFixture) -> None:
+    mocker.patch("sqlmesh.core.test.definition.random_id", return_value="jzngz56a")
+    test = _create_test(
+        body=load_yaml(
+            """
+test_foo:
+  model: xyz
+  inputs:
+    foo:
+      query: "SELECT {'x': 1, 'n': {'y': 2}} AS struct_value"
+  outputs:
+    query:
+      - struct_value: {'x': 1, 'n': {'y': 2}}
+            """
+        ),
+        test_name="test_foo",
+        model=_create_model("SELECT struct_value FROM foo"),
+        context=Context(config=Config(model_defaults=ModelDefaultsConfig(dialect="duckdb"))),
+    )
+    spy_execute = mocker.spy(test.engine_adapter, "_execute")
+    _check_successful_or_raise(test.run())
+
+    spy_execute.assert_any_call(
+        f'CREATE OR REPLACE VIEW "memory"."sqlmesh_test_jzngz56a"."foo" AS '
+        '''SELECT {'x': 1, 'n': {'y': 2}} AS "struct_value"'''
+    )
+
+    with pytest.raises(
+        TestError,
+        match="Invalid test, cannot set both 'query' and 'rows' for 'foo'",
+    ):
+        _create_test(
+            body=load_yaml(
+                """
+test_foo:
+  model: xyz
+  inputs:
+    foo:
+      query: "SELECT {'x': 1, 'n': {'y': 2}} AS struct_value"
+      rows:
+        struct_value: {'x': 1, 'n': {'y': 2}}
+  outputs:
+    query:
+      - struct_value: {'x': 1, 'n': {'y': 2}}
+                """
+            ),
+            test_name="test_foo",
+            model=_create_model("SELECT struct_value FROM foo"),
+            context=Context(config=Config(model_defaults=ModelDefaultsConfig(dialect="duckdb"))),
+        )
 
 
 def test_test_generation(tmp_path: Path) -> None:
