@@ -1136,7 +1136,7 @@ test_foo:
     _check_successful_or_raise(test.run())
 
     spy_execute.assert_any_call(
-        f'CREATE OR REPLACE VIEW "memory"."sqlmesh_test_jzngz56a"."foo" AS '
+        'CREATE OR REPLACE VIEW "memory"."sqlmesh_test_jzngz56a"."foo" AS '
         '''SELECT {'x': 1, 'n': {'y': 2}} AS "struct_value"'''
     )
 
