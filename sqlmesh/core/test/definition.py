@@ -25,7 +25,10 @@ from sqlmesh.utils import UniqueKeyDict, random_id, type_is_known, yaml
 from sqlmesh.utils.date import pandas_timestamp_to_pydatetime
 from sqlmesh.utils.errors import ConfigError, TestError
 
-Row = t.Dict[str, t.Any]
+if t.TYPE_CHECKING:
+    from sqlglot.dialects.dialect import DialectType
+
+    Row = t.Dict[str, t.Any]
 
 
 class ModelTest(unittest.TestCase):
@@ -121,10 +124,10 @@ class ModelTest(unittest.TestCase):
                     len(known_columns_to_types) == len(inferred_columns_to_types)
                 )
 
-            # Types specified in the test take precedence over the corresponding inferred ones
+            # Types specified in the test will override the corresponding inferred ones
             known_columns_to_types.update(values.get("columns", {}))
 
-            rows = values["rows"]
+            rows = values.get("rows")
             if not all_types_are_known and rows:
                 for col, value in rows[0].items():
                     if col not in known_columns_to_types:
@@ -144,9 +147,13 @@ class ModelTest(unittest.TestCase):
 
                         known_columns_to_types[col] = v_type
 
-            df = _create_df(rows, columns=known_columns_to_types)
+            if rows is None:
+                query_or_df = values["query"]
+            else:
+                query_or_df = self._create_df(values, columns=known_columns_to_types)
+
             self.engine_adapter.create_view(
-                self._test_fixture_table(name), df, known_columns_to_types
+                self._test_fixture_table(name), query_or_df, known_columns_to_types
             )
 
     def tearDown(self) -> None:
@@ -310,17 +317,38 @@ class ModelTest(unittest.TestCase):
         partial = outputs.pop("partial", None)
 
         def _normalize_rows(
-            values: t.List[Row] | t.Dict, name: str, partial: bool = False
+            values: t.List[Row] | t.Dict,
+            name: str,
+            partial: bool = False,
+            dialect: DialectType = None,
         ) -> t.Dict:
             if not isinstance(values, dict):
                 values = {"rows": values}
 
-            if "rows" not in values:
+            rows = values.get("rows")
+            query = values.get("query")
+
+            if query is not None:
+                if rows is not None:
+                    _raise_error(
+                        f"Invalid test, cannot set both 'query' and 'rows' for '{name}'", self.path
+                    )
+
+                # We parse the user-supplied query using the testing adapter dialect, but we
+                # normalize its identifiers according to the model's dialect, so that, e.g.,
+                # the projection names match those in its `columns_to_types` field
+                values["query"] = normalize_identifiers(
+                    exp.maybe_parse(query, dialect=self._test_adapter_dialect), dialect=dialect
+                )
+                return values
+
+            if rows is None:
                 _raise_error(f"Incomplete test, missing row data for '{name}'", self.path)
 
+            assert isinstance(rows, list)
             values["rows"] = [
                 {self._normalize_column_name(column): value for column, value in row.items()}
-                for row in values["rows"]
+                for row in rows
             ]
             if partial:
                 values["partial"] = True
@@ -330,12 +358,19 @@ class ModelTest(unittest.TestCase):
         def _normalize_sources(
             sources: t.Dict, partial: bool = False, with_default_catalog: bool = True
         ) -> t.Dict:
-            return {
-                self._normalize_model_name(
+            normalized_sources = {}
+            for name, values in sources.items():
+                normalized_name = self._normalize_model_name(
                     name, with_default_catalog=with_default_catalog
-                ): _normalize_rows(values, name, partial=partial)
-                for name, values in sources.items()
-            }
+                )
+                model = self.models.get(normalized_name)
+                dialect = model.dialect if model else self.dialect
+
+                normalized_sources[normalized_name] = _normalize_rows(
+                    values, name, partial=partial, dialect=dialect
+                )
+
+            return normalized_sources
 
         normalized_model_name = self._normalize_model_name(self.body["model"])
         self.body["model"] = normalized_model_name
@@ -373,7 +408,9 @@ class ModelTest(unittest.TestCase):
             outputs["ctes"] = _normalize_sources(ctes, partial=partial, with_default_catalog=False)
 
         if query or query == []:
-            outputs["query"] = _normalize_rows(query, self.model.name, partial=partial)
+            outputs["query"] = _normalize_rows(
+                query, self.model.name, partial=partial, dialect=self.model.dialect
+            )
 
     def _test_fixture_table(self, name: str) -> exp.Table:
         table = self._fixture_table_cache.get(name)
@@ -410,6 +447,31 @@ class ModelTest(unittest.TestCase):
 
         return normalized_name
 
+    def _execute(self, query: exp.Query) -> pd.DataFrame:
+        """Executes the given query using the testing engine adapter and returns a DataFrame."""
+        with patch.dict(self._test_adapter_dialect.generator_class.TRANSFORMS, self._transforms):
+            return self.engine_adapter.fetchdf(query)
+
+    def _create_df(
+        self,
+        values: t.Dict[str, t.Any],
+        columns: t.Optional[t.Collection] = None,
+        partial: t.Optional[bool] = False,
+    ) -> pd.DataFrame:
+        query = values.get("query")
+        if query:
+            return self._execute(query)
+
+        rows = values["rows"]
+        if columns:
+            referenced_columns = list(dict.fromkeys(col for row in rows for col in row))
+            _raise_if_unexpected_columns(columns, referenced_columns)
+
+            if partial:
+                columns = referenced_columns
+
+        return pd.DataFrame.from_records(rows, columns=columns)
+
 
 class SqlModelTest(ModelTest):
     def test_ctes(self, ctes: t.Dict[str, exp.Expression]) -> None:
@@ -425,17 +487,15 @@ class SqlModelTest(ModelTest):
                 for alias, cte in ctes.items():
                     cte_query = cte_query.with_(alias, cte.this)
 
-                rows = values["rows"]
                 partial = values.get("partial")
                 sort = cte_query.args.get("order") is None
 
                 actual = self._execute(cte_query)
-                expected = _create_df(rows, columns=cte_query.named_selects, partial=partial)
+                expected = self._create_df(values, columns=cte_query.named_selects, partial=partial)
 
                 self.assert_equal(expected, actual, sort=sort, partial=partial)
 
     def runTest(self) -> None:
-        # For tests we just use the model name for the table reference and we don't want to expand
         mapping = {
             name: self._test_fixture_table(name).sql()
             for name in (
@@ -459,19 +519,13 @@ class SqlModelTest(ModelTest):
 
         values = self.body["outputs"].get("query")
         if values is not None:
-            rows = values["rows"]
             partial = values.get("partial")
             sort = query.args.get("order") is None
 
             actual = self._execute(query)
-            expected = _create_df(rows, columns=self.model.columns_to_types, partial=partial)
+            expected = self._create_df(values, columns=self.model.columns_to_types, partial=partial)
 
             self.assert_equal(expected, actual, sort=sort, partial=partial)
-
-    def _execute(self, query: exp.Expression) -> pd.DataFrame:
-        """Executes the query with the engine adapter and returns a DataFrame."""
-        with patch.dict(self._test_adapter_dialect.generator_class.TRANSFORMS, self._transforms):
-            return self.engine_adapter.fetchdf(query)
 
 
 class PythonModelTest(ModelTest):
@@ -524,12 +578,11 @@ class PythonModelTest(ModelTest):
     def runTest(self) -> None:
         values = self.body["outputs"].get("query")
         if values is not None:
-            rows = values["rows"]
             partial = values.get("partial")
 
             actual_df = self._execute_model()
             actual_df.reset_index(drop=True, inplace=True)
-            expected = _create_df(rows, columns=self.model.columns_to_types, partial=partial)
+            expected = self._create_df(values, columns=self.model.columns_to_types, partial=partial)
 
             self.assert_equal(expected, actual_df, sort=False, partial=partial)
 
@@ -639,7 +692,7 @@ def generate_test(
                 for prev in previous_ctes:
                     cte_query = cte_query.with_(prev.alias, prev.this)
 
-                cte_output = t.cast(SqlModelTest, test)._execute(cte_query)
+                cte_output = test._execute(cte_query)
                 ctes[cte.alias] = (
                     pandas_timestamp_to_pydatetime(
                         cte_output.apply(lambda col: col.map(_normalize_df_value)),
@@ -654,7 +707,7 @@ def generate_test(
             if ctes:
                 outputs["ctes"] = ctes
 
-        output = t.cast(SqlModelTest, test)._execute(model_query)
+        output = test._execute(model_query)
     else:
         output = t.cast(PythonModelTest, test)._execute_model()
 
@@ -671,19 +724,6 @@ def generate_test(
     fixture_path.parent.mkdir(exist_ok=True, parents=True)
     with open(fixture_path, "w", encoding="utf-8") as file:
         yaml.dump({test_name: test_body}, file)
-
-
-def _create_df(
-    rows: t.List[Row], columns: t.Optional[t.Collection] = None, partial: t.Optional[bool] = False
-) -> pd.DataFrame:
-    if columns:
-        referenced_columns = list(dict.fromkeys(col for row in rows for col in row))
-        _raise_if_unexpected_columns(columns, referenced_columns)
-
-        if partial:
-            columns = referenced_columns
-
-    return pd.DataFrame.from_records(rows, columns=columns)
 
 
 def _raise_if_unexpected_columns(
