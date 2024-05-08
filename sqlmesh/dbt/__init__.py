@@ -1,2 +1,4 @@
-# ruff: noqa: F401
-from sqlmesh.dbt.builtin import create_builtin_filters, create_builtin_globals
+from sqlmesh.dbt.builtin import (
+    create_builtin_filters as create_builtin_filters,
+    create_builtin_globals as create_builtin_globals,
+)

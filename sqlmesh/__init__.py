@@ -1,4 +1,4 @@
-# ruff: noqa: F401, E402
+# ruff: noqa: E402
 """
 .. include:: ../README.md
 """
@@ -19,16 +19,19 @@ from sqlmesh.core.dialect import extend_sqlglot
 extend_sqlglot()
 
 from sqlmesh.core import constants as c
-from sqlmesh.core.config import Config
-from sqlmesh.core.context import Context, ExecutionContext
-from sqlmesh.core.engine_adapter import EngineAdapter
-from sqlmesh.core.macros import SQL, macro
-from sqlmesh.core.model import Model, model
-from sqlmesh.core.snapshot import Snapshot
-from sqlmesh.utils import debug_mode_enabled, enable_debug_mode
+from sqlmesh.core.config import Config as Config
+from sqlmesh.core.context import Context as Context, ExecutionContext as ExecutionContext
+from sqlmesh.core.engine_adapter import EngineAdapter as EngineAdapter
+from sqlmesh.core.macros import SQL as SQL, macro as macro
+from sqlmesh.core.model import Model as Model, model as model
+from sqlmesh.core.snapshot import Snapshot as Snapshot
+from sqlmesh.utils import (
+    debug_mode_enabled as debug_mode_enabled,
+    enable_debug_mode as enable_debug_mode,
+)
 
 try:
-    from sqlmesh._version import __version__, __version_tuple__  # type: ignore
+    from sqlmesh._version import __version__ as __version__, __version_tuple__ as __version_tuple__
 except ImportError:
     pass
 
