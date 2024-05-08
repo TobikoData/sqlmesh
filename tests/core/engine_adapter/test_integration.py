@@ -1873,8 +1873,7 @@ def test_sushi(mark_gateway: t.Tuple[str, str], ctx: TestContext):
 
     # confirm view layer comments are registered in PROD
     if ctx.engine_adapter.COMMENT_CREATION_VIEW.is_supported:
-        prod_plan = context.plan(skip_tests=True, no_prompts=True, auto_apply=True)
-
+        context.plan(skip_tests=True, no_prompts=True, auto_apply=True)
         validate_comments("sushi", is_physical_layer=False)
 
 

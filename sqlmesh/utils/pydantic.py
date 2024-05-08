@@ -177,7 +177,9 @@ class PydanticModel(pydantic.BaseModel):
     @classmethod
     def parse_raw(cls: t.Type["Model"], b: t.Union[str, bytes], **kwargs: t.Any) -> "Model":
         return (
-            super().model_validate_json(b, **kwargs) if PYDANTIC_MAJOR_VERSION >= 2 else super().parse_raw(b, **kwargs)  # type: ignore
+            super().model_validate_json(b, **kwargs)  # type: ignore
+            if PYDANTIC_MAJOR_VERSION >= 2
+            else super().parse_raw(b, **kwargs)
         )
 
     @classmethod
@@ -200,7 +202,9 @@ class PydanticModel(pydantic.BaseModel):
 
     @classmethod
     def required_fields(cls: t.Type["PydanticModel"]) -> t.Set[str]:
-        return cls._fields(lambda field: field.is_required() if PYDANTIC_MAJOR_VERSION >= 2 else field.required)  # type: ignore
+        return cls._fields(
+            lambda field: field.is_required() if PYDANTIC_MAJOR_VERSION >= 2 else field.required
+        )  # type: ignore
 
     @classmethod
     def _fields(

@@ -246,19 +246,19 @@ def test_model_kind():
         insert_overwrite=True, disable_restatement=True
     )
 
-    with pytest.raises(ConfigError) as exception:
+    with pytest.raises(ConfigError):
         ModelConfig(
             materialized=Materialization.INCREMENTAL,
             unique_key=["bar"],
             incremental_strategy="delete+insert",
         ).model_kind(context)
-    with pytest.raises(ConfigError) as exception:
+    with pytest.raises(ConfigError):
         ModelConfig(
             materialized=Materialization.INCREMENTAL,
             unique_key=["bar"],
             incremental_strategy="insert_overwrite",
         ).model_kind(context)
-    with pytest.raises(ConfigError) as exception:
+    with pytest.raises(ConfigError):
         ModelConfig(
             materialized=Materialization.INCREMENTAL,
             unique_key=["bar"],

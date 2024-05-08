@@ -740,8 +740,7 @@ class Snapshot(PydanticModel, SnapshotInfoMixin):
         if self.identifier == other.identifier or (
             # Indirect Non-Breaking snapshots share the dev table with its previous version.
             # The same applies to migrated snapshots.
-            (self.is_indirect_non_breaking or self.migrated)
-            and other.snapshot_id in previous_ids
+            (self.is_indirect_non_breaking or self.migrated) and other.snapshot_id in previous_ids
         ):
             for start, end in other.dev_intervals:
                 self.add_interval(start, end, is_dev=True)

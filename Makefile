@@ -22,7 +22,7 @@ py-style:
 	SKIP=prettier,eslint pre-commit run --all-files
 
 ui-style:
-	SKIP=autoflake,isort,black,mypy pre-commit run --all-files
+	SKIP=ruff,ruff-format,mypy pre-commit run --all-files
 
 doc-test:
 	PYTEST_PLUGINS=tests.common_fixtures pytest --doctest-modules sqlmesh/core sqlmesh/utils

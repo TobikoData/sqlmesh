@@ -121,12 +121,12 @@ class SparkEngineAdapter(GetCurrentCatalogFromFunctionMixin, HiveMetastoreTableP
         def spark_complex_to_sqlglot_complex(
             complex_type: t.Union[
                 spark_types.StructType, spark_types.ArrayType, spark_types.MapType
-            ]
+            ],
         ) -> exp.DataType:
             def get_fields(
                 complex_type: t.Union[
                     spark_types.StructType, spark_types.ArrayType, spark_types.MapType
-                ]
+                ],
             ) -> t.Sequence[spark_types.DataType]:
                 if isinstance(complex_type, spark_types.StructType):
                     return complex_type.fields

@@ -51,7 +51,12 @@ def sqlmesh_config(
 
     return Config(
         default_gateway=profile.target_name,
-        gateways={profile.target_name: GatewayConfig(connection=profile.target.to_sqlmesh(**target_to_sqlmesh_args), state_connection=state_connection)},  # type: ignore
+        gateways={
+            profile.target_name: GatewayConfig(
+                connection=profile.target.to_sqlmesh(**target_to_sqlmesh_args),
+                state_connection=state_connection,
+            )
+        },  # type: ignore
         loader=DbtLoader,
         model_defaults=model_defaults,
         variables=variables or {},

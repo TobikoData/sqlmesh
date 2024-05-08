@@ -39,7 +39,7 @@ class SqlmeshAirflowPlugin(AirflowPlugin):
                     versions = state_sync.get_versions(validate=False)
                     if versions.schema_version != 0:
                         raise SQLMeshError(
-                            f"Must define `default_catalog` when creating `SQLMeshAirflow` object. See docs for more info: https://sqlmesh.readthedocs.io/en/stable/integrations/airflow/#airflow-cluster-configuration"
+                            "Must define `default_catalog` when creating `SQLMeshAirflow` object. See docs for more info: https://sqlmesh.readthedocs.io/en/stable/integrations/airflow/#airflow-cluster-configuration"
                         )
                 logger.info("Migrating SQLMesh state ...")
                 state_sync.migrate(default_catalog=default_catalog)

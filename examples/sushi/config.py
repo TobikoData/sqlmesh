@@ -127,7 +127,7 @@ environment_suffix_config = Config(
 
 CATALOGS = {
     "in_memory": ":memory:",
-    "other_catalog": f":memory:",
+    "other_catalog": ":memory:",
 }
 
 local_catalogs = Config(

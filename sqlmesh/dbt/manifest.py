@@ -125,9 +125,9 @@ class ManifestHelper:
                 **_config(source),
                 **source.to_dict(),
             )
-            self._sources_per_package[source.package_name][
-                source_config.config_name
-            ] = source_config
+            self._sources_per_package[source.package_name][source_config.config_name] = (
+                source_config
+            )
 
     def _load_macros(self) -> None:
         for macro in self._manifest.macros.values():

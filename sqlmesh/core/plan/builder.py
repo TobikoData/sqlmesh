@@ -171,7 +171,7 @@ class PlanBuilder:
     def apply(self) -> None:
         """Builds and applies the plan."""
         if not self._apply:
-            raise SQLMeshError(f"Plan was not initialized with an applier.")
+            raise SQLMeshError("Plan was not initialized with an applier.")
         self._apply(self.build())
 
     def build(self) -> Plan:
@@ -543,9 +543,8 @@ class PlanBuilder:
                 child_snapshot.categorize_as(SnapshotChangeCategory.INDIRECT_NON_BREAKING)
 
             for upstream_id in directly_modified:
-                if (
-                    upstream_id == snapshot.snapshot_id
-                    or child_s_id not in indirectly_modified.get(upstream_id, set())
+                if upstream_id == snapshot.snapshot_id or child_s_id not in indirectly_modified.get(
+                    upstream_id, set()
                 ):
                     continue
 

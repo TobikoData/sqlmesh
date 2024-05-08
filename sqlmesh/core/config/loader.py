@@ -118,7 +118,7 @@ def load_config_from_paths(
 
     supported_model_defaults = ModelDefaultsConfig.all_fields()
     for default in non_python_config_dict.get("model_defaults", {}):
-        if not default in supported_model_defaults:
+        if default not in supported_model_defaults:
             raise ConfigError(
                 f"'{default}' is not a valid model default configuration key. Please remove it from the `model_defaults` specification in your config file."
             )

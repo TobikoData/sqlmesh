@@ -273,7 +273,6 @@ class BaseSlackNotificationTarget(BaseNotificationTarget):
         exc: t.Optional[str] = None,
         **kwargs: t.Any,
     ) -> None:
-
         status_emoji = {
             NotificationStatus.PROGRESS: slack.SlackAlertIcon.START,
             NotificationStatus.SUCCESS: slack.SlackAlertIcon.SUCCESS,

@@ -50,16 +50,13 @@ def test_adapter_relation(sushi_test_project: Project, runtime_renderer: t.Calla
 
     assert renderer("{{ adapter.list_relations(database=None, schema='foo')|length }}") == "2"
 
-    assert (
-        renderer(
-            """
+    assert renderer(
+        """
         {%- set from = adapter.get_relation(database=None, schema='foo', identifier='bar') -%}
         {%- set to = adapter.get_relation(database=None, schema='foo', identifier='another') -%}
         {{ adapter.get_missing_columns(from, to) -}}
         """
-        )
-        == str([Column.from_description(name="baz", raw_data_type="INT")])
-    )
+    ) == str([Column.from_description(name="baz", raw_data_type="INT")])
 
     assert (
         renderer(
@@ -138,9 +135,6 @@ def test_normalization(
 
     adapter_mock.drop_table.reset_mock()
     renderer = runtime_renderer(context, engine_adapter=adapter_mock)
-
-    bla_id = exp.to_identifier("bla", quoted=True)
-    bob_id = exp.to_identifier("bob", quoted=True)
 
     # Ensures we'll pass lowercase names to the engine
     renderer(

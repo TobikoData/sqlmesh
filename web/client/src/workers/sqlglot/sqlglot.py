@@ -45,7 +45,7 @@ def validate(sql: str = "", read: DialectType = None) -> str:
         sqlglot.transpile(
             sql, read=read, pretty=False, unsupported_level=sqlglot.errors.ErrorLevel.IMMEDIATE
         )
-    except sqlglot.errors.ParseError as e:
+    except sqlglot.errors.ParseError:
         return json.dumps(False)
 
     return json.dumps(True)

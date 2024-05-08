@@ -201,7 +201,7 @@ def test_insert_overwrite_by_time_partition_pandas(
     ]
     assert load_temp_table.kwargs["df"].equals(df)
     assert load_temp_table.kwargs["table"] == get_temp_bq_table.return_value
-    assert load_temp_table.kwargs["job_config"].write_disposition == None
+    assert load_temp_table.kwargs["job_config"].write_disposition is None
     assert (
         merge_sql.sql(dialect="bigquery")
         == "MERGE INTO test_table AS __MERGE_TARGET__ USING (SELECT `a`, `ds` FROM (SELECT `a`, `ds` FROM project.dataset.temp_table) AS _subquery WHERE ds BETWEEN '2022-01-01' AND '2022-01-05') AS __MERGE_SOURCE__ ON FALSE WHEN NOT MATCHED BY SOURCE AND ds BETWEEN '2022-01-01' AND '2022-01-05' THEN DELETE WHEN NOT MATCHED THEN INSERT (a, ds) VALUES (a, ds)"
@@ -415,7 +415,7 @@ def test_ctas_time_partition(
 
     sql_calls = _to_sql_calls(execute_mock)
     assert sql_calls == [
-        f"CREATE TABLE IF NOT EXISTS `test_table` PARTITION BY `ds` AS SELECT * FROM `a`",
+        "CREATE TABLE IF NOT EXISTS `test_table` PARTITION BY `ds` AS SELECT * FROM `a`",
     ]
 
 
