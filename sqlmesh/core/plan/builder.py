@@ -18,7 +18,6 @@ from sqlmesh.core.config import (
     EnvironmentSuffixTarget,
 )
 from sqlmesh.core.context_diff import ContextDiff
-from sqlmesh.core.engine_adapter import DIALECT_TO_ENGINE_ADAPTER
 from sqlmesh.core.environment import EnvironmentNamingInfo
 from sqlmesh.core.plan.definition import Plan, SnapshotMapping, earliest_interval_start
 from sqlmesh.core.schema_diff import SchemaDiffer
@@ -74,11 +73,13 @@ class PlanBuilder:
         ensure_finalized_snapshots: Whether to compare against snapshots from the latest finalized
             environment state, or to use whatever snapshots are in the current environment state even if
             the environment is not finalized.
+        engine_schema_differ: Schema differ from the context engine adapter.
     """
 
     def __init__(
         self,
         context_diff: ContextDiff,
+        engine_schema_differ: SchemaDiffer,
         start: t.Optional[TimeLike] = None,
         end: t.Optional[TimeLike] = None,
         execution_time: t.Optional[TimeLike] = None,
@@ -109,7 +110,9 @@ class PlanBuilder:
         self._skip_backfill = skip_backfill
         self._is_dev = is_dev
         self._forward_only = forward_only
-        self._allow_destructive_models = set(allow_destructive_models or [])
+        self._allow_destructive_models = set(
+            allow_destructive_models if allow_destructive_models is not None else []
+        )
         self._enable_preview = enable_preview
         self._end_bounded = end_bounded
         self._ensure_finalized_snapshots = ensure_finalized_snapshots
@@ -117,12 +120,13 @@ class PlanBuilder:
         self._categorizer_config = categorizer_config or CategorizerConfig()
         self._auto_categorization_enabled = auto_categorization_enabled
         self._include_unmodified = include_unmodified
-        self._restate_models = set(restate_models) if restate_models is not None else None
+        self._restate_models = set(restate_models if restate_models is not None else [])
         self._effective_from = effective_from
         self._execution_time = execution_time
         self._backfill_models = backfill_models
         self._end = end or default_end
         self._apply = apply
+        self._engine_schema_differ = engine_schema_differ
         self._console = console or get_console()
 
         self._start = start
@@ -464,28 +468,20 @@ class PlanBuilder:
                         # previous version for non-seed models.
                         # New snapshots of seed models are considered non-breaking ones.
                         if not snapshot.is_seed:
-                            if (
-                                snapshot.is_model
-                                and not snapshot.name in self._allow_destructive_models
-                            ):
-                                self._validate_schema_change(
-                                    s_id,
-                                    self._upstream_directly_modified(s_id, directly_modified, dag),
-                                    True,
-                                )
+                            self._validate_destructive_change(
+                                s_id,
+                                self._upstream_directly_modified(s_id, directly_modified, dag),
+                                True,
+                            )
 
                             snapshot.categorize_as(SnapshotChangeCategory.FORWARD_ONLY)
                         else:
                             snapshot.categorize_as(SnapshotChangeCategory.NON_BREAKING)
                     elif self._is_forward_only_change(s_id) and is_directly_modified:
-                        if (
-                            snapshot.is_model
-                            and not snapshot.name in self._allow_destructive_models
-                        ):
-                            self._validate_schema_change(
-                                s_id,
-                                self._upstream_directly_modified(s_id, directly_modified, dag),
-                            )
+                        self._validate_destructive_change(
+                            s_id,
+                            self._upstream_directly_modified(s_id, directly_modified, dag),
+                        )
 
                         self._set_choice(
                             snapshot,
@@ -592,18 +588,14 @@ class PlanBuilder:
 
             is_forward_only_child = self._is_forward_only_change(child_s_id)
 
-            if (
-                is_forward_only_child
-                and not child_snapshot.model.on_schema_change.is_ignore
-                and not child_snapshot.name in self._allow_destructive_models
-            ):
+            if is_forward_only_child:
                 # no DAG if manual categorization
                 if not dag:
                     logger.info(
                         f"Unable to evaluate model '{child_s_id.name}'s upstream parents for destructive schema changes at plan time."
                     )
 
-                self._validate_schema_change(
+                self._validate_destructive_change(
                     child_s_id,
                     (
                         self._upstream_directly_modified(child_s_id, directly_modified, dag)
@@ -739,29 +731,28 @@ class PlanBuilder:
             upstream_id for upstream_id in dag.upstream(s_id) if upstream_id in directly_modified
         ]
 
-    def _validate_schema_change(
+    def _validate_destructive_change(
         self,
         s_id: SnapshotId,
         upstream_snapshot_ids: t.List[SnapshotId] = [],
-        force_warn: bool = False,
+        force_check: bool = False,
     ) -> None:
-        """Determine if a schema change requires a DROP operation"""
+        """Determine if a schema change requires a destructive operation"""
         s_id_snapshot = t.cast(Snapshot, self._context_diff.snapshots.get(s_id))
 
-        if not s_id_snapshot.model.on_schema_change.is_ignore or force_warn:
-            schema_differ_args = getattr(
-                DIALECT_TO_ENGINE_ADAPTER[s_id_snapshot.model.dialect], "schema_differ_args"
-            )
-            schema_differ = SchemaDiffer(**schema_differ_args)
+        if (
+            s_id_snapshot.is_model and not s_id_snapshot.name in self._allow_destructive_models
+        ) and (not s_id_snapshot.model.on_destructive_change.is_ignore or force_check):
+            schema_differ = self._engine_schema_differ
 
             subdag = [s_id, *upstream_snapshot_ids]
 
-            # if we already know that the change is destructive, we don't need to evaluate any more snapshots
+            # if we already know the change is destructive, we don't need to evaluate any more snapshots
             warning_msg = f"PLAN TIME CHECK: Plan results in a destructive change to forward-only model '{s_id_snapshot.name}'s schema."
-            error_msg = f"{warning_msg} To allow this, change the model's `on_schema_change` setting to `warn` or `ignore` or include it in the plan's `--allow-destructive-model` option."
+            error_msg = f"{warning_msg} To allow this, change the model's `on_destructive_change` setting to `warn` or `ignore` or include it in the plan's `--allow-destructive-model` option."
 
             if any(self._snapshot_change_is_destructive.get(id.name, None) for id in subdag):
-                if s_id_snapshot.model.on_schema_change.is_error:
+                if s_id_snapshot.model.on_destructive_change.is_error:
                     raise PlanError(error_msg)
                 else:
                     logger.warning(warning_msg)
@@ -802,7 +793,7 @@ class PlanBuilder:
                         )
 
                 if any(self._snapshot_change_is_destructive[id.name] for id in subdag):
-                    if s_id_snapshot.model.on_schema_change.is_error:
+                    if s_id_snapshot.model.on_destructive_change.is_error or force_check:
                         raise PlanError(error_msg)
                     else:
                         logger.warning(warning_msg)

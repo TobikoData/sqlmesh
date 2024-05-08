@@ -35,22 +35,17 @@ class DatabricksEngineAdapter(SparkEngineAdapter):
     SUPPORTS_CLONING = True
     SUPPORTS_MATERIALIZED_VIEWS = True
     SUPPORTS_MATERIALIZED_VIEW_SCHEMA = True
+    SCHEMA_DIFFER = SchemaDiffer(
+        support_positional_add=True,
+        support_nested_operations=True,
+        array_element_selector="element",
+    )
     CATALOG_SUPPORT = CatalogSupport.FULL_SUPPORT
     SUPPORTS_ROW_LEVEL_OP = True
-    SCHEMA_DIFFER_ARGS: t.Dict[str, t.Any] = {
-        "support_positional_add": True,
-        "support_nested_operations": True,
-        "array_element_selector": "element",
-    }
-    SCHEMA_DIFFER = SchemaDiffer(**SCHEMA_DIFFER_ARGS)
 
     def __init__(self, *args: t.Any, **kwargs: t.Any):
         super().__init__(*args, **kwargs)
         self._spark: t.Optional[PySparkSession] = None
-
-    @classproperty
-    def schema_differ_args(cls) -> t.Dict[str, t.Any]:
-        return cls.SCHEMA_DIFFER_ARGS
 
     @classproperty
     def can_access_spark_session(cls) -> bool:
