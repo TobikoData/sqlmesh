@@ -31,7 +31,7 @@ def test_create_view(make_mocked_engine_adapter: t.Callable):
         "test_view",
         parse_one("SELECT a FROM tbl"),
         replace=True,
-        physical_properties={"a": exp.convert(1)},
+        view_properties={"a": exp.convert(1)},
     )
 
     assert to_sql_calls(adapter) == [
@@ -48,7 +48,7 @@ def test_create_view_pandas(make_mocked_engine_adapter: t.Callable):
         "test_view",
         pd.DataFrame({"a": [1, 2, 3]}),
         replace=True,
-        physical_properties={"a": exp.convert(1)},
+        view_properties={"a": exp.convert(1)},
     )
 
     assert to_sql_calls(adapter) == [

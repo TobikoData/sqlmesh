@@ -731,7 +731,7 @@ def test_view_properties(make_mocked_engine_adapter: t.Callable, mocker: MockerF
         "test_table",
         parse_one("SELECT 1"),
         table_description="some description",
-        table_properties={
+        view_properties={
             "labels": exp.array("('test-label', 'label-value')"),
         },
     )
@@ -745,7 +745,7 @@ def test_view_properties(make_mocked_engine_adapter: t.Callable, mocker: MockerF
         },
     )
 
-    adapter.create_view("test_table", parse_one("SELECT 1"), physical_properties={})
+    adapter.create_view("test_table", parse_one("SELECT 1"), view_properties={})
 
     sql_calls = _to_sql_calls(execute_mock)
     assert sql_calls == [

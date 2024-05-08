@@ -118,7 +118,7 @@ def test_replace_query_table_properties_exists(
 def test_create_view_properties(make_mocked_engine_adapter: t.Callable):
     adapter = make_mocked_engine_adapter(SparkEngineAdapter)
 
-    adapter.create_view("test_view", parse_one("SELECT a FROM tbl"), table_properties={"a": exp.convert(1)})  # type: ignore
+    adapter.create_view("test_view", parse_one("SELECT a FROM tbl"), view_properties={"a": exp.convert(1)})  # type: ignore
     adapter.cursor.execute.assert_called_once_with(
         "CREATE OR REPLACE VIEW test_view TBLPROPERTIES ('a'=1) AS SELECT a FROM tbl"
     )
