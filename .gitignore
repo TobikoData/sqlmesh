@@ -158,3 +158,7 @@ web/client/dist
 # Version file
 sqlmesh/_version.py
 tests/_version.py
+
+# spark
+metastore_db/
+spark-warehouse/
