@@ -95,7 +95,7 @@ def test_apply_plan(mocker: MockerFixture, snapshot: Snapshot):
                         "name": "INCREMENTAL_BY_TIME_RANGE",
                         "time_column": {"column": "`ds`"},
                         "forward_only": False,
-                        "on_schema_change": "WARN",
+                        "on_destructive_change": "WARN",
                         "disable_restatement": False,
                         "dialect": "spark",
                     },

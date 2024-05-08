@@ -152,7 +152,7 @@ class ModelKindName(str, ModelKindMixin, Enum):
         return str(self)
 
 
-class OnSchemaChange(str, Enum):
+class OnDestructiveChange(str, Enum):
     """What should happen when a forward-only model change requires a destructive schema change."""
 
     ERROR = "ERROR"
@@ -161,15 +161,15 @@ class OnSchemaChange(str, Enum):
 
     @property
     def is_error(self) -> bool:
-        return self == OnSchemaChange.ERROR
+        return self == OnDestructiveChange.ERROR
 
     @property
     def is_warn(self) -> bool:
-        return self == OnSchemaChange.WARN
+        return self == OnDestructiveChange.WARN
 
     @property
     def is_ignore(self) -> bool:
-        return self == OnSchemaChange.IGNORE
+        return self == OnDestructiveChange.IGNORE
 
 
 class _ModelKind(PydanticModel, ModelKindMixin):
@@ -290,7 +290,7 @@ class _Incremental(_ModelKind):
     batch_concurrency: t.Optional[SQLGlotPositiveInt] = None
     lookback: t.Optional[SQLGlotPositiveInt] = None
     forward_only: SQLGlotBool = False
-    on_schema_change: OnSchemaChange = OnSchemaChange.WARN
+    on_destructive_change: OnDestructiveChange = OnDestructiveChange.ERROR
     disable_restatement: SQLGlotBool = False
 
     _dialect_validator = kind_dialect_validator
@@ -309,7 +309,7 @@ class _Incremental(_ModelKind):
             *super().metadata_hash_values,
             str(self.batch_size) if self.batch_size is not None else None,
             str(self.forward_only),
-            str(self.on_schema_change),
+            str(self.on_destructive_change),
             str(self.disable_restatement),
         ]
 
@@ -380,7 +380,7 @@ class IncrementalUnmanagedKind(_ModelKind):
     insert_overwrite: SQLGlotBool = False
     forward_only: SQLGlotBool = True
     disable_restatement: SQLGlotBool = True
-    on_schema_change: OnSchemaChange = OnSchemaChange.WARN
+    on_destructive_change: OnDestructiveChange = OnDestructiveChange.ERROR
 
     @property
     def data_hash_values(self) -> t.List[t.Optional[str]]:
@@ -388,7 +388,11 @@ class IncrementalUnmanagedKind(_ModelKind):
 
     @property
     def metadata_hash_values(self) -> t.List[t.Optional[str]]:
-        return [*super().metadata_hash_values, str(self.forward_only), str(self.on_schema_change)]
+        return [
+            *super().metadata_hash_values,
+            str(self.forward_only),
+            str(self.on_destructive_change),
+        ]
 
 
 class ViewKind(_ModelKind):
@@ -457,7 +461,7 @@ class _SCDType2Kind(_ModelKind):
     time_data_type: exp.DataType = Field(exp.DataType.build("TIMESTAMP"), validate_default=True)
 
     forward_only: SQLGlotBool = True
-    on_schema_change: OnSchemaChange = OnSchemaChange.WARN
+    on_destructive_change: OnDestructiveChange = OnDestructiveChange.ERROR
     disable_restatement: SQLGlotBool = True
 
     _dialect_validator = kind_dialect_validator
@@ -504,7 +508,7 @@ class _SCDType2Kind(_ModelKind):
         return [
             *super().metadata_hash_values,
             str(self.forward_only),
-            str(self.on_schema_change),
+            str(self.on_destructive_change),
             str(self.disable_restatement),
         ]
 
@@ -624,13 +628,13 @@ def _model_kind_validator(cls: t.Type, v: t.Any, values: t.Dict[str, t.Any]) -> 
         }
         props.update(user_defaults_to_set)
 
-        # OnSchemaChange: convert string or exp.Identifier to enum
-        on_schema_change = props.get("on_schema_change", None)
-        if on_schema_change and not isinstance(on_schema_change, OnSchemaChange):
-            props["on_schema_change"] = OnSchemaChange(
-                on_schema_change.this.upper()
-                if isinstance(on_schema_change, exp.Identifier)
-                else on_schema_change.upper()
+        # OnDestructiveChange: convert string or exp.Identifier to enum
+        on_destructive_change = props.get("on_destructive_change", None)
+        if on_destructive_change and not isinstance(on_destructive_change, OnDestructiveChange):
+            props["on_destructive_change"] = OnDestructiveChange(
+                on_destructive_change.this.upper()
+                if isinstance(on_destructive_change, exp.Identifier)
+                else on_destructive_change.upper()
             )
 
         return kind_type(**props)
