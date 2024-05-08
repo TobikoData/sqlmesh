@@ -182,11 +182,9 @@ class TrinoEngineAdapter(
         # Pandas with that format, so we convert the column to a string with the proper format and CAST to
         # timestamp in Trino.
         for column, kind in (columns_to_types or {}).items():
-            if (
-                is_datetime64_any_dtype(df.dtypes[column])
-                and getattr(df.dtypes[column], "tz", None) is not None
-            ):  # type: ignore
-                df[column] = pd.to_datetime(df[column]).map(lambda x: x.isoformat(" "))  # type: ignore
+            dtype = df.dtypes[column]
+            if is_datetime64_any_dtype(dtype) and getattr(dtype, "tz", None) is not None:
+                df[column] = pd.to_datetime(df[column]).map(lambda x: x.isoformat(" "))
 
         return super()._df_to_source_queries(df, columns_to_types, batch_size, target_table)
 
