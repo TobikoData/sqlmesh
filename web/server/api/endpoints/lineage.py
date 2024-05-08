@@ -20,13 +20,15 @@ if t.TYPE_CHECKING:
 router = APIRouter()
 
 
-def get_source_name(node: Node, default_catalog: t.Optional[str], dialect: str) -> str:
+def get_source_name(
+    node: Node, default_catalog: t.Optional[str], dialect: str, model_name: str
+) -> str:
     table = node.expression.find(exp.Table)
     if table:
         return normalize_model_name(table, default_catalog=default_catalog, dialect=dialect)
     if node.reference_node_name:
-        # CTE name
-        return node.reference_node_name
+        # CTE name or derived table alias
+        return f"{model_name}: {node.reference_node_name}"
     return ""
 
 
@@ -62,7 +64,10 @@ def create_lineage_adjacency_list(
                 continue
             node_name = (
                 get_source_name(
-                    node, default_catalog=context.default_catalog, dialect=model.dialect
+                    node,
+                    default_catalog=context.default_catalog,
+                    dialect=model.dialect,
+                    model_name=model_name,
                 )
                 or model_name
             )
@@ -73,7 +78,10 @@ def create_lineage_adjacency_list(
                 dependencies = defaultdict(set)
             for d in node.downstream:
                 table = get_source_name(
-                    d, default_catalog=context.default_catalog, dialect=model.dialect
+                    d,
+                    default_catalog=context.default_catalog,
+                    dialect=model.dialect,
+                    model_name=model_name,
                 )
                 if table:
                     column_name = get_column_name(d)
