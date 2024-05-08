@@ -110,11 +110,11 @@ class TestContext:
 
     def _format_df(self, data: pd.DataFrame, to_datetime: bool = True) -> pd.DataFrame:
         for timestamp_column in self.timestamp_columns:
-            if timestamp_column in data.columns and to_datetime:
-                value = pd.to_datetime(data[timestamp_column])
-                if self.dialect == "duckdb":
-                    value = value.astype("datetime64[us]")
-                data[timestamp_column] = value
+            if timestamp_column in data.columns:
+                value = data[timestamp_column]
+                if to_datetime:
+                    value = pd.to_datetime(value)
+                data[timestamp_column] = value.astype("datetime64[ns]")
         return data
 
     def init(self):
