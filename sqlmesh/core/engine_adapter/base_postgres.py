@@ -115,6 +115,7 @@ class BasePostgresEngineAdapter(EngineAdapter):
                 materialized=materialized,
                 table_description=table_description,
                 column_descriptions=column_descriptions,
+                view_properties=view_properties,
                 **create_kwargs,
             )
 

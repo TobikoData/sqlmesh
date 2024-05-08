@@ -399,6 +399,7 @@ class SparkEngineAdapter(GetCurrentCatalogFromFunctionMixin, HiveMetastoreTableP
             materialized,
             table_description,
             column_descriptions,
+            view_properties=view_properties,
             **create_kwargs,
         )
 
