@@ -108,7 +108,7 @@ def test_json(snapshot: Snapshot):
                 "time_column": {"column": "`ds`"},
                 "batch_size": 30,
                 "forward_only": False,
-                "on_schema_change": "WARN",
+                "on_destructive_change": "WARN",
                 "disable_restatement": False,
                 "dialect": "spark",
             },

@@ -24,7 +24,7 @@ from sqlmesh.core.engine_adapter import SparkEngineAdapter
 from sqlmesh.core.engine_adapter.base import EngineAdapter
 from sqlmesh.core.macros import macro
 from sqlmesh.core.model import IncrementalByTimeRangeKind, SqlModel, model
-from sqlmesh.core.model.kind import OnSchemaChange
+from sqlmesh.core.model.kind import OnDestructiveChange
 from sqlmesh.core.plan import BuiltInPlanEvaluator, Plan
 from sqlmesh.core.snapshot import (
     Node,
@@ -326,12 +326,12 @@ def make_snapshot() -> t.Callable:
 
 
 @pytest.fixture
-def make_snapshot_on_schema_change(make_snapshot: t.Callable) -> t.Callable:
+def make_snapshot_on_destructive_change(make_snapshot: t.Callable) -> t.Callable:
     def _make_function(
         name: str = "a",
         old_query: str = "select '1' as one, '2022-01-01' ds",
         new_query: str = "select 1 as one, '2022-01-01' ds",
-        on_schema_change: OnSchemaChange = OnSchemaChange.WARN,
+        on_destructive_change: OnDestructiveChange = OnDestructiveChange.ERROR,
     ) -> t.Tuple[Snapshot, Snapshot]:
         snapshot_old = make_snapshot(
             SqlModel(
@@ -339,7 +339,7 @@ def make_snapshot_on_schema_change(make_snapshot: t.Callable) -> t.Callable:
                 dialect="duckdb",
                 query=parse_one(old_query),
                 kind=IncrementalByTimeRangeKind(
-                    time_column="ds", forward_only=True, on_schema_change=on_schema_change
+                    time_column="ds", forward_only=True, on_destructive_change=on_destructive_change
                 ),
             )
         )
@@ -350,7 +350,7 @@ def make_snapshot_on_schema_change(make_snapshot: t.Callable) -> t.Callable:
                 dialect="duckdb",
                 query=parse_one(new_query),
                 kind=IncrementalByTimeRangeKind(
-                    time_column="ds", forward_only=True, on_schema_change=on_schema_change
+                    time_column="ds", forward_only=True, on_destructive_change=on_destructive_change
                 ),
             )
         )
