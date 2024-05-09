@@ -705,7 +705,7 @@ class GithubController:
         def conclusion_handler(
             conclusion: GithubCheckConclusion,
         ) -> t.Tuple[GithubCheckConclusion, str, t.Optional[str]]:
-            test_summary = f"**List of possible required approvers:**\n"
+            test_summary = "**List of possible required approvers:**\n"
             for user in self._required_approvers:
                 test_summary += f"- `{user.github_username or user.username}`\n"
 

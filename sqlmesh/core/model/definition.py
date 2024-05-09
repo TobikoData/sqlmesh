@@ -124,7 +124,7 @@ class _Model(ModelMeta, frozen=True):
         end: t.Optional[TimeLike] = None,
         execution_time: t.Optional[TimeLike] = None,
         **kwargs: t.Any,
-    ) -> t.Generator[QueryOrDF, None, None]:
+    ) -> t.Iterator[QueryOrDF]:
         """Renders the content of this model in a form of either a SELECT query, executing which the data for this model can
         be fetched, or a dataframe object which contains the data itself.
 
@@ -1142,7 +1142,7 @@ class SeedModel(_SqlBasedModel):
         end: t.Optional[TimeLike] = None,
         execution_time: t.Optional[TimeLike] = None,
         **kwargs: t.Any,
-    ) -> t.Generator[QueryOrDF, None, None]:
+    ) -> t.Iterator[QueryOrDF]:
         self._ensure_hydrated()
 
         date_columns = []
@@ -1163,12 +1163,15 @@ class SeedModel(_SqlBasedModel):
             # convert all date/time types to native pandas timestamp
             for column in [*date_columns, *datetime_columns]:
                 df[column] = pd.to_datetime(df[column])
+
             # extract datetime.date from pandas timestamp for DATE columns
             for column in date_columns:
                 df[column] = df[column].dt.date
+
             df[bool_columns] = df[bool_columns].apply(lambda i: str_to_bool(str(i)))
             df.loc[:, string_columns] = df[string_columns].mask(
-                cond=lambda x: x.notna(), other=df[string_columns].astype(str)  # type: ignore
+                cond=lambda x: x.notna(),  # type: ignore
+                other=df[string_columns].astype(str),  # type: ignore
             )
             yield df
 
@@ -1318,7 +1321,7 @@ class PythonModel(_Model):
         end: t.Optional[TimeLike] = None,
         execution_time: t.Optional[TimeLike] = None,
         **kwargs: t.Any,
-    ) -> t.Generator[QueryOrDF, None, None]:
+    ) -> t.Iterator[QueryOrDF]:
         env = prepare_env(self.python_env)
         start, end = make_inclusive(start or c.EPOCH, end or c.EPOCH)
         execution_time = to_datetime(execution_time or c.EPOCH)
@@ -1940,11 +1943,11 @@ def _python_env(
         if macro_ref.package is None and macro_ref.name in macros:
             used_macros[macro_ref.name] = macros[macro_ref.name]
 
-    for name, macro in used_macros.items():
-        if isinstance(macro, Executable):
-            serialized_env[name] = macro
-        elif not hasattr(macro, c.SQLMESH_BUILTIN):
-            build_env(macro.func, env=python_env, name=name, path=module_path)
+    for name, used_macro in used_macros.items():
+        if isinstance(used_macro, Executable):
+            serialized_env[name] = used_macro
+        elif not hasattr(used_macro, c.SQLMESH_BUILTIN):
+            build_env(used_macro.func, env=python_env, name=name, path=module_path)
 
     serialized_env.update(serialize_env(python_env, path=module_path))
 

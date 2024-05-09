@@ -154,7 +154,9 @@ def create_plan_dag_spec(
             if deployability_index_for_creation.is_representative(s)
         }
         if request.no_gaps and not request.is_dev
-        else None if request.no_gaps else set()
+        else None
+        if request.no_gaps
+        else set()
     )
 
     return common.PlanDagSpec(

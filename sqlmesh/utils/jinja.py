@@ -216,7 +216,7 @@ class JinjaMacroRegistry(PydanticModel):
     ) -> t.Dict[str, t.Any]:
         # NOTE: This is called only when used with Pydantic V2.
         def _convert(
-            val: t.Union[t.Dict[str, JinjaGlobalAttribute], t.Dict[str, t.Any]]
+            val: t.Union[t.Dict[str, JinjaGlobalAttribute], t.Dict[str, t.Any]],
         ) -> t.Dict[str, t.Any]:
             return {k: _convert(v) if isinstance(v, AttributeDict) else v for k, v in val.items()}
 

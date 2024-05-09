@@ -38,7 +38,7 @@ class model(registry_decorator):
                     f"""Python model "{name}"'s `kind` argument was passed a SQLMesh `{type(kind).__name__}` object. This may result in unexpected behavior - provide a dictionary instead."""
                 )
             elif isinstance(kind, dict):
-                if not "name" in kind or not isinstance(kind.get("name"), ModelKindName):
+                if "name" not in kind or not isinstance(kind.get("name"), ModelKindName):
                     raise ConfigError(
                         f"""Python model "{name}"'s `kind` dictionary must contain a `name` key with a valid ModelKindName enum value."""
                     )

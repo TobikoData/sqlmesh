@@ -140,8 +140,8 @@ def test_test_to_sqlmesh_fields():
 
     assert audit.name == "foo_test"
     assert audit.dialect == "duckdb"
-    assert audit.skip == False
-    assert audit.blocking == True
+    assert not audit.skip
+    assert audit.blocking
     assert sql in audit.query.sql()
 
     sql = "SELECT * FROM FOO WHERE NOT id IS NULL"
@@ -158,8 +158,8 @@ def test_test_to_sqlmesh_fields():
 
     assert audit.name == "foo_null_test"
     assert audit.dialect == "duckdb"
-    assert audit.skip == True
-    assert audit.blocking == False
+    assert audit.skip
+    assert not audit.blocking
     assert sql in audit.query.sql()
 
 
@@ -178,7 +178,7 @@ def test_singular_test_to_standalone_audit():
         dependencies=Dependencies(refs=["bar"]),
     )
 
-    assert test_config.is_standalone == True
+    assert test_config.is_standalone
 
     model = ModelConfig(schema="foo", name="bar", alias="bar")
 

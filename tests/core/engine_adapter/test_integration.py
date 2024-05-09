@@ -110,11 +110,11 @@ class TestContext:
 
     def _format_df(self, data: pd.DataFrame, to_datetime: bool = True) -> pd.DataFrame:
         for timestamp_column in self.timestamp_columns:
-            if timestamp_column in data.columns and to_datetime:
-                value = pd.to_datetime(data[timestamp_column])
-                if self.dialect == "duckdb":
-                    value = value.astype("datetime64[us]")
-                data[timestamp_column] = value
+            if timestamp_column in data.columns:
+                value = data[timestamp_column]
+                if to_datetime:
+                    value = pd.to_datetime(value)
+                data[timestamp_column] = value.astype("datetime64[ns]")
         return data
 
     def init(self):
@@ -173,7 +173,7 @@ class TestContext:
         df = self.engine_adapter.fetchdf(exp.select("*").from_(table), quote_identifiers=True)
         if self.dialect == "snowflake" and "id" in df.columns:
             df["id"] = df["id"].apply(lambda x: x if pd.isna(x) else int(x))
-        return df
+        return self._format_df(df)
 
     def compare_with_current(self, table: exp.Table, expected: pd.DataFrame) -> None:
         compare_dataframes(
@@ -1873,8 +1873,7 @@ def test_sushi(mark_gateway: t.Tuple[str, str], ctx: TestContext):
 
     # confirm view layer comments are registered in PROD
     if ctx.engine_adapter.COMMENT_CREATION_VIEW.is_supported:
-        prod_plan = context.plan(skip_tests=True, no_prompts=True, auto_apply=True)
-
+        context.plan(skip_tests=True, no_prompts=True, auto_apply=True)
         validate_comments("sushi", is_physical_layer=False)
 
 

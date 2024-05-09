@@ -669,7 +669,6 @@ class BigQueryEngineAdapter(InsertOverwriteWithMergeMixin):
         # resort to using SQL instead.
         schema = to_schema(schema_name)
         catalog = schema.catalog or self.get_current_catalog()
-        schema_sql = schema.sql(dialect=self.dialect)
         query = exp.select(
             exp.column("table_catalog").as_("catalog"),
             exp.column("table_name").as_("name"),

@@ -11,7 +11,7 @@ from sqlmesh.utils.pydantic import field_validator
 
 
 def yaml_to_columns(
-    yaml: t.Dict[str, ColumnConfig] | t.List[t.Dict[str, ColumnConfig]]
+    yaml: t.Dict[str, ColumnConfig] | t.List[t.Dict[str, ColumnConfig]],
 ) -> t.Dict[str, ColumnConfig]:
     columns = {}
     mappings: t.List[t.Dict[str, ColumnConfig]] = ensure_list(yaml)

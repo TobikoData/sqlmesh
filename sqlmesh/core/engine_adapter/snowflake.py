@@ -101,10 +101,14 @@ class SnowflakeEngineAdapter(GetCurrentCatalogFromFunctionMixin):
                         if kind.is_type("date"):  # type: ignore
                             df[column] = pd.to_datetime(df[column]).dt.date  # type: ignore
                         elif getattr(df.dtypes[column], "tz", None) is not None:  # type: ignore
-                            df[column] = pd.to_datetime(df[column]).dt.strftime("%Y-%m-%d %H:%M:%S.%f%z")  # type: ignore
+                            df[column] = pd.to_datetime(df[column]).dt.strftime(
+                                "%Y-%m-%d %H:%M:%S.%f%z"
+                            )  # type: ignore
                         # https://github.com/snowflakedb/snowflake-connector-python/issues/1677
                         else:  # type: ignore
-                            df[column] = pd.to_datetime(df[column]).dt.strftime("%Y-%m-%d %H:%M:%S.%f")  # type: ignore
+                            df[column] = pd.to_datetime(df[column]).dt.strftime(
+                                "%Y-%m-%d %H:%M:%S.%f"
+                            )  # type: ignore
                 self.create_table(temp_table, columns_to_types, exists=False)
                 write_pandas(
                     self._connection_pool.get(),
@@ -149,7 +153,6 @@ class SnowflakeEngineAdapter(GetCurrentCatalogFromFunctionMixin):
 
         schema = to_schema(schema_name)
         catalog_name = schema.catalog or self.get_current_catalog()
-        schema_sql = schema.sql(dialect=self.dialect)
         query = (
             exp.select(
                 exp.column("TABLE_CATALOG").as_("catalog"),
