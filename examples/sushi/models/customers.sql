@@ -9,8 +9,8 @@ MODEL (
 );
 
 CREATE SCHEMA IF NOT EXISTS raw;
-DROP TABLE IF EXISTS raw.demographics;
-CREATE TABLE raw.demographics AS (
+DROP VIEW IF EXISTS raw.demographics;
+CREATE VIEW raw.demographics AS (
   SELECT 1 AS customer_id, '00000' AS zip
 );
 
