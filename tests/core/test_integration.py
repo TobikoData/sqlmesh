@@ -1721,17 +1721,17 @@ def test_environment_suffix_target_table(init_and_plan_context: t.Callable):
     context, plan = init_and_plan_context("examples/sushi", config="environment_suffix_config")
     context.apply(plan)
     metadata = DuckDBMetadata.from_context(context)
-    environments_schemas = {"raw", "sushi"}
+    environments_schemas = {"sushi"}
     internal_schemas = {"sqlmesh", "sqlmesh__sushi"}
     starting_schemas = environments_schemas | internal_schemas
     # Make sure no new schemas are created
-    assert set(metadata.schemas) - starting_schemas == set()
+    assert set(metadata.schemas) - starting_schemas == {"raw"}
     prod_views = {x for x in metadata.qualified_views if x.db in environments_schemas}
     # Make sure that all models are present
     assert len(prod_views) == 12
     apply_to_environment(context, "dev")
     # Make sure no new schemas are created
-    assert set(metadata.schemas) - starting_schemas == set()
+    assert set(metadata.schemas) - starting_schemas == {"raw"}
     dev_views = {
         x for x in metadata.qualified_views if x.db in environments_schemas and "__dev" in x.name
     }
@@ -1788,7 +1788,7 @@ def test_environment_catalog_mapping(init_and_plan_context: t.Callable):
     ) = get_default_catalog_and_non_tables(metadata, context.default_catalog)
     assert len(prod_views) == 12
     assert len(dev_views) == 0
-    assert len(user_default_tables) == 23
+    assert len(user_default_tables) == 22
     assert state_metadata.schemas == ["sqlmesh"]
     assert {x.sql() for x in state_metadata.qualified_tables}.issuperset(
         {
@@ -1808,7 +1808,7 @@ def test_environment_catalog_mapping(init_and_plan_context: t.Callable):
     ) = get_default_catalog_and_non_tables(metadata, context.default_catalog)
     assert len(prod_views) == 12
     assert len(dev_views) == 12
-    assert len(user_default_tables) == 23
+    assert len(user_default_tables) == 22
     assert len(non_default_tables) == 0
     assert state_metadata.schemas == ["sqlmesh"]
     assert {x.sql() for x in state_metadata.qualified_tables}.issuperset(
@@ -1829,7 +1829,7 @@ def test_environment_catalog_mapping(init_and_plan_context: t.Callable):
     ) = get_default_catalog_and_non_tables(metadata, context.default_catalog)
     assert len(prod_views) == 12
     assert len(dev_views) == 24
-    assert len(user_default_tables) == 23
+    assert len(user_default_tables) == 22
     assert len(non_default_tables) == 0
     assert state_metadata.schemas == ["sqlmesh"]
     assert {x.sql() for x in state_metadata.qualified_tables}.issuperset(
@@ -1851,7 +1851,7 @@ def test_environment_catalog_mapping(init_and_plan_context: t.Callable):
     ) = get_default_catalog_and_non_tables(metadata, context.default_catalog)
     assert len(prod_views) == 12
     assert len(dev_views) == 12
-    assert len(user_default_tables) == 23
+    assert len(user_default_tables) == 22
     assert len(non_default_tables) == 0
     assert state_metadata.schemas == ["sqlmesh"]
     assert {x.sql() for x in state_metadata.qualified_tables}.issuperset(
