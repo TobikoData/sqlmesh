@@ -70,13 +70,13 @@ api-docs-serve:
 	python pdoc/cli.py
 
 ui-up:
-	docker-compose up --build -d && $(if $(shell which open), open http://localhost:8001, echo "Open http://localhost:8001 in your browser.")
+	docker-compose -f ./web/docker-compose.yml up --build -d && $(if $(shell which open), open http://localhost:8001, echo "Open http://localhost:8001 in your browser.")
 
 ui-down:
-	docker-compose down
+	docker-compose -f ./web/docker-compose.yml down
 
 ui-build:
-	docker-compose -f docker-compose.yml -f docker-compose.build.yml run app
+	docker-compose -f ./web/docker-compose.yml -f ./web/docker-compose.build.yml run app
 
 clean-build:
 	rm -rf build/ && rm -rf dist/ && rm -rf *.egg-info
