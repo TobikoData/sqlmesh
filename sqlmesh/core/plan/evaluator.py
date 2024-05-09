@@ -151,6 +151,7 @@ class BuiltInPlanEvaluator(PlanEvaluator):
             plan.environment_naming_info,
             plan.start,
             plan.end,
+            execution_time=plan.execution_time,
             restatements=plan.restatements,
             selected_snapshots=selected_snapshots,
             deployability_index=deployability_index,
@@ -278,7 +279,6 @@ class BuiltInPlanEvaluator(PlanEvaluator):
                 (plan.context_diff.snapshots[s_id], interval)
                 for s_id, interval in plan.restatements.items()
             ],
-            plan.execution_time,
             remove_shared_versions=not plan.is_dev,
         )
 
@@ -373,6 +373,7 @@ class StateBasedAirflowPlanEvaluator(BaseAirflowPlanEvaluator):
                 for change_source, snapshots in plan.indirectly_modified.items()
             },
             removed_snapshots=list(plan.context_diff.removed_snapshots),
+            execution_time=plan.execution_time,
         )
         plan_dag_spec = create_plan_dag_spec(plan_application_request, self.state_sync)
         PlanDagState.from_state_sync(self.state_sync).add_dag_spec(plan_dag_spec)
@@ -449,6 +450,7 @@ class AirflowPlanEvaluator(StateBasedAirflowPlanEvaluator):
                 for change_source, snapshots in plan.indirectly_modified.items()
             },
             removed_snapshots=list(plan.context_diff.removed_snapshots),
+            execution_time=plan.execution_time,
         )
 
 
