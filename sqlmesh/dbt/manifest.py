@@ -471,8 +471,8 @@ def _node_base_config(node: ManifestNode) -> t.Dict[str, t.Any]:
 
 
 def _convert_jinja_test_to_macro(test_jinja: str) -> str:
-    TEST_TAG_REGEX = "\s*{%\s*test\s+"
-    ENDTEST_REGEX = "{%\s*endtest\s*%}"
+    TEST_TAG_REGEX = r"\s*{%\s*test\s+"
+    ENDTEST_REGEX = r"{%\s*endtest\s*%}"
     match = re.match(TEST_TAG_REGEX, test_jinja)
     if not match:
         # already a macro
