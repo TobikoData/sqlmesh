@@ -254,6 +254,36 @@ def test_evaluate_limit():
     assert context.evaluate("without_limit", "2020-01-01", "2020-01-02", "2020-01-02", 2).size == 2
 
 
+def test_plan_execution_time():
+    context = Context(config=Config())
+    context.upsert_model(
+        load_sql_based_model(
+            parse(
+                """
+                MODEL(
+                    name db.x, 
+                    start '2024-01-01',
+                    kind FULL
+                );
+
+                SELECT @execution_date AS execution_date
+                """
+            )
+        )
+    )
+
+    context.plan(
+        "dev",
+        execution_time="2024-01-02",
+        auto_apply=True,
+        no_prompts=True,
+    )
+    assert (
+        str(list(context.fetchdf("select * from db__dev.x")["execution_date"])[0])
+        == "2024-01-02 00:00:00"
+    )
+
+
 def test_clear_caches(tmp_path: pathlib.Path):
     models_dir = tmp_path / "models"
 

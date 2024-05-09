@@ -130,7 +130,7 @@ def create_plan_dag_spec(
             [s for s in all_snapshots.values() if request.is_selected_for_backfill(s.name)],
             start=request.environment.start_at,
             end=end,
-            execution_time=now(),
+            execution_time=request.execution_time or now(),
             deployability_index=deployability_index_for_evaluation,
             restatements=restatements,
             end_bounded=request.end_bounded,
@@ -182,6 +182,7 @@ def create_plan_dag_spec(
         directly_modified_snapshots=request.directly_modified_snapshots,
         indirectly_modified_snapshots=request.indirectly_modified_snapshots,
         removed_snapshots=request.removed_snapshots,
+        execution_time=request.execution_time,
     )
 
 

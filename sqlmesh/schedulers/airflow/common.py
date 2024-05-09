@@ -55,6 +55,7 @@ class PlanApplicationRequest(PydanticModel):
     directly_modified_snapshots: t.List[SnapshotId]
     indirectly_modified_snapshots: t.Dict[str, t.List[SnapshotId]]
     removed_snapshots: t.List[SnapshotId]
+    execution_time: t.Optional[TimeLike] = None
 
     def is_selected_for_backfill(self, model_fqn: str) -> bool:
         return self.models_to_backfill is None or model_fqn in self.models_to_backfill
@@ -89,6 +90,7 @@ class PlanDagSpec(PydanticModel):
     directly_modified_snapshots: t.Optional[t.List[SnapshotId]] = None
     indirectly_modified_snapshots: t.Optional[t.Dict[str, t.List[SnapshotId]]] = None
     removed_snapshots: t.Optional[t.List[SnapshotId]] = None
+    execution_time: t.Optional[TimeLike] = None
 
 
 class EnvironmentsResponse(PydanticModel):

@@ -207,6 +207,7 @@ class SnapshotDagGenerator:
                 plan_dag_spec.deployability_index,
                 plan_dag_spec.environment.plan_id,
                 "before_promote",
+                plan_dag_spec.execution_time,
             )
 
             (
@@ -218,6 +219,7 @@ class SnapshotDagGenerator:
                 plan_dag_spec.deployability_index,
                 plan_dag_spec.environment.plan_id,
                 "after_promote",
+                plan_dag_spec.execution_time,
             )
 
             (
@@ -425,6 +427,7 @@ class SnapshotDagGenerator:
         deployability_index: DeployabilityIndex,
         plan_id: str,
         task_id_suffix: str,
+        execution_time: t.Optional[TimeLike],
     ) -> t.Tuple[BaseOperator, BaseOperator]:
         snapshot_to_tasks = {}
         for intervals_per_snapshot in backfill_intervals:
@@ -456,6 +459,7 @@ class SnapshotDagGenerator:
                     end=end,
                     deployability_index=deployability_index,
                     plan_id=plan_id,
+                    execution_time=execution_time,
                 )
                 external_sensor_task = self._create_hwm_external_sensor(
                     snapshot, start=start, end=end
@@ -593,6 +597,7 @@ class SnapshotDagGenerator:
         task_id: str,
         start: t.Optional[TimeLike] = None,
         end: t.Optional[TimeLike] = None,
+        execution_time: t.Optional[TimeLike] = None,
         deployability_index: t.Optional[DeployabilityIndex] = None,
         plan_id: t.Optional[str] = None,
     ) -> BaseOperator:
@@ -607,6 +612,7 @@ class SnapshotDagGenerator:
                 end=end,
                 deployability_index=deployability_index or DeployabilityIndex.all_deployable(),
                 plan_id=plan_id,
+                execution_time=execution_time,
             ),
             task_id=task_id,
         )

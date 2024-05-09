@@ -136,12 +136,11 @@ class CachingStateSync(DelegatingStateSync):
     def remove_interval(
         self,
         snapshot_intervals: t.Sequence[t.Tuple[SnapshotInfoLike, Interval]],
-        execution_time: t.Optional[TimeLike] = None,
         remove_shared_versions: bool = False,
     ) -> None:
         for s, _ in snapshot_intervals:
             self.snapshot_cache.pop(s.snapshot_id, None)
-        self.state_sync.remove_interval(snapshot_intervals, execution_time, remove_shared_versions)
+        self.state_sync.remove_interval(snapshot_intervals, remove_shared_versions)
 
     def unpause_snapshots(
         self, snapshots: t.Collection[SnapshotInfoLike], unpaused_dt: TimeLike
