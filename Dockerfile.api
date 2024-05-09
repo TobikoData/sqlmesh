@@ -1,8 +1,15 @@
-FROM python:3.11
-
-WORKDIR /sqlmesh
-
+FROM python:3.11-slim-bullseye AS venv-image
+RUN apt-get update && apt-get -y install libpq-dev gcc
 COPY setup.py setup.py
 COPY sqlmesh/_version.py sqlmesh/_version.py
+ENV VIRTUAL_ENV=/.venv
+ENV PATH="$VIRTUAL_ENV/bin:$PATH"
+RUN python3 -m venv $VIRTUAL_ENV
+RUN pip3 install -e .[dev,web]
 
-RUN pip install -e .[dev,web]
+FROM python:3.11-slim-bullseye as app-image
+WORKDIR /app
+ENV VIRTUAL_ENV=/opt/venv
+ENV PATH="$VIRTUAL_ENV/bin:$PATH"
+RUN python3 -m venv $VIRTUAL_ENV
+COPY --from=venv-image /.venv $VIRTUAL_ENV
