@@ -65,7 +65,7 @@ class FileCache(t.Generic[T]):
         # delete all old cache files
         for file in self._path.glob("*"):
             if not file.stem.startswith(self._cache_version) or file.stat().st_mtime < threshold:
-                file.unlink()
+                file.unlink(missing_ok=True)
 
     def get_or_load(self, name: str, entry_id: str = "", *, loader: t.Callable[[], T]) -> T:
         """Returns an existing cached entry or loads and caches a new one.
@@ -114,8 +114,7 @@ class FileCache(t.Generic[T]):
             entry_id: The unique entry identifier. Used for cache invalidation.
             value: The value to store in the cache.
         """
-        if not self._path.exists():
-            self._path.mkdir(parents=True)
+        self._path.mkdir(parents=True, exist_ok=True)
         if not self._path.is_dir():
             raise SQLMeshError(f"Cache path '{self._path}' is not a directory.")
 
