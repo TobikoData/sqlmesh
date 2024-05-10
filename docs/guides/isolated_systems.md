@@ -88,13 +88,11 @@ The SQLMesh project files provide the link between the systems. The files should
 
 ### Workflow with one system
 
-This section describes a generic workflow for updating SQLMesh projects with one system, which serves as a baseline for the workflow for isolated systems.
-
-We assume that a version of the SQLMesh project is currently running in production and serves as the starting point for code modifications.
+This section describes workflows for updating SQLMesh projects with one system. We assume that a version of the SQLMesh project is currently running in production and serves as the starting point for code modifications.
 
 #### Basic workflow
 
-Use this basic workflow if your data system does not use CI/CD to implement changes:
+Use this workflow if your data system does not use CI/CD to implement changes:
 
 - Make a change to a model
 - Run `sqlmesh plan dev` (or another environment name) to preview the changes in a local environment
@@ -106,10 +104,14 @@ Use this workflow with the SQLMesh [Github CI/CD bot](../integrations/github.md)
 
 - `git clone` the project repo
 - Make a change to a model in a git branch
-- Push the branch to the project repo and make a pull request. The bot will create a development environment for you to preview the changes.
+- Push the branch to the project repo and make a pull request. The bot will create a development environment for you to preview the changes if it is configured for [synchronized deployments](../integrations/github.md#synchronized-vs-desynchronized-deployments).
 - Merge the branch into `main` to apply the changes to the `prod` environment
 
-Learn more about how the CI/CD bot applies the changes to the `prod` environment [here](../integrations/github.md).
+Learn more about synchronized and desynchronized deployments [here](../integrations/github.md#synchronized-vs-desynchronized-deployments).
+
+#### Reusing computations
+
+Local environment previews are computed on the same data used by the `prod` environment in these workflows, so applying the changes to `prod` reuses the preview computations and only requires a virtual update.
 
 ### Workflow with isolated systems
 
@@ -120,9 +122,17 @@ This workflow combines the basic and CI/CD workflows above, where the basic work
 - `git clone` the project repo
 - Make a change to a model in a git branch
 - Run `sqlmesh plan dev` (or another environment name) to preview the changes in the nonproduction system. (You may need to include the nonproduction `--gateway` option, depending on your project configuration.)
-- Push the branch to the project repo and make a pull request. The bot will create an environment to preview the changes in the production system.
+- Push the branch to the project repo and make a pull request. The bot will create an environment to preview the changes in the production system if it is configured for [synchronized deployments](../integrations/github.md#synchronized-vs-desynchronized-deployments).
 - Merge the branch into `main` to apply the changes to the `prod` environment
 
-The classification of changes as breaking/non-breaking in the non-production system plan will not be available to the production system plan because the systems do not share SQLMesh state data. Therefore, the classification must occur again in the production system.
+The breaking/non-breaking change classifications in the non-production system will not be available to the production system because the systems do not share SQLMesh state data. Therefore, the classifications must occur again in the production system.
 
-In isolated systems, SQLMesh's virtual data environments will operate normally *within* each system, but not across systems. The non-production system will reuse relevant computations previously run in developer environments, and the production system will reuse relevant computations run by the CI/CD bot.
+#### Reusing computations
+
+In isolated systems, SQLMesh's virtual data environments operate normally *within* each system, but not across systems.
+
+In the non-production system, computations will be reused across preview environments. However, the system's data are not representative of the production data and will not be reused by the production system.
+
+In the production system, the CI/CD bot will execute the necessary computations when a pull request is submitted if it is configured for [synchronized deployments](../integrations/github.md#synchronized-vs-desynchronized-deployments). Merging to main and applying the changes to `prod` reuses the preview computations and only requires a virtual update.
+
+Learn more about synchronized and desynchronized deployments [here](../integrations/github.md#synchronized-vs-desynchronized-deployments).
