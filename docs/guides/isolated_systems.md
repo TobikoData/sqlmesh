@@ -2,11 +2,11 @@
 
 SQLMesh is optimized for use in systems where developers have access to production data.
 
-Writing code against partial or unrepresentative data can be problematic because developers don't become aware of changes in production data until errors have already occurred. Other data products, such as machine learning models, may depend on the distribution of values in the training data - building them on unrepresentative data may lead to different behavior in production than in development.
+Writing code against partial or unrepresentative data can cause problems because you don't become aware of changes in production data until errors have already occurred. Other data products, such as machine learning models, may depend on the distribution of values in the training data - building them on unrepresentative data may lead to different behavior in production than in development.
 
-However, some companies store production and non-production data in different data warehouses that can't talk to one another ("isolated systems"). This is usually motivated by information security concerns, as the non-production warehouse may be accessible to more users and/or have looser security restrictions.
+However, some companies store production and non-production data in different data warehouses that can't talk to one another ("isolated systems"). This is usually due to information security concerns, as the non-production warehouse may be accessible to more users and/or have looser security restrictions.
 
-This guide explains how to use SQLMesh with isolated systems. It also clarifies how isolating systems affects SQLMesh's behavior and why the systems still enjoy the benefits of many SQLMesh features.
+This guide explains how to use SQLMesh with isolated systems and how isolating systems affects SQLMesh's behavior.
 
 ## Terminology
 
@@ -50,7 +50,7 @@ gateways:
             ...[your production state connection parameters]...
 ```
 
-SQLMesh will use the first gateway in the configuration as the default when executing a command. For example, with that configuration SQLMesh would use the `nonproduction` gateway when executing the command `sqlmesh plan`.
+SQLMesh will use the first gateway in the configuration as the default when executing a command. For example, with the configuration above SQLMesh would use the `nonproduction` gateway when executing the command `sqlmesh plan`.
 
 Commands can override the default gateway with the `--gateway` option, such as `sqlmesh --gateway production plan`.
 
@@ -82,122 +82,47 @@ MODEL (
 
 The point of isolating systems is to prevent sharing of data by limiting network communications between the systems. Given this, how can a SQLMesh project be shared between them at all?
 
-The SQLMesh project files provide the link between the systems. The files should be stored in a mutually accessible location, such as a Git repository, or moved from one system to another as needed.
+The SQLMesh project files provide the link between the systems. The files should be stored in a mutually accessible location, such as a git repository.
 
 ![SQLMesh project files link systems](./isolated_systems/isolated-systems_linkage.png)
 
 ### Workflow with one system
 
-This section outlines a generic workflow for SQLMesh projects with one system, which serves as a baseline to which we will compare the workflow for isolated systems.
+This section describes a generic workflow for updating SQLMesh projects with one system, which serves as a baseline for the workflow for isolated systems.
 
 We assume that a version of the SQLMesh project is currently running in production and serves as the starting point for code modifications.
 
-The simplest version of the workflow is:
+#### Basic workflow
 
-1. Developers modify project code
+Use this basic workflow if your data system does not use CI/CD to implement changes:
 
-    a. Developers clone the production code repository
+- Make a change to a model
+- Run `sqlmesh plan dev` (or another environment name) to preview the changes in a local environment
+- Run `sqlmesh plan` to apply the changes to the `prod` environment
 
-    b. Developers update code in local git branches
+#### CI/CD workflow
 
-    c. Developers create SQLMesh environments and validate their code updates
+Use this workflow with the SQLMesh [Github CI/CD bot](../integrations/github.md):
 
-2. Update production project code
+- `git clone` the project repo
+- Make a change to a model in a git branch
+- Push the branch to the project repo and make a pull request. The bot will create a development environment for you to preview the changes.
+- Merge the branch into `main` to apply the changes to the `prod` environment
 
-    a. A set of git branches are selected for deployment to production
-
-    b. The changes in the selected git branches are merged into the production branch
-
-3. Deploy to production
-
-    a. Execute the `sqlmesh plan` command or use the [SQLMesh CI/CD bot](../integrations/github.md) to apply the updates to the `prod` environment
-
-![Standard SQLMesh workflow](./isolated_systems/isolated-systems_standard-workflow-staging.png)
-
-When applying the updates to the `prod` environment, all model changes that were previously applied in user environments will not run again due to SQLMesh's virtual data environments.
-
-#### Staging environment
-
-In the workflow described in the previous section, individual code modifications have been tested by the developers that made them, but the collection of all changes being deployed may not have been tested together.
-
-A common expansion of the simple workflow (that we recommend) is to add a staging environment where the set of changes can be evaluated before deploying to production.
-
-The single system workflow with a staging environment is the same as the [generic workflow above](#workflow-with-one-system), but with additional `staging` environment creation and validation in step 2:
-
-1. [Same as [above](#workflow-with-one-system)]
-
-2. Update production project code
-
-    a. A set of code updates is selected for deployment to production
-
-    b. The production SQLMesh project files are modified with the updates
-
-    c. Execute the `sqlmesh plan staging` command to apply the updates to the `staging` environment (or another environment of your choosing)
-
-    d. Developers validate the set of code updates in the `staging` environment
-
-3. [Same as [above](#workflow-with-one-system)]
-
-![Standard SQLMesh workflow with staging environment](./isolated_systems/isolated-systems_standard-workflow-staging.png)
-
-Because the code updates have run in the `staging` environment, the deployment to the `prod` environment will not require additional computation due to SQLMesh's virtual data environments. The deployment only requires updates to views so will be very rapid.
+Learn more about how the CI/CD bot applies the changes to the `prod` environment [here](../integrations/github.md).
 
 ### Workflow with isolated systems
 
-We now describe the SQLMesh project workflow with isolated systems.
+This section describes the workflow with isolated systems.
 
-The primary difference from the single-system workflows described above is that some steps now occur in the nonproduction system and others in the production system.
+This workflow combines the basic and CI/CD workflows above, where the basic workflow is used in the non-production system and the CI/CD workflow is used in the production system:
 
-In some isolated system implementations, the data in the non-production system is different from that in the production system. For example, columns containing sensitive information may be masked or altered in the non-production system's data. These potential differences increase the likelihood of unintentional errors, so we describe (and recommend) a workflow with staging environments.
+- `git clone` the project repo
+- Make a change to a model in a git branch
+- Run `sqlmesh plan dev` (or another environment name) to preview the changes in the nonproduction system. (You may need to include the nonproduction `--gateway` option, depending on your project configuration.)
+- Push the branch to the project repo and make a pull request. The bot will create an environment to preview the changes in the production system.
+- Merge the branch into `main` to apply the changes to the `prod` environment
 
-In the steps below, we assume that the non-production system is the default gateway. The isolated system workflow with staging environments begins like the [staging workflow above](#staging-environment), but with additional staging environment creation and validation in the production system after validation in the default non-production system:
+The classification of changes as breaking/non-breaking in the non-production system plan will not be available to the production system plan because the systems do not share SQLMesh state data. Therefore, the classification must occur again in the production system.
 
-1. [Same as [above](#staging-environment)]
-
-2. [Same as [above](#staging-environment)]
-
-3. Deploy to production system `staging` environment
-
-    a. Execute the `sqlmesh --gateway production plan staging` command to apply the updates to the production system `staging` environment. Note that your production system's gateway may have a different name and that you may choose any environment name (other than the reserved name `prod`).
-
-    b. Developers validate the set of code updates in the production system `staging` environment
-
-4. Deploy to production
-
-    a. Execute the `sqlmesh --gateway production plan` command or use the [SQLMesh CI/CD bot](../integrations/github.md) to apply the updates to the production system's `prod` environment
-
-![Isolated systems SQLMesh workflow with staging environments](./isolated_systems/isolated-systems_isolated-systems-workflow.png)
-
-The classification of changes as breaking/non-breaking in the non-production system plan (step 2) will not be available to the production system plan (step 3) because the systems do not share SQLMesh state data. Therefore, the classification must occur again in the production system.
-
-In isolated systems, SQLMesh's virtual data environments will operate normally *within* each system, but not across systems. For example, when the non-production system's staging environment is created (step 2c), any computations previously run in a developer's personal environment will not run again.
-
-In step (3) above, the creation of the `staging` environment in the production system will require running all the computations required by code changes. Deployment to the production system's `prod` environment (step 4) will not require additional computation due to SQLMesh's virtual data environments. The deployment only requires updates views so will be very rapid.
-
-## SQLMesh features
-
-This section describes how two key SQLMesh features perform when a project runs on isolated systems: virtual data environments and computing only what's necessary.
-
-### Virtual data environments
-
-SQLMesh's virtual data environments ensure that computations are only run when necessary, saving analyst time and reducing computing expenses.
-
-Environments are isolated namespaces where users can safely modify code and examine the outputted data. The production environment runs the models your business relies on for its operations, and other environments are created by users on demand.
-
-SQLMesh environments work by separating database objects into two conceptual "layers": physical and virtual. The physical layer consists of the tables created, modified, and queried by SQLMesh models. The virtual layer consists of [views](https://en.wikipedia.org/wiki/View_(SQL)) that pass through data from an underlying physical table via `SELECT *`.
-
-When an existing model is modified, a new physical table is created to reflect the updated model. The virtual layer of any environment containing that version of the model can point to the same new physical table. This approach allows a model version's computations to run once and be reused by any environment (including production).
-
-#### Table reuse in isolated systems
-
-Isolated production systems cannot reuse the physical tables created in non-production systems. Therefore, computations performed in non-production systems must be run again when an updated model version is pushed to the production system.
-
-However, computations performed in different SQLMesh environments inside a system will be reused by other SQLMesh environments in that system. In organizations with many collaborators, most computations occur during development, resulting in time and cost savings due to table reuse within the non-production system.
-
-### Compute only what's necessary
-
-SQLMesh plans determine what computations to run by comparing the versions of models in the project files to the versions of existing models in the system. If an updated version of a model is detected, SQLMesh compares it to the existing version to determine the update's impact on downstream models.
-
-For each downstream model, SQLMesh determines whether the change is `breaking` because it invalidates existing data or `non-breaking` because it does not. Only models with `breaking` changes need to be recomputed when the plan is executed.
-
-Isolated systems still enjoy the benefits of computing only what is necessary within each system.
+In isolated systems, SQLMesh's virtual data environments will operate normally *within* each system, but not across systems. The non-production system will reuse relevant computations previously run in developer environments, and the production system will reuse relevant computations run by the CI/CD bot.
