@@ -2699,14 +2699,14 @@ def test_model_table_properties_conflicts() -> None:
 
 
 def test_session_properties_on_model_and_project(sushi_context):
-    model_defaults=ModelDefaultsConfig(
-        session_properties = {
+    model_defaults = ModelDefaultsConfig(
+        session_properties={
             "some_bool": False,
             "quoted_identifier": "value_you_wont_see",
-            "project_level_property": "project_property"
+            "project_level_property": "project_property",
         }
     )
-    
+
     model = load_sql_based_model(
         d.parse(
             """
@@ -2737,6 +2737,7 @@ def test_session_properties_on_model_and_project(sushi_context):
         "unquoted_identifier": exp.column("unquoted_identifier", quoted=False),
         "project_level_property": exp.column("project_property", quoted=False),
     }
+
 
 def test_model_session_properties(sushi_context):
     assert sushi_context.models['"memory"."sushi"."items"'].session_properties == {

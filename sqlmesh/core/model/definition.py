@@ -1877,21 +1877,19 @@ def _split_sql_model_statements(
     return query, expressions[:pos], expressions[pos + 1 :]
 
 
-def _resolve_custom_session_params(defaults: t.Dict[str, t.Any], **kwargs: t.Any): 
-    if  kwargs.get("session_properties") and defaults and defaults.get("session_properties"):
+def _resolve_custom_session_params(
+    defaults: t.Dict[str, t.Any] | None, **kwargs: t.Dict[str, t.Any]
+) -> None:
+    if kwargs.get("session_properties") and defaults and defaults.get("session_properties"):
         session_properties = kwargs["session_properties"]
         session_props = {expr.this.name for expr in session_properties}
         for k, v in defaults["session_properties"].items():
             if k not in session_props:
                 new_eq = exp.EQ(
-                    this=exp.Literal(this=k),
-                    expression=exp.Column(
-                    this=exp.Identifier(this=v)
-                    )
+                    this=exp.Literal(this=k), expression=exp.Column(this=exp.Identifier(this=v))
                 )
                 session_properties.expressions.append(new_eq)
         kwargs["session_properties"] = session_properties
-
 
 
 def _validate_model_fields(klass: t.Type[_Model], provided_fields: t.Set[str], path: Path) -> None:
