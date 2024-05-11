@@ -29,5 +29,6 @@ class ModelDefaultsConfig(BaseConfig):
     owner: t.Optional[str] = None
     start: t.Optional[TimeLike] = None
     storage_format: t.Optional[str] = None
+    session_properties: t.Optional[t.Dict[str, t.Any]] = None
 
     _model_kind_validator = model_kind_validator
