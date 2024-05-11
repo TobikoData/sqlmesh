@@ -3,7 +3,12 @@ from __future__ import annotations
 import typing as t
 
 from sqlmesh.core.config.base import BaseConfig
-from sqlmesh.core.model.kind import ModelKind, OnDestructiveChange, model_kind_validator
+from sqlmesh.core.model.kind import (
+    ModelKind,
+    OnDestructiveChange,
+    model_kind_validator,
+    on_destructive_change_validator,
+)
 from sqlmesh.utils.date import TimeLike
 
 
@@ -30,7 +35,8 @@ class ModelDefaultsConfig(BaseConfig):
     owner: t.Optional[str] = None
     start: t.Optional[TimeLike] = None
     storage_format: t.Optional[str] = None
-    on_destructive_change: t.Optional[t.Union[OnDestructiveChange, str]] = None
+    on_destructive_change: t.Optional[OnDestructiveChange] = None
     session_properties: t.Optional[t.Dict[str, t.Any]] = None
 
     _model_kind_validator = model_kind_validator
+    _on_destructive_change_validator = on_destructive_change_validator

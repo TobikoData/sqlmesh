@@ -172,8 +172,24 @@ class OnDestructiveChange(str, Enum):
         return self == OnDestructiveChange.IGNORE
 
 
+def _on_destructive_change_validator(
+    cls: t.Type, v: t.Union[OnDestructiveChange, str, exp.Identifier]
+) -> t.Any:
+    if v and not isinstance(v, OnDestructiveChange):
+        return OnDestructiveChange(v.this.upper() if isinstance(v, exp.Identifier) else v.upper())
+    return v
+
+
+on_destructive_change_validator = field_validator("on_destructive_change", mode="before")(
+    _on_destructive_change_validator
+)
+
+
 class _ModelKind(PydanticModel, ModelKindMixin):
     name: ModelKindName
+    on_destructive_change: OnDestructiveChange = OnDestructiveChange.IGNORE
+
+    _on_destructive_change_validator = on_destructive_change_validator
 
     @property
     def model_kind_name(self) -> t.Optional[ModelKindName]:
@@ -284,30 +300,19 @@ kind_dialect_validator = field_validator("dialect", mode="before", always=True)(
 )
 
 
-def _on_destructive_change_validator(
-    cls: t.Type, v: t.Union[OnDestructiveChange, str, exp.Identifier]
-) -> t.Any:
-    if v and not isinstance(v, OnDestructiveChange):
-        return OnDestructiveChange(v.this.upper() if isinstance(v, exp.Identifier) else v.upper())
-    return v
-
-
-on_destructive_change_validator = field_validator("on_destructive_change", mode="before")(
-    _on_destructive_change_validator
-)
-
-
 class _Incremental(_ModelKind):
+    on_destructive_change: OnDestructiveChange = OnDestructiveChange.ERROR
+
+
+class _IncrementalBy(_Incremental):
     dialect: t.Optional[str] = Field(None, validate_default=True)
     batch_size: t.Optional[SQLGlotPositiveInt] = None
     batch_concurrency: t.Optional[SQLGlotPositiveInt] = None
     lookback: t.Optional[SQLGlotPositiveInt] = None
     forward_only: SQLGlotBool = False
-    on_destructive_change: OnDestructiveChange = OnDestructiveChange.ERROR
     disable_restatement: SQLGlotBool = False
 
     _dialect_validator = kind_dialect_validator
-    _on_destructive_change_validator = on_destructive_change_validator
 
     @property
     def data_hash_values(self) -> t.List[t.Optional[str]]:
@@ -328,7 +333,7 @@ class _Incremental(_ModelKind):
         ]
 
 
-class IncrementalByTimeRangeKind(_Incremental):
+class IncrementalByTimeRangeKind(_IncrementalBy):
     name: Literal[ModelKindName.INCREMENTAL_BY_TIME_RANGE] = ModelKindName.INCREMENTAL_BY_TIME_RANGE
     time_column: TimeColumn
 
@@ -342,7 +347,7 @@ class IncrementalByTimeRangeKind(_Incremental):
         return [*super().data_hash_values, gen(self.time_column.column), self.time_column.format]
 
 
-class IncrementalByUniqueKeyKind(_Incremental):
+class IncrementalByUniqueKeyKind(_IncrementalBy):
     name: Literal[ModelKindName.INCREMENTAL_BY_UNIQUE_KEY] = ModelKindName.INCREMENTAL_BY_UNIQUE_KEY
     unique_key: SQLGlotListOfFields
     when_matched: t.Optional[exp.When] = None
@@ -389,14 +394,11 @@ class IncrementalByUniqueKeyKind(_Incremental):
         ]
 
 
-class IncrementalUnmanagedKind(_ModelKind):
+class IncrementalUnmanagedKind(_Incremental):
     name: Literal[ModelKindName.INCREMENTAL_UNMANAGED] = ModelKindName.INCREMENTAL_UNMANAGED
     insert_overwrite: SQLGlotBool = False
     forward_only: SQLGlotBool = True
     disable_restatement: SQLGlotBool = True
-    on_destructive_change: OnDestructiveChange = OnDestructiveChange.ERROR
-
-    _on_destructive_change_validator = on_destructive_change_validator
 
     @property
     def data_hash_values(self) -> t.List[t.Optional[str]]:
@@ -468,7 +470,7 @@ class FullKind(_ModelKind):
     name: Literal[ModelKindName.FULL] = ModelKindName.FULL
 
 
-class _SCDType2Kind(_ModelKind):
+class _SCDType2Kind(_Incremental):
     dialect: t.Optional[str] = Field(None, validate_default=True)
     unique_key: SQLGlotListOfFields
     valid_from_name: SQLGlotColumn = Field(exp.column("valid_from"), validate_default=True)
@@ -477,11 +479,9 @@ class _SCDType2Kind(_ModelKind):
     time_data_type: exp.DataType = Field(exp.DataType.build("TIMESTAMP"), validate_default=True)
 
     forward_only: SQLGlotBool = True
-    on_destructive_change: OnDestructiveChange = OnDestructiveChange.ERROR
     disable_restatement: SQLGlotBool = True
 
     _dialect_validator = kind_dialect_validator
-    _on_destructive_change_validator = on_destructive_change_validator
 
     # Remove once Pydantic 1 is deprecated
     _always_validate_column = field_validator(
@@ -633,17 +633,18 @@ def _model_kind_validator(cls: t.Type, v: t.Any, values: t.Dict[str, t.Any]) -> 
         # instead of `SCD_TYPE_2_BY_TIME`.
         props["name"] = name
         kind_type = model_kind_type_from_name(name)
-        kind_type_fields = kind_type.all_fields()
 
-        if "dialect" in kind_type_fields and props.get("dialect") is None:
+        if "dialect" in kind_type.all_fields() and props.get("dialect") is None:
             props["dialect"] = dialect
 
-        user_defaults_to_set = {
-            k: v
-            for k, v in (values.get("kind_specific_defaults") or {}).items()
-            if k in kind_type_fields and not k in props
-        }
-        props.update(user_defaults_to_set)
+        # only pass the on_destructive_change user default to models inheriting from _Incremental
+        # that don't explicitly set it in the model definition
+        if (
+            issubclass(kind_type, _Incremental)
+            and props.get("on_destructive_change") is None
+            and values.get("on_destructive_change") is not None
+        ):
+            props["on_destructive_change"] = values.get("on_destructive_change")
 
         return kind_type(**props)
 

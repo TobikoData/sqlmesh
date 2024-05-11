@@ -4265,12 +4265,30 @@ def test_python_model_dialect():
 
 
 def test_forward_only_on_destructive_change_config() -> None:
-    # nothing specified in either MODEL kind or model defaults: kind-specific default
+    # global default to IGNORE for non-incremental models
     config = Config(model_defaults=ModelDefaultsConfig(dialect="duckdb"))
     context = Context(config=config)
 
     expressions = d.parse(
-        f"""
+        """
+        MODEL (
+            name memory.db.table,
+            kind FULL,
+        );
+        SELECT a, b, c FROM source_table;
+        """
+    )
+    model = load_sql_based_model(expressions, defaults=config.model_defaults.dict())
+    context.upsert_model(model)
+    context_model = context.get_model("memory.db.table")
+    assert context_model.kind.on_destructive_change.is_ignore
+
+    # global default to ERROR for incremental models
+    config = Config(model_defaults=ModelDefaultsConfig(dialect="duckdb"))
+    context = Context(config=config)
+
+    expressions = d.parse(
+        """
         MODEL (
             name memory.db.table,
             kind INCREMENTAL_BY_TIME_RANGE (
@@ -4281,42 +4299,41 @@ def test_forward_only_on_destructive_change_config() -> None:
         SELECT a, b, c FROM source_table;
         """
     )
-    model = load_sql_based_model(expressions, dialect=config.model_defaults.dialect)
+    model = load_sql_based_model(expressions, defaults=config.model_defaults.dict())
     context.upsert_model(model)
     context_model = context.get_model("memory.db.table")
-    assert (
-        context_model.on_destructive_change
-        == IncrementalByTimeRangeKind.all_field_infos()["on_destructive_change"].default
-    )
+    assert context_model.kind.on_destructive_change.is_error
 
-    # error specified in MODEL kind
+    # WARN specified in model definition, overrides incremental model sqlmesh default ERROR
     config = Config(model_defaults=ModelDefaultsConfig(dialect="duckdb"))
     context = Context(config=config)
 
     expressions = d.parse(
-        f"""
+        """
         MODEL (
             name memory.db.table,
             kind INCREMENTAL_BY_TIME_RANGE (
                 time_column c,
                 forward_only True,
-                on_destructive_change error
+                on_destructive_change warn
             ),
         );
         SELECT a, b, c FROM source_table;
         """
     )
-    model = load_sql_based_model(expressions, dialect=config.model_defaults.dialect)
+    model = load_sql_based_model(expressions, defaults=config.model_defaults.dict())
     context.upsert_model(model)
     context_model = context.get_model("memory.db.table")
-    assert context_model.on_destructive_change.is_error
+    assert context_model.kind.on_destructive_change.is_warn
 
-    # error specified as model default
-    config = Config(model_defaults=ModelDefaultsConfig(dialect="duckdb"))
+    # WARN specified as model default, overrides incremental model sqlmesh default ERROR
+    config = Config(
+        model_defaults=ModelDefaultsConfig(dialect="duckdb", on_destructive_change="warn")
+    )
     context = Context(config=config)
 
     expressions = d.parse(
-        f"""
+        """
         MODEL (
             name memory.db.table,
             kind INCREMENTAL_BY_TIME_RANGE (
@@ -4327,11 +4344,27 @@ def test_forward_only_on_destructive_change_config() -> None:
         SELECT a, b, c FROM source_table;
         """
     )
-    model = load_sql_based_model(
-        expressions,
-        dialect=config.model_defaults.dialect,
-        kind_specific_defaults={"on_destructive_change": exp.Identifier(this="error")},
-    )
+    model = load_sql_based_model(expressions, defaults=config.model_defaults.dict())
     context.upsert_model(model)
     context_model = context.get_model("memory.db.table")
-    assert context_model.on_destructive_change.is_error
+    assert context_model.kind.on_destructive_change.is_warn
+
+    # WARN specified as model default, does not override non-incremental sqlmesh default IGNORE
+    config = Config(
+        model_defaults=ModelDefaultsConfig(dialect="duckdb", on_destructive_change="warn")
+    )
+    context = Context(config=config)
+
+    expressions = d.parse(
+        """
+        MODEL (
+            name memory.db.table,
+            kind FULL,
+        );
+        SELECT a, b, c FROM source_table;
+        """
+    )
+    model = load_sql_based_model(expressions, defaults=config.model_defaults.dict())
+    context.upsert_model(model)
+    context_model = context.get_model("memory.db.table")
+    assert context_model.kind.on_destructive_change.is_ignore
