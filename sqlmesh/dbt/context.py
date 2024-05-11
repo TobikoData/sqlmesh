@@ -20,11 +20,11 @@ from sqlmesh.utils.jinja import (
 )
 
 if t.TYPE_CHECKING:
-    from dbt.contracts.relation import Policy
     from jinja2 import Environment
 
     from sqlmesh.dbt.basemodel import Dependencies
     from sqlmesh.dbt.model import ModelConfig
+    from sqlmesh.dbt.relation import Policy
     from sqlmesh.dbt.seed import SeedConfig
     from sqlmesh.dbt.source import SourceConfig
 

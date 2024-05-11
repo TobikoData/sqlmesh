@@ -6,7 +6,6 @@ from unittest.mock import PropertyMock
 
 import pytest
 from dbt.adapters.base import BaseRelation, Column
-from dbt.contracts.relation import Policy
 from pytest_mock import MockerFixture
 
 from sqlmesh.core.dialect import jinja_query
@@ -16,6 +15,7 @@ from sqlmesh.dbt.context import DbtContext
 from sqlmesh.dbt.loader import sqlmesh_config
 from sqlmesh.dbt.model import IncrementalByUniqueKeyKind, Materialization, ModelConfig
 from sqlmesh.dbt.project import Project
+from sqlmesh.dbt.relation import Policy
 from sqlmesh.dbt.source import SourceConfig
 from sqlmesh.dbt.target import (
     TARGET_TYPE_TO_CONFIG_CLASS,
