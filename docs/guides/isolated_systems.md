@@ -137,6 +137,6 @@ In isolated systems, SQLMesh's virtual data environments operate normally *withi
 
 In the non-production system, computations will be reused across preview environments. However, the system's data are not representative of the production data and will not be reused by the production system.
 
-In the production system, the CI/CD bot will execute the necessary computations when a pull request is submitted if it is configured for [synchronized deployments](../integrations/github.md#synchronized-vs-desynchronized-deployments). Merging to main and applying the changes to `prod` reuses the preview computations and only requires a virtual update.
+In the production system, the CI/CD bot will execute the necessary computations when a pull request is submitted if it is configured for [synchronized deployment](../integrations/github.md#synchronized-vs-desynchronized-deployments). Merging to main and applying the changes to `prod` reuses the preview computations and only requires a virtual update.
 
-Learn more about synchronized and desynchronized deployments [here](../integrations/github.md#synchronized-vs-desynchronized-deployments).
+This approach enables true [blue-green deployment](https://en.m.wikipedia.org/wiki/Blue%E2%80%93green_deployment). Deploying to production occurs with no system downtime because virtual updates only require swapping views. If issues are identified after changes have been pushed to production, reverting is quick and painless because it just swaps the views back.
