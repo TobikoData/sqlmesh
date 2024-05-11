@@ -2,7 +2,9 @@
 
 SQLMesh is optimized for use in systems where developers have access to production data.
 
-Writing code against partial or unrepresentative data can cause problems because you don't become aware of changes in production data until errors have already occurred. Other data products, such as machine learning models, may depend on the distribution of values in the training data - building them on unrepresentative data may lead to different behavior in production than in development.
+Writing code against partial or unrepresentative data can cause problems because you don't become aware of changes in production data until errors have already occurred.
+
+Other data products, such as machine learning models, may depend on the distribution of values in the training data - building them on unrepresentative data may lead to different behavior in production than in development.
 
 However, some companies store production and non-production data in different data warehouses that can't talk to one another ("isolated systems"). This is usually due to information security concerns, as the non-production warehouse may be accessible to more users and/or have looser security restrictions.
 
@@ -22,7 +24,7 @@ When we refer to "environments," we are always talking about [SQLMesh environmen
 
 SQLMesh maintains a record of every model version so it can identify changes when models are updated. Those records are called "state" data, as in "the state of the model at that point in time."
 
-State data can be stored alongside other data in the primary data warehouse or in a [separate database](./connections.md#state-connection). (We recommend using a separate transactional database for projects running on cloud SQL engines.)
+State data can be stored alongside other data in the primary data warehouse or in a [separate database](./configuration.md#state-connection). We recommend using a separate transactional database for projects running on cloud SQL engines.
 
 Isolated systems must use a **separate** state database for each system. The state of models and other objects in the non-production system is not accurate for the production system, and sharing state data will prevent the project from running correctly.
 
@@ -60,7 +62,7 @@ We recommend using identical schema and model names in both systems, but in some
 
 Schema and model names may be parameterized by gateway using the predefined [`@gateway` macro variable](../concepts/macros/macro_variables.md#runtime-variables).
 
-This example demonstrates conditioning the model schema name on the current gateway with the SQLMesh [`@IF` macro operator](../concepts/macros/sqlmesh_macros.md#if). If the gateway is named "production," `my_model`'s schema is `prod_schema`; otherwise, it is `dev_schema`.
+This example demonstrates conditioning the model schema name on the current gateway with the SQLMesh [`@IF` macro operator](../concepts/macros/sqlmesh_macros.md#if). If the gateway is named `production`, `my_model`'s schema is `prod_schema`; otherwise, it is `dev_schema`.
 
 ```sql linenums="1"
 MODEL (
@@ -88,7 +90,9 @@ The SQLMesh project files provide the link between the systems. The files should
 
 ### Workflow with one system
 
-This section describes workflows for updating SQLMesh projects with one system. We assume that a version of the SQLMesh project is currently running in production and serves as the starting point for code modifications.
+This section describes workflows for updating SQLMesh projects with one system.
+
+We assume that a version of the SQLMesh project is currently running in production and serves as the starting point for code modifications.
 
 #### Basic workflow
 
@@ -121,7 +125,7 @@ This workflow combines the basic and CI/CD workflows above, where the basic work
 
 - `git clone` the project repo
 - Make a change to a model in a git branch
-- Run `sqlmesh plan dev` (or another environment name) to preview the changes in the nonproduction system. (You may need to include the nonproduction `--gateway` option, depending on your project configuration.)
+- Run `sqlmesh plan dev` (or another environment name) to preview the changes in the nonproduction system. You may need to include the nonproduction `--gateway` option, depending on your project configuration.
 - Push the branch to the project repo and make a pull request. The bot will create an environment to preview the changes in the production system if it is configured for [synchronized deployments](../integrations/github.md#synchronized-vs-desynchronized-deployments).
 - Merge the branch into `main` to apply the changes to the `prod` environment
 
