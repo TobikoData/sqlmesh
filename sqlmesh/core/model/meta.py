@@ -21,11 +21,12 @@ from sqlmesh.core.model.common import (
 from sqlmesh.core.model.kind import (
     IncrementalByUniqueKeyKind,
     ModelKind,
+    OnDestructiveChange,
     SCDType2ByColumnKind,
     SCDType2ByTimeKind,
     TimeColumn,
     ViewKind,
-    _Incremental,
+    _IncrementalBy,
     model_kind_validator,
 )
 from sqlmesh.core.node import _Node, str_or_exp_to_str
@@ -53,7 +54,7 @@ class ModelMeta(_Node):
 
     dialect: str = ""
     name: str
-    kind_specific_defaults: t.Optional[t.Dict[str, t.Any]] = None
+    on_destructive_change: t.Optional[OnDestructiveChange] = Field(default=None, exclude=True)
     kind: ModelKind = ViewKind()
     retention: t.Optional[int] = None  # not implemented yet
     storage_format: t.Optional[str] = None
@@ -329,7 +330,7 @@ class ModelMeta(_Node):
     @property
     def lookback(self) -> int:
         """The incremental lookback window."""
-        return (self.kind.lookback if isinstance(self.kind, _Incremental) else 0) or 0
+        return (self.kind.lookback if isinstance(self.kind, _IncrementalBy) else 0) or 0
 
     def lookback_start(self, start: TimeLike) -> TimeLike:
         if self.lookback == 0:

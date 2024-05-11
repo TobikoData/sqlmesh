@@ -225,7 +225,7 @@ def test_forward_only_plan_allow_destructive_models(
     # forward-only model, not forward-only plan
     snapshot_a_old, snapshot_a = make_snapshot_on_destructive_change()
 
-    context_diff = ContextDiff(
+    context_diff_a = ContextDiff(
         environment="prod",
         is_new_environment=False,
         is_unfinalized_environment=False,
@@ -241,12 +241,12 @@ def test_forward_only_plan_allow_destructive_models(
     )
 
     with pytest.raises(PlanError, match="Plan results in a destructive change to forward-only"):
-        PlanBuilder(context_diff, schema_differ, forward_only=False).build()
+        PlanBuilder(context_diff_a, schema_differ, forward_only=False).build()
 
     logger = logging.getLogger("sqlmesh.core.plan.builder")
     with patch.object(logger, "warning") as mock_logger:
         assert PlanBuilder(
-            context_diff, schema_differ, forward_only=False, allow_destructive_models=['"a"']
+            context_diff_a, schema_differ, forward_only=False, allow_destructive_models=['"a"']
         ).build()
         assert mock_logger.call_count == 0
 
@@ -269,28 +269,68 @@ def test_forward_only_plan_allow_destructive_models(
         )
     )
 
-    context_diff = ContextDiff(
+    snapshot_c_old = make_snapshot(
+        SqlModel(
+            name="c",
+            dialect="duckdb",
+            query=parse_one("select '1' as one"),
+            kind=IncrementalByTimeRangeKind(time_column="ds"),
+        )
+    )
+
+    snapshot_c = make_snapshot(
+        SqlModel(
+            name="c",
+            dialect="duckdb",
+            query=parse_one("select 1 as one"),
+            kind=IncrementalByTimeRangeKind(time_column="ds"),
+        )
+    )
+
+    context_diff_b = ContextDiff(
         environment="prod",
         is_new_environment=False,
         is_unfinalized_environment=False,
         create_from="prod",
         added=set(),
         removed_snapshots={},
-        modified_snapshots={snapshot_b.name: (snapshot_b, snapshot_b_old)},
-        snapshots={snapshot_b.snapshot_id: snapshot_b, snapshot_b_old.snapshot_id: snapshot_b_old},
-        new_snapshots={snapshot_b.snapshot_id: snapshot_b},
+        modified_snapshots={
+            snapshot_b.name: (snapshot_b, snapshot_b_old),
+            snapshot_c.name: (snapshot_c, snapshot_c_old),
+        },
+        snapshots={
+            snapshot_b.snapshot_id: snapshot_b,
+            snapshot_b_old.snapshot_id: snapshot_b_old,
+            snapshot_c.snapshot_id: snapshot_c,
+            snapshot_c_old.snapshot_id: snapshot_c_old,
+        },
+        new_snapshots={snapshot_b.snapshot_id: snapshot_b, snapshot_c.snapshot_id: snapshot_c},
         previous_plan_id=None,
         previously_promoted_snapshot_ids=set(),
         previous_finalized_snapshots=None,
     )
 
-    with pytest.raises(PlanError, match="Plan results in a destructive change to forward-only"):
-        PlanBuilder(context_diff, schema_differ, forward_only=True).build()
+    with pytest.raises(
+        PlanError,
+        match="""Plan results in a destructive change to forward-only model '"b"'s schema.""",
+    ):
+        PlanBuilder(context_diff_b, schema_differ, forward_only=True).build()
+
+    with pytest.raises(
+        PlanError,
+        match="""Plan results in a destructive change to forward-only model '"c"'s schema.""",
+    ):
+        PlanBuilder(
+            context_diff_b, schema_differ, forward_only=True, allow_destructive_models=['"b"']
+        ).build()
 
     logger = logging.getLogger("sqlmesh.core.plan.builder")
     with patch.object(logger, "warning") as mock_logger:
         PlanBuilder(
-            context_diff, schema_differ, forward_only=True, allow_destructive_models=['"b"']
+            context_diff_b,
+            schema_differ,
+            forward_only=True,
+            allow_destructive_models=['"b"', '"c"'],
         ).build()
         assert mock_logger.call_count == 0
 
@@ -300,7 +340,7 @@ def test_forward_only_model_on_destructive_change(
 ):
     schema_differ = DuckDBEngineAdapter.SCHEMA_DIFFER
 
-    # direct change to A: error
+    # direct change to A
     snapshot_a_old, snapshot_a = make_snapshot_on_destructive_change()
 
     context_diff_1 = ContextDiff(
@@ -329,9 +369,9 @@ def test_forward_only_model_on_destructive_change(
         PlanError,
         match="""Plan results in a destructive change to forward-only model '"a"'s schema.""",
     ):
-        PlanBuilder(context_diff_1, schema_differ, forward_only=False).build()
+        PlanBuilder(context_diff_1, schema_differ).build()
 
-    # indirect change to B: error
+    # ignore A, indirect change to B
     snapshot_a_old2, snapshot_a2 = make_snapshot_on_destructive_change(
         on_destructive_change=OnDestructiveChange.IGNORE
     )
@@ -386,9 +426,9 @@ def test_forward_only_model_on_destructive_change(
         PlanError,
         match="""Plan results in a destructive change to forward-only model '"b"'s schema.""",
     ):
-        PlanBuilder(context_diff_2, schema_differ, forward_only=False).build()
+        PlanBuilder(context_diff_2, schema_differ).build()
 
-    # indirect change to C: error
+    # ignore A and B, indirect change to C
     snapshot_a_old3, snapshot_a3 = make_snapshot_on_destructive_change(
         on_destructive_change=OnDestructiveChange.IGNORE
     )
@@ -473,7 +513,7 @@ def test_forward_only_model_on_destructive_change(
         PlanError,
         match="""Plan results in a destructive change to forward-only model '"c"'s schema.""",
     ):
-        PlanBuilder(context_diff_3, schema_differ, forward_only=False).build()
+        PlanBuilder(context_diff_3, schema_differ).build()
 
 
 def test_forward_only_model_on_destructive_change_no_column_types(
@@ -507,7 +547,7 @@ def test_forward_only_model_on_destructive_change_no_column_types(
 
     logger = logging.getLogger("sqlmesh.core.plan.builder")
     with patch.object(logger, "info") as mock_logger:
-        PlanBuilder(context_diff_1, DuckDBEngineAdapter.SCHEMA_DIFFER, forward_only=False).build()
+        PlanBuilder(context_diff_1, DuckDBEngineAdapter.SCHEMA_DIFFER).build()
         assert (
             mock_logger.call_args[0][0]
             == """Unable to determine at plan time if changes cause a destructive schema change to model '"a"'."""

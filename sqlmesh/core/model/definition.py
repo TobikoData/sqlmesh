@@ -24,7 +24,7 @@ from sqlmesh.core import constants as c
 from sqlmesh.core import dialect as d
 from sqlmesh.core.macros import MacroRegistry, MacroStrTemplate, macro
 from sqlmesh.core.model.common import expression_validator
-from sqlmesh.core.model.kind import ModelKindName, OnDestructiveChange, SeedKind
+from sqlmesh.core.model.kind import ModelKindName, SeedKind
 from sqlmesh.core.model.meta import ModelMeta
 from sqlmesh.core.model.seed import CsvSeedReader, Seed, create_seed
 from sqlmesh.core.renderer import ExpressionRenderer, QueryRenderer
@@ -159,38 +159,39 @@ class _Model(ModelMeta, frozen=True):
         expressions = []
         comment = None
         for field_name, field_info in ModelMeta.all_field_infos().items():
-            field_value = getattr(self, field_name)
+            # fields with `exclude=True` are not present if we are processing data that has been serialized
+            if not field_info.field_info.exclude:  # type: ignore
+                field_value = getattr(self, field_name)
 
-            if field_value != field_info.default:
-                if field_name == "description":
-                    comment = field_value
-                elif field_name == "kind":
-                    expressions.append(
-                        exp.Property(
-                            this="kind",
-                            value=field_value.to_expression(dialect=self.dialect),
+                if field_value != field_info.default:
+                    if field_name == "description":
+                        comment = field_value
+                    elif field_name == "kind":
+                        expressions.append(
+                            exp.Property(
+                                this="kind",
+                                value=field_value.to_expression(dialect=self.dialect),
+                            )
                         )
-                    )
-                elif field_name == "name":
-                    expressions.append(
-                        exp.Property(
-                            this=field_name,
-                            value=exp.to_table(field_value, dialect=self.dialect),
+                    elif field_name == "name":
+                        expressions.append(
+                            exp.Property(
+                                this=field_name,
+                                value=exp.to_table(field_value, dialect=self.dialect),
+                            )
                         )
-                    )
-                elif field_name not in (
-                    "column_descriptions_",
-                    "default_catalog",
-                    "kind_specific_defaults",
-                ):
-                    expressions.append(
-                        exp.Property(
-                            this=field_info.alias or field_name,
-                            value=META_FIELD_CONVERTER.get(field_name, exp.to_identifier)(
-                                field_value
-                            ),
+                    elif field_name not in (
+                        "column_descriptions_",
+                        "default_catalog",
+                    ):
+                        expressions.append(
+                            exp.Property(
+                                this=field_info.alias or field_name,
+                                value=META_FIELD_CONVERTER.get(field_name, exp.to_identifier)(
+                                    field_value
+                                ),
+                            )
                         )
-                    )
 
         model = d.Model(expressions=expressions)
         model.comments = [comment] if comment else None
@@ -618,10 +619,6 @@ class _Model(ModelMeta, frozen=True):
     @property
     def forward_only(self) -> bool:
         return getattr(self.kind, "forward_only", False)
-
-    @property
-    def on_destructive_change(self) -> OnDestructiveChange:
-        return getattr(self.kind, "on_destructive_change", OnDestructiveChange.IGNORE)
 
     @property
     def disable_restatement(self) -> bool:
@@ -1828,25 +1825,17 @@ def _create_model(
     dialect = dialect or ""
     physical_schema_override = physical_schema_override or {}
 
-    # Assumption: any specified default that is not a ModelMeta field is kind-specific.
-    # _model_kind_validator ensures that kind-specific defaults passed to kind constructor
-    # are valid for the kind.
-    meta_fields = ModelMeta.all_fields()
-    model_defaults = {k: v for k, v in (defaults or {}).items() if k in meta_fields}
-    kind_specific_defaults = {k: v for k, v in (defaults or {}).items() if not k in meta_fields}
-
     try:
         model = klass(
             name=name,
             **{
-                **model_defaults,
+                **(defaults or {}),
                 "jinja_macros": jinja_macros or JinjaMacroRegistry(),
                 "dialect": dialect,
                 "depends_on": depends_on,
                 "physical_schema_override": physical_schema_override.get(
                     exp.to_table(name, dialect=dialect).db
                 ),
-                "kind_specific_defaults": kind_specific_defaults,
                 **kwargs,
             },
         )
