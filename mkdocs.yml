@@ -14,6 +14,7 @@ nav:
     - Project structure:
       - guides/projects.md
       - guides/multi_repo.md
+      - guides/isolated_systems.md
     - Project setup:
       - guides/configuration.md
       - guides/connections.md
@@ -114,6 +115,7 @@ theme:
 plugins:
   - include-markdown
   - search
+  - glightbox
 markdown_extensions:
   - tables
   - pymdownx.highlight:
