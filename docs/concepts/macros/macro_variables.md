@@ -37,7 +37,9 @@ We describe SQLMesh's predefined variables below; user-defined macro variables a
 ## Predefined Variables
 SQLMesh comes with predefined variables that can be used in your queries. They are automatically set by the SQLMesh runtime.
 
-These variables are mostly related to time and comprise a combination of prefixes (start, end, execution) and postfixes (date, ds, ts, epoch, millis).
+Most predefined variables are related to time and use a combination of prefixes (start, end, execution) and postfixes (date, ds, ts, epoch, millis). They are described in the next section; [other predefined variables](#runtime-variables) are discussed in the following section.
+
+### Temporal variables
 
 SQLMesh uses the python [datetime module](https://docs.python.org/3/library/datetime.html) for handling dates and times. It uses the standard [Unix epoch](https://en.wikipedia.org/wiki/Unix_time) start of 1970-01-01. *All predefined variables with a time component use the [UTC time zone](https://en.wikipedia.org/wiki/Coordinated_Universal_Time).*
 
@@ -56,7 +58,7 @@ Postfixes:
 * epoch - An integer representing seconds since Unix epoch.
 * millis - An integer representing milliseconds since Unix epoch.
 
-All predefined macro variables:
+All predefined temporal macro variables:
 
 * date
     * @start_date
@@ -93,10 +95,21 @@ All predefined macro variables:
     * @end_millis
     * @execution_millis
 
-Other macro variables:
+### Runtime variables
+
+SQLMesh provides two other predefined variables used to modify model behavior based on information available at runtime.
 
 * @runtime_stage - A string value that denotes the current stage of the SQLMesh runtime. It can take one of the following values:
     * 'loading' - The project is currently being loaded into SQLMesh's runtime context.
     * 'creating' - The model tables are being created.
     * 'evaluating' - The models' logic is being evaluated.
+    * 'testing' - The models' logic is being evaluated in the context of a unit test.
 * @gateway - A string value that represents the name of the selected [gateway](../../guides/connections.md).
+
+### Audit-only variables
+
+Some predefined variables are only supported in [SQLMesh audit definitions](../audits.md).
+
+* @this_model - used to create [generic audits](../audits.md#generic-audits)
+
+The `{{ this_model }}` Jinja macro variable may be used in model definitions for the rare cases when SQLGlot cannot fully parse a statement and you need to reference the model's underlying physical table directly. We recommend against using it unless absolutely required.
