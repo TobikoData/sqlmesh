@@ -8,7 +8,6 @@ from unittest.mock import call
 import pytest
 from dbt.adapters.base import BaseRelation
 from dbt.adapters.base.column import Column
-from dbt.contracts.relation import Policy
 from pytest_mock.plugin import MockerFixture
 from sqlglot import exp
 
@@ -16,6 +15,7 @@ from sqlmesh import Context
 from sqlmesh.core.dialect import schema_
 from sqlmesh.core.snapshot import SnapshotId
 from sqlmesh.dbt.project import Project
+from sqlmesh.dbt.relation import Policy
 from sqlmesh.dbt.target import SnowflakeConfig
 from sqlmesh.utils.errors import ConfigError
 

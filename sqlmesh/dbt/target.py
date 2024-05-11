@@ -7,7 +7,6 @@ import typing as t
 from pathlib import Path
 
 from dbt.adapters.base import BaseRelation, Column
-from dbt.contracts.relation import Policy
 from pydantic import Field
 
 from sqlmesh.core.config.connection import (
@@ -30,6 +29,7 @@ from sqlmesh.core.model import (
     IncrementalUnmanagedKind,
 )
 from sqlmesh.dbt.common import DbtConfig
+from sqlmesh.dbt.relation import Policy
 from sqlmesh.dbt.util import DBT_VERSION
 from sqlmesh.utils import AttributeDict, classproperty
 from sqlmesh.utils.errors import ConfigError

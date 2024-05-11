@@ -2,12 +2,12 @@ from __future__ import annotations
 
 import typing as t
 
-from dbt.contracts.relation import RelationType
 from pydantic import Field
 
 from sqlmesh.core.config.base import UpdateStrategy
 from sqlmesh.dbt.column import ColumnConfig
 from sqlmesh.dbt.common import GeneralConfig
+from sqlmesh.dbt.relation import RelationType
 from sqlmesh.utils import AttributeDict
 from sqlmesh.utils.errors import ConfigError
 
