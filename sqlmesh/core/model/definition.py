@@ -24,7 +24,7 @@ from sqlmesh.core import constants as c
 from sqlmesh.core import dialect as d
 from sqlmesh.core.macros import MacroRegistry, MacroStrTemplate, macro
 from sqlmesh.core.model.common import expression_validator
-from sqlmesh.core.model.kind import ModelKindName, OnDestructiveChange, SeedKind
+from sqlmesh.core.model.kind import ModelKindName, SeedKind
 from sqlmesh.core.model.meta import ModelMeta
 from sqlmesh.core.model.seed import CsvSeedReader, Seed, create_seed
 from sqlmesh.core.renderer import ExpressionRenderer, QueryRenderer
@@ -623,10 +623,6 @@ class _Model(ModelMeta, frozen=True):
     @property
     def forward_only(self) -> bool:
         return getattr(self.kind, "forward_only", False)
-
-    @property
-    def on_destructive_change(self) -> OnDestructiveChange:
-        return getattr(self.kind, "on_destructive_change", OnDestructiveChange.IGNORE)
 
     @property
     def disable_restatement(self) -> bool:
@@ -1837,25 +1833,17 @@ def _create_model(
     dialect = dialect or ""
     physical_schema_override = physical_schema_override or {}
 
-    # Assumption: any specified default that is not a ModelMeta field is kind-specific.
-    # _model_kind_validator ensures that kind-specific defaults passed to kind constructor
-    # are valid for the kind.
-    meta_fields = ModelMeta.all_fields()
-    model_defaults = {k: v for k, v in (defaults or {}).items() if k in meta_fields}
-    kind_specific_defaults = {k: v for k, v in (defaults or {}).items() if not k in meta_fields}
-
     try:
         model = klass(
             name=name,
             **{
-                **model_defaults,
+                **(defaults or {}),
                 "jinja_macros": jinja_macros or JinjaMacroRegistry(),
                 "dialect": dialect,
                 "depends_on": depends_on,
                 "physical_schema_override": physical_schema_override.get(
                     exp.to_table(name, dialect=dialect).db
                 ),
-                "kind_specific_defaults": kind_specific_defaults,
                 **kwargs,
             },
         )

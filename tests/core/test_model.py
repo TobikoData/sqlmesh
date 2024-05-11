@@ -4265,79 +4265,10 @@ def test_python_model_dialect():
 
 
 def test_forward_only_on_destructive_change_config() -> None:
-    # unspecified: default to True
+    # global default to IGNORE for non-incremental models
     config = Config(model_defaults=ModelDefaultsConfig(dialect="duckdb"))
     context = Context(config=config)
 
-    expressions = d.parse(
-        f"""
-        MODEL (
-            name memory.db.table,
-            kind INCREMENTAL_BY_TIME_RANGE (
-                time_column c,
-                forward_only True
-            ),
-        );
-        SELECT a, b, c FROM source_table;
-        """
-    )
-    model = load_sql_based_model(expressions, dialect=config.model_defaults.dialect)
-    context.upsert_model(model)
-    context_model = context.get_model("memory.db.table")
-    assert (
-        context_model.on_destructive_change
-        == IncrementalByTimeRangeKind.all_field_infos()["on_destructive_change"].default
-    )
-
-    # error specified in MODEL kind
-    config = Config(model_defaults=ModelDefaultsConfig(dialect="duckdb"))
-    context = Context(config=config)
-
-    expressions = d.parse(
-        f"""
-        MODEL (
-            name memory.db.table,
-            kind INCREMENTAL_BY_TIME_RANGE (
-                time_column c,
-                forward_only True,
-                on_destructive_change error
-            ),
-        );
-        SELECT a, b, c FROM source_table;
-        """
-    )
-    model = load_sql_based_model(expressions, dialect=config.model_defaults.dialect)
-    context.upsert_model(model)
-    context_model = context.get_model("memory.db.table")
-    assert context_model.on_destructive_change.is_error
-
-    # error specified as model default
-    config = Config(model_defaults=ModelDefaultsConfig(dialect="duckdb"))
-    context = Context(config=config)
-
-    expressions = d.parse(
-        f"""
-        MODEL (
-            name memory.db.table,
-            kind INCREMENTAL_BY_TIME_RANGE (
-                time_column c,
-                forward_only True
-            ),
-        );
-        SELECT a, b, c FROM source_table;
-        """
-    )
-    model = load_sql_based_model(
-        expressions,
-        dialect=config.model_defaults.dialect,
-        kind_specific_defaults={"on_destructive_change": exp.Identifier(this="error")},
-    )
-    context.upsert_model(model)
-    context_model = context.get_model("memory.db.table")
-    assert not context_model.additive_only
-
-
-def test_jinja_runtime_stage(assert_exp_eq):
     expressions = d.parse(
         """
         MODEL (

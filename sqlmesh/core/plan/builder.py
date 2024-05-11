@@ -525,7 +525,6 @@ class PlanBuilder:
                             self._validate_destructive_change(
                                 s_id,
                                 self._upstream_directly_modified(s_id, directly_modified, dag),
-                                True,
                             )
 
                             snapshot.categorize_as(SnapshotChangeCategory.FORWARD_ONLY)
@@ -794,8 +793,10 @@ class PlanBuilder:
         s_id_snapshot = t.cast(Snapshot, self._context_diff.snapshots.get(s_id))
 
         if (
-            s_id_snapshot.is_model and not s_id_snapshot.name in self._allow_destructive_models
-        ) and (not s_id_snapshot.model.on_destructive_change.is_ignore or force_check):
+            s_id_snapshot.is_model
+            and s_id_snapshot.name not in self._allow_destructive_models
+            and not s_id_snapshot.model.kind.on_destructive_change.is_ignore
+        ):
             schema_differ = self._engine_schema_differ
 
             subdag = [s_id, *upstream_snapshot_ids]
@@ -805,14 +806,14 @@ class PlanBuilder:
             error_msg = f"{warning_msg} To allow this, change the model's `on_destructive_change` setting to `warn` or `ignore` or include it in the plan's `--allow-destructive-model` option."
 
             if any(self._snapshot_change_is_destructive.get(id.name, None) for id in subdag):
-                if s_id_snapshot.model.on_destructive_change.is_error:
+                if s_id_snapshot.model.kind.on_destructive_change.is_error:
                     raise PlanError(error_msg)
                 else:
                     logger.warning(warning_msg)
             else:
                 for id in subdag:
                     # if we already evaluated this snapshot, we don't need to evaluate it again
-                    if not id.name in self._snapshot_change_is_destructive:
+                    if id.name not in self._snapshot_change_is_destructive:
                         snapshot = t.cast(
                             Snapshot,
                             s_id_snapshot if id == s_id else self._context_diff.snapshots.get(id),
@@ -846,7 +847,7 @@ class PlanBuilder:
                         )
 
                 if any(self._snapshot_change_is_destructive[id.name] for id in subdag):
-                    if s_id_snapshot.model.on_destructive_change.is_error or force_check:
+                    if s_id_snapshot.model.kind.on_destructive_change.is_error or force_check:
                         raise PlanError(error_msg)
                     else:
                         logger.warning(warning_msg)

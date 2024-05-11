@@ -300,19 +300,6 @@ kind_dialect_validator = field_validator("dialect", mode="before", always=True)(
 )
 
 
-def _on_destructive_change_validator(
-    cls: t.Type, v: t.Union[OnDestructiveChange, str, exp.Identifier]
-) -> t.Any:
-    if v and not isinstance(v, OnDestructiveChange):
-        return OnDestructiveChange(v.this.upper() if isinstance(v, exp.Identifier) else v.upper())
-    return v
-
-
-on_destructive_change_validator = field_validator("on_destructive_change", mode="before")(
-    _on_destructive_change_validator
-)
-
-
 class _Incremental(_ModelKind):
     on_destructive_change: OnDestructiveChange = OnDestructiveChange.ERROR
 
@@ -330,11 +317,9 @@ class _IncrementalBy(_Incremental):
     batch_concurrency: t.Optional[SQLGlotPositiveInt] = None
     lookback: t.Optional[SQLGlotPositiveInt] = None
     forward_only: SQLGlotBool = False
-    on_destructive_change: OnDestructiveChange = OnDestructiveChange.ERROR
     disable_restatement: SQLGlotBool = False
 
     _dialect_validator = kind_dialect_validator
-    _on_destructive_change_validator = on_destructive_change_validator
 
     @property
     def data_hash_values(self) -> t.List[t.Optional[str]]:
@@ -421,9 +406,6 @@ class IncrementalUnmanagedKind(_Incremental):
     insert_overwrite: SQLGlotBool = False
     forward_only: SQLGlotBool = True
     disable_restatement: SQLGlotBool = True
-    on_destructive_change: OnDestructiveChange = OnDestructiveChange.ERROR
-
-    _on_destructive_change_validator = on_destructive_change_validator
 
     @property
     def data_hash_values(self) -> t.List[t.Optional[str]]:
@@ -504,11 +486,9 @@ class _SCDType2Kind(_Incremental):
     time_data_type: exp.DataType = Field(exp.DataType.build("TIMESTAMP"), validate_default=True)
 
     forward_only: SQLGlotBool = True
-    on_destructive_change: OnDestructiveChange = OnDestructiveChange.ERROR
     disable_restatement: SQLGlotBool = True
 
     _dialect_validator = kind_dialect_validator
-    _on_destructive_change_validator = on_destructive_change_validator
 
     # Remove once Pydantic 1 is deprecated
     _always_validate_column = field_validator(
