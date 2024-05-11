@@ -5,7 +5,6 @@ import logging
 import typing as t
 
 import pandas as pd
-from dbt.contracts.relation import Policy
 from sqlglot import exp, parse_one
 
 from sqlmesh.core.dialect import normalize_and_quote, normalize_model_name
@@ -19,6 +18,7 @@ if t.TYPE_CHECKING:
     from dbt.adapters.base import BaseRelation
     from dbt.adapters.base.column import Column
     from dbt.adapters.base.impl import AdapterResponse
+    from sqlmesh.dbt.relation import Policy
 
 
 logger = logging.getLogger(__name__)
@@ -221,7 +221,7 @@ class RuntimeAdapter(BaseAdapter):
         return self.list_relations_without_caching(reference_relation)
 
     def list_relations_without_caching(self, schema_relation: BaseRelation) -> t.List[BaseRelation]:
-        from dbt.contracts.relation import RelationType
+        from sqlmesh.dbt.relation import RelationType
 
         schema = self._normalize(self._schema(schema_relation))
 

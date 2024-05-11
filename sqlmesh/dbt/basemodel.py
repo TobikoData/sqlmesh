@@ -5,7 +5,6 @@ from abc import abstractmethod
 from enum import Enum
 from pathlib import Path
 
-from dbt.contracts.relation import Policy, RelationType
 from pydantic import Field
 from sqlglot.helper import ensure_list
 
@@ -24,6 +23,7 @@ from sqlmesh.dbt.common import (
     SqlStr,
     sql_str_validator,
 )
+from sqlmesh.dbt.relation import Policy, RelationType
 from sqlmesh.dbt.test import TestConfig
 from sqlmesh.utils import AttributeDict
 from sqlmesh.utils.conversions import ensure_bool

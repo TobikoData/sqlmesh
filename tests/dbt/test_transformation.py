@@ -6,7 +6,6 @@ from unittest.mock import patch
 
 import pytest
 from dbt.adapters.base import BaseRelation
-from dbt.contracts.relation import Policy
 from dbt.exceptions import CompilationError
 from freezegun import freeze_time
 from pytest_mock.plugin import MockerFixture
@@ -35,6 +34,7 @@ from sqlmesh.dbt.column import (
 from sqlmesh.dbt.context import DbtContext
 from sqlmesh.dbt.model import Materialization, ModelConfig
 from sqlmesh.dbt.project import Project
+from sqlmesh.dbt.relation import Policy
 from sqlmesh.dbt.seed import SeedConfig
 from sqlmesh.dbt.target import BigQueryConfig, DuckDbConfig, SnowflakeConfig
 from sqlmesh.dbt.test import TestConfig
