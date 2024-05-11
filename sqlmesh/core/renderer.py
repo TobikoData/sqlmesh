@@ -131,6 +131,7 @@ class BaseExpressionRenderer:
             table_mapping=table_mapping,
             deployability_index=deployability_index,
             default_catalog=self._default_catalog,
+            runtime_stage=runtime_stage.value,
         )
 
         if isinstance(self._expression, d.Jinja):
