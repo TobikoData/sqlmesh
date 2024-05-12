@@ -1884,14 +1884,14 @@ def _resolve_custom_session_properties(
     defaults: t.Optional[t.Dict[str, t.Any]],
     provided: t.Optional[exp.Expression] | t.Optional[t.Dict[str, t.Any]],
 ) -> t.Optional[exp.Expression]:
-    if provided is not None and isinstance(provided, dict):
+    if isinstance(provided, dict):
         session_properties = {k: exp.Literal.string(k).eq(v) for k, v in provided.items()}
     else:
         session_properties = (
             {expr.this.name: expr for expr in provided} if provided is not None else {}
         )
 
-    if defaults is not None and defaults.get("session_properties") is not None:
+    if defaults and defaults.get("session_properties"):
         for k, v in defaults["session_properties"].items():
             if k not in session_properties:
                 session_properties[k] = exp.Literal.string(k).eq(v)

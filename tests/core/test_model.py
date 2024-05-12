@@ -1554,6 +1554,28 @@ def test_python_model_depends_on() -> None:
     assert m.depends_on == {'"foo"."bar"'}
 
 
+def test_python_model_with_session_props():
+    @model(
+        name="python_model_prop",
+        kind="full",
+        columns={"some_col": "int"},
+        session_properties={"some_string": "string_prop", "some_bool": True, "some_float": 1.0},
+    )
+    def python_model_prop(context, **kwargs):
+        context.table("foo")
+
+    m = model.get_registry()["python_model_prop"].model(
+        module_path=Path("."),
+        path=Path("."),
+        dialect="duckdb",
+    )
+    assert m.session_properties == {
+        "some_string": "string_prop",
+        "some_bool": True,
+        "some_float": 1.0,
+    }
+
+
 def test_python_models_returning_sql(assert_exp_eq) -> None:
     config = Config(model_defaults=ModelDefaultsConfig(dialect="snowflake"))
     context = Context(config=config)
