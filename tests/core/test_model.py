@@ -4211,3 +4211,22 @@ def test_python_model_dialect():
     assert m.time_column.format == "%Y-%m-%d"
 
     model._dialect = None
+
+
+def test_jinja_runtime_stage(assert_exp_eq):
+    expressions = d.parse(
+        """
+        MODEL (
+            name test.jinja
+        );
+
+        JINJA_QUERY_BEGIN;
+
+        SELECT '{{ runtime_stage }}' as a, {{ runtime_stage == 'loading' }} as b
+
+        JINJA_END;
+        """
+    )
+
+    model = load_sql_based_model(expressions)
+    assert_exp_eq(model.render_query(), '''SELECT 'loading' as "a", TRUE as "b"''')
