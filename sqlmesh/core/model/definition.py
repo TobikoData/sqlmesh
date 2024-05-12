@@ -1812,7 +1812,10 @@ def _create_model(
     **kwargs: t.Any,
 ) -> Model:
     _validate_model_fields(klass, {"name", *kwargs} - {"grain", "table_properties"}, path)
-    _resolve_custom_session_params(defaults, **kwargs)
+
+    kwargs["session_properties"] = _resolve_custom_session_properties(
+        defaults, kwargs.get("session_properties")
+    )
 
     dialect = dialect or ""
     physical_schema_override = physical_schema_override or {}
@@ -1877,19 +1880,26 @@ def _split_sql_model_statements(
     return query, expressions[:pos], expressions[pos + 1 :]
 
 
-def _resolve_custom_session_params(
-    defaults: t.Dict[str, t.Any] | None, **kwargs: t.Dict[str, t.Any]
-) -> None:
-    if kwargs.get("session_properties") and defaults and defaults.get("session_properties"):
-        session_properties = kwargs["session_properties"]
-        session_props = {expr.this.name for expr in session_properties}
+def _resolve_custom_session_properties(
+    defaults: t.Optional[t.Dict[str, t.Any]],
+    provided: t.Optional[exp.Expression] | t.Optional[t.Dict[str, t.Any]],
+) -> t.Optional[exp.Expression]:
+    if provided is not None and isinstance(provided, dict):
+        session_properties = {k: exp.Literal.string(k).eq(v) for k, v in provided.items()}
+    else:
+        session_properties = (
+            {expr.this.name: expr for expr in provided} if provided is not None else {}
+        )
+
+    if defaults is not None and defaults.get("session_properties") is not None:
         for k, v in defaults["session_properties"].items():
-            if k not in session_props:
-                new_eq = exp.EQ(
-                    this=exp.Literal(this=k), expression=exp.Column(this=exp.Identifier(this=v))
-                )
-                session_properties.expressions.append(new_eq)
-        kwargs["session_properties"] = session_properties
+            if k not in session_properties:
+                session_properties[k] = exp.Literal.string(k).eq(v)
+
+    if session_properties:
+        return exp.Tuple(expressions=session_properties.values())
+
+    return None
 
 
 def _validate_model_fields(klass: t.Type[_Model], provided_fields: t.Set[str], path: Path) -> None:

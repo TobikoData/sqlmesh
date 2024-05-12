@@ -2735,7 +2735,36 @@ def test_session_properties_on_model_and_project(sushi_context):
         "some_float": 0.1,
         "quoted_identifier": exp.column("quoted identifier", quoted=True),
         "unquoted_identifier": exp.column("unquoted_identifier", quoted=False),
-        "project_level_property": exp.column("project_property", quoted=False),
+        "project_level_property": "project_property",
+    }
+
+
+def test_project_level_session_properties(sushi_context):
+    model_defaults = ModelDefaultsConfig(
+        session_properties={
+            "some_bool": False,
+            "some_float": 0.1,
+            "project_level_property": "project_property",
+        }
+    )
+
+    model = load_sql_based_model(
+        d.parse(
+            """
+        MODEL (
+            name test_schema.test_model,
+        );
+        SELECT a FROM tbl;
+        """,
+            default_dialect="snowflake",
+        ),
+        defaults=model_defaults.dict(),
+    )
+
+    assert model.session_properties == {
+        "some_bool": False,
+        "some_float": 0.1,
+        "project_level_property": "project_property",
     }
 
 
