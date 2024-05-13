@@ -256,6 +256,7 @@ class ManifestHelper:
             profiles_dir=str(self.profiles_path),
             target=self.target.name,
             macro_debugging=False,
+            REQUIRE_RESOURCE_NAMES_WITHOUT_SPACES=True,
         )
         flags.set_from_args(args, None)
 
@@ -271,7 +272,15 @@ class ManifestHelper:
 
         self._project_name = project.project_name
 
-        register_adapter(runtime_config)
+        if DBT_VERSION >= (1, 8):
+            from dbt.mp_context import get_mp_context  # type: ignore
+            from dbt_common.context import set_invocation_context  # type: ignore
+
+            register_adapter(runtime_config, get_mp_context())  # type: ignore
+            set_invocation_context({})
+        else:
+            register_adapter(runtime_config)  # type: ignore
+
         manifest = ManifestLoader.get_full_manifest(runtime_config)
         reset_adapters()
         return manifest
