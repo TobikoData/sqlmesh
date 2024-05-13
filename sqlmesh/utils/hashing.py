@@ -9,8 +9,8 @@ def crc32(data: t.Iterable[t.Optional[str]]) -> str:
     return str(zlib.crc32(_safe_concat(data)))
 
 
-def sha256(data: t.Iterable[t.Optional[str]]) -> str:
-    return hashlib.sha256(_safe_concat(data)).hexdigest()
+def md5(data: t.Iterable[t.Optional[str]]) -> str:
+    return hashlib.md5(_safe_concat(data)).hexdigest()
 
 
 def hash_data(data: t.Iterable[t.Optional[str]]) -> str:

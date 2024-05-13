@@ -21,7 +21,7 @@ from sqlmesh.core.state_sync import EngineAdapterStateSync, StateSync
 from sqlmesh.schedulers.airflow.client import AirflowClient
 from sqlmesh.schedulers.airflow.mwaa_client import MWAAClient
 from sqlmesh.utils.errors import ConfigError
-from sqlmesh.utils.hashing import sha256
+from sqlmesh.utils.hashing import md5
 from sqlmesh.utils.pydantic import model_validator, model_validator_v1_args
 
 if t.TYPE_CHECKING:
@@ -97,7 +97,7 @@ class _EngineAdapterStateSyncSchedulerConfig(_SchedulerConfig):
         state_connection = (
             context.config.get_state_connection(context.gateway) or context._connection_config
         )
-        return sha256([state_connection.json(sort_keys=True)])
+        return md5([state_connection.json(sort_keys=True)])
 
 
 class BuiltInSchedulerConfig(_EngineAdapterStateSyncSchedulerConfig, BaseConfig):
@@ -151,7 +151,7 @@ class _BaseAirflowSchedulerConfig(_EngineAdapterStateSyncSchedulerConfig):
     def state_sync_fingerprint(self, context: GenericContext) -> str:
         if self.use_state_connection:
             return super().state_sync_fingerprint(context)
-        return sha256([self.airflow_url])
+        return md5([self.airflow_url])
 
     def create_plan_evaluator(self, context: GenericContext) -> PlanEvaluator:
         return AirflowPlanEvaluator(

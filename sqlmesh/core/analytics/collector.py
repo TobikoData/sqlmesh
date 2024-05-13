@@ -10,7 +10,7 @@ from sqlmesh.core import constants as c
 from sqlmesh.core.analytics.dispatcher import AsyncEventDispatcher, EventDispatcher
 from sqlmesh.utils import random_id
 from sqlmesh.utils.date import now_timestamp
-from sqlmesh.utils.hashing import sha256
+from sqlmesh.utils.hashing import md5
 from sqlmesh.utils.pydantic import PydanticModel
 from sqlmesh.utils.yaml import dump as yaml_dump
 from sqlmesh.utils.yaml import load as yaml_load
@@ -348,4 +348,4 @@ class User(PydanticModel):
 
 
 def _anonymize(value: str) -> str:
-    return sha256([value])
+    return md5([value])

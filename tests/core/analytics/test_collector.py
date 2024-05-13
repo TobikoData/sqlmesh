@@ -39,7 +39,7 @@ def test_on_project_loaded(collector: AnalyticsCollector, mocker: MockerFixture)
             "seq_num": 0,
             "event_type": "PROJECT_LOADED",
             "client_ts": mocker.ANY,
-            "event": '{"project_type": "NATIVE", "models_count": 1, "audits_count": 2, "standalone_audits_count": 3, "macros_count": 4, "jinja_macros_count": 5, "load_time_ms": 1123, "state_sync_fingerprint": "test_fingerprint", "project_name_hash": "ad62917b5e639fad064d4c72dd0eca227d2cccab83bac09ded995db314e5b200", "dbt_version": null}',
+            "event": '{"project_type": "NATIVE", "models_count": 1, "audits_count": 2, "standalone_audits_count": 3, "macros_count": 4, "jinja_macros_count": 5, "load_time_ms": 1123, "state_sync_fingerprint": "test_fingerprint", "project_name_hash": "6e72a69d5c5cca8f0400338441c022e4", "dbt_version": null}',
         }
     )
 
@@ -160,7 +160,7 @@ def test_on_plan_apply(
                 {
                     "seq_num": 0,
                     "event_type": "PLAN_APPLY_START",
-                    "event": f'{{"plan_id": "{plan_id}", "engine_type": "bigquery", "state_sync_type": "mysql", "scheduler_type": "BUILTIN", "is_dev": false, "skip_backfill": false, "no_gaps": false, "forward_only": false, "ensure_finalized_snapshots": false, "has_restatements": false, "directly_modified_count": 17, "indirectly_modified_count": 0, "environment_name_hash": "6754af9632a2745e85c293e5aac0863370d9bd3330b9938c00cadfd215227d77"}}',
+                    "event": f'{{"plan_id": "{plan_id}", "engine_type": "bigquery", "state_sync_type": "mysql", "scheduler_type": "BUILTIN", "is_dev": false, "skip_backfill": false, "no_gaps": false, "forward_only": false, "ensure_finalized_snapshots": false, "has_restatements": false, "directly_modified_count": 17, "indirectly_modified_count": 0, "environment_name_hash": "d6e4a9b6646c62fc48baa6dd6150d1f7"}}',
                     **common_fields,
                 }
             ),
@@ -210,7 +210,7 @@ def test_on_snapshots_created(
 
     snapshots = [
         {
-            "name_hash": "84215ae191517da5c59da03fa46ed6ce09b3f4d68008d2d9ef4e3e8bead0e588",
+            "name_hash": "e460a6c71eafe1037edc84a6fc253082",
             "identifier": new_snapshots[0].identifier,
             "version": new_snapshots[0].version,
             "node_type": "MODEL",
@@ -222,7 +222,7 @@ def test_on_snapshots_created(
             "effective_from_set": True,
         },
         {
-            "name_hash": "9877934ae555dd62818f87445d31878eee279654513f2a4972c2d0c77eac6c7b",
+            "name_hash": "86a8d86801fc831d207bd02ba0d5d90d",
             "identifier": new_snapshots[1].identifier,
             "version": new_snapshots[1].version,
             "node_type": "MODEL",
@@ -234,7 +234,7 @@ def test_on_snapshots_created(
             "effective_from_set": False,
         },
         {
-            "name_hash": "43e722d38768169cee67b816fec067a9c573002858b46551ae463caa545de39a",
+            "name_hash": "da096f341c6129f9b45da6cbe75d0b39",
             "identifier": new_snapshots[2].identifier,
             "version": new_snapshots[2].version,
             "node_type": "MODEL",
