@@ -1813,8 +1813,8 @@ def _create_model(
 ) -> Model:
     _validate_model_fields(klass, {"name", *kwargs} - {"grain", "table_properties"}, path)
 
-    kwargs["session_properties"] = _resolve_custom_session_properties(
-        defaults, kwargs.get("session_properties")
+    kwargs["session_properties"] = _resolve_session_properties(
+        (defaults or {}).get("session_properties"), kwargs.get("session_properties")
     )
 
     dialect = dialect or ""
@@ -1880,21 +1880,20 @@ def _split_sql_model_statements(
     return query, expressions[:pos], expressions[pos + 1 :]
 
 
-def _resolve_custom_session_properties(
-    defaults: t.Optional[t.Dict[str, t.Any]],
-    provided: t.Optional[exp.Expression] | t.Optional[t.Dict[str, t.Any]],
+def _resolve_session_properties(
+    default: t.Optional[t.Dict[str, t.Any]],
+    provided: t.Optional[exp.Expression | t.Dict[str, t.Any]],
 ) -> t.Optional[exp.Expression]:
     if isinstance(provided, dict):
         session_properties = {k: exp.Literal.string(k).eq(v) for k, v in provided.items()}
+    elif provided:
+        session_properties = {expr.this.name: expr for expr in provided}
     else:
-        session_properties = (
-            {expr.this.name: expr for expr in provided} if provided is not None else {}
-        )
+        session_properties = {}
 
-    if defaults and defaults.get("session_properties"):
-        for k, v in defaults["session_properties"].items():
-            if k not in session_properties:
-                session_properties[k] = exp.Literal.string(k).eq(v)
+    for k, v in (default or {}).items():
+        if k not in session_properties:
+            session_properties[k] = exp.Literal.string(k).eq(v)
 
     if session_properties:
         return exp.Tuple(expressions=list(session_properties.values()))
