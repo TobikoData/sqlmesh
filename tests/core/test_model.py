@@ -1554,6 +1554,28 @@ def test_python_model_depends_on() -> None:
     assert m.depends_on == {'"foo"."bar"'}
 
 
+def test_python_model_with_session_props():
+    @model(
+        name="python_model_prop",
+        kind="full",
+        columns={"some_col": "int"},
+        session_properties={"some_string": "string_prop", "some_bool": True, "some_float": 1.0},
+    )
+    def python_model_prop(context, **kwargs):
+        context.table("foo")
+
+    m = model.get_registry()["python_model_prop"].model(
+        module_path=Path("."),
+        path=Path("."),
+        dialect="duckdb",
+    )
+    assert m.session_properties == {
+        "some_string": "string_prop",
+        "some_bool": True,
+        "some_float": 1.0,
+    }
+
+
 def test_python_models_returning_sql(assert_exp_eq) -> None:
     config = Config(model_defaults=ModelDefaultsConfig(dialect="snowflake"))
     context = Context(config=config)
@@ -2696,6 +2718,76 @@ def test_model_table_properties_conflicts() -> None:
             )
         )
         sql_model.physical_properties
+
+
+def test_session_properties_on_model_and_project(sushi_context):
+    model_defaults = ModelDefaultsConfig(
+        session_properties={
+            "some_bool": False,
+            "quoted_identifier": "value_you_wont_see",
+            "project_level_property": "project_property",
+        }
+    )
+
+    model = load_sql_based_model(
+        d.parse(
+            """
+        MODEL (
+            name test_schema.test_model,
+            session_properties (
+                'spark.executor.cores' = 2,
+                'spark.executor.memory' = '1G',
+                some_bool = True,
+                some_float = 0.1,
+                quoted_identifier = "quoted identifier",
+                unquoted_identifier = unquoted_identifier,
+            )
+        );
+        SELECT a FROM tbl;
+        """,
+            default_dialect="snowflake",
+        ),
+        defaults=model_defaults.dict(),
+    )
+
+    assert model.session_properties == {
+        "spark.executor.cores": 2,
+        "spark.executor.memory": "1G",
+        "some_bool": True,
+        "some_float": 0.1,
+        "quoted_identifier": exp.column("quoted identifier", quoted=True),
+        "unquoted_identifier": exp.column("unquoted_identifier", quoted=False),
+        "project_level_property": "project_property",
+    }
+
+
+def test_project_level_session_properties(sushi_context):
+    model_defaults = ModelDefaultsConfig(
+        session_properties={
+            "some_bool": False,
+            "some_float": 0.1,
+            "project_level_property": "project_property",
+        }
+    )
+
+    model = load_sql_based_model(
+        d.parse(
+            """
+        MODEL (
+            name test_schema.test_model,
+        );
+        SELECT a FROM tbl;
+        """,
+            default_dialect="snowflake",
+        ),
+        defaults=model_defaults.dict(),
+    )
+
+    assert model.session_properties == {
+        "some_bool": False,
+        "some_float": 0.1,
+        "project_level_property": "project_property",
+    }
 
 
 def test_model_session_properties(sushi_context):
