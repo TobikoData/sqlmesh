@@ -203,6 +203,7 @@ class MacroEvaluator:
                     continue
 
                 # Changes to bound.arguments will reflect in bound.args and bound.kwargs
+                # https://docs.python.org/3/library/inspect.html#inspect.BoundArguments.arguments
                 if isinstance(value, tuple):
                     bound.arguments[arg] = tuple(self._coerce(v, typ) for v in value)
                 elif isinstance(value, dict):
