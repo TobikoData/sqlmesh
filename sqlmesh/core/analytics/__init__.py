@@ -13,8 +13,7 @@ from sqlmesh.utils import str_to_bool
 def init_collector() -> AnalyticsCollector:
     dispatcher = (
         NoopEventDispatcher()
-        if "DO_NOT_TRACK" in os.environ
-        or str_to_bool(os.getenv("SQLMESH__DISABLE_ANONYMIZED_ANALYTICS", "false"))
+        if str_to_bool(os.getenv("SQLMESH__DISABLE_ANONYMIZED_ANALYTICS", "false"))
         else AsyncEventDispatcher()
     )
     return AnalyticsCollector(dispatcher=dispatcher)

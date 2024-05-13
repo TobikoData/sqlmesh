@@ -283,4 +283,3 @@ You can disable collection of anonymized usage information with these methods:
 
 - Set the root `disable_anonymized_analytics: true` key in your SQLMesh project configuration file
 - Execute SQLMesh commands with an environment variable `SQLMESH__DISABLE_ANONYMIZED_ANALYTICS` set to `1`, `true`, `t`, `yes`, or `y`
-- Execute SQLMesh commands with an environment variable `DO_NOT_TRACK` set to `1`, `true`, `t`, `yes`, or `y`
