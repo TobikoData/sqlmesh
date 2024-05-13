@@ -744,64 +744,79 @@ class PlanBuilder:
             and s_id_snapshot.name not in self._allow_destructive_models
             and not s_id_snapshot.model.kind.on_destructive_change.is_ignore
         ):
-            schema_differ = self._engine_schema_differ
-
-            subdag = [s_id, *upstream_snapshot_ids]
-
-            # if we already know the change is destructive, we don't need to evaluate any more snapshots
+            info_msg = f"Unable to determine at plan time if changes cause a destructive schema change to model '{s_id.name}'."
             warning_msg = f"PLAN TIME CHECK: Plan results in a destructive change to forward-only model '{s_id_snapshot.name}'s schema."
             error_msg = f"{warning_msg} To allow this, change the model's `on_destructive_change` setting to `warn` or `ignore` or include it in the plan's `--allow-destructive-model` option."
 
-            if any(self._snapshot_change_is_destructive.get(id.name, None) for id in subdag):
+            def _raise_or_warn() -> None:
                 if s_id_snapshot.model.kind.on_destructive_change.is_error:
                     raise PlanError(error_msg)
-                else:
-                    logger.warning(warning_msg)
-            else:
-                for id in subdag:
-                    # if we already evaluated this snapshot, we don't need to evaluate it again
-                    if id.name not in self._snapshot_change_is_destructive:
-                        snapshot = t.cast(
-                            Snapshot,
-                            s_id_snapshot if id == s_id else self._context_diff.snapshots.get(id),
-                        )
-                        new, old = self._context_diff.modified_snapshots[snapshot.name]
+                logger.warning(warning_msg)
 
-                        # We must know all columns_to_types to determine whether a change is destructive
-                        old_columns_to_types = old.model.columns_to_types
-                        new_columns_to_types = new.model.columns_to_types
-                        if (
-                            not old_columns_to_types
-                            or not columns_to_types_all_known(old_columns_to_types)
-                            or not new_columns_to_types
-                            or not columns_to_types_all_known(new_columns_to_types)
-                        ):
-                            self._snapshot_change_is_destructive[id.name] = None
-                            continue
+            subdag = set([s_id, *upstream_snapshot_ids])
+            subdag_to_process = subdag.copy()
+            subdag_no_cols_to_types = set()
 
-                        schema_diff = schema_differ.compare_columns(
-                            new.model.name,
-                            old_columns_to_types,
-                            new_columns_to_types,
-                        )
+            # get already classified snapshots
+            for id in subdag:
+                if id.name in self._snapshot_change_is_destructive:
+                    subdag_to_process.remove(id)
+                    value = self._snapshot_change_is_destructive[id.name]
+                    if value:
+                        _raise_or_warn()
+                        return
+                    if value is None:
+                        subdag_no_cols_to_types.add(id)
 
-                        self._snapshot_change_is_destructive[snapshot.name] = any(
-                            [
-                                isinstance(action, exp.Drop)
-                                for actions in schema_diff
-                                for action in actions.args.get("actions", [])
-                            ]
-                        )
+            # return if all are missing columns_to_types
+            if subdag_no_cols_to_types == subdag:
+                logger.info(info_msg)
+                return
 
-                if any(self._snapshot_change_is_destructive[id.name] for id in subdag):
-                    if s_id_snapshot.model.kind.on_destructive_change.is_error or force_check:
-                        raise PlanError(error_msg)
-                    else:
-                        logger.warning(warning_msg)
-                elif any(self._snapshot_change_is_destructive[id.name] is None for id in subdag):
-                    logger.info(
-                        f"Unable to determine at plan time if changes cause a destructive schema change to model '{s_id.name}'."
-                    )
+            # process unclassified snapshots
+            for id in subdag_to_process:
+                snapshot = t.cast(
+                    Snapshot,
+                    s_id_snapshot if id == s_id else self._context_diff.snapshots.get(id),
+                )
+                new, old = self._context_diff.modified_snapshots[snapshot.name]
+
+                # we must know all columns_to_types to determine whether a change is destructive
+                old_columns_to_types = old.model.columns_to_types
+                new_columns_to_types = new.model.columns_to_types
+                if (
+                    not old_columns_to_types
+                    or not columns_to_types_all_known(old_columns_to_types)
+                    or not new_columns_to_types
+                    or not columns_to_types_all_known(new_columns_to_types)
+                ):
+                    self._snapshot_change_is_destructive[id.name] = None
+                    subdag_no_cols_to_types.add(id)
+                    if subdag_no_cols_to_types == subdag:
+                        logger.info(info_msg)
+                        return
+
+                schema_differ = self._engine_schema_differ
+                schema_diff = schema_differ.compare_columns(
+                    new.model.name,
+                    t.cast(t.Dict[str, exp.DataType], old_columns_to_types),
+                    t.cast(t.Dict[str, exp.DataType], new_columns_to_types),
+                )
+
+                has_drop = any(
+                    [
+                        isinstance(action, exp.Drop)
+                        for actions in schema_diff
+                        for action in actions.args.get("actions", [])
+                    ]
+                )
+                self._snapshot_change_is_destructive[id.name] = has_drop
+                if has_drop:
+                    _raise_or_warn()
+                    return
+
+            if subdag_no_cols_to_types == subdag:
+                logger.info(info_msg)
 
     @cached_property
     def _forward_only_preview_needed(self) -> bool:

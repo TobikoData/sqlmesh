@@ -3074,9 +3074,7 @@ def test_scd_type_2_by_time_overrides():
     assert not scd_type_2_model.kind.disable_restatement
 
     model_kind_dict = scd_type_2_model.kind.dict()
-    assert scd_type_2_model.kind == _model_kind_validator(
-        None, model_kind_dict, {"kind_specific_defaults": {}}
-    )
+    assert scd_type_2_model.kind == _model_kind_validator(None, model_kind_dict, {})
 
 
 def test_scd_type_2_by_column_defaults():
@@ -3165,9 +3163,7 @@ def test_scd_type_2_by_column_overrides():
     assert not scd_type_2_model.kind.disable_restatement
 
     model_kind_dict = scd_type_2_model.kind.dict()
-    assert scd_type_2_model.kind == _model_kind_validator(
-        None, model_kind_dict, {"kind_specific_defaults": {}}
-    )
+    assert scd_type_2_model.kind == _model_kind_validator(None, model_kind_dict, {})
 
 
 @pytest.mark.parametrize(
