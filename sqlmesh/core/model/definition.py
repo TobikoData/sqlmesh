@@ -160,7 +160,14 @@ class _Model(ModelMeta, frozen=True):
         comment = None
         for field_name, field_info in ModelMeta.all_field_infos().items():
             # fields with `exclude=True` are not present if we are processing data that has been serialized
-            if not field_info.field_info.exclude:  # type: ignore
+            if not (
+                # field_info attributes are stored differently depending on whether we're on Pydantic v1 or v2
+                getattr(field_info, "exclude", None)
+                or (
+                    hasattr(field_info, "field_info")
+                    and getattr(field_info.field_info, "exclude", None)
+                )
+            ):
                 field_value = getattr(self, field_name)
 
                 if field_value != field_info.default:
