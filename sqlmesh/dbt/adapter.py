@@ -278,9 +278,8 @@ class RuntimeAdapter(BaseAdapter):
         self, sql: str, auto_begin: bool = False, fetch: bool = False
     ) -> t.Tuple[AdapterResponse, agate.Table]:
         from dbt.adapters.base.impl import AdapterResponse
-        from dbt.clients.agate_helper import empty_table
 
-        from sqlmesh.dbt.util import pandas_to_agate
+        from sqlmesh.dbt.util import pandas_to_agate, empty_table
 
         # mypy bug: https://github.com/python/mypy/issues/10740
         exec_func: t.Callable[..., None | pd.DataFrame] = (

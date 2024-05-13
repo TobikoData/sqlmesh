@@ -92,15 +92,15 @@ class SQLExecution:
         self._results: t.Dict[str, AttributeDict] = {}
 
     def store_result(self, name: str, response: t.Any, agate_table: t.Optional[agate.Table]) -> str:
-        from dbt.clients import agate_helper
+        from sqlmesh.dbt.util import empty_table, as_matrix
 
         if agate_table is None:
-            agate_table = agate_helper.empty_table()
+            agate_table = empty_table()
 
         self._results[name] = AttributeDict(
             {
                 "response": response,
-                "data": agate_helper.as_matrix(agate_table),
+                "data": as_matrix(agate_table),
                 "table": agate_table,
             }
         )
