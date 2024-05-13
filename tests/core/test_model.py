@@ -1554,7 +1554,7 @@ def test_python_model_depends_on() -> None:
     assert m.depends_on == {'"foo"."bar"'}
 
 
-def test_python_model_with_session_props():
+def test_python_model_with_session_properties():
     @model(
         name="python_model_prop",
         kind="full",
@@ -1568,11 +1568,18 @@ def test_python_model_with_session_props():
         module_path=Path("."),
         path=Path("."),
         dialect="duckdb",
+        defaults={
+            "session_properties": {
+                "some_string": "default_string",
+                "default_value": "default_value",
+            }
+        },
     )
     assert m.session_properties == {
         "some_string": "string_prop",
         "some_bool": True,
         "some_float": 1.0,
+        "default_value": "default_value",
     }
 
 

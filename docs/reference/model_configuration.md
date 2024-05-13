@@ -45,6 +45,7 @@ The SQLMesh project-level `model_defaults` key supports the following options, d
 - owner
 - start
 - storage_format
+- session_properties (on per key basis)
 
 ## Model kind properties
 
