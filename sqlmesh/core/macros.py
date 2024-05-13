@@ -183,35 +183,31 @@ class MacroEvaluator:
         if not callable(func):
             raise SQLMeshError(f"Macro '{name}' does not exist.")
 
+        # Bind the macro's actual parameters to its formal parameters
+        bound = inspect.signature(func).bind(self, *args, **kwargs)
+
         try:
             annotations = t.get_type_hints(func)
         except NameError:  # forward references aren't handled
             annotations = {}
 
+        # If the macro is annotated, we try coerce the actual parameters to the corresponding types
         if annotations:
-            spec = inspect.getfullargspec(func)
-            callargs = inspect.getcallargs(func, self, *args, **kwargs)
-            new_args: t.List[t.Any] = []
-
-            for arg, value in callargs.items():
+            for arg, value in bound.arguments.items():
                 typ = annotations.get(arg)
-
-                if value is self:
+                if not typ:
                     continue
-                if arg == spec.varargs:
-                    new_args.extend(self._coerce(v, typ) for v in value)
-                elif arg == spec.varkw:
-                    for k, v in value.items():
-                        kwargs[k] = self._coerce(v, typ)
-                elif arg in kwargs:
-                    kwargs[arg] = self._coerce(value, typ)
-                else:
-                    new_args.append(self._coerce(value, typ))
 
-            args = new_args  # type: ignore
+                # Changes to bound.arguments will reflect in bound.args and bound.kwargs
+                if isinstance(value, tuple):
+                    bound.arguments[arg] = tuple(self._coerce(v, typ) for v in value)
+                elif isinstance(value, dict):
+                    bound.arguments[arg] = {k: self._coerce(v, typ) for k, v in value.items()}
+                else:
+                    bound.arguments[arg] = self._coerce(value, typ)
 
         try:
-            return func(self, *args, **kwargs)
+            return func(*bound.args, **bound.kwargs)
         except Exception as e:
             print_exception(e, self.python_env)
             raise MacroEvalError("Error trying to eval macro.") from e
@@ -337,7 +333,8 @@ class MacroEvaluator:
                 else:
                     if kwargs:
                         raise MacroEvalError(
-                            f"Positional argument cannot follow keyword argument.\n  {func.sql(dialect=self.dialect)} at '{self._path}'"
+                            "Positional argument cannot follow keyword argument.\n  "
+                            f"{func.sql(dialect=self.dialect)} at '{self._path}'"
                         )
 
                     args.append(e)
@@ -809,7 +806,7 @@ def star(
         >>> from sqlglot import parse_one, exp
         >>> from sqlglot.schema import MappingSchema
         >>> from sqlmesh.core.macros import MacroEvaluator
-        >>> sql = "SELECT @STAR(foo, bar, [c], 'baz_') FROM foo AS bar"
+        >>> sql = "SELECT @STAR(foo, bar, except_ := [c], prefix := 'baz_') FROM foo AS bar"
         >>> MacroEvaluator(schema=MappingSchema({"foo": {"a": exp.DataType.build("string"), "b": exp.DataType.build("string"), "c": exp.DataType.build("string"), "d": exp.DataType.build("int")}})).transform(parse_one(sql)).sql()
         'SELECT CAST("bar"."a" AS TEXT) AS "baz_a", CAST("bar"."b" AS TEXT) AS "baz_b", CAST("bar"."d" AS INT) AS "baz_d" FROM foo AS bar'
     """
