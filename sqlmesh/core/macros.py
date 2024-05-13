@@ -183,8 +183,12 @@ class MacroEvaluator:
         if not callable(func):
             raise SQLMeshError(f"Macro '{name}' does not exist.")
 
-        # Bind the macro's actual parameters to its formal parameters
-        bound = inspect.signature(func).bind(self, *args, **kwargs)
+        try:
+            # Bind the macro's actual parameters to its formal parameters
+            bound = inspect.signature(func).bind(self, *args, **kwargs)
+        except Exception as e:
+            print_exception(e, self.python_env)
+            raise MacroEvalError("Error trying to eval macro.") from e
 
         try:
             annotations = t.get_type_hints(func)
