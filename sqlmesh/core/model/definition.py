@@ -1897,7 +1897,7 @@ def _resolve_custom_session_properties(
                 session_properties[k] = exp.Literal.string(k).eq(v)
 
     if session_properties:
-        return exp.Tuple(expressions=session_properties.values())
+        return exp.Tuple(expressions=list(session_properties.values()))
 
     return None
 
