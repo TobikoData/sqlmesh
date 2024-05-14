@@ -3,10 +3,12 @@ from __future__ import annotations
 import re
 import sys
 import typing as t
+import logging
 from collections import defaultdict
 from datetime import datetime
 from functools import cached_property
 
+from sqlmesh.core.console import Console, get_console
 from sqlmesh.core.config import (
     AutoCategorizationMode,
     CategorizerConfig,
@@ -26,6 +28,9 @@ from sqlmesh.utils import random_id
 from sqlmesh.utils.dag import DAG
 from sqlmesh.utils.date import TimeLike, now, to_datetime, yesterday_ds
 from sqlmesh.utils.errors import NoChangesPlanError, PlanError, SQLMeshError
+
+
+logger = logging.getLogger(__name__)
 
 
 class PlanBuilder:
@@ -88,6 +93,7 @@ class PlanBuilder:
         enable_preview: bool = False,
         end_bounded: bool = False,
         ensure_finalized_snapshots: bool = False,
+        console: t.Optional[Console] = None,
     ):
         self._context_diff = context_diff
         self._no_gaps = no_gaps
@@ -101,12 +107,13 @@ class PlanBuilder:
         self._categorizer_config = categorizer_config or CategorizerConfig()
         self._auto_categorization_enabled = auto_categorization_enabled
         self._include_unmodified = include_unmodified
-        self._restate_models = set(restate_models or [])
+        self._restate_models = set(restate_models) if restate_models is not None else None
         self._effective_from = effective_from
         self._execution_time = execution_time
         self._backfill_models = backfill_models
         self._end = end or default_end
         self._apply = apply
+        self._console = console or get_console()
 
         self._start = start
         if not self._start and self._forward_only_preview_needed:
@@ -286,9 +293,15 @@ class PlanBuilder:
                 return False
             return not snapshot.is_symbolic and not snapshot.is_seed
 
-        restatements: t.Dict[SnapshotId, Interval] = {}
-        dummy_interval = (sys.maxsize, -sys.maxsize)
         restate_models = self._restate_models
+        if restate_models == set():
+            # This is a warning but we print this as error since the Console is lacking API for warnings.
+            self._console.log_error(
+                "Provided restated models do not match any models. No models will be included in plan."
+            )
+            return {}
+
+        restatements: t.Dict[SnapshotId, Interval] = {}
         forward_only_preview_needed = self._forward_only_preview_needed
         if not restate_models and forward_only_preview_needed:
             # Add model names for new forward-only snapshots to the restatement list
@@ -298,18 +311,27 @@ class PlanBuilder:
                 for s in self._context_diff.new_snapshots.values()
                 if s.is_materialized and (self._forward_only or s.model.forward_only)
             }
+
         if not restate_models:
-            return restatements
+            return {}
 
         # Add restate snapshots and their downstream snapshots
+        dummy_interval = (sys.maxsize, -sys.maxsize)
         for model_fqn in restate_models:
             snapshot = self._model_fqn_to_snapshot.get(model_fqn)
-            if not snapshot or (
-                not forward_only_preview_needed and not is_restateable_snapshot(snapshot)
-            ):
-                raise PlanError(
-                    f"Cannot restate from '{model_fqn}'. Either such model doesn't exist, no other materialized model references it, or restatement was disabled for this model."
-                )
+            if not snapshot:
+                raise PlanError(f"Cannot restate model '{model_fqn}'. Model does not exist.")
+            if not forward_only_preview_needed:
+                if not self._is_dev and snapshot.disable_restatement:
+                    # This is a warning but we print this as error since the Console is lacking API for warnings.
+                    self._console.log_error(
+                        f"Cannot restate model '{model_fqn}'. Restatement is disabled for this model."
+                    )
+                    continue
+                elif snapshot.is_symbolic or snapshot.is_seed:
+                    logger.info("Skipping restatement for model '%s'", model_fqn)
+                    continue
+
             restatements[snapshot.snapshot_id] = dummy_interval
             for downstream_s_id in dag.downstream(snapshot.snapshot_id):
                 if is_restateable_snapshot(self._context_diff.snapshots[downstream_s_id]):
@@ -632,7 +654,9 @@ class PlanBuilder:
                 )
 
     def _ensure_no_new_snapshots_with_restatements(self) -> None:
-        if self._restate_models and self._context_diff.new_snapshots:
+        if self._restate_models is not None and (
+            self._context_diff.new_snapshots or self._context_diff.modified_snapshots
+        ):
             raise PlanError(
                 "Model changes and restatements can't be a part of the same plan. "
                 "Revert or apply changes before proceeding with restatements."
