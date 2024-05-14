@@ -55,7 +55,6 @@ if t.TYPE_CHECKING:
         QueryOrDF,
     )
     from sqlmesh.core.node import IntervalUnit
-    from sqlmesh.utils.pandas import PandasNamedTuple
 
 logger = logging.getLogger(__name__)
 
@@ -1061,7 +1060,7 @@ class EngineAdapter:
 
     def _values_to_sql(
         self,
-        values: t.List[PandasNamedTuple],
+        values: t.List[t.Tuple[t.Any, ...]],
         columns_to_types: t.Dict[str, exp.DataType],
         batch_start: int,
         batch_end: int,
