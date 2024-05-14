@@ -90,7 +90,7 @@ nav:
       - reference/model_configuration.md
 theme:
   name: material
-  logo: sqlmesh.png
+  logo: _readthedocs/html/sqlmesh.png
   palette:
     - media: "(prefers-color-scheme: light)"
       scheme: default
