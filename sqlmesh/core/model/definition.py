@@ -2012,9 +2012,9 @@ def _parse_dependencies(
 
                 def get_first_arg(keyword_arg_name: str) -> t.Any:
                     if node.args:
-                        table: t.Optional[ast.expr] = node.args[0]
+                        first_arg: t.Optional[ast.expr] = node.args[0]
                     else:
-                        table = next(
+                        first_arg = next(
                             (
                                 keyword.value
                                 for keyword in node.keywords
@@ -2024,11 +2024,11 @@ def _parse_dependencies(
                         )
 
                     try:
-                        expression = to_source(table)
+                        expression = to_source(first_arg)
                         return eval(expression, env)
                     except Exception:
                         raise ConfigError(
-                            f"Error resolving dependencies for '{executable.path}'. References to context / evaluator must be resolvable at parse time.\n\n{expression}"
+                            f"Error resolving dependencies for '{executable.path}'. Argument '{expression.strip()}' must be resolvable at parse time."
                         )
 
                 if func.value.id == "context" and func.attr == "table":
