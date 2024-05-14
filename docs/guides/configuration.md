@@ -194,11 +194,11 @@ Conceptually, we can group the root level parameters into the following types. E
 
 The rest of this page provides additional detail for some of the configuration options and provides brief examples. Comprehensive lists of configuration options are at the [configuration reference page](../reference/configuration.md).
 
-### Environment schemas
+### Table/view storage locations
 
 SQLMesh creates schemas, physical tables, and views in the data warehouse/engine. Learn more about why and how SQLMesh creates schema in the ["Why does SQLMesh create schemas?" FAQ](../faq/faq.md#schema-question).
 
-The default SQLMesh behavior described in the FAQ is appropriate for most deployments, but you can override where SQLMesh creates physical tables and views with the `physical_schema_override` and `environment_suffix_target` configuration options. These options are in the [environments](../reference/configuration.md#environments) section of the configuration reference page.
+The default SQLMesh behavior described in the FAQ is appropriate for most deployments, but you can override where SQLMesh creates physical tables and views with the `physical_schema_override`, `environment_suffix_target`, and `environment_catalog_mapping` configuration options. These options are in the [environments](../reference/configuration.md#environments) section of the configuration reference page.
 
 #### Physical table schemas
 By default, SQLMesh creates physical tables for a model with a naming convention of `sqlmesh__[model schema]`.
@@ -229,7 +229,7 @@ If you had a model name of `my_schema.table`, the physical table would be create
 
 This key only applies to the _physical tables_ that SQLMesh creates - the views are still created in `my_schema` (prod) or `my_schema__<env>`.
 
-#### Environment view schemas
+#### Disable environment-specific schemas
 
 SQLMesh stores `prod` environment views in the schema in a model's name - for example, the `prod` views for a model `my_schema.users` will be located in `my_schema`.
 
@@ -306,17 +306,11 @@ With the example configuration above, SQLMesh would evaluate environment names a
 * If the environment name starts with `dev`, the catalog will be `dev`.
 * If the environment name starts with `analytics_repo`, the catalog will be `cicd`.
 
-*Note:* This feature is only available for engines that support querying across catalogs. At the time of writing, these engines are supported:
+*Note:* This feature is only available for engines that support querying across catalogs. At the time of writing, the following engines are **NOT** supported:
 
-* [BigQuery](../integrations/engines/bigquery.md)
-* [Databricks](../integrations/engines/databricks.md)
-* [DuckDB](../integrations/engines/duckdb.md)
-* [MotherDuck](../integrations/engines/motherduck.md)
 * [MySQL](../integrations/engines/mysql.md)
-* [MSSQL](../integrations/engines/mssql.md)
-* [Snowflake](../integrations/engines/snowflake.md)
-* [Spark](../integrations/engines/spark.md)
-* [Trino](../integrations/engines/trino.md)
+* [Postgres](../integrations/engines/postgres.md)
+* [GCP Postgres](../integrations/engines/gcp-postgres.md)
 
 ##### Regex Tips
 * If you are less familiar with regex, you can use a tool like [regex101](https://regex101.com/) to help you build your regex patterns.
