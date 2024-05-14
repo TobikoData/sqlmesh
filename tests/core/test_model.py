@@ -2833,6 +2833,24 @@ def test_model_session_properties(sushi_context):
         "unquoted_identifier": exp.column("unquoted_identifier", quoted=False),
     }
 
+    model = load_sql_based_model(
+        d.parse(
+            """
+        MODEL (
+            name test_schema.test_model,
+            session_properties (
+                'warehouse' = 'test_warehouse'
+            )
+        );
+        SELECT a FROM tbl;
+        """,
+            default_dialect="snowflake",
+        )
+    )
+    assert model.session_properties == {
+        "warehouse": "test_warehouse",
+    }
+
 
 def test_model_jinja_macro_rendering():
     expressions = d.parse(
