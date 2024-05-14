@@ -1004,10 +1004,6 @@ class GenericContext(BaseContext, t.Generic[C]):
         expanded_restate_models = None
         if restate_models is not None:
             expanded_restate_models = model_selector.expand_model_selections(restate_models)
-            if not expanded_restate_models:
-                self.console.log_error(
-                    f"Provided restated models do not match any models. No models will be included in plan. Provided: {', '.join(restate_models)}"
-                )
 
         snapshots = self._snapshots(models_override)
         context_diff = self._context_diff(
@@ -1083,6 +1079,7 @@ class GenericContext(BaseContext, t.Generic[C]):
             ),
             end_bounded=not run,
             ensure_finalized_snapshots=self.config.plan.use_finalized_state,
+            console=self.console,
         )
 
     def apply(
