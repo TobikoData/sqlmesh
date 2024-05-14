@@ -112,6 +112,8 @@ theme:
     - navigation.tracking
     - navigation.tabs
     - navigation.sections
+    - toc.integrate
+    - toc.follow
 plugins:
   - include-markdown
   - search
