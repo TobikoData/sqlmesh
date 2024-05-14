@@ -41,7 +41,7 @@ def run_tests(
         preserve_fixtures: Preserve the fixture tables in the testing database, useful for debugging.
     """
     testing_adapter_by_gateway: t.Dict[str, EngineAdapter] = {}
-    default_gateway = gateway or config.default_gateway
+    default_gateway = gateway or config.default_gateway_name
 
     try:
         tests = []
