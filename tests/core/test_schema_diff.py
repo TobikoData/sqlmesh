@@ -659,6 +659,57 @@ def test_schema_diff_calculate_type_transitions():
             ],
             dict(support_positional_add=True, support_nested_operations=True),
         ),
+        # untyped array to support Snowflake
+        (
+            "STRUCT<id INT, ids ARRAY>",
+            "STRUCT<id INT, ids ARRAY>",
+            [],
+            {},
+        ),
+        # Primitive to untyped array
+        (
+            "STRUCT<id INT, ids INT>",
+            "STRUCT<id INT, ids ARRAY>",
+            [
+                TableAlterOperation.drop(
+                    [
+                        TableAlterColumn.primitive("ids"),
+                    ],
+                    "STRUCT<id INT>",
+                    "INT",
+                ),
+                TableAlterOperation.add(
+                    [
+                        TableAlterColumn.primitive("ids"),
+                    ],
+                    "ARRAY",
+                    expected_table_struct="STRUCT<id INT, ids ARRAY>",
+                ),
+            ],
+            {},
+        ),
+        # untyped array to primitive
+        (
+            "STRUCT<id INT, ids ARRAY>",
+            "STRUCT<id INT, ids INT>",
+            [
+                TableAlterOperation.drop(
+                    [
+                        TableAlterColumn.array_of_primitive("ids"),
+                    ],
+                    "STRUCT<id INT>",
+                    "ARRAY",
+                ),
+                TableAlterOperation.add(
+                    [
+                        TableAlterColumn.array_of_primitive("ids"),
+                    ],
+                    "INT",
+                    expected_table_struct="STRUCT<id INT, ids INT>",
+                ),
+            ],
+            {},
+        ),
         # Precision VARCHAR is a no-op with no changes
         (
             "STRUCT<id INT, address VARCHAR(120)>",
