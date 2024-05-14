@@ -27,6 +27,7 @@ atexit.register(collector.shutdown, flush=True)
 
 def disable_analytics() -> None:
     global collector
+    collector.shutdown(flush=False)
     collector = AnalyticsCollector(dispatcher=NoopEventDispatcher())
 
 

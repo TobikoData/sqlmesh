@@ -19,7 +19,19 @@ def collector(mocker: MockerFixture) -> AnalyticsCollector:
 
 def test_on_project_loaded(collector: AnalyticsCollector, mocker: MockerFixture):
     collector.on_project_loaded(
-        project_type="NATIVE",
+        project_type="native",
+        models_count=1,
+        audits_count=2,
+        standalone_audits_count=3,
+        macros_count=4,
+        jinja_macros_count=5,
+        load_time_sec=1.123,
+        state_sync_fingerprint="test_fingerprint",
+        project_name="test_project",
+    )
+
+    collector.on_project_loaded(
+        project_type="dbt",
         models_count=1,
         audits_count=2,
         standalone_audits_count=3,
@@ -32,15 +44,31 @@ def test_on_project_loaded(collector: AnalyticsCollector, mocker: MockerFixture)
 
     collector.flush()
 
-    collector._dispatcher.add_event.assert_called_once_with(  # type: ignore
-        {
-            "user_id": mocker.ANY,
-            "process_id": collector._process_id,
-            "seq_num": 0,
-            "event_type": "PROJECT_LOADED",
-            "client_ts": mocker.ANY,
-            "event": '{"project_type": "NATIVE", "models_count": 1, "audits_count": 2, "standalone_audits_count": 3, "macros_count": 4, "jinja_macros_count": 5, "load_time_ms": 1123, "state_sync_fingerprint": "test_fingerprint", "project_name_hash": "6e72a69d5c5cca8f0400338441c022e4", "dbt_version": null}',
-        }
+    from dbt.version import __version__ as dbt_version
+
+    collector._dispatcher.add_event.assert_has_calls(  # type: ignore
+        [
+            call(
+                {
+                    "user_id": mocker.ANY,
+                    "process_id": collector._process_id,
+                    "seq_num": 0,
+                    "event_type": "PROJECT_LOADED",
+                    "client_ts": mocker.ANY,
+                    "event": '{"project_type": "native", "models_count": 1, "audits_count": 2, "standalone_audits_count": 3, "macros_count": 4, "jinja_macros_count": 5, "load_time_ms": 1123, "state_sync_fingerprint": "test_fingerprint", "project_name_hash": "6e72a69d5c5cca8f0400338441c022e4"}',
+                }
+            ),
+            call(
+                {
+                    "user_id": mocker.ANY,
+                    "process_id": collector._process_id,
+                    "seq_num": 1,
+                    "event_type": "PROJECT_LOADED",
+                    "client_ts": mocker.ANY,
+                    "event": f'{{"project_type": "dbt", "models_count": 1, "audits_count": 2, "standalone_audits_count": 3, "macros_count": 4, "jinja_macros_count": 5, "load_time_ms": 1123, "state_sync_fingerprint": "test_fingerprint", "project_name_hash": "6e72a69d5c5cca8f0400338441c022e4", "dbt_version": "{dbt_version}"}}',
+                }
+            ),
+        ]
     )
 
 
@@ -160,7 +188,7 @@ def test_on_plan_apply(
                 {
                     "seq_num": 0,
                     "event_type": "PLAN_APPLY_START",
-                    "event": f'{{"plan_id": "{plan_id}", "engine_type": "bigquery", "state_sync_type": "mysql", "scheduler_type": "BUILTIN", "is_dev": false, "skip_backfill": false, "no_gaps": false, "forward_only": false, "ensure_finalized_snapshots": false, "has_restatements": false, "directly_modified_count": 17, "indirectly_modified_count": 0, "environment_name_hash": "d6e4a9b6646c62fc48baa6dd6150d1f7"}}',
+                    "event": f'{{"plan_id": "{plan_id}", "engine_type": "bigquery", "state_sync_type": "mysql", "scheduler_type": "builtin", "is_dev": false, "skip_backfill": false, "no_gaps": false, "forward_only": false, "ensure_finalized_snapshots": false, "has_restatements": false, "directly_modified_count": 17, "indirectly_modified_count": 0, "environment_name_hash": "d6e4a9b6646c62fc48baa6dd6150d1f7"}}',
                     **common_fields,
                 }
             ),
@@ -213,10 +241,10 @@ def test_on_snapshots_created(
             "name_hash": "e460a6c71eafe1037edc84a6fc253082",
             "identifier": new_snapshots[0].identifier,
             "version": new_snapshots[0].version,
-            "node_type": "MODEL",
-            "model_kind": "INCREMENTAL_BY_TIME_RANGE",
+            "node_type": "model",
+            "model_kind": "incremental_by_time_range",
             "is_sql": False,
-            "change_category": "FORWARD_ONLY",
+            "change_category": "forward_only",
             "dialect": "duckdb",
             "audits_count": 0,
             "effective_from_set": True,
@@ -225,10 +253,10 @@ def test_on_snapshots_created(
             "name_hash": "86a8d86801fc831d207bd02ba0d5d90d",
             "identifier": new_snapshots[1].identifier,
             "version": new_snapshots[1].version,
-            "node_type": "MODEL",
-            "model_kind": "INCREMENTAL_BY_TIME_RANGE",
+            "node_type": "model",
+            "model_kind": "incremental_by_time_range",
             "is_sql": True,
-            "change_category": "BREAKING",
+            "change_category": "breaking",
             "dialect": "duckdb",
             "audits_count": 1,
             "effective_from_set": False,
@@ -237,10 +265,10 @@ def test_on_snapshots_created(
             "name_hash": "da096f341c6129f9b45da6cbe75d0b39",
             "identifier": new_snapshots[2].identifier,
             "version": new_snapshots[2].version,
-            "node_type": "MODEL",
-            "model_kind": "VIEW",
+            "node_type": "model",
+            "model_kind": "view",
             "is_sql": True,
-            "change_category": "INDIRECT_BREAKING",
+            "change_category": "indirect_breaking",
             "dialect": "duckdb",
             "audits_count": 1,
             "effective_from_set": False,

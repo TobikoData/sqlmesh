@@ -62,3 +62,5 @@ SQLMESH_BUILTIN = "__sqlmesh__builtin__"
 
 BUILTIN = "builtin"
 AIRFLOW = "airflow"
+DBT = "dbt"
+NATIVE = "native"

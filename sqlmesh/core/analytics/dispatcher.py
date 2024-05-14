@@ -31,7 +31,7 @@ class EventEmitter:
     ):
         from sqlmesh import __version__ as sqlmesh_version
 
-        self.base_url = base_url
+        self.sqlmesh_url = urljoin(base_url, "sqlmesh/")
         self.read_timeout = read_timeout_sec
         self.connect_timeout = connect_timeout_sec
 
@@ -45,11 +45,10 @@ class EventEmitter:
         )
 
     def emit(self, events: t.List[t.Dict[str, t.Any]]) -> None:
-        url = urljoin(self.base_url, "sqlmesh/")
         data = json.dumps({"events": events, "versions": self._versions}).encode("utf-8")
         data = gzip.compress(data)
         response = self._session.post(
-            url, data=data, timeout=(self.connect_timeout, self.read_timeout)
+            self.sqlmesh_url, data=data, timeout=(self.connect_timeout, self.read_timeout)
         )
         raise_for_status(response)
 
@@ -142,7 +141,7 @@ class AsyncEventDispatcher(EventDispatcher):
                     self._emit_interval_sec = min(
                         self._emit_interval_sec * 2, self._max_emit_interval_sec
                     )
-                    logger.info(
+                    logger.debug(
                         "Increasing the emit interval to %s seconds", self._emit_interval_sec
                     )
                 elif e.code in (400, 403, 404, 405, 426):
@@ -169,7 +168,7 @@ class AsyncEventDispatcher(EventDispatcher):
     def _add_events(self, events: t.List[t.Dict[str, t.Any]], prepend: bool = False) -> None:
         with self._events_lock:
             if not prepend:
-                self._events += events
+                self._events.extend(events)
             else:
                 self._events = events + self._events
 

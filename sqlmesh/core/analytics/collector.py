@@ -123,28 +123,25 @@ class AnalyticsCollector:
             state_sync_fingerprint: The fingerprint of the state sync configuration.
             project_name: The name of the project.
         """
-        dbt_version = None
-        project_type = project_type.upper()
-        if project_type == "DBT":
-            from dbt import version
+        project_type = project_type.lower()
+        event_data = {
+            "project_type": project_type,
+            "models_count": models_count,
+            "audits_count": audits_count,
+            "standalone_audits_count": standalone_audits_count,
+            "macros_count": macros_count,
+            "jinja_macros_count": jinja_macros_count,
+            "load_time_ms": int(load_time_sec * 1000),
+            "state_sync_fingerprint": state_sync_fingerprint,
+            "project_name_hash": _anonymize(project_name),
+        }
 
-            dbt_version = version.__version__
+        if project_type == c.DBT:
+            from dbt.version import __version__ as dbt_version
 
-        self._add_event(
-            "PROJECT_LOADED",
-            {
-                "project_type": project_type.upper(),
-                "models_count": models_count,
-                "audits_count": audits_count,
-                "standalone_audits_count": standalone_audits_count,
-                "macros_count": macros_count,
-                "jinja_macros_count": jinja_macros_count,
-                "load_time_ms": int(load_time_sec * 1000),
-                "state_sync_fingerprint": state_sync_fingerprint,
-                "project_name_hash": _anonymize(project_name),
-                "dbt_version": dbt_version,
-            },
-        )
+            event_data["dbt_version"] = dbt_version
+
+        self._add_event("PROJECT_LOADED", event_data)
 
     def on_plan_apply_start(
         self,
@@ -168,7 +165,7 @@ class AnalyticsCollector:
                 "plan_id": plan.plan_id,
                 "engine_type": engine_type.lower() if engine_type is not None else None,
                 "state_sync_type": state_sync_type.lower() if state_sync_type is not None else None,
-                "scheduler_type": scheduler_type.upper(),
+                "scheduler_type": scheduler_type.lower(),
                 "is_dev": plan.is_dev,
                 "skip_backfill": plan.skip_backfill,
                 "no_gaps": plan.no_gaps,
@@ -215,11 +212,13 @@ class AnalyticsCollector:
                     "name_hash": _anonymize(snapshot.name),
                     "identifier": snapshot.identifier,
                     "version": snapshot.version,
-                    "node_type": snapshot.node_type.upper(),
-                    "model_kind": snapshot.model.kind.name.value if snapshot.is_model else None,
+                    "node_type": snapshot.node_type.lower(),
+                    "model_kind": snapshot.model.kind.name.value.lower()
+                    if snapshot.is_model
+                    else None,
                     "is_sql": snapshot.model.is_sql if snapshot.is_model else None,
                     "change_category": (
-                        snapshot.change_category.name if snapshot.change_category else None
+                        snapshot.change_category.name.lower() if snapshot.change_category else None
                     ),
                     "dialect": getattr(snapshot.node, "dialect", None),
                     "audits_count": len(snapshot.model.audits) if snapshot.is_model else None,
@@ -343,7 +342,7 @@ class User(PydanticModel):
 
         user = User(id=random_id())
         with user_path.open("w") as fd:
-            yaml_dump(user.dict(), stream=fd)
+            yaml_dump(user.dict(mode="json"), stream=fd)
         return user
 
 

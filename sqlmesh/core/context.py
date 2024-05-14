@@ -499,7 +499,7 @@ class GenericContext(BaseContext, t.Generic[C]):
 
         analytics.collector.on_project_loaded(
             project_type=(
-                "dbt" if type(self._loader).__name__.lower().startswith("dbt") else "native"
+                c.DBT if type(self._loader).__name__.lower().startswith(c.DBT) else c.NATIVE
             ),
             models_count=len(self._models),
             audits_count=len(self._audits),
