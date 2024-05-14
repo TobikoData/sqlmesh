@@ -1887,6 +1887,8 @@ def _resolve_session_properties(
     if isinstance(provided, dict):
         session_properties = {k: exp.Literal.string(k).eq(v) for k, v in provided.items()}
     elif provided:
+        if isinstance(provided, exp.Paren):
+            provided = exp.Tuple(expressions=[provided.this])
         session_properties = {expr.this.name: expr for expr in provided}
     else:
         session_properties = {}
