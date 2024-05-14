@@ -185,7 +185,9 @@ class MacroEvaluator:
 
         try:
             # Bind the macro's actual parameters to its formal parameters
-            bound = inspect.signature(func).bind(self, *args, **kwargs)
+            sig = inspect.signature(func)
+            bound = sig.bind(self, *args, **kwargs)
+            bound.apply_defaults()
         except Exception as e:
             print_exception(e, self.python_env)
             raise MacroEvalError("Error trying to eval macro.") from e
@@ -204,9 +206,10 @@ class MacroEvaluator:
 
                 # Changes to bound.arguments will reflect in bound.args and bound.kwargs
                 # https://docs.python.org/3/library/inspect.html#inspect.BoundArguments.arguments
-                if isinstance(value, tuple):
+                param = sig.parameters[arg]
+                if param.kind is inspect.Parameter.VAR_POSITIONAL:
                     bound.arguments[arg] = tuple(self._coerce(v, typ) for v in value)
-                elif isinstance(value, dict):
+                elif param.kind is inspect.Parameter.VAR_KEYWORD:
                     bound.arguments[arg] = {k: self._coerce(v, typ) for k, v in value.items()}
                 else:
                     bound.arguments[arg] = self._coerce(value, typ)
@@ -481,7 +484,7 @@ class MacroEvaluator:
                 return expr
             if issubclass(base, exp.Expression):
                 d = Dialect.get_or_raise(self.dialect)
-                into = base if base in d.parser().EXPRESSION_PARSERS else None
+                into = base if base in d.parser_class.EXPRESSION_PARSERS else None
                 if into is None:
                     if isinstance(expr, exp.Literal):
                         coerced = parse_one(expr.this)

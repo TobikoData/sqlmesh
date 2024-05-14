@@ -77,8 +77,16 @@ def macro_evaluator() -> MacroEvaluator:
         return query.select(exp.Literal.string("2024-01-01").as_("stamp")).subquery()
 
     @macro()
-    def test_args(evaluator, pos_only, /, a1, *, a2=1, **rest):
+    def test_arg_resolution(evaluator, pos_only, /, a1, *, a2=1, **rest):
         return 1
+
+    @macro()
+    def test_default_arg_coercion(
+        evaluator: MacroEvaluator,
+        a1: int = 1,
+        a2: int = exp.Literal.number(2),  # type: ignore
+    ):
+        return sum([a1, a2])
 
     return MacroEvaluator(
         "hive",
@@ -444,6 +452,11 @@ def test_ast_correctness(macro_evaluator):
             "SELECT 'a1-b1-c2-d:d1-e:e2'",
             {},
         ),
+        (
+            """select @TEST_DEFAULT_ARG_COERCION()""",
+            "SELECT 3",
+            {},
+        ),
     ],
 )
 def test_macro_functions(macro_evaluator: MacroEvaluator, assert_exp_eq, sql, expected, args):
@@ -548,27 +561,27 @@ def test_positional_follows_kwargs(macro_evaluator):
 
 def test_macro_parameter_resolution(macro_evaluator):
     with pytest.raises(MacroEvalError) as e:
-        macro_evaluator.evaluate(parse_one("@test_args()"))
+        macro_evaluator.evaluate(parse_one("@test_arg_resolution()"))
     assert str(e.value.__cause__) == "missing a required argument: 'pos_only'"
 
     with pytest.raises(MacroEvalError) as e:
-        macro_evaluator.evaluate(parse_one("@test_args(a1 := 1)"))
+        macro_evaluator.evaluate(parse_one("@test_arg_resolution(a1 := 1)"))
     assert str(e.value.__cause__) == "missing a required argument: 'pos_only'"
 
     with pytest.raises(MacroEvalError) as e:
-        macro_evaluator.evaluate(parse_one("@test_args(1)"))
+        macro_evaluator.evaluate(parse_one("@test_arg_resolution(1)"))
     assert str(e.value.__cause__) == "missing a required argument: 'a1'"
 
     with pytest.raises(MacroEvalError) as e:
-        macro_evaluator.evaluate(parse_one("@test_args(1, a2 := 2)"))
+        macro_evaluator.evaluate(parse_one("@test_arg_resolution(1, a2 := 2)"))
     assert str(e.value.__cause__) == "missing a required argument: 'a1'"
 
     with pytest.raises(MacroEvalError) as e:
-        macro_evaluator.evaluate(parse_one("@test_args(pos_only := 1)"))
+        macro_evaluator.evaluate(parse_one("@test_arg_resolution(pos_only := 1)"))
     assert str(e.value.__cause__) == (
         "'pos_only' parameter is positional only, but was passed as a keyword"
     )
 
     with pytest.raises(MacroEvalError) as e:
-        macro_evaluator.evaluate(parse_one("@test_args(1, 2, 3)"))
+        macro_evaluator.evaluate(parse_one("@test_arg_resolution(1, 2, 3)"))
     assert str(e.value.__cause__) == "too many positional arguments"
