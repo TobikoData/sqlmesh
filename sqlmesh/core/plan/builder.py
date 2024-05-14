@@ -3,6 +3,7 @@ from __future__ import annotations
 import re
 import sys
 import typing as t
+import logging
 from collections import defaultdict
 from datetime import datetime
 from functools import cached_property
@@ -27,6 +28,9 @@ from sqlmesh.utils import random_id
 from sqlmesh.utils.dag import DAG
 from sqlmesh.utils.date import TimeLike, now, to_datetime, yesterday_ds
 from sqlmesh.utils.errors import NoChangesPlanError, PlanError, SQLMeshError
+
+
+logger = logging.getLogger(__name__)
 
 
 class PlanBuilder:
@@ -291,6 +295,7 @@ class PlanBuilder:
 
         restate_models = self._restate_models
         if restate_models == set():
+            # This is a warning but we print this as error since the Console is lacking API for warnings.
             self._console.log_error(
                 "Provided restated models do not match any models. No models will be included in plan."
             )
@@ -318,11 +323,13 @@ class PlanBuilder:
                 raise PlanError(f"Cannot restate model '{model_fqn}'. Model does not exist.")
             if not forward_only_preview_needed:
                 if not self._is_dev and snapshot.disable_restatement:
+                    # This is a warning but we print this as error since the Console is lacking API for warnings.
                     self._console.log_error(
                         f"Cannot restate model '{model_fqn}'. Restatement is disabled for this model."
                     )
                     continue
                 elif snapshot.is_symbolic or snapshot.is_seed:
+                    logger.info("Skipping restatement for model '%s'", model_fqn)
                     continue
 
             restatements[snapshot.snapshot_id] = dummy_interval
