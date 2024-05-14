@@ -54,7 +54,9 @@ class ModelMeta(_Node):
 
     dialect: str = ""
     name: str
-    on_destructive_change: t.Optional[OnDestructiveChange] = Field(default=None, exclude=True)
+    on_destructive_change_: t.Optional[OnDestructiveChange] = Field(
+        alias="on_destructive_change", default=None, exclude=True
+    )
     kind: ModelKind = ViewKind()
     retention: t.Optional[int] = None  # not implemented yet
     storage_format: t.Optional[str] = None
@@ -420,3 +422,7 @@ class ModelMeta(_Node):
         return normalize_model_name(
             self.name, default_catalog=self.default_catalog, dialect=self.dialect
         )
+
+    @property
+    def on_destructive_change(self) -> OnDestructiveChange:
+        return self.kind.on_destructive_change

@@ -768,11 +768,6 @@ class PlanBuilder:
                     if value is None:
                         subdag_no_cols_to_types.add(id)
 
-            # return if all are missing columns_to_types
-            if subdag_no_cols_to_types == subdag:
-                logger.info(info_msg)
-                return
-
             # process unclassified snapshots
             for id in subdag_to_process:
                 snapshot = t.cast(
@@ -792,9 +787,7 @@ class PlanBuilder:
                 ):
                     self._snapshot_change_is_destructive[id.name] = None
                     subdag_no_cols_to_types.add(id)
-                    if subdag_no_cols_to_types == subdag:
-                        logger.info(info_msg)
-                        return
+                    continue
 
                 schema_differ = self._engine_schema_differ
                 schema_diff = schema_differ.compare_columns(

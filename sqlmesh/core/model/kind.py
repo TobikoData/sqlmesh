@@ -642,9 +642,9 @@ def _model_kind_validator(cls: t.Type, v: t.Any, values: t.Dict[str, t.Any]) -> 
         if (
             issubclass(kind_type, _Incremental)
             and props.get("on_destructive_change") is None
-            and values.get("on_destructive_change") is not None
+            and values.get("on_destructive_change_") is not None
         ):
-            props["on_destructive_change"] = values.get("on_destructive_change")
+            props["on_destructive_change"] = values.get("on_destructive_change_")
 
         return kind_type(**props)
 
