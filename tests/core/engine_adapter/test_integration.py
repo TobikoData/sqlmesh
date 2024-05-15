@@ -5,7 +5,6 @@ import os
 import pathlib
 import sys
 import typing as t
-import csv
 from datetime import datetime, timedelta
 
 import numpy as np
@@ -17,7 +16,7 @@ from sqlglot import exp, parse_one
 from sqlmesh import Config, Context, EngineAdapter
 from sqlmesh.cli.example_project import init_example_project
 from sqlmesh.core.config import load_config_from_paths
-from sqlmesh.core.dialect import normalize_model_name
+from sqlmesh.core.dialect import normalize_model_name, pandas_to_sql
 import sqlmesh.core.dialect as d
 from sqlmesh.core.engine_adapter import SparkEngineAdapter, TrinoEngineAdapter
 from sqlmesh.core.model import load_sql_based_model
@@ -411,32 +410,19 @@ class ProjectCreator(PydanticModel):
     schema_name: str
     _context: t.Optional[Context] = PrivateAttr(default=None)
 
-    def add_seed(self, model_name: str, columns: t.Dict[str, str], rows: t.List[t.Dict[str, str]]):
-        csv_file_name = f"{model_name}.csv"
-
-        header_typed = {name: exp.DataType.build(value) for name, value in columns.items()}
-
-        self._ensure_dir_exists(self.SEEDS_DIR)
-        with open(
-            self.output_path / self.SEEDS_DIR / csv_file_name, "w", newline="", encoding="utf8"
-        ) as fd:
-            writer = csv.DictWriter(fd, fieldnames=header_typed.keys())
-            writer.writeheader()
-            writer.writerows(rows)
-
-        columns_str = ",\n".join([f"{name} {typ}" for name, typ in header_typed.items()])
-
-        self.add_model(
-            f"""MODEL (
-        name {self.schema_name}.{model_name},
-        kind SEED (
-            path '../seeds/{csv_file_name}'
-        ),
-        columns (
-            {columns_str}
-        )
-    );""",
-        )
+    def add_seed(
+        self,
+        model_name: str,
+        data: pd.DataFrame,
+        columns_to_types: t.Optional[t.Dict[str, exp.DataType]] = None,
+    ):
+        expression = next(pandas_to_sql(data, columns_to_types=columns_to_types))
+        query = expression.sql(dialect=self.engine_adapter.dialect)
+        self.add_model(f"""MODEL(
+          name {self.schema_name}.{model_name}
+        );
+        {query}
+        """)
 
     def add_model(self, definition: str) -> None:
         self._ensure_dir_exists(self.MODELS_DIR)
@@ -2229,16 +2215,22 @@ def test_batch_size_on_incremental_by_unique_key_model(
     schema = project_creator.schema_name
     project_creator.add_seed(
         "seed_model",
-        {"item_id": "integer", "event_date": "date"},
-        [
-            {"item_id": "2", "event_date": "2020-01-01"},
-            {"item_id": "1", "event_date": "2020-01-01"},
-            {"item_id": "3", "event_date": "2020-01-03"},
-            {"item_id": "1", "event_date": "2020-01-04"},
-            {"item_id": "1", "event_date": "2020-01-05"},
-            {"item_id": "1", "event_date": "2020-01-06"},
-            {"item_id": "1", "event_date": "2020-01-07"},
-        ],
+        pd.DataFrame(
+            [
+                [2, "2020-01-01"],
+                [1, "2020-01-01"],
+                [3, "2020-01-03"],
+                [1, "2020-01-04"],
+                [1, "2020-01-05"],
+                [1, "2020-01-06"],
+                [1, "2020-01-07"],
+            ],
+            columns=["item_id", "event_date"],
+        ),
+        columns_to_types={
+            "item_id": exp.DataType.build("integer"),
+            "event_date": exp.DataType.build("date"),
+        },
     )
 
     project_creator.add_model(
