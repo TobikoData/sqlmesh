@@ -1073,7 +1073,6 @@ def test_gateway(copy_to_temp_path: t.Callable, mocker: MockerFixture) -> None:
             "main": GatewayConfig(connection=DuckDBConnectionConfig(database=db_db_path)),
             "test": GatewayConfig(test_connection=DuckDBConnectionConfig(database=test_db_path)),
         },
-        default_gateway="main",
         model_defaults=ModelDefaultsConfig(dialect="duckdb"),
     )
 
