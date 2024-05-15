@@ -5,17 +5,22 @@ import os
 import pathlib
 import sys
 import typing as t
+import csv
 from datetime import datetime, timedelta
 
 import numpy as np
 import pandas as pd
 import pytest
+from pydantic import PrivateAttr
 from sqlglot import exp, parse_one
 
 from sqlmesh import Config, Context, EngineAdapter
 from sqlmesh.cli.example_project import init_example_project
 from sqlmesh.core.config import load_config_from_paths
 from sqlmesh.core.dialect import normalize_model_name
+import sqlmesh.core.dialect as d
+from sqlmesh.core.engine_adapter import SparkEngineAdapter, TrinoEngineAdapter
+from sqlmesh.core.model import load_sql_based_model
 from sqlmesh.core.engine_adapter.shared import DataObject, DataObjectType
 from sqlmesh.utils import random_id
 from sqlmesh.utils.date import now, to_date, to_ds, to_time_column, yesterday
@@ -95,6 +100,20 @@ class TestContext:
     @property
     def current_catalog_type(self) -> str:
         return self.engine_adapter.current_catalog_type
+
+    @property
+    def supports_merge(self) -> bool:
+        if self.dialect == "spark":
+            engine_adapter: SparkEngineAdapter = self.engine_adapter
+            # Spark supports MERGE on the Iceberg catalog (which is configured under "testing" in these integration tests)
+            return engine_adapter.default_catalog == "testing"
+
+        if self.dialect == "trino":
+            engine_adapter: TrinoEngineAdapter = self.engine_adapter
+            # Trino supports MERGE on Delta and Iceberg but not Hive
+            return engine_adapter.get_catalog_type(engine_adapter.default_catalog) != "hive"
+
+        return True
 
     def add_test_suffix(self, value: str) -> str:
         return f"{value}_{self.test_id}"
@@ -374,6 +393,116 @@ class MetadataResults(PydanticModel):
     @property
     def non_temp_tables(self) -> t.List[str]:
         return [x for x in self.tables if not x.startswith("__temp") and not x.startswith("temp")]
+
+
+class ProjectCreator(PydanticModel):
+    """
+    Create test-scoped projects in the tmpdir of the currently executing test, under a schema specific to the currently executing test
+
+    The intention is to use these to set up bare minimum SQLMesh projects that can be used to end-to-end test a single thing
+    """
+
+    SEEDS_DIR: str = "seeds"
+    MODELS_DIR: str = "models"
+
+    output_path: pathlib.Path
+    engine_adapter: EngineAdapter
+    gateway: str
+    schema_name: str
+    _context: t.Optional[Context] = PrivateAttr(default=None)
+
+    def add_seed(self, model_name: str, columns: t.Dict[str, str], rows: t.List[t.Dict[str, str]]):
+        csv_file_name = f"{model_name}.csv"
+
+        header_typed = {name: exp.DataType.build(value) for name, value in columns.items()}
+
+        self._ensure_dir_exists(self.SEEDS_DIR)
+        with open(
+            self.output_path / self.SEEDS_DIR / csv_file_name, "w", newline="", encoding="utf8"
+        ) as fd:
+            writer = csv.DictWriter(fd, fieldnames=header_typed.keys())
+            writer.writeheader()
+            writer.writerows(rows)
+
+        columns_str = ",\n".join([f"{name} {typ}" for name, typ in header_typed.items()])
+
+        self.add_model(
+            f"""MODEL (
+        name {self.schema_name}.{model_name},
+        kind SEED (
+            path '../seeds/{csv_file_name}'
+        ),
+        columns (
+            {columns_str}
+        )
+    );""",
+        )
+
+    def add_model(self, definition: str) -> None:
+        self._ensure_dir_exists(self.MODELS_DIR)
+        # note: we are just parsing the model definition here so we can extract its name
+        # which allows us to give the file a reasonable name
+        expressions = d.parse(definition, default_dialect=self.engine_adapter.dialect)
+        model = load_sql_based_model(expressions, path=self.model_output_path)
+        filename = f"{model.view_name}.sql"
+        self._write_file(self.model_output_path / filename, definition)
+
+    def load(self, config_mutator: t.Optional[t.Callable[[str, Config], None]] = None) -> Context:
+        config = load_config_from_paths(
+            Config,
+            project_paths=[
+                pathlib.Path(os.path.join(os.path.dirname(__file__), "config.yaml")),
+            ],
+        )
+        config_mutator(self.gateway, config)
+
+        self._context = Context(paths=self.output_path, config=config, gateway=self.gateway)
+        return self._context
+
+    def cleanup(self):
+        for schema_name in self.context_schemas:
+            self.engine_adapter.drop_schema(
+                schema_name=schema_name, ignore_if_not_exists=True, cascade=True
+            )
+
+    @property
+    def seed_output_path(self):
+        return self.output_path / self.SEEDS_DIR
+
+    @property
+    def model_output_path(self):
+        return self.output_path / self.MODELS_DIR
+
+    @property
+    def context_schemas(self) -> t.List[str]:
+        if ctx := self._context:
+            schemas = []
+            for _, model in ctx.models.items():
+                schemas.append(model.schema_name)
+                schemas.append(model.physical_schema)
+
+            return set(schemas)
+
+    def _ensure_dir_exists(self, name):
+        os.makedirs(self.output_path / name, exist_ok=True)
+
+    def _write_file(self, path: pathlib.Path, payload: str) -> None:
+        with open(path, "w", encoding="utf-8") as fd:
+            fd.write(payload)
+
+
+@pytest.fixture()
+def project_creator(
+    tmp_path: pathlib.Path, mark_gateway: t.Tuple[str, str], ctx: TestContext
+) -> ProjectCreator:
+    _, gateway = mark_gateway
+    schema_name = ctx.schema(TEST_SCHEMA)
+    return ProjectCreator(
+        schema_name=schema_name,
+        output_path=tmp_path,
+        gateway=gateway,
+        engine_adapter=ctx.engine_adapter,
+    )
 
 
 @pytest.fixture(params=["df", "query", "pyspark"])
@@ -1102,7 +1231,7 @@ def test_insert_overwrite_by_time_partition(ctx: TestContext):
 
 
 def test_merge(ctx: TestContext):
-    if ctx.dialect in ("trino", "spark"):
+    if not ctx.supports_merge:
         pytest.skip(f"{ctx.dialect} doesn't support merge")
 
     ctx.init()
@@ -2085,3 +2214,78 @@ def test_to_time_column(
         assert df[col_name][0] is expected
     else:
         assert df[col_name][0] == expected
+
+
+def test_batch_size_on_incremental_by_unique_key_model(
+    ctx: TestContext, mark_gateway: t.Tuple[str, str], project_creator: ProjectCreator
+):
+    if ctx.test_type != "query":
+        pytest.skip("This only needs to run once so we skip anything not query")
+
+    if not ctx.supports_merge:
+        _, gateway = mark_gateway
+        pytest.skip(f"{ctx.dialect} on {gateway} doesnt support merge")
+
+    schema = project_creator.schema_name
+    project_creator.add_seed(
+        "seed_model",
+        {"item_id": "integer", "event_date": "date"},
+        [
+            {"item_id": "2", "event_date": "2020-01-01"},
+            {"item_id": "1", "event_date": "2020-01-01"},
+            {"item_id": "3", "event_date": "2020-01-03"},
+            {"item_id": "1", "event_date": "2020-01-04"},
+            {"item_id": "1", "event_date": "2020-01-05"},
+            {"item_id": "1", "event_date": "2020-01-06"},
+            {"item_id": "1", "event_date": "2020-01-07"},
+        ],
+    )
+
+    project_creator.add_model(
+        f"""MODEL (
+            name {schema}.test_model,
+            kind INCREMENTAL_BY_UNIQUE_KEY (
+                unique_key item_id,
+                batch_size 1
+            ),
+            start '2020-01-01',
+            end '2020-01-07',
+            cron '@daily'
+        );
+
+        select * from {schema}.seed_model
+        where event_date between @start_date and @end_date""",
+    )
+
+    def _mutate_config(current_gateway_name: str, config: Config):
+        # make stepping through in the debugger easier
+        connection = config.gateways[current_gateway_name].connection
+        connection.concurrent_tasks = 1
+
+    context = project_creator.load(config_mutator=_mutate_config)
+
+    context.plan(auto_apply=True, no_prompts=True)
+
+    results = ctx.get_metadata_results(schema)
+    assert "test_model" in results.views
+
+    actual_df = (
+        ctx.get_current_data(f"{schema}.test_model")
+        .sort_values(by="event_date")
+        .reset_index(drop=True)
+    )
+    actual_df["event_date"] = actual_df["event_date"].astype(str)
+    assert actual_df.count()[0] == 3
+
+    expected_df = pd.DataFrame(
+        [[2, "2020-01-01"], [3, "2020-01-03"], [1, "2020-01-07"]],
+        columns=actual_df.columns,
+    ).sort_values(by="event_date")
+
+    pd.testing.assert_frame_equal(
+        actual_df,
+        expected_df,
+        check_dtype=False,
+    )
+
+    project_creator.cleanup()
