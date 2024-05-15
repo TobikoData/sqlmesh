@@ -303,6 +303,13 @@ kind_dialect_validator = field_validator("dialect", mode="before", always=True)(
 class _Incremental(_ModelKind):
     on_destructive_change: OnDestructiveChange = OnDestructiveChange.ERROR
 
+    @property
+    def metadata_hash_values(self) -> t.List[t.Optional[str]]:
+        return [
+            *super().metadata_hash_values,
+            str(self.on_destructive_change),
+        ]
+
 
 class _IncrementalBy(_Incremental):
     dialect: t.Optional[str] = Field(None, validate_default=True)
@@ -328,7 +335,6 @@ class _IncrementalBy(_Incremental):
             *super().metadata_hash_values,
             str(self.batch_size) if self.batch_size is not None else None,
             str(self.forward_only),
-            str(self.on_destructive_change),
             str(self.disable_restatement),
         ]
 
@@ -409,7 +415,6 @@ class IncrementalUnmanagedKind(_Incremental):
         return [
             *super().metadata_hash_values,
             str(self.forward_only),
-            str(self.on_destructive_change),
         ]
 
 
@@ -525,7 +530,6 @@ class _SCDType2Kind(_Incremental):
         return [
             *super().metadata_hash_values,
             str(self.forward_only),
-            str(self.on_destructive_change),
             str(self.disable_restatement),
         ]
 
