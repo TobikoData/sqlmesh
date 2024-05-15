@@ -803,7 +803,7 @@ class PlanBuilder:
                     _raise_or_warn()
                     return
 
-            if subdag_no_cols_to_types == subdag:
+            if subdag_no_cols_to_types:
                 logger.info(
                     f"Unable to determine at plan time if changes cause a destructive schema change to model '{s_id.name}'."
                 )
