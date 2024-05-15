@@ -4,7 +4,6 @@ import logging
 import re
 import sys
 import typing as t
-import logging
 from collections import defaultdict
 from datetime import datetime
 from functools import cached_property
@@ -32,9 +31,6 @@ from sqlmesh.utils import columns_to_types_all_known, random_id
 from sqlmesh.utils.dag import DAG
 from sqlmesh.utils.date import TimeLike, now, to_datetime, yesterday_ds
 from sqlmesh.utils.errors import NoChangesPlanError, PlanError, SQLMeshError
-
-logger = logging.getLogger(__name__)
-
 
 logger = logging.getLogger(__name__)
 
@@ -120,7 +116,7 @@ class PlanBuilder:
         self._categorizer_config = categorizer_config or CategorizerConfig()
         self._auto_categorization_enabled = auto_categorization_enabled
         self._include_unmodified = include_unmodified
-        self._restate_models = set(restate_models if restate_models is not None else [])
+        self._restate_models = set(restate_models) if restate_models is not None else None
         self._effective_from = effective_from
         self._execution_time = execution_time
         self._backfill_models = backfill_models
@@ -254,7 +250,7 @@ class PlanBuilder:
             skip_backfill=self._skip_backfill,
             no_gaps=self._no_gaps,
             forward_only=self._forward_only,
-            allow_destructive_models=self._allow_destructive_models,
+            allow_destructive_models=t.cast(t.Set, self._allow_destructive_models),
             include_unmodified=self._include_unmodified,
             environment_ttl=self._environment_ttl,
             environment_naming_info=self.environment_naming_info,
@@ -742,14 +738,13 @@ class PlanBuilder:
         if (
             s_id_snapshot.is_model
             and s_id_snapshot.name not in self._allow_destructive_models
-            and not s_id_snapshot.model.kind.on_destructive_change.is_ignore
+            and not s_id_snapshot.model.on_destructive_change.is_ignore
         ):
-            info_msg = f"Unable to determine at plan time if changes cause a destructive schema change to model '{s_id.name}'."
             warning_msg = f"PLAN TIME CHECK: Plan results in a destructive change to forward-only model '{s_id_snapshot.name}'s schema."
             error_msg = f"{warning_msg} To allow this, change the model's `on_destructive_change` setting to `warn` or `ignore` or include it in the plan's `--allow-destructive-model` option."
 
             def _raise_or_warn() -> None:
-                if s_id_snapshot.model.kind.on_destructive_change.is_error:
+                if s_id_snapshot.model.on_destructive_change.is_error:
                     raise PlanError(error_msg)
                 logger.warning(warning_msg)
 
@@ -809,7 +804,9 @@ class PlanBuilder:
                     return
 
             if subdag_no_cols_to_types == subdag:
-                logger.info(info_msg)
+                logger.info(
+                    f"Unable to determine at plan time if changes cause a destructive schema change to model '{s_id.name}'."
+                )
 
     @cached_property
     def _forward_only_preview_needed(self) -> bool:

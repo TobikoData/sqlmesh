@@ -100,6 +100,7 @@ def test_airflow_evaluator(sushi_plan: Plan, mocker: MockerFixture):
         skip_backfill=False,
         users=[],
         is_dev=True,
+        allow_destructive_snapshots=set(),
         forward_only=False,
         models_to_backfill=None,
         end_bounded=False,

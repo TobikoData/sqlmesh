@@ -48,6 +48,7 @@ class PlanApplicationRequest(PydanticModel):
     ddl_concurrent_tasks: int
     users: t.List[User]
     is_dev: bool
+    allow_destructive_snapshots: t.Set[str] = set()
     forward_only: bool
     models_to_backfill: t.Optional[t.Set[str]] = None
     end_bounded: bool
@@ -80,6 +81,7 @@ class PlanDagSpec(PydanticModel):
     ddl_concurrent_tasks: int
     users: t.List[User]
     is_dev: bool
+    allow_destructive_snapshots: t.Set[str]
     forward_only: t.Optional[bool] = None
     dag_start_ts: t.Optional[int] = None
     deployability_index: DeployabilityIndex = DeployabilityIndex.all_deployable()

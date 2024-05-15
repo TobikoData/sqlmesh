@@ -592,6 +592,7 @@ def test_missing_intervals_lookback(make_snapshot, mocker: MockerFixture):
         skip_backfill=False,
         no_gaps=False,
         forward_only=False,
+        allow_destructive_models=set(),
         include_unmodified=True,
         environment_naming_info=EnvironmentNamingInfo(),
         directly_modified={snapshot_a.snapshot_id},
@@ -732,7 +733,9 @@ def test_restate_symbolic_model(make_snapshot, mocker: MockerFixture):
         previous_finalized_snapshots=None,
     )
 
-    plan = PlanBuilder(context_diff, restate_models=[snapshot_a.name]).build()
+    plan = PlanBuilder(
+        context_diff, DuckDBEngineAdapter.SCHEMA_DIFFER, restate_models=[snapshot_a.name]
+    ).build()
     assert not plan.restatements
 
 
@@ -762,7 +765,9 @@ def test_restate_seed_model(make_snapshot, mocker: MockerFixture):
         previous_finalized_snapshots=None,
     )
 
-    plan = PlanBuilder(context_diff, restate_models=[snapshot_a.name]).build()
+    plan = PlanBuilder(
+        context_diff, DuckDBEngineAdapter.SCHEMA_DIFFER, restate_models=[snapshot_a.name]
+    ).build()
     assert not plan.restatements
 
 
@@ -786,7 +791,9 @@ def test_restate_missing_model(make_snapshot, mocker: MockerFixture):
         PlanError,
         match=r"Cannot restate model 'missing'. Model does not exist.",
     ):
-        PlanBuilder(context_diff, DuckDBEngineAdapter.SCHEMA_DIFFER, restate_models=["missing"]).build()
+        PlanBuilder(
+            context_diff, DuckDBEngineAdapter.SCHEMA_DIFFER, restate_models=["missing"]
+        ).build()
 
 
 def test_new_snapshots_with_restatements(make_snapshot, mocker: MockerFixture):

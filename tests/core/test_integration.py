@@ -1433,6 +1433,7 @@ def test_environment_promotion(sushi_context: Context):
         "prod",
         SnapshotChangeCategory.NON_BREAKING,
         plan_validators=[_validate_plan],
+        allow_destructive_models=['"memory"."sushi"."customer_revenue_by_day"'],
     )
 
 

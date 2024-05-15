@@ -1,6 +1,7 @@
 import typing as t
-from unittest.mock import call
+from unittest.mock import call, patch
 
+import logging
 import pytest
 from pytest_mock.plugin import MockerFixture
 from sqlglot import expressions as exp
@@ -27,6 +28,7 @@ from sqlmesh.core.model import (
     ViewKind,
     load_sql_based_model,
 )
+from sqlmesh.core.model.kind import OnDestructiveChange
 from sqlmesh.core.node import IntervalUnit
 from sqlmesh.core.snapshot import (
     DeployabilityIndex,
@@ -36,6 +38,7 @@ from sqlmesh.core.snapshot import (
     SnapshotEvaluator,
     SnapshotTableCleanupTask,
 )
+from sqlmesh.utils.concurrency import NodeExecutionFailedError
 from sqlmesh.utils.date import to_timestamp
 from sqlmesh.utils.errors import ConfigError
 from sqlmesh.utils.metaprogramming import Executable
@@ -829,7 +832,9 @@ def test_migrate(mocker: MockerFixture, make_snapshot):
 
     model = SqlModel(
         name="test_schema.test_model",
-        kind=IncrementalByTimeRangeKind(time_column="a"),
+        kind=IncrementalByTimeRangeKind(
+            time_column="a", on_destructive_change=OnDestructiveChange.IGNORE
+        ),
         storage_format="parquet",
         query=parse_one("SELECT c, a FROM tbl WHERE ds BETWEEN @start_ds and @end_ds"),
     )
@@ -1065,6 +1070,7 @@ def python_func(**kwargs):
 
 def test_create_clone_in_dev(mocker: MockerFixture, adapter_mock, make_snapshot):
     adapter_mock.SUPPORTS_CLONING = True
+    adapter_mock.get_alter_expressions.return_value = []
     evaluator = SnapshotEvaluator(adapter_mock)
 
     model = load_sql_based_model(
@@ -1106,14 +1112,87 @@ def test_create_clone_in_dev(mocker: MockerFixture, adapter_mock, make_snapshot)
         replace=True,
     )
 
-    adapter_mock.alter_table.assert_called_once_with(
+    adapter_mock.get_alter_expressions.assert_called_once_with(
         f"sqlmesh__test_schema.test_schema__test_model__{snapshot.version}__temp",
         f"sqlmesh__test_schema.test_schema__test_model__{snapshot.version}__temp__schema_migration_source",
     )
 
+    adapter_mock.alter_table.assert_called_once_with([])
+
     adapter_mock.drop_table.assert_called_once_with(
         f"sqlmesh__test_schema.test_schema__test_model__{snapshot.version}__temp__schema_migration_source"
     )
+
+
+def test_on_destructive_change_runtime_check(
+    mocker: MockerFixture,
+    make_snapshot,
+):
+    connection_mock = mocker.NonCallableMock()
+    cursor_mock = mocker.Mock()
+    connection_mock.cursor.return_value = cursor_mock
+    adapter = EngineAdapter(lambda: connection_mock, "")
+
+    current_table = "sqlmesh__test_schema.test_schema__test_model__1"
+
+    def columns(table_name):
+        if table_name == current_table:
+            return {
+                "c": exp.DataType.build("int"),
+                "b": exp.DataType.build("int"),
+            }
+        else:
+            return {
+                "c": exp.DataType.build("int"),
+                "a": exp.DataType.build("int"),
+            }
+
+    adapter.columns = columns  # type: ignore
+
+    evaluator = SnapshotEvaluator(adapter)
+
+    # SQLMesh default: ERROR
+    model = SqlModel(
+        name="test_schema.test_model",
+        kind=IncrementalByTimeRangeKind(time_column="a"),
+        query=parse_one("SELECT c, a FROM tbl WHERE ds BETWEEN @start_ds and @end_ds"),
+    )
+    snapshot = make_snapshot(model, version="1")
+    snapshot.change_category = SnapshotChangeCategory.FORWARD_ONLY
+
+    with pytest.raises(
+        NodeExecutionFailedError,
+        match="""Execution failed for node SnapshotId<"test_schema"."test_model""",
+    ):
+        with pytest.raises(
+            RuntimeError,
+            match="""RUN TIME CHECK: Plan results in a destructive change to forward-only table '"test_schema"."test_model"'s schema.""",
+        ):
+            evaluator.migrate([snapshot], {})
+
+    # WARN
+    model = SqlModel(
+        name="test_schema.test_model",
+        kind=IncrementalByTimeRangeKind(
+            time_column="a", on_destructive_change=OnDestructiveChange.WARN
+        ),
+        query=parse_one("SELECT c, a FROM tbl WHERE ds BETWEEN @start_ds and @end_ds"),
+    )
+    snapshot = make_snapshot(model, version="1")
+    snapshot.change_category = SnapshotChangeCategory.FORWARD_ONLY
+
+    logger = logging.getLogger("sqlmesh.core.snapshot.evaluator")
+    with patch.object(logger, "warning") as mock_logger:
+        evaluator.migrate([snapshot], {})
+        assert (
+            mock_logger.call_args[0][0]
+            == """RUN TIME CHECK: Plan results in a destructive change to forward-only table '"test_schema"."test_model"'s schema."""
+        )
+
+    # allow destructive
+    with patch.object(logger, "warning") as mock_logger:
+        evaluator.migrate([snapshot], {}, {'"test_schema"."test_model"'})
+        assert mock_logger.call_count == 0
 
 
 def test_forward_only_snapshot_for_added_model(mocker: MockerFixture, adapter_mock, make_snapshot):

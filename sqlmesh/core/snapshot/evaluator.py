@@ -237,6 +237,7 @@ class SnapshotEvaluator:
         snapshots: t.Dict[SnapshotId, Snapshot],
         deployability_index: t.Optional[DeployabilityIndex] = None,
         on_complete: t.Optional[t.Callable[[SnapshotInfoLike], None]] = None,
+        allow_destructive_snapshots: t.Set[str] = set(),
     ) -> None:
         """Creates a physical snapshot schema and table for the given collection of snapshots.
 
@@ -245,6 +246,7 @@ class SnapshotEvaluator:
             snapshots: Mapping of snapshot ID to snapshot.
             deployability_index: Determines snapshots that are deployable in the context of this creation.
             on_complete: A callback to call on each successfully created snapshot.
+            allow_destructive_snapshots: Set of snapshots that are allowed to have destructive schema changes.
         """
         snapshots_with_table_names = defaultdict(set)
         tables_by_schema = defaultdict(set)
@@ -286,23 +288,29 @@ class SnapshotEvaluator:
         with self.concurrent_context():
             concurrent_apply_to_snapshots(
                 snapshots_to_create,
-                lambda s: self._create_snapshot(s, snapshots, deployability_index, on_complete),
+                lambda s: self._create_snapshot(
+                    s, snapshots, deployability_index, on_complete, allow_destructive_snapshots
+                ),
                 self.ddl_concurrent_tasks,
             )
 
     def migrate(
-        self, target_snapshots: t.Iterable[Snapshot], snapshots: t.Dict[SnapshotId, Snapshot]
+        self,
+        target_snapshots: t.Iterable[Snapshot],
+        snapshots: t.Dict[SnapshotId, Snapshot],
+        allow_destructive_snapshots: t.Set[str] = set(),
     ) -> None:
         """Alters a physical snapshot table to match its snapshot's schema for the given collection of snapshots.
 
         Args:
             target_snapshots: Target snapshots.
             snapshots: Mapping of snapshot ID to snapshot.
+            allow_destructive_snapshots: Set of snapshots that are allowed to have destructive schema changes.
         """
         with self.concurrent_context():
             concurrent_apply_to_snapshots(
                 target_snapshots,
-                lambda s: self._migrate_snapshot(s, snapshots),
+                lambda s: self._migrate_snapshot(s, snapshots, allow_destructive_snapshots),
                 self.ddl_concurrent_tasks,
             )
 
@@ -603,6 +611,7 @@ class SnapshotEvaluator:
         snapshots: t.Dict[SnapshotId, Snapshot],
         deployability_index: t.Optional[DeployabilityIndex],
         on_complete: t.Optional[t.Callable[[SnapshotInfoLike], None]],
+        allow_destructive_snapshots: t.Set[str],
     ) -> None:
         if not snapshot.is_model:
             return
@@ -652,7 +661,13 @@ class SnapshotEvaluator:
                 )
                 try:
                     self.adapter.clone_table(target_table_name, snapshot.table_name(), replace=True)
-                    self.adapter.alter_table(target_table_name, tmp_table_name)
+                    alter_expressions = self.adapter.get_alter_expressions(
+                        target_table_name, tmp_table_name
+                    )
+                    _check_destructive_schema_change(
+                        snapshot, alter_expressions, allow_destructive_snapshots
+                    )
+                    self.adapter.alter_table(alter_expressions)
                 finally:
                     self.adapter.drop_table(tmp_table_name)
             else:
@@ -674,7 +689,10 @@ class SnapshotEvaluator:
             on_complete(snapshot)
 
     def _migrate_snapshot(
-        self, snapshot: Snapshot, snapshots: t.Dict[SnapshotId, Snapshot]
+        self,
+        snapshot: Snapshot,
+        snapshots: t.Dict[SnapshotId, Snapshot],
+        allow_destructive_snapshots: t.Set[str],
     ) -> None:
         if (
             not snapshot.is_paused
@@ -695,7 +713,11 @@ class SnapshotEvaluator:
         tmp_table_name = snapshot.table_name(is_deployable=False)
         target_table_name = snapshot.table_name()
         _evaluation_strategy(snapshot, self.adapter).migrate(
-            snapshot, parent_snapshots_by_name, target_table_name, tmp_table_name
+            snapshot,
+            parent_snapshots_by_name,
+            target_table_name,
+            tmp_table_name,
+            allow_destructive_snapshots,
         )
 
     def _promote_snapshot(
@@ -925,6 +947,7 @@ class EvaluationStrategy(abc.ABC):
         snapshots: t.Dict[str, Snapshot],
         target_table_name: str,
         source_table_name: str,
+        allow_destructive_snapshots: t.Set[str] = set(),
     ) -> None:
         """Migrates the target table schema so that it corresponds to the source table schema.
 
@@ -933,6 +956,7 @@ class EvaluationStrategy(abc.ABC):
             snapshots: Parent snapshots.
             target_table_name: The target table name.
             source_table_name: The source table name.
+            allow_destructive_snapshots: Set of snapshots that are allowed to have destructive schema changes.
         """
 
     @abc.abstractmethod
@@ -1036,6 +1060,7 @@ class SymbolicStrategy(EvaluationStrategy):
         snapshots: t.Dict[str, Snapshot],
         target_table_name: str,
         source_table_name: str,
+        allow_destructive_snapshots: t.Set[str] = set(),
     ) -> None:
         pass
 
@@ -1168,9 +1193,12 @@ class MaterializableStrategy(PromotableStrategy):
         snapshots: t.Dict[str, Snapshot],
         target_table_name: str,
         source_table_name: str,
+        allow_destructive_snapshots: t.Set[str] = set(),
     ) -> None:
         logger.info(f"Altering table '{target_table_name}'")
-        self.adapter.alter_table(target_table_name, source_table_name)
+        alter_expressions = self.adapter.get_alter_expressions(target_table_name, source_table_name)
+        _check_destructive_schema_change(snapshot, alter_expressions, allow_destructive_snapshots)
+        self.adapter.alter_table(alter_expressions)
 
     def delete(self, table_name: str) -> None:
         self.adapter.drop_table(table_name)
@@ -1512,6 +1540,7 @@ class ViewStrategy(PromotableStrategy):
         snapshots: t.Dict[str, Snapshot],
         target_table_name: str,
         source_table_name: str,
+        allow_destructive_snapshots: t.Set[str] = set(),
     ) -> None:
         logger.info("Migrating view '%s'", target_table_name)
         model = snapshot.model
@@ -1549,3 +1578,30 @@ def _intervals(snapshot: Snapshot, deployability_index: DeployabilityIndex) -> I
         if deployability_index.is_deployable(snapshot)
         else snapshot.dev_intervals
     )
+
+
+def _check_destructive_schema_change(
+    snapshot: Snapshot,
+    alter_expressions: t.List[exp.AlterTable],
+    allow_destructive_snapshots: t.Set[str],
+) -> None:
+    if (
+        snapshot.is_model
+        and snapshot.is_forward_only
+        and snapshot.name not in allow_destructive_snapshots
+        and not snapshot.model.on_destructive_change.is_ignore
+        and any(
+            [
+                isinstance(action, exp.Drop)
+                for actions in alter_expressions
+                for action in actions.args.get("actions", [])
+            ]
+        )
+    ):
+        warning_msg = f"RUN TIME CHECK: Plan results in a destructive change to forward-only table '{snapshot.name}'s schema."
+        error_msg = f"{warning_msg} To allow this, change the model's `on_destructive_change` setting to `warn` or `ignore` or include it in the plan's `--allow-destructive-model` option."
+
+        if snapshot.model.on_destructive_change.is_error:
+            raise RuntimeError(error_msg)
+        else:
+            logger.warning(warning_msg)
