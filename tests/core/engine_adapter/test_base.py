@@ -825,10 +825,7 @@ def test_alter_table(
 
     adapter.columns = table_columns
 
-    adapter.alter_table(
-        current_table_name,
-        target_table_name,
-    )
+    adapter.alter_table(adapter.get_alter_expressions(current_table_name, target_table_name))
 
     adapter.cursor.begin.assert_called_once()
     adapter.cursor.commit.assert_called_once()
@@ -2312,7 +2309,7 @@ WITH "source" AS (
     COALESCE("joined"."t_price", "joined"."price") AS "price",
     COALESCE("t_test_valid_from", CAST('1970-01-01 00:00:00' AS TIMESTAMP)) AS "test_valid_from",
     CASE
-      WHEN 
+      WHEN
         (
           NOT "t_id" IS NULL AND NOT "id" IS NULL
         )

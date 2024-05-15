@@ -412,10 +412,7 @@ class IncrementalUnmanagedKind(_Incremental):
 
     @property
     def metadata_hash_values(self) -> t.List[t.Optional[str]]:
-        return [
-            *super().metadata_hash_values,
-            str(self.forward_only),
-        ]
+        return [*super().metadata_hash_values, str(self.forward_only)]
 
 
 class ViewKind(_ModelKind):

@@ -553,6 +553,14 @@ class Snapshot(PydanticModel, SnapshotInfoMixin):
 
         return result
 
+    @staticmethod
+    def has_drop_alteration(alter_expressions: t.List[exp.AlterTable]) -> bool:
+        return any(
+            isinstance(action, exp.Drop)
+            for actions in alter_expressions
+            for action in actions.args.get("actions", [])
+        )
+
     @classmethod
     def from_node(
         cls,
@@ -925,6 +933,16 @@ class Snapshot(PydanticModel, SnapshotInfoMixin):
             to_end_date(to_timestamp(self.intervals[-1][1]), self.node.interval_unit)
             if self.intervals
             else default
+        )
+
+    def do_destructive_check(
+        self, allow_destructive_snapshots: t.Set[str], check_forward_change: bool = False
+    ) -> bool:
+        return (
+            self.is_model
+            and not self.model.on_destructive_change.is_ignore
+            and self.name not in allow_destructive_snapshots
+            and (self.is_forward_only if check_forward_change else True)
         )
 
     @property
