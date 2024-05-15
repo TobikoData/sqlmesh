@@ -139,6 +139,11 @@ class PydanticModel(pydantic.BaseModel):
         if include is None and self.__config__.extra != "allow":  # type: ignore
             # Workaround to support @cached_property in Pydantic v1.
             include = {f.name for f in self.all_field_infos().values()}  # type: ignore
+
+        mode = kwargs.pop("mode", None)
+        if mode == "json":
+            # Pydantic v1 doesn't support the 'json' mode for dict().
+            return json.loads(super().json(include=include, **kwargs))
         return super().dict(include=include, **kwargs)  # type: ignore
 
     def json(

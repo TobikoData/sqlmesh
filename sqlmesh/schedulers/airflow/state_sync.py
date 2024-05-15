@@ -343,3 +343,7 @@ class HttpStateSync(StateSync):
 
     def close(self) -> None:
         """Closes all open connections and releases all allocated resources."""
+
+    def state_type(self) -> str:
+        """Returns the type of state sync."""
+        return "airflow_http"

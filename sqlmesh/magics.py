@@ -3,6 +3,7 @@ from __future__ import annotations
 import functools
 import logging
 import typing as t
+from argparse import Namespace
 from collections import defaultdict
 
 from hyperscript import h
@@ -15,9 +16,11 @@ from IPython.core.magic import (
     magics_class,
 )
 from IPython.core.magic_arguments import argument, magic_arguments, parse_argstring
+from IPython.utils.process import arg_split
 from rich.jupyter import JupyterRenderable
 
 from sqlmesh.cli.example_project import ProjectTemplate, init_example_project
+from sqlmesh.core import analytics
 from sqlmesh.core import constants as c
 from sqlmesh.core.config import load_configs
 from sqlmesh.core.console import get_console
@@ -51,7 +54,20 @@ def pass_sqlmesh_context(func: t.Callable) -> t.Callable:
         old_console = context.console
         context.console = get_console(display=self.display)
         context.refresh()
+
+        magic_name = func.__name__
+        bound_method = getattr(self, magic_name, None)
+        if bound_method:
+            args_split = arg_split(args[0])
+            parser = bound_method.parser
+            # Calling the private method to bypass setting of defaults.
+            parsed_args, _ = parser._parse_known_args(args_split, Namespace())
+
+            command_args = {k for k, v in parsed_args.__dict__.items() if v is not None}
+            analytics.collector.on_magic_command(command_name=magic_name, command_args=command_args)
+
         func(self, context, *args, **kwargs)
+
         context.console = old_console
 
     return wrapper

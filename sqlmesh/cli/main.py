@@ -11,6 +11,7 @@ from sqlmesh import configure_logging
 from sqlmesh.cli import error_handler
 from sqlmesh.cli import options as opt
 from sqlmesh.cli.example_project import ProjectTemplate, init_example_project
+from sqlmesh.core.analytics import cli_analytics
 from sqlmesh.core.config import load_configs
 from sqlmesh.core.context import Context
 from sqlmesh.utils.date import TimeLike
@@ -121,6 +122,7 @@ def cli(
 )
 @click.pass_context
 @error_handler
+@cli_analytics
 def init(
     ctx: click.Context, sql_dialect: t.Optional[str] = None, template: t.Optional[str] = None
 ) -> None:
@@ -146,6 +148,7 @@ def init(
 @click.option("--no-format", is_flag=True, help="Disable fancy formatting of the query.")
 @click.pass_context
 @error_handler
+@cli_analytics
 def render(
     ctx: click.Context,
     model: str,
@@ -184,6 +187,7 @@ def render(
 )
 @click.pass_context
 @error_handler
+@cli_analytics
 def evaluate(
     ctx: click.Context,
     model: str,
@@ -250,6 +254,7 @@ def evaluate(
 )
 @click.pass_context
 @error_handler
+@cli_analytics
 def format(ctx: click.Context, **kwargs: t.Any) -> None:
     """Format all SQL models."""
     ctx.obj.format(**{k: v for k, v in kwargs.items() if v is not None})
@@ -259,6 +264,7 @@ def format(ctx: click.Context, **kwargs: t.Any) -> None:
 @click.argument("environment")
 @click.pass_context
 @error_handler
+@cli_analytics
 def diff(ctx: click.Context, environment: t.Optional[str] = None) -> None:
     """Show the diff between the local state and the target environment."""
     if ctx.obj.diff(environment, detailed=True):
@@ -365,6 +371,7 @@ def diff(ctx: click.Context, environment: t.Optional[str] = None) -> None:
 @opt.verbose
 @click.pass_context
 @error_handler
+@cli_analytics
 def plan(
     ctx: click.Context, verbose: bool, environment: t.Optional[str] = None, **kwargs: t.Any
 ) -> None:
@@ -395,6 +402,7 @@ def plan(
 )
 @click.pass_context
 @error_handler
+@cli_analytics
 def run(ctx: click.Context, environment: t.Optional[str] = None, **kwargs: t.Any) -> None:
     """Evaluate missing intervals for the target environment."""
     context = ctx.obj
@@ -413,6 +421,7 @@ def run(ctx: click.Context, environment: t.Optional[str] = None, **kwargs: t.Any
 )
 @click.pass_context
 @error_handler
+@cli_analytics
 def invalidate(ctx: click.Context, environment: str, **kwargs: t.Any) -> None:
     """Invalidate the target environment, forcing its removal during the next run of the janitor process."""
     context = ctx.obj
@@ -429,6 +438,7 @@ def invalidate(ctx: click.Context, environment: str, **kwargs: t.Any) -> None:
 )
 @click.pass_context
 @error_handler
+@cli_analytics
 def dag(ctx: click.Context, file: str, select_model: t.List[str]) -> None:
     """Render the DAG as an html file."""
     rendered_dag_path = ctx.obj.render_dag(file, select_model)
@@ -488,6 +498,7 @@ def dag(ctx: click.Context, file: str, select_model: t.List[str]) -> None:
 )
 @click.pass_obj
 @error_handler
+@cli_analytics
 def create_test(
     obj: Context,
     model: str,
@@ -522,6 +533,7 @@ def create_test(
 @click.argument("tests", nargs=-1)
 @click.pass_obj
 @error_handler
+@cli_analytics
 def test(
     obj: Context,
     k: t.List[str],
@@ -552,6 +564,7 @@ def test(
 @opt.execution_time
 @click.pass_obj
 @error_handler
+@cli_analytics
 def audit(
     obj: Context,
     models: t.Iterator[str],
@@ -567,6 +580,7 @@ def audit(
 @click.argument("sql")
 @click.pass_context
 @error_handler
+@cli_analytics
 def fetchdf(ctx: click.Context, sql: str) -> None:
     """Run a SQL query and display the results."""
     context = ctx.obj
@@ -576,6 +590,7 @@ def fetchdf(ctx: click.Context, sql: str) -> None:
 @cli.command("info")
 @click.pass_obj
 @error_handler
+@cli_analytics
 def info(obj: Context) -> None:
     """
     Print information about a SQLMesh project.
@@ -606,6 +621,7 @@ def info(obj: Context) -> None:
 )
 @click.pass_context
 @error_handler
+@cli_analytics
 def ui(ctx: click.Context, host: str, port: int, mode: str) -> None:
     """Start a browser-based SQLMesh UI."""
     try:
@@ -636,6 +652,7 @@ def ui(ctx: click.Context, host: str, port: int, mode: str) -> None:
 @cli.command("migrate")
 @click.pass_context
 @error_handler
+@cli_analytics
 def migrate(ctx: click.Context) -> None:
     """Migrate SQLMesh to the current running version."""
     ctx.obj.migrate()
@@ -644,6 +661,7 @@ def migrate(ctx: click.Context) -> None:
 @cli.command("rollback")
 @click.pass_obj
 @error_handler
+@cli_analytics
 def rollback(obj: Context) -> None:
     """Rollback SQLMesh to the previous migration."""
     obj.rollback()
@@ -652,6 +670,7 @@ def rollback(obj: Context) -> None:
 @cli.command("create_external_models")
 @click.pass_obj
 @error_handler
+@cli_analytics
 def create_external_models(obj: Context) -> None:
     """Create a schema file containing external model schemas."""
     obj.create_external_models()
@@ -685,6 +704,7 @@ def create_external_models(obj: Context) -> None:
 )
 @click.pass_obj
 @error_handler
+@cli_analytics
 def table_diff(
     obj: Context, source_to_target: str, model: t.Optional[str], **kwargs: t.Any
 ) -> None:
@@ -712,6 +732,7 @@ def table_diff(
 )
 @click.pass_obj
 @error_handler
+@cli_analytics
 def rewrite(obj: Context, sql: str, read: str = "", write: str = "") -> None:
     """Rewrite a SQL expression with semantic references into an executable query.
 
@@ -740,6 +761,7 @@ def rewrite(obj: Context, sql: str, read: str = "", write: str = "") -> None:
 @opt.verbose
 @click.pass_context
 @error_handler
+@cli_analytics
 def prompt(
     ctx: click.Context, prompt: str, evaluate: bool, temperature: float, verbose: bool
 ) -> None:
@@ -764,6 +786,7 @@ def prompt(
 @cli.command("clean")
 @click.pass_obj
 @error_handler
+@cli_analytics
 def clean(obj: Context) -> None:
     """Clears the SQLMesh cache and any build artifacts."""
     obj.clear_caches()
@@ -779,6 +802,7 @@ def clean(obj: Context) -> None:
 )
 @click.pass_obj
 @error_handler
+@cli_analytics
 def table_name(obj: Context, model_name: str, dev: bool) -> None:
     """Prints the name of the physical table for the given model."""
     print(obj.table_name(model_name, dev))

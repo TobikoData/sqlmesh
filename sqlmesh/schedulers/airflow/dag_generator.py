@@ -196,6 +196,7 @@ class SnapshotDagGenerator:
                 plan_dag_spec.new_snapshots,
                 plan_dag_spec.ddl_concurrent_tasks,
                 plan_dag_spec.deployability_index_for_creation,
+                plan_dag_spec.request_id,
             )
 
             (
@@ -256,7 +257,17 @@ class SnapshotDagGenerator:
             finalize_task = self._create_finalize_task(plan_dag_spec.environment)
             before_finalize_task >> finalize_task
 
-            self._add_notification_target_tasks(plan_dag_spec, start_task, end_task, finalize_task)
+            on_plan_apply_end_task = PythonOperator(
+                task_id="on_plan_apply_end",
+                python_callable=on_plan_apply_end,
+                op_kwargs={"plan_id": plan_dag_spec.environment.plan_id},
+                trigger_rule="all_done",
+            )
+            finalize_task >> on_plan_apply_end_task
+
+            self._add_notification_target_tasks(
+                plan_dag_spec, start_task, end_task, on_plan_apply_end_task
+            )
             return dag
 
     def _add_notification_target_tasks(
@@ -301,6 +312,7 @@ class SnapshotDagGenerator:
         new_snapshots: t.List[Snapshot],
         ddl_concurrent_tasks: int,
         deployability_index: DeployabilityIndex,
+        request_id: str,
     ) -> t.Tuple[BaseOperator, BaseOperator]:
         start_task = EmptyOperator(task_id="snapshot_creation_start")
         end_task = EmptyOperator(task_id="snapshot_creation_end", trigger_rule="none_failed")
@@ -321,7 +333,7 @@ class SnapshotDagGenerator:
             update_state_task = PythonOperator(
                 task_id="snapshot_creation__update_state",
                 python_callable=creation_update_state_task,
-                op_kwargs={"new_snapshots": new_snapshots},
+                op_kwargs={"new_snapshots": new_snapshots, "request_id": request_id},
             )
             current_task >> update_state_task
             current_task = update_state_task
@@ -655,9 +667,13 @@ class SnapshotDagGenerator:
         return None
 
 
-def creation_update_state_task(new_snapshots: t.Iterable[Snapshot]) -> None:
+def creation_update_state_task(new_snapshots: t.Collection[Snapshot], request_id: str) -> None:
     with util.scoped_state_sync() as state_sync:
         state_sync.push_snapshots(new_snapshots)
+
+        from sqlmesh.core.analytics import collector
+
+        collector.on_snapshots_created(new_snapshots=new_snapshots, plan_id=request_id)
 
 
 def promotion_update_state_task(
@@ -680,3 +696,9 @@ def promotion_unpause_snapshots_task(
 def promotion_finalize_task(environment: Environment) -> None:
     with util.scoped_state_sync() as state_sync:
         state_sync.finalize(environment)
+
+
+def on_plan_apply_end(plan_id: str) -> None:
+    from sqlmesh.core.analytics import collector
+
+    collector.on_plan_apply_end(plan_id=plan_id)

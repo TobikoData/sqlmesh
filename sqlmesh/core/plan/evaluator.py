@@ -18,6 +18,8 @@ import abc
 import logging
 import typing as t
 
+from sqlmesh.core import analytics
+from sqlmesh.core import constants as c
 from sqlmesh.core.console import Console, get_console
 from sqlmesh.core.notification_target import (
     NotificationTarget,
@@ -77,6 +79,12 @@ class BuiltInPlanEvaluator(PlanEvaluator):
         circuit_breaker: t.Optional[t.Callable[[], bool]] = None,
     ) -> None:
         self.console.start_plan_evaluation(plan)
+        analytics.collector.on_plan_apply_start(
+            plan=plan,
+            engine_type=self.snapshot_evaluator.adapter.dialect,
+            state_sync_type=self.state_sync.state_type(),
+            scheduler_type=c.BUILTIN,
+        )
 
         try:
             snapshots = plan.snapshots
@@ -118,7 +126,11 @@ class BuiltInPlanEvaluator(PlanEvaluator):
 
             if not plan.requires_backfill:
                 self.console.log_success("Virtual Update executed successfully")
+        except Exception as e:
+            analytics.collector.on_plan_apply_end(plan_id=plan.plan_id, error=e)
+            raise
         finally:
+            analytics.collector.on_plan_apply_end(plan_id=plan.plan_id)
             self.console.stop_plan_evaluation()
 
     def _backfill(
@@ -195,6 +207,10 @@ class BuiltInPlanEvaluator(PlanEvaluator):
             self.console.stop_creation_progress(success=completed)
 
         self.state_sync.push_snapshots(plan.new_snapshots)
+
+        analytics.collector.on_snapshots_created(
+            new_snapshots=plan.new_snapshots, plan_id=plan.plan_id
+        )
 
     def _promote(
         self, plan: Plan, no_gaps_snapshot_names: t.Optional[t.Set[str]] = None
@@ -303,6 +319,13 @@ class BaseAirflowPlanEvaluator(PlanEvaluator):
     ) -> None:
         plan_request_id = plan.plan_id
         self._apply_plan(plan, plan_request_id)
+
+        analytics.collector.on_plan_apply_start(
+            plan=plan,
+            engine_type=None,
+            state_sync_type=None,
+            scheduler_type=c.AIRFLOW,
+        )
 
         if self.blocking:
             plan_application_dag_id = airflow_common.plan_application_dag_id(
