@@ -8,6 +8,8 @@ from sqlglot import exp
 from sqlglot.helper import AutoName
 
 if t.TYPE_CHECKING:
+    from requests.models import Response
+
     from sqlmesh.core.model import Model
 
 
@@ -109,7 +111,9 @@ class NotificationTargetError(SQLMeshError):
 
 
 class ApiError(SQLMeshError):
-    pass
+    def __init__(self, message: str, code: int) -> None:
+        super().__init__(message)
+        self.code = code
 
 
 class ApiClientError(ApiError):
@@ -121,7 +125,8 @@ class ApiServerError(ApiError):
 
 
 class NotFoundError(ApiClientError):
-    pass
+    def __init__(self, message: str) -> None:
+        super().__init__(message, 404)
 
 
 class CICDBotError(SQLMeshError):
@@ -153,3 +158,12 @@ def raise_config_error(
     if location:
         raise error_type(f"{msg} at '{location}'")
     raise error_type(msg)
+
+
+def raise_for_status(response: Response) -> None:
+    if response.status_code == 404:
+        raise NotFoundError(response.text)
+    if 400 <= response.status_code < 500:
+        raise ApiClientError(response.text, response.status_code)
+    if 500 <= response.status_code < 600:
+        raise ApiServerError(response.text, response.status_code)

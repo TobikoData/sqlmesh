@@ -19,6 +19,7 @@ from __future__ import annotations
 import contextlib
 import json
 import logging
+import time
 import typing as t
 from collections import defaultdict
 from copy import deepcopy
@@ -29,6 +30,7 @@ from sqlglot import __version__ as SQLGLOT_VERSION
 from sqlglot import exp
 from sqlglot.helper import seq_get
 
+from sqlmesh.core import analytics
 from sqlmesh.core import constants as c
 from sqlmesh.core.audit import ModelAudit
 from sqlmesh.core.console import Console, get_console
@@ -941,6 +943,8 @@ class EngineAdapterStateSync(CommonStateSyncMixin, StateSync):
         """Migrate the state sync to the latest SQLMesh / SQLGlot version."""
         versions = self.get_versions(validate=False)
 
+        migration_start_ts = time.perf_counter()
+
         try:
             migrate_rows = self._apply_migrations(default_catalog, skip_backup)
 
@@ -952,11 +956,24 @@ class EngineAdapterStateSync(CommonStateSyncMixin, StateSync):
                 # Cleanup plan DAGs since we currently don't migrate snapshot records that are in there.
                 self.engine_adapter.delete_from(self.plan_dags_table, "TRUE")
             self._update_versions()
+
+            analytics.collector.on_migration_end(
+                from_sqlmesh_version=versions.sqlmesh_version,
+                state_sync_type=self.state_type(),
+                migration_time_sec=time.perf_counter() - migration_start_ts,
+            )
         except Exception as e:
             if skip_backup:
                 logger.error("Backup was skipped so no rollback was attempted.")
             else:
                 self.rollback()
+
+            analytics.collector.on_migration_end(
+                from_sqlmesh_version=versions.sqlmesh_version,
+                state_sync_type=self.state_type(),
+                migration_time_sec=time.perf_counter() - migration_start_ts,
+                error=e,
+            )
 
             self.console.stop_migration_progress(success=False)
             raise SQLMeshError("SQLMesh migration failed.") from e
@@ -987,6 +1004,9 @@ class EngineAdapterStateSync(CommonStateSyncMixin, StateSync):
                     self._restore_table(optional_table, _backup_table_name(optional_table))
 
         logger.info("Migration rollback successful.")
+
+    def state_type(self) -> str:
+        return self.engine_adapter.dialect
 
     def _backup_state(self) -> None:
         for table in (

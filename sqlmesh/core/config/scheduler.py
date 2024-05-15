@@ -21,6 +21,7 @@ from sqlmesh.core.state_sync import EngineAdapterStateSync, StateSync
 from sqlmesh.schedulers.airflow.client import AirflowClient
 from sqlmesh.schedulers.airflow.mwaa_client import MWAAClient
 from sqlmesh.utils.errors import ConfigError
+from sqlmesh.utils.hashing import md5
 from sqlmesh.utils.pydantic import model_validator, model_validator_v1_args
 
 if t.TYPE_CHECKING:
@@ -67,6 +68,14 @@ class _SchedulerConfig(abc.ABC):
             context: The SQLMesh Context.
         """
 
+    @abc.abstractmethod
+    def state_sync_fingerprint(self, context: GenericContext) -> str:
+        """Returns the fingerprint of the State Sync configuration.
+
+        Args:
+            context: The SQLMesh Context.
+        """
+
 
 class _EngineAdapterStateSyncSchedulerConfig(_SchedulerConfig):
     def create_state_sync(self, context: GenericContext) -> StateSync:
@@ -83,6 +92,12 @@ class _EngineAdapterStateSyncSchedulerConfig(_SchedulerConfig):
         return EngineAdapterStateSync(
             engine_adapter, schema=schema, context_path=context.path, console=context.console
         )
+
+    def state_sync_fingerprint(self, context: GenericContext) -> str:
+        state_connection = (
+            context.config.get_state_connection(context.gateway) or context._connection_config
+        )
+        return md5([state_connection.json(sort_keys=True)])
 
 
 class BuiltInSchedulerConfig(_EngineAdapterStateSyncSchedulerConfig, BaseConfig):
@@ -105,6 +120,7 @@ class BuiltInSchedulerConfig(_EngineAdapterStateSyncSchedulerConfig, BaseConfig)
 
 
 class _BaseAirflowSchedulerConfig(_EngineAdapterStateSyncSchedulerConfig):
+    airflow_url: str
     dag_run_poll_interval_secs: int
     dag_creation_poll_interval_secs: int
     dag_creation_max_retry_attempts: int
@@ -131,6 +147,11 @@ class _BaseAirflowSchedulerConfig(_EngineAdapterStateSyncSchedulerConfig):
             dag_run_poll_interval_secs=self.dag_run_poll_interval_secs,
             console=context.console,
         )
+
+    def state_sync_fingerprint(self, context: GenericContext) -> str:
+        if self.use_state_connection:
+            return super().state_sync_fingerprint(context)
+        return md5([self.airflow_url])
 
     def create_plan_evaluator(self, context: GenericContext) -> PlanEvaluator:
         return AirflowPlanEvaluator(

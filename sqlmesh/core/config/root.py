@@ -74,6 +74,7 @@ class Config(BaseConfig):
         plan: The plan configuration.
         migration: The migration configuration.
         variables: A dictionary of variables that can be used in models / macros.
+        disable_anonymized_analytics: Whether to disable the anonymized analytics collection.
     """
 
     gateways: t.Dict[str, GatewayConfig] = {"": GatewayConfig()}
@@ -111,6 +112,7 @@ class Config(BaseConfig):
     plan: PlanConfig = PlanConfig()
     migration: MigrationConfig = MigrationConfig()
     variables: t.Dict[str, t.Any] = {}
+    disable_anonymized_analytics: bool = False
 
     _FIELD_UPDATE_STRATEGY: t.ClassVar[t.Dict[str, UpdateStrategy]] = {
         "gateways": UpdateStrategy.KEY_UPDATE,

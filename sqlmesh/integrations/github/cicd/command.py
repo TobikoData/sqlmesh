@@ -5,6 +5,7 @@ import traceback
 
 import click
 
+from sqlmesh.core.analytics import cli_analytics
 from sqlmesh.integrations.github.cicd.controller import (
     GithubCheckConclusion,
     GithubCheckStatus,
@@ -47,6 +48,7 @@ def _check_required_approvers(controller: GithubController) -> bool:
 
 @github.command()
 @click.pass_context
+@cli_analytics
 def check_required_approvers(ctx: click.Context) -> None:
     """Checks if a required approver has provided approval on the PR."""
     _check_required_approvers(ctx.obj["github"])
@@ -75,6 +77,7 @@ def _run_tests(controller: GithubController) -> bool:
 
 @github.command()
 @click.pass_context
+@cli_analytics
 def run_tests(ctx: click.Context) -> None:
     """Runs the unit tests"""
     _run_tests(ctx.obj["github"])
@@ -99,6 +102,7 @@ def _update_pr_environment(controller: GithubController) -> bool:
 
 @github.command()
 @click.pass_context
+@cli_analytics
 def update_pr_environment(ctx: click.Context) -> None:
     """Creates or updates the PR environments"""
     _update_pr_environment(ctx.obj["github"])
@@ -125,6 +129,7 @@ def _gen_prod_plan(controller: GithubController) -> bool:
 
 @github.command()
 @click.pass_context
+@cli_analytics
 def gen_prod_plan(ctx: click.Context) -> None:
     """Generates the production plan"""
     controller = ctx.obj["github"]
@@ -151,6 +156,7 @@ def _deploy_production(controller: GithubController) -> bool:
 
 @github.command()
 @click.pass_context
+@cli_analytics
 def deploy_production(ctx: click.Context) -> None:
     """Deploys the production environment"""
     _deploy_production(ctx.obj["github"])
@@ -238,6 +244,7 @@ def _run_all(controller: GithubController) -> None:
 
 @github.command()
 @click.pass_context
+@cli_analytics
 def run_all(ctx: click.Context) -> None:
     """Runs all the commands in the correct order."""
     return _run_all(ctx.obj["github"])

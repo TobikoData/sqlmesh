@@ -6,7 +6,6 @@ import uuid
 from urllib.parse import urlencode, urljoin
 
 import requests
-from requests.models import Response
 
 from sqlmesh.core.console import Console
 from sqlmesh.core.environment import Environment
@@ -19,10 +18,10 @@ from sqlmesh.schedulers.airflow import common
 from sqlmesh.utils import unique
 from sqlmesh.utils.date import TimeLike
 from sqlmesh.utils.errors import (
-    ApiClientError,
     ApiServerError,
     NotFoundError,
     SQLMeshError,
+    raise_for_status,
 )
 from sqlmesh.utils.pydantic import PydanticModel
 
@@ -368,12 +367,3 @@ def _list_to_json(models: t.Collection[T], batch_size: t.Optional[int] = None) -
 
 def _json_query_param(value: t.Any) -> str:
     return json.dumps(value, separators=(",", ":"))
-
-
-def raise_for_status(response: Response) -> None:
-    if response.status_code == 404:
-        raise NotFoundError(response.text)
-    if 400 <= response.status_code < 500:
-        raise ApiClientError(response.text)
-    if 500 <= response.status_code < 600:
-        raise ApiServerError(response.text)
