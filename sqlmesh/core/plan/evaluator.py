@@ -199,6 +199,7 @@ class BuiltInPlanEvaluator(PlanEvaluator):
             self.snapshot_evaluator.create(
                 snapshots_to_create,
                 plan.snapshots,
+                allow_destructive_snapshots=plan.allow_destructive_models,
                 deployability_index=deployability_index,
                 on_complete=self.console.update_creation_progress,
             )
@@ -231,6 +232,7 @@ class BuiltInPlanEvaluator(PlanEvaluator):
             self.snapshot_evaluator.migrate(
                 [s for s in plan.snapshots.values() if s.is_paused],
                 plan.snapshots,
+                plan.allow_destructive_models,
             )
             if not plan.ensure_finalized_snapshots:
                 # Only unpause at this point if we don't have to use the finalized snapshots
@@ -397,6 +399,7 @@ class StateBasedAirflowPlanEvaluator(BaseAirflowPlanEvaluator):
             },
             removed_snapshots=list(plan.context_diff.removed_snapshots),
             execution_time=plan.execution_time,
+            allow_destructive_snapshots=plan.allow_destructive_models,
         )
         plan_dag_spec = create_plan_dag_spec(plan_application_request, self.state_sync)
         PlanDagState.from_state_sync(self.state_sync).add_dag_spec(plan_dag_spec)
@@ -474,6 +477,7 @@ class AirflowPlanEvaluator(StateBasedAirflowPlanEvaluator):
             },
             removed_snapshots=list(plan.context_diff.removed_snapshots),
             execution_time=plan.execution_time,
+            allow_destructive_snapshots=plan.allow_destructive_models,
         )
 
 

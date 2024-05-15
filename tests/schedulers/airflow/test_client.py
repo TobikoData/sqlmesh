@@ -166,6 +166,7 @@ def test_apply_plan(mocker: MockerFixture, snapshot: Snapshot):
         "users": [],
         "is_dev": False,
         "forward_only": False,
+        "allow_destructive_snapshots": [],
         "models_to_backfill": ['"test_model"'],
         "end_bounded": False,
         "ensure_finalized_snapshots": False,

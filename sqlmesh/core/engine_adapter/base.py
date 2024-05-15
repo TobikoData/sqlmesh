@@ -778,20 +778,29 @@ class EngineAdapter:
         drop_expression = exp.Drop(this=exp.to_table(table_name), kind="TABLE", exists=exists)
         self.execute(drop_expression)
 
-    def alter_table(
+    def get_alter_expressions(
         self,
         current_table_name: TableName,
         target_table_name: TableName,
+    ) -> t.List[exp.AlterTable]:
+        """
+        Determines the alter statements needed to change the current table into the structure of the target table.
+        """
+        return self.SCHEMA_DIFFER.compare_columns(
+            current_table_name,
+            self.columns(current_table_name),
+            self.columns(target_table_name),
+        )
+
+    def alter_table(
+        self,
+        alter_expressions: t.List[exp.AlterTable],
     ) -> None:
         """
-        Performs the required alter statements to change the current table into the structure of the target table.
+        Performs the alter statements to change the current table into the structure of the target table.
         """
         with self.transaction():
-            for alter_expression in self.SCHEMA_DIFFER.compare_columns(
-                current_table_name,
-                self.columns(current_table_name),
-                self.columns(target_table_name),
-            ):
+            for alter_expression in alter_expressions:
                 self.execute(alter_expression)
 
     def create_view(

@@ -59,11 +59,13 @@ class CreateTablesCommandPayload(PydanticModel):
     target_snapshot_ids: t.List[SnapshotId]
     snapshots: t.List[Snapshot]
     deployability_index: DeployabilityIndex
+    allow_destructive_snapshots: t.Set[str]
 
 
 class MigrateTablesCommandPayload(PydanticModel):
     target_snapshot_ids: t.List[SnapshotId]
     snapshots: t.List[Snapshot]
+    allow_destructive_snapshots: t.Set[str]
 
 
 def evaluate(
@@ -140,6 +142,7 @@ def create_tables(
         target_snapshots,
         snapshots_by_id,
         deployability_index=command_payload.deployability_index,
+        allow_destructive_snapshots=command_payload.allow_destructive_snapshots,
     )
 
 
@@ -151,7 +154,9 @@ def migrate_tables(
         command_payload = MigrateTablesCommandPayload.parse_raw(command_payload)
     snapshots_by_id = {s.snapshot_id: s for s in command_payload.snapshots}
     target_snapshots = [snapshots_by_id[sid] for sid in command_payload.target_snapshot_ids]
-    evaluator.migrate(target_snapshots, snapshots_by_id)
+    evaluator.migrate(
+        target_snapshots, snapshots_by_id, command_payload.allow_destructive_snapshots
+    )
 
 
 COMMAND_HANDLERS: t.Dict[CommandType, t.Callable[[SnapshotEvaluator, str], None]] = {

@@ -196,6 +196,7 @@ class SnapshotDagGenerator:
                 plan_dag_spec.new_snapshots,
                 plan_dag_spec.ddl_concurrent_tasks,
                 plan_dag_spec.deployability_index_for_creation,
+                plan_dag_spec.allow_destructive_snapshots,
                 plan_dag_spec.request_id,
             )
 
@@ -312,6 +313,7 @@ class SnapshotDagGenerator:
         new_snapshots: t.List[Snapshot],
         ddl_concurrent_tasks: int,
         deployability_index: DeployabilityIndex,
+        allow_destructive_snapshots: t.Set[str],
         request_id: str,
     ) -> t.Tuple[BaseOperator, BaseOperator]:
         start_task = EmptyOperator(task_id="snapshot_creation_start")
@@ -324,6 +326,7 @@ class SnapshotDagGenerator:
                 snapshots_to_create,
                 ddl_concurrent_tasks,
                 deployability_index,
+                allow_destructive_snapshots,
                 "snapshot_creation__create_tables",
             )
             current_task >> creation_task
@@ -369,6 +372,7 @@ class SnapshotDagGenerator:
                     if snapshots[s.snapshot_id].is_paused
                 ],
                 request.ddl_concurrent_tasks,
+                request.allow_destructive_snapshots,
                 "snapshot_promotion_migrate_tables",
             )
             update_state_task >> migrate_tables_task
@@ -576,6 +580,7 @@ class SnapshotDagGenerator:
         new_snapshots: t.List[Snapshot],
         ddl_concurrent_tasks: int,
         deployability_index: DeployabilityIndex,
+        allow_destructive_snapshots: t.Set[str],
         task_id: str,
     ) -> BaseOperator:
         return self._ddl_engine_operator(
@@ -584,6 +589,7 @@ class SnapshotDagGenerator:
                 new_snapshots=new_snapshots,
                 ddl_concurrent_tasks=ddl_concurrent_tasks,
                 deployability_index=deployability_index,
+                allow_destructive_snapshots=allow_destructive_snapshots,
             ),
             task_id=task_id,
         )
@@ -592,12 +598,15 @@ class SnapshotDagGenerator:
         self,
         snapshots: t.List[Snapshot],
         ddl_concurrent_tasks: int,
+        allow_destructive_snapshots: t.Set[str],
         task_id: str,
     ) -> BaseOperator:
         return self._ddl_engine_operator(
             **self._ddl_engine_operator_args,
             target=targets.SnapshotMigrateTablesTarget(
-                snapshots=snapshots, ddl_concurrent_tasks=ddl_concurrent_tasks
+                snapshots=snapshots,
+                ddl_concurrent_tasks=ddl_concurrent_tasks,
+                allow_destructive_snapshots=allow_destructive_snapshots,
             ),
             task_id=task_id,
         )
