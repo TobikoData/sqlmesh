@@ -199,46 +199,54 @@ def _parse_macro(self: Parser, keyword_macro: str = "") -> t.Optional[exp.Expres
     index = self._index
     field = self._parse_primary() or self._parse_function(functions={}) or self._parse_id_var()
 
-    if isinstance(field, exp.Func):
-        macro_name = field.name.upper()
-        if macro_name != keyword_macro and macro_name in KEYWORD_MACROS:
-            self._retreat(index)
-            return None
+    def _build_macro(field: t.Optional[exp.Expression]) -> t.Optional[exp.Expression]:
+        if isinstance(field, exp.Func):
+            macro_name = field.name.upper()
+            if macro_name != keyword_macro and macro_name in KEYWORD_MACROS:
+                self._retreat(index)
+                return None
 
-        if isinstance(field, exp.Anonymous):
-            if macro_name == "DEF":
-                return self.expression(
-                    MacroDef,
-                    this=field.expressions[0],
-                    expression=field.expressions[1],
+            if isinstance(field, exp.Anonymous):
+                if macro_name == "DEF":
+                    return self.expression(
+                        MacroDef,
+                        this=field.expressions[0],
+                        expression=field.expressions[1],
+                        comments=comments,
+                    )
+                if macro_name == "SQL":
+                    into = field.expressions[1].this.lower() if len(field.expressions) > 1 else None
+                    return self.expression(
+                        MacroSQL, this=field.expressions[0], into=into, comments=comments
+                    )
+            else:
+                field = self.expression(
+                    exp.Anonymous,
+                    this=field.sql_name(),
+                    expressions=list(field.args.values()),
                     comments=comments,
                 )
-            if macro_name == "SQL":
-                into = field.expressions[1].this.lower() if len(field.expressions) > 1 else None
-                return self.expression(
-                    MacroSQL, this=field.expressions[0], into=into, comments=comments
-                )
-        else:
-            field = self.expression(
-                exp.Anonymous,
-                this=field.sql_name(),
-                expressions=list(field.args.values()),
-                comments=comments,
+
+            return self.expression(MacroFunc, this=field, comments=comments)
+
+        if field is None:
+            return None
+
+        if field.is_string or (isinstance(field, exp.Identifier) and field.quoted):
+            return self.expression(
+                MacroStrReplace, this=exp.Literal.string(field.this), comments=comments
             )
 
-        return self.expression(MacroFunc, this=field, comments=comments)
+        if "@" in field.this:
+            return field
+        return self.expression(MacroVar, this=field.this, comments=comments)
 
-    if field is None:
-        return None
+    if isinstance(field, exp.Window):
+        field.set("this", _build_macro(field.this))
+    else:
+        field = _build_macro(field)
 
-    if field.is_string or (isinstance(field, exp.Identifier) and field.quoted):
-        return self.expression(
-            MacroStrReplace, this=exp.Literal.string(field.this), comments=comments
-        )
-
-    if "@" in field.this:
-        return field
-    return self.expression(MacroVar, this=field.this, comments=comments)
+    return field
 
 
 KEYWORD_MACROS = {"WITH", "JOIN", "WHERE", "GROUP_BY", "HAVING", "ORDER_BY", "LIMIT"}

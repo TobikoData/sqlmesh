@@ -559,3 +559,14 @@ def test_model_normalization_quote_flexibility():
     # It doesn't work the other way which is what we currently expect
     with pytest.raises(ParseError):
         normalize_model_name("`catalog`.`db`.`table`", default_catalog=None, dialect=None)
+
+
+def test_macro_parse():
+    q = parse_one(
+        """select * from table(@get(x) OVER (PARTITION BY y ORDER BY z)) AS results""",
+        read="snowflake",
+    )
+    assert (
+        q.sql()
+        == "SELECT * FROM TABLE(@get(x) OVER (PARTITION BY y ORDER BY z NULLS LAST)) AS results"
+    )
