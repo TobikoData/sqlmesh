@@ -250,49 +250,54 @@ Usage: sqlmesh plan [OPTIONS] [ENVIRONMENT]
   Apply local changes to the target environment.
 
 Options:
-  -s, --start TEXT          The start datetime of the interval for which this
-                            command will be applied.
-  -e, --end TEXT            The end datetime of the interval for which this
-                            command will be applied.
-  --execution-time TEXT     The execution time (defaults to now).
-  --create-from TEXT        The environment to create the target environment
-                            from if it doesn't exist. Default: prod.
-  --skip-tests              Skip tests prior to generating the plan if they
-                            are defined.
-  -r, --restate-model TEXT  Restate data for specified models and models
-                            downstream from the one specified. For production
-                            environment, all related model versions will have
-                            their intervals wiped, but only the current
-                            versions will be backfilled. For development
-                            environment, only the current model versions will
-                            be affected.
-  --no-gaps                 Ensure that new snapshots have no data gaps when
-                            comparing to existing snapshots for matching
-                            models in the target environment.
-  --skip-backfill           Skip the backfill step.
-  --forward-only            Create a plan for forward-only changes.
-  --effective-from TEXT     The effective date from which to apply forward-
-                            only changes on production.
-  --no-prompts              Disable interactive prompts for the backfill time
-                            range. Please note that if this flag is set and
-                            there are uncategorized changes, plan creation
-                            will fail.
-  --auto-apply              Automatically apply the new plan after creation.
-  --no-auto-categorization  Disable automatic change categorization.
-  --include-unmodified      Include unmodified models in the target
-                            environment.
-  --select-model TEXT       Select specific model changes that should be
-                            included in the plan.
-  --backfill-model TEXT     Backfill only the models whose names match the
-                            expression. This is supported only when targeting
-                            a development environment.
-  --no-diff                 Hide text differences for changed models.
-  --run                     Run latest intervals as part of the plan
-                            application (prod environment only).
-  --enable-preview          Enable preview for forward-only models when
-                            targeting a development environment.
-  -v, --verbose             Verbose output.
-  --help                    Show this message and exit.
+  -s, --start TEXT                The start datetime of the interval for which
+                                  this command will be applied.
+  -e, --end TEXT                  The end datetime of the interval for which
+                                  this command will be applied.
+  --execution-time TEXT           The execution time (defaults to now).
+  --create-from TEXT              The environment to create the target
+                                  environment from if it doesn't exist.
+                                  Default: prod.
+  --skip-tests                    Skip tests prior to generating the plan if
+                                  they are defined.
+  -r, --restate-model TEXT        Restate data for specified models and models
+                                  downstream from the one specified. For
+                                  production environment, all related model
+                                  versions will have their intervals wiped,
+                                  but only the current versions will be
+                                  backfilled. For development environment,
+                                  only the current model versions will be
+                                  affected.
+  --no-gaps                       Ensure that new snapshots have no data gaps
+                                  when comparing to existing snapshots for
+                                  matching models in the target environment.
+  --skip-backfill                 Skip the backfill step.
+  --forward-only                  Create a plan for forward-only changes.
+  --allow-destructive-model TEXT  Allow destructive forward-only changes to
+                                  models whose names match the expression.
+  --effective-from TEXT           The effective date from which to apply
+                                  forward-only changes on production.
+  --no-prompts                    Disable interactive prompts for the backfill
+                                  time range. Please note that if this flag is
+                                  set and there are uncategorized changes,
+                                  plan creation will fail.
+  --auto-apply                    Automatically apply the new plan after
+                                  creation.
+  --no-auto-categorization        Disable automatic change categorization.
+  --include-unmodified            Include unmodified models in the target
+                                  environment.
+  --select-model TEXT             Select specific model changes that should be
+                                  included in the plan.
+  --backfill-model TEXT           Backfill only the models whose names match
+                                  the expression. This is supported only when
+                                  targeting a development environment.
+  --no-diff                       Hide text differences for changed models.
+  --run                           Run latest intervals as part of the plan
+                                  application (prod environment only).
+  --enable-preview                Enable preview for forward-only models when
+                                  targeting a development environment.
+  -v, --verbose                   Verbose output.
+  --help                          Show this message and exit.
 ```
 
 ## prompt
