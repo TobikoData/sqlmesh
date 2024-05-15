@@ -154,3 +154,40 @@ WHERE
 ```
 
 Alternatively, all the changes contained in a *specific plan* can be classified as forward-only with a flag: `sqlmesh plan --forward-only`. A subsequent plan that did not include the forward-only flag would fully refresh the model's physical table. Learn more about forward-only plans [here](../concepts/plans.md#forward-only-plans).
+
+### Destructive changes
+
+Some model changes destroy existing data in a table. Dropping a column from the model is the most direct cause, but changing a column's data type (such as casting a column from a `STRING` to `INTEGER`) can also require a drop. (Whether or not a specific change requires dropping a column may differ across SQL engines.)
+
+Forward-only models are used to retain existing data. Before executing forward-only changes to incremental models, SQLMesh performs a check to determine if existing data will be destroyed.
+
+The check is performed at plan time based on the model definition. SQLMesh may not be able to resolve all of a model's column data types and complete the check, so the check is performed again at run time based on the physical tables underlying the model.
+
+#### Changes to forward-only models
+
+A model's `on_destructive_change` [configuration setting](../reference/model_configuration.md#incremental-models) determines what happens when SQLMesh detects a destructive change.
+
+By default, SQLMesh will error so no data is lost. You can set `on_destructive_change` to `warn` or `ignore` in the model's `MODEL` block to allow destructive changes.
+
+This example configures a model to `ignore` (silently allow) destructive changes:
+
+``` sql linenums="1"
+MODEL (
+    name sqlmesh_example.new_model,
+    kind INCREMENTAL_BY_TIME_RANGE (
+        time_column model_time_column,
+        forward_only true,
+        on_destructive_change ignore
+    ),
+);
+```
+
+A default `on_destructive_change` value can be set for all incremental models that do not specify it themselves in the [model defaults configuration](../reference/model_configuration.md#model-defaults).
+
+#### Changes in forward-only plans
+
+The SQLMesh `plan` [`--forward-only` option](../concepts/plans.md#forward-only-plans) treats all the plan's model changes as forward-only. When this option is specified, SQLMesh will check all modified incremental models for destructive schema changes, not just models configured with `forward_only true`.
+
+SQLMesh determines what to do for each model based on this setting hierarchy: the model's `on_destructive_change` value (if present), the `on_destructive_change` [model defaults](../reference/model_configuration.md#model-defaults) value (if present), and the SQLMesh global default of `error`.
+
+If you want to temporarily allow destructive changes to models that don't allow them, use the `plan` command's [`--allow-destructive-change` selector](../concepts/plans.md#destructive-changes) to specify which models. Learn more about model selectors [here](../guides/model_selection.md).

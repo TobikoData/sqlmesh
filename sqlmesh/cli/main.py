@@ -313,7 +313,7 @@ def diff(ctx: click.Context, environment: t.Optional[str] = None) -> None:
     "--allow-destructive-model",
     type=str,
     multiple=True,
-    help="Select specific models whose forward-only changes can be destructive.",
+    help="Allow destructive forward-only changes to models whose names match the expression.",
 )
 @click.option(
     "--effective-from",
