@@ -1558,23 +1558,13 @@ def _check_destructive_schema_change(
     alter_expressions: t.List[exp.AlterTable],
     allow_destructive_snapshots: t.Set[str],
 ) -> None:
-    if (
-        snapshot.is_model
-        and snapshot.is_forward_only
-        and snapshot.name not in allow_destructive_snapshots
-        and not snapshot.model.on_destructive_change.is_ignore
-        and any(
-            [
-                isinstance(action, exp.Drop)
-                for actions in alter_expressions
-                for action in actions.args.get("actions", [])
-            ]
-        )
-    ):
+    if snapshot.do_destructive_check(
+        allow_destructive_snapshots, True
+    ) and snapshot.has_drop_alteration(alter_expressions):
         warning_msg = f"RUN TIME CHECK: Plan results in a destructive change to forward-only table '{snapshot.name}'s schema."
-        error_msg = f"{warning_msg} To allow this, change the model's `on_destructive_change` setting to `warn` or `ignore` or include it in the plan's `--allow-destructive-model` option."
-
-        if snapshot.model.on_destructive_change.is_error:
-            raise RuntimeError(error_msg)
-        else:
+        if snapshot.model.on_destructive_change.is_warn:
             logger.warning(warning_msg)
+            return
+        raise RuntimeError(
+            f"{warning_msg} To allow this, change the model's `on_destructive_change` setting to `warn` or `ignore` or include it in the plan's `--allow-destructive-model` option."
+        )
