@@ -2193,6 +2193,8 @@ def test_snapshot_batching(state_sync, mocker, make_snapshot):
                 ).json(),
                 "a",
                 "1",
+                "1",
+                None,
             ],
             [
                 make_snapshot(
@@ -2200,6 +2202,8 @@ def test_snapshot_batching(state_sync, mocker, make_snapshot):
                 ).json(),
                 "a",
                 "2",
+                "2",
+                None,
             ],
         ],
         [
@@ -2209,6 +2213,8 @@ def test_snapshot_batching(state_sync, mocker, make_snapshot):
                 ).json(),
                 "a",
                 "3",
+                "3",
+                None,
             ],
         ],
     ]

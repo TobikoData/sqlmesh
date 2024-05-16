@@ -81,7 +81,13 @@ def python_api_analytics(func: t.Callable[..., t.Any]) -> t.Callable[..., t.Any]
         from sqlmesh import magics
 
         should_log = True
-        for frame in inspect.stack():
+
+        try:
+            stack = inspect.stack()
+        except Exception:
+            stack = []
+
+        for frame in stack:
             if "click/" in frame.filename or frame.filename == magics.__file__:
                 # Magics and CLI are reported separately.
                 should_log = False

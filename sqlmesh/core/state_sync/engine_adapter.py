@@ -459,6 +459,45 @@ class EngineAdapterStateSync(CommonStateSyncMixin, StateSync):
             return query.lock(copy=False)
         return query
 
+    def _get_snapshots_expressions(
+        self,
+        snapshot_ids: t.Optional[t.Iterable[SnapshotIdLike]] = None,
+        lock_for_update: bool = False,
+        hydrate_seeds: bool = False,
+        batch_size: t.Optional[int] = None,
+    ) -> t.Iterator[exp.Expression]:
+        for where in (
+            [None]
+            if snapshot_ids is None
+            else self._snapshot_id_filter(snapshot_ids, alias="snapshots", batch_size=batch_size)
+        ):
+            query = (
+                exp.select(
+                    "snapshots.snapshot",
+                    "snapshots.name",
+                    "snapshots.identifier",
+                    "snapshots.version",
+                )
+                .from_(exp.to_table(self.snapshots_table).as_("snapshots"))
+                .where(where)
+            )
+            if hydrate_seeds:
+                query = query.select(exp.column("content", table="seeds")).join(
+                    exp.to_table(self.seeds_table).as_("seeds"),
+                    on=exp.and_(
+                        exp.column("name", table="snapshots").eq(exp.column("name", table="seeds")),
+                        exp.column("version", table="snapshots").eq(
+                            exp.column("version", table="seeds")
+                        ),
+                    ),
+                    join_type="left",
+                )
+            else:
+                query = query.select(exp.Null().as_("content"))
+            if lock_for_update:
+                query = query.lock(copy=False)
+            yield query
+
     def _get_snapshots(
         self,
         snapshot_ids: t.Optional[t.Iterable[SnapshotIdLike]] = None,
@@ -481,40 +520,15 @@ class EngineAdapterStateSync(CommonStateSyncMixin, StateSync):
         duplicates: t.Dict[SnapshotId, Snapshot] = {}
         model_cache = ModelCache(self._context_path / c.CACHE)
 
-        for where in (
-            [None] if snapshot_ids is None else self._snapshot_id_filter(snapshot_ids, "snapshots")
-        ):
-            query = (
-                exp.select(
-                    "snapshots.snapshot",
-                    "snapshots.name",
-                    "snapshots.identifier",
+        for query in self._get_snapshots_expressions(snapshot_ids, lock_for_update, hydrate_seeds):
+            for serialized_snapshot, name, identifier, _, seed_content in self._fetchall(query):
+                snapshot = parse_snapshot(
+                    model_cache,
+                    serialized_snapshot=serialized_snapshot,
+                    name=name,
+                    identifier=identifier,
+                    seed_content=seed_content,
                 )
-                .from_(exp.to_table(self.snapshots_table).as_("snapshots"))
-                .where(where)
-            )
-            if hydrate_seeds:
-                query = query.select(exp.column("content", table="seeds")).join(
-                    exp.to_table(self.seeds_table).as_("seeds"),
-                    on=exp.and_(
-                        exp.column("name", table="snapshots").eq(exp.column("name", table="seeds")),
-                        exp.column("version", table="snapshots").eq(
-                            exp.column("version", table="seeds")
-                        ),
-                    ),
-                    join_type="left",
-                )
-            elif lock_for_update:
-                query = query.lock(copy=False)
-
-            for row in self._fetchall(query):
-                payload = json.loads(row[0])
-
-                def loader() -> Node:
-                    return parse_obj_as(Node, payload["node"])  # type: ignore
-
-                payload["node"] = model_cache.get_or_load(f"{row[1]}_{row[2]}", loader=loader)  # type: ignore
-                snapshot = Snapshot(**payload)
                 snapshot_id = snapshot.snapshot_id
                 if snapshot_id in snapshots:
                     other = duplicates.get(snapshot_id, snapshots[snapshot_id])
@@ -524,9 +538,6 @@ class EngineAdapterStateSync(CommonStateSyncMixin, StateSync):
                     snapshots[snapshot_id] = duplicates[snapshot_id]
                 else:
                     snapshots[snapshot_id] = snapshot
-
-                if hydrate_seeds and isinstance(snapshot.node, SeedModel) and row[-1]:
-                    snapshot.node = t.cast(SeedModel, snapshot.node).to_hydrated(row[-1])
 
         if snapshots and hydrate_intervals:
             _, intervals = self._get_snapshot_intervals(snapshots.values())
@@ -1450,6 +1461,27 @@ def _backup_table_name(table_name: TableName) -> exp.Table:
 
 def _snapshot_to_json(snapshot: Snapshot) -> str:
     return snapshot.json(exclude={"intervals", "dev_intervals"})
+
+
+def parse_snapshot(
+    model_cache: ModelCache,
+    serialized_snapshot: str,
+    name: str,
+    identifier: str,
+    seed_content: t.Optional[str],
+) -> Snapshot:
+    payload = json.loads(serialized_snapshot)
+
+    def loader() -> Node:
+        return parse_obj_as(Node, payload["node"])  # type: ignore
+
+    payload["node"] = model_cache.get_or_load(f"{name}_{identifier}", loader=loader)  # type: ignore
+    snapshot = Snapshot(**payload)
+
+    if seed_content and isinstance(snapshot.node, SeedModel):
+        snapshot.node = snapshot.node.to_hydrated(seed_content)
+
+    return snapshot
 
 
 class LazilyParsedSnapshots:
