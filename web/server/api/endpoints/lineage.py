@@ -86,7 +86,7 @@ def create_lineage_adjacency_list(
                 if table:
                     column_name = get_column_name(d)
                     dependencies[table].add(column_name)
-                    if not d.downstream and (table, column_name) not in visited:
+                    if isinstance(d.expression, exp.Table) and (table, column_name) not in visited:
                         nodes.append((table, column_name))
                         visited.add((table, column_name))
 
