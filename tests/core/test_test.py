@@ -1034,7 +1034,7 @@ test_foo:
     )
     _check_successful_or_raise(test.run())
 
-    assert len(test._fixture_table_cache) == len(sushi_context.models) + 1
+    assert len(test._fixture_table_cache) == 1
     for table in test._fixture_table_cache.values():
         assert table.catalog == "memory"
         assert table.db == "sqlmesh_test_jzngz56a"
