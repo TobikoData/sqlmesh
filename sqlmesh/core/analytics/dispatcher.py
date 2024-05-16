@@ -62,7 +62,7 @@ class EventEmitter:
         from sqlmesh import __version__ as sqlmesh_version
 
         versions = {
-            "sqlmesh": sqlmesh_version,
+            "sqlmesh_version": sqlmesh_version,
             "sqlglot_version": sqlglot_version,
             "python_version": platform.python_version(),
             "pydantic_version": pydantic.__version__,
