@@ -141,8 +141,6 @@ class PlanBuilder:
 
         self._latest_plan: t.Optional[Plan] = None
 
-        self._snapshot_change_is_destructive: t.Dict[str, t.Optional[bool]] = {}
-
     @property
     def is_start_and_end_allowed(self) -> bool:
         """Indicates whether this plan allows to set the start and end dates."""
@@ -208,6 +206,7 @@ class PlanBuilder:
         dag = self._build_dag()
         directly_modified, indirectly_modified = self._build_directly_and_indirectly_modified(dag)
 
+        self._check_destructive_changes(dag, directly_modified)
         self._categorize_snapshots(dag, directly_modified, indirectly_modified)
         self._adjust_new_snapshot_intervals()
 
@@ -437,6 +436,64 @@ class PlanBuilder:
             if new.is_forward_only:
                 new.dev_intervals = new.intervals.copy()
 
+    def _check_destructive_changes(
+        self, dag: DAG[SnapshotId], directly_modified: t.Set[SnapshotId]
+    ) -> None:
+        def _raise_or_warn(snapshot: Snapshot) -> None:
+            warning_msg = f"Plan results in a destructive change to forward-only model '{snapshot.name}'s schema."
+            if snapshot.model.on_destructive_change.is_warn:
+                logger.warning(warning_msg)
+                return
+            raise PlanError(
+                f"{warning_msg} To allow this, change the model's `on_destructive_change` setting to `warn` or `ignore` or include it in the plan's `--allow-destructive-model` option."
+            )
+
+        snapshot_is_destructive = {}
+        for s_id in dag:
+            # Only process snapshots that are modified by the plan
+            if s_id.name in self._context_diff.modified_snapshots:
+                snapshot = self._context_diff.snapshots[s_id]
+
+                if snapshot and snapshot.is_model:
+                    # should we raise/warn if this snapshot has/inherits a destructive change?
+                    should_raise_or_warn = snapshot.needs_destructive_check(
+                        self._allow_destructive_models, self._forward_only
+                    )
+
+                    snapshot_is_destructive[s_id] = False
+
+                    # get parent classifications
+                    for parent_id in snapshot.parents:
+                        if snapshot_is_destructive.get(parent_id):
+                            snapshot_is_destructive[s_id] = True
+                            if should_raise_or_warn:
+                                _raise_or_warn(snapshot)
+                            break
+
+                    # examine directly modified snapshots unless we already know the snapshot is destructive
+                    if s_id in directly_modified and not snapshot_is_destructive[s_id]:
+                        new, old = self._context_diff.modified_snapshots[snapshot.name]
+
+                        # we must know all columns_to_types to determine whether a change is destructive
+                        old_columns_to_types = old.model.columns_to_types or {}
+                        new_columns_to_types = new.model.columns_to_types or {}
+
+                        if not columns_to_types_all_known(
+                            old_columns_to_types
+                        ) or not columns_to_types_all_known(new_columns_to_types):
+                            snapshot_is_destructive[s_id] = False
+                        else:
+                            schema_diff = self._engine_schema_differ.compare_columns(
+                                new.model.name,
+                                old_columns_to_types,
+                                new_columns_to_types,
+                            )
+
+                            has_drop = snapshot.has_drop_alteration(schema_diff)
+                            snapshot_is_destructive[s_id] = has_drop
+                            if has_drop and should_raise_or_warn:
+                                _raise_or_warn(snapshot)
+
     def _categorize_snapshots(
         self,
         dag: DAG[SnapshotId],
@@ -463,20 +520,15 @@ class PlanBuilder:
                         # previous version for non-seed models.
                         # New snapshots of seed models are considered non-breaking ones.
                         if not snapshot.is_seed:
-                            self._validate_destructive_change(s_id, directly_modified, dag)
-
                             snapshot.categorize_as(SnapshotChangeCategory.FORWARD_ONLY)
                         else:
                             snapshot.categorize_as(SnapshotChangeCategory.NON_BREAKING)
                     elif self._is_forward_only_change(s_id) and is_directly_modified:
-                        self._validate_destructive_change(s_id, directly_modified, dag)
-
                         self._set_choice(
                             snapshot,
                             SnapshotChangeCategory.FORWARD_ONLY,
                             directly_modified,
                             indirectly_modified,
-                            dag,
                         )
                     elif self._auto_categorization_enabled and is_directly_modified:
                         s_id_with_missing_columns: t.Optional[SnapshotId] = None
@@ -501,7 +553,6 @@ class PlanBuilder:
                                     change_category,
                                     directly_modified,
                                     indirectly_modified,
-                                    dag,
                                 )
                         else:
                             mode = self._categorizer_config.dict().get(
@@ -513,7 +564,6 @@ class PlanBuilder:
                                     SnapshotChangeCategory.BREAKING,
                                     directly_modified,
                                     indirectly_modified,
-                                    dag,
                                 )
 
                 if (
@@ -551,7 +601,6 @@ class PlanBuilder:
         choice: SnapshotChangeCategory,
         directly_modified: t.Set[SnapshotId],
         indirectly_modified: SnapshotMapping,
-        dag: t.Optional[DAG[SnapshotId]] = None,
     ) -> None:
         if self._forward_only:
             raise PlanError("Choice setting is not supported by a forward-only plan.")
@@ -575,11 +624,6 @@ class PlanBuilder:
                 continue
 
             is_forward_only_child = self._is_forward_only_change(child_s_id)
-
-            if is_forward_only_child:
-                self._validate_destructive_change(
-                    child_s_id, directly_modified, dag if dag else None
-                )
 
             if is_breaking_choice:
                 child_snapshot.categorize_as(
@@ -700,84 +744,6 @@ class PlanBuilder:
             raise NoChangesPlanError(
                 "No changes were detected. Make a change or run with --include-unmodified to create a new environment without changes."
             )
-
-    def _validate_destructive_change(
-        self,
-        s_id: SnapshotId,
-        directly_modified: t.Set[SnapshotId],
-        dag: t.Optional[DAG[SnapshotId]] = None,
-    ) -> None:
-        """Determine if a schema change requires a destructive operation"""
-        snapshot = t.cast(Snapshot, self._context_diff.snapshots.get(s_id))
-        upstream_snapshot_ids = (
-            [upstream_id for upstream_id in dag.upstream(s_id) if upstream_id in directly_modified]
-            if dag
-            else []
-        )
-
-        if snapshot.do_destructive_check(self._allow_destructive_models):
-
-            def _raise_or_warn() -> None:
-                warning_msg = f"PLAN TIME CHECK: Plan results in a destructive change to forward-only model '{snapshot.name}'s schema."
-                if snapshot.model.on_destructive_change.is_warn:
-                    logger.warning(warning_msg)
-                    return
-                raise PlanError(
-                    f"{warning_msg} To allow this, change the model's `on_destructive_change` setting to `warn` or `ignore` or include it in the plan's `--allow-destructive-model` option."
-                )
-
-            snapshots_to_classify = set()
-            subdag_no_cols_to_types = set()
-
-            # Every snapshot is in one of 4 states:
-            # - Not yet classified
-            # - Classified, destructive (True)
-            # - Classified, non-destructive (False)
-            # - Classified, cannot be determined due to missing columns_to_types (None)
-
-            # examine already classified snapshots in self._snapshot_change_is_destructive
-            for id in {s_id, *upstream_snapshot_ids}:
-                if id.name in self._snapshot_change_is_destructive:
-                    destructive = self._snapshot_change_is_destructive[id.name]
-                    # return if we see a destructive change
-                    if destructive:
-                        _raise_or_warn()
-                        return
-                    if destructive is None:
-                        subdag_no_cols_to_types.add(id)
-                else:
-                    snapshots_to_classify.add(id)
-
-            # process unclassified snapshots
-            for id in snapshots_to_classify:
-                new, old = self._context_diff.modified_snapshots[id.name]
-
-                # we must know all columns_to_types to determine whether a change is destructive
-                old_columns_to_types = old.model.columns_to_types or {}
-                new_columns_to_types = new.model.columns_to_types or {}
-                if not columns_to_types_all_known(
-                    old_columns_to_types
-                ) or not columns_to_types_all_known(new_columns_to_types):
-                    self._snapshot_change_is_destructive[id.name] = None
-                    subdag_no_cols_to_types.add(id)
-                    continue
-
-                schema_diff = self._engine_schema_differ.compare_columns(
-                    new.model.name,
-                    old_columns_to_types,
-                    new_columns_to_types,
-                )
-
-                has_drop = snapshot.has_drop_alteration(schema_diff)
-                self._snapshot_change_is_destructive[id.name] = has_drop
-                if has_drop:
-                    _raise_or_warn()
-                    return
-
-            if subdag_no_cols_to_types:
-                logger.info(
-                    f"Unable to determine at plan time if changes cause a destructive schema change to model '{s_id.name}'."
-                )
 
     @cached_property
     def _forward_only_preview_needed(self) -> bool:

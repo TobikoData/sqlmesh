@@ -546,12 +546,9 @@ def test_forward_only_model_on_destructive_change_no_column_types(
     )
 
     logger = logging.getLogger("sqlmesh.core.plan.builder")
-    with patch.object(logger, "info") as mock_logger:
+    with patch.object(logger, "warning") as mock_logger:
         PlanBuilder(context_diff_1, DuckDBEngineAdapter.SCHEMA_DIFFER).build()
-        assert (
-            mock_logger.call_args[0][0]
-            == """Unable to determine at plan time if changes cause a destructive schema change to model '"a"'."""
-        )
+        assert mock_logger.call_count == 0
 
 
 def test_missing_intervals_lookback(make_snapshot, mocker: MockerFixture):
