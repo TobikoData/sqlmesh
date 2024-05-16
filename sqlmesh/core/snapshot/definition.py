@@ -935,14 +935,24 @@ class Snapshot(PydanticModel, SnapshotInfoMixin):
             else default
         )
 
-    def do_destructive_check(
-        self, allow_destructive_snapshots: t.Set[str], check_forward_change: bool = False
+    def needs_destructive_check(
+        self,
+        allow_destructive_snapshots: t.Set[str],
+        is_forward_only_plan: bool = False,
+        runtime_check: bool = False,
     ) -> bool:
         return (
             self.is_model
+            # is a forward-only change happening?
+            # -- plantime check: snapshot change classification hasn't happened yet, so we check whether model or plan is forward-only
+            # -- runtime check: we can't determine whether we're in a forward-only plan, so we check whether the snapshot change is FORWARD_ONLY
+            and (
+                self.is_forward_only
+                if runtime_check
+                else (self.model.forward_only or is_forward_only_plan)
+            )
             and not self.model.on_destructive_change.is_ignore
             and self.name not in allow_destructive_snapshots
-            and (self.is_forward_only if check_forward_change else True)
         )
 
     @property
