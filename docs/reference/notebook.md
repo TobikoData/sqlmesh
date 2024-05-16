@@ -2,6 +2,8 @@
 
 SQLMesh supports Jupyter and Databricks Notebooks. Magics are loaded automatically when `sqlmesh` or one of its modules is imported.
 
+NOTE: VSCode notebooks may not properly render widgets with `ipywidgets` library version >=8 ([VSCode Github issue](https://github.com/microsoft/vscode-jupyter/issues/15499)). You can work around this by downgrading the ipywidgets version with `pip install "ipywidgets<8"`.
+
 ## SQLMesh project setup
 
 Notebooks locate a SQLMesh project by setting a `context` with either the Python API or a notebook magic.
