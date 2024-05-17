@@ -440,19 +440,16 @@ def _parse_if(self: Parser) -> t.Optional[exp.Expression]:
         self._match(TokenType.COMMA)
 
         # Try to parse a known statement, otherwise fall back to parsing a command
-        index = self._index
-        statement = self._parse_statement()
-        if isinstance(statement, exp.Command):
-            self._retreat(index)
-            statement = self._parse_as_command(self._curr)
+        # Since the trailing `)` token is not expected by the statement parsers, we
+        # remove it from the token stream before trying to parse the statement.
+        last_token = self._tokens[-1]
+        if last_token.token_type == TokenType.R_PAREN:
+            self._tokens[-2].comments.extend(last_token.comments)
+            self._tokens.pop()
+        else:
+            self.raise_error("Expecting )")
 
-            # Unconsume the right parenthesis as well as omit it from the command's text
-            self._retreat(self._index - 1)
-            statement.set("expression", statement.expression[:-1])
-
-        # Return anonymous so that _parse_macro can create a MacroFunc with this value
-        self._match_r_paren()
-        return exp.Anonymous(this="IF", expressions=[cond, statement])
+        return exp.Anonymous(this="IF", expressions=[cond, self._parse_statement()])
 
 
 def _create_parser(parser_type: t.Type[exp.Expression], table_keys: t.List[str]) -> t.Callable:
