@@ -10,6 +10,7 @@ from unittest.mock import patch
 
 import numpy as np
 import pandas as pd
+from io import StringIO
 from freezegun import freeze_time
 from pandas.api.types import is_object_dtype
 from sqlglot import Dialect, exp
@@ -24,6 +25,7 @@ from sqlmesh.core.model import Model, PythonModel, SqlModel
 from sqlmesh.utils import UniqueKeyDict, random_id, type_is_known, yaml
 from sqlmesh.utils.date import pandas_timestamp_to_pydatetime
 from sqlmesh.utils.errors import ConfigError, TestError
+from sqlmesh.utils.yaml import load as yaml_load
 
 if t.TYPE_CHECKING:
     from sqlglot.dialects.dialect import DialectType
@@ -327,6 +329,15 @@ class ModelTest(unittest.TestCase):
 
             rows = values.get("rows")
             query = values.get("query")
+
+            # We get the rows from fixture file or inline csv, if format is provided
+            format = values.get("format")
+            if format:
+                path = values.get("fixture")
+                if format == 'csv':
+                    rows = pd.read_csv(path).to_dict(orient='records') if path else pd.read_csv(StringIO(rows)).to_dict(orient='records')
+                elif format == 'yaml':
+                    rows = yaml_load(Path(path)) if path else rows
 
             if query is not None:
                 if rows is not None:
