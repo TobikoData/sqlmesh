@@ -570,3 +570,25 @@ def test_macro_parse():
         q.sql()
         == "SELECT * FROM TABLE(@get(x) OVER (PARTITION BY y ORDER BY z NULLS LAST)) AS results"
     )
+
+
+def test_conditional_statement():
+    q = parse_one(
+        """
+        @IF(
+          TRUE,
+          COPY INTO 's3://example/data.csv'
+            FROM EXTRA.EXAMPLE.TABLE
+            STORAGE_INTEGRATION = S3_INTEGRATION
+            FILE_FORMAT = (TYPE = CSV COMPRESSION = NONE NULL_IF = ('') FIELD_OPTIONALLY_ENCLOSED_BY = '"')
+            HEADER = TRUE
+            OVERWRITE = TRUE
+            SINGLE = TRUE
+        )
+        """,
+        read="snowflake",
+    )
+    assert (
+        q.sql("snowflake")
+        == "@IF(TRUE, COPY INTO 's3://example/data.csv' FROM EXTRA.EXAMPLE.TABLE  STORAGE_INTEGRATION = S3_INTEGRATION FILE_FORMAT = (TYPE = CSV COMPRESSION = NONE NULL_IF = ('') FIELD_OPTIONALLY_ENCLOSED_BY = '\"') HEADER = TRUE OVERWRITE = TRUE SINGLE = TRUE)"
+    )
