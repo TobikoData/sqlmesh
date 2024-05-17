@@ -30,7 +30,7 @@ from sqlmesh.core.model import (
     create_seed_model,
     load_sql_based_model,
 )
-from sqlmesh.core.model.kind import TimeColumn
+from sqlmesh.core.model.kind import TimeColumn, ModelKindName
 from sqlmesh.core.snapshot import (
     DeployabilityIndex,
     QualifiedViewName,
@@ -54,7 +54,7 @@ from sqlmesh.utils.jinja import JinjaMacroRegistry, MacroInfo
 def parent_model():
     return SqlModel(
         name="parent.tbl",
-        kind=IncrementalByTimeRangeKind(time_column="ds"),
+        kind=dict(time_column="ds", name=ModelKindName.INCREMENTAL_BY_TIME_RANGE),
         dialect="spark",
         query=parse_one("SELECT 1, ds"),
     )
@@ -64,7 +64,7 @@ def parent_model():
 def model():
     return SqlModel(
         name="name",
-        kind=IncrementalByTimeRangeKind(time_column="ds", batch_size=30),
+        kind=dict(time_column="ds", batch_size=30, name=ModelKindName.INCREMENTAL_BY_TIME_RANGE),
         owner="owner",
         dialect="spark",
         cron="1 0 * * *",
@@ -105,10 +105,11 @@ def test_json(snapshot: Snapshot):
             "cron": "1 0 * * *",
             "kind": {
                 "name": "INCREMENTAL_BY_TIME_RANGE",
-                "time_column": {"column": '"ds"'},
+                "time_column": {"column": "`ds`"},
                 "batch_size": 30,
                 "forward_only": False,
                 "disable_restatement": False,
+                "dialect": "spark",
             },
             "mapping_schema": {},
             "start": "2020-01-01",
@@ -630,7 +631,7 @@ def test_fingerprint(model: Model, parent_model: Model):
     fingerprint = fingerprint_from_node(model, nodes={})
 
     original_fingerprint = SnapshotFingerprint(
-        data_hash="3163676913",
+        data_hash="3582214120",
         metadata_hash="892368116",
     )
 
@@ -786,6 +787,22 @@ def test_fingerprint_standalone_audits(parent_model: Model):
     assert new_fingerprint != fingerprint
     assert new_fingerprint.data_hash == fingerprint.data_hash
     assert new_fingerprint.metadata_hash != fingerprint.metadata_hash
+
+
+def test_fingerprint_virtual_properties(model: Model, parent_model: Model):
+    original_model = deepcopy(model)
+    fingerprint = fingerprint_from_node(model, nodes={})
+
+    updated_model = SqlModel(
+        **original_model.dict(),
+        virtual_properties=parse_one("(labels = [('test-virtual-label', 'label-virtual-value')],)"),
+    )
+    assert "labels" in updated_model.virtual_properties
+    updated_fingerprint = fingerprint_from_node(updated_model, nodes={})
+
+    assert updated_fingerprint != fingerprint
+    assert updated_fingerprint.metadata_hash != fingerprint.metadata_hash
+    assert updated_fingerprint.data_hash == fingerprint.data_hash
 
 
 def test_stamp(model: Model):

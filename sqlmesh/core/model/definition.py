@@ -778,6 +778,10 @@ class _Model(ModelMeta, frozen=True):
             else:
                 raise SQLMeshError(f"Unexpected audit name '{audit_name}'.")
 
+        for key, value in (self.virtual_properties or {}).items():
+            metadata.append(key)
+            metadata.append(gen(value))
+
         metadata.extend(gen(s) for s in self.signals)
         metadata.extend(self._additional_metadata)
 
