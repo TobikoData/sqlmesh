@@ -38,7 +38,7 @@ bigquery_config = Config(
         )
     },
     default_gateway="gcp",
-    model_defaults=ModelDefaultsConfig(dialect="bigquery"),
+    model_defaults=ModelDefaultsConfig(dialect="duckdb"),
 )
 
 # A configuration used for SQLMesh tests.
