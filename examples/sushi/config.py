@@ -32,12 +32,12 @@ config = Config(
 
 bigquery_config = Config(
     gateways={
-        "gcp": GatewayConfig(
+        "bq": GatewayConfig(
             connection=BigQueryConnectionConfig(),
             state_connection=DuckDBConnectionConfig(database=f"{DATA_DIR}/bigquery.duckdb"),
         )
     },
-    default_gateway="gcp",
+    default_gateway="bq",
     model_defaults=ModelDefaultsConfig(dialect="duckdb"),
 )
 
