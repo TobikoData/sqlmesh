@@ -475,6 +475,7 @@ def test_connection_config_serialization():
         "register_comments": True,
         "type": "duckdb",
         "extensions": [],
+        "pre_ping": False,
         "connector_config": {},
         "database": "my_db",
     }
@@ -483,6 +484,7 @@ def test_connection_config_serialization():
         "register_comments": True,
         "type": "duckdb",
         "extensions": [],
+        "pre_ping": False,
         "connector_config": {},
         "database": "my_test_db",
     }

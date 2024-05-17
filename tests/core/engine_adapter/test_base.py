@@ -2661,3 +2661,19 @@ def test_get_data_objects_batching(mocker: MockerFixture, make_mocked_engine_ada
 
     assert len(calls[0][0][1]) == adapter.DATA_OBJECT_FILTER_BATCH_SIZE
     assert len(calls[1][0][1]) == 1
+
+
+def test_pre_ping(mocker: MockerFixture, make_mocked_engine_adapter: t.Callable):
+    adapter = make_mocked_engine_adapter(EngineAdapter)
+    adapter._pre_ping = True
+    adapter.cursor.execute.side_effect = RuntimeError("error")
+
+    with pytest.raises(RuntimeError):
+        adapter.execute("SELECT 'test'")
+
+    assert to_sql_calls(adapter) == [
+        "SELECT 1",  # ping
+        "SELECT 'test'",
+    ]
+
+    adapter._connection_pool.get().close.assert_called_once()

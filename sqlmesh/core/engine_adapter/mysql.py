@@ -144,3 +144,6 @@ class MySQLEngineAdapter(
                 f"Column comments for table '{table.alias_or_name}' not registered - this may be due to limited permissions.",
                 exc_info=True,
             )
+
+    def _ping(self) -> None:
+        self._connection_pool.get().ping(reconnect=False)
