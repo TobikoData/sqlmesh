@@ -80,7 +80,7 @@ class CsvSeedReader:
             )
             self._df = self._df.rename(
                 columns={
-                    col: normalize_identifiers(col, dialect=self.dialect).name
+                    col: (normalize_identifiers(col, dialect=self.dialect).name).replace(".","")
                     for col in self._df.columns
                 },
             )
