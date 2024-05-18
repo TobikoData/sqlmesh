@@ -96,6 +96,7 @@ def get_all_html_output():
 
     return _convert
 
+
 SIMPLE_SEED_DATA = """id,item_id,event_date
 1,2,2020-01-01
 2,1,2020-01-01
@@ -106,18 +107,23 @@ SIMPLE_SEED_DATA = """id,item_id,event_date
 7,1,2020-01-07
 """
 
+
 @pytest.fixture
 def simple_seed_data():
     return SIMPLE_SEED_DATA
+
 
 WEIRD_SEED_DATA = """Date,Start (ET),Visitor/Neutral,PTS,Home/Neutral,PTS,,,Attend.,Arena,Notes
 Tue Oct 24 2023,7:30p,Los Angeles Lakers,107,Denver Nuggets,119,Box Score,,19842,Ball Arena,
 Tue Oct 24 2023,10:00p,Phoenix Suns,108,Golden State Warriors,104,Box Score,,18064,Chase Center,
 Wed Oct 25 2023,7:00p,Houston Rockets,86,Orlando Magic,116,Box Score,,18846,Amway Center,
 """
+
+
 @pytest.fixture
 def weird_seed_data():
     return WEIRD_SEED_DATA
+
 
 def test_context(notebook, convert_all_html_output_to_text, get_all_html_output, tmp_path):
     with capture_output() as output:
@@ -239,6 +245,7 @@ SELECT
 FROM table"""
     )
 
+
 @pytest.mark.slow
 def test_model(notebook, sushi_context):
     with capture_output():
@@ -263,13 +270,19 @@ SELECT
 FROM table"""
     )
 
+
 @pytest.mark.slow
 def test_view_model(notebook, sushi_context):
     with capture_output():
         test_model_path = sushi_context.path / "models" / "test_model.sql"
-        test_model_path.write_text("MODEL(name db.test, kind VIEW); SELECT 1::int AS foo FROM table")
+        test_model_path.write_text(
+            "MODEL(name db.test, kind VIEW); SELECT 1::int AS foo FROM table"
+        )
         sushi_context.load()
-    assert test_model_path.read_text() == "MODEL(name db.test, kind VIEW); SELECT 1::int AS foo FROM table"
+    assert (
+        test_model_path.read_text()
+        == "MODEL(name db.test, kind VIEW); SELECT 1::int AS foo FROM table"
+    )
     with capture_output() as output:
         notebook.run_line_magic(magic_name="model", line="db.test")
 
@@ -288,13 +301,19 @@ SELECT
 FROM table"""
     )
 
+
 @pytest.mark.slow
 def test_full_model(notebook, sushi_context):
     with capture_output():
         test_model_path = sushi_context.path / "models" / "test_model.sql"
-        test_model_path.write_text("MODEL(name db.test, kind FULL); SELECT 1::int AS foo FROM table")
+        test_model_path.write_text(
+            "MODEL(name db.test, kind FULL); SELECT 1::int AS foo FROM table"
+        )
         sushi_context.load()
-    assert test_model_path.read_text() == "MODEL(name db.test, kind FULL); SELECT 1::int AS foo FROM table"
+    assert (
+        test_model_path.read_text()
+        == "MODEL(name db.test, kind FULL); SELECT 1::int AS foo FROM table"
+    )
     with capture_output() as output:
         notebook.run_line_magic(magic_name="model", line="db.test")
 
@@ -320,9 +339,14 @@ def test_seed_model(notebook, sushi_context, simple_seed_data):
         test_seed_path = sushi_context.path / "seeds" / "test_seed.csv"
         test_seed_path.write_text(simple_seed_data)
         test_model_path = sushi_context.path / "models" / "test_seed.sql"
-        test_model_path.write_text("MODEL(name db.seed_model, kind SEED (path '../seeds/test_seed.csv'), columns (id INTEGER, item_id INTEGER, event_date DATE), grain (id, event_date));")
+        test_model_path.write_text(
+            "MODEL(name db.seed_model, kind SEED (path '../seeds/test_seed.csv'), columns (id INTEGER, item_id INTEGER, event_date DATE), grain (id, event_date));"
+        )
         sushi_context.load()
-    assert test_model_path.read_text() == "MODEL(name db.seed_model, kind SEED (path '../seeds/test_seed.csv'), columns (id INTEGER, item_id INTEGER, event_date DATE), grain (id, event_date));"
+    assert (
+        test_model_path.read_text()
+        == "MODEL(name db.seed_model, kind SEED (path '../seeds/test_seed.csv'), columns (id INTEGER, item_id INTEGER, event_date DATE), grain (id, event_date));"
+    )
     with capture_output() as output:
         notebook.run_line_magic(magic_name="model", line="db.seed_model")
 
@@ -330,7 +354,8 @@ def test_seed_model(notebook, sushi_context, simple_seed_data):
     assert not output.stderr
     assert len(output.outputs) == 1
     assert (
-        test_model_path.read_text() == """MODEL (
+        test_model_path.read_text()
+        == """MODEL (
   name db.seed_model,
   kind SEED (
     path '../seeds/test_seed.csv'
@@ -358,15 +383,23 @@ FROM (VALUES
   (6, 1, '2020-01-06'),                                                                                            
   (7, 1, '2020-01-07')) AS t(id, item_id, event_date)"""
 
+
 @pytest.mark.slow
-def test_no_column_seed_model(notebook, sushi_context, simple_seed_data, convert_all_html_output_to_text):
+def test_no_column_seed_model(
+    notebook, sushi_context, simple_seed_data, convert_all_html_output_to_text
+):
     with capture_output():
         test_seed_path = sushi_context.path / "seeds" / "test_seed.csv"
         test_seed_path.write_text(simple_seed_data)
         test_model_path = sushi_context.path / "models" / "test_seed.sql"
-        test_model_path.write_text("MODEL(name db.seed_model, kind SEED (path '../seeds/test_seed.csv'));")
+        test_model_path.write_text(
+            "MODEL(name db.seed_model, kind SEED (path '../seeds/test_seed.csv'));"
+        )
         sushi_context.load()
-    assert test_model_path.read_text() == "MODEL(name db.seed_model, kind SEED (path '../seeds/test_seed.csv'));"
+    assert (
+        test_model_path.read_text()
+        == "MODEL(name db.seed_model, kind SEED (path '../seeds/test_seed.csv'));"
+    )
     with capture_output() as output:
         notebook.run_line_magic(magic_name="model", line="db.seed_model")
 
@@ -375,13 +408,15 @@ def test_no_column_seed_model(notebook, sushi_context, simple_seed_data, convert
     assert len(output.outputs) == 1
     assert convert_all_html_output_to_text(output)[0] == EXPECTED_SIMPLE_OUTPUT
     assert (
-        test_model_path.read_text() == """MODEL (
+        test_model_path.read_text()
+        == """MODEL (
   name db.seed_model,
   kind SEED (
     path '../seeds/test_seed.csv'
   )
 )"""
     )
+
 
 EXPECTED_WEIRD_OUTPUT = """SELECT                                                                                                             
   CAST(date AS TEXT) AS date,                                                                                      
@@ -400,15 +435,23 @@ FROM (VALUES
   (\'Tue Oct 24 2023\', \'10:00p\', \'Phoenix Suns\', 108, \'Golden State Warriors\', 104, \'Box Score\', NULL, 18064, \'Chase\nCenter\', NULL),                                                                                                    
   (\'Wed Oct 25 2023\', \'7:00p\', \'Houston Rockets\', 86, \'Orlando Magic\', 116, \'Box Score\', NULL, 18846, \'Amway       \nCenter\', NULL)) AS t(date, "start (et)", "visitor/neutral", pts, "home/neutral", pts1, "unnamed: 6", "unnamed: 7", \nattend, arena, notes)"""
 
+
 @pytest.mark.slow
-def test_no_column_weird_seed_model(notebook, sushi_context, weird_seed_data, convert_all_html_output_to_text):
+def test_no_column_weird_seed_model(
+    notebook, sushi_context, weird_seed_data, convert_all_html_output_to_text
+):
     with capture_output():
         test_seed_path = sushi_context.path / "seeds" / "test_seed.csv"
         test_seed_path.write_text(weird_seed_data)
         test_model_path = sushi_context.path / "models" / "test_seed.sql"
-        test_model_path.write_text("MODEL(name db.seed_model, kind SEED (path '../seeds/test_seed.csv'));")
+        test_model_path.write_text(
+            "MODEL(name db.seed_model, kind SEED (path '../seeds/test_seed.csv'));"
+        )
         sushi_context.load()
-    assert test_model_path.read_text() == "MODEL(name db.seed_model, kind SEED (path '../seeds/test_seed.csv'));"
+    assert (
+        test_model_path.read_text()
+        == "MODEL(name db.seed_model, kind SEED (path '../seeds/test_seed.csv'));"
+    )
     # weird seed model fails on column 'Attend.'
     with capture_output() as output:
         notebook.run_line_magic(magic_name="model", line="db.seed_model")
@@ -418,13 +461,15 @@ def test_no_column_weird_seed_model(notebook, sushi_context, weird_seed_data, co
     assert len(output.outputs) == 1
     assert convert_all_html_output_to_text(output)[0] == EXPECTED_WEIRD_OUTPUT
     assert (
-        test_model_path.read_text() == """MODEL (
+        test_model_path.read_text()
+        == """MODEL (
   name db.seed_model,
   kind SEED (
     path '../seeds/test_seed.csv'
   )
 )"""
     )
+
 
 @pytest.mark.slow
 def test_diff(sushi_context, notebook, convert_all_html_output_to_text, get_all_html_output):
