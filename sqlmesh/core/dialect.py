@@ -491,6 +491,7 @@ def _create_parser(parser_type: t.Type[exp.Expression], table_keys: t.List[str])
                     if kind in (
                         ModelKindName.INCREMENTAL_BY_TIME_RANGE,
                         ModelKindName.INCREMENTAL_BY_UNIQUE_KEY,
+                        ModelKindName.INCREMENTAL_UNMANAGED,
                         ModelKindName.SEED,
                         ModelKindName.VIEW,
                         ModelKindName.SCD_TYPE_2,
