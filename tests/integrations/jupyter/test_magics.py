@@ -246,7 +246,6 @@ FROM table"""
     )
 
 
-@pytest.mark.slow
 def test_model(notebook, sushi_context):
     with capture_output():
         test_model_path = sushi_context.path / "models" / "test_model.sql"
@@ -271,7 +270,6 @@ FROM table"""
     )
 
 
-@pytest.mark.slow
 def test_view_model(notebook, sushi_context):
     with capture_output():
         test_model_path = sushi_context.path / "models" / "test_model.sql"
@@ -302,7 +300,6 @@ FROM table"""
     )
 
 
-@pytest.mark.slow
 def test_full_model(notebook, sushi_context):
     with capture_output():
         test_model_path = sushi_context.path / "models" / "test_model.sql"
@@ -333,7 +330,6 @@ FROM table"""
     )
 
 
-@pytest.mark.slow
 def test_seed_model(notebook, sushi_context, simple_seed_data):
     with capture_output():
         test_seed_path = sushi_context.path / "seeds" / "test_seed.csv"
@@ -384,7 +380,6 @@ FROM (VALUES
   (7, 1, '2020-01-07')) AS t(id, item_id, event_date)"""
 
 
-@pytest.mark.slow
 def test_no_column_seed_model(
     notebook, sushi_context, simple_seed_data, convert_all_html_output_to_text
 ):
@@ -436,7 +431,6 @@ FROM (VALUES
   (\'Wed Oct 25 2023\', \'7:00p\', \'Houston Rockets\', 86, \'Orlando Magic\', 116, \'Box Score\', NULL, 18846, \'Amway       \nCenter\', NULL)) AS t(date, "start (et)", "visitor/neutral", pts, "home/neutral", pts1, "unnamed: 6", "unnamed: 7", \nattend, arena, notes)"""
 
 
-@pytest.mark.slow
 def test_no_column_weird_seed_model(
     notebook, sushi_context, weird_seed_data, convert_all_html_output_to_text
 ):
