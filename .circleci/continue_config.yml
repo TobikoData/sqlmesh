@@ -111,6 +111,8 @@ jobs:
     docker:
       - image: cimg/python:3.10
     resource_class: small
+    environment:
+      SQLMESH__DISABLE_ANONYMIZED_ANALYTICS: "1"
     steps:
       - halt_unless_core
       - checkout
@@ -174,6 +176,7 @@ jobs:
     resource_class: large
     environment:
       PYTEST_XDIST_AUTO_NUM_WORKERS: 8
+      SQLMESH__DISABLE_ANONYMIZED_ANALYTICS: "1"
     steps:
       - checkout
       - run:
@@ -203,6 +206,7 @@ jobs:
     resource_class: large
     environment:
       PYTEST_XDIST_AUTO_NUM_WORKERS: 8
+      SQLMESH__DISABLE_ANONYMIZED_ANALYTICS: "1"
     steps:
       - checkout
       - run:

@@ -49,6 +49,9 @@ ENV AIRFLOW_CONN_SPARK_DEFAULT="spark://local?deploy-mode=client"
 # Airflow configuration
 ENV AIRFLOW__SCHEDULER__MIN_FILE_PROCESS_INTERVAL=3
 
+# SQLMesh configuration
+ENV SQLMESH__DISABLE_ANONYMIZED_ANALYTICS=1
+
 USER airflow
 
 # Install Spark provider for Airflow

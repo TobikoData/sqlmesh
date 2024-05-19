@@ -112,6 +112,7 @@ theme:
     - navigation.tracking
     - navigation.tabs
     - navigation.sections
+    - navigation.top
     - toc.integrate
     - toc.follow
 plugins:

@@ -46,7 +46,7 @@ setup(
         "requests",
         "rich[jupyter]",
         "ruamel.yaml",
-        "sqlglot[rs]~=23.15.1",
+        "sqlglot[rs]~=23.16.0",
     ],
     extras_require={
         "bigquery": [
@@ -111,9 +111,6 @@ setup(
         "llm": [
             "langchain",
             "openai",
-        ],
-        "motherduck": [
-            "duckdb<0.10.0",
         ],
         "mssql": [
             "pymssql",

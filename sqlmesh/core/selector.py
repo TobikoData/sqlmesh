@@ -192,7 +192,7 @@ class Selector:
             selection,
             include_upstream,
             include_downstream,
-        ) = self._get_value_and_dependency_inclusion(selection.lower())
+        ) = self._get_value_and_dependency_inclusion(selection)
 
         matched_models = set()
 

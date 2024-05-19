@@ -496,19 +496,7 @@ class SqlModelTest(ModelTest):
                 self.assert_equal(expected, actual, sort=sort, partial=partial)
 
     def runTest(self) -> None:
-        mapping = {
-            name: self._test_fixture_table(name).sql()
-            for name in (
-                self._normalize_model_name(name)
-                for name in self.models.keys() | self.body.get("inputs", {}).keys()
-            )
-        }
-        query = self.model.render_query_or_raise(
-            **self.body.get("vars", {}),
-            engine_adapter=self.engine_adapter,
-            table_mapping=mapping,
-            runtime_stage=RuntimeStage.TESTING,
-        )
+        query = self._render_model_query()
 
         self.test_ctes(
             {
@@ -526,6 +514,16 @@ class SqlModelTest(ModelTest):
             expected = self._create_df(values, columns=self.model.columns_to_types, partial=partial)
 
             self.assert_equal(expected, actual, sort=sort, partial=partial)
+
+    def _render_model_query(self) -> exp.Query:
+        return self.model.render_query_or_raise(
+            **self.body.get("vars", {}),
+            engine_adapter=self.engine_adapter,
+            table_mapping={
+                name: self._test_fixture_table(name).sql() for name in self.body.get("inputs", {})
+            },
+            runtime_stage=RuntimeStage.TESTING,
+        )
 
 
 class PythonModelTest(ModelTest):
@@ -673,15 +671,8 @@ def generate_test(
     test.setUp()
 
     if isinstance(model, SqlModel):
-        mapping = {
-            name: test._test_fixture_table(name).sql() for name in models.keys() | inputs.keys()
-        }
-        model_query = model.render_query_or_raise(
-            **t.cast(t.Dict[str, t.Any], variables),
-            engine_adapter=test_engine_adapter,
-            table_mapping=mapping,
-            runtime_stage=RuntimeStage.TESTING,
-        )
+        assert isinstance(test, SqlModelTest)
+        model_query = test._render_model_query()
 
         if include_ctes:
             ctes = {}

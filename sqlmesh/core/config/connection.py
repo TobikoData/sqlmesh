@@ -596,7 +596,9 @@ class DatabricksConnectionConfig(ConnectionConfig):
         from sqlmesh import RuntimeEnv
 
         if not self.use_spark_session_only:
-            return {}
+            return {
+                "_user_agent_entry": "sqlmesh",
+            }
 
         if RuntimeEnv.get().is_databricks:
             from pyspark.sql import SparkSession
@@ -613,7 +615,9 @@ class DatabricksConnectionConfig(ConnectionConfig):
                 host=self.databricks_connect_server_hostname,
                 token=self.databricks_connect_access_token,
                 cluster_id=self.databricks_connect_cluster_id,
-            ).getOrCreate(),
+            )
+            .userAgent("sqlmesh")
+            .getOrCreate(),
             catalog=self.catalog,
         )
 
