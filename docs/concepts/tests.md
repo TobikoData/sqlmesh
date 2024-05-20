@@ -409,7 +409,7 @@ To avoid this ambiguity, SQLMesh needs to know the columns' types. By default, i
 
 ### `<test_name>`
 
-The unique name of the test, which must be a valid YAML key.
+The unique name of the test.
 
 ### `<test_name>.model`
 
