@@ -47,10 +47,10 @@ clean: decorate-docker-compose
 	docker-compose down --volumes --remove-orphans && docker rmi -f $(AIRFLOW_IMAGE_NAME) && rm -rf ./logs/* && rm -rf ./warehouse/*
 
 psql:
-	docker exec -it airflow-postgres-1 psql -U airflow airflow
+	docker-compose exec -it postgres psql -U airflow airflow
 
 spark-sql:
-	docker exec -it airflow-airflow-worker-1 spark-sql
+	docker-compose exec -it airflow-worker spark-sql
 
 docker-test: decorate-docker-compose
 	docker-compose up --force-recreate --exit-code-from sqlmesh-tests sqlmesh-tests

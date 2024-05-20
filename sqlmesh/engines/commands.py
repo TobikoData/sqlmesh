@@ -37,6 +37,7 @@ class EvaluateCommandPayload(PydanticModel):
     end: TimeLike
     execution_time: TimeLike
     deployability_index: DeployabilityIndex
+    batch_index: int
 
 
 class PromoteCommandPayload(PydanticModel):
@@ -82,6 +83,7 @@ def evaluate(
         execution_time=command_payload.execution_time,
         snapshots=parent_snapshots,
         deployability_index=command_payload.deployability_index,
+        batch_index=command_payload.batch_index,
     )
     evaluator.audit(
         snapshot=command_payload.snapshot,

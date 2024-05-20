@@ -141,6 +141,7 @@ class Scheduler:
         end: TimeLike,
         execution_time: TimeLike,
         deployability_index: DeployabilityIndex,
+        batch_index: int,
         **kwargs: t.Any,
     ) -> None:
         """Evaluate a snapshot and add the processed interval to the state sync.
@@ -151,6 +152,7 @@ class Scheduler:
             end: The end datetime to render.
             execution_time: The date/time time reference to use for execution time. Defaults to now.
             deployability_index: Determines snapshots that are deployable in the context of this evaluation.
+            batch_index: If the snapshot is part of a batch of related snapshots; which index in the batch is it
             kwargs: Additional kwargs to pass to the renderer.
         """
         validate_date_range(start, end)
@@ -174,6 +176,7 @@ class Scheduler:
             execution_time=execution_time,
             snapshots=snapshots,
             deployability_index=deployability_index,
+            batch_index=batch_index,
             **kwargs,
         )
         try:
@@ -290,7 +293,7 @@ class Scheduler:
             try:
                 assert execution_time  # mypy
                 assert deployability_index  # mypy
-                self.evaluate(snapshot, start, end, execution_time, deployability_index)
+                self.evaluate(snapshot, start, end, execution_time, deployability_index, batch_idx)
                 evaluation_duration_ms = now_timestamp() - execution_start_ts
             finally:
                 self.console.update_snapshot_evaluation_progress(

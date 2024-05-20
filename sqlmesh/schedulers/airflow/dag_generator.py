@@ -462,7 +462,7 @@ class SnapshotDagGenerator:
             )
 
             task_id_prefix = f"snapshot_backfill__{sanitized_model_name}__{snapshot.identifier}"
-            for start, end in intervals_per_snapshot.intervals:
+            for batch_idx, (start, end) in enumerate(intervals_per_snapshot.intervals):
                 evaluation_task = self._create_snapshot_evaluation_operator(
                     snapshots=snapshots,
                     snapshot=snapshot,
@@ -472,6 +472,7 @@ class SnapshotDagGenerator:
                     deployability_index=deployability_index,
                     plan_id=plan_id,
                     execution_time=execution_time,
+                    batch_index=batch_idx,
                 )
                 external_sensor_task = self._create_hwm_external_sensor(
                     snapshot, start=start, end=end
@@ -612,6 +613,7 @@ class SnapshotDagGenerator:
         execution_time: t.Optional[TimeLike] = None,
         deployability_index: t.Optional[DeployabilityIndex] = None,
         plan_id: t.Optional[str] = None,
+        batch_index: int = 0,
     ) -> BaseOperator:
         parent_snapshots = {snapshots[sid].name: snapshots[sid] for sid in snapshot.parents}
 
@@ -625,6 +627,7 @@ class SnapshotDagGenerator:
                 deployability_index=deployability_index or DeployabilityIndex.all_deployable(),
                 plan_id=plan_id,
                 execution_time=execution_time,
+                batch_index=batch_index,
             ),
             task_id=task_id,
         )

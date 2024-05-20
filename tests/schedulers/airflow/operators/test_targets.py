@@ -76,6 +76,7 @@ def test_evaluation_target_execute(
         execution_time=logical_ds,
         snapshots=parent_snapshots,
         deployability_index=deployability_index,
+        batch_index=0,
     )
 
 
@@ -137,6 +138,7 @@ def test_evaluation_target_execute_seed_model(
         execution_time=logical_ds,
         snapshots={snapshot.name: snapshot},
         deployability_index=deployability_index,
+        batch_index=0,
     )
 
 
