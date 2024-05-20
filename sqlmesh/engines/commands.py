@@ -37,7 +37,7 @@ class EvaluateCommandPayload(PydanticModel):
     end: TimeLike
     execution_time: TimeLike
     deployability_index: DeployabilityIndex
-    batch_index: int = 0
+    batch_index: int
 
 
 class PromoteCommandPayload(PydanticModel):
