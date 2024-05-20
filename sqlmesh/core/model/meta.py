@@ -54,9 +54,6 @@ class ModelMeta(_Node):
 
     dialect: str = ""
     name: str
-    on_destructive_change_: t.Optional[OnDestructiveChange] = Field(
-        alias="on_destructive_change", default=None, exclude=True
-    )
     kind: ModelKind = ViewKind()
     retention: t.Optional[int] = None  # not implemented yet
     storage_format: t.Optional[str] = None
@@ -425,4 +422,4 @@ class ModelMeta(_Node):
 
     @property
     def on_destructive_change(self) -> OnDestructiveChange:
-        return self.kind.on_destructive_change
+        return getattr(self.kind, "on_destructive_change", OnDestructiveChange.IGNORE)
