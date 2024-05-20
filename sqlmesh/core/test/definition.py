@@ -327,17 +327,8 @@ class ModelTest(unittest.TestCase):
             if not isinstance(values, dict):
                 values = {"rows": values}
 
-            rows = values.get("rows")
+            rows = _load_rows(values)
             query = values.get("query")
-
-            # We get the rows from fixture file or inline csv, if format is provided
-            format = values.get("format")
-            if format:
-                path = values.get("fixture")
-                if format == 'csv':
-                    rows = pd.read_csv(path).to_dict(orient='records') if path else pd.read_csv(StringIO(rows)).to_dict(orient='records')
-                elif format == 'yaml':
-                    rows = yaml_load(Path(path)) if path else rows
 
             if query is not None:
                 if rows is not None:
@@ -774,3 +765,30 @@ def _normalize_df_value(value: t.Any) -> t.Any:
             return {k: _normalize_df_value(v) for k, v in zip(value["key"], value["value"])}
         return {k: _normalize_df_value(v) for k, v in value.items()}
     return value
+
+
+def _load_csv(path: Path | str | None, rows: str | None) -> list | None:
+    """Handler to load rows from csv file or string."""
+    return pd.read_csv(path or StringIO(rows)).to_dict(orient="records")
+
+
+def _load_yaml(path: Path | str | None, rows: list | None) -> list | None:
+    """Handler to load rows from yaml file or list."""
+    input_rows = yaml_load(Path(path)) if path else rows
+    return input_rows.get("rows") if isinstance(input_rows, dict) else input_rows
+
+
+format_handlers = {"csv": _load_csv, "yaml": _load_yaml}
+
+
+def _load_rows(values: t.Dict) -> list | None:
+    """Load data in rows from external file or inline declared string."""
+    rows = values.get("rows")
+    format = values.get("format") or Path(values.get("path", "")).suffix[1:]
+    path = values.get("path")
+
+    handler = format_handlers.get(format)
+    if callable(handler):
+        rows = handler(path, rows)
+
+    return rows
