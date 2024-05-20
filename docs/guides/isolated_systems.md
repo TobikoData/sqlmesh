@@ -40,16 +40,16 @@ For example, this configuration creates gateways named `nonproduction` and `prod
 
 ```yaml linenums="1"
 gateways:
-    nonproduction:
-        connection:
-            ...[your non-production connection parameters]...
-        state_connection:
-            ...[your non-production state connection parameters]...
-    production:
-        connection:
-            ...[your production connection parameters]...
-        state_connection:
-            ...[your production state connection parameters]...
+  nonproduction:
+    connection:
+      ...[your non-production connection parameters]...
+    state_connection:
+      ...[your non-production state connection parameters]...
+  production:
+    connection:
+      ...[your production connection parameters]...
+    state_connection:
+      ...[your production state connection parameters]...
 ```
 
 SQLMesh will use the first gateway in the configuration as the default when executing a command. For example, with the configuration above SQLMesh would use the `nonproduction` gateway when executing the command `sqlmesh plan`.
@@ -66,7 +66,7 @@ This example demonstrates conditioning the model schema name on the current gate
 
 ```sql linenums="1"
 MODEL (
-    name @IF(@gateway = 'production', prod_schema, dev_schema).my_model
+  name @IF(@gateway = 'production', prod_schema, dev_schema).my_model
 )
 ```
 
@@ -74,7 +74,7 @@ To embed the gateway name directly in the schema name, use the `@{gateway}` synt
 
 ```sql linenums="1"
 MODEL (
-    name @{gateway}_schema.my_model
+  name @{gateway}_schema.my_model
 )
 ```
 

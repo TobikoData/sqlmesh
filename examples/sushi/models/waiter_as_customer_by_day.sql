@@ -1,4 +1,3 @@
-
 MODEL (
   name sushi.waiter_as_customer_by_day,
   kind incremental_by_time_range (

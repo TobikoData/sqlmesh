@@ -59,14 +59,14 @@ For example, this SQLMesh configuration key defines six variables of different d
 
 ```yaml linenums="1"
 variables:
-    int_var: 1
-    float_var: 2.0
-    bool_var: true
-    str_var: "cat"
-    list_var: [1, 2, 3]
-    dict_var:
-        key1: 1
-        key2: 2
+  int_var: 1
+  float_var: 2.0
+  bool_var: true
+  str_var: "cat"
+  list_var: [1, 2, 3]
+  dict_var:
+    key1: 1
+    key2: 2
 ```
 
 A model definition could access the `int_var` value in a `WHERE` clause like this:
@@ -103,10 +103,10 @@ Like global variables, gateway variables are defined in the project configuratio
 
 ```yaml linenums="1"
 gateways:
-    my_gateway:
-        variables:
-            int_var: 1
-        ...
+  my_gateway:
+    variables:
+      int_var: 1
+    ...
 ```
 
 Access them in models using the same methods as [global variables](#global-variables).
@@ -143,7 +143,7 @@ SELECT
   item_id,
   count(distinct id) AS num_orders,
 FROM
-    sqlmesh_example.incremental_model
+  sqlmesh_example.incremental_model
 GROUP BY item_id
 ```
 
@@ -163,9 +163,9 @@ SELECT
   item_id,
   count(distinct id) AS num_orders,
 FROM
-    sqlmesh_example.incremental_model
+  sqlmesh_example.incremental_model
 WHERE
-    item_size > @size -- Reference to macro variable `@size` defined above with `@DEF()`
+  item_size > @size -- Reference to macro variable `@size` defined above with `@DEF()`
 GROUP BY item_id
 ```
 
@@ -283,7 +283,7 @@ The function definition is specified inline. This example specifies the identity
 
 ```sql linenums="1"
 SELECT
-    @EACH([4, 5, 6], number -> number)
+  @EACH([4, 5, 6], number -> number)
 FROM table
 ```
 
@@ -302,9 +302,9 @@ Because of the automatic print and comma-separation, the anonymous function `num
 
 ```sql linenums="1"
 SELECT
-    4,
-    5,
-    6
+  4,
+  5,
+  6
 FROM table
 ```
 
@@ -314,9 +314,9 @@ For example, a column `favorite_number` in our data might contain values `4`, `5
 
 ```sql linenums="1"
 SELECT
-    CASE WHEN favorite_number = 4 THEN 1 ELSE 0 END as favorite_4,
-    CASE WHEN favorite_number = 5 THEN 1 ELSE 0 END as favorite_5,
-    CASE WHEN favorite_number = 6 THEN 1 ELSE 0 END as favorite_6
+  CASE WHEN favorite_number = 4 THEN 1 ELSE 0 END as favorite_4,
+  CASE WHEN favorite_number = 5 THEN 1 ELSE 0 END as favorite_5,
+  CASE WHEN favorite_number = 6 THEN 1 ELSE 0 END as favorite_6
 FROM table
 ```
 
@@ -484,13 +484,13 @@ SELECT
   item_id,
   count(distinct id) AS num_orders,
 FROM
-    sqlmesh_example.incremental_model
+  sqlmesh_example.incremental_model
 GROUP BY item_id
 ORDER BY item_id;
 
 @IF(
-    @runtime_stage = 'evaluating',
-    ALTER TABLE sqlmesh_example.full_model ALTER item_id TYPE VARCHAR
+  @runtime_stage = 'evaluating',
+  ALTER TABLE sqlmesh_example.full_model ALTER item_id TYPE VARCHAR
 );
 ```
 
@@ -690,11 +690,11 @@ would be rendered as:
 SELECT
   MD5(
     CONCAT(
-        COALESCE(CAST(a AS TEXT), '_sqlmesh_surrogate_key_null_'),
-        '|',
-        COALESCE(CAST(b AS TEXT), '_sqlmesh_surrogate_key_null_'),
-        '|',
-        COALESCE(CAST(c AS TEXT), '_sqlmesh_surrogate_key_null_')
+      COALESCE(CAST(a AS TEXT), '_sqlmesh_surrogate_key_null_'),
+      '|',
+      COALESCE(CAST(b AS TEXT), '_sqlmesh_surrogate_key_null_'),
+      '|',
+      COALESCE(CAST(c AS TEXT), '_sqlmesh_surrogate_key_null_')
     )
   )
 FROM foo
@@ -931,7 +931,7 @@ SELECT
   item_id,
   count(distinct id) AS num_orders,
 FROM
-    sqlmesh_example.incremental_model
+  sqlmesh_example.incremental_model
 @WHERE(TRUE) item_id > @size
 GROUP BY item_id
 ```
@@ -943,7 +943,7 @@ SELECT
   item_id,
   count(distinct id) AS num_orders,
 FROM
-    sqlmesh_example.incremental_model
+  sqlmesh_example.incremental_model
 WHERE item_id > 1
 GROUP BY item_id
 ```
@@ -968,7 +968,7 @@ SELECT
   item_id,
   count(distinct id) AS num_orders,
 FROM
-    sqlmesh_example.incremental_model
+  sqlmesh_example.incremental_model
 @WHERE(1 < 2) item_id > @size
 GROUP BY item_id
 ```
@@ -993,7 +993,7 @@ SELECT
   item_id,
   count(distinct id) AS num_orders,
 FROM
-    sqlmesh_example.incremental_model
+  sqlmesh_example.incremental_model
 @WHERE(@left_number < @right_number) item_id > @size
 GROUP BY item_id
 ```
@@ -1039,7 +1039,7 @@ The `@JOIN` operator specifies joins between tables or other SQL objects; it sup
 select *
 FROM all_cities
 LEFT OUTER @JOIN(True) country
-    ON city.country = country.name
+  ON city.country = country.name
 ```
 
 renders to
@@ -1048,7 +1048,7 @@ renders to
 select *
 FROM all_cities
 LEFT OUTER JOIN country
-    ON city.country = country.name
+  ON city.country = country.name
 ```
 
 The `@JOIN` operator recognizes that `LEFT OUTER` is a component of the `JOIN` specification and will omit it if the `@JOIN` argument evaluates to False.
@@ -1238,7 +1238,7 @@ When this macro is called, it will return `FALSE` even if an integer was passed 
 
 ``` sql linenums="1"
 SELECT
-    @arg_in_123(1)
+  @arg_in_123(1)
 ```
 
 It returns `SELECT FALSE` because:
@@ -1273,7 +1273,7 @@ def add_args(
     argument_1: int = 1,
     argument_2: int = 2,
     argument_3: int = 3
-  ):
+):
     return argument_1 + argument_2 + argument_3
 ```
 
@@ -1294,7 +1294,7 @@ from sqlmesh import macro
 
 @macro()
 def add_args(evaluator, *args: int): # Variable-length arguments of integer type `*args: int`
-  return sum(args)
+    return sum(args)
 ```
 
 This macro can be called with one or more arguments. For example:
@@ -1327,12 +1327,12 @@ from sqlmesh import macro
 
 @macro()
 def make_indicators(evaluator, string_column, values):
-  cases = []
+    cases = []
 
-  for value in values.expressions: # Iterate over `values.expressions`
-    cases.append(f"CASE WHEN {string_column} = '{value}' THEN '{value}' ELSE NULL END AS {string_column}_{value}")
+    for value in values.expressions: # Iterate over `values.expressions`
+        cases.append(f"CASE WHEN {string_column} = '{value}' THEN '{value}' ELSE NULL END AS {string_column}_{value}")
 
-  return cases
+    return cases
 ```
 
 We call this function in a model query to create `CASE WHEN` statements for the `vehicle` column values `truck` and `bus` like this:

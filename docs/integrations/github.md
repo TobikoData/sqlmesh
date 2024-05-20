@@ -89,8 +89,8 @@ Regardless of signal approach being used, the bot needs to be configured to use 
 
     ```yaml linenums="1"
     cicd_bot:
-        type: github
-        merge_method: squash
+      type: github
+      merge_method: squash
     ```
 
 === "Python"
@@ -178,9 +178,9 @@ This command must be enabled in the bot's configuration.
 
     ```yaml linenums="1"
     cicd_bot:
-        type: github
-        merge_method: squash
-        enable_deploy_command: true
+      type: github
+      merge_method: squash
+      enable_deploy_command: true
     ```
 
 === "Python"
@@ -268,7 +268,7 @@ Below is an example of how to define the default config for the bot in either YA
 
     ```yaml linenums="1"
     cicd_bot:
-        type: github
+      type: github
     ```
 
 === "Python"
@@ -302,19 +302,19 @@ Example with all properties defined:
 
     ```yaml linenums="1"
     cicd_bot:
-        type: github
-        invalidate_environment_after_deploy: false
-        enable_deploy_command: true
-        merge_method: squash
-        command_namespace: "#SQLMesh"
-        auto_categorize_changes:
-          external: full
-          python: full
-          sql: full
-          seed: full
-        default_pr_start: "1 week ago"
-        skip_pr_backfill: false
-        run_on_deploy_to_prod: true
+      type: github
+      invalidate_environment_after_deploy: false
+      enable_deploy_command: true
+      merge_method: squash
+      command_namespace: "#SQLMesh"
+      auto_categorize_changes:
+        external: full
+        python: full
+        sql: full
+        seed: full
+      default_pr_start: "1 week ago"
+      skip_pr_backfill: false
+      run_on_deploy_to_prod: true
     ```
 
 === "Python"

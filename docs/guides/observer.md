@@ -228,20 +228,20 @@ This example shows a model definition that includes a measure query defining two
 
 ```sql
 MODEL (
-    name custom_measure.example,
-    kind FULL
+  name custom_measure.example,
+  kind FULL
 );
 
 SELECT
-    numeric_col
+  numeric_col
 FROM
-    custom_measure.upstream;
+  custom_measure.upstream;
 
 @measure( -- Measure query specified in the `@measure` macro
-    SELECT
-        COUNT(*) AS row_count, -- Table's row count
-        AVG(numeric_col) AS num_col_avg -- Average value of `numeric_col`
-    FROM custom_measure.example -- Select FROM the name of the model
+  SELECT
+    COUNT(*) AS row_count, -- Table's row count
+    AVG(numeric_col) AS num_col_avg -- Average value of `numeric_col`
+  FROM custom_measure.example -- Select FROM the name of the model
 );
 ```
 
@@ -265,28 +265,28 @@ For example, this incremental model stores the date of each data point in the `e
 
 ```sql
 MODEL (
-    name custom_measure.incremental_example
-    kind INCREMENTAL_BY_TIME_RANGE (
-        time_column event_datestring
-    )
+  name custom_measure.incremental_example
+  kind INCREMENTAL_BY_TIME_RANGE (
+    time_column event_datestring
+  )
 );
 
 SELECT
-    event_datestring,
-    numeric_col
+  event_datestring,
+  numeric_col
 FROM
-    custom_measure.upstream
+  custom_measure.upstream
 WHERE
-    event_datestring BETWEEN @start_ds AND @end_ds;
+  event_datestring BETWEEN @start_ds AND @end_ds;
 
 @measure(
-    SELECT
-        event_datestring AS ts, -- Custom measure time column `ts`
-        COUNT(*) AS daily_row_count, -- Daily row count
-        AVG(numeric_col) AS daily_num_col_avg -- Daily average value of `numeric_col`
-    FROM custom_measure.incremental_example
-    WHERE event_datestring BETWEEN @start_ds AND @end_ds -- Filter measure on time
-    GROUP BY event_datestring -- Group measure by time
+  SELECT
+    event_datestring AS ts, -- Custom measure time column `ts`
+    COUNT(*) AS daily_row_count, -- Daily row count
+    AVG(numeric_col) AS daily_num_col_avg -- Daily average value of `numeric_col`
+  FROM custom_measure.incremental_example
+  WHERE event_datestring BETWEEN @start_ds AND @end_ds -- Filter measure on time
+  GROUP BY event_datestring -- Group measure by time
 );
 ```
 

@@ -9,11 +9,11 @@ MODEL (
 );
 
 WITH test_macros AS (
-    SELECT
-      @ADD_ONE(1) AS lit_two,
-      @MULTIPLY(revenue, 2.0) AS sql_exp,
-      @SQL_LITERAL(revenue::text, 'x', 'y', a, "b") AS sql_lit,
-    FROM sushi.waiter_revenue_by_day
+  SELECT
+    @ADD_ONE(1) AS lit_two,
+    @MULTIPLY(revenue, 2.0) AS sql_exp,
+    @SQL_LITERAL(revenue::text, 'x', 'y', a, "b") AS sql_lit,
+  FROM sushi.waiter_revenue_by_day
 )
 SELECT
   waiter_id::INT AS waiter_id,

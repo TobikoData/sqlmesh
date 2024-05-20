@@ -39,15 +39,15 @@ def create_example_project(temp_dir) -> None:
     with open(temp_dir / "config.yaml", "w", encoding="utf-8") as f:
         f.write(
             f"""gateways:
-    local:
-        connection:
-            type: duckdb
-            database: {temp_dir}/db.db
+  local:
+    connection:
+      type: duckdb
+      database: {temp_dir}/db.db
 
 default_gateway: local
 
 model_defaults:
-    dialect: duckdb
+  dialect: duckdb
 """
         )
 
@@ -57,24 +57,24 @@ def update_incremental_model(temp_dir) -> None:
         f.write(
             """
 MODEL (
-    name sqlmesh_example.incremental_model,
-    kind INCREMENTAL_BY_TIME_RANGE (
-        time_column event_date
-    ),
-    start '2020-01-01',
-    cron '@daily',
-    grain (id, event_date)
+  name sqlmesh_example.incremental_model,
+  kind INCREMENTAL_BY_TIME_RANGE (
+    time_column event_date
+  ),
+  start '2020-01-01',
+  cron '@daily',
+  grain (id, event_date)
 );
 
 SELECT
-    id,
-    item_id,
-    'a' as new_col,
-    event_date,
+  id,
+  item_id,
+  'a' as new_col,
+  event_date,
 FROM
-    sqlmesh_example.seed_model
+  sqlmesh_example.seed_model
 WHERE
-    event_date between @start_date and @end_date
+  event_date between @start_date and @end_date
 """
         )
 
@@ -95,7 +95,7 @@ SELECT
   item_id + 1 as item_id,
   count(distinct id) AS num_orders,
 FROM
-    sqlmesh_example.incremental_model
+  sqlmesh_example.incremental_model
 GROUP BY item_id
 """
         )

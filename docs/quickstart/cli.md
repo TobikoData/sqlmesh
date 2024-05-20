@@ -60,15 +60,15 @@ The scaffold will include a SQLMesh configuration file for the example project.
 
     ```yaml linenums="1"
     gateways:
-        local:
-            connection:
-                type: duckdb
-                database: ./db.db
+      local:
+        connection:
+          type: duckdb
+          database: ./db.db
 
     default_gateway: local
 
     model_defaults:
-        dialect: duckdb
+      dialect: duckdb
     ```
 
     Learn more about SQLMesh project configuration [here](../reference/configuration.md).
@@ -190,16 +190,16 @@ The `seed_model` date range begins on the same day the plan was made because `SE
 
     ```sql linenums="1"
     MODEL (
-        name sqlmesh_example.seed_model,
-        kind SEED (
-            path '../seeds/seed_data.csv'
-        ),
-        columns (
-            id INTEGER,
-            item_id INTEGER,
-            event_date DATE
-        ),
-        grain (id, event_date)
+      name sqlmesh_example.seed_model,
+      kind SEED (
+        path '../seeds/seed_data.csv'
+      ),
+      columns (
+        id INTEGER,
+        item_id INTEGER,
+        event_date DATE
+      ),
+      grain (id, event_date)
     );
     ```
 
@@ -211,41 +211,41 @@ The `seed_model` date range begins on the same day the plan was made because `SE
 
     ```sql linenums="1"
     MODEL (
-        name sqlmesh_example.incremental_model,
-        kind INCREMENTAL_BY_TIME_RANGE (
-            time_column event_date
-        ),
-        start '2020-01-01',
-        cron '@daily',
-        grain (id, event_date)
+      name sqlmesh_example.incremental_model,
+      kind INCREMENTAL_BY_TIME_RANGE (
+        time_column event_date
+      ),
+      start '2020-01-01',
+      cron '@daily',
+      grain (id, event_date)
     );
 
     SELECT
-        id,
-        item_id,
-        event_date,
+      id,
+      item_id,
+      event_date,
     FROM
-        sqlmesh_example.seed_model
+      sqlmesh_example.seed_model
     WHERE
-        event_date between @start_date and @end_date
+      event_date between @start_date and @end_date
     ```
 
     The final model in the project is a `FULL` model. In addition to properties used in the other models, its `MODEL` statement includes the [`audits`](../concepts/audits.md) property. The project includes a custom `assert_positive_order_ids` audit in the project `audits` directory; it verifies that all `item_id` values are positive numbers. It will be run every time the model is executed.
 
     ```sql linenums="1"
     MODEL (
-        name sqlmesh_example.full_model,
-        kind FULL,
-        cron '@daily',
-        grain item_id,
-        audits (assert_positive_order_ids),
+      name sqlmesh_example.full_model,
+      kind FULL,
+      cron '@daily',
+      grain item_id,
+      audits (assert_positive_order_ids),
     );
 
     SELECT
-        item_id,
-        count(distinct id) AS num_orders,
+      item_id,
+      count(distinct id) AS num_orders,
     FROM
-        sqlmesh_example.incremental_model
+      sqlmesh_example.incremental_model
     GROUP BY item_id
     ```
 
@@ -291,24 +291,24 @@ We modify the incremental SQL model by adding a new column to the query. Open th
 
 ```sql linenums="1" hl_lines="14"
 MODEL (
-    name sqlmesh_example.incremental_model,
-    kind INCREMENTAL_BY_TIME_RANGE (
-        time_column event_date
-    ),
-    start '2020-01-01',
-    cron '@daily',
-    grain (id, event_date)
+  name sqlmesh_example.incremental_model,
+  kind INCREMENTAL_BY_TIME_RANGE (
+    time_column event_date
+  ),
+  start '2020-01-01',
+  cron '@daily',
+  grain (id, event_date)
 );
 
 SELECT
-    id,
-    item_id,
-	'z' AS new_column, -- Added column
-    event_date,
+  id,
+  item_id,
+  'z' AS new_column, -- Added column
+  event_date,
 FROM
-    sqlmesh_example.seed_model
+  sqlmesh_example.seed_model
 WHERE
-    event_date between @start_date and @end_date
+  event_date between @start_date and @end_date
 ```
 
 ## 4. Work with a development environment

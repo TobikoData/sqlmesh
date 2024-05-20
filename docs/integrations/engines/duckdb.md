@@ -25,12 +25,12 @@ SQLMesh will place models with the explicit catalog "ephemeral", such as `epheme
 
     ```yaml linenums="1"
     gateways:
-        my_gateway:
-            connection:
-                type: duckdb
-                catalogs:
-                    persistent: 'local.duckdb'
-                    ephemeral: ':memory:'
+      my_gateway:
+        connection:
+          type: duckdb
+          catalogs:
+            persistent: 'local.duckdb'
+            ephemeral: ':memory:'
     ```
 
 === "Python"
@@ -69,18 +69,18 @@ The SQLite database is read-write, while the PostgreSQL database is read-only.
 
     ```yaml linenums="1"
     gateways:
-        my_gateway:
-            connection:
-                type: duckdb
-                catalogs:
-                  memory: ':memory:'
-                  sqlite:
-                    type: sqlite
-                    path: 'test.db'
-                  postgres:
-                    type: postgres
-                    path: 'dbname=postgres user=postgres host=127.0.0.1'
-                    read_only: true
+      my_gateway:
+        connection:
+          type: duckdb
+          catalogs:
+            memory: ':memory:'
+            sqlite:
+              type: sqlite
+              path: 'test.db'
+            postgres:
+              type: postgres
+              path: 'dbname=postgres user=postgres host=127.0.0.1'
+              read_only: true
     ```
 
 === "Python"

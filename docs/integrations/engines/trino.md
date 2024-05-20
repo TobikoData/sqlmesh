@@ -101,11 +101,11 @@ sqlmesh_airflow = SQLMeshAirflow(
 ```
 ```yaml linenums="1"
 gateway_name:
-    connection:
-        type: trino
-        user: [user]
-        host: [host]
-        catalog: [catalog]
+  connection:
+    type: trino
+    user: [user]
+    host: [host]
+    catalog: [catalog]
 ```
 
 ### Authentication
@@ -117,13 +117,13 @@ gateway_name:
 
     ```yaml linenums="1"
     gateway_name:
-        connection:
-            type: trino
-            user: [user]
-            host: [host]
-            catalog: [catalog]
-            # Most likely you will want http for scheme when not using auth
-            http_scheme: http
+      connection:
+        type: trino
+        user: [user]
+        host: [host]
+        catalog: [catalog]
+        # Most likely you will want http for scheme when not using auth
+        http_scheme: http
     ```
 
 
@@ -137,13 +137,13 @@ gateway_name:
 
     ```yaml linenums="1"
     gateway_name:
-        connection:
-            type: trino
-            method: basic
-            user: [user]
-            password: [password]
-            host: [host]
-            catalog: [catalog]
+      connection:
+        type: trino
+        method: basic
+        user: [user]
+        password: [password]
+        host: [host]
+        catalog: [catalog]
     ```
 
     * [Trino Documentation on Basic Authentication](https://trino.io/docs/current/security/password-file.html)
@@ -159,13 +159,13 @@ gateway_name:
 
     ```yaml linenums="1"
     gateway_name:
-        connection:
-            type: trino
-            method: ldap
-            user: [user]
-            password: [password]
-            host: [host]
-            catalog: [catalog]
+      connection:
+        type: trino
+        method: ldap
+        user: [user]
+        password: [password]
+        host: [host]
+        catalog: [catalog]
     ```
 
     * [Trino Documentation on LDAP Authentication](https://trino.io/docs/current/security/ldap.html)
@@ -188,15 +188,15 @@ gateway_name:
 
     ```yaml linenums="1"
     gateway_name:
-        connection:
-            type: trino
-            method: kerberos
-            user: user
-            keytab: /tmp/trino.keytab
-            krb5_config: /tmp/krb5.conf
-            principal: trino@company.com
-            host: trino.company.com
-            catalog: datalake
+      connection:
+        type: trino
+        method: kerberos
+        user: user
+        keytab: /tmp/trino.keytab
+        krb5_config: /tmp/krb5.conf
+        principal: trino@company.com
+        host: trino.company.com
+        catalog: datalake
     ```
 
     * [Trino Documentation on Kerberos Authentication](https://trino.io/docs/current/security/kerberos.html)
@@ -211,13 +211,13 @@ gateway_name:
 
     ```yaml linenums="1"
     gateway_name:
-        connection:
-            type: trino
-            method: jwt
-            user: [user]
-            password: [password]
-            host: [host]
-            catalog: [catalog]
+      connection:
+        type: trino
+        method: jwt
+        user: [user]
+        password: [password]
+        host: [host]
+        catalog: [catalog]
     ```
 
     * [Trino Documentation on JWT Authentication](https://trino.io/docs/current/security/jwt.html)
@@ -235,16 +235,16 @@ gateway_name:
 
     ```yaml linenums="1"
     gateway_name:
-        connection:
-            type: trino
-            method: certificate
-            user: [user]
-            password: [password]
-            host: [host]
-            catalog: [catalog]
-            cert: [path/to/cert_file]
-            client_certificate: [path/to/client/cert]
-            client_private_key: [path/to/client/key]
+      connection:
+        type: trino
+        method: certificate
+        user: [user]
+        password: [password]
+        host: [host]
+        catalog: [catalog]
+        cert: [path/to/cert_file]
+        client_certificate: [path/to/client/cert]
+        client_private_key: [path/to/client/key]
     ```
 
 === "Oauth"
@@ -255,11 +255,11 @@ gateway_name:
 
     ```yaml linenums="1"
     gateway_name:
-        connection:
-            type: trino
-            method: oauth
-            host: trino.company.com
-            catalog: datalake
+      connection:
+        type: trino
+        method: oauth
+        host: trino.company.com
+        catalog: datalake
     ```
 
     * [Trino Documentation on Oauth Authentication](https://trino.io/docs/current/security/oauth2.html)
