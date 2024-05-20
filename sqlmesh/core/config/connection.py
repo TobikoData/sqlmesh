@@ -44,6 +44,7 @@ class ConnectionConfig(abc.ABC, BaseConfig):
     type_: str
     concurrent_tasks: int
     register_comments: bool
+    pre_ping: bool
 
     @property
     @abc.abstractmethod
@@ -105,6 +106,7 @@ class ConnectionConfig(abc.ABC, BaseConfig):
             default_catalog=self.get_catalog(),
             cursor_init=self._cursor_init,
             register_comments=register_comments_override or self.register_comments,
+            pre_ping=self.pre_ping,
             **self._extra_engine_config,
         )
 
@@ -127,6 +129,7 @@ class BaseDuckDBConnectionConfig(ConnectionConfig):
         connector_config: A dictionary of configuration to pass into the duckdb connector.
         concurrent_tasks: The maximum number of tasks that can use this connection concurrently.
         register_comments: Whether or not to register model comments with the SQL engine.
+        pre_ping: Whether or not to pre-ping the connection before starting a new transaction to ensure it is still alive.
     """
 
     extensions: t.List[str] = []
@@ -134,6 +137,7 @@ class BaseDuckDBConnectionConfig(ConnectionConfig):
 
     concurrent_tasks: Literal[1] = 1
     register_comments: bool = True
+    pre_ping: Literal[False] = False
 
     @property
     def _engine_adapter(self) -> t.Type[EngineAdapter]:
@@ -319,6 +323,7 @@ class SnowflakeConnectionConfig(ConnectionConfig):
         private_key_path: The optional path to the private key to use for authentication. This would be used instead of `private_key`.
         private_key_passphrase: The optional passphrase to use to decrypt `private_key` or `private_key_path`. Keys can be created without encryption so only provide this if needed.
         register_comments: Whether or not to register model comments with the SQL engine.
+        pre_ping: Whether or not to pre-ping the connection before starting a new transaction to ensure it is still alive.
     """
 
     account: str
@@ -337,6 +342,7 @@ class SnowflakeConnectionConfig(ConnectionConfig):
 
     concurrent_tasks: int = 4
     register_comments: bool = True
+    pre_ping: bool = False
 
     type_: Literal["snowflake"] = Field(alias="type", default="snowflake")
 
@@ -496,6 +502,7 @@ class DatabricksConnectionConfig(ConnectionConfig):
             Defaults to deriving the cluster id from the `http_path` value.
         force_databricks_connect: Force all queries to run using Databricks Connect instead of the SQL connector.
         disable_databricks_connect: Even if databricks connect is installed, do not use it.
+        pre_ping: Whether or not to pre-ping the connection before starting a new transaction to ensure it is still alive.
     """
 
     server_hostname: t.Optional[str] = None
@@ -512,6 +519,7 @@ class DatabricksConnectionConfig(ConnectionConfig):
 
     concurrent_tasks: int = 1
     register_comments: bool = True
+    pre_ping: Literal[False] = False
 
     type_: Literal["databricks"] = Field(alias="type", default="databricks")
 
@@ -680,6 +688,7 @@ class BigQueryConnectionConfig(ConnectionConfig):
 
     concurrent_tasks: int = 1
     register_comments: bool = True
+    pre_ping: Literal[False] = False
 
     type_: Literal["bigquery"] = Field(alias="type", default="bigquery")
 
@@ -766,6 +775,7 @@ class GCPPostgresConnectionConfig(ConnectionConfig):
         password: The postgres user's password. Only needed when the user is a postgres user.
         enable_iam_auth: Set to True when user is an IAM user.
         db: Name of the db to connect to.
+        pre_ping: Whether or not to pre-ping the connection before starting a new transaction to ensure it is still alive.
     """
 
     instance_connection_string: str
@@ -779,6 +789,7 @@ class GCPPostgresConnectionConfig(ConnectionConfig):
     type_: Literal["gcp_postgres"] = Field(alias="type", default="gcp_postgres")
     concurrent_tasks: int = 4
     register_comments: bool = True
+    pre_ping: bool = True
 
     @model_validator(mode="before")
     @model_validator_v1_args
@@ -853,6 +864,7 @@ class RedshiftConnectionConfig(ConnectionConfig):
         is_serverless: Redshift end-point is serverless or provisional. Default value false.
         serverless_acct_id: The account ID of the serverless. Default value None
         serverless_work_group: The name of work group for serverless end point. Default value None.
+        pre_ping: Whether or not to pre-ping the connection before starting a new transaction to ensure it is still alive.
     """
 
     user: t.Optional[str] = None
@@ -879,6 +891,7 @@ class RedshiftConnectionConfig(ConnectionConfig):
 
     concurrent_tasks: int = 4
     register_comments: bool = True
+    pre_ping: bool = False
 
     type_: Literal["redshift"] = Field(alias="type", default="redshift")
 
@@ -932,6 +945,7 @@ class PostgresConnectionConfig(ConnectionConfig):
 
     concurrent_tasks: int = 4
     register_comments: bool = True
+    pre_ping: bool = True
 
     type_: Literal["postgres"] = Field(alias="type", default="postgres")
 
@@ -970,6 +984,7 @@ class MySQLConnectionConfig(ConnectionConfig):
 
     concurrent_tasks: int = 4
     register_comments: bool = True
+    pre_ping: bool = True
 
     type_: Literal["mysql"] = Field(alias="type", default="mysql")
 
@@ -1022,6 +1037,7 @@ class MSSQLConnectionConfig(ConnectionConfig):
 
     concurrent_tasks: int = 4
     register_comments: bool = True
+    pre_ping: bool = True
 
     type_: Literal["mssql"] = Field(alias="type", default="mssql")
 
@@ -1064,6 +1080,7 @@ class SparkConnectionConfig(ConnectionConfig):
 
     concurrent_tasks: int = 4
     register_comments: bool = True
+    pre_ping: Literal[False] = False
 
     type_: Literal["spark"] = Field(alias="type", default="spark")
 
@@ -1176,6 +1193,7 @@ class TrinoConnectionConfig(ConnectionConfig):
 
     concurrent_tasks: int = 4
     register_comments: bool = True
+    pre_ping: Literal[False] = False
 
     type_: Literal["trino"] = Field(alias="type", default="trino")
 

@@ -159,11 +159,12 @@ Most parameters are specific to the connection engine `type` - see [below](#engi
 
 #### General
 
-| Option              | Description                                                                                                                 | Type | Required |
-| ------------------- | --------------------------------------------------------------------------------------------------------------------------- | :--: | :------: |
-| `type`              | The engine type name, listed in engine-specific configuration pages below.                                                  | str  |    Y     |
-| `concurrent_tasks`  | The maximum number of concurrent tasks that will be run by SQLMesh. (Default: 4 for engines that support concurrent tasks.) | int  |    N     |
-| `register_comments` | Whether SQLMesh should register model comments with the SQL engine (if the engine supports it). (Default: `true`.)          | bool |    N     |
+| Option              | Description                                                                                                                                                             | Type | Required |
+|---------------------|-------------------------------------------------------------------------------------------------------------------------------------------------------------------------|:----:|:--------:|
+| `type`              | The engine type name, listed in engine-specific configuration pages below.                                                                                              | str  | Y        |
+| `concurrent_tasks`  | The maximum number of concurrent tasks that will be run by SQLMesh. (Default: 4 for engines that support concurrent tasks.)                                             | int  | N        |
+| `register_comments` | Whether SQLMesh should register model comments with the SQL engine (if the engine supports it). (Default: `true`.)                                                      | bool | N        |
+| `pre_ping`          | Whether or not to pre-ping the connection before starting a new transaction to ensure it is still alive. This can only be enabled for engines with transaction support. | bool | N        |
 
 #### Engine-specific
 
