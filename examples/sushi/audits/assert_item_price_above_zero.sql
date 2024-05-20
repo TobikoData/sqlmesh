@@ -1,7 +1,7 @@
 AUDIT (
-    name assert_item_price_above_zero,
-    description "Asserts that the price of an item is above zero.",
-    standalone true
+  name assert_item_price_above_zero,
+  description "Asserts that the price of an item is above zero.",
+  standalone true
 );
 
 SELECT *

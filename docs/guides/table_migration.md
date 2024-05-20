@@ -48,43 +48,43 @@ The staging model would contain code similar to the following for an `INCREMENTA
 
 ``` sql linenums="1"
 MODEL(
-    name my_schema.existing_table_staging,
-    kind INCREMENTAL_BY_TIME_RANGE ( -- or INCREMENTAL_BY_UNIQUE_KEY
-        time_column table_time_column
-    )
+  name my_schema.existing_table_staging,
+  kind INCREMENTAL_BY_TIME_RANGE ( -- or INCREMENTAL_BY_UNIQUE_KEY
+    time_column table_time_column
+  )
 )
 
 SELECT
-    col1,
-    col2,
-    col3
+  col1,
+  col2,
+  col3
 FROM
-    [your model's ongoing data source]
+  [your model's ongoing data source]
 WHERE
-    table_time_column BETWEEN @start_ds and @end_ds;
+  table_time_column BETWEEN @start_ds and @end_ds;
 ```
 
 The primary model would contain code similar to:
 
 ``` sql linenums="1"
 MODEL(
-    name my_schema.existing_table,
-    kind VIEW
+  name my_schema.existing_table,
+  kind VIEW
 )
 
 SELECT
-    col1,
-    col2,
-    col3
+  col1,
+  col2,
+  col3
 FROM
-    my_schema.existing_table_staging -- New data
+  my_schema.existing_table_staging -- New data
 UNION
 SELECT
-    col1,
-    col2,
-    col3
+  col1,
+  col2,
+  col3
 FROM
-    my_schema.existing_table_historical; -- Historical data
+  my_schema.existing_table_historical; -- Historical data
 ```
 
 Changes to columns in the source data or staging model may require modifying the code selecting from the historical data so the two tables can be safely unioned.
@@ -138,23 +138,23 @@ The model would have code similar to:
 
 ``` sql linenums="1" hl_lines="5 7-9"
 MODEL(
-    name my_schema.existing_table,
-    kind INCREMENTAL_BY_TIME_RANGE( -- or INCREMENTAL_BY_UNIQUE_KEY
-        time_column table_time_column,
-        forward_only true -- Forward-only model
-    ),
-    -- Start of first time interval SQLMesh should track, immediately
-    --  after the last data point the table ingested. Must match
-    --  the value passed to the `sqlmesh plan --start` option.
-    start "2024-01-01"
+  name my_schema.existing_table,
+  kind INCREMENTAL_BY_TIME_RANGE( -- or INCREMENTAL_BY_UNIQUE_KEY
+    time_column table_time_column,
+    forward_only true -- Forward-only model
+  ),
+  -- Start of first time interval SQLMesh should track, immediately
+  --  after the last data point the table ingested. Must match
+  --  the value passed to the `sqlmesh plan --start` option.
+  start "2024-01-01"
 )
 
 SELECT
-    col1,
-    col2,
-    col3
+  col1,
+  col2,
+  col3
 FROM
-    [your model's ongoing data source]
+  [your model's ongoing data source]
 WHERE
-    table_time_column BETWEEN @start_ds and @end_ds;
+  table_time_column BETWEEN @start_ds and @end_ds;
 ```

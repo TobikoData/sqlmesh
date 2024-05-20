@@ -27,24 +27,24 @@ For example, we could make two modifications to the [SQLMesh quickstart](../quic
 
 ```sql linenums="1"
 MODEL (
-    name sqlmesh_example.incremental_model,
-    kind INCREMENTAL_BY_TIME_RANGE (
-        time_column event_date
-    ),
-    start '2020-01-01',
-    cron '@daily',
-    grain (id, event_date)
+  name sqlmesh_example.incremental_model,
+  kind INCREMENTAL_BY_TIME_RANGE (
+    time_column event_date
+  ),
+  start '2020-01-01',
+  cron '@daily',
+  grain (id, event_date)
 );
 
 SELECT
-    id,
-    CASE WHEN item_id = 3 THEN 4 ELSE item_id END as item_id, -- Change item_id 3 to 4
-    event_date,
+  id,
+  CASE WHEN item_id = 3 THEN 4 ELSE item_id END as item_id, -- Change item_id 3 to 4
+  event_date,
 FROM
-    sqlmesh_example.seed_model
+  sqlmesh_example.seed_model
 WHERE
-    event_date between @start_ds and @end_ds
-    AND id != 1 -- Remove row whose item_id is 1
+  event_date between @start_ds and @end_ds
+  AND id != 1 -- Remove row whose item_id is 1
 ```
 
 After running `sqlmesh plan dev` and applying the plan, the updated model will be present in the `dev` environment but not in `prod`.

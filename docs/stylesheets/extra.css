@@ -14,4 +14,8 @@
     &::after {
       color: rgb(68, 138, 255);
     }
-  }
+}
+
+.md-nav__link {
+    word-break: break-word;
+}

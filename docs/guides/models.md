@@ -16,10 +16,10 @@ To add a model:
 2. Within the file, define a model. For example:
 
         MODEL (
-            name sqlmesh_example.new_model,
-            kind INCREMENTAL_BY_TIME_RANGE (
-                time_column (model_time_column, '%Y-%m-%d'),
-            ),
+          name sqlmesh_example.new_model,
+          kind INCREMENTAL_BY_TIME_RANGE (
+            time_column (model_time_column, '%Y-%m-%d'),
+          ),
         );
 
         SELECT *

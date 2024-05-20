@@ -91,18 +91,18 @@ This example shows an incremental by time model that could be added to the SQLMe
 
 ``` sql linenums="1"
 MODEL (
-    name sqlmesh_example.new_model,
-    kind INCREMENTAL_BY_TIME_RANGE (
-        time_column (model_time_column, '%Y-%m-%d'), -- Time column `model_time_column` with format '%Y-%m-%d'
-    ),
+  name sqlmesh_example.new_model,
+  kind INCREMENTAL_BY_TIME_RANGE (
+    time_column (model_time_column, '%Y-%m-%d'), -- Time column `model_time_column` with format '%Y-%m-%d'
+  ),
 );
 
 SELECT
-    *
+  *
 FROM
-    sqlmesh_example.incremental_model
+  sqlmesh_example.incremental_model
 WHERE
-    model_time_column BETWEEN @start_ds and @end_ds -- WHERE clause filters based on time
+  model_time_column BETWEEN @start_ds and @end_ds -- WHERE clause filters based on time
 ```
 
 The model configuration specifies that the column `model_time_column` represents the time stamp for each row, and the model query contains a `WHERE` clause that uses the time column to filter the data.
@@ -138,19 +138,19 @@ This example configures the model in the previous example to be forward only:
 
 ``` sql linenums="1"
 MODEL (
-    name sqlmesh_example.new_model,
-    kind INCREMENTAL_BY_TIME_RANGE (
-        time_column (model_time_column, '%Y-%m-%d'),
-        forward_only true -- All changes will be forward only
-    )
+  name sqlmesh_example.new_model,
+  kind INCREMENTAL_BY_TIME_RANGE (
+    time_column (model_time_column, '%Y-%m-%d'),
+    forward_only true -- All changes will be forward only
+  )
 );
 
 SELECT
-    *
+  *
 FROM
-    sqlmesh_example.incremental_model
+  sqlmesh_example.incremental_model
 WHERE
-    model_time_column BETWEEN @start_ds and @end_ds
+  model_time_column BETWEEN @start_ds and @end_ds
 ```
 
 Alternatively, all the changes contained in a *specific plan* can be classified as forward-only with a flag: `sqlmesh plan --forward-only`. A subsequent plan that did not include the forward-only flag would fully refresh the model's physical table. Learn more about forward-only plans [here](../concepts/plans.md#forward-only-plans).

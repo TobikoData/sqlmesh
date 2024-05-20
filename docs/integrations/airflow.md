@@ -54,10 +54,10 @@ Refer to the [Connection Configuration](../reference/configuration.md#connection
 In your SQLMesh repository, create the following configuration within config.yaml:
 ```yaml linenums="1"
 default_scheduler:
-    type: airflow
-    airflow_url: https://<Airflow Webserver Host>:<Airflow Webserver Port>/
-    username: <Airflow Username>
-    password: <Airflow Password>
+  type: airflow
+  airflow_url: https://<Airflow Webserver Host>:<Airflow Webserver Port>/
+  username: <Airflow Username>
+  password: <Airflow Password>
 ```
 
 ## External signals
@@ -70,18 +70,18 @@ Signals are defined as part of the model's definition using arbitrary key-value 
 
 ```sql linenums="1"
 MODEL (
-    name test_db.test_name,
-    signals [
-        (
-            table_name = 'upstream_table_a',
-            ds = @end_ds,
-        ),
-        (
-            table_name = 'upstream_table_b',
-            ds = @end_ds,
-            hour = @end_hour,
-        ),
-    ],
+  name test_db.test_name,
+  signals [
+    (
+      table_name = 'upstream_table_a',
+      ds = @end_ds,
+    ),
+    (
+      table_name = 'upstream_table_b',
+      ds = @end_ds,
+      hour = @end_hour,
+    ),
+  ],
 )
 ```
 
@@ -146,6 +146,6 @@ pip install "sqlmesh[mwaa]"
 Additionally, the scheduler needs to be configured accordingly:
 ```yaml linenums="1"
 default_scheduler:
-    type: mwaa
-    environment: <The MWAA Environment Name>
+  type: mwaa
+  environment: <The MWAA Environment Name>
 ```

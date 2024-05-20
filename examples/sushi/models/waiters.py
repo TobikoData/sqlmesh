@@ -37,6 +37,7 @@ def entrypoint(evaluator: MacroEvaluator) -> exp.Select:
         parent_snapshots = snapshot.parents
         assert len(parent_snapshots) == 1
         name = '"sushi"."orders"'
+
         # There are tests which force not having a default catalog so we check here if one is defined
         # and add it to the name if it is
         default_catalog = evaluator.default_catalog
@@ -44,6 +45,7 @@ def entrypoint(evaluator: MacroEvaluator) -> exp.Select:
             # make sure we don't double quote the default catalog
             default_catalog = default_catalog.strip('"')
             name = ".".join([f'"{default_catalog}"', name])
+
         assert (
             parent_snapshots[0].name == name
         ), f"Snapshot Name: {parent_snapshots[0].name}, Name: {name}"

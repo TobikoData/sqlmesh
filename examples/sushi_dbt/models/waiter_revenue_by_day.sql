@@ -1,10 +1,10 @@
 {{
-    config(
-        materialized='incremental',
-        incremental_strategy='delete+insert',
-        cluster_by=['ds'],
-        time_column='ds',
-    )
+  config(
+    materialized='incremental',
+    incremental_strategy='delete+insert',
+    cluster_by=['ds'],
+    time_column='ds',
+  )
 }}
 
 SELECT

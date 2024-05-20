@@ -10,6 +10,6 @@ SELECT
   item_id,
   count(distinct id) AS num_orders,
 FROM
-    ibis.incremental_model
+  ibis.incremental_model
 GROUP BY item_id
 ORDER BY item_id

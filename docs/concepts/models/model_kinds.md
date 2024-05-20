@@ -370,12 +370,12 @@ MODEL (
 );
 
 SELECT
-    id,
-    name,
-    price,
-    my_updated_at
+  id,
+  name,
+  price,
+  my_updated_at
 FROM
-    stg.current_menu_items;
+  stg.current_menu_items;
 ```
 
 SQLMesh will materialize this table with the following structure:
@@ -656,21 +656,21 @@ For example, if you wanted to query the latest version of the `menu_items` table
 
 ```sql linenums="1"
 SELECT
-    *
+  *
 FROM
-    menu_items
+  menu_items
 WHERE
-    valid_to IS NULL;
+  valid_to IS NULL;
 ```
 
 One could also create a view on top of the SCD Type 2 model that creates a new `is_current` column to make it easy for consumers to identify the current record.
 
 ```sql linenums="1"
 SELECT
-    *,
-    valid_to IS NULL AS is_current
+  *,
+  valid_to IS NULL AS is_current
 FROM
-    menu_items;
+  menu_items;
 ```
 
 #### Querying for a specific version of a record at a give point in time
@@ -679,54 +679,54 @@ If you wanted to query the `menu_items` table as it was on `2020-01-02 01:00:00`
 
 ```sql linenums="1"
 SELECT
-    *
+  *
 FROM
-    menu_items
+  menu_items
 WHERE
-    id = 1
-    AND '2020-01-02 01:00:00' >= valid_from
-    AND '2020-01-02 01:00:00' < COALESCE(valid_to, CAST('2199-12-31 23:59:59+00:00' AS TIMESTAMP));
+  id = 1
+  AND '2020-01-02 01:00:00' >= valid_from
+  AND '2020-01-02 01:00:00' < COALESCE(valid_to, CAST('2199-12-31 23:59:59+00:00' AS TIMESTAMP));
 ```
 
 Example in a join:
 
 ```sql linenums="1"
 SELECT
-    *
+  *
 FROM
-    orders
-    INNER JOIN
-    menu_items
-    ON orders.menu_item_id = menu_items.id
-    AND orders.created_at >= menu_items.valid_from
-    AND orders.created_at < COALESCE(menu_items.valid_to, CAST('2199-12-31 23:59:59+00:00' AS TIMESTAMP));
+  orders
+INNER JOIN
+  menu_items
+  ON orders.menu_item_id = menu_items.id
+  AND orders.created_at >= menu_items.valid_from
+  AND orders.created_at < COALESCE(menu_items.valid_to, CAST('2199-12-31 23:59:59+00:00' AS TIMESTAMP));
 ```
 
 A view can be created to do the `COALESCE` automatically. This, combined with the `is_current` flag, makes it easier to query for a specific version of a record.
 
 ```sql linenums="1"
 SELECT
-    id,
-    name,
-    price,
-    updated_at,
-    valid_from,
-    COALESCE(valid_to, CAST('2199-12-31 23:59:59+00:00' AS TIMESTAMP)) AS valid_to
-    valid_to IS NULL AS is_current,
+  id,
+  name,
+  price,
+  updated_at,
+  valid_from,
+  COALESCE(valid_to, CAST('2199-12-31 23:59:59+00:00' AS TIMESTAMP)) AS valid_to
+  valid_to IS NULL AS is_current,
 FROM
-    menu_items;
+  menu_items;
 ```
 
 Furthermore if you want to make it so users can use `BETWEEN` when querying by making `valid_to` inclusive you can do the following:
 ```sql linenums="1"
 SELECT
-    id,
-    name,
-    price,
-    updated_at,
-    valid_from,
-    COALESCE(valid_to, CAST('2200-01-01 00:00:00+00:00' AS TIMESTAMP)) - INTERVAL 1 SECOND AS valid_to
-    valid_to IS NULL AS is_current,
+  id,
+  name,
+  price,
+  updated_at,
+  valid_from,
+  COALESCE(valid_to, CAST('2200-01-01 00:00:00+00:00' AS TIMESTAMP)) - INTERVAL 1 SECOND AS valid_to
+  valid_to IS NULL AS is_current,
 ```
 
 Note: The precision of the timestamps in this example is second so I subtract 1 second. Make sure to subtract a value equal to the precision of your timestamps.
@@ -737,12 +737,12 @@ One way to identify deleted records is to query for records that do not have a `
 
 ```sql linenums="1"
 SELECT
-    id,
-    MAX(CASE WHEN valid_to IS NULL THEN 0 ELSE 1 END) AS is_deleted
+  id,
+  MAX(CASE WHEN valid_to IS NULL THEN 0 ELSE 1 END) AS is_deleted
 FROM
-    menu_items
+  menu_items
 GROUP BY
-    id
+  id
 ```
 
 ## EXTERNAL
