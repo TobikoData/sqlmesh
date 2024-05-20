@@ -20,6 +20,9 @@ docker_compose["x-airflow-common"]["volumes"].extend(
     ]
 )
 
+# Dont load Airflow example DAGs because they cause visual pollution
+docker_compose["x-airflow-common"]["environment"]["AIRFLOW__CORE__LOAD_EXAMPLES"] = "false"
+
 docker_compose["services"]["postgres"]["ports"] = ["5432:5432"]
 
 docker_compose["services"]["create-metastore-db"] = {
@@ -28,7 +31,7 @@ docker_compose["services"]["create-metastore-db"] = {
         "-U",
         "airflow",
         "--host",
-        "airflow-postgres-1",
+        "postgres",
         "-c",
         "CREATE DATABASE metastore_db",
     ],

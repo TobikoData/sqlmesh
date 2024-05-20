@@ -98,6 +98,7 @@ class SnapshotEvaluator:
         execution_time: TimeLike,
         snapshots: t.Dict[str, Snapshot],
         deployability_index: t.Optional[DeployabilityIndex] = None,
+        batch_index: int = 0,
         **kwargs: t.Any,
     ) -> t.Optional[str]:
         """Renders the snapshot's model, executes it and stores the result in the snapshot's physical table.
@@ -109,6 +110,7 @@ class SnapshotEvaluator:
             execution_time: The date/time time reference to use for execution time.
             snapshots: All upstream snapshots (by name) to use for expansion and mapping of physical locations.
             deployability_index: Determines snapshots that are deployable in the context of this evaluation.
+            batch_index: If the snapshot is part of a batch of related snapshots; which index in the batch is it
             kwargs: Additional kwargs to pass to the renderer.
 
         Returns:
@@ -121,6 +123,7 @@ class SnapshotEvaluator:
             execution_time,
             snapshots,
             deployability_index=deployability_index,
+            batch_index=batch_index,
             **kwargs,
         )
         if result is None or isinstance(result, str):
@@ -443,6 +446,7 @@ class SnapshotEvaluator:
         snapshots: t.Dict[str, Snapshot],
         limit: t.Optional[int] = None,
         deployability_index: t.Optional[DeployabilityIndex] = None,
+        batch_index: int = 0,
         **kwargs: t.Any,
     ) -> DF | str | None:
         """Renders the snapshot's model and executes it. The return value depends on whether the limit was specified.
@@ -455,6 +459,7 @@ class SnapshotEvaluator:
             snapshots: All upstream snapshots to use for expansion and mapping of physical locations.
             limit: If limit is not None, the query will not be persisted but evaluated and returned as a dataframe.
             deployability_index: Determines snapshots that are deployable in the context of this evaluation.
+            batch_index: If the snapshot is part of a batch of related snapshots; which index in the batch is it
             kwargs: Additional kwargs to pass to the renderer.
         """
         if not snapshot.is_model:
@@ -481,6 +486,7 @@ class SnapshotEvaluator:
                     query_or_df,
                     snapshots,
                     deployability_index,
+                    batch_index=batch_index,
                     start=start,
                     end=end,
                     execution_time=execution_time,
@@ -493,6 +499,7 @@ class SnapshotEvaluator:
                     query_or_df,
                     snapshots,
                     deployability_index,
+                    batch_index=batch_index,
                     start=start,
                     end=end,
                     execution_time=execution_time,
@@ -856,6 +863,7 @@ class EvaluationStrategy(abc.ABC):
         query_or_df: QueryOrDF,
         snapshots: t.Dict[str, Snapshot],
         deployability_index: DeployabilityIndex,
+        batch_index: int,
         **kwargs: t.Any,
     ) -> None:
         """Inserts the given query or a DataFrame into the target table or replaces a view.
@@ -866,6 +874,7 @@ class EvaluationStrategy(abc.ABC):
             query_or_df: The query or DataFrame to insert.
             snapshots: Parent snapshots.
             deployability_index: Determines snapshots that are deployable in the context of this evaluation.
+            batch_index: Snapshot position in the current batch
         """
 
     @abc.abstractmethod
@@ -876,6 +885,7 @@ class EvaluationStrategy(abc.ABC):
         query_or_df: QueryOrDF,
         snapshots: t.Dict[str, Snapshot],
         deployability_index: DeployabilityIndex,
+        batch_index: int,
         **kwargs: t.Any,
     ) -> None:
         """Appends the given query or a DataFrame to the existing table.
@@ -886,6 +896,7 @@ class EvaluationStrategy(abc.ABC):
             query_or_df: The query or DataFrame to insert.
             snapshots: Parent snapshots.
             deployability_index: Determines snapshots that are deployable in the context of this evaluation.
+            batch_index: Snapshot position in the current batch
         """
 
     @abc.abstractmethod
@@ -992,6 +1003,7 @@ class SymbolicStrategy(EvaluationStrategy):
         query_or_df: QueryOrDF,
         snapshots: t.Dict[str, Snapshot],
         deployability_index: DeployabilityIndex,
+        batch_index: int,
         **kwargs: t.Any,
     ) -> None:
         pass
@@ -1003,6 +1015,7 @@ class SymbolicStrategy(EvaluationStrategy):
         query_or_df: QueryOrDF,
         snapshots: t.Dict[str, Snapshot],
         deployability_index: DeployabilityIndex,
+        batch_index: int,
         **kwargs: t.Any,
     ) -> None:
         pass
@@ -1096,6 +1109,7 @@ class MaterializableStrategy(PromotableStrategy):
         query_or_df: QueryOrDF,
         snapshots: t.Dict[str, Snapshot],
         deployability_index: DeployabilityIndex,
+        batch_index: int,
         **kwargs: t.Any,
     ) -> None:
         model = snapshot.model
@@ -1171,6 +1185,7 @@ class IncrementalByTimeRangeStrategy(MaterializableStrategy):
         query_or_df: QueryOrDF,
         snapshots: t.Dict[str, Snapshot],
         deployability_index: DeployabilityIndex,
+        batch_index: int,
         **kwargs: t.Any,
     ) -> None:
         model = snapshot.model
@@ -1193,10 +1208,14 @@ class IncrementalByUniqueKeyStrategy(MaterializableStrategy):
         query_or_df: QueryOrDF,
         snapshots: t.Dict[str, Snapshot],
         deployability_index: DeployabilityIndex,
+        batch_index: int,
         **kwargs: t.Any,
     ) -> None:
         model = snapshot.model
-        if not _intervals(snapshot, deployability_index):
+        # https://github.com/TobikoData/sqlmesh/issues/2609
+        # If there are no existing intervals yet; only clear the table for the first snapshot in the batch
+        # Otherwise, each subsequent snapshot in the batch will keep clearing the table when it runs instead of appending to it
+        if not _intervals(snapshot, deployability_index) and batch_index == 0:
             self._replace_query_for_model(model, name, query_or_df)
         else:
             self.adapter.merge(
@@ -1214,6 +1233,7 @@ class IncrementalByUniqueKeyStrategy(MaterializableStrategy):
         query_or_df: QueryOrDF,
         snapshots: t.Dict[str, Snapshot],
         deployability_index: t.Optional[DeployabilityIndex],
+        batch_index: int,
         **kwargs: t.Any,
     ) -> None:
         model = snapshot.model
@@ -1234,6 +1254,7 @@ class IncrementalUnmanagedStrategy(MaterializableStrategy):
         query_or_df: QueryOrDF,
         snapshots: t.Dict[str, Snapshot],
         deployability_index: DeployabilityIndex,
+        batch_index: int,
         **kwargs: t.Any,
     ) -> None:
         model = snapshot.model
@@ -1253,6 +1274,7 @@ class IncrementalUnmanagedStrategy(MaterializableStrategy):
                 query_or_df,
                 snapshots,
                 deployability_index,
+                batch_index,
                 **kwargs,
             )
 
@@ -1265,6 +1287,7 @@ class FullRefreshStrategy(MaterializableStrategy):
         query_or_df: QueryOrDF,
         snapshots: t.Dict[str, Snapshot],
         deployability_index: DeployabilityIndex,
+        batch_index: int,
         **kwargs: t.Any,
     ) -> None:
         model = snapshot.model
@@ -1317,6 +1340,7 @@ class SCDType2Strategy(MaterializableStrategy):
         query_or_df: QueryOrDF,
         snapshots: t.Dict[str, Snapshot],
         deployability_index: DeployabilityIndex,
+        batch_index: int,
         **kwargs: t.Any,
     ) -> None:
         model = snapshot.model
@@ -1365,6 +1389,7 @@ class SCDType2Strategy(MaterializableStrategy):
         query_or_df: QueryOrDF,
         snapshots: t.Dict[str, Snapshot],
         deployability_index: DeployabilityIndex,
+        batch_index: int,
         **kwargs: t.Any,
     ) -> None:
         model = snapshot.model
@@ -1412,6 +1437,7 @@ class ViewStrategy(PromotableStrategy):
         query_or_df: QueryOrDF,
         snapshots: t.Dict[str, Snapshot],
         deployability_index: DeployabilityIndex,
+        batch_index: int,
         **kwargs: t.Any,
     ) -> None:
         model = snapshot.model
@@ -1455,6 +1481,7 @@ class ViewStrategy(PromotableStrategy):
         query_or_df: QueryOrDF,
         snapshots: t.Dict[str, Snapshot],
         deployability_index: DeployabilityIndex,
+        batch_index: int,
         **kwargs: t.Any,
     ) -> None:
         raise ConfigError(f"Cannot append to a view '{table_name}'.")
