@@ -19,14 +19,14 @@ The notebook interface works with both Jupyter and Databricks notebooks. Learn m
                 ┌▼─────────────┐
                 │seed_model.sql│
                 └─────────────┬┘
-                             │
-                            ┌▼────────────────────┐
-                            │incremental_model.sql│
-                            └────────────────────┬┘
-                                                 │
-                                                ┌▼─────────────┐
-                                                │full_model.sql│
-                                                └──────────────┘
+                              │
+                             ┌▼────────────────────┐
+                             │incremental_model.sql│
+                             └────────────────────┬┘
+                                                  │
+                                                 ┌▼─────────────┐
+                                                 │full_model.sql│
+                                                 └──────────────┘
     ```
 
     Although the project is simple, it touches on all the primary concepts needed to use SQLMesh productively.
