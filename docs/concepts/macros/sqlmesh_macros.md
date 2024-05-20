@@ -600,12 +600,14 @@ If the column data types are known, the resulting query `CAST`s columns to their
 
 - `relation`: The relation/table whose columns are being selected
 - `alias` (optional): The alias of the relation (if it has one)
-- `except_` (optional): A list of columns to exclude
+- `exclude` (optional): A list of columns to exclude
 - `prefix` (optional): A string to use as a prefix for all selected column names
 - `suffix` (optional): A string to use as a suffix for all selected column names
 - `quote_identifiers` (optional): Whether to quote the resulting identifiers, defaults to true
 
-Like all SQLMesh macro functions, omitting an argument when calling `@STAR` requires passing all subsequent arguments with their name and the special `:=` keyword operator. For example, we might omit the `alias` argument with `@STAR(foo, except_ := [c])`. Learn more about macro function arguments [below](#positional-and-keyword-arguments).
+**NOTE**: the `exclude` argument used to be named `except_`. The latter is still supported but we discourage its use because it will be deprecated in the future.
+
+Like all SQLMesh macro functions, omitting an argument when calling `@STAR` requires passing all subsequent arguments with their name and the special `:=` keyword operator. For example, we might omit the `alias` argument with `@STAR(foo, exclude := [c])`. Learn more about macro function arguments [below](#positional-and-keyword-arguments).
 
 As a `@STAR` example, consider the following query:
 
@@ -635,15 +637,15 @@ FROM foo AS bar
 Note these aspects of the rendered query:
 - Each column is `CAST` to its data type in the table `foo` (e.g., `a` to `TEXT`)
 - Each column selection uses the alias `bar` (e.g., `"bar"."a"`)
-- Column `c` is not present because it was passed to `@STAR`'s `except_` argument
+- Column `c` is not present because it was passed to `@STAR`'s `exclude` argument
 - Each column alias is prefixed with `baz_` and suffixed with `_qux` (e.g., `"baz_a_qux"`)
 
 Now consider a more complex example that provides different prefixes to `a` and `b` than to `d` and includes an explicit column `my_column`:
 
 ```sql linenums="1"
 SELECT
-  @STAR(foo, bar, except_=[c, d], 'ab_pre_'),
-  @STAR(foo, bar, except_=[a, b, c], 'd_pre_'),
+  @STAR(foo, bar, exclude := [c, d], 'ab_pre_'),
+  @STAR(foo, bar, exclude := [a, b, c], 'd_pre_'),
   my_column
 FROM foo AS bar
 ```
@@ -661,7 +663,7 @@ FROM foo AS bar
 
 Note these aspects of the rendered query:
 - Columns `a` and `b` have the prefix `"ab_pre_"` , while column `d` has the prefix `"d_pre_"`
-- Column `c` is not present because it was passed to the `except_` argument in both `@STAR` calls
+- Column `c` is not present because it was passed to the `exclude` argument in both `@STAR` calls
 - `my_column` is present in the query
 
 ### @GENERATE_SURROGATE_KEY

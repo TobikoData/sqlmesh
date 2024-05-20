@@ -807,7 +807,7 @@ def star(
         prefix: A prefix to use for all selections
         suffix: A suffix to use for all selections
         quote_identifiers: Whether or not quote the resulting aliases, defaults to true
-        except_: Alias for exclude (TODO: deprecate this)
+        except_: Alias for exclude (TODO: deprecate this, update docs)
 
     Returns:
         An array of columns.
