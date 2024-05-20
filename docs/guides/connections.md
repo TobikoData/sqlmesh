@@ -10,9 +10,9 @@ Each connection is configured as part of a gateway which has a unique name assoc
 
 ```yaml linenums="1"
 gateways:
-    local_db:
-        connection:
-            type: duckdb
+  local_db:
+    connection:
+      type: duckdb
 ```
 
 Now the defined connection can be selected in the `sqlmesh plan` CLI command as follows:
@@ -29,10 +29,10 @@ The state connection can be changed by providing different connection settings i
 
 ```yaml linenums="1"
 gateways:
-    local_db:
-        state_connection:
-            type: duckdb
-            database: state.db
+  local_db:
+    state_connection:
+      type: duckdb
+      database: state.db
 ```
 
 NOTE: Spark and Trino engines may not be used for the state connection.
@@ -43,8 +43,8 @@ Additionally, you can set a default connection by defining its configuration in 
 
 ```yaml linenums="1"
 default_connection:
-    type: duckdb
-    database: local.db
+  type: duckdb
+  database: local.db
 ```
 
 This connection configuration will be used if one is not provided in the target gateway.
@@ -55,10 +55,10 @@ By default, when running [tests](../concepts/tests.md), SQLMesh uses an in-memor
 
 ```yaml linenums="1"
 gateways:
-    local_db:
-        test_connection:
-            type: duckdb
-            database: test.db
+  local_db:
+    test_connection:
+      type: duckdb
+      database: test.db
 ```
 
 ### Default test connection
@@ -67,8 +67,8 @@ To configure a default test connection for all gateways use the `default_test_co
 
 ```yaml linenums="1"
 default_test_connection:
-    type: duckdb
-    database: test.db
+  type: duckdb
+  database: test.db
 ```
 
 ## Default gateway

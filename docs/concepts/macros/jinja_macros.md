@@ -50,7 +50,6 @@ JINJA_STATEMENT_BEGIN;
 JINJA_END;
 ```
 
-
 ## User-defined variables
 
 SQLMesh supports two kinds of user-defined macro variables: global and local.
@@ -111,7 +110,7 @@ SELECT
   item_id,
   count(distinct id) AS {{ my_col }}, -- Reference to Jinja variable {{ my_col }}
 FROM
-    sqlmesh_example.incremental_model
+  sqlmesh_example.incremental_model
 GROUP BY item_id
 
 JINJA_END;
@@ -133,9 +132,9 @@ Jinja for loops begin with `{% for ... %}` and end with `{% endfor %}`. This exa
 
 ```sql linenums="1"
 SELECT
-    {% for vehicle_type in ['car', 'truck', 'bus']}
-        CASE WHEN user_vehicle = '{{ vehicle_type }}' THEN 1 ELSE 0 END as vehicle_{{ vehicle_type }},
-    {% endfor %}
+  {% for vehicle_type in ['car', 'truck', 'bus']}
+    CASE WHEN user_vehicle = '{{ vehicle_type }}' THEN 1 ELSE 0 END as vehicle_{{ vehicle_type }},
+  {% endfor %}
 FROM table
 ```
 
@@ -147,9 +146,9 @@ The example renders to this after SQLMesh processing:
 
 ```sql linenums="1"
 SELECT
-    CASE WHEN user_vehicle = 'car' THEN 1 ELSE 0 END AS vehicle_car,
-    CASE WHEN user_vehicle = 'truck' THEN 1 ELSE 0 END AS vehicle_truck,
-    CASE WHEN user_vehicle = 'bus' THEN 1 ELSE 0 END AS vehicle_bus
+  CASE WHEN user_vehicle = 'car' THEN 1 ELSE 0 END AS vehicle_car,
+  CASE WHEN user_vehicle = 'truck' THEN 1 ELSE 0 END AS vehicle_truck,
+  CASE WHEN user_vehicle = 'bus' THEN 1 ELSE 0 END AS vehicle_bus
 FROM table
 ```
 
@@ -159,9 +158,9 @@ In general, it is a best practice to define lists of values separately from thei
 {% set vehicle_types = ['car', 'truck', 'bus'] %}
 
 SELECT
-    {% for vehicle_type in vehicle_types }
-        CASE WHEN user_vehicle = '{{ vehicle_type }}' THEN 1 ELSE 0 END as vehicle_{{ vehicle_type }},
-    {% endfor %}
+  {% for vehicle_type in vehicle_types }
+    CASE WHEN user_vehicle = '{{ vehicle_type }}' THEN 1 ELSE 0 END as vehicle_{{ vehicle_type }},
+  {% endfor %}
 FROM table
 ```
 
@@ -179,10 +178,10 @@ As an example, you might want a model to only include a column if the model was 
 {% set testing = True %}
 
 SELECT
-    normal_column,
-    {% if testing %}
-        testing_column
-    {% endif %}
+  normal_column,
+  {% if testing %}
+    testing_column
+  {% endif %}
 FROM table
 ```
 
@@ -190,8 +189,8 @@ Because `testing` is `True`, the rendered query would be:
 
 ```sql linenums="1"
 SELECT
-    normal_column,
-    testing_column
+  normal_column,
+  testing_column
 FROM table
 ```
 
@@ -225,8 +224,8 @@ We might call this macro function in a SQL query like this:
 
 ```sql linenums="1"
 SELECT
-    item_id,
-    {{ alias('item_id', 'item_id2')}}
+  item_id,
+  {{ alias('item_id', 'item_id2')}}
 FROM table
 ```
 
@@ -234,8 +233,8 @@ After processing, it would render to this:
 
 ```sql linenums="1"
 SELECT
-    item_id,
-    item_id AS item_id2
+  item_id,
+  item_id AS item_id2
 FROM table
 ```
 
@@ -245,8 +244,8 @@ In that example, the SQL query selects the column `item_id` with the alias `item
 
 ```sql linenums="1"
 SELECT
-    item_id,
-    {{ alias("'item_id'", 'item_id2')}}
+  item_id,
+  {{ alias("'item_id'", 'item_id2')}}
 FROM table
 ```
 
@@ -254,8 +253,8 @@ After processing, it would render to this:
 
 ```sql linenums="1"
 SELECT
-    item_id,
-    'item_id' AS item_id2
+  item_id,
+  'item_id' AS item_id2
 FROM table
 ```
 

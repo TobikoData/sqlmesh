@@ -16,32 +16,32 @@ class ProjectTemplate(Enum):
 def _gen_config(dialect: t.Optional[str], template: ProjectTemplate) -> str:
     default_configs = {
         ProjectTemplate.DEFAULT: f"""gateways:
-    local:
-        connection:
-            type: duckdb
-            database: db.db
+  local:
+    connection:
+      type: duckdb
+      database: db.db
 
 default_gateway: local
 
 model_defaults:
-    dialect: {dialect}
+  dialect: {dialect}
 """,
         ProjectTemplate.AIRFLOW: f"""gateways:
-    local:
-        connection:
-            type: duckdb
-            database: db.db
+  local:
+    connection:
+      type: duckdb
+      database: db.db
 
 default_gateway: local
 
 default_scheduler:
-    type: airflow
-    airflow_url: http://localhost:8080/
-    username: airflow
-    password: airflow
+  type: airflow
+  airflow_url: http://localhost:8080/
+  username: airflow
+  password: airflow
 
 model_defaults:
-    dialect: {dialect}
+  dialect: {dialect}
 """,
         ProjectTemplate.DBT: """from pathlib import Path
 
@@ -61,52 +61,52 @@ EXAMPLE_INCREMENTAL_MODEL_NAME = f"{EXAMPLE_SCHEMA_NAME}.incremental_model"
 EXAMPLE_SEED_MODEL_NAME = f"{EXAMPLE_SCHEMA_NAME}.seed_model"
 
 EXAMPLE_FULL_MODEL_DEF = f"""MODEL (
-    name {EXAMPLE_FULL_MODEL_NAME},
-    kind FULL,
-    cron '@daily',
-    grain item_id,
-    audits (assert_positive_order_ids),
+  name {EXAMPLE_FULL_MODEL_NAME},
+  kind FULL,
+  cron '@daily',
+  grain item_id,
+  audits (assert_positive_order_ids),
 );
 
 SELECT
-    item_id,
-    COUNT(DISTINCT id) AS num_orders,
+  item_id,
+  COUNT(DISTINCT id) AS num_orders,
 FROM
-    {EXAMPLE_INCREMENTAL_MODEL_NAME}
+  {EXAMPLE_INCREMENTAL_MODEL_NAME}
 GROUP BY item_id
 """
 
 EXAMPLE_INCREMENTAL_MODEL_DEF = f"""MODEL (
-    name {EXAMPLE_INCREMENTAL_MODEL_NAME},
-    kind INCREMENTAL_BY_TIME_RANGE (
-        time_column event_date
-    ),
-    start '2020-01-01',
-    cron '@daily',
-    grain (id, event_date)
+  name {EXAMPLE_INCREMENTAL_MODEL_NAME},
+  kind INCREMENTAL_BY_TIME_RANGE (
+    time_column event_date
+  ),
+  start '2020-01-01',
+  cron '@daily',
+  grain (id, event_date)
 );
 
 SELECT
-    id,
-    item_id,
-    event_date,
+  id,
+  item_id,
+  event_date,
 FROM
-    {EXAMPLE_SEED_MODEL_NAME}
+  {EXAMPLE_SEED_MODEL_NAME}
 WHERE
-    event_date BETWEEN @start_date AND @end_date
+  event_date BETWEEN @start_date AND @end_date
 """
 
 EXAMPLE_SEED_MODEL_DEF = f"""MODEL (
-    name {EXAMPLE_SEED_MODEL_NAME},
-    kind SEED (
-        path '../seeds/seed_data.csv'
-    ),
-    columns (
-        id INTEGER,
-        item_id INTEGER,
-        event_date DATE
-    ),
-    grain (id, event_date)
+  name {EXAMPLE_SEED_MODEL_NAME},
+  kind SEED (
+    path '../seeds/seed_data.csv'
+  ),
+  columns (
+    id INTEGER,
+    item_id INTEGER,
+    event_date DATE
+  ),
+  grain (id, event_date)
 );
 """
 
@@ -137,13 +137,10 @@ EXAMPLE_TEST = f"""test_example_full_model:
       rows:
       - id: 1
         item_id: 1
-        event_date: '2020-01-01'
       - id: 2
         item_id: 1
-        event_date: '2020-01-02'
       - id: 3
         item_id: 2
-        event_date: '2020-01-03'
   outputs:
     query:
       rows:
