@@ -8,68 +8,15 @@ A comprehensive suite of tests can empower data practitioners to work with confi
 
 ## Creating tests
 
-Test suites are defined using the YAML format. Each suite is a file whose name must begin with `test`, end in either `.yaml` or `.yml`, and is stored under the `tests/` folder of your SQLMesh project.
+A test suite is a [YAML file](https://learnxinyminutes.com/docs/yaml/) contained in the `tests/` folder of a SQLMesh project, whose name begins with `test` and ends with either `.yaml` or `.yml`. It can contain one or more uniquely named unit tests, each with a number of attributes that define its behavior.
 
-Tests within a suite file contain the following attributes:
+At minimum, a unit test must specify the model being tested, the input values for its upstream models, and the expected outputs for the target model's query and/or its [Common Table Expressions](glossary.md#cte). Other optional attributes include a description, the gateway to use, and a mapping that assigns values to [macro variables](macros/macro_variables.md) referenced in the model.
 
-* The unique name of a test
-* The name of the model targeted by this test
-* [Optional] The test's description
-* [Optional] The gateway whose `test_connection` will be used to run this test
-* Test inputs, which are defined per upstream model or external table referenced by the target model. Each test input consists of the following:
-    * The name of an upstream model or external table
-    * The list of rows defined as a mapping from a column name to a value associated with it
-    * [Optional] The table's schema, defined as a mapping from a column name to its type, represented as a string. Any number of columns may be omitted from this mapping, in which case their types will be inferred by SQLMesh, when possible
-* Expected outputs, which are defined as follows:
-    * The list of rows that are expected to be returned by the model's query defined as a mapping from a column name to a value associated with it
-    * [Optional] The list of expected rows per each individual [Common Table Expression](glossary.md#cte) (CTE) defined in the model's query
-* [Optional] The dictionary of values for macro variables that will be set during model testing
-    * There are three special macro variables: `start`, `end`, and `execution_time`. Setting these will allow you to override the date macros in your SQL queries. For example, `@execution_ds` will render to `2022-01-01` if `execution_time` is set to this value. Additionally, SQL expressions like `CURRENT_DATE` and `CURRENT_TIMESTAMP` will result in the same datetime value as `execution_time`, when it is set.
-
-The YAML format is defined as follows:
-
-```yaml linenums="1"
-<unique_test_name>:
-  model: <target_model_name>
-  description: <description>  # Optional
-  gateway: <gateway>  # Optional
-  inputs:
-    <upstream_model_or_external_table_name>:
-      columns:  # Optional
-        <column_name>: <column_type>
-      rows:
-        - <column_name>: <column_value>
-  outputs:
-    query:
-      rows:
-        - <column_name>: <column_value>
-    ctes:  # Optional
-      <cte_alias>:
-        rows:
-          - <column_name>: <column_value>
-  vars:  # Optional
-    start: 2022-01-01
-    end: 2022-01-01
-    execution_time: 2022-01-01
-    <macro_variable_name>: <macro_variable_value>
-```
-
-The `rows` key is optional in the above format, so the following would also be valid:
-
-```yaml linenums="1"
-<unique_test_name>:
-  model: <target_model_name>
-  inputs:
-    <upstream_model_or_external_table_name>:
-      - <column_name>: <column_value>
-...
-```
-
-Note: the columns in each row of an expected output must appear in the same relative order as they are selected in the corresponding query.
+Learn more about the supported attributes in the [unit test structure section](#unit-test-structure).
 
 ### Example
 
-In this example, we'll use the `sqlmesh_example.full_model` model, which is provided as part of the `sqlmesh init` command and defined as follows:
+In this example, we'll use the `sqlmesh_example.full_model` model, which is provided as part of the `sqlmesh init` command and is defined as follows:
 
 ```sql linenums="1"
 MODEL (
@@ -82,15 +29,13 @@ MODEL (
 
 SELECT
   item_id,
-  COUNT(distinct id) AS num_orders,
+  COUNT(DISTINCT id) AS num_orders,
 FROM
-    sqlmesh_example.incremental_model
+  sqlmesh_example.incremental_model
 GROUP BY item_id
 ```
 
-Notice how the query of the model definition above references one upstream model: `sqlmesh_example.incremental_model`.
-
-The test definition for this model may look like the following:
+This model aggregates the number of orders per `item_id` from the upstream `sqlmesh_example.incremental_model`. One way to test it is shown below:
 
 ```yaml linenums="1"
 test_example_full_model:
@@ -100,13 +45,10 @@ test_example_full_model:
       rows:
       - id: 1
         item_id: 1
-        event_date: '2020-01-01'
       - id: 2
         item_id: 1
-        event_date: '2020-01-02'
       - id: 3
         item_id: 2
-        event_date: '2020-01-03'
   outputs:
     query:
       rows:
@@ -116,52 +58,33 @@ test_example_full_model:
         num_orders: 1
 ```
 
-The `event_date` column is not needed in the above test, since it is not referenced in `full_model`, so it may be omitted.
-
-If we were only interested in testing the `num_orders` column, we could only specify input values for the `id` column of `sqlmesh_example.incremental_model`, thus rewriting the above test more compactly as follows:
-
-```yaml linenums="1"
-test_example_full_model:
-  model: sqlmesh_example.full_model
-  inputs:
-    sqlmesh_example.incremental_model:
-        rows:
-        - id: 1
-        - id: 2
-        - id: 3
-  outputs:
-    query:
-      rows:
-      - num_orders: 3
-```
-
-Since [omitted columns](#omitting-columns) are treated as `NULL`, this test also implicitly asserts that both the input and the expected output `item_id` columns are `NULL`, which is correct.
+This test verifies that `sqlmesh_example.full_model` correctly counts the number of orders per `item_id`. It provides three rows as input to `sqlmesh_example.incremental_model` and expects two rows as output from the target model's query.
 
 ### Testing CTEs
 
-Individual CTEs within the model's query can also be tested. Let's slightly modify the query of the model used in the previous example:
+Individual CTEs within the model's query can also be tested. To demonstrate this, let's slightly modify the query of `sqlmesh_example.full_model` to include a CTE named `filtered_orders_cte`:
 
 ```sql linenums="1"
 WITH filtered_orders_cte AS (
-    SELECT
-      id,
-      item_id
-    FROM
-        sqlmesh_example.incremental_model
-    WHERE
-        item_id = 1
+  SELECT
+    id,
+    item_id
+  FROM
+    sqlmesh_example.incremental_model
+  WHERE
+    item_id = 1
 )
 SELECT
   item_id,
   COUNT(DISTINCT id) AS num_orders,
 FROM
-    filtered_orders_cte
+  filtered_orders_cte
 GROUP BY item_id
 ```
 
-Below is the example of a test that verifies individual rows returned by the `filtered_orders_cte` CTE before aggregation takes place:
+The following test verifies the output of this CTE before aggregation takes place:
 
-```yaml linenums="1" hl_lines="16-22"
+```yaml linenums="1" hl_lines="13-19"
 test_example_full_model:
   model: sqlmesh_example.full_model
   inputs:
@@ -169,13 +92,10 @@ test_example_full_model:
         rows:
         - id: 1
           item_id: 1
-          event_date: '2020-01-01'
         - id: 2
           item_id: 1
-          event_date: '2020-01-02'
         - id: 3
           item_id: 2
-          event_date: '2020-01-03'
   outputs:
     ctes:
       filtered_orders_cte:
@@ -194,10 +114,9 @@ test_example_full_model:
 
 Defining the complete inputs and expected outputs for wide tables, i.e. tables with many columns, can become cumbersome. Therefore, if certain columns can be safely ignored they may be omitted from any row and their value will be treated as `NULL` for that row.
 
-Additionally, it's possible to test only a subset of the expected output columns by setting `partial` to `true` for the rows of interest:
+Additionally, it's possible to test only a subset of the output columns by setting `partial` to `true` for the outputs of interest:
 
 ```yaml linenums="1"
-  ...
   outputs:
     query:
       partial: true
@@ -206,16 +125,13 @@ Additionally, it's possible to test only a subset of the expected output columns
           ...
 ```
 
-This is useful when we can't treat the missing columns as `NULL`, but still want to ignore them. In order to apply this setting to _all_ expected outputs, simply set it under the `outputs` key:
+This is useful when the missing columns can't be treated as `NULL`, but we still want to ignore them. In order to apply this setting to _all_ expected outputs, set it under the `outputs` key:
 
 ```yaml linenums="1"
-  ...
   outputs:
     partial: true
     ...
 ```
-
-When `partial` is set for a _specific_ expected output, its rows need to be defined as a mapping under the `rows` key and only the columns referenced in them will be tested.
 
 ## Freezing time
 
@@ -227,13 +143,13 @@ The following example demonstrates how `execution_time` can be used to test a co
 
 ```sql linenums="1"
 MODEL (
-    name colors,
-    kind FULL
+  name colors,
+  kind FULL
 );
 
 SELECT
-    'Yellow' AS color,
-    CURRENT_TIMESTAMP AS created_at
+  'Yellow' AS color,
+  CURRENT_TIMESTAMP AS created_at
 ```
 
 And the corresponding test is:
@@ -270,34 +186,34 @@ test_colors:
 
 Creating tests manually can be repetitive and error-prone, which is why SQLMesh also provides a way to automate this process using the [`create_test` command](../reference/cli.md#create_test).
 
-This command can generate a complete test for a given model, as long as the tables of the upstream models it references exist in the project's data warehouse and are already populated with data.
+This command can generate a complete test for a given model, as long as the tables of its upstream models exist in the project's data warehouse and are already populated with data.
 
 ### Example
 
-In this example, we'll show how to generate a test for `sqlmesh_example.incremental_model`, which is another model provided as part of the `sqlmesh init` command and defined as follows:
+In this example, we'll show how to generate a test for `sqlmesh_example.incremental_model`, which is another model provided as part of the `sqlmesh init` command and is defined as follows:
 
 ```sql linenums="1"
 MODEL (
-    name sqlmesh_example.incremental_model,
-    kind INCREMENTAL_BY_TIME_RANGE (
-        time_column event_date
-    ),
-    start '2020-01-01',
-    cron '@daily',
-    grain (id, event_date)
+  name sqlmesh_example.incremental_model,
+  kind INCREMENTAL_BY_TIME_RANGE (
+    time_column event_date
+  ),
+  start '2020-01-01',
+  cron '@daily',
+  grain (id, event_date)
 );
 
 SELECT
-    id,
-    item_id,
-    event_date,
+  id,
+  item_id,
+  event_date,
 FROM
-    sqlmesh_example.seed_model
+  sqlmesh_example.seed_model
 WHERE
-    event_date BETWEEN @start_date AND @end_date
+  event_date BETWEEN @start_date AND @end_date
 ```
 
-Firstly, we need to specify the input data for the upstream model `sqlmesh_example.seed_model`. The `create_test` command starts by executing a user-supplied query against the project's data warehouse and uses the returned data to produce the test's input rows.
+Firstly, we need to specify the input data for the upstream model `sqlmesh_example.seed_model`. The `create_test` command starts by executing a user-supplied query against the project's data warehouse to fetch this data.
 
 For instance, the following query will return three rows from the table corresponding to the model `sqlmesh_example.seed_model`:
 
@@ -315,7 +231,7 @@ If we set `@start_date` to `'2020-01-01'` and `@end_date` to `'2020-01-04'`, the
 SELECT * FROM sqlmesh_example.seed_model WHERE event_date BETWEEN '2020-01-01' AND '2020-01-04' LIMIT 3
 ```
 
-Finally, combining this query with the proper macro variable definitions, we can compute the expected output for the model's query in order to generate the complete test.
+Finally, combining it with the proper macro variable definitions, we can compute the expected output for the model's query in order to generate the complete test.
 
 This can be achieved using the following command:
 
@@ -355,7 +271,7 @@ test_incremental_model:
     end: '2020-01-04'
 ```
 
-As shown below, we now have two passing tests. Hooray!
+As you can see, we now have two passing tests. Hooray!
 
 ```
 $ sqlmesh test
@@ -440,7 +356,7 @@ Ran 1 test in 0.012s
 FAILED (failures=1)
 ```
 
-Note: when there are many differing columns, the corresponding DataFrame will be truncated by default. In order to fully display them, use the `-v` (verbose) option of the `sqlmesh test` command.
+Note: when there are many differing columns, the corresponding dataframe will be truncated by default. In order to fully display them, use the `-v` (verbose) option of the `sqlmesh test` command.
 
 To run a specific model test, pass in the suite file name followed by `::` and the name of the test:
 
@@ -471,20 +387,165 @@ In [1]: import sqlmesh
 
 The `%run_test` magic supports the same options as the corresponding [CLI command](#testing-using-the-CLI).
 
-## Troubleshooting Issues
+## Troubleshooting issues
 
 When executing unit tests, SQLMesh creates input fixtures as views within the testing connection.
 
 These fixtures are dropped by default after the execution completes, but it is possible to preserve them using the `--preserve-fixtures` option available in both the `sqlmesh test` CLI command and the `%run_test` notebook magic.
 
-This can be helpful when debugging a test failure, because for example it's possible to query the fixture tables directly and verify that they are populated correctly.
+This can be helpful when debugging a test failure, because for example it's possible to query the fixture views directly and verify that they are defined correctly.
 
-### Type Mismatches
+### Type mismatches
 
-It's not always possible to correctly interpret certain column values in a unit test without additional context. For example, a YAML dictionary can be used to represent both a `STRUCT` and a `MAP` value.
+It's not always possible to correctly interpret certain values in a unit test without additional context. For example, a YAML dictionary can be used to represent both a `STRUCT` and a `MAP` value in SQL.
 
-To avoid this ambiguity, SQLMesh needs to know the column's type. This is possible either by relying on its type inference, which can be enhanced by `CAST`ing the model's columns, or by defining the model's schema:
+To avoid this ambiguity, SQLMesh needs to know the columns' types. By default, it will try to infer these types based on the model definitions, but they can also be explicitly specified:
 
-- in the [`schema.yaml`](models/external_models.md#generating-an-external-models-schema-file) file
+- in the [`schema.yaml`](models/external_models.md#generating-an-external-models-schema-file) file (for external models)
 - using the [`columns`](models/overview.md#columns) model property
-- using the [`columns`](#creating_tests) field in the unit test itself
+- using the [`columns`](#creating_tests) attribute of the unit test
+
+## Unit test structure
+
+### `<test_name>`
+
+The unique name of the test, which must be a valid YAML key.
+
+### `<test_name>.model`
+
+The name of the model being tested. This model must be defined in the project's `models/` folder.
+
+### `<test_name>.description`
+
+An optional description of the test, which can be used to provide additional context.
+
+### `<test_name>.gateway`
+
+The gateway whose `test_connection` will be used to run this test. If not specified, the default gateway is used.
+
+### `<test_name>.inputs`
+
+The inputs that will be used to test the target model. If the model has no dependencies, this can be omitted.
+
+### `<test_name>.inputs.<upstream_model>`
+
+A model that the target model depends on.
+
+### `<test_name>.inputs.<upstream_model>.rows`
+
+The rows of the upstream model, defined as an array of dictionaries that map columns to their values:
+
+```yaml linenums="1"
+    <upstream_model>:
+      rows:
+        - <column_name>: <column_value>
+        ...
+```
+
+If `rows` is the only key under `<upstream_model>`, then it can be omitted:
+
+```yaml linenums="1"
+    <upstream_model>:
+      - <column_name>: <column_value>
+      ...
+```
+
+### `<test_name>.inputs.<upstream_model>.columns`
+
+An optional dictionary that maps columns to their types:
+
+```yaml linenums="1"
+    <upstream_model>:
+      columns:
+        - <column_name>: <column_type>
+        ...
+```
+
+This can be used to help SQLMesh interpret the row values correctly in the context of SQL.
+
+Any number of columns may be omitted from this mapping, in which case their types will be inferred on a best-effort basis. Explicitly casting the corresponding columns in the model's query will enable SQLMesh to infer their types more accurately.
+
+### `<test_name>.inputs.<upstream_model>.query`
+
+An optional SQL query that will be executed against the testing connection to generate the input rows:
+
+```yaml linenums="1"
+    <upstream_model>:
+      query: <sql_query>
+```
+
+This provides more control over how the input data must be interpreted.
+
+The `query` key can't be used together with the `rows` key.
+
+### `<test_name>.outputs`
+
+The target model's expected outputs.
+
+Note: the columns in each row of an expected output must appear in the same relative order as they are selected in the corresponding query.
+
+### `<test_name>.outputs.partial`
+
+A boolean flag that indicates whether only a subset of the output columns will be tested. When set to `true`, only the columns referenced in the corresponding expected rows will be tested.
+
+See also: [Omitting columns](#omitting-columns).
+
+### `<test_name>.outputs.query`
+
+The expected output of the target model's query. This is optional, as long as [`<test_name>.outputs.ctes`](#test_nameoutputsctes) is present.
+
+### `<test_name>.outputs.query.partial`
+
+Same as [`<test_name>.outputs.partial`](#test_nameoutputspartial), but applies only to the output of the target model's query.
+
+### `<test_name>.outputs.query.rows`
+
+The expected rows of the target model's query.
+
+See also: [`<test_name>.inputs.<upstream_model>.rows`](#test_nameinputsupstream_modelrows).
+
+### `<test_name>.outputs.query.query`
+
+An optional SQL query that will be executed against the testing connection to generate the expected rows for the target model's query.
+
+See also: [`<test_name>.inputs.<upstream_model>.query`](#test_nameinputsupstream_modelquery).
+
+### `<test_name>.outputs.ctes`
+
+The expected output per each individual top-level [Common Table Expression](glossary.md#cte) (CTE) defined in the target model's query. This is optional, as long as [`<test_name>.outputs.query`](#test_nameoutputsquery) is present.
+
+### `<test_name>.outputs.ctes.<cte_name>`
+
+The expected output of the CTE with name `<cte_name>`.
+
+### `<test_name>.outputs.ctes.<cte_name>.partial`
+
+Same as [`<test_name>.outputs.partial`](#test_nameoutputs_partial), but applies only to the output of the CTE with name `<cte_name>`.
+
+### `<test_name>.outputs.ctes.<cte_name>.rows`
+
+The expected rows of the CTE with name `<cte_name>`.
+
+See also: [`<test_name>.inputs.<upstream_model>.rows`](#test_nameinputsupstream_modelrows).
+
+### `<test_name>.outputs.ctes.<cte_name>.query`
+
+An optional SQL query that will be executed against the testing connection to generate the expected rows for the CTE with name `<cte_name`.
+
+See also: [`<test_name>.inputs.<upstream_model>.query`](#test_nameinputsupstream_modelquery).
+
+### `<test_name>.vars`
+
+An optional dictionary that assigns values to macro variables:
+
+```
+  vars:
+    start: 2022-01-01
+    end: 2022-01-01
+    execution_time: 2022-01-01
+    <macro_variable_name>: <macro_variable_value>
+```
+
+There are three special macro variables: `start`, `end`, and `execution_time`. If these are set, they will override the corresponding date macros of the target model. For example, `@execution_ds` will render to `2022-01-01` if `execution_time` is set to this value.
+
+Additionally, SQL expressions like `CURRENT_DATE` and `CURRENT_TIMESTAMP` will produce the same datetime value as `execution_time`, when it is set.
