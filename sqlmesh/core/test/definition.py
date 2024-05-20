@@ -767,28 +767,30 @@ def _normalize_df_value(value: t.Any) -> t.Any:
     return value
 
 
-def _load_csv(path: Path | str | None, rows: str | None) -> list | None:
+def _load_csv(path: Path | str | None, rows: str | None) -> t.List | None:
     """Handler to load rows from csv file or string."""
     return pd.read_csv(path or StringIO(rows)).to_dict(orient="records")
 
 
-def _load_yaml(path: Path | str | None, rows: list | None) -> list | None:
+def _load_yaml(path: Path | str | None, rows: t.List | None) -> t.List | None:
     """Handler to load rows from yaml file or list."""
     input_rows = yaml_load(Path(path)) if path else rows
     return input_rows.get("rows") if isinstance(input_rows, dict) else input_rows
 
 
-format_handlers = {"csv": _load_csv, "yaml": _load_yaml}
+FORMAT_HANDLERS = {"csv": _load_csv, "yaml": _load_yaml}
 
 
-def _load_rows(values: t.Dict) -> list | None:
+def _load_rows(values: t.Dict) -> t.List | None:
     """Load data in rows from external file or inline declared string."""
     rows = values.get("rows")
     format = values.get("format") or Path(values.get("path", "")).suffix[1:]
     path = values.get("path")
 
-    handler = format_handlers.get(format)
-    if callable(handler):
+    handler = FORMAT_HANDLERS.get(format)
+    if format and not handler:
+        _raise_error(f"Unsupported data format '{format}'")
+    elif callable(handler):
         rows = handler(path, rows)
 
     return rows
