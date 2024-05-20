@@ -187,9 +187,6 @@ on_destructive_change_validator = field_validator("on_destructive_change", mode=
 
 class _ModelKind(PydanticModel, ModelKindMixin):
     name: ModelKindName
-    on_destructive_change: OnDestructiveChange = OnDestructiveChange.IGNORE
-
-    _on_destructive_change_validator = on_destructive_change_validator
 
     @property
     def model_kind_name(self) -> t.Optional[ModelKindName]:
@@ -302,6 +299,8 @@ kind_dialect_validator = field_validator("dialect", mode="before", always=True)(
 
 class _Incremental(_ModelKind):
     on_destructive_change: OnDestructiveChange = OnDestructiveChange.ERROR
+
+    _on_destructive_change_validator = on_destructive_change_validator
 
     @property
     def metadata_hash_values(self) -> t.List[t.Optional[str]]:
@@ -613,10 +612,7 @@ def model_kind_type_from_name(name: t.Optional[str]) -> t.Type[ModelKind]:
     return t.cast(t.Type[ModelKind], klass)
 
 
-@field_validator_v1_args
-def _model_kind_validator(cls: t.Type, v: t.Any, values: t.Dict[str, t.Any]) -> ModelKind:
-    dialect = get_dialect(values)
-
+def create_model_kind(v: t.Any, dialect: str, defaults: t.Dict[str, t.Any]) -> ModelKind:
     if isinstance(v, _ModelKind):
         return t.cast(ModelKind, v)
 
@@ -643,14 +639,20 @@ def _model_kind_validator(cls: t.Type, v: t.Any, values: t.Dict[str, t.Any]) -> 
         if (
             issubclass(kind_type, _Incremental)
             and props.get("on_destructive_change") is None
-            and values.get("on_destructive_change_") is not None
+            and defaults.get("on_destructive_change") is not None
         ):
-            props["on_destructive_change"] = values.get("on_destructive_change_")
+            props["on_destructive_change"] = defaults.get("on_destructive_change")
 
         return kind_type(**props)
 
     name = (v.name if isinstance(v, exp.Expression) else str(v)).upper()
     return model_kind_type_from_name(name)(name=name)  # type: ignore
+
+
+@field_validator_v1_args
+def _model_kind_validator(cls: t.Type, v: t.Any, values: t.Dict[str, t.Any]) -> ModelKind:
+    dialect = get_dialect(values)
+    return create_model_kind(v, dialect, {})
 
 
 model_kind_validator = field_validator("kind", mode="before")(_model_kind_validator)

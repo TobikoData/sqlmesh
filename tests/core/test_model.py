@@ -4277,7 +4277,7 @@ def test_forward_only_on_destructive_change_config() -> None:
     model = load_sql_based_model(expressions, defaults=config.model_defaults.dict())
     context.upsert_model(model)
     context_model = context.get_model("memory.db.table")
-    assert context_model.kind.on_destructive_change.is_ignore
+    assert context_model.on_destructive_change.is_ignore
 
     # global default to ERROR for incremental models
     config = Config(model_defaults=ModelDefaultsConfig(dialect="duckdb"))
@@ -4298,7 +4298,7 @@ def test_forward_only_on_destructive_change_config() -> None:
     model = load_sql_based_model(expressions, defaults=config.model_defaults.dict())
     context.upsert_model(model)
     context_model = context.get_model("memory.db.table")
-    assert context_model.kind.on_destructive_change.is_error
+    assert context_model.on_destructive_change.is_error
 
     # WARN specified in model definition, overrides incremental model sqlmesh default ERROR
     config = Config(model_defaults=ModelDefaultsConfig(dialect="duckdb"))
@@ -4320,7 +4320,7 @@ def test_forward_only_on_destructive_change_config() -> None:
     model = load_sql_based_model(expressions, defaults=config.model_defaults.dict())
     context.upsert_model(model)
     context_model = context.get_model("memory.db.table")
-    assert context_model.kind.on_destructive_change.is_warn
+    assert context_model.on_destructive_change.is_warn
 
     # WARN specified as model default, overrides incremental model sqlmesh default ERROR
     config = Config(
@@ -4343,7 +4343,7 @@ def test_forward_only_on_destructive_change_config() -> None:
     model = load_sql_based_model(expressions, defaults=config.model_defaults.dict())
     context.upsert_model(model)
     context_model = context.get_model("memory.db.table")
-    assert context_model.kind.on_destructive_change.is_warn
+    assert context_model.on_destructive_change.is_warn
 
     # WARN specified as model default, does not override non-incremental sqlmesh default IGNORE
     config = Config(
@@ -4363,4 +4363,4 @@ def test_forward_only_on_destructive_change_config() -> None:
     model = load_sql_based_model(expressions, defaults=config.model_defaults.dict())
     context.upsert_model(model)
     context_model = context.get_model("memory.db.table")
-    assert context_model.kind.on_destructive_change.is_ignore
+    assert context_model.on_destructive_change.is_ignore
