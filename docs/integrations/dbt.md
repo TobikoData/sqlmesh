@@ -170,7 +170,19 @@ The [`lookback` parameter](../concepts/models/overview.md#lookback) is used to c
 
 #### on_schema_change
 
-It's important to note, that the `on_schema_change` setting is ignored by SQLMesh. Schema changes are only applied during the [plan](../concepts/plans.md) application (i.e. `sqlmesh plan`) and never during runtime (i.e. `sqlmesh run`). The target table's schema is **always** updated to match the model's query, as if the `on_schema_change` setting was set to `sync_all_columns`.
+SQLMesh automatically detects destructive schema changes to [forward-only incremental models](../guides/incremental_time.md#forward-only-models) and to all incremental models in [forward-only plans](../concepts/plans.md#destructive-changes).
+
+A model's [`on_destructive_change` setting](../guides/incremental_time.md#destructive-changes) determines whether it errors (default), warns, or silently allows the changes. SQLMesh always allows non-destructive forward-only schema changes, such as adding or casting a column.
+
+`on_schema_change` configuration values are mapped to these SQLMesh `on_destructive_change` values:
+
+| `on_schema_change` | SQLMesh `on_destructive_change` |
+| ------------------ | ------------------------------- |
+| ignore             | error                           |
+| sync_all_columns   | allow                           |
+| fail               | error                           |
+| append_new_columns | error                           |
+
 
 ## Snapshot support
 
@@ -240,7 +252,7 @@ The project is now configured to use airflow. Going forward, this also means tha
 SQLMesh supports running dbt projects using the majority of dbt jinja methods, including:
 
 | Method      | Method         | Method       | Method  |
-|-------------|----------------|--------------|---------|
+| ----------- | -------------- | ------------ | ------- |
 | adapter (*) | env_var        | project_name | target  |
 | as_bool     | exceptions     | ref          | this    |
 | as_native   | from_yaml      | return       | to_yaml |

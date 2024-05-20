@@ -21,7 +21,7 @@ from sqlmesh.core.model import (
     ViewKind,
     create_sql_model,
 )
-from sqlmesh.core.model.kind import SCDType2ByTimeKind
+from sqlmesh.core.model.kind import SCDType2ByTimeKind, OnDestructiveChange
 from sqlmesh.dbt.basemodel import BaseModelConfig, Materialization, SnapshotStrategy
 from sqlmesh.dbt.common import SqlStr, extract_jinja_config, sql_str_validator
 from sqlmesh.utils.errors import ConfigError
@@ -86,6 +86,7 @@ class ModelConfig(BaseModelConfig):
     unique_key: t.Optional[t.List[str]] = None
     partition_by: t.Optional[t.Union[t.List[str], t.Dict[str, t.Any]]] = None
     full_refresh: t.Optional[bool] = None
+    on_schema_change: t.Optional[str] = None
 
     # Snapshot (SCD Type 2) Fields
     updated_at: t.Optional[str] = None
@@ -181,16 +182,26 @@ class ModelConfig(BaseModelConfig):
         """
         target = context.target
         materialization = self.model_materialization
+
+        # args common to all sqlmesh incremental kinds, regardless of materialization
+        incremental_kind_kwargs: t.Dict[str, t.Any] = {}
+        if self.on_schema_change:
+            incremental_kind_kwargs["on_destructive_change"] = (
+                OnDestructiveChange.ALLOW
+                if self.on_schema_change == "sync_all_columns"
+                else OnDestructiveChange.ERROR
+            )
+
         if materialization == Materialization.TABLE:
             return FullKind()
         if materialization == Materialization.VIEW:
             return ViewKind()
         if materialization == Materialization.INCREMENTAL:
-            incremental_kwargs: t.Dict[str, t.Any] = {"dialect": context.dialect}
+            incremental_materialization_kwargs: t.Dict[str, t.Any] = {"dialect": context.dialect}
             for field in ("batch_size", "lookback", "forward_only"):
                 field_val = getattr(self, field, None) or self.meta.get(field, None)
                 if field_val:
-                    incremental_kwargs[field] = field_val
+                    incremental_materialization_kwargs[field] = field_val
 
             if self.time_column:
                 strategy = self.incremental_strategy or target.default_incremental_strategy(
@@ -210,7 +221,8 @@ class ModelConfig(BaseModelConfig):
                     disable_restatement=(
                         self.disable_restatement if self.disable_restatement is not None else False
                     ),
-                    **incremental_kwargs,
+                    **incremental_kind_kwargs,
+                    **incremental_materialization_kwargs,
                 )
 
             disable_restatement = self.disable_restatement
@@ -234,7 +246,8 @@ class ModelConfig(BaseModelConfig):
                 return IncrementalByUniqueKeyKind(
                     unique_key=self.unique_key,
                     disable_restatement=disable_restatement,
-                    **incremental_kwargs,
+                    **incremental_kind_kwargs,
+                    **incremental_materialization_kwargs,
                 )
 
             logger.warning(
@@ -248,8 +261,9 @@ class ModelConfig(BaseModelConfig):
             )
             return IncrementalUnmanagedKind(
                 insert_overwrite=strategy in INCREMENTAL_BY_TIME_STRATEGIES,
-                forward_only=incremental_kwargs.get("forward_only", True),
+                forward_only=incremental_materialization_kwargs.get("forward_only", True),
                 disable_restatement=disable_restatement,
+                **incremental_kind_kwargs,
             )
         if materialization == Materialization.EPHEMERAL:
             return EmbeddedKind()
@@ -269,6 +283,7 @@ class ModelConfig(BaseModelConfig):
                     if target.dialect == "bigquery"
                     else exp.DataType.build("TIMESTAMP")
                 ),
+                **incremental_kind_kwargs,
             }
             if self.snapshot_strategy.is_check:
                 return SCDType2ByColumnKind(
