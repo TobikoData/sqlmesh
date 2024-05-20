@@ -371,9 +371,9 @@ def test_forward_only_model_on_destructive_change(
     ):
         PlanBuilder(context_diff_1, schema_differ).build()
 
-    # ignore A, indirect change to B
+    # allow A, indirect change to B
     snapshot_a_old2, snapshot_a2 = make_snapshot_on_destructive_change(
-        on_destructive_change=OnDestructiveChange.IGNORE
+        on_destructive_change=OnDestructiveChange.ALLOW
     )
 
     snapshot_b_old2 = make_snapshot(
@@ -428,9 +428,9 @@ def test_forward_only_model_on_destructive_change(
     ):
         PlanBuilder(context_diff_2, schema_differ).build()
 
-    # ignore A and B, indirect change to C
+    # allow A and B, indirect change to C
     snapshot_a_old3, snapshot_a3 = make_snapshot_on_destructive_change(
-        on_destructive_change=OnDestructiveChange.IGNORE
+        on_destructive_change=OnDestructiveChange.ALLOW
     )
 
     snapshot_b_old3 = make_snapshot(
@@ -441,7 +441,7 @@ def test_forward_only_model_on_destructive_change(
             kind=IncrementalByTimeRangeKind(
                 time_column="ds",
                 forward_only=True,
-                on_destructive_change=OnDestructiveChange.IGNORE,
+                on_destructive_change=OnDestructiveChange.ALLOW,
             ),
         ),
         nodes={'"a"': snapshot_a_old3.model},

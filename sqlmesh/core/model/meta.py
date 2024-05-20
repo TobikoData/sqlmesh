@@ -422,4 +422,4 @@ class ModelMeta(_Node):
 
     @property
     def on_destructive_change(self) -> OnDestructiveChange:
-        return getattr(self.kind, "on_destructive_change", OnDestructiveChange.IGNORE)
+        return getattr(self.kind, "on_destructive_change", OnDestructiveChange.ALLOW)

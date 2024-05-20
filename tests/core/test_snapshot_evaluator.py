@@ -833,7 +833,7 @@ def test_migrate(mocker: MockerFixture, make_snapshot):
     model = SqlModel(
         name="test_schema.test_model",
         kind=IncrementalByTimeRangeKind(
-            time_column="a", on_destructive_change=OnDestructiveChange.IGNORE
+            time_column="a", on_destructive_change=OnDestructiveChange.ALLOW
         ),
         storage_format="parquet",
         query=parse_one("SELECT c, a FROM tbl WHERE ds BETWEEN @start_ds and @end_ds"),

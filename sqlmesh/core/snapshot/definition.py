@@ -951,7 +951,7 @@ class Snapshot(PydanticModel, SnapshotInfoMixin):
                 if runtime_check
                 else (self.model.forward_only or is_forward_only_plan)
             )
-            and not self.model.on_destructive_change.is_ignore
+            and not self.model.on_destructive_change.is_allow
             and self.name not in allow_destructive_snapshots
         )
 

@@ -157,7 +157,7 @@ class OnDestructiveChange(str, Enum):
 
     ERROR = "ERROR"
     WARN = "WARN"
-    IGNORE = "IGNORE"
+    ALLOW = "ALLOW"
 
     @property
     def is_error(self) -> bool:
@@ -168,8 +168,8 @@ class OnDestructiveChange(str, Enum):
         return self == OnDestructiveChange.WARN
 
     @property
-    def is_ignore(self) -> bool:
-        return self == OnDestructiveChange.IGNORE
+    def is_allow(self) -> bool:
+        return self == OnDestructiveChange.ALLOW
 
 
 def _on_destructive_change_validator(
@@ -187,6 +187,9 @@ on_destructive_change_validator = field_validator("on_destructive_change", mode=
 
 class _ModelKind(PydanticModel, ModelKindMixin):
     name: ModelKindName
+    on_destructive_change: OnDestructiveChange = OnDestructiveChange.ALLOW
+
+    _on_destructive_change_validator = on_destructive_change_validator
 
     @property
     def model_kind_name(self) -> t.Optional[ModelKindName]:

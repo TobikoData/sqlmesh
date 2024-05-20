@@ -167,9 +167,9 @@ The check is performed at plan time based on the model definition. SQLMesh may n
 
 A model's `on_destructive_change` [configuration setting](../reference/model_configuration.md#incremental-models) determines what happens when SQLMesh detects a destructive change.
 
-By default, SQLMesh will error so no data is lost. You can set `on_destructive_change` to `warn` or `ignore` in the model's `MODEL` block to allow destructive changes.
+By default, SQLMesh will error so no data is lost. You can set `on_destructive_change` to `warn` or `allow` in the model's `MODEL` block to allow destructive changes.
 
-This example configures a model to `ignore` (silently allow) destructive changes:
+This example configures a model to silently `allow` destructive changes:
 
 ``` sql linenums="1"
 MODEL (
@@ -177,7 +177,7 @@ MODEL (
     kind INCREMENTAL_BY_TIME_RANGE (
         time_column model_time_column,
         forward_only true,
-        on_destructive_change ignore
+        on_destructive_change allow
     ),
 );
 ```

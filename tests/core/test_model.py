@@ -4261,7 +4261,7 @@ def test_python_model_dialect():
 
 
 def test_forward_only_on_destructive_change_config() -> None:
-    # global default to IGNORE for non-incremental models
+    # global default to ALLOW for non-incremental models
     config = Config(model_defaults=ModelDefaultsConfig(dialect="duckdb"))
     context = Context(config=config)
 
@@ -4277,7 +4277,7 @@ def test_forward_only_on_destructive_change_config() -> None:
     model = load_sql_based_model(expressions, defaults=config.model_defaults.dict())
     context.upsert_model(model)
     context_model = context.get_model("memory.db.table")
-    assert context_model.on_destructive_change.is_ignore
+    assert context_model.on_destructive_change.is_allow
 
     # global default to ERROR for incremental models
     config = Config(model_defaults=ModelDefaultsConfig(dialect="duckdb"))
@@ -4345,7 +4345,7 @@ def test_forward_only_on_destructive_change_config() -> None:
     context_model = context.get_model("memory.db.table")
     assert context_model.on_destructive_change.is_warn
 
-    # WARN specified as model default, does not override non-incremental sqlmesh default IGNORE
+    # WARN specified as model default, does not override non-incremental sqlmesh default ALLOW
     config = Config(
         model_defaults=ModelDefaultsConfig(dialect="duckdb", on_destructive_change="warn")
     )
@@ -4363,4 +4363,4 @@ def test_forward_only_on_destructive_change_config() -> None:
     model = load_sql_based_model(expressions, defaults=config.model_defaults.dict())
     context.upsert_model(model)
     context_model = context.get_model("memory.db.table")
-    assert context_model.on_destructive_change.is_ignore
+    assert context_model.on_destructive_change.is_allow

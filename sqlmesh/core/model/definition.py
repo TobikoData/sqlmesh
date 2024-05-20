@@ -159,43 +159,34 @@ class _Model(ModelMeta, frozen=True):
         expressions = []
         comment = None
         for field_name, field_info in ModelMeta.all_field_infos().items():
-            # fields with `exclude=True` are not present if we are processing data that has been serialized
-            if not (
-                # field_info attributes are stored differently depending on whether we're on Pydantic v1 or v2
-                getattr(field_info, "exclude", None)
-                or (
-                    hasattr(field_info, "field_info")
-                    and getattr(field_info.field_info, "exclude", None)
-                )
-            ):
-                field_value = getattr(self, field_name)
+            field_value = getattr(self, field_name)
 
-                if field_value != field_info.default:
-                    if field_name == "description":
-                        comment = field_value
-                    elif field_name == "kind":
-                        expressions.append(
-                            exp.Property(
-                                this="kind",
-                                value=field_value.to_expression(dialect=self.dialect),
-                            )
+            if field_value != field_info.default:
+                if field_name == "description":
+                    comment = field_value
+                elif field_name == "kind":
+                    expressions.append(
+                        exp.Property(
+                            this="kind",
+                            value=field_value.to_expression(dialect=self.dialect),
                         )
-                    elif field_name == "name":
-                        expressions.append(
-                            exp.Property(
-                                this=field_name,
-                                value=exp.to_table(field_value, dialect=self.dialect),
-                            )
+                    )
+                elif field_name == "name":
+                    expressions.append(
+                        exp.Property(
+                            this=field_name,
+                            value=exp.to_table(field_value, dialect=self.dialect),
                         )
-                    elif field_name not in ("column_descriptions_", "default_catalog"):
-                        expressions.append(
-                            exp.Property(
-                                this=field_info.alias or field_name,
-                                value=META_FIELD_CONVERTER.get(field_name, exp.to_identifier)(
-                                    field_value
-                                ),
-                            )
+                    )
+                elif field_name not in ("column_descriptions_", "default_catalog"):
+                    expressions.append(
+                        exp.Property(
+                            this=field_info.alias or field_name,
+                            value=META_FIELD_CONVERTER.get(field_name, exp.to_identifier)(
+                                field_value
+                            ),
                         )
+                    )
 
         model = d.Model(expressions=expressions)
         model.comments = [comment] if comment else None
