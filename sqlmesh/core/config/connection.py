@@ -97,6 +97,10 @@ class ConnectionConfig(abc.ABC, BaseConfig):
             },
         )
 
+    def connection_validator(self) -> t.Callable[[], None]:
+        """A function that validates the connection configuration"""
+        return self.create_engine_adapter()._ping
+
     def create_engine_adapter(self, register_comments_override: bool = False) -> EngineAdapter:
         """Returns a new instance of the Engine Adapter."""
         return self._engine_adapter(
