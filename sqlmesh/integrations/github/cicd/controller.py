@@ -360,7 +360,7 @@ class GithubController:
         return Environment.normalize_name(
             "_".join(
                 [
-                    self._event.pull_request_info.repo,
+                    self.bot_config.pr_environment_name or self._event.pull_request_info.repo,
                     str(self._event.pull_request_info.pr_number),
                 ]
             )

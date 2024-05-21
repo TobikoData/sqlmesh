@@ -66,7 +66,9 @@ def test_run_all_success_with_approvers_approved(
     controller = make_controller(
         "tests/fixtures/github/pull_request_synchronized.json",
         github_client,
-        bot_config=GithubCICDBotConfig(invalidate_environment_after_deploy=False),
+        bot_config=GithubCICDBotConfig(
+            invalidate_environment_after_deploy=False, pr_environment_name="MyOverride"
+        ),
     )
     controller._context._run_tests = mocker.MagicMock(
         side_effect=lambda **kwargs: (TestResult(), "")
@@ -127,7 +129,7 @@ def test_run_all_success_with_approvers_approved(
 
     assert len(controller._context.apply.call_args_list) == 2
     pr_plan = controller._context.apply.call_args_list[0][0]
-    assert pr_plan[0].environment.name == "hello_world_2"
+    assert pr_plan[0].environment.name == "myoverride_2"
     prod_plan = controller._context.apply.call_args_list[1][0]
     assert prod_plan[0].environment.name == c.PROD
 
@@ -137,7 +139,7 @@ def test_run_all_success_with_approvers_approved(
     assert len(created_comments) == 1
     assert created_comments[0].body.startswith(
         """**SQLMesh Bot Info**
-- PR Virtual Data Environment: hello_world_2
+- PR Virtual Data Environment: myoverride_2
 <details>
   <summary>Prod Plan Being Applied</summary>
 
@@ -147,7 +149,7 @@ def test_run_all_success_with_approvers_approved(
         output = f.read()
         assert (
             output
-            == "run_unit_tests=success\nhas_required_approval=success\ncreated_pr_environment=true\npr_environment_name=hello_world_2\npr_environment_synced=success\nprod_plan_preview=success\nprod_environment_synced=success\n"
+            == "run_unit_tests=success\nhas_required_approval=success\ncreated_pr_environment=true\npr_environment_name=myoverride_2\npr_environment_synced=success\nprod_plan_preview=success\nprod_environment_synced=success\n"
         )
 
 
