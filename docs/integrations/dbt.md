@@ -172,7 +172,7 @@ The [`lookback` parameter](../concepts/models/overview.md#lookback) is used to c
 
 SQLMesh automatically detects destructive schema changes to [forward-only incremental models](../guides/incremental_time.md#forward-only-models) and to all incremental models in [forward-only plans](../concepts/plans.md#destructive-changes).
 
-A model's [`on_destructive_change` setting](../guides/incremental_time.md#destructive-changes) determines whether it errors (default), warns, or silently allows the changes. SQLMesh always allows non-destructive forward-only schema changes, such as adding or casting a column.
+A model's [`on_destructive_change` setting](../guides/incremental_time.md#destructive-changes) determines whether it errors (default), warns, or silently allows the changes. SQLMesh always allows non-destructive forward-only schema changes, such as adding or casting a column in place.
 
 `on_schema_change` configuration values are mapped to these SQLMesh `on_destructive_change` values:
 

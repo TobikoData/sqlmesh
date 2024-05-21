@@ -1586,7 +1586,7 @@ def _check_destructive_schema_change(
     allow_destructive_snapshots: t.Set[str],
 ) -> None:
     if snapshot.needs_destructive_check(
-        allow_destructive_snapshots, True
+        allow_destructive_snapshots, runtime_check=True
     ) and snapshot.has_drop_alteration(alter_expressions):
         warning_msg = f"RUN TIME CHECK: Plan results in a destructive change to forward-only table '{snapshot.name}'s schema."
         if snapshot.model.on_destructive_change.is_warn:

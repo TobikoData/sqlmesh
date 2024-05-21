@@ -549,10 +549,7 @@ class PlanBuilder:
                             )
                             if change_category is not None:
                                 self._set_choice(
-                                    new,
-                                    change_category,
-                                    directly_modified,
-                                    indirectly_modified,
+                                    new, change_category, directly_modified, indirectly_modified
                                 )
                         else:
                             mode = self._categorizer_config.dict().get(
