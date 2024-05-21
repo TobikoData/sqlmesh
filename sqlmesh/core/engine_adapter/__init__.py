@@ -18,6 +18,7 @@ from sqlmesh.core.engine_adapter.spark import SparkEngineAdapter
 from sqlmesh.core.engine_adapter.trino import TrinoEngineAdapter
 
 DIALECT_TO_ENGINE_ADAPTER = {
+    "hive": SparkEngineAdapter,
     "spark": SparkEngineAdapter,
     "bigquery": BigQueryEngineAdapter,
     "duckdb": DuckDBEngineAdapter,

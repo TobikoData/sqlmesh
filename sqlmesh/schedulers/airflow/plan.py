@@ -172,6 +172,7 @@ def create_plan_dag_spec(
         ddl_concurrent_tasks=request.ddl_concurrent_tasks,
         users=request.users,
         is_dev=request.is_dev,
+        allow_destructive_snapshots=request.allow_destructive_snapshots,
         forward_only=request.forward_only,
         dag_start_ts=to_timestamp(now_dt),
         deployability_index=deployability_index_for_evaluation,

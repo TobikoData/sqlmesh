@@ -1396,7 +1396,12 @@ def test_environment_promotion(sushi_context: Context):
         DataType.Type.DOUBLE,
         DataType.Type.FLOAT,
     )
-    apply_to_environment(sushi_context, "dev", SnapshotChangeCategory.FORWARD_ONLY)
+    apply_to_environment(
+        sushi_context,
+        "dev",
+        SnapshotChangeCategory.FORWARD_ONLY,
+        allow_destructive_models=['"memory"."sushi"."customer_revenue_by_day"'],
+    )
 
     # Promote to prod
     def _validate_plan(context, plan):
@@ -1428,6 +1433,7 @@ def test_environment_promotion(sushi_context: Context):
         "prod",
         SnapshotChangeCategory.NON_BREAKING,
         plan_validators=[_validate_plan],
+        allow_destructive_models=['"memory"."sushi"."customer_revenue_by_day"'],
     )
 
 
@@ -1916,6 +1922,7 @@ def apply_to_environment(
     plan_validators: t.Optional[t.Iterable[t.Callable]] = None,
     apply_validators: t.Optional[t.Iterable[t.Callable]] = None,
     plan_start: t.Optional[TimeLike] = None,
+    allow_destructive_models: t.Optional[t.List[str]] = None,
 ):
     plan_validators = plan_validators or []
     apply_validators = apply_validators or []
@@ -1925,6 +1932,7 @@ def apply_to_environment(
         start=plan_start or start(context) if environment != c.PROD else None,
         forward_only=choice == SnapshotChangeCategory.FORWARD_ONLY,
         include_unmodified=True,
+        allow_destructive_models=allow_destructive_models if allow_destructive_models else [],
     )
     if environment != c.PROD:
         plan_builder.set_start(plan_start or start(context))

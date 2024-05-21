@@ -39,6 +39,7 @@ class Plan(PydanticModel, frozen=True):
     skip_backfill: bool
     no_gaps: bool
     forward_only: bool
+    allow_destructive_models: t.Set[str]
     include_unmodified: bool
     end_bounded: bool
     ensure_finalized_snapshots: bool
