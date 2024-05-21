@@ -33,6 +33,7 @@ class GithubCICDBotConfig(BaseConfig):
     skip_pr_backfill: bool = True
     pr_include_unmodified: t.Optional[bool] = None
     run_on_deploy_to_prod: bool = True
+    pr_environment_name: t.Optional[str] = None
 
     @model_validator(mode="before")
     @model_validator_v1_args
