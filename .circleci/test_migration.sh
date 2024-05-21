@@ -16,6 +16,9 @@ fi
 
 git checkout $LAST_TAG
 
+# Install dependencies from the previous release.
+make install-dev
+
 cp -r ./examples/sushi $TMP_DIR
 
 # Run initial plan
@@ -26,6 +29,9 @@ popd
 
 # Switch back to the starting state of the repository
 git checkout -
+
+# Install updated dependencies.
+make install-dev
 
 # Migrate and make sure the diff is empty
 pushd $SUSHI_DIR
