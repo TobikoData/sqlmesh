@@ -228,8 +228,8 @@ class TableDiff:
 
             def _column_expr(name: str, table: str) -> exp.Expression:
                 if matched_columns[name].this in exp.DataType.FLOAT_TYPES:
-                    return exp.Round(
-                        this=exp.column(name, table), decimals=exp.Literal.number(self.decimals)
+                    return exp.func(
+                        "ROUND", exp.column(name, table), exp.Literal.number(self.decimals)
                     )
                 return exp.column(name, table)
 

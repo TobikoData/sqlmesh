@@ -601,7 +601,7 @@ class SQLMeshMagics(Magics):
     @argument(
         "--decimals",
         type=int,
-        default=20,
+        default=3,
         help="The number of decimal places to keep when comparing floating point columns. Default: 3",
     )
     @line_magic
