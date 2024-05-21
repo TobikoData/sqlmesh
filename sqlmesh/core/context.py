@@ -1206,6 +1206,7 @@ class GenericContext(BaseContext, t.Generic[C]):
         limit: int = 20,
         show: bool = True,
         show_sample: bool = True,
+        decimals: int = 3,
     ) -> TableDiff:
         """Show a diff between two tables.
 
@@ -1219,6 +1220,7 @@ class GenericContext(BaseContext, t.Generic[C]):
             limit: The limit of the sample dataframe.
             show: Show the table diff output in the console.
             show_sample: Show the sample dataframe in the console. Requires show=True.
+            decimals: The number of decimal places to keep when comparing floating point columns.
 
         Returns:
             The TableDiff object containing schema and summary differences.
@@ -1263,6 +1265,7 @@ class GenericContext(BaseContext, t.Generic[C]):
             target_alias=target_alias,
             model_name=model.name if model_or_snapshot else None,
             limit=limit,
+            decimals=decimals,
         )
         if show:
             self.console.show_schema_diff(table_diff.schema_diff())

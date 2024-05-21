@@ -636,9 +636,7 @@ def test_table_diff(notebook, loaded_sushi_context, convert_all_html_output_to_t
         """Schema Diff Between 'DEV' and 'PROD' environments for model 'sushi.top_waiters':
 └── Schemas match""",
         """Row Counts:
-├──  COMMON: 8 rows
-├──  DEV ONLY: 0 rows
-└──  PROD ONLY: 0 rows""",
+└──  FULL MATCH: 8 rows (100.0%)""",
         """COMMON ROWS column comparison stats:""",
         """pct_match
 revenue      100.0""",

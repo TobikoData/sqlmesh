@@ -966,9 +966,22 @@ class TerminalConsole(Console):
             target_name = row_diff.target_alias.upper()
 
         tree = Tree("[b]Row Counts:[/b]")
-        tree.add(f" [b][blue]COMMON[/blue]:[/b] {row_diff.join_count} rows")
-        tree.add(f" [b][yellow]{source_name} ONLY[/yellow]:[/b] {row_diff.s_only_count} rows")
-        tree.add(f" [b][green]{target_name} ONLY[/green]:[/b] {row_diff.t_only_count} rows")
+        if row_diff.full_match_count:
+            tree.add(
+                f" [b][cyan]FULL MATCH[/cyan]:[/b] {row_diff.full_match_count} rows ({row_diff.full_match_pct}%)"
+            )
+        if row_diff.partial_match_count:
+            tree.add(
+                f" [b][blue]PARTIAL MATCH[/blue]:[/b] {row_diff.partial_match_count} rows ({row_diff.partial_match_pct}%)"
+            )
+        if row_diff.s_only_count:
+            tree.add(
+                f" [b][yellow]{source_name} ONLY[/yellow]:[/b] {row_diff.s_only_count} rows ({row_diff.s_only_pct}%)"
+            )
+        if row_diff.t_only_count:
+            tree.add(
+                f" [b][green]{target_name} ONLY[/green]:[/b] {row_diff.t_only_count} rows ({row_diff.t_only_pct}%)"
+            )
         self.console.print("\n", tree)
 
         self.console.print("\n[b][blue]COMMON ROWS[/blue] column comparison stats:[/b]")

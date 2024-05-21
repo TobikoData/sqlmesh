@@ -702,6 +702,13 @@ def create_external_models(obj: Context) -> None:
     is_flag=True,
     help="Show a sample of the rows that differ. With many columns, the output can be very wide.",
 )
+@click.option(
+    "-d",
+    "--decimals",
+    type=int,
+    default=3,
+    help="The number of decimal places to keep when comparing floating point columns. Default: 3",
+)
 @click.pass_obj
 @error_handler
 @cli_analytics

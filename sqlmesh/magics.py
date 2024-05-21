@@ -598,6 +598,12 @@ class SQLMeshMagics(Magics):
         action="store_true",
         help="Show a sample of the rows that differ. With many columns, the output can be very wide.",
     )
+    @argument(
+        "--decimals",
+        type=int,
+        default=3,
+        help="The number of decimal places to keep when comparing floating point columns. Default: 3",
+    )
     @line_magic
     @pass_sqlmesh_context
     def table_diff(self, context: Context, line: str) -> None:
@@ -615,6 +621,7 @@ class SQLMeshMagics(Magics):
             where=args.where,
             limit=args.limit,
             show_sample=args.show_sample,
+            decimals=args.decimals,
         )
 
     @magic_arguments()

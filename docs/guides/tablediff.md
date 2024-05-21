@@ -88,24 +88,20 @@ $ sqlmesh table_diff prod:dev sqlmesh_example.incremental_model --show-sample
 Schema Diff Between 'PROD' and 'DEV' environments for model 'sqlmesh_example.incremental_model':
 └── Schemas match
 
-
 Row Counts:
-├──  COMMON: 6 rows
-├──  PROD ONLY: 1 rows
-└──  DEV ONLY: 0 rows
+├──  FULL MATCH: 6 rows (92.31%)
+└──  PROD ONLY: 1 rows
 
 COMMON ROWS column comparison stats:
          pct_match
-item_id       83.3
+item_id      100.0
 
 
 COMMON ROWS sample data differences:
- id         ds  PROD__item_id  DEV__item_id
-  3 2020-01-03              3           4.0
-
+  All joined rows match
 
 PROD ONLY sample rows:
- id         ds  item_id
+ id event_date  item_id
   1 2020-01-01        2
 ```
 
@@ -124,29 +120,26 @@ Recall that SQLMesh models are accessible via views in the database. In the `pro
 We can replicate the comparison in the previous section by comparing the model views directly. Because we are passing the view names directly, the command needs to manually specify that the join should be on the `id` and `ds` columns with the `-o id -o ds` flags.
 
 ```bash linenums="1"
-$ sqlmesh table_diff sqlmesh_example.incremental_model:sqlmesh_example__dev.incremental_model -o id -o ds --show-sample
+$ sqlmesh table_diff sqlmesh_example.incremental_model:sqlmesh_example__dev.incremental_model -o id -o event_date --show-sample
 
 Schema Diff Between 'SQLMESH_EXAMPLE.INCREMENTAL_MODEL' and 'SQLMESH_EXAMPLE__DEV.INCREMENTAL_MODEL':
 └── Schemas match
 
 
 Row Counts:
-├──  COMMON: 6 rows
-├──  SQLMESH_EXAMPLE.INCREMENTAL_MODEL ONLY: 1 rows
-└──  SQLMESH_EXAMPLE__DEV.INCREMENTAL_MODEL ONLY: 0 rows
+├──  FULL MATCH: 6 rows (92.31%)
+└──  SQLMESH_EXAMPLE.INCREMENTAL_MODEL ONLY: 1 rows
 
 COMMON ROWS column comparison stats:
          pct_match
-item_id       83.3
+item_id      100.0
 
 
 COMMON ROWS sample data differences:
- id         ds  s__item_id  t__item_id
-  3 2020-01-03           3         4.0
-
+  All joined rows match
 
 SQLMESH_EXAMPLE.INCREMENTAL_MODEL ONLY sample rows:
- id         ds  item_id
+ id event_date  item_id
   1 2020-01-01        2
 ```
 

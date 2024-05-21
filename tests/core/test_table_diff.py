@@ -1,4 +1,5 @@
 import pytest
+import pandas as pd
 from sqlglot import exp
 
 from sqlmesh.core.config import AutoCategorizationMode, CategorizerConfig
@@ -81,9 +82,55 @@ def test_data_diff(sushi_context_fixed_date):
     assert row_diff.source_count == 17
     assert row_diff.target_count == 18
     assert row_diff.join_count == 17
+    assert row_diff.full_match_count == 17
+    assert row_diff.full_match_pct == 97.14
+    assert row_diff.partial_match_count == 0.0
+    assert row_diff.partial_match_pct == 0.0
     assert row_diff.s_only_count == 0
     assert row_diff.t_only_count == 1
     assert row_diff.sample.shape == (1, 12)
     assert row_diff.joined_sample.shape == (0, 2)
     assert row_diff.s_sample.shape == (0, 6)
     assert row_diff.t_sample.shape == (1, 6)
+
+
+@pytest.mark.slow
+def test_data_diff_decimals(sushi_context_fixed_date):
+    engine_adapter = sushi_context_fixed_date.engine_adapter
+
+    engine_adapter.ctas(
+        "table_diff_source",
+        pd.DataFrame(
+            {
+                "key": [1, 2, 3],
+                "value": [1.0, 2.0, 3.1233],
+            }
+        ),
+    )
+
+    engine_adapter.ctas(
+        "table_diff_target",
+        pd.DataFrame(
+            {
+                "key": [1, 2, 3],
+                "value": [1.0, 2.0, 3.1234],
+            }
+        ),
+    )
+
+    diff = sushi_context_fixed_date.table_diff(
+        source="table_diff_source",
+        target="table_diff_target",
+        on=["key"],
+    )
+    assert diff.row_diff().full_match_count == 3
+    assert diff.row_diff().partial_match_count == 0
+
+    diff = sushi_context_fixed_date.table_diff(
+        source="table_diff_source",
+        target="table_diff_target",
+        on=["key"],
+        decimals=4,
+    )
+    assert diff.row_diff().full_match_count == 2
+    assert diff.row_diff().partial_match_count == 1
