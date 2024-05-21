@@ -1166,7 +1166,7 @@ def test_on_destructive_change_runtime_check(
     ):
         with pytest.raises(
             RuntimeError,
-            match="""RUN TIME CHECK: Plan results in a destructive change to forward-only table '"test_schema"."test_model"'s schema.""",
+            match="""Plan results in a destructive change to forward-only table '"test_schema"."test_model"'s schema.""",
         ):
             evaluator.migrate([snapshot], {})
 
@@ -1186,7 +1186,7 @@ def test_on_destructive_change_runtime_check(
         evaluator.migrate([snapshot], {})
         assert (
             mock_logger.call_args[0][0]
-            == """RUN TIME CHECK: Plan results in a destructive change to forward-only table '"test_schema"."test_model"'s schema."""
+            == """Plan results in a destructive change to forward-only table '"test_schema"."test_model"'s schema."""
         )
 
     # allow destructive

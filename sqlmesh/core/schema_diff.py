@@ -588,5 +588,13 @@ class SchemaDiffer(PydanticModel):
         )
 
 
+def has_drop_alteration(alter_expressions: t.List[exp.AlterTable]) -> bool:
+    return any(
+        isinstance(action, exp.Drop)
+        for actions in alter_expressions
+        for action in actions.args.get("actions", [])
+    )
+
+
 def _get_name_and_type(struct: exp.ColumnDef) -> t.Tuple[exp.Identifier, exp.DataType]:
     return struct.this, struct.args["kind"]

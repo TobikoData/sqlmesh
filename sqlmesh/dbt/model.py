@@ -186,11 +186,15 @@ class ModelConfig(BaseModelConfig):
         # args common to all sqlmesh incremental kinds, regardless of materialization
         incremental_kind_kwargs: t.Dict[str, t.Any] = {}
         if self.on_schema_change:
-            incremental_kind_kwargs["on_destructive_change"] = (
-                OnDestructiveChange.ALLOW
-                if self.on_schema_change == "sync_all_columns"
-                else OnDestructiveChange.ERROR
-            )
+            on_schema_change = self.on_schema_change.lower()
+
+            on_destructive_change = OnDestructiveChange.WARN
+            if on_schema_change == "sync_all_columns":
+                on_destructive_change = OnDestructiveChange.ALLOW
+            elif on_schema_change == "fail":
+                on_destructive_change = OnDestructiveChange.ERROR
+
+            incremental_kind_kwargs["on_destructive_change"] = on_destructive_change
 
         if materialization == Materialization.TABLE:
             return FullKind()

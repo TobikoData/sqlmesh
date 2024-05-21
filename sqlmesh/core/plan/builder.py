@@ -18,7 +18,7 @@ from sqlmesh.core.config import (
 from sqlmesh.core.context_diff import ContextDiff
 from sqlmesh.core.environment import EnvironmentNamingInfo
 from sqlmesh.core.plan.definition import Plan, SnapshotMapping, earliest_interval_start
-from sqlmesh.core.schema_diff import SchemaDiffer
+from sqlmesh.core.schema_diff import SchemaDiffer, has_drop_alteration
 from sqlmesh.core.snapshot import (
     DeployabilityIndex,
     Snapshot,
@@ -456,9 +456,9 @@ class PlanBuilder:
 
                 if snapshot and snapshot.is_model:
                     # should we raise/warn if this snapshot has/inherits a destructive change?
-                    should_raise_or_warn = snapshot.needs_destructive_check(
-                        self._allow_destructive_models, self._forward_only
-                    )
+                    should_raise_or_warn = (
+                        snapshot.model.forward_only or self._forward_only
+                    ) and snapshot.needs_destructive_check(self._allow_destructive_models)
 
                     snapshot_is_destructive[s_id] = False
 
@@ -489,7 +489,7 @@ class PlanBuilder:
                                 new_columns_to_types,
                             )
 
-                            has_drop = snapshot.has_drop_alteration(schema_diff)
+                            has_drop = has_drop_alteration(schema_diff)
                             snapshot_is_destructive[s_id] = has_drop
                             if has_drop and should_raise_or_warn:
                                 _raise_or_warn(snapshot)

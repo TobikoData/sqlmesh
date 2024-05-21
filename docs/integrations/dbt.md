@@ -178,10 +178,10 @@ A model's [`on_destructive_change` setting](../guides/incremental_time.md#destru
 
 | `on_schema_change` | SQLMesh `on_destructive_change` |
 | ------------------ | ------------------------------- |
-| ignore             | error                           |
+| ignore             | warn                            |
+| append_new_columns | warn                            |
 | sync_all_columns   | allow                           |
 | fail               | error                           |
-| append_new_columns | error                           |
 
 
 ## Snapshot support
