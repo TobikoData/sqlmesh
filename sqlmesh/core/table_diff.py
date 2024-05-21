@@ -87,14 +87,47 @@ class RowDiff(PydanticModel, frozen=True):
         return int(self.stats["join_count"])
 
     @property
+    def full_match_count(self) -> int:
+        """The number of rows for which shared columns have same values."""
+        return int(self.stats["full_match_count"])
+
+    @property
+    def full_match_pct(self) -> float:
+        """The percentage of rows for which shared columns have same values."""
+        return self._pct(2 * self.full_match_count)
+
+    @property
+    def partial_match_count(self) -> int:
+        """The number of rows for which some shared columns have same values."""
+        return self.join_count - self.full_match_count
+
+    @property
+    def partial_match_pct(self) -> float:
+        """The percentage of rows for which some shared columns have same values."""
+        return self._pct(2 * self.partial_match_count)
+
+    @property
     def s_only_count(self) -> int:
         """Count of rows only present in source."""
         return int(self.stats["s_only_count"])
 
     @property
+    def s_only_pct(self) -> float:
+        """The percentage of rows that are only present in source."""
+        return self._pct(self.s_only_count)
+
+    @property
     def t_only_count(self) -> int:
         """Count of rows only present in target."""
         return int(self.stats["t_only_count"])
+
+    @property
+    def t_only_pct(self) -> float:
+        """The percentage of rows that are only present in target."""
+        return self._pct(self.t_only_count)
+
+    def _pct(self, numerator: int) -> float:
+        return round((numerator / (self.source_count + self.target_count)) * 100, 2)
 
 
 class TableDiff:
@@ -111,6 +144,7 @@ class TableDiff:
         source_alias: t.Optional[str] = None,
         target_alias: t.Optional[str] = None,
         model_name: t.Optional[str] = None,
+        decimals: int = 3,
     ):
         self.adapter = adapter
         self.source = source
@@ -119,6 +153,7 @@ class TableDiff:
         self.where = exp.condition(where, dialect=self.dialect) if where else None
         self.limit = limit
         self.model_name = model_name
+        self.decimals = decimals
 
         # Support environment aliases for diff output improvement in certain cases
         self.source_alias = source_alias
@@ -187,9 +222,20 @@ class TableDiff:
                     t_index.append(col)
             index_cols = list(dict.fromkeys(index_cols))
 
+            matched_columns = {
+                c: t for c, t in self.source_schema.items() if t == self.target_schema.get(c)
+            }
+
+            def _column_expr(name: str, table: str) -> exp.Expression:
+                if matched_columns[name].this in exp.DataType.FLOAT_TYPES:
+                    return exp.Round(
+                        this=exp.column(name, table), decimals=exp.Literal.number(self.decimals)
+                    )
+                return exp.column(name, table)
+
             comparisons = [
                 exp.Case()
-                .when(exp.column(c, "s").eq(exp.column(c, "t")), exp.Literal.number(1))
+                .when(_column_expr(c, "s").eq(_column_expr(c, "t")), exp.Literal.number(1))
                 .when(
                     exp.column(c, "s").is_(exp.Null()) & exp.column(c, "t").is_(exp.Null()),
                     exp.Literal.number(1),
@@ -200,8 +246,7 @@ class TableDiff:
                 )
                 .else_(exp.Literal.number(0))
                 .as_(f"{c}_matches")
-                for c, t in self.source_schema.items()
-                if t == self.target_schema.get(c)
+                for c, t in matched_columns.items()
             ]
 
             def name(e: exp.Expression) -> str:
@@ -231,7 +276,7 @@ class TableDiff:
                         ),
                         1,
                         0,
-                    ).as_("rows_joined"),
+                    ).as_("row_joined"),
                     *comparisons,
                 )
                 .from_(exp.alias_(self.source, "s"))
@@ -244,6 +289,22 @@ class TableDiff:
                 .where(self.where)
             )
 
+            query = exp.select(
+                "*",
+                exp.Case()
+                .when(
+                    exp.and_(
+                        *[
+                            exp.column(f"{c}_matches").eq(exp.Literal.number(1))
+                            for c in matched_columns
+                        ]
+                    ),
+                    exp.Literal.number(1),
+                )
+                .else_(exp.Literal.number(0))
+                .as_("row_full_match"),
+            ).from_(query.subquery("stats"))
+
             query = quote_identifiers(query, dialect=self.dialect)
             temp_table = exp.table_("diff", db="sqlmesh_temp", quoted=True)
 
@@ -251,7 +312,8 @@ class TableDiff:
                 summary_query = exp.select(
                     exp.func("SUM", "s_exists").as_("s_count"),
                     exp.func("SUM", "t_exists").as_("t_count"),
-                    exp.func("SUM", "rows_joined").as_("join_count"),
+                    exp.func("SUM", "row_joined").as_("join_count"),
+                    exp.func("SUM", "row_full_match").as_("full_match_count"),
                     *(exp.func("SUM", name(c)).as_(c.alias) for c in comparisons),
                 ).from_(table)
 
@@ -272,7 +334,7 @@ class TableDiff:
                         )
                     )
                     .from_(table)
-                    .where(exp.column("rows_joined").eq(exp.Literal.number(1)))
+                    .where(exp.column("row_joined").eq(exp.Literal.number(1)))
                 )
                 column_stats = (
                     self.adapter.fetchdf(column_stats_query, quote_identifiers=True)
@@ -283,7 +345,7 @@ class TableDiff:
                     .drop(index=index_cols)
                 )
 
-                sample_filter_cols = ["s_exists", "t_exists", "rows_joined"]
+                sample_filter_cols = ["s_exists", "t_exists", "row_joined", "row_full_match"]
                 sample_query = (
                     exp.select(
                         *(sample_filter_cols),
@@ -332,13 +394,13 @@ class TableDiff:
                         )
                         for c, n in joined_renamed_cols.items()
                     }
-                joined_sample = sample[sample["rows_joined"] == 1][joined_sample_cols]
+                joined_sample = sample[sample["row_joined"] == 1][joined_sample_cols]
                 joined_sample.rename(
                     columns=joined_renamed_cols,
                     inplace=True,
                 )
 
-                s_sample = sample[(sample["s_exists"] == 1) & (sample["rows_joined"] == 0)][
+                s_sample = sample[(sample["s_exists"] == 1) & (sample["row_joined"] == 0)][
                     [
                         *[f"s__{c}" for c in index_cols],
                         *[f"s__{c}" for c in self.source_schema if c not in index_cols],
@@ -348,7 +410,7 @@ class TableDiff:
                     columns={c: c.replace("s__", "") for c in s_sample.columns}, inplace=True
                 )
 
-                t_sample = sample[(sample["t_exists"] == 1) & (sample["rows_joined"] == 0)][
+                t_sample = sample[(sample["t_exists"] == 1) & (sample["row_joined"] == 0)][
                     [
                         *[f"t__{c}" for c in index_cols],
                         *[f"t__{c}" for c in self.target_schema if c not in index_cols],
