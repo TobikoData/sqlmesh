@@ -117,9 +117,6 @@ jobs:
       - halt_unless_core
       - checkout
       - run:
-          name: Install dependencies
-          command: make install-dev
-      - run:
           name: Run the migration test
           command: ./.circleci/test_migration.sh
 
