@@ -90,6 +90,9 @@ def column_description(context: Context, model_name: str, column: str) -> t.Opti
     """Returns a column's description, inferring if needed."""
     model = context.get_model(model_name)
 
+    if not model:
+        return None
+
     if column in model.column_descriptions:
         return model.column_descriptions[column]
 
