@@ -19,6 +19,8 @@ from sqlmesh.utils.date import to_datetime
 
 
 class TestSubmitOperator(BaseOperator):
+    __test__ = False  # prevent pytest trying to collect this as a test class
+
     def __init__(
         self,
         *,
