@@ -4277,3 +4277,109 @@ def test_jinja_runtime_stage(assert_exp_eq):
 
     model = load_sql_based_model(expressions)
     assert_exp_eq(model.render_query(), '''SELECT 'loading' as "a", TRUE as "b"''')
+
+
+def test_forward_only_on_destructive_change_config() -> None:
+    # global default to ALLOW for non-incremental models
+    config = Config(model_defaults=ModelDefaultsConfig(dialect="duckdb"))
+    context = Context(config=config)
+
+    expressions = d.parse(
+        """
+        MODEL (
+            name memory.db.table,
+            kind FULL,
+        );
+        SELECT a, b, c FROM source_table;
+        """
+    )
+    model = load_sql_based_model(expressions, defaults=config.model_defaults.dict())
+    context.upsert_model(model)
+    context_model = context.get_model("memory.db.table")
+    assert context_model.on_destructive_change.is_allow
+
+    # global default to ERROR for incremental models
+    config = Config(model_defaults=ModelDefaultsConfig(dialect="duckdb"))
+    context = Context(config=config)
+
+    expressions = d.parse(
+        """
+        MODEL (
+            name memory.db.table,
+            kind INCREMENTAL_BY_TIME_RANGE (
+                time_column c,
+                forward_only True
+            ),
+        );
+        SELECT a, b, c FROM source_table;
+        """
+    )
+    model = load_sql_based_model(expressions, defaults=config.model_defaults.dict())
+    context.upsert_model(model)
+    context_model = context.get_model("memory.db.table")
+    assert context_model.on_destructive_change.is_error
+
+    # WARN specified in model definition, overrides incremental model sqlmesh default ERROR
+    config = Config(model_defaults=ModelDefaultsConfig(dialect="duckdb"))
+    context = Context(config=config)
+
+    expressions = d.parse(
+        """
+        MODEL (
+            name memory.db.table,
+            kind INCREMENTAL_BY_TIME_RANGE (
+                time_column c,
+                forward_only True,
+                on_destructive_change warn
+            ),
+        );
+        SELECT a, b, c FROM source_table;
+        """
+    )
+    model = load_sql_based_model(expressions, defaults=config.model_defaults.dict())
+    context.upsert_model(model)
+    context_model = context.get_model("memory.db.table")
+    assert context_model.on_destructive_change.is_warn
+
+    # WARN specified as model default, overrides incremental model sqlmesh default ERROR
+    config = Config(
+        model_defaults=ModelDefaultsConfig(dialect="duckdb", on_destructive_change="warn")
+    )
+    context = Context(config=config)
+
+    expressions = d.parse(
+        """
+        MODEL (
+            name memory.db.table,
+            kind INCREMENTAL_BY_TIME_RANGE (
+                time_column c,
+                forward_only True
+            ),
+        );
+        SELECT a, b, c FROM source_table;
+        """
+    )
+    model = load_sql_based_model(expressions, defaults=config.model_defaults.dict())
+    context.upsert_model(model)
+    context_model = context.get_model("memory.db.table")
+    assert context_model.on_destructive_change.is_warn
+
+    # WARN specified as model default, does not override non-incremental sqlmesh default ALLOW
+    config = Config(
+        model_defaults=ModelDefaultsConfig(dialect="duckdb", on_destructive_change="warn")
+    )
+    context = Context(config=config)
+
+    expressions = d.parse(
+        """
+        MODEL (
+            name memory.db.table,
+            kind FULL,
+        );
+        SELECT a, b, c FROM source_table;
+        """
+    )
+    model = load_sql_based_model(expressions, defaults=config.model_defaults.dict())
+    context.upsert_model(model)
+    context_model = context.get_model("memory.db.table")
+    assert context_model.on_destructive_change.is_allow

@@ -10,6 +10,7 @@ from pytest_mock import MockerFixture
 
 from sqlmesh.core.dialect import jinja_query
 from sqlmesh.core.model import SqlModel
+from sqlmesh.core.model.kind import OnDestructiveChange
 from sqlmesh.dbt.common import Dependencies
 from sqlmesh.dbt.context import DbtContext
 from sqlmesh.dbt.loader import sqlmesh_config
@@ -95,6 +96,7 @@ def test_model_to_sqlmesh_fields():
         meta={"stamp": "bar"},
         owner="Sally",
         tags=["test", "incremental"],
+        on_schema_change="sync_all_columns",
     )
     context = DbtContext()
     context.project_name = "Foo"
@@ -120,6 +122,7 @@ def test_model_to_sqlmesh_fields():
     kind = t.cast(IncrementalByUniqueKeyKind, model.kind)
     assert kind.batch_size == 5
     assert kind.lookback == 3
+    assert kind.on_destructive_change == OnDestructiveChange.ALLOW
 
 
 def test_test_to_sqlmesh_fields():

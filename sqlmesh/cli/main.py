@@ -310,6 +310,12 @@ def diff(ctx: click.Context, environment: t.Optional[str] = None) -> None:
     default=None,
 )
 @click.option(
+    "--allow-destructive-model",
+    type=str,
+    multiple=True,
+    help="Allow destructive forward-only changes to models whose names match the expression.",
+)
+@click.option(
     "--effective-from",
     type=str,
     required=False,
@@ -379,12 +385,14 @@ def plan(
     context = ctx.obj
     restate_models = kwargs.pop("restate_model") or None
     select_models = kwargs.pop("select_model") or None
+    allow_destructive_models = kwargs.pop("allow_destructive_model") or None
     backfill_models = kwargs.pop("backfill_model") or None
     context.console.verbose = verbose
     context.plan(
         environment,
         restate_models=restate_models,
         select_models=select_models,
+        allow_destructive_models=allow_destructive_models,
         backfill_models=backfill_models,
         **kwargs,
     )

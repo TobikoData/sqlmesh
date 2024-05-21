@@ -25,6 +25,7 @@ def sushi_plan(sushi_context: Context, mocker: MockerFixture) -> Plan:
 
     return PlanBuilder(
         sushi_context._context_diff("dev"),
+        sushi_context.engine_adapter.SCHEMA_DIFFER,
         is_dev=True,
         include_unmodified=True,
     ).build()
@@ -59,7 +60,9 @@ def test_builtin_evaluator_push(sushi_context: Context, make_snapshot):
     new_model_snapshot.categorize_as(SnapshotChangeCategory.BREAKING)
     new_view_model_snapshot.categorize_as(SnapshotChangeCategory.BREAKING)
 
-    plan = PlanBuilder(sushi_context._context_diff("prod")).build()
+    plan = PlanBuilder(
+        sushi_context._context_diff("prod"), sushi_context.engine_adapter.SCHEMA_DIFFER
+    ).build()
 
     evaluator = BuiltInPlanEvaluator(
         sushi_context.state_sync,
@@ -97,6 +100,7 @@ def test_airflow_evaluator(sushi_plan: Plan, mocker: MockerFixture):
         skip_backfill=False,
         users=[],
         is_dev=True,
+        allow_destructive_snapshots=set(),
         forward_only=False,
         models_to_backfill=None,
         end_bounded=False,

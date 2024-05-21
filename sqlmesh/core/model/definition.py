@@ -24,7 +24,7 @@ from sqlmesh.core import constants as c
 from sqlmesh.core import dialect as d
 from sqlmesh.core.macros import MacroRegistry, MacroStrTemplate, macro
 from sqlmesh.core.model.common import expression_validator
-from sqlmesh.core.model.kind import ModelKindName, SeedKind
+from sqlmesh.core.model.kind import ModelKindName, SeedKind, create_model_kind
 from sqlmesh.core.model.meta import ModelMeta
 from sqlmesh.core.model.seed import CsvSeedReader, Seed, create_seed
 from sqlmesh.core.renderer import ExpressionRenderer, QueryRenderer
@@ -1494,6 +1494,9 @@ def load_sql_based_model(
         # Signals must remain unrendered, so that they can be rendered later at evaluation runtime.
         meta_fields["signals"] = unrendered_signals
 
+    if isinstance(meta_fields.get("dialect"), exp.Expression):
+        meta_fields["dialect"] = meta_fields["dialect"].name
+
     name = meta_fields.pop("name", "")
     if not name:
         raise_config_error("Model must have a name", path)
@@ -1823,6 +1826,12 @@ def _create_model(
 
     dialect = dialect or ""
     physical_schema_override = physical_schema_override or {}
+
+    raw_kind = kwargs.pop("kind", None)
+    if raw_kind:
+        kwargs["kind"] = create_model_kind(raw_kind, dialect, defaults or {})
+
+    defaults = {k: v for k, v in (defaults or {}).items() if k in klass.all_fields()}
 
     try:
         model = klass(

@@ -927,6 +927,16 @@ class Snapshot(PydanticModel, SnapshotInfoMixin):
             else default
         )
 
+    def needs_destructive_check(
+        self,
+        allow_destructive_snapshots: t.Set[str],
+    ) -> bool:
+        return (
+            self.is_model
+            and not self.model.on_destructive_change.is_allow
+            and self.name not in allow_destructive_snapshots
+        )
+
     @property
     def physical_schema(self) -> str:
         if self.physical_schema_ is not None:

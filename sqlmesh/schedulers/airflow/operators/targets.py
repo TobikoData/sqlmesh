@@ -285,6 +285,7 @@ class SnapshotCreateTablesTarget(BaseTarget[commands.CreateTablesCommandPayload]
     new_snapshots: t.List[Snapshot]
     ddl_concurrent_tasks: int
     deployability_index: DeployabilityIndex
+    allow_destructive_snapshots: t.Set[str]
 
     def _get_command_payload(
         self, context: Context
@@ -296,6 +297,7 @@ class SnapshotCreateTablesTarget(BaseTarget[commands.CreateTablesCommandPayload]
             target_snapshot_ids=[s.snapshot_id for s in self.new_snapshots],
             snapshots=_get_snapshots_with_parents(self.new_snapshots),
             deployability_index=self.deployability_index,
+            allow_destructive_snapshots=self.allow_destructive_snapshots,
         )
 
 
@@ -311,6 +313,7 @@ class SnapshotMigrateTablesTarget(BaseTarget[commands.MigrateTablesCommandPayloa
 
     snapshots: t.List[Snapshot]
     ddl_concurrent_tasks: int
+    allow_destructive_snapshots: t.Set[str]
 
     def _get_command_payload(
         self, context: Context
@@ -321,6 +324,7 @@ class SnapshotMigrateTablesTarget(BaseTarget[commands.MigrateTablesCommandPayloa
         return commands.MigrateTablesCommandPayload(
             target_snapshot_ids=[s.snapshot_id for s in self.snapshots],
             snapshots=_get_snapshots_with_parents(self.snapshots),
+            allow_destructive_snapshots=self.allow_destructive_snapshots,
         )
 
 

@@ -102,6 +102,7 @@ def test_generate_plan_application_dag__batch_index_populated(mocker: MockerFixt
         ddl_concurrent_tasks=1,
         users=[],
         is_dev=False,
+        allow_destructive_snapshots=set(),
         execution_time=to_datetime("2024-01-01"),
     )
 

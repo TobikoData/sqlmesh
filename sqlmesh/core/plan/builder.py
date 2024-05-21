@@ -1,12 +1,13 @@
 from __future__ import annotations
 
+import logging
 import re
 import sys
 import typing as t
-import logging
 from collections import defaultdict
 from datetime import datetime
 from functools import cached_property
+
 
 from sqlmesh.core.console import Console, get_console
 from sqlmesh.core.config import (
@@ -17,6 +18,7 @@ from sqlmesh.core.config import (
 from sqlmesh.core.context_diff import ContextDiff
 from sqlmesh.core.environment import EnvironmentNamingInfo
 from sqlmesh.core.plan.definition import Plan, SnapshotMapping, earliest_interval_start
+from sqlmesh.core.schema_diff import SchemaDiffer, has_drop_alteration
 from sqlmesh.core.snapshot import (
     DeployabilityIndex,
     Snapshot,
@@ -24,11 +26,10 @@ from sqlmesh.core.snapshot import (
     categorize_change,
 )
 from sqlmesh.core.snapshot.definition import Interval, SnapshotId, start_date
-from sqlmesh.utils import random_id
+from sqlmesh.utils import columns_to_types_all_known, random_id
 from sqlmesh.utils.dag import DAG
 from sqlmesh.utils.date import TimeLike, now, to_datetime, yesterday_ds
 from sqlmesh.utils.errors import NoChangesPlanError, PlanError, SQLMeshError
-
 
 logger = logging.getLogger(__name__)
 
@@ -52,6 +53,7 @@ class PlanBuilder:
         skip_backfill: Whether to skip the backfill step.
         is_dev: Whether this plan is for development purposes.
         forward_only: Whether the purpose of the plan is to make forward only changes.
+        allow_destructive_models: A list of fully qualified model names whose forward-only changes are allowed to be destructive.
         environment_ttl: The period of time that a development environment should exist before being deleted.
         categorizer_config: Auto categorization settings.
         auto_categorization_enabled: Whether to apply auto categorization.
@@ -66,11 +68,13 @@ class PlanBuilder:
         ensure_finalized_snapshots: Whether to compare against snapshots from the latest finalized
             environment state, or to use whatever snapshots are in the current environment state even if
             the environment is not finalized.
+        engine_schema_differ: Schema differ from the context engine adapter.
     """
 
     def __init__(
         self,
         context_diff: ContextDiff,
+        engine_schema_differ: SchemaDiffer,
         start: t.Optional[TimeLike] = None,
         end: t.Optional[TimeLike] = None,
         execution_time: t.Optional[TimeLike] = None,
@@ -81,6 +85,7 @@ class PlanBuilder:
         skip_backfill: bool = False,
         is_dev: bool = False,
         forward_only: bool = False,
+        allow_destructive_models: t.Optional[t.Iterable[str]] = None,
         environment_ttl: t.Optional[str] = None,
         environment_suffix_target: EnvironmentSuffixTarget = EnvironmentSuffixTarget.default,
         environment_catalog_mapping: t.Optional[t.Dict[re.Pattern, str]] = None,
@@ -100,6 +105,9 @@ class PlanBuilder:
         self._skip_backfill = skip_backfill
         self._is_dev = is_dev
         self._forward_only = forward_only
+        self._allow_destructive_models = set(
+            allow_destructive_models if allow_destructive_models is not None else []
+        )
         self._enable_preview = enable_preview
         self._end_bounded = end_bounded
         self._ensure_finalized_snapshots = ensure_finalized_snapshots
@@ -113,6 +121,7 @@ class PlanBuilder:
         self._backfill_models = backfill_models
         self._end = end or default_end
         self._apply = apply
+        self._engine_schema_differ = engine_schema_differ
         self._console = console or get_console()
 
         self._start = start
@@ -197,6 +206,7 @@ class PlanBuilder:
         dag = self._build_dag()
         directly_modified, indirectly_modified = self._build_directly_and_indirectly_modified(dag)
 
+        self._check_destructive_changes(dag, directly_modified)
         self._categorize_snapshots(dag, directly_modified, indirectly_modified)
         self._adjust_new_snapshot_intervals()
 
@@ -238,6 +248,7 @@ class PlanBuilder:
             skip_backfill=self._skip_backfill,
             no_gaps=self._no_gaps,
             forward_only=self._forward_only,
+            allow_destructive_models=t.cast(t.Set, self._allow_destructive_models),
             include_unmodified=self._include_unmodified,
             environment_ttl=self._environment_ttl,
             environment_naming_info=self.environment_naming_info,
@@ -424,6 +435,64 @@ class PlanBuilder:
             new.merge_intervals(old)
             if new.is_forward_only:
                 new.dev_intervals = new.intervals.copy()
+
+    def _check_destructive_changes(
+        self, dag: DAG[SnapshotId], directly_modified: t.Set[SnapshotId]
+    ) -> None:
+        def _raise_or_warn(snapshot: Snapshot) -> None:
+            warning_msg = f"Plan results in a destructive change to forward-only model '{snapshot.name}'s schema."
+            if snapshot.model.on_destructive_change.is_warn:
+                logger.warning(warning_msg)
+                return
+            raise PlanError(
+                f"{warning_msg} To allow this, change the model's `on_destructive_change` setting to `warn` or `ignore` or include it in the plan's `--allow-destructive-model` option."
+            )
+
+        snapshot_is_destructive = {}
+        for s_id in dag:
+            # Only process snapshots that are modified by the plan
+            if s_id.name in self._context_diff.modified_snapshots:
+                snapshot = self._context_diff.snapshots[s_id]
+
+                if snapshot and snapshot.is_model:
+                    # should we raise/warn if this snapshot has/inherits a destructive change?
+                    should_raise_or_warn = (
+                        snapshot.model.forward_only or self._forward_only
+                    ) and snapshot.needs_destructive_check(self._allow_destructive_models)
+
+                    snapshot_is_destructive[s_id] = False
+
+                    # get parent classifications
+                    for parent_id in snapshot.parents:
+                        if snapshot_is_destructive.get(parent_id):
+                            snapshot_is_destructive[s_id] = True
+                            if should_raise_or_warn:
+                                _raise_or_warn(snapshot)
+                            break
+
+                    # examine directly modified snapshots unless we already know the snapshot is destructive
+                    if s_id in directly_modified and not snapshot_is_destructive[s_id]:
+                        new, old = self._context_diff.modified_snapshots[snapshot.name]
+
+                        # we must know all columns_to_types to determine whether a change is destructive
+                        old_columns_to_types = old.model.columns_to_types or {}
+                        new_columns_to_types = new.model.columns_to_types or {}
+
+                        if not columns_to_types_all_known(
+                            old_columns_to_types
+                        ) or not columns_to_types_all_known(new_columns_to_types):
+                            snapshot_is_destructive[s_id] = False
+                        else:
+                            schema_diff = self._engine_schema_differ.compare_columns(
+                                new.model.name,
+                                old_columns_to_types,
+                                new_columns_to_types,
+                            )
+
+                            has_drop = has_drop_alteration(schema_diff)
+                            snapshot_is_destructive[s_id] = has_drop
+                            if has_drop and should_raise_or_warn:
+                                _raise_or_warn(snapshot)
 
     def _categorize_snapshots(
         self,

@@ -46,6 +46,7 @@ The SQLMesh project-level `model_defaults` key supports the following options, d
 - start
 - storage_format
 - session_properties (on per key basis)
+- on_destructive_change (described [below](#incremental-models))
 
 ## Model kind properties
 
@@ -78,6 +79,7 @@ Configuration options for all incremental models (in addition to [general model 
 | `batch_size`        | The maximum number of intervals that can be evaluated in a single backfill task. If this is `None`, all intervals will be processed as part of a single task. If this is set, a model's backfill will be chunked such that each individual task only contains jobs with the maximum of `batch_size` intervals. (Default: `None`) | int  |    N     |
 | `batch_concurrency` | The maximum number of batches that can run concurrently for this model. (Default: the number of concurrent tasks set in the connection settings)                                                                                                                                                                                 | int  |    N     |
 | `lookback`          | The number of time unit intervals prior to the current interval that should be processed. (Default: `0`)                                                                                                                                                                                                                         | int  |    N     |
+| `on_destructive_change`          | What should happen when a change to a [forward-only model](../guides/incremental_time.md#forward-only-models) or incremental model in a [forward-only plan](../concepts/plans.md#forward-only-plans) causes a destructive modification to the model schema. Valid values: `allow`, `warn`, `error`. (Default: `error`)                                                                                                                                                                                                                         | str  | N        |
 
 #### Incremental by time range
 

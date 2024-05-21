@@ -2,6 +2,8 @@
 
 This guide describes how to select specific models to include in a SQLMesh plan, which can be useful when modifying a subset of the models in a SQLMesh project.
 
+Note: the selector syntax described below is also used for the SQLMesh `plan` [`--allow-destructive-model` selector](../concepts/plans.md#destructive-changes).
+
 ## Background
 
 A SQLMesh [plan](../concepts/plans.md) automatically detects changes between the local version of a project and the version deployed in an environment. When applied, the plan backfills the directly modified models and their indirectly modified downstream children. This brings all model data into alignment with the local version of the project.
@@ -27,14 +29,14 @@ A selection may use the wildcard asterisk character `*` to select multiple model
 - `"example.seed*"` would match both `example.seed_cities` and `example.seed_states`
 - `"example.*l_model"` would match both `example.incremental_model` and `example.full_model`
 
-Multiple models can also be selected by using the tag selector syntax `tag:tag_name`. For example, `"tag:my_tag"` would select all models with the tag `my_tag`. 
+Multiple models can also be selected by using the tag selector syntax `tag:tag_name`. For example, `"tag:my_tag"` would select all models with the tag `my_tag`.
 
 Assuming all seed models had a "seed" tag and all incremental models had an "incremental" tag:
 
 - `"tag:seed"` would match all seed models
 - `"tag:incremental"` would match all incremental models
 
-Wildcards also apply to tags. For example, `"tag:reporting*"` would match all models that have a tag starting with "reporting". 
+Wildcards also apply to tags. For example, `"tag:reporting*"` would match all models that have a tag starting with "reporting".
 
 ### Upstream/downstream indicator
 
