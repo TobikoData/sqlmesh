@@ -187,9 +187,6 @@ on_destructive_change_validator = field_validator("on_destructive_change", mode=
 
 class _ModelKind(PydanticModel, ModelKindMixin):
     name: ModelKindName
-    on_destructive_change: OnDestructiveChange = OnDestructiveChange.ALLOW
-
-    _on_destructive_change_validator = on_destructive_change_validator
 
     @property
     def model_kind_name(self) -> t.Optional[ModelKindName]:
