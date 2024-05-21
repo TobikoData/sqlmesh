@@ -372,10 +372,13 @@ class TestContext:
     def create_context(
         self, config_mutator: t.Optional[t.Callable[[str, Config], None]] = None
     ) -> Context:
+        private_sqlmesh_dir = pathlib.Path(pathlib.Path().home(), ".sqlmesh")
         config = load_config_from_paths(
             Config,
             project_paths=[
                 pathlib.Path(os.path.join(os.path.dirname(__file__), "config.yaml")),
+                private_sqlmesh_dir / "config.yml",
+                private_sqlmesh_dir / "config.yaml",
             ],
         )
         if config_mutator:
