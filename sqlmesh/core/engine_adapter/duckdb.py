@@ -31,14 +31,10 @@ class DuckDBEngineAdapter(LogicalMergeMixin, GetCurrentCatalogFromFunctionMixin)
     CATALOG_SUPPORT = CatalogSupport.FULL_SUPPORT
 
     # TODO: remove once we stop supporting DuckDB 0.9
-    duckdb_0_9 = major_minor(duckdb_version) < (0, 10)
-    COMMENT_CREATION_TABLE = (
-        CommentCreationTable.UNSUPPORTED
-        if duckdb_0_9
-        else CommentCreationTable.COMMENT_COMMAND_ONLY
-    )
-    COMMENT_CREATION_VIEW = (
-        CommentCreationView.UNSUPPORTED if duckdb_0_9 else CommentCreationView.COMMENT_COMMAND_ONLY
+    COMMENT_CREATION_TABLE, COMMENT_CREATION_VIEW = (
+        (CommentCreationTable.UNSUPPORTED, CommentCreationView.UNSUPPORTED)
+        if major_minor(duckdb_version) < (0, 10)
+        else (CommentCreationTable.COMMENT_COMMAND_ONLY, CommentCreationView.COMMENT_COMMAND_ONLY)
     )
 
     def set_current_catalog(self, catalog: str) -> None:
