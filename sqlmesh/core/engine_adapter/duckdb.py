@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 import typing as t
-
+from duckdb import __version__ as duckdb_version
 from sqlglot import exp
 
 from sqlmesh.core.engine_adapter.mixins import (
@@ -17,6 +17,7 @@ from sqlmesh.core.engine_adapter.shared import (
     SourceQuery,
     set_catalog,
 )
+from sqlmesh.utils import major_minor
 
 if t.TYPE_CHECKING:
     from sqlmesh.core._typing import SchemaName, TableName
@@ -28,8 +29,13 @@ class DuckDBEngineAdapter(LogicalMergeMixin, GetCurrentCatalogFromFunctionMixin)
     DIALECT = "duckdb"
     SUPPORTS_TRANSACTIONS = False
     CATALOG_SUPPORT = CatalogSupport.FULL_SUPPORT
-    COMMENT_CREATION_TABLE = CommentCreationTable.UNSUPPORTED
-    COMMENT_CREATION_VIEW = CommentCreationView.UNSUPPORTED
+
+    # TODO: remove once we stop supporting DuckDB 0.9
+    COMMENT_CREATION_TABLE, COMMENT_CREATION_VIEW = (
+        (CommentCreationTable.UNSUPPORTED, CommentCreationView.UNSUPPORTED)
+        if major_minor(duckdb_version) < (0, 10)
+        else (CommentCreationTable.COMMENT_COMMAND_ONLY, CommentCreationView.COMMENT_COMMAND_ONLY)
+    )
 
     def set_current_catalog(self, catalog: str) -> None:
         """Sets the catalog name of the current connection."""
