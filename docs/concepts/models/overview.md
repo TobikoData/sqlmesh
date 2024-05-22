@@ -126,19 +126,20 @@ In the latter method, separate commands are required for every comment. This may
 
 This table lists each engine's support for `TABLE` and `VIEW` object comments:
 
-| Engine       | `TABLE` comments | `VIEW` comments |
-| ------------ | ---------------- | --------------- |
-| BigQuery     | Y                | Y               |
-| Databricks   | Y                | Y               |
-| DuckDB       | N                | N               |
-| MySQL        | Y                | Y               |
-| MSSQL        | N                | N               |
-| Postgres     | Y                | Y               |
-| GCP Postgres | Y                | Y               |
-| Redshift     | Y                | N               |
-| Snowflake    | Y                | Y               |
-| Spark        | Y                | Y               |
-| Trino        | Y                | Y               |
+| Engine        | `TABLE` comments | `VIEW` comments |
+| ------------- | ---------------- | --------------- |
+| BigQuery      | Y                | Y               |
+| Databricks    | Y                | Y               |
+| DuckDB <=0.9  | N                | N               |
+| DuckDB >=0.10 | Y                | Y               |
+| MySQL         | Y                | Y               |
+| MSSQL         | N                | N               |
+| Postgres      | Y                | Y               |
+| GCP Postgres  | Y                | Y               |
+| Redshift      | Y                | N               |
+| Snowflake     | Y                | Y               |
+| Spark         | Y                | Y               |
+| Trino         | Y                | Y               |
 
 
 ## Model properties

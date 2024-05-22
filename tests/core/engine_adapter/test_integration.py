@@ -269,6 +269,17 @@ class TestContext:
                     schema_name = '{schema_name}'
                     AND table_name = '{table_name}'
             """
+        elif self.dialect == "duckdb":
+            kind = "table" if table_kind == "BASE TABLE" else "view"
+            query = f"""
+                SELECT
+                    {kind}_name,
+                    comment
+                FROM duckdb_{kind}s()
+                WHERE
+                    schema_name = '{schema_name}'
+                    AND {kind}_name = '{table_name}'
+            """
 
         result = self.engine_adapter.fetchall(query)
 
@@ -353,6 +364,16 @@ class TestContext:
         elif self.dialect == "trino":
             query = f"SHOW COLUMNS FROM {schema_name}.{table_name}"
             comment_index = 3
+        elif self.dialect == "duckdb":
+            query = f"""
+                SELECT
+                    column_name,
+                    comment
+                FROM duckdb_columns()
+                WHERE
+                    schema_name = '{schema_name}'
+                    AND table_name = '{table_name}'
+            """
 
         result = self.engine_adapter.fetchall(query)
 
