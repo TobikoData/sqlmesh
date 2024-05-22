@@ -98,6 +98,7 @@ class EngineAdapterStateSync(CommonStateSyncMixin, StateSync):
         context_path: The context path, used for caching snapshot models.
     """
 
+    INTERVAL_BATCH_SIZE = 1000
     SNAPSHOT_BATCH_SIZE = 1000
     SNAPSHOT_MIGRATION_BATCH_SIZE = 500
     SNAPSHOT_SEED_MIGRATION_BATCH_SIZE = 200
@@ -315,7 +316,7 @@ class EngineAdapterStateSync(CommonStateSyncMixin, StateSync):
             )
 
         unique_expired_versions = unique(expired_candidates.values())
-        version_batches = self._snapshot_batches(unique_expired_versions)
+        version_batches = self._batches(unique_expired_versions)
         cleanup_targets = []
         for versions_batch in version_batches:
             snapshots = self._get_snapshots_with_same_version(versions_batch)
@@ -734,9 +735,12 @@ class EngineAdapterStateSync(CommonStateSyncMixin, StateSync):
         self._push_snapshot_intervals(snapshot_intervals)
 
         if interval_ids:
-            self.engine_adapter.delete_from(
-                self.intervals_table, exp.column("id").isin(*interval_ids)
-            )
+            for interval_id_batch in self._batches(
+                list(interval_ids), batch_size=self.INTERVAL_BATCH_SIZE
+            ):
+                self.engine_adapter.delete_from(
+                    self.intervals_table, exp.column("id").isin(*interval_id_batch)
+                )
 
     def refresh_snapshot_intervals(self, snapshots: t.Collection[Snapshot]) -> t.List[Snapshot]:
         if not snapshots:
@@ -1273,7 +1277,7 @@ class EngineAdapterStateSync(CommonStateSyncMixin, StateSync):
         name_identifiers = sorted(
             {(snapshot_id.name, snapshot_id.identifier) for snapshot_id in snapshot_ids}
         )
-        batches = self._snapshot_batches(name_identifiers, batch_size=batch_size)
+        batches = self._batches(name_identifiers, batch_size=batch_size)
 
         if not name_identifiers:
             yield exp.false()
@@ -1306,7 +1310,7 @@ class EngineAdapterStateSync(CommonStateSyncMixin, StateSync):
         alias: t.Optional[str] = "snapshots",
     ) -> t.Iterator[exp.Condition]:
         name_versions = sorted({(s.name, s.version) for s in snapshot_name_versions})
-        batches = self._snapshot_batches(name_versions)
+        batches = self._batches(name_versions)
 
         if not name_versions:
             yield exp.false()
@@ -1333,9 +1337,7 @@ class EngineAdapterStateSync(CommonStateSyncMixin, StateSync):
                     ]
                 )
 
-    def _snapshot_batches(
-        self, l: t.List[T], batch_size: t.Optional[int] = None
-    ) -> t.List[t.List[T]]:
+    def _batches(self, l: t.List[T], batch_size: t.Optional[int] = None) -> t.List[t.List[T]]:
         batch_size = batch_size or self.SNAPSHOT_BATCH_SIZE
         return [l[i : i + batch_size] for i in range(0, len(l), batch_size)]
 
