@@ -522,7 +522,7 @@ When the`format` is CSV, you can control the behaviour of data loading under `cs
         <row2_value>#<row2_value>
 ```
 
-[Learn more about the supported CSV settings](https://pandas.pydata.org/docs/reference/api/pandas.read_csv.html).
+Learn more about the [supported CSV settings](https://pandas.pydata.org/docs/reference/api/pandas.read_csv.html).
   
 ### `<test_name>.inputs.<upstream_model>.path`
 
