@@ -345,64 +345,34 @@ test_foo:
     )
 
 
-def test_partial_data(sushi_context: Context) -> None:
-    _check_successful_or_raise(
-        _create_test(
-            body=load_yaml(
-                """
-test_foo:
-  model: sushi.foo
-  inputs:
-    sushi.waiter_names:
-      - id: 1
-      - id: 2
-        name: null
-      - id: 3
-        name: 'bob'
-  outputs:
-    ctes:
-      source:
-        - id: 1
-        - id: 2
-          name: null
-        - id: 3
-          name: 'bob'
-    query:
-      - id: 1
-        str: nan
-      - id: 2
-        str: nan
-      - id: 3
-        name: 'bob'
-        str: nan
-                """
-            ),
-            test_name="test_foo",
-            model=sushi_context.upsert_model(
-                _create_model(
-                    "WITH source AS (SELECT id, name FROM sushi.waiter_names) "
-                    "SELECT id, name, 'nan' as str FROM source",
-                    default_catalog=sushi_context.default_catalog,
-                )
-            ),
-            context=sushi_context,
-        ).run()
-    )
-
-    _check_successful_or_raise(
-        _create_test(
-            body=load_yaml(
-                """
-test_foo_csv:
-  model: sushi.foo_csv
-  inputs:
-    sushi.waiter_names:
+@pytest.mark.parametrize(
+    "waiter_names_input",
+    [
+        """sushi.waiter_names:
+          - id: 1
+          - id: 2
+            name: null
+          - id: 3
+            name: 'bob'
+        """,
+        """sushi.waiter_names: 
       format: csv
       rows: |
         id,name
         1,
         2,null
-        3,bob
+        3,bob""",
+    ],
+)
+def test_partial_data(sushi_context: Context, waiter_names_input: str) -> None:
+    _check_successful_or_raise(
+        _create_test(
+            body=load_yaml(
+                f"""
+test_foo:
+  model: sushi.foo
+  inputs:
+    {waiter_names_input}
   outputs:
     ctes:
       source:
@@ -421,50 +391,6 @@ test_foo_csv:
         str: nan
                 """
             ),
-            test_name="test_foo_csv",
-            model=sushi_context.upsert_model(
-                _create_model(
-                    "WITH source AS (SELECT id, name FROM sushi.waiter_names) "
-                    "SELECT id, name, 'nan' as str FROM source",
-                    default_catalog=sushi_context.default_catalog,
-                )
-            ),
-            context=sushi_context,
-        ).run()
-    )
-
-
-def test_format(sushi_context: Context) -> None:
-    _check_successful_or_raise(
-        _create_test(
-            body=load_yaml(
-                """
-test_foo:
-  model: sushi.foo
-  inputs:
-    sushi.waiter_names:
-      format: yaml
-      rows: 
-        - id: 1
-          name: 'alice'
-        - id: 2
-          name: 'bob'
-  outputs:
-    ctes:
-      source:
-        - id: 1
-          name: alice
-        - id: 2
-          name: 'bob'
-    query:
-      - id: 1
-        name: alice
-        str: nan
-      - id: 2
-        name: 'bob'
-        str: nan
-                """
-            ),
             test_name="test_foo",
             model=sushi_context.upsert_model(
                 _create_model(
@@ -478,47 +404,150 @@ test_foo:
     )
 
 
-def test_csv_inputs(sushi_context: Context) -> None:
-    _check_successful_or_raise(
-        _create_test(
-            body=load_yaml(
-                """
-test_foo_csv:
-  model: sushi.foo_csv
-  inputs:
-    sushi.waiter_names:
-      format: csv
-      rows: |
-        id,name
-        1,alice
-        2,bob
-  outputs:
-    ctes:
-      source:
+@pytest.mark.parametrize(
+    "waiter_names_input",
+    [
+        """sushi.waiter_names:
+        format: yaml
+        rows: 
         - id: 1
           name: alice
         - id: 2
           name: 'bob'
+        """,
+        """sushi.waiter_names: 
+      format: csv
+      rows: |
+        id,name
+        1,alice
+        2,bob""",
+    ],
+)
+def test_format_inline(sushi_context: Context, waiter_names_input: str) -> None:
+    _check_successful_or_raise(
+        _create_test(
+            body=load_yaml(
+                f"""
+test_foo:
+  model: sushi.foo
+  inputs:
+    {waiter_names_input}
+  outputs:
     query:
       - id: 1
         name: alice
-        str: nan
       - id: 2
         name: 'bob'
-        str: nan
                 """
             ),
-            test_name="test_foo_csv",
+            test_name="test_foo",
             model=sushi_context.upsert_model(
                 _create_model(
-                    "WITH source AS (SELECT id, name FROM sushi.waiter_names) "
-                    "SELECT id, name, 'nan' as str FROM source",
+                    "SELECT id, name FROM sushi.waiter_names ",
                     default_catalog=sushi_context.default_catalog,
                 )
             ),
             context=sushi_context,
         ).run()
     )
+
+
+@pytest.mark.parametrize(
+    "input_data",
+    [
+        [
+            """sushi.waiter_names:
+        format: yaml
+        path: """,
+            "test_data.yaml",
+            """- id: 1
+  name: alice
+- id: 2
+  name: 'bob'
+""",
+        ],
+        [
+            """sushi.waiter_names:
+        path: """,
+            "test_data.yaml",
+            """- id: 1
+  name: alice
+- id: 2
+  name: 'bob'
+""",
+        ],
+        [
+            """sushi.waiter_names:
+        format: csv
+        path: """,
+            "test_data.csv",
+            """id,name
+1,alice
+2,bob""",
+        ],
+    ],
+)
+def test_format_path(sushi_context: Context, tmp_path: Path, input_data: str) -> None:
+    filename = input_data[1]
+    test_csv_file = tmp_path / filename
+    test_csv_file.write_text(input_data[2])
+
+    _check_successful_or_raise(
+        _create_test(
+            body=load_yaml(
+                f"""
+test_foo:
+  model: sushi.foo
+  inputs:
+    {input_data[0]}{str(test_csv_file)}
+  outputs:
+    query:
+      - id: 1
+        name: alice
+      - id: 2
+        name: 'bob'
+                """
+            ),
+            test_name="test_foo",
+            model=sushi_context.upsert_model(
+                _create_model(
+                    "SELECT id, name FROM sushi.waiter_names ",
+                    default_catalog=sushi_context.default_catalog,
+                )
+            ),
+            context=sushi_context,
+        ).run()
+    )
+
+
+def test_unsupported_format_failure(
+    sushi_context: Context, full_model_without_ctes: SqlModel
+) -> None:
+    # _check_successful_or_raise(
+    with pytest.raises(
+        TestError,
+        match="Unsupported data format 'xml' for 'sushi.waiter_names'",
+    ):
+        _create_test(
+            body=load_yaml(
+                """
+test_foo:
+  model: sushi.foo
+  description: XML format isn't supported to load data (fails intentionally)
+  inputs:
+    sushi.waiter_names:
+      format: xml
+      path: 'test_data.xml'
+  outputs:
+    query:
+      - id: 1
+        value: null
+                """
+            ),
+            test_name="test_foo",
+            model=sushi_context.upsert_model(full_model_without_ctes),
+            context=sushi_context,
+        )
 
 
 def test_partial_output_columns() -> None:
@@ -612,39 +641,6 @@ test_foo:
       - id: 9876
         name: hello
         event_date: 2020-01-02
-  outputs:
-    query:
-      - id: 1234
-        event_date: 2020-01-01
-      - id: 9876
-        name: hello
-        event_date: 2020-01-02
-                """
-            ),
-            test_name="test_foo",
-            model=sushi_context.upsert_model(
-                _create_model(
-                    "SELECT id, name, price, event_date FROM sushi.items",
-                    default_catalog=sushi_context.default_catalog,
-                )
-            ),
-            context=sushi_context,
-        ).run()
-    )
-
-    _check_successful_or_raise(
-        _create_test(
-            body=load_yaml(
-                """
-test_foo:
-  model: sushi.foo
-  inputs:
-    sushi.items:
-      format: csv
-      rows: |
-        id,name,event_date
-        1234,,2020-01-01
-        9876,hello,2020-01-02
   outputs:
     query:
       - id: 1234

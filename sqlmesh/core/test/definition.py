@@ -334,10 +334,10 @@ class ModelTest(unittest.TestCase):
             path = values.get("path")
             if format == "csv":
                 rows = pd.read_csv(path or StringIO(rows)).to_dict(orient="records")
-            elif format == "yaml" or (format is None and path):
-                input_rows = yaml_load(Path(path)) if path else rows
+            elif format in (None, "yaml") and path:
+                input_rows = yaml_load(Path(path))
                 rows = input_rows.get("rows") if isinstance(input_rows, dict) else input_rows
-            elif format:
+            elif format and path:
                 _raise_error(f"Unsupported data format '{format}' for '{name}'", self.path)
 
             if query is not None:
