@@ -10,7 +10,7 @@ A comprehensive suite of tests can empower data practitioners to work with confi
 
 A test suite is a [YAML file](https://learnxinyminutes.com/docs/yaml/) contained in the `tests/` folder of a SQLMesh project, whose name begins with `test` and ends with either `.yaml` or `.yml`. It can contain one or more uniquely named unit tests, each with a number of attributes that define its behavior.
 
-At minimum, a unit test must specify the model being tested, the input values for its upstream models, provided inline or through an external file (`.yaml` or `.csv`) , and the expected outputs for the target model's query and/or its [Common Table Expressions](glossary.md#cte). Other optional attributes include a description, the gateway to use, and a mapping that assigns values to [macro variables](macros/macro_variables.md) referenced in the model.
+At minimum, a unit test must specify the model being tested, the input values for its upstream models, and the expected outputs for the target model's query and/or its [Common Table Expressions](glossary.md#cte). Other optional attributes include a description, the gateway to use, and a mapping that assigns values to [macro variables](macros/macro_variables.md) referenced in the model.
 
 Learn more about the supported attributes in the [unit test structure section](#unit-test-structure).
 
@@ -110,47 +110,41 @@ test_example_full_model:
         num_orders: 2
 ```
 
-### Loading Inputs from CSV
+## Defining unit test data as CSV
 
-Defining the inputs can be specified in the YAML, but when testing with large datasets, loading the data from an external file, such as a CSV, can be more efficient. To achieve this, specify the `format` and the `path` as shown below:
+In unit tests, you can define data using CSV format, a common and user-friendly alternative to the more verbose YAML. Data in these supported formats can be specified inline or through external files, allowing for reuse across multiple tests.
 
-```yaml linenums="1" hl_lines="5-6"
+### Inline Data
+
+Both inputs and outputs can be formatted as CSV. You can provide the CSV data within the YAML under the `rows:` key:
+
+```yaml linenums="1"
 test_example_full_model:
-model: sqlmesh_example.full_model
-inputs:
-sqlmesh_example.incremental_model:
-format: csv
-path: filepath/test_data.csv
-outputs:
-query:
-rows:
-- item_id: 1
-num_orders: 2
-- item_id: 2
-num_orders: 1
+  model: sqlmesh_example.full_model
+  inputs:
+    sqlmesh_example.incremental_model:
+      format: csv
+      rows: |
+        id,item_id
+        1,1
+        2,1
+        3,2
 ```
 
-In addition, data can also be loaded from an external YAML file. When the `format` is omitted, this is the default behavior for files. Additionally, CSV data can be provided inline under the `rows` key:
+### External File
 
-```yaml linenums="1" hl_lines="5-10"
+To specify data using an external file, use the `path` attribute:
+
+```yaml linenums="1"
 test_example_full_model:
-model: sqlmesh_example.full_model
-inputs:
-sqlmesh_example.incremental_model:
-format: csv
-rows: |
-id,item_id
-1,1
-2,1
-3,2
-outputs:
-query:
-rows:
-- item_id: 1
-num_orders: 2
-- item_id: 2
-num_orders: 1
+  model: sqlmesh_example.full_model
+  inputs:
+    sqlmesh_example.incremental_model:
+      format: csv
+      path: filepath/test_data.csv
 ```
+
+In addition, data can also be loaded from an external YAML file. When the `format` is omitted, this is the default format for files.
 
 ## Omitting columns
 
@@ -504,15 +498,13 @@ When the input format is `csv`, the data can be specified inline under `rows` :
 
 ### `<test_name>.inputs.<upstream_model>.format`
   
-The optional `format` key allows for control over how the input data is loaded. The default behavior is YAML, while CSV is also supported.
+The optional `format` key allows for control over how the input data is loaded. The default format is YAML, while CSV is also supported.
 
 ```yaml linenums="1"
     <upstream_model>:
       format: csv
       path: filepath/test_data.csv
 ```
-
-When the `path` is defined, the data is loaded from the external file. Otherwise, it's loaded from the inline `rows`.
 
 ### `<test_name>.inputs.<upstream_model>.csv_settings`
   
@@ -529,6 +521,8 @@ When the`format` is CSV, you can control the behaviour of data loading under `cs
         <row1_value>#<row1_value>
         <row2_value>#<row2_value>
 ```
+
+[Learn more about the supported CSV settings](https://pandas.pydata.org/docs/reference/api/pandas.read_csv.html).
   
 ### `<test_name>.inputs.<upstream_model>.path`
 
@@ -538,9 +532,6 @@ The optional `path` key specifies the pathname of the data to be loaded.
     <upstream_model>:
       path: filepath/test_data.yaml
 ```
-
-When `format` is defined, it's used accordingly to load the data. Otherwise, the default behavior is YAML.
-
 
 ### `<test_name>.inputs.<upstream_model>.columns`
 
