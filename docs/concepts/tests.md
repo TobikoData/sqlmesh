@@ -144,7 +144,7 @@ test_example_full_model:
       path: filepath/test_data.csv
 ```
 
-In addition, data can also be loaded from an external YAML file. When the `format` is omitted, this is the default format for files.
+In addition, data can also be loaded from an external YAML file. When `format` is omitted, this is the default format for files.
 
 ## Omitting columns
 
