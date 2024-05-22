@@ -35,7 +35,7 @@ setup(
         "astor",
         "click",
         "croniter",
-        "duckdb",
+        "duckdb!=0.10.3",
         "dateparser",
         "freezegun",
         "hyperscript",
