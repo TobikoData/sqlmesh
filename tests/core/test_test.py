@@ -421,6 +421,14 @@ test_foo:
         id,name
         1,alice
         2,bob""",
+        """sushi.waiter_names: 
+      format: csv
+      csv_settings: 
+        sep: "#"
+      rows: |
+        id#name
+        1#alice
+        2#bob""",
     ],
 )
 def test_format_inline(sushi_context: Context, waiter_names_input: str) -> None:
