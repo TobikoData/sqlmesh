@@ -130,7 +130,8 @@ This table lists each engine's support for `TABLE` and `VIEW` object comments:
 | ------------ | ---------------- | --------------- |
 | BigQuery     | Y                | Y               |
 | Databricks   | Y                | Y               |
-| DuckDB       | N                | N               |
+| DuckDB v0.9  | N                | N               |
+| DuckDB v0.10 | Y                | Y               |
 | MySQL        | Y                | Y               |
 | MSSQL        | N                | N               |
 | Postgres     | Y                | Y               |
