@@ -470,7 +470,8 @@ test_foo:
             """sushi.waiter_names:
         path: """,
             "test_data.yaml",
-            """- id: 1
+            """rows:
+- id: 1
   name: alice
 - id: 2
   name: 'bob'
