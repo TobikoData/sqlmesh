@@ -116,7 +116,7 @@ In unit tests, you can define data using the CSV format, a common alternative to
 
 ### Inline Data
 
-Both inputs and outputs can be formatted as CSV. You can provide the CSV data within the YAML under the `rows:` key:
+Both inputs and outputs can be formatted as CSV. You can provide the CSV data inline under the `rows:` key:
 
 ```yaml linenums="1"
 test_example_full_model:
