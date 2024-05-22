@@ -112,7 +112,7 @@ test_example_full_model:
 
 ## Defining unit test data as CSV
 
-In unit tests, you can define data using CSV format, a common and user-friendly alternative to the more verbose YAML. Data in these supported formats can be specified inline or through external files, allowing for reuse across multiple tests.
+In unit tests, you can define data using the CSV format, a common alternative to YAML. Data in the supported formats can be specified inline or through external files, allowing for reuse across multiple tests.
 
 ### Inline Data
 
