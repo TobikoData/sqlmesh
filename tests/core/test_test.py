@@ -453,7 +453,7 @@ test_foo:
 
 
 @pytest.mark.parametrize(
-    "input_data",
+    ["input_data", "filename", "file_data"],
     [
         [
             """sushi.waiter_names:
@@ -487,10 +487,11 @@ test_foo:
         ],
     ],
 )
-def test_format_path(sushi_context: Context, tmp_path: Path, input_data: str) -> None:
-    filename = input_data[1]
+def test_format_path(
+    sushi_context: Context, tmp_path: Path, input_data: str, filename: str, file_data: str
+) -> None:
     test_csv_file = tmp_path / filename
-    test_csv_file.write_text(input_data[2])
+    test_csv_file.write_text(file_data)
 
     _check_successful_or_raise(
         _create_test(
@@ -499,7 +500,7 @@ def test_format_path(sushi_context: Context, tmp_path: Path, input_data: str) ->
 test_foo:
   model: sushi.foo
   inputs:
-    {input_data[0]}{str(test_csv_file)}
+    {input_data}{str(test_csv_file)}
   outputs:
     query:
       - id: 1
@@ -523,7 +524,6 @@ test_foo:
 def test_unsupported_format_failure(
     sushi_context: Context, full_model_without_ctes: SqlModel
 ) -> None:
-    # _check_successful_or_raise(
     with pytest.raises(
         TestError,
         match="Unsupported data format 'xml' for 'sushi.waiter_names'",
@@ -546,6 +546,48 @@ test_foo:
             ),
             test_name="test_foo",
             model=sushi_context.upsert_model(full_model_without_ctes),
+            context=sushi_context,
+        )
+
+    with pytest.raises(
+        TestError,
+        match="Unsupported data format 'xml' for 'sushi.waiter_names'",
+    ):
+        _create_test(
+            body=load_yaml(
+                """
+test_foo:
+  model: sushi.foo
+  description: XML without path doesn't raise error
+  inputs:
+    sushi.waiter_names:
+      format: xml
+      rows: |
+        <rows>
+          <row>
+              <id>1</id>
+              <name>alice</name>
+          </row>
+          <row>
+            <id>2</id>
+            <name>bob</name>
+          </row>
+        </rows>
+  outputs:
+    query:
+      - id: 1
+        name: alice
+      - id: 2
+        name: 'bob'
+                """
+            ),
+            test_name="test_foo",
+            model=sushi_context.upsert_model(
+                _create_model(
+                    "SELECT id, name FROM sushi.waiter_names ",
+                    default_catalog=sushi_context.default_catalog,
+                )
+            ),
             context=sushi_context,
         )
 
