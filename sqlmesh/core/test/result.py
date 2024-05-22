@@ -36,4 +36,5 @@ class ModelTextTestResult(unittest.TextTestResult):
         Args:
             test: The test case
         """
+        super().addSuccess(test)
         self.successes.append(test)
