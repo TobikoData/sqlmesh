@@ -1756,7 +1756,7 @@ class EngineAdapter:
         if self._pre_ping:
             try:
                 logger.debug("Pinging the database to check the connection")
-                self._ping()
+                self.ping()
             except Exception:
                 logger.info("Connection to the database was lost. Reconnecting...")
                 self._connection_pool.close()
@@ -2058,7 +2058,7 @@ class EngineAdapter:
     ) -> None:
         self.execute(exp.rename_table(old_table_name, new_table_name))
 
-    def _ping(self) -> None:
+    def ping(self) -> None:
         try:
             self._execute(exp.select("1").sql(dialect=self.dialect))
         finally:
