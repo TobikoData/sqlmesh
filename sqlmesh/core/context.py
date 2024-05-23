@@ -542,6 +542,11 @@ class GenericContext(BaseContext, t.Generic[C]):
         self.notification_target_manager.notify(
             NotificationEvent.RUN_START, environment=environment
         )
+        analytics_run_id = analytics.collector.on_run_start(
+            engine_type=self.snapshot_evaluator.adapter.dialect,
+            state_sync_type=self.state_sync.state_type(),
+        )
+
         success = False
         try:
             success = self._run(
@@ -557,6 +562,7 @@ class GenericContext(BaseContext, t.Generic[C]):
                 NotificationEvent.RUN_FAILURE, traceback.format_exc()
             )
             logger.error(f"Run Failure: {traceback.format_exc()}")
+            analytics.collector.on_run_end(run_id=analytics_run_id, succeeded=False, error=e)
             raise e
 
         if success:
@@ -568,6 +574,8 @@ class GenericContext(BaseContext, t.Generic[C]):
             self.notification_target_manager.notify(
                 NotificationEvent.RUN_FAILURE, "See console logs for details."
             )
+
+        analytics.collector.on_run_end(run_id=analytics_run_id, succeeded=success)
 
         return success
 

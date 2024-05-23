@@ -288,10 +288,9 @@ def test_on_snapshots_created(
 
 
 def test_on_run(collector: AnalyticsCollector, mocker: MockerFixture):
-    run_id = "test_run_id"
-    collector.on_run_start(run_id=run_id, engine_type="bigquery", state_sync_type="mysql")
-    collector.on_run_end(run_id=run_id)
-    collector.on_run_end(run_id=run_id, error=SQLMeshError("test_error"))
+    run_id = collector.on_run_start(engine_type="bigquery", state_sync_type="mysql")
+    collector.on_run_end(run_id=run_id, succeeded=True)
+    collector.on_run_end(run_id=run_id, succeeded=False, error=SQLMeshError("test_error"))
 
     collector.flush()
 
