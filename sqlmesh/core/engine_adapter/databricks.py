@@ -13,7 +13,6 @@ from sqlmesh.core.engine_adapter.shared import (
     set_catalog,
 )
 from sqlmesh.core.engine_adapter.spark import SparkEngineAdapter
-from sqlmesh.core.schema_diff import SchemaDiffer
 from sqlmesh.utils import classproperty
 from sqlmesh.utils.errors import SQLMeshError
 
@@ -35,12 +34,11 @@ class DatabricksEngineAdapter(SparkEngineAdapter):
     SUPPORTS_CLONING = True
     SUPPORTS_MATERIALIZED_VIEWS = True
     SUPPORTS_MATERIALIZED_VIEW_SCHEMA = True
-    SCHEMA_DIFFER = SchemaDiffer(
-        support_positional_add=True,
-        support_nested_operations=True,
-        array_element_selector="element",
-        dialect=DIALECT,
-    )
+    SCHEMA_DIFFER_PROPERTIES = {
+        "support_positional_add": True,
+        "support_nested_operations": True,
+        "array_element_selector": "element",
+    }
     CATALOG_SUPPORT = CatalogSupport.FULL_SUPPORT
     SUPPORTS_ROW_LEVEL_OP = True
 

@@ -3,7 +3,7 @@ import typing as t
 import pytest
 from sqlglot import exp
 
-from sqlmesh.core.engine_adapter import create_engine_adapter
+from sqlmesh.core.engine_adapter import create_engine_adapter, EngineAdapter, BigQueryEngineAdapter
 from sqlmesh.core.schema_diff import (
     SchemaDiffer,
     TableAlterColumn,
@@ -798,14 +798,13 @@ def test_struct_diff(
 
 
 def test_schema_diff_dialect():
-    assert SchemaDiffer().dialect == ""
+    assert EngineAdapter(lambda: None).schema_differ.dialect == ""
 
-    from sqlmesh.core.engine_adapter import BigQueryEngineAdapter
-
-    assert BigQueryEngineAdapter.SCHEMA_DIFFER.dialect == "bigquery"
+    bq_differ = BigQueryEngineAdapter(lambda: None).schema_differ
+    assert bq_differ.dialect == "bigquery"
 
     # No error when table name has BQ backtick quotes `apply_to_table`
-    BigQueryEngineAdapter.SCHEMA_DIFFER.compare_columns(
+    bq_differ.compare_columns(
         "`apply_to_table`",
         {
             "id": exp.DataType.build("INT"),

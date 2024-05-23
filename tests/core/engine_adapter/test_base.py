@@ -799,8 +799,8 @@ def test_alter_table(
 ):
     adapter = make_mocked_engine_adapter(EngineAdapter)
 
-    adapter.SCHEMA_DIFFER = SchemaDiffer(**schema_differ_config)
-    original_from_structs = adapter.SCHEMA_DIFFER._from_structs
+    adapter.schema_differ = SchemaDiffer(**schema_differ_config)
+    original_from_structs = adapter.schema_differ._from_structs
 
     def _from_structs(
         current_struct: exp.DataType, new_struct: exp.DataType

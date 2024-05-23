@@ -25,7 +25,6 @@ from sqlmesh.core.engine_adapter.shared import (
     set_catalog,
 )
 from sqlmesh.utils.date import TimeLike
-from sqlmesh.core.schema_diff import SchemaDiffer
 
 if t.TYPE_CHECKING:
     from trino.dbapi import Connection as TrinoConnection
@@ -41,7 +40,6 @@ class TrinoEngineAdapter(
     GetCurrentCatalogFromFunctionMixin,
 ):
     DIALECT = "trino"
-    SCHEMA_DIFFER = SchemaDiffer(dialect=DIALECT)
     INSERT_OVERWRITE_STRATEGY = InsertOverwriteStrategy.INTO_IS_OVERWRITE
     CATALOG_SUPPORT = CatalogSupport.FULL_SUPPORT
     # Trino does technically support transactions but it doesn't work correctly with partition overwrite so we

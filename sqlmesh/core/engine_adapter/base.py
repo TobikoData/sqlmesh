@@ -14,7 +14,7 @@ import itertools
 import logging
 import sys
 import typing as t
-from functools import partial
+from functools import cached_property, partial
 
 import pandas as pd
 from sqlglot import Dialect, exp
@@ -89,7 +89,7 @@ class EngineAdapter:
     SUPPORTS_MATERIALIZED_VIEWS = False
     SUPPORTS_MATERIALIZED_VIEW_SCHEMA = False
     SUPPORTS_CLONING = False
-    SCHEMA_DIFFER = SchemaDiffer(dialect=DIALECT)
+    SCHEMA_DIFFER_PROPERTIES: t.Dict[str, t.Any] = {}
     SUPPORTS_TUPLE_IN = True
     CATALOG_SUPPORT = CatalogSupport.UNSUPPORTED
     SUPPORTS_ROW_LEVEL_OP = True
@@ -149,6 +149,10 @@ class EngineAdapter:
     @property
     def comments_enabled(self) -> bool:
         return self._register_comments and self.COMMENT_CREATION_TABLE.is_supported
+
+    @cached_property
+    def schema_differ(self) -> SchemaDiffer:
+        return SchemaDiffer(**self.SCHEMA_DIFFER_PROPERTIES, dialect=self.DIALECT)
 
     @classmethod
     def is_pandas_df(cls, value: t.Any) -> bool:
@@ -788,7 +792,7 @@ class EngineAdapter:
         """
         Determines the alter statements needed to change the current table into the structure of the target table.
         """
-        return self.SCHEMA_DIFFER.compare_columns(
+        return self.schema_differ.compare_columns(
             current_table_name,
             self.columns(current_table_name),
             self.columns(target_table_name),

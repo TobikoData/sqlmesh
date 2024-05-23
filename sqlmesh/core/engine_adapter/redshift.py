@@ -20,7 +20,6 @@ from sqlmesh.core.engine_adapter.shared import (
     set_catalog,
 )
 from sqlmesh.utils import random_id
-from sqlmesh.core.schema_diff import SchemaDiffer
 
 if t.TYPE_CHECKING:
     from sqlmesh.core._typing import SchemaName, TableName
@@ -35,7 +34,6 @@ class RedshiftEngineAdapter(
     NonTransactionalTruncateMixin,
 ):
     DIALECT = "redshift"
-    SCHEMA_DIFFER = SchemaDiffer(dialect=DIALECT)
     CURRENT_CATALOG_EXPRESSION = exp.func("current_database")
     # Redshift doesn't support comments for VIEWs WITH NO SCHEMA BINDING (which we always use)
     COMMENT_CREATION_VIEW = CommentCreationView.UNSUPPORTED

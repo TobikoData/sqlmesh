@@ -22,6 +22,7 @@ from sqlmesh.core.model import (
 from sqlmesh.core.model.kind import OnDestructiveChange
 from sqlmesh.core.model.seed import Seed
 from sqlmesh.core.plan import Plan, PlanBuilder, SnapshotIntervals
+from sqlmesh.core.schema_diff import SchemaDiffer
 from sqlmesh.core.snapshot import (
     DeployabilityIndex,
     Snapshot,
@@ -39,6 +40,14 @@ from sqlmesh.utils.date import (
     yesterday_ds,
 )
 from sqlmesh.utils.errors import PlanError
+
+
+@pytest.fixture
+def duckdb_schema_differ() -> SchemaDiffer:
+    return DuckDBEngineAdapter(lambda: None).schema_differ
+
+
+pytestmakr = pytest.mark.usefixtures("duckdb_schema_differ")
 
 
 def test_forward_only_plan_sets_version(make_snapshot, mocker: MockerFixture):
@@ -80,7 +89,7 @@ def test_forward_only_plan_sets_version(make_snapshot, mocker: MockerFixture):
         previous_finalized_snapshots=None,
     )
 
-    plan_builder = PlanBuilder(context_diff, DuckDBEngineAdapter.SCHEMA_DIFFER, forward_only=True)
+    plan_builder = PlanBuilder(context_diff, duckdb_schema_differ, forward_only=True)
 
     plan_builder.build()
     assert snapshot_b.version == "test_version"
@@ -128,9 +137,7 @@ def test_forward_only_dev(make_snapshot, mocker: MockerFixture):
     mocker.patch("sqlmesh.core.plan.builder.now").return_value = expected_end
     mocker.patch("sqlmesh.core.plan.definition.now").return_value = expected_end
 
-    plan = PlanBuilder(
-        context_diff, DuckDBEngineAdapter.SCHEMA_DIFFER, forward_only=True, is_dev=True
-    ).build()
+    plan = PlanBuilder(context_diff, duckdb_schema_differ, forward_only=True, is_dev=True).build()
 
     assert plan.restatements == {
         snapshot_a.snapshot_id: (to_timestamp(expected_start), expected_interval_end)
@@ -170,7 +177,7 @@ def test_forward_only_plan_added_models(make_snapshot, mocker: MockerFixture):
         previous_finalized_snapshots=None,
     )
 
-    PlanBuilder(context_diff, DuckDBEngineAdapter.SCHEMA_DIFFER, forward_only=True).build()
+    PlanBuilder(context_diff, duckdb_schema_differ, forward_only=True).build()
     assert snapshot_a.change_category == SnapshotChangeCategory.FORWARD_ONLY
     assert snapshot_b.change_category == SnapshotChangeCategory.BREAKING
 
@@ -213,14 +220,14 @@ def test_paused_forward_only_parent(make_snapshot, mocker: MockerFixture):
         previous_finalized_snapshots=None,
     )
 
-    PlanBuilder(context_diff, DuckDBEngineAdapter.SCHEMA_DIFFER, forward_only=False).build()
+    PlanBuilder(context_diff, duckdb_schema_differ, forward_only=False).build()
     assert snapshot_b.change_category == SnapshotChangeCategory.BREAKING
 
 
 def test_forward_only_plan_allow_destructive_models(
     make_snapshot, make_snapshot_on_destructive_change
 ):
-    schema_differ = DuckDBEngineAdapter.SCHEMA_DIFFER
+    schema_differ = DuckDBEngineAdapter(lambda: None).schema_differ
 
     # forward-only model, not forward-only plan
     snapshot_a_old, snapshot_a = make_snapshot_on_destructive_change()
@@ -246,7 +253,10 @@ def test_forward_only_plan_allow_destructive_models(
     logger = logging.getLogger("sqlmesh.core.plan.builder")
     with patch.object(logger, "warning") as mock_logger:
         assert PlanBuilder(
-            context_diff_a, schema_differ, forward_only=False, allow_destructive_models=['"a"']
+            context_diff_a,
+            schema_differ,
+            forward_only=False,
+            allow_destructive_models=['"a"'],
         ).build()
         assert mock_logger.call_count == 0
 
@@ -321,7 +331,10 @@ def test_forward_only_plan_allow_destructive_models(
         match="""Plan results in a destructive change to forward-only model '"c"'s schema.""",
     ):
         PlanBuilder(
-            context_diff_b, schema_differ, forward_only=True, allow_destructive_models=['"b"']
+            context_diff_b,
+            schema_differ,
+            forward_only=True,
+            allow_destructive_models=['"b"'],
         ).build()
 
     logger = logging.getLogger("sqlmesh.core.plan.builder")
@@ -338,7 +351,7 @@ def test_forward_only_plan_allow_destructive_models(
 def test_forward_only_model_on_destructive_change(
     make_snapshot, make_snapshot_on_destructive_change
 ):
-    schema_differ = DuckDBEngineAdapter.SCHEMA_DIFFER
+    schema_differ = DuckDBEngineAdapter(lambda: None).schema_differ
 
     # direct change to A
     snapshot_a_old, snapshot_a = make_snapshot_on_destructive_change()
@@ -547,7 +560,7 @@ def test_forward_only_model_on_destructive_change_no_column_types(
 
     logger = logging.getLogger("sqlmesh.core.plan.builder")
     with patch.object(logger, "warning") as mock_logger:
-        PlanBuilder(context_diff_1, DuckDBEngineAdapter.SCHEMA_DIFFER).build()
+        PlanBuilder(context_diff_1, duckdb_schema_differ).build()
         assert mock_logger.call_count == 0
 
 
@@ -730,9 +743,7 @@ def test_restate_symbolic_model(make_snapshot, mocker: MockerFixture):
         previous_finalized_snapshots=None,
     )
 
-    plan = PlanBuilder(
-        context_diff, DuckDBEngineAdapter.SCHEMA_DIFFER, restate_models=[snapshot_a.name]
-    ).build()
+    plan = PlanBuilder(context_diff, duckdb_schema_differ, restate_models=[snapshot_a.name]).build()
     assert not plan.restatements
 
 
@@ -762,9 +773,7 @@ def test_restate_seed_model(make_snapshot, mocker: MockerFixture):
         previous_finalized_snapshots=None,
     )
 
-    plan = PlanBuilder(
-        context_diff, DuckDBEngineAdapter.SCHEMA_DIFFER, restate_models=[snapshot_a.name]
-    ).build()
+    plan = PlanBuilder(context_diff, duckdb_schema_differ, restate_models=[snapshot_a.name]).build()
     assert not plan.restatements
 
 
@@ -788,9 +797,7 @@ def test_restate_missing_model(make_snapshot, mocker: MockerFixture):
         PlanError,
         match=r"Cannot restate model 'missing'. Model does not exist.",
     ):
-        PlanBuilder(
-            context_diff, DuckDBEngineAdapter.SCHEMA_DIFFER, restate_models=["missing"]
-        ).build()
+        PlanBuilder(context_diff, duckdb_schema_differ, restate_models=["missing"]).build()
 
 
 def test_new_snapshots_with_restatements(make_snapshot, mocker: MockerFixture):
@@ -815,7 +822,7 @@ def test_new_snapshots_with_restatements(make_snapshot, mocker: MockerFixture):
         PlanError,
         match=r"Model changes and restatements can't be a part of the same plan.*",
     ):
-        PlanBuilder(context_diff, DuckDBEngineAdapter.SCHEMA_DIFFER, restate_models=["a"]).build()
+        PlanBuilder(context_diff, duckdb_schema_differ, restate_models=["a"]).build()
 
 
 def test_end_validation(make_snapshot, mocker: MockerFixture):
@@ -842,8 +849,9 @@ def test_end_validation(make_snapshot, mocker: MockerFixture):
         previous_finalized_snapshots=None,
     )
 
-    schema_differ = DuckDBEngineAdapter.SCHEMA_DIFFER
-    dev_plan_builder = PlanBuilder(context_diff, schema_differ, end="2022-01-03", is_dev=True)
+    dev_plan_builder = PlanBuilder(
+        context_diff, duckdb_schema_differ, end="2022-01-03", is_dev=True
+    )
     assert dev_plan_builder.build().end == "2022-01-03"
     dev_plan_builder.set_end("2022-01-04")
     assert dev_plan_builder.build().end == "2022-01-04"
@@ -853,12 +861,12 @@ def test_end_validation(make_snapshot, mocker: MockerFixture):
     )
 
     with pytest.raises(PlanError, match=start_end_not_allowed_message):
-        PlanBuilder(context_diff, schema_differ, end="2022-01-03").build()
+        PlanBuilder(context_diff, duckdb_schema_differ, end="2022-01-03").build()
 
     with pytest.raises(PlanError, match=start_end_not_allowed_message):
-        PlanBuilder(context_diff, schema_differ, start="2022-01-03").build()
+        PlanBuilder(context_diff, duckdb_schema_differ, start="2022-01-03").build()
 
-    prod_plan_builder = PlanBuilder(context_diff, schema_differ)
+    prod_plan_builder = PlanBuilder(context_diff, duckdb_schema_differ)
 
     with pytest.raises(PlanError, match=start_end_not_allowed_message):
         prod_plan_builder.set_end("2022-01-03").build()
@@ -869,7 +877,7 @@ def test_end_validation(make_snapshot, mocker: MockerFixture):
     context_diff.new_snapshots = {}
     restatement_prod_plan_builder = PlanBuilder(
         context_diff,
-        schema_differ,
+        duckdb_schema_differ,
         start="2022-01-01",
         end="2022-01-03",
         restate_models=['"a"'],
@@ -905,12 +913,11 @@ def test_forward_only_revert_not_allowed(make_snapshot, mocker: MockerFixture):
         previous_finalized_snapshots=None,
     )
 
-    schema_differ = DuckDBEngineAdapter.SCHEMA_DIFFER
     with pytest.raises(
         PlanError,
         match=r"Attempted to revert to an unrevertable version of model.*",
     ):
-        PlanBuilder(context_diff, schema_differ, forward_only=True).build()
+        PlanBuilder(context_diff, duckdb_schema_differ, forward_only=True).build()
 
     # Make sure the plan can be created if a new snapshot version was enforced.
     new_version_snapshot = make_snapshot(
@@ -919,7 +926,7 @@ def test_forward_only_revert_not_allowed(make_snapshot, mocker: MockerFixture):
     snapshot.categorize_as(SnapshotChangeCategory.BREAKING)
     context_diff.modified_snapshots = {snapshot.name: (new_version_snapshot, forward_only_snapshot)}
     context_diff.new_snapshots = {new_version_snapshot.snapshot_id: new_version_snapshot}
-    PlanBuilder(context_diff, schema_differ, forward_only=True).build()
+    PlanBuilder(context_diff, duckdb_schema_differ, forward_only=True).build()
 
 
 def test_forward_only_plan_seed_models(make_snapshot, mocker: MockerFixture):
@@ -961,7 +968,9 @@ def test_forward_only_plan_seed_models(make_snapshot, mocker: MockerFixture):
         previous_finalized_snapshots=None,
     )
 
-    PlanBuilder(context_diff, DuckDBEngineAdapter.SCHEMA_DIFFER, forward_only=True).build()
+    PlanBuilder(
+        context_diff, DuckDBEngineAdapter(lambda: None).schema_differ, forward_only=True
+    ).build()
     assert snapshot_a_updated.version == snapshot_a_updated.fingerprint.to_version()
     assert snapshot_a_updated.change_category == SnapshotChangeCategory.NON_BREAKING
 
@@ -995,15 +1004,14 @@ def test_start_inference(make_snapshot, mocker: MockerFixture):
 
     snapshot_b.add_interval("2022-01-01", now())
 
-    schema_differ = DuckDBEngineAdapter.SCHEMA_DIFFER
-    plan = PlanBuilder(context_diff, schema_differ).build()
+    plan = PlanBuilder(context_diff, duckdb_schema_differ).build()
     assert len(plan.missing_intervals) == 1
     assert plan.missing_intervals[0].snapshot_id == snapshot_a.snapshot_id
     assert plan.start == to_timestamp("2022-01-01")
 
     # Test inference from existing intervals
     context_diff.snapshots = {snapshot_b.snapshot_id: snapshot_b}
-    plan = PlanBuilder(context_diff, schema_differ).build()
+    plan = PlanBuilder(context_diff, duckdb_schema_differ).build()
     assert not plan.missing_intervals
     assert plan.start == to_datetime("2022-01-01")
 
@@ -1029,7 +1037,7 @@ def test_auto_categorization(make_snapshot, mocker: MockerFixture):
         previous_finalized_snapshots=None,
     )
 
-    PlanBuilder(context_diff, DuckDBEngineAdapter.SCHEMA_DIFFER).build()
+    PlanBuilder(context_diff, duckdb_schema_differ).build()
 
     assert updated_snapshot.version == updated_snapshot.fingerprint.to_version()
     assert updated_snapshot.change_category == SnapshotChangeCategory.BREAKING
@@ -1073,7 +1081,7 @@ def test_auto_categorization_missing_schema_downstream(make_snapshot, mocker: Mo
         previous_finalized_snapshots=None,
     )
 
-    PlanBuilder(context_diff, DuckDBEngineAdapter.SCHEMA_DIFFER).build()
+    PlanBuilder(context_diff, duckdb_schema_differ).build()
 
     assert updated_snapshot.version
     assert updated_snapshot.change_category == SnapshotChangeCategory.BREAKING
@@ -1109,7 +1117,7 @@ def test_broken_references(make_snapshot, mocker: MockerFixture):
         PlanError,
         match=r"""Removed '"a"' are referenced in '"b"'.*""",
     ):
-        PlanBuilder(context_diff, DuckDBEngineAdapter.SCHEMA_DIFFER).build()
+        PlanBuilder(context_diff, duckdb_schema_differ).build()
 
 
 def test_effective_from(make_snapshot, mocker: MockerFixture):
@@ -1143,18 +1151,17 @@ def test_effective_from(make_snapshot, mocker: MockerFixture):
         previous_finalized_snapshots=None,
     )
 
-    schema_differ = DuckDBEngineAdapter.SCHEMA_DIFFER
     with pytest.raises(
         PlanError,
         match="Effective date can only be set for a forward-only plan.",
     ):
-        PlanBuilder(context_diff, schema_differ).set_effective_from("2023-02-01").build()
+        PlanBuilder(context_diff, duckdb_schema_differ).set_effective_from("2023-02-01").build()
 
     # The snapshot gets categorized as breaking in previous step so we want to reset that back to None
     updated_snapshot.change_category = None
     plan_builder = PlanBuilder(
         context_diff,
-        schema_differ,
+        duckdb_schema_differ,
         forward_only=True,
         start="2023-01-01",
         end="2023-03-01",
@@ -1205,15 +1212,15 @@ def test_new_environment_no_changes(make_snapshot, mocker: MockerFixture):
         previous_finalized_snapshots=None,
     )
 
-    schema_differ = DuckDBEngineAdapter.SCHEMA_DIFFER
     with pytest.raises(PlanError, match="No changes were detected.*"):
-        PlanBuilder(context_diff, schema_differ, is_dev=True).build()
+        PlanBuilder(context_diff, duckdb_schema_differ, is_dev=True).build()
 
     assert (
-        PlanBuilder(context_diff, schema_differ).build().environment.promoted_snapshot_ids is None
+        PlanBuilder(context_diff, duckdb_schema_differ).build().environment.promoted_snapshot_ids
+        is None
     )
     assert (
-        PlanBuilder(context_diff, schema_differ, is_dev=True, include_unmodified=True)
+        PlanBuilder(context_diff, duckdb_schema_differ, is_dev=True, include_unmodified=True)
         .build()
         .environment.promoted_snapshot_ids
         is None
@@ -1247,9 +1254,8 @@ def test_new_environment_with_changes(make_snapshot, mocker: MockerFixture):
     )
 
     # Modified the existing model.
-    schema_differ = DuckDBEngineAdapter.SCHEMA_DIFFER
     assert PlanBuilder(
-        context_diff, schema_differ, is_dev=True
+        context_diff, duckdb_schema_differ, is_dev=True
     ).build().environment.promoted_snapshot_ids == [updated_snapshot_a.snapshot_id]
 
     # Updating the existing environment with a previously promoted snapshot.
@@ -1259,7 +1265,7 @@ def test_new_environment_with_changes(make_snapshot, mocker: MockerFixture):
     }
     context_diff.is_new_environment = False
     assert set(
-        PlanBuilder(context_diff, schema_differ, is_dev=True)
+        PlanBuilder(context_diff, duckdb_schema_differ, is_dev=True)
         .build()
         .environment.promoted_snapshot_ids
         or []
@@ -1281,7 +1287,7 @@ def test_new_environment_with_changes(make_snapshot, mocker: MockerFixture):
     context_diff.new_snapshots = {snapshot_c.snapshot_id: snapshot_c}
 
     assert set(
-        PlanBuilder(context_diff, schema_differ, is_dev=True)
+        PlanBuilder(context_diff, duckdb_schema_differ, is_dev=True)
         .build()
         .environment.promoted_snapshot_ids
         or []
@@ -1327,18 +1333,17 @@ def test_forward_only_models(make_snapshot, mocker: MockerFixture):
         previous_finalized_snapshots=None,
     )
 
-    schema_differ = DuckDBEngineAdapter.SCHEMA_DIFFER
-    PlanBuilder(context_diff, schema_differ, is_dev=True).build()
+    PlanBuilder(context_diff, duckdb_schema_differ, is_dev=True).build()
     assert updated_snapshot.change_category == SnapshotChangeCategory.FORWARD_ONLY
 
     updated_snapshot.change_category = None
     updated_snapshot.version = None
-    PlanBuilder(context_diff, schema_differ, is_dev=True, forward_only=True).build()
+    PlanBuilder(context_diff, duckdb_schema_differ, is_dev=True, forward_only=True).build()
     assert updated_snapshot.change_category == SnapshotChangeCategory.FORWARD_ONLY
 
     updated_snapshot.change_category = None
     updated_snapshot.version = None
-    PlanBuilder(context_diff, schema_differ, forward_only=True).build()
+    PlanBuilder(context_diff, duckdb_schema_differ, forward_only=True).build()
     assert updated_snapshot.change_category == SnapshotChangeCategory.FORWARD_ONLY
 
 
@@ -1369,7 +1374,7 @@ def test_forward_only_models_model_kind_changed(make_snapshot, mocker: MockerFix
         previous_finalized_snapshots=None,
     )
 
-    PlanBuilder(context_diff, DuckDBEngineAdapter.SCHEMA_DIFFER, is_dev=True).build()
+    PlanBuilder(context_diff, duckdb_schema_differ, is_dev=True).build()
     assert updated_snapshot.change_category == SnapshotChangeCategory.BREAKING
 
 
@@ -1428,7 +1433,7 @@ def test_indirectly_modified_forward_only_model(make_snapshot, mocker: MockerFix
         previous_finalized_snapshots=None,
     )
 
-    plan = PlanBuilder(context_diff, DuckDBEngineAdapter.SCHEMA_DIFFER, is_dev=True).build()
+    plan = PlanBuilder(context_diff, duckdb_schema_differ, is_dev=True).build()
     assert plan.indirectly_modified == {
         updated_snapshot_a.snapshot_id: {
             updated_snapshot_b.snapshot_id,
@@ -1478,7 +1483,7 @@ def test_added_model_with_forward_only_parent(make_snapshot, mocker: MockerFixtu
         previous_finalized_snapshots=None,
     )
 
-    PlanBuilder(context_diff, DuckDBEngineAdapter.SCHEMA_DIFFER, is_dev=True).build()
+    PlanBuilder(context_diff, duckdb_schema_differ, is_dev=True).build()
     assert snapshot_b.change_category == SnapshotChangeCategory.BREAKING
 
 
@@ -1514,7 +1519,7 @@ def test_added_forward_only_model(make_snapshot, mocker: MockerFixture):
         previous_finalized_snapshots=None,
     )
 
-    PlanBuilder(context_diff, DuckDBEngineAdapter.SCHEMA_DIFFER).build()
+    PlanBuilder(context_diff, duckdb_schema_differ).build()
     assert snapshot_a.change_category == SnapshotChangeCategory.BREAKING
     assert snapshot_b.change_category == SnapshotChangeCategory.BREAKING
 
@@ -1544,19 +1549,20 @@ def test_disable_restatement(make_snapshot, mocker: MockerFixture):
         previous_finalized_snapshots=None,
     )
 
-    schema_differ = DuckDBEngineAdapter.SCHEMA_DIFFER
-    plan = PlanBuilder(context_diff, schema_differ, restate_models=['"a"']).build()
+    plan = PlanBuilder(context_diff, duckdb_schema_differ, restate_models=['"a"']).build()
     assert not plan.restatements
 
     # Effective from doesn't apply to snapshots for which restatements are disabled.
     plan = PlanBuilder(
-        context_diff, schema_differ, forward_only=True, effective_from="2023-01-01"
+        context_diff, duckdb_schema_differ, forward_only=True, effective_from="2023-01-01"
     ).build()
     assert plan.effective_from == "2023-01-01"
     assert snapshot.effective_from is None
 
     # Restatements should still be supported when in dev.
-    plan = PlanBuilder(context_diff, schema_differ, is_dev=True, restate_models=['"a"']).build()
+    plan = PlanBuilder(
+        context_diff, duckdb_schema_differ, is_dev=True, restate_models=['"a"']
+    ).build()
     assert plan.restatements == {
         snapshot.snapshot_id: (to_timestamp(plan.start), to_timestamp(to_date("today")))
     }
@@ -1603,7 +1609,7 @@ def test_revert_to_previous_value(make_snapshot, mocker: MockerFixture):
         previous_finalized_snapshots=None,
     )
 
-    plan_builder = PlanBuilder(context_diff, DuckDBEngineAdapter.SCHEMA_DIFFER)
+    plan_builder = PlanBuilder(context_diff, duckdb_schema_differ)
     plan_builder.set_choice(snapshot_a, SnapshotChangeCategory.BREAKING)
     plan_builder.build()
     # Make sure it does not get assigned INDIRECT_BREAKING
@@ -1815,7 +1821,7 @@ def test_add_restatements(
 
     plan = PlanBuilder(
         context_diff,
-        DuckDBEngineAdapter.SCHEMA_DIFFER,
+        duckdb_schema_differ,
         start=to_date(start),
         end=to_date(end),
         execution_time=to_date(execution_time),
@@ -1888,9 +1894,8 @@ def test_dev_plan_depends_past(make_snapshot, mocker: MockerFixture):
         previous_finalized_snapshots=None,
     )
 
-    schema_differ = DuckDBEngineAdapter.SCHEMA_DIFFER
     dev_plan_start_aligned = PlanBuilder(
-        context_diff, schema_differ, start="2023-01-01", end="2023-01-10", is_dev=True
+        context_diff, duckdb_schema_differ, start="2023-01-01", end="2023-01-10", is_dev=True
     ).build()
     assert len(dev_plan_start_aligned.new_snapshots) == 3
     assert sorted([x.name for x in dev_plan_start_aligned.new_snapshots]) == [
@@ -1906,7 +1911,7 @@ def test_dev_plan_depends_past(make_snapshot, mocker: MockerFixture):
     assert dev_plan_start_aligned.indirectly_modified == {}
 
     dev_plan_start_ahead_of_model = PlanBuilder(
-        context_diff, schema_differ, start="2023-01-02", end="2023-01-10", is_dev=True
+        context_diff, duckdb_schema_differ, start="2023-01-02", end="2023-01-10", is_dev=True
     ).build()
     assert len(dev_plan_start_ahead_of_model.new_snapshots) == 1
     assert [x.name for x in dev_plan_start_ahead_of_model.new_snapshots] == ['"b"']
@@ -1991,9 +1996,8 @@ def test_dev_plan_depends_past_non_deployable(make_snapshot, mocker: MockerFixtu
         previous_finalized_snapshots=None,
     )
 
-    schema_differ = DuckDBEngineAdapter.SCHEMA_DIFFER
     dev_plan_start_aligned = PlanBuilder(
-        context_diff, schema_differ, start="2023-01-01", end="2023-01-10", is_dev=True
+        context_diff, duckdb_schema_differ, start="2023-01-01", end="2023-01-10", is_dev=True
     ).build()
     assert len(dev_plan_start_aligned.new_snapshots) == 3
     assert sorted([x.name for x in dev_plan_start_aligned.new_snapshots]) == [
@@ -2004,7 +2008,7 @@ def test_dev_plan_depends_past_non_deployable(make_snapshot, mocker: MockerFixtu
 
     # There should be no ignored snapshots because all changes are non-deployable.
     dev_plan_start_ahead_of_model = PlanBuilder(
-        context_diff, schema_differ, start="2023-01-02", end="2023-01-10", is_dev=True
+        context_diff, duckdb_schema_differ, start="2023-01-02", end="2023-01-10", is_dev=True
     ).build()
     assert len(dev_plan_start_ahead_of_model.new_snapshots) == 3
     assert sorted([x.name for x in dev_plan_start_aligned.new_snapshots]) == [
@@ -2062,14 +2066,13 @@ def test_models_selected_for_backfill(make_snapshot, mocker: MockerFixture):
         previous_finalized_snapshots=None,
     )
 
-    schema_differ = DuckDBEngineAdapter.SCHEMA_DIFFER
     with pytest.raises(
         PlanError,
         match="Selecting models to backfill is only supported for development environments",
     ):
-        PlanBuilder(context_diff, schema_differ, backfill_models={'"a"'}).build()
+        PlanBuilder(context_diff, duckdb_schema_differ, backfill_models={'"a"'}).build()
 
-    plan = PlanBuilder(context_diff, schema_differ).build()
+    plan = PlanBuilder(context_diff, duckdb_schema_differ).build()
     assert plan.is_selected_for_backfill('"a"')
     assert plan.is_selected_for_backfill('"b"')
     assert plan.models_to_backfill is None
@@ -2078,14 +2081,18 @@ def test_models_selected_for_backfill(make_snapshot, mocker: MockerFixture):
         snapshot_b.snapshot_id,
     }
 
-    plan = PlanBuilder(context_diff, schema_differ, is_dev=True, backfill_models={'"a"'}).build()
+    plan = PlanBuilder(
+        context_diff, duckdb_schema_differ, is_dev=True, backfill_models={'"a"'}
+    ).build()
     assert plan.is_selected_for_backfill('"a"')
     assert not plan.is_selected_for_backfill('"b"')
     assert plan.models_to_backfill == {'"a"'}
     assert {i.snapshot_id for i in plan.missing_intervals} == {snapshot_a.snapshot_id}
     assert not plan.environment.promoted_snapshot_ids
 
-    plan = PlanBuilder(context_diff, schema_differ, is_dev=True, backfill_models={'"b"'}).build()
+    plan = PlanBuilder(
+        context_diff, duckdb_schema_differ, is_dev=True, backfill_models={'"b"'}
+    ).build()
     assert plan.is_selected_for_backfill('"a"')
     assert plan.is_selected_for_backfill('"b"')
     assert plan.models_to_backfill == {'"a"', '"b"'}
@@ -2118,7 +2125,7 @@ def test_categorized_uncategorized(make_snapshot, mocker: MockerFixture):
     )
 
     plan_builder = PlanBuilder(
-        context_diff, DuckDBEngineAdapter.SCHEMA_DIFFER, auto_categorization_enabled=False
+        context_diff, duckdb_schema_differ, auto_categorization_enabled=False
     )
 
     plan = plan_builder.build()
@@ -2170,8 +2177,7 @@ def test_environment_previous_finalized_snapshots(make_snapshot, mocker: MockerF
         previous_finalized_snapshots=[snapshot_c.table_info, snapshot_d.table_info],
     )
 
-    schema_differ = DuckDBEngineAdapter.SCHEMA_DIFFER
-    plan = PlanBuilder(context_diff, schema_differ).build()
+    plan = PlanBuilder(context_diff, duckdb_schema_differ).build()
     assert set(plan.environment.previous_finalized_snapshots or []) == {
         snapshot_c.table_info,
         snapshot_d.table_info,
@@ -2179,7 +2185,7 @@ def test_environment_previous_finalized_snapshots(make_snapshot, mocker: MockerF
 
     context_diff.is_unfinalized_environment = False
 
-    plan = PlanBuilder(context_diff, schema_differ).build()
+    plan = PlanBuilder(context_diff, duckdb_schema_differ).build()
     assert set(plan.environment.previous_finalized_snapshots or []) == {
         snapshot_a.table_info,
         snapshot_c.table_info,
