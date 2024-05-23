@@ -1611,7 +1611,7 @@ class GenericContext(BaseContext, t.Generic[C]):
         self.console.log_status_update(f"Models: {len(self.models)}")
         self.console.log_status_update(f"Macros: {len(self._macros) - len(macro.get_registry())}")
 
-        self._try_connection("data warehouse", self._engine_adapter._ping)
+        self._try_connection("data warehouse", self._engine_adapter.ping)
 
         state_connection = self.config.get_state_connection(self.gateway)
         if state_connection:
