@@ -53,6 +53,7 @@ if t.TYPE_CHECKING:
         PySparkSession,
         Query,
         QueryOrDF,
+        SnowparkSession,
     )
     from sqlmesh.core.node import IntervalUnit
 
@@ -147,12 +148,12 @@ class EngineAdapter:
         return None
 
     @property
+    def snowpark(self) -> t.Optional[SnowparkSession]:
+        return None
+
+    @property
     def comments_enabled(self) -> bool:
         return self._register_comments and self.COMMENT_CREATION_TABLE.is_supported
-
-    @classmethod
-    def is_pandas_df(cls, value: t.Any) -> bool:
-        return isinstance(value, pd.DataFrame)
 
     @classmethod
     def _casted_columns(cls, columns_to_types: t.Dict[str, exp.DataType]) -> t.List[exp.Alias]:
@@ -244,7 +245,7 @@ class EngineAdapter:
     ) -> t.Optional[t.Dict[str, exp.DataType]]:
         if columns_to_types:
             return columns_to_types
-        if self.is_pandas_df(query_or_df):
+        if isinstance(query_or_df, pd.DataFrame):
             return columns_to_types_from_df(t.cast(pd.DataFrame, query_or_df))
         return columns_to_types
 
@@ -833,8 +834,10 @@ class EngineAdapter:
             view_properties: Optional view properties to add to the view.
             create_kwargs: Additional kwargs to pass into the Create expression
         """
-        if self.is_pandas_df(query_or_df):
-            values = list(t.cast(pd.DataFrame, query_or_df).itertuples(index=False, name=None))
+        if isinstance(query_or_df, pd.DataFrame):
+            values: t.List[t.Tuple[t.Any, ...]] = list(
+                query_or_df.itertuples(index=False, name=None)
+            )
             columns_to_types = columns_to_types or self._columns_to_types(query_or_df)
             if not columns_to_types:
                 raise SQLMeshError("columns_to_types must be provided for dataframes")

@@ -33,7 +33,7 @@ The `execute` function is wrapped with the `@model` [decorator](https://wiki.pyt
 
 Because SQLMesh creates tables before evaluating models, the schema of the output DataFrame is a required argument. The `@model` argument `columns` contains a dictionary of column names to types.
 
-The function takes an `ExecutionContext` that is able to run queries and to retrieve the current time interval that is being processed, along with arbitrary key-value arguments passed in at runtime. The function can either return a Pandas or PySpark Dataframe instance.
+The function takes an `ExecutionContext` that is able to run queries and to retrieve the current time interval that is being processed, along with arbitrary key-value arguments passed in at runtime. The function can either return a Pandas, PySpark, or Snowpark Dataframe instance.
 
 If the function output is too large, it can also be returned in chunks using Python generators.
 
@@ -289,6 +289,40 @@ def execute(
     df = context.spark.table(table).withColumn("country", functions.lit("USA"))
 
     # returns the pyspark DataFrame directly, so no data is computed locally
+    return df
+```
+
+
+### Snowpark
+This example demonstrates using the Snowpark DataFrame API. If you use Snowflake, the DataFrame API is preferred to Pandas since it allows you to compute in a distributed fashion.
+
+```python linenums="1"
+import typing as t
+from datetime import datetime
+
+import pandas as pd
+from snowwflake.snowpark.dataframe import DataFrame
+
+from sqlmesh import ExecutionContext, model
+
+@model(
+    "docs_example.snowpark",
+    columns={
+        "id": "int",
+        "name": "text",
+        "country": "text",
+    },
+)
+def execute(
+    context: ExecutionContext,
+    start: datetime,
+    end: datetime,
+    execution_time: datetime,
+    **kwargs: t.Any,
+) -> DataFrame:
+    # returns the snowpark DataFrame directly, so no data is computed locally
+    df = context.snowpark.create_dataframe([[1, "a", "usa"], [2, "b", "cad"]], schema=["id", "name", "country"])
+    df = df.filter(df.id > 1)
     return df
 ```
 

@@ -18,11 +18,14 @@ from sqlmesh.core.engine_adapter.shared import (
     SourceQuery,
     set_catalog,
 )
+from sqlmesh.utils import optional_import
 from sqlmesh.utils.errors import SQLMeshError
+
+snowpark = optional_import("snowflake.snowpark")
 
 if t.TYPE_CHECKING:
     from sqlmesh.core._typing import SchemaName, SessionProperties, TableName
-    from sqlmesh.core.engine_adapter._typing import DF, Query
+    from sqlmesh.core.engine_adapter._typing import DF, Query, SnowparkSession
 
 
 @set_catalog(
@@ -72,6 +75,14 @@ class SnowflakeEngineAdapter(GetCurrentCatalogFromFunctionMixin):
         yield
         self.execute(f"USE WAREHOUSE {current_warehouse_sql}")
 
+    @property
+    def snowpark(self) -> t.Optional[SnowparkSession]:
+        if snowpark:
+            return snowpark.Session.builder.configs(
+                {"connection": self._connection_pool.get()}
+            ).getOrCreate()
+        return None
+
     def _df_to_source_queries(
         self,
         df: DF,
@@ -79,15 +90,15 @@ class SnowflakeEngineAdapter(GetCurrentCatalogFromFunctionMixin):
         batch_size: int,
         target_table: TableName,
     ) -> t.List[SourceQuery]:
-        assert isinstance(df, pd.DataFrame)
         temp_table = self._get_temp_table(target_table or "pandas")
 
         def query_factory() -> Query:
-            from snowflake.connector.pandas_tools import write_pandas
+            if snowpark and isinstance(df, snowpark.dataframe.DataFrame):
+                df.createOrReplaceTempView(temp_table.sql(dialect=self.dialect, identify=True))
+            elif isinstance(df, pd.DataFrame):
+                from snowflake.connector.pandas_tools import write_pandas
 
-            if not self.table_exists(temp_table):
                 # Workaround for https://github.com/snowflakedb/snowflake-connector-python/issues/1034
-                #
                 # The above issue has already been fixed upstream, but we keep the following
                 # line anyway in order to support a wider range of Snowflake versions.
                 schema = f'"{temp_table.db}"'
@@ -109,7 +120,8 @@ class SnowflakeEngineAdapter(GetCurrentCatalogFromFunctionMixin):
                             df[column] = pd.to_datetime(df[column]).dt.strftime(
                                 "%Y-%m-%d %H:%M:%S.%f"
                             )  # type: ignore
-                self.create_table(temp_table, columns_to_types, exists=False)
+                self.create_table(temp_table, columns_to_types)
+
                 write_pandas(
                     self._connection_pool.get(),
                     df,
@@ -117,15 +129,17 @@ class SnowflakeEngineAdapter(GetCurrentCatalogFromFunctionMixin):
                     schema=temp_table.db or None,
                     database=temp_table.catalog or None,
                     chunk_size=self.DEFAULT_BATCH_SIZE,
+                    overwrite=True,
+                    table_type="temp",
                 )
+            else:
+                raise SQLMeshError(
+                    f"Unknown dataframe type: {type(df)} for {target_table}. Expecting pandas or snowpark."
+                )
+
             return exp.select(*self._casted_columns(columns_to_types)).from_(temp_table)
 
-        return [
-            SourceQuery(
-                query_factory=query_factory,
-                cleanup_func=lambda: self.drop_table(temp_table),
-            )
-        ]
+        return [SourceQuery(query_factory=query_factory)]
 
     def _fetch_native_df(
         self, query: t.Union[exp.Expression, str], quote_identifiers: bool = False
