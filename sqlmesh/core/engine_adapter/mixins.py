@@ -277,8 +277,6 @@ class VarcharSizeWorkaroundMixin(EngineAdapter):
             assert not isinstance(table_name_or_schema, exp.Schema)
             # redshift and mssql have a bug where CTAS statements have non determistic types. if a limit
             # is applied to a ctas statement, VARCHAR types default to 1 in some instances.
-            # this checks the explain plain from redshift and tries to detect when these optimizer
-            # bugs occur and force a cast
             select_statement = statement.expression.copy()
             for select_or_union in select_statement.find_all(exp.Select, exp.Union):
                 select_or_union.set("limit", None)
