@@ -484,7 +484,7 @@ class PlanBuilder:
                             snapshot_is_destructive[s_id] = False
                         else:
                             schema_diff = self._engine_schema_differ.compare_columns(
-                                new.model.name,
+                                new.name,
                                 old_columns_to_types,
                                 new_columns_to_types,
                             )
