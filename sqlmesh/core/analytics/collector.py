@@ -227,14 +227,17 @@ class AnalyticsCollector:
             )
         self._add_event("SNAPSHOTS_CREATED", {"plan_id": plan_id, "snapshots": snapshots})
 
-    def on_run_start(self, *, run_id: str, engine_type: str, state_sync_type: str) -> None:
+    def on_run_start(self, *, engine_type: str, state_sync_type: str) -> str:
         """Called after a run starts.
 
         Args:
-            run_id: The ID of the run.
             engine_type: The type of the target engine.
             state_sync_type: The type of the engine used to store the SQLMesh state.
+
+        Returns:
+            The run ID.
         """
+        run_id = random_id()
         self._add_event(
             "RUN_START",
             {
@@ -243,8 +246,9 @@ class AnalyticsCollector:
                 "state_sync_type": state_sync_type.lower(),
             },
         )
+        return run_id
 
-    def on_run_end(self, *, run_id: str, error: t.Optional[t.Any] = None) -> None:
+    def on_run_end(self, *, run_id: str, succeeded: bool, error: t.Optional[t.Any] = None) -> None:
         """Called after a run ends.
 
         Args:
@@ -255,7 +259,7 @@ class AnalyticsCollector:
             "RUN_END",
             {
                 "run_id": run_id,
-                "succeeded": error is None,
+                "succeeded": succeeded,
                 "error": type(error).__name__ if error else None,
             },
         )
