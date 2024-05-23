@@ -11,6 +11,7 @@ from sqlmesh.core.engine_adapter.mixins import (
     GetCurrentCatalogFromFunctionMixin,
     LogicalMergeMixin,
     NonTransactionalTruncateMixin,
+    VarcharSizeWorkaroundMixin,
 )
 from sqlmesh.core.engine_adapter.shared import (
     CommentCreationView,
@@ -19,7 +20,6 @@ from sqlmesh.core.engine_adapter.shared import (
     SourceQuery,
     set_catalog,
 )
-from sqlmesh.utils import random_id
 
 if t.TYPE_CHECKING:
     from sqlmesh.core._typing import SchemaName, TableName
@@ -32,6 +32,7 @@ class RedshiftEngineAdapter(
     LogicalMergeMixin,
     GetCurrentCatalogFromFunctionMixin,
     NonTransactionalTruncateMixin,
+    VarcharSizeWorkaroundMixin,
 ):
     DIALECT = "redshift"
     CURRENT_CATALOG_EXPRESSION = exp.func("current_database")
@@ -102,63 +103,6 @@ class RedshiftEngineAdapter(
             column_descriptions=column_descriptions,
             **kwargs,
         )
-
-    def _build_create_table_exp(
-        self,
-        table_name_or_schema: t.Union[exp.Schema, TableName],
-        expression: t.Optional[exp.Expression],
-        exists: bool = True,
-        replace: bool = False,
-        columns_to_types: t.Optional[t.Dict[str, exp.DataType]] = None,
-        table_description: t.Optional[str] = None,
-        **kwargs: t.Any,
-    ) -> exp.Create:
-        statement = super()._build_create_table_exp(
-            table_name_or_schema,
-            expression=expression,
-            exists=exists,
-            replace=replace,
-            columns_to_types=columns_to_types,
-            table_description=table_description,
-            **kwargs,
-        )
-
-        if (
-            statement.expression
-            and statement.expression.args.get("limit") is not None
-            and statement.expression.args["limit"].expression.this == "0"
-        ):
-            assert not isinstance(table_name_or_schema, exp.Schema)
-            # redshift has a bug where CTAS statements have non determistic types. if a limit
-            # is applied to a ctas statement, VARCHAR types default to 1 in some instances.
-            # this checks the explain plain from redshift and tries to detect when these optimizer
-            # bugs occur and force a cast
-            select_statement = statement.expression.copy()
-            for select_or_union in select_statement.find_all(exp.Select, exp.Union):
-                select_or_union.set("limit", None)
-                select_or_union.set("where", None)
-
-            temp_view_name = exp.table_(f"#sqlmesh__{random_id()}")
-            self.create_view(
-                temp_view_name, select_statement, replace=False, no_schema_binding=False
-            )
-            columns_to_types_from_view = self.columns(temp_view_name)
-
-            schema = self._build_schema_exp(
-                exp.to_table(table_name_or_schema),
-                columns_to_types_from_view,
-            )
-            statement = super()._build_create_table_exp(
-                schema,
-                None,
-                exists=exists,
-                replace=replace,
-                columns_to_types=columns_to_types_from_view,
-                table_description=table_description,
-                **kwargs,
-            )
-
-        return statement
 
     def create_view(
         self,

@@ -33,7 +33,7 @@ def test_create_table_from_query_exists_no_if_not_exists(
     adapter: t.Callable, mocker: MockerFixture
 ):
     mocker.patch(
-        "sqlmesh.core.engine_adapter.redshift.random_id",
+        "sqlmesh.core.engine_adapter.base.random_id",
         return_value="test_random_id",
     )
 
@@ -62,11 +62,12 @@ def test_create_table_from_query_exists_no_if_not_exists(
     )
 
     assert to_sql_calls(adapter) == [
-        'CREATE VIEW "#sqlmesh__test_random_id" AS SELECT "a", "b", "x" + 1 AS "c", "d" AS "d", "e" FROM (SELECT * FROM "table")',
+        'CREATE VIEW "__temp_ctas_test_random_id" AS SELECT "a", "b", "x" + 1 AS "c", "d" AS "d", "e" FROM (SELECT * FROM "table")',
+        'DROP VIEW IF EXISTS "__temp_ctas_test_random_id" CASCADE',
         'CREATE TABLE "test_schema"."test_table" ("a" VARCHAR(MAX), "b" VARCHAR(60), "c" VARCHAR(MAX), "d" VARCHAR(MAX), "e" TIMESTAMP)',
     ]
 
-    columns_mock.assert_called_once_with(exp.table_("#sqlmesh__test_random_id"))
+    columns_mock.assert_called_once_with(exp.table_("__temp_ctas_test_random_id", quoted=True))
 
 
 def test_create_table_from_query_exists_and_if_not_exists(

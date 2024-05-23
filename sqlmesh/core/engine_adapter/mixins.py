@@ -246,3 +246,65 @@ class NonTransactionalTruncateMixin(EngineAdapter):
         if self._connection_pool.is_transaction_active:
             return self.execute(exp.Delete(this=exp.to_table(table_name)))
         super()._truncate_table(table_name)
+
+
+class VarcharSizeWorkaroundMixin(EngineAdapter):
+    def _build_create_table_exp(
+        self,
+        table_name_or_schema: t.Union[exp.Schema, TableName],
+        expression: t.Optional[exp.Expression],
+        exists: bool = True,
+        replace: bool = False,
+        columns_to_types: t.Optional[t.Dict[str, exp.DataType]] = None,
+        table_description: t.Optional[str] = None,
+        **kwargs: t.Any,
+    ) -> exp.Create:
+        statement = super()._build_create_table_exp(
+            table_name_or_schema,
+            expression=expression,
+            exists=exists,
+            replace=replace,
+            columns_to_types=columns_to_types,
+            table_description=table_description,
+            **kwargs,
+        )
+
+        if (
+            statement.expression
+            and statement.expression.args.get("limit") is not None
+            and statement.expression.args["limit"].expression.this == "0"
+        ):
+            assert not isinstance(table_name_or_schema, exp.Schema)
+            # redshift and mssql have a bug where CTAS statements have non determistic types. if a limit
+            # is applied to a ctas statement, VARCHAR types default to 1 in some instances.
+            # this checks the explain plain from redshift and tries to detect when these optimizer
+            # bugs occur and force a cast
+            select_statement = statement.expression.copy()
+            for select_or_union in select_statement.find_all(exp.Select, exp.Union):
+                select_or_union.set("limit", None)
+                select_or_union.set("where", None)
+
+            temp_view_name = self._get_temp_table("ctas")
+            self.create_view(
+                temp_view_name, select_statement, replace=False, no_schema_binding=False
+            )
+            try:
+                columns_to_types_from_view = self.columns(temp_view_name)
+
+                schema = self._build_schema_exp(
+                    exp.to_table(table_name_or_schema),
+                    columns_to_types_from_view,
+                )
+                statement = super()._build_create_table_exp(
+                    schema,
+                    None,
+                    exists=exists,
+                    replace=replace,
+                    columns_to_types=columns_to_types_from_view,
+                    table_description=table_description,
+                    **kwargs,
+                )
+            finally:
+                self.drop_view(temp_view_name)
+
+        return statement

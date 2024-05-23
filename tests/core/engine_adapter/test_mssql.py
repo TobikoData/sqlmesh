@@ -529,3 +529,43 @@ def test_rename_table(make_mocked_engine_adapter: t.Callable, mocker: MockerFixt
         "EXEC sp_rename 'test_schema.old_name', 'new_name';",
         "EXEC sp_rename 'old_name', 'new_name';",
     ]
+
+
+def test_create_table_from_query(make_mocked_engine_adapter: t.Callable, mocker: MockerFixture):
+    adapter = make_mocked_engine_adapter(MSSQLEngineAdapter)
+    mocker.patch(
+        "sqlmesh.core.engine_adapter.base.random_id",
+        return_value="test_random_id",
+    )
+
+    mocker.patch(
+        "sqlmesh.core.engine_adapter.mssql.MSSQLEngineAdapter.table_exists",
+        return_value=False,
+    )
+
+    columns_mock = mocker.patch(
+        "sqlmesh.core.engine_adapter.mssql.MSSQLEngineAdapter.columns",
+        return_value={
+            "a": exp.DataType.build("VARCHAR(MAX)", dialect="redshift"),
+            "b": exp.DataType.build("VARCHAR(60)", dialect="redshift"),
+            "c": exp.DataType.build("VARCHAR(MAX)", dialect="redshift"),
+            "d": exp.DataType.build("VARCHAR(MAX)", dialect="redshift"),
+            "e": exp.DataType.build("TIMESTAMP", dialect="redshift"),
+        },
+    )
+
+    adapter.ctas(
+        table_name="test_schema.test_table",
+        query_or_df=parse_one(
+            "SELECT a, b, x + 1 AS c, d AS d, e FROM (SELECT * FROM table WHERE FALSE LIMIT 0) WHERE d > 0 AND FALSE LIMIT 0"
+        ),
+        exists=False,
+    )
+
+    assert to_sql_calls(adapter) == [
+        "CREATE VIEW [__temp_ctas_test_random_id] AS SELECT [a], [b], [x] + 1 AS [c], [d] AS [d], [e] FROM (SELECT * FROM [table]);",
+        "DROP VIEW IF EXISTS [__temp_ctas_test_random_id];",
+        "CREATE TABLE [test_schema].[test_table] ([a] VARCHAR(MAX), [b] VARCHAR(60), [c] VARCHAR(MAX), [d] VARCHAR(MAX), [e] DATETIME2);",
+    ]
+
+    columns_mock.assert_called_once_with(exp.table_("__temp_ctas_test_random_id", quoted=True))
