@@ -252,11 +252,12 @@ class TableAlterOperation(PydanticModel):
         )
 
     def expression(
-        self, table_name: t.Union[str, exp.Table], array_element_selector: str
+        self, table_name: t.Union[str, exp.Table], array_element_selector: str, dialect: str = ""
     ) -> exp.AlterTable:
+        alter_table_name = exp.to_table(table_name, dialect=dialect)
         if self.is_alter_type:
             return exp.AlterTable(
-                this=exp.to_table(table_name),
+                this=alter_table_name,
                 actions=[
                     exp.AlterColumn(
                         this=self.column(array_element_selector),
@@ -265,14 +266,14 @@ class TableAlterOperation(PydanticModel):
                 ],
             )
         elif self.is_add:
-            alter_table = exp.AlterTable(this=exp.to_table(table_name))
+            alter_table = exp.AlterTable(this=alter_table_name)
             column = self.column_def(array_element_selector)
             alter_table.set("actions", [column])
             if self.add_position:
                 column.set("position", self.add_position.column_position_node)
             return alter_table
         elif self.is_drop:
-            alter_table = exp.AlterTable(this=exp.to_table(table_name))
+            alter_table = exp.AlterTable(this=alter_table_name)
             drop_column = exp.Drop(this=self.column(array_element_selector), kind="COLUMN")
             alter_table.set("actions", [drop_column])
             return alter_table
@@ -303,6 +304,7 @@ class SchemaDiffer(PydanticModel):
     array_element_selector: str = ""
     compatible_types: t.Dict[exp.DataType, t.Set[exp.DataType]] = {}
     support_coercing_compatible_types: bool = False
+    dialect: str = ""
 
     _coerceable_types: t.Dict[exp.DataType, t.Set[exp.DataType]] = {}
 
@@ -563,7 +565,7 @@ class SchemaDiffer(PydanticModel):
             The list of table alter operations.
         """
         return [
-            op.expression(table_name, self.array_element_selector)
+            op.expression(table_name, self.array_element_selector, dialect=self.dialect)
             for op in self._from_structs(current, new)
         ]
 

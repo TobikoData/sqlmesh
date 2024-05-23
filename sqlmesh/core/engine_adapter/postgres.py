@@ -11,6 +11,7 @@ from sqlmesh.core.engine_adapter.mixins import (
     PandasNativeFetchDFSupportMixin,
 )
 from sqlmesh.core.engine_adapter.shared import set_catalog
+from sqlmesh.core.schema_diff import SchemaDiffer
 
 if t.TYPE_CHECKING:
     from sqlmesh.core.engine_adapter._typing import DF
@@ -25,6 +26,7 @@ class PostgresEngineAdapter(
     GetCurrentCatalogFromFunctionMixin,
 ):
     DIALECT = "postgres"
+    SCHEMA_DIFFER = SchemaDiffer(dialect=DIALECT)
     SUPPORTS_INDEXES = True
     HAS_VIEW_BINDING = True
     CURRENT_CATALOG_EXPRESSION = exp.column("current_catalog")

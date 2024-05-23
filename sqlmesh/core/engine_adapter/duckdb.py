@@ -17,6 +17,7 @@ from sqlmesh.core.engine_adapter.shared import (
     SourceQuery,
     set_catalog,
 )
+from sqlmesh.core.schema_diff import SchemaDiffer
 from sqlmesh.utils import major_minor
 
 if t.TYPE_CHECKING:
@@ -27,6 +28,7 @@ if t.TYPE_CHECKING:
 @set_catalog(override_mapping={"_get_data_objects": CatalogSupport.REQUIRES_SET_CATALOG})
 class DuckDBEngineAdapter(LogicalMergeMixin, GetCurrentCatalogFromFunctionMixin):
     DIALECT = "duckdb"
+    SCHEMA_DIFFER = SchemaDiffer(dialect=DIALECT)
     SUPPORTS_TRANSACTIONS = False
     CATALOG_SUPPORT = CatalogSupport.FULL_SUPPORT
 

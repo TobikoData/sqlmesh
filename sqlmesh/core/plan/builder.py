@@ -445,7 +445,7 @@ class PlanBuilder:
                 logger.warning(warning_msg)
                 return
             raise PlanError(
-                f"{warning_msg} To allow this, change the model's `on_destructive_change` setting to `warn` or `ignore` or include it in the plan's `--allow-destructive-model` option."
+                f"{warning_msg} To allow this, change the model's `on_destructive_change` setting to `warn` or `allow` or include it in the plan's `--allow-destructive-model` option."
             )
 
         snapshot_is_destructive = {}

@@ -18,6 +18,7 @@ from sqlmesh.core.engine_adapter.shared import (
     DataObjectType,
     set_catalog,
 )
+from sqlmesh.core.schema_diff import SchemaDiffer
 
 if t.TYPE_CHECKING:
     from sqlmesh.core._typing import SchemaName, TableName
@@ -33,6 +34,7 @@ class MySQLEngineAdapter(
 ):
     DEFAULT_BATCH_SIZE = 200
     DIALECT = "mysql"
+    SCHEMA_DIFFER = SchemaDiffer(dialect=DIALECT)
     SUPPORTS_INDEXES = True
     COMMENT_CREATION_TABLE = CommentCreationTable.IN_SCHEMA_DEF_NO_CTAS
     COMMENT_CREATION_VIEW = CommentCreationView.UNSUPPORTED

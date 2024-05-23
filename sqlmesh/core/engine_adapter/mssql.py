@@ -25,6 +25,7 @@ from sqlmesh.core.engine_adapter.shared import (
     SourceQuery,
     set_catalog,
 )
+from sqlmesh.core.schema_diff import SchemaDiffer
 
 if t.TYPE_CHECKING:
     from sqlmesh.core._typing import SchemaName, TableName
@@ -39,6 +40,7 @@ class MSSQLEngineAdapter(
     GetCurrentCatalogFromFunctionMixin,
 ):
     DIALECT: str = "tsql"
+    SCHEMA_DIFFER = SchemaDiffer(dialect=DIALECT)
     SUPPORTS_TUPLE_IN = False
     SUPPORTS_MATERIALIZED_VIEWS = False
     CATALOG_SUPPORT = CatalogSupport.REQUIRES_SET_CATALOG

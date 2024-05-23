@@ -19,6 +19,7 @@ from sqlmesh.core.engine_adapter.shared import (
     set_catalog,
 )
 from sqlmesh.utils.errors import SQLMeshError
+from sqlmesh.core.schema_diff import SchemaDiffer
 
 if t.TYPE_CHECKING:
     from sqlmesh.core._typing import SchemaName, SessionProperties, TableName
@@ -34,6 +35,7 @@ if t.TYPE_CHECKING:
 )
 class SnowflakeEngineAdapter(GetCurrentCatalogFromFunctionMixin):
     DIALECT = "snowflake"
+    SCHEMA_DIFFER = SchemaDiffer(dialect=DIALECT)
     SUPPORTS_MATERIALIZED_VIEWS = True
     SUPPORTS_MATERIALIZED_VIEW_SCHEMA = True
     SUPPORTS_CLONING = True

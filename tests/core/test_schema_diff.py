@@ -797,6 +797,25 @@ def test_struct_diff(
     assert operations == expected_diff
 
 
+def test_schema_diff_dialect():
+    assert SchemaDiffer().dialect == ""
+
+    from sqlmesh.core.engine_adapter import BigQueryEngineAdapter
+
+    assert BigQueryEngineAdapter.SCHEMA_DIFFER.dialect == "bigquery"
+
+    # No error when table name has BQ backtick quotes `apply_to_table`
+    BigQueryEngineAdapter.SCHEMA_DIFFER.compare_columns(
+        "`apply_to_table`",
+        {
+            "id": exp.DataType.build("INT"),
+        },
+        {
+            "name": exp.DataType.build("STR"),
+        },
+    )
+
+
 def test_schema_diff_calculate_duckdb(duck_conn):
     engine_adapter = create_engine_adapter(lambda: duck_conn, "duckdb")
 

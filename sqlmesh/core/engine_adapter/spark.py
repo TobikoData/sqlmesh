@@ -24,6 +24,7 @@ from sqlmesh.core.engine_adapter.shared import (
 )
 from sqlmesh.utils import classproperty
 from sqlmesh.utils.errors import SQLMeshError
+from sqlmesh.core.schema_diff import SchemaDiffer
 
 if t.TYPE_CHECKING:
     from pyspark.sql import types as spark_types
@@ -45,6 +46,7 @@ logger = logging.getLogger(__name__)
 @set_catalog()
 class SparkEngineAdapter(GetCurrentCatalogFromFunctionMixin, HiveMetastoreTablePropertiesMixin):
     DIALECT = "spark"
+    SCHEMA_DIFFER = SchemaDiffer(dialect=DIALECT)
     SUPPORTS_TRANSACTIONS = False
     INSERT_OVERWRITE_STRATEGY = InsertOverwriteStrategy.INSERT_OVERWRITE
     CATALOG_SUPPORT = CatalogSupport.FULL_SUPPORT

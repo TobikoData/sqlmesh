@@ -89,7 +89,7 @@ class EngineAdapter:
     SUPPORTS_MATERIALIZED_VIEWS = False
     SUPPORTS_MATERIALIZED_VIEW_SCHEMA = False
     SUPPORTS_CLONING = False
-    SCHEMA_DIFFER = SchemaDiffer()
+    SCHEMA_DIFFER = SchemaDiffer(dialect=DIALECT)
     SUPPORTS_TUPLE_IN = True
     CATALOG_SUPPORT = CatalogSupport.UNSUPPORTED
     SUPPORTS_ROW_LEVEL_OP = True

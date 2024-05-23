@@ -73,6 +73,7 @@ class BigQueryEngineAdapter(InsertOverwriteWithMergeMixin):
             },
         },
         support_coercing_compatible_types=True,
+        dialect=DIALECT,
     )
 
     @property

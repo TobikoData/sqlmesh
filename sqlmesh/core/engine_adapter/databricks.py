@@ -39,6 +39,7 @@ class DatabricksEngineAdapter(SparkEngineAdapter):
         support_positional_add=True,
         support_nested_operations=True,
         array_element_selector="element",
+        dialect=DIALECT,
     )
     CATALOG_SUPPORT = CatalogSupport.FULL_SUPPORT
     SUPPORTS_ROW_LEVEL_OP = True
