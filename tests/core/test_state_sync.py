@@ -478,6 +478,36 @@ def test_compact_intervals(
     assert get_snapshot_intervals(snapshot).intervals == expected_intervals
 
 
+def test_compact_intervals_delete_batches(
+    state_sync: EngineAdapterStateSync,
+    make_snapshot: t.Callable,
+    mocker: MockerFixture,
+) -> None:
+    snapshot = make_snapshot(
+        SqlModel(
+            name="a",
+            cron="@daily",
+            query=parse_one("select 1, ds"),
+        ),
+        version="a",
+    )
+
+    delete_from_mock = mocker.patch.object(state_sync.engine_adapter, "delete_from")
+    state_sync.INTERVAL_BATCH_SIZE = 2
+
+    state_sync.push_snapshots([snapshot])
+
+    state_sync.add_interval(snapshot, "2020-01-01", "2020-01-11")
+    state_sync.add_interval(snapshot, "2020-01-01", "2020-01-12")
+    state_sync.add_interval(snapshot, "2020-01-01", "2020-01-13")
+    state_sync.add_interval(snapshot, "2020-01-01", "2020-01-14")
+    state_sync.add_interval(snapshot, "2020-01-01", "2020-01-15")
+
+    state_sync.compact_intervals()
+
+    delete_from_mock.assert_has_calls([call(state_sync.intervals_table, mocker.ANY)] * 3)
+
+
 def test_promote_snapshots(state_sync: EngineAdapterStateSync, make_snapshot: t.Callable):
     snapshot_a = make_snapshot(
         SqlModel(

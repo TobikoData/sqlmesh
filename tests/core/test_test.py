@@ -345,20 +345,34 @@ test_foo:
     )
 
 
-def test_partial_data(sushi_context: Context) -> None:
+@pytest.mark.parametrize(
+    "waiter_names_input",
+    [
+        """sushi.waiter_names:
+          - id: 1
+          - id: 2
+            name: null
+          - id: 3
+            name: 'bob'
+        """,
+        """sushi.waiter_names: 
+      format: csv
+      rows: |
+        id,name
+        1,
+        2,null
+        3,bob""",
+    ],
+)
+def test_partial_data(sushi_context: Context, waiter_names_input: str) -> None:
     _check_successful_or_raise(
         _create_test(
             body=load_yaml(
-                """
+                f"""
 test_foo:
   model: sushi.foo
   inputs:
-    sushi.waiter_names:
-      - id: 1
-      - id: 2
-        name: null
-      - id: 3
-        name: 'bob'
+    {waiter_names_input}
   outputs:
     ctes:
       source:
@@ -388,6 +402,195 @@ test_foo:
             context=sushi_context,
         ).run()
     )
+
+
+@pytest.mark.parametrize(
+    "waiter_names_input",
+    [
+        """sushi.waiter_names:
+        format: yaml
+        rows: 
+        - id: 1
+          name: alice
+        - id: 2
+          name: 'bob'
+        """,
+        """sushi.waiter_names: 
+      format: csv
+      rows: |
+        id,name
+        1,alice
+        2,bob""",
+    ],
+)
+def test_format_inline(sushi_context: Context, waiter_names_input: str) -> None:
+    _check_successful_or_raise(
+        _create_test(
+            body=load_yaml(
+                f"""
+test_foo:
+  model: sushi.foo
+  inputs:
+    {waiter_names_input}
+  outputs:
+    query:
+      - id: 1
+        name: alice
+      - id: 2
+        name: 'bob'
+                """
+            ),
+            test_name="test_foo",
+            model=sushi_context.upsert_model(
+                _create_model(
+                    "SELECT id, name FROM sushi.waiter_names ",
+                    default_catalog=sushi_context.default_catalog,
+                )
+            ),
+            context=sushi_context,
+        ).run()
+    )
+
+
+@pytest.mark.parametrize(
+    ["input_data", "filename", "file_data"],
+    [
+        [
+            """sushi.waiter_names:
+        format: yaml
+        path: """,
+            "test_data.yaml",
+            """- id: 1
+  name: alice
+- id: 2
+  name: 'bob'
+""",
+        ],
+        [
+            """sushi.waiter_names:
+        path: """,
+            "test_data.yaml",
+            """rows:
+- id: 1
+  name: alice
+- id: 2
+  name: 'bob'
+""",
+        ],
+        [
+            """sushi.waiter_names:
+        format: csv
+        path: """,
+            "test_data.csv",
+            """id,name
+1,alice
+2,bob""",
+        ],
+    ],
+)
+def test_format_path(
+    sushi_context: Context, tmp_path: Path, input_data: str, filename: str, file_data: str
+) -> None:
+    test_csv_file = tmp_path / filename
+    test_csv_file.write_text(file_data)
+
+    _check_successful_or_raise(
+        _create_test(
+            body=load_yaml(
+                f"""
+test_foo:
+  model: sushi.foo
+  inputs:
+    {input_data}{str(test_csv_file)}
+  outputs:
+    query:
+      - id: 1
+        name: alice
+      - id: 2
+        name: 'bob'
+                """
+            ),
+            test_name="test_foo",
+            model=sushi_context.upsert_model(
+                _create_model(
+                    "SELECT id, name FROM sushi.waiter_names ",
+                    default_catalog=sushi_context.default_catalog,
+                )
+            ),
+            context=sushi_context,
+        ).run()
+    )
+
+
+def test_unsupported_format_failure(
+    sushi_context: Context, full_model_without_ctes: SqlModel
+) -> None:
+    with pytest.raises(
+        TestError,
+        match="Unsupported data format 'xml' for 'sushi.waiter_names'",
+    ):
+        _create_test(
+            body=load_yaml(
+                """
+test_foo:
+  model: sushi.foo
+  description: XML format isn't supported to load data (fails intentionally)
+  inputs:
+    sushi.waiter_names:
+      format: xml
+      path: 'test_data.xml'
+  outputs:
+    query:
+      - id: 1
+        value: null
+                """
+            ),
+            test_name="test_foo",
+            model=sushi_context.upsert_model(full_model_without_ctes),
+            context=sushi_context,
+        )
+
+    with pytest.raises(
+        TestError,
+        match="Unsupported data format 'xml' for 'sushi.waiter_names'",
+    ):
+        _create_test(
+            body=load_yaml(
+                """
+test_foo:
+  model: sushi.foo
+  description: XML without path doesn't raise error
+  inputs:
+    sushi.waiter_names:
+      format: xml
+      rows: |
+        <rows>
+          <row>
+              <id>1</id>
+              <name>alice</name>
+          </row>
+          <row>
+            <id>2</id>
+            <name>bob</name>
+          </row>
+        </rows>
+  outputs:
+    query:
+      - id: 1
+        name: alice
+      - id: 2
+        name: 'bob'
+                """
+            ),
+            test_name="test_foo",
+            model=sushi_context.upsert_model(
+                _create_model(
+                    "SELECT id, name FROM sushi.waiter_names ",
+                    default_catalog=sushi_context.default_catalog,
+                )
+            ),
+            context=sushi_context,
+        )
 
 
 def test_partial_output_columns() -> None:
