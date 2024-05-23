@@ -47,10 +47,9 @@ def duckdb_schema_differ() -> SchemaDiffer:
     return DuckDBEngineAdapter(lambda: None).schema_differ
 
 
-pytestmakr = pytest.mark.usefixtures("duckdb_schema_differ")
-
-
-def test_forward_only_plan_sets_version(make_snapshot, mocker: MockerFixture):
+def test_forward_only_plan_sets_version(
+    make_snapshot, mocker: MockerFixture, duckdb_schema_differ: SchemaDiffer
+):
     snapshot_a = make_snapshot(
         SqlModel(name="a", query=parse_one("select 1, ds"), dialect="duckdb")
     )
@@ -99,7 +98,7 @@ def test_forward_only_plan_sets_version(make_snapshot, mocker: MockerFixture):
         plan_builder.set_choice(snapshot_b, SnapshotChangeCategory.BREAKING).build()
 
 
-def test_forward_only_dev(make_snapshot, mocker: MockerFixture):
+def test_forward_only_dev(make_snapshot, mocker: MockerFixture, duckdb_schema_differ: SchemaDiffer):
     snapshot_a = make_snapshot(
         SqlModel(
             name="a",
@@ -146,7 +145,9 @@ def test_forward_only_dev(make_snapshot, mocker: MockerFixture):
     assert plan.end == expected_end
 
 
-def test_forward_only_plan_added_models(make_snapshot, mocker: MockerFixture):
+def test_forward_only_plan_added_models(
+    make_snapshot, mocker: MockerFixture, duckdb_schema_differ: SchemaDiffer
+):
     snapshot_a = make_snapshot(
         SqlModel(name="a", query=parse_one("select 1 as a, ds"), dialect="duckdb")
     )
@@ -182,7 +183,9 @@ def test_forward_only_plan_added_models(make_snapshot, mocker: MockerFixture):
     assert snapshot_b.change_category == SnapshotChangeCategory.BREAKING
 
 
-def test_paused_forward_only_parent(make_snapshot, mocker: MockerFixture):
+def test_paused_forward_only_parent(
+    make_snapshot, mocker: MockerFixture, duckdb_schema_differ: SchemaDiffer
+):
     snapshot_a = make_snapshot(SqlModel(name="a", query=parse_one("select 1, ds")))
     snapshot_a.previous_versions = (
         SnapshotDataVersion(
@@ -719,7 +722,9 @@ def test_restate_models_with_existing_missing_intervals(sushi_context: Context):
     assert plan.requires_backfill
 
 
-def test_restate_symbolic_model(make_snapshot, mocker: MockerFixture):
+def test_restate_symbolic_model(
+    make_snapshot, mocker: MockerFixture, duckdb_schema_differ: SchemaDiffer
+):
     snapshot_a = make_snapshot(
         SqlModel(
             name="a",
@@ -747,7 +752,9 @@ def test_restate_symbolic_model(make_snapshot, mocker: MockerFixture):
     assert not plan.restatements
 
 
-def test_restate_seed_model(make_snapshot, mocker: MockerFixture):
+def test_restate_seed_model(
+    make_snapshot, mocker: MockerFixture, duckdb_schema_differ: SchemaDiffer
+):
     snapshot_a = make_snapshot(
         SeedModel(
             name="a",
@@ -777,7 +784,9 @@ def test_restate_seed_model(make_snapshot, mocker: MockerFixture):
     assert not plan.restatements
 
 
-def test_restate_missing_model(make_snapshot, mocker: MockerFixture):
+def test_restate_missing_model(
+    make_snapshot, mocker: MockerFixture, duckdb_schema_differ: SchemaDiffer
+):
     context_diff = ContextDiff(
         environment="test_environment",
         is_new_environment=True,
@@ -800,7 +809,9 @@ def test_restate_missing_model(make_snapshot, mocker: MockerFixture):
         PlanBuilder(context_diff, duckdb_schema_differ, restate_models=["missing"]).build()
 
 
-def test_new_snapshots_with_restatements(make_snapshot, mocker: MockerFixture):
+def test_new_snapshots_with_restatements(
+    make_snapshot, mocker: MockerFixture, duckdb_schema_differ: SchemaDiffer
+):
     snapshot_a = make_snapshot(SqlModel(name="a", query=parse_one("select 1, ds")))
 
     context_diff = ContextDiff(
@@ -825,7 +836,7 @@ def test_new_snapshots_with_restatements(make_snapshot, mocker: MockerFixture):
         PlanBuilder(context_diff, duckdb_schema_differ, restate_models=["a"]).build()
 
 
-def test_end_validation(make_snapshot, mocker: MockerFixture):
+def test_end_validation(make_snapshot, mocker: MockerFixture, duckdb_schema_differ: SchemaDiffer):
     snapshot_a = make_snapshot(
         SqlModel(
             name="a",
@@ -887,7 +898,9 @@ def test_end_validation(make_snapshot, mocker: MockerFixture):
     assert restatement_prod_plan_builder.build().end == "2022-01-04"
 
 
-def test_forward_only_revert_not_allowed(make_snapshot, mocker: MockerFixture):
+def test_forward_only_revert_not_allowed(
+    make_snapshot, mocker: MockerFixture, duckdb_schema_differ: SchemaDiffer
+):
     snapshot = make_snapshot(SqlModel(name="a", query=parse_one("select 1, ds")))
     snapshot.categorize_as(SnapshotChangeCategory.BREAKING)
     assert not snapshot.is_forward_only
@@ -975,7 +988,7 @@ def test_forward_only_plan_seed_models(make_snapshot, mocker: MockerFixture):
     assert snapshot_a_updated.change_category == SnapshotChangeCategory.NON_BREAKING
 
 
-def test_start_inference(make_snapshot, mocker: MockerFixture):
+def test_start_inference(make_snapshot, mocker: MockerFixture, duckdb_schema_differ: SchemaDiffer):
     snapshot_a = make_snapshot(
         SqlModel(name="a", query=parse_one("select 1, ds"), start="2022-01-01")
     )
@@ -1016,7 +1029,9 @@ def test_start_inference(make_snapshot, mocker: MockerFixture):
     assert plan.start == to_datetime("2022-01-01")
 
 
-def test_auto_categorization(make_snapshot, mocker: MockerFixture):
+def test_auto_categorization(
+    make_snapshot, mocker: MockerFixture, duckdb_schema_differ: SchemaDiffer
+):
     snapshot = make_snapshot(SqlModel(name="a", query=parse_one("select 1, ds")))
     snapshot.categorize_as(SnapshotChangeCategory.BREAKING)
 
@@ -1043,7 +1058,9 @@ def test_auto_categorization(make_snapshot, mocker: MockerFixture):
     assert updated_snapshot.change_category == SnapshotChangeCategory.BREAKING
 
 
-def test_auto_categorization_missing_schema_downstream(make_snapshot, mocker: MockerFixture):
+def test_auto_categorization_missing_schema_downstream(
+    make_snapshot, mocker: MockerFixture, duckdb_schema_differ: SchemaDiffer
+):
     snapshot = make_snapshot(SqlModel(name="a", query=parse_one("select 1, ds")))
     snapshot.categorize_as(SnapshotChangeCategory.BREAKING)
     updated_snapshot = make_snapshot(SqlModel(name="a", query=parse_one("select 1, 2, ds")))
@@ -1087,7 +1104,9 @@ def test_auto_categorization_missing_schema_downstream(make_snapshot, mocker: Mo
     assert updated_snapshot.change_category == SnapshotChangeCategory.BREAKING
 
 
-def test_broken_references(make_snapshot, mocker: MockerFixture):
+def test_broken_references(
+    make_snapshot, mocker: MockerFixture, duckdb_schema_differ: SchemaDiffer
+):
     snapshot_a = make_snapshot(SqlModel(name="a", query=parse_one("select 1, ds")))
     snapshot_a.categorize_as(SnapshotChangeCategory.BREAKING)
 
@@ -1120,7 +1139,7 @@ def test_broken_references(make_snapshot, mocker: MockerFixture):
         PlanBuilder(context_diff, duckdb_schema_differ).build()
 
 
-def test_effective_from(make_snapshot, mocker: MockerFixture):
+def test_effective_from(make_snapshot, mocker: MockerFixture, duckdb_schema_differ: SchemaDiffer):
     snapshot = make_snapshot(
         SqlModel(
             name="a", query=parse_one("select 1, ds FROM b"), start="2023-01-01", dialect="duckdb"
@@ -1193,7 +1212,9 @@ def test_effective_from(make_snapshot, mocker: MockerFixture):
     assert updated_snapshot.effective_from is None
 
 
-def test_new_environment_no_changes(make_snapshot, mocker: MockerFixture):
+def test_new_environment_no_changes(
+    make_snapshot, mocker: MockerFixture, duckdb_schema_differ: SchemaDiffer
+):
     snapshot = make_snapshot(SqlModel(name="a", query=parse_one("select 1, ds")))
     snapshot.categorize_as(SnapshotChangeCategory.BREAKING)
 
@@ -1227,7 +1248,9 @@ def test_new_environment_no_changes(make_snapshot, mocker: MockerFixture):
     )
 
 
-def test_new_environment_with_changes(make_snapshot, mocker: MockerFixture):
+def test_new_environment_with_changes(
+    make_snapshot, mocker: MockerFixture, duckdb_schema_differ: SchemaDiffer
+):
     snapshot_a = make_snapshot(SqlModel(name="a", query=parse_one("select 1, ds")))
     snapshot_a.categorize_as(SnapshotChangeCategory.BREAKING)
     updated_snapshot_a = make_snapshot(SqlModel(name="a", query=parse_one("select 3, ds")))
@@ -1298,7 +1321,9 @@ def test_new_environment_with_changes(make_snapshot, mocker: MockerFixture):
     }
 
 
-def test_forward_only_models(make_snapshot, mocker: MockerFixture):
+def test_forward_only_models(
+    make_snapshot, mocker: MockerFixture, duckdb_schema_differ: SchemaDiffer
+):
     snapshot = make_snapshot(
         SqlModel(
             name="a",
@@ -1347,7 +1372,9 @@ def test_forward_only_models(make_snapshot, mocker: MockerFixture):
     assert updated_snapshot.change_category == SnapshotChangeCategory.FORWARD_ONLY
 
 
-def test_forward_only_models_model_kind_changed(make_snapshot, mocker: MockerFixture):
+def test_forward_only_models_model_kind_changed(
+    make_snapshot, mocker: MockerFixture, duckdb_schema_differ: SchemaDiffer
+):
     snapshot = make_snapshot(SqlModel(name="a", query=parse_one("select 1, ds"), kind=FullKind()))
     snapshot.categorize_as(SnapshotChangeCategory.BREAKING)
     updated_snapshot = make_snapshot(
@@ -1378,7 +1405,9 @@ def test_forward_only_models_model_kind_changed(make_snapshot, mocker: MockerFix
     assert updated_snapshot.change_category == SnapshotChangeCategory.BREAKING
 
 
-def test_indirectly_modified_forward_only_model(make_snapshot, mocker: MockerFixture):
+def test_indirectly_modified_forward_only_model(
+    make_snapshot, mocker: MockerFixture, duckdb_schema_differ: SchemaDiffer
+):
     snapshot_a = make_snapshot(SqlModel(name="a", query=parse_one("select 1 as a, ds")))
     snapshot_a.categorize_as(SnapshotChangeCategory.BREAKING)
     updated_snapshot_a = make_snapshot(SqlModel(name="a", query=parse_one("select 2 as a, ds")))
@@ -1459,7 +1488,9 @@ def test_indirectly_modified_forward_only_model(make_snapshot, mocker: MockerFix
     assert not deployability_index.is_representative(updated_snapshot_c)
 
 
-def test_added_model_with_forward_only_parent(make_snapshot, mocker: MockerFixture):
+def test_added_model_with_forward_only_parent(
+    make_snapshot, mocker: MockerFixture, duckdb_schema_differ: SchemaDiffer
+):
     snapshot_a = make_snapshot(SqlModel(name="a", query=parse_one("select 1 as a, ds")))
     snapshot_a.categorize_as(SnapshotChangeCategory.FORWARD_ONLY)
 
@@ -1487,7 +1518,9 @@ def test_added_model_with_forward_only_parent(make_snapshot, mocker: MockerFixtu
     assert snapshot_b.change_category == SnapshotChangeCategory.BREAKING
 
 
-def test_added_forward_only_model(make_snapshot, mocker: MockerFixture):
+def test_added_forward_only_model(
+    make_snapshot, mocker: MockerFixture, duckdb_schema_differ: SchemaDiffer
+):
     snapshot_a = make_snapshot(
         SqlModel(
             name="a",
@@ -1524,7 +1557,9 @@ def test_added_forward_only_model(make_snapshot, mocker: MockerFixture):
     assert snapshot_b.change_category == SnapshotChangeCategory.BREAKING
 
 
-def test_disable_restatement(make_snapshot, mocker: MockerFixture):
+def test_disable_restatement(
+    make_snapshot, mocker: MockerFixture, duckdb_schema_differ: SchemaDiffer
+):
     snapshot = make_snapshot(
         SqlModel(
             name="a",
@@ -1568,7 +1603,9 @@ def test_disable_restatement(make_snapshot, mocker: MockerFixture):
     }
 
 
-def test_revert_to_previous_value(make_snapshot, mocker: MockerFixture):
+def test_revert_to_previous_value(
+    make_snapshot, mocker: MockerFixture, duckdb_schema_differ: SchemaDiffer
+):
     """
     Make sure we can revert to previous snapshots with intervals if it already exists and not modify
     it's existing change category
@@ -1778,6 +1815,7 @@ def test_add_restatements(
     expected: t.Dict[str, t.Tuple[str, str]],
     make_snapshot,
     mocker,
+    duckdb_schema_differ: SchemaDiffer,
 ):
     dag = DAG(graph)
     snapshots: t.Dict[str, Snapshot] = {}
@@ -1834,7 +1872,9 @@ def test_add_restatements(
     }
 
 
-def test_dev_plan_depends_past(make_snapshot, mocker: MockerFixture):
+def test_dev_plan_depends_past(
+    make_snapshot, mocker: MockerFixture, duckdb_schema_differ: SchemaDiffer
+):
     snapshot = make_snapshot(
         SqlModel(
             name="a",
@@ -1924,7 +1964,9 @@ def test_dev_plan_depends_past(make_snapshot, mocker: MockerFixture):
     assert dev_plan_start_ahead_of_model.indirectly_modified == {}
 
 
-def test_dev_plan_depends_past_non_deployable(make_snapshot, mocker: MockerFixture):
+def test_dev_plan_depends_past_non_deployable(
+    make_snapshot, mocker: MockerFixture, duckdb_schema_differ: SchemaDiffer
+):
     snapshot = make_snapshot(
         SqlModel(
             name="a",
@@ -2038,7 +2080,9 @@ def test_restatement_intervals_after_updating_start(sushi_context: Context):
     assert new_restatement_interval != restatement_interval
 
 
-def test_models_selected_for_backfill(make_snapshot, mocker: MockerFixture):
+def test_models_selected_for_backfill(
+    make_snapshot, mocker: MockerFixture, duckdb_schema_differ: SchemaDiffer
+):
     snapshot_a = make_snapshot(SqlModel(name="a", query=parse_one("select 1 as one, ds")))
     snapshot_a.categorize_as(SnapshotChangeCategory.BREAKING)
 
@@ -2103,7 +2147,9 @@ def test_models_selected_for_backfill(make_snapshot, mocker: MockerFixture):
     assert plan.environment.promoted_snapshot_ids == [snapshot_b.snapshot_id]
 
 
-def test_categorized_uncategorized(make_snapshot, mocker: MockerFixture):
+def test_categorized_uncategorized(
+    make_snapshot, mocker: MockerFixture, duckdb_schema_differ: SchemaDiffer
+):
     snapshot = make_snapshot(SqlModel(name="a", query=parse_one("select 1, ds")))
     snapshot.categorize_as(SnapshotChangeCategory.BREAKING)
 
@@ -2139,7 +2185,9 @@ def test_categorized_uncategorized(make_snapshot, mocker: MockerFixture):
     assert plan.categorized == [new_snapshot]
 
 
-def test_environment_previous_finalized_snapshots(make_snapshot, mocker: MockerFixture):
+def test_environment_previous_finalized_snapshots(
+    make_snapshot, mocker: MockerFixture, duckdb_schema_differ: SchemaDiffer
+):
     snapshot_a = make_snapshot(SqlModel(name="a", query=parse_one("select 1 as one, ds")))
     snapshot_a.categorize_as(SnapshotChangeCategory.BREAKING)
 
