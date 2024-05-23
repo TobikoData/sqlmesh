@@ -15,6 +15,7 @@ from sqlmesh.core.engine_adapter.mixins import (
     GetCurrentCatalogFromFunctionMixin,
     InsertOverwriteWithMergeMixin,
     PandasNativeFetchDFSupportMixin,
+    VarcharSizeWorkaroundMixin,
 )
 from sqlmesh.core.engine_adapter.shared import (
     CatalogSupport,
@@ -37,6 +38,7 @@ class MSSQLEngineAdapter(
     PandasNativeFetchDFSupportMixin,
     InsertOverwriteWithMergeMixin,
     GetCurrentCatalogFromFunctionMixin,
+    VarcharSizeWorkaroundMixin,
 ):
     DIALECT: str = "tsql"
     SUPPORTS_TUPLE_IN = False
