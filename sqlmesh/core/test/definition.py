@@ -150,7 +150,9 @@ class ModelTest(unittest.TestCase):
                         known_columns_to_types[col] = v_type
 
             if rows is None:
-                query_or_df = values["query"]
+                query_or_df: exp.Query | pd.DataFrame = self._add_missing_columns(
+                    values["query"], known_columns_to_types
+                )
             else:
                 query_or_df = self._create_df(values, columns=known_columns_to_types)
 
@@ -474,7 +476,7 @@ class ModelTest(unittest.TestCase):
     ) -> pd.DataFrame:
         query = values.get("query")
         if query:
-            return self._execute(query)
+            return self._execute(self._add_missing_columns(query, columns))
 
         rows = values["rows"]
         if columns:
@@ -485,6 +487,19 @@ class ModelTest(unittest.TestCase):
                 columns = referenced_columns
 
         return pd.DataFrame.from_records(rows, columns=columns)
+
+    def _add_missing_columns(
+        self, query: exp.Query, all_columns: t.Optional[t.Collection[str]] = None
+    ) -> exp.Query:
+        if not all_columns or query.is_star:
+            return query
+
+        query_columns = set(query.named_selects)
+        missing_columns = [col for col in all_columns if col not in query_columns]
+        if missing_columns:
+            query.select(*[exp.null().as_(col) for col in missing_columns], copy=False)
+
+        return query
 
 
 class SqlModelTest(ModelTest):
