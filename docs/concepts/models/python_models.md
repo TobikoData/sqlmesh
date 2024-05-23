@@ -366,7 +366,7 @@ def execute(
     df = bpd.read_gbq("bigquery-samples.wikipedia_pageviews.200809h")
     df.assign(view_count_bucket=bq_df['views'].apply(get_bucket))
     return (
-        df[bq_df_sample.title.str.contains(r"[Gg]oogle")]
+        df[df.title.str.contains(r"[Gg]oogle")]
         .groupby(['title'], as_index=False)['views'].sum(numeric_only=True)
         .sort_values('views', ascending=False)
         .assign(bucket=lambda x: remote_get_bucket(x.views))

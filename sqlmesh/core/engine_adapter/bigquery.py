@@ -5,7 +5,7 @@ import typing as t
 
 import pandas as pd
 from bigframes.pandas import DataFrame as BigframeDataFrame
-from bigframes.session import bigquery_options
+from bigframes.session import bigquery_options, Session as BigframeSession
 from sqlglot import exp
 from sqlglot.transforms import remove_precision_parameterized_types
 
@@ -33,7 +33,7 @@ if t.TYPE_CHECKING:
     from google.cloud.bigquery.table import Table as BigQueryTable
 
     from sqlmesh.core._typing import SchemaName, SessionProperties, TableName
-    from sqlmesh.core.engine_adapter._typing import BigframeSession, DF, Query
+    from sqlmesh.core.engine_adapter._typing import DF, Query
     from sqlmesh.core.engine_adapter.base import QueryOrDF
 
 logger = logging.getLogger(__name__)
@@ -92,7 +92,6 @@ class BigQueryEngineAdapter(InsertOverwriteWithMergeMixin):
                 credentials=self.client._credentials,
                 project=self.client.project,
                 location=self.client.location,
-                skip_bq_connection_check=True,
             )
         )
 
@@ -128,7 +127,7 @@ class BigQueryEngineAdapter(InsertOverwriteWithMergeMixin):
 
         def query_factory() -> Query:
             if isinstance(df, BigframeDataFrame):
-                df.to_gbq(temp_table.sql(dialect=self.dialect, identify=False), if_exists="replace")
+                df.to_gbq(str(temp_bq_table), if_exists="replace")
             elif not self.table_exists(temp_table):
                 # Make mypy happy
                 assert isinstance(df, pd.DataFrame)
