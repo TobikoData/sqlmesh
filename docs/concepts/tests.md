@@ -118,7 +118,7 @@ SQLMesh currently supports the following ways to define input and output data in
 2. Listing the rows as comma-separated values (CSV)
 3. Executing a SQL query against the testing connection to generate the data
 
-The previous examples demonstrate the first method, which is the default way to define data in SQLMesh. The following examples will cover the remaining methods.
+The previous examples demonstrate the first method, which is the default way to define data in unit tests. The following examples will cover the remaining methods.
 
 ### Defining data as CSV
 
