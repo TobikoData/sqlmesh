@@ -96,7 +96,7 @@ setup(
             "dbt-databricks",
             "dbt-redshift",
             "dbt-snowflake",
-            "dbt-sqlserver",
+            "dbt-sqlserver>=1.7.0",
             "dbt-trino",
         ],
         "dbt": [
