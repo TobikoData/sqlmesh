@@ -1323,7 +1323,42 @@ def test_gateway(copy_to_temp_path: t.Callable, mocker: MockerFixture) -> None:
     _check_successful_or_raise(context.test())
 
 
-def test_generate_input_data_using_sql(mocker: MockerFixture) -> None:
+def test_generate_input_data_using_sql(mocker: MockerFixture, tmp_path: Path) -> None:
+    init_example_project(tmp_path, dialect="duckdb")
+    config = Config(
+        default_connection=DuckDBConnectionConfig(),
+        model_defaults=ModelDefaultsConfig(dialect="duckdb"),
+    )
+    context = Context(paths=tmp_path, config=config)
+    _check_successful_or_raise(
+        _create_test(
+            body=load_yaml(
+                """
+test_example_full_model_alt:
+  model: sqlmesh_example.full_model
+  inputs:
+    sqlmesh_example.incremental_model:
+      query: |
+        SELECT 1 AS id, 1 AS item_id
+        UNION ALL
+        SELECT 2 AS id, 1 AS item_id
+        UNION ALL
+        SELECT 3 AS id, 2 AS item_id
+  outputs:
+    query:
+      rows:
+      - item_id: 1
+        num_orders: 2
+      - item_id: 2
+        num_orders: 1
+                """
+            ),
+            test_name="test_example_full_model_alt",
+            model=context.get_model("sqlmesh_example.full_model"),
+            context=context,
+        ).run()
+    )
+
     mocker.patch("sqlmesh.core.test.definition.random_id", return_value="jzngz56a")
     test = _create_test(
         body=load_yaml(

@@ -110,13 +110,19 @@ test_example_full_model:
         num_orders: 2
 ```
 
-## Defining unit test data as CSV
+## Supported data formats
 
-In unit tests, you can define data using the CSV format, a common alternative to YAML. Data in the supported formats can be specified inline or through external files, allowing for reuse across multiple tests.
+SQLMesh currently supports the following ways to define input and output data in unit tests:
 
-### Inline Data
+1. Listing YAML dictionaries where columns are mapped to their values for each row
+2. Listing the rows as comma-separated values (CSV)
+3. Executing a SQL query against the testing connection to generate the data
 
-Both inputs and outputs can be formatted as CSV. You can provide the CSV data inline under the `rows:` key:
+The previous examples demonstrate the first method, which is the default way to define data in unit tests. The following examples will cover the remaining methods.
+
+### Defining data as CSV
+
+This is how we could define the same test as in the first [example](#example), but with the input data formatted as CSV:
 
 ```yaml linenums="1"
 test_example_full_model:
@@ -129,11 +135,42 @@ test_example_full_model:
         1,1
         2,1
         3,2
+  outputs:
+    query:
+      rows:
+      - item_id: 1
+        num_orders: 2
+      - item_id: 2
+        num_orders: 1
 ```
 
-### External File
+### Generating data using SQL queries
 
-To specify data using an external file, use the `path` attribute:
+This is how we could define the same test as in the first [example](#example), but with the input data generated from a SQL query:
+
+```yaml linenums="1"
+test_example_full_model:
+  model: sqlmesh_example.full_model
+  inputs:
+    sqlmesh_example.incremental_model:
+      query: |
+        SELECT 1 AS id, 1 AS item_id
+        UNION ALL
+        SELECT 2 AS id, 1 AS item_id
+        UNION ALL
+        SELECT 3 AS id, 2 AS item_id
+  outputs:
+    query:
+      rows:
+      - item_id: 1
+        num_orders: 2
+      - item_id: 2
+        num_orders: 1
+```
+
+## Using files to populate data
+
+SQLMesh supports loading data from external files. To achieve this, you can use the `path` attribute, which specifies the pathname of the data to be loaded:
 
 ```yaml linenums="1"
 test_example_full_model:
@@ -144,7 +181,7 @@ test_example_full_model:
       path: filepath/test_data.csv
 ```
 
-In addition, data can also be loaded from an external YAML file. When `format` is omitted, this is the default format for files.
+When `format` is omitted, the file will be loaded as a YAML document.
 
 ## Omitting columns
 
@@ -498,13 +535,14 @@ When the input format is `csv`, the data can be specified inline under `rows` :
 
 ### `<test_name>.inputs.<upstream_model>.format`
   
-The optional `format` key allows for control over how the input data is loaded. The default format is YAML, while CSV is also supported.
+The optional `format` key allows for control over how the input data is loaded.
 
 ```yaml linenums="1"
     <upstream_model>:
       format: csv
-      path: filepath/test_data.csv
 ```
+
+Currently, the following formats are supported: `yaml` (default), `csv`.
 
 ### `<test_name>.inputs.<upstream_model>.csv_settings`
   
