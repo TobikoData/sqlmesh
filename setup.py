@@ -59,7 +59,7 @@ setup(
         ],
         "dev": [
             f"apache-airflow=={os.environ.get('AIRFLOW_VERSION', '2.9.1')}",
-            "agate==1.7.1",
+            # "agate==1.7.1",
             "beautifulsoup4",
             "ruff~=0.4.0",
             "cryptography~=42.0.4",
