@@ -330,16 +330,17 @@ class ModelTest(unittest.TestCase):
             rows = values.get("rows")
             query = values.get("query")
 
-            format = values.get("format")
+            fmt = values.get("format")
             path = values.get("path")
-            if format == "csv":
-                rows = pd.read_csv(path or StringIO(rows)).to_dict(orient="records")
-            elif format in (None, "yaml"):
+            if fmt == "csv":
+                csv_settings = values.get("csv_settings") or {}
+                rows = pd.read_csv(path or StringIO(rows), **csv_settings).to_dict(orient="records")
+            elif fmt in (None, "yaml"):
                 if path:
                     input_rows = yaml_load(Path(path))
                     rows = input_rows.get("rows") if isinstance(input_rows, dict) else input_rows
             else:
-                _raise_error(f"Unsupported data format '{format}' for '{name}'", self.path)
+                _raise_error(f"Unsupported data format '{fmt}' for '{name}'", self.path)
 
             if query is not None:
                 if rows is not None:
