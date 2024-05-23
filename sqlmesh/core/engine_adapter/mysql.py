@@ -145,5 +145,5 @@ class MySQLEngineAdapter(
                 exc_info=True,
             )
 
-    def _ping(self) -> None:
+    def ping(self) -> None:
         self._connection_pool.get().ping(reconnect=False)
