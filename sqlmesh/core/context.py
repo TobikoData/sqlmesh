@@ -120,7 +120,12 @@ from sqlmesh.utils.jinja import JinjaMacroRegistry
 if t.TYPE_CHECKING:
     from typing_extensions import Literal
 
-    from sqlmesh.core.engine_adapter._typing import DF, PySparkDataFrame, PySparkSession
+    from sqlmesh.core.engine_adapter._typing import (
+        DF,
+        PySparkDataFrame,
+        PySparkSession,
+        SnowparkSession,
+    )
     from sqlmesh.core.snapshot import Node
 
     ModelOrSnapshot = t.Union[str, Model, Snapshot]
@@ -151,6 +156,11 @@ class BaseContext(abc.ABC):
     def spark(self) -> t.Optional[PySparkSession]:
         """Returns the spark session if it exists."""
         return self.engine_adapter.spark
+
+    @property
+    def snowpark(self) -> t.Optional[SnowparkSession]:
+        """Returns the snowpark session if it exists."""
+        return self.engine_adapter.snowpark
 
     @property
     def default_catalog(self) -> t.Optional[str]:

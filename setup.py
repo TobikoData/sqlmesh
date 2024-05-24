@@ -82,6 +82,7 @@ setup(
             "pyspark~=3.5.0",
             "pytz",
             "snowflake-connector-python[pandas,secure-local-storage]>=3.0.2",
+            "snowflake-snowpark-python[pandas];python_version<'3.12'",
             "sqlalchemy-stubs",
             "tenacity==8.1.0",
             "types-croniter",

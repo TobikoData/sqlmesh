@@ -204,7 +204,10 @@ def evaluate(
         execution_time=execution_time,
         limit=limit,
     )
-    ctx.obj.console.log_success(df)
+    if hasattr(df, "show"):
+        df.show(limit)
+    else:
+        ctx.obj.console.log_success(df)
 
 
 @cli.command("format")

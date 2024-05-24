@@ -216,7 +216,7 @@ class SparkEngineAdapter(GetCurrentCatalogFromFunctionMixin, HiveMetastoreTableP
 
     @classmethod
     def try_get_pandas_df(cls, value: t.Any) -> t.Optional[pd.DataFrame]:
-        if cls.is_pandas_df(value):
+        if isinstance(value, pd.DataFrame):
             return value
         return None
 
