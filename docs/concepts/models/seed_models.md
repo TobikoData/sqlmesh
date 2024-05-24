@@ -30,12 +30,29 @@ MODEL (
 ```
 The `path` attribute contains the path to the seed's CSV file **relative** to the path of the model's `.sql` file. If you want to specify a path relative to the root of the SQLMesh project, use the `$root` marker (see [Markers](#markers)).
 
-The physical table with the seed CSV's content is created using column types inferred by Pandas. Alternatively, you can manually specify the dataset schema as part of the `MODEL` definition:
-```sql linenums="1" hl_lines="6 7 8 9"
+If your seed file has special quoting rules or delimiters, you can pass settings to [Pandas' `read_csv` function](https://pandas.pydata.org/docs/reference/api/pandas.read_csv.html) with the `csv_settings` dictionary (all supported settings [here](../../reference/model_configuration.md#csv_settings)):
+
+```sql linenums="1" hl_lines="5-7"
 MODEL (
   name test_db.national_holidays,
   kind SEED (
-    path 'national_holidays.csv'
+    path 'national_holidays.csv',
+    csv_settings (
+      delimiter = "|"
+    )
+  )
+);
+```
+
+The physical table with the seed CSV's content is created using column types inferred by Pandas. Alternatively, you can manually specify the dataset schema as part of the `MODEL` definition:
+```sql linenums="1" hl_lines="9-12"
+MODEL (
+  name test_db.national_holidays,
+  kind SEED (
+    path 'national_holidays.csv',
+    csv_settings (
+      delimiter = "|"
+    )
   ),
   columns (
     name VARCHAR,

@@ -165,6 +165,7 @@ Options specified within the top-level `kind` property:
 | `batch_size`   | The maximum number of CSV rows ingested in each batch. All rows ingested in one batch if not specified.                                                                                 | int  | N        |
 | `csv_settings` | Pandas CSV reader settings (overrides [default values](https://pandas.pydata.org/pandas-docs/stable/reference/api/pandas.read_csv.html)). Specified as key-value pairs (`key = value`). | dict | N        |
 
+<a id="csv_settings"></a>
 Options specified within the `kind` property's `csv_settings` property (overrides [default Pandas CSV reader settings](https://pandas.pydata.org/pandas-docs/stable/reference/api/pandas.read_csv.html)):
 
 | Option             | Description                                                                                                                                                                                                                                                                         | Type | Required |
