@@ -562,7 +562,7 @@ class SnapshotEvaluator:
                 if isinstance(query_or_df, pd.DataFrame):
                     return query_or_df.head(limit)
                 if not isinstance(query_or_df, exp.Expression):
-                    # We assume that if this branch is reached, `query_or_df` is a pyspark dataframe,
+                    # We assume that if this branch is reached, `query_or_df` is a pyspark / snowpark dataframe,
                     # so we use `limit` instead of `head` to get back a dataframe instead of List[Row]
                     # https://spark.apache.org/docs/3.1.1/api/python/reference/api/pyspark.sql.DataFrame.head.html#pyspark.sql.DataFrame.head
                     return query_or_df.limit(limit)
@@ -591,7 +591,7 @@ class SnapshotEvaluator:
                 query_or_df = reduce(
                     lambda a, b: (
                         pd.concat([a, b], ignore_index=True)  # type: ignore
-                        if self.adapter.is_pandas_df(a)
+                        if isinstance(a, pd.DataFrame)
                         else a.union_all(b)  # type: ignore
                     ),  # type: ignore
                     queries_or_dfs,

@@ -151,7 +151,7 @@ class RedshiftEngineAdapter(
         If it does exist then we need to do the:
             `CREATE TABLE...`, `INSERT INTO...`, `RENAME TABLE...`, `RENAME TABLE...`, DROP TABLE...`  dance.
         """
-        if not self.is_pandas_df(query_or_df) or not self.table_exists(table_name):
+        if not isinstance(query_or_df, pd.DataFrame) or not self.table_exists(table_name):
             return super().replace_query(
                 table_name,
                 query_or_df,
