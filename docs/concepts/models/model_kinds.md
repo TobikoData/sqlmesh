@@ -121,7 +121,9 @@ Depending on the target engine, models of the `INCREMENTAL_BY_TIME_RANGE` kind a
 
 Models of the `INCREMENTAL_BY_UNIQUE_KEY` kind are computed incrementally based on a unique key.
 
-If a key is missing in the model's table, the new data row is inserted; otherwise, the existing row associated with this key is updated with the new one. This kind is a good fit for datasets that have the following traits:
+If a key in newly loaded data is not present in the model table, the new data row is inserted. If a key in newly loaded data is already present in the model table, the existing row is updated with the new data. If a key is present in the model table but not present in the newly loaded data, its row is not modified and remains in the model table.
+
+This kind is a good fit for datasets that have the following traits:
 
 * Each record has a unique key associated with it.
 * There is at most one record associated with each unique key.
