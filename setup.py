@@ -58,6 +58,7 @@ setup(
             "google-cloud-bigquery[pandas]",
             "google-cloud-bigquery-storage",
         ],
+        "bigframes": ["bigframes>=1.32.0"],
         "clickhouse": ["clickhouse-connect"],
         "databricks": ["databricks-sql-connector"],
         "dev": [

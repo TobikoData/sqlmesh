@@ -33,7 +33,7 @@ The `execute` function is wrapped with the `@model` [decorator](https://wiki.pyt
 
 Because SQLMesh creates tables before evaluating models, the schema of the output DataFrame is a required argument. The `@model` argument `columns` contains a dictionary of column names to types.
 
-The function takes an `ExecutionContext` that is able to run queries and to retrieve the current time interval that is being processed, along with arbitrary key-value arguments passed in at runtime. The function can either return a Pandas, PySpark, or Snowpark Dataframe instance.
+The function takes an `ExecutionContext` that is able to run queries and to retrieve the current time interval that is being processed, along with arbitrary key-value arguments passed in at runtime. The function can either return a Pandas, PySpark, Bigframe, or Snowpark Dataframe instance.
 
 If the function output is too large, it can also be returned in chunks using Python generators.
 
@@ -439,6 +439,57 @@ def execute(
     df = context.snowpark.create_dataframe([[1, "a", "usa"], [2, "b", "cad"]], schema=["id", "name", "country"])
     df = df.filter(df.id > 1)
     return df
+```
+
+### Bigframe
+This example demonstrates using the [Bigframe](https://cloud.google.com/bigquery/docs/use-bigquery-dataframes#pandas-examples) DataFrame API. If you use Bigquery, the Bigframe API is preferred to Pandas as all computation is done in Bigquery.
+
+```python linenums="1"
+import typing as t
+from datetime import datetime
+
+from bigframes.pandas import DataFrame
+
+from sqlmesh import ExecutionContext, model
+
+
+def get_bucket(num: int):
+    if not num:
+        return "NA"
+    boundary = 10
+    return "at_or_above_10" if num >= boundary else "below_10"
+
+
+@model(
+    "mart.wiki",
+    columns={
+        "title": "text",
+        "views": "int",
+        "bucket": "text",
+    },
+)
+def execute(
+    context: ExecutionContext,
+    start: datetime,
+    end: datetime,
+    execution_time: datetime,
+    **kwargs: t.Any,
+) -> DataFrame:
+    # Create a remote function to be used in the Bigframe DataFrame
+    remote_get_bucket = context.bigframe.remote_function([int], str)(get_bucket)
+
+    # Returns the Bigframe DataFrame handle, no data is computed locally
+    df = context.bigframe.read_gbq("bigquery-samples.wikipedia_pageviews.200809h")
+
+    df = (
+        # This runs entirely on the BigQuery engine lazily
+        df[df.title.str.contains(r"[Gg]oogle")]
+        .groupby(["title"], as_index=False)["views"]
+        .sum(numeric_only=True)
+        .sort_values("views", ascending=False)
+    )
+
+    return df.assign(bucket=df["views"].apply(remote_get_bucket))
 ```
 
 ### Batching
