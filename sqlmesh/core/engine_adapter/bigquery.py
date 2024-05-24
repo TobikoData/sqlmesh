@@ -4,6 +4,8 @@ import logging
 import typing as t
 
 import pandas as pd
+from bigframes.pandas import DataFrame as BigframeDataFrame
+from bigframes.session import bigquery_options
 from sqlglot import exp
 from sqlglot.transforms import remove_precision_parameterized_types
 
@@ -31,7 +33,7 @@ if t.TYPE_CHECKING:
     from google.cloud.bigquery.table import Table as BigQueryTable
 
     from sqlmesh.core._typing import SchemaName, SessionProperties, TableName
-    from sqlmesh.core.engine_adapter._typing import DF, Query
+    from sqlmesh.core.engine_adapter._typing import BigframeSession, DF, Query
     from sqlmesh.core.engine_adapter.base import QueryOrDF
 
 logger = logging.getLogger(__name__)
@@ -84,6 +86,17 @@ class BigQueryEngineAdapter(InsertOverwriteWithMergeMixin):
         return self.cursor.connection
 
     @property
+    def bigframe(self) -> BigframeSession:
+        return BigframeSession(
+            bigquery_options.BigQueryOptions(
+                credentials=self.client._credentials,
+                project=self.client.project,
+                location=self.client.location,
+                skip_bq_connection_check=True,
+            )
+        )
+
+    @property
     def _job_params(self) -> t.Dict[str, t.Any]:
         from sqlmesh.core.config.connection import BigQueryPriority
 
@@ -114,7 +127,9 @@ class BigQueryEngineAdapter(InsertOverwriteWithMergeMixin):
         )
 
         def query_factory() -> Query:
-            if not self.table_exists(temp_table):
+            if isinstance(df, BigframeDataFrame):
+                df.to_gbq(temp_table.sql(dialect=self.dialect, identify=False), if_exists="replace")
+            elif not self.table_exists(temp_table):
                 # Make mypy happy
                 assert isinstance(df, pd.DataFrame)
                 self._db_call(self.client.create_table, table=temp_bq_table, exists_ok=False)

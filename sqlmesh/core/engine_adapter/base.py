@@ -48,6 +48,7 @@ from sqlmesh.utils.pandas import columns_to_types_from_df
 if t.TYPE_CHECKING:
     from sqlmesh.core._typing import SchemaName, SessionProperties, TableName
     from sqlmesh.core.engine_adapter._typing import (
+        BigframeSession,
         DF,
         PySparkDataFrame,
         PySparkSession,
@@ -149,6 +150,10 @@ class EngineAdapter:
 
     @property
     def snowpark(self) -> t.Optional[SnowparkSession]:
+        return None
+
+    @property
+    def bigframe(self) -> t.Optional[BigframeSession]:
         return None
 
     @property

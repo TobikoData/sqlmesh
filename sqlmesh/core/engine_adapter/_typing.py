@@ -8,6 +8,7 @@ from sqlmesh.utils import optional_import
 if t.TYPE_CHECKING:
     import pyspark
     import pyspark.sql.connect.dataframe
+    from bigframes.session import Session as BigframeSession  # noqa
 
     snowpark = optional_import("snowflake.snowpark")
 

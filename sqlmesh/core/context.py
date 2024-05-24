@@ -121,6 +121,7 @@ if t.TYPE_CHECKING:
     from typing_extensions import Literal
 
     from sqlmesh.core.engine_adapter._typing import (
+        BigframeSession,
         DF,
         PySparkDataFrame,
         PySparkSession,
@@ -161,6 +162,11 @@ class BaseContext(abc.ABC):
     def snowpark(self) -> t.Optional[SnowparkSession]:
         """Returns the snowpark session if it exists."""
         return self.engine_adapter.snowpark
+
+    @property
+    def bigframe(self) -> t.Optional[BigframeSession]:
+        """Returns the bigframe session if it exists."""
+        return self.engine_adapter.bigframe
 
     @property
     def default_catalog(self) -> t.Optional[str]:

@@ -33,7 +33,7 @@ The `execute` function is wrapped with the `@model` [decorator](https://wiki.pyt
 
 Because SQLMesh creates tables before evaluating models, the schema of the output DataFrame is a required argument. The `@model` argument `columns` contains a dictionary of column names to types.
 
-The function takes an `ExecutionContext` that is able to run queries and to retrieve the current time interval that is being processed, along with arbitrary key-value arguments passed in at runtime. The function can either return a Pandas, PySpark, or Snowpark Dataframe instance.
+The function takes an `ExecutionContext` that is able to run queries and to retrieve the current time interval that is being processed, along with arbitrary key-value arguments passed in at runtime. The function can either return a Pandas, PySpark, Bigframe, or Snowpark Dataframe instance.
 
 If the function output is too large, it can also be returned in chunks using Python generators.
 
@@ -325,6 +325,54 @@ def execute(
     df = df.filter(df.id > 1)
     return df
 ```
+
+### Bigframe
+This example demonstrates using the Bigframe DataFrame API. If you use Bigquery, the Bigframe API is preferred to Pandas as all computation is done in Bigquery.
+
+```python linenums="1"
+import typing as t
+from datetime import datetime
+
+from bigframes.pandas import DataFrame
+
+from sqlmesh import ExecutionContext, model
+
+def get_bucket(num):
+    if not num:
+        return "NA"
+    boundary = 4000
+    return "at_or_above_4000" if num >= boundary else "below_4000"
+
+
+@model(
+    "docs_example.bigframe",
+    columns={
+        "id": "int",
+        "name": "text",
+        "country": "text",
+    },
+)
+def execute(
+    context: ExecutionContext,
+    start: datetime,
+    end: datetime,
+    execution_time: datetime,
+    **kwargs: t.Any,
+) -> DataFrame:
+    # create a remote function to be used in the Bigframe DataFrame
+    remote_get_bucket = context.bigframe.remote_function([float], str)(get_bucket)
+
+    # returns the Bigframe DataFrame directly, so no data is computed locally
+    df = bpd.read_gbq("bigquery-samples.wikipedia_pageviews.200809h")
+    df.assign(view_count_bucket=bq_df['views'].apply(get_bucket))
+    return (
+        df[bq_df_sample.title.str.contains(r"[Gg]oogle")]
+        .groupby(['title'], as_index=False)['views'].sum(numeric_only=True)
+        .sort_values('views', ascending=False)
+        .assign(bucket=lambda x: remote_get_bucket(x.views))
+    )
+```
+
 
 ### Batching
 If the output of a Python model is very large and you cannot use Spark, it may be helpful to split the output into multiple batches.
