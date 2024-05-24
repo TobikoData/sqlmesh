@@ -478,6 +478,8 @@ To avoid this ambiguity, SQLMesh needs to know the columns' types. By default, i
 - using the [`columns`](models/overview.md#columns) model property
 - using the [`columns`](#creating_tests) attribute of the unit test
 
+If none of these options work, consider using a SQL [query](#test_nameinputsupstream_modelquery) to generate the data.
+
 ## Unit test structure
 
 ### `<test_name>`
