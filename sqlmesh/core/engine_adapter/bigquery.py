@@ -4,8 +4,6 @@ import logging
 import typing as t
 
 import pandas as pd
-from bigframes.pandas import DataFrame as BigframeDataFrame
-from bigframes.session import bigquery_options, Session as BigframeSession
 from sqlglot import exp
 from sqlglot.transforms import remove_precision_parameterized_types
 
@@ -20,6 +18,7 @@ from sqlmesh.core.engine_adapter.shared import (
 )
 from sqlmesh.core.node import IntervalUnit
 from sqlmesh.core.schema_diff import SchemaDiffer
+from sqlmesh.utils import optional_import
 from sqlmesh.utils.date import to_datetime
 from sqlmesh.utils.errors import SQLMeshError
 
@@ -33,10 +32,13 @@ if t.TYPE_CHECKING:
     from google.cloud.bigquery.table import Table as BigQueryTable
 
     from sqlmesh.core._typing import SchemaName, SessionProperties, TableName
-    from sqlmesh.core.engine_adapter._typing import DF, Query
+    from sqlmesh.core.engine_adapter._typing import BigframeSession, DF, Query
     from sqlmesh.core.engine_adapter.base import QueryOrDF
 
 logger = logging.getLogger(__name__)
+
+bigframes = optional_import("bigframes.session")
+bqf = optional_import("bigframes.pandas")
 
 
 @set_catalog()
@@ -86,14 +88,16 @@ class BigQueryEngineAdapter(InsertOverwriteWithMergeMixin):
         return self.cursor.connection
 
     @property
-    def bigframe(self) -> BigframeSession:
-        return BigframeSession(
-            bigquery_options.BigQueryOptions(
-                credentials=self.client._credentials,
-                project=self.client.project,
-                location=self.client.location,
+    def bigframe(self) -> t.Optional[BigframeSession]:
+        if bigframes:
+            return bigframes.Session(
+                bigframes.bigquery_options.BigQueryOptions(
+                    credentials=self.client._credentials,
+                    project=self.client.project,
+                    location=self.client.location,
+                )
             )
-        )
+        return None
 
     @property
     def _job_params(self) -> t.Dict[str, t.Any]:
@@ -126,8 +130,8 @@ class BigQueryEngineAdapter(InsertOverwriteWithMergeMixin):
         )
 
         def query_factory() -> Query:
-            if isinstance(df, BigframeDataFrame):
-                df.to_gbq(str(temp_bq_table), if_exists="replace")
+            if bqf and isinstance(df, bqf.DataFrame):
+                df.to_gbq(str(temp_bq_table), if_exists="replace")  # type: ignore
             elif not self.table_exists(temp_table):
                 # Make mypy happy
                 assert isinstance(df, pd.DataFrame)

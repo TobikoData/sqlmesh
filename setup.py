@@ -52,7 +52,6 @@ setup(
         "bigquery": [
             "google-cloud-bigquery[pandas]",
             "google-cloud-bigquery-storage",
-            "bigframes",
         ],
         "databricks": [
             "databricks-sql-connector",
