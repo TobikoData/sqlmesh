@@ -141,3 +141,6 @@ extra:
       link: mailto:hello@tobikodata.com
     - icon: fontawesome/brands/github
       link: https://github.com/TobikoData/sqlmesh/issues/new
+  analytics:
+    provider: google
+    property: G-JXQ1R227VS
