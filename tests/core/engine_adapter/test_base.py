@@ -2705,7 +2705,7 @@ def test_insert_overwrite_by_partition_query(
     assert sql_calls == [
         'CREATE TABLE "test_schema"."__temp_test_table_abcdefgh" AS SELECT "a", "ds", "b" FROM "tbl"',
         'DELETE FROM "test_schema"."test_table" WHERE CONCAT_WS(\'__SQLMESH_DELIM__\', DATETIME_TRUNC("ds", MONTH), "b") IN (SELECT DISTINCT CONCAT_WS(\'__SQLMESH_DELIM__\', DATETIME_TRUNC("ds", MONTH), "b") FROM "test_schema"."__temp_test_table_abcdefgh")',
-        'INSERT INTO "test_schema"."test_table" ("a", "ds", "b") (SELECT "a", "ds", "b" FROM "test_schema"."__temp_test_table_abcdefgh")',
+        'INSERT INTO "test_schema"."test_table" ("a", "ds", "b") SELECT "a", "ds", "b" FROM "test_schema"."__temp_test_table_abcdefgh"',
         'DROP TABLE IF EXISTS "test_schema"."__temp_test_table_abcdefgh"',
     ]
 

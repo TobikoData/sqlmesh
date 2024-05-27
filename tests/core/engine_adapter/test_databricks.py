@@ -6,6 +6,7 @@ import pytest
 from pytest_mock import MockFixture
 from sqlglot import exp, parse_one
 
+from sqlmesh.core import dialect as d
 from sqlmesh.core.engine_adapter import DatabricksEngineAdapter
 from tests.core.engine_adapter import to_sql_calls
 
@@ -103,3 +104,35 @@ def test_get_current_database(make_mocked_engine_adapter: t.Callable):
 
     assert adapter.get_current_database() == "test_database"
     assert to_sql_calls(adapter) == ["SELECT CURRENT_DATABASE()"]
+
+
+def test_insert_overwrite_by_partition_query(
+    make_mocked_engine_adapter: t.Callable, mocker: MockFixture, make_temp_table_name: t.Callable
+):
+    adapter = make_mocked_engine_adapter(DatabricksEngineAdapter)
+
+    temp_table_mock = mocker.patch("sqlmesh.core.engine_adapter.EngineAdapter._get_temp_table")
+    table_name = "test_schema.test_table"
+    temp_table_id = "abcdefgh"
+    temp_table_mock.return_value = make_temp_table_name(table_name, temp_table_id)
+
+    adapter.insert_overwrite_by_partition(
+        table_name,
+        parse_one("SELECT a, ds, b FROM tbl"),
+        partitioned_by=[
+            d.parse_one("DATETIME_TRUNC(ds, MONTH)"),
+            d.parse_one("b"),
+        ],
+        columns_to_types={
+            "a": exp.DataType.build("int"),
+            "ds": exp.DataType.build("DATETIME"),
+            "b": exp.DataType.build("boolean"),
+        },
+    )
+
+    sql_calls = to_sql_calls(adapter)
+    assert sql_calls == [
+        "CREATE TABLE `test_schema`.`temp_test_table_abcdefgh` AS SELECT `a`, `ds`, `b` FROM `tbl`",
+        "INSERT INTO `test_schema`.`test_table` REPLACE WHERE CONCAT_WS('__SQLMESH_DELIM__', DATE_TRUNC('MONTH', `ds`), `b`) IN (SELECT DISTINCT CONCAT_WS('__SQLMESH_DELIM__', DATE_TRUNC('MONTH', `ds`), `b`) FROM `test_schema`.`temp_test_table_abcdefgh`) SELECT `a`, `ds`, `b` FROM `test_schema`.`temp_test_table_abcdefgh`",
+        "DROP TABLE IF EXISTS `test_schema`.`temp_test_table_abcdefgh`",
+    ]

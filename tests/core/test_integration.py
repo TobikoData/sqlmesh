@@ -23,6 +23,7 @@ from sqlmesh.core.model import (
     ModelKindName,
     SqlModel,
     TimeColumn,
+    load_sql_based_model,
 )
 from sqlmesh.core.model.kind import model_kind_type_from_name
 from sqlmesh.core.plan import Plan, PlanBuilder, SnapshotIntervals
@@ -1105,6 +1106,60 @@ def test_dbt_select_star_is_directly_modified(sushi_test_dbt_context: Context):
 
     assert plan.snapshots[snapshot_a_id].change_category == SnapshotChangeCategory.NON_BREAKING
     assert plan.snapshots[snapshot_b_id].change_category == SnapshotChangeCategory.NON_BREAKING
+
+
+@freeze_time("2023-01-08 15:00:00")
+def test_incremental_by_partition(init_and_plan_context: t.Callable):
+    context, plan = init_and_plan_context("examples/sushi")
+    context.apply(plan)
+
+    source_name = "raw.test_incremental_by_partition"
+    model_name = "memory.sushi.test_incremental_by_partition"
+
+    expressions = d.parse(
+        f"""
+        MODEL (
+            name {model_name},
+            kind INCREMENTAL_BY_PARTITION,
+            partitioned_by [key],
+            allow_partials true,
+        );
+
+        SELECT key, value FROM {source_name};
+        """
+    )
+    model = load_sql_based_model(expressions)
+    context.upsert_model(model)
+
+    context.engine_adapter.ctas(
+        source_name,
+        d.parse_one("SELECT 'key_a' AS key, 1 AS value"),
+    )
+
+    context.plan(auto_apply=True, no_prompts=True)
+    assert context.engine_adapter.fetchall(f"SELECT * FROM {model_name}") == [
+        ("key_a", 1),
+    ]
+
+    context.engine_adapter.replace_query(
+        source_name,
+        d.parse_one("SELECT 'key_b' AS key, 1 AS value"),
+    )
+    context.run(ignore_cron=True)
+    assert context.engine_adapter.fetchall(f"SELECT * FROM {model_name}") == [
+        ("key_a", 1),
+        ("key_b", 1),
+    ]
+
+    context.engine_adapter.replace_query(
+        source_name,
+        d.parse_one("SELECT 'key_a' AS key, 2 AS value"),
+    )
+    context.run(ignore_cron=True)
+    assert context.engine_adapter.fetchall(f"SELECT * FROM {model_name}") == [
+        ("key_b", 1),
+        ("key_a", 2),
+    ]
 
 
 @pytest.mark.parametrize(

@@ -38,7 +38,7 @@ def test_logical_merge(make_mocked_engine_adapter: t.Callable, mocker: MockerFix
                 """DELETE FROM "target" WHERE CONCAT_WS('__SQLMESH_DELIM__', "id") IN (SELECT CONCAT_WS('__SQLMESH_DELIM__', "id") FROM "temporary")"""
             ),
             call(
-                """INSERT INTO "target" ("id", "ts", "val") (SELECT DISTINCT ON ("id") "id", "ts", "val" FROM "temporary")"""
+                'INSERT INTO "target" ("id", "ts", "val") SELECT DISTINCT ON ("id") "id", "ts", "val" FROM "temporary"'
             ),
             call('''DROP TABLE IF EXISTS "temporary"'''),
         ]
@@ -63,7 +63,7 @@ def test_logical_merge(make_mocked_engine_adapter: t.Callable, mocker: MockerFix
                 """DELETE FROM "target" WHERE CONCAT_WS('__SQLMESH_DELIM__', "id", "ts") IN (SELECT CONCAT_WS('__SQLMESH_DELIM__', "id", "ts") FROM "temporary")"""
             ),
             call(
-                """INSERT INTO "target" ("id", "ts", "val") (SELECT DISTINCT ON ("id", "ts") "id", "ts", "val" FROM "temporary")"""
+                'INSERT INTO "target" ("id", "ts", "val") SELECT DISTINCT ON ("id", "ts") "id", "ts", "val" FROM "temporary"'
             ),
             call('''DROP TABLE IF EXISTS "temporary"'''),
         ]

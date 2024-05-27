@@ -41,7 +41,7 @@ class LogicalMergeMixin(EngineAdapter):
             raise SQLMeshError(
                 "This engine does not support MERGE expressions and therefore `when_matched` is not supported."
             )
-        self._delete_then_insert_by_key(
+        self._replace_by_key(
             target_table, source_table, columns_to_types, unique_key, is_unique_key=True
         )
 

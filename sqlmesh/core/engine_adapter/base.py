@@ -1050,7 +1050,7 @@ class EngineAdapter:
                 table_name, source_queries, columns_to_types=columns_to_types
             )
         else:
-            self._delete_then_insert_by_key(
+            self._replace_by_key(
                 table_name, query_or_df, columns_to_types, partitioned_by, is_unique_key=False
             )
 
@@ -2015,7 +2015,7 @@ class EngineAdapter:
         table = exp.to_table(table_name)
         self.execute(f"TRUNCATE TABLE {table.sql(dialect=self.dialect, identify=True)}")
 
-    def _delete_then_insert_by_key(
+    def _replace_by_key(
         self,
         target_table: TableName,
         source_table: QueryOrDF,
@@ -2032,23 +2032,31 @@ class EngineAdapter:
 
         with self.transaction():
             self.ctas(temp_table, source_table, columns_to_types=columns_to_types, exists=False)
-            delete_query = exp.select(unique_exp).from_(temp_table)
-            if not is_unique_key:
-                delete_query = delete_query.distinct()
-            self.execute(exp.delete(target_table).where(unique_exp.isin(query=delete_query)))
 
-            insert_query = self._select_columns(columns_to_types).from_(temp_table)
-            if is_unique_key:
-                insert_query = insert_query.distinct(*key)
+            try:
+                delete_query = exp.select(unique_exp).from_(temp_table)
+                insert_query = self._select_columns(columns_to_types).from_(temp_table)
+                if not is_unique_key:
+                    delete_query = delete_query.distinct()
+                else:
+                    insert_query = insert_query.distinct(*key)
 
-            self.execute(
-                exp.insert(
-                    insert_query.subquery(),
+                insert_statement = exp.insert(
+                    insert_query,
                     target_table,
                     columns=column_names,
                 )
-            )
-            self.drop_table(temp_table)
+                delete_filter = unique_exp.isin(query=delete_query)
+
+                if not self.INSERT_OVERWRITE_STRATEGY.is_replace_where:
+                    self.execute(exp.delete(target_table).where(delete_filter))
+                else:
+                    insert_statement.set("where", delete_filter)
+                    insert_statement.set("this", exp.to_table(target_table))
+
+                self.execute(insert_statement)
+            finally:
+                self.drop_table(temp_table)
 
     def _build_create_comment_table_exp(
         self, table: exp.Table, table_comment: str, table_kind: str
