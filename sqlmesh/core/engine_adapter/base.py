@@ -2032,11 +2032,10 @@ class EngineAdapter:
 
         with self.transaction():
             self.ctas(temp_table, source_table, columns_to_types=columns_to_types, exists=False)
-            self.execute(
-                exp.delete(target_table).where(
-                    unique_exp.isin(query=exp.select(unique_exp).from_(temp_table))
-                )
-            )
+            delete_query = exp.select(unique_exp).from_(temp_table)
+            if not is_unique_key:
+                delete_query = delete_query.distinct()
+            self.execute(exp.delete(target_table).where(unique_exp.isin(query=delete_query)))
 
             insert_query = self._select_columns(columns_to_types).from_(temp_table)
             if is_unique_key:
