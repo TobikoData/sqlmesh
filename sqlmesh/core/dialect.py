@@ -878,7 +878,7 @@ def select_from_values_for_batch_range(
     alias: str = "t",
 ) -> exp.Select:
     casted_columns = [
-        exp.alias_(exp.cast(column, to=kind), column, copy=False)
+        exp.alias_(exp.cast(exp.column(column), to=kind), column, copy=False)
         for column, kind in columns_to_types.items()
     ]
 

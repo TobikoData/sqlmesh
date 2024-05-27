@@ -909,6 +909,23 @@ def test_seed_model_custom_types(tmp_path):
     assert df["i_str"].iloc[0] == "321"
 
 
+def test_seed_with_special_characters_in_column(tmp_path, assert_exp_eq):
+    config = Config(model_defaults=ModelDefaultsConfig(dialect="duckdb"))
+    context = Context(config=config)
+
+    model_csv_path = (tmp_path / "model.csv").absolute()
+    with open(model_csv_path, "w", encoding="utf-8") as fd:
+        fd.write("col.\n123")
+
+    model = create_seed_model("memory.test_db.test_model", SeedKind(path=str(model_csv_path)))
+    context.upsert_model(model)
+
+    assert_exp_eq(
+        context.render("memory.test_db.test_model").sql(),
+        'SELECT CAST("col." AS BIGINT) AS "col." FROM (VALUES (123)) AS t("col.")',
+    )
+
+
 def test_audits():
     expressions = d.parse(
         """
