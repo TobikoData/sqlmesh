@@ -862,6 +862,8 @@ def _evaluation_strategy(snapshot: SnapshotInfoLike, adapter: EngineAdapter) -> 
         klass = IncrementalByTimeRangeStrategy
     elif snapshot.is_incremental_by_unique_key:
         klass = IncrementalByUniqueKeyStrategy
+    elif snapshot.is_incremental_by_partition:
+        klass = IncrementalByPartitionStrategy
     elif snapshot.is_incremental_unmanaged:
         klass = IncrementalUnmanagedStrategy
     elif snapshot.is_view:
@@ -1204,6 +1206,26 @@ class MaterializableStrategy(PromotableStrategy):
     def delete(self, table_name: str) -> None:
         self.adapter.drop_table(table_name)
         logger.info("Dropped table '%s'", table_name)
+
+
+class IncrementalByPartitionStrategy(MaterializableStrategy):
+    def insert(
+        self,
+        snapshot: Snapshot,
+        name: str,
+        query_or_df: QueryOrDF,
+        snapshots: t.Dict[str, Snapshot],
+        deployability_index: DeployabilityIndex,
+        batch_index: int,
+        **kwargs: t.Any,
+    ) -> None:
+        model = snapshot.model
+        self.adapter.insert_overwrite_by_partition(
+            name,
+            query_or_df,
+            partitioned_by=model.partitioned_by,
+            columns_to_types=model.columns_to_types,
+        )
 
 
 class IncrementalByTimeRangeStrategy(MaterializableStrategy):

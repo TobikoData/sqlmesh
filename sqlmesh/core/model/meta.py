@@ -298,6 +298,8 @@ class ModelMeta(_Node):
             for field in ("partitioned_by_", "clustered_by"):
                 if values.get(field) and not kind.is_materialized:
                     raise ValueError(f"{field} field cannot be set for {kind} models")
+            if kind.is_incremental_by_partition and not values.get("partitioned_by_"):
+                raise ValueError(f"partitioned_by field is required for {kind.name} models")
         return values
 
     @property

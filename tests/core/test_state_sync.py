@@ -1479,7 +1479,12 @@ def test_version_sqlmesh(state_sync: EngineAdapterStateSync) -> None:
 
     # patch version sqlmesh doesn't matter
     major, minor, patch, *_ = SQLMESH_VERSION_TUPLE
-    sqlmesh_version_patch_bump = f"{major}.{minor}.{int(patch) + 1}"
+    new_patch = (
+        f"dev{int(patch[3:]) + 1}"
+        if isinstance(patch, str) and patch.startswith("dev")
+        else f"{int(patch) + 1}"
+    )
+    sqlmesh_version_patch_bump = f"{major}.{minor}.{new_patch}"
     state_sync._update_versions(sqlmesh_version=sqlmesh_version_patch_bump)
     state_sync.get_versions(validate=False)
 

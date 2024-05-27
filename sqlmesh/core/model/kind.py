@@ -54,6 +54,10 @@ class ModelKindMixin:
         return self.model_kind_name == ModelKindName.INCREMENTAL_BY_UNIQUE_KEY
 
     @property
+    def is_incremental_by_partition(self) -> bool:
+        return self.model_kind_name == ModelKindName.INCREMENTAL_BY_PARTITION
+
+    @property
     def is_incremental_unmanaged(self) -> bool:
         return self.model_kind_name == ModelKindName.INCREMENTAL_UNMANAGED
 
@@ -62,6 +66,7 @@ class ModelKindMixin:
         return (
             self.is_incremental_by_time_range
             or self.is_incremental_by_unique_key
+            or self.is_incremental_by_partition
             or self.is_incremental_unmanaged
             or self.is_scd_type_2
         )
@@ -129,6 +134,7 @@ class ModelKindName(str, ModelKindMixin, Enum):
 
     INCREMENTAL_BY_TIME_RANGE = "INCREMENTAL_BY_TIME_RANGE"
     INCREMENTAL_BY_UNIQUE_KEY = "INCREMENTAL_BY_UNIQUE_KEY"
+    INCREMENTAL_BY_PARTITION = "INCREMENTAL_BY_PARTITION"
     INCREMENTAL_UNMANAGED = "INCREMENTAL_UNMANAGED"
     FULL = "FULL"
     # Legacy alias to SCD Type 2 By Time
@@ -336,6 +342,12 @@ class _IncrementalBy(_Incremental):
             str(self.forward_only),
             str(self.disable_restatement),
         ]
+
+
+class IncrementalByPartitionKind(_Incremental):
+    name: Literal[ModelKindName.INCREMENTAL_BY_PARTITION] = ModelKindName.INCREMENTAL_BY_PARTITION
+    forward_only: Literal[True] = True
+    disable_restatement: SQLGlotBool = True
 
 
 class IncrementalByTimeRangeKind(_IncrementalBy):
@@ -581,6 +593,7 @@ ModelKind = Annotated[
         FullKind,
         IncrementalByTimeRangeKind,
         IncrementalByUniqueKeyKind,
+        IncrementalByPartitionKind,
         IncrementalUnmanagedKind,
         SeedKind,
         ViewKind,
@@ -596,6 +609,7 @@ MODEL_KIND_NAME_TO_TYPE: t.Dict[str, t.Type[ModelKind]] = {
     ModelKindName.FULL: FullKind,
     ModelKindName.INCREMENTAL_BY_TIME_RANGE: IncrementalByTimeRangeKind,
     ModelKindName.INCREMENTAL_BY_UNIQUE_KEY: IncrementalByUniqueKeyKind,
+    ModelKindName.INCREMENTAL_BY_PARTITION: IncrementalByPartitionKind,
     ModelKindName.INCREMENTAL_UNMANAGED: IncrementalUnmanagedKind,
     ModelKindName.SEED: SeedKind,
     ModelKindName.VIEW: ViewKind,

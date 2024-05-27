@@ -10,6 +10,7 @@ from sqlglot import expressions as exp
 from sqlglot import parse_one
 from sqlglot.helper import ensure_list
 
+from sqlmesh.core import dialect as d
 from sqlmesh.core.dialect import normalize_model_name
 from sqlmesh.core.engine_adapter import EngineAdapter, EngineAdapterWithIndexSupport
 from sqlmesh.core.engine_adapter.shared import InsertOverwriteStrategy
@@ -2674,3 +2675,67 @@ def test_pre_ping(mocker: MockerFixture, make_mocked_engine_adapter: t.Callable)
     ]
 
     adapter._connection_pool.get().close.assert_called_once()
+
+
+def test_insert_overwrite_by_partition_query(
+    make_mocked_engine_adapter: t.Callable, mocker: MockerFixture, make_temp_table_name: t.Callable
+):
+    adapter = make_mocked_engine_adapter(EngineAdapter)
+
+    temp_table_mock = mocker.patch("sqlmesh.core.engine_adapter.EngineAdapter._get_temp_table")
+    table_name = "test_schema.test_table"
+    temp_table_id = "abcdefgh"
+    temp_table_mock.return_value = make_temp_table_name(table_name, temp_table_id)
+
+    adapter.insert_overwrite_by_partition(
+        table_name,
+        parse_one("SELECT a, ds, b FROM tbl"),
+        partitioned_by=[
+            d.parse_one("DATETIME_TRUNC(ds, MONTH)"),
+            d.parse_one("b"),
+        ],
+        columns_to_types={
+            "a": exp.DataType.build("int"),
+            "ds": exp.DataType.build("DATETIME"),
+            "b": exp.DataType.build("boolean"),
+        },
+    )
+
+    sql_calls = to_sql_calls(adapter)
+    assert sql_calls == [
+        'CREATE TABLE "test_schema"."__temp_test_table_abcdefgh" AS SELECT "a", "ds", "b" FROM "tbl"',
+        'DELETE FROM "test_schema"."test_table" WHERE CONCAT_WS(\'__SQLMESH_DELIM__\', DATETIME_TRUNC("ds", MONTH), "b") IN (SELECT CONCAT_WS(\'__SQLMESH_DELIM__\', DATETIME_TRUNC("ds", MONTH), "b") FROM "test_schema"."__temp_test_table_abcdefgh")',
+        'INSERT INTO "test_schema"."test_table" ("a", "ds", "b") (SELECT "a", "ds", "b" FROM "test_schema"."__temp_test_table_abcdefgh")',
+        'DROP TABLE IF EXISTS "test_schema"."__temp_test_table_abcdefgh"',
+    ]
+
+
+def test_insert_overwrite_by_partition_query_insert_overwrite_strategy(
+    make_mocked_engine_adapter: t.Callable, mocker: MockerFixture, make_temp_table_name: t.Callable
+):
+    adapter = make_mocked_engine_adapter(EngineAdapter)
+    adapter.INSERT_OVERWRITE_STRATEGY = InsertOverwriteStrategy.INSERT_OVERWRITE
+
+    temp_table_mock = mocker.patch("sqlmesh.core.engine_adapter.EngineAdapter._get_temp_table")
+    table_name = "test_schema.test_table"
+    temp_table_id = "abcdefgh"
+    temp_table_mock.return_value = make_temp_table_name(table_name, temp_table_id)
+
+    adapter.insert_overwrite_by_partition(
+        table_name,
+        parse_one("SELECT a, ds, b FROM tbl"),
+        partitioned_by=[
+            d.parse_one("DATETIME_TRUNC(ds, MONTH)"),
+            d.parse_one("b"),
+        ],
+        columns_to_types={
+            "a": exp.DataType.build("int"),
+            "ds": exp.DataType.build("DATETIME"),
+            "b": exp.DataType.build("boolean"),
+        },
+    )
+
+    sql_calls = to_sql_calls(adapter)
+    assert sql_calls == [
+        'INSERT OVERWRITE TABLE "test_schema"."test_table" ("a", "ds", "b") SELECT "a", "ds", "b" FROM "tbl"'
+    ]
