@@ -96,9 +96,9 @@ Formatting settings for the `sqlmesh format` command and UI.
 
 SQLMesh UI settings.
 
-| Option   | Description                                                                                   |  Type   | Required |
-| -------- | --------------------------------------------------------------------------------------------- | :-----: | :------: |
-| `format` | Whether to automatically format model definitions upon saving them to a file (Default: False) | boolean |    N     |
+| Option           | Description                                                                                   |  Type   | Required |
+| ---------------- | --------------------------------------------------------------------------------------------- | :-----: | :------: |
+| `format_on_save` | Whether to automatically format model definitions upon saving them to a file (Default: False) | boolean |    N     |
 
 ## Gateways
 
