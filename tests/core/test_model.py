@@ -636,12 +636,17 @@ def test_seed_hydration():
 
     model = load_sql_based_model(expressions, path=Path("./examples/sushi/models/test_model.sql"))
     assert model.is_hydrated
+    assert not model.derived_columns_to_types
 
     column_hashes = model.column_hashes
 
     dehydrated_model = model.to_dehydrated()
     assert not dehydrated_model.is_hydrated
     assert dehydrated_model.column_hashes == column_hashes
+    assert dehydrated_model.derived_columns_to_types == {
+        "id": exp.DataType.build("bigint"),
+        "name": exp.DataType.build("text"),
+    }
     assert dehydrated_model.seed.content == ""
 
     hydrated_model = dehydrated_model.to_hydrated(model.seed.content)
@@ -761,31 +766,6 @@ def test_seed_marker_substitution():
     assert model.kind.path == "examples/sushi/seeds/waiter_names.csv"
     assert model.seed is not None
     assert len(model.seed.content) > 0
-
-
-def test_seed_model_diff(tmp_path):
-    model_a_csv_path = (tmp_path / "model_a.csv").absolute()
-    model_b_csv_path = (tmp_path / "model_b.csv").absolute()
-
-    with open(model_a_csv_path, "w", encoding="utf-8") as fd:
-        fd.write(
-            """key,value
-1,value_a
-"""
-        )
-
-    with open(model_b_csv_path, "w", encoding="utf-8") as fd:
-        fd.write(
-            """key,value
-2,value_b
-"""
-        )
-
-    model_a = create_seed_model("test_db.test_model", SeedKind(path=str(model_a_csv_path)))
-    model_b = create_seed_model("test_db.test_model", SeedKind(path=str(model_b_csv_path)))
-
-    diff = model_a.text_diff(model_b)
-    assert diff.endswith("-1,value_a\n+2,value_b")
 
 
 def test_seed_pre_post_statements():

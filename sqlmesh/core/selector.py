@@ -80,9 +80,7 @@ class Selector:
             )
             env_models = {
                 s.name: s.model
-                for s in self._state_reader.get_snapshots(
-                    environment_snapshot_infos, hydrate_seeds=True
-                ).values()
+                for s in self._state_reader.get_snapshots(environment_snapshot_infos).values()
                 if s.is_model
             }
 

@@ -183,7 +183,9 @@ class ModelMeta(_Node):
 
         return partitions
 
-    @field_validator("columns_to_types_", mode="before")
+    @field_validator(
+        "columns_to_types_", "derived_columns_to_types", mode="before", check_fields=False
+    )
     @field_validator_v1_args
     def _columns_validator(
         cls, v: t.Any, values: t.Dict[str, t.Any]

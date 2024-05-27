@@ -43,6 +43,7 @@ from sqlmesh.core.macros import RuntimeStage
 from sqlmesh.core.model import (
     IncrementalUnmanagedKind,
     Model,
+    SeedModel,
     SCDType2ByColumnKind,
     SCDType2ByTimeKind,
     ViewKind,
@@ -856,8 +857,10 @@ def _evaluation_strategy(snapshot: SnapshotInfoLike, adapter: EngineAdapter) -> 
         klass = EmbeddedStrategy
     elif snapshot.is_symbolic or snapshot.is_audit:
         klass = SymbolicStrategy
-    elif snapshot.is_full or snapshot.is_seed:
+    elif snapshot.is_full:
         klass = FullRefreshStrategy
+    elif snapshot.is_seed:
+        klass = SeedStrategy
     elif snapshot.is_incremental_by_time_range:
         klass = IncrementalByTimeRangeStrategy
     elif snapshot.is_incremental_by_unique_key:
@@ -1321,6 +1324,40 @@ class FullRefreshStrategy(MaterializableStrategy):
     ) -> None:
         model = snapshot.model
         self._replace_query_for_model(model, name, query_or_df)
+
+
+class SeedStrategy(MaterializableStrategy):
+    def create(
+        self,
+        snapshot: Snapshot,
+        name: str,
+        is_table_deployable: bool,
+        is_snapshot_deployable: bool,
+        **render_kwargs: t.Any,
+    ) -> None:
+        super().create(snapshot, name, is_table_deployable, is_snapshot_deployable, **render_kwargs)
+
+        # For seeds we insert data at the time of table creation.
+        if is_table_deployable:
+            model = t.cast(SeedModel, snapshot.model)
+            for index, df in enumerate(model.render_seed()):
+                if index == 0:
+                    self._replace_query_for_model(model, name, df)
+                else:
+                    self.adapter.insert_append(name, df, columns_to_types=model.columns_to_types)
+
+    def insert(
+        self,
+        snapshot: Snapshot,
+        name: str,
+        query_or_df: QueryOrDF,
+        snapshots: t.Dict[str, Snapshot],
+        deployability_index: DeployabilityIndex,
+        batch_index: int,
+        **kwargs: t.Any,
+    ) -> None:
+        # Data has already been inserted at the time of table creation.
+        pass
 
 
 class SCDType2Strategy(MaterializableStrategy):

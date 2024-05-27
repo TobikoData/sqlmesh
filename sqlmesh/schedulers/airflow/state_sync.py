@@ -105,7 +105,6 @@ class HttpStateSync(StateSync):
     def get_snapshots(
         self,
         snapshot_ids: t.Optional[t.Iterable[SnapshotIdLike]],
-        hydrate_seeds: bool = False,
     ) -> t.Dict[SnapshotId, Snapshot]:
         """Gets multiple snapshots from the rest api.
 
@@ -115,8 +114,7 @@ class HttpStateSync(StateSync):
         on the production server.
         """
         snapshots = self._client.get_snapshots(
-            [s.snapshot_id for s in snapshot_ids] if snapshot_ids is not None else None,
-            hydrate_seeds=hydrate_seeds,
+            [s.snapshot_id for s in snapshot_ids] if snapshot_ids is not None else None
         )
         return {snapshot.snapshot_id: snapshot for snapshot in snapshots}
 

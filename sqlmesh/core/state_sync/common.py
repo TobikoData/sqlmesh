@@ -90,9 +90,8 @@ class CommonStateSyncMixin(StateSync):
     def get_snapshots(
         self,
         snapshot_ids: t.Optional[t.Iterable[SnapshotIdLike]],
-        hydrate_seeds: bool = False,
     ) -> t.Dict[SnapshotId, Snapshot]:
-        return self._get_snapshots(snapshot_ids, hydrate_seeds=hydrate_seeds)
+        return self._get_snapshots(snapshot_ids)
 
     def get_environment(self, environment: str) -> t.Optional[Environment]:
         return self._get_environment(environment)
@@ -323,7 +322,6 @@ class CommonStateSyncMixin(StateSync):
         self,
         snapshot_ids: t.Optional[t.Iterable[SnapshotIdLike]] = None,
         lock_for_update: bool = False,
-        hydrate_seeds: bool = False,
         hydrate_intervals: bool = True,
     ) -> t.Dict[SnapshotId, Snapshot]:
         """Fetches specified snapshots.
@@ -331,7 +329,6 @@ class CommonStateSyncMixin(StateSync):
         Args:
             snapshot_ids: The collection of IDs of snapshots to fetch
             lock_for_update: Lock the snapshot rows for future update
-            hydrate_seeds: Whether to hydrate seed snapshots with the content.
             hydrate_intervals: Whether to hydrate result snapshots with intervals.
 
         Returns:
