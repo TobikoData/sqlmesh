@@ -413,7 +413,9 @@ class MacroEvaluator:
             default_catalog=self.default_catalog,
             dialect=self.dialect,
         )
-        columns_to_types = self._schema.find(exp.to_table(normalized_model_name))
+        columns_to_types = self._schema.find(
+            exp.to_table(normalized_model_name), ensure_data_types=True
+        )
         if columns_to_types is None:
             raise SQLMeshError(f"Schema for model '{model_name}' can't be statically determined.")
 
