@@ -137,7 +137,7 @@ The column defining the partitioning key is specified in the model's `MODEL` DDL
 ```sql linenums="1" hl_lines="4"
 MODEL (
   name db.events,
-  kind INCREMENTAL_BY_TIME_RANGE,
+  kind INCREMENTAL_BY_PARTITION,
   partitioned_by region,
 );
 ```
@@ -147,7 +147,7 @@ Compound partition keys are also supported, such as `region` and `department`:
 ```sql linenums="1" hl_lines="4"
 MODEL (
   name db.events,
-  kind INCREMENTAL_BY_TIME_RANGE,
+  kind INCREMENTAL_BY_PARTITION,
   partitioned_by (region, department),
 );
 ```
@@ -157,7 +157,7 @@ Date and/or timestamp column expressions are also supported (varies by SQL engin
 ```sql linenums="1" hl_lines="4"
 MODEL (
   name db.events,
-  kind INCREMENTAL_BY_TIME_RANGE,
+  kind INCREMENTAL_BY_PARTITION,
   partitioned_by DATETIME_TRUNC(event_date, MONTH)
 );
 ```
@@ -165,12 +165,12 @@ MODEL (
 **Note**: Partial data [restatement](../plans.md#restatement-plans) is not supported for this model kind, which means that the entire table will be recreated from scratch if restated. This may lead to data loss, so data restatement is disabled for models of this kind by default.
 
 ### Materialization strategy
-Depending on the target engine, models of the `INCREMENTAL_BY_TIME_RANGE` kind are materialized using the following strategies:
+Depending on the target engine, models of the `INCREMENTAL_BY_PARTITION` kind are materialized using the following strategies:
 
 | Engine     | Strategy                                |
 |------------|-----------------------------------------|
 | Databricks | REPLACE WHERE by partitioning key       |
-| Spark      | DELETE by partitioning key, then INSERT |
+| Spark      | INSERT OVERWRITE by partitioning key    |
 | Snowflake  | DELETE by partitioning key, then INSERT |
 | BigQuery   | DELETE by partitioning key, then INSERT |
 | Redshift   | DELETE by partitioning key, then INSERT |

@@ -25,7 +25,7 @@ Configuration options for SQLMesh model properties. Supported by all model kinds
 | `references`          | The model column(s) used to join to other models' grains                                                                                                                                                                                                                                         | str \| array[str] |    N     |
 | `depends_on`          | Models on which this model depends. (Default: dependencies inferred from model code)                                                                                                                                                                                                             |    array[str]     |    N     |
 | `storage_format`      | The storage format that should be used to store physical tables; only applicable to engines such as Spark                                                                                                                                                                                        |        str        |    N     |
-| `partitioned_by`      | The column(s) and/or column expressions used define a model's partitioning key. Required for the `INCREMENTAL_BY_PARTITION` model kind - see [below](#incremental-by-partition). Optional for all other model kinds; used to partition the model's physical table in engines that support partitioning. | str \| array[str] |    N     |
+| `partitioned_by`      | The column(s) and/or column expressions used define a model's partitioning key. Required for the `INCREMENTAL_BY_PARTITION` model kind. Optional for all other model kinds; used to partition the model's physical table in engines that support partitioning. | str \| array[str] |    N     |
 | `clustered_by`        | The column(s) used to cluster the model's physical table; only applicable to engines that support clustering                                                                                                                                                                                     |        str        |    N     |
 | `columns`             | The column names and data types returned by the model. Disables [automatic inference of column names and types](../concepts/models/overview.md#conventions) from the SQL query.                                                                                                                  |    array[str]     |    N     |
 | `physical_properties` | A key-value mapping of arbitrary properties specific to the target engine that are applied to the model table / view in the physical layer. Specified as key-value pairs (`key = value`).                                                                                                        |       dict        |    N     |
@@ -96,11 +96,7 @@ Python model kind `name` enum value: [ModelKindName.INCREMENTAL_BY_TIME_RANGE](h
 
 #### Incremental by partition
 
-Configuration options for [`INCREMENTAL_BY_PARTITION` models](../concepts/models/model_kinds.md#incremental_by_partition) (in addition to [general model properties](#general-model-properties) and [incremental model properties](#incremental-models)).
-
-| Option           | Description                                                                    | Type              | Required |
-| ---------------- | ------------------------------------------------------------------------------ | ----------------- | -------- |
-| `partitioned_by` | The column(s) and/or column expressions used define a model's partitioning key | str \| array[str] | Y        |
+The [`INCREMENTAL_BY_PARTITION` models](../concepts/models/model_kinds.md#incremental_by_partition) kind does not support any configuration options other than the [general model properties](#general-model-properties) and [incremental model properties](#incremental-models).
 
 Python model kind `name` enum value: [ModelKindName.INCREMENTAL_BY_PARTITION](https://sqlmesh.readthedocs.io/en/stable/_readthedocs/html/sqlmesh/core/model/kind.html#ModelKindName)
 
