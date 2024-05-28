@@ -105,7 +105,6 @@ class DatabricksEngineAdapter(SparkEngineAdapter):
             catalog = self._extra_config.get("catalog")
             if catalog:
                 self.set_current_catalog(catalog)
-            self._spark.conf.set("spark.sql.sources.partitionOverwriteMode", "dynamic")
         return self._spark
 
     def _fetch_native_df(
