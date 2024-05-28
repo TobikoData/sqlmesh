@@ -1474,7 +1474,7 @@ def test_version_sqlmesh(state_sync: EngineAdapterStateSync) -> None:
     # patch version sqlmesh doesn't matter
     major, minor, patch, *_ = SQLMESH_VERSION_TUPLE
     new_patch = (
-        f"dev{int(patch[3:]) + 1}"
+        f"dev{int(patch[3:]) + 1}"  # type: ignore
         if isinstance(patch, str) and patch.startswith("dev")
         else f"{int(patch) + 1}"
     )
