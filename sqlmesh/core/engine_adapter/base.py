@@ -1041,9 +1041,18 @@ class EngineAdapter:
         partitioned_by: t.List[exp.Expression],
         columns_to_types: t.Optional[t.Dict[str, exp.DataType]] = None,
     ) -> None:
-        raise NotImplementedError(
-            "Insert Overwrite by Partition (not time) is not supported by this engine"
-        )
+        if self.INSERT_OVERWRITE_STRATEGY.is_insert_overwrite:
+            target_table = exp.to_table(table_name)
+            source_queries, columns_to_types = self._get_source_queries_and_columns_to_types(
+                query_or_df, columns_to_types, target_table=target_table
+            )
+            self._insert_overwrite_by_condition(
+                table_name, source_queries, columns_to_types=columns_to_types
+            )
+        else:
+            self._replace_by_key(
+                table_name, query_or_df, columns_to_types, partitioned_by, is_unique_key=False
+            )
 
     def insert_overwrite_by_time_partition(
         self,
@@ -2005,6 +2014,49 @@ class EngineAdapter:
     def _truncate_table(self, table_name: TableName) -> None:
         table = exp.to_table(table_name)
         self.execute(f"TRUNCATE TABLE {table.sql(dialect=self.dialect, identify=True)}")
+
+    def _replace_by_key(
+        self,
+        target_table: TableName,
+        source_table: QueryOrDF,
+        columns_to_types: t.Optional[t.Dict[str, exp.DataType]],
+        key: t.Sequence[exp.Expression],
+        is_unique_key: bool,
+    ) -> None:
+        if columns_to_types is None:
+            columns_to_types = self.columns(target_table)
+
+        temp_table = self._get_temp_table(target_table)
+        key_exp = exp.func("CONCAT_WS", "'__SQLMESH_DELIM__'", *key)
+        column_names = list(columns_to_types or [])
+
+        with self.transaction():
+            self.ctas(temp_table, source_table, columns_to_types=columns_to_types, exists=False)
+
+            try:
+                delete_query = exp.select(key_exp).from_(temp_table)
+                insert_query = self._select_columns(columns_to_types).from_(temp_table)
+                if not is_unique_key:
+                    delete_query = delete_query.distinct()
+                else:
+                    insert_query = insert_query.distinct(*key)
+
+                insert_statement = exp.insert(
+                    insert_query,
+                    target_table,
+                    columns=column_names,
+                )
+                delete_filter = key_exp.isin(query=delete_query)
+
+                if not self.INSERT_OVERWRITE_STRATEGY.is_replace_where:
+                    self.execute(exp.delete(target_table).where(delete_filter))
+                else:
+                    insert_statement.set("where", delete_filter)
+                    insert_statement.set("this", exp.to_table(target_table))
+
+                self.execute(insert_statement)
+            finally:
+                self.drop_table(temp_table)
 
     def _build_create_comment_table_exp(
         self, table: exp.Table, table_comment: str, table_kind: str

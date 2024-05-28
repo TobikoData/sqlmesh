@@ -24,6 +24,7 @@ from sqlmesh.core.model import (
     FullKind,
     IncrementalByTimeRangeKind,
     IncrementalUnmanagedKind,
+    IncrementalByPartitionKind,
     PythonModel,
     SqlModel,
     TimeColumn,
@@ -1903,3 +1904,33 @@ def test_create_post_statements_use_deployable_table(
     post_calls = call_args[1][0][0]
     assert len(post_calls) == 1
     assert post_calls[0].sql(dialect="postgres") == expected_call
+
+
+def test_evaluate_incremental_by_partition(mocker: MockerFixture, make_snapshot, adapter_mock):
+    model = SqlModel(
+        name="test_schema.test_model",
+        query=parse_one("SELECT 1, ds, b FROM tbl_a"),
+        kind=IncrementalByPartitionKind(),
+        partitioned_by=["ds", "b"],
+    )
+    snapshot = make_snapshot(model)
+    snapshot.categorize_as(SnapshotChangeCategory.BREAKING)
+
+    evaluator = SnapshotEvaluator(adapter_mock)
+    evaluator.evaluate(
+        snapshot,
+        start="2020-01-01",
+        end="2020-01-02",
+        execution_time="2020-01-02",
+        snapshots={},
+    )
+
+    adapter_mock.insert_overwrite_by_partition.assert_called_once_with(
+        snapshot.table_name(),
+        model.render_query(),
+        partitioned_by=[
+            exp.to_column("ds", quoted=True),
+            exp.to_column("b", quoted=True),
+        ],
+        columns_to_types=model.columns_to_types,
+    )

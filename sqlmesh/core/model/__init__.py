@@ -21,6 +21,7 @@ from sqlmesh.core.model.kind import (
     IncrementalByTimeRangeKind as IncrementalByTimeRangeKind,
     IncrementalByUniqueKeyKind as IncrementalByUniqueKeyKind,
     IncrementalUnmanagedKind as IncrementalUnmanagedKind,
+    IncrementalByPartitionKind as IncrementalByPartitionKind,
     ModelKind as ModelKind,
     ModelKindMixin as ModelKindMixin,
     ModelKindName as ModelKindName,

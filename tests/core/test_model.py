@@ -4380,3 +4380,53 @@ def test_forward_only_on_destructive_change_config() -> None:
     context.upsert_model(model)
     context_model = context.get_model("memory.db.table")
     assert context_model.on_destructive_change.is_allow
+
+
+def test_incremental_by_partition(sushi_context, assert_exp_eq):
+    expressions = d.parse(
+        """
+        MODEL (
+            name db.table,
+            kind INCREMENTAL_BY_PARTITION,
+            partitioned_by [a],
+        );
+
+        SELECT a, b
+        """
+    )
+    model = load_sql_based_model(expressions)
+    assert model.kind.is_incremental_by_partition
+    assert model.kind.disable_restatement
+
+    expressions = d.parse(
+        """
+        MODEL (
+            name db.table,
+            kind INCREMENTAL_BY_PARTITION (
+                disable_restatement false
+            ),
+            partitioned_by [a],
+        );
+
+        SELECT a, b
+        """
+    )
+    model = load_sql_based_model(expressions)
+    assert model.kind.is_incremental_by_partition
+    assert not model.kind.disable_restatement
+
+    with pytest.raises(
+        ConfigError,
+        match=r".*partitioned_by field is required for INCREMENTAL_BY_PARTITION models.*",
+    ):
+        expressions = d.parse(
+            """
+            MODEL (
+                name db.table,
+                kind INCREMENTAL_BY_PARTITION,
+            );
+
+            SELECT a, b
+            """
+        )
+        load_sql_based_model(expressions)
