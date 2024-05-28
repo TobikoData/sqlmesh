@@ -41,31 +41,9 @@ class LogicalMergeMixin(EngineAdapter):
             raise SQLMeshError(
                 "This engine does not support MERGE expressions and therefore `when_matched` is not supported."
             )
-        if columns_to_types is None:
-            columns_to_types = self.columns(target_table)
-
-        temp_table = self._get_temp_table(target_table)
-        unique_exp = exp.func("CONCAT_WS", "'__SQLMESH_DELIM__'", *unique_key)
-        column_names = list(columns_to_types or [])
-
-        with self.transaction():
-            self.ctas(temp_table, source_table, columns_to_types=columns_to_types, exists=False)
-            self.execute(
-                exp.delete(target_table).where(
-                    unique_exp.isin(query=exp.select(unique_exp).from_(temp_table))
-                )
-            )
-            self.execute(
-                exp.insert(
-                    self._select_columns(columns_to_types)
-                    .distinct(*unique_key)
-                    .from_(temp_table)
-                    .subquery(),
-                    target_table,
-                    columns=column_names,
-                )
-            )
-            self.drop_table(temp_table)
+        self._replace_by_key(
+            target_table, source_table, columns_to_types, unique_key, is_unique_key=True
+        )
 
 
 class PandasNativeFetchDFSupportMixin(EngineAdapter):
