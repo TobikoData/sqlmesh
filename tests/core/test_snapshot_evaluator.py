@@ -3,11 +3,13 @@ from unittest.mock import call, patch
 
 import logging
 import pytest
+from pathlib import Path
 from pytest_mock.plugin import MockerFixture
 from sqlglot import expressions as exp
 from sqlglot import parse, parse_one, select
 
 from sqlmesh.core.audit import ModelAudit, StandaloneAudit
+from sqlmesh.core import dialect as d
 from sqlmesh.core.dialect import schema_, to_schema
 from sqlmesh.core.engine_adapter import EngineAdapter, create_engine_adapter
 from sqlmesh.core.engine_adapter.base import MERGE_SOURCE_ALIAS, MERGE_TARGET_ALIAS
@@ -1671,6 +1673,77 @@ def test_create_incremental_by_unique_no_intervals(adapter_mock, make_snapshot):
         table_description=None,
         table_properties={},
     )
+
+
+def test_create_seed(mocker: MockerFixture, adapter_mock, make_snapshot):
+    expressions = d.parse(
+        """
+        MODEL (
+            name db.seed,
+            kind SEED (
+              path '../seeds/waiter_names.csv',
+              batch_size 5,
+            )
+        );
+    """
+    )
+
+    model = load_sql_based_model(expressions, path=Path("./examples/sushi/models/test_model.sql"))
+
+    snapshot = make_snapshot(model)
+    snapshot.categorize_as(SnapshotChangeCategory.BREAKING)
+
+    evaluator = SnapshotEvaluator(adapter_mock)
+    evaluator.create([snapshot], {})
+
+    common_create_kwargs: t.Dict[str, t.Any] = dict(
+        columns_to_types={"id": exp.DataType.build("bigint"), "name": exp.DataType.build("text")},
+        storage_format=None,
+        partitioned_by=[],
+        partition_interval_unit=IntervalUnit.DAY,
+        clustered_by=[],
+        table_properties={},
+        table_description=None,
+    )
+
+    adapter_mock.create_table.assert_has_calls(
+        [
+            call(
+                f"sqlmesh__db.db__seed__{snapshot.version}__temp",
+                column_descriptions=None,
+                **common_create_kwargs,
+            ),
+            call(
+                f"sqlmesh__db.db__seed__{snapshot.version}",
+                column_descriptions={},
+                **common_create_kwargs,
+            ),
+        ]
+    )
+
+    replace_query_calls = adapter_mock.replace_query.call_args_list
+    assert len(replace_query_calls) == 1
+
+    df = replace_query_calls[0][0][1]
+    assert list(df.itertuples(index=False)) == [
+        (0, "Toby"),
+        (1, "Tyson"),
+        (2, "Ryan"),
+        (3, "George"),
+        (4, "Chris"),
+    ]
+
+    insert_append_calls = adapter_mock.insert_append.call_args_list
+    assert len(insert_append_calls) == 1
+
+    df = insert_append_calls[0][0][1]
+    assert list(df.itertuples(index=False)) == [
+        (5, "Max"),
+        (6, "Vincent"),
+        (7, "Iaroslav"),
+        (8, "Emma"),
+        (9, "Maia"),
+    ]
 
 
 def test_standalone_audit(mocker: MockerFixture, adapter_mock, make_snapshot):

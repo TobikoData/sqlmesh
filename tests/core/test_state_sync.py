@@ -1094,18 +1094,12 @@ def test_delete_expired_snapshots_seed(
 
     state_sync.push_snapshots([snapshot])
     assert set(state_sync.get_snapshots(None)) == {snapshot.snapshot_id}
-    assert state_sync.engine_adapter.fetchall(
-        "SELECT name, version, content FROM sqlmesh._seeds"
-    ) == [
-        (snapshot.name, snapshot.version, snapshot.model.seed.content),
-    ]
 
     assert state_sync.delete_expired_snapshots() == [
         SnapshotTableCleanupTask(snapshot=snapshot.table_info, dev_table_only=False),
     ]
 
     assert not state_sync.get_snapshots(None)
-    assert not state_sync.engine_adapter.fetchall("SELECT * FROM sqlmesh._seeds")
 
 
 def test_delete_expired_snapshots_batching(
@@ -1613,7 +1607,6 @@ def test_first_migration_failure(duck_conn, mocker: MockerFixture, tmp_path) -> 
     assert not state_sync.engine_adapter.table_exists(state_sync.snapshots_table)
     assert not state_sync.engine_adapter.table_exists(state_sync.environments_table)
     assert not state_sync.engine_adapter.table_exists(state_sync.versions_table)
-    assert not state_sync.engine_adapter.table_exists(state_sync.seeds_table)
     assert not state_sync.engine_adapter.table_exists(state_sync.intervals_table)
 
 
@@ -1766,19 +1759,10 @@ def test_seed_hydration(
     assert snapshot.model.is_hydrated
     assert snapshot.model.seed.content == "header\n1\n2"
 
-    stored_snapshot = state_sync.get_snapshots([snapshot.snapshot_id], hydrate_seeds=False)[
-        snapshot.snapshot_id
-    ]
+    stored_snapshot = state_sync.get_snapshots([snapshot.snapshot_id])[snapshot.snapshot_id]
     assert isinstance(stored_snapshot.model, SeedModel)
     assert not stored_snapshot.model.is_hydrated
     assert stored_snapshot.model.seed.content == ""
-
-    stored_snapshot = state_sync.get_snapshots([snapshot.snapshot_id], hydrate_seeds=True)[
-        snapshot.snapshot_id
-    ]
-    assert isinstance(stored_snapshot.model, SeedModel)
-    assert stored_snapshot.model.is_hydrated
-    assert stored_snapshot.model.seed.content == "header\n1\n2"
 
 
 def test_nodes_exist(state_sync: EngineAdapterStateSync, make_snapshot: t.Callable):
@@ -2224,7 +2208,6 @@ def test_snapshot_batching(state_sync, mocker, make_snapshot):
                 "a",
                 "1",
                 "1",
-                None,
             ],
             [
                 make_snapshot(
@@ -2233,7 +2216,6 @@ def test_snapshot_batching(state_sync, mocker, make_snapshot):
                 "a",
                 "2",
                 "2",
-                None,
             ],
         ],
         [
@@ -2244,7 +2226,6 @@ def test_snapshot_batching(state_sync, mocker, make_snapshot):
                 "a",
                 "3",
                 "3",
-                None,
             ],
         ],
     ]
@@ -2278,14 +2259,6 @@ def test_seed_model_metadata_update(
 
     state_sync.push_snapshots([snapshot])
 
-    seed_query = (
-        exp.select("COUNT(*)")
-        .from_("sqlmesh._seeds")
-        .where(exp.column("version").eq(snapshot.version))
-    )
-
-    assert state_sync.engine_adapter.fetchone(seed_query)[0] == 1
-
     model = model.copy(update={"owner": "jen"})
     new_snapshot = make_snapshot(model)
     new_snapshot.previous_versions = snapshot.all_versions
@@ -2295,5 +2268,4 @@ def test_seed_model_metadata_update(
     assert snapshot.version == new_snapshot.version
 
     state_sync.push_snapshots([new_snapshot])
-    assert state_sync.engine_adapter.fetchone(seed_query)[0] == 1
     assert len(state_sync.get_snapshots([new_snapshot, snapshot])) == 2

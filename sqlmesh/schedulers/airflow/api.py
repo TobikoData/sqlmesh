@@ -123,11 +123,7 @@ def get_snapshots() -> Response:
             )
             return _success(common.SnapshotIdsResponse(snapshot_ids=existing_snapshot_ids))
 
-        hydrate_seeds = "hydrate_seeds" in request.args
-        snapshots = list(
-            state_sync.get_snapshots(snapshot_ids, hydrate_seeds=hydrate_seeds).values()
-        )
-
+        snapshots = list(state_sync.get_snapshots(snapshot_ids).values())
         return _success(common.SnapshotsResponse(snapshots=snapshots))
 
 

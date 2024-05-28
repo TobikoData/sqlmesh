@@ -10,7 +10,6 @@ from sqlalchemy.orm import Session
 
 from sqlmesh.core.engine_adapter import create_engine_adapter
 from sqlmesh.core.environment import EnvironmentNamingInfo
-from sqlmesh.core.model import SeedModel
 from sqlmesh.core.snapshot import (
     DeployabilityIndex,
     Snapshot,
@@ -148,15 +147,8 @@ class SnapshotEvaluationTarget(BaseTarget[commands.EvaluateCommandPayload], Pyda
             )
 
     def _get_command_payload(self, context: Context) -> t.Optional[commands.EvaluateCommandPayload]:
-        snapshot = self.snapshot
-        if isinstance(snapshot.node, SeedModel) and not snapshot.node.is_hydrated:
-            with util.scoped_state_sync() as state_sync:
-                snapshot = state_sync.get_snapshots([snapshot], hydrate_seeds=True)[
-                    snapshot.snapshot_id
-                ]
-
         return commands.EvaluateCommandPayload(
-            snapshot=snapshot,
+            snapshot=self.snapshot,
             parent_snapshots=self.parent_snapshots,
             start=self._get_start(context),
             end=self._get_end(context),
