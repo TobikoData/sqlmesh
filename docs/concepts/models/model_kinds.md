@@ -117,9 +117,69 @@ Depending on the target engine, models of the `INCREMENTAL_BY_TIME_RANGE` kind a
 | Postgres   | DELETE by time range, then INSERT         |
 | DuckDB     | DELETE by time range, then INSERT         |
 
+## INCREMENTAL_BY_PARTITION
+
+Models of the `INCREMENTAL_BY_PARTITION` kind are computed incrementally based on partition. A set of columns defines the model's partitioning key, and a partition is the group of rows with the same partitioning key value.
+
+This model kind is designed for the scenario where data rows should be loaded and updated as a group based on their shared value for the partitioning key. This kind may be used with any SQL engine; SQLMesh will automatically create partitioned tables on engines that support explicit table partitioning (e.g., [BigQuery](https://cloud.google.com/bigquery/docs/creating-partitioned-tables), [Databricks](https://docs.databricks.com/en/sql/language-manual/sql-ref-partition.html)).
+
+If a partitioning key in newly loaded data is not present in the model table, the new partitioning key and its data rows are inserted. If a partitioning key in newly loaded data is already present in the model table, **all the partitioning key's existing data rows in the model table are replaced** with the partitioning key's data rows in the newly loaded data. If a partitioning key is present in the model table but not present in the newly loaded data, the partitioning key's existing data rows are not modified and remain in the model table.
+
+This kind is a good fit for datasets that have the following traits:
+
+* The dataset's records can be grouped by a partitioning key.
+* Each record has a partitioning key associated with it.
+* It is appropriate to upsert records, so existing records can be overwritten by new arrivals when their partitioning keys match.
+* All existing records associated with a given partitioning key can be removed or overwritten when any new record has the partitioning key value.
+
+The column defining the partitioning key is specified in the model's `MODEL` DDL `partitioned_by` key. This example shows the `MODEL` DDL for an `INCREMENTAL_BY_PARTITION` model whose partition key is the row's value for the `region` column:
+
+```sql linenums="1" hl_lines="4"
+MODEL (
+  name db.events,
+  kind INCREMENTAL_BY_PARTITION,
+  partitioned_by region,
+);
+```
+
+Compound partition keys are also supported, such as `region` and `department`:
+
+```sql linenums="1" hl_lines="4"
+MODEL (
+  name db.events,
+  kind INCREMENTAL_BY_PARTITION,
+  partitioned_by (region, department),
+);
+```
+
+Date and/or timestamp column expressions are also supported (varies by SQL engine). This BigQuery example's partition key is based on the month each row's `event_date` occurred:
+
+```sql linenums="1" hl_lines="4"
+MODEL (
+  name db.events,
+  kind INCREMENTAL_BY_PARTITION,
+  partitioned_by DATETIME_TRUNC(event_date, MONTH)
+);
+```
+
+**Note**: Partial data [restatement](../plans.md#restatement-plans) is not supported for this model kind, which means that the entire table will be recreated from scratch if restated. This may lead to data loss, so data restatement is disabled for models of this kind by default.
+
+### Materialization strategy
+Depending on the target engine, models of the `INCREMENTAL_BY_PARTITION` kind are materialized using the following strategies:
+
+| Engine     | Strategy                                |
+|------------|-----------------------------------------|
+| Databricks | REPLACE WHERE by partitioning key       |
+| Spark      | INSERT OVERWRITE by partitioning key    |
+| Snowflake  | DELETE by partitioning key, then INSERT |
+| BigQuery   | DELETE by partitioning key, then INSERT |
+| Redshift   | DELETE by partitioning key, then INSERT |
+| Postgres   | DELETE by partitioning key, then INSERT |
+| DuckDB     | DELETE by partitioning key, then INSERT |
+
 ## INCREMENTAL_BY_UNIQUE_KEY
 
-Models of the `INCREMENTAL_BY_UNIQUE_KEY` kind are computed incrementally based on a unique key.
+Models of the `INCREMENTAL_BY_UNIQUE_KEY` kind are computed incrementally based on a key that is unique for each data row.
 
 If a key in newly loaded data is not present in the model table, the new data row is inserted. If a key in newly loaded data is already present in the model table, the existing row is updated with the new data. If a key is present in the model table but not present in the newly loaded data, its row is not modified and remains in the model table.
 
@@ -127,7 +187,7 @@ This kind is a good fit for datasets that have the following traits:
 
 * Each record has a unique key associated with it.
 * There is at most one record associated with each unique key.
-* It is appropriate to upsert records, so existing records can be overridden by new arrivals when their keys match.
+* It is appropriate to upsert records, so existing records can be overwritten by new arrivals when their keys match.
 
 A [Slowly Changing Dimension](../glossary.md#slowly-changing-dimension-scd) (SCD) is one approach that fits this description well. See the [SCD Type 2](#scd-type-2) model kind for a specific model kind for SCD Type 2 models.
 
@@ -320,9 +380,9 @@ SCD Type 2 is a model kind that supports [slowly changing dimensions](https://en
 
 SQLMesh achieves this by adding a `valid_from` and `valid_to` column to your model. The `valid_from` column is the timestamp that the record became valid (inclusive) and the `valid_to` column is the timestamp that the record became invalid (exclusive). The `valid_to` column is set to `NULL` for the latest record.
 
-Therefore you can use these models to not only tell you what the latest value is for a given record but also what the values were anytime in the past. Note that maintaining this history does come at a cost of increased storage and compute and this may not be a good fit for sources that change frequently since the history could get very large.
+Therefore, you can use these models to not only tell you what the latest value is for a given record but also what the values were anytime in the past. Note that maintaining this history does come at a cost of increased storage and compute and this may not be a good fit for sources that change frequently since the history could get very large.
 
-**Note**: Partial data [restatement](../plans.md#restatement-plans) is not supported for this model kind, which means that the entire table will be recreated from scratch if restated. This may lead to data loss, which is why data restatement is disabled for models of this kind by default.
+**Note**: Partial data [restatement](../plans.md#restatement-plans) is not supported for this model kind, which means that the entire table will be recreated from scratch if restated. This may lead to data loss, so data restatement is disabled for models of this kind by default.
 
 There are two ways to tracking changes: By Time (Recommended) or By Column.
 
