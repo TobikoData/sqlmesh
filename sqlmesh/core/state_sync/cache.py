@@ -52,12 +52,10 @@ class CachingStateSync(DelegatingStateSync):
         return snapshot
 
     def get_snapshots(
-        self,
-        snapshot_ids: t.Optional[t.Iterable[SnapshotIdLike]],
-        hydrate_seeds: bool = False,
+        self, snapshot_ids: t.Optional[t.Iterable[SnapshotIdLike]]
     ) -> t.Dict[SnapshotId, Snapshot]:
         if snapshot_ids is None:
-            return self.state_sync.get_snapshots(snapshot_ids, hydrate_seeds)
+            return self.state_sync.get_snapshots(snapshot_ids)
 
         existing = {}
         missing = set()
@@ -72,17 +70,10 @@ class CachingStateSync(DelegatingStateSync):
                 self.snapshot_cache[snapshot_id] = (False, expire_at)
                 missing.add(snapshot_id)
             elif snapshot:
-                if (
-                    hydrate_seeds
-                    and isinstance(snapshot.node, SeedModel)
-                    and not snapshot.node.is_hydrated
-                ):
-                    missing.add(snapshot_id)
-                else:
-                    existing[snapshot_id] = snapshot
+                existing[snapshot_id] = snapshot
 
         if missing:
-            existing.update(self.state_sync.get_snapshots(missing, hydrate_seeds))
+            existing.update(self.state_sync.get_snapshots(missing))
 
         for snapshot_id, snapshot in existing.items():
             cached = self._from_cache(snapshot_id, now)

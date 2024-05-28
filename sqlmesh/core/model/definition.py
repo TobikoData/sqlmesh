@@ -6,7 +6,6 @@ import logging
 import sys
 import types
 import typing as t
-from difflib import unified_diff
 from functools import cached_property
 from pathlib import Path
 
@@ -1135,6 +1134,7 @@ class SeedModel(_SqlBasedModel):
     kind: SeedKind
     seed: Seed
     column_hashes_: t.Optional[t.Dict[str, str]] = Field(default=None, alias="column_hashes")
+    derived_columns_to_types: t.Optional[t.Dict[str, exp.DataType]] = None
     is_hydrated: bool = True
     source_type: Literal["seed"] = "seed"
 
@@ -1147,6 +1147,11 @@ class SeedModel(_SqlBasedModel):
         execution_time: t.Optional[TimeLike] = None,
         **kwargs: t.Any,
     ) -> t.Iterator[QueryOrDF]:
+        if not self.is_hydrated:
+            return
+        yield from self.render_seed()
+
+    def render_seed(self) -> t.Iterator[QueryOrDF]:
         self._ensure_hydrated()
 
         date_columns = []
@@ -1179,29 +1184,15 @@ class SeedModel(_SqlBasedModel):
             )
             yield df
 
-    def text_diff(self, other: Node) -> str:
-        if not isinstance(other, SeedModel):
-            return super().text_diff(other)
-
-        other._ensure_hydrated()
-        self._ensure_hydrated()
-
-        return "\n".join(
-            (
-                super().text_diff(other),
-                *unified_diff(
-                    self.seed.content.split("\n"),
-                    other.seed.content.split("\n"),
-                ),
-            )
-        ).strip()
-
     @property
     def columns_to_types(self) -> t.Optional[t.Dict[str, exp.DataType]]:
         if self.columns_to_types_ is not None:
             return self.columns_to_types_
-        self._ensure_hydrated()
-        return self._reader.columns_to_types
+        if self.derived_columns_to_types is not None:
+            return self.derived_columns_to_types
+        if self.is_hydrated:
+            return self._reader.columns_to_types
+        return None
 
     @property
     def column_hashes(self) -> t.Dict[str, str]:
@@ -1254,6 +1245,9 @@ class SeedModel(_SqlBasedModel):
                 "seed": Seed(content=""),
                 "is_hydrated": False,
                 "column_hashes_": self.column_hashes,
+                "derived_columns_to_types": self.columns_to_types
+                if self.columns_to_types_ is None
+                else None,
             }
         )
 

@@ -1801,7 +1801,6 @@ def test_environment_catalog_mapping(init_and_plan_context: t.Callable):
             "physical.sqlmesh._environments",
             "physical.sqlmesh._intervals",
             "physical.sqlmesh._plan_dags",
-            "physical.sqlmesh._seeds",
             "physical.sqlmesh._snapshots",
             "physical.sqlmesh._versions",
         }
@@ -1822,7 +1821,6 @@ def test_environment_catalog_mapping(init_and_plan_context: t.Callable):
             "physical.sqlmesh._environments",
             "physical.sqlmesh._intervals",
             "physical.sqlmesh._plan_dags",
-            "physical.sqlmesh._seeds",
             "physical.sqlmesh._snapshots",
             "physical.sqlmesh._versions",
         }
@@ -1843,7 +1841,6 @@ def test_environment_catalog_mapping(init_and_plan_context: t.Callable):
             "physical.sqlmesh._environments",
             "physical.sqlmesh._intervals",
             "physical.sqlmesh._plan_dags",
-            "physical.sqlmesh._seeds",
             "physical.sqlmesh._snapshots",
             "physical.sqlmesh._versions",
         }
@@ -1865,7 +1862,6 @@ def test_environment_catalog_mapping(init_and_plan_context: t.Callable):
             "physical.sqlmesh._environments",
             "physical.sqlmesh._intervals",
             "physical.sqlmesh._plan_dags",
-            "physical.sqlmesh._seeds",
             "physical.sqlmesh._snapshots",
             "physical.sqlmesh._versions",
         }

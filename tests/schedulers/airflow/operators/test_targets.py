@@ -129,8 +129,6 @@ def test_evaluation_target_execute_seed_model(
 
     add_interval_mock.assert_called_once_with(snapshot, interval_ds, interval_ds, is_dev=False)
 
-    get_snapshots_mock.assert_called_once_with([snapshot], hydrate_seeds=True)
-
     evaluator_evaluate_mock.assert_called_once_with(
         snapshot,
         start=interval_ds,

@@ -8,7 +8,6 @@ from datetime import datetime
 from sqlmesh.core import constants as c
 from sqlmesh.core.console import Console, get_console
 from sqlmesh.core.environment import EnvironmentNamingInfo
-from sqlmesh.core.model import SeedModel
 from sqlmesh.core.notification_target import (
     NotificationEvent,
     NotificationTargetManager,
@@ -161,11 +160,6 @@ class Scheduler:
             self.snapshots[p_sid].name: self.snapshots[p_sid] for p_sid in snapshot.parents
         }
         snapshots[snapshot.name] = snapshot
-
-        if isinstance(snapshot.node, SeedModel) and not snapshot.node.is_hydrated:
-            snapshot = self.state_sync.get_snapshots([snapshot], hydrate_seeds=True)[
-                snapshot.snapshot_id
-            ]
 
         is_deployable = deployability_index.is_deployable(snapshot)
 

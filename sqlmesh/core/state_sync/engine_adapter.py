@@ -41,7 +41,6 @@ from sqlmesh.core.snapshot import (
     Intervals,
     Node,
     Snapshot,
-    SnapshotChangeCategory,
     SnapshotFingerprint,
     SnapshotId,
     SnapshotIdLike,
@@ -101,7 +100,6 @@ class EngineAdapterStateSync(CommonStateSyncMixin, StateSync):
     INTERVAL_BATCH_SIZE = 1000
     SNAPSHOT_BATCH_SIZE = 1000
     SNAPSHOT_MIGRATION_BATCH_SIZE = 500
-    SNAPSHOT_SEED_MIGRATION_BATCH_SIZE = 200
 
     def __init__(
         self,
@@ -117,7 +115,6 @@ class EngineAdapterStateSync(CommonStateSyncMixin, StateSync):
         self.console = console or get_console()
         self.snapshots_table = exp.table_("_snapshots", db=self.schema)
         self.environments_table = exp.table_("_environments", db=self.schema)
-        self.seeds_table = exp.table_("_seeds", db=self.schema)
         self.intervals_table = exp.table_("_intervals", db=self.schema)
         self.plan_dags_table = exp.table_("_plan_dags", db=self.schema)
         self.versions_table = exp.table_("_versions", db=self.schema)
@@ -144,12 +141,6 @@ class EngineAdapterStateSync(CommonStateSyncMixin, StateSync):
             "suffix_target": exp.DataType.build("text"),
             "catalog_name_override": exp.DataType.build("text"),
             "previous_finalized_snapshots": exp.DataType.build("text"),
-        }
-
-        self._seed_columns_to_types = {
-            "name": exp.DataType.build("text"),
-            "version": exp.DataType.build("text"),
-            "content": exp.DataType.build("text"),
         }
 
         self._interval_columns_to_types = {
@@ -210,30 +201,16 @@ class EngineAdapterStateSync(CommonStateSyncMixin, StateSync):
         if snapshots:
             self._push_snapshots(snapshots)
 
-    def _push_snapshots(
-        self, snapshots: t.Iterable[Snapshot], overwrite: bool = False, push_seeds: bool = True
-    ) -> None:
+    def _push_snapshots(self, snapshots: t.Iterable[Snapshot], overwrite: bool = False) -> None:
         if overwrite:
             snapshots = tuple(snapshots)
             self.delete_snapshots(snapshots)
 
-        seed_contents = []
         snapshots_to_store = []
 
         for snapshot in snapshots:
-            if isinstance(snapshot.node, SeedModel) and snapshot.change_category in (
-                SnapshotChangeCategory.BREAKING,
-                SnapshotChangeCategory.NON_BREAKING,
-            ):
+            if isinstance(snapshot.node, SeedModel):
                 seed_model = t.cast(SeedModel, snapshot.node)
-                if push_seeds:
-                    seed_contents.append(
-                        {
-                            "name": snapshot.name,
-                            "version": snapshot.version,
-                            "content": seed_model.seed.content,
-                        }
-                    )
                 snapshot = snapshot.copy(update={"node": seed_model.to_dehydrated()})
             snapshots_to_store.append(snapshot)
 
@@ -242,13 +219,6 @@ class EngineAdapterStateSync(CommonStateSyncMixin, StateSync):
             _snapshots_to_df(snapshots_to_store),
             columns_to_types=self._snapshot_columns_to_types,
         )
-
-        if push_seeds and seed_contents:
-            self.engine_adapter.insert_append(
-                self.seeds_table,
-                pd.DataFrame(seed_contents),
-                columns_to_types=self._seed_columns_to_types,
-            )
 
     def _update_versions(
         self,
@@ -350,10 +320,6 @@ class EngineAdapterStateSync(CommonStateSyncMixin, StateSync):
                             dev_table_only=bool(shared_version_snapshots),
                         )
                     )
-
-        seed_deletion_candidates = [t.snapshot for t in cleanup_targets if not t.dev_table_only]
-        if seed_deletion_candidates:
-            self._delete_seeds(seed_deletion_candidates)
 
         return cleanup_targets
 
@@ -464,7 +430,6 @@ class EngineAdapterStateSync(CommonStateSyncMixin, StateSync):
         self,
         snapshot_ids: t.Optional[t.Iterable[SnapshotIdLike]] = None,
         lock_for_update: bool = False,
-        hydrate_seeds: bool = False,
         batch_size: t.Optional[int] = None,
     ) -> t.Iterator[exp.Expression]:
         for where in (
@@ -482,19 +447,6 @@ class EngineAdapterStateSync(CommonStateSyncMixin, StateSync):
                 .from_(exp.to_table(self.snapshots_table).as_("snapshots"))
                 .where(where)
             )
-            if hydrate_seeds:
-                query = query.select(exp.column("content", table="seeds")).join(
-                    exp.to_table(self.seeds_table).as_("seeds"),
-                    on=exp.and_(
-                        exp.column("name", table="snapshots").eq(exp.column("name", table="seeds")),
-                        exp.column("version", table="snapshots").eq(
-                            exp.column("version", table="seeds")
-                        ),
-                    ),
-                    join_type="left",
-                )
-            else:
-                query = query.select(exp.Null().as_("content"))
             if lock_for_update:
                 query = query.lock(copy=False)
             yield query
@@ -503,7 +455,6 @@ class EngineAdapterStateSync(CommonStateSyncMixin, StateSync):
         self,
         snapshot_ids: t.Optional[t.Iterable[SnapshotIdLike]] = None,
         lock_for_update: bool = False,
-        hydrate_seeds: bool = False,
         hydrate_intervals: bool = True,
     ) -> t.Dict[SnapshotId, Snapshot]:
         """Fetches specified snapshots or all snapshots.
@@ -511,7 +462,6 @@ class EngineAdapterStateSync(CommonStateSyncMixin, StateSync):
         Args:
             snapshot_ids: The collection of snapshot like objects to fetch.
             lock_for_update: Lock the snapshot rows for future update
-            hydrate_seeds: Whether to hydrate seed snapshots with the content.
             hydrate_intervals: Whether to hydrate result snapshots with intervals.
 
         Returns:
@@ -521,14 +471,13 @@ class EngineAdapterStateSync(CommonStateSyncMixin, StateSync):
         duplicates: t.Dict[SnapshotId, Snapshot] = {}
         model_cache = ModelCache(self._context_path / c.CACHE)
 
-        for query in self._get_snapshots_expressions(snapshot_ids, lock_for_update, hydrate_seeds):
-            for serialized_snapshot, name, identifier, _, seed_content in self._fetchall(query):
+        for query in self._get_snapshots_expressions(snapshot_ids, lock_for_update):
+            for serialized_snapshot, name, identifier, _ in self._fetchall(query):
                 snapshot = parse_snapshot(
                     model_cache,
                     serialized_snapshot=serialized_snapshot,
                     name=name,
                     identifier=identifier,
-                    seed_content=seed_content,
                 )
                 snapshot_id = snapshot.snapshot_id
                 if snapshot_id in snapshots:
@@ -1000,7 +949,7 @@ class EngineAdapterStateSync(CommonStateSyncMixin, StateSync):
         """Rollback to the previous migration."""
         logger.info("Starting migration rollback.")
         tables = (self.snapshots_table, self.environments_table, self.versions_table)
-        optional_tables = (self.seeds_table, self.intervals_table, self.plan_dags_table)
+        optional_tables = (self.intervals_table, self.plan_dags_table)
         versions = self.get_versions(validate=False)
         if versions.schema_version == 0:
             # Clean up state tables
@@ -1028,7 +977,6 @@ class EngineAdapterStateSync(CommonStateSyncMixin, StateSync):
             self.snapshots_table,
             self.environments_table,
             self.versions_table,
-            self.seeds_table,
             self.intervals_table,
             self.plan_dags_table,
         ):
@@ -1119,7 +1067,7 @@ class EngineAdapterStateSync(CommonStateSyncMixin, StateSync):
             ]
             if new_snapshots_to_push:
                 logger.info("Pushing %s migrated snapshots", len(new_snapshots_to_push))
-                self._push_snapshots(new_snapshots_to_push, push_seeds=False)
+                self._push_snapshots(new_snapshots_to_push)
             new_snapshots.clear()
             snapshot_id_mapping.clear()
 
@@ -1252,10 +1200,6 @@ class EngineAdapterStateSync(CommonStateSyncMixin, StateSync):
                 self.unpause_snapshots(updated_prod_environment.snapshots, now_timestamp())
             except Exception:
                 logger.warning("Failed to unpause migrated snapshots", exc_info=True)
-
-    def _delete_seeds(self, snapshots: t.Iterable[SnapshotNameVersionLike]) -> None:
-        for where in self._snapshot_name_version_filter(snapshots, alias=None):
-            self.engine_adapter.delete_from(self.seeds_table, where=where)
 
     def _snapshot_ids_exist(
         self, snapshot_ids: t.Iterable[SnapshotIdLike], table_name: exp.Table
@@ -1470,7 +1414,6 @@ def parse_snapshot(
     serialized_snapshot: str,
     name: str,
     identifier: str,
-    seed_content: t.Optional[str],
 ) -> Snapshot:
     payload = json.loads(serialized_snapshot)
 
@@ -1479,9 +1422,6 @@ def parse_snapshot(
 
     payload["node"] = model_cache.get_or_load(f"{name}_{identifier}", loader=loader)  # type: ignore
     snapshot = Snapshot(**payload)
-
-    if seed_content and isinstance(snapshot.node, SeedModel):
-        snapshot.node = snapshot.node.to_hydrated(seed_content)
 
     return snapshot
 

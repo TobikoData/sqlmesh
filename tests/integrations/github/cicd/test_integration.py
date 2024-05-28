@@ -1562,16 +1562,7 @@ def test_overlapping_changes_models(
 ```
 - `sushi.waiter_names`
 ```diff
---- 
 
-+++ 
-
-@@ -9,4 +9,5 @@
-
- 7,Iaroslav
- 8,Emma
- 9,Maia
-+10,Trey
 ```
 
 **Indirectly Modified:**

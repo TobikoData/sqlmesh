@@ -233,11 +233,7 @@ class AirflowClient(BaseAirflowClient):
         )
         raise_for_status(response)
 
-    def get_snapshots(
-        self, snapshot_ids: t.Optional[t.List[SnapshotId]], hydrate_seeds: bool = False
-    ) -> t.List[Snapshot]:
-        flags = ["hydrate_seeds"] if hydrate_seeds else []
-
+    def get_snapshots(self, snapshot_ids: t.Optional[t.List[SnapshotId]]) -> t.List[Snapshot]:
         output = []
 
         if snapshot_ids is not None:
@@ -246,12 +242,12 @@ class AirflowClient(BaseAirflowClient):
             ):
                 output.extend(
                     common.SnapshotsResponse.parse_obj(
-                        self._get(SNAPSHOTS_PATH, *flags, ids=ids_batch)
+                        self._get(SNAPSHOTS_PATH, ids=ids_batch)
                     ).snapshots
                 )
             return output
 
-        return common.SnapshotsResponse.parse_obj(self._get(SNAPSHOTS_PATH, *flags)).snapshots
+        return common.SnapshotsResponse.parse_obj(self._get(SNAPSHOTS_PATH)).snapshots
 
     def snapshots_exist(self, snapshot_ids: t.List[SnapshotId]) -> t.Set[SnapshotId]:
         output = set()
