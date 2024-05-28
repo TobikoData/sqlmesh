@@ -344,12 +344,6 @@ class _IncrementalBy(_Incremental):
         ]
 
 
-class IncrementalByPartitionKind(_Incremental):
-    name: Literal[ModelKindName.INCREMENTAL_BY_PARTITION] = ModelKindName.INCREMENTAL_BY_PARTITION
-    forward_only: Literal[True] = True
-    disable_restatement: SQLGlotBool = True
-
-
 class IncrementalByTimeRangeKind(_IncrementalBy):
     name: Literal[ModelKindName.INCREMENTAL_BY_TIME_RANGE] = ModelKindName.INCREMENTAL_BY_TIME_RANGE
     time_column: TimeColumn
@@ -411,6 +405,20 @@ class IncrementalByUniqueKeyKind(_IncrementalBy):
         ]
 
 
+class IncrementalByPartitionKind(_Incremental):
+    name: Literal[ModelKindName.INCREMENTAL_BY_PARTITION] = ModelKindName.INCREMENTAL_BY_PARTITION
+    forward_only: Literal[True] = True
+    disable_restatement: SQLGlotBool = True
+
+    @property
+    def metadata_hash_values(self) -> t.List[t.Optional[str]]:
+        return [
+            *super().metadata_hash_values,
+            str(self.forward_only),
+            str(self.disable_restatement),
+        ]
+
+
 class IncrementalUnmanagedKind(_Incremental):
     name: Literal[ModelKindName.INCREMENTAL_UNMANAGED] = ModelKindName.INCREMENTAL_UNMANAGED
     insert_overwrite: SQLGlotBool = False
@@ -423,7 +431,11 @@ class IncrementalUnmanagedKind(_Incremental):
 
     @property
     def metadata_hash_values(self) -> t.List[t.Optional[str]]:
-        return [*super().metadata_hash_values, str(self.forward_only)]
+        return [
+            *super().metadata_hash_values,
+            str(self.forward_only),
+            str(self.disable_restatement),
+        ]
 
 
 class ViewKind(_ModelKind):
