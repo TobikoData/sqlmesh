@@ -39,7 +39,14 @@ class CsvSettings(PydanticModel):
     def _str_validator(cls, v: t.Any) -> t.Optional[str]:
         if v is None or not isinstance(v, exp.Expression):
             return v
-        return v.this
+
+        v = v.this
+        if v == "\\t":
+            return "\t"
+        if v == "\\\\":
+            return "\\"
+
+        return v
 
 
 class CsvSeedReader:

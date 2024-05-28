@@ -895,14 +895,29 @@ def test_seed_with_special_characters_in_column(tmp_path, assert_exp_eq):
 
     model_csv_path = (tmp_path / "model.csv").absolute()
     with open(model_csv_path, "w", encoding="utf-8") as fd:
-        fd.write("col.\n123")
+        fd.write("col.\tcol!@#$\n123\tfoo")
 
-    model = create_seed_model("memory.test_db.test_model", SeedKind(path=str(model_csv_path)))
-    context.upsert_model(model)
+    expressions = d.parse(
+        f"""
+        MODEL (
+            name memory.test_db.test_model,
+            kind SEED (
+              path '{model_csv_path}',
+              csv_settings (
+                delimiter = '\\t'
+              )
+            ),
+        );
+    """
+    )
 
+    context.upsert_model(load_sql_based_model(expressions))
     assert_exp_eq(
         context.render("memory.test_db.test_model").sql(),
-        'SELECT CAST("col." AS BIGINT) AS "col." FROM (VALUES (123)) AS t("col.")',
+        "SELECT "
+        'CAST("col." AS BIGINT) AS "col.", '
+        'CAST("col!@#$" AS TEXT) AS "col!@#$" '
+        """FROM (VALUES (123, 'foo')) AS t("col.", "col!@#$")""",
     )
 
 
