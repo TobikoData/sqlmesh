@@ -472,7 +472,7 @@ class SnapshotEvaluator:
             batch_index: If the snapshot is part of a batch of related snapshots; which index in the batch is it
             kwargs: Additional kwargs to pass to the renderer.
         """
-        if not snapshot.is_model:
+        if not snapshot.is_model or snapshot.is_seed:
             return None
 
         model = snapshot.model
