@@ -7,6 +7,7 @@ from pathlib import Path
 
 import pandas as pd
 from sqlglot import exp
+from sqlglot.dialects.dialect import UNESCAPED_SEQUENCES
 from sqlglot.optimizer.normalize_identifiers import normalize_identifiers
 
 from sqlmesh.core.model.common import parse_bool
@@ -39,7 +40,11 @@ class CsvSettings(PydanticModel):
     def _str_validator(cls, v: t.Any) -> t.Optional[str]:
         if v is None or not isinstance(v, exp.Expression):
             return v
-        return v.this
+
+        # SQLGlot parses escape sequences like \t as \\t for dialects that don't treat \ as
+        # an escape character, so we map them back to the corresponding escaped sequence
+        v = v.this
+        return UNESCAPED_SEQUENCES.get(v, v)
 
 
 class CsvSeedReader:
