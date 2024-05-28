@@ -2027,14 +2027,14 @@ class EngineAdapter:
             columns_to_types = self.columns(target_table)
 
         temp_table = self._get_temp_table(target_table)
-        unique_exp = exp.func("CONCAT_WS", "'__SQLMESH_DELIM__'", *key)
+        key_exp = exp.func("CONCAT_WS", "'__SQLMESH_DELIM__'", *key)
         column_names = list(columns_to_types or [])
 
         with self.transaction():
             self.ctas(temp_table, source_table, columns_to_types=columns_to_types, exists=False)
 
             try:
-                delete_query = exp.select(unique_exp).from_(temp_table)
+                delete_query = exp.select(key_exp).from_(temp_table)
                 insert_query = self._select_columns(columns_to_types).from_(temp_table)
                 if not is_unique_key:
                     delete_query = delete_query.distinct()
@@ -2046,7 +2046,7 @@ class EngineAdapter:
                     target_table,
                     columns=column_names,
                 )
-                delete_filter = unique_exp.isin(query=delete_query)
+                delete_filter = key_exp.isin(query=delete_query)
 
                 if not self.INSERT_OVERWRITE_STRATEGY.is_replace_where:
                     self.execute(exp.delete(target_table).where(delete_filter))
