@@ -114,7 +114,7 @@ class ModelKindMixin:
     @property
     def only_execution_time(self) -> bool:
         """Whether or not this model only cares about execution time to render."""
-        return self.is_view or self.is_full or self.is_scd_type_2
+        return self.is_view or self.is_full
 
     @property
     def full_history_restatement_only(self) -> bool:
