@@ -96,9 +96,15 @@ def macro_evaluator() -> MacroEvaluator:
 
 def test_star(assert_exp_eq) -> None:
     sql = """SELECT @STAR(foo) FROM foo"""
-    expected_sql = """SELECT CAST([foo].[a] AS DATETIMEOFFSET) AS [a] FROM foo"""
+    expected_sql = """SELECT CAST([foo].[a] AS DATETIMEOFFSET) AS [a], CAST([foo].[b] AS INTEGER) AS [b] FROM foo"""
     schema = MappingSchema(
-        {"foo": {"a": exp.DataType.build("datetimeoffset", dialect="tsql")}}, dialect="tsql"
+        {
+            "foo": {
+                "a": exp.DataType.build("datetimeoffset", dialect="tsql"),
+                "b": "int",
+            },
+        },
+        dialect="tsql",
     )
     evaluator = MacroEvaluator(schema=schema, dialect="tsql")
     assert_exp_eq(evaluator.transform(parse_one(sql, read="tsql")), expected_sql, dialect="tsql")
