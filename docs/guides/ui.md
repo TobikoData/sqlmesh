@@ -18,7 +18,7 @@ Many developers edit code in an integrated development environment (IDE), such a
 
 The SQLMesh UI editor is not an IDE; it is a code editor for quickly updating models and writing ad-hoc SQL queries.
 
-For development work, we recommend using the SQLMesh UI alongside an IDE. The UI's modular design lets you suppress the UI's code editor while you edit code in the IDE. Learn more [below](#working-with-an-ide).
+For development work, we recommend using the SQLMesh UI alongside an IDE. The UI's modular design lets you mix and match UI components while you edit code in the IDE. Learn more [below](#working-with-an-ide).
 
 ## Setup
 
