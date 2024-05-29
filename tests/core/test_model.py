@@ -4450,6 +4450,8 @@ def test_incremental_by_partition(sushi_context, assert_exp_eq):
             """
         )
         load_sql_based_model(expressions)
+
+
 @pytest.mark.parametrize(
     ["model_def", "path", "assertion"],
     [
