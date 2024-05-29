@@ -126,7 +126,7 @@ The results appear in an interactive table in the details pane below the editor.
 
 ### Plan module
 
-The plan module provides a graphical interface for the `sqlmesh plan` command. Its actions change based on the current state of your SQLMesh project.
+The plan module provides a graphical interface for the `sqlmesh plan` command. Its actions change based on the current state of your SQLMesh project. For example, it will auto-update impact analysis based on the latest saved changes to a SQL model.
 
 Open the plan module by clicking the green circle button on the left-hand pane or the green Plan button on the top bar next to the environment dropdown.
 
