@@ -14,7 +14,6 @@ from sqlmesh.core.engine_adapter.shared import (
 )
 from sqlmesh.core.engine_adapter.spark import SparkEngineAdapter
 from sqlmesh.core.schema_diff import SchemaDiffer
-from sqlmesh.utils import classproperty
 from sqlmesh.utils.errors import SQLMeshError
 
 if t.TYPE_CHECKING:
@@ -47,12 +46,20 @@ class DatabricksEngineAdapter(SparkEngineAdapter):
         super().__init__(*args, **kwargs)
         self._spark: t.Optional[PySparkSession] = None
 
-    @classproperty
-    def can_access_spark_session(cls) -> bool:
+    @classmethod
+    def can_access_spark_session(cls, disable_spark_session: bool) -> bool:
         from sqlmesh import RuntimeEnv
 
-        if RuntimeEnv.get().is_databricks:
-            return True
+        if disable_spark_session:
+            return False
+
+        return RuntimeEnv.get().is_databricks
+
+    @classmethod
+    def can_access_databricks_connect(cls, disable_databricks_connect: bool) -> bool:
+        if disable_databricks_connect:
+            return False
+
         try:
             from databricks.connect import DatabricksSession  # noqa
 
@@ -62,19 +69,15 @@ class DatabricksEngineAdapter(SparkEngineAdapter):
 
     @property
     def _use_spark_session(self) -> bool:
-        from sqlmesh import RuntimeEnv
-
-        if RuntimeEnv.get().is_databricks:
+        if self.can_access_spark_session(bool(self._extra_config.get("disable_spark_session"))):
             return True
-        return (
-            self.can_access_spark_session
-            and {
-                "databricks_connect_server_hostname",
-                "databricks_connect_access_token",
-                "databricks_connect_cluster_id",
-            }.issubset(self._extra_config)
-            and not self._extra_config.get("disable_databricks_connect")
-        )
+        return self.can_access_databricks_connect(
+            bool(self._extra_config.get("disable_databricks_connect"))
+        ) and {
+            "databricks_connect_server_hostname",
+            "databricks_connect_access_token",
+            "databricks_connect_cluster_id",
+        }.issubset(self._extra_config)
 
     @property
     def is_spark_session_cursor(self) -> bool:
@@ -97,11 +100,15 @@ class DatabricksEngineAdapter(SparkEngineAdapter):
         from databricks.connect import DatabricksSession
 
         if self._spark is None:
-            self._spark = DatabricksSession.builder.remote(
-                host=self._extra_config["databricks_connect_server_hostname"],
-                token=self._extra_config["databricks_connect_access_token"],
-                cluster_id=self._extra_config["databricks_connect_cluster_id"],
-            ).getOrCreate()
+            self._spark = (
+                DatabricksSession.builder.remote(
+                    host=self._extra_config["databricks_connect_server_hostname"],
+                    token=self._extra_config["databricks_connect_access_token"],
+                    cluster_id=self._extra_config["databricks_connect_cluster_id"],
+                )
+                .userAgent("sqlmesh")
+                .getOrCreate()
+            )
             catalog = self._extra_config.get("catalog")
             if catalog:
                 self.set_current_catalog(catalog)

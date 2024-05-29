@@ -506,6 +506,7 @@ class DatabricksConnectionConfig(ConnectionConfig):
             Defaults to deriving the cluster id from the `http_path` value.
         force_databricks_connect: Force all queries to run using Databricks Connect instead of the SQL connector.
         disable_databricks_connect: Even if databricks connect is installed, do not use it.
+        disable_spark_session: Do not use SparkSession if it is available (like when running in a notebook).
         pre_ping: Whether or not to pre-ping the connection before starting a new transaction to ensure it is still alive.
     """
 
@@ -520,6 +521,7 @@ class DatabricksConnectionConfig(ConnectionConfig):
     databricks_connect_cluster_id: t.Optional[str] = None
     force_databricks_connect: bool = False
     disable_databricks_connect: bool = False
+    disable_spark_session: bool = False
 
     concurrent_tasks: int = 1
     register_comments: bool = True
@@ -533,12 +535,11 @@ class DatabricksConnectionConfig(ConnectionConfig):
     @model_validator(mode="before")
     @model_validator_v1_args
     def _databricks_connect_validator(cls, values: t.Dict[str, t.Any]) -> t.Dict[str, t.Any]:
-        from sqlmesh import RuntimeEnv
         from sqlmesh.core.engine_adapter.databricks import DatabricksEngineAdapter
 
-        runtime_env = RuntimeEnv.get()
-
-        if runtime_env.is_databricks:
+        if DatabricksEngineAdapter.can_access_spark_session(
+            bool(values.get("disable_spark_session"))
+        ):
             return values
         server_hostname, http_path, access_token = (
             values.get("server_hostname"),
@@ -549,7 +550,9 @@ class DatabricksConnectionConfig(ConnectionConfig):
             raise ValueError(
                 "`server_hostname`, `http_path`, and `access_token` are required for Databricks connections when not running in a notebook"
             )
-        if DatabricksEngineAdapter.can_access_spark_session:
+        if DatabricksEngineAdapter.can_access_databricks_connect(
+            bool(values.get("disable_databricks_connect"))
+        ):
             if not values.get("databricks_connect_server_hostname"):
                 values["databricks_connect_server_hostname"] = f"https://{server_hostname}"
             if not values.get("databricks_connect_access_token"):
@@ -580,14 +583,18 @@ class DatabricksConnectionConfig(ConnectionConfig):
         return {
             k: v
             for k, v in self.dict().items()
-            if k.startswith("databricks_connect_") or k in ("catalog", "disable_databricks_connect")
+            if k.startswith("databricks_connect_")
+            or k in ("catalog", "disable_databricks_connect", "disable_spark_session")
         }
 
     @property
     def use_spark_session_only(self) -> bool:
-        from sqlmesh import RuntimeEnv
+        from sqlmesh.core.engine_adapter.databricks import DatabricksEngineAdapter
 
-        return RuntimeEnv.get().is_databricks or self.force_databricks_connect
+        return (
+            DatabricksEngineAdapter.can_access_spark_session(self.disable_spark_session)
+            or self.force_databricks_connect
+        )
 
     @property
     def _connection_factory(self) -> t.Callable:
@@ -602,14 +609,14 @@ class DatabricksConnectionConfig(ConnectionConfig):
 
     @property
     def _static_connection_kwargs(self) -> t.Dict[str, t.Any]:
-        from sqlmesh import RuntimeEnv
+        from sqlmesh.core.engine_adapter.databricks import DatabricksEngineAdapter
 
         if not self.use_spark_session_only:
             return {
                 "_user_agent_entry": "sqlmesh",
             }
 
-        if RuntimeEnv.get().is_databricks:
+        if DatabricksEngineAdapter.can_access_spark_session(self.disable_spark_session):
             from pyspark.sql import SparkSession
 
             return dict(
