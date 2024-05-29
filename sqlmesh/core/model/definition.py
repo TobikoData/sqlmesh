@@ -1494,12 +1494,11 @@ def load_sql_based_model(
     name = meta_fields.pop("name", "")
 
     # If the sql file is under a schema directory infer the name from path
-    if (
-        (not name or not name.db)
-        and "models" in path.parts
-        and len(path.parts) - path.parts.index("models") == 3
-    ):
-        name = f"{path.parts[-2]}.{path.stem}"
+    if not name:
+        name = path.stem
+        subdirectories = path.parts[path.parts.index("models") + 1 : -1]
+        if subdirectories:
+            name = ".".join(subdirectories) + "." + name
 
     if not name:
         raise_config_error("Model must have a name", path)

@@ -4456,16 +4456,21 @@ def test_incremental_by_partition(sushi_context, assert_exp_eq):
     ["model_def", "path", "assertion"],
     [
         [
-            """name test_model,""",
+            """dialect snowflake,""",
             """models/test_schema/test_model.sql,""",
             "test_schema.test_model",
         ],
         [
             """dialect snowflake,""",
-            """models/test_schema/test_model.sql,""",
-            "test_schema.test_model",
+            """models/test_model.sql,""",
+            "test_model",
         ],
-        ["""name test_model,""", """models/test_model.sql,""", "test_model"],
+        [
+            """dialect snowflake,""",
+            """models/catalog1/catalog2/test_schema/test_model.sql,""",
+            "catalog1.catalog2.test_schema.test_model",
+        ],
+        ["""name test_model,""", """models/schema/test_model.sql,""", "test_model"],
     ],
 )
 def test_model_table_name_inference(
@@ -4483,5 +4488,4 @@ def test_model_table_name_inference(
         ),
         path=Path(f"$root/{path}"),
     )
-
     assert model.name == assertion
