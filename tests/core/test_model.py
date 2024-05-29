@@ -4450,3 +4450,36 @@ def test_incremental_by_partition(sushi_context, assert_exp_eq):
             """
         )
         load_sql_based_model(expressions)
+@pytest.mark.parametrize(
+    ["model_def", "path", "assertion"],
+    [
+        [
+            """name test_model,""",
+            """models/test_schema/test_model.sql,""",
+            "test_schema.test_model",
+        ],
+        [
+            """dialect snowflake,""",
+            """models/test_schema/test_model.sql,""",
+            "test_schema.test_model",
+        ],
+        ["""name test_model,""", """models/test_model.sql,""", "test_model"],
+    ],
+)
+def test_model_table_name_inference(
+    sushi_context: Context, model_def: str, path: str, assertion: str
+):
+    model = load_sql_based_model(
+        d.parse(
+            f"""
+        MODEL (
+            {model_def}
+        );
+        SELECT a FROM tbl;
+        """,
+            default_dialect="snowflake",
+        ),
+        path=Path(f"$root/{path}"),
+    )
+
+    assert model.name == assertion
