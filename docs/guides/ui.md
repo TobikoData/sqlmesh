@@ -16,7 +16,7 @@ Editing code is the primary activity when modifying SQLMesh projects.
 
 Many developers edit code in an integrated development environment (IDE), such as [VSCode](https://code.visualstudio.com/) or [PyCharm](https://www.jetbrains.com/pycharm/). IDEs include extensive editing functionality like auto-completion, customized key mappings, code validation, and embedded terminals.
 
-The SQLMesh UI editor is not an IDE; it is a relatively simple code editor for quickly updating models and writing ad-hoc SQL queries.
+The SQLMesh UI editor is not an IDE; it is a code editor for quickly updating models and writing ad-hoc SQL queries.
 
 For development work, we recommend using the SQLMesh UI alongside an IDE. The UI's modular design lets you suppress the UI's code editor while you edit code in the IDE. Learn more [below](#working-with-an-ide).
 
