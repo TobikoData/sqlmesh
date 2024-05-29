@@ -301,7 +301,7 @@ import typing as t
 from datetime import datetime
 
 import pandas as pd
-from snowwflake.snowpark.dataframe import DataFrame
+from snowflake.snowpark.dataframe import DataFrame
 
 from sqlmesh import ExecutionContext, model
 
