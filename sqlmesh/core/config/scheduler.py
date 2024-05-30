@@ -97,7 +97,30 @@ class _EngineAdapterStateSyncSchedulerConfig(_SchedulerConfig):
         state_connection = (
             context.config.get_state_connection(context.gateway) or context._connection_config
         )
-        return md5([state_connection.json(sort_keys=True)])
+        return md5(
+            [
+                state_connection.json(
+                    sort_keys=True,
+                    exclude={
+                        "access_token",
+                        "concurrent_tasks",
+                        "user",
+                        "password",
+                        "keytab",
+                        "keyfile",
+                        "keyfile_json",
+                        "pre_ping",
+                        "principal",
+                        "private_key",
+                        "private_key_passphrase",
+                        "private_key_path",
+                        "refresh_token",
+                        "register_comments",
+                        "token",
+                    },
+                )
+            ]
+        )
 
 
 class BuiltInSchedulerConfig(_EngineAdapterStateSyncSchedulerConfig, BaseConfig):
