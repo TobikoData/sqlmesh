@@ -843,11 +843,18 @@ class SQLMeshMagics(Magics):
         )
 
     @magic_arguments()
+    @argument(
+        "--skip-connection",
+        action="store_true",
+        help="Include unmodified models in the target environment.",
+        default=False,
+    )
     @line_magic
     @pass_sqlmesh_context
     def info(self, context: Context, line: str) -> None:
         """Display SQLMesh project information."""
-        context.print_info()
+        args = parse_argstring(self.info, line)
+        context.print_info(skip_connection=args.skip_connection)
 
     @magic_arguments()
     @line_magic
