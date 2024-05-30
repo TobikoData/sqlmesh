@@ -17,14 +17,11 @@ from sqlmesh.core.model.definition import (
     get_model_name,
 )
 from sqlmesh.core.model.kind import ModelKindName, _ModelKind
-from sqlmesh.utils import registry_decorator
+from sqlmesh.utils import registry_decorator, DECORATOR_RETURN_TYPE
 from sqlmesh.utils.errors import ConfigError
 from sqlmesh.utils.metaprogramming import build_env, serialize_env
 
 logger = logging.getLogger(__name__)
-
-
-DECORATOR_RETURN_TYPE = t.TypeVar("DECORATOR_RETURN_TYPE")
 
 
 class model(registry_decorator):
@@ -38,8 +35,17 @@ class model(registry_decorator):
     ) -> t.Callable[..., DECORATOR_RETURN_TYPE]:
         self.name = self.name or get_model_name(Path(inspect.getfile(func)))
 
-        if not self.name:
-            raise ConfigError("Python model must have a name.")
+        kind = self.kwargs.get("kind", None)
+        if kind is not None:
+            if isinstance(kind, _ModelKind):
+                logger.warning(
+                    f"""Python model "{self.name}"'s `kind` argument was passed a SQLMesh `{type(kind).__name__}` object. This may result in unexpected behavior - provide a dictionary instead."""
+                )
+            elif isinstance(kind, dict):
+                if "name" not in kind or not isinstance(kind.get("name"), ModelKindName):
+                    raise ConfigError(
+                        f"""Python model "{self.name}"'s `kind` dictionary must contain a `name` key with a valid ModelKindName enum value."""
+                    )
 
         return super().__call__(func)
 
@@ -47,18 +53,7 @@ class model(registry_decorator):
         if not is_sql and "columns" not in kwargs:
             raise ConfigError("Python model must define column schema.")
 
-        kind = kwargs.get("kind", None)
-        if kind is not None:
-            if isinstance(kind, _ModelKind):
-                logger.warning(
-                    f"""Python model "{name}"'s `kind` argument was passed a SQLMesh `{type(kind).__name__}` object. This may result in unexpected behavior - provide a dictionary instead."""
-                )
-            elif isinstance(kind, dict):
-                if "name" not in kind or not isinstance(kind.get("name"), ModelKindName):
-                    raise ConfigError(
-                        f"""Python model "{name}"'s `kind` dictionary must contain a `name` key with a valid ModelKindName enum value."""
-                    )
-
+        # Set the name to an empty string, allowing __call__ method to infer the name based on the model's path
         self.name = name or ""
         self.is_sql = is_sql
         self.kwargs = kwargs

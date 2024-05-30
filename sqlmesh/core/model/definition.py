@@ -1491,7 +1491,7 @@ def load_sql_based_model(
     if isinstance(meta_fields.get("dialect"), exp.Expression):
         meta_fields["dialect"] = meta_fields["dialect"].name
 
-    # If the sql file is under a schema directory infer the name from path
+    # The name of the model will be inferred from its path relative to `models/`, if it's not explicitly specified
     name = meta_fields.pop("name", "") or get_model_name(path)
 
     if not name:
@@ -2127,9 +2127,5 @@ META_FIELD_CONVERTER: t.Dict[str, t.Callable] = {
 
 
 def get_model_name(path: Path) -> str:
-    name = path.stem
-    subdirectories = path.parts[path.parts.index("models") + 1 : -1]
-    if subdirectories:
-        subdirectories = subdirectories[-2:]
-        name = ".".join(subdirectories) + "." + name
-    return name
+    path_parts = list(path.parts[path.parts.index("models") + 1 : -1]) + [path.stem]
+    return ".".join(path_parts[-3:])

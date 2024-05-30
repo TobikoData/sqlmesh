@@ -4453,7 +4453,7 @@ def test_incremental_by_partition(sushi_context, assert_exp_eq):
 
 
 @pytest.mark.parametrize(
-    ["model_def", "path", "assertion"],
+    ["model_def", "path", "expected_name"],
     [
         [
             """dialect duckdb,""",
@@ -4474,7 +4474,7 @@ def test_incremental_by_partition(sushi_context, assert_exp_eq):
     ],
 )
 def test_model_table_name_inference(
-    sushi_context: Context, model_def: str, path: str, assertion: str
+    sushi_context: Context, model_def: str, path: str, expected_name: str
 ):
     model = load_sql_based_model(
         d.parse(
@@ -4488,4 +4488,4 @@ def test_model_table_name_inference(
         ),
         path=Path(f"$root/{path}"),
     )
-    assert model.name == assertion
+    assert model.name == expected_name
