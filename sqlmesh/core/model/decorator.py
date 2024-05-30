@@ -3,13 +3,19 @@ from __future__ import annotations
 import logging
 import typing as t
 from pathlib import Path
+import inspect
 
 from sqlglot import exp
 from sqlglot.dialects.dialect import DialectType
 
 from sqlmesh.core import constants as c
 from sqlmesh.core.dialect import MacroFunc
-from sqlmesh.core.model.definition import Model, create_python_model, create_sql_model
+from sqlmesh.core.model.definition import (
+    Model,
+    create_python_model,
+    create_sql_model,
+    get_model_name,
+)
 from sqlmesh.core.model.kind import ModelKindName, _ModelKind
 from sqlmesh.utils import registry_decorator
 from sqlmesh.utils.errors import ConfigError
@@ -18,16 +24,26 @@ from sqlmesh.utils.metaprogramming import build_env, serialize_env
 logger = logging.getLogger(__name__)
 
 
+DECORATOR_RETURN_TYPE = t.TypeVar("DECORATOR_RETURN_TYPE")
+
+
 class model(registry_decorator):
     """Specifies a function is a python based model."""
 
     registry_name = "python_models"
     _dialect: DialectType = None
 
-    def __init__(self, name: str, is_sql: bool = False, **kwargs: t.Any) -> None:
-        if not name:
+    def __call__(
+        self, func: t.Callable[..., DECORATOR_RETURN_TYPE]
+    ) -> t.Callable[..., DECORATOR_RETURN_TYPE]:
+        self.name = self.name or get_model_name(Path(inspect.getfile(func)))
+
+        if not self.name:
             raise ConfigError("Python model must have a name.")
 
+        return super().__call__(func)
+
+    def __init__(self, name: t.Optional[str] = None, is_sql: bool = False, **kwargs: t.Any) -> None:
         if not is_sql and "columns" not in kwargs:
             raise ConfigError("Python model must define column schema.")
 
@@ -43,7 +59,7 @@ class model(registry_decorator):
                         f"""Python model "{name}"'s `kind` dictionary must contain a `name` key with a valid ModelKindName enum value."""
                     )
 
-        self.name = name
+        self.name = name or ""
         self.is_sql = is_sql
         self.kwargs = kwargs
 

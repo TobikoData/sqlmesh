@@ -1491,14 +1491,8 @@ def load_sql_based_model(
     if isinstance(meta_fields.get("dialect"), exp.Expression):
         meta_fields["dialect"] = meta_fields["dialect"].name
 
-    name = meta_fields.pop("name", "")
-
     # If the sql file is under a schema directory infer the name from path
-    if not name:
-        name = path.stem
-        subdirectories = path.parts[path.parts.index("models") + 1 : -1]
-        if subdirectories:
-            name = ".".join(subdirectories) + "." + name
+    name = meta_fields.pop("name", "") or get_model_name(path)
 
     if not name:
         raise_config_error("Model must have a name", path)
@@ -2130,3 +2124,12 @@ META_FIELD_CONVERTER: t.Dict[str, t.Callable] = {
     "allow_partials": exp.convert,
     "signals": lambda values: exp.Tuple(expressions=values),
 }
+
+
+def get_model_name(path: Path) -> str:
+    name = path.stem
+    subdirectories = path.parts[path.parts.index("models") + 1 : -1]
+    if subdirectories:
+        subdirectories = subdirectories[-2:]
+        name = ".".join(subdirectories) + "." + name
+    return name
