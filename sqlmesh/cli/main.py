@@ -599,16 +599,21 @@ def fetchdf(ctx: click.Context, sql: str) -> None:
 
 
 @cli.command("info")
+@click.option(
+    "--skip-connection",
+    is_flag=True,
+    help="Skip the connection test.",
+)
 @click.pass_obj
 @error_handler
 @cli_analytics
-def info(obj: Context) -> None:
+def info(obj: Context, skip_connection: bool) -> None:
     """
     Print information about a SQLMesh project.
 
     Includes counts of project models and macros and connection tests for the data warehouse.
     """
-    obj.print_info()
+    obj.print_info(skip_connection=skip_connection)
 
 
 @cli.command("ui")
