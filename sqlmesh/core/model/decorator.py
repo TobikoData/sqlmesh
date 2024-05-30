@@ -24,6 +24,9 @@ from sqlmesh.utils.metaprogramming import build_env, serialize_env
 logger = logging.getLogger(__name__)
 
 
+DECORATOR_RETURN_TYPE = t.TypeVar("DECORATOR_RETURN_TYPE")
+
+
 class model(registry_decorator):
     """Specifies a function is a python based model."""
 
