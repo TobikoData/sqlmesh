@@ -846,7 +846,7 @@ class SQLMeshMagics(Magics):
     @argument(
         "--skip-connection",
         action="store_true",
-        help="Include unmodified models in the target environment.",
+        help="Skip the connection test.",
         default=False,
     )
     @line_magic
