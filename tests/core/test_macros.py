@@ -154,6 +154,14 @@ def test_macro_var(macro_evaluator):
     assert e.find(exp.Parameter) is e.selects[0]
     assert e.sql(dialect="snowflake") == "SELECT $1 FROM @path (FILE_FORMAT => bla.foo)"
 
+    macro_evaluator.locals = {"x": 1}
+    macro_evaluator.dialect = "snowflake"
+    e = parse_one("COPY INTO @'s3://example/foo_@{x}.csv' FROM a.b.c", read="snowflake")
+    assert (
+        macro_evaluator.transform(e).sql(dialect="snowflake")
+        == "COPY INTO 's3://example/foo_1.csv' FROM a.b.c"
+    )
+
 
 def test_macro_str_replace(macro_evaluator):
     expression = parse_one("""@'@val1, @val2'""")
