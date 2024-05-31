@@ -1791,6 +1791,7 @@ def create_external_model(
     *,
     dialect: t.Optional[str] = None,
     path: Path = Path(),
+    defaults: t.Optional[t.Dict[str, t.Any]] = None,
     **kwargs: t.Any,
 ) -> Model:
     """Creates an external model.
@@ -1804,6 +1805,7 @@ def create_external_model(
     return _create_model(
         ExternalModel,
         name,
+        defaults=defaults,
         dialect=dialect,
         path=path,
         kind=ModelKindName.EXTERNAL.value,

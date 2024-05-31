@@ -92,3 +92,23 @@ Files in the `external_models` directory must be `.yaml` files that follow the s
 When SQLMesh loads the definitions, it will first load the models defined in `external_models.yaml` (or `schema.yaml`) and  any models found in `external_models/*.yaml`.
 
 Therefore, you can use `sqlmesh create_external_models` to manage the `external_models.yaml` file and then put any models that need to be defined manually inside the `external_models/` directory.
+
+### External Audits
+It is possible to define [audits](../audits.md) on external models. This can be useful to check the data quality of upstream dependencies before your internal models evaluate.
+
+This example shows an external model with two audits.
+
+```yaml
+- name: raw.demographics
+  description: Table containing demographics information
+  audits:
+    - name: not_null
+      columns: "[customer_id]"
+    - name: accepted_range
+      column: zip
+      min_v: "'00000'"
+      max_v: "'99999'"
+  columns:
+    customer_id: int
+    zip: text
+```

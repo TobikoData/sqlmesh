@@ -2,10 +2,11 @@ import typing as t
 
 import pytest
 from pytest_mock.plugin import MockerFixture
-from sqlglot import parse_one
+from sqlglot import parse_one, parse
 
 from sqlmesh.core.context import Context
 from sqlmesh.core.environment import EnvironmentNamingInfo
+from sqlmesh.core.model import load_sql_based_model
 from sqlmesh.core.model.definition import SqlModel
 from sqlmesh.core.model.kind import (
     IncrementalByTimeRangeKind,
@@ -14,7 +15,7 @@ from sqlmesh.core.model.kind import (
 )
 from sqlmesh.core.node import IntervalUnit
 from sqlmesh.core.scheduler import Scheduler, compute_interval_params
-from sqlmesh.core.snapshot import Snapshot, SnapshotEvaluator
+from sqlmesh.core.snapshot import Snapshot, SnapshotEvaluator, SnapshotChangeCategory
 from sqlmesh.utils.date import to_datetime
 from sqlmesh.utils.errors import CircuitBreakerError
 
@@ -417,3 +418,43 @@ def test_intervals_with_end_date_on_model(mocker: MockerFixture, make_snapshot):
     # generate for future days to ensure no future batches are loaded
     snapshot_to_batches = scheduler.batches(start="2023-02-01", end="2023-02-28")
     assert len(snapshot_to_batches) == 0
+
+
+def test_external_model_audit(mocker, make_snapshot):
+    model = load_sql_based_model(
+        parse(  # type: ignore
+            """
+            MODEL (
+                name test_schema.test_model,
+                kind EXTERNAL,
+                columns (id int),
+                audits not_null(columns := id)
+            );
+
+            SELECT 1;
+            """
+        ),
+    )
+
+    snapshot = make_snapshot(model)
+    snapshot.categorize_as(SnapshotChangeCategory.BREAKING)
+
+    evaluator = SnapshotEvaluator(adapter=mocker.MagicMock())
+    spy = mocker.spy(evaluator, "_audit")
+
+    scheduler = Scheduler(
+        snapshots=[snapshot],
+        snapshot_evaluator=evaluator,
+        state_sync=mocker.MagicMock(),
+        max_workers=2,
+        default_catalog=None,
+    )
+
+    scheduler.run(
+        EnvironmentNamingInfo(),
+        "2022-01-01",
+        "2022-01-01",
+        "2022-01-30",
+    )
+
+    spy.assert_called_once()
