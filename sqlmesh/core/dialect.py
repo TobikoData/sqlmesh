@@ -416,7 +416,7 @@ def _parse_table_parts(
 
     if isinstance(table_arg, exp.Var) and table_arg.name.startswith(SQLMESH_MACRO_PREFIX):
         # Macro functions do not clash with the staged file syntax, so we can safely parse them
-        if "(" in table_arg.name:
+        if self._prev.token_type == TokenType.STRING or "(" in table_arg.name:
             self._retreat(index)
             return Parser._parse_table_parts(self, schema=schema, is_db_reference=is_db_reference)
 
