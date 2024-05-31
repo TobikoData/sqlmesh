@@ -1761,6 +1761,7 @@ def test_sushi(mark_gateway: t.Tuple[str, str], ctx: TestContext):
             },
             "raw_marketing": {
                 "table": "Table of marketing status.",
+                "column": {"customer_id": "Unique identifier of the customer"},
             },
             "top_waiters": {
                 "table": "View of top waiters.",
