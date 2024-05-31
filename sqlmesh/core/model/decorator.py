@@ -78,12 +78,6 @@ class model(registry_decorator):
             for column_name, column_type in self.kwargs.pop("columns", {}).items()
         }
 
-        for column_name in self.kwargs.get("column_descriptions", {}):
-            if column_name not in self.columns:
-                raise ConfigError(
-                    f"In Python model '{self.name}', a description is provided for '{column_name}' but it is not present in the `columns` specification."
-                )
-
     def model(
         self,
         *,

@@ -75,11 +75,31 @@ Some SQL engines support registering comments as metadata associated with a tabl
 
 SQLMesh will automatically register comments if the engine supports it and the [connection's `register_comments` configuration](../../reference/configuration.md#connection) is `true` (`true` by default). Engines vary in their support for comments - see [tables below](#engine-comment-support).
 
-#### Model comments
+#### Model comment
 
 SQLMesh will register a comment specified before the `MODEL` DDL block as the table comment in the underlying SQL engine. If the [`MODEL` DDL `description` field](#description) is also specified, SQLMesh will register it with the engine instead.
 
-SQLMesh will automatically detect comments in a query's column selections and register each column's final comment in the underlying SQL engine.
+#### Explicit column comments
+
+You may explicitly specify column comments in the `MODEL` DDL `column_descriptions` field.
+
+Specify them as an dictionary of key/value pairs separated by an equals sign `=`, where the column name is the key and the column comment is the value. For example:
+
+```sql linenums="1" hl_lines="4-6"
+MODEL (
+  name sushi.customer_total_revenue,
+  cron '@daily',
+  column_descriptions (
+    id = 'This is the ID column comment'
+  )
+);
+```
+
+If the `column_descriptions` key is present, SQLMesh will not detect and register inline column comments from the model query.
+
+#### Inline column comments
+
+If the `column_descriptions` key is not present in the `MODEL` definition, SQLMesh will automatically detect comments in a query's column selections and register each column's final comment in the underlying SQL engine.
 
 For example, the physical table created for the following model definition would have:
 
@@ -248,6 +268,9 @@ MODEL (
 
 ### description
 - Optional description of the model. Automatically registered as a table description/comment with the underlying SQL engine (if supported by the engine).
+
+### column_descriptions
+- Optional array of [key/value pairs](#explicit-column-comments). Automatically registered as colum descriptions/comments with the underlying SQL engine (if supported by the engine). If not present, [inline comments](#inline-column-comments) will automatically be registered.
 
 ### physical_properties (previously table_properties)
 - A key-value mapping of arbitrary properties specific to the target engine that are applied to the model table / view in the physical layer. For example:

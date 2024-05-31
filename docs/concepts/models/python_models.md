@@ -188,7 +188,7 @@ def execute(
 ### Basic
 The following is an example of a Python model returning a static Pandas DataFrame.
 
-**Note:** All of the [metadata](./overview.md#properties) field names are the same as those in the SQL `MODEL` DDL, other than the Python model only [`column_descriptions` field](./overview.md#python-models).
+**Note:** All of the [metadata](./overview.md#properties) field names are the same as those in the SQL `MODEL` DDL.
 
 ```python linenums="1"
 import typing as t

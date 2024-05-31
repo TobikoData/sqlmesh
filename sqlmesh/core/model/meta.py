@@ -214,6 +214,41 @@ class ModelMeta(_Node):
 
         return v
 
+    @field_validator("column_descriptions_", mode="before")
+    @field_validator_v1_args
+    def _column_descriptions_validator(
+        cls, vs: t.Any, values: t.Dict[str, t.Any]
+    ) -> t.Optional[t.Dict[str, str]]:
+        if vs is None:
+            return None
+
+        if isinstance(vs, exp.Paren):
+            vs = vs.flatten()
+
+        if isinstance(vs, (exp.Tuple, exp.Array)):
+            vs = vs.expressions
+
+        col_descriptions = (
+            vs
+            if isinstance(vs, dict)
+            else {
+                v.this.name: v.expression.alias_or_name
+                if isinstance(v, exp.EQ)
+                else v.alias_or_name
+                for v in vs
+            }
+        )
+
+        columns_to_types = values.get("columns_to_types_")
+        if columns_to_types:
+            for column_name in col_descriptions:
+                if column_name not in columns_to_types:
+                    raise ConfigError(
+                        f"In model '{values.get('name')}', a description is provided for column '{column_name}' but it is not a column in the model."
+                    )
+
+        return col_descriptions
+
     @field_validator("grains", "references", mode="before")
     @field_validator_v1_args
     def _refs_validator(cls, vs: t.Any, values: t.Dict[str, t.Any]) -> t.List[exp.Expression]:
