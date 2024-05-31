@@ -2677,8 +2677,18 @@ def test_pre_ping(mocker: MockerFixture, make_mocked_engine_adapter: t.Callable)
     adapter._connection_pool.get().close.assert_called_once()
 
 
+@pytest.mark.parametrize(
+    "partitioned_by",
+    [
+        ["DATETIME_TRUNC(ds, MONTH)", "b"],
+        ["b"],
+    ],
+)
 def test_insert_overwrite_by_partition_query(
-    make_mocked_engine_adapter: t.Callable, mocker: MockerFixture, make_temp_table_name: t.Callable
+    make_mocked_engine_adapter: t.Callable,
+    mocker: MockerFixture,
+    make_temp_table_name: t.Callable,
+    partitioned_by: t.List[str],
 ):
     adapter = make_mocked_engine_adapter(EngineAdapter)
 
@@ -2690,10 +2700,7 @@ def test_insert_overwrite_by_partition_query(
     adapter.insert_overwrite_by_partition(
         table_name,
         parse_one("SELECT a, ds, b FROM tbl"),
-        partitioned_by=[
-            d.parse_one("DATETIME_TRUNC(ds, MONTH)"),
-            d.parse_one("b"),
-        ],
+        partitioned_by=[d.parse_one(k) for k in partitioned_by],
         columns_to_types={
             "a": exp.DataType.build("int"),
             "ds": exp.DataType.build("DATETIME"),
@@ -2701,10 +2708,16 @@ def test_insert_overwrite_by_partition_query(
         },
     )
 
+    expected_delete_stmt = (
+        'DELETE FROM "test_schema"."test_table" WHERE CONCAT_WS(\'__SQLMESH_DELIM__\', DATETIME_TRUNC("ds", MONTH), "b") IN (SELECT DISTINCT CONCAT_WS(\'__SQLMESH_DELIM__\', DATETIME_TRUNC("ds", MONTH), "b") FROM "test_schema"."__temp_test_table_abcdefgh")'
+        if len(partitioned_by) > 1
+        else 'DELETE FROM "test_schema"."test_table" WHERE "b" IN (SELECT DISTINCT "b" FROM "test_schema"."__temp_test_table_abcdefgh")'
+    )
+
     sql_calls = to_sql_calls(adapter)
     assert sql_calls == [
         'CREATE TABLE "test_schema"."__temp_test_table_abcdefgh" AS SELECT "a", "ds", "b" FROM "tbl"',
-        'DELETE FROM "test_schema"."test_table" WHERE CONCAT_WS(\'__SQLMESH_DELIM__\', DATETIME_TRUNC("ds", MONTH), "b") IN (SELECT DISTINCT CONCAT_WS(\'__SQLMESH_DELIM__\', DATETIME_TRUNC("ds", MONTH), "b") FROM "test_schema"."__temp_test_table_abcdefgh")',
+        expected_delete_stmt,
         'INSERT INTO "test_schema"."test_table" ("a", "ds", "b") SELECT "a", "ds", "b" FROM "test_schema"."__temp_test_table_abcdefgh"',
         'DROP TABLE IF EXISTS "test_schema"."__temp_test_table_abcdefgh"',
     ]

@@ -28,15 +28,13 @@ def test_logical_merge(make_mocked_engine_adapter: t.Callable, mocker: MockerFix
             "ts": exp.DataType(this=exp.DataType.Type.TIMESTAMP),
             "val": exp.DataType(this=exp.DataType.Type.INT),
         },
-        unique_key=["id"],
+        unique_key=[parse_one("id")],
     )
 
     adapter.cursor.execute.assert_has_calls(
         [
             call('''CREATE TABLE "temporary" AS SELECT "id", "ts", "val" FROM "source"'''),
-            call(
-                """DELETE FROM "target" WHERE CONCAT_WS('__SQLMESH_DELIM__', "id") IN (SELECT CONCAT_WS('__SQLMESH_DELIM__', "id") FROM "temporary")"""
-            ),
+            call("""DELETE FROM "target" WHERE "id" IN (SELECT "id" FROM "temporary")"""),
             call(
                 'INSERT INTO "target" ("id", "ts", "val") SELECT DISTINCT ON ("id") "id", "ts", "val" FROM "temporary"'
             ),
@@ -53,7 +51,7 @@ def test_logical_merge(make_mocked_engine_adapter: t.Callable, mocker: MockerFix
             "ts": exp.DataType(this=exp.DataType.Type.TIMESTAMP),
             "val": exp.DataType(this=exp.DataType.Type.INT),
         },
-        unique_key=["id", "ts"],
+        unique_key=[parse_one("id"), parse_one("ts")],
     )
 
     adapter.cursor.execute.assert_has_calls(
