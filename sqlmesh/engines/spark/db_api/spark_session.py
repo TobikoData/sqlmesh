@@ -89,8 +89,12 @@ class SparkSessionConnection:
     def cursor(self) -> SparkSessionCursor:
         try:
             self.spark.sparkContext.setLocalProperty("spark.scheduler.pool", f"pool_{get_ident()}")
+            self.spark.conf.set("spark.sql.sources.partitionOverwriteMode", "dynamic")
+            self.spark.conf.set("hive.exec.dynamic.partition", "true")
+            self.spark.conf.set("hive.exec.dynamic.partition.mode", "nonstrict")
         except NotImplementedError:
-            # Databricks Connect does not support accessing the SparkContext
+            # Databricks Connect does not support accessing the SparkContext nor does it support
+            # setting dynamic partition overwrite since it uses replace where
             pass
         if self.catalog:
             from py4j.protocol import Py4JError
@@ -101,9 +105,6 @@ class SparkSessionConnection:
             # and shared clusters so we use the Databricks Unity only SQL command instead
             except Py4JError:
                 self.spark.sql(f"USE CATALOG {self.catalog}")
-        self.spark.conf.set("spark.sql.sources.partitionOverwriteMode", "dynamic")
-        self.spark.conf.set("hive.exec.dynamic.partition", "true")
-        self.spark.conf.set("hive.exec.dynamic.partition.mode", "nonstrict")
         return SparkSessionCursor(self.spark)
 
     def commit(self) -> None:
