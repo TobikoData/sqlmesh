@@ -308,6 +308,7 @@ class SqlMeshLoader(Loader):
                         project=config.project,
                         default_catalog=self._context.default_catalog,
                         variables=variables,
+                        name_inference=config.model_naming.name_inference,
                     )
 
                 model = cache.get_or_load_model(path, _load)
@@ -351,6 +352,7 @@ class SqlMeshLoader(Loader):
                             project=config.project,
                             default_catalog=self._context.default_catalog,
                             variables=variables,
+                            name_inference=config.model_naming.name_inference,
                         )
                         models[model.fqn] = model
             finally:

@@ -1692,26 +1692,38 @@ def test_python_model_decorator_kind() -> None:
 
     assert isinstance(python_model.kind, FullKind)
 
+    @model("kind_empty_dict", kind=dict(), columns={'"COL"': "int"})
+    def my_model(context):
+        pass
+
     # error if kind dict with no `name` key
     with pytest.raises(ConfigError, match="`kind` dictionary must contain a `name` key"):
+        python_model = model.get_registry()["kind_empty_dict"].model(
+            module_path=Path("."),
+            path=Path("."),
+        )
 
-        @model("kind_empty_dict", kind=dict(), columns={'"COL"': "int"})
-        def my_model(context):
-            pass
+    @model("kind_dict_badname", kind=dict(name="test"), columns={'"COL"': "int"})
+    def my_model_1(context):
+        pass
 
     # error if kind dict with `name` key whose type is not a ModelKindName enum
     with pytest.raises(ConfigError, match="with a valid ModelKindName enum value"):
+        python_model = model.get_registry()["kind_dict_badname"].model(
+            module_path=Path("."),
+            path=Path("."),
+        )
 
-        @model("kind_dict_badname", kind=dict(name="test"), columns={'"COL"': "int"})
-        def my_model(context):
-            pass
+    @model("kind_instance", kind=FullKind(), columns={'"COL"': "int"})
+    def my_model_2(context):
+        pass
 
     # warning if kind is ModelKind instance
     with patch.object(logger, "warning") as mock_logger:
-
-        @model("kind_instance", kind=FullKind(), columns={'"COL"': "int"})
-        def my_model(context):
-            pass
+        python_model = model.get_registry()["kind_instance"].model(
+            module_path=Path("."),
+            path=Path("."),
+        )
 
         assert (
             mock_logger.call_args[0][0]
@@ -4487,5 +4499,6 @@ def test_model_table_name_inference(
             default_dialect="duckdb",
         ),
         path=Path(f"$root/{path}"),
+        name_inference=True,
     )
     assert model.name == expected_name

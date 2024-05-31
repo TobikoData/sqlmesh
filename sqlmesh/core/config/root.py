@@ -26,6 +26,7 @@ from sqlmesh.core.config.format import FormatConfig
 from sqlmesh.core.config.gateway import GatewayConfig
 from sqlmesh.core.config.migration import MigrationConfig
 from sqlmesh.core.config.model import ModelDefaultsConfig
+from sqlmesh.core.config.naming import NameInferenceConfig as NameInferenceConfig
 from sqlmesh.core.config.plan import PlanConfig
 from sqlmesh.core.config.run import RunConfig
 from sqlmesh.core.config.scheduler import BuiltInSchedulerConfig, SchedulerConfig
@@ -111,6 +112,7 @@ class Config(BaseConfig):
     feature_flags: FeatureFlag = FeatureFlag()
     plan: PlanConfig = PlanConfig()
     migration: MigrationConfig = MigrationConfig()
+    model_naming: NameInferenceConfig = NameInferenceConfig()
     variables: t.Dict[str, t.Any] = {}
     disable_anonymized_analytics: bool = False
 

@@ -33,20 +33,6 @@ class model(registry_decorator):
     def __call__(
         self, func: t.Callable[..., DECORATOR_RETURN_TYPE]
     ) -> t.Callable[..., DECORATOR_RETURN_TYPE]:
-        self.name = self.name or get_model_name(Path(inspect.getfile(func)))
-
-        kind = self.kwargs.get("kind", None)
-        if kind is not None:
-            if isinstance(kind, _ModelKind):
-                logger.warning(
-                    f"""Python model "{self.name}"'s `kind` argument was passed a SQLMesh `{type(kind).__name__}` object. This may result in unexpected behavior - provide a dictionary instead."""
-                )
-            elif isinstance(kind, dict):
-                if "name" not in kind or not isinstance(kind.get("name"), ModelKindName):
-                    raise ConfigError(
-                        f"""Python model "{self.name}"'s `kind` dictionary must contain a `name` key with a valid ModelKindName enum value."""
-                    )
-
         return super().__call__(func)
 
     def __init__(self, name: t.Optional[str] = None, is_sql: bool = False, **kwargs: t.Any) -> None:
@@ -101,10 +87,31 @@ class model(registry_decorator):
         project: str = "",
         default_catalog: t.Optional[str] = None,
         variables: t.Optional[t.Dict[str, t.Any]] = None,
+        name_inference: t.Optional[bool] = False,
     ) -> Model:
         """Get the model registered by this function."""
         env: t.Dict[str, t.Any] = {}
         entrypoint = self.func.__name__
+        self.name = (
+            self.name
+            if not name_inference
+            else self.name or get_model_name(Path(inspect.getfile(self.func)))
+        )
+
+        if not self.name:
+            raise ConfigError("Python model must have a name.")
+
+        kind = self.kwargs.get("kind", None)
+        if kind is not None:
+            if isinstance(kind, _ModelKind):
+                logger.warning(
+                    f"""Python model "{self.name}"'s `kind` argument was passed a SQLMesh `{type(kind).__name__}` object. This may result in unexpected behavior - provide a dictionary instead."""
+                )
+            elif isinstance(kind, dict):
+                if "name" not in kind or not isinstance(kind.get("name"), ModelKindName):
+                    raise ConfigError(
+                        f"""Python model "{self.name}"'s `kind` dictionary must contain a `name` key with a valid ModelKindName enum value."""
+                    )
 
         build_env(self.func, env=env, name=entrypoint, path=module_path)
 

@@ -1404,6 +1404,7 @@ def load_sql_based_model(
     physical_schema_override: t.Optional[t.Dict[str, str]] = None,
     default_catalog: t.Optional[str] = None,
     variables: t.Optional[t.Dict[str, t.Any]] = None,
+    name_inference: t.Optional[bool] = False,
     **kwargs: t.Any,
 ) -> Model:
     """Load a model from a parsed SQLMesh model SQL file.
@@ -1492,7 +1493,11 @@ def load_sql_based_model(
         meta_fields["dialect"] = meta_fields["dialect"].name
 
     # The name of the model will be inferred from its path relative to `models/`, if it's not explicitly specified
-    name = meta_fields.pop("name", "") or get_model_name(path)
+    name = (
+        meta_fields.pop("name", "")
+        if not name_inference
+        else meta_fields.pop("name", "") or get_model_name(path)
+    )
 
     if not name:
         raise_config_error("Model must have a name", path)
