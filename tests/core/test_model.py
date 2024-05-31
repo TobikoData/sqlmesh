@@ -4499,6 +4499,6 @@ def test_model_table_name_inference(
             default_dialect="duckdb",
         ),
         path=Path(f"$root/{path}"),
-        name_inference=True,
+        infer_names=True,
     )
     assert model.name == expected_name

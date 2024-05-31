@@ -87,14 +87,14 @@ class model(registry_decorator):
         project: str = "",
         default_catalog: t.Optional[str] = None,
         variables: t.Optional[t.Dict[str, t.Any]] = None,
-        name_inference: t.Optional[bool] = False,
+        infer_names: t.Optional[bool] = False,
     ) -> Model:
         """Get the model registered by this function."""
         env: t.Dict[str, t.Any] = {}
         entrypoint = self.func.__name__
         self.name = (
             self.name
-            if not name_inference
+            if not infer_names
             else self.name or get_model_name(Path(inspect.getfile(self.func)))
         )
 
