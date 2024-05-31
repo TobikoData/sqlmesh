@@ -237,7 +237,7 @@ class ModelMeta(_Node):
             for column_name in col_descriptions:
                 if column_name not in columns_to_types:
                     raise ConfigError(
-                        f"In model '{values.get('name')}', a description is provided for column '{column_name}' but it is not a column in the model."
+                        f"In model '{values['name']}', a description is provided for column '{column_name}' but it is not a column in the model."
                     )
 
         return col_descriptions
