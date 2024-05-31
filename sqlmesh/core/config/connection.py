@@ -223,10 +223,15 @@ class MotherDuckConnectionConfig(BaseDuckDBConnectionConfig):
     @property
     def _static_connection_kwargs(self) -> t.Dict[str, t.Any]:
         """kwargs that are for execution config only"""
+        from sqlmesh import __version__
+
         connection_str = f"md:{self.database}"
         if self.token:
             connection_str += f"?motherduck_token={self.token}"
-        return {"database": connection_str}
+        return {
+            "database": connection_str,
+            "config": {"custom_user_agent": f"SQLMesh/{__version__}"},
+        }
 
 
 class DuckDBAttachOptions(BaseConfig):
