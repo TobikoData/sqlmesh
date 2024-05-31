@@ -62,7 +62,9 @@ class ModelMeta(_Node):
     default_catalog: t.Optional[str] = None
     depends_on_: t.Optional[t.Set[str]] = Field(default=None, alias="depends_on")
     columns_to_types_: t.Optional[t.Dict[str, exp.DataType]] = Field(default=None, alias="columns")
-    column_descriptions_: t.Optional[t.Dict[str, str]] = None
+    column_descriptions_: t.Optional[t.Dict[str, str]] = Field(
+        default=None, alias="column_descriptions"
+    )
     audits: t.List[AuditReference] = []
     grains: t.List[exp.Expression] = []
     references: t.List[exp.Expression] = []

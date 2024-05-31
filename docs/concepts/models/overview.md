@@ -105,6 +105,35 @@ FROM sushi.orders AS o
 GROUP BY o.customer_id;
 ```
 
+#### Python models
+
+[Python models](./python_models.md) are not parsed like SQL models, so column comments cannot be inferred from the model definition's inline comments.
+
+Instead, specify them in the `@model` decorator's `column_descriptions` key. Specify them in a dictionary whose keys are column names and values are the columns' comments. SQLMesh will error if a column name is present that is not also in the `columns` key.
+
+For example:
+
+```python linenums="1" hl_lines="8-10"
+from sqlmesh import ExecutionContext, model
+
+@model(
+    "my_model.name",
+    columns={
+        "column_name": "int",
+    },
+    column_descriptions={
+        "column_name": "The `column_name` column comment",
+    },
+)
+def execute(
+    context: ExecutionContext,
+    start: datetime,
+    end: datetime,
+    execution_time: datetime,
+    **kwargs: t.Any,
+) -> pd.DataFrame:
+```
+
 #### Comment registration by object type
 
 Only some tables/views have comments registered:

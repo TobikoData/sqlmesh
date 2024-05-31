@@ -297,7 +297,7 @@ class BaseModelConfig(GeneralConfig):
         return {
             "audits": [(test.name, {}) for test in self.tests],
             "columns": column_types_to_sqlmesh(self.columns, context.dialect) or None,
-            "column_descriptions_": column_descriptions_to_sqlmesh(self.columns) or None,
+            "column_descriptions": column_descriptions_to_sqlmesh(self.columns) or None,
             "depends_on": {
                 model.canonical_name(context) for model in model_context.refs.values()
             }.union({source.canonical_name(context) for source in model_context.sources.values()}),
