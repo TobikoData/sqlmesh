@@ -270,7 +270,7 @@ MODEL (
 - Optional description of the model. Automatically registered as a table description/comment with the underlying SQL engine (if supported by the engine).
 
 ### column_descriptions
-- Optional array of [key/value pairs](#explicit-column-comments). Automatically registered as colum descriptions/comments with the underlying SQL engine (if supported by the engine). If not present, [inline comments](#inline-column-comments) will automatically be registered.
+- Optional dictionary of [key/value pairs](#explicit-column-comments). Automatically registered as colum descriptions/comments with the underlying SQL engine (if supported by the engine). If not present, [inline comments](#inline-column-comments) will automatically be registered.
 
 ### physical_properties (previously table_properties)
 - A key-value mapping of arbitrary properties specific to the target engine that are applied to the model table / view in the physical layer. For example:
