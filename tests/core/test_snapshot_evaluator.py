@@ -1853,7 +1853,7 @@ def test_audit_wap(adapter_mock, make_snapshot):
     not_null_query = call_args[0][0][0]
     assert (
         not_null_query.sql(dialect="spark")
-        == "SELECT COUNT(*) FROM (SELECT * FROM (SELECT * FROM `spark_catalog`.`test_schema`.`test_table`.`branch_wap_test_wap_id` AS `branch_wap_test_wap_id`) AS `_q_0` WHERE `a` IS NULL) AS audit"
+        == "SELECT COUNT(*) FROM (SELECT * FROM (SELECT * FROM `spark_catalog`.`test_schema`.`test_table`.`branch_wap_test_wap_id` AS `branch_wap_test_wap_id`) AS `_q_0` WHERE `a` IS NULL AND TRUE) AS audit"
     )
 
     custom_audit_query = call_args[1][0][0]
