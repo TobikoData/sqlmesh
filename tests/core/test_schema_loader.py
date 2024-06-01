@@ -114,7 +114,7 @@ def test_no_internal_model_conversion(tmp_path: Path, make_snapshot, mocker: Moc
     model_a = SqlModel(name="a", query=parse_one("select * FROM model_b, tbl_c"))
     model_b = SqlModel(name="b", query=parse_one("select * FROM `tbl-d`", read="bigquery"))
 
-    schema_file = tmp_path / c.SCHEMA_YAML
+    schema_file = tmp_path / c.EXTERNAL_MODELS_DEFAULT_YAML
     create_schema_file(
         schema_file,
         {  # type: ignore
@@ -144,7 +144,7 @@ def test_missing_table(tmp_path: Path):
     context = Context(paths=[str(tmp_path.absolute())], config=config)
     model = SqlModel(name="a", query=parse_one("select * FROM tbl_source"))
 
-    schema_file = tmp_path / c.SCHEMA_YAML
+    schema_file = tmp_path / c.EXTERNAL_MODELS_YAML
     logger = logging.getLogger("sqlmesh.core.schema_loader")
     with patch.object(logger, "warning") as mock_logger:
         create_schema_file(
