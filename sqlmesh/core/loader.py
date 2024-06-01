@@ -183,9 +183,13 @@ class Loader(abc.ABC):
         models: UniqueKeyDict[str, Model] = UniqueKeyDict("models")
         for context_path, config in self._context.configs.items():
             schema_path = Path(context_path / c.SCHEMA_YAML)
+            external_models_default_path = context_path / c.EXTERNAL_MODELS_DEFAULT_YAML
             external_models_path = context_path / c.EXTERNAL_MODELS
 
             paths_to_load = []
+            if external_models_default_path.exists():
+                paths_to_load.append(external_models_default_path)
+
             if schema_path.exists():
                 paths_to_load.append(schema_path)
 

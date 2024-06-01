@@ -47,6 +47,7 @@ EXTERNAL_MODELS = "external_models"
 SEEDS = "seeds"
 TESTS = "tests"
 CACHE = ".cache"
+EXTERNAL_MODELS_DEFAULT_YAML = "external_models.yaml"
 SCHEMA_YAML = "schema.yaml"
 
 
