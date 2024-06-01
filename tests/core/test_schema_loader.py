@@ -11,7 +11,7 @@ from sqlmesh.core.config import Config, DuckDBConnectionConfig, GatewayConfig
 from sqlmesh.core.context import Context
 from sqlmesh.core.dialect import parse
 from sqlmesh.core.model import SqlModel, create_external_model, load_sql_based_model
-from sqlmesh.core.schema_loader import create_schema_file
+from sqlmesh.core.schema_loader import create_external_models_file
 from sqlmesh.core.snapshot import SnapshotChangeCategory
 from sqlmesh.utils.yaml import YAML
 
@@ -114,9 +114,9 @@ def test_no_internal_model_conversion(tmp_path: Path, make_snapshot, mocker: Moc
     model_a = SqlModel(name="a", query=parse_one("select * FROM model_b, tbl_c"))
     model_b = SqlModel(name="b", query=parse_one("select * FROM `tbl-d`", read="bigquery"))
 
-    schema_file = tmp_path / c.EXTERNAL_MODELS_DEFAULT_YAML
-    create_schema_file(
-        schema_file,
+    filename = tmp_path / c.EXTERNAL_MODELS_DEFAULT_YAML
+    create_external_models_file(
+        filename,
         {  # type: ignore
             "a": model_a,
             "b": model_b,
@@ -126,7 +126,7 @@ def test_no_internal_model_conversion(tmp_path: Path, make_snapshot, mocker: Moc
         "bigquery",
     )
 
-    with open(schema_file, "r", encoding="utf8") as fd:
+    with open(filename, "r", encoding="utf8") as fd:
         schema = YAML().load(fd)
 
     assert len(schema) == 2
@@ -144,11 +144,11 @@ def test_missing_table(tmp_path: Path):
     context = Context(paths=[str(tmp_path.absolute())], config=config)
     model = SqlModel(name="a", query=parse_one("select * FROM tbl_source"))
 
-    schema_file = tmp_path / c.EXTERNAL_MODELS_YAML
+    filename = tmp_path / c.EXTERNAL_MODELS_YAML
     logger = logging.getLogger("sqlmesh.core.schema_loader")
     with patch.object(logger, "warning") as mock_logger:
-        create_schema_file(
-            schema_file,
+        create_external_models_file(
+            filename,
             {"a": model},  # type: ignore
             context.engine_adapter,
             context.state_reader,
@@ -156,6 +156,6 @@ def test_missing_table(tmp_path: Path):
         )
     assert """Unable to get schema for '"tbl_source"'""" in mock_logger.call_args[0][0]
 
-    with open(schema_file, "r", encoding="utf8") as fd:
+    with open(filename, "r", encoding="utf8") as fd:
         schema = YAML().load(fd)
     assert len(schema) == 0
