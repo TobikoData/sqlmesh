@@ -7,12 +7,12 @@ from constants import DB_PATH  # type: ignore
 from sqlglot import exp
 
 from sqlmesh import ExecutionContext, model
-from sqlmesh.core.model import FullKind
+from sqlmesh.core.model import ModelKindName
 
 
 @model(
     "ibis.ibis_full_model_python",
-    kind=FullKind(),
+    kind=dict(name=ModelKindName.FULL),
     columns={
         "item_id": "int",
         "num_orders": "int",
@@ -33,7 +33,7 @@ def execute(
     con = ibis.duckdb.connect(DB_PATH)
 
     # retrieve table
-    incremental_model = con.table(name=upstream_model.name, schema=upstream_model.db)
+    incremental_model = con.table(name=upstream_model.name, database=upstream_model.db)
 
     # build query
     count = incremental_model.id.nunique()

@@ -17,7 +17,7 @@ def entrypoint(evaluator: MacroEvaluator) -> str:
     incremental_model = UnboundTable(
         name="incremental_model",
         schema={"id": "int32", "item_id": "int32", "ds": "varchar"},
-        namespace=Namespace(database="local", schema="ibis"),
+        namespace=Namespace(catalog="local", database="ibis"),
     ).to_expr()
 
     # build query
