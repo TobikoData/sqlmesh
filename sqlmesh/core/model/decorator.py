@@ -17,7 +17,7 @@ from sqlmesh.core.model.definition import (
     get_model_name,
 )
 from sqlmesh.core.model.kind import ModelKindName, _ModelKind
-from sqlmesh.utils import registry_decorator, DECORATOR_RETURN_TYPE
+from sqlmesh.utils import registry_decorator
 from sqlmesh.utils.errors import ConfigError
 from sqlmesh.utils.metaprogramming import build_env, serialize_env
 
@@ -30,16 +30,10 @@ class model(registry_decorator):
     registry_name = "python_models"
     _dialect: DialectType = None
 
-    def __call__(
-        self, func: t.Callable[..., DECORATOR_RETURN_TYPE]
-    ) -> t.Callable[..., DECORATOR_RETURN_TYPE]:
-        return super().__call__(func)
-
     def __init__(self, name: t.Optional[str] = None, is_sql: bool = False, **kwargs: t.Any) -> None:
         if not is_sql and "columns" not in kwargs:
             raise ConfigError("Python model must define column schema.")
 
-        # Set the name to an empty string, allowing __call__ method to infer the name based on the model's path
         self.name = name or ""
         self.is_sql = is_sql
         self.kwargs = kwargs
@@ -92,11 +86,9 @@ class model(registry_decorator):
         """Get the model registered by this function."""
         env: t.Dict[str, t.Any] = {}
         entrypoint = self.func.__name__
-        self.name = (
-            self.name
-            if not infer_names
-            else self.name or get_model_name(Path(inspect.getfile(self.func)))
-        )
+
+        if not self.name and infer_names:
+            self.name = get_model_name(Path(inspect.getfile(self.func)))
 
         if not self.name:
             raise ConfigError("Python model must have a name.")

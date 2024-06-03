@@ -1493,11 +1493,9 @@ def load_sql_based_model(
         meta_fields["dialect"] = meta_fields["dialect"].name
 
     # The name of the model will be inferred from its path relative to `models/`, if it's not explicitly specified
-    name = (
-        meta_fields.pop("name", "")
-        if not infer_names
-        else meta_fields.pop("name", "") or get_model_name(path)
-    )
+    name = meta_fields.pop("name", "")
+    if not name and infer_names:
+        name = get_model_name(path)
 
     if not name:
         raise_config_error("Model must have a name", path)

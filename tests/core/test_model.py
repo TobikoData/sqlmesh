@@ -11,15 +11,21 @@ import pytest
 from pytest_mock.plugin import MockerFixture
 from sqlglot import exp, parse_one
 from sqlglot.schema import MappingSchema
+from sqlmesh.cli.example_project import init_example_project
 
 from sqlmesh.core import constants as c
 from sqlmesh.core import dialect as d
-from sqlmesh.core.config import Config
-from sqlmesh.core.config.model import ModelDefaultsConfig
+from sqlmesh.core.config import (
+    Config,
+    DuckDBConnectionConfig,
+    NameInferenceConfig,
+    ModelDefaultsConfig,
+)
 from sqlmesh.core.context import Context, ExecutionContext
 from sqlmesh.core.dialect import parse
 from sqlmesh.core.macros import MacroEvaluator, macro
 from sqlmesh.core.model import (
+    PythonModel,
     FullKind,
     IncrementalByTimeRangeKind,
     IncrementalUnmanagedKind,
@@ -4502,3 +4508,37 @@ def test_model_table_name_inference(
         infer_names=True,
     )
     assert model.name == expected_name
+
+
+@pytest.mark.parametrize(
+    ["path", "expected_name"],
+    [
+        [
+            """models/test_schema/test_model.py""",
+            "test_schema.test_model",
+        ],
+        [
+            """models/inventory/db/test_schema/test_model.py""",
+            "db.test_schema.test_model",
+        ],
+    ],
+)
+def test_python_model_name_inference(tmp_path: Path, path: str, expected_name: str) -> None:
+    init_example_project(tmp_path, dialect="duckdb")
+    config = Config(
+        default_connection=DuckDBConnectionConfig(),
+        model_defaults=ModelDefaultsConfig(dialect="duckdb"),
+        model_naming=NameInferenceConfig(infer_names=True),
+    )
+
+    foo_py_file = tmp_path / path
+    foo_py_file.parent.mkdir(parents=True, exist_ok=True)
+    foo_py_file.write_text("""from sqlmesh import model
+@model(
+    columns={'"COL"': "int"},
+)
+def my_model(context, **kwargs):
+    pass""")
+    context = Context(paths=tmp_path, config=config)
+    assert context.get_model(expected_name).name == expected_name
+    assert isinstance(context.get_model(expected_name), PythonModel)

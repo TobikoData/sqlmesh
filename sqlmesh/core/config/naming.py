@@ -8,7 +8,7 @@ class NameInferenceConfig(BaseConfig):
 
     Args:
         infer_names: A flag indicating whether name inference is enabled.
-                        Default is False.
+
     """
 
     infer_names: bool = False

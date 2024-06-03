@@ -55,7 +55,7 @@ Configuration option for name inference. Learn more in the [model naming guide](
 
 | Option          | Description                                                                             |  Type   | Required |
 | --------------- | --------------------------------------------------------------------------------------- | :-----: | :------: |
-| `infer_names`   | Whether to automatically infer model names based on the directory structure (Default: true) | boolean |    N     |
+| `infer_names`   | Whether to automatically infer model names based on the directory structure (Default: `False`) | bool |    N     |
 
 
 ## Model kind properties
@@ -164,7 +164,7 @@ Top-level options inside the MODEL DDL:
 
 | Option        | Description                                                                                                                                                                                                                |    Type    | Required |
 | ------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | :--------: | :------: |
-| `name`        | The model name. Must include at least a qualifying schema (`<schema>.<model>`) and may include a catalog (`<catalog>.<schema>.<model>`).                                                                                   |    str     |    Y     |
+| `name`        | The model name. Must include at least a qualifying schema (`<schema>.<model>`) and may include a catalog (`<catalog>.<schema>.<model>`).                                                                                   |    str     |    N     |
 | `kind`        | The model kind. Must be `SEED`.                                                                                                                                                                                            |    str     |    Y     |
 | `columns`     | The column names and data types in the CSV file. Disables automatic inference of column names and types by the pandas CSV reader. NOTE: order of columns overrides the order specified in the CSV header row (if present). | array[str] |    N     |
 | `audits`      | SQLMesh [audits](../concepts/audits.md) that should run against the model's output                                                                                                                                         | array[str] |    N     |
