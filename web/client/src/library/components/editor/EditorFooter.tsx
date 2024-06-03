@@ -130,7 +130,8 @@ function getFileType(path?: string): FileType {
   if (path.startsWith('metrics')) return EnumFileType.Metric
   if (['config.yaml', 'config.yml', 'config.py'].includes(path))
     return EnumFileType.Config
-  if (['schema.yaml', 'schema.yml'].includes(path)) return EnumFileType.Schema
+  if (['external_models.yaml', 'schema.yaml'].includes(path))
+    return EnumFileType.Schema
 
   return EnumFileType.Unknown
 }

@@ -40,16 +40,16 @@ DEFAULT_LOG_FILE_DIR = "logs"
 """The default directory for log files."""
 
 AUDITS = "audits"
+CACHE = ".cache"
+EXTERNAL_MODELS = "external_models"
 MACROS = "macros"
 METRICS = "metrics"
 MODELS = "models"
-EXTERNAL_MODELS = "external_models"
 SEEDS = "seeds"
 TESTS = "tests"
-CACHE = ".cache"
-EXTERNAL_MODELS_DEFAULT_YAML = "external_models.yaml"
-SCHEMA_YAML = "schema.yaml"
 
+EXTERNAL_MODELS_YAML = "external_models.yaml"
+EXTERNAL_MODELS_DEPRECATED_YAML = "schema.yaml"
 
 DEFAULT_SCHEMA = "default"
 
