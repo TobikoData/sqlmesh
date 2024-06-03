@@ -26,10 +26,11 @@ def migrate(state_sync, **kwargs):  # type: ignore
     ):
         parsed_snapshot = json.loads(snapshot)
 
-        column_descriptions = parsed_snapshot["node"].pop("column_descriptions_", None)
-        if column_descriptions:
+        if "column_descriptions_" in parsed_snapshot["node"]:
             found_col_descriptions = True
-            parsed_snapshot["node"]["column_descriptions"] = column_descriptions
+            parsed_snapshot["node"]["column_descriptions"] = parsed_snapshot["node"].pop(
+                "column_descriptions_"
+            )
 
         new_snapshots.append(
             {
