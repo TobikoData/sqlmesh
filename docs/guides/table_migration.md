@@ -52,7 +52,7 @@ MODEL(
   kind INCREMENTAL_BY_TIME_RANGE ( -- or INCREMENTAL_BY_UNIQUE_KEY
     time_column table_time_column
   )
-)
+);
 
 SELECT
   col1,
