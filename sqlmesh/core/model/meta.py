@@ -229,7 +229,7 @@ class ModelMeta(_Node):
             vs = vs.expressions
 
         col_descriptions = (
-            vs if isinstance(vs, dict) else {v.this.name: v.expression.alias_or_name for v in vs}
+            vs if isinstance(vs, dict) else {v.this.name: v.expression.name for v in vs}
         )
 
         columns_to_types = values.get("columns_to_types_")
