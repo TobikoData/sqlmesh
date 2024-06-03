@@ -330,7 +330,7 @@ def create_builtin_globals(
     builtin_globals["is_incremental"] = lambda: is_incremental
 
     builtin_globals["builtins"] = AttributeDict(
-        {k: builtin_globals.get(k) for k in ("ref", "source", "config")}
+        {k: builtin_globals.get(k) for k in ("ref", "source", "config", "var")}
     )
 
     if engine_adapter is not None:
