@@ -17,7 +17,6 @@ from sqlmesh.core import constants as c
 from sqlmesh.core import dialect as d
 from sqlmesh.core.config import (
     Config,
-    DuckDBConnectionConfig,
     NameInferenceConfig,
     ModelDefaultsConfig,
 )
@@ -4526,7 +4525,6 @@ def test_model_table_name_inference(
 def test_python_model_name_inference(tmp_path: Path, path: str, expected_name: str) -> None:
     init_example_project(tmp_path, dialect="duckdb")
     config = Config(
-        default_connection=DuckDBConnectionConfig(),
         model_defaults=ModelDefaultsConfig(dialect="duckdb"),
         model_naming=NameInferenceConfig(infer_names=True),
     )
