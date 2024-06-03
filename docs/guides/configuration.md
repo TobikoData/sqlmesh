@@ -951,18 +951,13 @@ The `model_naming` configuration controls if model names are inferred based on t
 
 With `infer_names` set to true, model names are inferred based on their path. For example, a model located at `models/catalog/schema/model.sql` would be named `catalog.schema.model`. However, if a name is provided in the model definition, it will take precedence over the inferred name.
 
-Supported values:
-
-* `true`: Automatically infer model names based on the directory structure.
-* `false`: Do not infer model names automatically.
-
-Example showing default values:
+Example enabling name inference:
 
 === "YAML"
 
     ```yaml linenums="1"
     model_naming:
-      infer_names: false
+      infer_names: true
     ```
 
 === "Python"
@@ -972,7 +967,7 @@ Example showing default values:
 
     config = Config(
         model_naming=NameInferenceConfig(
-            infer_names=False
+            infer_names=True
         )
     )
     ```
