@@ -83,7 +83,7 @@ SQLMesh will register a comment specified before the `MODEL` DDL block as the ta
 
 You may explicitly specify column comments in the `MODEL` DDL `column_descriptions` field.
 
-Specify them as an dictionary of key/value pairs separated by an equals sign `=`, where the column name is the key and the column comment is the value. For example:
+Specify them as a dictionary of key/value pairs separated by an equals sign `=`, where the column name is the key and the column comment is the value. For example:
 
 ```sql linenums="1" hl_lines="4-6"
 MODEL (
