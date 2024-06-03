@@ -75,11 +75,31 @@ Some SQL engines support registering comments as metadata associated with a tabl
 
 SQLMesh will automatically register comments if the engine supports it and the [connection's `register_comments` configuration](../../reference/configuration.md#connection) is `true` (`true` by default). Engines vary in their support for comments - see [tables below](#engine-comment-support).
 
-#### Model comments
+#### Model comment
 
 SQLMesh will register a comment specified before the `MODEL` DDL block as the table comment in the underlying SQL engine. If the [`MODEL` DDL `description` field](#description) is also specified, SQLMesh will register it with the engine instead.
 
-SQLMesh will automatically detect comments in a query's column selections and register each column's final comment in the underlying SQL engine.
+#### Explicit column comments
+
+You may explicitly specify column comments in the `MODEL` DDL `column_descriptions` field.
+
+Specify them as a dictionary of key/value pairs separated by an equals sign `=`, where the column name is the key and the column comment is the value. For example:
+
+```sql linenums="1" hl_lines="4-6"
+MODEL (
+  name sushi.customer_total_revenue,
+  cron '@daily',
+  column_descriptions (
+    id = 'This is the ID column comment'
+  )
+);
+```
+
+If the `column_descriptions` key is present, SQLMesh will not detect and register inline column comments from the model query.
+
+#### Inline column comments
+
+If the `column_descriptions` key is not present in the `MODEL` definition, SQLMesh will automatically detect comments in a query's column selections and register each column's final comment in the underlying SQL engine.
 
 For example, the physical table created for the following model definition would have:
 
@@ -103,6 +123,35 @@ SELECT
   SUM(o.amount)::DOUBLE AS revenue -- Revenue from customer orders
 FROM sushi.orders AS o
 GROUP BY o.customer_id;
+```
+
+#### Python models
+
+[Python models](./python_models.md) are not parsed like SQL models, so column comments cannot be inferred from the model definition's inline comments.
+
+Instead, specify them in the `@model` decorator's `column_descriptions` key. Specify them in a dictionary whose keys are column names and values are the columns' comments. SQLMesh will error if a column name is present that is not also in the `columns` key.
+
+For example:
+
+```python linenums="1" hl_lines="8-10"
+from sqlmesh import ExecutionContext, model
+
+@model(
+    "my_model.name",
+    columns={
+        "column_name": "int",
+    },
+    column_descriptions={
+        "column_name": "The `column_name` column comment",
+    },
+)
+def execute(
+    context: ExecutionContext,
+    start: datetime,
+    end: datetime,
+    execution_time: datetime,
+    **kwargs: t.Any,
+) -> pd.DataFrame:
 ```
 
 #### Comment registration by object type
@@ -219,6 +268,9 @@ MODEL (
 
 ### description
 - Optional description of the model. Automatically registered as a table description/comment with the underlying SQL engine (if supported by the engine).
+
+### column_descriptions
+- Optional dictionary of [key/value pairs](#explicit-column-comments). Automatically registered as column descriptions/comments with the underlying SQL engine (if supported by the engine). If not present, [inline comments](#inline-column-comments) will automatically be registered.
 
 ### physical_properties (previously table_properties)
 - A key-value mapping of arbitrary properties specific to the target engine that are applied to the model table / view in the physical layer. For example:

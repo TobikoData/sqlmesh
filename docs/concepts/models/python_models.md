@@ -205,6 +205,10 @@ from sqlmesh import ExecutionContext, model
         "id": "int",
         "name": "text",
     },
+    column_descriptions={
+        "id": "Unique ID",
+        "name": "Name corresponding to the ID"
+    },
 )
 def execute(
     context: ExecutionContext,

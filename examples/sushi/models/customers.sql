@@ -5,7 +5,10 @@ MODEL (
   cron '@daily',
   tags (pii, fact),
   grain customer_id,
-  description 'Sushi customer data'
+  description 'Sushi customer data',
+  column_descriptions (
+    customer_id = 'customer_id uniquely identifies customers'
+  )
 );
 
 CREATE SCHEMA IF NOT EXISTS raw;
@@ -22,7 +25,7 @@ WITH current_marketing AS (
   WHERE valid_to is null
 )
 SELECT DISTINCT
-  o.customer_id::INT AS customer_id, -- customer_id uniquely identifies customers
+  o.customer_id::INT AS customer_id, -- this comment should not be registered
   m.status,
   d.zip
   FROM sushi.orders AS o
