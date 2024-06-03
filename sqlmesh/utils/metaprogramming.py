@@ -347,6 +347,9 @@ def serialize_env(env: t.Dict[str, t.Any], path: Path) -> t.Dict[str, Executable
         if callable(v):
             name = v.__name__
             name = k if name == "<lambda>" else name
+
+            # We can't call getfile on built-in callables
+            # https://docs.python.org/3/library/inspect.html#inspect.getfile
             file_path = Path(inspect.getfile(v)) if not inspect.isbuiltin(v) else None
 
             if _is_relative_to(file_path, path):
