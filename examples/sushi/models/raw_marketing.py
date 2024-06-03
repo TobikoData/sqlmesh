@@ -24,6 +24,9 @@ from sqlmesh.core.model.kind import ModelKindName
         "status": "text",
         "updated_at": "timestamp",
     },
+    column_descriptions={
+        "customer_id": "Unique identifier of the customer",
+    },
 )
 def execute(
     context: ExecutionContext,

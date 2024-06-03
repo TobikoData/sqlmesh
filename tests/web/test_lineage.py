@@ -42,7 +42,7 @@ WHERE
     assert response.json() == {
         '"memory"."sushi"."customers"': {
             "customer_id": {
-                "expression": 'CAST("o"."customer_id" AS INT) AS "customer_id" /* customer_id uniquely identifies customers */',
+                "expression": 'CAST("o"."customer_id" AS INT) AS "customer_id" /* this comment should not be registered */',
                 "models": {'"memory"."sushi"."orders"': ["customer_id"]},
                 "source": '''WITH "current_marketing" AS (
   SELECT
@@ -53,7 +53,7 @@ WHERE
     "marketing"."valid_to" IS NULL
 )
 SELECT DISTINCT
-  CAST("o"."customer_id" AS INT) AS "customer_id" /* customer_id uniquely identifies customers */
+  CAST("o"."customer_id" AS INT) AS "customer_id" /* this comment should not be registered */
 FROM "memory"."sushi"."orders" AS "o"
 LEFT JOIN "current_marketing" AS "m"
   ON "m"."customer_id" = "o"."customer_id"
