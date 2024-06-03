@@ -358,7 +358,7 @@ def serialize_env(env: t.Dict[str, t.Any], path: Path) -> t.Dict[str, Executable
                     payload=normalize_source(v),
                     kind=ExecutableKind.DEFINITION,
                     # Do `as_posix` to serialize windows path back to POSIX
-                    path=file_path.relative_to(path.absolute()).as_posix(),
+                    path=t.cast(Path, file_path).relative_to(path.absolute()).as_posix(),
                     alias=k if name != k else None,
                 )
             else:

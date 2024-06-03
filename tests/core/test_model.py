@@ -1525,7 +1525,7 @@ def test_python_model(assert_exp_eq) -> None:
         context.table(model_name=CONST + ".baz")
 
         # This checks that built-in functions are serialized properly
-        a = reduce(lambda x, y: x + y, [1, 2, 3, 4])
+        a = reduce(lambda x, y: x + y, [1, 2, 3, 4])  # noqa: F841
 
     m = model.get_registry()["my_model"].model(
         module_path=Path("."),
