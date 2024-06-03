@@ -16,6 +16,7 @@ def migrate(state_sync, **kwargs):  # type: ignore
         snapshots_table = f"{schema}.{snapshots_table}"
 
     new_snapshots = []
+    found_col_descriptions = False
 
     for name, identifier, version, snapshot, kind_name, expiration_ts in engine_adapter.fetchall(
         exp.select("name", "identifier", "version", "snapshot", "kind_name", "expiration_ts").from_(
@@ -25,10 +26,10 @@ def migrate(state_sync, **kwargs):  # type: ignore
     ):
         parsed_snapshot = json.loads(snapshot)
 
-        if "column_descriptions_" in parsed_snapshot["node"]:
-            parsed_snapshot["node"]["column_descriptions"] = parsed_snapshot["node"].pop(
-                "column_descriptions_"
-            )
+        column_descriptions = parsed_snapshot["node"].pop("column_descriptions_", None)
+        if column_descriptions:
+            found_col_descriptions = True
+            parsed_snapshot["node"]["column_descriptions"] = column_descriptions
 
         new_snapshots.append(
             {
@@ -41,7 +42,7 @@ def migrate(state_sync, **kwargs):  # type: ignore
             }
         )
 
-    if new_snapshots:
+    if found_col_descriptions:
         engine_adapter.delete_from(snapshots_table, "TRUE")
 
         index_type = index_text_type(engine_adapter.dialect)
