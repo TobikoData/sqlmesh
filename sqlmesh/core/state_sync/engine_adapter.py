@@ -1394,6 +1394,7 @@ def _environment_to_df(environment: Environment) -> pd.DataFrame:
                     if environment.previous_finalized_snapshots is not None
                     else None
                 ),
+                "normalize_name": environment.normalize_name,
             }
         ]
     )

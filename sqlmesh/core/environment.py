@@ -24,41 +24,43 @@ class EnvironmentNamingInfo(PydanticModel):
         name: The name of the environment.
         suffix_target: Indicates whether to append the environment name to the schema or table name.
         catalog_name_override: The name of the catalog to use for this environment if an override was provided
-
+        normalize_name: Indicates whether the environment's name will be normalized. For example, if it's
+            `dev`, then it will become `DEV` when targeting Snowflake.
     """
 
     name: str = c.PROD
     suffix_target: EnvironmentSuffixTarget = Field(default=EnvironmentSuffixTarget.SCHEMA)
     catalog_name_override: t.Optional[str] = None
+    normalize_name: t.Optional[bool] = None
 
     @field_validator("name", mode="before")
     @classmethod
-    def _normalize_name(cls, v: str) -> str:
+    def _sanitize_name(cls, v: str) -> str:
         return word_characters_only(v).lower()
 
     @t.overload
     @classmethod
-    def normalize_name(cls, v: str) -> str: ...
+    def sanitize_name(cls, v: str) -> str: ...
 
     @t.overload
     @classmethod
-    def normalize_name(cls, v: Environment) -> Environment: ...
+    def sanitize_name(cls, v: Environment) -> Environment: ...
 
     @classmethod
-    def normalize_name(cls, v: str | Environment) -> str | Environment:
+    def sanitize_name(cls, v: str | Environment) -> str | Environment:
         """
-        Normalizes the environment name so we create names that are valid names for database objects.
+        Sanitizes the environment name so we create names that are valid names for database objects.
         This means alphanumeric and underscores only. Invalid characters are replaced with underscores.
         """
         if isinstance(v, Environment):
             return v
         if not isinstance(v, str):
             raise TypeError(f"Expected str or Environment, got {type(v).__name__}")
-        return cls._normalize_name(v)
+        return cls._sanitize_name(v)
 
     @classmethod
-    def normalize_names(cls, values: t.Iterable[str]) -> t.Set[str]:
-        return {cls.normalize_name(value) for value in values}
+    def sanitize_names(cls, values: t.Iterable[str]) -> t.Set[str]:
+        return {cls.sanitize_name(value) for value in values}
 
     @classmethod
     def from_environment_catalog_mapping(
