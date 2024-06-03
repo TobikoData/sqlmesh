@@ -150,7 +150,7 @@ Learn more about these properties and their default values in the [model configu
 ### name
 - `name` specifies the name of the model. This name represents the production view name that the model outputs, so it generally takes the form of `"schema"."view_name"`. The name of a model must be unique in a SQLMesh project.<br /><br />
 When models are used in non-production environments, SQLMesh automatically prefixes the names. For example, consider a model named `"sushi"."customers"`. In production its view is named `"sushi"."customers"`, and in dev its view is named `"sushi__dev"."customers"`.<br /><br />
-Name is ***required*** and must be ***unique***.
+Name is ***required*** and must be ***unique***, unless [name inference](../../reference/model_configuration.md#model-naming) is enabled.
 
 ### kind
 - Kind specifies what [kind](model_kinds.md) a model is. A model's kind determines how it is computed and stored. The default kind is `VIEW`, which means a view is created and your query is run each time that view is accessed. See [below](#incremental-model-properties) for properties that apply to incremental model kinds.

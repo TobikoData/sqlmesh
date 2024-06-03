@@ -10,7 +10,7 @@ Configuration options for SQLMesh model properties. Supported by all model kinds
 
 | Option                | Description                                                                                                                                                                                                                                                                                      |       Type        | Required |
 | --------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ | :---------------: | :------: |
-| `name`                | The model name. Must include at least a qualifying schema (`<schema>.<model>`) and may include a catalog (`<catalog>.<schema>.<model>`).                                                                                                                                                         |        str        |    Y     |
+| `name`                | The model name. Must include at least a qualifying schema (`<schema>.<model>`) and may include a catalog (`<catalog>.<schema>.<model>`).                                                                                                                                                         |        str        |    N     |
 | `kind`                | The model kind ([Additional Details](#model-kind-properties)). (Default: `VIEW`)                                                                                                                                                                                                                 |    str \| dict    |    N     |
 | `audits`              | SQLMesh [audits](../concepts/audits.md) that should run against the model's output                                                                                                                                                                                                               |    array[str]     |    N     |
 | `dialect`             | The SQL dialect in which the model's query is written. All SQL dialects [supported by the SQLGlot library](https://github.com/tobymao/sqlglot/blob/main/sqlglot/dialects/dialect.py) are allowed.                                                                                                |        str        |    N     |
@@ -47,6 +47,16 @@ The SQLMesh project-level `model_defaults` key supports the following options, d
 - storage_format
 - session_properties (on per key basis)
 - on_destructive_change (described [below](#incremental-models))
+
+
+### Model Naming
+
+Configuration option for name inference. Learn more in the [model naming guide](../guides/configuration.md#model-naming).
+
+| Option          | Description                                                                             |  Type   | Required |
+| --------------- | --------------------------------------------------------------------------------------- | :-----: | :------: |
+| `infer_names`   | Whether to automatically infer model names based on the directory structure (Default: true) | boolean |    N     |
+
 
 ## Model kind properties
 
