@@ -28,11 +28,12 @@ def test_manifest_helper(caplog):
     assert helper.models()["top_waiters"].dependencies == Dependencies(
         refs={"sushi.waiter_revenue_by_day", "waiter_revenue_by_day"},
         variables={"top_waiters:revenue", "top_waiters:limit"},
+        macros=[MacroReference(name="ref"), MacroReference(name="var")],
     )
     assert helper.models()["top_waiters"].materialized == "view"
 
     assert helper.models()["waiters"].dependencies == Dependencies(
-        macros={MacroReference(name="incremental_by_time")},
+        macros={MacroReference(name="incremental_by_time"), MacroReference(name="source")},
         sources={"streaming.orders"},
     )
     assert helper.models()["waiters"].materialized == "ephemeral"
@@ -57,6 +58,7 @@ def test_manifest_helper(caplog):
     waiter_as_customer_by_day_config = helper.models()["waiter_as_customer_by_day"]
     assert waiter_as_customer_by_day_config.dependencies == Dependencies(
         refs={"waiters", "waiter_names", "customers"},
+        macros=[MacroReference(name="ref")],
     )
     assert waiter_as_customer_by_day_config.materialized == "incremental"
     assert waiter_as_customer_by_day_config.incremental_strategy == "delete+insert"
@@ -70,6 +72,7 @@ def test_manifest_helper(caplog):
             MacroReference(name="test_dependencies"),
             MacroReference(package="customers", name="duckdb__current_engine"),
             MacroReference(package="dbt", name="run_query"),
+            MacroReference(name="source"),
         },
         sources={"streaming.items", "streaming.orders", "streaming.order_items"},
         variables={"yet_another_var"},
@@ -82,6 +85,7 @@ def test_manifest_helper(caplog):
     assert helper.models("customers")["customers"].dependencies == Dependencies(
         sources={"raw.orders"},
         variables={"customers:customer_id"},
+        macros=[MacroReference(name="source"), MacroReference(name="var")],
     )
 
     assert set(helper.macros()["incremental_by_time"].info.depends_on) == {
