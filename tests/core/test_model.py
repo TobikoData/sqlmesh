@@ -1517,10 +1517,15 @@ CONST = "bar"
 
 
 def test_python_model(assert_exp_eq) -> None:
+    from functools import reduce
+
     @model(name="my_model", kind="full", columns={'"COL"': "int"})
     def my_model(context, **kwargs):
         context.table("foo")
         context.table(model_name=CONST + ".baz")
+
+        # This checks that built-in functions are serialized properly
+        a = reduce(lambda x, y: x + y, [1, 2, 3, 4])
 
     m = model.get_registry()["my_model"].model(
         module_path=Path("."),
