@@ -11,15 +11,20 @@ import pytest
 from pytest_mock.plugin import MockerFixture
 from sqlglot import exp, parse_one
 from sqlglot.schema import MappingSchema
+from sqlmesh.cli.example_project import init_example_project
 
 from sqlmesh.core import constants as c
 from sqlmesh.core import dialect as d
-from sqlmesh.core.config import Config
-from sqlmesh.core.config.model import ModelDefaultsConfig
+from sqlmesh.core.config import (
+    Config,
+    NameInferenceConfig,
+    ModelDefaultsConfig,
+)
 from sqlmesh.core.context import Context, ExecutionContext
 from sqlmesh.core.dialect import parse
 from sqlmesh.core.macros import MacroEvaluator, macro
 from sqlmesh.core.model import (
+    PythonModel,
     FullKind,
     IncrementalByTimeRangeKind,
     IncrementalUnmanagedKind,
@@ -1692,26 +1697,38 @@ def test_python_model_decorator_kind() -> None:
 
     assert isinstance(python_model.kind, FullKind)
 
+    @model("kind_empty_dict", kind=dict(), columns={'"COL"': "int"})
+    def my_model(context):
+        pass
+
     # error if kind dict with no `name` key
     with pytest.raises(ConfigError, match="`kind` dictionary must contain a `name` key"):
+        python_model = model.get_registry()["kind_empty_dict"].model(
+            module_path=Path("."),
+            path=Path("."),
+        )
 
-        @model("kind_empty_dict", kind=dict(), columns={'"COL"': "int"})
-        def my_model(context):
-            pass
+    @model("kind_dict_badname", kind=dict(name="test"), columns={'"COL"': "int"})
+    def my_model_1(context):
+        pass
 
     # error if kind dict with `name` key whose type is not a ModelKindName enum
     with pytest.raises(ConfigError, match="with a valid ModelKindName enum value"):
+        python_model = model.get_registry()["kind_dict_badname"].model(
+            module_path=Path("."),
+            path=Path("."),
+        )
 
-        @model("kind_dict_badname", kind=dict(name="test"), columns={'"COL"': "int"})
-        def my_model(context):
-            pass
+    @model("kind_instance", kind=FullKind(), columns={'"COL"': "int"})
+    def my_model_2(context):
+        pass
 
     # warning if kind is ModelKind instance
     with patch.object(logger, "warning") as mock_logger:
-
-        @model("kind_instance", kind=FullKind(), columns={'"COL"': "int"})
-        def my_model(context):
-            pass
+        python_model = model.get_registry()["kind_instance"].model(
+            module_path=Path("."),
+            path=Path("."),
+        )
 
         assert (
             mock_logger.call_args[0][0]
@@ -4450,3 +4467,76 @@ def test_incremental_by_partition(sushi_context, assert_exp_eq):
             """
         )
         load_sql_based_model(expressions)
+
+
+@pytest.mark.parametrize(
+    ["model_def", "path", "expected_name"],
+    [
+        [
+            """dialect duckdb,""",
+            """models/test_schema/test_model.sql,""",
+            "test_schema.test_model",
+        ],
+        [
+            """dialect duckdb,""",
+            """models/test_model.sql,""",
+            "test_model",
+        ],
+        [
+            """dialect duckdb,""",
+            """models/inventory/db/test_schema/test_model.sql,""",
+            "db.test_schema.test_model",
+        ],
+        ["""name test_model,""", """models/schema/test_model.sql,""", "test_model"],
+    ],
+)
+def test_model_table_name_inference(
+    sushi_context: Context, model_def: str, path: str, expected_name: str
+):
+    model = load_sql_based_model(
+        d.parse(
+            f"""
+        MODEL (
+            {model_def}
+        );
+        SELECT a FROM tbl;
+        """,
+            default_dialect="duckdb",
+        ),
+        path=Path(f"$root/{path}"),
+        infer_names=True,
+    )
+    assert model.name == expected_name
+
+
+@pytest.mark.parametrize(
+    ["path", "expected_name"],
+    [
+        [
+            """models/test_schema/test_model.py""",
+            "test_schema.test_model",
+        ],
+        [
+            """models/inventory/db/test_schema/test_model.py""",
+            "db.test_schema.test_model",
+        ],
+    ],
+)
+def test_python_model_name_inference(tmp_path: Path, path: str, expected_name: str) -> None:
+    init_example_project(tmp_path, dialect="duckdb")
+    config = Config(
+        model_defaults=ModelDefaultsConfig(dialect="duckdb"),
+        model_naming=NameInferenceConfig(infer_names=True),
+    )
+
+    foo_py_file = tmp_path / path
+    foo_py_file.parent.mkdir(parents=True, exist_ok=True)
+    foo_py_file.write_text("""from sqlmesh import model
+@model(
+    columns={'"COL"': "int"},
+)
+def my_model(context, **kwargs):
+    pass""")
+    context = Context(paths=tmp_path, config=config)
+    assert context.get_model(expected_name).name == expected_name
+    assert isinstance(context.get_model(expected_name), PythonModel)

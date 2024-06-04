@@ -944,6 +944,35 @@ This example demonstrates how to specify an incremental by time range model kind
 
 Learn more about specifying Python models at the [Python models concepts page](../concepts/models/python_models.md#model-specification).
 
+
+#### Model Naming
+
+The `model_naming` configuration controls if model names are inferred based on the project's directory structure. If `model_naming` is not defined or `infer_names` is set to false, the model names must be provided explicitly.
+
+With `infer_names` set to true, model names are inferred based on their path. For example, a model located at `models/catalog/schema/model.sql` would be named `catalog.schema.model`. However, if a name is provided in the model definition, it will take precedence over the inferred name.
+
+Example enabling name inference:
+
+=== "YAML"
+
+    ```yaml linenums="1"
+    model_naming:
+      infer_names: true
+    ```
+
+=== "Python"
+
+    ```python linenums="1"
+    from sqlmesh.core.config import Config, NameInferenceConfig
+
+    config = Config(
+        model_naming=NameInferenceConfig(
+            infer_names=True
+        )
+    )
+    ```
+
+
 ### Debug mode
 
 To enable debug mode set the `SQLMESH_DEBUG` environment variable to one of the following values: "1", "true", "t", "yes" or "y".

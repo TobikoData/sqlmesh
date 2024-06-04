@@ -3,13 +3,19 @@ from __future__ import annotations
 import logging
 import typing as t
 from pathlib import Path
+import inspect
 
 from sqlglot import exp
 from sqlglot.dialects.dialect import DialectType
 
 from sqlmesh.core import constants as c
 from sqlmesh.core.dialect import MacroFunc
-from sqlmesh.core.model.definition import Model, create_python_model, create_sql_model
+from sqlmesh.core.model.definition import (
+    Model,
+    create_python_model,
+    create_sql_model,
+    get_model_name,
+)
 from sqlmesh.core.model.kind import ModelKindName, _ModelKind
 from sqlmesh.utils import registry_decorator
 from sqlmesh.utils.errors import ConfigError
@@ -24,26 +30,11 @@ class model(registry_decorator):
     registry_name = "python_models"
     _dialect: DialectType = None
 
-    def __init__(self, name: str, is_sql: bool = False, **kwargs: t.Any) -> None:
-        if not name:
-            raise ConfigError("Python model must have a name.")
-
+    def __init__(self, name: t.Optional[str] = None, is_sql: bool = False, **kwargs: t.Any) -> None:
         if not is_sql and "columns" not in kwargs:
             raise ConfigError("Python model must define column schema.")
 
-        kind = kwargs.get("kind", None)
-        if kind is not None:
-            if isinstance(kind, _ModelKind):
-                logger.warning(
-                    f"""Python model "{name}"'s `kind` argument was passed a SQLMesh `{type(kind).__name__}` object. This may result in unexpected behavior - provide a dictionary instead."""
-                )
-            elif isinstance(kind, dict):
-                if "name" not in kind or not isinstance(kind.get("name"), ModelKindName):
-                    raise ConfigError(
-                        f"""Python model "{name}"'s `kind` dictionary must contain a `name` key with a valid ModelKindName enum value."""
-                    )
-
-        self.name = name
+        self.name = name or ""
         self.is_sql = is_sql
         self.kwargs = kwargs
 
@@ -90,10 +81,29 @@ class model(registry_decorator):
         project: str = "",
         default_catalog: t.Optional[str] = None,
         variables: t.Optional[t.Dict[str, t.Any]] = None,
+        infer_names: t.Optional[bool] = False,
     ) -> Model:
         """Get the model registered by this function."""
         env: t.Dict[str, t.Any] = {}
         entrypoint = self.func.__name__
+
+        if not self.name and infer_names:
+            self.name = get_model_name(Path(inspect.getfile(self.func)))
+
+        if not self.name:
+            raise ConfigError("Python model must have a name.")
+
+        kind = self.kwargs.get("kind", None)
+        if kind is not None:
+            if isinstance(kind, _ModelKind):
+                logger.warning(
+                    f"""Python model "{self.name}"'s `kind` argument was passed a SQLMesh `{type(kind).__name__}` object. This may result in unexpected behavior - provide a dictionary instead."""
+                )
+            elif isinstance(kind, dict):
+                if "name" not in kind or not isinstance(kind.get("name"), ModelKindName):
+                    raise ConfigError(
+                        f"""Python model "{self.name}"'s `kind` dictionary must contain a `name` key with a valid ModelKindName enum value."""
+                    )
 
         build_env(self.func, env=env, name=entrypoint, path=module_path)
 
