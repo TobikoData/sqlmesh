@@ -61,7 +61,7 @@ class PandasNativeFetchDFSupportMixin(EngineAdapter):
             else query
         )
         logger.debug(f"Executing SQL:\n{sql}")
-        with catch_warnings():
+        with catch_warnings(), self.transaction():
             filterwarnings(
                 "ignore",
                 category=UserWarning,
