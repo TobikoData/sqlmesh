@@ -149,7 +149,9 @@ class _Model(ModelMeta, frozen=True):
             **kwargs,
         )
 
-    def render_definition(self, include_python: bool = True) -> t.List[exp.Expression]:
+    def render_definition(
+        self, include_python: bool = True, include_defaults: bool = False
+    ) -> t.List[exp.Expression]:
         """Returns the original list of sql expressions comprising the model definition.
 
         Args:
@@ -160,7 +162,7 @@ class _Model(ModelMeta, frozen=True):
         for field_name, field_info in ModelMeta.all_field_infos().items():
             field_value = getattr(self, field_name)
 
-            if field_value != field_info.default:
+            if (include_defaults and field_value) or field_value != field_info.default:
                 if field_name == "description":
                     comment = field_value
                 elif field_name == "kind":
@@ -968,8 +970,12 @@ class SqlModel(_SqlBasedModel):
         )
         return query
 
-    def render_definition(self, include_python: bool = True) -> t.List[exp.Expression]:
-        result = super().render_definition(include_python=include_python)
+    def render_definition(
+        self, include_python: bool = True, include_defaults: bool = False
+    ) -> t.List[exp.Expression]:
+        result = super().render_definition(
+            include_python=include_python, include_defaults=include_defaults
+        )
         result.extend(self.pre_statements)
         result.append(self.query)
         result.extend(self.post_statements)
@@ -1347,10 +1353,12 @@ class PythonModel(_Model):
             print_exception(e, self.python_env)
             raise SQLMeshError(f"Error executing Python model '{self.name}'")
 
-    def render_definition(self, include_python: bool = True) -> t.List[exp.Expression]:
+    def render_definition(
+        self, include_python: bool = True, include_defaults: bool = False
+    ) -> t.List[exp.Expression]:
         # Ignore the provided value for the include_python flag, since the Pyhon model's
         # definition without Python code is meaningless.
-        return super().render_definition(include_python=True)
+        return super().render_definition(include_python=True, include_defaults=include_defaults)
 
     @property
     def is_python(self) -> bool:
