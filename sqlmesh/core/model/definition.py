@@ -971,8 +971,8 @@ class SqlModel(_SqlBasedModel):
     def render_definition(self, include_python: bool = True) -> t.List[exp.Expression]:
         result = super().render_definition(include_python=include_python)
         result.extend(self.pre_statements)
-        result.extend(self.post_statements)
         result.append(self.query)
+        result.extend(self.post_statements)
         return result
 
     @property
