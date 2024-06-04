@@ -843,7 +843,7 @@ test_foo:
         expected_msg=(
             """Failed to infer the data type of column 'value' for '"raw"'. This issue can """
             "be mitigated by casting the column in the model definition, setting its type in "
-            "schema.yaml if it's an external model, setting the model's 'columns' property, "
+            "external_models.yaml if it's an external model, setting the model's 'columns' property, "
             "or setting its 'columns' mapping in the test itself\n"
         ),
     )

@@ -81,7 +81,7 @@ from sqlmesh.core.notification_target import (
 from sqlmesh.core.plan import Plan, PlanBuilder
 from sqlmesh.core.reference import ReferenceGraph
 from sqlmesh.core.scheduler import Scheduler
-from sqlmesh.core.schema_loader import create_schema_file
+from sqlmesh.core.schema_loader import create_external_models_file
 from sqlmesh.core.selector import Selector
 from sqlmesh.core.snapshot import (
     DeployabilityIndex,
@@ -1598,17 +1598,22 @@ class GenericContext(BaseContext, t.Generic[C]):
 
     @python_api_analytics
     def create_external_models(self) -> None:
-        """Create a schema file with all external models.
+        """Create a file to document the schema of external models.
 
-        The schema file contains all columns and types of external models, allowing for more robust
-        lineage, validation, and optimizations.
+        The external models file contains all columns and types of external models, allowing for more
+        robust lineage, validation, and optimizations.
         """
         if not self._models:
             self.load(update_schemas=False)
 
         for path, config in self.configs.items():
-            create_schema_file(
-                path=path / c.SCHEMA_YAML,
+            deprecated_yaml = path / c.EXTERNAL_MODELS_DEPRECATED_YAML
+
+            external_models_yaml = (
+                path / c.EXTERNAL_MODELS_YAML if not deprecated_yaml.exists() else deprecated_yaml
+            )
+            create_external_models_file(
+                path=external_models_yaml,
                 models=UniqueKeyDict(
                     "models",
                     {

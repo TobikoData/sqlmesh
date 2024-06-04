@@ -474,7 +474,7 @@ It's not always possible to correctly interpret certain values in a unit test wi
 
 To avoid this ambiguity, SQLMesh needs to know the columns' types. By default, it will try to infer these types based on the model definitions, but they can also be explicitly specified:
 
-- in the [`schema.yaml`](models/external_models.md#generating-an-external-models-schema-file) file (for external models)
+- in the [`external_models.yaml`](models/external_models.md#generating-an-external-models-schema-file) file (for external models)
 - using the [`columns`](models/overview.md#columns) model property
 - using the [`columns`](#creating_tests) attribute of the unit test
 

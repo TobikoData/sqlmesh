@@ -39,7 +39,7 @@ Consider an existing table named `my_schema.existing_table`. Migrating this tabl
 
 1. Ensure `my_schema.existing_table` is up to date (has ingested all available source data)
 2. Rename `my_schema.existing_table` to any other name, such as `my_schema.existing_table_historical`
-    - Optionally, enable column-level lineage for the table by making it an [`EXTERNAL` model](../concepts/models/model_kinds.md#external) and adding it to the project's `schema.yaml` file
+    - Optionally, enable column-level lineage for the table by making it an [`EXTERNAL` model](../concepts/models/model_kinds.md#external) and adding it to the project's `external_models.yaml` file
 3. Create a new incremental staging model named `my_schema.existing_table_staging` (see below for code)
 4. Create a new [`VIEW` model](../concepts/models/model_kinds.md#view) named `my_schema.existing_table` (see below for code)
 5. Run `sqlmesh plan` to create and backfill the models

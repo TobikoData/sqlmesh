@@ -182,12 +182,15 @@ class Loader(abc.ABC):
     def _load_external_models(self) -> UniqueKeyDict[str, Model]:
         models: UniqueKeyDict[str, Model] = UniqueKeyDict("models")
         for context_path, config in self._context.configs.items():
-            schema_path = Path(context_path / c.SCHEMA_YAML)
+            external_models_yaml = Path(context_path / c.EXTERNAL_MODELS_YAML)
+            deprecated_yaml = Path(context_path / c.EXTERNAL_MODELS_DEPRECATED_YAML)
             external_models_path = context_path / c.EXTERNAL_MODELS
 
             paths_to_load = []
-            if schema_path.exists():
-                paths_to_load.append(schema_path)
+            if external_models_yaml.exists():
+                paths_to_load.append(external_models_yaml)
+            elif deprecated_yaml.exists():
+                paths_to_load.append(deprecated_yaml)
 
             if external_models_path.exists() and external_models_path.is_dir():
                 paths_to_load.extend(external_models_path.glob("*.yaml"))
