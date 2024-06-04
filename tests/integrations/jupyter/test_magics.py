@@ -66,7 +66,8 @@ def loaded_sushi_context(sushi_context) -> Context:
 def convert_all_html_output_to_text():
     def _convert(output: CapturedIO) -> t.List[str]:
         return [
-            BeautifulSoup(output.data["text/html"]).get_text().strip() for output in output.outputs
+            BeautifulSoup(output.data["text/html"], "html.parser").get_text().strip()
+            for output in output.outputs
         ]
 
     return _convert
@@ -78,7 +79,7 @@ def convert_all_html_output_to_tags():
         # BS4 automatically adds html and body tags so we remove those since they are not actually part of the output
         return [
             tag.name
-            for tag in BeautifulSoup(html, "html").find_all()
+            for tag in BeautifulSoup(html, "html.parser").find_all()
             if tag.name not in {"html", "body"}
         ]
 
