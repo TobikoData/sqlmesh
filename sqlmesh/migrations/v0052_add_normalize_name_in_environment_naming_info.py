@@ -23,5 +23,5 @@ def migrate(state_sync, **kwargs):  # type: ignore
     state_sync.engine_adapter.update_table(
         environments_table,
         {"normalize_name": False},
-        where=True,
+        where=exp.true(),
     )
