@@ -10,7 +10,7 @@ SQLMesh stores external tables' column information as `EXTERNAL` models.
 
 `EXTERNAL` models consist solely of an external table's column information, so there is no query for SQLMesh to run.
 
-SQLMesh has no information about the data contained in the table represented by an `EXTERNAL` model. The table could be altered or have all its data deleted, and SQLMesh will not detect it. All SQLMesh knows about the table is that it contains the columns specified in the `EXTERNAL` model's `schema.yaml` file (more information below).
+SQLMesh has no information about the data contained in the table represented by an `EXTERNAL` model. The table could be altered or have all its data deleted, and SQLMesh will not detect it. All SQLMesh knows about the table is that it contains the columns specified in the `EXTERNAL` model's file (more information below).
 
 SQLMesh will not take any actions based on an `EXTERNAL` model - its actions are solely determined by the model whose query selects from the `EXTERNAL` model.
 
@@ -18,7 +18,7 @@ The querying model's [`kind`](./model_kinds.md), [`cron`](./overview.md#cron), a
 
 ## Generating an external models schema file
 
-External models can be defined in the `schema.yaml` file in the SQLMesh project's root folder.
+External models can be defined in the `external_models.yaml` file in the SQLMesh project's root folder. The alternative name for this file is `schema.yaml`.
 
 You can create this file by either writing the YAML by hand or allowing SQLMesh to fetch information about external tables with the `create_external_models` CLI command.
 
@@ -38,13 +38,13 @@ FROM
 
 The following sections demonstrate how to create an external model containing `external_db.external_table`'s column information.
 
-All of a SQLMesh project's external models are defined in a single `schema.yaml` file, so the files created below might also include column information for other external models.
+All of a SQLMesh project's external models are defined in a single `external_models.yaml` file, so the files created below might also include column information for other external models.
 
 Alternatively, additional external models can also be defined in the [external_models/](#using-the-external_models-directory) folder.
 
 ### Writing YAML by hand
 
-This example demonstrates the structure of a `schema.yaml` file:
+This example demonstrates the structure of a `external_models.yaml` file:
 
 ```yaml
 - name: external_db.external_table
@@ -65,9 +65,9 @@ The file can be constructed by hand using a standard text editor or IDE.
 
 ### Using CLI
 
-Instead of creating the `schema.yaml` file manually, SQLMesh can generate it for you with the [create_external_models](../../reference/cli.md#create_external_models) CLI command.
+Instead of creating the `external_models.yaml` file manually, SQLMesh can generate it for you with the [create_external_models](../../reference/cli.md#create_external_models) CLI command.
 
-The command identifies all external tables referenced in your SQLMesh project, fetches their column information from the SQL engine's metadata, and then stores the information in the `schema.yaml` file.
+The command identifies all external tables referenced in your SQLMesh project, fetches their column information from the SQL engine's metadata, and then stores the information in the `external_models.yaml` file.
 
 If SQLMesh does not have access to an external table's metadata, the table will be omitted from the file and SQLMesh will issue a warning.
 
@@ -77,18 +77,18 @@ If SQLMesh does not have access to an external table's metadata, the table will 
 
 Sometimes, SQLMesh cannot infer the structure of a model and you need to add it manually.
 
-However, since `sqlmesh create_external_models` replaces the `schema.yaml` file, any manual changes you made to that file will be overwritten.
+However, since `sqlmesh create_external_models` replaces the `external_models.yaml` file, any manual changes you made to that file will be overwritten.
 
 The solution is to create the manual model definition files in the `external_models/` directory, like so:
 
 ```
-schema.yaml
-external_models/another_schema.yaml
-external_models/yet_another_schema.yaml
+external_models.yaml
+external_models/more_external_models.yaml
+external_models/even_more_external_models.yaml
 ```
 
-Files in the `external_models` directory must be `.yaml` files that follow the same structure as the `schema.yaml` file.
+Files in the `external_models` directory must be `.yaml` files that follow the same structure as the `external_models.yaml` file.
 
-When SQLMesh loads the definitions, it will first load the models defined in `schema.yaml` followed by any models it can find in `external_models/*.yaml`.
+When SQLMesh loads the definitions, it will first load the models defined in `external_models.yaml` (or `schema.yaml`) and  any models found in `external_models/*.yaml`.
 
-Therefore, you can use `sqlmesh create_external_models` to manage the `schema.yaml` file and then put any models that need to be defined manually inside the `external_models/` directory.
+Therefore, you can use `sqlmesh create_external_models` to manage the `external_models.yaml` file and then put any models that need to be defined manually inside the `external_models/` directory.

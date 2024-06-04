@@ -142,7 +142,7 @@ class ModelTest(unittest.TestCase):
                             _raise_error(
                                 f"Failed to infer the data type of column '{col}' for '{name}'. This issue can be "
                                 "mitigated by casting the column in the model definition, setting its type in "
-                                "schema.yaml if it's an external model, setting the model's 'columns' property, "
+                                "external_models.yaml if it's an external model, setting the model's 'columns' property, "
                                 "or setting its 'columns' mapping in the test itself",
                                 self.path,
                             )

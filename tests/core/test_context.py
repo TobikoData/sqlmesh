@@ -668,7 +668,7 @@ def test_load_external_models(copy_to_temp_path):
 
     assert len(external_model_names) > 0
 
-    # from schema.yaml in root dir
+    # from default external_models.yaml in root dir
     assert "raw.demographics" in external_model_names
 
     # from external_models/model1.yaml

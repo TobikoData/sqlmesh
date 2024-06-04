@@ -600,7 +600,7 @@ def test_migrate(
 
 @pytest.mark.slow
 def test_create_external_models(notebook, loaded_sushi_context):
-    external_model_file = loaded_sushi_context.path / "schema.yaml"
+    external_model_file = loaded_sushi_context.path / "external_models.yaml"
     external_model_file.unlink()
     assert not external_model_file.exists()
     loaded_sushi_context.load()

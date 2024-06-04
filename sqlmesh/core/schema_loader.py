@@ -16,7 +16,7 @@ from sqlmesh.utils import UniqueKeyDict, yaml
 logger = logging.getLogger(__name__)
 
 
-def create_schema_file(
+def create_external_models_file(
     path: Path,
     models: UniqueKeyDict[str, Model],
     adapter: EngineAdapter,
@@ -24,7 +24,7 @@ def create_schema_file(
     dialect: DialectType,
     max_workers: int = 1,
 ) -> None:
-    """Create or replace a YAML file with model schemas.
+    """Create or replace a YAML file with column and types of all columns in all external models.
 
     Args:
         path: The path to store the YAML file.
