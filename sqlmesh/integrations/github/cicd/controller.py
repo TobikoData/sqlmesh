@@ -806,7 +806,7 @@ class GithubController:
                             )
                         body_rows.append(
                             [
-                                h("td", model_name),
+                                h("td", model_name, autoescape=False),
                                 h("td", change_category),
                                 h("td", interval_output),
                             ]
