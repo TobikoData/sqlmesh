@@ -990,7 +990,9 @@ def test_render_definition():
             LEFT JOIN
             db.table t2
             ON
-                t1.a = t2.a
+                t1.a = t2.a;
+
+        @IF( @runtime_stage = 'creating', create index db_table_idx on db.table(a) );
     """
     )
 
