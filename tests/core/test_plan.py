@@ -240,7 +240,10 @@ def test_forward_only_plan_allow_destructive_models(
         previous_finalized_snapshots=None,
     )
 
-    with pytest.raises(PlanError, match="Plan results in a destructive change to forward-only"):
+    with pytest.raises(
+        PlanError,
+        match="""Changes to model '"a"' may result in a destructive change to forward-only model '"a"'s schema.""",
+    ):
         PlanBuilder(context_diff_a, schema_differ, forward_only=False).build()
 
     logger = logging.getLogger("sqlmesh.core.plan.builder")
@@ -312,13 +315,13 @@ def test_forward_only_plan_allow_destructive_models(
 
     with pytest.raises(
         PlanError,
-        match="""Plan results in a destructive change to forward-only model '"b"'s schema.""",
+        match="""Changes to model '"b"' may result in a destructive change to forward-only model '"b"'s schema.""",
     ):
         PlanBuilder(context_diff_b, schema_differ, forward_only=True).build()
 
     with pytest.raises(
         PlanError,
-        match="""Plan results in a destructive change to forward-only model '"c"'s schema.""",
+        match="""Changes to model '"c"' may result in a destructive change to forward-only model '"c"'s schema.""",
     ):
         PlanBuilder(
             context_diff_b, schema_differ, forward_only=True, allow_destructive_models=['"b"']
@@ -367,7 +370,7 @@ def test_forward_only_model_on_destructive_change(
 
     with pytest.raises(
         PlanError,
-        match="""Plan results in a destructive change to forward-only model '"a"'s schema.""",
+        match="""Changes to model '"a"' may result in a destructive change to forward-only model '"a"'s schema.""",
     ):
         PlanBuilder(context_diff_1, schema_differ).build()
 
@@ -424,7 +427,7 @@ def test_forward_only_model_on_destructive_change(
 
     with pytest.raises(
         PlanError,
-        match="""Plan results in a destructive change to forward-only model '"b"'s schema.""",
+        match="""Changes to model '"a"' may result in a destructive change to forward-only model '"b"'s schema.""",
     ):
         PlanBuilder(context_diff_2, schema_differ).build()
 
@@ -511,7 +514,7 @@ def test_forward_only_model_on_destructive_change(
 
     with pytest.raises(
         PlanError,
-        match="""Plan results in a destructive change to forward-only model '"c"'s schema.""",
+        match="""Changes to model '"a"' may result in a destructive change to forward-only model '"c"'s schema.""",
     ):
         PlanBuilder(context_diff_3, schema_differ).build()
 
