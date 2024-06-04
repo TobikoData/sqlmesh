@@ -355,7 +355,6 @@ def test_forward_only_model_on_destructive_change(
         },
         snapshots={
             snapshot_a.snapshot_id: snapshot_a,
-            snapshot_a_old.snapshot_id: snapshot_a_old,
         },
         new_snapshots={
             snapshot_a.snapshot_id: snapshot_a,
@@ -409,9 +408,7 @@ def test_forward_only_model_on_destructive_change(
         },
         snapshots={
             snapshot_a2.snapshot_id: snapshot_a2,
-            snapshot_a_old2.snapshot_id: snapshot_a_old2,
             snapshot_b2.snapshot_id: snapshot_b2,
-            snapshot_b_old2.snapshot_id: snapshot_b_old2,
         },
         new_snapshots={
             snapshot_a2.snapshot_id: snapshot_a2,
@@ -422,11 +419,7 @@ def test_forward_only_model_on_destructive_change(
         previous_finalized_snapshots=None,
     )
 
-    with pytest.raises(
-        PlanError,
-        match="""Plan results in a destructive change to forward-only model '"b"'s schema.""",
-    ):
-        PlanBuilder(context_diff_2, schema_differ).build()
+    PlanBuilder(context_diff_2, schema_differ).build()
 
     # allow A and B, indirect change to C
     snapshot_a_old3, snapshot_a3 = make_snapshot_on_destructive_change(
@@ -493,11 +486,8 @@ def test_forward_only_model_on_destructive_change(
         },
         snapshots={
             snapshot_a3.snapshot_id: snapshot_a3,
-            snapshot_a_old3.snapshot_id: snapshot_a_old3,
             snapshot_b3.snapshot_id: snapshot_b3,
-            snapshot_b_old3.snapshot_id: snapshot_b_old3,
             snapshot_c3.snapshot_id: snapshot_c3,
-            snapshot_c_old3.snapshot_id: snapshot_c_old3,
         },
         new_snapshots={
             snapshot_a3.snapshot_id: snapshot_a3,
@@ -509,11 +499,7 @@ def test_forward_only_model_on_destructive_change(
         previous_finalized_snapshots=None,
     )
 
-    with pytest.raises(
-        PlanError,
-        match="""Plan results in a destructive change to forward-only model '"c"'s schema.""",
-    ):
-        PlanBuilder(context_diff_3, schema_differ).build()
+    PlanBuilder(context_diff_3, schema_differ).build()
 
 
 def test_forward_only_model_on_destructive_change_no_column_types(
