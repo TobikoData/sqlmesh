@@ -118,7 +118,9 @@ def test_context(notebook, convert_all_html_output_to_text, get_all_html_output,
                     "span",
                     {"style": SUCCESS_STYLE},
                     "SQLMesh project context set to: examples/sushi",
+                    autoescape=False,
                 ),
+                autoescape=False,
             )
         )
     ]
@@ -144,7 +146,9 @@ def test_init(tmp_path, notebook, convert_all_html_output_to_text, get_all_html_
                     "span",
                     {"style": "color: green; font-weight: bold"},
                     "SQLMesh project scaffold created",
+                    autoescape=False,
                 ),
+                autoescape=False,
             )
         )
     ]
@@ -245,7 +249,9 @@ def test_diff(sushi_context, notebook, convert_all_html_output_to_text, get_all_
                     "span",
                     {"style": "font-weight: bold"},
                     "Summary of differences against `prod`:",
+                    autoescape=False,
                 ),
+                autoescape=False,
             )
         ),
         str(
@@ -257,6 +263,7 @@ def test_diff(sushi_context, notebook, convert_all_html_output_to_text, get_all_
                         "span",
                         {"style": "font-weight: bold"},
                         "Models:",
+                        autoescape=False,
                     )
                 )
                 + "└── "
@@ -265,9 +272,11 @@ def test_diff(sushi_context, notebook, convert_all_html_output_to_text, get_all_
                         "span",
                         {"style": "font-weight: bold"},
                         "Directly Modified:",
+                        autoescape=False,
                     )
                 )
                 + "    └── sqlmesh_example.test",
+                autoescape=False,
             )
         ),
     ]
@@ -331,7 +340,9 @@ def test_run_dag(
                     "span",
                     {"style": SUCCESS_STYLE},
                     "All model batches have been executed successfully",
+                    autoescape=False,
                 ),
+                autoescape=False,
             )
         ),
         str(
@@ -342,12 +353,15 @@ def test_run_dag(
                     "span",
                     {"style": SUCCESS_STYLE},
                     "Run finished for environment ",
+                    autoescape=False,
                 ),
                 h(
                     "span",
                     {"style": SUCCESS_STYLE},
                     "'prod'",
+                    autoescape=False,
                 ),
+                autoescape=False,
             )
         ),
     ]
@@ -381,6 +395,7 @@ def test_invalidate(
                         "span",
                         {"style": SUCCESS_STYLE},
                         "Environment ",
+                        autoescape=False,
                     )
                 )
                 + str(
@@ -388,6 +403,7 @@ def test_invalidate(
                         "span",
                         {"style": SUCCESS_STYLE},
                         "'dev'",
+                        autoescape=False,
                     )
                 )
                 + str(
@@ -395,8 +411,10 @@ def test_invalidate(
                         "span",
                         {"style": SUCCESS_STYLE},
                         " has been invalidated.",
+                        autoescape=False,
                     )
                 ),
+                autoescape=False,
             )
         )
     ]
@@ -528,8 +546,10 @@ def test_info(notebook, sushi_context, convert_all_html_output_to_text, get_all_
                         # "color: #008000; text-decoration-color: #008000"
                         {"style": f"{NEUTRAL_STYLE}; font-weight: bold"},
                         "16",
+                        autoescape=False,
                     )
                 ),
+                autoescape=False,
             )
         ),
         str(
@@ -542,8 +562,10 @@ def test_info(notebook, sushi_context, convert_all_html_output_to_text, get_all_
                         "span",
                         {"style": f"{NEUTRAL_STYLE}; font-weight: bold"},
                         "5",
+                        autoescape=False,
                     )
                 ),
+                autoescape=False,
             )
         ),
         str(
@@ -556,8 +578,10 @@ def test_info(notebook, sushi_context, convert_all_html_output_to_text, get_all_
                         "span",
                         {"style": SUCCESS_STYLE},
                         "succeeded",
+                        autoescape=False,
                     )
                 ),
+                autoescape=False,
             )
         ),
     ]
@@ -585,7 +609,9 @@ def test_migrate(
                     "span",
                     {"style": SUCCESS_STYLE},
                     "Migration complete",
+                    autoescape=False,
                 ),
+                autoescape=False,
             )
         )
     ]
