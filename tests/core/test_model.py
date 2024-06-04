@@ -1752,6 +1752,35 @@ def test_python_model_decorator_kind() -> None:
         assert not mock_logger.call_args
 
 
+def test_python_model_decorator_col_descriptions() -> None:
+    # `columns` and `column_descriptions` column names are different cases, but name normalization makes both lower
+    @model("col_descriptions", columns={"col": "int"}, column_descriptions={"COL": "a column"})
+    def a_model(context):
+        pass
+
+    py_model = model.get_registry()["col_descriptions"].model(
+        module_path=Path("."),
+        path=Path("."),
+    )
+
+    assert py_model.columns_to_types.keys() == py_model.column_descriptions.keys()
+
+    # error: `columns` and `column_descriptions` column names are different cases, quoting preserves case
+    @model(
+        "col_descriptions_quoted",
+        columns={'"col"': "int"},
+        column_descriptions={'"COL"': "a column"},
+    )
+    def b_model(context):
+        pass
+
+    with pytest.raises(ConfigError, match="a description is provided for column 'COL'"):
+        py_model = model.get_registry()["col_descriptions_quoted"].model(
+            module_path=Path("."),
+            path=Path("."),
+        )
+
+
 def test_star_expansion(assert_exp_eq) -> None:
     context = Context(config=Config())
 
