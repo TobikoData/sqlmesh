@@ -219,6 +219,8 @@ class ModelMeta(_Node):
     def _column_descriptions_validator(
         cls, vs: t.Any, values: t.Dict[str, t.Any]
     ) -> t.Optional[t.Dict[str, str]]:
+        dialect = values.get("dialect")
+
         if vs is None:
             return None
 
@@ -228,9 +230,14 @@ class ModelMeta(_Node):
         if isinstance(vs, (exp.Tuple, exp.Array)):
             vs = vs.expressions
 
-        col_descriptions = (
+        raw_col_descriptions = (
             vs if isinstance(vs, dict) else {v.this.name: v.expression.name for v in vs}
         )
+
+        col_descriptions = {
+            normalize_identifiers(k, dialect=dialect).name: v
+            for k, v in raw_col_descriptions.items()
+        }
 
         columns_to_types = values.get("columns_to_types_")
         if columns_to_types:
