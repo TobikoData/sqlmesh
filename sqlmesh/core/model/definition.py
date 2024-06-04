@@ -1404,6 +1404,7 @@ def load_sql_based_model(
     physical_schema_override: t.Optional[t.Dict[str, str]] = None,
     default_catalog: t.Optional[str] = None,
     variables: t.Optional[t.Dict[str, t.Any]] = None,
+    infer_names: t.Optional[bool] = False,
     **kwargs: t.Any,
 ) -> Model:
     """Load a model from a parsed SQLMesh model SQL file.
@@ -1491,7 +1492,11 @@ def load_sql_based_model(
     if isinstance(meta_fields.get("dialect"), exp.Expression):
         meta_fields["dialect"] = meta_fields["dialect"].name
 
+    # The name of the model will be inferred from its path relative to `models/`, if it's not explicitly specified
     name = meta_fields.pop("name", "")
+    if not name and infer_names:
+        name = get_model_name(path)
+
     if not name:
         raise_config_error("Model must have a name", path)
     if "default_catalog" in meta_fields:
@@ -2122,3 +2127,8 @@ META_FIELD_CONVERTER: t.Dict[str, t.Callable] = {
     "allow_partials": exp.convert,
     "signals": lambda values: exp.Tuple(expressions=values),
 }
+
+
+def get_model_name(path: Path) -> str:
+    path_parts = list(path.parts[path.parts.index("models") + 1 : -1]) + [path.stem]
+    return ".".join(path_parts[-3:])
