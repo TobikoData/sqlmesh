@@ -118,7 +118,7 @@ class SnapshotDagGenerator:
 
         with DAG(
             dag_id=dag_id,
-            schedule_interval=snapshot.node.cron,
+            schedule=snapshot.node.cron,
             start_date=pendulum.instance(to_datetime(snapshot.unpaused_ts)),
             end_date=end_date,
             max_active_runs=1,
@@ -174,7 +174,7 @@ class SnapshotDagGenerator:
 
         with DAG(
             dag_id=dag_id,
-            schedule_interval="@once",
+            schedule="@once",
             start_date=pendulum.instance(
                 to_datetime(plan_dag_spec.dag_start_ts or yesterday_timestamp())
             ),
