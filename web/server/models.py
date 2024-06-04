@@ -5,7 +5,7 @@ import pathlib
 import typing as t
 
 import pydantic
-from pydantic import BaseModel, Field
+from pydantic import Field
 from sqlglot import exp
 from watchfiles import Change
 
@@ -21,6 +21,7 @@ from sqlmesh.core.snapshot.definition import (
 from sqlmesh.utils.date import TimeLike, now_timestamp
 from sqlmesh.utils.pydantic import (
     PYDANTIC_MAJOR_VERSION,
+    PydanticModel,
     field_validator,
     field_validator_v1_args,
 )
@@ -111,7 +112,7 @@ class PlanStage(str, enum.Enum):
     cancel = "cancel"
 
 
-class File(BaseModel):
+class File(PydanticModel):
     name: str
     path: str
     extension: str = ""
@@ -128,25 +129,25 @@ class File(BaseModel):
         return v
 
 
-class Directory(BaseModel):
+class Directory(PydanticModel):
     name: str
     path: str
     directories: t.List[Directory] = []
     files: t.List[File] = []
 
 
-class Meta(BaseModel):
+class Meta(PydanticModel):
     version: str
     has_running_task: bool = False
 
 
-class Reference(BaseModel):
+class Reference(PydanticModel):
     name: str
     expression: str
     unique: bool
 
 
-class ModelDetails(BaseModel):
+class ModelDetails(PydanticModel):
     owner: t.Optional[str] = None
     kind: t.Optional[str] = None
     batch_size: t.Optional[int] = None
@@ -167,13 +168,13 @@ class ModelDetails(BaseModel):
     annotated: t.Optional[bool] = None
 
 
-class Column(BaseModel):
+class Column(PydanticModel):
     name: str
     type: str
     description: t.Optional[str] = None
 
 
-class Model(BaseModel):
+class Model(PydanticModel):
     name: str
     fqn: str
     path: str
@@ -187,7 +188,7 @@ class Model(BaseModel):
     hash: str
 
 
-class ChangeDisplay(BaseModel):
+class ChangeDisplay(PydanticModel):
     name: str
     view_name: str
     node_type: NodeType = NodeType.MODEL
@@ -222,7 +223,7 @@ class ChangeIndirect(ChangeDisplay):
     pass
 
 
-class ModelsDiff(BaseModel):
+class ModelsDiff(PydanticModel):
     direct: t.List[ChangeDirect] = []
     indirect: t.List[ChangeIndirect] = []
     metadata: t.List[ChangeDisplay] = []
@@ -299,13 +300,13 @@ class ModelsDiff(BaseModel):
         )
 
 
-class Environments(BaseModel):
+class Environments(PydanticModel):
     environments: t.Dict[str, Environment] = {}
     pinned_environments: t.Set[str] = set()
     default_target_environment: str = ""
 
 
-class EvaluateInput(BaseModel):
+class EvaluateInput(PydanticModel):
     model: str
     start: TimeLike
     end: TimeLike
@@ -313,12 +314,12 @@ class EvaluateInput(BaseModel):
     limit: int = 1000
 
 
-class FetchdfInput(BaseModel):
+class FetchdfInput(PydanticModel):
     sql: str
     limit: int = 1000
 
 
-class RenderInput(BaseModel):
+class RenderInput(PydanticModel):
     model: str
     start: t.Optional[TimeLike] = None
     end: t.Optional[TimeLike] = None
@@ -328,12 +329,12 @@ class RenderInput(BaseModel):
     dialect: t.Optional[str] = None
 
 
-class PlanDates(BaseModel):
+class PlanDates(PydanticModel):
     start: t.Optional[TimeLike] = None
     end: t.Optional[TimeLike] = None
 
 
-class PlanOptions(BaseModel):
+class PlanOptions(PydanticModel):
     skip_tests: bool = False
     skip_backfill: bool = False
     no_gaps: bool = False
@@ -352,17 +353,17 @@ class PlanOptions(BaseModel):
         return v
 
 
-class LineageColumn(BaseModel):
+class LineageColumn(PydanticModel):
     source: t.Optional[str] = None
     expression: t.Optional[str] = None
     models: t.Dict[str, t.Set[str]]
 
 
-class Query(BaseModel):
+class Query(PydanticModel):
     sql: str
 
 
-class ApiExceptionPayload(BaseModel):
+class ApiExceptionPayload(PydanticModel):
     timestamp: int
     message: str
     origin: str
@@ -374,7 +375,7 @@ class ApiExceptionPayload(BaseModel):
     stack: t.Optional[t.List[str]] = None
 
 
-class SchemaDiff(BaseModel):
+class SchemaDiff(PydanticModel):
     source: str
     target: str
     source_schema: t.Dict[str, str]
@@ -398,7 +399,7 @@ class SchemaDiff(BaseModel):
         return v
 
 
-class RowDiff(BaseModel):
+class RowDiff(PydanticModel):
     source: str
     target: str
     stats: t.Dict[str, float]
@@ -408,13 +409,13 @@ class RowDiff(BaseModel):
     count_pct_change: float
 
 
-class TableDiff(BaseModel):
+class TableDiff(PydanticModel):
     schema_diff: SchemaDiff
     row_diff: RowDiff
     on: t.List[t.List[str]]
 
 
-class TestCase(BaseModel):
+class TestCase(PydanticModel):
     name: str
     path: pathlib.Path
 
@@ -427,7 +428,7 @@ class TestSkipped(TestCase):
     reason: str
 
 
-class TestResult(BaseModel):
+class TestResult(PydanticModel):
     tests_run: int
     failures: t.List[TestErrorOrFailure]
     errors: t.List[TestErrorOrFailure]
@@ -435,14 +436,14 @@ class TestResult(BaseModel):
     successes: t.List[TestCase]
 
 
-class ArtifactChange(BaseModel):
+class ArtifactChange(PydanticModel):
     change: Change
     path: str
     type: t.Optional[ArtifactType] = None
     file: t.Optional[File] = None
 
 
-class ReportTestsResult(BaseModel):
+class ReportTestsResult(PydanticModel):
     message: str
 
 
@@ -473,7 +474,7 @@ class BackfillTask(ChangeDisplay):
     interval: t.Optional[t.List[str]] = None
 
 
-class TrackableMeta(BaseModel):
+class TrackableMeta(PydanticModel):
     status: Status = Status.INIT
     start: int = Field(default_factory=now_timestamp)
     end: t.Optional[int] = None
@@ -489,7 +490,7 @@ class TrackableMeta(BaseModel):
         return data
 
 
-class Trackable(BaseModel):
+class Trackable(PydanticModel):
     meta: TrackableMeta = Field(default_factory=TrackableMeta)
 
     def stop(self, success: bool = True) -> None:
@@ -514,7 +515,7 @@ class PlanStageCancel(Trackable):
     pass
 
 
-class PlanChanges(BaseModel):
+class PlanChanges(PydanticModel):
     # can't have a set of pydantic models: https://github.com/pydantic/pydantic/issues/1090
     added: t.Optional[t.List[ChangeDisplay]] = None
     removed: t.Optional[t.List[ChangeDisplay]] = None
@@ -574,6 +575,6 @@ class PlanCancelStageTracker(PlanStageTracker):
     cancel: t.Optional[PlanStageCancel] = None
 
 
-class FormatFileStatus(BaseModel):
+class FormatFileStatus(PydanticModel):
     path: str
     status: Status = Status.INIT
