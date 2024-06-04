@@ -1357,7 +1357,6 @@ def table_name(
     return exp.table_name(table)
 
 
-# TODO: should we find a way to propagate the engine dialect into `for_environment` here?
 def display_name(
     snapshot_info_like: t.Union[SnapshotInfoLike, SnapshotInfoMixin],
     environment_naming_info: EnvironmentNamingInfo,
