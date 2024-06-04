@@ -309,7 +309,6 @@ class GenericContext(BaseContext, t.Generic[C]):
         console: t.Optional[Console] = None,
         users: t.Optional[t.List[User]] = None,
     ):
-        self.console = console or get_console()
         self.configs = (
             config if isinstance(config, dict) else load_configs(config, self.CONFIG_TYPE, paths)
         )
@@ -338,6 +337,8 @@ class GenericContext(BaseContext, t.Generic[C]):
         self._connection_config = self.config.get_connection(self.gateway)
         self.concurrent_tasks = concurrent_tasks or self._connection_config.concurrent_tasks
         self._engine_adapter = engine_adapter or self._connection_config.create_engine_adapter()
+
+        self.console = console or get_console(dialect=self._engine_adapter.dialect)
 
         self._test_connection_config = self.config.get_test_connection(
             self.gateway, self.default_catalog, default_catalog_dialect=self.engine_adapter.DIALECT

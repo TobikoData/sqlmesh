@@ -334,14 +334,17 @@ class SnapshotInfoMixin(ModelKindMixin):
         return (*self.previous_versions, self.data_version)[-c.DATA_VERSION_LIMIT :]
 
     def display_name(
-        self, environment_naming_info: EnvironmentNamingInfo, default_catalog: t.Optional[str]
+        self,
+        environment_naming_info: EnvironmentNamingInfo,
+        default_catalog: t.Optional[str],
+        dialect: DialectType = None,
     ) -> str:
         """
         Returns the model name as a qualified view name.
         This is just used for presenting information back to the user and `qualified_view_name` should be used
         when wanting a view name in all other cases.
         """
-        return display_name(self, environment_naming_info, default_catalog)
+        return display_name(self, environment_naming_info, default_catalog, dialect=dialect)
 
     def data_hash_matches(self, other: t.Optional[SnapshotInfoMixin | SnapshotDataVersion]) -> bool:
         return other is not None and self.fingerprint.data_hash == other.fingerprint.data_hash
@@ -1359,6 +1362,7 @@ def display_name(
     snapshot_info_like: t.Union[SnapshotInfoLike, SnapshotInfoMixin],
     environment_naming_info: EnvironmentNamingInfo,
     default_catalog: t.Optional[str],
+    dialect: DialectType = None,
 ) -> str:
     """
     Returns the model name as a qualified view name.
@@ -1377,7 +1381,7 @@ def display_name(
         schema_name=view_name.db or None,
         table=view_name.name,
     )
-    return qvn.for_environment(environment_naming_info)
+    return qvn.for_environment(environment_naming_info, dialect=dialect)
 
 
 def fingerprint_from_node(
