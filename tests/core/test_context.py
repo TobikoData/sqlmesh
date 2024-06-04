@@ -461,6 +461,7 @@ def test_physical_schema_override(copy_to_temp_path: t.Callable) -> None:
 @pytest.mark.slow
 def test_janitor(sushi_context, mocker: MockerFixture) -> None:
     adapter_mock = mocker.MagicMock()
+    adapter_mock.dialect = "duckdb"
     state_sync_mock = mocker.MagicMock()
     state_sync_mock.delete_expired_environments.return_value = [
         Environment(

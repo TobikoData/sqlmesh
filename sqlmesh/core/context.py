@@ -1221,6 +1221,7 @@ class GenericContext(BaseContext, t.Generic[C]):
                 self.config.environment_catalog_mapping,
                 name=environment,
                 suffix_target=self.config.environment_suffix_target,
+                normalize_name=context_diff.is_new_environment,
             ),
             self.default_catalog,
             no_diff=not detailed,

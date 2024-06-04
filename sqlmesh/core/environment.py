@@ -31,12 +31,17 @@ class EnvironmentNamingInfo(PydanticModel):
     name: str = c.PROD
     suffix_target: EnvironmentSuffixTarget = Field(default=EnvironmentSuffixTarget.SCHEMA)
     catalog_name_override: t.Optional[str] = None
-    normalize_name: t.Optional[bool] = None
+    normalize_name: bool = True
 
     @field_validator("name", mode="before")
     @classmethod
     def _sanitize_name(cls, v: str) -> str:
         return word_characters_only(v).lower()
+
+    @field_validator("normalize_name", mode="before")
+    @classmethod
+    def _validate_normalize_name(cls, v: t.Any) -> bool:
+        return True if v is None else bool(v)
 
     @t.overload
     @classmethod
@@ -145,4 +150,5 @@ class Environment(EnvironmentNamingInfo):
             name=self.name,
             suffix_target=self.suffix_target,
             catalog_name_override=self.catalog_name_override,
+            normalize_name=self.normalize_name,
         )

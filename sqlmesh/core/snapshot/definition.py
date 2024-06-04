@@ -10,6 +10,7 @@ from functools import cached_property, lru_cache
 from pydantic import Field
 from sqlglot import exp
 from sqlglot.helper import seq_get
+from sqlglot.optimizer.normalize_identifiers import normalize_identifiers
 
 from sqlmesh.core import constants as c
 from sqlmesh.core.audit import BUILT_IN_AUDITS, Audit, ModelAudit, StandaloneAudit
@@ -43,6 +44,7 @@ else:
     from typing_extensions import Annotated
 
 if t.TYPE_CHECKING:
+    from sqlglot.dialects.dialect import DialectType
     from sqlmesh.core.environment import EnvironmentNamingInfo
 
 Interval = t.Tuple[int, int]
@@ -204,13 +206,17 @@ class QualifiedViewName(PydanticModel, frozen=True):
     schema_name: t.Optional[str] = None
     table: str
 
-    def for_environment(self, environment_naming_info: EnvironmentNamingInfo) -> str:
-        return exp.table_name(self.table_for_environment(environment_naming_info))
+    def for_environment(
+        self, environment_naming_info: EnvironmentNamingInfo, dialect: DialectType = None
+    ) -> str:
+        return exp.table_name(self.table_for_environment(environment_naming_info, dialect=dialect))
 
-    def table_for_environment(self, environment_naming_info: EnvironmentNamingInfo) -> exp.Table:
+    def table_for_environment(
+        self, environment_naming_info: EnvironmentNamingInfo, dialect: DialectType = None
+    ) -> exp.Table:
         return exp.table_(
-            self.table_name_for_environment(environment_naming_info),
-            db=self.schema_for_environment(environment_naming_info),
+            self.table_name_for_environment(environment_naming_info, dialect=dialect),
+            db=self.schema_for_environment(environment_naming_info, dialect=dialect),
             catalog=self.catalog_for_environment(environment_naming_info),
         )
 
@@ -219,22 +225,36 @@ class QualifiedViewName(PydanticModel, frozen=True):
     ) -> t.Optional[str]:
         return environment_naming_info.catalog_name_override or self.catalog
 
-    def schema_for_environment(self, environment_naming_info: EnvironmentNamingInfo) -> str:
+    def schema_for_environment(
+        self, environment_naming_info: EnvironmentNamingInfo, dialect: DialectType = None
+    ) -> str:
         schema = self.schema_name or c.DEFAULT_SCHEMA
         if (
             environment_naming_info.name.lower() != c.PROD
             and environment_naming_info.suffix_target.is_schema
         ):
-            schema = f"{schema}__{environment_naming_info.name}"
+            env_name = environment_naming_info.name
+            if environment_naming_info.normalize_name:
+                env_name = normalize_identifiers(env_name, dialect=dialect).name
+
+            schema = f"{schema}__{env_name}"
+
         return schema
 
-    def table_name_for_environment(self, environment_naming_info: EnvironmentNamingInfo) -> str:
+    def table_name_for_environment(
+        self, environment_naming_info: EnvironmentNamingInfo, dialect: DialectType = None
+    ) -> str:
         table = self.table
         if (
             environment_naming_info.name.lower() != c.PROD
             and environment_naming_info.suffix_target.is_table
         ):
-            table = f"{table}__{environment_naming_info.name}"
+            env_name = environment_naming_info.name
+            if environment_naming_info.normalize_name:
+                env_name = normalize_identifiers(env_name, dialect=dialect).name
+
+            table = f"{table}__{env_name}"
+
         return table
 
 
@@ -1334,6 +1354,7 @@ def table_name(
     return exp.table_name(table)
 
 
+# TODO: should we find a way to propagate the engine dialect into `for_environment` here?
 def display_name(
     snapshot_info_like: t.Union[SnapshotInfoLike, SnapshotInfoMixin],
     environment_naming_info: EnvironmentNamingInfo,

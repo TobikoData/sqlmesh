@@ -40,7 +40,9 @@ def cleanup_expired_views(
     for expired_catalog, expired_schema in {
         (
             snapshot.qualified_view_name.catalog_for_environment(environment.naming_info),
-            snapshot.qualified_view_name.schema_for_environment(environment.naming_info),
+            snapshot.qualified_view_name.schema_for_environment(
+                environment.naming_info, dialect=adapter.dialect
+            ),
         )
         for environment in expired_schema_environments
         for snapshot in environment.snapshots
@@ -58,7 +60,9 @@ def cleanup_expired_views(
         except Exception as e:
             logger.warning("Falied to drop the expired environment schema '%s': %s", schema, e)
     for expired_view in {
-        snapshot.qualified_view_name.for_environment(environment.naming_info)
+        snapshot.qualified_view_name.for_environment(
+            environment.naming_info, dialect=adapter.dialect
+        )
         for environment in expired_table_environments
         for snapshot in environment.snapshots
         if snapshot.is_model and not snapshot.is_symbolic
