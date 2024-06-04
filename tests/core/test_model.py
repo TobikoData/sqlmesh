@@ -1013,6 +1013,57 @@ def test_render_definition():
     assert "def test_macro(evaluator, v):" in d.format_model_expressions(model.render_definition())
 
 
+def test_render_definition_with_defaults():
+    query = """
+        SELECT
+            1::int AS a,
+            CAST(2 AS double) AS b,
+        FROM
+            db.other_table t1
+            LEFT JOIN
+            db.table t2
+            ON
+                t1.a = t2.a
+        """
+
+    expressions = d.parse(
+        f"""
+        MODEL (
+            name db.table,
+            owner owner_name,
+            dialect spark,
+            kind VIEW,
+        );
+
+        {query}
+        """
+    )
+
+    model = load_sql_based_model(
+        expressions,
+        default_catalog="catalog",
+    )
+
+    expected_expressions = d.parse(
+        f"""
+        MODEL (
+            name db.table,
+            owner owner_name,
+            cron '@daily',
+            dialect spark,
+            kind VIEW,
+        );
+
+        {query}
+        """
+    )
+
+    # Should not include the macro implementation.
+    assert d.format_model_expressions(
+        model.render_definition(include_python=False, include_defaults=True)
+    ) == d.format_model_expressions(expected_expressions)
+
+
 def test_cron():
     daily = _Node(name="x", cron="@daily")
     assert to_datetime(daily.cron_prev("2020-01-01")) == to_datetime("2019-12-31")

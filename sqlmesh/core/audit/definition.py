@@ -377,7 +377,9 @@ class StandaloneAudit(_Node, AuditMixin):
             self.render_definition(), other.render_definition(), self.dialect, other.dialect
         ).strip()
 
-    def render_definition(self, include_python: bool = True) -> t.List[exp.Expression]:
+    def render_definition(
+        self, include_python: bool = True, include_defaults: bool = False
+    ) -> t.List[exp.Expression]:
         """Returns the original list of sql expressions comprising the model definition.
 
         Args:
@@ -388,7 +390,11 @@ class StandaloneAudit(_Node, AuditMixin):
         for field_name in sorted(self.meta_fields):
             field_value = getattr(self, field_name)
             field_info = self.all_field_infos()[field_name]
-            if field_name == "standalone" or field_value != field_info.default:
+            if (
+                field_name == "standalone"
+                or (include_defaults and field_value)
+                or field_value != field_info.default
+            ):
                 if field_name == "description":
                     comment = field_value
                 else:
