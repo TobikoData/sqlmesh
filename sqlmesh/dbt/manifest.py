@@ -379,16 +379,19 @@ class ManifestHelper:
                     source = ".".join(args)
                     if not self._is_disabled_source(source):
                         dependencies.sources.add(source)
+                dependencies.macros.append(MacroReference(name="source"))
             elif call_name[0] == "ref":
                 args = [jinja_call_arg_name(arg) for arg in node.args]
                 if args and all(arg for arg in args):
                     ref = ".".join(args)
                     if not self._is_disabled_ref(ref):
                         dependencies.refs.add(ref)
+                dependencies.macros.append(MacroReference(name="ref"))
             elif call_name[0] == "var":
                 args = [jinja_call_arg_name(arg) for arg in node.args]
                 if args and args[0]:
                     dependencies.variables.add(args[0])
+                dependencies.macros.append(MacroReference(name="var"))
             elif len(call_name) == 1:
                 macro_name = call_name[0]
                 if macro_name in BUILTIN_CALLS:

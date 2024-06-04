@@ -347,7 +347,10 @@ def serialize_env(env: t.Dict[str, t.Any], path: Path) -> t.Dict[str, Executable
         if callable(v):
             name = v.__name__
             name = k if name == "<lambda>" else name
-            file_path = Path(inspect.getfile(v))
+
+            # We can't call getfile on built-in callables
+            # https://docs.python.org/3/library/inspect.html#inspect.getfile
+            file_path = Path(inspect.getfile(v)) if not inspect.isbuiltin(v) else None
 
             if _is_relative_to(file_path, path):
                 serialized[k] = Executable(
@@ -355,7 +358,7 @@ def serialize_env(env: t.Dict[str, t.Any], path: Path) -> t.Dict[str, Executable
                     payload=normalize_source(v),
                     kind=ExecutableKind.DEFINITION,
                     # Do `as_posix` to serialize windows path back to POSIX
-                    path=file_path.relative_to(path.absolute()).as_posix(),
+                    path=t.cast(Path, file_path).relative_to(path.absolute()).as_posix(),
                     alias=k if name != k else None,
                 )
             else:
