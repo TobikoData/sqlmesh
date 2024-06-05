@@ -1714,10 +1714,19 @@ def test_create_seed(mocker: MockerFixture, adapter_mock, make_snapshot):
         **common_create_kwargs,
     )
 
-    adapter_mock.create_table.assert_called_once_with(
-        f"sqlmesh__db.db__seed__{snapshot.version}__temp",
-        column_descriptions=None,
-        **common_create_kwargs,
+    adapter_mock.create_table.assert_has_calls(
+        [
+            call(
+                f"sqlmesh__db.db__seed__{snapshot.version}__temp",
+                column_descriptions=None,
+                **common_create_kwargs,
+            ),
+            call(
+                f"sqlmesh__db.db__seed__{snapshot.version}",
+                column_descriptions={},
+                **common_create_kwargs,
+            ),
+        ]
     )
 
     replace_query_calls = adapter_mock.replace_query.call_args_list
