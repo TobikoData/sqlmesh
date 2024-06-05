@@ -201,9 +201,9 @@ def test_evaluate(notebook, loaded_sushi_context):
 def test_format(notebook, sushi_context):
     with capture_output():
         test_model_path = sushi_context.path / "models" / "test_model.sql"
-        test_model_path.write_text("MODEL(name db.test); SELECT 1 AS foo FROM table")
+        test_model_path.write_text("MODEL(name db.test); SELECT 1 AS foo FROM t")
         sushi_context.load()
-    assert test_model_path.read_text() == "MODEL(name db.test); SELECT 1 AS foo FROM table"
+    assert test_model_path.read_text() == "MODEL(name db.test); SELECT 1 AS foo FROM t"
     with capture_output() as output:
         notebook.run_line_magic(magic_name="format", line="")
 
@@ -218,7 +218,7 @@ def test_format(notebook, sushi_context):
 
 SELECT
   1 AS foo
-FROM table"""
+FROM t"""
     )
 
 
