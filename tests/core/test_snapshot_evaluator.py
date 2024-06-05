@@ -1707,19 +1707,17 @@ def test_create_seed(mocker: MockerFixture, adapter_mock, make_snapshot):
         table_description=None,
     )
 
-    adapter_mock.create_table.assert_has_calls(
-        [
-            call(
-                f"sqlmesh__db.db__seed__{snapshot.version}__temp",
-                column_descriptions=None,
-                **common_create_kwargs,
-            ),
-            call(
-                f"sqlmesh__db.db__seed__{snapshot.version}",
-                column_descriptions={},
-                **common_create_kwargs,
-            ),
-        ]
+    adapter_mock.replace_query.assert_called_once_with(
+        f"sqlmesh__db.db__seed__{snapshot.version}",
+        mocker.ANY,
+        column_descriptions={},
+        **common_create_kwargs,
+    )
+
+    adapter_mock.create_table.assert_called_once_with(
+        f"sqlmesh__db.db__seed__{snapshot.version}__temp",
+        column_descriptions=None,
+        **common_create_kwargs,
     )
 
     replace_query_calls = adapter_mock.replace_query.call_args_list
@@ -1745,6 +1743,98 @@ def test_create_seed(mocker: MockerFixture, adapter_mock, make_snapshot):
         (8, "Emma"),
         (9, "Maia"),
     ]
+
+
+def test_create_seed_on_error(mocker: MockerFixture, adapter_mock, make_snapshot):
+    adapter_mock.insert_append.side_effect = Exception("test error")
+
+    expressions = d.parse(
+        """
+        MODEL (
+            name db.seed,
+            kind SEED (
+              path '../seeds/waiter_names.csv',
+              batch_size 5,
+            )
+        );
+    """
+    )
+
+    model = load_sql_based_model(expressions, path=Path("./examples/sushi/models/test_model.sql"))
+
+    snapshot = make_snapshot(model)
+    snapshot.categorize_as(SnapshotChangeCategory.BREAKING)
+
+    evaluator = SnapshotEvaluator(adapter_mock)
+    evaluator.create([snapshot], {})
+
+    adapter_mock.replace_query.assert_called_once_with(
+        f"sqlmesh__db.db__seed__{snapshot.version}",
+        mocker.ANY,
+        column_descriptions={},
+        columns_to_types={"id": exp.DataType.build("bigint"), "name": exp.DataType.build("text")},
+        storage_format=None,
+        partitioned_by=[],
+        partition_interval_unit=IntervalUnit.DAY,
+        clustered_by=[],
+        table_properties={},
+        table_description=None,
+    )
+
+    adapter_mock.drop_table.assert_called_once_with(f"sqlmesh__db.db__seed__{snapshot.version}")
+
+
+def test_create_seed_no_intervals(mocker: MockerFixture, adapter_mock, make_snapshot):
+    expressions = d.parse(
+        """
+        MODEL (
+            name db.seed,
+            kind SEED (
+              path '../seeds/waiter_names.csv',
+            )
+        );
+    """
+    )
+
+    model = load_sql_based_model(expressions, path=Path("./examples/sushi/models/test_model.sql"))
+
+    snapshot = make_snapshot(model)
+    snapshot.categorize_as(SnapshotChangeCategory.BREAKING)
+    snapshot.intervals = [(to_timestamp("2020-01-01"), to_timestamp("2020-01-02"))]
+
+    # Simulate that the table already exists.
+    adapter_mock.get_data_objects.return_value = [
+        DataObject(
+            name=f"db__seed__{snapshot.version}",
+            schema="sqlmesh__db",
+            type=DataObjectType.TABLE,
+        ),
+        DataObject(
+            name=f"db__seed__{snapshot.version}__temp",
+            schema="sqlmesh__db",
+            type=DataObjectType.TABLE,
+        ),
+    ]
+
+    evaluator = SnapshotEvaluator(adapter_mock)
+    evaluator.create([snapshot], {})
+
+    snapshot.intervals = []
+    evaluator.create([snapshot], {})
+
+    # The replace query should only be called once when there are no intervals.
+    adapter_mock.replace_query.assert_called_once_with(
+        f"sqlmesh__db.db__seed__{snapshot.version}",
+        mocker.ANY,
+        column_descriptions={},
+        columns_to_types={"id": exp.DataType.build("bigint"), "name": exp.DataType.build("text")},
+        storage_format=None,
+        partitioned_by=[],
+        partition_interval_unit=IntervalUnit.DAY,
+        clustered_by=[],
+        table_properties={},
+        table_description=None,
+    )
 
 
 def test_standalone_audit(mocker: MockerFixture, adapter_mock, make_snapshot):
