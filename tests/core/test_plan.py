@@ -18,6 +18,7 @@ from sqlmesh.core.model import (
     SeedKind,
     SeedModel,
     SqlModel,
+    ModelKindName,
 )
 from sqlmesh.core.model.kind import OnDestructiveChange
 from sqlmesh.core.model.seed import Seed
@@ -91,12 +92,22 @@ def test_forward_only_plan_sets_version(make_snapshot, mocker: MockerFixture):
 
 
 def test_forward_only_dev(make_snapshot, mocker: MockerFixture):
-    snapshot_a = make_snapshot(
+    snapshot = make_snapshot(
         SqlModel(
             name="a",
             dialect="duckdb",
             query=parse_one("select 1, ds"),
-            kind=IncrementalByTimeRangeKind(time_column="ds"),
+            kind=dict(name=ModelKindName.INCREMENTAL_BY_TIME_RANGE, time_column="ds"),
+        )
+    )
+
+    # Simulate a direct change.
+    updated_snapshot = make_snapshot(
+        SqlModel(
+            **{
+                **snapshot.model.dict(),
+                "query": parse_one("select 2, ds"),
+            }
         )
     )
 
@@ -111,9 +122,9 @@ def test_forward_only_dev(make_snapshot, mocker: MockerFixture):
         create_from="prod",
         added=set(),
         removed_snapshots={},
-        modified_snapshots={snapshot_a.name: (snapshot_a, snapshot_a)},
-        snapshots={snapshot_a.snapshot_id: snapshot_a},
-        new_snapshots={snapshot_a.snapshot_id: snapshot_a},
+        modified_snapshots={snapshot.name: (updated_snapshot, snapshot)},
+        snapshots={updated_snapshot.snapshot_id: updated_snapshot},
+        new_snapshots={updated_snapshot.snapshot_id: updated_snapshot},
         previous_plan_id=None,
         previously_promoted_snapshot_ids=set(),
         previous_finalized_snapshots=None,
@@ -133,10 +144,64 @@ def test_forward_only_dev(make_snapshot, mocker: MockerFixture):
     ).build()
 
     assert plan.restatements == {
-        snapshot_a.snapshot_id: (to_timestamp(expected_start), expected_interval_end)
+        updated_snapshot.snapshot_id: (to_timestamp(expected_start), expected_interval_end)
     }
     assert plan.start == to_date(expected_start)
     assert plan.end == expected_end
+
+
+def test_forward_only_metadata_change_dev(make_snapshot, mocker: MockerFixture):
+    snapshot = make_snapshot(
+        SqlModel(
+            name="a",
+            dialect="duckdb",
+            query=parse_one("select 1, ds"),
+            kind=dict(name=ModelKindName.INCREMENTAL_BY_TIME_RANGE, time_column="ds"),
+        )
+    )
+
+    # Simulate a metadata change.
+    updated_snapshot = make_snapshot(
+        SqlModel(
+            **{
+                **snapshot.model.dict(),
+                "owner": "new_owner",
+            }
+        )
+    )
+
+    expected_start = to_date("2022-01-02")
+    expected_end = to_date("2022-01-03")
+
+    context_diff = ContextDiff(
+        environment="test_environment",
+        is_new_environment=True,
+        is_unfinalized_environment=False,
+        create_from="prod",
+        added=set(),
+        removed_snapshots={},
+        modified_snapshots={updated_snapshot.name: (updated_snapshot, snapshot)},
+        snapshots={updated_snapshot.snapshot_id: snapshot},
+        new_snapshots={updated_snapshot.snapshot_id: snapshot},
+        previous_plan_id=None,
+        previously_promoted_snapshot_ids=set(),
+        previous_finalized_snapshots=None,
+    )
+
+    yesterday_ds_mock = mocker.patch("sqlmesh.core.plan.builder.yesterday_ds")
+    yesterday_ds_mock.return_value = expected_start
+
+    now_mock = mocker.patch("sqlmesh.core.snapshot.definition.now")
+    now_mock.return_value = expected_end
+
+    mocker.patch("sqlmesh.core.plan.builder.now").return_value = expected_end
+    mocker.patch("sqlmesh.core.plan.definition.now").return_value = expected_end
+
+    plan = PlanBuilder(
+        context_diff, DuckDBEngineAdapter.SCHEMA_DIFFER, forward_only=True, is_dev=True
+    ).build()
+
+    assert not plan.restatements
 
 
 def test_forward_only_plan_added_models(make_snapshot, mocker: MockerFixture):
