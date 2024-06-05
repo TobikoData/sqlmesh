@@ -618,10 +618,9 @@ class PythonModelTest(ModelTest):
         time_ctx = freeze_time(self._execution_time) if self._execution_time else nullcontext()
         with patch.dict(self._test_adapter_dialect.generator_class.TRANSFORMS, self._transforms):
             with t.cast(AbstractContextManager, time_ctx):
-                return t.cast(
-                    pd.DataFrame,
-                    next(self.model.render(context=self.context, **self.body.get("vars", {}))),
-                )
+                df = next(self.model.render(context=self.context, **self.body.get("vars", {})))
+                assert not isinstance(df, exp.Expression)
+                return df if isinstance(df, pd.DataFrame) else df.toPandas()
 
 
 def generate_test(
