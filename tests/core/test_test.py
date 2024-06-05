@@ -1420,10 +1420,7 @@ def test_pyspark_python_model() -> None:
         },
     )
     config = Config(
-        gateways=GatewayConfig(
-            connection=spark_connection_config,
-            test_connection=spark_connection_config,
-        ),
+        gateways=GatewayConfig(test_connection=spark_connection_config),
         model_defaults=ModelDefaultsConfig(dialect="spark"),
     )
     context = Context(config=config)
