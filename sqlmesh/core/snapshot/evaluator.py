@@ -278,7 +278,7 @@ class SnapshotEvaluator:
 
         snapshots_to_create = []
         for snapshot, table_names in snapshots_with_table_names.items():
-            if table_names - existing_objects:
+            if table_names - existing_objects or (snapshot.is_seed and not snapshot.intervals):
                 snapshots_to_create.append(snapshot)
             elif on_complete:
                 on_complete(snapshot)
@@ -1357,16 +1357,24 @@ class SeedStrategy(MaterializableStrategy):
         is_snapshot_deployable: bool,
         **render_kwargs: t.Any,
     ) -> None:
-        super().create(snapshot, name, is_table_deployable, is_snapshot_deployable, **render_kwargs)
-
-        # For seeds we insert data at the time of table creation.
         if is_table_deployable:
+            # For seeds we insert data at the time of table creation.
             model = t.cast(SeedModel, snapshot.model)
-            for index, df in enumerate(model.render_seed()):
-                if index == 0:
-                    self._replace_query_for_model(model, name, df)
-                else:
-                    self.adapter.insert_append(name, df, columns_to_types=model.columns_to_types)
+            try:
+                for index, df in enumerate(model.render_seed()):
+                    if index == 0:
+                        self._replace_query_for_model(model, name, df)
+                    else:
+                        self.adapter.insert_append(
+                            name, df, columns_to_types=model.columns_to_types
+                        )
+            except Exception:
+                self.adapter.drop_table(name)
+                raise
+        else:
+            super().create(
+                snapshot, name, is_table_deployable, is_snapshot_deployable, **render_kwargs
+            )
 
     def insert(
         self,
