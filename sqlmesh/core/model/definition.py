@@ -1636,6 +1636,8 @@ def create_sql_model(
             used_variables=used_variables,
             path=path,
         )
+    else:
+        python_env = _add_variables_to_python_env(python_env, used_variables, variables)
 
     return _create_model(
         SqlModel,
@@ -1716,6 +1718,8 @@ def create_seed_model(
             used_variables=used_variables,
             path=path,
         )
+    else:
+        python_env = _add_variables_to_python_env(python_env, used_variables, variables)
 
     return _create_model(
         SeedModel,
@@ -1999,15 +2003,22 @@ def _python_env(
             build_env(used_macro.func, env=python_env, name=name, path=module_path)
 
     serialized_env.update(serialize_env(python_env, path=module_path))
+    return _add_variables_to_python_env(serialized_env, used_variables, variables)
 
-    _, python_used_variables = _parse_dependencies(serialized_env, None)
-    used_variables |= python_used_variables
+
+def _add_variables_to_python_env(
+    python_env: t.Dict[str, Executable],
+    used_variables: t.Optional[t.Set[str]],
+    variables: t.Optional[t.Dict[str, t.Any]],
+) -> t.Dict[str, Executable]:
+    _, python_used_variables = _parse_dependencies(python_env, None)
+    used_variables = (used_variables or set()) | python_used_variables
 
     variables = {k: v for k, v in (variables or {}).items() if k in used_variables}
     if variables:
-        serialized_env[c.SQLMESH_VARS] = Executable.value(variables)
+        python_env[c.SQLMESH_VARS] = Executable.value(variables)
 
-    return serialized_env
+    return python_env
 
 
 def _parse_dependencies(

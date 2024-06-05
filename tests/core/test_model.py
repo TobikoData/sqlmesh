@@ -4093,6 +4093,38 @@ def test_variables_python_model(mocker: MockerFixture) -> None:
     assert df.to_dict(orient="records") == [{"a": "test_value", "b": "default_value", "c": None}]
 
 
+def test_variables_python_sql_model(mocker: MockerFixture) -> None:
+    @model(
+        "test_variables_python_model",
+        is_sql=True,
+        kind="full",
+        columns={"a": "string", "b": "string", "c": "string"},
+    )
+    def model_with_variables(evaluator, **kwargs):
+        return exp.select(
+            exp.convert(evaluator.var("TEST_VAR_A")).as_("a"),
+            exp.convert(evaluator.var("test_var_b", "default_value")).as_("b"),
+            exp.convert(evaluator.var("test_var_c")).as_("c"),
+        )
+
+    python_sql_model = model.get_registry()["test_variables_python_model"].model(
+        module_path=Path("."),
+        path=Path("."),
+        variables={"test_var_a": "test_value", "test_var_unused": 2},
+    )
+
+    assert python_sql_model.python_env[c.SQLMESH_VARS] == Executable.value(
+        {"test_var_a": "test_value"}
+    )
+
+    context = ExecutionContext(mocker.Mock(), {}, None, None)
+    query = list(python_sql_model.render(context=context))[0]
+    assert (
+        query.sql()
+        == """SELECT 'test_value' AS "a", 'default_value' AS "b", NULL AS "c" """.strip()
+    )
+
+
 def test_named_variables_python_model(mocker: MockerFixture) -> None:
     @model(
         "test_named_variables_python_model",
