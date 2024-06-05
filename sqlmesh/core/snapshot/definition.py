@@ -675,9 +675,21 @@ class Snapshot(PydanticModel, SnapshotInfoMixin):
         execution_time: t.Optional[TimeLike] = None,
         *,
         strict: bool = True,
+        is_preview: bool = False,
     ) -> Interval:
+        """Get the interval that should be removed from the snapshot.
+
+        Args:
+            start: The start date/time of the interval to remove.
+            end: The end date/time of the interval to removed.
+            execution_time: The time the interval is being removed.
+            strict: Whether to fail when the inclusive start is the same as the exclusive end.
+            is_preview: Whether the interval needs to be removed for a preview of forward-only changes.
+                When previewing, we are not actually restating a model, but removing an interval to trigger
+                a run.
+        """
         end = execution_time or now() if self.depends_on_past else end
-        if self.full_history_restatement_only and self.intervals:
+        if not is_preview and self.full_history_restatement_only and self.intervals:
             start = self.intervals[0][0]
         return self.inclusive_exclusive(start, end, strict)
 

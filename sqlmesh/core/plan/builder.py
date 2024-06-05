@@ -314,6 +314,7 @@ class PlanBuilder:
 
         restatements: t.Dict[SnapshotId, Interval] = {}
         forward_only_preview_needed = self._forward_only_preview_needed
+        is_preview = False
         if not restate_models and forward_only_preview_needed:
             # Add model names for new forward-only snapshots to the restatement list
             # in order to compute previews.
@@ -322,6 +323,7 @@ class PlanBuilder:
                 for s in self._context_diff.new_snapshots.values()
                 if s.is_materialized and (self._forward_only or s.model.forward_only)
             }
+            is_preview = True
 
         if not restate_models:
             return {}
@@ -358,6 +360,7 @@ class PlanBuilder:
                 self._end or now(),
                 self._execution_time,
                 strict=False,
+                is_preview=is_preview,
             )
             # Since we are traversing the graph in topological order and the largest interval range is pushed down
             # the graph we just have to check our immediate parents in the graph and not the whole upstream graph.
