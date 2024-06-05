@@ -15,6 +15,7 @@ from sqlmesh.core import constants as c
 from sqlmesh.core.config import (
     Config,
     DuckDBConnectionConfig,
+    SparkConnectionConfig,
     GatewayConfig,
     ModelDefaultsConfig,
 )
@@ -1408,6 +1409,47 @@ test_foo:
             model=_create_model("SELECT struct_value FROM foo"),
             context=Context(config=Config(model_defaults=ModelDefaultsConfig(dialect="duckdb"))),
         )
+
+
+def test_pyspark_python_model() -> None:
+    spark_connection_config = SparkConnectionConfig(
+        config={
+            "spark.master": "local",
+            "spark.sql.warehouse.dir": "/tmp/data_dir",
+            "spark.driver.extraJavaOptions": "-Dderby.system.home=/tmp/derby_dir",
+        },
+    )
+    config = Config(
+        gateways=GatewayConfig(
+            connection=spark_connection_config,
+            test_connection=spark_connection_config,
+        ),
+        model_defaults=ModelDefaultsConfig(dialect="spark"),
+    )
+    context = Context(config=config)
+
+    @model("pyspark_model", columns={"col": "int"})
+    def execute(context, start, end, execution_time, **kwargs):
+        return context.spark.sql("SELECT 1 AS col")
+
+    _check_successful_or_raise(
+        _create_test(
+            body=load_yaml(
+                """
+test_pyspark_model:
+  model: pyspark_model
+  outputs:
+    query:
+      - col: 1
+                """
+            ),
+            test_name="test_pyspark_model",
+            model=model.get_registry()["pyspark_model"].model(
+                module_path=Path("."), path=Path(".")
+            ),
+            context=context,
+        ).run()
+    )
 
 
 def test_test_generation(tmp_path: Path) -> None:
