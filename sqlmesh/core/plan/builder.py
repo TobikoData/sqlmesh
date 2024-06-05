@@ -644,7 +644,7 @@ class PlanBuilder:
                 raise PlanError("Effective date cannot be in the future.")
 
         for snapshot in self._context_diff.new_snapshots.values():
-            if not snapshot.disable_restatement:
+            if not snapshot.disable_restatement and not snapshot.full_history_restatement_only:
                 snapshot.effective_from = self._effective_from
 
     def _is_forward_only_change(self, s_id: SnapshotId) -> bool:
