@@ -321,7 +321,13 @@ class PlanBuilder:
             restate_models = {
                 s.name
                 for s in self._context_diff.new_snapshots.values()
-                if s.is_materialized and (self._forward_only or s.model.forward_only)
+                if s.is_materialized
+                and (self._forward_only or s.model.forward_only)
+                and (
+                    # Metadata changes should not be previewed.
+                    self._context_diff.directly_modified(s.name)
+                    or self._context_diff.indirectly_modified(s.name)
+                )
             }
             is_preview = True
 
