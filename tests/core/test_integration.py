@@ -336,6 +336,66 @@ def test_forward_only_model_regular_plan_preview_enabled(init_and_plan_context: 
 
 
 @freeze_time("2023-01-08 15:00:00")
+def test_full_history_restatement_model_regular_plan_preview_enabled(
+    init_and_plan_context: t.Callable,
+):
+    context, plan = init_and_plan_context("examples/sushi")
+    context.apply(plan)
+
+    model_name = "sushi.marketing"  # SCD2 model
+
+    model = context.get_model(model_name)
+    model = add_projection_to_model(t.cast(SqlModel, model))
+
+    context.upsert_model(model)
+    snapshot = context.get_snapshot(model, raise_if_missing=True)
+    customers_snapshot = context.get_snapshot("sushi.customers", raise_if_missing=True)
+    waiter_as_customer_snapshot = context.get_snapshot(
+        "sushi.waiter_as_customer_by_day", raise_if_missing=True
+    )
+
+    plan = context.plan("dev", no_prompts=True, skip_tests=True, enable_preview=True)
+
+    assert len(plan.new_snapshots) == 3
+    assert (
+        plan.context_diff.snapshots[snapshot.snapshot_id].change_category
+        == SnapshotChangeCategory.FORWARD_ONLY
+    )
+    assert (
+        plan.context_diff.snapshots[customers_snapshot.snapshot_id].change_category
+        == SnapshotChangeCategory.FORWARD_ONLY
+    )
+    assert (
+        plan.context_diff.snapshots[waiter_as_customer_snapshot.snapshot_id].change_category
+        == SnapshotChangeCategory.FORWARD_ONLY
+    )
+
+    assert plan.start == to_date("2023-01-07")
+    assert plan.missing_intervals == [
+        SnapshotIntervals(
+            snapshot_id=customers_snapshot.snapshot_id,
+            intervals=[
+                (to_timestamp("2023-01-07"), to_timestamp("2023-01-08")),
+            ],
+        ),
+        SnapshotIntervals(
+            snapshot_id=snapshot.snapshot_id,
+            intervals=[
+                (to_timestamp("2023-01-07"), to_timestamp("2023-01-08")),
+            ],
+        ),
+        SnapshotIntervals(
+            snapshot_id=waiter_as_customer_snapshot.snapshot_id,
+            intervals=[
+                (to_timestamp("2023-01-07"), to_timestamp("2023-01-08")),
+            ],
+        ),
+    ]
+
+    context.apply(plan)
+
+
+@freeze_time("2023-01-08 15:00:00")
 def test_hourly_model_with_lookback_no_backfill_in_dev(init_and_plan_context: t.Callable):
     context, plan = init_and_plan_context("examples/sushi")
 
