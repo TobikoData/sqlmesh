@@ -612,6 +612,14 @@ def test_get_removal_intervals_full_history_restatement_model(make_snapshot):
     snapshot.add_interval("2020-01-01", "2024-01-01")
 
     interval = snapshot.get_removal_interval(
+        "2023-01-01",
+        "2023-01-01",
+        execution_time=execution_time,
+        is_preview=True,
+    )
+    assert interval == (to_timestamp("2023-01-01"), execution_time)
+
+    interval = snapshot.get_removal_interval(
         "2023-01-01", "2023-01-01", execution_time=execution_time
     )
     assert interval == (to_timestamp("2020-01-01"), execution_time)
