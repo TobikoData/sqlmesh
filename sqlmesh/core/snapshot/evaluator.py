@@ -1357,6 +1357,7 @@ class SeedStrategy(MaterializableStrategy):
         is_snapshot_deployable: bool,
         **render_kwargs: t.Any,
     ) -> None:
+        super().create(snapshot, name, is_table_deployable, is_snapshot_deployable, **render_kwargs)
         if is_table_deployable:
             # For seeds we insert data at the time of table creation.
             model = t.cast(SeedModel, snapshot.model)
@@ -1371,10 +1372,6 @@ class SeedStrategy(MaterializableStrategy):
             except Exception:
                 self.adapter.drop_table(name)
                 raise
-        else:
-            super().create(
-                snapshot, name, is_table_deployable, is_snapshot_deployable, **render_kwargs
-            )
 
     def insert(
         self,
