@@ -396,6 +396,34 @@ def test_full_history_restatement_model_regular_plan_preview_enabled(
 
 
 @freeze_time("2023-01-08 15:00:00")
+def test_metadata_changed_regular_plan_preview_enabled(init_and_plan_context: t.Callable):
+    context, plan = init_and_plan_context("examples/sushi")
+    context.apply(plan)
+
+    model_name = "sushi.waiter_revenue_by_day"
+
+    model = context.get_model(model_name)
+    model = model.copy(update={"owner": "new_owner"})
+
+    context.upsert_model(model)
+    snapshot = context.get_snapshot(model, raise_if_missing=True)
+    top_waiters_snapshot = context.get_snapshot("sushi.top_waiters", raise_if_missing=True)
+
+    plan = context.plan("dev", no_prompts=True, skip_tests=True, enable_preview=True)
+    assert len(plan.new_snapshots) == 2
+    assert (
+        plan.context_diff.snapshots[snapshot.snapshot_id].change_category
+        == SnapshotChangeCategory.FORWARD_ONLY
+    )
+    assert (
+        plan.context_diff.snapshots[top_waiters_snapshot.snapshot_id].change_category
+        == SnapshotChangeCategory.FORWARD_ONLY
+    )
+    assert not plan.missing_intervals
+    assert not plan.restatements
+
+
+@freeze_time("2023-01-08 15:00:00")
 def test_hourly_model_with_lookback_no_backfill_in_dev(init_and_plan_context: t.Callable):
     context, plan = init_and_plan_context("examples/sushi")
 
