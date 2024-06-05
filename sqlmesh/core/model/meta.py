@@ -110,16 +110,29 @@ class ModelMeta(_Node):
         if isinstance(v, exp.Expression):
             return [extract(v)]
         if isinstance(v, list):
-            return [
-                (
-                    entry[0].lower(),
-                    {
-                        key: d.parse(value)[0] if isinstance(value, str) else value
-                        for key, value in entry[1].items()
-                    },
+            audits = []
+
+            for entry in v:
+                if isinstance(entry, dict):
+                    args = entry
+                    name = entry.pop("name")
+                elif isinstance(entry, (tuple, list)):
+                    name, args = entry
+                else:
+                    raise ConfigError(f"Audit must be a dictionary or named tuple. Got {entry}.")
+
+                audits.append(
+                    (
+                        name.lower(),
+                        {
+                            key: d.parse_one(value) if isinstance(value, str) else value
+                            for key, value in args.items()
+                        },
+                    )
                 )
-                for entry in v
-            ]
+
+            return audits
+
         return v
 
     @field_validator("tags", mode="before")

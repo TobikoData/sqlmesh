@@ -203,6 +203,7 @@ class Loader(abc.ABC):
                         model = create_external_model(
                             **row,
                             dialect=config.model_defaults.dialect,
+                            defaults=config.model_defaults.dict(),
                             path=path,
                             project=config.project,
                             default_catalog=self._context.default_catalog,

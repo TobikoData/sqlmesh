@@ -2084,9 +2084,9 @@ def validate_state_sync_environment(
 def validate_tables(snapshots: t.Iterable[Snapshot], context: Context) -> None:
     adapter = context.engine_adapter
     for snapshot in snapshots:
-        if not snapshot.is_model:
+        if not snapshot.is_model or snapshot.is_external:
             continue
-        table_should_exist = not snapshot.is_symbolic
+        table_should_exist = not snapshot.is_embedded
         assert adapter.table_exists(snapshot.table_name()) == table_should_exist
         if table_should_exist:
             assert select_all(snapshot.table_name(), adapter)

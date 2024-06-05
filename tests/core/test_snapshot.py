@@ -1746,3 +1746,10 @@ def test_missing_intervals_node_start_end(make_snapshot):
     assert missing_intervals([snapshot], start="2024-03-01", end=to_datetime("2024-03-10")) == {}
     assert missing_intervals([snapshot], start="2024-03-13", end="2024-03-14") == {}
     assert missing_intervals([snapshot], start="2024-03-14", end="2024-03-30") == {}
+
+
+def test_external_model_audits(sushi_context):
+    snapshot = sushi_context.get_snapshot("raw.demographics")
+    assert snapshot.evaluatable
+    assert len(snapshot.model.audits) == 2
+    assert snapshot.intervals

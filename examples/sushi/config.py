@@ -24,10 +24,15 @@ CURRENT_FILE_PATH = os.path.abspath(__file__)
 DATA_DIR = os.path.join(os.path.dirname(__file__), "data")
 
 
+defaults = {"dialect": "duckdb"}
+model_defaults = ModelDefaultsConfig(**defaults)
+model_defaults_iceberg = ModelDefaultsConfig(**defaults, storage_format="iceberg")
+
+
 # An in memory DuckDB config.
 config = Config(
     default_connection=DuckDBConnectionConfig(),
-    model_defaults=ModelDefaultsConfig(dialect="duckdb"),
+    model_defaults=model_defaults,
 )
 
 bigquery_config = Config(
@@ -38,7 +43,7 @@ bigquery_config = Config(
         )
     },
     default_gateway="bq",
-    model_defaults=ModelDefaultsConfig(dialect="duckdb"),
+    model_defaults=model_defaults,
 )
 
 # A configuration used for SQLMesh tests.
@@ -46,13 +51,13 @@ test_config = Config(
     gateways={"in_memory": GatewayConfig(connection=DuckDBConnectionConfig())},
     default_gateway="in_memory",
     plan=PlanConfig(auto_categorize_changes=CategorizerConfig(sql=AutoCategorizationMode.SEMI)),
-    model_defaults=ModelDefaultsConfig(dialect="duckdb"),
+    model_defaults=model_defaults,
 )
 
 # A stateful DuckDB config.
 local_config = Config(
     default_connection=DuckDBConnectionConfig(database=f"{DATA_DIR}/local.duckdb"),
-    model_defaults=ModelDefaultsConfig(dialect="duckdb"),
+    model_defaults=model_defaults,
 )
 
 airflow_config = Config(
@@ -65,21 +70,21 @@ airflow_config = Config(
             },
         )
     ),
-    model_defaults=ModelDefaultsConfig(dialect="duckdb", storage_format="iceberg"),
+    model_defaults=model_defaults_iceberg,
 )
 
 
 airflow_config_docker = Config(
     default_scheduler=AirflowSchedulerConfig(airflow_url="http://airflow-webserver:8080/"),
     gateways=GatewayConfig(connection=SparkConnectionConfig()),
-    model_defaults=ModelDefaultsConfig(dialect="duckdb", storage_format="iceberg"),
+    model_defaults=model_defaults_iceberg,
 )
 
 # A DuckDB config with a physical schema map.
 map_config = Config(
     default_connection=DuckDBConnectionConfig(),
     physical_schema_override={"sushi": "company_internal"},
-    model_defaults=ModelDefaultsConfig(dialect="duckdb"),
+    model_defaults=model_defaults,
 )
 
 
@@ -114,13 +119,13 @@ required_approvers_config = Config(
             ],
         ),
     ],
-    model_defaults=ModelDefaultsConfig(dialect="duckdb"),
+    model_defaults=model_defaults,
 )
 
 
 environment_suffix_config = Config(
     default_connection=DuckDBConnectionConfig(),
-    model_defaults=ModelDefaultsConfig(dialect="duckdb"),
+    model_defaults=model_defaults,
     environment_suffix_target=EnvironmentSuffixTarget.TABLE,
 )
 
@@ -133,7 +138,7 @@ CATALOGS = {
 local_catalogs = Config(
     default_connection=DuckDBConnectionConfig(catalogs=CATALOGS),
     default_test_connection=DuckDBConnectionConfig(catalogs=CATALOGS),
-    model_defaults=ModelDefaultsConfig(dialect="duckdb"),
+    model_defaults=model_defaults,
 )
 
 environment_catalog_mapping_config = Config(
@@ -144,7 +149,7 @@ environment_catalog_mapping_config = Config(
             "dev_catalog": ":memory:",
         }
     ),
-    model_defaults=ModelDefaultsConfig(dialect="duckdb"),
+    model_defaults=model_defaults,
     environment_suffix_target=EnvironmentSuffixTarget.TABLE,
     environment_catalog_mapping={
         "^prod$": "prod_catalog",
