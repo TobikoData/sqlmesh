@@ -75,6 +75,15 @@ gateways:
       password: mysql
       port: 3306
       charset: utf8
+  inttest_materialize:
+    connection:
+      type: materialize
+      host: localhost
+      port: 6877
+      user: mz_system
+      password: materialize
+      database: materialize
+      cluster: quickstart
 
   # Cloud databases
   inttest_snowflake:

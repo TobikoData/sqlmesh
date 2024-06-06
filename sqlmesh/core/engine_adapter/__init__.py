@@ -9,6 +9,7 @@ from sqlmesh.core.engine_adapter.base import (
 from sqlmesh.core.engine_adapter.bigquery import BigQueryEngineAdapter
 from sqlmesh.core.engine_adapter.databricks import DatabricksEngineAdapter
 from sqlmesh.core.engine_adapter.duckdb import DuckDBEngineAdapter
+from sqlmesh.core.engine_adapter.materialize import MaterializeEngineAdapter
 from sqlmesh.core.engine_adapter.mssql import MSSQLEngineAdapter
 from sqlmesh.core.engine_adapter.mysql import MySQLEngineAdapter
 from sqlmesh.core.engine_adapter.postgres import PostgresEngineAdapter
@@ -26,6 +27,7 @@ DIALECT_TO_ENGINE_ADAPTER = {
     "databricks": DatabricksEngineAdapter,
     "redshift": RedshiftEngineAdapter,
     "postgres": PostgresEngineAdapter,
+    "materialize": MaterializeEngineAdapter,
     "mysql": MySQLEngineAdapter,
     "mssql": MSSQLEngineAdapter,
     "trino": TrinoEngineAdapter,

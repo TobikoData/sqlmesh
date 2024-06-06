@@ -218,7 +218,7 @@ class TestContext:
         table_kind: str = "BASE TABLE",
         snowflake_capitalize_ids: bool = True,
     ) -> str:
-        if self.dialect in ["postgres", "redshift"]:
+        if self.dialect in ["postgres", "redshift", "materialize"]:
             query = f"""
                 SELECT
                     pgc.relname,
@@ -312,7 +312,7 @@ class TestContext:
         snowflake_capitalize_ids: bool = True,
     ) -> t.Dict[str, str]:
         comment_index = 1
-        if self.dialect in ["postgres", "redshift"]:
+        if self.dialect in ["postgres", "redshift", "materialize"]:
             query = f"""
                 SELECT
                     cols.column_name,
