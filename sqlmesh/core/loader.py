@@ -120,7 +120,8 @@ class Loader(abc.ABC):
         self._config_mtimes = {path: max(mtimes) for path, mtimes in config_mtimes.items()}
 
         macros, jinja_macros = self._load_scripts()
-        models = self._load_models(macros, jinja_macros)
+        gateway = context.gateway or context.config.default_gateway
+        models = self._load_models(macros, jinja_macros, gateway)
 
         for model in models.values():
             self._add_model_to_dag(model)
@@ -166,7 +167,7 @@ class Loader(abc.ABC):
 
     @abc.abstractmethod
     def _load_models(
-        self, macros: MacroRegistry, jinja_macros: JinjaMacroRegistry
+        self, macros: MacroRegistry, jinja_macros: JinjaMacroRegistry, gateway: t.Optional[str]
     ) -> UniqueKeyDict[str, Model]:
         """Loads all models."""
 
@@ -179,7 +180,7 @@ class Loader(abc.ABC):
     def _load_metrics(self) -> UniqueKeyDict[str, MetricMeta]:
         return UniqueKeyDict("metrics")
 
-    def _load_external_models(self) -> UniqueKeyDict[str, Model]:
+    def _load_external_models(self, gateway: t.Optional[str]) -> UniqueKeyDict[str, Model]:
         models: UniqueKeyDict[str, Model] = UniqueKeyDict("models")
         for context_path, config in self._context.configs.items():
             external_models_yaml = Path(context_path / c.EXTERNAL_MODELS_YAML)
@@ -200,15 +201,19 @@ class Loader(abc.ABC):
 
                 with open(path, "r", encoding="utf-8") as file:
                     for row in YAML().load(file.read()):
-                        model = create_external_model(
-                            **row,
-                            dialect=config.model_defaults.dialect,
-                            defaults=config.model_defaults.dict(),
-                            path=path,
-                            project=config.project,
-                            default_catalog=self._context.default_catalog,
-                        )
-                        models[model.fqn] = model
+                        model_gateway = row.get("gateway", None)
+                        # only load the external model if it doesnt define a specific gateway
+                        # or, if it does define a specific gateway, it needs to match the current gateway
+                        if not model_gateway or (gateway == model_gateway):
+                            model = create_external_model(
+                                **row,
+                                dialect=config.model_defaults.dialect,
+                                defaults=config.model_defaults.dict(),
+                                path=path,
+                                project=config.project,
+                                default_catalog=self._context.default_catalog,
+                            )
+                            models[model.fqn] = model
         return models
 
     def _add_model_to_dag(self, model: Model) -> None:
@@ -261,14 +266,14 @@ class SqlMeshLoader(Loader):
         return macros, jinja_macros
 
     def _load_models(
-        self, macros: MacroRegistry, jinja_macros: JinjaMacroRegistry
+        self, macros: MacroRegistry, jinja_macros: JinjaMacroRegistry, gateway: t.Optional[str]
     ) -> UniqueKeyDict[str, Model]:
         """
         Loads all of the models within the model directory with their associated
         audits into a Dict and creates the dag
         """
         models = self._load_sql_models(macros, jinja_macros)
-        models.update(self._load_external_models())
+        models.update(self._load_external_models(gateway))
         models.update(self._load_python_models())
 
         return models

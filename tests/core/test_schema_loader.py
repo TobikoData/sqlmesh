@@ -1,4 +1,5 @@
 import logging
+import typing as t
 from pathlib import Path
 from unittest.mock import patch
 
@@ -11,6 +12,7 @@ from sqlmesh.core.config import Config, DuckDBConnectionConfig, GatewayConfig
 from sqlmesh.core.context import Context
 from sqlmesh.core.dialect import parse
 from sqlmesh.core.model import SqlModel, create_external_model, load_sql_based_model
+from sqlmesh.core.model.definition import ExternalModel
 from sqlmesh.core.schema_loader import create_external_models_file
 from sqlmesh.core.snapshot import SnapshotChangeCategory
 from sqlmesh.utils.yaml import YAML
@@ -99,6 +101,70 @@ def test_create_external_models(tmpdir, assert_exp_eq):
     context.create_external_models()
     context.load()
     assert context.models['"memory"."sushi"."raw_fruits"']
+    # there was no explicit gateway, so it should not be written to the external models schema
+    assert context.models['"memory"."sushi"."raw_fruits"'].gateway is None
+
+
+def test_gateway_specific_external_models(tmpdir: Path):
+    gateways = {
+        "dev": GatewayConfig(connection=DuckDBConnectionConfig()),
+        "prod": GatewayConfig(connection=DuckDBConnectionConfig()),
+    }
+
+    config = Config(gateways=gateways, default_gateway="dev")
+
+    dev_context = Context(paths=[tmpdir], config=config, gateway="dev")
+    dev_context.engine_adapter.execute("create schema landing")
+    dev_context.engine_adapter.execute("create table landing.dev_source as select 1")
+    dev_context.engine_adapter.execute("create schema lake")
+
+    prod_context = Context(paths=[tmpdir], config=config, gateway="prod")
+    prod_context.engine_adapter.execute("create schema landing")
+    prod_context.engine_adapter.execute("create table landing.prod_source as select 1")
+    prod_context.engine_adapter.execute("create schema lake")
+
+    def _create_model(gateway: str):
+        return load_sql_based_model(
+            parse(
+                """
+            MODEL (
+                name lake.table,
+                kind FULL,
+            );
+
+            SELECT * FROM landing.@{gateway}_source
+            """,
+            ),
+            variables={"gateway": gateway},
+            default_catalog="memory",
+        )
+
+    dev_context.upsert_model(_create_model("dev"))
+    prod_context.upsert_model(_create_model("prod"))
+
+    dev_context.create_external_models()
+    dev_context.load()
+
+    dev_models = dev_context.models
+    assert len(dev_models) == 1
+    dev_model = t.cast(ExternalModel, dev_models['"memory"."landing"."dev_source"'])
+    assert dev_model.gateway == "dev"
+
+    prod_context.create_external_models()
+    prod_context.load()
+    prod_models = prod_context.models
+    prod_model = t.cast(ExternalModel, prod_models['"memory"."landing"."prod_source"'])
+    assert prod_model.gateway == "prod"
+
+    # each context can only see models for its own gateway
+    # check that models from both gateways present in the file, to show that prod_context.create_external_models() didnt clobber the dev ones
+    external_models_filename = tmpdir / c.EXTERNAL_MODELS_YAML
+    with open(external_models_filename, "r", encoding="utf8") as fd:
+        contents = YAML().load(fd)
+
+        assert len(contents) == 2
+        assert len([c for c in contents if c["name"] == '"memory"."landing"."dev_source"']) == 1
+        assert len([c for c in contents if c["name"] == '"memory"."landing"."prod_source"']) == 1
 
 
 def test_no_internal_model_conversion(tmp_path: Path, make_snapshot, mocker: MockerFixture):
