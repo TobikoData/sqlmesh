@@ -126,6 +126,12 @@ class RowDiff(PydanticModel, frozen=True):
         """The percentage of rows that are only present in target."""
         return self._pct(self.t_only_count)
 
+    # TODO: update this
+    @property
+    def t_unchanged_count(self) -> int:
+        """Count of rows unchanged between source and target."""
+        return int(self.stats["t_only_count"])
+
     def _pct(self, numerator: int) -> float:
         return round((numerator / (self.source_count + self.target_count)) * 100, 2)
 
