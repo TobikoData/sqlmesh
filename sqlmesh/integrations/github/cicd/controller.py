@@ -279,7 +279,7 @@ class GithubEvent:
 
 
 class GithubController:
-    BOT_HEADER_MSG = "**SQLMesh Bot Info**"
+    BOT_HEADER_MSG = ":robot: **SQLMesh Bot Info** :robot:"
     MAX_BYTE_LENGTH = 65535
 
     def __init__(
@@ -565,7 +565,7 @@ class GithubController:
                 "Please check PR and resolve any issues."
             )
         plan_summary = f"""<details>
-  <summary>Prod Plan Being Applied</summary>
+  <summary>:ship: Prod Plan Being Applied</summary>
 
 {self.get_plan_summary(self.prod_plan)}
 </details>
@@ -814,9 +814,16 @@ class GithubController:
                     table_header = h("thead", [h("tr", row) for row in header_rows])
                     table_body = h("tbody", [h("tr", row) for row in body_rows])
                     summary = str(h("table", [table_header, table_body]))
+                vde_title = (
+                    "- :eyes: To **review** this PR's changes, use virtual data environment:"
+                )
+                comment_value = f"{vde_title}\n  - `{self.pr_environment_name}`"
+                if self.bot_config.enable_deploy_command:
+                    comment_value += "\n- :arrow_forward: To apply this PR's plan to prod, comment:\n  - `/deploy`"
+                dedup_regex = vde_title.replace("*", r"\*") + r".*"
                 updated_comment, _ = self.update_sqlmesh_comment_info(
-                    value=f"- {check_title}",
-                    dedup_regex=rf"- {check_title_static}.*",
+                    value=comment_value,
+                    dedup_regex=dedup_regex,
                 )
                 if updated_comment:
                     self._append_output("created_pr_environment", "true")
