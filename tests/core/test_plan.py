@@ -2236,3 +2236,46 @@ def test_environment_previous_finalized_snapshots(make_snapshot, mocker: MockerF
         snapshot_c.table_info,
         snapshot_d.table_info,
     }
+
+
+def test_metadata_change(make_snapshot, mocker: MockerFixture):
+    snapshot = make_snapshot(
+        SqlModel(
+            name="a",
+            dialect="duckdb",
+            query=parse_one("select 1, ds"),
+            kind=dict(name=ModelKindName.INCREMENTAL_BY_TIME_RANGE, time_column="ds"),
+        )
+    )
+
+    # Simulate a direct change.
+    updated_snapshot = make_snapshot(
+        SqlModel(
+            **{
+                **snapshot.model.dict(),
+                "owner": "new_owner",
+            }
+        )
+    )
+
+    context_diff = ContextDiff(
+        environment="test_environment",
+        is_new_environment=True,
+        is_unfinalized_environment=False,
+        create_from="prod",
+        added=set(),
+        removed_snapshots={},
+        modified_snapshots={snapshot.name: (updated_snapshot, snapshot)},
+        snapshots={updated_snapshot.snapshot_id: updated_snapshot},
+        new_snapshots={updated_snapshot.snapshot_id: updated_snapshot},
+        previous_plan_id=None,
+        previously_promoted_snapshot_ids=set(),
+        previous_finalized_snapshots=None,
+    )
+
+    plan = PlanBuilder(context_diff, DuckDBEngineAdapter.SCHEMA_DIFFER, is_dev=True).build()
+
+    assert (
+        plan.snapshots[updated_snapshot.snapshot_id].change_category
+        == SnapshotChangeCategory.METADATA
+    )
