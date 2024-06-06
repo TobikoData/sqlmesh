@@ -138,10 +138,11 @@ def test_run_all_success_with_approvers_approved(
 
     assert len(created_comments) == 1
     assert created_comments[0].body.startswith(
-        """**SQLMesh Bot Info**
-- PR Virtual Data Environment: myoverride_2
+        """:robot: **SQLMesh Bot Info** :robot:
+- :eyes: To **review** this PR's changes, use virtual data environment:
+  - `myoverride_2`
 <details>
-  <summary>Prod Plan Being Applied</summary>
+  <summary>:ship: Prod Plan Being Applied</summary>
 
 **New environment `prod` will be created from `prod`**"""
     )
@@ -264,10 +265,11 @@ def test_run_all_success_with_approvers_approved_merge_delete(
 
     assert len(created_comments) == 1
     assert created_comments[0].body.startswith(
-        """**SQLMesh Bot Info**
-- PR Virtual Data Environment: hello_world_2
+        """:robot: **SQLMesh Bot Info** :robot:
+- :eyes: To **review** this PR's changes, use virtual data environment:
+  - `hello_world_2`
 <details>
-  <summary>Prod Plan Being Applied</summary>
+  <summary>:ship: Prod Plan Being Applied</summary>
 
 **New environment `prod` will be created from `prod`**"""
     )
@@ -390,7 +392,9 @@ def test_run_all_missing_approval(
     assert len(created_comments) == 1
     assert (
         created_comments[0].body
-        == """**SQLMesh Bot Info**\n- PR Virtual Data Environment: hello_world_2"""
+        == """:robot: **SQLMesh Bot Info** :robot:
+- :eyes: To **review** this PR's changes, use virtual data environment:
+  - `hello_world_2`"""
     )
     with open(github_output_file, "r", encoding="utf-8") as f:
         output = f.read()
@@ -902,10 +906,11 @@ def test_prod_update_failure(
 
     assert len(created_comments) == 1
     assert created_comments[0].body.startswith(
-        """**SQLMesh Bot Info**
-- PR Virtual Data Environment: hello_world_2
+        """:robot: **SQLMesh Bot Info** :robot:
+- :eyes: To **review** this PR's changes, use virtual data environment:
+  - `hello_world_2`
 <details>
-  <summary>Prod Plan Being Applied</summary>
+  <summary>:ship: Prod Plan Being Applied</summary>
 
 **New environment `prod` will be created from `prod`**"""
     )
@@ -1095,10 +1100,13 @@ def test_comment_command_deploy_prod(
 
     assert len(created_comments) == 1
     assert created_comments[0].body.startswith(
-        """**SQLMesh Bot Info**
-- PR Virtual Data Environment: hello_world_2
+        """:robot: **SQLMesh Bot Info** :robot:
+- :eyes: To **review** this PR's changes, use virtual data environment:
+  - `hello_world_2`
+- :arrow_forward: To apply this PR's plan to prod, comment:
+  - `/deploy`
 <details>
-  <summary>Prod Plan Being Applied</summary>
+  <summary>:ship: Prod Plan Being Applied</summary>
 
 **New environment `prod` will be created from `prod`**"""
     )

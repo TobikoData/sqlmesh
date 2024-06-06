@@ -317,8 +317,8 @@ update_sqlmesh_comment_info_params = [
         [],
         "test1",
         None,
-        "**SQLMesh Bot Info**\ntest1",
-        "**SQLMesh Bot Info**\ntest1",
+        ":robot: **SQLMesh Bot Info** :robot:\ntest1",
+        ":robot: **SQLMesh Bot Info** :robot:\ntest1",
     ),
     (
         "Existing comments that are not related, one is created and then updated with value",
@@ -328,43 +328,43 @@ update_sqlmesh_comment_info_params = [
         ],
         "test1",
         None,
-        "**SQLMesh Bot Info**\ntest1",
-        "**SQLMesh Bot Info**\ntest1",
+        ":robot: **SQLMesh Bot Info** :robot:\ntest1",
+        ":robot: **SQLMesh Bot Info** :robot:\ntest1",
     ),
     (
         "Existing bot comment, that is updated and create comment is not called",
         [
-            MockIssueComment(body="**SQLMesh Bot Info**\ntest2"),
+            MockIssueComment(body=":robot: **SQLMesh Bot Info** :robot:\ntest2"),
             MockIssueComment(body="test3"),
         ],
         "test1",
         None,
-        "**SQLMesh Bot Info**\ntest2\ntest1",
+        ":robot: **SQLMesh Bot Info** :robot:\ntest2\ntest1",
         None,
     ),
     (
         "Existing bot comment, that is not updated because of dedup_regex and create comment is not called",
         [
-            MockIssueComment(body="**SQLMesh Bot Info**\ntest2"),
+            MockIssueComment(body=":robot: **SQLMesh Bot Info** :robot:\ntest2"),
             MockIssueComment(body="test3"),
         ],
         "test1",
         "test2",
-        "**SQLMesh Bot Info**\ntest2",
+        ":robot: **SQLMesh Bot Info** :robot:\ntest2",
         None,
     ),
     (
         "Ensure comments are truncated if they are too long",
         [
-            MockIssueComment(body="**SQLMesh Bot Info**\ntest1"),
+            MockIssueComment(body=":robot: **SQLMesh Bot Info** :robot:\ntest1"),
         ],
         # Making sure that although we will be under the character limit of `65535` we will still truncate
         # because the byte size of this character is 3 and therefore we will be over the limit since it is based
         # on bytes on not characters (despite what the error message may say)
         "桜" * 65000,
         None,
-        # ((Max Byte Length) - (Length of "**SQLMesh Bot Info**\ntest1\n")) / (Length of "桜")
-        "**SQLMesh Bot Info**\ntest1\n" + ("桜" * int((65535 - 27) / 3)),
+        # ((Max Byte Length) - (Length of ":robot: **SQLMesh Bot Info** :robot:\ntest1\n")) / (Length of "桜")
+        ":robot: **SQLMesh Bot Info** :robot:\ntest1\n" + ("桜" * int((65535 - 43) / 3)),
         None,
     ),
 ]

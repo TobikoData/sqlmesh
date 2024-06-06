@@ -227,10 +227,11 @@ def test_merge_pr_has_non_breaking_change(
     assert len(created_comments) == 1
     assert (
         created_comments[0].body
-        == f"""**SQLMesh Bot Info**
-- PR Virtual Data Environment: hello_world_2
+        == f""":robot: **SQLMesh Bot Info** :robot:
+- :eyes: To **review** this PR's changes, use virtual data environment:
+  - `hello_world_2`
 <details>
-  <summary>Prod Plan Being Applied</summary>
+  <summary>:ship: Prod Plan Being Applied</summary>
 
 {expected_prod_plan_summary}
 </details>
@@ -425,10 +426,11 @@ def test_merge_pr_has_non_breaking_change_diff_start(
     assert len(created_comments) == 1
     assert (
         created_comments[0].body
-        == f"""**SQLMesh Bot Info**
-- PR Virtual Data Environment: hello_world_2
+        == f""":robot: **SQLMesh Bot Info** :robot:
+- :eyes: To **review** this PR's changes, use virtual data environment:
+  - `hello_world_2`
 <details>
-  <summary>Prod Plan Being Applied</summary>
+  <summary>:ship: Prod Plan Being Applied</summary>
 
 {expected_prod_plan}
 </details>
@@ -735,9 +737,9 @@ def test_merge_pr_has_no_changes(
     assert len(created_comments) == 1
     assert (
         created_comments[0].body
-        == f"""**SQLMesh Bot Info**
+        == f""":robot: **SQLMesh Bot Info** :robot:
 <details>
-  <summary>Prod Plan Being Applied</summary>
+  <summary>:ship: Prod Plan Being Applied</summary>
 
 {expected_prod_plan_summary}
 </details>
@@ -921,8 +923,9 @@ def test_no_merge_since_no_deploy_signal(
     assert len(created_comments) == 1
     assert (
         created_comments[0].body
-        == """**SQLMesh Bot Info**
-- PR Virtual Data Environment: hello_world_2"""
+        == """:robot: **SQLMesh Bot Info** :robot:
+- :eyes: To **review** this PR's changes, use virtual data environment:
+  - `hello_world_2`"""
     )
 
     with open(github_output_file, "r", encoding="utf-8") as f:
@@ -1080,8 +1083,9 @@ def test_no_merge_since_no_deploy_signal_no_approvers_defined(
     assert len(created_comments) == 1
     assert (
         created_comments[0].body
-        == """**SQLMesh Bot Info**
-- PR Virtual Data Environment: hello_world_2"""
+        == """:robot: **SQLMesh Bot Info** :robot:
+- :eyes: To **review** this PR's changes, use virtual data environment:
+  - `hello_world_2`"""
     )
 
     with open(github_output_file, "r", encoding="utf-8") as f:
@@ -1257,10 +1261,13 @@ def test_deploy_comment_pre_categorized(
     assert len(created_comments) == 1
     assert (
         created_comments[0].body
-        == f"""**SQLMesh Bot Info**
-- PR Virtual Data Environment: hello_world_2
+        == f""":robot: **SQLMesh Bot Info** :robot:
+- :eyes: To **review** this PR's changes, use virtual data environment:
+  - `hello_world_2`
+- :arrow_forward: To apply this PR's plan to prod, comment:
+  - `/deploy`
 <details>
-  <summary>Prod Plan Being Applied</summary>
+  <summary>:ship: Prod Plan Being Applied</summary>
 
 {expected_prod_plan}
 </details>
@@ -1613,10 +1620,11 @@ def test_overlapping_changes_models(
     assert len(created_comments) == 1
     assert (
         created_comments[0].body
-        == f"""**SQLMesh Bot Info**
-- PR Virtual Data Environment: hello_world_2
+        == f""":robot: **SQLMesh Bot Info** :robot:
+- :eyes: To **review** this PR's changes, use virtual data environment:
+  - `hello_world_2`
 <details>
-  <summary>Prod Plan Being Applied</summary>
+  <summary>:ship: Prod Plan Being Applied</summary>
 
 {expected_prod_plan_summary}
 </details>
@@ -1791,10 +1799,11 @@ def test_pr_delete_model(
     assert len(created_comments) == 1
     assert (
         created_comments[0].body
-        == f"""**SQLMesh Bot Info**
-- PR Virtual Data Environment: hello_world_2
+        == f""":robot: **SQLMesh Bot Info** :robot:
+- :eyes: To **review** this PR's changes, use virtual data environment:
+  - `hello_world_2`
 <details>
-  <summary>Prod Plan Being Applied</summary>
+  <summary>:ship: Prod Plan Being Applied</summary>
 
 {expected_prod_plan_summary}
 </details>
