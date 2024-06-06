@@ -90,7 +90,7 @@ Schema Diff Between 'PROD' and 'DEV' environments for model 'sqlmesh_example.inc
 
 Row Counts:
 ├──  FULL MATCH: 6 rows (92.31%)
-└──  PROD ONLY: 1 rows
+└──  PROD ONLY: 1 rows (7.69%)
 
 COMMON ROWS column comparison stats:
          pct_match
