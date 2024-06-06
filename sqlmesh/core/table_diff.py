@@ -126,10 +126,10 @@ class RowDiff(PydanticModel, frozen=True):
         """The percentage of rows that are only present in target."""
         return self._pct(self.t_only_count)
 
-    # TODO: update this
+    # TODO: add properties for metrics like this
     @property
-    def t_unchanged_count(self) -> int:
-        """Count of rows unchanged between source and target."""
+    def t_added_count(self) -> int:
+        """Count of rows added to target."""
         return int(self.stats["t_only_count"])
 
     def _pct(self, numerator: int) -> float:
@@ -345,7 +345,7 @@ class TableDiff:
                 column_stats = (
                     self.adapter.fetchdf(column_stats_query, quote_identifiers=True)
                     .T.rename(
-                        columns={0: "pct_match"},
+                        columns={0: "pct_match"},  # TODO: update this to include row count
                         index=lambda x: str(x).replace("_matches", "") if x else "",
                     )
                     .drop(index=index_cols)
