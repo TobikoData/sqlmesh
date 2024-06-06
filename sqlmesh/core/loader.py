@@ -180,7 +180,7 @@ class Loader(abc.ABC):
     def _load_metrics(self) -> UniqueKeyDict[str, MetricMeta]:
         return UniqueKeyDict("metrics")
 
-    def _load_external_models(self, gateway: t.Optional[str]) -> UniqueKeyDict[str, Model]:
+    def _load_external_models(self, gateway: t.Optional[str] = None) -> UniqueKeyDict[str, Model]:
         models: UniqueKeyDict[str, Model] = UniqueKeyDict("models")
         for context_path, config in self._context.configs.items():
             external_models_yaml = Path(context_path / c.EXTERNAL_MODELS_YAML)
