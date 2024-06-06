@@ -158,7 +158,10 @@ class MacroEvaluator:
         }
         self.python_env = python_env or {}
         self._jinja_env: t.Optional[Environment] = jinja_env
-        self.macros = {normalize_macro_name(k): v.func for k, v in macro.get_registry().items()}
+        self.macros = {
+            normalize_macro_name(k): v.func if hasattr(v, "func") else v
+            for k, v in macro.get_registry().items()
+        }
         self._schema = schema
         self._resolve_tables = resolve_tables
         self.columns_to_types_called = False

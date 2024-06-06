@@ -37,6 +37,10 @@ class Model(exp.Expression):
     arg_types = {"expressions": True}
 
 
+class Macro(exp.Expression):
+    arg_types = {"expressions": True}
+
+
 class Audit(exp.Expression):
     arg_types = {"expressions": True}
 
@@ -524,6 +528,7 @@ def _create_parser(parser_type: t.Type[exp.Expression], table_keys: t.List[str])
 
 PARSERS = {
     "MODEL": _create_parser(Model, ["name"]),
+    "MACRO": _create_parser(Macro, ["name"]),
     "AUDIT": _create_parser(Audit, ["model"]),
     "METRIC": _create_parser(Metric, ["name"]),
 }
