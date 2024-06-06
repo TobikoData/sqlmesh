@@ -3887,20 +3887,34 @@ def test_variables():
             kind FULL,
         );
 
-        SELECT @VAR('TEST_VAR_A') AS a, @VAR('test_var_b', 'default_value') AS b, @VAR('test_var_c') AS c, @TEST_MACRO_VAR() AS d;
+        SELECT
+          @VAR('TEST_VAR_A') AS a,
+          @VAR('test_var_b', 'default_value') AS b,
+          @VAR('test_var_c') AS c,
+          @TEST_MACRO_VAR() AS d,
+          @'foo_@{test_var_e}' AS e,
+          @SQL(foo_@{test_var_f}) AS f,
+          'foo_@{test_var_unused}' AS g
     """,
         default_dialect="bigquery",
     )
 
     model = load_sql_based_model(
-        expressions, variables={"test_var_a": "test_value", "test_var_d": 1, "test_var_unused": 2}
+        expressions,
+        variables={
+            "test_var_a": "test_value",
+            "test_var_d": 1,
+            "test_var_e": 4,
+            "test_var_f": 5,
+            "test_var_unused": 2,
+        },
     )
     assert model.python_env[c.SQLMESH_VARS] == Executable.value(
-        {"test_var_a": "test_value", "test_var_d": 1}
+        {"test_var_a": "test_value", "test_var_d": 1, "test_var_e": 4, "test_var_f": 5}
     )
     assert (
         model.render_query().sql(dialect="bigquery")
-        == "SELECT 'test_value' AS `a`, 'default_value' AS `b`, NULL AS `c`, 11 AS `d`"
+        == "SELECT 'test_value' AS `a`, 'default_value' AS `b`, NULL AS `c`, 11 AS `d`, 'foo_4' AS `e`, `foo_5` AS `f`, 'foo_@{test_var_unused}' AS `g`"
     )
 
     with pytest.raises(ConfigError, match=r"Macro VAR requires at least one argument.*"):
