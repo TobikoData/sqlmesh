@@ -1983,10 +1983,10 @@ def _python_env(
                     elif name in variables:
                         used_variables.add(name)
                 elif (
-                    isinstance(macro_func_or_var, exp.Identifier) and "@" in macro_func_or_var.this
-                ):
+                    isinstance(macro_func_or_var, (exp.Identifier, d.MacroStrReplace, d.MacroSQL))
+                ) and "@" in macro_func_or_var.name:
                     for _, identifier, braced_identifier, _ in MacroStrTemplate.pattern.findall(
-                        macro_func_or_var.this
+                        macro_func_or_var.name
                     ):
                         var_name = braced_identifier or identifier
                         if var_name in variables:
