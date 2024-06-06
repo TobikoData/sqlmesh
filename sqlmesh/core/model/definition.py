@@ -1961,7 +1961,9 @@ def _python_env(
     expressions = ensure_list(expressions)
     for expression in expressions:
         if not isinstance(expression, d.Jinja):
-            for macro_func_or_var in expression.find_all(d.MacroFunc, d.MacroVar, exp.Identifier):
+            for macro_func_or_var in expression.find_all(
+                d.MacroFunc, d.MacroVar, exp.Identifier, exp.Literal
+            ):
                 if macro_func_or_var.__class__ is d.MacroFunc:
                     name = macro_func_or_var.this.name.lower()
                     if name in macros:
@@ -1983,8 +1985,8 @@ def _python_env(
                     elif name in variables:
                         used_variables.add(name)
                 elif (
-                    isinstance(macro_func_or_var, exp.Identifier) and "@" in macro_func_or_var.this
-                ):
+                    isinstance(macro_func_or_var, exp.Identifier) or macro_func_or_var.is_string
+                ) and "@" in macro_func_or_var.this:
                     for _, identifier, braced_identifier, _ in MacroStrTemplate.pattern.findall(
                         macro_func_or_var.this
                     ):
