@@ -257,6 +257,7 @@ class SnapshotDagGenerator:
 
             finalize_task = self._create_finalize_task(plan_dag_spec.environment)
             before_finalize_task >> finalize_task
+            finalize_task >> end_task
 
             on_plan_apply_end_task = PythonOperator(
                 task_id="on_plan_apply_end",
@@ -266,9 +267,7 @@ class SnapshotDagGenerator:
             )
             finalize_task >> on_plan_apply_end_task
 
-            self._add_notification_target_tasks(
-                plan_dag_spec, start_task, end_task, on_plan_apply_end_task
-            )
+            self._add_notification_target_tasks(plan_dag_spec, start_task, finalize_task)
             return dag
 
     def _add_notification_target_tasks(
@@ -276,9 +275,7 @@ class SnapshotDagGenerator:
         request: common.PlanDagSpec,
         start_task: BaseOperator,
         end_task: BaseOperator,
-        previous_end_task: BaseOperator,
     ) -> None:
-        has_success_or_failed_notification = False
         for notification_target in request.notification_targets:
             notification_operator_provider = NOTIFICATION_TARGET_TO_OPERATOR_PROVIDER.get(
                 type(notification_target)
@@ -297,15 +294,9 @@ class SnapshotDagGenerator:
             if plan_start_notification_task:
                 start_task >> plan_start_notification_task
             if plan_success_notification_task:
-                has_success_or_failed_notification = True
-                previous_end_task >> plan_success_notification_task
-                plan_success_notification_task >> end_task
+                end_task >> plan_success_notification_task
             if plan_failed_notification_task:
-                has_success_or_failed_notification = True
-                previous_end_task >> plan_failed_notification_task
-                plan_failed_notification_task >> end_task
-        if not has_success_or_failed_notification:
-            previous_end_task >> end_task
+                end_task >> plan_failed_notification_task
 
     def _create_creation_tasks(
         self,
