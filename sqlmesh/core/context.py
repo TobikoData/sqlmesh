@@ -1301,6 +1301,7 @@ class GenericContext(BaseContext, t.Generic[C]):
         )
         if show:
             self.console.show_schema_diff(table_diff.schema_diff())
+            # TODO: this is where the sample row diffs are invoked
             self.console.show_row_diff(table_diff.row_diff(), show_sample=show_sample)
         return table_diff
 

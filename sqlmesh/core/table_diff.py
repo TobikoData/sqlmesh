@@ -211,6 +211,7 @@ class TableDiff:
             model_name=self.model_name,
         )
 
+    # TODO: this is where the actual row diff logic is located
     def row_diff(self) -> RowDiff:
         if self._row_diff is None:
             s_selects = {c: exp.column(c, "s").as_(f"s__{c}") for c in self.source_schema}
