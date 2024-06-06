@@ -203,6 +203,79 @@ class BaseDuckDBConnectionConfig(ConnectionConfig):
         return init
 
 
+class MaterializeConnectionConfig(ConnectionConfig):
+    """
+    Materialize Connection Configuration.
+
+    Args:
+        host: The hostname of the Materialize instance.
+        user: The username to use for authentication.
+        password: The password to use for authentication.
+        database: The name of the database to connect to.
+        port: The port number of the Materialize instance. Default is 6875.
+        sslmode: The SSL mode to use for the connection. Default is 'disable'.
+        connect_timeout: The number of seconds before the connection to the server will timeout.
+        application_name: The name of the application connecting to Materialize.
+        cluster: The name of the cluster to connect to.
+    """
+
+    host: str
+    user: str
+    password: str
+    database: str
+    port: int = 6875
+    sslmode: str = "disable"
+    connect_timeout: int = 10
+    application_name: t.Optional[str] = None
+    cluster: t.Optional[str] = None
+
+    concurrent_tasks: int = 4
+    register_comments: bool = True
+    pre_ping: bool = True
+
+    type_: Literal["materialize"] = Field(alias="type", default="materialize")
+
+    @property
+    def _connection_kwargs_keys(self) -> t.Set[str]:
+        return {
+            "host",
+            "user",
+            "password",
+            "database",
+            "port",
+            "sslmode",
+            "connect_timeout",
+            "application_name",
+            "cluster",
+        }
+
+    @property
+    def _engine_adapter(self) -> t.Type[EngineAdapter]:
+        return engine_adapter.MaterializeEngineAdapter
+
+    @property
+    def _connection_factory(self) -> t.Callable:
+        from psycopg2 import connect
+
+        return connect
+
+    @property
+    def _static_connection_kwargs(self) -> t.Dict[str, t.Any]:
+        kwargs = {
+            "host": self.host,
+            "user": self.user,
+            "password": self.password,
+            "database": self.database,
+            "port": self.port,
+            "sslmode": self.sslmode,
+            "connect_timeout": self.connect_timeout,
+            "application_name": self.application_name,
+        }
+        if self.cluster:
+            kwargs["options"] = f"--cluster={self.cluster}"
+        return kwargs
+
+
 class MotherDuckConnectionConfig(BaseDuckDBConnectionConfig):
     """Configuration for the MotherDuck connection.
 

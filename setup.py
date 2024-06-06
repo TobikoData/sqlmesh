@@ -113,6 +113,9 @@ setup(
             "langchain",
             "openai",
         ],
+        "materialize": [
+            "psycopg2",
+        ],
         "mssql": [
             "pymssql",
         ],
