@@ -698,9 +698,9 @@ class PlanBuilder:
 
     def _ensure_no_broken_references(self) -> None:
         for snapshot in self._context_diff.snapshots.values():
-            broken_references = {x.name for x in self._context_diff.removed_snapshots} & {
-                x for x in snapshot.node.depends_on
-            }
+            broken_references = {
+                x.name for x in self._context_diff.removed_snapshots.values() if not x.is_external
+            } & {x for x in snapshot.node.depends_on}
             if broken_references:
                 broken_references_msg = ", ".join(f"'{x}'" for x in broken_references)
                 raise PlanError(

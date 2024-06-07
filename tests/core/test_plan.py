@@ -13,6 +13,7 @@ from sqlmesh.core.context_diff import ContextDiff
 from sqlmesh.core.engine_adapter import DuckDBEngineAdapter
 from sqlmesh.core.environment import EnvironmentNamingInfo
 from sqlmesh.core.model import (
+    ExternalModel,
     FullKind,
     IncrementalByTimeRangeKind,
     SeedKind,
@@ -1161,6 +1162,36 @@ def test_broken_references(make_snapshot, mocker: MockerFixture):
         match=r"""Removed '"a"' are referenced in '"b"'.*""",
     ):
         PlanBuilder(context_diff, DuckDBEngineAdapter.SCHEMA_DIFFER).build()
+
+
+def test_broken_references_external_model(make_snapshot, mocker: MockerFixture):
+    snapshot_a = make_snapshot(ExternalModel(name="a", kind=dict(name=ModelKindName.EXTERNAL)))
+    snapshot_a.categorize_as(SnapshotChangeCategory.BREAKING)
+
+    snapshot_b = make_snapshot(SqlModel(name="b", query=parse_one("select 2, ds FROM a")))
+    snapshot_b.categorize_as(SnapshotChangeCategory.BREAKING)
+
+    context_diff = ContextDiff(
+        environment="test_environment",
+        is_new_environment=True,
+        is_unfinalized_environment=False,
+        create_from="prod",
+        added=set(),
+        removed_snapshots={snapshot_a.snapshot_id: snapshot_a.table_info},
+        modified_snapshots={snapshot_b.name: (snapshot_b, snapshot_b)},
+        snapshots={snapshot_b.snapshot_id: snapshot_b},
+        new_snapshots={},
+        previous_plan_id=None,
+        previously_promoted_snapshot_ids=set(),
+        previous_finalized_snapshots=None,
+    )
+
+    # Make sure the downstream snapshot doesn't have any parents,
+    # since its only parent has been removed from the project.
+    assert not snapshot_b.parents
+
+    # Shouldn't raise
+    PlanBuilder(context_diff, DuckDBEngineAdapter.SCHEMA_DIFFER).build()
 
 
 def test_effective_from(make_snapshot, mocker: MockerFixture):
