@@ -1094,9 +1094,17 @@ class SqlModel(_SqlBasedModel):
         for edit in edits:
             if isinstance(edit, Insert):
                 expr = edit.expression
-                if _is_udtf(expr) or (
-                    not _is_projection(expr) and expr.parent not in inserted_expressions
-                ):
+                if _is_udtf(expr):
+                    # projection subqueries do not change cardinality, engines don't allow these to return
+                    # more than one row of data
+                    parent = expr.find_ancestor(exp.Subquery)
+
+                    if not parent:
+                        return None
+
+                    expr = parent
+
+                if not _is_projection(expr) and expr.parent not in inserted_expressions:
                     return None
             elif not isinstance(edit, Keep):
                 return None
