@@ -129,8 +129,9 @@ class BuiltInPlanEvaluator(PlanEvaluator):
         except Exception as e:
             analytics.collector.on_plan_apply_end(plan_id=plan.plan_id, error=e)
             raise
-        finally:
+        else:
             analytics.collector.on_plan_apply_end(plan_id=plan.plan_id)
+        finally:
             self.console.stop_plan_evaluation()
 
     def _backfill(
