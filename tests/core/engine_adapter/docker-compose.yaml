@@ -200,6 +200,7 @@ services:
       - --bootstrap-builtin-probe-cluster-replica-size=25cc
       - --availability-zone=test1
       - --availability-zone=test2
+      - --system-parameter-default=max_tables=1000
       - --all-features
     ports:
       - 6875:6875
