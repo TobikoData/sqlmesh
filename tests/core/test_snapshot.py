@@ -1041,6 +1041,28 @@ def test_categorize_change_sql(make_snapshot):
         is SnapshotChangeCategory.NON_BREAKING
     )
 
+    # A UDTF subquery has been added.
+    assert (
+        categorize_change(
+            new=make_snapshot(
+                SqlModel(name="a", query=parse_one("select 1, ds, (select x from unnest(a) x)"))
+            ),
+            old=old_snapshot,
+            config=config,
+        )
+        is SnapshotChangeCategory.NON_BREAKING
+    )
+    assert (
+        categorize_change(
+            new=make_snapshot(
+                SqlModel(name="a", query=parse_one("select 1, ds, (select x from posexplode(a) x)"))
+            ),
+            old=old_snapshot,
+            config=config,
+        )
+        is SnapshotChangeCategory.NON_BREAKING
+    )
+
 
 def test_categorize_change_seed(make_snapshot, tmp_path):
     config = CategorizerConfig(seed=AutoCategorizationMode.SEMI)
