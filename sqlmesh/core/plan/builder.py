@@ -569,7 +569,7 @@ class PlanBuilder:
                         )
                     else:
                         # Metadata updated.
-                        snapshot.categorize_as(SnapshotChangeCategory.FORWARD_ONLY)
+                        snapshot.categorize_as(SnapshotChangeCategory.METADATA)
 
             elif s_id in self._context_diff.added and self._is_new_snapshot(snapshot):
                 snapshot.categorize_as(
@@ -689,8 +689,7 @@ class PlanBuilder:
                 candidate.snapshot_id not in self._context_diff.new_snapshots
                 and promoted.is_forward_only
                 and not promoted.is_paused
-                and not candidate.is_forward_only
-                and not candidate.is_indirect_non_breaking
+                and not candidate.reuses_previous_version
                 and promoted.version == candidate.version
             ):
                 raise PlanError(
