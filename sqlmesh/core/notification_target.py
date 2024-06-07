@@ -1,6 +1,5 @@
 from __future__ import annotations
 
-import functools
 import smtplib
 import sys
 import typing as t
@@ -35,9 +34,6 @@ def _sqlmesh_version() -> str:
         return __version__
     except ImportError:
         return "0.0.0"
-
-
-NOTIFICATION_FUNCTIONS: t.Dict[NotificationEvent, str] = {}
 
 
 class NotificationStatus(str, Enum):
@@ -81,25 +77,13 @@ class NotificationEvent(str, Enum):
     MIGRATION_FAILURE = "migration_failure"
 
 
-def notify(event: NotificationEvent) -> t.Callable:
-    """Decorator used to register 'notify' methods and the events they correspond to."""
-
-    def decorator(f: t.Callable) -> t.Callable:
-        @functools.wraps(f)
-        def wrapper(*args: t.List[t.Any], **kwargs: t.Dict[str, t.Any]) -> None:
-            return f(*args, **kwargs)
-
-        NOTIFICATION_FUNCTIONS[event] = f.__name__
-        return wrapper
-
-    return decorator
-
-
 class BaseNotificationTarget(PydanticModel, frozen=True):
     """
     Base notification target model. Provides a command for sending notifications that is currently only used
     by the built-in scheduler. Other schedulers like Airflow use the configuration of the target itself
     to create the notification constructs appropriate for the scheduler.
+
+    Notification functions follow a naming convention of `notify_` + NotificationEvent value.
     """
 
     type_: str
@@ -113,7 +97,6 @@ class BaseNotificationTarget(PydanticModel, frozen=True):
             msg: The message to send.
         """
 
-    @notify(NotificationEvent.APPLY_START)
     def notify_apply_start(self, environment: str, plan_id: str) -> None:
         """Notify when an apply starts.
 
@@ -126,7 +109,6 @@ class BaseNotificationTarget(PydanticModel, frozen=True):
             f"Plan `{plan_id}` apply started for environment `{environment}`.",
         )
 
-    @notify(NotificationEvent.APPLY_END)
     def notify_apply_end(self, environment: str, plan_id: str) -> None:
         """Notify when an apply ends.
 
@@ -139,7 +121,6 @@ class BaseNotificationTarget(PydanticModel, frozen=True):
             f"Plan `{plan_id}` apply finished for environment `{environment}`.",
         )
 
-    @notify(NotificationEvent.RUN_START)
     def notify_run_start(self, environment: str) -> None:
         """Notify when a SQLMesh run starts.
 
@@ -148,7 +129,6 @@ class BaseNotificationTarget(PydanticModel, frozen=True):
         """
         self.send(NotificationStatus.INFO, f"SQLMesh run started for environment `{environment}`.")
 
-    @notify(NotificationEvent.RUN_END)
     def notify_run_end(self, environment: str) -> None:
         """Notify when a SQLMesh run ends.
 
@@ -159,17 +139,14 @@ class BaseNotificationTarget(PydanticModel, frozen=True):
             NotificationStatus.SUCCESS, f"SQLMesh run finished for environment `{environment}`."
         )
 
-    @notify(NotificationEvent.MIGRATION_START)
     def notify_migration_start(self) -> None:
         """Notify when a SQLMesh migration starts."""
         self.send(NotificationStatus.INFO, "SQLMesh migration started.")
 
-    @notify(NotificationEvent.MIGRATION_END)
     def notify_migration_end(self) -> None:
         """Notify when a SQLMesh migration ends."""
         self.send(NotificationStatus.SUCCESS, "SQLMesh migration finished.")
 
-    @notify(NotificationEvent.APPLY_FAILURE)
     def notify_apply_failure(self, environment: str, plan_id: str, exc: str) -> None:
         """Notify in the case of an apply failure.
 
@@ -184,7 +161,6 @@ class BaseNotificationTarget(PydanticModel, frozen=True):
             exc=exc,
         )
 
-    @notify(NotificationEvent.RUN_FAILURE)
     def notify_run_failure(self, exc: str) -> None:
         """Notify in the case of a run failure.
 
@@ -193,7 +169,6 @@ class BaseNotificationTarget(PydanticModel, frozen=True):
         """
         self.send(NotificationStatus.FAILURE, "SQLMesh run failed.", exc=exc)
 
-    @notify(NotificationEvent.AUDIT_FAILURE)
     def notify_audit_failure(self, audit_error: AuditError) -> None:
         """Notify in the case of an audit failure.
 
@@ -202,7 +177,6 @@ class BaseNotificationTarget(PydanticModel, frozen=True):
         """
         self.send(NotificationStatus.FAILURE, "Audit failure.", audit_error=audit_error)
 
-    @notify(NotificationEvent.MIGRATION_FAILURE)
     def notify_migration_failure(self, exc: str) -> None:
         """Notify in the case of a migration failure.
 
@@ -470,6 +444,5 @@ class NotificationTargetManager:
     def _get_notification_function(
         self, notification_target: NotificationTarget, event: NotificationEvent
     ) -> t.Callable:
-        """Lookup the registered function for a notification event"""
-        func_name = NOTIFICATION_FUNCTIONS[event]
-        return getattr(notification_target, func_name)
+        """Fetch the function for a notification event"""
+        return getattr(notification_target, f"notify_{event.value}")
