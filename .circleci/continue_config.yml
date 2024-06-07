@@ -221,7 +221,7 @@ jobs:
       - run:
           name: Run tests
           command: make engine-docker-test
-          no_output_timeout: 30m
+          no_output_timeout: 40m
 
   trigger_private_tests:
       docker:
