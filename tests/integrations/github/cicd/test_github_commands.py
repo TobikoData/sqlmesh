@@ -1103,7 +1103,7 @@ def test_comment_command_deploy_prod(
         """:robot: **SQLMesh Bot Info** :robot:
 - :eyes: To **review** this PR's changes, use virtual data environment:
   - `hello_world_2`
-- :arrow_forward: To apply this PR's plan to prod, comment:
+- :arrow_forward: To **apply** this PR's plan to prod, comment:
   - `/deploy`
 <details>
   <summary>:ship: Prod Plan Being Applied</summary>

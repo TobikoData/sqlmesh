@@ -819,7 +819,7 @@ class GithubController:
                 )
                 comment_value = f"{vde_title}\n  - `{self.pr_environment_name}`"
                 if self.bot_config.enable_deploy_command:
-                    comment_value += "\n- :arrow_forward: To apply this PR's plan to prod, comment:\n  - `/deploy`"
+                    comment_value += "\n- :arrow_forward: To **apply** this PR's plan to prod, comment:\n  - `/deploy`"
                 dedup_regex = vde_title.replace("*", r"\*") + r".*"
                 updated_comment, _ = self.update_sqlmesh_comment_info(
                     value=comment_value,
