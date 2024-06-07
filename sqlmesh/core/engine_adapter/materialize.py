@@ -10,9 +10,10 @@ from sqlmesh.core.engine_adapter.mixins import (
     PandasNativeFetchDFSupportMixin,
 )
 from sqlmesh.core.engine_adapter.shared import set_catalog
+from sqlglot import exp
 
 if t.TYPE_CHECKING:
-    pass
+    from sqlmesh.core._typing import TableName
 
 logger = logging.getLogger(__name__)
 
@@ -23,6 +24,13 @@ class MaterializeEngineAdapter(
     PandasNativeFetchDFSupportMixin,
     GetCurrentCatalogFromFunctionMixin,
 ):
+    CURRENT_CATALOG_EXPRESSION = exp.func("current_database")
     DIALECT = "materialize"
     SUPPORTS_REPLACE_TABLE = False
     SUPPORTS_MATERIALIZED_VIEWS = True
+    SUPPORTS_TRANSACTIONS = False
+
+    def _truncate_table(self, table_name: TableName) -> None:
+        table = exp.to_table(table_name)
+        # Materialize does not support TRUNCATE TABLE so we have to use DELETE FROM
+        self.execute(f"DELETE FROM {table.sql(dialect=self.dialect, identify=True)}")

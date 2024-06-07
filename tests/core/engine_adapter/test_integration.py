@@ -622,6 +622,15 @@ def config() -> Config:
             ],
         ),
         pytest.param(
+            "materialize",
+            marks=[
+                pytest.mark.docker,
+                pytest.mark.engine,
+                pytest.mark.materialize,
+                pytest.mark.xdist_group("engine_integration_materialize"),
+            ],
+        ),
+        pytest.param(
             "bigquery",
             marks=[
                 pytest.mark.bigquery,

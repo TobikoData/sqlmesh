@@ -246,7 +246,6 @@ class MaterializeConnectionConfig(ConnectionConfig):
             "sslmode",
             "connect_timeout",
             "application_name",
-            "cluster",
         }
 
     @property
@@ -257,22 +256,22 @@ class MaterializeConnectionConfig(ConnectionConfig):
     def _connection_factory(self) -> t.Callable:
         from psycopg2 import connect
 
-        return connect
+        # TODO: Look into improving this
+        def connection(*args, **kwargs):  # type: ignore
+            conn = connect(*args, **kwargs)
+            conn.autocommit = True
+            return conn
+
+        return connection
 
     @property
     def _static_connection_kwargs(self) -> t.Dict[str, t.Any]:
-        kwargs = {
-            "host": self.host,
-            "user": self.user,
-            "password": self.password,
-            "database": self.database,
-            "port": self.port,
-            "sslmode": self.sslmode,
-            "connect_timeout": self.connect_timeout,
-            "application_name": self.application_name,
-        }
+        kwargs = {}
+        options_list = ["--auto_route_introspection_queries=on", "--welcome_message=off"]
         if self.cluster:
-            kwargs["options"] = f"--cluster={self.cluster}"
+            options_list.insert(0, f"--cluster={self.cluster}")
+        kwargs["options"] = " ".join(options_list)
+
         return kwargs
 
 
