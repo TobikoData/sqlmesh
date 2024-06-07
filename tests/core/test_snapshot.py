@@ -1637,15 +1637,46 @@ def test_deployability_index_uncategorized_forward_only_model(make_snapshot):
     snapshot_b = make_snapshot(SqlModel(name="b", query=parse_one("SELECT 1")))
     snapshot_b.parents = (snapshot_a.snapshot_id,)
 
-    deplyability_index = DeployabilityIndex.create(
+    deployability_index = DeployabilityIndex.create(
         {s.snapshot_id: s for s in [snapshot_a, snapshot_b]}
     )
 
-    assert not deplyability_index.is_deployable(snapshot_a)
-    assert not deplyability_index.is_deployable(snapshot_b)
+    assert not deployability_index.is_deployable(snapshot_a)
+    assert not deployability_index.is_deployable(snapshot_b)
 
-    assert not deplyability_index.is_representative(snapshot_a)
-    assert not deplyability_index.is_representative(snapshot_b)
+    assert not deployability_index.is_representative(snapshot_a)
+    assert not deployability_index.is_representative(snapshot_b)
+
+
+def test_deployability_index_categorized_forward_only_model(make_snapshot):
+    model_a = SqlModel(
+        name="a",
+        query=parse_one("SELECT 1, ds"),
+        kind=IncrementalByTimeRangeKind(time_column="ds", forward_only=True),
+    )
+
+    snapshot_a_old = make_snapshot(model_a)
+    snapshot_a_old.categorize_as(SnapshotChangeCategory.BREAKING)
+
+    snapshot_a = make_snapshot(model_a)
+    snapshot_a.previous_versions = snapshot_a_old.all_versions
+    snapshot_a.categorize_as(SnapshotChangeCategory.METADATA)
+
+    snapshot_b = make_snapshot(SqlModel(name="b", query=parse_one("SELECT 1")))
+    snapshot_b.parents = (snapshot_a.snapshot_id,)
+    snapshot_b.categorize_as(SnapshotChangeCategory.METADATA)
+
+    # The fact that the model is forward only should be ignored if an actual category
+    # has been assigned.
+    deployability_index = DeployabilityIndex.create(
+        {s.snapshot_id: s for s in [snapshot_a, snapshot_b]}
+    )
+
+    assert deployability_index.is_deployable(snapshot_a)
+    assert deployability_index.is_deployable(snapshot_b)
+
+    assert deployability_index.is_representative(snapshot_a)
+    assert deployability_index.is_representative(snapshot_b)
 
 
 def test_deployability_index_missing_parent(make_snapshot):

@@ -1259,13 +1259,16 @@ class DeployabilityIndex(PydanticModel, frozen=True):
             if deployable and node in snapshots:
                 snapshot = snapshots[node]
                 # Capture uncategorized snapshot which represents a forward-only model.
-                is_forward_only_model = (
-                    snapshot.previous_versions and snapshot.is_model and snapshot.model.forward_only
+                is_uncategorized_forward_only_model = (
+                    snapshot.change_category is None
+                    and snapshot.previous_versions
+                    and snapshot.is_model
+                    and snapshot.model.forward_only
                 )
                 if (
                     snapshot.is_forward_only
                     or snapshot.is_indirect_non_breaking
-                    or is_forward_only_model
+                    or is_uncategorized_forward_only_model
                 ):
                     # FORWARD_ONLY and INDIRECT_NON_BREAKING snapshots are not deployable by nature.
                     this_deployable = False
@@ -1275,7 +1278,8 @@ class DeployabilityIndex(PydanticModel, frozen=True):
                 else:
                     this_deployable = True
                 children_deployable = not (
-                    snapshot.is_paused and (snapshot.is_forward_only or is_forward_only_model)
+                    snapshot.is_paused
+                    and (snapshot.is_forward_only or is_uncategorized_forward_only_model)
                 )
             else:
                 this_deployable, children_deployable = False, False
