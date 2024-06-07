@@ -674,7 +674,7 @@ class SnapshotEvaluator:
                     self.adapter.drop_table(tmp_table_name)
             else:
                 table_deployability_flags = [False]
-                if not snapshot.is_indirect_non_breaking and not snapshot.is_forward_only:
+                if not snapshot.reuses_previous_version:
                     table_deployability_flags.append(True)
                 for is_table_deployable in table_deployability_flags:
                     evaluation_strategy.create(

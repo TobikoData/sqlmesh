@@ -60,6 +60,7 @@ class SnapshotChangeCategory(IntEnum):
     FORWARD_ONLY: The change requires no rebuilding
     INDIRECT_BREAKING: The change was caused indirectly and is breaking.
     INDIRECT_NON_BREAKING: The change was caused indirectly by a non-breaking change.
+    METADATA: The change was caused by a metadata update.
     """
 
     BREAKING = 1
@@ -67,6 +68,7 @@ class SnapshotChangeCategory(IntEnum):
     FORWARD_ONLY = 3
     INDIRECT_BREAKING = 4
     INDIRECT_NON_BREAKING = 5
+    METADATA = 6
 
     @property
     def is_breaking(self) -> bool:
@@ -79,6 +81,10 @@ class SnapshotChangeCategory(IntEnum):
     @property
     def is_forward_only(self) -> bool:
         return self == self.FORWARD_ONLY
+
+    @property
+    def is_metadata(self) -> bool:
+        return self == self.METADATA
 
     @property
     def is_indirect_breaking(self) -> bool:
@@ -287,8 +293,20 @@ class SnapshotInfoMixin(ModelKindMixin):
         return self.change_category == SnapshotChangeCategory.FORWARD_ONLY
 
     @property
+    def is_metadata(self) -> bool:
+        return self.change_category == SnapshotChangeCategory.METADATA
+
+    @property
     def is_indirect_non_breaking(self) -> bool:
         return self.change_category == SnapshotChangeCategory.INDIRECT_NON_BREAKING
+
+    @property
+    def reuses_previous_version(self) -> bool:
+        return self.change_category in (
+            SnapshotChangeCategory.FORWARD_ONLY,
+            SnapshotChangeCategory.METADATA,
+            SnapshotChangeCategory.INDIRECT_NON_BREAKING,
+        )
 
     @property
     def all_versions(self) -> t.Tuple[SnapshotDataVersion, ...]:
@@ -752,7 +770,8 @@ class Snapshot(PydanticModel, SnapshotInfoMixin):
         if self.identifier == other.identifier or (
             # Indirect Non-Breaking snapshots share the dev table with its previous version.
             # The same applies to migrated snapshots.
-            (self.is_indirect_non_breaking or self.migrated) and other.snapshot_id in previous_ids
+            (self.is_indirect_non_breaking or self.is_metadata or self.migrated)
+            and other.snapshot_id in previous_ids
         ):
             for start, end in other.dev_intervals:
                 self.add_interval(start, end, is_dev=True)
@@ -856,15 +875,16 @@ class Snapshot(PydanticModel, SnapshotInfoMixin):
             category: The change category to assign to this snapshot.
         """
         self.temp_version = None
-        is_forward_only = category in (
+        reuse_previous_version = category in (
             SnapshotChangeCategory.FORWARD_ONLY,
             SnapshotChangeCategory.INDIRECT_NON_BREAKING,
+            SnapshotChangeCategory.METADATA,
         )
-        if is_forward_only and self.previous_version:
+        if reuse_previous_version and self.previous_version:
             previous_version = self.previous_version
             self.version = previous_version.data_version.version
             self.physical_schema_ = previous_version.physical_schema
-            if category.is_indirect_non_breaking:
+            if category.is_indirect_non_breaking or category.is_metadata:
                 # Reuse the dev table for indirect non-breaking changes.
                 self.temp_version = (
                     previous_version.data_version.temp_version
