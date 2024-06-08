@@ -1,5 +1,5 @@
 import pandas as pd
-from typing import List
+from typing import List, Any
 import daff
 
 # Create two sample dataframes
@@ -11,7 +11,7 @@ data1 = {
         "2020-01-01",
         "2020-01-03",
         "2020-01-04",
-        "2020-01-05",
+        "2020-01-01",
         "2020-01-06",
         "2020-01-07",
     ],
@@ -34,7 +34,7 @@ data2 = {
 df2 = pd.DataFrame(data2)
 
 
-def dataframe_to_sorted_list(df: pd.DataFrame) -> List[List]:
+def dataframe_to_sorted_list(df: pd.DataFrame) -> List[List[Any]]:
     """Converts a DataFrame into a sorted list of lists, where the first list is the header."""
     sorted_df = df.sort_values(by=list(df.columns))
     header = sorted_df.columns.tolist()
@@ -47,7 +47,7 @@ source = dataframe_to_sorted_list(df1)
 target = dataframe_to_sorted_list(df2)
 
 
-def run_daff_diff(source: List[List], target: List[List]) -> str:
+def run_daff_diff(source: List[List], target: List[List[Any]]) -> str:
     expected_daff_table = daff.PythonTableView(source)
     actual_daff_table = daff.PythonTableView(target)
 
