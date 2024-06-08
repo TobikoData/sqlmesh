@@ -23,6 +23,8 @@ repos:
         files: *files
         require_serial: true
         exclude: ^(tests/fixtures)
+        args: ["--ignore-missing-imports"]
+
   - repo: https://github.com/pre-commit/mirrors-prettier
     rev: "fc26039"
     hooks:
