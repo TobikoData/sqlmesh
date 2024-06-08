@@ -19,7 +19,7 @@ data1 = {
 df1 = pd.DataFrame(data1)
 
 data2 = {
-    "id": [1, 2, 3, 4, 5, 9, 7],
+    "ids": [1, 2, 3, 4, 5, 9, 7],
     "item_id": [2, 1, 2, 1, 1, 1, 1],
     "event_dates": [
         "2020-01-01",
@@ -47,23 +47,7 @@ source = dataframe_to_sorted_list(df1)
 target = dataframe_to_sorted_list(df2)
 
 
-class CustomTerminalDiffRender(daff.TerminalDiffRender):
-    COLORS = {
-        "header": "\033[96m",  # cyan
-        "move": "\033[95m",  # magenta
-        "insert": "\033[95m",  # green
-        "delete": "\033[91m",  # red
-        "modify_old": "\033[91m",  # red
-        "modify_new": "\033[95m",  # green
-        "conflict": "\033[91m",  # red
-        "reset": "\033[0m",  # reset
-    }
-
-    def colorize(self, text: str, category: str) -> str:
-        return f"{self.COLORS.get(category, self.COLORS['reset'])}{text}{self.COLORS['reset']}"
-
-
-def run_daff_diff(source: List[List], target: List[List]) -> None:
+def run_daff_diff(source: List[List], target: List[List]) -> str:
     expected_daff_table = daff.PythonTableView(source)
     actual_daff_table = daff.PythonTableView(target)
 
@@ -77,10 +61,12 @@ def run_daff_diff(source: List[List], target: List[List]) -> None:
     diff = daff.TableDiff(alignment, flags)
     diff.hilite(result)
 
-    renderer = CustomTerminalDiffRender()
+    renderer = daff.TerminalDiffRender()
     rendered = renderer.render(result)
-    print(rendered)
+
     return rendered
 
 
-run_daff_diff(source, target)
+rendered_diff = run_daff_diff(source, target)
+
+print(rendered_diff)
