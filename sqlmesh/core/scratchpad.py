@@ -5,6 +5,21 @@ import daff
 # Create two sample dataframes
 data1 = {
     "id": [1, 2, 3, 4, 5, 6, 7],
+    "item_ids": [2, 1, 3, 1, 1, 1, 1],
+    "event_date": [
+        "2020-01-01",
+        "2020-01-01",
+        "2020-01-03",
+        "2020-01-04",
+        "2020-01-01",
+        "2020-01-06",
+        1,
+    ],
+}
+df1 = pd.DataFrame(data1)
+
+data2 = {
+    "id": [1, 2, 3, 4, 5, 6, 7],
     "item_id": [2, 1, 3, 1, 1, 1, 1],
     "event_date": [
         "2020-01-01",
@@ -13,22 +28,7 @@ data1 = {
         "2020-01-04",
         "2020-01-01",
         "2020-01-06",
-        "2020-01-07",
-    ],
-}
-df1 = pd.DataFrame(data1)
-
-data2 = {
-    "ids": [1, 2, 3, 4, 5, 9, 7],
-    "item_id": [2, 1, 2, 1, 1, 1, 1],
-    "event_dates": [
-        "2020-01-01",
-        "2020-01-01",
-        "2020-01-03",
-        "2020-01-04",
-        "2020-01-05",
-        "2020-01-07",
-        "2020-01-07",
+        1,
     ],
 }
 df2 = pd.DataFrame(data2)
@@ -63,7 +63,10 @@ def run_daff_diff(source: List[List], target: List[List[Any]]) -> str:
 
     renderer = daff.TerminalDiffRender()
     rendered = renderer.render(result)
-
+    if diff.hasDifference():
+        print(rendered)
+    else:
+        print("No data differences")
     return rendered
 
 
