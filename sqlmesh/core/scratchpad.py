@@ -47,7 +47,7 @@ source = dataframe_to_sorted_list(df1)
 target = dataframe_to_sorted_list(df2)
 
 
-def run_daff_diff(source: List[List], target: List[List[Any]]) -> str:
+def run_daff_diff(source: List[List], target: List[List[Any]]) -> int:
     expected_daff_table = daff.PythonTableView(source)
     actual_daff_table = daff.PythonTableView(target)
 
