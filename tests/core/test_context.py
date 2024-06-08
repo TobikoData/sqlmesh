@@ -285,6 +285,31 @@ def test_plan_execution_time():
     )
 
 
+def test_env_and_default_schema_normalization(mocker: MockerFixture):
+    from sqlglot.dialects import DuckDB
+    from sqlglot.dialects.dialect import NormalizationStrategy
+
+    mocker.patch.object(DuckDB, "NORMALIZATION_STRATEGY", NormalizationStrategy.UPPERCASE)
+
+    context = Context(config=Config())
+    context.upsert_model(
+        load_sql_based_model(
+            parse(
+                """
+                MODEL(
+                    name x,
+                    kind FULL
+                );
+
+                SELECT 1 AS c
+                """
+            )
+        )
+    )
+    context.plan("dev", auto_apply=True, no_prompts=True)
+    assert list(context.fetchdf('select c from "DEFAULT__DEV"."X"')["c"])[0] == 1
+
+
 def test_clear_caches(tmp_path: pathlib.Path):
     models_dir = tmp_path / "models"
 

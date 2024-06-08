@@ -1222,7 +1222,7 @@ class GenericContext(BaseContext, t.Generic[C]):
                 self.config.environment_catalog_mapping,
                 name=environment,
                 suffix_target=self.config.environment_suffix_target,
-                normalize_name=context_diff.is_new_environment,
+                normalize_name=context_diff.normalize_environment_name,
             ),
             self.default_catalog,
             no_diff=not detailed,
@@ -1874,7 +1874,8 @@ class GenericContext(BaseContext, t.Generic[C]):
     ) -> ContextDiff:
         environment = Environment.sanitize_name(environment)
         if force_no_diff:
-            return ContextDiff.create_no_diff(environment)
+            return ContextDiff.create_no_diff(environment, state_reader=self.state_reader)
+
         return ContextDiff.create(
             environment,
             snapshots=snapshots or self.snapshots,

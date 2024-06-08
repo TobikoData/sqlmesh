@@ -137,7 +137,7 @@ class PlanBuilder:
             environment_catalog_mapping or {},
             name=self._context_diff.environment,
             suffix_target=environment_suffix_target,
-            normalize_name=self._context_diff.is_new_environment,
+            normalize_name=self._context_diff.normalize_environment_name,
         )
 
         self._latest_plan: t.Optional[Plan] = None

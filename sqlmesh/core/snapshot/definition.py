@@ -236,6 +236,9 @@ class QualifiedViewName(PydanticModel, frozen=True):
             env_name = environment_naming_info.name
             if environment_naming_info.normalize_name:
                 env_name = normalize_identifiers(env_name, dialect=dialect).name
+                if not self.schema_name:
+                    # We also normalize the schema if it's the default one
+                    schema = normalize_identifiers(schema, dialect=dialect).name
 
             schema = f"{schema}__{env_name}"
 
