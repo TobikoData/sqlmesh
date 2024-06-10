@@ -38,7 +38,7 @@ class Model(exp.Expression):
 
 
 class Macro(exp.Expression):
-    arg_types = {"expressions": True}
+    arg_types = {"this": True, "expression": True, "expressions": True}
 
 
 class Audit(exp.Expression):
@@ -112,7 +112,6 @@ class StagedFilePath(exp.Table):
 def _parse_statement(self: Parser) -> t.Optional[exp.Expression]:
     if self._curr is None:
         return None
-
     parser = PARSERS.get(self._curr.text.upper())
 
     if parser:
@@ -461,7 +460,6 @@ def _create_parser(parser_type: t.Type[exp.Expression], table_keys: t.List[str])
         from sqlmesh.core.model.kind import ModelKindName
 
         expressions: t.List[exp.Expression] = []
-
         while True:
             prev_property = seq_get(expressions, -1)
             if not self._match(TokenType.COMMA, expression=prev_property) and expressions:
@@ -663,9 +661,21 @@ def _is_command_statement(command: str, tokens: t.List[Token], pos: int) -> bool
         return False
 
 
+MACRO = "MACRO"
+MACRO_END = "MACRO_END"
+
+
 JINJA_QUERY_BEGIN = "JINJA_QUERY_BEGIN"
 JINJA_STATEMENT_BEGIN = "JINJA_STATEMENT_BEGIN"
 JINJA_END = "JINJA_END"
+
+
+def _is_sql_macro_begin(tokens: t.List[Token], pos: int) -> bool:
+    return tokens[pos].text.upper() == MACRO
+
+
+def _is_sql_macro_end(tokens: t.List[Token], pos: int) -> bool:
+    return _is_command_statement(MACRO_END, tokens, pos)
 
 
 def _is_jinja_statement_begin(tokens: t.List[Token], pos: int) -> bool:
@@ -680,6 +690,37 @@ def _is_jinja_end(tokens: t.List[Token], pos: int) -> bool:
     return _is_command_statement(JINJA_END, tokens, pos)
 
 
+def macro_function(tokens: t.List[Token], sql: str) -> Macro:
+    start, *_, end = tokens
+    macro_args = []
+    pos = 3
+    try:
+        if tokens[1].token_type == TokenType.VAR:
+            macro_name = tokens[1].text
+            if tokens[2].token_type == TokenType.L_PAREN:
+                while tokens[pos].token_type != TokenType.R_PAREN:
+                    if tokens[pos].token_type == TokenType.VAR:
+                        macro_args.append(exp.Identifier(this=tokens[pos].text))
+                        pos += 1
+                        if tokens[pos].token_type == TokenType.COMMA:
+                            pos += 1
+                        elif tokens[pos].token_type == TokenType.R_PAREN:
+                            break
+                        else:
+                            raise SyntaxError(f"Unexpected token: {tokens[pos].token_type}")
+                    else:
+                        raise SyntaxError(f"Unexpected token: {tokens[pos].token_type}")
+    except IndexError:
+        raise IndexError()
+
+    segment = sql[tokens[pos].end + 2 : end.start - 1]
+    macro_def = parse(segment)
+    expression = Macro(this=macro_name, expression=macro_def, expressions=macro_args)
+    expression.meta["sql"] = sql[start.start : end.end + 1]
+
+    return expression
+
+
 def jinja_query(query: str) -> JinjaQuery:
     return JinjaQuery(this=exp.Literal.string(query.strip()))
 
@@ -692,6 +733,7 @@ class ChunkType(Enum):
     JINJA_QUERY = auto()
     JINJA_STATEMENT = auto()
     SQL = auto()
+    SQL_MACRO = auto()
 
 
 def parse_one(
@@ -710,6 +752,7 @@ def parse(
     default_dialect: t.Optional[str] = None,
     match_dialect: bool = True,
     into: t.Optional[exp.IntoType] = None,
+    tokens: t.Optional[t.List[Token]] = None,
 ) -> t.List[exp.Expression]:
     """Parse a sql string.
 
@@ -725,26 +768,32 @@ def parse(
     """
     match = match_dialect and DIALECT_PATTERN.search(sql[:MAX_MODEL_DEFINITION_SIZE])
     dialect = Dialect.get_or_raise(match.group(2) if match else default_dialect)
+    tokens = tokens or dialect.tokenizer.tokenize(sql)
 
-    tokens = dialect.tokenizer.tokenize(sql)
     chunks: t.List[t.Tuple[t.List[Token], ChunkType]] = [([], ChunkType.SQL)]
     total = len(tokens)
-
     pos = 0
     while pos < total:
         token = tokens[pos]
-        if _is_jinja_end(tokens, pos) or (
-            chunks[-1][1] == ChunkType.SQL
-            and token.token_type == TokenType.SEMICOLON
-            and pos < total - 1
+        if (
+            _is_jinja_end(tokens, pos)
+            or _is_sql_macro_end(tokens, pos)
+            or (
+                chunks[-1][1] == ChunkType.SQL
+                and token.token_type == TokenType.SEMICOLON
+                and pos < total - 1
+            )
         ):
             if token.token_type == TokenType.SEMICOLON:
                 pos += 1
             else:
-                # Jinja end statement
+                # Jinja or SQL Macro end statement
                 chunks[-1][0].append(token)
                 pos += 2
             chunks.append(([], ChunkType.SQL))
+        elif _is_sql_macro_begin(tokens, pos):
+            chunks.append(([token], ChunkType.SQL_MACRO))
+            pos += 1
         elif _is_jinja_query_begin(tokens, pos):
             chunks.append(([token], ChunkType.JINJA_QUERY))
             pos += 2
@@ -767,6 +816,11 @@ def parse(
                 if expression:
                     expression.meta["sql"] = parser._find_sql(chunk[0], chunk[-1])
                     expressions.append(expression)
+
+        elif chunk_type == ChunkType.SQL_MACRO:
+            expression = macro_function(chunk, sql)
+            expressions.append(expression)
+
         else:
             start, *_, end = chunk
             segment = sql[start.end + 2 : end.start - 1]

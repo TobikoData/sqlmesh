@@ -11,11 +11,12 @@ from pathlib import Path
 
 from sqlglot.errors import SchemaError, SqlglotError
 from sqlglot.schema import MappingSchema
-from sqlglot import exp
+from sqlglot import exp, Dialect
+
 
 from sqlmesh.core import constants as c
 from sqlmesh.core.audit import Audit, load_multiple_audits
-from sqlmesh.core.dialect import parse
+from sqlmesh.core.dialect import parse, MACRO
 from sqlmesh.core.macros import MacroRegistry, macro, _norm_var_arg_lambda, normalize_macro_name
 from sqlmesh.core.metric import Metric, MetricMeta, expand_metrics, load_metric_ddl
 from sqlmesh.core.model import (
@@ -253,35 +254,21 @@ class SqlMeshLoader(Loader):
                 )
                 with open(path, "r", encoding="utf-8") as file:
                     sql_file = file.read()
-                    jinja_macro_defs = extractor.extract(sql_file)
-                    if not jinja_macro_defs:
-
-                        def traverse_and_replace(node: exp.Lambda) -> exp.Expression:
-                            if isinstance(node, exp.Column):
-                                node = node.this
-                                return node
-                            elif hasattr(node, "args"):
-                                for key, value in node.args.items():
-                                    if isinstance(value, list):
-                                        node.args[key] = [traverse_and_replace(v) for v in value]
-                                    else:
-                                        node.args[key] = traverse_and_replace(value)
-                            return node
-
-                        parsed = parse(sql_file)
-                        for decl, macro_def in zip(parsed[0::2], parsed[1::2]):
-                            macro_name = decl.expressions[0].args["value"].this.this
-                            lambda_func = exp.Lambda(this=macro_def)
-                            lambda_func.set(
-                                "expressions", decl.expressions[1].args["value"].expressions
+                    tokens = Dialect().tokenizer.tokenize(sql_file)
+                    if tokens[0].text == MACRO:
+                        parsed = parse(sql=sql_file, tokens=tokens)
+                        for macro_func in parsed:
+                            macro_name = macro_func.this
+                            lambda_func = exp.Lambda(
+                                this=macro_func.expression[0], expressions=macro_func.expressions
                             )
-                            _, fn = _norm_var_arg_lambda(self, traverse_and_replace(lambda_func))
+                            _, fn = _norm_var_arg_lambda(self, lambda_func)
                             standard_macros[macro_name] = lambda _, *args: fn(
                                 args[0] if len(args) == 1 else exp.Tuple(expressions=list(args))
                             )
                             macro(normalize_macro_name(macro_name))(standard_macros[macro_name])
                     else:
-                        jinja_macros.add_macros(jinja_macro_defs)
+                        jinja_macros.add_macros(extractor.extract(jinja=sql_file, tokens=tokens))
 
         self._macros_max_mtime = macros_max_mtime
 
