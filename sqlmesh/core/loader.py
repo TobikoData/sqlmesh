@@ -17,7 +17,13 @@ from sqlglot import exp, Dialect
 from sqlmesh.core import constants as c
 from sqlmesh.core.audit import Audit, load_multiple_audits
 from sqlmesh.core.dialect import parse, MACRO
-from sqlmesh.core.macros import MacroRegistry, macro, _norm_var_arg_lambda, normalize_macro_name
+from sqlmesh.core.macros import (
+    MacroRegistry,
+    macro,
+    _norm_var_arg_lambda,
+    normalize_macro_name,
+    MacroEvaluator,
+)
 from sqlmesh.core.metric import Metric, MetricMeta, expand_metrics, load_metric_ddl
 from sqlmesh.core.model import (
     Model,
@@ -262,7 +268,7 @@ class SqlMeshLoader(Loader):
                             lambda_func = exp.Lambda(
                                 this=macro_func.expression[0], expressions=macro_func.expressions
                             )
-                            _, fn = _norm_var_arg_lambda(self, lambda_func)
+                            _, fn = _norm_var_arg_lambda(MacroEvaluator(), lambda_func)
                             standard_macros[macro_name] = lambda _, *args: fn(
                                 args[0] if len(args) == 1 else exp.Tuple(expressions=list(args))
                             )
