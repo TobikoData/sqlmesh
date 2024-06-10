@@ -736,7 +736,7 @@ class PlanBuilder:
                 self._enable_preview
                 and any(
                     snapshot.model.forward_only
-                    for snapshot in self._context_diff.new_snapshots.values()
+                    for snapshot, _ in self._context_diff.modified_snapshots.values()
                     if snapshot.is_model
                 )
             )

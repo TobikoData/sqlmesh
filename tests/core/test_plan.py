@@ -2310,3 +2310,60 @@ def test_metadata_change(make_snapshot, mocker: MockerFixture):
         plan.snapshots[updated_snapshot.snapshot_id].change_category
         == SnapshotChangeCategory.METADATA
     )
+
+
+def test_plan_start_when_preview_enabled(make_snapshot, mocker: MockerFixture):
+    model_start = "2024-01-01"
+    model = SqlModel(
+        name="a",
+        query=parse_one("select 1, ds"),
+        dialect="duckdb",
+        kind=dict(
+            name=ModelKindName.INCREMENTAL_BY_TIME_RANGE, time_column="ds", forward_only=True
+        ),
+        start=model_start,
+    )
+
+    snapshot = make_snapshot(model)
+    context_diff = ContextDiff(
+        environment="test_environment",
+        is_new_environment=True,
+        is_unfinalized_environment=False,
+        create_from="prod",
+        added={snapshot.snapshot_id},
+        removed_snapshots={},
+        modified_snapshots={},
+        snapshots={
+            snapshot.snapshot_id: snapshot,
+        },
+        new_snapshots={snapshot.snapshot_id: snapshot},
+        previous_plan_id=None,
+        previously_promoted_snapshot_ids=set(),
+        previous_finalized_snapshots=None,
+    )
+
+    default_start_for_preview = "2024-06-09"
+
+    # When a model is added SQLMesh should not consider the backfill to be a preview.
+    plan_builder = PlanBuilder(
+        context_diff,
+        DuckDBEngineAdapter.SCHEMA_DIFFER,
+        default_start=default_start_for_preview,
+        is_dev=True,
+        enable_preview=True,
+    )
+    assert plan_builder.build().start == to_timestamp(model_start)
+
+    # When a model is modified then the backfill should be a preview.
+    snapshot = make_snapshot(model)
+    context_diff.added = set()
+    context_diff.modified_snapshots = {snapshot.name: (snapshot, snapshot)}
+
+    plan_builder = PlanBuilder(
+        context_diff,
+        DuckDBEngineAdapter.SCHEMA_DIFFER,
+        default_start=default_start_for_preview,
+        is_dev=True,
+        enable_preview=True,
+    )
+    assert plan_builder.build().start == default_start_for_preview
