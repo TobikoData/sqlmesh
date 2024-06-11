@@ -2370,6 +2370,7 @@ def test_plan_start_when_preview_enabled(make_snapshot, mocker: MockerFixture):
         environment="test_environment",
         is_new_environment=True,
         is_unfinalized_environment=False,
+        normalize_environment_name=True,
         create_from="prod",
         added={snapshot.snapshot_id},
         removed_snapshots={},
