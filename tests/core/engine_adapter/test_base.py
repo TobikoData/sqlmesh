@@ -1022,7 +1022,8 @@ WITH "source" AS (
     "price",
     "test_UPDATED_at",
     "test_valid_from",
-    "test_valid_to"
+    "test_valid_to",
+    TRUE AS "_exists"
   FROM "target"
   WHERE
     NOT "test_valid_to" IS NULL
@@ -1033,7 +1034,8 @@ WITH "source" AS (
     "price",
     "test_UPDATED_at",
     "test_valid_from",
-    "test_valid_to"
+    "test_valid_to",
+    TRUE AS "_exists"
   FROM "target"
   WHERE
     "test_valid_to" IS NULL
@@ -1086,7 +1088,7 @@ WITH "source" AS (
       COALESCE("source"."id", '') || '|' || COALESCE("source"."name", '')
     )
     AND COALESCE("latest"."name", '') = COALESCE("source"."name", '')
-  UNION
+  UNION ALL
   SELECT
     "source"."_exists",
     "latest"."id" AS "t_id",
@@ -1107,6 +1109,8 @@ WITH "source" AS (
       COALESCE("source"."id", '') || '|' || COALESCE("source"."name", '')
     )
     AND COALESCE("latest"."name", '') = COALESCE("source"."name", '')
+  WHERE
+    "latest"."_exists" IS NULL
 ), "updated_rows" AS (
   SELECT
     COALESCE("joined"."t_id", "joined"."id") AS "id",
@@ -1231,7 +1235,8 @@ WITH "source" AS (
     "price",
     "test_updated_at",
     "test_valid_from",
-    "test_valid_to"
+    "test_valid_to",
+    TRUE AS "_exists"
   FROM "target"
   WHERE
     NOT "test_valid_to" IS NULL
@@ -1242,7 +1247,8 @@ WITH "source" AS (
     "price",
     "test_updated_at",
     "test_valid_from",
-    "test_valid_to"
+    "test_valid_to",
+    TRUE AS "_exists"
   FROM "target"
   WHERE
     "test_valid_to" IS NULL
@@ -1283,7 +1289,7 @@ WITH "source" AS (
   FROM "latest"
   LEFT JOIN "source"
     ON COALESCE("latest"."id", '') = COALESCE("source"."id", '')
-  UNION
+  UNION ALL
   SELECT
     "source"."_exists",
     "latest"."id" AS "t_id",
@@ -1299,6 +1305,8 @@ WITH "source" AS (
   FROM "latest"
   RIGHT JOIN "source"
     ON COALESCE("latest"."id", '') = COALESCE("source"."id", '')
+  WHERE
+    "latest"."_exists" IS NULL
 ), "updated_rows" AS (
   SELECT
     COALESCE("joined"."t_id", "joined"."id") AS "id",
@@ -1433,7 +1441,8 @@ WITH "source" AS (
     "price",
     "test_updated_at",
     "test_valid_from",
-    "test_valid_to"
+    "test_valid_to",
+    TRUE AS "_exists"
   FROM "target"
   WHERE
     NOT "test_valid_to" IS NULL
@@ -1445,7 +1454,8 @@ WITH "source" AS (
     "price",
     "test_updated_at",
     "test_valid_from",
-    "test_valid_to"
+    "test_valid_to",
+    TRUE AS "_exists"
   FROM "target"
   WHERE
     "test_valid_to" IS NULL
@@ -1491,7 +1501,7 @@ WITH "source" AS (
   FROM "latest"
   LEFT JOIN "source"
     ON "latest"."id1" = "source"."id1" AND "latest"."id2" = "source"."id2"
-  UNION
+  UNION ALL
   SELECT
     "source"."_exists",
     "latest"."id1" AS "t_id1",
@@ -1509,6 +1519,8 @@ WITH "source" AS (
   FROM "latest"
   RIGHT JOIN "source"
     ON "latest"."id1" = "source"."id1" AND "latest"."id2" = "source"."id2"
+  WHERE
+    "latest"."_exists" IS NULL
 ), "updated_rows" AS (
   SELECT
     COALESCE("joined"."t_id1", "joined"."id1") AS "id1",
@@ -1629,7 +1641,8 @@ WITH "source" AS (
     "name",
     "price",
     "test_VALID_from",
-    "test_valid_to"
+    "test_valid_to",
+    TRUE AS "_exists"
   FROM "target"
   WHERE
     NOT "test_valid_to" IS NULL
@@ -1639,7 +1652,8 @@ WITH "source" AS (
     "name",
     "price",
     "test_VALID_from",
-    "test_valid_to"
+    "test_valid_to",
+    TRUE AS "_exists"
   FROM "target"
   WHERE
     "test_valid_to" IS NULL
@@ -1677,7 +1691,7 @@ WITH "source" AS (
   FROM "latest"
   LEFT JOIN "source"
     ON "latest"."id" = "source"."id"
-  UNION
+  UNION ALL
   SELECT
     "source"."_exists",
     "latest"."id" AS "t_id",
@@ -1691,6 +1705,8 @@ WITH "source" AS (
   FROM "latest"
   RIGHT JOIN "source"
     ON "latest"."id" = "source"."id"
+  WHERE
+    "latest"."_exists" IS NULL
 ), "updated_rows" AS (
   SELECT
     COALESCE("joined"."t_id", "joined"."id") AS "id",
@@ -1828,7 +1844,8 @@ WITH "source" AS (
     "name",
     "price",
     "test_valid_from",
-    "test_valid_to"
+    "test_valid_to",
+    TRUE AS "_exists"
   FROM "target"
   WHERE
     NOT "test_valid_to" IS NULL
@@ -1839,7 +1856,8 @@ WITH "source" AS (
     "name",
     "price",
     "test_valid_from",
-    "test_valid_to"
+    "test_valid_to",
+    TRUE AS "_exists"
   FROM "target"
   WHERE
     "test_valid_to" IS NULL
@@ -1878,7 +1896,7 @@ WITH "source" AS (
   FROM "latest"
   LEFT JOIN "source"
     ON "latest"."id" = "source"."id"
-  UNION
+  UNION ALL
   SELECT
     "source"."_exists",
     "latest"."id" AS "t_id",
@@ -1892,6 +1910,8 @@ WITH "source" AS (
   FROM "latest"
   RIGHT JOIN "source"
     ON "latest"."id" = "source"."id"
+  WHERE
+    "latest"."_exists" IS NULL
 ), "updated_rows" AS (
   SELECT
     COALESCE("joined"."t_id", "joined"."id") AS "id",
@@ -2028,7 +2048,8 @@ WITH "source" AS (
     "name",
     "price",
     "test_valid_from",
-    "test_valid_to"
+    "test_valid_to",
+    TRUE AS "_exists"
   FROM "target"
   WHERE
     NOT "test_valid_to" IS NULL
@@ -2038,7 +2059,8 @@ WITH "source" AS (
     "name",
     "price",
     "test_valid_from",
-    "test_valid_to"
+    "test_valid_to",
+    TRUE AS "_exists"
   FROM "target"
   WHERE
     "test_valid_to" IS NULL
@@ -2076,7 +2098,7 @@ WITH "source" AS (
   FROM "latest"
   LEFT JOIN "source"
     ON "latest"."id" = "source"."id"
-  UNION
+  UNION ALL
   SELECT
     "source"."_exists",
     "latest"."id" AS "t_id",
@@ -2090,6 +2112,8 @@ WITH "source" AS (
   FROM "latest"
   RIGHT JOIN "source"
     ON "latest"."id" = "source"."id"
+  WHERE
+    "latest"."_exists" IS NULL
 ), "updated_rows" AS (
   SELECT
     COALESCE("joined"."t_id", "joined"."id") AS "id",
@@ -2241,7 +2265,8 @@ WITH "source" AS (
     "name",
     "price",
     "test_valid_from",
-    "test_valid_to"
+    "test_valid_to",
+    TRUE AS "_exists"
   FROM "target"
   WHERE
     NOT "test_valid_to" IS NULL
@@ -2251,7 +2276,8 @@ WITH "source" AS (
     "name",
     "price",
     "test_valid_from",
-    "test_valid_to"
+    "test_valid_to",
+    TRUE AS "_exists"
   FROM "target"
   WHERE
     "test_valid_to" IS NULL
@@ -2289,7 +2315,7 @@ WITH "source" AS (
   FROM "latest"
   LEFT JOIN "source"
     ON "latest"."id" = "source"."id"
-  UNION
+  UNION ALL
   SELECT
     "source"."_exists",
     "latest"."id" AS "t_id",
@@ -2303,6 +2329,8 @@ WITH "source" AS (
   FROM "latest"
   RIGHT JOIN "source"
     ON "latest"."id" = "source"."id"
+  WHERE
+    "latest"."_exists" IS NULL
 ), "updated_rows" AS (
   SELECT
     COALESCE("joined"."t_id", "joined"."id") AS "id",
@@ -2310,26 +2338,25 @@ WITH "source" AS (
     COALESCE("joined"."t_price", "joined"."price") AS "price",
     COALESCE("t_test_valid_from", CAST('1970-01-01 00:00:00' AS TIMESTAMP)) AS "test_valid_from",
     CASE
-      WHEN
-        (
-          NOT "t_id" IS NULL AND NOT "id" IS NULL
+      WHEN (
+        NOT "t_id" IS NULL AND NOT "id" IS NULL
+      )
+      AND (
+        "name" <> "t_name"
+        OR (
+          "t_name" IS NULL AND NOT "name" IS NULL
         )
-        AND (
-          "name" <> "t_name"
-          OR (
-            "t_name" IS NULL AND NOT "name" IS NULL
-          )
-          OR (
-            NOT "t_name" IS NULL AND "name" IS NULL
-          )
-          OR "price" <> "t_price"
-          OR (
-            "t_price" IS NULL AND NOT "price" IS NULL
-          )
-          OR (
-            NOT "t_price" IS NULL AND "price" IS NULL
-          )
+        OR (
+          NOT "t_name" IS NULL AND "name" IS NULL
         )
+        OR "price" <> "t_price"
+        OR (
+          "t_price" IS NULL AND NOT "price" IS NULL
+        )
+        OR (
+          NOT "t_price" IS NULL AND "price" IS NULL
+        )
+      )
       THEN CAST('2020-01-01 00:00:00' AS TIMESTAMP)
       ELSE "t_test_valid_to"
     END AS "test_valid_to"

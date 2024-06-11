@@ -1402,7 +1402,9 @@ class EngineAdapter:
                 .else_(prefixed_valid_from_col)
             ).as_(valid_from_col.this)
 
-        existing_rows_query = exp.select(*table_columns).from_(target_table)
+        existing_rows_query = exp.select(*table_columns, exp.true().as_("_exists")).from_(
+            target_table
+        )
         if truncate:
             existing_rows_query = existing_rows_query.limit(0)
 
@@ -1465,6 +1467,8 @@ class EngineAdapter:
                 )
                 # Do a full join between latest records and source table in order to combine them together
                 # MySQL doesn't suport full join so going to do a left then right join and remove dups with union
+                # We do a left/right and filter right on only matching to remove the need to do union distinct
+                # which allows scd type 2 to be compatible with unhashable data types
                 .with_(
                     "joined",
                     exp.select(
@@ -1511,6 +1515,8 @@ class EngineAdapter:
                             ),
                             join_type="right",
                         )
+                        .where(exp.column("_exists", table="latest").is_(exp.Null())),
+                        distinct=False,
                     ),
                 )
                 # Get deleted, new, no longer current, or unchanged records
