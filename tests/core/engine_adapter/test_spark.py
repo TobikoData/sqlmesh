@@ -639,7 +639,8 @@ def test_scd_type_2_by_time(
     `price`,
     `test_updated_at`,
     `test_valid_from`,
-    `test_valid_to`
+    `test_valid_to`,
+    TRUE AS `_exists`
   FROM `db`.`temp_target_abcdefgh`
   WHERE
     NOT `test_valid_to` IS NULL
@@ -650,7 +651,8 @@ def test_scd_type_2_by_time(
     `price`,
     `test_updated_at`,
     `test_valid_from`,
-    `test_valid_to`
+    `test_valid_to`,
+    TRUE AS `_exists`
   FROM `db`.`temp_target_abcdefgh`
   WHERE
     `test_valid_to` IS NULL
@@ -691,7 +693,7 @@ def test_scd_type_2_by_time(
   FROM `latest`
   LEFT JOIN `source`
     ON COALESCE(`latest`.`id`, '') = COALESCE(`source`.`id`, '')
-  UNION
+  UNION ALL
   SELECT
     `source`.`_exists`,
     `latest`.`id` AS `t_id`,
@@ -707,6 +709,8 @@ def test_scd_type_2_by_time(
   FROM `latest`
   RIGHT JOIN `source`
     ON COALESCE(`latest`.`id`, '') = COALESCE(`source`.`id`, '')
+  WHERE
+    `latest`.`_exists` IS NULL
 ), `updated_rows` AS (
   SELECT
     COALESCE(`joined`.`t_id`, `joined`.`id`) AS `id`,
