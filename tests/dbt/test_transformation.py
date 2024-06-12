@@ -340,14 +340,14 @@ def test_seed_columns():
                 name="address", data_type="text", description="Business address"
             ),
             "zipcode": ColumnConfig(
-                name="zipcode", data_type="varchar(5)", description="Business zipcode"
+                name="zipcode", data_type="text", description="Business zipcode"
             ),
         },
     )
 
     expected_column_types = {
         "address": parse_one("text", into=exp.DataType),
-        "zipcode": parse_one("varchar(5)", into=exp.DataType),
+        "zipcode": parse_one("text", into=exp.DataType),
     }
     expected_column_descriptions = {
         "address": "Business address",
