@@ -1806,7 +1806,7 @@ def create_external_model(
     path: Path = Path(),
     defaults: t.Optional[t.Dict[str, t.Any]] = None,
     **kwargs: t.Any,
-) -> Model:
+) -> ExternalModel:
     """Creates an external model.
 
     Args:
@@ -1815,14 +1815,17 @@ def create_external_model(
         dialect: The dialect to serialize.
         path: An optional path to the model definition file.
     """
-    return _create_model(
+    return t.cast(
         ExternalModel,
-        name,
-        defaults=defaults,
-        dialect=dialect,
-        path=path,
-        kind=ModelKindName.EXTERNAL.value,
-        **kwargs,
+        _create_model(
+            ExternalModel,
+            name,
+            defaults=defaults,
+            dialect=dialect,
+            path=path,
+            kind=ModelKindName.EXTERNAL.value,
+            **kwargs,
+        ),
     )
 
 

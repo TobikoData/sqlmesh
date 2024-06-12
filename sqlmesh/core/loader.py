@@ -19,6 +19,7 @@ from sqlmesh.core.macros import MacroRegistry, macro
 from sqlmesh.core.metric import Metric, MetricMeta, expand_metrics, load_metric_ddl
 from sqlmesh.core.model import (
     Model,
+    ExternalModel,
     ModelCache,
     OptimizedQueryCache,
     SeedModel,
@@ -120,8 +121,7 @@ class Loader(abc.ABC):
         self._config_mtimes = {path: max(mtimes) for path, mtimes in config_mtimes.items()}
 
         macros, jinja_macros = self._load_scripts()
-        gateway = context.gateway or context.config.default_gateway
-        models = self._load_models(macros, jinja_macros, gateway)
+        models = self._load_models(macros, jinja_macros, context.gateway)
 
         for model in models.values():
             self._add_model_to_dag(model)
@@ -200,20 +200,27 @@ class Loader(abc.ABC):
                 self._track_file(path)
 
                 with open(path, "r", encoding="utf-8") as file:
+                    external_models: t.List[ExternalModel] = []
                     for row in YAML().load(file.read()):
-                        model_gateway = row.get("gateway", None)
-                        # only load the external model if it doesnt define a specific gateway
-                        # or, if it does define a specific gateway, it needs to match the current gateway
-                        if not model_gateway or (gateway == model_gateway):
-                            model = create_external_model(
-                                **row,
-                                dialect=config.model_defaults.dialect,
-                                defaults=config.model_defaults.dict(),
-                                path=path,
-                                project=config.project,
-                                default_catalog=self._context.default_catalog,
-                            )
-                            models[model.fqn] = model
+                        model = create_external_model(
+                            **row,
+                            dialect=config.model_defaults.dialect,
+                            defaults=config.model_defaults.dict(),
+                            path=path,
+                            project=config.project,
+                            default_catalog=self._context.default_catalog,
+                        )
+                        external_models.append(model)
+
+                    # external models with no explicit gateway defined form the base set
+                    for model in (e for e in external_models if e.gateway is None):
+                        models[model.fqn] = model
+
+                    # however, if there is a gateway defined, gateway-specific models take precedence
+                    if gateway:
+                        for model in (e for e in external_models if e.gateway == gateway):
+                            models.update({model.fqn: model})
+
         return models
 
     def _add_model_to_dag(self, model: Model) -> None:

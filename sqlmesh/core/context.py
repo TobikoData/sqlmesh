@@ -340,9 +340,7 @@ class GenericContext(BaseContext, t.Generic[C]):
         self._engine_adapter = engine_adapter or self._connection_config.create_engine_adapter()
 
         self._test_connection_config = self.config.get_test_connection(
-            self.gateway,
-            self.default_catalog,
-            default_catalog_dialect=self.engine_adapter.DIALECT,
+            self.gateway, self.default_catalog, default_catalog_dialect=self.engine_adapter.DIALECT
         )
 
         self._snapshot_evaluator: t.Optional[SnapshotEvaluator] = None
@@ -749,9 +747,7 @@ class GenericContext(BaseContext, t.Generic[C]):
         if expand and not isinstance(expand, bool):
             expand = {
                 normalize_model_name(
-                    x,
-                    default_catalog=self.default_catalog,
-                    dialect=self.default_dialect,
+                    x, default_catalog=self.default_catalog, dialect=self.default_dialect
                 )
                 for x in expand
             }
@@ -952,7 +948,7 @@ class GenericContext(BaseContext, t.Generic[C]):
             auto_apply if auto_apply is not None else self.config.plan.auto_apply,
             self.default_catalog,
             no_diff=no_diff if no_diff is not None else self.config.plan.no_diff,
-            no_prompts=(no_prompts if no_prompts is not None else self.config.plan.no_prompts),
+            no_prompts=no_prompts if no_prompts is not None else self.config.plan.no_prompts,
         )
 
         return plan_builder.build()
@@ -1101,8 +1097,7 @@ class GenericContext(BaseContext, t.Generic[C]):
                 )
             else:
                 default_end = self.state_sync.max_interval_end_for_environment(
-                    c.PROD,
-                    ensure_finalized_snapshots=self.config.plan.use_finalized_state,
+                    c.PROD, ensure_finalized_snapshots=self.config.plan.use_finalized_state
                 )
         else:
             default_end = None
@@ -1765,9 +1760,7 @@ class GenericContext(BaseContext, t.Generic[C]):
             result, test_output = self._run_tests()
             if result.testsRun > 0:
                 self.console.log_test_results(
-                    result,
-                    test_output,
-                    self._test_connection_config._engine_adapter.DIALECT,
+                    result, test_output, self._test_connection_config._engine_adapter.DIALECT
                 )
             if not result.wasSuccessful():
                 raise PlanError(
@@ -1855,8 +1848,7 @@ class GenericContext(BaseContext, t.Generic[C]):
         if unrestorable_snapshots:
             for snapshot in unrestorable_snapshots:
                 logger.info(
-                    "Found a unrestorable snapshot %s. Restamping the model...",
-                    snapshot.name,
+                    "Found a unrestorable snapshot %s. Restamping the model...", snapshot.name
                 )
                 node = local_nodes[snapshot.name]
                 nodes[snapshot.name] = node.copy(
@@ -1936,9 +1928,7 @@ class GenericContext(BaseContext, t.Generic[C]):
             for user in self.users
         }
         self.notification_target_manager = NotificationTargetManager(
-            event_notifications,
-            user_notification_targets,
-            username=self.config.username,
+            event_notifications, user_notification_targets, username=self.config.username
         )
 
 
