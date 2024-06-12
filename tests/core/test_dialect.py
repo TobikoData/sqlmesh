@@ -6,6 +6,8 @@ from sqlmesh.core.dialect import (
     JinjaQuery,
     JinjaStatement,
     Model,
+    Macro,
+    MacroFunc,
     format_model_expressions,
     normalize_model_name,
     parse,
@@ -228,6 +230,25 @@ FROM foo
   @EACH(@columns, item -> @'@iteaoeuatnoehutoenahuoanteuhonateuhaoenthuaoentuhaeotnhaoem'),
   @'@foo'"""
     )
+
+
+def test_parse_sql_macro():
+    expressions = parse(
+        """MACRO_BEGIN pythag(a, b);
+    SQRT(POW(@a, 2) + POW(@b, 2));
+MACRO_END;
+MACRO_BEGIN foo(a, b);
+    @PYTHAG(@a, @b) + 3;
+MACRO_END;"""
+    )
+
+    assert len(expressions) == 2
+    assert expressions[0].this == "pythag"
+    assert isinstance(expressions[0], Macro)
+    assert isinstance(expressions[0].expression[0].this, exp.Add)
+    assert expressions[1].this == "foo"
+    assert isinstance(expressions[1], Macro)
+    assert isinstance(expressions[1].expression[0].this, MacroFunc)
 
 
 def test_text_diff():
