@@ -232,6 +232,44 @@ def test_gateway_specific_external_models_mixed_with_others(tmpdir):
     assert external_models[0].name == '"memory"."landing"."source_table"'
 
 
+def test_create_external_models_no_duplicates(tmpdir):
+    config = Config(gateways={"": GatewayConfig(connection=DuckDBConnectionConfig())})
+
+    model_dir = (tmpdir / c.MODELS).mkdir()
+
+    with open(model_dir / "table.sql", "w", encoding="utf8") as fd:
+        fd.write(
+            """
+        MODEL (
+            name lake.table,
+            kind FULL,
+        );
+
+        SELECT * FROM landing.source_table
+        """,
+        )
+
+    ctx = Context(paths=[tmpdir], config=config)
+    assert ctx.gateway is None
+    ctx.engine_adapter.execute("create schema landing")
+    ctx.engine_adapter.execute("create table landing.source_table as select 1")
+    ctx.engine_adapter.execute("create schema lake")
+
+    def _load_external_models():
+        with open(tmpdir / c.EXTERNAL_MODELS_YAML, "r", encoding="utf8") as fd:
+            return YAML().load(fd)
+
+    ctx.create_external_models()
+
+    assert len(_load_external_models()) == 1
+
+    # check no duplicates when writing the same models
+    # (since the file gets mutated and not replaced)
+    ctx.create_external_models()
+
+    assert len(_load_external_models()) == 1
+
+
 def test_no_internal_model_conversion(tmp_path: Path, make_snapshot, mocker: MockerFixture):
     engine_adapter_mock = mocker.Mock()
     engine_adapter_mock.columns.return_value = {
