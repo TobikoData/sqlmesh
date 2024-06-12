@@ -38,6 +38,7 @@ from sqlmesh.utils.date import time_like_to_str, to_date, yesterday_ds
 if t.TYPE_CHECKING:
     import ipywidgets as widgets
 
+    from sqlglot.dialects.dialect import DialectType
     from sqlmesh.core.context_diff import ContextDiff
     from sqlmesh.core.plan import Plan, PlanBuilder
     from sqlmesh.core.table_diff import RowDiff, SchemaDiff
@@ -223,7 +224,11 @@ class TerminalConsole(Console):
     """A rich based implementation of the console."""
 
     def __init__(
-        self, console: t.Optional[RichConsole] = None, verbose: bool = False, **kwargs: t.Any
+        self,
+        console: t.Optional[RichConsole] = None,
+        verbose: bool = False,
+        dialect: DialectType = None,
+        **kwargs: t.Any,
     ) -> None:
         self.console: RichConsole = console or srich.console
 
@@ -250,8 +255,7 @@ class TerminalConsole(Console):
         self.loading_status: t.Dict[uuid.UUID, Status] = {}
 
         self.verbose = verbose
-
-        self.dialect = kwargs.pop("dialect", None)
+        self.dialect = dialect
 
     def _print(self, value: t.Any, **kwargs: t.Any) -> None:
         self.console.print(value, **kwargs)
@@ -1088,6 +1092,7 @@ class NotebookMagicConsole(TerminalConsole):
         self,
         display: t.Optional[t.Callable] = None,
         console: t.Optional[RichConsole] = None,
+        dialect: DialectType = None,
         **kwargs: t.Any,
     ) -> None:
         import ipywidgets as widgets
@@ -1100,7 +1105,7 @@ class NotebookMagicConsole(TerminalConsole):
         self.missing_dates_output = widgets.Output()
         self.dynamic_options_after_categorization_output = widgets.VBox()
 
-        self.dialect = kwargs.pop("dialect", None)
+        self.dialect = dialect
 
     def _show_missing_dates(self, plan: Plan, default_catalog: t.Optional[str]) -> None:
         self._add_to_dynamic_options(self.missing_dates_output)

@@ -21,6 +21,7 @@ from sqlmesh.utils.errors import SQLMeshError
 from sqlmesh.utils.pydantic import PydanticModel
 
 if t.TYPE_CHECKING:
+    from sqlmesh.core.environment import EnvironmentNamingInfo
     from sqlmesh.core.state_sync import StateReader
 
 logger = logging.getLogger(__name__)
@@ -177,7 +178,7 @@ class ContextDiff(PydanticModel):
         )
 
     @classmethod
-    def create_no_diff(cls, environment: str, state_reader: StateReader) -> ContextDiff:
+    def create_no_diff(cls, environment: EnvironmentNamingInfo) -> ContextDiff:
         """Create a no-op ContextDiff object.
 
         Args:
@@ -186,18 +187,11 @@ class ContextDiff(PydanticModel):
         Returns:
             The ContextDiff object.
         """
-        env = state_reader.get_environment(environment.lower())
-
-        if env is None:
-            normalize_environment_name = True
-        else:
-            normalize_environment_name = env.normalize_name
-
         return ContextDiff(
-            environment=environment,
+            environment=environment.name,
             is_new_environment=False,
             is_unfinalized_environment=False,
-            normalize_environment_name=normalize_environment_name,
+            normalize_environment_name=environment.normalize_name,
             create_from="",
             added=set(),
             removed_snapshots={},

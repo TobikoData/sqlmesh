@@ -1874,7 +1874,10 @@ class GenericContext(BaseContext, t.Generic[C]):
     ) -> ContextDiff:
         environment = Environment.sanitize_name(environment)
         if force_no_diff:
-            return ContextDiff.create_no_diff(environment, state_reader=self.state_reader)
+            return ContextDiff.create_no_diff(
+                self.state_reader.get_environment(environment.lower())
+                or EnvironmentNamingInfo(name=environment)
+            )
 
         return ContextDiff.create(
             environment,
