@@ -16,7 +16,7 @@ from sqlglot import exp, Dialect
 
 from sqlmesh.core import constants as c
 from sqlmesh.core.audit import Audit, load_multiple_audits
-from sqlmesh.core.dialect import parse, MACRO
+from sqlmesh.core.dialect import parse, MACRO_BEGIN
 from sqlmesh.core.macros import (
     MacroRegistry,
     macro,
@@ -261,7 +261,8 @@ class SqlMeshLoader(Loader):
                 with open(path, "r", encoding="utf-8") as file:
                     sql_file = file.read()
                     tokens = Dialect().tokenizer.tokenize(sql_file)
-                    if tokens[0].text == MACRO:
+
+                    if tokens[0].text == MACRO_BEGIN:
                         parsed = parse(sql=sql_file, tokens=tokens)
                         for macro_func in parsed:
                             macro_name = macro_func.this

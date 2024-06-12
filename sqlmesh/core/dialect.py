@@ -661,7 +661,7 @@ def _is_command_statement(command: str, tokens: t.List[Token], pos: int) -> bool
         return False
 
 
-MACRO = "MACRO"
+MACRO_BEGIN = "MACRO_BEGIN"
 MACRO_END = "MACRO_END"
 
 
@@ -671,7 +671,7 @@ JINJA_END = "JINJA_END"
 
 
 def _is_sql_macro_begin(tokens: t.List[Token], pos: int) -> bool:
-    return tokens[pos].text.upper() == MACRO
+    return tokens[pos].text.upper() == MACRO_BEGIN
 
 
 def _is_sql_macro_end(tokens: t.List[Token], pos: int) -> bool:
