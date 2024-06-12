@@ -322,7 +322,7 @@ class SqlMeshLoader(Loader):
                             raise ConfigError(
                                 f"Failed to parse a model definition at '{path}': {ex}."
                             )
-
+                    # breakpoint()
                     return load_sql_based_model(
                         expressions,
                         defaults=config.model_defaults.dict(),
@@ -338,7 +338,7 @@ class SqlMeshLoader(Loader):
                         variables=variables,
                         infer_names=config.model_naming.infer_names,
                     )
-
+                # breakpoint()
                 model = cache.get_or_load_model(path, _load)
                 models[model.fqn] = model
 

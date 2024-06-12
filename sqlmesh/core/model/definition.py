@@ -1967,6 +1967,7 @@ def _python_env(
     serialized_env = {}
 
     expressions = ensure_list(expressions)
+    # breakpoint()
     for expression in expressions:
         if not isinstance(expression, d.Jinja):
             for macro_func_or_var in expression.find_all(d.MacroFunc, d.MacroVar, exp.Identifier):
@@ -2003,7 +2004,7 @@ def _python_env(
     for macro_ref in jinja_macro_references or set():
         if macro_ref.package is None and macro_ref.name in macros:
             used_macros[macro_ref.name] = macros[macro_ref.name]
-
+    # breakpoint()
     for name, used_macro in used_macros.items():
         if isinstance(used_macro, Executable):
             serialized_env[name] = used_macro

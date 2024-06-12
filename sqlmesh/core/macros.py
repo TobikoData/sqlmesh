@@ -181,8 +181,8 @@ class MacroEvaluator:
     def send(
         self, name: str, *args: t.Any, **kwargs: t.Any
     ) -> t.Union[None, exp.Expression, t.List[exp.Expression]]:
-        func = self.macros.get(normalize_macro_name(name))
-
+        func = self.macros.get(normalize_macro_name(name)) or self.macros.get()
+        # breakpoint()
         if not callable(func):
             raise SQLMeshError(f"Macro '{name}' does not exist.")
 
@@ -319,6 +319,8 @@ class MacroEvaluator:
         return MacroStrTemplate(str(text)).safe_substitute(mapping)
 
     def evaluate(self, node: MacroFunc) -> exp.Expression | t.List[exp.Expression] | None:
+
+
         if isinstance(node, MacroDef):
             if isinstance(node.expression, exp.Lambda):
                 _, fn = _norm_var_arg_lambda(self, node.expression)
@@ -349,9 +351,10 @@ class MacroEvaluator:
                         )
 
                     args.append(e)
-
+            breakpoint()
             result = self.send(func.name, *args, **kwargs)
 
+            breakpoint()
         if result is None:
             return None
 
