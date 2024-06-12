@@ -824,7 +824,7 @@ def test_schema_diff_calculate_duckdb(duck_conn):
     engine_adapter.alter_table(alter_expressions)
     assert engine_adapter.columns("apply_to_table") == {
         "id": exp.DataType.build("int"),
-        "ds": exp.DataType.build("varchar"),
+        "ds": exp.DataType.build("text"),
         "new_column": exp.DataType.build("double"),
         "name": exp.DataType.build("int"),
     }
