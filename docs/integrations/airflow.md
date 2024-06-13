@@ -116,6 +116,7 @@ SQLMesh supports a variety of engines in Airflow. Support for each engine is pro
 
 * [BigQuery](engines/bigquery.md#airflow-scheduler)
 * [Databricks](engines/databricks.md#airflow-scheduler)
+* [MSSQL](engines/mssql.md#airflow-scheduler)
 * [Postgres](engines/postgres.md#airflow-scheduler)
 * [Redshift](engines/redshift.md#airflow-scheduler)
 * [Snowflake](engines/snowflake.md#airflow-scheduler)
