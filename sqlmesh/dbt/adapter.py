@@ -105,9 +105,9 @@ class BaseAdapter(abc.ABC):
             package_name, macro_name = val
             score = 0
             if package_name != package:
-                score += 3
-            if macro_name.startswith("default"):
                 score += 2
+            if macro_name.startswith("default"):
+                score += 3
             elif not macro_name.startswith(target_type):
                 score += 1
             return score
