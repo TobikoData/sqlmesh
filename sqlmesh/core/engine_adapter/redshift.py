@@ -20,6 +20,7 @@ from sqlmesh.core.engine_adapter.shared import (
     SourceQuery,
     set_catalog,
 )
+from sqlmesh.core.schema_diff import SchemaDiffer
 
 if t.TYPE_CHECKING:
     from sqlmesh.core._typing import SchemaName, TableName
@@ -39,6 +40,20 @@ class RedshiftEngineAdapter(
     # Redshift doesn't support comments for VIEWs WITH NO SCHEMA BINDING (which we always use)
     COMMENT_CREATION_VIEW = CommentCreationView.UNSUPPORTED
     SUPPORTS_REPLACE_TABLE = False
+    SCHEMA_DIFFER = SchemaDiffer(
+        parameterized_type_defaults={
+            exp.DataType.build("VARBYTE", dialect=DIALECT).this: {0: (64000,)},
+            exp.DataType.build("DECIMAL", dialect=DIALECT).this: {0: (18, 0), 1: (0,)},
+            exp.DataType.build("CHAR", dialect=DIALECT).this: {0: (1,)},
+            exp.DataType.build("VARCHAR", dialect=DIALECT).this: {0: (256,)},
+            exp.DataType.build("NCHAR", dialect=DIALECT).this: {0: (1,)},
+            exp.DataType.build("NVARCHAR", dialect=DIALECT).this: {0: (256,)},
+        },
+        types_with_max_parameter={
+            exp.DataType.build("CHAR", dialect=DIALECT).this,
+            exp.DataType.build("VARCHAR", dialect=DIALECT).this,
+        },
+    )
 
     def _columns_query(self, table: exp.Table) -> exp.Select:
         sql = (

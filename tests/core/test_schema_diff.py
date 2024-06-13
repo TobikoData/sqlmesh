@@ -710,14 +710,31 @@ def test_schema_diff_calculate_type_transitions():
             ],
             {},
         ),
-        # Precision VARCHAR is a no-op with no changes
+        # ############
+        # Precision Tests
+        # ############
+        # Identical precision is a no-op with no changes
         (
             "STRUCT<id INT, address VARCHAR(120)>",
             "STRUCT<id INT, address VARCHAR(120)>",
             [],
             {},
         ),
-        # Change the precision bits of a VARCHAR
+        # Increase the precision of a type is ALTER
+        (
+            "STRUCT<id INT, address VARCHAR(120)>",
+            "STRUCT<id INT, address VARCHAR(121)>",
+            [
+                TableAlterOperation.alter_type(
+                    TableAlterColumn.primitive("address"),
+                    "VARCHAR(121)",
+                    current_type="VARCHAR(120)",
+                    expected_table_struct="STRUCT<id INT, address VARCHAR(121)>",
+                )
+            ],
+            {},
+        ),
+        # Decrease the precision of a type is DROP/ADD
         (
             "STRUCT<id INT, address VARCHAR(120)>",
             "STRUCT<id INT, address VARCHAR(100)>",
@@ -737,6 +754,198 @@ def test_schema_diff_calculate_type_transitions():
             dict(
                 support_positional_add=True,
                 support_nested_operations=True,
+            ),
+        ),
+        # Type with precision to same type with no precision and no default is DROP/ADD
+        (
+            "STRUCT<id INT, address VARCHAR(120)>",
+            "STRUCT<id INT, address VARCHAR>",
+            [
+                TableAlterOperation.drop(
+                    TableAlterColumn.primitive("address"),
+                    "STRUCT<id INT>",
+                    "VARCHAR(120)",
+                ),
+                TableAlterOperation.add(
+                    TableAlterColumn.primitive("address"),
+                    "VARCHAR",
+                    expected_table_struct="STRUCT<id INT, address VARCHAR>",
+                    position=TableAlterColumnPosition.last("id"),
+                ),
+            ],
+            dict(
+                support_positional_add=True,
+            ),
+        ),
+        # Type with no precision and no default to same type with precision is DROP/ADD
+        (
+            "STRUCT<id INT, address VARCHAR>",
+            "STRUCT<id INT, address VARCHAR(120)>",
+            [
+                TableAlterOperation.drop(
+                    TableAlterColumn.primitive("address"),
+                    "STRUCT<id INT>",
+                    "VARCHAR",
+                ),
+                TableAlterOperation.add(
+                    TableAlterColumn.primitive("address"),
+                    "VARCHAR(120)",
+                    expected_table_struct="STRUCT<id INT, address VARCHAR(120)>",
+                    position=TableAlterColumnPosition.last("id"),
+                ),
+            ],
+            dict(
+                support_positional_add=True,
+            ),
+        ),
+        # Increase precision of a type from a default is ALTER
+        (
+            "STRUCT<id INT, address VARCHAR>",  # default of 1 --> VARCHAR(1)
+            "STRUCT<id INT, address VARCHAR(2)>",
+            [
+                TableAlterOperation.alter_type(
+                    TableAlterColumn.primitive("address"),
+                    "VARCHAR(2)",
+                    current_type="VARCHAR",
+                    expected_table_struct="STRUCT<id INT, address VARCHAR(2)>",
+                )
+            ],
+            dict(
+                parameterized_type_defaults={
+                    exp.DataType.build("VARCHAR").this: {0: (1,)},
+                },
+            ),
+        ),
+        # Decrease precision of a type to a default is DROP/ADD
+        (
+            "STRUCT<id INT, address VARCHAR(120)>",
+            "STRUCT<id INT, address VARCHAR>",  # default of 1 --> VARCHAR(1)
+            [
+                TableAlterOperation.drop(
+                    TableAlterColumn.primitive("address"),
+                    "STRUCT<id INT>",
+                    "VARCHAR(120)",
+                ),
+                TableAlterOperation.add(
+                    TableAlterColumn.primitive("address"),
+                    "VARCHAR",
+                    expected_table_struct="STRUCT<id INT, address VARCHAR>",
+                    position=TableAlterColumnPosition.last("id"),
+                ),
+            ],
+            dict(
+                parameterized_type_defaults={
+                    exp.DataType.build("VARCHAR").this: {0: (1,)},
+                },
+                support_positional_add=True,
+            ),
+        ),
+        # Increase the precision of a type to "max" is ALTER
+        (
+            "STRUCT<id INT, address VARCHAR(120)>",
+            "STRUCT<id INT, address VARCHAR(max)>",
+            [
+                TableAlterOperation.alter_type(
+                    TableAlterColumn.primitive("address"),
+                    "VARCHAR(max)",
+                    current_type="VARCHAR(120)",
+                    expected_table_struct="STRUCT<id INT, address VARCHAR(max)>",
+                )
+            ],
+            dict(
+                types_with_max_parameter={
+                    exp.DataType.build("VARCHAR").this,
+                },
+            ),
+        ),
+        # Decrease the precision of a type from "max" to any numeric precision is DROP/ADD
+        (
+            "STRUCT<id INT, address VARCHAR(max)>",
+            "STRUCT<id INT, address VARCHAR(120)>",
+            [
+                TableAlterOperation.drop(
+                    TableAlterColumn.primitive("address"),
+                    "STRUCT<id INT>",
+                    "VARCHAR(max)",
+                ),
+                TableAlterOperation.add(
+                    TableAlterColumn.primitive("address"),
+                    "VARCHAR(120)",
+                    expected_table_struct="STRUCT<id INT, address VARCHAR(120)>",
+                    position=TableAlterColumnPosition.last("id"),
+                ),
+            ],
+            dict(
+                support_positional_add=True,
+                types_with_max_parameter={
+                    exp.DataType.build("VARCHAR").this,
+                },
+            ),
+        ),
+        # Increase the precision of a type to no-precision unlimited is ALTER
+        (
+            "STRUCT<id INT, address VARCHAR(120)>",
+            "STRUCT<id INT, address VARCHAR>",
+            [
+                TableAlterOperation.alter_type(
+                    TableAlterColumn.primitive("address"),
+                    "VARCHAR",
+                    current_type="VARCHAR(120)",
+                    expected_table_struct="STRUCT<id INT, address VARCHAR>",
+                )
+            ],
+            dict(
+                types_with_unlimited_length={
+                    exp.DataType.build("VARCHAR").this: {
+                        exp.DataType.build("VARCHAR").this,
+                    },
+                }
+            ),
+        ),
+        # Decrease the precision of a type from no-precision unlimited to any precision is DROP/ADD
+        (
+            "STRUCT<id INT, address VARCHAR>",
+            "STRUCT<id INT, address VARCHAR(120)>",
+            [
+                TableAlterOperation.drop(
+                    TableAlterColumn.primitive("address"),
+                    "STRUCT<id INT>",
+                    "VARCHAR",
+                ),
+                TableAlterOperation.add(
+                    TableAlterColumn.primitive("address"),
+                    "VARCHAR(120)",
+                    expected_table_struct="STRUCT<id INT, address VARCHAR(120)>",
+                    position=TableAlterColumnPosition.last("id"),
+                ),
+            ],
+            dict(
+                support_positional_add=True,
+                types_with_unlimited_length={
+                    exp.DataType.build("VARCHAR").this: {
+                        exp.DataType.build("VARCHAR").this,
+                    },
+                },
+            ),
+        ),
+        # Increase the precision of one type to a different no-precision unlimited type is ALTER
+        (
+            "STRUCT<id INT, address VARCHAR(120)>",
+            "STRUCT<id INT, address TEXT>",
+            [
+                TableAlterOperation.alter_type(
+                    TableAlterColumn.primitive("address"),
+                    "TEXT",
+                    current_type="VARCHAR(120)",
+                    expected_table_struct="STRUCT<id INT, address TEXT>",
+                )
+            ],
+            dict(
+                types_with_unlimited_length={
+                    exp.DataType.build("TEXT").this: {
+                        exp.DataType.build("VARCHAR").this,
+                    },
+                }
             ),
         ),
         # ############
@@ -787,9 +996,6 @@ def test_struct_diff(
     expected_diff: t.List[TableAlterOperation],
     config: t.Dict[str, t.Any],
 ):
-    config = {
-        **config,
-    }
     resolver = SchemaDiffer(**config)
     operations = resolver._from_structs(
         exp.DataType.build(current_struct), exp.DataType.build(new_struct)

@@ -26,6 +26,7 @@ from sqlmesh.core.engine_adapter.shared import (
     SourceQuery,
     set_catalog,
 )
+from sqlmesh.core.schema_diff import SchemaDiffer
 
 if t.TYPE_CHECKING:
     from sqlmesh.core._typing import SchemaName, TableName
@@ -48,6 +49,25 @@ class MSSQLEngineAdapter(
     COMMENT_CREATION_TABLE = CommentCreationTable.UNSUPPORTED
     COMMENT_CREATION_VIEW = CommentCreationView.UNSUPPORTED
     SUPPORTS_REPLACE_TABLE = False
+    SCHEMA_DIFFER = SchemaDiffer(
+        parameterized_type_defaults={
+            exp.DataType.build("DECIMAL", dialect=DIALECT).this: {0: (18, 0), 1: (0,)},
+            exp.DataType.build("BINARY", dialect=DIALECT).this: {0: (1,)},
+            exp.DataType.build("VARBINARY", dialect=DIALECT).this: {0: (1,)},
+            exp.DataType.build("CHAR", dialect=DIALECT).this: {0: (1,)},
+            exp.DataType.build("VARCHAR", dialect=DIALECT).this: {0: (1,)},
+            exp.DataType.build("NCHAR", dialect=DIALECT).this: {0: (1,)},
+            exp.DataType.build("NVARCHAR", dialect=DIALECT).this: {0: (1,)},
+            exp.DataType.build("TIME", dialect=DIALECT).this: {0: (7,)},
+            exp.DataType.build("DATETIME2", dialect=DIALECT).this: {0: (7,)},
+            exp.DataType.build("DATETIMEOFFSET", dialect=DIALECT).this: {0: (7,)},
+        },
+        types_with_max_parameter={
+            exp.DataType.build("VARBINARY", dialect=DIALECT).this,
+            exp.DataType.build("VARCHAR", dialect=DIALECT).this,
+            exp.DataType.build("NVARCHAR", dialect=DIALECT).this,
+        },
+    )
 
     def columns(
         self,

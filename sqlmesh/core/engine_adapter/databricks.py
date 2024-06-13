@@ -38,6 +38,9 @@ class DatabricksEngineAdapter(SparkEngineAdapter):
         support_positional_add=True,
         support_nested_operations=True,
         array_element_selector="element",
+        parameterized_type_defaults={
+            exp.DataType.build("DECIMAL", dialect=DIALECT).this: {0: (10, 0), 1: (0,)},
+        },
     )
     CATALOG_SUPPORT = CatalogSupport.FULL_SUPPORT
     SUPPORTS_ROW_LEVEL_OP = True

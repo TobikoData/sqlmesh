@@ -4,7 +4,7 @@ import logging
 import typing as t
 from collections import defaultdict
 from enum import Enum, auto
-
+from math import inf
 from sqlglot import exp
 from sqlglot.helper import ensure_list, seq_get
 
@@ -303,6 +303,11 @@ class SchemaDiffer(PydanticModel):
     array_element_selector: str = ""
     compatible_types: t.Dict[exp.DataType, t.Set[exp.DataType]] = {}
     support_coercing_compatible_types: bool = False
+    parameterized_type_defaults: t.Dict[
+        exp.DataType.Type, t.Dict[int, t.Tuple[t.Union[int, float], ...]]
+    ] = {}
+    types_with_max_parameter: t.Set[exp.DataType.Type] = set()
+    types_with_unlimited_length: t.Dict[exp.DataType.Type, t.Set[exp.DataType.Type]] = {}
 
     _coerceable_types: t.Dict[exp.DataType, t.Set[exp.DataType]] = {}
 
@@ -319,10 +324,16 @@ class SchemaDiffer(PydanticModel):
         return self._coerceable_types
 
     def _is_compatible_type(self, current_type: exp.DataType, new_type: exp.DataType) -> bool:
-        if current_type == new_type:
+        # types are identical or both types are parameterized and new has higher precision
+        # - default parameter values are automatically provided if not present
+        if current_type == new_type or self._is_precision_increase(current_type, new_type):
             return True
+        # types are un-parameterized and compatible
         if current_type in self.compatible_types:
             return new_type in self.compatible_types[current_type]
+        # new type is un-parameterized and has unlimited length, current type is compatible
+        if len(new_type.expressions) == 0 and new_type.this in self.types_with_unlimited_length:
+            return current_type.this in self.types_with_unlimited_length[new_type.this]
         return False
 
     def _is_coerceable_type(self, current_type: exp.DataType, new_type: exp.DataType) -> bool:
@@ -336,6 +347,45 @@ class SchemaDiffer(PydanticModel):
                 )
             return is_coerceable
         return False
+
+    def _is_precision_increase(self, current_type: exp.DataType, new_type: exp.DataType) -> bool:
+        if current_type.this == new_type.this and not self._is_nested_type(current_type):
+            current_params = self._get_type_parameters(current_type)
+            new_params = self._get_type_parameters(new_type)
+
+            if len(current_params) != len(new_params):
+                return False
+
+            return all(new >= current for current, new in zip(current_params, new_params))
+        return False
+
+    def _is_nested_type(self, type: exp.DataType) -> bool:
+        return type.is_type(exp.DataType.Type.STRUCT) or type.is_type(exp.DataType.Type.ARRAY)
+
+    def _get_type_parameters(self, type: exp.DataType) -> t.List[t.Union[int, float]]:
+        def _str_to_number(string: str, max_to_inf: bool) -> t.Union[int, float]:
+            try:
+                return int(string)
+            except ValueError:
+                try:
+                    return float(string)
+                except ValueError:
+                    if max_to_inf and string.upper() == "MAX":
+                        return inf
+                    raise ValueError(f"Could not convert '{string}' to a number")
+
+        # extract existing parameters
+        params = [
+            _str_to_number(param.this.this, type.this in self.types_with_max_parameter)
+            for param in type.expressions
+        ]
+
+        # maybe get default parameter values
+        param_defaults: t.Tuple[t.Union[int, float], ...] = (
+            self.parameterized_type_defaults.get(type.this) or {}
+        ).get(len(params)) or ()
+
+        return [*params, *param_defaults]
 
     def _get_matching_kwarg(
         self,

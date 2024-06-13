@@ -18,6 +18,7 @@ from sqlmesh.core.engine_adapter.shared import (
     SourceQuery,
     set_catalog,
 )
+from sqlmesh.core.schema_diff import SchemaDiffer
 from sqlmesh.utils import optional_import
 from sqlmesh.utils.errors import SQLMeshError
 
@@ -42,6 +43,21 @@ class SnowflakeEngineAdapter(GetCurrentCatalogFromFunctionMixin):
     SUPPORTS_CLONING = True
     CATALOG_SUPPORT = CatalogSupport.FULL_SUPPORT
     CURRENT_CATALOG_EXPRESSION = exp.func("current_database")
+    SCHEMA_DIFFER = SchemaDiffer(
+        parameterized_type_defaults={
+            exp.DataType.build("BINARY", dialect=DIALECT).this: {0: (8388608,)},
+            exp.DataType.build("VARBINARY", dialect=DIALECT).this: {0: (8388608,)},
+            exp.DataType.build("DECIMAL", dialect=DIALECT).this: {0: (38, 0), 1: (0,)},
+            exp.DataType.build("CHAR", dialect=DIALECT).this: {0: (1,)},
+            exp.DataType.build("NCHAR", dialect=DIALECT).this: {0: (1,)},
+            exp.DataType.build("VARCHAR", dialect=DIALECT).this: {0: (16777216,)},
+            exp.DataType.build("TIME", dialect=DIALECT).this: {0: (9,)},
+            exp.DataType.build("TIMESTAMP", dialect=DIALECT).this: {0: (9,)},
+            exp.DataType.build("TIMESTAMP_LTZ", dialect=DIALECT).this: {0: (9,)},
+            exp.DataType.build("TIMESTAMP_NTZ", dialect=DIALECT).this: {0: (9,)},
+            exp.DataType.build("TIMESTAMP_TZ", dialect=DIALECT).this: {0: (9,)},
+        },
+    )
 
     @contextlib.contextmanager
     def session(self, properties: SessionProperties) -> t.Iterator[None]:

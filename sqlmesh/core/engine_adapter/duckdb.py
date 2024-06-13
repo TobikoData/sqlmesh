@@ -18,6 +18,7 @@ from sqlmesh.core.engine_adapter.shared import (
     set_catalog,
 )
 from sqlmesh.utils import major_minor
+from sqlmesh.core.schema_diff import SchemaDiffer
 
 if t.TYPE_CHECKING:
     from sqlmesh.core._typing import SchemaName, TableName
@@ -29,6 +30,11 @@ class DuckDBEngineAdapter(LogicalMergeMixin, GetCurrentCatalogFromFunctionMixin)
     DIALECT = "duckdb"
     SUPPORTS_TRANSACTIONS = False
     CATALOG_SUPPORT = CatalogSupport.FULL_SUPPORT
+    SCHEMA_DIFFER = SchemaDiffer(
+        parameterized_type_defaults={
+            exp.DataType.build("DECIMAL", dialect=DIALECT).this: {0: (18, 3), 1: (0,)},
+        },
+    )
 
     # TODO: remove once we stop supporting DuckDB 0.9
     COMMENT_CREATION_TABLE, COMMENT_CREATION_VIEW = (
