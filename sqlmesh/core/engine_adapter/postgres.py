@@ -44,7 +44,7 @@ class PostgresEngineAdapter(
                 exp.DataType.build("CHAR", dialect=DIALECT).this,
                 exp.DataType.build("BPCHAR", dialect=DIALECT).this,
             },
-            # all can ALTER to unparameterized `VARCHAR`
+            # all can ALTER to unparameterized version of `VARCHAR`
             exp.DataType.build("VARCHAR", dialect=DIALECT).this: {
                 exp.DataType.build("VARCHAR", dialect=DIALECT).this,
                 exp.DataType.build("CHAR", dialect=DIALECT).this,
