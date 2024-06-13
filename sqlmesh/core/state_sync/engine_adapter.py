@@ -141,6 +141,7 @@ class EngineAdapterStateSync(CommonStateSyncMixin, StateSync):
             "suffix_target": exp.DataType.build("text"),
             "catalog_name_override": exp.DataType.build("text"),
             "previous_finalized_snapshots": exp.DataType.build("text"),
+            "normalize_name": exp.DataType.build("boolean"),
         }
 
         self._interval_columns_to_types = {
@@ -1394,6 +1395,7 @@ def _environment_to_df(environment: Environment) -> pd.DataFrame:
                     if environment.previous_finalized_snapshots is not None
                     else None
                 ),
+                "normalize_name": environment.normalize_name,
             }
         ]
     )

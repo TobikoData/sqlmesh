@@ -309,7 +309,6 @@ class GenericContext(BaseContext, t.Generic[C]):
         console: t.Optional[Console] = None,
         users: t.Optional[t.List[User]] = None,
     ):
-        self.console = console or get_console()
         self.configs = (
             config if isinstance(config, dict) else load_configs(config, self.CONFIG_TYPE, paths)
         )
@@ -332,12 +331,14 @@ class GenericContext(BaseContext, t.Generic[C]):
         self.gateway = gateway
         self._scheduler = self.config.get_scheduler(self.gateway)
         self.environment_ttl = self.config.environment_ttl
-        self.pinned_environments = Environment.normalize_names(self.config.pinned_environments)
+        self.pinned_environments = Environment.sanitize_names(self.config.pinned_environments)
         self.auto_categorize_changes = self.config.plan.auto_categorize_changes
 
         self._connection_config = self.config.get_connection(self.gateway)
         self.concurrent_tasks = concurrent_tasks or self._connection_config.concurrent_tasks
         self._engine_adapter = engine_adapter or self._connection_config.create_engine_adapter()
+
+        self.console = console or get_console(dialect=self._engine_adapter.dialect)
 
         self._test_connection_config = self.config.get_test_connection(
             self.gateway, self.default_catalog, default_catalog_dialect=self.engine_adapter.DIALECT
@@ -1015,7 +1016,7 @@ class GenericContext(BaseContext, t.Generic[C]):
             The plan builder.
         """
         environment = environment or self.config.default_target_environment
-        environment = Environment.normalize_name(environment)
+        environment = Environment.sanitize_name(environment)
         is_dev = environment != c.PROD
 
         if skip_backfill and not no_gaps and not is_dev:
@@ -1213,7 +1214,7 @@ class GenericContext(BaseContext, t.Generic[C]):
             True if there are changes, False otherwise.
         """
         environment = environment or self.config.default_target_environment
-        environment = Environment.normalize_name(environment)
+        environment = Environment.sanitize_name(environment)
         context_diff = self._context_diff(environment)
         self.console.show_model_difference_summary(
             context_diff,
@@ -1221,6 +1222,7 @@ class GenericContext(BaseContext, t.Generic[C]):
                 self.config.environment_catalog_mapping,
                 name=environment,
                 suffix_target=self.config.environment_suffix_target,
+                normalize_name=context_diff.normalize_environment_name,
             ),
             self.default_catalog,
             no_diff=not detailed,
@@ -1870,9 +1872,13 @@ class GenericContext(BaseContext, t.Generic[C]):
         force_no_diff: bool = False,
         ensure_finalized_snapshots: bool = False,
     ) -> ContextDiff:
-        environment = Environment.normalize_name(environment)
+        environment = Environment.sanitize_name(environment)
         if force_no_diff:
-            return ContextDiff.create_no_diff(environment)
+            return ContextDiff.create_no_diff(
+                self.state_reader.get_environment(environment.lower())
+                or EnvironmentNamingInfo(name=environment)
+            )
+
         return ContextDiff.create(
             environment,
             snapshots=snapshots or self.snapshots,

@@ -357,7 +357,7 @@ class GithubController:
 
     @property
     def pr_environment_name(self) -> str:
-        return Environment.normalize_name(
+        return Environment.sanitize_name(
             "_".join(
                 [
                     self.bot_config.pr_environment_name or self._event.pull_request_info.repo,

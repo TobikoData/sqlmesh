@@ -3,13 +3,13 @@ import pytest
 from sqlmesh.core.environment import Environment, EnvironmentNamingInfo
 
 
-def test_normalize_name():
-    assert Environment.normalize_name("12foo!#%@") == "12foo____"
-    assert Environment.normalize_name("__test@$@%") == "__test____"
-    assert Environment.normalize_name("test") == "test"
-    assert Environment.normalize_name("-test_") == "_test_"
+def test_sanitize_name():
+    assert Environment.sanitize_name("12foo!#%@") == "12foo____"
+    assert Environment.sanitize_name("__test@$@%") == "__test____"
+    assert Environment.sanitize_name("test") == "test"
+    assert Environment.sanitize_name("-test_") == "_test_"
     with pytest.raises(TypeError, match="Expected str or Environment, got int"):
-        Environment.normalize_name(123)
+        Environment.sanitize_name(123)
 
 
 @pytest.mark.parametrize(
