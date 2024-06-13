@@ -49,9 +49,9 @@ class RedshiftEngineAdapter(
             exp.DataType.build("NCHAR", dialect=DIALECT).this: {0: (1,)},
             exp.DataType.build("NVARCHAR", dialect=DIALECT).this: {0: (256,)},
         },
-        types_with_max_parameter={
-            exp.DataType.build("CHAR", dialect=DIALECT).this,
-            exp.DataType.build("VARCHAR", dialect=DIALECT).this,
+        max_parameter_length={
+            exp.DataType.build("CHAR", dialect=DIALECT).this: 4096,
+            exp.DataType.build("VARCHAR", dialect=DIALECT).this: 65535,
         },
     )
 

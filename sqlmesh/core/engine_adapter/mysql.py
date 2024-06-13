@@ -46,6 +46,7 @@ class MySQLEngineAdapter(
             exp.DataType.build("BINARY", dialect=DIALECT).this: {0: (1,)},
             exp.DataType.build("DECIMAL", dialect=DIALECT).this: {0: (10, 0), 1: (0,)},
             exp.DataType.build("CHAR", dialect=DIALECT).this: {0: (1,)},
+            exp.DataType.build("NCHAR", dialect=DIALECT).this: {0: (1,)},
             exp.DataType.build("TEXT", dialect=DIALECT).this: {0: (65535,)},
             exp.DataType.build("TIME", dialect=DIALECT).this: {0: (0,)},
             exp.DataType.build("DATETIME", dialect=DIALECT).this: {0: (0,)},

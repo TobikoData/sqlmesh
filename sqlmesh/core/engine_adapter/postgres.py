@@ -31,11 +31,14 @@ class PostgresEngineAdapter(
     SUPPORTS_REPLACE_TABLE = False
     SCHEMA_DIFFER = SchemaDiffer(
         parameterized_type_defaults={
-            exp.DataType.build("DECIMAL", dialect=DIALECT).this: {1: (0,)},
+            # DECIMAL without precision is "up to 131072 digits before the decimal point; up to 16383 digits after the decimal point"
+            exp.DataType.build("DECIMAL", dialect=DIALECT).this: {
+                0: (131072 + 16383, 16383),
+                1: (0,),
+            },
             exp.DataType.build("CHAR", dialect=DIALECT).this: {0: (1,)},
             exp.DataType.build("TIME", dialect=DIALECT).this: {0: (6,)},
             exp.DataType.build("TIMESTAMP", dialect=DIALECT).this: {0: (6,)},
-            exp.DataType.build("INTERVAL", dialect=DIALECT).this: {0: (6,)},
         },
         types_with_unlimited_length={
             # all can ALTER to `TEXT`
@@ -44,7 +47,7 @@ class PostgresEngineAdapter(
                 exp.DataType.build("CHAR", dialect=DIALECT).this,
                 exp.DataType.build("BPCHAR", dialect=DIALECT).this,
             },
-            # all can ALTER to unparameterized version of `VARCHAR`
+            # all can ALTER to unparameterized `VARCHAR`
             exp.DataType.build("VARCHAR", dialect=DIALECT).this: {
                 exp.DataType.build("VARCHAR", dialect=DIALECT).this,
                 exp.DataType.build("CHAR", dialect=DIALECT).this,
@@ -54,10 +57,6 @@ class PostgresEngineAdapter(
             # parameterized `BPCHAR(n)` can ALTER to unparameterized `BPCHAR`
             exp.DataType.build("BPCHAR", dialect=DIALECT).this: {
                 exp.DataType.build("BPCHAR", dialect=DIALECT).this
-            },
-            # parameterized `DECIMAL(n)` can ALTER to unparameterized `DECIMAL`
-            exp.DataType.build("DECIMAL", dialect=DIALECT).this: {
-                exp.DataType.build("DECIMAL", dialect=DIALECT).this
             },
         },
     )

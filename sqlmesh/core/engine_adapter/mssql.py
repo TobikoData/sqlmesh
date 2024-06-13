@@ -62,10 +62,10 @@ class MSSQLEngineAdapter(
             exp.DataType.build("DATETIME2", dialect=DIALECT).this: {0: (7,)},
             exp.DataType.build("DATETIMEOFFSET", dialect=DIALECT).this: {0: (7,)},
         },
-        types_with_max_parameter={
-            exp.DataType.build("VARBINARY", dialect=DIALECT).this,
-            exp.DataType.build("VARCHAR", dialect=DIALECT).this,
-            exp.DataType.build("NVARCHAR", dialect=DIALECT).this,
+        max_parameter_length={
+            exp.DataType.build("VARBINARY", dialect=DIALECT).this: 2147483647,
+            exp.DataType.build("VARCHAR", dialect=DIALECT).this: 2147483647,
+            exp.DataType.build("NVARCHAR", dialect=DIALECT).this: 2147483647,
         },
     )
 

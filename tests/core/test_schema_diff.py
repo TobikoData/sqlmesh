@@ -840,7 +840,7 @@ def test_schema_diff_calculate_type_transitions():
                 support_positional_add=True,
             ),
         ),
-        # Increase the precision of a type to "max" is ALTER
+        # Change the precision of a type to exact "max" value is ALTER
         (
             "STRUCT<id INT, address VARCHAR(120)>",
             "STRUCT<id INT, address VARCHAR(max)>",
@@ -853,12 +853,30 @@ def test_schema_diff_calculate_type_transitions():
                 )
             ],
             dict(
-                types_with_max_parameter={
-                    exp.DataType.build("VARCHAR").this,
+                max_parameter_length={
+                    exp.DataType.build("VARCHAR").this: 120,
                 },
             ),
         ),
-        # Decrease the precision of a type from "max" to any numeric precision is DROP/ADD
+        # Increase the precision of a type to larger "max" is ALTER
+        (
+            "STRUCT<id INT, address VARCHAR(120)>",
+            "STRUCT<id INT, address VARCHAR(max)>",
+            [
+                TableAlterOperation.alter_type(
+                    TableAlterColumn.primitive("address"),
+                    "VARCHAR(max)",
+                    current_type="VARCHAR(120)",
+                    expected_table_struct="STRUCT<id INT, address VARCHAR(max)>",
+                )
+            ],
+            dict(
+                max_parameter_length={
+                    exp.DataType.build("VARCHAR").this: 121,
+                },
+            ),
+        ),
+        # Decrease the precision of a type from "max" to smaller value is DROP/ADD
         (
             "STRUCT<id INT, address VARCHAR(max)>",
             "STRUCT<id INT, address VARCHAR(120)>",
@@ -877,8 +895,8 @@ def test_schema_diff_calculate_type_transitions():
             ],
             dict(
                 support_positional_add=True,
-                types_with_max_parameter={
-                    exp.DataType.build("VARCHAR").this,
+                max_parameter_length={
+                    exp.DataType.build("VARCHAR").this: 121,
                 },
             ),
         ),

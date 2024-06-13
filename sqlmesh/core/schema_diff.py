@@ -4,7 +4,6 @@ import logging
 import typing as t
 from collections import defaultdict
 from enum import Enum, auto
-from math import inf
 from sqlglot import exp
 from sqlglot.helper import ensure_list, seq_get
 
@@ -306,7 +305,7 @@ class SchemaDiffer(PydanticModel):
     parameterized_type_defaults: t.Dict[
         exp.DataType.Type, t.Dict[int, t.Tuple[t.Union[int, float], ...]]
     ] = {}
-    types_with_max_parameter: t.Set[exp.DataType.Type] = set()
+    max_parameter_length: t.Dict[exp.DataType.Type, t.Union[int, float]] = {}
     types_with_unlimited_length: t.Dict[exp.DataType.Type, t.Set[exp.DataType.Type]] = {}
 
     _coerceable_types: t.Dict[exp.DataType, t.Set[exp.DataType]] = {}
@@ -363,20 +362,20 @@ class SchemaDiffer(PydanticModel):
         return type.is_type(exp.DataType.Type.STRUCT) or type.is_type(exp.DataType.Type.ARRAY)
 
     def _get_type_parameters(self, type: exp.DataType) -> t.List[t.Union[int, float]]:
-        def _str_to_number(string: str, max_to_inf: bool) -> t.Union[int, float]:
+        def _str_to_number(string: str, allows_max_param: bool) -> t.Union[int, float]:
             try:
                 return int(string)
             except ValueError:
                 try:
                     return float(string)
                 except ValueError:
-                    if max_to_inf and string.upper() == "MAX":
-                        return inf
+                    if allows_max_param and string.upper() == "MAX":
+                        return self.max_parameter_length[type.this]
                     raise ValueError(f"Could not convert '{string}' to a number")
 
         # extract existing parameters
         params = [
-            _str_to_number(param.this.this, type.this in self.types_with_max_parameter)
+            _str_to_number(param.this.this, type.this in self.max_parameter_length)
             for param in type.expressions
         ]
 
