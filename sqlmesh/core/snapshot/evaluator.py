@@ -195,7 +195,9 @@ class SnapshotEvaluator:
         """
         self._create_schemas(
             [
-                s.qualified_view_name.table_for_environment(environment_naming_info)
+                s.qualified_view_name.table_for_environment(
+                    environment_naming_info, dialect=self.adapter.dialect
+                )
                 for s in target_snapshots
                 if s.is_model and not s.is_symbolic
             ]
@@ -1098,7 +1100,9 @@ class EmbeddedStrategy(SymbolicStrategy):
         table_name: str,
         snapshot: Snapshot,
     ) -> None:
-        target_name = view_name.for_environment(environment_naming_info)
+        target_name = view_name.for_environment(
+            environment_naming_info, dialect=self.adapter.dialect
+        )
         logger.info("Dropping view '%s' for non-materialized table", target_name)
         self.adapter.drop_view(target_name, cascade=False)
 
@@ -1111,7 +1115,9 @@ class PromotableStrategy(EvaluationStrategy):
         table_name: str,
         snapshot: Snapshot,
     ) -> None:
-        target_name = view_name.for_environment(environment_naming_info)
+        target_name = view_name.for_environment(
+            environment_naming_info, dialect=self.adapter.dialect
+        )
         is_prod = environment_naming_info.name.lower() == c.PROD
         logger.info("Updating view '%s' to point at table '%s'", target_name, table_name)
         self.adapter.create_view(
@@ -1127,7 +1133,9 @@ class PromotableStrategy(EvaluationStrategy):
         view_name: QualifiedViewName,
         environment_naming_info: EnvironmentNamingInfo,
     ) -> None:
-        target_name = view_name.for_environment(environment_naming_info)
+        target_name = view_name.for_environment(
+            environment_naming_info, dialect=self.adapter.dialect
+        )
         logger.info("Dropping view '%s'", target_name)
         self.adapter.drop_view(target_name, cascade=False)
 
