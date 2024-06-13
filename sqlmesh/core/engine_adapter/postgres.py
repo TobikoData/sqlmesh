@@ -30,12 +30,6 @@ class PostgresEngineAdapter(
     CURRENT_CATALOG_EXPRESSION = exp.column("current_catalog")
     SUPPORTS_REPLACE_TABLE = False
     SCHEMA_DIFFER = SchemaDiffer(
-        # user may pass a parameterize-able type with 0, 1, or 2 parameters present (depending on the type)
-        #  - this dictionary's keys are the underlying exp.DataType.Type data types returned by sqlglot
-        #  - each key's value is a dictionary whose keys are the number of parameters provided by the user
-        #      and whose values are a tuple containing the default values for the omitted parameters
-        #  - the default values are in the order they are specified in the data type string
-        #  - parameters are appended to existing parameters (e.g., "DECIMAL(10)" -> `(0,)` -> `DECIMAL(10,0)`)
         parameterized_type_defaults={
             exp.DataType.build("DECIMAL", dialect=DIALECT).this: {1: (0,)},
             exp.DataType.build("CHAR", dialect=DIALECT).this: {0: (1,)},
@@ -43,14 +37,14 @@ class PostgresEngineAdapter(
             exp.DataType.build("TIMESTAMP", dialect=DIALECT).this: {0: (6,)},
             exp.DataType.build("INTERVAL", dialect=DIALECT).this: {0: (6,)},
         },
-        # keys are an unlimited length type, values are the types that can always ALTER to the key type
         types_with_unlimited_length={
+            # all can ALTER to `TEXT`
             exp.DataType.build("TEXT", dialect=DIALECT).this: {
                 exp.DataType.build("VARCHAR", dialect=DIALECT).this,
                 exp.DataType.build("CHAR", dialect=DIALECT).this,
                 exp.DataType.build("BPCHAR", dialect=DIALECT).this,
             },
-            # all can ALTER to unparameterized `VARCHAR`
+            # all can ALTER to unparameterized version of `VARCHAR`
             exp.DataType.build("VARCHAR", dialect=DIALECT).this: {
                 exp.DataType.build("VARCHAR", dialect=DIALECT).this,
                 exp.DataType.build("CHAR", dialect=DIALECT).this,
