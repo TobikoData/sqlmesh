@@ -131,15 +131,31 @@ class Console(abc.ABC):
 
     @abc.abstractmethod
     def start_migration_progress(self, total_tasks: int) -> None:
-        """Indicates that a new migration progress has begun."""
+        """Indicates that a new snapshot migration progress has begun."""
 
     @abc.abstractmethod
     def update_migration_progress(self, num_tasks: int) -> None:
-        """Update the migration progress."""
+        """Update the snapshot migration progress."""
 
     @abc.abstractmethod
-    def stop_migration_progress(self, success: bool = True) -> None:
-        """Stop the migration progress."""
+    def log_migration_status(self, success: bool = True) -> None:
+        """Log the finished migration status."""
+
+    @abc.abstractmethod
+    def stop_snapshot_migration_progress(self, success: bool = True) -> None:
+        """Stop the snapshot migration progress."""
+
+    @abc.abstractmethod
+    def start_env_migration_progress(self, total_tasks: int) -> None:
+        """Indicates that a new environment migration progress has begun."""
+
+    @abc.abstractmethod
+    def update_env_migration_progress(self, num_tasks: int) -> None:
+        """Update the environment migration progress."""
+
+    @abc.abstractmethod
+    def stop_env_migration_progress(self, success: bool = True) -> None:
+        """Stop the environment migration progress."""
 
     @abc.abstractmethod
     def show_model_difference_summary(
@@ -251,6 +267,9 @@ class TerminalConsole(Console):
 
         self.migration_progress: t.Optional[Progress] = None
         self.migration_task: t.Optional[TaskID] = None
+
+        self.env_migration_progress: t.Optional[Progress] = None
+        self.env_migration_task: t.Optional[TaskID] = None
 
         self.loading_status: t.Dict[uuid.UUID, Status] = {}
 
@@ -493,14 +512,55 @@ class TerminalConsole(Console):
         if self.migration_progress is not None and self.migration_task is not None:
             self.migration_progress.update(self.migration_task, refresh=True, advance=num_tasks)
 
-    def stop_migration_progress(self, success: bool = True) -> None:
+    def log_migration_status(self, success: bool = True) -> None:
+        """Log the migration status."""
+        if success:
+            self.log_success("The migration has been completed successfully")
+
+    def stop_snapshot_migration_progress(self, success: bool = True) -> None:
         """Stop the migration progress."""
         self.migration_task = None
         if self.migration_progress is not None:
             self.migration_progress.stop()
             self.migration_progress = None
             if success:
-                self.log_success("The migration has been completed successfully")
+                self.log_success("All snapshots have been migrated successfully")
+
+    def start_env_migration_progress(self, total_tasks: int) -> None:
+        """Indicates that a new environment migration has begun."""
+        if self.env_migration_progress is None:
+            self.env_migration_progress = Progress(
+                TextColumn("[bold blue]Migrating environments", justify="right"),
+                BarColumn(bar_width=40),
+                "[progress.percentage]{task.percentage:>3.1f}%",
+                "•",
+                srich.BatchColumn(),
+                "•",
+                TimeElapsedColumn(),
+                console=self.console,
+            )
+
+            self.env_migration_progress.start()
+            self.env_migration_task = self.env_migration_progress.add_task(
+                "Migrating environments...",
+                total=total_tasks,
+            )
+
+    def update_env_migration_progress(self, num_tasks: int) -> None:
+        """Update the environment migration progress."""
+        if self.env_migration_progress is not None and self.env_migration_task is not None:
+            self.env_migration_progress.update(
+                self.env_migration_task, refresh=True, advance=num_tasks
+            )
+
+    def stop_env_migration_progress(self, success: bool = True) -> None:
+        """Stop the environment migration progress."""
+        self.env_migration_task = None
+        if self.env_migration_progress is not None:
+            self.env_migration_progress.stop()
+            self.env_migration_progress = None
+            if success:
+                self.log_success("All environments have been migrated successfully")
 
     def show_model_difference_summary(
         self,
@@ -1730,10 +1790,32 @@ class DatabricksMagicConsole(CaptureTerminalConsole):
         if num_migrations % 5 == 0:
             print(f"Migration Updated {num_migrations}/{total_migrations}")
 
-    def stop_migration_progress(self, success: bool = True) -> None:
+    def log_migration_status(self, success: bool = True) -> None:
+        """Log the migration status."""
+        print(f"Migration {'succeeded' if success else 'failed'}")
+
+    def stop_snapshot_migration_progress(self, success: bool = True) -> None:
         """Stop the migration progress."""
         self.migration_status = (0, 0)
-        print(f"Migration {'succeeded' if success else 'failed'}")
+        print(f"Snapshot migration {'succeeded' if success else 'failed'}")
+
+    def start_env_migration_progress(self, total_tasks: int) -> None:
+        """Indicates that a new migration progress has begun."""
+        self.env_migration_status = (0, total_tasks)
+        print("Starting Environment migration")
+
+    def update_env_migration_progress(self, num_tasks: int) -> None:
+        """Update the migration progress."""
+        num_migrations, total_migrations = self.env_migration_status
+        num_migrations += num_tasks
+        self.env_migration_status = (num_migrations, total_migrations)
+        if num_migrations % 5 == 0:
+            print(f"Environment migration Updated {num_migrations}/{total_migrations}")
+
+    def stop_env_migration_progress(self, success: bool = True) -> None:
+        """Stop the migration progress."""
+        self.env_migration_status = (0, 0)
+        print(f"Environment migration {'succeeded' if success else 'failed'}")
 
 
 class DebuggerTerminalConsole(TerminalConsole):
@@ -1814,8 +1896,20 @@ class DebuggerTerminalConsole(TerminalConsole):
     def update_migration_progress(self, num_tasks: int) -> None:
         self._write(f"Migration {num_tasks}")
 
-    def stop_migration_progress(self, success: bool = True) -> None:
-        self._write(f"Stopping migration with success={success}")
+    def log_migration_status(self, success: bool = True) -> None:
+        self._write(f"Migration finished with success={success}")
+
+    def stop_snapshot_migration_progress(self, success: bool = True) -> None:
+        self._write(f"Stopping snapshot migration with success={success}")
+
+    def start_env_migration_progress(self, total_tasks: int) -> None:
+        self._write(f"Starting migration for {total_tasks} environments")
+
+    def update_env_migration_progress(self, num_tasks: int) -> None:
+        self._write(f"Environment migration {num_tasks}")
+
+    def stop_env_migration_progress(self, success: bool = True) -> None:
+        self._write(f"Stopping environment migration with success={success}")
 
     def show_model_difference_summary(
         self,
