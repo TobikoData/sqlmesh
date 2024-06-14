@@ -74,7 +74,7 @@ def test_data_diff(sushi_context_fixed_date):
     schema_diff = diff.schema_diff()
     assert schema_diff.added == [("z", exp.DataType.build("int"))]
     assert schema_diff.modified == {
-        "modified_col": (exp.DataType.build("varchar"), exp.DataType.build("int"))
+        "modified_col": (exp.DataType.build("text"), exp.DataType.build("int"))
     }
     assert schema_diff.removed == [("y", exp.DataType.build("int"))]
 

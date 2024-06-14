@@ -73,7 +73,7 @@ def test_create_external_models(tmpdir, assert_exp_eq):
     assert raw_fruits.kind.is_external
     assert raw_fruits.columns_to_types == {
         "id": exp.DataType.build("BIGINT"),
-        "name": exp.DataType.build("VARCHAR"),
+        "name": exp.DataType.build("TEXT"),
     }
 
     snapshot = context.get_snapshot("sushi.raw_fruits", raise_if_missing=True)
@@ -84,7 +84,7 @@ def test_create_external_models(tmpdir, assert_exp_eq):
     assert not fruits.kind.is_external
     assert fruits.columns_to_types == {
         "id": exp.DataType.build("BIGINT"),
-        "name": exp.DataType.build("VARCHAR"),
+        "name": exp.DataType.build("TEXT"),
     }
     assert_exp_eq(
         fruits.render_query(snapshots=context.snapshots),
