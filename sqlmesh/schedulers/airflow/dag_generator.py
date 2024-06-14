@@ -263,7 +263,7 @@ class SnapshotDagGenerator:
                 task_id="on_plan_apply_end",
                 python_callable=on_plan_apply_end,
                 op_kwargs={"plan_id": plan_dag_spec.environment.plan_id},
-                trigger_rule="all_done",
+                trigger_rule="all_success",
             )
             finalize_task >> on_plan_apply_end_task
 
