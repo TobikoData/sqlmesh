@@ -10,6 +10,7 @@ from functools import cached_property
 from pathlib import Path
 
 import pandas as pd
+import numpy as np
 from astor import to_source
 from pydantic import Field
 from sqlglot import diff, exp
@@ -1172,6 +1173,7 @@ class SeedModel(_SqlBasedModel):
         datetime_columns = []
         bool_columns = []
         string_columns = []
+
         for name, tpe in (self.columns_to_types_ or {}).items():
             if tpe.this in (exp.DataType.Type.DATE, exp.DataType.Type.DATE32):
                 date_columns.append(name)
@@ -1196,7 +1198,7 @@ class SeedModel(_SqlBasedModel):
                 cond=lambda x: x.notna(),  # type: ignore
                 other=df[string_columns].astype(str),  # type: ignore
             )
-            yield df
+            yield df.replace({np.nan: None})
 
     @property
     def columns_to_types(self) -> t.Optional[t.Dict[str, exp.DataType]]:
