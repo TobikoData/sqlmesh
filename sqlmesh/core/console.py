@@ -514,15 +514,16 @@ class TerminalConsole(Console):
 
     def log_migration_status(self, success: bool = True) -> None:
         """Log the migration status."""
-        if success:
-            self.log_success("The migration has been completed successfully")
+        if self.migration_progress is not None:
+            self.migration_progress = None
+            if success:
+                self.log_success("The migration has been completed successfully")
 
     def stop_snapshot_migration_progress(self, success: bool = True) -> None:
         """Stop the migration progress."""
         self.migration_task = None
         if self.migration_progress is not None:
             self.migration_progress.stop()
-            self.migration_progress = None
             if success:
                 self.log_success("All snapshots have been migrated successfully")
 
