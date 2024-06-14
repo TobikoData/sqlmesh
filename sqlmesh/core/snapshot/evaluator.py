@@ -1362,10 +1362,20 @@ class SeedStrategy(MaterializableStrategy):
         is_snapshot_deployable: bool,
         **render_kwargs: t.Any,
     ) -> None:
+        model = t.cast(SeedModel, snapshot.model)
+        if not model.is_hydrated and self.adapter.table_exists(name):
+            # This likely means that the table was created and populated previously, but the evaluation stage
+            # failed before the interval could be added for this model.
+            logger.warning(
+                "Seed model '%s' is not hydrated, but the table '%s' exists. Skipping creation",
+                model.name,
+                name,
+            )
+            return
+
         super().create(snapshot, name, is_table_deployable, is_snapshot_deployable, **render_kwargs)
         if is_table_deployable:
             # For seeds we insert data at the time of table creation.
-            model = t.cast(SeedModel, snapshot.model)
             try:
                 for index, df in enumerate(model.render_seed()):
                     if index == 0:
