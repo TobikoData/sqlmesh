@@ -1330,6 +1330,7 @@
           "year",
           "month",
           "day",
+          "six_hour",
           "hour",
           "half_hour",
           "quarter_hour",

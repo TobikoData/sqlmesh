@@ -34,6 +34,7 @@ class IntervalUnit(str, Enum):
     YEAR = "year"
     MONTH = "month"
     DAY = "day"
+    SIX_HOUR = "six_hour"
     HOUR = "hour"
     HALF_HOUR = "half_hour"
     QUARTER_HOUR = "quarter_hour"
@@ -71,7 +72,7 @@ class IntervalUnit(str, Enum):
 
     @property
     def is_hour(self) -> bool:
-        return self == IntervalUnit.HOUR
+        return self in (IntervalUnit.HOUR, IntervalUnit.SIX_HOUR)
 
     @property
     def is_minute(self) -> bool:
@@ -87,6 +88,8 @@ class IntervalUnit(str, Enum):
             return "*/30 * * * *"
         if self == IntervalUnit.HOUR:
             return "0 * * * *"
+        if self == IntervalUnit.SIX_HOUR:
+            return "0 */6 * * *"
         if self == IntervalUnit.DAY:
             return "0 0 * * *"
         if self == IntervalUnit.MONTH:
@@ -153,6 +156,7 @@ INTERVAL_SECONDS = {
     IntervalUnit.YEAR: 60 * 60 * 24 * 365,
     IntervalUnit.MONTH: 60 * 60 * 24 * 28,
     IntervalUnit.DAY: 60 * 60 * 24,
+    IntervalUnit.SIX_HOUR: 60 * 60 * 6,
     IntervalUnit.HOUR: 60 * 60,
     IntervalUnit.HALF_HOUR: 60 * 30,
     IntervalUnit.QUARTER_HOUR: 60 * 15,

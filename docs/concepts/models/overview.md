@@ -223,7 +223,7 @@ Name is ***required*** and must be ***unique***, unless [name inference](../../r
 - Cron is used to schedule your model to process or refresh at a certain interval. It accepts a [cron expression](https://en.wikipedia.org/wiki/Cron) or any of `@hourly`, `@daily`, `@weekly`, or `@monthly`.
 
 ### interval_unit
-- Interval unit determines the granularity of data intervals for this model. By default the interval unit is automatically derived from the `cron` expression. Supported values are: `year`, `month`, `day`, `hour`, `half_hour`, `quarter_hour`, and `five_minute`.
+- Interval unit determines the granularity of data intervals for this model. By default the interval unit is automatically derived from the `cron` expression. Supported values are: `year`, `month`, `day`, `six_hour`, `hour`, `half_hour`, `quarter_hour`, and `five_minute`.
 
 ### tags
 - Tags are one or more labels used to organize your models.
