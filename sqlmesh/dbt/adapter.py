@@ -110,9 +110,9 @@ class BaseAdapter(abc.ABC):
             return 1
 
         macros = [
-            MacroReference(package=package_name, name=macro_name)
-            for package_name, macros in self.jinja_macros.packages.items()
-            if (package_name == package) or (package == "dbt" and package_name.startswith("dbt_"))
+            MacroReference(package=macro_package, name=macro_name)
+            for macro_package, macros in self.jinja_macros.packages.items()
+            if (macro_package == package) or (package == "dbt" and macro_package.startswith("dbt_"))
             for macro_name in macros.keys()
             if macro_name.endswith(macro_suffix)
         ]
