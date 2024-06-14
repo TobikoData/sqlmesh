@@ -1739,8 +1739,15 @@ class DatabricksMagicConsole(CaptureTerminalConsole):
 class DebuggerTerminalConsole(TerminalConsole):
     """A terminal console to use while debugging with no fluff, progress bars, etc."""
 
-    def __init__(self, console: t.Optional[RichConsole], *args: t.Any, **kwargs: t.Any) -> None:
+    def __init__(
+        self,
+        console: t.Optional[RichConsole],
+        *args: t.Any,
+        dialect: DialectType = None,
+        **kwargs: t.Any,
+    ) -> None:
         self.console: RichConsole = console or srich.console
+        self.dialect = dialect
 
     def _write(self, msg: t.Any, *args: t.Any, **kwargs: t.Any) -> None:
         self.console.log(msg, *args, **kwargs)
