@@ -422,20 +422,20 @@ class _Model(ModelMeta, frozen=True):
         """
         query = self.render_query_or_raise(**render_kwarg).copy()
 
-        for select_or_union in query.find_all(exp.Select, exp.Union):
-            cte = select_or_union.find_ancestor(exp.With, exp.Select, exp.Subquery)
+        for select_or_set_op in query.find_all(exp.Select, exp.SetOperation):
+            cte = select_or_set_op.find_ancestor(exp.With, exp.Select, exp.Subquery)
             skip_limit = isinstance(cte, exp.With) and cte.recursive
 
-            if isinstance(select_or_union, exp.Select) and select_or_union.args.get("from"):
-                select_or_union.where(exp.false(), copy=False)
-                if not skip_limit and not isinstance(select_or_union.parent, exp.Union):
-                    select_or_union.limit(0, copy=False)
+            if isinstance(select_or_set_op, exp.Select) and select_or_set_op.args.get("from"):
+                select_or_set_op.where(exp.false(), copy=False)
+                if not skip_limit and not isinstance(select_or_set_op.parent, exp.SetOperation):
+                    select_or_set_op.limit(0, copy=False)
             elif (
                 not skip_limit
-                and isinstance(select_or_union, exp.Union)
-                and not isinstance(select_or_union.parent, exp.Union)
+                and isinstance(select_or_set_op, exp.SetOperation)
+                and not isinstance(select_or_set_op.parent, exp.SetOperation)
             ):
-                select_or_union.set("limit", exp.Limit(expression=exp.Literal.number(0)))
+                select_or_set_op.set("limit", exp.Limit(expression=exp.Literal.number(0)))
 
         if self.managed_columns:
             query.select(
