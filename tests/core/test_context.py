@@ -702,3 +702,27 @@ def test_load_external_models(copy_to_temp_path):
 
     # from external_models/model2.yaml
     assert "raw.model2" in external_model_names
+
+    # from external_models/prod.yaml, should not show unless --gateway=prod
+    assert "prod_raw.model1" not in external_model_names
+
+
+def test_load_gateway_specific_external_models(copy_to_temp_path):
+    path = copy_to_temp_path("examples/sushi")
+
+    def _get_external_model_names(gateway=None):
+        context = Context(paths=path, config="isolated_systems_config", gateway=gateway)
+
+        external_model_names = [
+            m.name for m in context.models.values() if m.kind.name == ModelKindName.EXTERNAL
+        ]
+
+        assert len(external_model_names) > 0
+
+        return external_model_names
+
+    # default gateway is dev, prod model should not show
+    assert "prod_raw.model1" not in _get_external_model_names()
+
+    # gateway explicitly set to prod; prod model should now show
+    assert "prod_raw.model1" in _get_external_model_names(gateway="prod")

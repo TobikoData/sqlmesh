@@ -1627,6 +1627,7 @@ class GenericContext(BaseContext, t.Generic[C]):
                 adapter=self._engine_adapter,
                 state_reader=self.state_reader,
                 dialect=config.model_defaults.dialect,
+                gateway=self.gateway,
                 max_workers=self.concurrent_tasks,
             )
 

@@ -22,6 +22,7 @@ def create_external_models_file(
     adapter: EngineAdapter,
     state_reader: StateReader,
     dialect: DialectType,
+    gateway: t.Optional[str] = None,
     max_workers: int = 1,
 ) -> None:
     """Create or replace a YAML file with column and types of all columns in all external models.
@@ -32,6 +33,7 @@ def create_external_models_file(
         adapter: The engine adapter.
         state_reader: The state reader.
         dialect: The dialect to serialize the schema as.
+        gateway: If the model should be associated with a specific gateway; the gateway key
         max_workers: The max concurrent workers to fetch columns.
     """
     external_model_fqns = set()
@@ -62,10 +64,13 @@ def create_external_models_file(
                 logger.warning(f"Unable to get schema for '{table}': '{e}'.")
                 return None
 
+        gateway_part = {"gateway": gateway} if gateway else {}
+
         schemas = [
             {
                 "name": exp.to_table(table).sql(dialect=dialect),
                 "columns": {c: dtype.sql(dialect=dialect) for c, dtype in columns.items()},
+                **gateway_part,
             }
             for table, columns in sorted(
                 pool.map(
@@ -76,5 +81,12 @@ def create_external_models_file(
             if columns
         ]
 
+        # dont clobber existing entries from other gateways
+        entries_to_keep = (
+            [e for e in yaml.load(path) if e.get("gateway", None) != gateway]
+            if path.exists()
+            else []
+        )
+
         with open(path, "w", encoding="utf-8") as file:
-            yaml.dump(schemas, file)
+            yaml.dump(entries_to_keep + schemas, file)
