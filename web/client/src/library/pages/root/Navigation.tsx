@@ -16,6 +16,7 @@ export default function PageNavigation(): JSX.Element {
       className={clsx(
         'relative min-w-[10rem] px-2 min-h-8 max-h-8 w-full flex items-center',
         modules.showHistoryNavigation ? 'justify-between' : 'justify-end',
+        isFetchingModels && 'overflow-hidden',
       )}
     >
       {modules.showHistoryNavigation && <HistoryNavigation />}

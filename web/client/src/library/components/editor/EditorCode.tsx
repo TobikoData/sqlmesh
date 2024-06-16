@@ -3,7 +3,7 @@ import CodeMirror from '@uiw/react-codemirror'
 import { type KeyBinding, keymap } from '@codemirror/view'
 import { type Extension } from '@codemirror/state'
 import { useApiFileByPath, useMutationApiSaveFile } from '~/api'
-import { debounceSync, isNil } from '~/utils'
+import { debounceSync, isNil, isNotNil } from '~/utils'
 import { useStoreContext } from '~/context/context'
 import { useStoreEditor } from '~/context/editor'
 import {
@@ -31,7 +31,7 @@ import {
   SQLMeshDialect,
   SQLMeshDialectCleanUp,
 } from './extensions/SQLMeshDialect'
-import { indentMore } from '@codemirror/commands'
+import { indentMore, defaultKeymap, historyKeymap } from '@codemirror/commands'
 
 export { CodeEditorDefault, CodeEditorRemoteFile }
 
@@ -55,11 +55,11 @@ function CodeEditorDefault({
   const { mode } = useColorScheme()
 
   const models = useStoreContext(s => s.models)
-
   const engine = useStoreEditor(s => s.engine)
   const dialects = useStoreEditor(s => s.dialects)
 
   const [value, setValue] = useState(content)
+  const [isTyping, setIsTyping] = useState(false)
 
   const [dialectOptions, setDialectOptions] = useState<{
     types: string
@@ -67,12 +67,18 @@ function CodeEditorDefault({
   }>()
 
   const debouncedChange = useCallback(
-    debounceSync(function handleChange(value): void {
-      setValue(value)
-      onChange?.(value)
-    }, 500),
+    debounceSync(
+      (value): void => {
+        setValue(value)
+        onChange?.(value)
+      },
+      500,
+      true,
+    ),
     [],
   )
+
+  const debouncedTyping = useCallback(debounceSync(setIsTyping, 500), [])
 
   const handleEngineWorkerMessage = useCallback((e: MessageEvent): void => {
     if (e.data.topic === 'dialect') {
@@ -96,26 +102,34 @@ function CodeEditorDefault({
     () => dialects.map(d => d.dialect_title),
     [dialects],
   )
-  const extensionKeymap = useMemo(
-    () =>
-      keymap.of(
-        [
-          ...(keymaps ?? []),
-          [
-            {
-              key: 'Tab',
-              preventDefault: true,
-              run(e: any) {
-                return isNil(completionStatus(e.state))
-                  ? indentMore(e)
-                  : acceptCompletion(e)
-              },
-            },
-          ],
-        ].flat(),
-      ),
-    [keymaps],
-  )
+  const extensionKeymap = useMemo(() => {
+    const keys = [
+      defaultKeymap,
+      historyKeymap,
+      ...(keymaps ?? []),
+      [
+        {
+          key: 'Tab',
+          preventDefault: true,
+          run(e: any) {
+            return isNil(completionStatus(e.state))
+              ? indentMore(e)
+              : acceptCompletion(e)
+          },
+        },
+      ],
+    ]
+      .flat()
+      .reduce<Record<string, KeyBinding>>((acc, binding) => {
+        if (isNotNil(binding.key)) {
+          acc[binding.key] = binding
+        }
+
+        return acc
+      }, {})
+
+    return keymap.of(Object.values(keys))
+  }, [keymaps])
   const allModels = useMemo(() => Array.from(models.values()), [models])
   const allModelsNames = useMemo(
     () =>
@@ -191,6 +205,8 @@ function CodeEditorDefault({
   }, [dialect])
 
   useEffect(() => {
+    if (isTyping) return
+
     setValue(content)
   }, [content])
 
@@ -204,10 +220,14 @@ function CodeEditorDefault({
         indentWithTab={false}
         extensions={extensionsAll}
         onChange={debouncedChange}
+        onKeyDown={() => setIsTyping(true)}
+        onKeyUp={() => debouncedTyping(false)}
         readOnly={isNil(onChange)}
         basicSetup={{
           autocompletion: false,
+          defaultKeymap: false,
         }}
+        autoFocus
       />
     </div>
   )
