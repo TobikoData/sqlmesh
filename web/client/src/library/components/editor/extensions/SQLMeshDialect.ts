@@ -149,7 +149,7 @@ export const SQLMeshDialect: ExtensionSQLMeshDialect = function SQLMeshDialect(
         if (isNotNil(completionResult)) {
           const options = completionResult.options ?? []
           completionResult.options = options.concat(suggestions)
-          completionResult.map = () => null // Udates sussgestions to switch between lower and upper case
+          completionResult.map = () => null // Updates sussgestions to switch between lower and upper case
         }
 
         return completionResult
