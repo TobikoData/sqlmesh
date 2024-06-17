@@ -105,7 +105,7 @@ class BaseTarget(abc.ABC, t.Generic[CP]):
         return payload
 
 
-class SnapshotEvaluationTarget(BaseTarget[commands.EvaluateCommandPayload], PydanticModel):
+class SnapshotEvaluationTarget(PydanticModel, BaseTarget[commands.EvaluateCommandPayload]):
     """The target which contains attributes necessary to evaluate a given snapshot.
 
     Args:
@@ -176,7 +176,7 @@ class SnapshotEvaluationTarget(BaseTarget[commands.EvaluateCommandPayload], Pyda
         return self.execution_time or context["dag_run"].logical_date
 
 
-class SnapshotPromotionTarget(BaseTarget[commands.PromoteCommandPayload], PydanticModel):
+class SnapshotPromotionTarget(PydanticModel, BaseTarget[commands.PromoteCommandPayload]):
     """The target which contains attributes necessary to perform snapshot promotion in a given environment.
 
     The promotion means creation of views associated with the environment which target physical tables
@@ -208,7 +208,7 @@ class SnapshotPromotionTarget(BaseTarget[commands.PromoteCommandPayload], Pydant
         )
 
 
-class SnapshotDemotionTarget(BaseTarget[commands.DemoteCommandPayload], PydanticModel):
+class SnapshotDemotionTarget(PydanticModel, BaseTarget[commands.DemoteCommandPayload]):
     """The target which contains attributes necessary to perform snapshot demotion in a given environment.
 
     The demotion means deletion of views that match names of provided snapshots in the target environment.
@@ -234,7 +234,7 @@ class SnapshotDemotionTarget(BaseTarget[commands.DemoteCommandPayload], Pydantic
         )
 
 
-class SnapshotCleanupTarget(BaseTarget[commands.CleanupCommandPayload], PydanticModel):
+class SnapshotCleanupTarget(PydanticModel, BaseTarget[commands.CleanupCommandPayload]):
     """The target which contains attributes necessary to perform table cleanup of expired snapshots"""
 
     command_type: commands.CommandType = commands.CommandType.CLEANUP
@@ -266,7 +266,7 @@ class SnapshotCleanupTarget(BaseTarget[commands.CleanupCommandPayload], Pydantic
         return command
 
 
-class SnapshotCreateTablesTarget(BaseTarget[commands.CreateTablesCommandPayload], PydanticModel):
+class SnapshotCreateTablesTarget(PydanticModel, BaseTarget[commands.CreateTablesCommandPayload]):
     """The target which creates physical tables for the given set of new snapshots."""
 
     command_type: commands.CommandType = commands.CommandType.CREATE_TABLES
@@ -293,7 +293,7 @@ class SnapshotCreateTablesTarget(BaseTarget[commands.CreateTablesCommandPayload]
         )
 
 
-class SnapshotMigrateTablesTarget(BaseTarget[commands.MigrateTablesCommandPayload], PydanticModel):
+class SnapshotMigrateTablesTarget(PydanticModel, BaseTarget[commands.MigrateTablesCommandPayload]):
     """The target which updates schemas of existing physical tables to bring them in correspondance
     with schemas of target snapshots.
     """
