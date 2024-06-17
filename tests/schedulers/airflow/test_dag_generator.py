@@ -67,6 +67,7 @@ def test_generate_plan_application_dag__batch_index_populated(mocker: MockerFixt
         ddl_engine_operator=TestSubmitOperator,
         ddl_engine_operator_args={},
         external_table_sensor_factory=None,
+        sensor_mode="reschedule",
         state_reader=state_reader_mock,
     )
 
