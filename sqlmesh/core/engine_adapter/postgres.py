@@ -32,13 +32,10 @@ class PostgresEngineAdapter(
     SCHEMA_DIFFER = SchemaDiffer(
         parameterized_type_defaults={
             # DECIMAL without precision is "up to 131072 digits before the decimal point; up to 16383 digits after the decimal point"
-            exp.DataType.build("DECIMAL", dialect=DIALECT).this: {
-                0: (131072 + 16383, 16383),
-                1: (0,),
-            },
-            exp.DataType.build("CHAR", dialect=DIALECT).this: {0: (1,)},
-            exp.DataType.build("TIME", dialect=DIALECT).this: {0: (6,)},
-            exp.DataType.build("TIMESTAMP", dialect=DIALECT).this: {0: (6,)},
+            exp.DataType.build("DECIMAL", dialect=DIALECT).this: [(131072 + 16383, 16383), (0,)],
+            exp.DataType.build("CHAR", dialect=DIALECT).this: [(1,)],
+            exp.DataType.build("TIME", dialect=DIALECT).this: [(6,)],
+            exp.DataType.build("TIMESTAMP", dialect=DIALECT).this: [(6,)],
         },
         types_with_unlimited_length={
             # all can ALTER to `TEXT`

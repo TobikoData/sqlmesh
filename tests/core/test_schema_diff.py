@@ -812,7 +812,7 @@ def test_schema_diff_calculate_type_transitions():
             ],
             dict(
                 parameterized_type_defaults={
-                    exp.DataType.build("VARCHAR").this: {0: (1,)},
+                    exp.DataType.build("VARCHAR").this: [(1,)],
                 },
             ),
         ),
@@ -835,7 +835,7 @@ def test_schema_diff_calculate_type_transitions():
             ],
             dict(
                 parameterized_type_defaults={
-                    exp.DataType.build("VARCHAR").this: {0: (1,)},
+                    exp.DataType.build("VARCHAR").this: [(1,)],
                 },
                 support_positional_add=True,
             ),

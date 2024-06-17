@@ -61,8 +61,8 @@ class SparkEngineAdapter(GetCurrentCatalogFromFunctionMixin, HiveMetastoreTableP
     BRANCH_PREFIX = "branch_"
     SCHEMA_DIFFER = SchemaDiffer(
         parameterized_type_defaults={
-            exp.DataType.build("BINARY", dialect=DIALECT).this: {0: (100,)},
-            exp.DataType.build("DECIMAL", dialect=DIALECT).this: {0: (10, 0), 1: (0,)},
+            # default decimal precision varies across backends
+            exp.DataType.build("DECIMAL", dialect=DIALECT).this: [(), (0,)],
         },
     )
 

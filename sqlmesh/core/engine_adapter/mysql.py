@@ -42,15 +42,15 @@ class MySQLEngineAdapter(
     SUPPORTS_REPLACE_TABLE = False
     SCHEMA_DIFFER = SchemaDiffer(
         parameterized_type_defaults={
-            exp.DataType.build("BIT", dialect=DIALECT).this: {0: (1,)},
-            exp.DataType.build("BINARY", dialect=DIALECT).this: {0: (1,)},
-            exp.DataType.build("DECIMAL", dialect=DIALECT).this: {0: (10, 0), 1: (0,)},
-            exp.DataType.build("CHAR", dialect=DIALECT).this: {0: (1,)},
-            exp.DataType.build("NCHAR", dialect=DIALECT).this: {0: (1,)},
-            exp.DataType.build("TEXT", dialect=DIALECT).this: {0: (65535,)},
-            exp.DataType.build("TIME", dialect=DIALECT).this: {0: (0,)},
-            exp.DataType.build("DATETIME", dialect=DIALECT).this: {0: (0,)},
-            exp.DataType.build("TIMESTAMP", dialect=DIALECT).this: {0: (0,)},
+            exp.DataType.build("BIT", dialect=DIALECT).this: [(1,)],
+            exp.DataType.build("BINARY", dialect=DIALECT).this: [(1,)],
+            exp.DataType.build("DECIMAL", dialect=DIALECT).this: [(10, 0), (0,)],
+            exp.DataType.build("CHAR", dialect=DIALECT).this: [(1,)],
+            exp.DataType.build("NCHAR", dialect=DIALECT).this: [(1,)],
+            exp.DataType.build("TEXT", dialect=DIALECT).this: [(65535,)],
+            exp.DataType.build("TIME", dialect=DIALECT).this: [(0,)],
+            exp.DataType.build("DATETIME", dialect=DIALECT).this: [(0,)],
+            exp.DataType.build("TIMESTAMP", dialect=DIALECT).this: [(0,)],
         },
     )
 

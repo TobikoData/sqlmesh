@@ -293,8 +293,29 @@ class SchemaDiffer(PydanticModel):
     change. As a result historical data is lost.
 
     Potential future improvements:
-    1. Support precision changes on columns like VARCHAR and DECIMAL. Each engine has different rules on what is allowed
-    2. Support column moves. Databricks Delta supports moves and would allow exact matches.
+    1. Support column moves. Databricks Delta supports moves and would allow exact matches.
+
+    Args:
+        support_positional_add: Whether the engine for which the diff is being computed supports adding columns in a
+            specific position in the set of existing columns.
+        support_nested_operations: Whether the engine for which the diff is being computed supports modifications to
+            nested data types like STRUCTs and ARRAYs.
+        compatible_types: Types that are compatible and automatically coerced in actions like UNION ALL. Dict key is data
+            type, and value is the set of types that are compatible with it.
+        support_coercing_compatible_types: Whether or not the engine for which the diff is being computed supports direct
+            coercion of compatible types.
+        parameterized_type_defaults: Default values for parameterized data types. Dict key is a sqlglot exp.DataType.Type,
+            but in the engine adapter specification we build it from the dialect string instead of specifying it directly.
+            Example: `exp.DataType.build("STRING", dialect=DIALECT).this` instead of the underlying `exp.DataType.Type.TEXT`
+            to which it parses. We do that because parameter default replacement will silently break if we specify type
+            directly and SQLGlot changes the dialect's mapping of type string to exp.DataType.Type. Dict value is default
+            values in a list, where the list index contains the remaining defaults given the number of parameter values
+            provided by the user. Example: if user provides 0 parameters "DECIMAL", we return index 0 values for the two
+            omitted parameters `(38, 9)` -> "DECIMAL(38,9)". Example: if user provides 1 parameters "DECIMAL(10)", we return
+            index 1 value for the one omitted parameters `(0,)` -> "DECIMAL(10,0)".
+        max_parameter_length: Numeric parameter values corresponding to "max". Example: `VARCHAR(max)` -> `VARCHAR(65535)`.
+        types_with_unlimited_length: Data types that accept values of any length up to system limits. Any explicitly
+            parameterized type can ALTER to its unlimited length version, along with different types in some engines.
     """
 
     support_positional_add: bool = False
@@ -303,7 +324,7 @@ class SchemaDiffer(PydanticModel):
     compatible_types: t.Dict[exp.DataType, t.Set[exp.DataType]] = {}
     support_coercing_compatible_types: bool = False
     parameterized_type_defaults: t.Dict[
-        exp.DataType.Type, t.Dict[int, t.Tuple[t.Union[int, float], ...]]
+        exp.DataType.Type, t.List[t.Tuple[t.Union[int, float], ...]]
     ] = {}
     max_parameter_length: t.Dict[exp.DataType.Type, t.Union[int, float]] = {}
     types_with_unlimited_length: t.Dict[exp.DataType.Type, t.Set[exp.DataType.Type]] = {}
@@ -380,9 +401,11 @@ class SchemaDiffer(PydanticModel):
         ]
 
         # maybe get default parameter values
-        param_defaults: t.Tuple[t.Union[int, float], ...] = (
-            self.parameterized_type_defaults.get(type.this) or {}
-        ).get(len(params)) or ()
+        param_defaults: t.Tuple[t.Union[int, float], ...] = ()
+        if type.this in self.parameterized_type_defaults:
+            param_defaults_list = self.parameterized_type_defaults[type.this]
+            if len(params) < len(param_defaults_list):
+                param_defaults = param_defaults_list[len(params)]
 
         return [*params, *param_defaults]
 

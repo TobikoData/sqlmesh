@@ -56,16 +56,10 @@ class TrinoEngineAdapter(
     QUOTE_IDENTIFIERS_IN_VIEWS = False
     SCHEMA_DIFFER = SchemaDiffer(
         parameterized_type_defaults={
-            exp.DataType.build("DECIMAL", dialect=DIALECT).this: {1: (0,)},
-            exp.DataType.build("CHAR", dialect=DIALECT).this: {0: (1,)},
-            exp.DataType.build("TIME", dialect=DIALECT).this: {0: (3,)},
-            exp.DataType.build("TIMESTAMP", dialect=DIALECT).this: {0: (3,)},
-        },
-        types_with_unlimited_length={
-            # parameterized `VARCHAR(n)` can ALTER to unparameterized `VARCHAR`
-            exp.DataType.build("VARCHAR", dialect=DIALECT).this: {
-                exp.DataType.build("VARCHAR", dialect=DIALECT).this
-            },
+            # default decimal precision varies across backends
+            exp.DataType.build("DECIMAL", dialect=DIALECT).this: [(), (0,)],
+            exp.DataType.build("CHAR", dialect=DIALECT).this: [(1,)],
+            exp.DataType.build("TIMESTAMP", dialect=DIALECT).this: [(3,)],
         },
     )
 
