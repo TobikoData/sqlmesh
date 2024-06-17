@@ -133,6 +133,7 @@ def test_json(snapshot: Snapshot):
             "references": [],
             "allow_partials": False,
             "signals": [],
+            "enabled": True,
         },
         "audits": [],
         "name": '"name"',

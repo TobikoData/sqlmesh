@@ -328,7 +328,8 @@ class SqlMeshLoader(Loader):
                     )
 
                 model = cache.get_or_load_model(path, _load)
-                models[model.fqn] = model
+                if model.enabled:
+                    models[model.fqn] = model
 
                 if isinstance(model, SeedModel):
                     seed_path = model.seed_path

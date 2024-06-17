@@ -686,7 +686,7 @@ def test_default_catalog_connections(copy_to_temp_path: t.Callable):
 def test_load_external_models(copy_to_temp_path):
     path = copy_to_temp_path("examples/sushi")
 
-    context = Context(paths=path, config="local_config")
+    context = Context(paths=path)
 
     external_model_names = [
         m.name for m in context.models.values() if m.kind.name == ModelKindName.EXTERNAL
@@ -743,3 +743,12 @@ def test_override_dialect_normalization_strategy():
 
     # The above change is applied globally so we revert it to avoid breaking other tests
     DuckDB.NORMALIZATION_STRATEGY = NormalizationStrategy.CASE_INSENSITIVE
+
+    
+def test_disabled_model(copy_to_temp_path):
+    path = copy_to_temp_path("examples/sushi")
+
+    context = Context(paths=path)
+
+    assert (path[0] / "models" / "disabled.sql").exists()
+    assert not context.get_model("sushi.disabled")

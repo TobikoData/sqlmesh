@@ -419,6 +419,8 @@ class GenericContext(BaseContext, t.Generic[C]):
             A new instance of the updated or inserted model.
         """
         model = self.get_model(model, raise_if_missing=True)
+        if not model.enabled:
+            raise SQLMeshError(f"The disabled model '{model.name}' cannot be upserted")
         path = model._path
 
         # model.copy() can't be used here due to a cached state that can be a part of a model instance.
