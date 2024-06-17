@@ -15,7 +15,8 @@ from sqlmesh.core.snapshot import (
 from sqlmesh.schedulers.airflow.dag_generator import SnapshotDagGenerator
 from sqlmesh.schedulers.airflow import common
 from sqlmesh.schedulers.airflow.operators.targets import BaseTarget, SnapshotEvaluationTarget
-from sqlmesh.utils.date import to_datetime
+from sqlmesh.schedulers.airflow.operators.hwm_sensor import HighWaterMarkSensor
+from sqlmesh.utils.date import to_datetime, to_timestamp
 
 
 class TestSubmitOperator(BaseOperator):
@@ -126,3 +127,45 @@ def test_generate_plan_application_dag__batch_index_populated(mocker: MockerFixt
         assert command is not None
         assert target.batch_index == batch_idx
         assert command.batch_index == batch_idx
+
+
+def test_sensor_mode_override(mocker: MockerFixture, make_snapshot):
+    snapshot_a = make_snapshot(
+        SqlModel(name="a", kind=dict(name="FULL"), query=parse_one("select 1 as a, ds")),
+    )
+    snapshot_a.categorize_as(SnapshotChangeCategory.BREAKING)
+    snapshot_a.unpaused_ts = to_timestamp("2024-01-01")
+
+    snapshot_b = make_snapshot(
+        SqlModel(name="b", kind=dict(name="FULL"), query=parse_one("select a, ds from a")),
+        nodes={snapshot_a.name: snapshot_a.node},
+    )
+    snapshot_b.categorize_as(SnapshotChangeCategory.BREAKING)
+    snapshot_b.unpaused_ts = to_timestamp("2024-01-01")
+
+    state_reader_mock = mocker.Mock()
+    state_reader_mock.get_snapshots.return_value = {
+        snapshot_a.snapshot_id: snapshot_a,
+        snapshot_b.snapshot_id: snapshot_b,
+    }
+
+    generator = SnapshotDagGenerator(
+        engine_operator=TestSubmitOperator,
+        engine_operator_args={},
+        ddl_engine_operator=TestSubmitOperator,
+        ddl_engine_operator_args={},
+        external_table_sensor_factory=None,
+        sensor_mode="poke",
+        state_reader=state_reader_mock,
+    )
+
+    dags = generator.generate_cadence_dags([snapshot_a, snapshot_b])
+    assert len(dags) == 2
+
+    assert len(dags[0].tasks) == 1
+    assert isinstance(dags[0].tasks[0], TestSubmitOperator)
+
+    assert len(dags[1].tasks) == 2
+    assert isinstance(dags[1].tasks[0], HighWaterMarkSensor)
+    assert isinstance(dags[1].tasks[1], TestSubmitOperator)
+    assert dags[1].tasks[0].mode == "poke"
