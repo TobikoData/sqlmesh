@@ -37,12 +37,13 @@ from sqlmesh.core.snapshot import (
     Snapshot,
     SnapshotChangeCategory,
     SnapshotFingerprint,
-    categorize_change,
+    SnapshotTableInfo,
     earliest_start_date,
     fingerprint_from_node,
     has_paused_forward_only,
     missing_intervals,
 )
+from sqlmesh.core.snapshot.categorizer import categorize_change
 from sqlmesh.core.snapshot.definition import display_name
 from sqlmesh.utils import AttributeDict
 from sqlmesh.utils.date import to_date, to_datetime, to_timestamp
@@ -1815,3 +1816,46 @@ def test_external_model_audits(sushi_context):
     assert snapshot.evaluatable
     assert len(snapshot.model.audits) == 2
     assert snapshot.intervals
+
+
+def test_custom_model_kind(make_snapshot):
+    from sqlmesh import CustomMaterialization
+
+    class MyCustomStrategy(CustomMaterialization):
+        pass
+
+    snapshot = make_snapshot(
+        SqlModel(
+            name="test_model_name",
+            kind=dict(
+                name="CUSTOM",
+                materialization="MyCustomStrategy",
+                materialization_properties=parse_one("('test_key' = 'test_value')"),
+            ),
+            owner="owner",
+            dialect="",
+            cron="@hourly",
+            start="2023-01-29",
+            query=parse_one("SELECT id, @end_ds as ds FROM name"),
+        )
+    )
+    snapshot.categorize_as(SnapshotChangeCategory.BREAKING)
+
+    assert snapshot.custom_materialization == "MyCustomStrategy"
+    assert snapshot.custom_materialization_properties == {"test_key": "test_value"}
+
+    table_info = snapshot.table_info
+    assert table_info.custom_materialization == "MyCustomStrategy"
+    assert table_info.custom_materialization_properties == {"test_key": "test_value"}
+    assert (
+        table_info.custom_materialization_properties_
+        == snapshot.model.kind.materialization_properties_
+    )
+
+    parsed_table_info = SnapshotTableInfo.parse_raw(table_info.json())
+    assert parsed_table_info.custom_materialization == "MyCustomStrategy"
+    assert parsed_table_info.custom_materialization_properties == {"test_key": "test_value"}
+    assert (
+        parsed_table_info.custom_materialization_properties_
+        == snapshot.model.kind.materialization_properties_
+    )

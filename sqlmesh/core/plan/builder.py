@@ -23,8 +23,8 @@ from sqlmesh.core.snapshot import (
     DeployabilityIndex,
     Snapshot,
     SnapshotChangeCategory,
-    categorize_change,
 )
+from sqlmesh.core.snapshot.categorizer import categorize_change
 from sqlmesh.core.snapshot.definition import Interval, SnapshotId, start_date
 from sqlmesh.utils import columns_to_types_all_known, random_id
 from sqlmesh.utils.dag import DAG

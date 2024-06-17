@@ -497,6 +497,7 @@ def _create_parser(parser_type: t.Type[exp.Expression], table_keys: t.List[str])
                         ModelKindName.SCD_TYPE_2,
                         ModelKindName.SCD_TYPE_2_BY_TIME,
                         ModelKindName.SCD_TYPE_2_BY_COLUMN,
+                        ModelKindName.CUSTOM,
                     ) and self._match(TokenType.L_PAREN, advance=False):
                         props = self._parse_wrapped_csv(functools.partial(_parse_props, self))
                     else:
@@ -1069,3 +1070,19 @@ def normalize_and_quote(
     yield query
     if quote:
         quote_identifiers(query, dialect=dialect)
+
+
+def interpret_expression(e: exp.Expression) -> exp.Expression | str | int | float | bool:
+    if e.is_int:
+        return int(e.this)
+    if e.is_number:
+        return float(e.this)
+    if isinstance(e, (exp.Literal, exp.Boolean)):
+        return e.this
+    return e
+
+
+def interpret_key_value_pairs(
+    e: exp.Tuple,
+) -> t.Dict[str, exp.Expression | str | int | float | bool]:
+    return {i.this.name: interpret_expression(i.expression) for i in e.expressions}

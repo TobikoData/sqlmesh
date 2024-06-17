@@ -12,9 +12,10 @@ from sqlglot import exp
 from sqlglot.helper import seq_get
 from sqlglot.optimizer.normalize_identifiers import normalize_identifiers
 
-from sqlmesh.core import constants as c
+from sqlmesh.core import constants as c, dialect as d
 from sqlmesh.core.audit import BUILT_IN_AUDITS, Audit, ModelAudit, StandaloneAudit
-from sqlmesh.core.model import Model, ModelKindMixin, ModelKindName, ViewKind
+from sqlmesh.core.model import Model, ModelKindMixin, ModelKindName, ViewKind, CustomKind
+from sqlmesh.core.model.common import properties_validator
 from sqlmesh.core.model.definition import _Model
 from sqlmesh.core.node import IntervalUnit, NodeType
 from sqlmesh.utils import sanitize_name
@@ -45,6 +46,7 @@ else:
 
 if t.TYPE_CHECKING:
     from sqlglot.dialects.dialect import DialectType
+    from sqlmesh.core._typing import CustomMaterializationProperties
     from sqlmesh.core.environment import EnvironmentNamingInfo
 
 Interval = t.Tuple[int, int]
@@ -423,6 +425,13 @@ class SnapshotTableInfo(PydanticModel, SnapshotInfoMixin, frozen=True):
     # This can be removed from this model once Pydantic 1 support is dropped (must remain in `Snapshot` though)
     base_table_name_override: t.Optional[str] = None
 
+    custom_materialization: t.Optional[str] = None
+    custom_materialization_properties_: t.Optional[exp.Tuple] = Field(
+        default=None, alias="custom_materialization_properties"
+    )
+
+    _properties_validator = properties_validator
+
     def __lt__(self, other: SnapshotTableInfo) -> bool:
         return self.name < other.name
 
@@ -474,6 +483,12 @@ class SnapshotTableInfo(PydanticModel, SnapshotInfoMixin, frozen=True):
     def name_version(self) -> SnapshotNameVersion:
         """Returns the name and version of the snapshot."""
         return SnapshotNameVersion(name=self.name, version=self.version)
+
+    @property
+    def custom_materialization_properties(self) -> t.Optional[CustomMaterializationProperties]:
+        if self.custom_materialization_properties_ is None:
+            return None
+        return d.interpret_key_value_pairs(self.custom_materialization_properties_)
 
 
 class Snapshot(PydanticModel, SnapshotInfoMixin):
@@ -1017,6 +1032,13 @@ class Snapshot(PydanticModel, SnapshotInfoMixin):
     def table_info(self) -> SnapshotTableInfo:
         """Helper method to get the SnapshotTableInfo from the Snapshot."""
         self._ensure_categorized()
+
+        custom_materialization: t.Optional[str] = None
+        custom_materialization_properties: t.Optional[exp.Tuple] = None
+        if self.is_model and isinstance(self.model.kind, CustomKind):
+            custom_materialization = self.model.kind.materialization
+            custom_materialization_properties = self.model.kind.materialization_properties_
+
         return SnapshotTableInfo(
             physical_schema=self.physical_schema,
             name=self.name,
@@ -1028,6 +1050,8 @@ class Snapshot(PydanticModel, SnapshotInfoMixin):
             change_category=self.change_category,
             kind_name=self.model_kind_name,
             node_type=self.node_type,
+            custom_materialization=custom_materialization,
+            custom_materialization_properties=custom_materialization_properties,
         )
 
     @property
@@ -1160,6 +1184,18 @@ class Snapshot(PydanticModel, SnapshotInfoMixin):
     @property
     def expiration_ts(self) -> int:
         return to_timestamp(self.ttl, relative_base=to_datetime(self.updated_ts))
+
+    @property
+    def custom_materialization(self) -> t.Optional[str]:
+        if self.is_custom:
+            return t.cast(CustomKind, self.model.kind).materialization
+        return None
+
+    @property
+    def custom_materialization_properties(self) -> t.Optional[CustomMaterializationProperties]:
+        if self.is_custom:
+            return t.cast(CustomKind, self.model.kind).materialization_properties
+        return None
 
     def _ensure_categorized(self) -> None:
         if not self.change_category:

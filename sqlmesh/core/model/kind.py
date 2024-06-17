@@ -12,7 +12,7 @@ from sqlglot.optimizer.simplify import gen
 from sqlglot.time import format_time
 
 from sqlmesh.core import dialect as d
-from sqlmesh.core.model.common import parse_properties
+from sqlmesh.core.model.common import parse_properties, properties_validator
 from sqlmesh.core.model.seed import CsvSettings
 from sqlmesh.utils.errors import ConfigError
 from sqlmesh.utils.pydantic import (
@@ -27,6 +27,7 @@ from sqlmesh.utils.pydantic import (
     field_validator,
     field_validator_v1_args,
     get_dialect,
+    validate_string,
 )
 
 if sys.version_info >= (3, 9):
@@ -36,6 +37,8 @@ else:
 
 
 if t.TYPE_CHECKING:
+    from sqlmesh.core._typing import CustomMaterializationProperties
+
     MODEL_KIND = t.TypeVar("MODEL_KIND", bound="_ModelKind")
 
 
@@ -108,6 +111,10 @@ class ModelKindMixin:
         return self.model_kind_name == ModelKindName.SCD_TYPE_2_BY_COLUMN
 
     @property
+    def is_custom(self) -> bool:
+        return self.model_kind_name == ModelKindName.CUSTOM
+
+    @property
     def is_symbolic(self) -> bool:
         """A symbolic model is one that doesn't execute at all."""
         return self.model_kind_name in (ModelKindName.EMBEDDED, ModelKindName.EXTERNAL)
@@ -149,6 +156,7 @@ class ModelKindName(str, ModelKindMixin, Enum):
     EMBEDDED = "EMBEDDED"
     SEED = "SEED"
     EXTERNAL = "EXTERNAL"
+    CUSTOM = "CUSTOM"
 
     @property
     def model_kind_name(self) -> t.Optional[ModelKindName]:
@@ -601,6 +609,72 @@ class ExternalKind(_ModelKind):
     name: Literal[ModelKindName.EXTERNAL] = ModelKindName.EXTERNAL
 
 
+class CustomKind(_ModelKind):
+    name: Literal[ModelKindName.CUSTOM] = ModelKindName.CUSTOM
+    materialization: str
+    materialization_properties_: t.Optional[exp.Tuple] = Field(
+        default=None, alias="materialization_properties"
+    )
+    forward_only: SQLGlotBool = False
+    disable_restatement: SQLGlotBool = False
+
+    _properties_validator = properties_validator
+
+    @field_validator("materialization", mode="before")
+    @classmethod
+    def _validate_materialization(cls, v: t.Any) -> str:
+        from sqlmesh.core.snapshot.evaluator import get_custom_materialization_type
+
+        materialization = validate_string(v)
+        # The below call fails if a materialization with the given name doesn't exist.
+        get_custom_materialization_type(materialization)
+        return materialization
+
+    @property
+    def materialization_properties(self) -> CustomMaterializationProperties:
+        """A dictionary of materialization properties."""
+        if not self.materialization_properties_:
+            return {}
+        return d.interpret_key_value_pairs(self.materialization_properties_)
+
+    @property
+    def data_hash_values(self) -> t.List[t.Optional[str]]:
+        return [
+            *super().data_hash_values,
+            self.materialization,
+            gen(self.materialization_properties_) if self.materialization_properties_ else None,
+        ]
+
+    @property
+    def metadata_hash_values(self) -> t.List[t.Optional[str]]:
+        return [
+            *super().metadata_hash_values,
+            str(self.forward_only),
+            str(self.disable_restatement),
+        ]
+
+    def to_expression(self, **kwargs: t.Any) -> d.ModelKind:
+        return super().to_expression(
+            expressions=[
+                exp.Property(
+                    this=exp.Var(this="materialization"),
+                    value=exp.Literal.string(self.materialization),
+                ),
+                exp.Property(
+                    this=exp.Var(this="materialization_properties"),
+                    value=self.materialization_properties_,
+                ),
+                exp.Property(
+                    this=exp.Var(this="forward_only"), value=exp.convert(self.forward_only)
+                ),
+                exp.Property(
+                    this=exp.Var(this="disable_restatement"),
+                    value=exp.convert(self.disable_restatement),
+                ),
+            ],
+        )
+
+
 ModelKind = Annotated[
     t.Union[
         EmbeddedKind,
@@ -614,6 +688,7 @@ ModelKind = Annotated[
         ViewKind,
         SCDType2ByTimeKind,
         SCDType2ByColumnKind,
+        CustomKind,
     ],
     Field(discriminator="name"),
 ]
@@ -631,6 +706,7 @@ MODEL_KIND_NAME_TO_TYPE: t.Dict[str, t.Type[ModelKind]] = {
     ModelKindName.SCD_TYPE_2: SCDType2ByTimeKind,
     ModelKindName.SCD_TYPE_2_BY_TIME: SCDType2ByTimeKind,
     ModelKindName.SCD_TYPE_2_BY_COLUMN: SCDType2ByColumnKind,
+    ModelKindName.CUSTOM: CustomKind,
 }
 
 

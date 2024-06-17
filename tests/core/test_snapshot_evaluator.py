@@ -1,3 +1,4 @@
+from __future__ import annotations
 import typing as t
 from unittest.mock import call, patch
 
@@ -21,6 +22,7 @@ from sqlmesh.core.engine_adapter.shared import (
 from sqlmesh.core.environment import EnvironmentNamingInfo
 from sqlmesh.core.macros import RuntimeStage, macro
 from sqlmesh.core.model import (
+    Model,
     FullKind,
     IncrementalByTimeRangeKind,
     IncrementalUnmanagedKind,
@@ -41,10 +43,15 @@ from sqlmesh.core.snapshot import (
     SnapshotEvaluator,
     SnapshotTableCleanupTask,
 )
+from sqlmesh.core.snapshot.evaluator import CustomMaterialization
 from sqlmesh.utils.concurrency import NodeExecutionFailedError
 from sqlmesh.utils.date import to_timestamp
 from sqlmesh.utils.errors import ConfigError
 from sqlmesh.utils.metaprogramming import Executable
+
+
+if t.TYPE_CHECKING:
+    from sqlmesh.core.engine_adapter._typing import QueryOrDF
 
 
 @pytest.fixture
@@ -1442,10 +1449,8 @@ def test_insert_into_scd_type_2_by_time(
         unique_key=[exp.to_column("id", quoted=True)],
         valid_from_col=exp.column("valid_from", quoted=True),
         valid_to_col=exp.column("valid_to", quoted=True),
-        updated_at_col=exp.column("updated_at", quoted=True),
-        start="2020-01-01",
-        end="2020-01-02",
         execution_time="2020-01-02",
+        updated_at_col=exp.column("updated_at", quoted=True),
         invalidate_hard_deletes=False,
         table_description=None,
         column_descriptions={},
@@ -1610,8 +1615,6 @@ def test_insert_into_scd_type_2_by_column(
         check_columns=exp.Star(),
         valid_from_col=exp.column("valid_from", quoted=True),
         valid_to_col=exp.column("valid_to", quoted=True),
-        start="2020-01-01",
-        end="2020-01-02",
         execution_time="2020-01-02",
         execution_time_as_valid_from=False,
         invalidate_hard_deletes=False,
@@ -2079,3 +2082,58 @@ def test_evaluate_incremental_by_partition(mocker: MockerFixture, make_snapshot,
         ],
         columns_to_types=model.columns_to_types,
     )
+
+
+def test_custom_materialization_strategy(adapter_mock, make_snapshot):
+    custom_insert_called = False
+
+    class TestCustomMaterializationStrategy(CustomMaterialization):
+        NAME = "custom_materialization_test"
+
+        def insert(
+            self,
+            table_name: str,
+            query_or_df: QueryOrDF,
+            model: Model,
+            is_first_insert: bool,
+            **kwargs: t.Any,
+        ) -> None:
+            nonlocal custom_insert_called
+            custom_insert_called = True
+
+            assert self.properties == {"test_property": "test_value"}
+
+            assert isinstance(query_or_df, exp.Query)
+            assert query_or_df.sql() == 'SELECT * FROM "tbl" AS "tbl"'
+
+    evaluator = SnapshotEvaluator(adapter_mock)
+    model = load_sql_based_model(
+        parse(  # type: ignore
+            """
+            MODEL (
+                name test_schema.test_model,
+                kind CUSTOM (
+                    materialization 'custom_materialization_test',
+                    materialization_properties (
+                        'test_property' = 'test_value'
+                    )
+                )
+            );
+
+            SELECT * FROM tbl;
+            """
+        )
+    )
+
+    snapshot = make_snapshot(model)
+    snapshot.categorize_as(SnapshotChangeCategory.BREAKING)
+
+    evaluator.evaluate(
+        snapshot,
+        start="2020-01-01",
+        end="2020-01-02",
+        execution_time="2020-01-02",
+        snapshots={},
+    )
+
+    assert custom_insert_called

@@ -141,6 +141,8 @@ properties_validator = field_validator(
     "physical_properties_",
     "virtual_properties_",
     "session_properties_",
+    "materialization_properties_",
+    "custom_materialization_properties_",
     mode="before",
     check_fields=False,
 )(parse_properties)

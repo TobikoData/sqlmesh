@@ -424,20 +424,7 @@ class ModelMeta(_Node):
         if not self.session_properties_:
             return {}
 
-        def _interpret_expr(
-            e: exp.Expression,
-        ) -> t.Union[exp.Expression | str | int | float | bool]:
-            if e.is_int:
-                return int(e.this)
-            if e.is_number:
-                return float(e.this)
-            if isinstance(e, (exp.Literal, exp.Boolean)):
-                return e.this
-            return e
-
-        return {
-            e.this.name: _interpret_expr(e.expression) for e in self.session_properties_.expressions
-        }
+        return d.interpret_key_value_pairs(self.session_properties_)
 
     @property
     def all_references(self) -> t.List[Reference]:
