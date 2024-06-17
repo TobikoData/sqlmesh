@@ -74,6 +74,7 @@ class ModelMeta(_Node):
     session_properties_: t.Optional[exp.Tuple] = Field(default=None, alias="session_properties")
     allow_partials: bool = False
     signals: t.List[exp.Tuple] = []
+    enabled: bool = True
 
     _bool_validator = bool_validator
     _model_kind_validator = model_kind_validator
