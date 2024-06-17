@@ -148,64 +148,83 @@
 .sqlmesh-model__column.--is-action-mode:hover {
   opacity: 0.8;
 }
-[mode='dark'] {
-  .cm-editor .cm-activeLineGutter,
-  .cm-editor .cm-activeLine {
-    background-color: var(--color-neutral-30);
-  }
-  .cm-editor .cm-tooltip-autocomplete .cm-completionIcon-model::before {
-    color: var(--color-secondary-300);
-    background: var(--color-secondary-20);
-  }
+
+[mode='dark'] .cm-editor .cm-activeLineGutter,
+[mode='dark'] .cm-editor .cm-activeLine {
+  background-color: var(--color-neutral-30);
+}
+[mode='dark']
   .cm-editor
-    .cm-tooltip.cm-tooltip-autocomplete
-    > ul
-    > li
-    .cm-completionMatchedText {
-    color: var(--color-accent-200);
-    background: var(--color-accent-50);
-  }
-  .cm-editor .cm-tooltip-autocomplete .cm-completionIcon-column::before {
-    color: var(--color-brand-500);
-    background: var(--color-brand-10);
-  }
-  .cm-editor .cm-tooltip.cm-tooltip-autocomplete > ul {
-    border: 1px solid var(--color-neutral-50) !important;
-    box-shadow: 0 2px 3px 0 var(--color-neutral-20);
-  }
-  .cm-editor .cm-tooltip-autocomplete > ul > li[aria-selected='true'] {
-    background: var(--color-neutral-30);
-    border: 1px solid var(--color-neutral-50) !important;
-  }
+  .cm-tooltip-autocomplete
+  .cm-completionIcon-model::before {
+  color: var(--color-secondary-300);
+  background: var(--color-secondary-20);
+}
+[mode='dark']
+  .cm-editor
+  .cm-tooltip.cm-tooltip-autocomplete
+  > ul
+  > li
+  .cm-completionMatchedText {
+  color: var(--color-accent-200);
+  background: var(--color-accent-50);
+}
+[mode='dark']
+  .cm-editor
+  .cm-tooltip-autocomplete
+  .cm-completionIcon-column::before {
+  color: var(--color-brand-500);
+  background: var(--color-brand-10);
+}
+[mode='dark'] .cm-editor .cm-tooltip.cm-tooltip-autocomplete > ul {
+  border: 1px solid var(--color-neutral-50) !important;
+  box-shadow: 0 2px 3px 0 var(--color-neutral-20);
+}
+[mode='dark']
+  .cm-editor
+  .cm-tooltip-autocomplete
+  > ul
+  > li[aria-selected='true'] {
+  background: var(--color-neutral-30);
+  border: 1px solid var(--color-neutral-50) !important;
 }
 
-[mode='light'] {
-  .cm-editor .cm-activeLineGutter,
-  .cm-editor .cm-activeLine {
-    background-color: var(--color-neutral-10);
-  }
-  .cm-editor .cm-tooltip-autocomplete .cm-completionIcon-model::before {
-    color: var(--color-secondary-500);
-    background: var(--color-secondary-10);
-  }
+[mode='light'] .cm-editor .cm-activeLineGutter,
+[mode='light'] .cm-editor .cm-activeLine {
+  background-color: var(--color-neutral-10);
+}
+[mode='light']
   .cm-editor
-    .cm-tooltip.cm-tooltip-autocomplete
-    > ul
-    > li
-    .cm-completionMatchedText {
-    color: var(--color-accent-500);
-    background: var(--color-accent-5);
-  }
-  .cm-editor .cm-tooltip-autocomplete .cm-completionIcon-column::before {
-    color: var(--color-brand-500);
-    background: var(--color-brand-20);
-  }
-  .cm-editor .cm-tooltip.cm-tooltip-autocomplete > ul {
-    border: 1px solid var(--color-neutral-20) !important;
-    box-shadow: 0 2px 3px 0 var(--color-neutral-20);
-  }
-  .cm-editor .cm-tooltip-autocomplete > ul > li[aria-selected='true'] {
-    background: var(--color-neutral-5);
-    border: 1px solid var(--color-neutral-10) !important;
-  }
+  .cm-tooltip-autocomplete
+  .cm-completionIcon-model::before {
+  color: var(--color-secondary-500);
+  background: var(--color-secondary-10);
+}
+[mode='light']
+  .cm-editor
+  .cm-tooltip.cm-tooltip-autocomplete
+  > ul
+  > li
+  .cm-completionMatchedText {
+  color: var(--color-accent-500);
+  background: var(--color-accent-5);
+}
+[mode='light']
+  .cm-editor
+  .cm-tooltip-autocomplete
+  .cm-completionIcon-column::before {
+  color: var(--color-brand-500);
+  background: var(--color-brand-20);
+}
+[mode='light'] .cm-editor .cm-tooltip.cm-tooltip-autocomplete > ul {
+  border: 1px solid var(--color-neutral-20) !important;
+  box-shadow: 0 2px 3px 0 var(--color-neutral-20);
+}
+[mode='light']
+  .cm-editor
+  .cm-tooltip-autocomplete
+  > ul
+  > li[aria-selected='true'] {
+  background: var(--color-neutral-5);
+  border: 1px solid var(--color-neutral-10) !important;
 }
