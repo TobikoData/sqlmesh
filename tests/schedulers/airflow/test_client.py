@@ -118,6 +118,7 @@ def test_apply_plan(mocker: MockerFixture, snapshot: Snapshot):
                     "grains": [],
                     "allow_partials": False,
                     "signals": [],
+                    "enabled": True,
                 },
                 "audits": [],
                 "name": '"test_model"',

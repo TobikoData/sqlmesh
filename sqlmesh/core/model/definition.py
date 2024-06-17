@@ -180,7 +180,7 @@ class _Model(ModelMeta, frozen=True):
                             value=exp.to_table(field_value, dialect=self.dialect),
                         )
                     )
-                elif field_name not in ("column_descriptions_", "default_catalog"):
+                elif field_name not in ("column_descriptions_", "default_catalog", "enabled"):
                     expressions.append(
                         exp.Property(
                             this=field_info.alias or field_name,
