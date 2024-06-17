@@ -65,6 +65,8 @@ class SQLMeshAirflow:
         plan_application_dag_ttl: Determines the time-to-live period for finished plan application DAGs.
             Once this period is exceeded, finished plan application DAGs are deleted by the janitor. Default: 2 days.
         external_table_sensor_factory: A factory function that creates a sensor operator for a given signal payload.
+        sensor_mode: The mode to use for SQLMesh sensors. Supported values are "poke" and "reschedule".
+            See https://airflow.apache.org/docs/apache-airflow/stable/core-concepts/sensors.html for more details. Default: "reschedule".
         generate_cadence_dags: Whether to generate cadence DAGs for model versions that are currently deployed to production.
     """
 
@@ -80,6 +82,7 @@ class SQLMeshAirflow:
         external_table_sensor_factory: t.Optional[
             t.Callable[[t.Dict[str, t.Any]], BaseSensorOperator]
         ] = None,
+        sensor_mode: str = "reschedule",
         generate_cadence_dags: bool = True,
     ):
         if isinstance(engine_operator, str):
@@ -105,6 +108,7 @@ class SQLMeshAirflow:
         self._external_table_sensor_factory = external_table_sensor_factory
         self._generate_cadence_dags = generate_cadence_dags
         self._default_catalog = default_catalog
+        self._sensor_mode = sensor_mode
 
     @classmethod
     def set_default_catalog(cls, default_catalog: str) -> None:
@@ -188,6 +192,7 @@ class SQLMeshAirflow:
             self._ddl_engine_operator,
             self._ddl_engine_operator_args,
             self._external_table_sensor_factory,
+            self._sensor_mode,
             state_reader,
         )
 

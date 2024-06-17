@@ -73,6 +73,7 @@ class SnapshotDagGenerator:
         external_table_sensor_factory: t.Optional[
             t.Callable[[t.Dict[str, t.Any]], BaseSensorOperator]
         ],
+        sensor_mode: str,
         state_reader: StateReader,
     ):
         self._engine_operator = engine_operator
@@ -81,6 +82,7 @@ class SnapshotDagGenerator:
         self._ddl_engine_operator_args = ddl_engine_operator_args or {}
         self._external_table_sensor_factory = external_table_sensor_factory
         self._state_reader = state_reader
+        self._sensor_mode = sensor_mode
 
     def generate_cadence_dags(self, snapshots: t.Iterable[SnapshotIdLike]) -> t.List[DAG]:
         dags = []
@@ -644,6 +646,7 @@ class SnapshotDagGenerator:
                         target_snapshot_info=upstream_snapshot.table_info,
                         this_snapshot=snapshot,
                         task_id=f"{sanitize_name(upstream_snapshot.node.name)}_{upstream_snapshot.version}_high_water_mark_sensor",
+                        mode=self._sensor_mode,
                     )
                 )
 
@@ -664,6 +667,7 @@ class SnapshotDagGenerator:
                 snapshot=snapshot,
                 external_table_sensor_factory=self._external_table_sensor_factory,
                 task_id="external_high_water_mark_sensor",
+                mode=self._sensor_mode,
                 start=start,
                 end=end,
             )
