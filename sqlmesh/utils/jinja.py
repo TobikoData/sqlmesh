@@ -8,7 +8,7 @@ from collections import defaultdict
 from enum import Enum
 
 from jinja2 import Environment, Template, nodes
-from sqlglot import Dialect, Expression, Parser, TokenType
+from sqlglot import Dialect, Expression, Parser, TokenType, Token
 
 from sqlmesh.core import constants as c
 from sqlmesh.core import dialect as d
@@ -55,7 +55,9 @@ class MacroReturnVal(Exception):
 
 
 class MacroExtractor(Parser):
-    def extract(self, jinja: str, dialect: str = "") -> t.Dict[str, MacroInfo]:
+    def extract(
+        self, jinja: str, dialect: str = "", tokens: t.Optional[t.List[Token]] = None
+    ) -> t.Dict[str, MacroInfo]:
         """Extract a dictionary of macro definitions from a jinja string.
 
         Args:
@@ -67,7 +69,7 @@ class MacroExtractor(Parser):
         """
         self.reset()
         self.sql = jinja
-        self._tokens = Dialect.get_or_raise(dialect).tokenizer.tokenize(jinja)
+        self._tokens = tokens or Dialect.get_or_raise(dialect).tokenizer.tokenize(jinja)
         self._index = -1
         self._advance()
 
