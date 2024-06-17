@@ -940,10 +940,10 @@ class EngineAdapterStateSync(CommonStateSyncMixin, StateSync):
                 error=e,
             )
 
-            self.console.stop_migration_progress(success=False)
+            self.console.log_migration_status(success=False)
             raise SQLMeshError("SQLMesh migration failed.") from e
 
-        self.console.stop_migration_progress()
+        self.console.log_migration_status()
 
     @transactional()
     def rollback(self) -> None:
@@ -1046,7 +1046,7 @@ class EngineAdapterStateSync(CommonStateSyncMixin, StateSync):
 
         reversed_dag_raw = dag.reversed.graph
 
-        self.console.start_migration_progress(len(raw_snapshots))
+        self.console.start_snapshot_migration_progress(len(raw_snapshots))
 
         parsed_snapshots = LazilyParsedSnapshots(raw_snapshots)
         all_snapshot_mapping: t.Dict[SnapshotId, SnapshotTableInfo] = {}
@@ -1130,7 +1130,7 @@ class EngineAdapterStateSync(CommonStateSyncMixin, StateSync):
             if not new_snapshot.temp_version:
                 new_snapshot.temp_version = snapshot.fingerprint.to_version()
 
-            self.console.update_migration_progress(1)
+            self.console.update_snapshot_migration_progress(1)
 
             # Visit children and evict them from the parsed_snapshots cache after.
             for child in reversed_dag_raw.get(snapshot_id, []):
@@ -1166,6 +1166,7 @@ class EngineAdapterStateSync(CommonStateSyncMixin, StateSync):
         if new_snapshots:
             _push_new_snapshots()
 
+        self.console.stop_snapshot_migration_progress()
         return all_snapshot_mapping
 
     def _migrate_environment_rows(
@@ -1192,15 +1193,19 @@ class EngineAdapterStateSync(CommonStateSyncMixin, StateSync):
                 updated_environments.append(environment)
                 if environment.name == c.PROD:
                     updated_prod_environment = environment
+        self.console.start_env_migration_progress(len(updated_environments))
 
         for environment in updated_environments:
             self._update_environment(environment)
+            self.console.update_env_migration_progress(1)
 
         if updated_prod_environment:
             try:
                 self.unpause_snapshots(updated_prod_environment.snapshots, now_timestamp())
             except Exception:
                 logger.warning("Failed to unpause migrated snapshots", exc_info=True)
+
+        self.console.stop_env_migration_progress()
 
     def _snapshot_ids_exist(
         self, snapshot_ids: t.Iterable[SnapshotIdLike], table_name: exp.Table
