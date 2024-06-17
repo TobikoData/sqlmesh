@@ -744,7 +744,7 @@ def test_override_dialect_normalization_strategy():
     # The above change is applied globally so we revert it to avoid breaking other tests
     DuckDB.NORMALIZATION_STRATEGY = NormalizationStrategy.CASE_INSENSITIVE
 
-    
+
 def test_disabled_model(copy_to_temp_path):
     path = copy_to_temp_path("examples/sushi")
 
