@@ -1046,7 +1046,7 @@ class EngineAdapterStateSync(CommonStateSyncMixin, StateSync):
 
         reversed_dag_raw = dag.reversed.graph
 
-        self.console.start_migration_progress(len(raw_snapshots))
+        self.console.start_snapshot_migration_progress(len(raw_snapshots))
 
         parsed_snapshots = LazilyParsedSnapshots(raw_snapshots)
         all_snapshot_mapping: t.Dict[SnapshotId, SnapshotTableInfo] = {}
@@ -1130,7 +1130,7 @@ class EngineAdapterStateSync(CommonStateSyncMixin, StateSync):
             if not new_snapshot.temp_version:
                 new_snapshot.temp_version = snapshot.fingerprint.to_version()
 
-            self.console.update_migration_progress(1)
+            self.console.update_snapshot_migration_progress(1)
 
             # Visit children and evict them from the parsed_snapshots cache after.
             for child in reversed_dag_raw.get(snapshot_id, []):

@@ -130,11 +130,11 @@ class Console(abc.ABC):
         """Stop the snapshot promotion progress."""
 
     @abc.abstractmethod
-    def start_migration_progress(self, total_tasks: int) -> None:
+    def start_snapshot_migration_progress(self, total_tasks: int) -> None:
         """Indicates that a new snapshot migration progress has begun."""
 
     @abc.abstractmethod
-    def update_migration_progress(self, num_tasks: int) -> None:
+    def update_snapshot_migration_progress(self, num_tasks: int) -> None:
         """Update the snapshot migration progress."""
 
     @abc.abstractmethod
@@ -236,6 +236,19 @@ class Console(abc.ABC):
         """Show table summary diff."""
 
 
+def make_progress_bar(message: str, console: t.Optional[RichConsole] = None) -> Progress:
+    return Progress(
+        TextColumn(f"[bold blue]{message}", justify="right"),
+        BarColumn(bar_width=40),
+        "[progress.percentage]{task.percentage:>3.1f}%",
+        "•",
+        srich.BatchColumn(),
+        "•",
+        TimeElapsedColumn(),
+        console=console,
+    )
+
+
 class TerminalConsole(Console):
     """A rich based implementation of the console."""
 
@@ -299,16 +312,7 @@ class TerminalConsole(Console):
     ) -> None:
         """Indicates that a new snapshot evaluation progress has begun."""
         if not self.evaluation_progress_live:
-            self.evaluation_total_progress = Progress(
-                TextColumn("[bold blue]Evaluating models", justify="right"),
-                BarColumn(bar_width=40),
-                "[progress.percentage]{task.percentage:>3.1f}%",
-                "•",
-                srich.BatchColumn(),
-                "•",
-                TimeElapsedColumn(),
-                console=self.console,
-            )
+            self.evaluation_total_progress = make_progress_bar("Evaluating models", self.console)
 
             self.evaluation_model_progress = Progress(
                 TextColumn("{task.fields[view_name]}", justify="right"),
@@ -391,16 +395,7 @@ class TerminalConsole(Console):
     ) -> None:
         """Indicates that a new creation progress has begun."""
         if self.creation_progress is None:
-            self.creation_progress = Progress(
-                TextColumn("[bold blue]Creating physical tables", justify="right"),
-                BarColumn(bar_width=40),
-                "[progress.percentage]{task.percentage:>3.1f}%",
-                "•",
-                srich.BatchColumn(),
-                "•",
-                TimeElapsedColumn(),
-                console=self.console,
-            )
+            self.creation_progress = make_progress_bar("Creating physical table", self.console)
 
             self.creation_progress.start()
             self.creation_task = self.creation_progress.add_task(
@@ -444,16 +439,8 @@ class TerminalConsole(Console):
     ) -> None:
         """Indicates that a new snapshot promotion progress has begun."""
         if self.promotion_progress is None:
-            self.promotion_progress = Progress(
-                TextColumn(
-                    f"[bold blue]Virtually Updating '{environment_naming_info.name}'",
-                    justify="right",
-                ),
-                BarColumn(bar_width=40),
-                "[progress.percentage]{task.percentage:>3.1f}%",
-                "•",
-                TimeElapsedColumn(),
-                console=self.console,
+            self.promotion_progress = make_progress_bar(
+                f"Virtually Updating '{environment_naming_info.name}'", self.console
             )
 
             self.promotion_progress.start()
@@ -487,19 +474,10 @@ class TerminalConsole(Console):
         self.environment_naming_info = EnvironmentNamingInfo()
         self.default_catalog = None
 
-    def start_migration_progress(self, total_tasks: int) -> None:
-        """Indicates that a new migration progress has begun."""
+    def start_snapshot_migration_progress(self, total_tasks: int) -> None:
+        """Indicates that a new snapshot migration progress has begun."""
         if self.migration_progress is None:
-            self.migration_progress = Progress(
-                TextColumn("[bold blue]Migrating snapshots", justify="right"),
-                BarColumn(bar_width=40),
-                "[progress.percentage]{task.percentage:>3.1f}%",
-                "•",
-                srich.BatchColumn(),
-                "•",
-                TimeElapsedColumn(),
-                console=self.console,
-            )
+            self.migration_progress = make_progress_bar("Migrating snapshots", self.console)
 
             self.migration_progress.start()
             self.migration_task = self.migration_progress.add_task(
@@ -507,7 +485,7 @@ class TerminalConsole(Console):
                 total=total_tasks,
             )
 
-    def update_migration_progress(self, num_tasks: int) -> None:
+    def update_snapshot_migration_progress(self, num_tasks: int) -> None:
         """Update the migration progress."""
         if self.migration_progress is not None and self.migration_task is not None:
             self.migration_progress.update(self.migration_task, refresh=True, advance=num_tasks)
@@ -530,17 +508,7 @@ class TerminalConsole(Console):
     def start_env_migration_progress(self, total_tasks: int) -> None:
         """Indicates that a new environment migration has begun."""
         if self.env_migration_progress is None:
-            self.env_migration_progress = Progress(
-                TextColumn("[bold blue]Migrating environments", justify="right"),
-                BarColumn(bar_width=40),
-                "[progress.percentage]{task.percentage:>3.1f}%",
-                "•",
-                srich.BatchColumn(),
-                "•",
-                TimeElapsedColumn(),
-                console=self.console,
-            )
-
+            self.env_migration_progress = make_progress_bar("Migrating environments", self.console)
             self.env_migration_progress.start()
             self.env_migration_task = self.env_migration_progress.add_task(
                 "Migrating environments...",
@@ -1778,12 +1746,12 @@ class DatabricksMagicConsole(CaptureTerminalConsole):
         self.promotion_status = (0, 0)
         print(f"Virtual Update {'succeeded' if success else 'failed'}")
 
-    def start_migration_progress(self, total_tasks: int) -> None:
+    def start_snapshot_migration_progress(self, total_tasks: int) -> None:
         """Indicates that a new migration progress has begun."""
         self.migration_status = (0, total_tasks)
         print("Starting Migration")
 
-    def update_migration_progress(self, num_tasks: int) -> None:
+    def update_snapshot_migration_progress(self, num_tasks: int) -> None:
         """Update the migration progress."""
         num_migrations, total_migrations = self.migration_status
         num_migrations += num_tasks
@@ -1891,10 +1859,10 @@ class DebuggerTerminalConsole(TerminalConsole):
     def stop_promotion_progress(self, success: bool = True) -> None:
         self._write(f"Stopping promotion with success={success}")
 
-    def start_migration_progress(self, total_tasks: int) -> None:
+    def start_snapshot_migration_progress(self, total_tasks: int) -> None:
         self._write(f"Starting migration for {total_tasks} snapshots")
 
-    def update_migration_progress(self, num_tasks: int) -> None:
+    def update_snapshot_migration_progress(self, num_tasks: int) -> None:
         self._write(f"Migration {num_tasks}")
 
     def log_migration_status(self, success: bool = True) -> None:
