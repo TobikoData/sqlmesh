@@ -327,7 +327,7 @@ class GenericContext(BaseContext, t.Generic[C]):
 
         # This allows overriding the default dialect's normalization strategy, so for example
         # one can do `dialect="duckdb,normalization_strategy=lowercase"` and this will be
-        # applied to the DuckDB globally
+        # applied to the DuckDB dialect globally
         if "normalization_strategy" in str(self.config.dialect):
             dialect = Dialect.get_or_raise(self.config.dialect)
             type(dialect).NORMALIZATION_STRATEGY = dialect.normalization_strategy
