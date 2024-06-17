@@ -439,8 +439,16 @@ class TerminalConsole(Console):
     ) -> None:
         """Indicates that a new snapshot promotion progress has begun."""
         if self.promotion_progress is None:
-            self.promotion_progress = make_progress_bar(
-                f"Virtually Updating '{environment_naming_info.name}'", self.console
+            self.promotion_progress = Progress(
+                TextColumn(
+                    f"[bold blue]Virtually Updating '{environment_naming_info.name}'",
+                    justify="right",
+                ),
+                BarColumn(bar_width=40),
+                "[progress.percentage]{task.percentage:>3.1f}%",
+                "•",
+                TimeElapsedColumn(),
+                console=self.console,
             )
 
             self.promotion_progress.start()
