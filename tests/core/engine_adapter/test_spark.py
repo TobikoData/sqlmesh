@@ -82,7 +82,7 @@ def test_replace_query_table_properties_not_exists(
     )
 
     assert to_sql_calls(adapter) == [
-        "CREATE TABLE IF NOT EXISTS `test_table` USING ICEBERG PARTITIONED BY (`colb`) TBLPROPERTIES ('a'=1) AS SELECT 1 AS `cola`, '2' AS `colb`, '3' AS `colc`",
+        "CREATE TABLE IF NOT EXISTS `test_table` USING ICEBERG PARTITIONED BY (`colb`) TBLPROPERTIES ('a'=1) AS SELECT CAST(`cola` AS INT) AS `cola`, CAST(`colb` AS STRING) AS `colb`, CAST(`colc` AS STRING) AS `colc` FROM (SELECT 1 AS `cola`, '2' AS `colb`, '3' AS `colc`) AS `_subquery`",
         "INSERT INTO `test_table` SELECT * FROM `test_table`",
     ]
 
@@ -178,7 +178,7 @@ def test_replace_query_not_exists(mocker: MockerFixture, make_mocked_engine_adap
     )
 
     assert to_sql_calls(adapter) == [
-        "CREATE TABLE IF NOT EXISTS `test_table` AS SELECT `a` FROM `tbl`",
+        "CREATE TABLE IF NOT EXISTS `test_table` AS SELECT CAST(`a` AS INT) AS `a` FROM (SELECT `a` FROM `tbl`) AS `_subquery`",
     ]
 
 
@@ -213,7 +213,7 @@ def test_replace_query_pandas_not_exists(
     )
 
     assert to_sql_calls(adapter) == [
-        "CREATE TABLE IF NOT EXISTS `test_table` AS SELECT CAST(`a` AS INT) AS `a`, CAST(`b` AS INT) AS `b` FROM VALUES (1, 4), (2, 5), (3, 6) AS `t`(`a`, `b`)",
+        "CREATE TABLE IF NOT EXISTS `test_table` AS SELECT CAST(`a` AS INT) AS `a`, CAST(`b` AS INT) AS `b` FROM (SELECT CAST(`a` AS INT) AS `a`, CAST(`b` AS INT) AS `b` FROM VALUES (1, 4), (2, 5), (3, 6) AS `t`(`a`, `b`)) AS `_subquery`",
     ]
 
 
@@ -280,7 +280,7 @@ def test_replace_query_self_ref_not_exists(
     assert to_sql_calls(adapter) == [
         "CREATE TABLE IF NOT EXISTS `db`.`table` (`col` INT)",
         "CREATE SCHEMA IF NOT EXISTS `db`",
-        "CREATE TABLE IF NOT EXISTS `db`.`temp_table_abcdefgh` AS SELECT `col` FROM `db`.`table`",
+        "CREATE TABLE IF NOT EXISTS `db`.`temp_table_abcdefgh` AS SELECT CAST(`col` AS INT) AS `col` FROM (SELECT `col` FROM `db`.`table`) AS `_subquery`",
         "INSERT OVERWRITE TABLE `db`.`table` (`col`) SELECT `col` + 1 AS `col` FROM `db`.`temp_table_abcdefgh`",
         "DROP TABLE IF EXISTS `db`.`temp_table_abcdefgh`",
     ]
@@ -324,7 +324,7 @@ def test_replace_query_self_ref_exists(
         # This is something temp_table does and isn't really needed. The contract with `replace_query` is that
         # the schema for the table already exists
         "CREATE SCHEMA IF NOT EXISTS `db`",
-        f"CREATE TABLE IF NOT EXISTS `db`.`temp_table_{temp_table_id}` AS SELECT `col` FROM `db`.`table`",
+        f"CREATE TABLE IF NOT EXISTS `db`.`temp_table_{temp_table_id}` AS SELECT CAST(`col` AS INT) AS `col` FROM (SELECT `col` FROM `db`.`table`) AS `_subquery`",
         "INSERT OVERWRITE TABLE `db`.`table` (`col`) SELECT `col` + 1 AS `col` FROM `db`.`temp_table_abcdefgh`",
         f"DROP TABLE IF EXISTS `db`.`temp_table_{temp_table_id}`",
     ]
@@ -604,7 +604,7 @@ def test_scd_type_2_by_time(
     assert to_sql_calls(adapter) == [
         "CREATE TABLE IF NOT EXISTS `db`.`target` (`id` INT, `name` STRING, `price` DOUBLE, `test_updated_at` TIMESTAMP, `test_valid_from` TIMESTAMP, `test_valid_to` TIMESTAMP)",
         "CREATE SCHEMA IF NOT EXISTS `db`",
-        "CREATE TABLE IF NOT EXISTS `db`.`temp_target_abcdefgh` AS SELECT `id`, `name`, `price`, `test_updated_at`, `test_valid_from`, `test_valid_to` FROM `db`.`target`",
+        "CREATE TABLE IF NOT EXISTS `db`.`temp_target_abcdefgh` AS SELECT CAST(`id` AS INT) AS `id`, CAST(`name` AS STRING) AS `name`, CAST(`price` AS DOUBLE) AS `price`, CAST(`test_updated_at` AS TIMESTAMP) AS `test_updated_at`, CAST(`test_valid_from` AS TIMESTAMP) AS `test_valid_from`, CAST(`test_valid_to` AS TIMESTAMP) AS `test_valid_to` FROM (SELECT `id`, `name`, `price`, `test_updated_at`, `test_valid_from`, `test_valid_to` FROM `db`.`target`) AS `_subquery`",
         parse_one(
             """WITH `source` AS (
   SELECT
@@ -910,7 +910,7 @@ def test_comments_hive(mocker: MockerFixture, make_mocked_engine_adapter: t.Call
     sql_calls = to_sql_calls(adapter)
     assert sql_calls == [
         f"CREATE TABLE IF NOT EXISTS `test_table` (`a` INT COMMENT '{truncated_column_comment}', `b` INT) COMMENT '{truncated_table_comment}'",
-        f"CREATE TABLE IF NOT EXISTS `test_table` COMMENT '{truncated_table_comment}' AS SELECT `a`, `b` FROM `source_table`",
+        f"CREATE TABLE IF NOT EXISTS `test_table` COMMENT '{truncated_table_comment}' AS SELECT CAST(`a` AS INT) AS `a`, CAST(`b` AS INT) AS `b` FROM (SELECT `a`, `b` FROM `source_table`) AS `_subquery`",
         f"ALTER TABLE `test_table` ALTER COLUMN `a` COMMENT '{truncated_column_comment}'",
         f"CREATE OR REPLACE VIEW test_view COMMENT '{truncated_table_comment}' AS SELECT a, b FROM source_table",
         f"COMMENT ON TABLE `test_table` IS '{truncated_table_comment}'",
@@ -968,7 +968,7 @@ def test_comments_iceberg(mocker: MockerFixture, make_mocked_engine_adapter: t.C
     sql_calls = to_sql_calls(adapter)
     assert sql_calls == [
         f"CREATE TABLE IF NOT EXISTS `test_table` (`a` INT COMMENT '{long_column_comment}', `b` INT) COMMENT '{long_table_comment}'",
-        f"CREATE TABLE IF NOT EXISTS `test_table` COMMENT '{long_table_comment}' AS SELECT `a`, `b` FROM `source_table`",
+        f"CREATE TABLE IF NOT EXISTS `test_table` COMMENT '{long_table_comment}' AS SELECT CAST(`a` AS INT) AS `a`, CAST(`b` AS INT) AS `b` FROM (SELECT `a`, `b` FROM `source_table`) AS `_subquery`",
         f"ALTER TABLE `test_table` ALTER COLUMN `a` COMMENT '{long_column_comment}'",
         f"CREATE OR REPLACE VIEW test_view COMMENT '{long_table_comment}' AS SELECT a, b FROM source_table",
         f"COMMENT ON TABLE `test_table` IS '{long_table_comment}'",
@@ -1021,7 +1021,7 @@ def test_replace_query_with_wap_self_reference(
     assert sql_calls == [
         "CREATE TABLE IF NOT EXISTS `catalog`.`schema`.`table` (`a` INT)",
         "CREATE SCHEMA IF NOT EXISTS `catalog`.`schema`",
-        "CREATE TABLE IF NOT EXISTS `catalog`.`schema`.`temp_branch_wap_12345_abcdefgh` USING ICEBERG AS SELECT `a` FROM `catalog`.`schema`.`table`.`branch_wap_12345`",
+        "CREATE TABLE IF NOT EXISTS `catalog`.`schema`.`temp_branch_wap_12345_abcdefgh` USING ICEBERG AS SELECT CAST(`a` AS INT) AS `a` FROM (SELECT `a` FROM `catalog`.`schema`.`table`.`branch_wap_12345`) AS `_subquery`",
         "INSERT OVERWRITE TABLE `catalog`.`schema`.`table`.`branch_wap_12345` (`a`) SELECT 1 AS `a` FROM `catalog`.`schema`.`temp_branch_wap_12345_abcdefgh`",
         "DROP TABLE IF EXISTS `catalog`.`schema`.`temp_branch_wap_12345_abcdefgh`",
     ]

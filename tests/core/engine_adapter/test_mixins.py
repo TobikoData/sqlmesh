@@ -33,7 +33,9 @@ def test_logical_merge(make_mocked_engine_adapter: t.Callable, mocker: MockerFix
 
     adapter.cursor.execute.assert_has_calls(
         [
-            call('''CREATE TABLE "temporary" AS SELECT "id", "ts", "val" FROM "source"'''),
+            call(
+                '''CREATE TABLE "temporary" AS SELECT CAST("id" AS INT) AS "id", CAST("ts" AS TIMESTAMP) AS "ts", CAST("val" AS INT) AS "val" FROM (SELECT "id", "ts", "val" FROM "source") AS "_subquery"'''
+            ),
             call("""DELETE FROM "target" WHERE "id" IN (SELECT "id" FROM "temporary")"""),
             call(
                 'INSERT INTO "target" ("id", "ts", "val") SELECT DISTINCT ON ("id") "id", "ts", "val" FROM "temporary"'
@@ -56,7 +58,9 @@ def test_logical_merge(make_mocked_engine_adapter: t.Callable, mocker: MockerFix
 
     adapter.cursor.execute.assert_has_calls(
         [
-            call('''CREATE TABLE "temporary" AS SELECT "id", "ts", "val" FROM "source"'''),
+            call(
+                '''CREATE TABLE "temporary" AS SELECT CAST("id" AS INT) AS "id", CAST("ts" AS TIMESTAMP) AS "ts", CAST("val" AS INT) AS "val" FROM (SELECT "id", "ts", "val" FROM "source") AS "_subquery"'''
+            ),
             call(
                 """DELETE FROM "target" WHERE CONCAT_WS('__SQLMESH_DELIM__', "id", "ts") IN (SELECT CONCAT_WS('__SQLMESH_DELIM__', "id", "ts") FROM "temporary")"""
             ),

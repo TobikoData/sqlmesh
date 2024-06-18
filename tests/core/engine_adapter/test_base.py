@@ -443,7 +443,7 @@ def test_comments(make_mocked_engine_adapter: t.Callable, mocker: MockerFixture)
     sql_calls = to_sql_calls(adapter)
     assert sql_calls == [
         """CREATE TABLE IF NOT EXISTS "test_table" ("a" INT COMMENT 'a description', "b" INT) COMMENT='test description'""",
-        """CREATE TABLE IF NOT EXISTS "test_table" ("a" INT COMMENT 'a description', "b" INT) COMMENT='test description' AS SELECT "a", "b" FROM "source_table\"""",
+        """CREATE TABLE IF NOT EXISTS "test_table" ("a" INT COMMENT 'a description', "b" INT) COMMENT='test description' AS SELECT CAST("a" AS INT) AS "a", CAST("b" AS INT) AS "b" FROM (SELECT "a", "b" FROM "source_table") AS "_subquery\"""",
         """CREATE TABLE IF NOT EXISTS "test_table" COMMENT='test description' AS SELECT "a", "b" FROM "source_table\"""",
         """COMMENT ON COLUMN "test_table"."a" IS 'a description'""",
         """CREATE OR REPLACE VIEW "test_view" COMMENT='test description' AS SELECT "a", "b" FROM "source_table\"""",
@@ -1154,31 +1154,17 @@ WITH "source" AS (
     "test_UPDATED_at" > "t_test_UPDATED_at"
 )
 SELECT
-  "id",
-  "name",
-  "price",
-  "test_UPDATED_at",
-  "test_valid_from",
-  "test_valid_to"
-FROM "static"
-UNION ALL
-SELECT
-  "id",
-  "name",
-  "price",
-  "test_UPDATED_at",
-  "test_valid_from",
-  "test_valid_to"
-FROM "updated_rows"
-UNION ALL
-SELECT
-  "id",
-  "name",
-  "price",
-  "test_UPDATED_at",
-  "test_valid_from",
-  "test_valid_to"
-FROM "inserted_rows"
+  CAST("id" AS INT) AS "id",
+  CAST("name" AS VARCHAR) AS "name",
+  CAST("price" AS DOUBLE) AS "price",
+  CAST("test_UPDATED_at" AS TIMESTAMP) AS "test_UPDATED_at",
+  CAST("test_valid_from" AS TIMESTAMP) AS "test_valid_from",
+  CAST("test_valid_to" AS TIMESTAMP) AS "test_valid_to"
+FROM (
+  SELECT "id", "name", "price", "test_UPDATED_at", "test_valid_from", "test_valid_to" FROM "static"
+  UNION ALL SELECT "id", "name", "price", "test_UPDATED_at", "test_valid_from", "test_valid_to" FROM "updated_rows"
+  UNION ALL SELECT "id", "name", "price", "test_UPDATED_at", "test_valid_from", "test_valid_to" FROM "inserted_rows"
+) AS "_subquery"
     """
         ).sql()
     )
@@ -1345,31 +1331,17 @@ WITH "source" AS (
     "test_updated_at" > "t_test_updated_at"
 )
 SELECT
-  "id",
-  "name",
-  "price",
-  "test_updated_at",
-  "test_valid_from",
-  "test_valid_to"
-FROM "static"
-UNION ALL
-SELECT
-  "id",
-  "name",
-  "price",
-  "test_updated_at",
-  "test_valid_from",
-  "test_valid_to"
-FROM "updated_rows"
-UNION ALL
-SELECT
-  "id",
-  "name",
-  "price",
-  "test_updated_at",
-  "test_valid_from",
-  "test_valid_to"
-FROM "inserted_rows"
+  CAST("id" AS INT) AS "id",
+  CAST("name" AS VARCHAR) AS "name",
+  CAST("price" AS DOUBLE) AS "price",
+  CAST("test_updated_at" AS TIMESTAMP) AS "test_updated_at",
+  CAST("test_valid_from" AS TIMESTAMP) AS "test_valid_from",
+  CAST("test_valid_to" AS TIMESTAMP) AS "test_valid_to"
+FROM (
+  SELECT "id", "name", "price", "test_updated_at", "test_valid_from", "test_valid_to" FROM "static"
+  UNION ALL SELECT "id", "name", "price", "test_updated_at", "test_valid_from", "test_valid_to" FROM "updated_rows"
+  UNION ALL SELECT "id", "name", "price", "test_updated_at", "test_valid_from", "test_valid_to" FROM "inserted_rows"
+) AS "_subquery"
     """
         ).sql()
     )
@@ -1563,35 +1535,7 @@ WITH "source" AS (
   WHERE
     "test_updated_at" > "t_test_updated_at"
 )
-SELECT
-  "id1",
-  "id2",
-  "name",
-  "price",
-  "test_updated_at",
-  "test_valid_from",
-  "test_valid_to"
-FROM "static"
-UNION ALL
-SELECT
-  "id1",
-  "id2",
-  "name",
-  "price",
-  "test_updated_at",
-  "test_valid_from",
-  "test_valid_to"
-FROM "updated_rows"
-UNION ALL
-SELECT
-  "id1",
-  "id2",
-  "name",
-  "price",
-  "test_updated_at",
-  "test_valid_from",
-  "test_valid_to"
-FROM "inserted_rows"
+SELECT CAST("id1" AS INT) AS "id1", CAST("id2" AS INT) AS "id2", CAST("name" AS VARCHAR) AS "name", CAST("price" AS DOUBLE) AS "price", CAST("test_updated_at" AS TIMESTAMPTZ) AS "test_updated_at", CAST("test_valid_from" AS TIMESTAMPTZ) AS "test_valid_from", CAST("test_valid_to" AS TIMESTAMPTZ) AS "test_valid_to" FROM (SELECT "id1", "id2", "name", "price", "test_updated_at", "test_valid_from", "test_valid_to" FROM "static" UNION ALL SELECT "id1", "id2", "name", "price", "test_updated_at", "test_valid_from", "test_valid_to" FROM "updated_rows" UNION ALL SELECT "id1", "id2", "name", "price", "test_updated_at", "test_valid_from", "test_valid_to" FROM "inserted_rows") AS "_subquery"
 """
         ).sql()
     )
@@ -1771,29 +1715,7 @@ WITH "source" AS (
       )
     )
 )
-SELECT
-  "id",
-  "name",
-  "price",
-  "test_VALID_from",
-  "test_valid_to"
-FROM "static"
-UNION ALL
-SELECT
-  "id",
-  "name",
-  "price",
-  "test_VALID_from",
-  "test_valid_to"
-FROM "updated_rows"
-UNION ALL
-SELECT
-  "id",
-  "name",
-  "price",
-  "test_VALID_from",
-  "test_valid_to"
-FROM "inserted_rows"
+SELECT CAST("id" AS INT) AS "id", CAST("name" AS VARCHAR) AS "name", CAST("price" AS DOUBLE) AS "price", CAST("test_VALID_from" AS TIMESTAMP) AS "test_VALID_from", CAST("test_valid_to" AS TIMESTAMP) AS "test_valid_to" FROM (SELECT "id", "name", "price", "test_VALID_from", "test_valid_to" FROM "static" UNION ALL SELECT "id", "name", "price", "test_VALID_from", "test_valid_to" FROM "updated_rows" UNION ALL SELECT "id", "name", "price", "test_VALID_from", "test_valid_to" FROM "inserted_rows") AS "_subquery"
     """
         ).sql()
     )
@@ -1976,29 +1898,7 @@ WITH "source" AS (
       )
     )
 )
-SELECT
-  "id",
-  "name",
-  "price",
-  "test_valid_from",
-  "test_valid_to"
-FROM "static"
-UNION ALL
-SELECT
-  "id",
-  "name",
-  "price",
-  "test_valid_from",
-  "test_valid_to"
-FROM "updated_rows"
-UNION ALL
-SELECT
-  "id",
-  "name",
-  "price",
-  "test_valid_from",
-  "test_valid_to"
-FROM "inserted_rows"
+SELECT CAST("id" AS INT) AS "id", CAST("name" AS VARCHAR) AS "name", CAST("price" AS DOUBLE) AS "price", CAST("test_valid_from" AS TIMESTAMP) AS "test_valid_from", CAST("test_valid_to" AS TIMESTAMP) AS "test_valid_to" FROM (SELECT "id", "name", "price", "test_valid_from", "test_valid_to" FROM "static" UNION ALL SELECT "id", "name", "price", "test_valid_from", "test_valid_to" FROM "updated_rows" UNION ALL SELECT "id", "name", "price", "test_valid_from", "test_valid_to" FROM "inserted_rows") AS "_subquery"
     """
         ).sql()
     )
@@ -2192,29 +2092,7 @@ WITH "source" AS (
       )
     )
 )
-SELECT
-  "id",
-  "name",
-  "price",
-  "test_valid_from",
-  "test_valid_to"
-FROM "static"
-UNION ALL
-SELECT
-  "id",
-  "name",
-  "price",
-  "test_valid_from",
-  "test_valid_to"
-FROM "updated_rows"
-UNION ALL
-SELECT
-  "id",
-  "name",
-  "price",
-  "test_valid_from",
-  "test_valid_to"
-FROM "inserted_rows"
+SELECT CAST("id" AS INT) AS "id", CAST("name" AS VARCHAR) AS "name", CAST("price" AS DOUBLE) AS "price", CAST("test_valid_from" AS TIMESTAMP) AS "test_valid_from", CAST("test_valid_to" AS TIMESTAMP) AS "test_valid_to" FROM (SELECT "id", "name", "price", "test_valid_from", "test_valid_to" FROM "static" UNION ALL SELECT "id", "name", "price", "test_valid_from", "test_valid_to" FROM "updated_rows" UNION ALL SELECT "id", "name", "price", "test_valid_from", "test_valid_to" FROM "inserted_rows") AS "_subquery"
     """
         ).sql()
     )
@@ -2392,43 +2270,30 @@ WITH "source" AS (
       )
     )
 )
-SELECT
-  "id",
-  "name",
-  "price",
-  "test_valid_from",
-  "test_valid_to"
-FROM "static"
-UNION ALL
-SELECT
-  "id",
-  "name",
-  "price",
-  "test_valid_from",
-  "test_valid_to"
-FROM "updated_rows"
-UNION ALL
-SELECT
-  "id",
-  "name",
-  "price",
-  "test_valid_from",
-  "test_valid_to"
-FROM "inserted_rows"
+SELECT CAST("id" AS INT) AS "id", CAST("name" AS VARCHAR) AS "name", CAST("price" AS DOUBLE) AS "price", CAST("test_valid_from" AS TIMESTAMP) AS "test_valid_from", CAST("test_valid_to" AS TIMESTAMP) AS "test_valid_to" FROM (SELECT "id", "name", "price", "test_valid_from", "test_valid_to" FROM "static" UNION ALL SELECT "id", "name", "price", "test_valid_from", "test_valid_to" FROM "updated_rows" UNION ALL SELECT "id", "name", "price", "test_valid_from", "test_valid_to" FROM "inserted_rows") AS "_subquery"
     """
         ).sql()
     )
 
 
-def test_replace_query(make_mocked_engine_adapter: t.Callable):
+def test_replace_query(make_mocked_engine_adapter: t.Callable, mocker: MockerFixture):
     adapter = make_mocked_engine_adapter(EngineAdapter)
+    columns_mock = mocker.patch.object(adapter, "columns")
+    columns_mock.return_value = None
+
     adapter.replace_query(
         "test_table", parse_one("SELECT a FROM tbl"), {"a": exp.DataType.build("INT")}
+    )
+    adapter.replace_query("test_table", parse_one("SELECT a FROM tbl"))
+    adapter.replace_query(
+        "test_table", parse_one("SELECT a FROM tbl"), {"a": exp.DataType.build("UNKNOWN")}
     )
 
     # TODO: Shouldn't we enforce that `a` is casted to an int?
     assert to_sql_calls(adapter) == [
-        'CREATE OR REPLACE TABLE "test_table" AS SELECT "a" FROM "tbl"'
+        'CREATE OR REPLACE TABLE "test_table" AS SELECT CAST("a" AS INT) AS "a" FROM (SELECT "a" FROM "tbl") AS "_subquery"',
+        'CREATE OR REPLACE TABLE "test_table" AS SELECT "a" FROM "tbl"',
+        'CREATE OR REPLACE TABLE "test_table" AS SELECT "a" FROM "tbl"',
     ]
 
 
@@ -2442,9 +2307,9 @@ def test_replace_query_pandas(make_mocked_engine_adapter: t.Callable):
     )
 
     assert to_sql_calls(adapter) == [
-        'CREATE OR REPLACE TABLE "test_table" AS SELECT CAST("a" AS INT) AS "a", CAST("b" AS INT) AS "b" FROM (VALUES (1, 4)) AS "t"("a", "b")',
-        'INSERT INTO "test_table" ("a", "b") SELECT CAST("a" AS INT) AS "a", CAST("b" AS INT) AS "b" FROM (VALUES (2, 5)) AS "t"("a", "b")',
-        'INSERT INTO "test_table" ("a", "b") SELECT CAST("a" AS INT) AS "a", CAST("b" AS INT) AS "b" FROM (VALUES (3, 6)) AS "t"("a", "b")',
+        'CREATE OR REPLACE TABLE "test_table" AS SELECT CAST("a" AS INT) AS "a", CAST("b" AS INT) AS "b" FROM (SELECT CAST("a" AS INT) AS "a", CAST("b" AS INT) AS "b" FROM (VALUES (1, 4)) AS "t"("a", "b")) AS "_subquery"',
+        'INSERT INTO "test_table" ("a", "b") SELECT CAST("a" AS INT) AS "a", CAST("b" AS INT) AS "b" FROM (SELECT CAST("a" AS INT) AS "a", CAST("b" AS INT) AS "b" FROM (VALUES (2, 5)) AS "t"("a", "b")) AS "_subquery"',
+        'INSERT INTO "test_table" ("a", "b") SELECT CAST("a" AS INT) AS "a", CAST("b" AS INT) AS "b" FROM (SELECT CAST("a" AS INT) AS "a", CAST("b" AS INT) AS "b" FROM (VALUES (3, 6)) AS "t"("a", "b")) AS "_subquery"',
     ]
 
 
@@ -2508,7 +2373,7 @@ def test_replace_query_self_referencing_not_exists_known(
 
     assert to_sql_calls(adapter) == [
         'CREATE TABLE IF NOT EXISTS "test" ("a" INT)',
-        'CREATE OR REPLACE TABLE "test" AS SELECT "a" FROM "test"',
+        'CREATE OR REPLACE TABLE "test" AS SELECT CAST("a" AS INT) AS "a" FROM (SELECT "a" FROM "test") AS "_subquery"',
     ]
 
 
@@ -2585,7 +2450,7 @@ def test_ctas_pandas(make_mocked_engine_adapter: t.Callable):
     adapter.ctas("new_table", df)
 
     assert to_sql_calls(adapter) == [
-        'CREATE TABLE IF NOT EXISTS "new_table" AS SELECT CAST("a" AS BIGINT) AS "a", CAST("b" AS BIGINT) AS "b" FROM (VALUES (1, 4), (2, 5), (3, 6)) AS "t"("a", "b")'
+        'CREATE TABLE IF NOT EXISTS "new_table" AS SELECT CAST("a" AS BIGINT) AS "a", CAST("b" AS BIGINT) AS "b" FROM (SELECT CAST("a" AS BIGINT) AS "a", CAST("b" AS BIGINT) AS "b" FROM (VALUES (1, 4), (2, 5), (3, 6)) AS "t"("a", "b")) AS "_subquery"'
     ]
 
 
@@ -2743,7 +2608,7 @@ def test_insert_overwrite_by_partition_query(
 
     sql_calls = to_sql_calls(adapter)
     assert sql_calls == [
-        'CREATE TABLE "test_schema"."__temp_test_table_abcdefgh" AS SELECT "a", "ds", "b" FROM "tbl"',
+        'CREATE TABLE "test_schema"."__temp_test_table_abcdefgh" AS SELECT CAST("a" AS INT) AS "a", CAST("ds" AS DATETIME) AS "ds", CAST("b" AS BOOLEAN) AS "b" FROM (SELECT "a", "ds", "b" FROM "tbl") AS "_subquery"',
         expected_delete_stmt,
         'INSERT INTO "test_schema"."test_table" ("a", "ds", "b") SELECT "a", "ds", "b" FROM "test_schema"."__temp_test_table_abcdefgh"',
         'DROP TABLE IF EXISTS "test_schema"."__temp_test_table_abcdefgh"',
