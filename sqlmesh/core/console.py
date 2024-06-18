@@ -286,6 +286,8 @@ class TerminalConsole(Console):
 
         self.loading_status: t.Dict[uuid.UUID, Status] = {}
 
+        self.modified_threshold: int = 20
+
         self.verbose = verbose
         self.dialect = dialect
 
@@ -628,6 +630,16 @@ class TerminalConsole(Console):
         if auto_apply:
             plan_builder.apply()
 
+    def _limit_model_names(self, tree: Tree) -> Tree:
+        modified_length = len(tree.children)
+        if modified_length > self.modified_threshold:
+            tree.children = [
+                tree.children[0],
+                Tree(f".... {modified_length-2} more ...."),
+                tree.children[-1],
+            ]
+        return tree
+
     def _get_ignored_tree(
         self,
         ignored_snapshot_ids: t.Set[SnapshotId],
@@ -728,7 +740,7 @@ class TerminalConsole(Console):
             if direct.children:
                 tree.add(direct)
             if indirect.children:
-                tree.add(indirect)
+                tree.add(indirect if self.verbose else self._limit_model_names(indirect))
             if metadata.children:
                 tree.add(metadata)
         if selected_ignored_snapshot_ids:
@@ -795,6 +807,11 @@ class TerminalConsole(Console):
                 indirect_tree.add(
                     f"[indirect]{child_snapshot.display_name(plan.environment_naming_info, default_catalog, dialect=self.dialect)}"
                 )
+            indirect_tree = (
+                self._limit_model_names(indirect_tree)
+                if not self.verbose and indirect_tree
+                else indirect_tree
+            )
             self._print(tree)
             if not no_prompts:
                 self._get_snapshot_change_category(
@@ -822,6 +839,12 @@ class TerminalConsole(Console):
                 indirect_tree.add(
                     f"[indirect]{child_snapshot.display_name(plan.environment_naming_info, default_catalog, dialect=self.dialect)} ({child_category_str})"
                 )
+            indirect_tree = (
+                self._limit_model_names(indirect_tree)
+                if not self.verbose and indirect_tree
+                else indirect_tree
+            )
+
             self._print(Syntax(context_diff.text_diff(snapshot.name), "sql", word_wrap=True))
             self._print(tree)
 
