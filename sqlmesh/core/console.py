@@ -1569,16 +1569,19 @@ class MarkdownConsole(CaptureTerminalConsole):
                         self._print(f"```diff\n{context_diff.text_diff(snapshot.name)}\n```")
             if indirectly_modified:
                 self._print("\n**Indirectly Modified:**")
+                indirectly_modified = sorted(indirectly_modified)
                 modified_length = len(indirectly_modified)
                 if (
                     not self.verbose
                     and modified_length > self.INDIRECTLY_MODIFIED_DISPLAY_THRESHOLD
                 ):
                     self._print(
-                        f"- `{indirectly_modified[0].display_name(environment_naming_info, default_catalog, dialect=self.dialect)}`\n- `.... {modified_length-2} more ....`\n- `{indirectly_modified[-1].display_name(environment_naming_info, default_catalog, dialect=self.dialect)}`"
+                        f"- `{indirectly_modified[0].display_name(environment_naming_info, default_catalog, dialect=self.dialect)}`\n"
+                        f"- `.... {modified_length-2} more ....`\n"
+                        f"- `{indirectly_modified[-1].display_name(environment_naming_info, default_catalog, dialect=self.dialect)}`"
                     )
                 else:
-                    for snapshot in sorted(indirectly_modified):
+                    for snapshot in indirectly_modified:
                         self._print(
                             f"- `{snapshot.display_name(environment_naming_info, default_catalog, dialect=self.dialect)}`"
                         )
