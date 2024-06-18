@@ -352,7 +352,7 @@ class SchemaDiffer(PydanticModel):
         if current_type in self.compatible_types:
             return new_type in self.compatible_types[current_type]
         # new type is un-parameterized and has unlimited length, current type is compatible
-        if len(new_type.expressions) == 0 and new_type.this in self.types_with_unlimited_length:
+        if not new_type.expressions and new_type.this in self.types_with_unlimited_length:
             return current_type.this in self.types_with_unlimited_length[new_type.this]
         return False
 
@@ -369,7 +369,9 @@ class SchemaDiffer(PydanticModel):
         return False
 
     def _is_precision_increase(self, current_type: exp.DataType, new_type: exp.DataType) -> bool:
-        if current_type.this == new_type.this and not self._is_nested_type(current_type):
+        if current_type.this == new_type.this and not current_type.is_type(
+            *exp.DataType.NESTED_TYPES
+        ):
             current_params = self._get_type_parameters(current_type)
             new_params = self._get_type_parameters(new_type)
 
@@ -378,9 +380,6 @@ class SchemaDiffer(PydanticModel):
 
             return all(new >= current for current, new in zip(current_params, new_params))
         return False
-
-    def _is_nested_type(self, type: exp.DataType) -> bool:
-        return type.is_type(exp.DataType.Type.STRUCT) or type.is_type(exp.DataType.Type.ARRAY)
 
     def _get_type_parameters(self, type: exp.DataType) -> t.List[t.Union[int, float]]:
         def _str_to_number(string: str, allows_max_param: bool) -> t.Union[int, float]:
