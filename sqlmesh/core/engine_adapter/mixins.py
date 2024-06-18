@@ -256,7 +256,7 @@ class VarcharSizeWorkaroundMixin(EngineAdapter):
             # redshift and mssql have a bug where CTAS statements have non determistic types. if a limit
             # is applied to a ctas statement, VARCHAR types default to 1 in some instances.
             select_statement = statement.expression.copy()
-            for select_or_union in select_statement.find_all(exp.Select, exp.Union):
+            for select_or_union in select_statement.find_all(exp.Select, exp.SetOperation):
                 select_or_union.set("limit", None)
                 select_or_union.set("where", None)
 
