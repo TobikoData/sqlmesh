@@ -180,9 +180,7 @@ class MacroEvaluator:
     def send(
         self, name: str, *args: t.Any, **kwargs: t.Any
     ) -> t.Union[None, exp.Expression, t.List[exp.Expression]]:
-        func = self.macros.get(normalize_macro_name(name)) or self.macros.get(
-            normalize_macro_name("@" + name)
-        )
+        func = self.macros.get(normalize_macro_name(name))
 
         if not callable(func):
             raise SQLMeshError(f"Macro '{name}' does not exist.")
@@ -1096,7 +1094,7 @@ def var(
 
 def normalize_macro_name(name: str) -> str:
     """Prefix macro name with @ and upcase"""
-    return f"@{name.upper()}"
+    return name.upper() if name.startswith("@") else f"@{name.upper()}"
 
 
 for m in macro.get_registry().values():
