@@ -60,6 +60,8 @@ class Console(abc.ABC):
     """Abstract base class for defining classes used for displaying information to the user and also interact
     with them when their input is needed."""
 
+    INDIRECTLY_MODIFIED_DISPLAY_THRESHOLD = 20
+
     @abc.abstractmethod
     def start_plan_evaluation(self, plan: Plan) -> None:
         """Indicates that a new evaluation has begun."""
@@ -235,6 +237,17 @@ class Console(abc.ABC):
     def show_row_diff(self, row_diff: RowDiff, show_sample: bool = True) -> None:
         """Show table summary diff."""
 
+    def _limit_model_names(self, tree: Tree, verbose: bool = False) -> Tree:
+        """Trim long indirectly modified model lists below threshold."""
+        modified_length = len(tree.children)
+        if not verbose and modified_length > self.INDIRECTLY_MODIFIED_DISPLAY_THRESHOLD:
+            tree.children = [
+                tree.children[0],
+                Tree(f".... {modified_length-2} more ...."),
+                tree.children[-1],
+            ]
+        return tree
+
 
 def make_progress_bar(message: str, console: t.Optional[RichConsole] = None) -> Progress:
     return Progress(
@@ -285,8 +298,6 @@ class TerminalConsole(Console):
         self.env_migration_task: t.Optional[TaskID] = None
 
         self.loading_status: t.Dict[uuid.UUID, Status] = {}
-
-        self.modified_threshold: int = 20
 
         self.verbose = verbose
         self.dialect = dialect
@@ -630,16 +641,6 @@ class TerminalConsole(Console):
         if auto_apply:
             plan_builder.apply()
 
-    def _limit_model_names(self, tree: Tree) -> Tree:
-        modified_length = len(tree.children)
-        if modified_length > self.modified_threshold:
-            tree.children = [
-                tree.children[0],
-                Tree(f".... {modified_length-2} more ...."),
-                tree.children[-1],
-            ]
-        return tree
-
     def _get_ignored_tree(
         self,
         ignored_snapshot_ids: t.Set[SnapshotId],
@@ -740,7 +741,7 @@ class TerminalConsole(Console):
             if direct.children:
                 tree.add(direct)
             if indirect.children:
-                tree.add(indirect if self.verbose else self._limit_model_names(indirect))
+                tree.add(self._limit_model_names(indirect, self.verbose))
             if metadata.children:
                 tree.add(metadata)
         if selected_ignored_snapshot_ids:
@@ -807,11 +808,9 @@ class TerminalConsole(Console):
                 indirect_tree.add(
                     f"[indirect]{child_snapshot.display_name(plan.environment_naming_info, default_catalog, dialect=self.dialect)}"
                 )
-            indirect_tree = (
-                self._limit_model_names(indirect_tree)
-                if not self.verbose and indirect_tree
-                else indirect_tree
-            )
+            if indirect_tree:
+                indirect_tree = self._limit_model_names(indirect_tree, self.verbose)
+
             self._print(tree)
             if not no_prompts:
                 self._get_snapshot_change_category(
@@ -839,11 +838,8 @@ class TerminalConsole(Console):
                 indirect_tree.add(
                     f"[indirect]{child_snapshot.display_name(plan.environment_naming_info, default_catalog, dialect=self.dialect)} ({child_category_str})"
                 )
-            indirect_tree = (
-                self._limit_model_names(indirect_tree)
-                if not self.verbose and indirect_tree
-                else indirect_tree
-            )
+            if indirect_tree:
+                indirect_tree = self._limit_model_names(indirect_tree, self.verbose)
 
             self._print(Syntax(context_diff.text_diff(snapshot.name), "sql", word_wrap=True))
             self._print(tree)
@@ -1573,10 +1569,19 @@ class MarkdownConsole(CaptureTerminalConsole):
                         self._print(f"```diff\n{context_diff.text_diff(snapshot.name)}\n```")
             if indirectly_modified:
                 self._print("\n**Indirectly Modified:**")
-                for snapshot in sorted(indirectly_modified):
+                modified_length = len(indirectly_modified)
+                if (
+                    not self.verbose
+                    and modified_length > self.INDIRECTLY_MODIFIED_DISPLAY_THRESHOLD
+                ):
                     self._print(
-                        f"- `{snapshot.display_name(environment_naming_info, default_catalog, dialect=self.dialect)}`"
+                        f"- `{indirectly_modified[0].display_name(environment_naming_info, default_catalog, dialect=self.dialect)}`\n- `.... {modified_length-2} more ....`\n- `{indirectly_modified[-1].display_name(environment_naming_info, default_catalog, dialect=self.dialect)}`"
                     )
+                else:
+                    for snapshot in sorted(indirectly_modified):
+                        self._print(
+                            f"- `{snapshot.display_name(environment_naming_info, default_catalog, dialect=self.dialect)}`"
+                        )
             if metadata_modified:
                 self._print("\n**Metadata Updated:**")
                 for snapshot in sorted(metadata_modified):
@@ -1630,6 +1635,8 @@ class MarkdownConsole(CaptureTerminalConsole):
                 indirect_tree.add(
                     f"[indirect]{child_snapshot.display_name(plan.environment_naming_info, default_catalog, dialect=self.dialect)} ({child_category_str})"
                 )
+            if indirect_tree:
+                indirect_tree = self._limit_model_names(indirect_tree, self.verbose)
             self._print(f"```diff\n{context_diff.text_diff(snapshot.name)}\n```\n")
             self._print("```\n")
             self._print(tree)
