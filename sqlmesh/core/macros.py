@@ -158,14 +158,16 @@ class MacroEvaluator:
         }
         self.python_env = python_env or {}
         self._jinja_env: t.Optional[Environment] = jinja_env
-        self.macros = {normalize_macro_name(k): v.func for k, v in macro.get_registry().items()}
+        self.macros = {
+            normalize_macro_name(k): v.func if isinstance(v, macro) else v
+            for k, v in macro.get_registry().items()
+        }
         self._schema = schema
         self._resolve_tables = resolve_tables
         self.columns_to_types_called = False
         self._snapshots = snapshots if snapshots is not None else {}
         self.default_catalog = default_catalog
         self._path = path
-
         prepare_env(self.python_env, self.env)
         for k, v in self.python_env.items():
             if v.is_definition:
@@ -178,7 +180,9 @@ class MacroEvaluator:
     def send(
         self, name: str, *args: t.Any, **kwargs: t.Any
     ) -> t.Union[None, exp.Expression, t.List[exp.Expression]]:
-        func = self.macros.get(normalize_macro_name(name))
+        func = self.macros.get(normalize_macro_name(name)) or self.macros.get(
+            normalize_macro_name("@" + name)
+        )
 
         if not callable(func):
             raise SQLMeshError(f"Macro '{name}' does not exist.")

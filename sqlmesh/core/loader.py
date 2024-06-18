@@ -11,12 +11,12 @@ from pathlib import Path
 
 from sqlglot.errors import SchemaError, SqlglotError
 from sqlglot.schema import MappingSchema
-from sqlglot import TokenType, exp
+from sqlglot import TokenType, tokenize
 
 from sqlmesh.core import constants as c
 from sqlmesh.core.audit import Audit, load_multiple_audits
-from sqlmesh.core.dialect import parse, MacroDef, Dialect
-from sqlmesh.core.macros import MacroRegistry, macro, _norm_var_arg_lambda, MacroEvaluator
+from sqlmesh.core.dialect import parse, MacroDef
+from sqlmesh.core.macros import MacroRegistry, macro, MacroEvaluator
 from sqlmesh.core.metric import Metric, MetricMeta, expand_metrics, load_metric_ddl
 from sqlmesh.core.model import (
     Model,
@@ -266,31 +266,24 @@ class SqlMeshLoader(Loader):
                 )
                 with open(path, "r", encoding="utf-8") as file:
                     sql_file = file.read()
-                    dialect = next(iter(self._context.configs.values())).model_defaults.dialect
-                    tokens = Dialect(dialect=dialect).tokenizer.tokenize(sql_file)
-
-                    if (
-                        len(tokens) > 2
-                        and tokens[0].token_type == TokenType.PARAMETER
-                        and tokens[1].text == "DEF"
-                    ):
-                        parsed = parse(sql=sql_file, tokens=tokens)
-                        for node in parsed:
-                            if isinstance(node, MacroDef):
-                                macro_definitions.append(node)
-
-                    else:
+                    dialect = self._context.config.dialect
+                    tokens = tokenize(sql_file, dialect=dialect)
+                    if tokens and tokens[0].token_type == TokenType.BLOCK_START:
                         jinja_macros.add_macros(extractor.extract(jinja=sql_file, tokens=tokens))
+                    else:
+                        expressions = parse(sql=sql_file, default_dialect=dialect, tokens=tokens)
+                        for expr in expressions:
+                            if isinstance(expr, MacroDef):
+                                macro_definitions.append(expr)
 
         self._macros_max_mtime = macros_max_mtime
 
-        for definition in macro_definitions:
-            if isinstance(definition.expression, exp.Lambda):
-                _, fn = _norm_var_arg_lambda(MacroEvaluator(), definition.expression)
-                standard_macros[definition.name] = lambda _, *args: fn(
-                    args[0] if len(args) == 1 else exp.Tuple(expressions=list(args))
-                )
-                macro(definition.name)(standard_macros[definition.name])
+        if macro_definitions:
+            macro_evaluator = MacroEvaluator(dialect=dialect)
+            macro_evaluator.macros = standard_macros
+            for definition in macro_definitions:
+                macro_evaluator.evaluate(definition)
+            standard_macros = macro_evaluator.macros
 
         macros = macro.get_registry()
         macro.set_registry(standard_macros)
