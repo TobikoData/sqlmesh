@@ -191,7 +191,7 @@ function CodeEditorDefault({
 
   useEffect(() => {
     updateEditor(content, editorView)
-  }, [editorView, content])
+  }, [editorView, content, extensionsAll])
   return (
     <div className={clsx('flex w-full h-full', className)}>
       <CodeMirror
