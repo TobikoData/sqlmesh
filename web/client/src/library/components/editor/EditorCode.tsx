@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useMemo, useState } from 'react'
 import CodeMirror from '@uiw/react-codemirror'
-import { type KeyBinding, keymap } from '@codemirror/view'
+import { type EditorView, type KeyBinding, keymap } from '@codemirror/view'
 import { type Extension } from '@codemirror/state'
 import { useApiFileByPath, useMutationApiSaveFile } from '~/api'
 import { debounceSync, isNil, isNotNil } from '~/utils'
@@ -32,6 +32,7 @@ import {
   SQLMeshDialectCleanUp,
 } from './extensions/SQLMeshDialect'
 import { indentMore, defaultKeymap, historyKeymap } from '@codemirror/commands'
+import { EMPTY_STRING } from '@components/search/help'
 
 export { CodeEditorDefault, CodeEditorRemoteFile }
 
@@ -58,27 +59,11 @@ function CodeEditorDefault({
   const engine = useStoreEditor(s => s.engine)
   const dialects = useStoreEditor(s => s.dialects)
 
-  const [value, setValue] = useState(content)
-  const [isTyping, setIsTyping] = useState(false)
-
+  const [editorView, setEditorView] = useState<Optional<EditorView>>()
   const [dialectOptions, setDialectOptions] = useState<{
     types: string
     keywords: string
   }>()
-
-  const debouncedChange = useCallback(
-    debounceSync(
-      (value): void => {
-        setValue(value)
-        onChange?.(value)
-      },
-      500,
-      true,
-    ),
-    [],
-  )
-
-  const debouncedTyping = useCallback(debounceSync(setIsTyping, 500), [])
 
   const handleEngineWorkerMessage = useCallback((e: MessageEvent): void => {
     if (e.data.topic === 'dialect') {
@@ -205,24 +190,19 @@ function CodeEditorDefault({
   }, [dialect])
 
   useEffect(() => {
-    if (isTyping) return
-
-    setValue(content)
-  }, [content])
-
+    updateEditor(content, editorView)
+  }, [editorView, content])
   return (
     <div className={clsx('flex w-full h-full', className)}>
       <CodeMirror
         height="100%"
         width="100%"
         className={clsx('flex w-full h-full font-mono text-xs', className)}
-        value={value}
         indentWithTab={false}
         extensions={extensionsAll}
-        onChange={debouncedChange}
-        onKeyDown={() => setIsTyping(true)}
-        onKeyUp={() => debouncedTyping(false)}
+        onChange={onChange}
         readOnly={isNil(onChange)}
+        onCreateEditor={setEditorView}
         basicSetup={{
           autocompletion: false,
           defaultKeymap: false,
@@ -320,4 +300,94 @@ function CodeEditorRemoteFile({
   ) : (
     children({ file, keymaps: extensionKeymap })
   )
+}
+
+function updateEditor(content: string = '', view?: EditorView): void {
+  if (isNil(view)) return
+
+  const state = view.state
+  const text = state.doc.toString()
+
+  if (text === content) return
+
+  const selection = state.selection.main
+  const caretPos = selection.head
+  const [word, wordStartPos, wordPosOffset] = getClosestWordAtPosition(
+    text,
+    caretPos,
+  )
+  const range = 25 // number of characters before and after the caret
+  const textBeforeCaret = text.slice(Math.max(0, caretPos - range), caretPos)
+  const textAfterCaret = text.slice(
+    caretPos,
+    Math.min(text.length, caretPos + range),
+  )
+
+  view.dispatch({
+    changes: { from: 0, to: state.doc.length, insert: content },
+  })
+
+  const newDocText = view.state.doc.toString()
+  const newCaretPos = findCaretPosition(
+    newDocText,
+    textBeforeCaret,
+    textAfterCaret,
+    word,
+    range,
+    wordPosOffset,
+    wordPosOffset - wordStartPos,
+  )
+
+  if (newCaretPos < 0) return
+
+  view.dispatch({
+    selection: { anchor: newCaretPos, head: newCaretPos },
+    scrollIntoView: true,
+  })
+}
+
+function findCaretPosition(
+  text = '',
+  textBeforeCaret = '',
+  textAfterCaret = '',
+  word = '',
+  range = 0,
+  pos = 0,
+  offset = 0,
+): number {
+  const startPos = text.indexOf(textBeforeCaret)
+  const endPos = text.indexOf(textAfterCaret)
+
+  if (startPos >= 0 && endPos >= 0) return startPos + textBeforeCaret.length
+
+  const startRange = pos - range
+  const endRange = pos + range
+  const wordPos = text.slice(startRange, endRange).indexOf(word, startPos)
+
+  return wordPos < 0 ? pos : startRange + wordPos + offset
+}
+
+function getClosestWordAtPosition(
+  text = '',
+  pos = 0,
+): [string, number, number] {
+  const beforeSlice = text.slice(0, pos)
+  const afterSlice = text.slice(pos)
+  const wordStart = /[\w.`"'!@#$%^&*()\-+=<>?/[\]{}|,.;]+$/.exec(beforeSlice)
+  const wordEnd = /^[\w.`"'!@#$%^&*()\-+=<>?/[\]{}|,.;]+/.exec(afterSlice)
+  const start = isNil(wordStart) ? pos : pos - wordStart[0].length
+  const end = isNil(wordEnd) ? pos : pos + wordEnd[0].length
+  const word = text.slice(start, end).trim()
+
+  if (word === EMPTY_STRING && pos >= 0 && pos <= text.length) {
+    const before = getClosestWordAtPosition(beforeSlice, pos - 1)
+
+    if (before[0] !== EMPTY_STRING) return before
+
+    const after = getClosestWordAtPosition(afterSlice, pos + 1)
+
+    if (after[0] !== EMPTY_STRING) return after
+  }
+
+  return [word, start, pos]
 }
