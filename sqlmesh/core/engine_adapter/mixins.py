@@ -228,6 +228,24 @@ class NonTransactionalTruncateMixin(EngineAdapter):
 
 
 class VarcharSizeWorkaroundMixin(EngineAdapter):
+    def _default_precision_to_max(
+        self, columns_to_types: t.Dict[str, exp.DataType]
+    ) -> t.Dict[str, exp.DataType]:
+        # get default lengths for types that support "max" length
+        types_with_max_defaults = {
+            k: self.SCHEMA_DIFFER.parameterized_type_defaults[k][0][0]
+            for k in self.SCHEMA_DIFFER.max_parameter_length
+        }
+
+        # if type has default length, convert to "max" length
+        for col_name, col_type in columns_to_types.items():
+            parameter = self.SCHEMA_DIFFER.get_type_parameters(col_type)
+            type_max_default = types_with_max_defaults.get(col_type.this)
+            if parameter and type_max_default and parameter == [type_max_default]:
+                col_type.set("expressions", [exp.DataTypeParam(this=exp.Var(this="max"))])
+
+        return columns_to_types
+
     def _build_create_table_exp(
         self,
         table_name_or_schema: t.Union[exp.Schema, TableName],
@@ -268,7 +286,9 @@ class VarcharSizeWorkaroundMixin(EngineAdapter):
                 temp_view_name, select_statement, replace=False, no_schema_binding=False
             )
             try:
-                columns_to_types_from_view = self.columns(temp_view_name)
+                columns_to_types_from_view = self._default_precision_to_max(
+                    self.columns(temp_view_name)
+                )
 
                 schema = self._build_schema_exp(
                     exp.to_table(table_name_or_schema),

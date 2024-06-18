@@ -29,6 +29,26 @@ def test_columns(adapter: t.Callable):
     assert resp == {"col": exp.DataType.build("INT")}
 
 
+def test_varchar_size_workaround(make_mocked_engine_adapter: t.Callable, mocker: MockerFixture):
+    adapter = make_mocked_engine_adapter(RedshiftEngineAdapter)
+
+    columns_to_max = adapter._default_precision_to_max(
+        {
+            "char": exp.DataType.build("CHAR", dialect=adapter.dialect),
+            "char2": exp.DataType.build("CHAR(2)", dialect=adapter.dialect),
+            "varchar": exp.DataType.build("VARCHAR", dialect=adapter.dialect),
+            "varchar2": exp.DataType.build("VARCHAR(2)", dialect=adapter.dialect),
+        }
+    )
+
+    assert columns_to_max == {
+        "char": exp.DataType.build("CHAR(max)", dialect=adapter.dialect),
+        "char2": exp.DataType.build("CHAR(2)", dialect=adapter.dialect),
+        "varchar": exp.DataType.build("VARCHAR(max)", dialect=adapter.dialect),
+        "varchar2": exp.DataType.build("VARCHAR(2)", dialect=adapter.dialect),
+    }
+
+
 def test_create_table_from_query_exists_no_if_not_exists(
     adapter: t.Callable, mocker: MockerFixture
 ):
