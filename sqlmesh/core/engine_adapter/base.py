@@ -631,6 +631,10 @@ class EngineAdapter:
         with self.transaction(condition=len(source_queries) > 1):
             for i, source_query in enumerate(source_queries):
                 with source_query as query:
+                    if columns_to_types and columns_to_types_known:
+                        query = self._order_projections_and_filter(
+                            query, columns_to_types, coerce_types=True
+                        )
                     if i == 0:
                         self._create_table(
                             schema if schema else table,
@@ -1421,6 +1425,16 @@ class EngineAdapter:
                 prefixed_unmanaged_columns.append(prefixed_col)
             query = (
                 exp.Select()  # type: ignore
+                .select(*table_columns)
+                .from_("static")
+                .union(
+                    exp.select(*table_columns).from_("updated_rows"),
+                    distinct=False,
+                )
+                .union(
+                    exp.select(*table_columns).from_("inserted_rows"),
+                    distinct=False,
+                )
                 .with_(
                     "source",
                     exp.select(exp.true().as_("_exists"), *select_source_columns)
@@ -1558,16 +1572,6 @@ class EngineAdapter:
                     )
                     .from_("joined")
                     .where(updated_row_filter),
-                )
-                .select(*table_columns)
-                .from_("static")
-                .union(
-                    exp.select(*table_columns).from_("updated_rows"),
-                    distinct=False,
-                )
-                .union(
-                    exp.select(*table_columns).from_("inserted_rows"),
-                    distinct=False,
                 )
             )
 
@@ -1998,17 +2002,26 @@ class EngineAdapter:
         query: Query,
         columns_to_types: t.Dict[str, exp.DataType],
         where: t.Optional[exp.Expression] = None,
+        coerce_types: bool = False,
     ) -> Query:
         if not isinstance(query, exp.Query) or (
-            not where and query.named_selects == list(columns_to_types)
+            not where and not coerce_types and query.named_selects == list(columns_to_types)
         ):
             return query
 
         query = t.cast(exp.Query, query.copy())
         with_ = query.args.pop("with", None)
-        query = self._select_columns(columns_to_types).from_(
-            query.subquery("_subquery", copy=False), copy=False
-        )
+
+        select_exprs: t.List[exp.Expression] = [
+            exp.column(c, quoted=True) for c in columns_to_types
+        ]
+        if coerce_types and columns_to_types_all_known(columns_to_types):
+            select_exprs = [
+                exp.cast(select_exprs[i], col_tpe).as_(col, quoted=True)
+                for i, (col, col_tpe) in enumerate(columns_to_types.items())
+            ]
+
+        query = exp.select(*select_exprs).from_(query.subquery("_subquery", copy=False), copy=False)
         if where:
             query = query.where(where, copy=False)
 

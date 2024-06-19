@@ -223,7 +223,9 @@ def test_replace_query(make_mocked_engine_adapter: t.Callable, mocker: MockerFix
     )
 
     sql_calls = _to_sql_calls(execute_mock)
-    assert sql_calls == ["CREATE OR REPLACE TABLE `test_table` AS SELECT `a` FROM `tbl`"]
+    assert sql_calls == [
+        "CREATE OR REPLACE TABLE `test_table` AS SELECT CAST(`a` AS INT64) AS `a` FROM (SELECT `a` FROM `tbl`) AS `_subquery`"
+    ]
 
 
 def test_replace_query_pandas(make_mocked_engine_adapter: t.Callable, mocker: MockerFixture):
@@ -292,7 +294,7 @@ def test_replace_query_pandas(make_mocked_engine_adapter: t.Callable, mocker: Mo
     ]
     sql_calls = _to_sql_calls(execute_mock)
     assert sql_calls == [
-        "CREATE OR REPLACE TABLE `test_table` AS SELECT `a`, `b` FROM `project`.`dataset`.`temp_table`",
+        "CREATE OR REPLACE TABLE `test_table` AS SELECT CAST(`a` AS INT64) AS `a`, CAST(`b` AS INT64) AS `b` FROM (SELECT `a`, `b` FROM `project`.`dataset`.`temp_table`) AS `_subquery`",
         "DROP TABLE IF EXISTS `project`.`dataset`.`temp_table`",
     ]
 
@@ -636,7 +638,7 @@ def test_comments(make_mocked_engine_adapter: t.Callable, mocker: MockerFixture)
     assert sql_calls == [
         f"CREATE TABLE IF NOT EXISTS `test_table` (`a` INT64 OPTIONS (description='{truncated_column_comment}'), `b` INT64) OPTIONS (description='{truncated_table_comment}')",
         "CREATE TABLE IF NOT EXISTS `test_table` (`a` INT64 OPTIONS (description='\\\\'), `b` INT64) OPTIONS (description='\\\\')",
-        f"CREATE TABLE IF NOT EXISTS `test_table` (`a` INT64 OPTIONS (description='{truncated_column_comment}'), `b` INT64) OPTIONS (description='{truncated_table_comment}') AS SELECT `a`, `b` FROM `source_table`",
+        f"CREATE TABLE IF NOT EXISTS `test_table` (`a` INT64 OPTIONS (description='{truncated_column_comment}'), `b` INT64) OPTIONS (description='{truncated_table_comment}') AS SELECT CAST(`a` AS INT64) AS `a`, CAST(`b` AS INT64) AS `b` FROM (SELECT `a`, `b` FROM `source_table`) AS `_subquery`",
         f"CREATE OR REPLACE VIEW `test_table` OPTIONS (description='{truncated_table_comment}') AS SELECT `a`, `b` FROM `source_table`",
         f"ALTER TABLE `test_table` SET OPTIONS(description = '{truncated_table_comment}')",
     ]
