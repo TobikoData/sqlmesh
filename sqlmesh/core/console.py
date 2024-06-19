@@ -60,7 +60,7 @@ class Console(abc.ABC):
     """Abstract base class for defining classes used for displaying information to the user and also interact
     with them when their input is needed."""
 
-    INDIRECTLY_MODIFIED_DISPLAY_THRESHOLD = 20
+    INDIRECTLY_MODIFIED_DISPLAY_THRESHOLD = 10
 
     @abc.abstractmethod
     def start_plan_evaluation(self, plan: Plan) -> None:
@@ -862,6 +862,8 @@ class TerminalConsole(Console):
             backfill.add(
                 f"{snapshot.display_name(plan.environment_naming_info, default_catalog, dialect=self.dialect)}: {missing.format_intervals(snapshot.node.interval_unit)}{preview_modifier}"
             )
+        if backfill:
+            backfill = self._limit_model_names(backfill, self.verbose)
         self._print(backfill)
 
     def _prompt_effective_from(
@@ -1605,6 +1607,7 @@ class MarkdownConsole(CaptureTerminalConsole):
         if not missing_intervals:
             return
         self._print("\n**Models needing backfill (missing dates):**")
+        snapshots = []
         for missing in missing_intervals:
             snapshot = plan.context_diff.snapshots[missing.snapshot_id]
             if not snapshot.is_model:
@@ -1614,9 +1617,18 @@ class MarkdownConsole(CaptureTerminalConsole):
             if not plan.deployability_index.is_deployable(snapshot):
                 preview_modifier = " (**preview**)"
 
-            self._print(
+            snapshots.append(
                 f"* `{snapshot.display_name(plan.environment_naming_info, default_catalog, dialect=self.dialect)}`: {missing.format_intervals(snapshot.node.interval_unit)}{preview_modifier}"
             )
+
+        length = len(snapshots)
+        if not self.verbose and length > self.INDIRECTLY_MODIFIED_DISPLAY_THRESHOLD:
+            self._print(snapshots[0])
+            self._print(f"- `.... {length-2} more ....`\n")
+            self._print(snapshots[-1])
+        else:
+            for snap in snapshots:
+                self._print(snap)
 
     def _show_categorized_snapshots(self, plan: Plan, default_catalog: t.Optional[str]) -> None:
         context_diff = plan.context_diff
