@@ -735,3 +735,20 @@ def test_disabled_model(copy_to_temp_path):
 
     assert (path[0] / "models" / "disabled.sql").exists()
     assert not context.get_model("sushi.disabled")
+
+
+def test_override_dialect_normalization_strategy():
+    config = Config(
+        model_defaults=ModelDefaultsConfig(dialect="duckdb,normalization_strategy=lowercase")
+    )
+
+    # This has the side-effect of mutating DuckDB globally to override its normalization strategy
+    Context(config=config)
+
+    from sqlglot.dialects import DuckDB
+    from sqlglot.dialects.dialect import NormalizationStrategy
+
+    assert DuckDB.NORMALIZATION_STRATEGY == NormalizationStrategy.LOWERCASE
+
+    # The above change is applied globally so we revert it to avoid breaking other tests
+    DuckDB.NORMALIZATION_STRATEGY = NormalizationStrategy.CASE_INSENSITIVE
