@@ -228,17 +228,22 @@ class QualifiedViewName(PydanticModel, frozen=True):
     def schema_for_environment(
         self, environment_naming_info: EnvironmentNamingInfo, dialect: DialectType = None
     ) -> str:
-        schema = self.schema_name or c.DEFAULT_SCHEMA
+        normalize = environment_naming_info.normalize_name
+
+        if self.schema_name:
+            schema = self.schema_name
+        else:
+            schema = c.DEFAULT_SCHEMA
+            if normalize:
+                schema = normalize_identifiers(schema, dialect=dialect).name
+
         if (
             environment_naming_info.name.lower() != c.PROD
             and environment_naming_info.suffix_target.is_schema
         ):
             env_name = environment_naming_info.name
-            if environment_naming_info.normalize_name:
+            if normalize:
                 env_name = normalize_identifiers(env_name, dialect=dialect).name
-                if not self.schema_name:
-                    # We also normalize the schema if it's the default one
-                    schema = normalize_identifiers(schema, dialect=dialect).name
 
             schema = f"{schema}__{env_name}"
 
