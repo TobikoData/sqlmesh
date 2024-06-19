@@ -369,8 +369,11 @@ function findCaretPosition(
 
   if (indices.length === 1 && isNotNil(indices[0])) return indices[0] + offset
 
-  const startRange = Math.max(0, pos - textBeforeCaret.length * 4)
-  const endRange = Math.min(text.length, pos + textAfterCaret.length * 4)
+  // At this point, we have multiple matches for the word in the text
+  // and result may not be accurate, because we are approximating the range
+  // so it is possibel thta cursor may not be at the exact position
+  const startRange = Math.max(0, pos - textBeforeCaret.length * 4) // just approximating the range
+  const endRange = Math.min(text.length, pos + textAfterCaret.length * 4) // just approximating the range
   const wordPos = text.slice(startRange, endRange).indexOf(word)
 
   return wordPos < 0 ? pos : startRange + wordPos + offset
@@ -387,7 +390,7 @@ function getClosestWordRangeAtPosition(
   let word = ''
   let counter = pos - 1
 
-  while (word.length < 5 && counter > 0) {
+  while (word.length < 10 && counter > 0) {
     const char = text[counter]
 
     if ([undefined, '\n', '\r'].includes(char)) break
@@ -403,15 +406,10 @@ function getClosestWordRangeAtPosition(
 
   counter = pos
 
-  while (word.length < offset + 5 && counter < text.length) {
-    const char = text[counter]
+  const afterSlice = text.slice(pos)
+  const wordEnd = /^[\w.`"'!@#$%^&*()\-+=<>?/[\]{}|,.;]+/.exec(afterSlice)
 
-    if ([undefined, '\n', '\r'].includes(char)) break
-
-    word += char
-
-    counter++
-  }
+  word += wordEnd?.[0] ?? ''
 
   return [word.trim(), pos - offset, offset]
 }
