@@ -301,7 +301,7 @@ def test_comments_hive(mocker: MockerFixture, make_mocked_engine_adapter: t.Call
     sql_calls = to_sql_calls(adapter)
     assert sql_calls == [
         f"""CREATE TABLE IF NOT EXISTS "test_table" ("a" INTEGER COMMENT '{truncated_column_comment}', "b" INTEGER) COMMENT '{truncated_table_comment}'""",
-        f"""CREATE TABLE IF NOT EXISTS "test_table" COMMENT '{truncated_table_comment}' AS SELECT "a", "b" FROM "source_table\"""",
+        f"""CREATE TABLE IF NOT EXISTS "test_table" COMMENT '{truncated_table_comment}' AS SELECT CAST("a" AS INTEGER) AS "a", CAST("b" AS INTEGER) AS "b" FROM (SELECT "a", "b" FROM "source_table") AS "_subquery\"""",
         f"""COMMENT ON COLUMN "test_table"."a" IS '{truncated_column_comment}'""",
         """CREATE OR REPLACE VIEW test_view AS SELECT a, b FROM source_table""",
         f"""COMMENT ON VIEW "test_view" IS '{truncated_table_comment}'""",
@@ -369,7 +369,7 @@ def test_comments_iceberg_delta(
     sql_calls = to_sql_calls(adapter)
     assert sql_calls == [
         f"""CREATE TABLE IF NOT EXISTS "test_table" ("a" INTEGER COMMENT '{long_column_comment}', "b" INTEGER) COMMENT '{long_table_comment}'""",
-        f"""CREATE TABLE IF NOT EXISTS "test_table" COMMENT '{long_table_comment}' AS SELECT "a", "b" FROM "source_table\"""",
+        f"""CREATE TABLE IF NOT EXISTS "test_table" COMMENT '{long_table_comment}' AS SELECT CAST("a" AS INTEGER) AS "a", CAST("b" AS INTEGER) AS "b" FROM (SELECT "a", "b" FROM "source_table") AS "_subquery\"""",
         f"""COMMENT ON COLUMN "test_table"."a" IS '{long_column_comment}'""",
         """CREATE OR REPLACE VIEW test_view AS SELECT a, b FROM source_table""",
         f"""COMMENT ON VIEW "test_view" IS '{long_table_comment}'""",
