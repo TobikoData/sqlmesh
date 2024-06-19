@@ -129,10 +129,11 @@ gateway_name:
 
 === "Basic Auth"
 
-    | Option     | Description                              |  Type  | Required |
-    |------------|------------------------------------------|:------:|:--------:|
-    | `method`   | `basic`                                  | string |    Y     |
-    | `password` | The password to use when authenticating. | string |    Y     |
+    | Option     | Description                                                                                                                                                                  |  Type  | Required |
+    | ---------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | :----: | :------: |
+    | `method`   | `basic`                                                                                                                                                                      | string |    Y     |
+    | `password` | The password to use when authenticating.                                                                                                                                     | string |    Y     |
+    | `verify`   | Boolean flag for whether SSL verification should occur. Default: [trinodb Python client](https://github.com/trinodb/trino-python-client) default (`true` as of this writing) |  bool  |    N     |
 
 
     ```yaml linenums="1"
