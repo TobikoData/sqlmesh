@@ -312,10 +312,8 @@ function updateEditor(content: string = '', view?: EditorView): void {
 
   const selection = state.selection.main
   const caretPos = selection.head
-  const [word, wordStartPos, wordPosOffset] = getClosestWordAtPosition(
-    text,
-    caretPos,
-  )
+  const [wordRange, wordStartPos, wordPosOffset] =
+    getClosestWordRangeAtPosition(text, caretPos)
   const range = 25 // number of characters before and after the caret
   const textBeforeCaret = text.slice(Math.max(0, caretPos - range), caretPos)
   const textAfterCaret = text.slice(
@@ -332,10 +330,9 @@ function updateEditor(content: string = '', view?: EditorView): void {
     newDocText,
     textBeforeCaret,
     textAfterCaret,
-    word,
-    range,
+    wordRange,
+    wordStartPos,
     wordPosOffset,
-    wordPosOffset - wordStartPos,
   )
 
   if (newCaretPos < 0) return
@@ -351,43 +348,70 @@ function findCaretPosition(
   textBeforeCaret = '',
   textAfterCaret = '',
   word = '',
-  range = 0,
   pos = 0,
   offset = 0,
 ): number {
+  if (word === EMPTY_STRING) return pos
+
   const startPos = text.indexOf(textBeforeCaret)
   const endPos = text.indexOf(textAfterCaret)
 
   if (startPos >= 0 && endPos >= 0) return startPos + textBeforeCaret.length
 
-  const startRange = pos - range
-  const endRange = pos + range
-  const wordPos = text.slice(startRange, endRange).indexOf(word, startPos)
+  const regex = new RegExp(word.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'), 'gi')
+
+  let match
+  const indices = []
+
+  while ((match = regex.exec(text)) !== null) {
+    indices.push(match.index)
+  }
+
+  if (indices.length === 1 && isNotNil(indices[0])) return indices[0] + offset
+
+  const startRange = Math.max(0, pos - textBeforeCaret.length * 4)
+  const endRange = Math.min(text.length, pos + textAfterCaret.length * 4)
+  const wordPos = text.slice(startRange, endRange).indexOf(word)
 
   return wordPos < 0 ? pos : startRange + wordPos + offset
 }
 
-function getClosestWordAtPosition(
+function getClosestWordRangeAtPosition(
   text = '',
   pos = 0,
 ): [string, number, number] {
-  const beforeSlice = text.slice(0, pos)
-  const afterSlice = text.slice(pos)
-  const wordStart = /[\w.`"'!@#$%^&*()\-+=<>?/[\]{}|,.;]+$/.exec(beforeSlice)
-  const wordEnd = /^[\w.`"'!@#$%^&*()\-+=<>?/[\]{}|,.;]+/.exec(afterSlice)
-  const start = isNil(wordStart) ? pos : pos - wordStart[0].length
-  const end = isNil(wordEnd) ? pos : pos + wordEnd[0].length
-  const word = text.slice(start, end).trim()
+  pos = Math.max(0, Math.min(pos, text.length))
 
-  if (word === EMPTY_STRING && pos >= 0 && pos <= text.length) {
-    const before = getClosestWordAtPosition(beforeSlice, pos - 1)
+  if (pos === 0) return [EMPTY_STRING, pos, 0]
 
-    if (before[0] !== EMPTY_STRING) return before
+  let word = ''
+  let counter = pos - 1
 
-    const after = getClosestWordAtPosition(afterSlice, pos + 1)
+  while (word.length < 5 && counter > 0) {
+    const char = text[counter]
 
-    if (after[0] !== EMPTY_STRING) return after
+    if ([undefined, '\n', '\r'].includes(char)) break
+
+    word = char + word
+
+    counter--
   }
 
-  return [word, start, pos]
+  word = word.endsWith(' ') ? word.trim() + ' ' : word.trim()
+
+  const offset = word.length
+
+  counter = pos
+
+  while (word.length < offset + 5 && counter < text.length) {
+    const char = text[counter]
+
+    if ([undefined, '\n', '\r'].includes(char)) break
+
+    word += char
+
+    counter++
+  }
+
+  return [word.trim(), pos - offset, offset]
 }
