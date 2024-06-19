@@ -1185,6 +1185,7 @@ class TrinoConnectionConfig(ConnectionConfig):
     timezone: t.Optional[str] = None
     # Basic/LDAP
     password: t.Optional[str] = None
+    verify: t.Optional[bool] = None  # disable SSL verification (ignored if `cert` is provided)
     # LDAP
     impersonation_user: t.Optional[str] = None
     # Kerberos
@@ -1309,7 +1310,7 @@ class TrinoConnectionConfig(ConnectionConfig):
             "auth": auth,
             "user": self.impersonation_user or self.user,
             "max_attempts": self.retries,
-            "verify": self.cert,
+            "verify": self.cert if self.cert is not None else self.verify,
             "source": "sqlmesh",
         }
 
