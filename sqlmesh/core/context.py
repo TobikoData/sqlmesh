@@ -624,21 +624,27 @@ class GenericContext(BaseContext, t.Generic[C]):
             The expected model.
         """
         if isinstance(model_or_snapshot, str):
-            normalized_name = normalize_model_name(
-                model_or_snapshot,
-                dialect=self.default_dialect,
-                default_catalog=self.default_catalog,
-            )
-            model = self._models.get(normalized_name)
+            # We should try all dialects referenced in the project for cases when models use mixed dialects.
+            all_dialects = {m.dialect for m in self._models.values() if m.dialect} | {
+                self.default_dialect
+            }
+            for dialect in all_dialects:
+                normalized_name = normalize_model_name(
+                    model_or_snapshot,
+                    dialect=dialect,
+                    default_catalog=self.default_catalog,
+                )
+                if normalized_name in self._models:
+                    return self._models[normalized_name]
         elif isinstance(model_or_snapshot, Snapshot):
-            model = model_or_snapshot.model
+            return model_or_snapshot.model
         else:
-            model = model_or_snapshot
+            return model_or_snapshot
 
-        if raise_if_missing and not model:
+        if raise_if_missing:
             raise SQLMeshError(f"Cannot find model for '{model_or_snapshot}'")
 
-        return model
+        return None
 
     @t.overload
     def get_snapshot(self, node_or_snapshot: NodeOrSnapshot) -> t.Optional[Snapshot]: ...
