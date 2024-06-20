@@ -194,20 +194,21 @@ function CodeEditorDefault({
     updateEditor(content)
   }, [editorView, content, extensionsAll])
 
-  function updateEditor(content: string = ''): void {
+  function updateEditor(newContent: string = ''): void {
     if (isNil(editorView)) return
 
     const state = editorView.state
-    const text = state.doc.toString()
+    const currentContent = state.doc.toString()
 
-    if (text === content || isNil(diffChars)) return
+    if (currentContent === newContent) return
 
-    const items = diffChars(text, content)
     const changes: ChangeSpec[] = []
 
-    if (text === EMPTY_STRING) {
-      changes.push({ from: 0, to: 0, insert: content })
+    if (currentContent === EMPTY_STRING) {
+      changes.push({ from: 0, to: 0, insert: newContent })
     } else {
+      const items = diffChars(currentContent, newContent)
+
       let from = 0
 
       items.forEach(item => {
