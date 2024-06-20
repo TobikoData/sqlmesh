@@ -24,6 +24,7 @@ from sqlmesh.core.context import Context, ExecutionContext
 from sqlmesh.core.dialect import parse
 from sqlmesh.core.macros import MacroEvaluator, macro
 from sqlmesh.core.model import (
+    CustomKind,
     PythonModel,
     FullKind,
     IncrementalByTimeRangeKind,
@@ -4672,3 +4673,50 @@ def my_model(context, **kwargs):
     context = Context(paths=tmp_path, config=config)
     assert context.get_model(expected_name).name == expected_name
     assert isinstance(context.get_model(expected_name), PythonModel)
+
+
+def test_custom_kind():
+    from sqlmesh import CustomMaterialization
+
+    expressions = d.parse(
+        """
+        MODEL (
+            name db.table,
+            kind CUSTOM (
+                materialization 'MyTestStrategy',
+                forward_only true,
+                disable_restatement true,
+                materialization_properties (
+                  'key_a' = 'value_a',
+                  key_b = 2,
+                  'key_c' = true,
+                  'key_d' = 1.23,
+                )
+            )
+        );
+
+        SELECT a, b
+        """
+    )
+
+    with pytest.raises(
+        ConfigError, match=r"Materialization strategy with name 'MyTestStrategy' was not found.*"
+    ):
+        load_sql_based_model(expressions)
+
+    class MyTestStrategy(CustomMaterialization):
+        pass
+
+    model = load_sql_based_model(expressions)
+    assert model.kind.is_custom
+
+    kind = t.cast(CustomKind, model.kind)
+    assert kind.disable_restatement
+    assert kind.forward_only
+    assert kind.materialization == "MyTestStrategy"
+    assert kind.materialization_properties == {
+        "key_a": "value_a",
+        "key_b": 2,
+        "key_c": True,
+        "key_d": 1.23,
+    }

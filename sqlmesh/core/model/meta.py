@@ -19,6 +19,7 @@ from sqlmesh.core.model.common import (
     properties_validator,
 )
 from sqlmesh.core.model.kind import (
+    CustomKind,
     IncrementalByUniqueKeyKind,
     ModelKind,
     OnDestructiveChange,
@@ -42,7 +43,7 @@ from sqlmesh.utils.pydantic import (
 )
 
 if t.TYPE_CHECKING:
-    from sqlmesh.core._typing import SessionProperties
+    from sqlmesh.core._typing import CustomMaterializationProperties, SessionProperties
 
 AuditReference = t.Tuple[str, t.Dict[str, exp.Expression]]
 
@@ -424,20 +425,13 @@ class ModelMeta(_Node):
         if not self.session_properties_:
             return {}
 
-        def _interpret_expr(
-            e: exp.Expression,
-        ) -> t.Union[exp.Expression | str | int | float | bool]:
-            if e.is_int:
-                return int(e.this)
-            if e.is_number:
-                return float(e.this)
-            if isinstance(e, (exp.Literal, exp.Boolean)):
-                return e.this
-            return e
+        return d.interpret_key_value_pairs(self.session_properties_)
 
-        return {
-            e.this.name: _interpret_expr(e.expression) for e in self.session_properties_.expressions
-        }
+    @property
+    def custom_materialization_properties(self) -> CustomMaterializationProperties:
+        if isinstance(self.kind, CustomKind):
+            return self.kind.materialization_properties
+        return {}
 
     @property
     def all_references(self) -> t.List[Reference]:

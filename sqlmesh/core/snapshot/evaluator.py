@@ -25,6 +25,7 @@ from __future__ import annotations
 import abc
 import logging
 import typing as t
+import sys
 from collections import defaultdict
 from contextlib import contextmanager
 from functools import reduce
@@ -52,7 +53,6 @@ from sqlmesh.core.schema_diff import has_drop_alteration
 from sqlmesh.core.snapshot import (
     DeployabilityIndex,
     Intervals,
-    QualifiedViewName,
     Snapshot,
     SnapshotChangeCategory,
     SnapshotId,
@@ -66,6 +66,11 @@ from sqlmesh.utils.concurrency import (
 )
 from sqlmesh.utils.date import TimeLike, now
 from sqlmesh.utils.errors import AuditError, ConfigError, SQLMeshError
+
+if sys.version_info >= (3, 12):
+    from importlib import metadata
+else:
+    import importlib_metadata as metadata  # type: ignore
 
 if t.TYPE_CHECKING:
     from sqlmesh.core.engine_adapter._typing import DF, QueryOrDF
@@ -490,14 +495,19 @@ class SnapshotEvaluator:
 
         evaluation_strategy = _evaluation_strategy(snapshot, self.adapter)
 
+        # https://github.com/TobikoData/sqlmesh/issues/2609
+        # If there are no existing intervals yet; only consider this a first insert for the first snapshot in the batch
+        is_first_insert = not _intervals(snapshot, deployability_index) and batch_index == 0
+
         def apply(query_or_df: QueryOrDF, index: int = 0) -> None:
             if index > 0:
                 evaluation_strategy.append(
-                    snapshot,
-                    table_name,
-                    query_or_df,
-                    snapshots,
-                    deployability_index,
+                    table_name=table_name,
+                    query_or_df=query_or_df,
+                    model=snapshot.model,
+                    snapshot=snapshot,
+                    snapshots=snapshots,
+                    deployability_index=deployability_index,
                     batch_index=batch_index,
                     start=start,
                     end=end,
@@ -506,11 +516,13 @@ class SnapshotEvaluator:
             else:
                 logger.info("Inserting batch (%s, %s) into %s'", start, end, table_name)
                 evaluation_strategy.insert(
-                    snapshot,
-                    table_name,
-                    query_or_df,
-                    snapshots,
-                    deployability_index,
+                    table_name=table_name,
+                    query_or_df=query_or_df,
+                    is_first_insert=is_first_insert,
+                    model=snapshot.model,
+                    snapshot=snapshot,
+                    snapshots=snapshots,
+                    deployability_index=deployability_index,
                     batch_index=batch_index,
                     start=start,
                     end=end,
@@ -626,7 +638,6 @@ class SnapshotEvaluator:
         parent_snapshots_by_name[snapshot.name] = snapshot
 
         deployability_index = deployability_index or DeployabilityIndex.all_deployable()
-        is_snapshot_deployable = deployability_index.is_deployable(snapshot)
 
         common_render_kwargs: t.Dict[str, t.Any] = dict(
             engine_adapter=self.adapter,
@@ -661,10 +672,10 @@ class SnapshotEvaluator:
                 logger.info(f"Cloning table '{source_table_name}' into '{target_table_name}'")
 
                 evaluation_strategy.create(
-                    snapshot,
-                    tmp_table_name,
-                    False,
-                    is_snapshot_deployable,
+                    table_name=tmp_table_name,
+                    model=snapshot.model,
+                    is_table_deployable=False,
+                    snapshot=snapshot,
                     table_mapping={snapshot.name: tmp_table_name},
                     **create_render_kwargs,
                 )
@@ -685,10 +696,10 @@ class SnapshotEvaluator:
                     table_deployability_flags.append(True)
                 for is_table_deployable in table_deployability_flags:
                     evaluation_strategy.create(
-                        snapshot,
-                        snapshot.table_name(is_deployable=is_table_deployable),
-                        is_table_deployable,
-                        is_snapshot_deployable,
+                        table_name=snapshot.table_name(is_deployable=is_table_deployable),
+                        model=snapshot.model,
+                        is_table_deployable=is_table_deployable,
+                        snapshot=snapshot,
                         **create_render_kwargs,
                     )
 
@@ -722,11 +733,11 @@ class SnapshotEvaluator:
         tmp_table_name = snapshot.table_name(is_deployable=False)
         target_table_name = snapshot.table_name()
         _evaluation_strategy(snapshot, self.adapter).migrate(
-            snapshot,
-            parent_snapshots_by_name,
-            target_table_name,
-            tmp_table_name,
-            allow_destructive_snapshots,
+            target_table_name=target_table_name,
+            source_table_name=tmp_table_name,
+            snapshot=snapshot,
+            snapshots=parent_snapshots_by_name,
+            allow_destructive_snapshots=allow_destructive_snapshots,
         )
 
     def _promote_snapshot(
@@ -738,8 +749,14 @@ class SnapshotEvaluator:
     ) -> None:
         if snapshot.is_model:
             table_name = snapshot.table_name(deployability_index.is_representative(snapshot))
+            view_name = snapshot.qualified_view_name.for_environment(
+                environment_naming_info, dialect=self.adapter.dialect
+            )
             _evaluation_strategy(snapshot, self.adapter).promote(
-                snapshot.qualified_view_name, environment_naming_info, table_name, snapshot
+                table_name=table_name,
+                view_name=view_name,
+                model=snapshot.model,
+                environment=environment_naming_info.name,
             )
 
         if on_complete is not None:
@@ -751,9 +768,10 @@ class SnapshotEvaluator:
         environment_naming_info: EnvironmentNamingInfo,
         on_complete: t.Optional[t.Callable[[SnapshotInfoLike], None]],
     ) -> None:
-        _evaluation_strategy(snapshot, self.adapter).demote(
-            snapshot.qualified_view_name, environment_naming_info
+        view_name = snapshot.qualified_view_name.for_environment(
+            environment_naming_info, dialect=self.adapter.dialect
         )
+        _evaluation_strategy(snapshot, self.adapter).demote(view_name)
 
         if on_complete is not None:
             on_complete(snapshot)
@@ -880,6 +898,13 @@ def _evaluation_strategy(snapshot: SnapshotInfoLike, adapter: EngineAdapter) -> 
         klass = ViewStrategy
     elif snapshot.is_scd_type_2:
         klass = SCDType2Strategy
+    elif snapshot.is_custom:
+        if snapshot.custom_materialization is None:
+            raise SQLMeshError(
+                f"Missing the name of a custom evaluation strategy in model '{snapshot.name}'."
+            )
+        klass = get_custom_materialization_type(snapshot.custom_materialization)
+        return klass(adapter)
     else:
         raise SQLMeshError(f"Unexpected snapshot: {snapshot}")
 
@@ -893,87 +918,75 @@ class EvaluationStrategy(abc.ABC):
     @abc.abstractmethod
     def insert(
         self,
-        snapshot: Snapshot,
-        name: str,
+        table_name: str,
         query_or_df: QueryOrDF,
-        snapshots: t.Dict[str, Snapshot],
-        deployability_index: DeployabilityIndex,
-        batch_index: int,
+        model: Model,
+        is_first_insert: bool,
         **kwargs: t.Any,
     ) -> None:
-        """Inserts the given query or a DataFrame into the target table or replaces a view.
+        """Inserts the given query or a DataFrame into the target table or a view.
 
         Args:
-            snapshot: The target snapshot.
-            name: The name of the target table or view.
-            query_or_df: The query or DataFrame to insert.
-            snapshots: Parent snapshots.
-            deployability_index: Determines snapshots that are deployable in the context of this evaluation.
-            batch_index: Snapshot position in the current batch
+            table_name: The name of the target table or view.
+            query_or_df: A query or a DataFrame to insert.
+            model: The target model.
+            is_first_insert: Whether this is the first insert for this version of a model. This value is set to True
+                if no data has been previously inserted into the target table, or when the entire history of the target model has
+                been restated. Note that in the latter case, the table might contain data from previous executions, and it is the
+                responsibility of a specific evaluation strategy to handle the truncation of the table if necessary.
         """
 
     @abc.abstractmethod
     def append(
         self,
-        snapshot: Snapshot,
         table_name: str,
         query_or_df: QueryOrDF,
-        snapshots: t.Dict[str, Snapshot],
-        deployability_index: DeployabilityIndex,
-        batch_index: int,
+        model: Model,
         **kwargs: t.Any,
     ) -> None:
         """Appends the given query or a DataFrame to the existing table.
 
         Args:
-            snapshot: The target snapshot.
             table_name: The target table name.
-            query_or_df: The query or DataFrame to insert.
-            snapshots: Parent snapshots.
-            deployability_index: Determines snapshots that are deployable in the context of this evaluation.
-            batch_index: Snapshot position in the current batch
+            query_or_df: A query or a DataFrame to insert.
+            model: The target model.
         """
 
     @abc.abstractmethod
     def create(
         self,
-        snapshot: Snapshot,
-        name: str,
+        table_name: str,
+        model: Model,
         is_table_deployable: bool,
-        is_snapshot_deployable: bool,
         **render_kwargs: t.Any,
     ) -> None:
         """Creates the target table or view.
 
         Args:
-            snapshot: The target snapshot.
-            name: The name of a table or a view.
+            table_name: The name of a table or a view.
+            model: The target model.
             is_table_deployable: Whether the table that is being created is deployable.
-            is_snapshot_deployable: Whether the snapshot is considered deployable.
             render_kwargs: Additional kwargs for node rendering.
         """
 
     @abc.abstractmethod
     def migrate(
         self,
-        snapshot: Snapshot,
-        snapshots: t.Dict[str, Snapshot],
         target_table_name: str,
         source_table_name: str,
-        allow_destructive_snapshots: t.Set[str] = set(),
+        snapshot: Snapshot,
+        **kwargs: t.Any,
     ) -> None:
         """Migrates the target table schema so that it corresponds to the source table schema.
 
         Args:
-            snapshot: The target snapshot.
-            snapshots: Parent snapshots.
             target_table_name: The target table name.
             source_table_name: The source table name.
-            allow_destructive_snapshots: Set of snapshots that are allowed to have destructive schema changes.
+            snapshot: The target snapshot.
         """
 
     @abc.abstractmethod
-    def delete(self, name: str) -> None:
+    def delete(self, name: str, **kwargs: t.Any) -> None:
         """Deletes a target table or a view.
 
         Args:
@@ -983,31 +996,27 @@ class EvaluationStrategy(abc.ABC):
     @abc.abstractmethod
     def promote(
         self,
-        view_name: QualifiedViewName,
-        environment_naming_info: EnvironmentNamingInfo,
         table_name: str,
-        snapshot: Snapshot,
+        view_name: str,
+        model: Model,
+        environment: str,
+        **kwargs: t.Any,
     ) -> None:
         """Updates the target view to point to the target table.
 
         Args:
-            view_name: The name of the target view.
-            environment_naming_info: The naming information for the target environment
-            table_name: The name of the target table.
-            snapshot: The target snapshot. Not ucrrently used but can be used by others if needed.
+            table_name: The name of a table in the physical layer that is being promoted.
+            view_name: The name of the target view in the virtual layer.
+            model: The model that is being promoted.
+            environment: The name of the target environment.
         """
 
     @abc.abstractmethod
-    def demote(
-        self,
-        view_name: QualifiedViewName,
-        environment_naming_info: EnvironmentNamingInfo,
-    ) -> None:
-        """Deletes the target view.
+    def demote(self, view_name: str, **kwargs: t.Any) -> None:
+        """Deletes the target view in the virtual layer.
 
         Args:
-            view_name: The name of the target view.
-            environment_naming_info: Naming information for the target environment.
+            view_name: The name of the target view in the virtual layer.
         """
 
     def _replace_query_for_model(self, model: Model, name: str, query_or_df: QueryOrDF) -> None:
@@ -1035,145 +1044,118 @@ class EvaluationStrategy(abc.ABC):
 class SymbolicStrategy(EvaluationStrategy):
     def insert(
         self,
-        snapshot: Snapshot,
-        name: str,
+        table_name: str,
         query_or_df: QueryOrDF,
-        snapshots: t.Dict[str, Snapshot],
-        deployability_index: DeployabilityIndex,
-        batch_index: int,
+        model: Model,
+        is_first_insert: bool,
         **kwargs: t.Any,
     ) -> None:
         pass
 
     def append(
         self,
-        snapshot: Snapshot,
         table_name: str,
         query_or_df: QueryOrDF,
-        snapshots: t.Dict[str, Snapshot],
-        deployability_index: DeployabilityIndex,
-        batch_index: int,
+        model: Model,
         **kwargs: t.Any,
     ) -> None:
         pass
 
     def create(
         self,
-        snapshot: Snapshot,
-        name: str,
+        table_name: str,
+        model: Model,
         is_table_deployable: bool,
-        is_snapshot_deployable: bool,
         **render_kwargs: t.Any,
     ) -> None:
         pass
 
     def migrate(
         self,
-        snapshot: Snapshot,
-        snapshots: t.Dict[str, Snapshot],
         target_table_name: str,
         source_table_name: str,
-        allow_destructive_snapshots: t.Set[str] = set(),
+        snapshot: Snapshot,
+        **kwarg: t.Any,
     ) -> None:
         pass
 
-    def delete(self, name: str) -> None:
+    def delete(self, name: str, **kwargs: t.Any) -> None:
         pass
 
     def promote(
         self,
-        view_name: QualifiedViewName,
-        environment_naming_info: EnvironmentNamingInfo,
         table_name: str,
-        snapshot: Snapshot,
+        view_name: str,
+        model: Model,
+        environment: str,
+        **kwargs: t.Any,
     ) -> None:
         pass
 
-    def demote(
-        self,
-        view_name: QualifiedViewName,
-        environment_naming_info: EnvironmentNamingInfo,
-    ) -> None:
+    def demote(self, view_name: str, **kwargs: t.Any) -> None:
         pass
 
 
 class EmbeddedStrategy(SymbolicStrategy):
     def promote(
         self,
-        view_name: QualifiedViewName,
-        environment_naming_info: EnvironmentNamingInfo,
         table_name: str,
-        snapshot: Snapshot,
+        view_name: str,
+        model: Model,
+        environment: str,
+        **kwargs: t.Any,
     ) -> None:
-        target_name = view_name.for_environment(
-            environment_naming_info, dialect=self.adapter.dialect
-        )
-        logger.info("Dropping view '%s' for non-materialized table", target_name)
-        self.adapter.drop_view(target_name, cascade=False)
+        logger.info("Dropping view '%s' for non-materialized table", view_name)
+        self.adapter.drop_view(view_name, cascade=False)
 
 
 class PromotableStrategy(EvaluationStrategy):
     def promote(
         self,
-        view_name: QualifiedViewName,
-        environment_naming_info: EnvironmentNamingInfo,
         table_name: str,
-        snapshot: Snapshot,
+        view_name: str,
+        model: Model,
+        environment: str,
+        **kwargs: t.Any,
     ) -> None:
-        target_name = view_name.for_environment(
-            environment_naming_info, dialect=self.adapter.dialect
-        )
-        is_prod = environment_naming_info.name.lower() == c.PROD
-        logger.info("Updating view '%s' to point at table '%s'", target_name, table_name)
+        is_prod = environment == c.PROD
+        logger.info("Updating view '%s' to point at table '%s'", view_name, table_name)
         self.adapter.create_view(
-            target_name,
+            view_name,
             exp.select("*").from_(table_name, dialect=self.adapter.dialect),
-            table_description=snapshot.model.description if is_prod else None,
-            column_descriptions=snapshot.model.column_descriptions if is_prod else None,
-            view_properties=snapshot.model.virtual_properties,
+            table_description=model.description if is_prod else None,
+            column_descriptions=model.column_descriptions if is_prod else None,
+            view_properties=model.virtual_properties,
         )
 
-    def demote(
-        self,
-        view_name: QualifiedViewName,
-        environment_naming_info: EnvironmentNamingInfo,
-    ) -> None:
-        target_name = view_name.for_environment(
-            environment_naming_info, dialect=self.adapter.dialect
-        )
-        logger.info("Dropping view '%s'", target_name)
-        self.adapter.drop_view(target_name, cascade=False)
+    def demote(self, view_name: str, **kwargs: t.Any) -> None:
+        logger.info("Dropping view '%s'", view_name)
+        self.adapter.drop_view(view_name, cascade=False)
 
 
 class MaterializableStrategy(PromotableStrategy):
     def append(
         self,
-        snapshot: Snapshot,
         table_name: str,
         query_or_df: QueryOrDF,
-        snapshots: t.Dict[str, Snapshot],
-        deployability_index: DeployabilityIndex,
-        batch_index: int,
+        model: Model,
         **kwargs: t.Any,
     ) -> None:
-        model = snapshot.model
         self.adapter.insert_append(table_name, query_or_df, columns_to_types=model.columns_to_types)
 
     def create(
         self,
-        snapshot: Snapshot,
-        name: str,
+        table_name: str,
+        model: Model,
         is_table_deployable: bool,
-        is_snapshot_deployable: bool,
         **render_kwargs: t.Any,
     ) -> None:
-        model = snapshot.model
         ctas_query = model.ctas_query(**render_kwargs)
 
-        logger.info("Creating table '%s'", name)
+        logger.info("Creating table '%s'", table_name)
         if model.annotated:
             self.adapter.create_table(
-                name,
+                table_name,
                 columns_to_types=model.columns_to_types_or_raise,
                 storage_format=model.storage_format,
                 partitioned_by=model.partitioned_by,
@@ -1194,7 +1176,7 @@ class MaterializableStrategy(PromotableStrategy):
                 self.adapter.fetchall(ctas_query)
         else:
             self.adapter.ctas(
-                name,
+                table_name,
                 ctas_query,
                 model.columns_to_types,
                 storage_format=model.storage_format,
@@ -1208,36 +1190,34 @@ class MaterializableStrategy(PromotableStrategy):
 
     def migrate(
         self,
-        snapshot: Snapshot,
-        snapshots: t.Dict[str, Snapshot],
         target_table_name: str,
         source_table_name: str,
-        allow_destructive_snapshots: t.Set[str] = set(),
+        snapshot: Snapshot,
+        **kwargs: t.Any,
     ) -> None:
         logger.info(f"Altering table '{target_table_name}'")
         alter_expressions = self.adapter.get_alter_expressions(target_table_name, source_table_name)
-        _check_destructive_schema_change(snapshot, alter_expressions, allow_destructive_snapshots)
+        _check_destructive_schema_change(
+            snapshot, alter_expressions, kwargs["allow_destructive_snapshots"]
+        )
         self.adapter.alter_table(alter_expressions)
 
-    def delete(self, table_name: str) -> None:
-        self.adapter.drop_table(table_name)
-        logger.info("Dropped table '%s'", table_name)
+    def delete(self, name: str, **kwargs: t.Any) -> None:
+        self.adapter.drop_table(name)
+        logger.info("Dropped table '%s'", name)
 
 
 class IncrementalByPartitionStrategy(MaterializableStrategy):
     def insert(
         self,
-        snapshot: Snapshot,
-        name: str,
+        table_name: str,
         query_or_df: QueryOrDF,
-        snapshots: t.Dict[str, Snapshot],
-        deployability_index: DeployabilityIndex,
-        batch_index: int,
+        model: Model,
+        is_first_insert: bool,
         **kwargs: t.Any,
     ) -> None:
-        model = snapshot.model
         self.adapter.insert_overwrite_by_partition(
-            name,
+            table_name,
             query_or_df,
             partitioned_by=model.partitioned_by,
             columns_to_types=model.columns_to_types,
@@ -1247,18 +1227,15 @@ class IncrementalByPartitionStrategy(MaterializableStrategy):
 class IncrementalByTimeRangeStrategy(MaterializableStrategy):
     def insert(
         self,
-        snapshot: Snapshot,
-        name: str,
+        table_name: str,
         query_or_df: QueryOrDF,
-        snapshots: t.Dict[str, Snapshot],
-        deployability_index: DeployabilityIndex,
-        batch_index: int,
+        model: Model,
+        is_first_insert: bool,
         **kwargs: t.Any,
     ) -> None:
-        model = snapshot.model
         assert model.time_column
         self.adapter.insert_overwrite_by_time_partition(
-            name,
+            table_name,
             query_or_df,
             time_formatter=model.convert_to_time_column,
             time_column=model.time_column,
@@ -1270,23 +1247,17 @@ class IncrementalByTimeRangeStrategy(MaterializableStrategy):
 class IncrementalByUniqueKeyStrategy(MaterializableStrategy):
     def insert(
         self,
-        snapshot: Snapshot,
-        name: str,
+        table_name: str,
         query_or_df: QueryOrDF,
-        snapshots: t.Dict[str, Snapshot],
-        deployability_index: DeployabilityIndex,
-        batch_index: int,
+        model: Model,
+        is_first_insert: bool,
         **kwargs: t.Any,
     ) -> None:
-        model = snapshot.model
-        # https://github.com/TobikoData/sqlmesh/issues/2609
-        # If there are no existing intervals yet; only clear the table for the first snapshot in the batch
-        # Otherwise, each subsequent snapshot in the batch will keep clearing the table when it runs instead of appending to it
-        if not _intervals(snapshot, deployability_index) and batch_index == 0:
-            self._replace_query_for_model(model, name, query_or_df)
+        if is_first_insert:
+            self._replace_query_for_model(model, table_name, query_or_df)
         else:
             self.adapter.merge(
-                name,
+                table_name,
                 query_or_df,
                 columns_to_types=model.columns_to_types,
                 unique_key=model.unique_key,
@@ -1295,15 +1266,11 @@ class IncrementalByUniqueKeyStrategy(MaterializableStrategy):
 
     def append(
         self,
-        snapshot: Snapshot,
         table_name: str,
         query_or_df: QueryOrDF,
-        snapshots: t.Dict[str, Snapshot],
-        deployability_index: t.Optional[DeployabilityIndex],
-        batch_index: int,
+        model: Model,
         **kwargs: t.Any,
     ) -> None:
-        model = snapshot.model
         self.adapter.merge(
             table_name,
             query_or_df,
@@ -1316,32 +1283,26 @@ class IncrementalByUniqueKeyStrategy(MaterializableStrategy):
 class IncrementalUnmanagedStrategy(MaterializableStrategy):
     def insert(
         self,
-        snapshot: Snapshot,
-        name: str,
+        table_name: str,
         query_or_df: QueryOrDF,
-        snapshots: t.Dict[str, Snapshot],
-        deployability_index: DeployabilityIndex,
-        batch_index: int,
+        model: Model,
+        is_first_insert: bool,
         **kwargs: t.Any,
     ) -> None:
-        model = snapshot.model
-        if not _intervals(snapshot, deployability_index):
-            self._replace_query_for_model(model, name, query_or_df)
+        if is_first_insert:
+            self._replace_query_for_model(model, table_name, query_or_df)
         elif isinstance(model.kind, IncrementalUnmanagedKind) and model.kind.insert_overwrite:
             self.adapter.insert_overwrite_by_partition(
-                name,
+                table_name,
                 query_or_df,
                 model.partitioned_by,
                 columns_to_types=model.columns_to_types,
             )
         else:
             self.append(
-                snapshot,
-                name,
+                table_name,
                 query_or_df,
-                snapshots,
-                deployability_index,
-                batch_index,
+                model,
                 **kwargs,
             )
 
@@ -1349,61 +1310,55 @@ class IncrementalUnmanagedStrategy(MaterializableStrategy):
 class FullRefreshStrategy(MaterializableStrategy):
     def insert(
         self,
-        snapshot: Snapshot,
-        name: str,
+        table_name: str,
         query_or_df: QueryOrDF,
-        snapshots: t.Dict[str, Snapshot],
-        deployability_index: DeployabilityIndex,
-        batch_index: int,
+        model: Model,
+        is_first_insert: bool,
         **kwargs: t.Any,
     ) -> None:
-        model = snapshot.model
-        self._replace_query_for_model(model, name, query_or_df)
+        self._replace_query_for_model(model, table_name, query_or_df)
 
 
 class SeedStrategy(MaterializableStrategy):
     def create(
         self,
-        snapshot: Snapshot,
-        name: str,
+        table_name: str,
+        model: Model,
         is_table_deployable: bool,
-        is_snapshot_deployable: bool,
         **render_kwargs: t.Any,
     ) -> None:
-        model = t.cast(SeedModel, snapshot.model)
-        if not model.is_hydrated and self.adapter.table_exists(name):
+        model = t.cast(SeedModel, model)
+        if not model.is_hydrated and self.adapter.table_exists(table_name):
             # This likely means that the table was created and populated previously, but the evaluation stage
             # failed before the interval could be added for this model.
             logger.warning(
                 "Seed model '%s' is not hydrated, but the table '%s' exists. Skipping creation",
                 model.name,
-                name,
+                table_name,
             )
             return
 
-        super().create(snapshot, name, is_table_deployable, is_snapshot_deployable, **render_kwargs)
+        super().create(table_name, model, is_table_deployable, **render_kwargs)
         if is_table_deployable:
             # For seeds we insert data at the time of table creation.
             try:
                 for index, df in enumerate(model.render_seed()):
                     if index == 0:
-                        self._replace_query_for_model(model, name, df)
+                        self._replace_query_for_model(model, table_name, df)
                     else:
                         self.adapter.insert_append(
-                            name, df, columns_to_types=model.columns_to_types
+                            table_name, df, columns_to_types=model.columns_to_types
                         )
             except Exception:
-                self.adapter.drop_table(name)
+                self.adapter.drop_table(table_name)
                 raise
 
     def insert(
         self,
-        snapshot: Snapshot,
-        name: str,
+        table_name: str,
         query_or_df: QueryOrDF,
-        snapshots: t.Dict[str, Snapshot],
-        deployability_index: DeployabilityIndex,
-        batch_index: int,
+        model: Model,
+        is_first_insert: bool,
         **kwargs: t.Any,
     ) -> None:
         # Data has already been inserted at the time of table creation.
@@ -1413,21 +1368,19 @@ class SeedStrategy(MaterializableStrategy):
 class SCDType2Strategy(MaterializableStrategy):
     def create(
         self,
-        snapshot: Snapshot,
-        name: str,
+        table_name: str,
+        model: Model,
         is_table_deployable: bool,
-        is_snapshot_deployable: bool,
         **render_kwargs: t.Any,
     ) -> None:
-        model = snapshot.model
         assert isinstance(model.kind, (SCDType2ByTimeKind, SCDType2ByColumnKind))
         if model.annotated:
-            logger.info("Creating table '%s'", name)
+            logger.info("Creating table '%s'", table_name)
             columns_to_types = model.columns_to_types_or_raise
             if isinstance(model.kind, SCDType2ByTimeKind):
                 columns_to_types[model.kind.updated_at_name.name] = model.kind.time_data_type
             self.adapter.create_table(
-                name,
+                table_name,
                 columns_to_types=columns_to_types,
                 storage_format=model.storage_format,
                 partitioned_by=model.partitioned_by,
@@ -1442,56 +1395,51 @@ class SCDType2Strategy(MaterializableStrategy):
             # `time_data_type`. If that isn't the case, then the user might get an error about not being able
             # to do comparisons across different data types
             super().create(
-                snapshot,
-                name,
+                table_name,
+                model,
                 is_table_deployable,
-                is_snapshot_deployable,
                 **render_kwargs,
             )
 
     def insert(
         self,
-        snapshot: Snapshot,
-        name: str,
+        table_name: str,
         query_or_df: QueryOrDF,
-        snapshots: t.Dict[str, Snapshot],
-        deployability_index: DeployabilityIndex,
-        batch_index: int,
+        model: Model,
+        is_first_insert: bool,
         **kwargs: t.Any,
     ) -> None:
-        model = snapshot.model
-        truncate = not _intervals(snapshot, deployability_index)
         if isinstance(model.kind, SCDType2ByTimeKind):
             self.adapter.scd_type_2_by_time(
-                target_table=name,
+                target_table=table_name,
                 source_table=query_or_df,
                 unique_key=model.unique_key,
                 valid_from_col=model.kind.valid_from_name,
                 valid_to_col=model.kind.valid_to_name,
+                execution_time=kwargs["execution_time"],
                 updated_at_col=model.kind.updated_at_name,
                 invalidate_hard_deletes=model.kind.invalidate_hard_deletes,
                 updated_at_as_valid_from=model.kind.updated_at_as_valid_from,
                 columns_to_types=model.columns_to_types,
                 table_description=model.description,
                 column_descriptions=model.column_descriptions,
-                truncate=truncate,
-                **kwargs,
+                truncate=is_first_insert,
             )
         elif isinstance(model.kind, SCDType2ByColumnKind):
             self.adapter.scd_type_2_by_column(
-                target_table=name,
+                target_table=table_name,
                 source_table=query_or_df,
                 unique_key=model.unique_key,
                 valid_from_col=model.kind.valid_from_name,
                 valid_to_col=model.kind.valid_to_name,
+                execution_time=kwargs["execution_time"],
                 check_columns=model.kind.columns,
-                columns_to_types=model.columns_to_types,
                 invalidate_hard_deletes=model.kind.invalidate_hard_deletes,
                 execution_time_as_valid_from=model.kind.execution_time_as_valid_from,
+                columns_to_types=model.columns_to_types,
                 table_description=model.description,
                 column_descriptions=model.column_descriptions,
-                truncate=truncate,
-                **kwargs,
+                truncate=is_first_insert,
             )
         else:
             raise SQLMeshError(
@@ -1500,15 +1448,11 @@ class SCDType2Strategy(MaterializableStrategy):
 
     def append(
         self,
-        snapshot: Snapshot,
         table_name: str,
         query_or_df: QueryOrDF,
-        snapshots: t.Dict[str, Snapshot],
-        deployability_index: DeployabilityIndex,
-        batch_index: int,
+        model: Model,
         **kwargs: t.Any,
     ) -> None:
-        model = snapshot.model
         if isinstance(model.kind, SCDType2ByTimeKind):
             self.adapter.scd_type_2_by_time(
                 target_table=table_name,
@@ -1548,16 +1492,17 @@ class SCDType2Strategy(MaterializableStrategy):
 class ViewStrategy(PromotableStrategy):
     def insert(
         self,
-        snapshot: Snapshot,
-        name: str,
+        table_name: str,
         query_or_df: QueryOrDF,
-        snapshots: t.Dict[str, Snapshot],
-        deployability_index: DeployabilityIndex,
-        batch_index: int,
+        model: Model,
+        is_first_insert: bool,
         **kwargs: t.Any,
     ) -> None:
-        model = snapshot.model
-        deployability_index = deployability_index or DeployabilityIndex.all_deployable()
+        deployability_index = (
+            kwargs.get("deployability_index") or DeployabilityIndex.all_deployable()
+        )
+        snapshot = kwargs["snapshot"]
+        snapshots = kwargs["snapshots"]
         if (
             (
                 (
@@ -1574,14 +1519,14 @@ class ViewStrategy(PromotableStrategy):
                 or self.adapter.HAS_VIEW_BINDING
             )
             and snapshot.intervals  # Re-create the view during the first evaluation.
-            and self.adapter.table_exists(name)
+            and self.adapter.table_exists(table_name)
         ):
-            logger.info("Skipping creation of the view '%s'", name)
+            logger.info("Skipping creation of the view '%s'", table_name)
             return
 
-        logger.info("Replacing view '%s'", name)
+        logger.info("Replacing view '%s'", table_name)
         self.adapter.create_view(
-            name,
+            table_name,
             query_or_df,
             model.columns_to_types,
             materialized=self._is_materialized_view(model),
@@ -1592,29 +1537,23 @@ class ViewStrategy(PromotableStrategy):
 
     def append(
         self,
-        snapshot: Snapshot,
         table_name: str,
         query_or_df: QueryOrDF,
-        snapshots: t.Dict[str, Snapshot],
-        deployability_index: DeployabilityIndex,
-        batch_index: int,
+        model: Model,
         **kwargs: t.Any,
     ) -> None:
         raise ConfigError(f"Cannot append to a view '{table_name}'.")
 
     def create(
         self,
-        snapshot: Snapshot,
-        name: str,
+        table_name: str,
+        model: Model,
         is_table_deployable: bool,
-        is_snapshot_deployable: bool,
         **render_kwargs: t.Any,
     ) -> None:
-        model = snapshot.model
-
-        logger.info("Creating view '%s'", name)
+        logger.info("Creating view '%s'", table_name)
         self.adapter.create_view(
-            name,
+            table_name,
             model.render_query_or_raise(**render_kwargs),
             materialized=self._is_materialized_view(model),
             view_properties=model.physical_properties,
@@ -1624,18 +1563,17 @@ class ViewStrategy(PromotableStrategy):
 
     def migrate(
         self,
-        snapshot: Snapshot,
-        snapshots: t.Dict[str, Snapshot],
         target_table_name: str,
         source_table_name: str,
-        allow_destructive_snapshots: t.Set[str] = set(),
+        snapshot: Snapshot,
+        **kwargs: t.Any,
     ) -> None:
         logger.info("Migrating view '%s'", target_table_name)
         model = snapshot.model
         self.adapter.create_view(
             target_table_name,
             model.render_query_or_raise(
-                execution_time=now(), snapshots=snapshots, engine_adapter=self.adapter
+                execution_time=now(), snapshots=kwargs["snapshots"], engine_adapter=self.adapter
             ),
             model.columns_to_types,
             materialized=self._is_materialized_view(model),
@@ -1644,7 +1582,7 @@ class ViewStrategy(PromotableStrategy):
             column_descriptions=model.column_descriptions,
         )
 
-    def delete(self, name: str) -> None:
+    def delete(self, name: str, **kwargs: t.Any) -> None:
         try:
             self.adapter.drop_view(name)
         except Exception:
@@ -1658,6 +1596,69 @@ class ViewStrategy(PromotableStrategy):
 
     def _is_materialized_view(self, model: Model) -> bool:
         return isinstance(model.kind, ViewKind) and model.kind.materialized
+
+
+class CustomMaterialization(MaterializableStrategy):
+    """Base class for custom materializations."""
+
+    def insert(
+        self,
+        table_name: str,
+        query_or_df: QueryOrDF,
+        model: Model,
+        is_first_insert: bool,
+        **kwargs: t.Any,
+    ) -> None:
+        """Inserts the given query or a DataFrame into the target table or a view.
+
+        Args:
+            table_name: The name of the target table or view.
+            query_or_df: A query or a DataFrame to insert.
+            model: The target model.
+            is_first_insert: Whether this is the first insert for this version of a model. This value is set to True
+                if no data has been previously inserted into the target table, or when the entire history of the target model has
+                been restated. Note that in the latter case, the table might contain data from previous executions, and it is the
+                responsibility of a specific evaluation strategy to handle the truncation of the table if necessary.
+        """
+        raise NotImplementedError(
+            "Custom materialization strategies must implement the 'insert' method."
+        )
+
+
+_custom_materialization_type_cache: t.Optional[t.Dict[str, t.Type[CustomMaterialization]]] = None
+
+
+def get_custom_materialization_type(name: str) -> t.Type[CustomMaterialization]:
+    global _custom_materialization_type_cache
+
+    strategy_key = name.lower()
+
+    if (
+        _custom_materialization_type_cache is None
+        or strategy_key not in _custom_materialization_type_cache
+    ):
+        strategy_types = list(CustomMaterialization.__subclasses__())
+
+        entry_points = metadata.entry_points(group="sqlmesh.materializations")
+        for entry_point in entry_points:
+            strategy_type = entry_point.load()
+            if not issubclass(strategy_type, CustomMaterialization):
+                raise SQLMeshError(
+                    f"Custom materialization entry point '{entry_point.name}' must be a subclass of CustomMaterialization."
+                )
+            strategy_types.append(strategy_type)
+
+        _custom_materialization_type_cache = {
+            getattr(strategy_type, "NAME", strategy_type.__name__).lower(): strategy_type
+            for strategy_type in strategy_types
+        }
+
+    if strategy_key not in _custom_materialization_type_cache:
+        raise ConfigError(f"Materialization strategy with name '{name}' was not found.")
+
+    strategy_type = _custom_materialization_type_cache[strategy_key]
+    logger.debug("Resolved custom materialization '%s' to '%s'", name, strategy_type)
+    return strategy_type
 
 
 def _intervals(snapshot: Snapshot, deployability_index: DeployabilityIndex) -> Intervals:
