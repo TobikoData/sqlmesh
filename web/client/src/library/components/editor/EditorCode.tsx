@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useMemo, useState } from 'react'
 import CodeMirror from '@uiw/react-codemirror'
 import { type EditorView, type KeyBinding, keymap } from '@codemirror/view'
-import { type Extension } from '@codemirror/state'
+import { type ChangeSpec, type Extension } from '@codemirror/state'
 import { useApiFileByPath, useMutationApiSaveFile } from '~/api'
 import { debounceSync, isNil, isNotNil } from '~/utils'
 import { useStoreContext } from '~/context/context'
@@ -33,6 +33,7 @@ import {
 } from './extensions/SQLMeshDialect'
 import { indentMore, defaultKeymap, historyKeymap } from '@codemirror/commands'
 import { EMPTY_STRING } from '@components/search/help'
+import { diffChars } from 'diff'
 
 export { CodeEditorDefault, CodeEditorRemoteFile }
 
@@ -190,8 +191,49 @@ function CodeEditorDefault({
   }, [dialect])
 
   useEffect(() => {
-    updateEditor(content, editorView)
+    updateEditor(content)
   }, [editorView, content, extensionsAll])
+
+  function updateEditor(content: string = ''): void {
+    if (isNil(editorView)) return
+
+    const state = editorView.state
+    const text = state.doc.toString()
+
+    if (text === content || isNil(diffChars)) return
+
+    const items = diffChars(text, content)
+    const changes: ChangeSpec[] = []
+
+    if (text === EMPTY_STRING) {
+      changes.push({ from: 0, to: 0, insert: content })
+    } else {
+      let from = 0
+
+      items.forEach(item => {
+        const count = item.count ?? 0
+
+        if (isNotNil(item.removed)) {
+          const to = from + count
+          const change = { from, to }
+
+          from = to
+
+          changes.push(change)
+        } else if (isNotNil(item.added)) {
+          changes.push({ from, to: from, insert: item.value })
+        } else {
+          from = from + count
+        }
+      })
+    }
+
+    editorView.dispatch({
+      changes,
+      scrollIntoView: true,
+    })
+  }
+
   return (
     <div className={clsx('flex w-full h-full', className)}>
       <CodeMirror
@@ -300,116 +342,4 @@ function CodeEditorRemoteFile({
   ) : (
     children({ file, keymaps: extensionKeymap })
   )
-}
-
-function updateEditor(content: string = '', view?: EditorView): void {
-  if (isNil(view)) return
-
-  const state = view.state
-  const text = state.doc.toString()
-
-  if (text === content) return
-
-  const selection = state.selection.main
-  const caretPos = selection.head
-  const [wordRange, wordStartPos, wordPosOffset] =
-    getClosestWordRangeAtPosition(text, caretPos)
-  const range = 25 // number of characters before and after the caret
-  const textBeforeCaret = text.slice(Math.max(0, caretPos - range), caretPos)
-  const textAfterCaret = text.slice(
-    caretPos,
-    Math.min(text.length, caretPos + range),
-  )
-
-  view.dispatch({
-    changes: { from: 0, to: state.doc.length, insert: content },
-  })
-
-  const newDocText = view.state.doc.toString()
-  const newCaretPos = findCaretPosition(
-    newDocText,
-    textBeforeCaret,
-    textAfterCaret,
-    wordRange,
-    wordStartPos,
-    wordPosOffset,
-  )
-
-  if (newCaretPos < 0) return
-
-  view.dispatch({
-    selection: { anchor: newCaretPos, head: newCaretPos },
-    scrollIntoView: true,
-  })
-}
-
-function findCaretPosition(
-  text = '',
-  textBeforeCaret = '',
-  textAfterCaret = '',
-  word = '',
-  pos = 0,
-  offset = 0,
-): number {
-  if (word === EMPTY_STRING) return pos
-
-  const startPos = text.indexOf(textBeforeCaret)
-  const endPos = text.indexOf(textAfterCaret)
-
-  if (startPos >= 0 && endPos >= 0) return startPos + textBeforeCaret.length
-
-  const regex = new RegExp(word.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'), 'gi')
-
-  let match
-  const indices = []
-
-  while ((match = regex.exec(text)) !== null) {
-    indices.push(match.index)
-  }
-
-  if (indices.length === 1 && isNotNil(indices[0])) return indices[0] + offset
-
-  // At this point, we have multiple matches for the word in the text
-  // and result may not be accurate, because we are approximating the range
-  // so it is possibel thta cursor may not be at the exact position
-  const startRange = Math.max(0, pos - textBeforeCaret.length * 4) // just approximating the range
-  const endRange = Math.min(text.length, pos + textAfterCaret.length * 4) // just approximating the range
-  const wordPos = text.slice(startRange, endRange).indexOf(word)
-
-  return wordPos < 0 ? pos : startRange + wordPos + offset
-}
-
-function getClosestWordRangeAtPosition(
-  text = '',
-  pos = 0,
-): [string, number, number] {
-  pos = Math.max(0, Math.min(pos, text.length))
-
-  if (pos === 0) return [EMPTY_STRING, pos, 0]
-
-  let word = ''
-  let counter = pos - 1
-
-  while (word.length < 10 && counter > 0) {
-    const char = text[counter]
-
-    if ([undefined, '\n', '\r'].includes(char)) break
-
-    word = char + word
-
-    counter--
-  }
-
-  word = word.endsWith(' ') ? word.trim() + ' ' : word.trim()
-
-  const offset = word.length
-
-  counter = pos
-
-  const afterSlice = text.slice(pos)
-  const wordEnd = /^[\w.`"'!@#$%^&*()\-+=<>?/[\]{}|,.;]+/.exec(afterSlice)
-
-  word += wordEnd?.[0] ?? ''
-
-  return [word.trim(), pos - offset, offset]
 }
