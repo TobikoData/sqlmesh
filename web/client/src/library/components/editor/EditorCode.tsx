@@ -1,9 +1,9 @@
 import { useCallback, useEffect, useMemo, useState } from 'react'
 import CodeMirror from '@uiw/react-codemirror'
-import { type KeyBinding, keymap } from '@codemirror/view'
-import { type Extension } from '@codemirror/state'
+import { type EditorView, type KeyBinding, keymap } from '@codemirror/view'
+import { type ChangeSpec, type Extension } from '@codemirror/state'
 import { useApiFileByPath, useMutationApiSaveFile } from '~/api'
-import { debounceSync, isNil } from '~/utils'
+import { debounceSync, isNil, isNotNil } from '~/utils'
 import { useStoreContext } from '~/context/context'
 import { useStoreEditor } from '~/context/editor'
 import {
@@ -31,7 +31,9 @@ import {
   SQLMeshDialect,
   SQLMeshDialectCleanUp,
 } from './extensions/SQLMeshDialect'
-import { indentMore } from '@codemirror/commands'
+import { indentMore, defaultKeymap, historyKeymap } from '@codemirror/commands'
+import { EMPTY_STRING } from '@components/search/help'
+import { diffChars } from 'diff'
 
 export { CodeEditorDefault, CodeEditorRemoteFile }
 
@@ -55,24 +57,14 @@ function CodeEditorDefault({
   const { mode } = useColorScheme()
 
   const models = useStoreContext(s => s.models)
-
   const engine = useStoreEditor(s => s.engine)
   const dialects = useStoreEditor(s => s.dialects)
 
-  const [value, setValue] = useState(content)
-
+  const [editorView, setEditorView] = useState<Optional<EditorView>>()
   const [dialectOptions, setDialectOptions] = useState<{
     types: string
     keywords: string
   }>()
-
-  const debouncedChange = useCallback(
-    debounceSync(function handleChange(value): void {
-      setValue(value)
-      onChange?.(value)
-    }, 500),
-    [],
-  )
 
   const handleEngineWorkerMessage = useCallback((e: MessageEvent): void => {
     if (e.data.topic === 'dialect') {
@@ -96,26 +88,34 @@ function CodeEditorDefault({
     () => dialects.map(d => d.dialect_title),
     [dialects],
   )
-  const extensionKeymap = useMemo(
-    () =>
-      keymap.of(
-        [
-          ...(keymaps ?? []),
-          [
-            {
-              key: 'Tab',
-              preventDefault: true,
-              run(e: any) {
-                return isNil(completionStatus(e.state))
-                  ? indentMore(e)
-                  : acceptCompletion(e)
-              },
-            },
-          ],
-        ].flat(),
-      ),
-    [keymaps],
-  )
+  const extensionKeymap = useMemo(() => {
+    const keys = [
+      defaultKeymap,
+      historyKeymap,
+      ...(keymaps ?? []),
+      [
+        {
+          key: 'Tab',
+          preventDefault: true,
+          run(e: any) {
+            return isNil(completionStatus(e.state))
+              ? indentMore(e)
+              : acceptCompletion(e)
+          },
+        },
+      ],
+    ]
+      .flat()
+      .reduce<Record<string, KeyBinding>>((acc, binding) => {
+        if (isNotNil(binding.key)) {
+          acc[binding.key] = binding
+        }
+
+        return acc
+      }, {})
+
+    return keymap.of(Object.values(keys))
+  }, [keymaps])
   const allModels = useMemo(() => Array.from(models.values()), [models])
   const allModelsNames = useMemo(
     () =>
@@ -191,8 +191,49 @@ function CodeEditorDefault({
   }, [dialect])
 
   useEffect(() => {
-    setValue(content)
-  }, [content])
+    updateEditor(content)
+  }, [editorView, content, extensionsAll])
+
+  function updateEditor(newContent: string = ''): void {
+    if (isNil(editorView)) return
+
+    const state = editorView.state
+    const currentContent = state.doc.toString()
+
+    if (currentContent === newContent) return
+
+    const changes: ChangeSpec[] = []
+
+    if (currentContent === EMPTY_STRING) {
+      changes.push({ from: 0, to: 0, insert: newContent })
+    } else {
+      const items = diffChars(currentContent, newContent)
+
+      let from = 0
+
+      items.forEach(item => {
+        const count = item.count ?? 0
+
+        if (isNotNil(item.removed)) {
+          const to = from + count
+          const change = { from, to }
+
+          from = to
+
+          changes.push(change)
+        } else if (isNotNil(item.added)) {
+          changes.push({ from, to: from, insert: item.value })
+        } else {
+          from = from + count
+        }
+      })
+    }
+
+    editorView.dispatch({
+      changes,
+      scrollIntoView: true,
+    })
+  }
 
   return (
     <div className={clsx('flex w-full h-full', className)}>
@@ -200,14 +241,16 @@ function CodeEditorDefault({
         height="100%"
         width="100%"
         className={clsx('flex w-full h-full font-mono text-xs', className)}
-        value={value}
         indentWithTab={false}
         extensions={extensionsAll}
-        onChange={debouncedChange}
+        onChange={onChange}
         readOnly={isNil(onChange)}
+        onCreateEditor={setEditorView}
         basicSetup={{
           autocompletion: false,
+          defaultKeymap: false,
         }}
+        autoFocus
       />
     </div>
   )

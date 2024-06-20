@@ -10,6 +10,7 @@ import {
 } from '@codemirror/view'
 import { type ModelSQLMeshModel } from '@models/sqlmesh-model'
 import SQLMeshModel from './SQLMeshModel'
+import { isNil } from '@utils/index'
 
 export { events, HoverTooltip, SQLMeshModel, SQLMeshExpression }
 
@@ -36,7 +37,7 @@ function HoverTooltip(models: Map<string, ModelSQLMeshModel>): Extension {
       const modelName = view.state.doc.sliceString(start, end)
       const model = models.get(modelName)
 
-      if (model == null) return null
+      if (isNil(model)) return null
 
       return {
         pos: start,
