@@ -61,7 +61,7 @@ class Console(abc.ABC):
     """Abstract base class for defining classes used for displaying information to the user and also interact
     with them when their input is needed."""
 
-    INDIRECTLY_MODIFIED_DISPLAY_THRESHOLD = 20
+    INDIRECTLY_MODIFIED_DISPLAY_THRESHOLD = 10
 
     @abc.abstractmethod
     def start_plan_evaluation(self, plan: Plan) -> None:
@@ -702,20 +702,20 @@ class TerminalConsole(Console):
         tree = Tree(f"[bold]{header}:")
         if added_snapshot_ids:
             added_tree = Tree("[bold][added]Added:")
-            for s_id in added_snapshot_ids:
+            for s_id in sorted(added_snapshot_ids):
                 snapshot = context_diff.snapshots[s_id]
                 added_tree.add(
                     f"[added]{snapshot.display_name(environment_naming_info, default_catalog, dialect=self.dialect)}"
                 )
-            tree.add(added_tree)
+            tree.add(self._limit_model_names(added_tree, self.verbose))
         if removed_snapshot_ids:
             removed_tree = Tree("[bold][removed]Removed:")
-            for s_id in removed_snapshot_ids:
+            for s_id in sorted(removed_snapshot_ids):
                 snapshot_table_info = context_diff.removed_snapshots[s_id]
                 removed_tree.add(
                     f"[removed]{snapshot_table_info.display_name(environment_naming_info, default_catalog, dialect=self.dialect)}"
                 )
-            tree.add(removed_tree)
+            tree.add(self._limit_model_names(removed_tree, self.verbose))
         if modified_snapshot_ids:
             direct = Tree("[bold][direct]Directly Modified:")
             indirect = Tree("[bold][indirect]Indirectly Modified:")
@@ -863,6 +863,8 @@ class TerminalConsole(Console):
             backfill.add(
                 f"{snapshot.display_name(plan.environment_naming_info, default_catalog, dialect=self.dialect)}: {missing.format_intervals(snapshot.node.interval_unit)}{preview_modifier}"
             )
+        if backfill:
+            backfill = self._limit_model_names(backfill, self.verbose)
         self._print(backfill)
 
     def _prompt_effective_from(
@@ -1510,10 +1512,17 @@ class MarkdownConsole(CaptureTerminalConsole):
         added_snapshot_models = {s for s in added_snapshots if s.is_model}
         if added_snapshot_models:
             self._print("\n**Added Models:**")
-            for snapshot in sorted(added_snapshot_models):
-                self._print(
-                    f"- `{snapshot.display_name(environment_naming_info, default_catalog, dialect=self.dialect)}`"
-                )
+            added_models = sorted(added_snapshot_models)
+            list_length = len(added_models)
+            if not self.verbose and list_length > self.INDIRECTLY_MODIFIED_DISPLAY_THRESHOLD:
+                self._print(added_models[0])
+                self._print(f"- `.... {list_length-2} more ....`\n")
+                self._print(added_models[-1])
+            else:
+                for snapshot in added_models:
+                    self._print(
+                        f"- `{snapshot.display_name(environment_naming_info, default_catalog, dialect=self.dialect)}`"
+                    )
 
         added_snapshot_audits = {s for s in added_snapshots if s.is_audit}
         if added_snapshot_audits:
@@ -1531,10 +1540,17 @@ class MarkdownConsole(CaptureTerminalConsole):
         removed_model_snapshot_table_infos = {s for s in removed_snapshot_table_infos if s.is_model}
         if removed_model_snapshot_table_infos:
             self._print("\n**Removed Models:**")
-            for snapshot_table_info in sorted(removed_model_snapshot_table_infos):
-                self._print(
-                    f"- `{snapshot_table_info.display_name(environment_naming_info, default_catalog, dialect=self.dialect)}`"
-                )
+            removed_models = sorted(removed_model_snapshot_table_infos)
+            list_length = len(removed_models)
+            if not self.verbose and list_length > self.INDIRECTLY_MODIFIED_DISPLAY_THRESHOLD:
+                self._print(removed_models[0])
+                self._print(f"- `.... {list_length-2} more ....`\n")
+                self._print(removed_models[-1])
+            else:
+                for snapshot_table_info in removed_models:
+                    self._print(
+                        f"- `{snapshot_table_info.display_name(environment_naming_info, default_catalog, dialect=self.dialect)}`"
+                    )
 
         removed_audit_snapshot_table_infos = {s for s in removed_snapshot_table_infos if s.is_audit}
         if removed_audit_snapshot_table_infos:
@@ -1606,6 +1622,7 @@ class MarkdownConsole(CaptureTerminalConsole):
         if not missing_intervals:
             return
         self._print("\n**Models needing backfill (missing dates):**")
+        snapshots = []
         for missing in missing_intervals:
             snapshot = plan.context_diff.snapshots[missing.snapshot_id]
             if not snapshot.is_model:
@@ -1615,9 +1632,18 @@ class MarkdownConsole(CaptureTerminalConsole):
             if not plan.deployability_index.is_deployable(snapshot):
                 preview_modifier = " (**preview**)"
 
-            self._print(
+            snapshots.append(
                 f"* `{snapshot.display_name(plan.environment_naming_info, default_catalog, dialect=self.dialect)}`: {missing.format_intervals(snapshot.node.interval_unit)}{preview_modifier}"
             )
+
+        length = len(snapshots)
+        if not self.verbose and length > self.INDIRECTLY_MODIFIED_DISPLAY_THRESHOLD:
+            self._print(snapshots[0])
+            self._print(f"- `.... {length-2} more ....`\n")
+            self._print(snapshots[-1])
+        else:
+            for snap in snapshots:
+                self._print(snap)
 
     def _show_categorized_snapshots(self, plan: Plan, default_catalog: t.Optional[str]) -> None:
         context_diff = plan.context_diff
