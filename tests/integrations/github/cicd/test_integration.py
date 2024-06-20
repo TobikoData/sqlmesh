@@ -1573,6 +1573,7 @@ def test_overlapping_changes_models(
 ```
 
 **Indirectly Modified:**
+- `sushi.active_customers`
 - `sushi.waiter_as_customer_by_day`
 
 """
@@ -1612,7 +1613,7 @@ def test_overlapping_changes_models(
 """
     )
 
-    assert len(get_environment_objects(controller, "hello_world_2")) == 3
+    assert len(get_environment_objects(controller, "hello_world_2")) == 4
     assert "new_col" in get_columns(controller, "hello_world_2", "customers")
 
     assert mock_pull_request.merge.called

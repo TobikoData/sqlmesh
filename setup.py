@@ -1,7 +1,10 @@
 import os
+from pathlib import Path
 from os.path import exists
 
 from setuptools import find_packages, setup
+
+custom_materializations_path = Path("examples/custom_materializations").absolute()
 
 description = open("README.md").read() if exists("README.md") else ""
 
@@ -92,6 +95,7 @@ setup(
             "types-pytz",
             "types-requests==2.28.8",
             "typing-extensions",
+            f"custom_materializations @ file://localhost/{custom_materializations_path}",
         ],
         "cicdtest": [
             "dbt-databricks",

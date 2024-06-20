@@ -291,7 +291,7 @@ def test_plan(
 
     # TODO: Should this be going to stdout? This is printing the status updates for when each batch finishes for
     # the models and how long it took
-    assert len(output.stdout.strip().split("\n")) == 21
+    assert len(output.stdout.strip().split("\n")) == 22
     assert not output.stderr
     assert len(output.outputs) == 5
     text_output = convert_all_html_output_to_text(output)
@@ -530,7 +530,7 @@ def test_info(notebook, sushi_context, convert_all_html_output_to_text, get_all_
     assert not output.stderr
     assert len(output.outputs) == 3
     assert convert_all_html_output_to_text(output) == [
-        "Models: 16",
+        "Models: 17",
         "Macros: 5",
         "Data warehouse connection succeeded",
     ]
@@ -545,7 +545,7 @@ def test_info(notebook, sushi_context, convert_all_html_output_to_text, get_all_
                         "span",
                         # "color: #008000; text-decoration-color: #008000"
                         {"style": f"{NEUTRAL_STYLE}; font-weight: bold"},
-                        "16",
+                        "17",
                         autoescape=False,
                     )
                 ),
