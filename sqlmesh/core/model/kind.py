@@ -657,18 +657,16 @@ class CustomKind(_ModelKind):
         return super().to_expression(
             expressions=[
                 exp.Property(
-                    this=exp.Var(this="materialization"),
+                    this=exp.var("materialization"),
                     value=exp.Literal.string(self.materialization),
                 ),
                 exp.Property(
-                    this=exp.Var(this="materialization_properties"),
+                    this=exp.var("materialization_properties"),
                     value=self.materialization_properties_,
                 ),
+                exp.Property(this=exp.var("forward_only"), value=exp.convert(self.forward_only)),
                 exp.Property(
-                    this=exp.Var(this="forward_only"), value=exp.convert(self.forward_only)
-                ),
-                exp.Property(
-                    this=exp.Var(this="disable_restatement"),
+                    this=exp.var("disable_restatement"),
                     value=exp.convert(self.disable_restatement),
                 ),
             ],

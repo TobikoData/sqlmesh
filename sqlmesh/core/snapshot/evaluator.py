@@ -73,7 +73,6 @@ else:
     import importlib_metadata as metadata  # type: ignore
 
 if t.TYPE_CHECKING:
-    from sqlmesh.core._typing import CustomMaterializationProperties
     from sqlmesh.core.engine_adapter._typing import DF, QueryOrDF
     from sqlmesh.core.environment import EnvironmentNamingInfo
 
@@ -905,7 +904,7 @@ def _evaluation_strategy(snapshot: SnapshotInfoLike, adapter: EngineAdapter) -> 
                 f"Missing the name of a custom evaluation strategy in model '{snapshot.name}'."
             )
         klass = get_custom_materialization_type(snapshot.custom_materialization)
-        return klass(adapter, snapshot.custom_materialization_properties or {})
+        return klass(adapter)
     else:
         raise SQLMeshError(f"Unexpected snapshot: {snapshot}")
 
@@ -976,8 +975,7 @@ class EvaluationStrategy(abc.ABC):
         target_table_name: str,
         source_table_name: str,
         snapshot: Snapshot,
-        snapshots: t.Dict[str, Snapshot],
-        allow_destructive_snapshots: t.Set[str] = set(),
+        **kwargs: t.Any,
     ) -> None:
         """Migrates the target table schema so that it corresponds to the source table schema.
 
@@ -985,12 +983,10 @@ class EvaluationStrategy(abc.ABC):
             target_table_name: The target table name.
             source_table_name: The source table name.
             snapshot: The target snapshot.
-            snapshots: Parent snapshots.
-            allow_destructive_snapshots: Set of snapshots that are allowed to have destructive schema changes.
         """
 
     @abc.abstractmethod
-    def delete(self, name: str) -> None:
+    def delete(self, name: str, **kwargs: t.Any) -> None:
         """Deletes a target table or a view.
 
         Args:
@@ -1004,6 +1000,7 @@ class EvaluationStrategy(abc.ABC):
         view_name: str,
         model: Model,
         environment: str,
+        **kwargs: t.Any,
     ) -> None:
         """Updates the target view to point to the target table.
 
@@ -1015,7 +1012,7 @@ class EvaluationStrategy(abc.ABC):
         """
 
     @abc.abstractmethod
-    def demote(self, view_name: str) -> None:
+    def demote(self, view_name: str, **kwargs: t.Any) -> None:
         """Deletes the target view in the virtual layer.
 
         Args:
@@ -1078,12 +1075,11 @@ class SymbolicStrategy(EvaluationStrategy):
         target_table_name: str,
         source_table_name: str,
         snapshot: Snapshot,
-        snapshots: t.Dict[str, Snapshot],
-        allow_destructive_snapshots: t.Set[str] = set(),
+        **kwarg: t.Any,
     ) -> None:
         pass
 
-    def delete(self, name: str) -> None:
+    def delete(self, name: str, **kwargs: t.Any) -> None:
         pass
 
     def promote(
@@ -1092,10 +1088,11 @@ class SymbolicStrategy(EvaluationStrategy):
         view_name: str,
         model: Model,
         environment: str,
+        **kwargs: t.Any,
     ) -> None:
         pass
 
-    def demote(self, view_name: str) -> None:
+    def demote(self, view_name: str, **kwargs: t.Any) -> None:
         pass
 
 
@@ -1106,6 +1103,7 @@ class EmbeddedStrategy(SymbolicStrategy):
         view_name: str,
         model: Model,
         environment: str,
+        **kwargs: t.Any,
     ) -> None:
         logger.info("Dropping view '%s' for non-materialized table", view_name)
         self.adapter.drop_view(view_name, cascade=False)
@@ -1118,6 +1116,7 @@ class PromotableStrategy(EvaluationStrategy):
         view_name: str,
         model: Model,
         environment: str,
+        **kwargs: t.Any,
     ) -> None:
         is_prod = environment == c.PROD
         logger.info("Updating view '%s' to point at table '%s'", view_name, table_name)
@@ -1129,7 +1128,7 @@ class PromotableStrategy(EvaluationStrategy):
             view_properties=model.virtual_properties,
         )
 
-    def demote(self, view_name: str) -> None:
+    def demote(self, view_name: str, **kwargs: t.Any) -> None:
         logger.info("Dropping view '%s'", view_name)
         self.adapter.drop_view(view_name, cascade=False)
 
@@ -1194,17 +1193,18 @@ class MaterializableStrategy(PromotableStrategy):
         target_table_name: str,
         source_table_name: str,
         snapshot: Snapshot,
-        snapshots: t.Dict[str, Snapshot],
-        allow_destructive_snapshots: t.Set[str] = set(),
+        **kwargs: t.Any,
     ) -> None:
         logger.info(f"Altering table '{target_table_name}'")
         alter_expressions = self.adapter.get_alter_expressions(target_table_name, source_table_name)
-        _check_destructive_schema_change(snapshot, alter_expressions, allow_destructive_snapshots)
+        _check_destructive_schema_change(
+            snapshot, alter_expressions, kwargs["allow_destructive_snapshots"]
+        )
         self.adapter.alter_table(alter_expressions)
 
-    def delete(self, table_name: str) -> None:
-        self.adapter.drop_table(table_name)
-        logger.info("Dropped table '%s'", table_name)
+    def delete(self, name: str, **kwargs: t.Any) -> None:
+        self.adapter.drop_table(name)
+        logger.info("Dropped table '%s'", name)
 
 
 class IncrementalByPartitionStrategy(MaterializableStrategy):
@@ -1566,15 +1566,14 @@ class ViewStrategy(PromotableStrategy):
         target_table_name: str,
         source_table_name: str,
         snapshot: Snapshot,
-        snapshots: t.Dict[str, Snapshot],
-        allow_destructive_snapshots: t.Set[str] = set(),
+        **kwargs: t.Any,
     ) -> None:
         logger.info("Migrating view '%s'", target_table_name)
         model = snapshot.model
         self.adapter.create_view(
             target_table_name,
             model.render_query_or_raise(
-                execution_time=now(), snapshots=snapshots, engine_adapter=self.adapter
+                execution_time=now(), snapshots=kwargs["snapshots"], engine_adapter=self.adapter
             ),
             model.columns_to_types,
             materialized=self._is_materialized_view(model),
@@ -1583,7 +1582,7 @@ class ViewStrategy(PromotableStrategy):
             column_descriptions=model.column_descriptions,
         )
 
-    def delete(self, name: str) -> None:
+    def delete(self, name: str, **kwargs: t.Any) -> None:
         try:
             self.adapter.drop_view(name)
         except Exception:
@@ -1600,16 +1599,7 @@ class ViewStrategy(PromotableStrategy):
 
 
 class CustomMaterialization(MaterializableStrategy):
-    """Base class for custom materializations.
-
-    Args:
-        adapter: The engine adapter.
-        properties: Arbitrary materialization settings that a provided by a user in the CUSTOM model kind.
-    """
-
-    def __init__(self, adapter: EngineAdapter, properties: CustomMaterializationProperties):
-        super().__init__(adapter)
-        self.properties = properties
+    """Base class for custom materializations."""
 
     def insert(
         self,

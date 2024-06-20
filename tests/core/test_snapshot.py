@@ -1842,20 +1842,9 @@ def test_custom_model_kind(make_snapshot):
     snapshot.categorize_as(SnapshotChangeCategory.BREAKING)
 
     assert snapshot.custom_materialization == "MyCustomStrategy"
-    assert snapshot.custom_materialization_properties == {"test_key": "test_value"}
 
     table_info = snapshot.table_info
     assert table_info.custom_materialization == "MyCustomStrategy"
-    assert table_info.custom_materialization_properties == {"test_key": "test_value"}
-    assert (
-        table_info.custom_materialization_properties_
-        == snapshot.model.kind.materialization_properties_
-    )
 
     parsed_table_info = SnapshotTableInfo.parse_raw(table_info.json())
     assert parsed_table_info.custom_materialization == "MyCustomStrategy"
-    assert parsed_table_info.custom_materialization_properties == {"test_key": "test_value"}
-    assert (
-        parsed_table_info.custom_materialization_properties_
-        == snapshot.model.kind.materialization_properties_
-    )

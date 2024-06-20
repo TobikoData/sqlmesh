@@ -2101,7 +2101,7 @@ def test_custom_materialization_strategy(adapter_mock, make_snapshot):
             nonlocal custom_insert_called
             custom_insert_called = True
 
-            assert self.properties == {"test_property": "test_value"}
+            assert model.custom_materialization_properties == {"test_property": "test_value"}
 
             assert isinstance(query_or_df, exp.Query)
             assert query_or_df.sql() == 'SELECT * FROM "tbl" AS "tbl"'
