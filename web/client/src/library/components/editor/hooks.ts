@@ -106,7 +106,7 @@ function useSQLMeshModelExtensions(
     )
 
     function handleEventModelClick(event: MouseEvent): void {
-      if (event.ctrlKey) {
+      if (event.metaKey) {
         const model = findModel(event, models)
 
         if (isNil(model)) return
@@ -116,7 +116,7 @@ function useSQLMeshModelExtensions(
     }
 
     function handleEventlColumnClick(event: MouseEvent): void {
-      if (event.ctrlKey) {
+      if (event.metaKey) {
         if (isNil(model)) return
 
         const column = findColumn(event, model)
@@ -127,28 +127,24 @@ function useSQLMeshModelExtensions(
       }
     }
 
-    return isNil(model)
-      ? []
-      : ([
-          models.size > 0 && isActionMode && HoverTooltip(models),
-          events({
-            keydown: e => {
-              if (e.ctrlKey) {
-                setIsActionMode(true)
-              }
-            },
-            keyup: e => {
-              if (isFalse(e.ctrlKey)) {
-                setIsActionMode(false)
-              }
-            },
-          }),
-          isNotNil(handleModelClick) &&
-            events({ click: handleEventModelClick }),
-          isNotNil(handleModelColumn) &&
-            events({ click: handleEventlColumnClick }),
-          SQLMeshModel(models, columns, isActionMode, model),
-        ].filter(Boolean) as Extension[])
+    return [
+      models.size > 0 && isActionMode && HoverTooltip(models),
+      events({
+        keydown: e => {
+          if (e.metaKey) {
+            setIsActionMode(true)
+          }
+        },
+        keyup: e => {
+          if (isFalse(e.metaKey)) {
+            setIsActionMode(false)
+          }
+        },
+      }),
+      isNotNil(handleModelClick) && events({ click: handleEventModelClick }),
+      isNotNil(handleModelColumn) && events({ click: handleEventlColumnClick }),
+      SQLMeshModel(models, columns, isActionMode, model),
+    ].filter(Boolean) as Extension[]
   }, [handleModelClick, handleModelColumn, model, models, files, isActionMode])
 
   return extensions

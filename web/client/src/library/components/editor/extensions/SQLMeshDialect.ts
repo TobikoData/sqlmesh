@@ -3,6 +3,7 @@ import {
   completeFromList,
   type CompletionContext,
   type Completion,
+  type CompletionResult,
 } from '@codemirror/autocomplete'
 import { keywordCompletionSource, SQLDialect } from '@codemirror/lang-sql'
 import { LanguageSupport } from '@codemirror/language'
@@ -139,28 +140,19 @@ export const SQLMeshDialect: ExtensionSQLMeshDialect = function SQLMeshDialect(
           suggestions.push(...allColumnsNames)
         }
 
-        const wordLastChar = getFirstChar(word.text)
-        const isUpperCase =
-          isStringEmptyOrNil(wordLastChar) &&
-          wordLastChar === wordLastChar.toUpperCase()
+        const wordLastChar = word.text.trim().slice(-1)
+        const completionResult = keywordCompletionSource(
+          lang,
+          wordLastChar === wordLastChar.toUpperCase(),
+        )(ctx) as CompletionResult
 
-        if (isUpperCase) {
-          suggestions = suggestions.map(suggestion => ({
-            ...suggestion,
-            label: suggestion.label.toUpperCase(),
-          }))
+        if (isNotNil(completionResult)) {
+          const options = completionResult.options ?? []
+          completionResult.options = options.concat(suggestions)
+          completionResult.map = () => null // Updates suggestions to switch between lower and upper case
         }
 
-        const source = isArrayEmpty(suggestions)
-          ? keywordCompletionSource(lang, isUpperCase)(ctx)
-          : {
-              from: word.from,
-              to: word.to,
-              options: suggestions,
-              validFor: /^\w*$/,
-            }
-
-        return source
+        return completionResult
       },
     }),
   ])
@@ -262,18 +254,7 @@ function matchWordWithSpacesAfter(
 }
 
 function maybeSuggestion(suggestions: Completion[], word: string): boolean {
-  return (
-    word.length > 1 &&
-    suggestions.some(suggestion =>
-      suggestion.label.toLowerCase().includes(word.toLowerCase()),
-    )
+  return suggestions.some(suggestion =>
+    suggestion.label.toLowerCase().includes(word.toLowerCase()),
   )
-}
-
-function getFirstChar(word: string): string {
-  for (const char of word) {
-    if (/[a-zA-Z]/.test(char)) return char
-  }
-
-  return ''
 }
