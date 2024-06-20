@@ -182,10 +182,18 @@ class EngineAdapter:
         batch_size = self.DEFAULT_BATCH_SIZE if batch_size is None else batch_size
         if isinstance(query_or_df, (exp.Query, exp.DerivedTable)):
             return [SourceQuery(query_factory=lambda: query_or_df)]  # type: ignore
+
         if not columns_to_types:
             raise SQLMeshError(
-                "It is expected that if a DF is passed in then columns_to_types is set"
+                "It is expected that if a DataFrame is passed in then columns_to_types is set"
             )
+        if query_or_df.empty:
+            raise SQLMeshError(
+                "Cannot construct source query from an empty DataFrame. This error is commonly "
+                "related to Python models that produce no data. For such models, consider yielding "
+                "from an empty generator if the resulting set is empty, i.e. use `yield from ()`."
+            )
+
         return self._df_to_source_queries(
             query_or_df, columns_to_types, batch_size, target_table=target_table
         )
