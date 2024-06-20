@@ -77,6 +77,7 @@ def test_apply_plan(mocker: MockerFixture, snapshot: Snapshot):
     args, data = apply_plan_mock.call_args_list[0]
 
     assert args[0] == "http://localhost:8080/sqlmesh/api/v1/plans"
+    assert data["headers"] == {"Content-Type": "application/json"}
     assert json.loads(data["data"]) == {
         "new_snapshots": [
             {
