@@ -423,8 +423,12 @@ class _Model(ModelMeta, frozen=True):
         query = self.render_query_or_raise(**render_kwarg).copy()
 
         for select_or_set_op in query.find_all(exp.Select, exp.SetOperation):
-            cte = select_or_set_op.find_ancestor(exp.With, exp.Select, exp.Subquery)
-            skip_limit = isinstance(cte, exp.With) and cte.recursive
+            skip_limit = False
+            ancestor = select_or_set_op.parent
+            while ancestor and not skip_limit:
+                if isinstance(ancestor, exp.With) and ancestor.recursive:
+                    skip_limit = True
+                ancestor = ancestor.parent
 
             if isinstance(select_or_set_op, exp.Select) and select_or_set_op.args.get("from"):
                 select_or_set_op.where(exp.false(), copy=False)
