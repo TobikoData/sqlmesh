@@ -53,6 +53,7 @@ SNAPSHOT_CHANGE_CATEGORY_STR = {
     SnapshotChangeCategory.FORWARD_ONLY: "Forward-only",
     SnapshotChangeCategory.INDIRECT_BREAKING: "Indirect Breaking",
     SnapshotChangeCategory.INDIRECT_NON_BREAKING: "Indirect Non-breaking",
+    SnapshotChangeCategory.METADATA: "Metadata",
 }
 
 
