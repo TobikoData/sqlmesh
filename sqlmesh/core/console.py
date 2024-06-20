@@ -38,6 +38,7 @@ from sqlmesh.utils.date import time_like_to_str, to_date, yesterday_ds
 if t.TYPE_CHECKING:
     import ipywidgets as widgets
 
+    from sqlglot.dialects.dialect import DialectType
     from sqlmesh.core.context_diff import ContextDiff
     from sqlmesh.core.plan import Plan, PlanBuilder
     from sqlmesh.core.table_diff import RowDiff, SchemaDiff
@@ -58,6 +59,8 @@ SNAPSHOT_CHANGE_CATEGORY_STR = {
 class Console(abc.ABC):
     """Abstract base class for defining classes used for displaying information to the user and also interact
     with them when their input is needed."""
+
+    INDIRECTLY_MODIFIED_DISPLAY_THRESHOLD = 20
 
     @abc.abstractmethod
     def start_plan_evaluation(self, plan: Plan) -> None:
@@ -129,16 +132,32 @@ class Console(abc.ABC):
         """Stop the snapshot promotion progress."""
 
     @abc.abstractmethod
-    def start_migration_progress(self, total_tasks: int) -> None:
-        """Indicates that a new migration progress has begun."""
+    def start_snapshot_migration_progress(self, total_tasks: int) -> None:
+        """Indicates that a new snapshot migration progress has begun."""
 
     @abc.abstractmethod
-    def update_migration_progress(self, num_tasks: int) -> None:
-        """Update the migration progress."""
+    def update_snapshot_migration_progress(self, num_tasks: int) -> None:
+        """Update the snapshot migration progress."""
 
     @abc.abstractmethod
-    def stop_migration_progress(self, success: bool = True) -> None:
-        """Stop the migration progress."""
+    def log_migration_status(self, success: bool = True) -> None:
+        """Log the finished migration status."""
+
+    @abc.abstractmethod
+    def stop_snapshot_migration_progress(self, success: bool = True) -> None:
+        """Stop the snapshot migration progress."""
+
+    @abc.abstractmethod
+    def start_env_migration_progress(self, total_tasks: int) -> None:
+        """Indicates that a new environment migration progress has begun."""
+
+    @abc.abstractmethod
+    def update_env_migration_progress(self, num_tasks: int) -> None:
+        """Update the environment migration progress."""
+
+    @abc.abstractmethod
+    def stop_env_migration_progress(self, success: bool = True) -> None:
+        """Stop the environment migration progress."""
 
     @abc.abstractmethod
     def show_model_difference_summary(
@@ -218,12 +237,40 @@ class Console(abc.ABC):
     def show_row_diff(self, row_diff: RowDiff, show_sample: bool = True) -> None:
         """Show table summary diff."""
 
+    def _limit_model_names(self, tree: Tree, verbose: bool = False) -> Tree:
+        """Trim long indirectly modified model lists below threshold."""
+        modified_length = len(tree.children)
+        if not verbose and modified_length > self.INDIRECTLY_MODIFIED_DISPLAY_THRESHOLD:
+            tree.children = [
+                tree.children[0],
+                Tree(f".... {modified_length-2} more ...."),
+                tree.children[-1],
+            ]
+        return tree
+
+
+def make_progress_bar(message: str, console: t.Optional[RichConsole] = None) -> Progress:
+    return Progress(
+        TextColumn(f"[bold blue]{message}", justify="right"),
+        BarColumn(bar_width=40),
+        "[progress.percentage]{task.percentage:>3.1f}%",
+        "•",
+        srich.BatchColumn(),
+        "•",
+        TimeElapsedColumn(),
+        console=console,
+    )
+
 
 class TerminalConsole(Console):
     """A rich based implementation of the console."""
 
     def __init__(
-        self, console: t.Optional[RichConsole] = None, verbose: bool = False, **kwargs: t.Any
+        self,
+        console: t.Optional[RichConsole] = None,
+        verbose: bool = False,
+        dialect: DialectType = None,
+        **kwargs: t.Any,
     ) -> None:
         self.console: RichConsole = console or srich.console
 
@@ -247,9 +294,13 @@ class TerminalConsole(Console):
         self.migration_progress: t.Optional[Progress] = None
         self.migration_task: t.Optional[TaskID] = None
 
+        self.env_migration_progress: t.Optional[Progress] = None
+        self.env_migration_task: t.Optional[TaskID] = None
+
         self.loading_status: t.Dict[uuid.UUID, Status] = {}
 
         self.verbose = verbose
+        self.dialect = dialect
 
     def _print(self, value: t.Any, **kwargs: t.Any) -> None:
         self.console.print(value, **kwargs)
@@ -274,16 +325,7 @@ class TerminalConsole(Console):
     ) -> None:
         """Indicates that a new snapshot evaluation progress has begun."""
         if not self.evaluation_progress_live:
-            self.evaluation_total_progress = Progress(
-                TextColumn("[bold blue]Evaluating models", justify="right"),
-                BarColumn(bar_width=40),
-                "[progress.percentage]{task.percentage:>3.1f}%",
-                "•",
-                srich.BatchColumn(),
-                "•",
-                TimeElapsedColumn(),
-                console=self.console,
-            )
+            self.evaluation_total_progress = make_progress_bar("Evaluating models", self.console)
 
             self.evaluation_model_progress = Progress(
                 TextColumn("{task.fields[view_name]}", justify="right"),
@@ -308,7 +350,9 @@ class TerminalConsole(Console):
 
     def start_snapshot_evaluation_progress(self, snapshot: Snapshot) -> None:
         if self.evaluation_model_progress and snapshot.name not in self.evaluation_model_tasks:
-            display_name = snapshot.display_name(self.environment_naming_info, self.default_catalog)
+            display_name = snapshot.display_name(
+                self.environment_naming_info, self.default_catalog, dialect=self.dialect
+            )
             self.evaluation_model_tasks[snapshot.name] = self.evaluation_model_progress.add_task(
                 f"Evaluating {display_name}...",
                 view_name=display_name,
@@ -328,7 +372,7 @@ class TerminalConsole(Console):
 
             if duration_ms:
                 self.evaluation_progress_live.console.print(
-                    f"[{batch_idx + 1}/{total_batches}] {snapshot.display_name(self.environment_naming_info, self.default_catalog)} [green]evaluated[/green] in {(duration_ms / 1000.0):.2f}s"
+                    f"[{batch_idx + 1}/{total_batches}] {snapshot.display_name(self.environment_naming_info, self.default_catalog, dialect=self.dialect)} [green]evaluated[/green] in {(duration_ms / 1000.0):.2f}s"
                 )
 
             self.evaluation_total_progress.update(
@@ -364,16 +408,7 @@ class TerminalConsole(Console):
     ) -> None:
         """Indicates that a new creation progress has begun."""
         if self.creation_progress is None:
-            self.creation_progress = Progress(
-                TextColumn("[bold blue]Creating physical tables", justify="right"),
-                BarColumn(bar_width=40),
-                "[progress.percentage]{task.percentage:>3.1f}%",
-                "•",
-                srich.BatchColumn(),
-                "•",
-                TimeElapsedColumn(),
-                console=self.console,
-            )
+            self.creation_progress = make_progress_bar("Creating physical table", self.console)
 
             self.creation_progress.start()
             self.creation_task = self.creation_progress.add_task(
@@ -389,7 +424,7 @@ class TerminalConsole(Console):
         if self.creation_progress is not None and self.creation_task is not None:
             if self.verbose:
                 self.creation_progress.live.console.print(
-                    f"{snapshot.display_name(self.environment_naming_info, self.default_catalog)} [green]created[/green]"
+                    f"{snapshot.display_name(self.environment_naming_info, self.default_catalog, dialect=self.dialect)} [green]created[/green]"
                 )
             self.creation_progress.update(self.creation_task, refresh=True, advance=1)
 
@@ -444,7 +479,7 @@ class TerminalConsole(Console):
             if self.verbose:
                 action_str = "[green]promoted[/green]" if promoted else "[yellow]demoted[/yellow]"
                 self.promotion_progress.live.console.print(
-                    f"{snapshot.display_name(self.environment_naming_info, self.default_catalog)} {action_str}"
+                    f"{snapshot.display_name(self.environment_naming_info, self.default_catalog, dialect=self.dialect)} {action_str}"
                 )
             self.promotion_progress.update(self.promotion_task, refresh=True, advance=1)
 
@@ -460,19 +495,10 @@ class TerminalConsole(Console):
         self.environment_naming_info = EnvironmentNamingInfo()
         self.default_catalog = None
 
-    def start_migration_progress(self, total_tasks: int) -> None:
-        """Indicates that a new migration progress has begun."""
+    def start_snapshot_migration_progress(self, total_tasks: int) -> None:
+        """Indicates that a new snapshot migration progress has begun."""
         if self.migration_progress is None:
-            self.migration_progress = Progress(
-                TextColumn("[bold blue]Migrating snapshots", justify="right"),
-                BarColumn(bar_width=40),
-                "[progress.percentage]{task.percentage:>3.1f}%",
-                "•",
-                srich.BatchColumn(),
-                "•",
-                TimeElapsedColumn(),
-                console=self.console,
-            )
+            self.migration_progress = make_progress_bar("Migrating snapshots", self.console)
 
             self.migration_progress.start()
             self.migration_task = self.migration_progress.add_task(
@@ -480,19 +506,51 @@ class TerminalConsole(Console):
                 total=total_tasks,
             )
 
-    def update_migration_progress(self, num_tasks: int) -> None:
+    def update_snapshot_migration_progress(self, num_tasks: int) -> None:
         """Update the migration progress."""
         if self.migration_progress is not None and self.migration_task is not None:
             self.migration_progress.update(self.migration_task, refresh=True, advance=num_tasks)
 
-    def stop_migration_progress(self, success: bool = True) -> None:
+    def log_migration_status(self, success: bool = True) -> None:
+        """Log the migration status."""
+        if self.migration_progress is not None:
+            self.migration_progress = None
+            if success:
+                self.log_success("The migration has been completed successfully")
+
+    def stop_snapshot_migration_progress(self, success: bool = True) -> None:
         """Stop the migration progress."""
         self.migration_task = None
         if self.migration_progress is not None:
             self.migration_progress.stop()
-            self.migration_progress = None
             if success:
-                self.log_success("The migration has been completed successfully")
+                self.log_success("All snapshots have been migrated successfully")
+
+    def start_env_migration_progress(self, total_tasks: int) -> None:
+        """Indicates that a new environment migration has begun."""
+        if self.env_migration_progress is None:
+            self.env_migration_progress = make_progress_bar("Migrating environments", self.console)
+            self.env_migration_progress.start()
+            self.env_migration_task = self.env_migration_progress.add_task(
+                "Migrating environments...",
+                total=total_tasks,
+            )
+
+    def update_env_migration_progress(self, num_tasks: int) -> None:
+        """Update the environment migration progress."""
+        if self.env_migration_progress is not None and self.env_migration_task is not None:
+            self.env_migration_progress.update(
+                self.env_migration_task, refresh=True, advance=num_tasks
+            )
+
+    def stop_env_migration_progress(self, success: bool = True) -> None:
+        """Stop the environment migration progress."""
+        self.env_migration_task = None
+        if self.env_migration_progress is not None:
+            self.env_migration_progress.stop()
+            self.env_migration_progress = None
+            if success:
+                self.log_success("All environments have been migrated successfully")
 
     def show_model_difference_summary(
         self,
@@ -594,7 +652,7 @@ class TerminalConsole(Console):
         for s_id in ignored_snapshot_ids:
             snapshot = snapshots[s_id]
             ignored.add(
-                f"[ignored]{snapshot.display_name(environment_naming_info, default_catalog)} ({snapshot.get_latest(start_date(snapshot, snapshots.values()))})"
+                f"[ignored]{snapshot.display_name(environment_naming_info, default_catalog, dialect=self.dialect)} ({snapshot.get_latest(start_date(snapshot, snapshots.values()))})"
             )
         return ignored
 
@@ -646,7 +704,7 @@ class TerminalConsole(Console):
             for s_id in added_snapshot_ids:
                 snapshot = context_diff.snapshots[s_id]
                 added_tree.add(
-                    f"[added]{snapshot.display_name(environment_naming_info, default_catalog)}"
+                    f"[added]{snapshot.display_name(environment_naming_info, default_catalog, dialect=self.dialect)}"
                 )
             tree.add(added_tree)
         if removed_snapshot_ids:
@@ -654,7 +712,7 @@ class TerminalConsole(Console):
             for s_id in removed_snapshot_ids:
                 snapshot_table_info = context_diff.removed_snapshots[s_id]
                 removed_tree.add(
-                    f"[removed]{snapshot_table_info.display_name(environment_naming_info, default_catalog)}"
+                    f"[removed]{snapshot_table_info.display_name(environment_naming_info, default_catalog, dialect=self.dialect)}"
                 )
             tree.add(removed_tree)
         if modified_snapshot_ids:
@@ -664,7 +722,7 @@ class TerminalConsole(Console):
             for s_id in modified_snapshot_ids:
                 name = s_id.name
                 display_name = context_diff.snapshots[s_id].display_name(
-                    environment_naming_info, default_catalog
+                    environment_naming_info, default_catalog, dialect=self.dialect
                 )
                 if context_diff.directly_modified(name):
                     direct.add(
@@ -683,7 +741,7 @@ class TerminalConsole(Console):
             if direct.children:
                 tree.add(direct)
             if indirect.children:
-                tree.add(indirect)
+                tree.add(self._limit_model_names(indirect, self.verbose))
             if metadata.children:
                 tree.add(metadata)
         if selected_ignored_snapshot_ids:
@@ -738,7 +796,7 @@ class TerminalConsole(Console):
             if not no_diff:
                 self.show_sql(plan.context_diff.text_diff(snapshot.name))
             tree = Tree(
-                f"[bold][direct]Directly Modified: {snapshot.display_name(plan.environment_naming_info, default_catalog)}"
+                f"[bold][direct]Directly Modified: {snapshot.display_name(plan.environment_naming_info, default_catalog, dialect=self.dialect)}"
             )
             indirect_tree = None
 
@@ -748,8 +806,11 @@ class TerminalConsole(Console):
                     indirect_tree = Tree("[indirect]Indirectly Modified Children:")
                     tree.add(indirect_tree)
                 indirect_tree.add(
-                    f"[indirect]{child_snapshot.display_name(plan.environment_naming_info, default_catalog)}"
+                    f"[indirect]{child_snapshot.display_name(plan.environment_naming_info, default_catalog, dialect=self.dialect)}"
                 )
+            if indirect_tree:
+                indirect_tree = self._limit_model_names(indirect_tree, self.verbose)
+
             self._print(tree)
             if not no_prompts:
                 self._get_snapshot_change_category(
@@ -765,7 +826,7 @@ class TerminalConsole(Console):
 
             category_str = SNAPSHOT_CHANGE_CATEGORY_STR[snapshot.change_category]
             tree = Tree(
-                f"[bold][direct]Directly Modified: {snapshot.display_name(plan.environment_naming_info, default_catalog)} ({category_str})"
+                f"[bold][direct]Directly Modified: {snapshot.display_name(plan.environment_naming_info, default_catalog, dialect=self.dialect)} ({category_str})"
             )
             indirect_tree = None
             for child_sid in sorted(plan.indirectly_modified.get(snapshot.snapshot_id, set())):
@@ -775,8 +836,11 @@ class TerminalConsole(Console):
                     tree.add(indirect_tree)
                 child_category_str = SNAPSHOT_CHANGE_CATEGORY_STR[child_snapshot.change_category]
                 indirect_tree.add(
-                    f"[indirect]{child_snapshot.display_name(plan.environment_naming_info, default_catalog)} ({child_category_str})"
+                    f"[indirect]{child_snapshot.display_name(plan.environment_naming_info, default_catalog, dialect=self.dialect)} ({child_category_str})"
                 )
+            if indirect_tree:
+                indirect_tree = self._limit_model_names(indirect_tree, self.verbose)
+
             self._print(Syntax(context_diff.text_diff(snapshot.name), "sql", word_wrap=True))
             self._print(tree)
 
@@ -796,7 +860,7 @@ class TerminalConsole(Console):
                 preview_modifier = " ([orange1]preview[/orange1])"
 
             backfill.add(
-                f"{snapshot.display_name(plan.environment_naming_info, default_catalog)}: {missing.format_intervals(snapshot.node.interval_unit)}{preview_modifier}"
+                f"{snapshot.display_name(plan.environment_naming_info, default_catalog, dialect=self.dialect)}: {missing.format_intervals(snapshot.node.interval_unit)}{preview_modifier}"
             )
         self._print(backfill)
 
@@ -1030,7 +1094,9 @@ class TerminalConsole(Console):
         default_catalog: t.Optional[str],
         use_rich_formatting: bool = True,
     ) -> t.Dict[SnapshotChangeCategory, str]:
-        direct = snapshot.display_name(environment_naming_info, default_catalog)
+        direct = snapshot.display_name(
+            environment_naming_info, default_catalog, dialect=self.dialect
+        )
         if use_rich_formatting:
             direct = f"[direct]{direct}[/direct]"
         indirect = "indirectly modified children"
@@ -1082,6 +1148,7 @@ class NotebookMagicConsole(TerminalConsole):
         self,
         display: t.Optional[t.Callable] = None,
         console: t.Optional[RichConsole] = None,
+        dialect: DialectType = None,
         **kwargs: t.Any,
     ) -> None:
         import ipywidgets as widgets
@@ -1093,6 +1160,8 @@ class NotebookMagicConsole(TerminalConsole):
         self.display = display or get_ipython().user_ns.get("display", ipython_display)
         self.missing_dates_output = widgets.Output()
         self.dynamic_options_after_categorization_output = widgets.VBox()
+
+        self.dialect = dialect
 
     def _show_missing_dates(self, plan: Plan, default_catalog: t.Optional[str]) -> None:
         self._add_to_dynamic_options(self.missing_dates_output)
@@ -1442,7 +1511,7 @@ class MarkdownConsole(CaptureTerminalConsole):
             self._print("\n**Added Models:**")
             for snapshot in sorted(added_snapshot_models):
                 self._print(
-                    f"- `{snapshot.display_name(environment_naming_info, default_catalog)}`"
+                    f"- `{snapshot.display_name(environment_naming_info, default_catalog, dialect=self.dialect)}`"
                 )
 
         added_snapshot_audits = {s for s in added_snapshots if s.is_audit}
@@ -1450,7 +1519,7 @@ class MarkdownConsole(CaptureTerminalConsole):
             self._print("\n**Added Standalone Audits:**")
             for snapshot in sorted(added_snapshot_audits):
                 self._print(
-                    f"- `{snapshot.display_name(environment_naming_info, default_catalog)}`"
+                    f"- `{snapshot.display_name(environment_naming_info, default_catalog, dialect=self.dialect)}`"
                 )
 
         removed_snapshot_table_infos = {
@@ -1463,7 +1532,7 @@ class MarkdownConsole(CaptureTerminalConsole):
             self._print("\n**Removed Models:**")
             for snapshot_table_info in sorted(removed_model_snapshot_table_infos):
                 self._print(
-                    f"- `{snapshot_table_info.display_name(environment_naming_info, default_catalog)}`"
+                    f"- `{snapshot_table_info.display_name(environment_naming_info, default_catalog, dialect=self.dialect)}`"
                 )
 
         removed_audit_snapshot_table_infos = {s for s in removed_snapshot_table_infos if s.is_audit}
@@ -1471,7 +1540,7 @@ class MarkdownConsole(CaptureTerminalConsole):
             self._print("\n**Removed Standalone Audits:**")
             for snapshot_table_info in sorted(removed_audit_snapshot_table_infos):
                 self._print(
-                    f"- `{snapshot_table_info.display_name(environment_naming_info, default_catalog)}`"
+                    f"- `{snapshot_table_info.display_name(environment_naming_info, default_catalog, dialect=self.dialect)}`"
                 )
 
         modified_snapshots = {
@@ -1494,28 +1563,40 @@ class MarkdownConsole(CaptureTerminalConsole):
                 self._print("\n**Directly Modified:**")
                 for snapshot in sorted(directly_modified):
                     self._print(
-                        f"- `{snapshot.display_name(environment_naming_info, default_catalog)}`"
+                        f"- `{snapshot.display_name(environment_naming_info, default_catalog, dialect=self.dialect)}`"
                     )
                     if not no_diff:
                         self._print(f"```diff\n{context_diff.text_diff(snapshot.name)}\n```")
             if indirectly_modified:
                 self._print("\n**Indirectly Modified:**")
-                for snapshot in sorted(indirectly_modified):
+                indirectly_modified = sorted(indirectly_modified)
+                modified_length = len(indirectly_modified)
+                if (
+                    not self.verbose
+                    and modified_length > self.INDIRECTLY_MODIFIED_DISPLAY_THRESHOLD
+                ):
                     self._print(
-                        f"- `{snapshot.display_name(environment_naming_info, default_catalog)}`"
+                        f"- `{indirectly_modified[0].display_name(environment_naming_info, default_catalog, dialect=self.dialect)}`\n"
+                        f"- `.... {modified_length-2} more ....`\n"
+                        f"- `{indirectly_modified[-1].display_name(environment_naming_info, default_catalog, dialect=self.dialect)}`"
                     )
+                else:
+                    for snapshot in indirectly_modified:
+                        self._print(
+                            f"- `{snapshot.display_name(environment_naming_info, default_catalog, dialect=self.dialect)}`"
+                        )
             if metadata_modified:
                 self._print("\n**Metadata Updated:**")
                 for snapshot in sorted(metadata_modified):
                     self._print(
-                        f"- `{snapshot.display_name(environment_naming_info, default_catalog)}`"
+                        f"- `{snapshot.display_name(environment_naming_info, default_catalog, dialect=self.dialect)}`"
                     )
         if ignored_snapshot_ids:
             self._print("\n**Ignored Models (Expected Plan Start):**")
             for s_id in sorted(ignored_snapshot_ids):
                 snapshot = context_diff.snapshots[s_id]
                 self._print(
-                    f"- `{snapshot.display_name(environment_naming_info, default_catalog)}` ({snapshot.get_latest(start_date(snapshot, context_diff.snapshots.values()))})"
+                    f"- `{snapshot.display_name(environment_naming_info, default_catalog, dialect=self.dialect)}` ({snapshot.get_latest(start_date(snapshot, context_diff.snapshots.values()))})"
                 )
 
     def _show_missing_dates(self, plan: Plan, default_catalog: t.Optional[str]) -> None:
@@ -1534,7 +1615,7 @@ class MarkdownConsole(CaptureTerminalConsole):
                 preview_modifier = " (**preview**)"
 
             self._print(
-                f"* `{snapshot.display_name(plan.environment_naming_info, default_catalog)}`: {missing.format_intervals(snapshot.node.interval_unit)}{preview_modifier}"
+                f"* `{snapshot.display_name(plan.environment_naming_info, default_catalog, dialect=self.dialect)}`: {missing.format_intervals(snapshot.node.interval_unit)}{preview_modifier}"
             )
 
     def _show_categorized_snapshots(self, plan: Plan, default_catalog: t.Optional[str]) -> None:
@@ -1545,7 +1626,7 @@ class MarkdownConsole(CaptureTerminalConsole):
 
             category_str = SNAPSHOT_CHANGE_CATEGORY_STR[snapshot.change_category]
             tree = Tree(
-                f"[bold][direct]Directly Modified: {snapshot.display_name(plan.environment_naming_info, default_catalog)} ({category_str})"
+                f"[bold][direct]Directly Modified: {snapshot.display_name(plan.environment_naming_info, default_catalog, dialect=self.dialect)} ({category_str})"
             )
             indirect_tree = None
             for child_sid in sorted(plan.indirectly_modified.get(snapshot.snapshot_id, set())):
@@ -1555,8 +1636,10 @@ class MarkdownConsole(CaptureTerminalConsole):
                     tree.add(indirect_tree)
                 child_category_str = SNAPSHOT_CHANGE_CATEGORY_STR[child_snapshot.change_category]
                 indirect_tree.add(
-                    f"[indirect]{child_snapshot.display_name(plan.environment_naming_info, default_catalog)} ({child_category_str})"
+                    f"[indirect]{child_snapshot.display_name(plan.environment_naming_info, default_catalog, dialect=self.dialect)} ({child_category_str})"
                 )
+            if indirect_tree:
+                indirect_tree = self._limit_model_names(indirect_tree, self.verbose)
             self._print(f"```diff\n{context_diff.text_diff(snapshot.name)}\n```\n")
             self._print("```\n")
             self._print(tree)
@@ -1625,7 +1708,7 @@ class DatabricksMagicConsole(CaptureTerminalConsole):
     def start_snapshot_evaluation_progress(self, snapshot: Snapshot) -> None:
         if not self.evaluation_batch_progress.get(snapshot.snapshot_id):
             display_name = snapshot.display_name(
-                self.evaluation_environment_naming_info, self.default_catalog
+                self.evaluation_environment_naming_info, self.default_catalog, dialect=self.dialect
             )
             self.evaluation_batch_progress[snapshot.snapshot_id] = (display_name, 0)
             print(f"Starting '{display_name}', Total batches: {self.evaluation_batches[snapshot]}")
@@ -1704,12 +1787,12 @@ class DatabricksMagicConsole(CaptureTerminalConsole):
         self.promotion_status = (0, 0)
         print(f"Virtual Update {'succeeded' if success else 'failed'}")
 
-    def start_migration_progress(self, total_tasks: int) -> None:
+    def start_snapshot_migration_progress(self, total_tasks: int) -> None:
         """Indicates that a new migration progress has begun."""
         self.migration_status = (0, total_tasks)
         print("Starting Migration")
 
-    def update_migration_progress(self, num_tasks: int) -> None:
+    def update_snapshot_migration_progress(self, num_tasks: int) -> None:
         """Update the migration progress."""
         num_migrations, total_migrations = self.migration_status
         num_migrations += num_tasks
@@ -1717,17 +1800,46 @@ class DatabricksMagicConsole(CaptureTerminalConsole):
         if num_migrations % 5 == 0:
             print(f"Migration Updated {num_migrations}/{total_migrations}")
 
-    def stop_migration_progress(self, success: bool = True) -> None:
+    def log_migration_status(self, success: bool = True) -> None:
+        """Log the migration status."""
+        print(f"Migration {'succeeded' if success else 'failed'}")
+
+    def stop_snapshot_migration_progress(self, success: bool = True) -> None:
         """Stop the migration progress."""
         self.migration_status = (0, 0)
-        print(f"Migration {'succeeded' if success else 'failed'}")
+        print(f"Snapshot migration {'succeeded' if success else 'failed'}")
+
+    def start_env_migration_progress(self, total_tasks: int) -> None:
+        """Indicates that a new migration progress has begun."""
+        self.env_migration_status = (0, total_tasks)
+        print("Starting Environment migration")
+
+    def update_env_migration_progress(self, num_tasks: int) -> None:
+        """Update the migration progress."""
+        num_migrations, total_migrations = self.env_migration_status
+        num_migrations += num_tasks
+        self.env_migration_status = (num_migrations, total_migrations)
+        if num_migrations % 5 == 0:
+            print(f"Environment migration Updated {num_migrations}/{total_migrations}")
+
+    def stop_env_migration_progress(self, success: bool = True) -> None:
+        """Stop the migration progress."""
+        self.env_migration_status = (0, 0)
+        print(f"Environment migration {'succeeded' if success else 'failed'}")
 
 
 class DebuggerTerminalConsole(TerminalConsole):
     """A terminal console to use while debugging with no fluff, progress bars, etc."""
 
-    def __init__(self, console: t.Optional[RichConsole], *args: t.Any, **kwargs: t.Any) -> None:
+    def __init__(
+        self,
+        console: t.Optional[RichConsole],
+        *args: t.Any,
+        dialect: DialectType = None,
+        **kwargs: t.Any,
+    ) -> None:
         self.console: RichConsole = console or srich.console
+        self.dialect = dialect
 
     def _write(self, msg: t.Any, *args: t.Any, **kwargs: t.Any) -> None:
         self.console.log(msg, *args, **kwargs)
@@ -1788,14 +1900,26 @@ class DebuggerTerminalConsole(TerminalConsole):
     def stop_promotion_progress(self, success: bool = True) -> None:
         self._write(f"Stopping promotion with success={success}")
 
-    def start_migration_progress(self, total_tasks: int) -> None:
+    def start_snapshot_migration_progress(self, total_tasks: int) -> None:
         self._write(f"Starting migration for {total_tasks} snapshots")
 
-    def update_migration_progress(self, num_tasks: int) -> None:
+    def update_snapshot_migration_progress(self, num_tasks: int) -> None:
         self._write(f"Migration {num_tasks}")
 
-    def stop_migration_progress(self, success: bool = True) -> None:
-        self._write(f"Stopping migration with success={success}")
+    def log_migration_status(self, success: bool = True) -> None:
+        self._write(f"Migration finished with success={success}")
+
+    def stop_snapshot_migration_progress(self, success: bool = True) -> None:
+        self._write(f"Stopping snapshot migration with success={success}")
+
+    def start_env_migration_progress(self, total_tasks: int) -> None:
+        self._write(f"Starting migration for {total_tasks} environments")
+
+    def update_env_migration_progress(self, num_tasks: int) -> None:
+        self._write(f"Environment migration {num_tasks}")
+
+    def stop_env_migration_progress(self, success: bool = True) -> None:
+        self._write(f"Stopping environment migration with success={success}")
 
     def show_model_difference_summary(
         self,

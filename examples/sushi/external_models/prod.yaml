@@ -1,0 +1,6 @@
+- name: prod_raw.model1
+  description: Gateway-specific table defined in external model file
+  gateway: prod
+  columns:
+    customer_id: int
+    zip: text

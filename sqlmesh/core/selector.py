@@ -65,10 +65,10 @@ class Selector:
         Returns:
             A dictionary of models.
         """
-        target_env = self._state_reader.get_environment(Environment.normalize_name(target_env_name))
+        target_env = self._state_reader.get_environment(Environment.sanitize_name(target_env_name))
         if not target_env and fallback_env_name:
             target_env = self._state_reader.get_environment(
-                Environment.normalize_name(fallback_env_name)
+                Environment.sanitize_name(fallback_env_name)
             )
 
         env_models: t.Dict[str, Model] = {}

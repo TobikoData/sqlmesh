@@ -4,6 +4,7 @@ from pathlib import Path
 
 import click
 from sqlglot import Dialect
+from sqlmesh.utils.date import yesterday_ds
 
 
 class ProjectTemplate(Enum):
@@ -25,6 +26,7 @@ default_gateway: local
 
 model_defaults:
   dialect: {dialect}
+  start: {yesterday_ds()}
 """,
         ProjectTemplate.AIRFLOW: f"""gateways:
   local:
@@ -42,6 +44,7 @@ default_scheduler:
 
 model_defaults:
   dialect: {dialect}
+  start: {yesterday_ds()}
 """,
         ProjectTemplate.DBT: """from pathlib import Path
 

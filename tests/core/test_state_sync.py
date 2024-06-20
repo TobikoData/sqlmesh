@@ -1886,6 +1886,7 @@ def test_cleanup_expired_views(
     mocker: MockerFixture, state_sync: EngineAdapterStateSync, make_snapshot: t.Callable
 ):
     adapter = mocker.MagicMock()
+    adapter.dialect = None
     snapshot_a = make_snapshot(SqlModel(name="catalog.schema.a", query=parse_one("select 1, ds")))
     snapshot_a.categorize_as(SnapshotChangeCategory.BREAKING)
     snapshot_b = make_snapshot(SqlModel(name="catalog.schema.b", query=parse_one("select 1, ds")))

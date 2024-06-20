@@ -851,8 +851,8 @@ def test_seed_model_custom_types(tmp_path):
 
     with open(model_csv_path, "w", encoding="utf-8") as fd:
         fd.write(
-            """key,ds_date,ds_timestamp,b_a,b_b,i,i_str
-123,2022-01-01,2022-01-01,false,0,321,321
+            """key,ds_date,ds_timestamp,b_a,b_b,i,i_str,empty_date
+123,2022-01-01,2022-01-01,false,0,321,321,
 """
         )
 
@@ -867,6 +867,7 @@ def test_seed_model_custom_types(tmp_path):
             "b_b": "boolean",
             "i": "int",
             "i_str": "text",
+            "empty_date": "date",
         },
     )
 
@@ -892,6 +893,9 @@ def test_seed_model_custom_types(tmp_path):
 
     assert df["i_str"].dtype == "object"
     assert df["i_str"].iloc[0] == "321"
+
+    assert df["empty_date"].dtype == "object"
+    assert df["empty_date"].iloc[0] is None
 
 
 def test_seed_with_special_characters_in_column(tmp_path, assert_exp_eq):

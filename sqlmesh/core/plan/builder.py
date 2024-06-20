@@ -137,6 +137,7 @@ class PlanBuilder:
             environment_catalog_mapping or {},
             name=self._context_diff.environment,
             suffix_target=environment_suffix_target,
+            normalize_name=self._context_diff.normalize_environment_name,
         )
 
         self._latest_plan: t.Optional[Plan] = None
@@ -569,7 +570,7 @@ class PlanBuilder:
                         )
                     else:
                         # Metadata updated.
-                        snapshot.categorize_as(SnapshotChangeCategory.FORWARD_ONLY)
+                        snapshot.categorize_as(SnapshotChangeCategory.METADATA)
 
             elif s_id in self._context_diff.added and self._is_new_snapshot(snapshot):
                 snapshot.categorize_as(
@@ -689,8 +690,7 @@ class PlanBuilder:
                 candidate.snapshot_id not in self._context_diff.new_snapshots
                 and promoted.is_forward_only
                 and not promoted.is_paused
-                and not candidate.is_forward_only
-                and not candidate.is_indirect_non_breaking
+                and not candidate.reuses_previous_version
                 and promoted.version == candidate.version
             ):
                 raise PlanError(
@@ -699,9 +699,9 @@ class PlanBuilder:
 
     def _ensure_no_broken_references(self) -> None:
         for snapshot in self._context_diff.snapshots.values():
-            broken_references = {x.name for x in self._context_diff.removed_snapshots} & {
-                x for x in snapshot.node.depends_on
-            }
+            broken_references = {
+                x.name for x in self._context_diff.removed_snapshots.values() if not x.is_external
+            } & {x for x in snapshot.node.depends_on}
             if broken_references:
                 broken_references_msg = ", ".join(f"'{x}'" for x in broken_references)
                 raise PlanError(
@@ -737,7 +737,7 @@ class PlanBuilder:
                 self._enable_preview
                 and any(
                     snapshot.model.forward_only
-                    for snapshot in self._context_diff.new_snapshots.values()
+                    for snapshot, _ in self._context_diff.modified_snapshots.values()
                     if snapshot.is_model
                 )
             )

@@ -413,11 +413,11 @@ def test_metadata_changed_regular_plan_preview_enabled(init_and_plan_context: t.
     assert len(plan.new_snapshots) == 2
     assert (
         plan.context_diff.snapshots[snapshot.snapshot_id].change_category
-        == SnapshotChangeCategory.FORWARD_ONLY
+        == SnapshotChangeCategory.METADATA
     )
     assert (
         plan.context_diff.snapshots[top_waiters_snapshot.snapshot_id].change_category
-        == SnapshotChangeCategory.FORWARD_ONLY
+        == SnapshotChangeCategory.METADATA
     )
     assert not plan.missing_intervals
     assert not plan.restatements

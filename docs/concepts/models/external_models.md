@@ -42,6 +42,45 @@ All of a SQLMesh project's external models are defined in a single `external_mod
 
 Alternatively, additional external models can also be defined in the [external_models/](#using-the-external_models-directory) folder.
 
+### Using CLI
+
+Instead of creating the `external_models.yaml` file manually, SQLMesh can generate it for you with the [create_external_models](../../reference/cli.md#create_external_models) CLI command.
+
+The command identifies all external tables referenced in your SQLMesh project, fetches their column information from the SQL engine's metadata, and then stores the information in the `external_models.yaml` file.
+
+If SQLMesh does not have access to an external table's metadata, the table will be omitted from the file and SQLMesh will issue a warning.
+
+`create_external_models` solely queries SQL engine metadata and does not query external tables themselves.
+
+### Gateway-specific external models
+
+In some use-cases such as [isolated systems with multiple gateways](../../guides/isolated_systems.md#multiple-gateways), there are external models that only exist on a certain gateway.
+
+Consider the following model that queries an external table with a dynamic database based on the current gateway:
+
+```
+MODEL (
+  name my_db.my_table,
+  kind FULL
+);
+
+SELECT
+  *
+FROM
+  @{gateway}_db.external_table;
+```
+
+This table will be named differently depending on which `--gateway` SQLMesh is run with. For example:
+
+- `sqlmesh --gateway dev plan` - SQLMesh will try to query `dev_db.external_table`
+- `sqlmesh --gateway prod plan` - SQLMesh will try to query `prod_db.external_table`
+
+To ensure SQLMesh can look up the correct schema when the relevant gateway is set, run `create_external_models` with the `--gateway` argument. For example:
+
+- `sqlmesh --gateway dev create_external_models`
+
+This will set `gateway: dev` on the external model and ensure that it is only loaded when the current gateway is set to `dev`.
+
 ### Writing YAML by hand
 
 This example demonstrates the structure of a `external_models.yaml` file:
@@ -57,21 +96,17 @@ This example demonstrates the structure of a `external_models.yaml` file:
   columns:
     column_c: bool
     column_d: float
+- name: external_db.gateway_specific_external_table
+  description: Another external table that only exists when the gateway is set to "test"
+  gateway: test
+  columns:
+    column_e: int
+    column_f: varchar
 ```
 
-It contains each `EXTERNAL` model's name, an optional description, and each of the external table's columns' name and data type.
+It contains each `EXTERNAL` model's name, an optional description, an optional gateway and each of the external table's columns' name and data type.
 
 The file can be constructed by hand using a standard text editor or IDE.
-
-### Using CLI
-
-Instead of creating the `external_models.yaml` file manually, SQLMesh can generate it for you with the [create_external_models](../../reference/cli.md#create_external_models) CLI command.
-
-The command identifies all external tables referenced in your SQLMesh project, fetches their column information from the SQL engine's metadata, and then stores the information in the `external_models.yaml` file.
-
-If SQLMesh does not have access to an external table's metadata, the table will be omitted from the file and SQLMesh will issue a warning.
-
-`create_external_models` solely queries SQL engine metadata and does not query external tables themselves.
 
 ### Using the `external_models` directory
 

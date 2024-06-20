@@ -1127,6 +1127,52 @@ def test_create_clone_in_dev(mocker: MockerFixture, adapter_mock, make_snapshot)
     )
 
 
+def test_create_clone_in_dev_self_referencing(mocker: MockerFixture, adapter_mock, make_snapshot):
+    adapter_mock.SUPPORTS_CLONING = True
+    adapter_mock.get_alter_expressions.return_value = []
+    evaluator = SnapshotEvaluator(adapter_mock)
+
+    model = load_sql_based_model(
+        parse(  # type: ignore
+            """
+            MODEL (
+                name test_schema.test_model,
+                kind INCREMENTAL_BY_TIME_RANGE (
+                    time_column ds
+                )
+            );
+
+            SELECT 1::INT as a, ds::DATE FROM test_schema.test_model;
+            """
+        ),
+    )
+
+    snapshot = make_snapshot(model)
+    snapshot.categorize_as(SnapshotChangeCategory.FORWARD_ONLY)
+    snapshot.previous_versions = snapshot.all_versions
+
+    evaluator.create([snapshot], {})
+
+    adapter_mock.create_table.assert_called_once_with(
+        f"sqlmesh__test_schema.test_schema__test_model__{snapshot.version}__temp__schema_migration_source",
+        columns_to_types={"a": exp.DataType.build("int"), "ds": exp.DataType.build("date")},
+        storage_format=None,
+        partitioned_by=[exp.to_column("ds", quoted=True)],
+        partition_interval_unit=IntervalUnit.DAY,
+        clustered_by=[],
+        table_properties={},
+        table_description=None,
+        column_descriptions=None,
+    )
+
+    # Make sure the dry run references the correct ("...__schema_migration_source") table.
+    dry_run_query = adapter_mock.fetchall.call_args[0][0].sql()
+    assert (
+        dry_run_query
+        == f'SELECT CAST(1 AS INT) AS "a", CAST("ds" AS DATE) AS "ds" FROM "sqlmesh__test_schema"."test_schema__test_model__{snapshot.version}__temp__schema_migration_source" AS "test_model" /* test_schema.test_model */ WHERE FALSE LIMIT 0'
+    )
+
+
 def test_on_destructive_change_runtime_check(
     mocker: MockerFixture,
     make_snapshot,

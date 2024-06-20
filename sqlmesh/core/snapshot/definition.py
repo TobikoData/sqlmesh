@@ -10,6 +10,7 @@ from functools import cached_property, lru_cache
 from pydantic import Field
 from sqlglot import exp
 from sqlglot.helper import seq_get
+from sqlglot.optimizer.normalize_identifiers import normalize_identifiers
 
 from sqlmesh.core import constants as c
 from sqlmesh.core.audit import BUILT_IN_AUDITS, Audit, ModelAudit, StandaloneAudit
@@ -43,6 +44,7 @@ else:
     from typing_extensions import Annotated
 
 if t.TYPE_CHECKING:
+    from sqlglot.dialects.dialect import DialectType
     from sqlmesh.core.environment import EnvironmentNamingInfo
 
 Interval = t.Tuple[int, int]
@@ -60,6 +62,7 @@ class SnapshotChangeCategory(IntEnum):
     FORWARD_ONLY: The change requires no rebuilding
     INDIRECT_BREAKING: The change was caused indirectly and is breaking.
     INDIRECT_NON_BREAKING: The change was caused indirectly by a non-breaking change.
+    METADATA: The change was caused by a metadata update.
     """
 
     BREAKING = 1
@@ -67,6 +70,7 @@ class SnapshotChangeCategory(IntEnum):
     FORWARD_ONLY = 3
     INDIRECT_BREAKING = 4
     INDIRECT_NON_BREAKING = 5
+    METADATA = 6
 
     @property
     def is_breaking(self) -> bool:
@@ -79,6 +83,10 @@ class SnapshotChangeCategory(IntEnum):
     @property
     def is_forward_only(self) -> bool:
         return self == self.FORWARD_ONLY
+
+    @property
+    def is_metadata(self) -> bool:
+        return self == self.METADATA
 
     @property
     def is_indirect_breaking(self) -> bool:
@@ -198,13 +206,17 @@ class QualifiedViewName(PydanticModel, frozen=True):
     schema_name: t.Optional[str] = None
     table: str
 
-    def for_environment(self, environment_naming_info: EnvironmentNamingInfo) -> str:
-        return exp.table_name(self.table_for_environment(environment_naming_info))
+    def for_environment(
+        self, environment_naming_info: EnvironmentNamingInfo, dialect: DialectType = None
+    ) -> str:
+        return exp.table_name(self.table_for_environment(environment_naming_info, dialect=dialect))
 
-    def table_for_environment(self, environment_naming_info: EnvironmentNamingInfo) -> exp.Table:
+    def table_for_environment(
+        self, environment_naming_info: EnvironmentNamingInfo, dialect: DialectType = None
+    ) -> exp.Table:
         return exp.table_(
-            self.table_name_for_environment(environment_naming_info),
-            db=self.schema_for_environment(environment_naming_info),
+            self.table_name_for_environment(environment_naming_info, dialect=dialect),
+            db=self.schema_for_environment(environment_naming_info, dialect=dialect),
             catalog=self.catalog_for_environment(environment_naming_info),
         )
 
@@ -213,22 +225,44 @@ class QualifiedViewName(PydanticModel, frozen=True):
     ) -> t.Optional[str]:
         return environment_naming_info.catalog_name_override or self.catalog
 
-    def schema_for_environment(self, environment_naming_info: EnvironmentNamingInfo) -> str:
-        schema = self.schema_name or c.DEFAULT_SCHEMA
+    def schema_for_environment(
+        self, environment_naming_info: EnvironmentNamingInfo, dialect: DialectType = None
+    ) -> str:
+        normalize = environment_naming_info.normalize_name
+
+        if self.schema_name:
+            schema = self.schema_name
+        else:
+            schema = c.DEFAULT_SCHEMA
+            if normalize:
+                schema = normalize_identifiers(schema, dialect=dialect).name
+
         if (
             environment_naming_info.name.lower() != c.PROD
             and environment_naming_info.suffix_target.is_schema
         ):
-            schema = f"{schema}__{environment_naming_info.name}"
+            env_name = environment_naming_info.name
+            if normalize:
+                env_name = normalize_identifiers(env_name, dialect=dialect).name
+
+            schema = f"{schema}__{env_name}"
+
         return schema
 
-    def table_name_for_environment(self, environment_naming_info: EnvironmentNamingInfo) -> str:
+    def table_name_for_environment(
+        self, environment_naming_info: EnvironmentNamingInfo, dialect: DialectType = None
+    ) -> str:
         table = self.table
         if (
             environment_naming_info.name.lower() != c.PROD
             and environment_naming_info.suffix_target.is_table
         ):
-            table = f"{table}__{environment_naming_info.name}"
+            env_name = environment_naming_info.name
+            if environment_naming_info.normalize_name:
+                env_name = normalize_identifiers(env_name, dialect=dialect).name
+
+            table = f"{table}__{env_name}"
+
         return table
 
 
@@ -287,8 +321,20 @@ class SnapshotInfoMixin(ModelKindMixin):
         return self.change_category == SnapshotChangeCategory.FORWARD_ONLY
 
     @property
+    def is_metadata(self) -> bool:
+        return self.change_category == SnapshotChangeCategory.METADATA
+
+    @property
     def is_indirect_non_breaking(self) -> bool:
         return self.change_category == SnapshotChangeCategory.INDIRECT_NON_BREAKING
+
+    @property
+    def reuses_previous_version(self) -> bool:
+        return self.change_category in (
+            SnapshotChangeCategory.FORWARD_ONLY,
+            SnapshotChangeCategory.METADATA,
+            SnapshotChangeCategory.INDIRECT_NON_BREAKING,
+        )
 
     @property
     def all_versions(self) -> t.Tuple[SnapshotDataVersion, ...]:
@@ -296,14 +342,17 @@ class SnapshotInfoMixin(ModelKindMixin):
         return (*self.previous_versions, self.data_version)[-c.DATA_VERSION_LIMIT :]
 
     def display_name(
-        self, environment_naming_info: EnvironmentNamingInfo, default_catalog: t.Optional[str]
+        self,
+        environment_naming_info: EnvironmentNamingInfo,
+        default_catalog: t.Optional[str],
+        dialect: DialectType = None,
     ) -> str:
         """
         Returns the model name as a qualified view name.
         This is just used for presenting information back to the user and `qualified_view_name` should be used
         when wanting a view name in all other cases.
         """
-        return display_name(self, environment_naming_info, default_catalog)
+        return display_name(self, environment_naming_info, default_catalog, dialect=dialect)
 
     def data_hash_matches(self, other: t.Optional[SnapshotInfoMixin | SnapshotDataVersion]) -> bool:
         return other is not None and self.fingerprint.data_hash == other.fingerprint.data_hash
@@ -752,7 +801,8 @@ class Snapshot(PydanticModel, SnapshotInfoMixin):
         if self.identifier == other.identifier or (
             # Indirect Non-Breaking snapshots share the dev table with its previous version.
             # The same applies to migrated snapshots.
-            (self.is_indirect_non_breaking or self.migrated) and other.snapshot_id in previous_ids
+            (self.is_indirect_non_breaking or self.is_metadata or self.migrated)
+            and other.snapshot_id in previous_ids
         ):
             for start, end in other.dev_intervals:
                 self.add_interval(start, end, is_dev=True)
@@ -856,15 +906,16 @@ class Snapshot(PydanticModel, SnapshotInfoMixin):
             category: The change category to assign to this snapshot.
         """
         self.temp_version = None
-        is_forward_only = category in (
+        reuse_previous_version = category in (
             SnapshotChangeCategory.FORWARD_ONLY,
             SnapshotChangeCategory.INDIRECT_NON_BREAKING,
+            SnapshotChangeCategory.METADATA,
         )
-        if is_forward_only and self.previous_version:
+        if reuse_previous_version and self.previous_version:
             previous_version = self.previous_version
             self.version = previous_version.data_version.version
             self.physical_schema_ = previous_version.physical_schema
-            if category.is_indirect_non_breaking:
+            if category.is_indirect_non_breaking or category.is_metadata:
                 # Reuse the dev table for indirect non-breaking changes.
                 self.temp_version = (
                     previous_version.data_version.temp_version
@@ -1239,13 +1290,16 @@ class DeployabilityIndex(PydanticModel, frozen=True):
             if deployable and node in snapshots:
                 snapshot = snapshots[node]
                 # Capture uncategorized snapshot which represents a forward-only model.
-                is_forward_only_model = (
-                    snapshot.previous_versions and snapshot.is_model and snapshot.model.forward_only
+                is_uncategorized_forward_only_model = (
+                    snapshot.change_category is None
+                    and snapshot.previous_versions
+                    and snapshot.is_model
+                    and snapshot.model.forward_only
                 )
                 if (
                     snapshot.is_forward_only
                     or snapshot.is_indirect_non_breaking
-                    or is_forward_only_model
+                    or is_uncategorized_forward_only_model
                 ):
                     # FORWARD_ONLY and INDIRECT_NON_BREAKING snapshots are not deployable by nature.
                     this_deployable = False
@@ -1255,7 +1309,8 @@ class DeployabilityIndex(PydanticModel, frozen=True):
                 else:
                     this_deployable = True
                 children_deployable = not (
-                    snapshot.is_paused and (snapshot.is_forward_only or is_forward_only_model)
+                    snapshot.is_paused
+                    and (snapshot.is_forward_only or is_uncategorized_forward_only_model)
                 )
             else:
                 this_deployable, children_deployable = False, False
@@ -1314,6 +1369,7 @@ def display_name(
     snapshot_info_like: t.Union[SnapshotInfoLike, SnapshotInfoMixin],
     environment_naming_info: EnvironmentNamingInfo,
     default_catalog: t.Optional[str],
+    dialect: DialectType = None,
 ) -> str:
     """
     Returns the model name as a qualified view name.
@@ -1332,7 +1388,7 @@ def display_name(
         schema_name=view_name.db or None,
         table=view_name.name,
     )
-    return qvn.for_environment(environment_naming_info)
+    return qvn.for_environment(environment_naming_info, dialect=dialect)
 
 
 def fingerprint_from_node(

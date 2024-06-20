@@ -138,7 +138,7 @@ def test_comments(make_mocked_engine_adapter: t.Callable, mocker: MockerFixture)
     sql_calls = to_sql_calls(adapter)
     assert sql_calls == [
         """CREATE TABLE IF NOT EXISTS "test_table" ("a" INT COMMENT 'a column description', "b" INT) COMMENT='table description'""",
-        """CREATE TABLE IF NOT EXISTS "test_table" ("a" INT COMMENT 'a column description', "b" INT) COMMENT='table description' AS SELECT "a", "b" FROM "source_table\"""",
+        """CREATE TABLE IF NOT EXISTS "test_table" ("a" INT COMMENT 'a column description', "b" INT) COMMENT='table description' AS SELECT CAST("a" AS INT) AS "a", CAST("b" AS INT) AS "b" FROM (SELECT "a", "b" FROM "source_table") AS "_subquery\"""",
         """CREATE OR REPLACE VIEW "test_view" COMMENT='table description' AS SELECT "a", "b" FROM "source_table\"""",
         """ALTER VIEW "test_view" ALTER COLUMN "a" COMMENT 'a column description'""",
         """COMMENT ON TABLE "test_table" IS 'table description'""",

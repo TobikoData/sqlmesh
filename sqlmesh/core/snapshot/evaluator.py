@@ -195,7 +195,9 @@ class SnapshotEvaluator:
         """
         self._create_schemas(
             [
-                s.qualified_view_name.table_for_environment(environment_naming_info)
+                s.qualified_view_name.table_for_environment(
+                    environment_naming_info, dialect=self.adapter.dialect
+                )
                 for s in target_snapshots
                 if s.is_model and not s.is_symbolic
             ]
@@ -659,7 +661,12 @@ class SnapshotEvaluator:
                 logger.info(f"Cloning table '{source_table_name}' into '{target_table_name}'")
 
                 evaluation_strategy.create(
-                    snapshot, tmp_table_name, False, is_snapshot_deployable, **create_render_kwargs
+                    snapshot,
+                    tmp_table_name,
+                    False,
+                    is_snapshot_deployable,
+                    table_mapping={snapshot.name: tmp_table_name},
+                    **create_render_kwargs,
                 )
                 try:
                     self.adapter.clone_table(target_table_name, snapshot.table_name(), replace=True)
@@ -674,7 +681,7 @@ class SnapshotEvaluator:
                     self.adapter.drop_table(tmp_table_name)
             else:
                 table_deployability_flags = [False]
-                if not snapshot.is_indirect_non_breaking and not snapshot.is_forward_only:
+                if not snapshot.reuses_previous_version:
                     table_deployability_flags.append(True)
                 for is_table_deployable in table_deployability_flags:
                     evaluation_strategy.create(
@@ -1098,7 +1105,9 @@ class EmbeddedStrategy(SymbolicStrategy):
         table_name: str,
         snapshot: Snapshot,
     ) -> None:
-        target_name = view_name.for_environment(environment_naming_info)
+        target_name = view_name.for_environment(
+            environment_naming_info, dialect=self.adapter.dialect
+        )
         logger.info("Dropping view '%s' for non-materialized table", target_name)
         self.adapter.drop_view(target_name, cascade=False)
 
@@ -1111,7 +1120,9 @@ class PromotableStrategy(EvaluationStrategy):
         table_name: str,
         snapshot: Snapshot,
     ) -> None:
-        target_name = view_name.for_environment(environment_naming_info)
+        target_name = view_name.for_environment(
+            environment_naming_info, dialect=self.adapter.dialect
+        )
         is_prod = environment_naming_info.name.lower() == c.PROD
         logger.info("Updating view '%s' to point at table '%s'", target_name, table_name)
         self.adapter.create_view(
@@ -1127,7 +1138,9 @@ class PromotableStrategy(EvaluationStrategy):
         view_name: QualifiedViewName,
         environment_naming_info: EnvironmentNamingInfo,
     ) -> None:
-        target_name = view_name.for_environment(environment_naming_info)
+        target_name = view_name.for_environment(
+            environment_naming_info, dialect=self.adapter.dialect
+        )
         logger.info("Dropping view '%s'", target_name)
         self.adapter.drop_view(target_name, cascade=False)
 
@@ -1357,10 +1370,20 @@ class SeedStrategy(MaterializableStrategy):
         is_snapshot_deployable: bool,
         **render_kwargs: t.Any,
     ) -> None:
+        model = t.cast(SeedModel, snapshot.model)
+        if not model.is_hydrated and self.adapter.table_exists(name):
+            # This likely means that the table was created and populated previously, but the evaluation stage
+            # failed before the interval could be added for this model.
+            logger.warning(
+                "Seed model '%s' is not hydrated, but the table '%s' exists. Skipping creation",
+                model.name,
+                name,
+            )
+            return
+
         super().create(snapshot, name, is_table_deployable, is_snapshot_deployable, **render_kwargs)
         if is_table_deployable:
             # For seeds we insert data at the time of table creation.
-            model = t.cast(SeedModel, snapshot.model)
             try:
                 for index, df in enumerate(model.render_seed()):
                     if index == 0:

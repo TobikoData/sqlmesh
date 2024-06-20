@@ -302,6 +302,9 @@ MODEL (
 ### allow_partials
 - Indicates that this model can be executed for partial (incomplete) data intervals. By default, each model processes only complete intervals to prevent common mistakes caused by partial data. The size of the interval is determined by the model's [interval_unit](#interval_unit). Setting `allow_partials` to `true` overrides this behavior, indicating that the model may process a segment of input data that is missing some of the data points. Please note that setting this attribute to `true` results in the disregard of the [cron](#cron) attribute.
 
+### enabled
+- Whether the model is enabled. This attribute is `true` by default. Setting it to `false` causes SQLMesh to ignore this model when loading the project.
+
 ## Incremental Model Properties
 
 For models that are incremental, the following parameters can be specified in the `kind`'s definition.

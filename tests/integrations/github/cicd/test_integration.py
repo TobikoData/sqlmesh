@@ -1264,7 +1264,7 @@ def test_deploy_comment_pre_categorized(
         == f""":robot: **SQLMesh Bot Info** :robot:
 - :eyes: To **review** this PR's changes, use virtual data environment:
   - `hello_world_2`
-- :arrow_forward: To apply this PR's plan to prod, comment:
+- :arrow_forward: To **apply** this PR's plan to prod, comment:
   - `/deploy`
 <details>
   <summary>:ship: Prod Plan Being Applied</summary>

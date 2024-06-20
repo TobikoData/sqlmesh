@@ -49,7 +49,7 @@ from shutil import rmtree
 from types import MappingProxyType
 
 import pandas as pd
-from sqlglot import exp
+from sqlglot import Dialect, exp
 from sqlglot.lineage import GraphHTML
 
 from sqlmesh.core import analytics
@@ -309,7 +309,6 @@ class GenericContext(BaseContext, t.Generic[C]):
         console: t.Optional[Console] = None,
         users: t.Optional[t.List[User]] = None,
     ):
-        self.console = console or get_console()
         self.configs = (
             config if isinstance(config, dict) else load_configs(config, self.CONFIG_TYPE, paths)
         )
@@ -326,18 +325,27 @@ class GenericContext(BaseContext, t.Generic[C]):
 
         self.path, self.config = t.cast(t.Tuple[Path, C], next(iter(self.configs.items())))
 
+        # This allows overriding the default dialect's normalization strategy, so for example
+        # one can do `dialect="duckdb,normalization_strategy=lowercase"` and this will be
+        # applied to the DuckDB dialect globally
+        if "normalization_strategy" in str(self.config.dialect):
+            dialect = Dialect.get_or_raise(self.config.dialect)
+            type(dialect).NORMALIZATION_STRATEGY = dialect.normalization_strategy
+
         if self.config.disable_anonymized_analytics:
             analytics.disable_analytics()
 
         self.gateway = gateway
         self._scheduler = self.config.get_scheduler(self.gateway)
         self.environment_ttl = self.config.environment_ttl
-        self.pinned_environments = Environment.normalize_names(self.config.pinned_environments)
+        self.pinned_environments = Environment.sanitize_names(self.config.pinned_environments)
         self.auto_categorize_changes = self.config.plan.auto_categorize_changes
 
         self._connection_config = self.config.get_connection(self.gateway)
         self.concurrent_tasks = concurrent_tasks or self._connection_config.concurrent_tasks
         self._engine_adapter = engine_adapter or self._connection_config.create_engine_adapter()
+
+        self.console = console or get_console(dialect=self._engine_adapter.dialect)
 
         self._test_connection_config = self.config.get_test_connection(
             self.gateway, self.default_catalog, default_catalog_dialect=self.engine_adapter.DIALECT
@@ -411,6 +419,8 @@ class GenericContext(BaseContext, t.Generic[C]):
             A new instance of the updated or inserted model.
         """
         model = self.get_model(model, raise_if_missing=True)
+        if not model.enabled:
+            raise SQLMeshError(f"The disabled model '{model.name}' cannot be upserted")
         path = model._path
 
         # model.copy() can't be used here due to a cached state that can be a part of a model instance.
@@ -1015,7 +1025,7 @@ class GenericContext(BaseContext, t.Generic[C]):
             The plan builder.
         """
         environment = environment or self.config.default_target_environment
-        environment = Environment.normalize_name(environment)
+        environment = Environment.sanitize_name(environment)
         is_dev = environment != c.PROD
 
         if skip_backfill and not no_gaps and not is_dev:
@@ -1213,7 +1223,7 @@ class GenericContext(BaseContext, t.Generic[C]):
             True if there are changes, False otherwise.
         """
         environment = environment or self.config.default_target_environment
-        environment = Environment.normalize_name(environment)
+        environment = Environment.sanitize_name(environment)
         context_diff = self._context_diff(environment)
         self.console.show_model_difference_summary(
             context_diff,
@@ -1221,6 +1231,7 @@ class GenericContext(BaseContext, t.Generic[C]):
                 self.config.environment_catalog_mapping,
                 name=environment,
                 suffix_target=self.config.environment_suffix_target,
+                normalize_name=context_diff.normalize_environment_name,
             ),
             self.default_catalog,
             no_diff=not detailed,
@@ -1625,6 +1636,7 @@ class GenericContext(BaseContext, t.Generic[C]):
                 adapter=self._engine_adapter,
                 state_reader=self.state_reader,
                 dialect=config.model_defaults.dialect,
+                gateway=self.gateway,
                 max_workers=self.concurrent_tasks,
             )
 
@@ -1870,9 +1882,13 @@ class GenericContext(BaseContext, t.Generic[C]):
         force_no_diff: bool = False,
         ensure_finalized_snapshots: bool = False,
     ) -> ContextDiff:
-        environment = Environment.normalize_name(environment)
+        environment = Environment.sanitize_name(environment)
         if force_no_diff:
-            return ContextDiff.create_no_diff(environment)
+            return ContextDiff.create_no_diff(
+                self.state_reader.get_environment(environment.lower())
+                or EnvironmentNamingInfo(name=environment)
+            )
+
         return ContextDiff.create(
             environment,
             snapshots=snapshots or self.snapshots,

@@ -46,7 +46,7 @@ setup(
         "requests",
         "rich[jupyter]",
         "ruamel.yaml",
-        "sqlglot[rs]~=25.0.3",
+        "sqlglot[rs]~=25.2.0",
     ],
     extras_require={
         "bigquery": [
@@ -84,7 +84,6 @@ setup(
             "pyspark~=3.5.0",
             "pytz",
             "snowflake-connector-python[pandas,secure-local-storage]>=3.0.2",
-            "snowflake-snowpark-python[pandas];python_version<'3.12'",
             "sqlalchemy-stubs",
             "tenacity==8.1.0",
             "types-croniter",

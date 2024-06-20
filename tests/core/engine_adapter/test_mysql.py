@@ -56,7 +56,7 @@ def test_comments(make_mocked_engine_adapter: t.Callable, mocker: MockerFixture)
     sql_calls = to_sql_calls(adapter)
     assert sql_calls == [
         f"CREATE TABLE IF NOT EXISTS `test_table` (`a` INT COMMENT '{truncated_column_comment}', `b` INT) COMMENT='{truncated_table_comment}'",
-        f"CREATE TABLE IF NOT EXISTS `test_table` COMMENT='{truncated_table_comment}' AS SELECT `a`, `b` FROM `source_table`",
+        f"CREATE TABLE IF NOT EXISTS `test_table` COMMENT='{truncated_table_comment}' AS SELECT CAST(`a` AS SIGNED) AS `a`, CAST(`b` AS SIGNED) AS `b` FROM (SELECT `a`, `b` FROM `source_table`) AS `_subquery`",
         f"ALTER TABLE `test_table` MODIFY `a` INT COMMENT '{truncated_column_comment}'",
         "CREATE OR REPLACE VIEW `test_view` AS SELECT `a`, `b` FROM `source_table`",
         f"ALTER TABLE `test_table` COMMENT = '{truncated_table_comment}'",

@@ -87,6 +87,16 @@ map_config = Config(
     model_defaults=model_defaults,
 )
 
+# A config representing isolated systems with a gateway per system
+isolated_systems_config = Config(
+    gateways={
+        "dev": GatewayConfig(connection=DuckDBConnectionConfig()),
+        "test": GatewayConfig(connection=DuckDBConnectionConfig()),
+        "prod": GatewayConfig(connection=DuckDBConnectionConfig()),
+    },
+    default_gateway="dev",
+    model_defaults=model_defaults,
+)
 
 required_approvers_config = Config(
     default_connection=DuckDBConnectionConfig(),

@@ -285,6 +285,31 @@ def test_plan_execution_time():
     )
 
 
+def test_env_and_default_schema_normalization(mocker: MockerFixture):
+    from sqlglot.dialects import DuckDB
+    from sqlglot.dialects.dialect import NormalizationStrategy
+
+    mocker.patch.object(DuckDB, "NORMALIZATION_STRATEGY", NormalizationStrategy.UPPERCASE)
+
+    context = Context(config=Config())
+    context.upsert_model(
+        load_sql_based_model(
+            parse(
+                """
+                MODEL(
+                    name x,
+                    kind FULL
+                );
+
+                SELECT 1 AS c
+                """
+            )
+        )
+    )
+    context.plan("dev", auto_apply=True, no_prompts=True)
+    assert list(context.fetchdf('select c from "DEFAULT__DEV"."X"')["c"])[0] == 1
+
+
 def test_clear_caches(tmp_path: pathlib.Path):
     models_dir = tmp_path / "models"
 
@@ -461,6 +486,7 @@ def test_physical_schema_override(copy_to_temp_path: t.Callable) -> None:
 @pytest.mark.slow
 def test_janitor(sushi_context, mocker: MockerFixture) -> None:
     adapter_mock = mocker.MagicMock()
+    adapter_mock.dialect = "duckdb"
     state_sync_mock = mocker.MagicMock()
     state_sync_mock.delete_expired_environments.return_value = [
         Environment(
@@ -660,7 +686,7 @@ def test_default_catalog_connections(copy_to_temp_path: t.Callable):
 def test_load_external_models(copy_to_temp_path):
     path = copy_to_temp_path("examples/sushi")
 
-    context = Context(paths=path, config="local_config")
+    context = Context(paths=path)
 
     external_model_names = [
         m.name for m in context.models.values() if m.kind.name == ModelKindName.EXTERNAL
@@ -676,3 +702,53 @@ def test_load_external_models(copy_to_temp_path):
 
     # from external_models/model2.yaml
     assert "raw.model2" in external_model_names
+
+    # from external_models/prod.yaml, should not show unless --gateway=prod
+    assert "prod_raw.model1" not in external_model_names
+
+
+def test_load_gateway_specific_external_models(copy_to_temp_path):
+    path = copy_to_temp_path("examples/sushi")
+
+    def _get_external_model_names(gateway=None):
+        context = Context(paths=path, config="isolated_systems_config", gateway=gateway)
+
+        external_model_names = [
+            m.name for m in context.models.values() if m.kind.name == ModelKindName.EXTERNAL
+        ]
+
+        assert len(external_model_names) > 0
+
+        return external_model_names
+
+    # default gateway is dev, prod model should not show
+    assert "prod_raw.model1" not in _get_external_model_names()
+
+    # gateway explicitly set to prod; prod model should now show
+    assert "prod_raw.model1" in _get_external_model_names(gateway="prod")
+
+
+def test_disabled_model(copy_to_temp_path):
+    path = copy_to_temp_path("examples/sushi")
+
+    context = Context(paths=path)
+
+    assert (path[0] / "models" / "disabled.sql").exists()
+    assert not context.get_model("sushi.disabled")
+
+
+def test_override_dialect_normalization_strategy():
+    config = Config(
+        model_defaults=ModelDefaultsConfig(dialect="duckdb,normalization_strategy=lowercase")
+    )
+
+    # This has the side-effect of mutating DuckDB globally to override its normalization strategy
+    Context(config=config)
+
+    from sqlglot.dialects import DuckDB
+    from sqlglot.dialects.dialect import NormalizationStrategy
+
+    assert DuckDB.NORMALIZATION_STRATEGY == NormalizationStrategy.LOWERCASE
+
+    # The above change is applied globally so we revert it to avoid breaking other tests
+    DuckDB.NORMALIZATION_STRATEGY = NormalizationStrategy.CASE_INSENSITIVE

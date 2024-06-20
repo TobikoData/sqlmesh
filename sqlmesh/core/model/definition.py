@@ -10,6 +10,7 @@ from functools import cached_property
 from pathlib import Path
 
 import pandas as pd
+import numpy as np
 from astor import to_source
 from pydantic import Field
 from sqlglot import diff, exp
@@ -179,7 +180,7 @@ class _Model(ModelMeta, frozen=True):
                             value=exp.to_table(field_value, dialect=self.dialect),
                         )
                     )
-                elif field_name not in ("column_descriptions_", "default_catalog"):
+                elif field_name not in ("column_descriptions_", "default_catalog", "enabled"):
                     expressions.append(
                         exp.Property(
                             this=field_info.alias or field_name,
@@ -421,20 +422,20 @@ class _Model(ModelMeta, frozen=True):
         """
         query = self.render_query_or_raise(**render_kwarg).copy()
 
-        for select_or_union in query.find_all(exp.Select, exp.Union):
-            cte = select_or_union.find_ancestor(exp.With, exp.Select, exp.Subquery)
+        for select_or_set_op in query.find_all(exp.Select, exp.SetOperation):
+            cte = select_or_set_op.find_ancestor(exp.With, exp.Select, exp.Subquery)
             skip_limit = isinstance(cte, exp.With) and cte.recursive
 
-            if isinstance(select_or_union, exp.Select) and select_or_union.args.get("from"):
-                select_or_union.where(exp.false(), copy=False)
-                if not skip_limit and not isinstance(select_or_union.parent, exp.Union):
-                    select_or_union.limit(0, copy=False)
+            if isinstance(select_or_set_op, exp.Select) and select_or_set_op.args.get("from"):
+                select_or_set_op.where(exp.false(), copy=False)
+                if not skip_limit and not isinstance(select_or_set_op.parent, exp.SetOperation):
+                    select_or_set_op.limit(0, copy=False)
             elif (
                 not skip_limit
-                and isinstance(select_or_union, exp.Union)
-                and not isinstance(select_or_union.parent, exp.Union)
+                and isinstance(select_or_set_op, exp.SetOperation)
+                and not isinstance(select_or_set_op.parent, exp.SetOperation)
             ):
-                select_or_union.set("limit", exp.Limit(expression=exp.Literal.number(0)))
+                select_or_set_op.set("limit", exp.Limit(expression=exp.Literal.number(0)))
 
         if self.managed_columns:
             query.select(
@@ -1094,9 +1095,17 @@ class SqlModel(_SqlBasedModel):
         for edit in edits:
             if isinstance(edit, Insert):
                 expr = edit.expression
-                if _is_udtf(expr) or (
-                    not _is_projection(expr) and expr.parent not in inserted_expressions
-                ):
+                if _is_udtf(expr):
+                    # projection subqueries do not change cardinality, engines don't allow these to return
+                    # more than one row of data
+                    parent = expr.find_ancestor(exp.Subquery)
+
+                    if not parent:
+                        return None
+
+                    expr = parent
+
+                if not _is_projection(expr) and expr.parent not in inserted_expressions:
                     return None
             elif not isinstance(edit, Keep):
                 return None
@@ -1164,6 +1173,7 @@ class SeedModel(_SqlBasedModel):
         datetime_columns = []
         bool_columns = []
         string_columns = []
+
         for name, tpe in (self.columns_to_types_ or {}).items():
             if tpe.this in (exp.DataType.Type.DATE, exp.DataType.Type.DATE32):
                 date_columns.append(name)
@@ -1188,7 +1198,7 @@ class SeedModel(_SqlBasedModel):
                 cond=lambda x: x.notna(),  # type: ignore
                 other=df[string_columns].astype(str),  # type: ignore
             )
-            yield df
+            yield df.replace({np.nan: None})
 
     @property
     def columns_to_types(self) -> t.Optional[t.Dict[str, exp.DataType]]:
@@ -1378,6 +1388,7 @@ class ExternalModel(_Model):
     """The model definition which represents an external source/table."""
 
     source_type: Literal["external"] = "external"
+    gateway: t.Optional[str] = None
 
     def is_breaking_change(self, previous: Model) -> t.Optional[bool]:
         if not isinstance(previous, ExternalModel):
@@ -1797,7 +1808,7 @@ def create_external_model(
     path: Path = Path(),
     defaults: t.Optional[t.Dict[str, t.Any]] = None,
     **kwargs: t.Any,
-) -> Model:
+) -> ExternalModel:
     """Creates an external model.
 
     Args:
@@ -1806,14 +1817,17 @@ def create_external_model(
         dialect: The dialect to serialize.
         path: An optional path to the model definition file.
     """
-    return _create_model(
+    return t.cast(
         ExternalModel,
-        name,
-        defaults=defaults,
-        dialect=dialect,
-        path=path,
-        kind=ModelKindName.EXTERNAL.value,
-        **kwargs,
+        _create_model(
+            ExternalModel,
+            name,
+            defaults=defaults,
+            dialect=dialect,
+            path=path,
+            kind=ModelKindName.EXTERNAL.value,
+            **kwargs,
+        ),
     )
 
 

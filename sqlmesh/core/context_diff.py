@@ -21,6 +21,7 @@ from sqlmesh.utils.errors import SQLMeshError
 from sqlmesh.utils.pydantic import PydanticModel
 
 if t.TYPE_CHECKING:
+    from sqlmesh.core.environment import EnvironmentNamingInfo
     from sqlmesh.core.state_sync import StateReader
 
 logger = logging.getLogger(__name__)
@@ -39,6 +40,8 @@ class ContextDiff(PydanticModel):
     """Whether the target environment is new."""
     is_unfinalized_environment: bool
     """Whether the currently stored environment record is in unfinalized state."""
+    normalize_environment_name: bool
+    """Whether the environment name should be normalized."""
     create_from: str
     """The name of the environment the target environment will be created from if new."""
     added: t.Set[SnapshotId]
@@ -162,6 +165,7 @@ class ContextDiff(PydanticModel):
             environment=environment,
             is_new_environment=is_new_environment,
             is_unfinalized_environment=bool(env and not env.finalized_ts),
+            normalize_environment_name=is_new_environment or bool(env and env.normalize_name),
             create_from=create_from,
             added=added,
             removed_snapshots=removed,
@@ -174,7 +178,7 @@ class ContextDiff(PydanticModel):
         )
 
     @classmethod
-    def create_no_diff(cls, environment: str) -> ContextDiff:
+    def create_no_diff(cls, environment: EnvironmentNamingInfo) -> ContextDiff:
         """Create a no-op ContextDiff object.
 
         Args:
@@ -184,9 +188,10 @@ class ContextDiff(PydanticModel):
             The ContextDiff object.
         """
         return ContextDiff(
-            environment=environment,
+            environment=environment.name,
             is_new_environment=False,
             is_unfinalized_environment=False,
+            normalize_environment_name=environment.normalize_name,
             create_from="",
             added=set(),
             removed_snapshots={},

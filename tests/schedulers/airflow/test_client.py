@@ -118,6 +118,7 @@ def test_apply_plan(mocker: MockerFixture, snapshot: Snapshot):
                     "grains": [],
                     "allow_partials": False,
                     "signals": [],
+                    "enabled": True,
                 },
                 "audits": [],
                 "name": '"test_model"',
@@ -156,6 +157,7 @@ def test_apply_plan(mocker: MockerFixture, snapshot: Snapshot):
                 }
             ],
             "suffix_target": "schema",
+            "normalize_name": True,
         },
         "no_gaps": False,
         "skip_backfill": False,
