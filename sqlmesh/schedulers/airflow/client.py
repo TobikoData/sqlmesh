@@ -230,6 +230,7 @@ class AirflowClient(BaseAirflowClient):
         response = self._session.post(
             urljoin(self._airflow_url, PLANS_PATH),
             data=request.json(),
+            headers={"Content-Type": "application/json"},
         )
         raise_for_status(response)
 
