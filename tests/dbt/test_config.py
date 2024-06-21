@@ -226,7 +226,7 @@ def test_singular_test_to_standalone_audit():
     assert standalone_audit.query == jinja_query(sql)
     assert standalone_audit.depends_on == {'"memory"."foo"."bar"'}
 
-    test_config.dialect = "bigquery"
+    test_config.dialect_ = "bigquery"
     standalone_audit = test_config.to_sqlmesh(context)
     assert standalone_audit.dialect == "bigquery"
 

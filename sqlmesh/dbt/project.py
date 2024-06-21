@@ -68,7 +68,7 @@ class Project:
         profile_name = context.render(project_yaml.get("profile", "")) or context.project_name
         context.profile_name = profile_name
 
-        profile = Profile.load(context, context.target_name, project_yaml)
+        profile = Profile.load(context, context.target_name)
         context.target = profile.target
 
         context.manifest = ManifestHelper(

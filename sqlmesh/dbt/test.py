@@ -73,7 +73,7 @@ class TestConfig(GeneralConfig):
     interval_unit: t.Optional[str] = None
     column_name: t.Optional[str] = None
     dependencies: Dependencies = Dependencies()
-    dialect: t.Optional[str] = None
+    dialect_: t.Optional[str] = Field(None, alias="dialect")
 
     # dbt fields
     package_name: str = ""
@@ -111,6 +111,9 @@ class TestConfig(GeneralConfig):
     def sqlmesh_config_fields(self) -> t.Set[str]:
         return {"description", "owner", "stamp", "cron", "interval_unit"}
 
+    def dialect(self, context: DbtContext) -> str:
+        return self.dialect_ or context.default_dialect
+
     def to_sqlmesh(self, context: DbtContext) -> Audit:
         """Convert dbt Test to SQLMesh Audit
 
@@ -143,7 +146,7 @@ class TestConfig(GeneralConfig):
             jinja_macros.add_globals({"this": self.relation_info})
             audit = StandaloneAudit(
                 name=self.name,
-                dialect=self.dialect or context.default_dialect,
+                dialect=self.dialect(context),
                 skip=skip,
                 query=query,
                 jinja_macros=jinja_macros,
@@ -159,7 +162,7 @@ class TestConfig(GeneralConfig):
         else:
             audit = ModelAudit(
                 name=self.name,
-                dialect=self.dialect or context.default_dialect,
+                dialect=self.dialect(context),
                 skip=skip,
                 blocking=blocking,
                 query=query,

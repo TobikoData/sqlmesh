@@ -3,7 +3,6 @@ from __future__ import annotations
 import logging
 import typing as t
 from pathlib import Path
-from sqlglot import Dialect
 from sqlmesh.core import constants as c
 from sqlmesh.core.audit import Audit
 from sqlmesh.core.config import (
@@ -21,7 +20,7 @@ from sqlmesh.dbt.model import ModelConfig
 from sqlmesh.dbt.profile import Profile
 from sqlmesh.dbt.project import Project
 from sqlmesh.dbt.target import TargetConfig
-from sqlmesh.utils import sqlglot_dialects, UniqueKeyDict
+from sqlmesh.utils import UniqueKeyDict
 from sqlmesh.utils.errors import ConfigError
 from sqlmesh.utils.jinja import JinjaMacroRegistry
 
@@ -29,36 +28,6 @@ logger = logging.getLogger(__name__)
 
 if t.TYPE_CHECKING:
     from sqlmesh.core.context import GenericContext
-
-
-def get_default_dialect(
-    model_defaults_config: ModelDefaultsConfig, profile: Profile, profile_name: t.Optional[str]
-) -> ModelDefaultsConfig:
-    if model_defaults_config.dialect is None:
-        project_model_config = profile.project_model_config
-        profile_name = profile_name or ""
-
-        dialect = (
-            # profile-specific defaults
-            project_model_config.get(profile_name, {}).get("+dialect")
-            or project_model_config.get(profile_name, {}).get("dialect")
-            # global defaults
-            or project_model_config.get("+dialect")
-            or project_model_config.get("dialect")
-            # target engine
-            or profile.target.dialect
-        )
-        try:
-            Dialect.get_or_raise(dialect)
-            model_defaults_config.dialect = dialect
-        except ValueError as e:
-            raise ConfigError(
-                "Default dialect may not be specified as a jinja variable."
-                if "{{" in dialect
-                else f"Invalid default dialect specification. Supported dialects are: {sqlglot_dialects()}."
-            ) from e
-
-    return model_defaults_config
 
 
 def sqlmesh_config(
@@ -72,9 +41,9 @@ def sqlmesh_config(
     project_root = project_root or Path()
     context = DbtContext(project_root=project_root)
     profile = Profile.load(context, target_name=dbt_target_name)
-    model_defaults = get_default_dialect(
-        kwargs.pop("model_defaults", ModelDefaultsConfig()), profile, context.target_name
-    )
+    model_defaults = kwargs.pop("model_defaults", ModelDefaultsConfig())
+    if model_defaults.dialect is None:
+        model_defaults.dialect = profile.target.dialect
 
     target_to_sqlmesh_args = {}
     if register_comments is not None:

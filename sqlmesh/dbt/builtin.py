@@ -302,7 +302,7 @@ def create_builtin_globals(
 
     target: t.Optional[AttributeDict] = jinja_globals.get("target", None)
     api = Api(target)
-    dialect = jinja_globals.pop("dialect", None) or dict(target or {}).get("dialect")
+    dialect = jinja_globals.pop("dialect", None) or (target.dialect if target else None)  # type: ignore
 
     builtin_globals["api"] = api
 

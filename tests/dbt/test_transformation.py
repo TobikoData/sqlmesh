@@ -10,7 +10,6 @@ from dbt.exceptions import CompilationError
 from freezegun import freeze_time
 from pytest_mock.plugin import MockerFixture
 from sqlglot import exp, parse_one
-from sqlglot.errors import ParseError
 from sqlmesh.core import dialect as d
 from sqlmesh.core.audit import StandaloneAudit
 from sqlmesh.core.context import Context
@@ -581,7 +580,7 @@ def test_test_dialect(assert_exp_eq, sushi_test_project: Project):
         audit = t.cast(StandaloneAudit, test_config.to_sqlmesh(context))
         audit.render_query(audit).sql()
 
-    test_config.dialect = "bigquery"
+    test_config.dialect_ = "bigquery"
     audit = t.cast(StandaloneAudit, test_config.to_sqlmesh(context))
     assert_exp_eq(
         audit.render_query(audit).sql(),
@@ -858,17 +857,6 @@ def test_partition_by(sushi_test_project: Project):
     )
 
     model_config.partition_by = {"field": "ds", "data_type": "date", "granularity": "day"}
-    assert model_config.to_sqlmesh(context).partitioned_by == [exp.to_column("ds", quoted=True)]
-
-    # partition_by parsed with model dialect
-    model_config.dialect = "duckdb"
-    model_config.partition_by = ["`ds`"]
-
-    with pytest.raises(ParseError):
-        # fails because duckdb can't parse "`"
-        model_config.to_sqlmesh(context).partitioned_by[0].sql()
-
-    model_config.dialect = "bigquery"
     assert model_config.to_sqlmesh(context).partitioned_by == [exp.to_column("ds", quoted=True)]
 
 

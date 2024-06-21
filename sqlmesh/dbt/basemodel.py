@@ -105,7 +105,7 @@ class BaseModelConfig(GeneralConfig):
     path: Path = Path()
     dependencies: Dependencies = Dependencies()
     tests: t.List[TestConfig] = []
-    dialect: t.Optional[str] = None
+    dialect_: t.Optional[str] = Field(None, alias="dialect")
 
     # DBT configuration fields
     name: str = ""
@@ -187,6 +187,9 @@ class BaseModelConfig(GeneralConfig):
         Get the model's config name (package_name.name)
         """
         return f"{self.package_name}.{self.name}"
+
+    def dialect(self, context: DbtContext) -> str:
+        return self.dialect_ or context.default_dialect
 
     def canonical_name(self, context: DbtContext) -> str:
         """
@@ -297,10 +300,7 @@ class BaseModelConfig(GeneralConfig):
         )
         return {
             "audits": [(test.name, {}) for test in self.tests],
-            "columns": column_types_to_sqlmesh(
-                self.columns, self.dialect or context.default_dialect
-            )
-            or None,
+            "columns": column_types_to_sqlmesh(self.columns, self.dialect(context)) or None,
             "column_descriptions": column_descriptions_to_sqlmesh(self.columns) or None,
             "depends_on": {
                 model.canonical_name(context) for model in model_context.refs.values()

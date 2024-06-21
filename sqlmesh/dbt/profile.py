@@ -26,27 +26,19 @@ class Profile:
         path: Path,
         target_name: str,
         target: TargetConfig,
-        project_model_config: t.Dict[str, t.Any],
     ):
         """
         Args:
             path: Path to the profile file
             target_name: Name of the target loaded
             target: TargetConfig for target_name
-            project_model_config: Model configuration values from the project YAML
         """
         self.path = path
         self.target_name = target_name
         self.target = target
-        self.project_model_config = project_model_config
 
     @classmethod
-    def load(
-        cls,
-        context: DbtContext,
-        target_name: t.Optional[str] = None,
-        project_yaml: t.Optional[t.Dict[str, t.Any]] = None,
-    ) -> Profile:
+    def load(cls, context: DbtContext, target_name: t.Optional[str] = None) -> Profile:
         """
         Loads the profile for the specified project
 
@@ -56,27 +48,22 @@ class Profile:
         Returns:
             The Profile for the specified project
         """
-        if not project_yaml:
+        if not context.profile_name:
             project_file = Path(context.project_root, PROJECT_FILENAME)
             if not project_file.exists():
                 raise ConfigError(f"Could not find {PROJECT_FILENAME} in {context.project_root}")
             project_yaml = load_yaml(project_file)
-
-        project_model_config = project_yaml.get("models", {})
-
-        if not context.profile_name:
             context.profile_name = context.render(
                 project_yaml.get("profile", "")
             ) or context.render(project_yaml.get("name", ""))
             if not context.profile_name:
                 raise ConfigError(f"{project_file.stem} must include project name.")
-
         profile_filepath = cls._find_profile(context.project_root)
         if not profile_filepath:
             raise ConfigError(f"{cls.PROFILE_FILE} not found.")
 
         target_name, target = cls._read_profile(profile_filepath, context, target_name)
-        return Profile(profile_filepath, target_name, target, project_model_config)
+        return Profile(profile_filepath, target_name, target)
 
     @classmethod
     def _find_profile(cls, project_root: Path) -> t.Optional[Path]:

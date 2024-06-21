@@ -60,7 +60,13 @@ class DbtContext:
 
     @property
     def default_dialect(self) -> str:
-        return self.sqlmesh_config.dialect or self.target.dialect
+        if self.sqlmesh_config.dialect:
+            return self.sqlmesh_config.dialect
+        if not self.target:
+            raise SQLMeshError(
+                "Target must be configured before calling the default_dialect property."
+            )
+        return self.target.dialect
 
     @property
     def project_name(self) -> t.Optional[str]:
