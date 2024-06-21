@@ -2163,6 +2163,45 @@ def test_model_ctas_query():
         == 'WITH RECURSIVE "a" AS (SELECT * FROM "x" AS "x" WHERE FALSE), "b" AS (SELECT * FROM "a" AS "a" WHERE FALSE UNION ALL SELECT * FROM "a" AS "a" WHERE FALSE) SELECT * FROM "b" AS "b" WHERE FALSE LIMIT 0'
     )
 
+    expressions = d.parse(
+        """
+        MODEL (name `a-b-c.table`, kind FULL, dialect bigquery);
+        WITH RECURSIVE a AS (
+            SELECT * FROM (SELECT * FROM (SELECT * FROM x))
+        ), b AS (
+            SELECT * FROM a UNION ALL SELECT * FROM a
+        )
+        SELECT * FROM b
+
+    """
+    )
+
+    assert (
+        load_sql_based_model(expressions, dialect="bigquery").ctas_query().sql()
+        == 'WITH RECURSIVE "a" AS (SELECT * FROM (SELECT * FROM (SELECT * FROM "x" AS "x" WHERE FALSE) AS "_q_0" WHERE FALSE) AS "_q_1" WHERE FALSE), "b" AS (SELECT * FROM "a" AS "a" WHERE FALSE UNION ALL SELECT * FROM "a" AS "a" WHERE FALSE) SELECT * FROM "b" AS "b" WHERE FALSE LIMIT 0'
+    )
+
+    expressions = d.parse(
+        """
+        MODEL (name `a-b-c.table`, kind FULL, dialect bigquery);
+        WITH RECURSIVE a AS (
+            WITH nested_a AS (
+                SELECT * FROM (SELECT * FROM (SELECT * FROM x))
+            )
+            SELECT * FROM nested_a
+        ), b AS (
+            SELECT * FROM a UNION ALL SELECT * FROM a
+        )
+        SELECT * FROM b
+
+    """
+    )
+
+    assert (
+        load_sql_based_model(expressions, dialect="bigquery").ctas_query().sql()
+        == 'WITH RECURSIVE "a" AS (WITH "nested_a" AS (SELECT * FROM (SELECT * FROM (SELECT * FROM "x" AS "x" WHERE FALSE) AS "_q_0" WHERE FALSE) AS "_q_1" WHERE FALSE) SELECT * FROM "nested_a" AS "nested_a" WHERE FALSE), "b" AS (SELECT * FROM "a" AS "a" WHERE FALSE UNION ALL SELECT * FROM "a" AS "a" WHERE FALSE) SELECT * FROM "b" AS "b" WHERE FALSE LIMIT 0'
+    )
+
 
 def test_is_breaking_change():
     model = create_external_model("a", columns={"a": "int", "limit": "int"})
