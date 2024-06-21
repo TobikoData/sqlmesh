@@ -156,6 +156,9 @@ class ModelMeta(_Node):
         def _normalize(value: t.Any) -> t.Any:
             return normalize_identifiers(value, dialect=dialect) if normalize else value
 
+        if isinstance(v, exp.Paren):
+            v = [v.unnest()]
+
         if isinstance(v, (exp.Tuple, exp.Array)):
             return [_normalize(e).name for e in v.expressions]
         if isinstance(v, exp.Expression):

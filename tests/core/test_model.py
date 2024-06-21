@@ -939,7 +939,8 @@ def test_audits():
             audits (
                 audit_a,
                 audit_b(key='value')
-            )
+            ),
+            tags (foo)
         );
         SELECT 1, ds;
     """
@@ -950,6 +951,7 @@ def test_audits():
         ("audit_a", {}),
         ("audit_b", {"key": exp.Literal.string("value")}),
     ]
+    assert model.tags == ["foo"]
 
 
 def test_description(sushi_context):
