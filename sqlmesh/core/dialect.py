@@ -412,15 +412,17 @@ def _parse_table_parts(
 ) -> exp.Table:
     index = self._index
     table = self.__parse_table_parts(schema=schema, is_db_reference=is_db_reference)  # type: ignore
-    table_arg = table.this
 
-    if isinstance(table_arg, exp.Var) and table_arg.name.startswith(SQLMESH_MACRO_PREFIX):
+    table_arg = table.this
+    name = table_arg.name
+
+    if isinstance(table_arg, exp.Var) and name.startswith(SQLMESH_MACRO_PREFIX):
         # Macro functions do not clash with the staged file syntax, so we can safely parse them
-        if self._prev.token_type == TokenType.STRING or "(" in table_arg.name:
+        if self._prev.token_type == TokenType.STRING or any(ch in name for ch in ("(", "{")):
             self._retreat(index)
             return Parser._parse_table_parts(self, schema=schema, is_db_reference=is_db_reference)
 
-        table_arg.replace(MacroVar(this=table_arg.name[1:]))
+        table_arg.replace(MacroVar(this=name[1:]))
         return StagedFilePath(**table.args)
 
     return table
