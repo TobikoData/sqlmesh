@@ -34,17 +34,23 @@ def test_varchar_size_workaround(make_mocked_engine_adapter: t.Callable, mocker:
 
     columns_to_max = adapter._default_precision_to_max(
         {
+            "nchar1": exp.DataType.build("NCHAR(1)", dialect=adapter.dialect),
             "char": exp.DataType.build("CHAR", dialect=adapter.dialect),
+            "char1": exp.DataType.build("CHAR(1)", dialect=adapter.dialect),
             "char2": exp.DataType.build("CHAR(2)", dialect=adapter.dialect),
             "varchar": exp.DataType.build("VARCHAR", dialect=adapter.dialect),
+            "varchar256": exp.DataType.build("VARCHAR(256)", dialect=adapter.dialect),
             "varchar2": exp.DataType.build("VARCHAR(2)", dialect=adapter.dialect),
         }
     )
 
     assert columns_to_max == {
-        "char": exp.DataType.build("CHAR(max)", dialect=adapter.dialect),
+        "nchar1": exp.DataType.build("NCHAR(1)", dialect=adapter.dialect),
+        "char": exp.DataType.build("CHAR", dialect=adapter.dialect),
+        "char1": exp.DataType.build("CHAR(max)", dialect=adapter.dialect),
         "char2": exp.DataType.build("CHAR(2)", dialect=adapter.dialect),
-        "varchar": exp.DataType.build("VARCHAR(max)", dialect=adapter.dialect),
+        "varchar": exp.DataType.build("VARCHAR", dialect=adapter.dialect),
+        "varchar256": exp.DataType.build("VARCHAR(max)", dialect=adapter.dialect),
         "varchar2": exp.DataType.build("VARCHAR(2)", dialect=adapter.dialect),
     }
 
