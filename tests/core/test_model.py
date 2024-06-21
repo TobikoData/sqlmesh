@@ -4043,6 +4043,24 @@ def test_variables_in_templates() -> None:
         == "SELECT 'combo' AS \"col_test_value_overridden_value_col_in_memory\""
     )
 
+    model = load_sql_based_model(
+        parse(
+            """
+        MODEL(
+          name @{some_var}.bar,
+          dialect snowflake
+        );
+
+        SELECT 1 AS c
+        """
+        ),
+        variables={
+            "some_var": "foo",
+        },
+    )
+
+    assert model.name == "foo.bar"
+
 
 def test_variables_jinja():
     expressions = parse(
