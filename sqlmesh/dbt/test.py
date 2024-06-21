@@ -6,7 +6,6 @@ from enum import Enum
 from pathlib import Path
 
 from pydantic import Field
-
 import sqlmesh.core.dialect as d
 from sqlmesh.core.audit import Audit, ModelAudit, StandaloneAudit
 from sqlmesh.dbt.common import (
@@ -48,6 +47,7 @@ class TestConfig(GeneralConfig):
         interval_unit: The duration of an interval for the audit. By default, it is computed from the cron expression.
         column_name: The name of the column under test.
         dependencies: The macros, refs, and sources the test depends upon.
+        dialect: SQL dialect of the test query.
         package_name: Name of the package that defines the test.
         alias: The alias for the materialized table where failures are stored (Not supported).
         schema: The schema for the materialized table where the failures are stored (Not supported).
@@ -73,6 +73,7 @@ class TestConfig(GeneralConfig):
     interval_unit: t.Optional[str] = None
     column_name: t.Optional[str] = None
     dependencies: Dependencies = Dependencies()
+    dialect: t.Optional[str] = None
 
     # dbt fields
     package_name: str = ""
@@ -142,7 +143,7 @@ class TestConfig(GeneralConfig):
             jinja_macros.add_globals({"this": self.relation_info})
             audit = StandaloneAudit(
                 name=self.name,
-                dialect=context.dialect,
+                dialect=self.dialect or context.default_dialect,
                 skip=skip,
                 query=query,
                 jinja_macros=jinja_macros,
@@ -158,7 +159,7 @@ class TestConfig(GeneralConfig):
         else:
             audit = ModelAudit(
                 name=self.name,
-                dialect=context.dialect,
+                dialect=self.dialect or context.default_dialect,
                 skip=skip,
                 blocking=blocking,
                 query=query,

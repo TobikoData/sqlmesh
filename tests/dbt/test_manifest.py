@@ -31,6 +31,7 @@ def test_manifest_helper(caplog):
         macros=[MacroReference(name="ref"), MacroReference(name="var")],
     )
     assert helper.models()["top_waiters"].materialized == "view"
+    assert helper.models()["top_waiters"].dialect == "postgres"
 
     assert helper.models()["waiters"].dependencies == Dependencies(
         macros={MacroReference(name="incremental_by_time"), MacroReference(name="source")},
@@ -81,6 +82,7 @@ def test_manifest_helper(caplog):
     assert waiter_revenue_by_day_config.incremental_strategy == "delete+insert"
     assert waiter_revenue_by_day_config.cluster_by == ["ds"]
     assert waiter_revenue_by_day_config.time_column == "ds"
+    assert waiter_revenue_by_day_config.dialect == "bigquery"
 
     assert helper.models("customers")["customers"].dependencies == Dependencies(
         sources={"raw.orders"},

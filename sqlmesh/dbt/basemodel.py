@@ -105,6 +105,7 @@ class BaseModelConfig(GeneralConfig):
     path: Path = Path()
     dependencies: Dependencies = Dependencies()
     tests: t.List[TestConfig] = []
+    dialect: t.Optional[str] = None
 
     # DBT configuration fields
     name: str = ""
@@ -296,7 +297,10 @@ class BaseModelConfig(GeneralConfig):
         )
         return {
             "audits": [(test.name, {}) for test in self.tests],
-            "columns": column_types_to_sqlmesh(self.columns, context.dialect) or None,
+            "columns": column_types_to_sqlmesh(
+                self.columns, self.dialect or context.default_dialect
+            )
+            or None,
             "column_descriptions": column_descriptions_to_sqlmesh(self.columns) or None,
             "depends_on": {
                 model.canonical_name(context) for model in model_context.refs.values()

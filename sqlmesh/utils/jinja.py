@@ -567,6 +567,7 @@ def create_builtin_globals(
     jinja_macros: JinjaMacroRegistry, global_vars: t.Dict[str, t.Any], *args: t.Any, **kwargs: t.Any
 ) -> t.Dict[str, t.Any]:
     global_vars.pop(c.GATEWAY, None)
+    global_vars.pop("dialect", None)  # may be set in dbt context
     variables = global_vars.pop(c.SQLMESH_VARS, None) or {}
     return {
         c.VAR: create_var(variables),

@@ -7,7 +7,7 @@ from unittest.mock import PropertyMock
 import pytest
 from dbt.adapters.base import BaseRelation, Column
 from pytest_mock import MockerFixture
-
+from sqlmesh.core.config import Config, ModelDefaultsConfig
 from sqlmesh.core.dialect import jinja_query
 from sqlmesh.core.model import SqlModel
 from sqlmesh.core.model.kind import OnDestructiveChange
@@ -124,6 +124,17 @@ def test_model_to_sqlmesh_fields():
     assert kind.lookback == 3
     assert kind.on_destructive_change == OnDestructiveChange.ALLOW
 
+    model = model_config.update_with({"dialect": "snowflake"}).to_sqlmesh(context)
+    assert model.dialect == "snowflake"
+
+    bq_default_context = DbtContext(
+        sqlmesh_config=Config(model_defaults=ModelDefaultsConfig(dialect="bigquery"))
+    )
+    bq_default_context.project_name = "Foo"
+    bq_default_context.target = DuckDbConfig(name="target", schema="foo")
+    model = model_config.to_sqlmesh(bq_default_context)
+    assert model.dialect == "bigquery"
+
 
 def test_test_to_sqlmesh_fields():
     sql = "SELECT * FROM FOO WHERE cost > 100"
@@ -165,6 +176,20 @@ def test_test_to_sqlmesh_fields():
     assert not audit.blocking
     assert sql in audit.query.sql()
 
+    test_config = TestConfig(
+        name="foo_null_test",
+        sql=sql,
+        model_name="Foo",
+        column_name="id",
+        severity="WARN",
+        enabled=False,
+        dialect="bigquery",
+    )
+
+    audit = test_config.to_sqlmesh(context)
+
+    assert audit.dialect == "bigquery"
+
 
 def test_singular_test_to_standalone_audit():
     sql = "SELECT * FROM FOO.BAR WHERE cost > 100"
@@ -200,6 +225,10 @@ def test_singular_test_to_standalone_audit():
     assert standalone_audit.dialect == "duckdb"
     assert standalone_audit.query == jinja_query(sql)
     assert standalone_audit.depends_on == {'"memory"."foo"."bar"'}
+
+    test_config.dialect = "bigquery"
+    standalone_audit = test_config.to_sqlmesh(context)
+    assert standalone_audit.dialect == "bigquery"
 
 
 def test_model_config_sql_no_config():
@@ -347,12 +376,15 @@ def test_seed_config(sushi_test_project: Project, mocker: MockerFixture):
     context = sushi_test_project.context
     assert raw_items_seed.canonical_name(context) == "sushi.waiter_names"
     assert raw_items_seed.to_sqlmesh(context).name == "sushi.waiter_names"
-    mock_dialect = PropertyMock(return_value="snowflake")
-    mocker.patch("sqlmesh.dbt.context.DbtContext.dialect", mock_dialect)
+    mock_target = PropertyMock(
+        return_value=SnowflakeConfig(
+            name="foo", schema="foo", database="foo", account="foo", user="bar", password="baz"
+        )
+    )
+    mocker.patch("sqlmesh.dbt.context.DbtContext.target", mock_target)
     assert raw_items_seed.to_sqlmesh(sushi_test_project.context).name == "sushi.waiter_names"
     assert (
-        raw_items_seed.to_sqlmesh(sushi_test_project.context).fqn
-        == '"MEMORY"."SUSHI"."WAITER_NAMES"'
+        raw_items_seed.to_sqlmesh(sushi_test_project.context).fqn == '"FOO"."SUSHI"."WAITER_NAMES"'
     )
 
 
