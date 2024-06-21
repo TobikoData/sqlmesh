@@ -187,7 +187,11 @@ class EngineAdapter:
             raise SQLMeshError(
                 "It is expected that if a DataFrame is passed in then columns_to_types is set"
             )
-        if query_or_df.empty:
+
+        df_is_empty = (
+            query_or_df.empty if isinstance(query_or_df, pd.DataFrame) else query_or_df.isEmpty()
+        )
+        if df_is_empty:
             raise SQLMeshError(
                 "Cannot construct source query from an empty DataFrame. This error is commonly "
                 "related to Python models that produce no data. For such models, consider yielding "
