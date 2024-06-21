@@ -90,6 +90,7 @@ class EngineAdapter:
     SUPPORTS_MATERIALIZED_VIEWS = False
     SUPPORTS_MATERIALIZED_VIEW_SCHEMA = False
     SUPPORTS_CLONING = False
+    SUPPORTS_MANAGED_MODELS = False
     SCHEMA_DIFFER = SchemaDiffer()
     SUPPORTS_TUPLE_IN = True
     CATALOG_SUPPORT = CatalogSupport.UNSUPPORTED
@@ -428,6 +429,35 @@ class EngineAdapter:
             **kwargs,
         )
 
+    def create_managed_table(
+        self,
+        table_name: TableName,
+        query: Query,
+        columns_to_types: t.Optional[t.Dict[str, exp.DataType]] = None,
+        partitioned_by: t.Optional[t.List[exp.Expression]] = None,
+        clustered_by: t.Optional[t.List[str]] = None,
+        table_properties: t.Optional[t.Dict[str, exp.Expression]] = None,
+        table_description: t.Optional[str] = None,
+        column_descriptions: t.Optional[t.Dict[str, str]] = None,
+        **kwargs: t.Any,
+    ) -> None:
+        """Create an managed table using a query.
+
+        "Managed" means that once the table is created, the data is kept up to date by the underlying database engine and not SQLMesh.
+
+        Args:
+            table_name: The name of the table to create. Can be fully qualified or just table name.
+            query: The SQL query for the engine to base the managed table on
+            columns_to_types: A mapping between the column name and its data type.
+            partitioned_by: The partition columns or engine specific expressions, only applicable in certain engines. (eg. (ds, hour))
+            clustered_by: The cluster columns, only applicable in certain engines. (eg. (ds, hour))
+            table_properties: Optional mapping of engine-specific properties to be set on the managed table
+            table_description: Optional table description from MODEL DDL.
+            column_descriptions: Optional column descriptions from model query.
+            kwargs: Optional create table properties.
+        """
+        raise NotImplementedError(f"Engine does not support managed tables: {type(self)}")
+
     def ctas(
         self,
         table_name: TableName,
@@ -610,6 +640,7 @@ class EngineAdapter:
         replace: bool = False,
         table_description: t.Optional[str] = None,
         column_descriptions: t.Optional[t.Dict[str, str]] = None,
+        table_kind: t.Optional[str] = None,
         **kwargs: t.Any,
     ) -> None:
         table = exp.to_table(table_name)
@@ -652,6 +683,7 @@ class EngineAdapter:
                             exists=exists,
                             replace=replace,
                             table_description=table_description,
+                            table_kind=table_kind,
                             **kwargs,
                         )
                     else:
@@ -679,6 +711,7 @@ class EngineAdapter:
         columns_to_types: t.Optional[t.Dict[str, exp.DataType]] = None,
         table_description: t.Optional[str] = None,
         column_descriptions: t.Optional[t.Dict[str, str]] = None,
+        table_kind: t.Optional[str] = None,
         **kwargs: t.Any,
     ) -> None:
         self.execute(
@@ -693,6 +726,7 @@ class EngineAdapter:
                     if self.COMMENT_CREATION_TABLE.supports_schema_def and self.comments_enabled
                     else None
                 ),
+                table_kind=table_kind,
                 **kwargs,
             )
         )
@@ -704,6 +738,8 @@ class EngineAdapter:
         exists: bool = True,
         replace: bool = False,
         columns_to_types: t.Optional[t.Dict[str, exp.DataType]] = None,
+        table_description: t.Optional[str] = None,
+        table_kind: t.Optional[str] = None,
         **kwargs: t.Any,
     ) -> exp.Create:
         exists = False if replace else exists
@@ -717,14 +753,18 @@ class EngineAdapter:
 
         properties = (
             self._build_table_properties_exp(
-                **kwargs, catalog_name=catalog_name, columns_to_types=columns_to_types
+                **kwargs,
+                catalog_name=catalog_name,
+                columns_to_types=columns_to_types,
+                table_description=table_description,
+                table_kind=table_kind,
             )
-            if kwargs
+            if kwargs or table_description
             else None
         )
         return exp.Create(
             this=table_name_or_schema,
-            kind="TABLE",
+            kind=table_kind or "TABLE",
             replace=replace,
             exists=exists,
             expression=expression,
@@ -791,7 +831,30 @@ class EngineAdapter:
             table_name: The name of the table to drop.
             exists: If exists, defaults to True.
         """
-        drop_expression = exp.Drop(this=exp.to_table(table_name), kind="TABLE", exists=exists)
+        self._drop_tablelike_object(table_name, exists)
+
+    def drop_managed_table(self, table_name: TableName, exists: bool = True) -> None:
+        """Drops a managed table.
+
+        Args:
+            table_name: The name of the table to drop.
+            exists: If exists, defaults to True.
+        """
+        raise NotImplementedError(f"Engine does not support managed tables: {type(self)}")
+
+    def _drop_tablelike_object(
+        self, table_name: TableName, exists: bool = True, kind: str = "TABLE"
+    ) -> None:
+        """Drops a "tablelike object".
+
+        A "tablelike object" could be a TABLE or a DYNAMIC TABLE or a TEMPORARY TABLE etc depending on the context.
+
+        Args:
+            table_name: The name of the table to drop.
+            exists: If exists, defaults to True.
+            kind: What kind of object to drop. Defaults to TABLE
+        """
+        drop_expression = exp.Drop(this=exp.to_table(table_name), kind=kind, exists=exists)
         self.execute(drop_expression)
 
     def get_alter_expressions(
@@ -1919,6 +1982,7 @@ class EngineAdapter:
         table_properties: t.Optional[t.Dict[str, exp.Expression]] = None,
         columns_to_types: t.Optional[t.Dict[str, exp.DataType]] = None,
         table_description: t.Optional[str] = None,
+        table_kind: t.Optional[str] = None,
     ) -> t.Optional[exp.Properties]:
         """Creates a SQLGlot table properties expression for ddl."""
         properties: t.List[exp.Expression] = []

@@ -27,6 +27,7 @@ snowpark = optional_import("snowflake.snowpark")
 if t.TYPE_CHECKING:
     from sqlmesh.core._typing import SchemaName, SessionProperties, TableName
     from sqlmesh.core.engine_adapter._typing import DF, Query, SnowparkSession
+    from sqlmesh.core.node import IntervalUnit
 
 
 @set_catalog(
@@ -41,6 +42,7 @@ class SnowflakeEngineAdapter(GetCurrentCatalogFromFunctionMixin):
     SUPPORTS_MATERIALIZED_VIEWS = True
     SUPPORTS_MATERIALIZED_VIEW_SCHEMA = True
     SUPPORTS_CLONING = True
+    SUPPORTS_MANAGED_MODELS = True
     CATALOG_SUPPORT = CatalogSupport.FULL_SUPPORT
     CURRENT_CATALOG_EXPRESSION = exp.func("current_database")
     SCHEMA_DIFFER = SchemaDiffer(
@@ -58,6 +60,7 @@ class SnowflakeEngineAdapter(GetCurrentCatalogFromFunctionMixin):
             exp.DataType.build("TIMESTAMP_TZ", dialect=DIALECT).this: [(9,)],
         },
     )
+    MANAGED_TABLE_KIND = "DYNAMIC TABLE"
 
     @contextlib.contextmanager
     def session(self, properties: SessionProperties) -> t.Iterator[None]:
@@ -75,13 +78,7 @@ class SnowflakeEngineAdapter(GetCurrentCatalogFromFunctionMixin):
             normalize_identifiers(warehouse, dialect=self.dialect), dialect=self.dialect
         )
         warehouse_sql = warehouse_exp.sql(dialect=self.dialect)
-
-        current_warehouse_str = self.fetchone("SELECT CURRENT_WAREHOUSE()")[0]
-        # The warehouse value returned by Snowflake is already normalized, so only quoting is needed.
-        current_warehouse_exp = quote_identifiers(
-            exp.to_identifier(current_warehouse_str), dialect=self.dialect
-        )
-        current_warehouse_sql = current_warehouse_exp.sql(dialect=self.dialect)
+        current_warehouse_sql = self._current_warehouse.sql(dialect=self.dialect)
 
         if warehouse_sql == current_warehouse_sql:
             yield
@@ -92,11 +89,108 @@ class SnowflakeEngineAdapter(GetCurrentCatalogFromFunctionMixin):
         self.execute(f"USE WAREHOUSE {current_warehouse_sql}")
 
     @property
+    def _current_warehouse(self) -> exp.Identifier:
+        current_warehouse_str = self.fetchone("SELECT CURRENT_WAREHOUSE()")[0]
+        # The warehouse value returned by Snowflake is already normalized, so only quoting is needed.
+        return quote_identifiers(exp.to_identifier(current_warehouse_str), dialect=self.dialect)
+
+    @property
     def snowpark(self) -> t.Optional[SnowparkSession]:
         if snowpark:
             return snowpark.Session.builder.configs(
                 {"connection": self._connection_pool.get()}
             ).getOrCreate()
+        return None
+
+    def create_managed_table(
+        self,
+        table_name: TableName,
+        query: Query,
+        columns_to_types: t.Optional[t.Dict[str, exp.DataType]] = None,
+        partitioned_by: t.Optional[t.List[exp.Expression]] = None,
+        clustered_by: t.Optional[t.List[str]] = None,
+        table_properties: t.Optional[t.Dict[str, exp.Expression]] = None,
+        table_description: t.Optional[str] = None,
+        column_descriptions: t.Optional[t.Dict[str, str]] = None,
+        **kwargs: t.Any,
+    ) -> None:
+        target_table = exp.to_table(table_name)
+
+        # Snowflake defaults to uppercase and it also makes the property presence checks
+        # easier
+        table_properties = {k.upper(): v for k, v in (table_properties or {}).items()}
+
+        # the WAREHOUSE property is required for a Dynamic Table
+        if "WAREHOUSE" not in table_properties:
+            table_properties["WAREHOUSE"] = self._current_warehouse
+
+        # so is TARGET_LAG
+        # ref: https://docs.snowflake.com/en/sql-reference/sql/create-dynamic-table
+        if "TARGET_LAG" not in table_properties:
+            raise SQLMeshError(
+                "`target_lag` must be specified in the model physical_properties for a Snowflake Dynamic Table"
+            )
+
+        source_queries, columns_to_types = self._get_source_queries_and_columns_to_types(
+            query, columns_to_types, target_table=target_table
+        )
+
+        self._create_table_from_source_queries(
+            quote_identifiers(target_table),
+            source_queries,
+            columns_to_types,
+            replace=self.SUPPORTS_REPLACE_TABLE,
+            partitioned_by=partitioned_by,
+            clustered_by=clustered_by,
+            table_properties=table_properties,
+            table_description=table_description,
+            column_descriptions=column_descriptions,
+            table_kind=self.MANAGED_TABLE_KIND,
+            **kwargs,
+        )
+
+    def drop_managed_table(self, table_name: TableName, exists: bool = True) -> None:
+        self._drop_tablelike_object(table_name, exists, kind=self.MANAGED_TABLE_KIND)
+
+    def _build_table_properties_exp(
+        self,
+        catalog_name: t.Optional[str] = None,
+        storage_format: t.Optional[str] = None,
+        partitioned_by: t.Optional[t.List[exp.Expression]] = None,
+        partition_interval_unit: t.Optional[IntervalUnit] = None,
+        clustered_by: t.Optional[t.List[str]] = None,
+        table_properties: t.Optional[t.Dict[str, exp.Expression]] = None,
+        columns_to_types: t.Optional[t.Dict[str, exp.DataType]] = None,
+        table_description: t.Optional[str] = None,
+        table_kind: t.Optional[str] = None,
+    ) -> t.Optional[exp.Properties]:
+        properties: t.List[exp.Expression] = []
+
+        # TODO: there is some overlap with the base class and other engine adapters
+        # we need a better way of filtering table properties relevent to the current engine
+        # and using those to build the expression
+        if table_description:
+            properties.append(
+                exp.SchemaCommentProperty(
+                    this=exp.Literal.string(self._truncate_table_comment(table_description))
+                )
+            )
+
+        if clustered_by:
+            properties.append(exp.Cluster(expressions=[exp.column(col) for col in clustered_by]))
+
+        if table_properties:
+            table_properties = {k.upper(): v for k, v in table_properties.items()}
+            # if we are creating a non-dynamic table; remove any properties that are only valid for dynamic tables
+            if table_kind != self.MANAGED_TABLE_KIND:
+                for prop in {"TARGET_LAG", "REFRESH_MODE", "INITIALIZE"}:
+                    table_properties.pop(prop, None)
+
+            properties.extend(self._table_or_view_properties_to_expressions(table_properties))
+
+        if properties:
+            return exp.Properties(expressions=properties)
+
         return None
 
     def _df_to_source_queries(
@@ -189,6 +283,13 @@ class SnowflakeEngineAdapter(GetCurrentCatalogFromFunctionMixin):
                 exp.column("TABLE_NAME").as_("name"),
                 exp.column("TABLE_SCHEMA").as_("schema_name"),
                 exp.case()
+                .when(
+                    exp.And(
+                        this=exp.column("TABLE_TYPE").eq("BASE TABLE"),
+                        expression=exp.column("IS_DYNAMIC").eq("YES"),
+                    ),
+                    exp.Literal.string("MANAGED_TABLE"),
+                )
                 .when(exp.column("TABLE_TYPE").eq("BASE TABLE"), exp.Literal.string("TABLE"))
                 .when(exp.column("TABLE_TYPE").eq("TEMPORARY TABLE"), exp.Literal.string("TABLE"))
                 .when(exp.column("TABLE_TYPE").eq("EXTERNAL TABLE"), exp.Literal.string("TABLE"))

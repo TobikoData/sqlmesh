@@ -103,6 +103,7 @@ class AuditError(SQLMeshError):
 
 
 class TestError(SQLMeshError):
+    __test__ = False  # prevent pytest trying to collect this as a test class
     pass
 
 

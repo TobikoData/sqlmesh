@@ -46,6 +46,7 @@ nav:
       - concepts/models/python_models.md
       - concepts/models/seed_models.md
       - concepts/models/external_models.md
+      - concepts/models/managed_models.md
     - Macros:
       - concepts/macros/overview.md
       - concepts/macros/macro_variables.md
