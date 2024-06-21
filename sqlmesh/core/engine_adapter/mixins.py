@@ -232,17 +232,19 @@ class VarcharSizeWorkaroundMixin(EngineAdapter):
         self, columns_to_types: t.Dict[str, exp.DataType]
     ) -> t.Dict[str, exp.DataType]:
         # get default lengths for types that support "max" length
-        types_with_max_defaults = {
-            k: self.SCHEMA_DIFFER.parameterized_type_defaults[k][0][0]
+        types_with_max_default_param = {
+            k: [self.SCHEMA_DIFFER.parameterized_type_defaults[k][0][0]]
             for k in self.SCHEMA_DIFFER.max_parameter_length
+            if k in self.SCHEMA_DIFFER.parameterized_type_defaults
         }
 
-        # if type has default length, convert to "max" length
+        # if type supports "max" and has default length, convert to "max" length
         for col_name, col_type in columns_to_types.items():
-            parameter = self.SCHEMA_DIFFER.get_type_parameters(col_type)
-            type_max_default = types_with_max_defaults.get(col_type.this)
-            if parameter and type_max_default and parameter == [type_max_default]:
-                col_type.set("expressions", [exp.DataTypeParam(this=exp.Var(this="max"))])
+            if col_type.this in types_with_max_default_param and col_type.expressions:
+                parameter = self.SCHEMA_DIFFER.get_type_parameters(col_type)
+                type_default = types_with_max_default_param[col_type.this]
+                if parameter == type_default:
+                    col_type.set("expressions", [exp.DataTypeParam(this=exp.Var(this="max"))])
 
         return columns_to_types
 

@@ -82,17 +82,29 @@ def test_varchar_workaround_to_max(make_mocked_engine_adapter: t.Callable, mocke
 
     columns_to_max = adapter._default_precision_to_max(
         {
+            "binary1": exp.DataType.build("BINARY(1)", dialect=adapter.dialect),
+            "varbinary": exp.DataType.build("VARBINARY", dialect=adapter.dialect),
+            "varbinary1": exp.DataType.build("VARBINARY(1)", dialect=adapter.dialect),
+            "varbinary2": exp.DataType.build("VARBINARY(2)", dialect=adapter.dialect),
             "varchar": exp.DataType.build("VARCHAR", dialect=adapter.dialect),
+            "varchar1": exp.DataType.build("VARCHAR(1)", dialect=adapter.dialect),
             "varchar2": exp.DataType.build("VARCHAR(2)", dialect=adapter.dialect),
             "nvarchar": exp.DataType.build("NVARCHAR", dialect=adapter.dialect),
+            "nvarchar1": exp.DataType.build("NVARCHAR(1)", dialect=adapter.dialect),
             "nvarchar2": exp.DataType.build("NVARCHAR(2)", dialect=adapter.dialect),
         }
     )
 
     assert columns_to_max == {
-        "varchar": exp.DataType.build("VARCHAR(max)", dialect=adapter.dialect),
+        "binary1": exp.DataType.build("BINARY(1)", dialect=adapter.dialect),
+        "varbinary": exp.DataType.build("VARBINARY", dialect=adapter.dialect),
+        "varbinary1": exp.DataType.build("VARBINARY(max)", dialect=adapter.dialect),
+        "varbinary2": exp.DataType.build("VARBINARY(2)", dialect=adapter.dialect),
+        "varchar": exp.DataType.build("VARCHAR", dialect=adapter.dialect),
+        "varchar1": exp.DataType.build("VARCHAR(max)", dialect=adapter.dialect),
         "varchar2": exp.DataType.build("VARCHAR(2)", dialect=adapter.dialect),
-        "nvarchar": exp.DataType.build("NVARCHAR(max)", dialect=adapter.dialect),
+        "nvarchar": exp.DataType.build("NVARCHAR", dialect=adapter.dialect),
+        "nvarchar1": exp.DataType.build("NVARCHAR(max)", dialect=adapter.dialect),
         "nvarchar2": exp.DataType.build("NVARCHAR(2)", dialect=adapter.dialect),
     }
 
