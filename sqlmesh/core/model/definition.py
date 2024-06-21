@@ -28,7 +28,7 @@ from sqlmesh.core.model.kind import ModelKindName, SeedKind, create_model_kind
 from sqlmesh.core.model.meta import ModelMeta
 from sqlmesh.core.model.seed import CsvSeedReader, Seed, create_seed
 from sqlmesh.core.renderer import ExpressionRenderer, QueryRenderer
-from sqlmesh.utils import columns_to_types_all_known, str_to_bool
+from sqlmesh.utils import columns_to_types_all_known, str_to_bool, UniqueKeyDict
 from sqlmesh.utils.date import TimeLike, make_inclusive, to_datetime, to_time_column
 from sqlmesh.utils.errors import ConfigError, SQLMeshError, raise_config_error
 from sqlmesh.utils.hashing import hash_data
@@ -46,7 +46,7 @@ from sqlmesh.utils.metaprogramming import (
 
 if t.TYPE_CHECKING:
     from sqlmesh.core._typing import TableName
-    from sqlmesh.core.audit import ModelAudit
+    from sqlmesh.core.audit import ModelAudit, Audit
     from sqlmesh.core.context import ExecutionContext
     from sqlmesh.core.engine_adapter import EngineAdapter
     from sqlmesh.core.engine_adapter._typing import QueryOrDF
@@ -453,7 +453,7 @@ class _Model(ModelMeta, frozen=True):
             )
         return query
 
-    def referenced_audits(self, audits: t.Dict[str, ModelAudit]) -> t.List[ModelAudit]:
+    def referenced_audits(self, audits: t.Dict[str, ModelAudit]) -> t.List[Audit]:
         """Returns audits referenced in this model.
 
         Args:
@@ -463,7 +463,9 @@ class _Model(ModelMeta, frozen=True):
 
         referenced_audits = []
         for audit_name, _ in self.audits:
-            if audit_name in audits:
+            if audit_name in self.inline_audits:
+                referenced_audits.append(self.inline_audits[audit_name])
+            elif audit_name in audits:
                 referenced_audits.append(audits[audit_name])
             elif audit_name not in BUILT_IN_AUDITS:
                 raise_config_error(
@@ -767,8 +769,12 @@ class _Model(ModelMeta, frozen=True):
                 for arg_name, arg_value in audit_args.items():
                     metadata.append(arg_name)
                     metadata.append(gen(arg_value))
+            elif audit_name in self.inline_audits:
+                audit = self.inline_audits[audit_name]
             elif audit_name in audits:
                 audit = audits[audit_name]
+
+            if audit:
                 query = (
                     audit.render_query(self, **t.cast(t.Dict[str, t.Any], audit_args))
                     or audit.query
@@ -1035,7 +1041,6 @@ class SqlModel(_SqlBasedModel):
 
     def validate_definition(self) -> None:
         query = self._query_renderer.render()
-
         if query is None:
             if self.depends_on_ is None:
                 raise_config_error(
@@ -1494,8 +1499,8 @@ def load_sql_based_model(
     rendered_meta = rendered_meta_exprs[0]
 
     # Extract the query and any pre/post statements
-    query_or_seed_insert, pre_statements, post_statements = _split_sql_model_statements(
-        expressions[1:], path
+    query_or_seed_insert, pre_statements, post_statements, inline_audits = (
+        _split_sql_model_statements(expressions[1:], path, dialect)
     )
 
     meta_fields: t.Dict[str, t.Any] = {
@@ -1552,6 +1557,7 @@ def load_sql_based_model(
         default_catalog=default_catalog,
         variables=variables,
         used_variables=used_variables,
+        inline_audits=inline_audits,
         **meta_fields,
     )
 
@@ -1847,6 +1853,7 @@ def _create_model(
     depends_on: t.Optional[t.Set[str]] = None,
     dialect: t.Optional[str] = None,
     physical_schema_override: t.Optional[t.Dict[str, str]] = None,
+    inline_audits: t.Optional[t.Dict[str, Audit]] = None,
     **kwargs: t.Any,
 ) -> Model:
     _validate_model_fields(klass, {"name", *kwargs} - {"grain", "table_properties"}, path)
@@ -1867,6 +1874,7 @@ def _create_model(
     try:
         model = klass(
             name=name,
+            inline_audits=inline_audits,
             **{
                 **(defaults or {}),
                 "jinja_macros": jinja_macros or JinjaMacroRegistry(),
@@ -1892,8 +1900,13 @@ INSERT_SEED_MACRO_CALL = d.parse_one("@INSERT_SEED()")
 
 
 def _split_sql_model_statements(
-    expressions: t.List[exp.Expression], path: Path
-) -> t.Tuple[t.Optional[exp.Expression], t.List[exp.Expression], t.List[exp.Expression]]:
+    expressions: t.List[exp.Expression], path: Path, dialect: t.Optional[str] = None
+) -> t.Tuple[
+    t.Optional[exp.Expression],
+    t.List[exp.Expression],
+    t.List[exp.Expression],
+    UniqueKeyDict[str, Audit],
+]:
     """Extracts the SELECT query from a sequence of expressions.
 
     Args:
@@ -1906,22 +1919,32 @@ def _split_sql_model_statements(
     Raises:
         ConfigError: If the model definition contains more than one SELECT query or `@INSERT_SEED()` call.
     """
+    from sqlmesh.core.audit.definition import load_audit
+
     query_positions = []
-    for idx, expression in enumerate(expressions):
-        if (
+    inline_audits: UniqueKeyDict[str, Audit] = UniqueKeyDict("inline_audits")
+    idx = 0
+    while idx < len(expressions):
+        expression = expressions[idx]
+        if isinstance(expression, d.Audit):
+            audit = load_audit([expression, expressions[idx + 1]], dialect=dialect or "")
+            inline_audits[audit.name] = audit
+            expressions = expressions[:idx] + expressions[idx + 2 :]
+        elif (
             isinstance(expression, (exp.Query, d.JinjaQuery))
             or expression == INSERT_SEED_MACRO_CALL
             or (isinstance(expression, d.MacroFunc) and expression.this.name.lower() == "union")
         ):
             query_positions.append((expression, idx))
-
+            idx += 1
     if not query_positions:
-        return None, expressions, []
+        return None, expressions, [], inline_audits
+
     elif len(query_positions) > 1:
         raise_config_error("Only one SELECT query is allowed per model", path)
 
     query, pos = query_positions[0]
-    return query, expressions[:pos], expressions[pos + 1 :]
+    return query, expressions[:pos], expressions[pos + 1 :], inline_audits
 
 
 def _resolve_session_properties(
