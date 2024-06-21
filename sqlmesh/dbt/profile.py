@@ -52,12 +52,14 @@ class Profile:
             project_file = Path(context.project_root, PROJECT_FILENAME)
             if not project_file.exists():
                 raise ConfigError(f"Could not find {PROJECT_FILENAME} in {context.project_root}")
+
             project_yaml = load_yaml(project_file)
             context.profile_name = context.render(
                 project_yaml.get("profile", "")
             ) or context.render(project_yaml.get("name", ""))
             if not context.profile_name:
                 raise ConfigError(f"{project_file.stem} must include project name.")
+
         profile_filepath = cls._find_profile(context.project_root)
         if not profile_filepath:
             raise ConfigError(f"{cls.PROFILE_FILE} not found.")

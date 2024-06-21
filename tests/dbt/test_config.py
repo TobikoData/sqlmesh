@@ -2,7 +2,6 @@ import base64
 import typing as t
 from pathlib import Path
 from shutil import copytree
-from unittest.mock import PropertyMock
 
 import pytest
 from dbt.adapters.base import BaseRelation, Column
@@ -376,15 +375,12 @@ def test_seed_config(sushi_test_project: Project, mocker: MockerFixture):
     context = sushi_test_project.context
     assert raw_items_seed.canonical_name(context) == "sushi.waiter_names"
     assert raw_items_seed.to_sqlmesh(context).name == "sushi.waiter_names"
-    mock_target = PropertyMock(
-        return_value=SnowflakeConfig(
-            name="foo", schema="foo", database="foo", account="foo", user="bar", password="baz"
-        )
-    )
-    mocker.patch("sqlmesh.dbt.context.DbtContext.target", mock_target)
+
+    raw_items_seed.dialect_ = "snowflake"
     assert raw_items_seed.to_sqlmesh(sushi_test_project.context).name == "sushi.waiter_names"
     assert (
-        raw_items_seed.to_sqlmesh(sushi_test_project.context).fqn == '"FOO"."SUSHI"."WAITER_NAMES"'
+        raw_items_seed.to_sqlmesh(sushi_test_project.context).fqn
+        == '"MEMORY"."SUSHI"."WAITER_NAMES"'
     )
 
 

@@ -367,7 +367,7 @@ class ModelConfig(BaseModelConfig):
 
         if self.partition_by:
             optional_kwargs["partitioned_by"] = (
-                [exp.to_column(val) for val in self.partition_by]
+                [exp.to_column(val, dialect=model_dialect) for val in self.partition_by]
                 if isinstance(self.partition_by, list)
                 else self._big_query_partition_by_expr(context)
             )
