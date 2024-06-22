@@ -46,7 +46,7 @@ from sqlmesh.utils.metaprogramming import (
 
 if t.TYPE_CHECKING:
     from sqlmesh.core._typing import TableName
-    from sqlmesh.core.audit import ModelAudit, Audit
+    from sqlmesh.core.audit import ModelAudit
     from sqlmesh.core.context import ExecutionContext
     from sqlmesh.core.engine_adapter import EngineAdapter
     from sqlmesh.core.engine_adapter._typing import QueryOrDF
@@ -453,7 +453,7 @@ class _Model(ModelMeta, frozen=True):
             )
         return query
 
-    def referenced_audits(self, audits: t.Dict[str, ModelAudit]) -> t.List[Audit]:
+    def referenced_audits(self, audits: t.Dict[str, ModelAudit]) -> t.List[ModelAudit]:
         """Returns audits referenced in this model.
 
         Args:
@@ -463,7 +463,7 @@ class _Model(ModelMeta, frozen=True):
 
         referenced_audits = []
         for audit_name, _ in self.audits:
-            if audit_name in self.inline_audits:
+            if self.inline_audits and audit_name in self.inline_audits:
                 referenced_audits.append(self.inline_audits[audit_name])
             elif audit_name in audits:
                 referenced_audits.append(audits[audit_name])
@@ -764,15 +764,17 @@ class _Model(ModelMeta, frozen=True):
 
         for audit_name, audit_args in sorted(self.audits, key=lambda a: a[0]):
             metadata.append(audit_name)
-
+            audit = None
             if audit_name in BUILT_IN_AUDITS:
                 for arg_name, arg_value in audit_args.items():
                     metadata.append(arg_name)
                     metadata.append(gen(arg_value))
-            elif audit_name in self.inline_audits:
+            elif self.inline_audits and audit_name in self.inline_audits:
                 audit = self.inline_audits[audit_name]
             elif audit_name in audits:
                 audit = audits[audit_name]
+            else:
+                raise SQLMeshError(f"Unexpected audit name '{audit_name}'.")
 
             if audit:
                 query = (
@@ -787,8 +789,6 @@ class _Model(ModelMeta, frozen=True):
                         str(audit.blocking),
                     ]
                 )
-            else:
-                raise SQLMeshError(f"Unexpected audit name '{audit_name}'.")
 
         for key, value in (self.virtual_properties or {}).items():
             metadata.append(key)
@@ -1853,7 +1853,7 @@ def _create_model(
     depends_on: t.Optional[t.Set[str]] = None,
     dialect: t.Optional[str] = None,
     physical_schema_override: t.Optional[t.Dict[str, str]] = None,
-    inline_audits: t.Optional[t.Dict[str, Audit]] = None,
+    inline_audits: t.Optional[t.Dict[str, ModelAudit]] = None,
     **kwargs: t.Any,
 ) -> Model:
     _validate_model_fields(klass, {"name", *kwargs} - {"grain", "table_properties"}, path)
@@ -1905,7 +1905,7 @@ def _split_sql_model_statements(
     t.Optional[exp.Expression],
     t.List[exp.Expression],
     t.List[exp.Expression],
-    UniqueKeyDict[str, Audit],
+    UniqueKeyDict[str, ModelAudit],
 ]:
     """Extracts the SELECT query from a sequence of expressions.
 
@@ -1919,24 +1919,26 @@ def _split_sql_model_statements(
     Raises:
         ConfigError: If the model definition contains more than one SELECT query or `@INSERT_SEED()` call.
     """
-    from sqlmesh.core.audit.definition import load_audit
+    from sqlmesh.core.audit.definition import load_audit, ModelAudit
 
     query_positions = []
-    inline_audits: UniqueKeyDict[str, Audit] = UniqueKeyDict("inline_audits")
+    inline_audits: UniqueKeyDict[str, ModelAudit] = UniqueKeyDict("inline_audits")
     idx = 0
     while idx < len(expressions):
         expression = expressions[idx]
         if isinstance(expression, d.Audit):
             audit = load_audit([expression, expressions[idx + 1]], dialect=dialect or "")
-            inline_audits[audit.name] = audit
+            if isinstance(audit, ModelAudit):
+                inline_audits[audit.name] = audit
             expressions = expressions[:idx] + expressions[idx + 2 :]
+            idx -= 1
         elif (
             isinstance(expression, (exp.Query, d.JinjaQuery))
             or expression == INSERT_SEED_MACRO_CALL
             or (isinstance(expression, d.MacroFunc) and expression.this.name.lower() == "union")
         ):
             query_positions.append((expression, idx))
-            idx += 1
+        idx += 1
     if not query_positions:
         return None, expressions, [], inline_audits
 

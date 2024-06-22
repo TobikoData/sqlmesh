@@ -11,7 +11,12 @@ from sqlmesh.core.audit import (
     load_multiple_audits,
 )
 from sqlmesh.core.dialect import parse
-from sqlmesh.core.model import IncrementalByTimeRangeKind, Model, create_sql_model
+from sqlmesh.core.model import (
+    IncrementalByTimeRangeKind,
+    Model,
+    create_sql_model,
+    load_sql_based_model,
+)
 from sqlmesh.utils.errors import AuditConfigError
 from sqlmesh.utils.jinja import JinjaMacroRegistry, MacroExtractor
 from sqlmesh.utils.metaprogramming import Executable
@@ -742,3 +747,38 @@ def test_variables(assert_exp_eq):
         audit.render_query(audit).sql(dialect="bigquery")
         == "SELECT * FROM `db`.`table` AS `table` WHERE `col` = 'test_val'"
     )
+
+
+def test_load_inline_audits(assert_exp_eq):
+    expressions = parse(
+        """
+        MODEL (
+            name db.table,
+            dialect spark,
+            audits(does_not_exceed_threshold)
+        );
+
+        SELECT id FROM tbl;
+
+        AUDIT (
+        name does_not_exceed_threshold,
+        );
+        SELECT * FROM @this_model
+        WHERE @column >= @threshold;
+
+        AUDIT (
+        name assert_positive_id,
+        );
+        SELECT *
+        FROM @this_model
+        WHERE
+        id < 0;
+    """
+    )
+
+    model = load_sql_based_model(expressions)
+    assert model.inline_audits
+    assert len(model.audits) == 1
+    assert len(model.inline_audits) == 2
+    assert type(model.inline_audits["assert_positive_id"]) == ModelAudit
+    assert type(model.inline_audits["does_not_exceed_threshold"]) == ModelAudit

@@ -44,7 +44,7 @@ from sqlmesh.utils.pydantic import (
 
 if t.TYPE_CHECKING:
     from sqlmesh.core._typing import CustomMaterializationProperties, SessionProperties
-    from sqlmesh.core.audit import Audit
+    from sqlmesh.core.audit import ModelAudit
 
 AuditReference = t.Tuple[str, t.Dict[str, exp.Expression]]
 
@@ -68,7 +68,7 @@ class ModelMeta(_Node):
         default=None, alias="column_descriptions"
     )
     audits: t.List[AuditReference] = []
-    inline_audits: t.Optional[t.Dict[str, Audit]] = None
+    inline_audits: t.Optional[t.Dict[str, ModelAudit]] = None
     grains: t.List[exp.Expression] = []
     references: t.List[exp.Expression] = []
     physical_schema_override: t.Optional[str] = None
