@@ -108,6 +108,8 @@ class Loader(abc.ABC):
         self._path_mtimes.clear()
         self._dag = DAG()
 
+        self._load_materializations()
+
         config_mtimes: t.Dict[Path, t.List[float]] = defaultdict(list)
         for context_path, config in self._context.configs.items():
             for config_file in context_path.glob("config.*"):
@@ -176,6 +178,9 @@ class Loader(abc.ABC):
         self, macros: MacroRegistry, jinja_macros: JinjaMacroRegistry
     ) -> UniqueKeyDict[str, Audit]:
         """Loads all audits."""
+
+    def _load_materializations(self) -> None:
+        """Loads custom materializations."""
 
     def _load_metrics(self) -> UniqueKeyDict[str, MetricMeta]:
         return UniqueKeyDict("metrics")
@@ -376,6 +381,15 @@ class SqlMeshLoader(Loader):
                 model_registry._dialect = None
 
         return models
+
+    def _load_materializations(self) -> None:
+        """Loads custom materializations."""
+        for context_path, config in self._context.configs.items():
+            for path in self._glob_paths(
+                context_path / c.MATERIALIZATIONS, config=config, extension=".py"
+            ):
+                if os.path.getsize(path):
+                    import_python_file(path, context_path)
 
     def _load_audits(
         self, macros: MacroRegistry, jinja_macros: JinjaMacroRegistry

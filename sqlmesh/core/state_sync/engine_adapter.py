@@ -1379,7 +1379,9 @@ def _environment_to_df(environment: Environment) -> pd.DataFrame:
         [
             {
                 "name": environment.name,
-                "snapshots": json.dumps([snapshot.dict() for snapshot in environment.snapshots]),
+                "snapshots": json.dumps(
+                    [snapshot.dict(mode="json") for snapshot in environment.snapshots]
+                ),
                 "start_at": time_like_to_str(environment.start_at),
                 "end_at": time_like_to_str(environment.end_at) if environment.end_at else None,
                 "plan_id": environment.plan_id,
@@ -1395,7 +1397,10 @@ def _environment_to_df(environment: Environment) -> pd.DataFrame:
                 "catalog_name_override": environment.catalog_name_override,
                 "previous_finalized_snapshots": (
                     json.dumps(
-                        [snapshot.dict() for snapshot in environment.previous_finalized_snapshots]
+                        [
+                            snapshot.dict(mode="json")
+                            for snapshot in environment.previous_finalized_snapshots
+                        ]
                     )
                     if environment.previous_finalized_snapshots is not None
                     else None

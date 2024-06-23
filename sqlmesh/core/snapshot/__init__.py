@@ -1,4 +1,3 @@
-from sqlmesh.core.snapshot.categorizer import categorize_change as categorize_change
 from sqlmesh.core.snapshot.definition import (
     DeployabilityIndex as DeployabilityIndex,
     Intervals as Intervals,

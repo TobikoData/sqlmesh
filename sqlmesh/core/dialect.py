@@ -412,15 +412,17 @@ def _parse_table_parts(
 ) -> exp.Table:
     index = self._index
     table = self.__parse_table_parts(schema=schema, is_db_reference=is_db_reference)  # type: ignore
-    table_arg = table.this
 
-    if isinstance(table_arg, exp.Var) and table_arg.name.startswith(SQLMESH_MACRO_PREFIX):
+    table_arg = table.this
+    name = table_arg.name
+
+    if isinstance(table_arg, exp.Var) and name.startswith(SQLMESH_MACRO_PREFIX):
         # Macro functions do not clash with the staged file syntax, so we can safely parse them
-        if self._prev.token_type == TokenType.STRING or "(" in table_arg.name:
+        if self._prev.token_type == TokenType.STRING or any(ch in name for ch in ("(", "{")):
             self._retreat(index)
             return Parser._parse_table_parts(self, schema=schema, is_db_reference=is_db_reference)
 
-        table_arg.replace(MacroVar(this=table_arg.name[1:]))
+        table_arg.replace(MacroVar(this=name[1:]))
         return StagedFilePath(**table.args)
 
     return table
@@ -497,6 +499,7 @@ def _create_parser(parser_type: t.Type[exp.Expression], table_keys: t.List[str])
                         ModelKindName.SCD_TYPE_2,
                         ModelKindName.SCD_TYPE_2_BY_TIME,
                         ModelKindName.SCD_TYPE_2_BY_COLUMN,
+                        ModelKindName.CUSTOM,
                     ) and self._match(TokenType.L_PAREN, advance=False):
                         props = self._parse_wrapped_csv(functools.partial(_parse_props, self))
                     else:
@@ -1069,3 +1072,19 @@ def normalize_and_quote(
     yield query
     if quote:
         quote_identifiers(query, dialect=dialect)
+
+
+def interpret_expression(e: exp.Expression) -> exp.Expression | str | int | float | bool:
+    if e.is_int:
+        return int(e.this)
+    if e.is_number:
+        return float(e.this)
+    if isinstance(e, (exp.Literal, exp.Boolean)):
+        return e.this
+    return e
+
+
+def interpret_key_value_pairs(
+    e: exp.Tuple,
+) -> t.Dict[str, exp.Expression | str | int | float | bool]:
+    return {i.this.name: interpret_expression(i.expression) for i in e.expressions}

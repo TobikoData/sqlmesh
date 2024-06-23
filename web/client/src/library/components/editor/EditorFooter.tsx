@@ -50,7 +50,7 @@ export default function EditorFooter({ tab }: { tab: EditorTab }): JSX.Element {
   }
 
   return (
-    <div className="flex w-full items-center px-2 min-h-[2rem]">
+    <div className="flex w-full items-center px-2 min-h-[2rem] overflow-hidden">
       {tab.file.isRemote && (
         <EditorIndicator
           className="mr-2"

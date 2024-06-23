@@ -218,6 +218,7 @@ class AirflowSchedulerConfig(_BaseAirflowSchedulerConfig, BaseConfig):
     airflow_url: str = "http://localhost:8080/"
     username: str = "airflow"
     password: str = "airflow"
+    token: t.Optional[str] = None
     dag_run_poll_interval_secs: int = 10
     dag_creation_poll_interval_secs: int = 30
     dag_creation_max_retry_attempts: int = 10
@@ -236,8 +237,10 @@ class AirflowSchedulerConfig(_BaseAirflowSchedulerConfig, BaseConfig):
 
     def get_client(self, console: t.Optional[Console] = None) -> AirflowClient:
         session = Session()
-        session.headers.update({"Content-Type": "application/json"})
-        session.auth = (self.username, self.password)
+        if self.token is None:
+            session.auth = (self.username, self.password)
+        else:
+            session.headers.update({"Authorization": f"Bearer {self.token}"})
 
         return AirflowClient(
             session=session,

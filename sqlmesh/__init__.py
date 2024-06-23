@@ -25,6 +25,9 @@ from sqlmesh.core.engine_adapter import EngineAdapter as EngineAdapter
 from sqlmesh.core.macros import SQL as SQL, macro as macro
 from sqlmesh.core.model import Model as Model, model as model
 from sqlmesh.core.snapshot import Snapshot as Snapshot
+from sqlmesh.core.snapshot.evaluator import (
+    CustomMaterialization as CustomMaterialization,
+)
 from sqlmesh.utils import (
     debug_mode_enabled as debug_mode_enabled,
     enable_debug_mode as enable_debug_mode,
@@ -34,6 +37,10 @@ try:
     from sqlmesh._version import __version__ as __version__, __version_tuple__ as __version_tuple__
 except ImportError:
     pass
+
+
+if t.TYPE_CHECKING:
+    from sqlmesh.core.engine_adapter._typing import QueryOrDF  # noqa: F401
 
 
 class RuntimeEnv(str, Enum):

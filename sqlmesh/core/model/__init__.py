@@ -16,6 +16,7 @@ from sqlmesh.core.model.definition import (
     load_sql_based_model as load_sql_based_model,
 )
 from sqlmesh.core.model.kind import (
+    CustomKind as CustomKind,
     EmbeddedKind as EmbeddedKind,
     ExternalKind as ExternalKind,
     FullKind as FullKind,

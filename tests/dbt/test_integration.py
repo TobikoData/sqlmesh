@@ -192,11 +192,12 @@ test_config = config"""
         values: t.List[t.Tuple[int, str, str]],
     ):
         df = create_df(values, self.source_schema)
-        adapter.replace_query(
-            "sushi.raw_marketing",
-            df,
-            columns_to_types=columns_to_types_from_df(df),
-        )
+        columns_to_types = columns_to_types_from_df(df)
+
+        if values:
+            adapter.replace_query("sushi.raw_marketing", df, columns_to_types=columns_to_types)
+        else:
+            adapter.create_table("sushi.raw_marketing", columns_to_types=columns_to_types)
 
     def _normalize_dbt_dataframe(
         self,

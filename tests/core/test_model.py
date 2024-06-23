@@ -24,6 +24,7 @@ from sqlmesh.core.context import Context, ExecutionContext
 from sqlmesh.core.dialect import parse
 from sqlmesh.core.macros import MacroEvaluator, macro
 from sqlmesh.core.model import (
+    CustomKind,
     PythonModel,
     FullKind,
     IncrementalByTimeRangeKind,
@@ -938,7 +939,8 @@ def test_audits():
             audits (
                 audit_a,
                 audit_b(key='value')
-            )
+            ),
+            tags (foo)
         );
         SELECT 1, ds;
     """
@@ -949,6 +951,7 @@ def test_audits():
         ("audit_a", {}),
         ("audit_b", {"key": exp.Literal.string("value")}),
     ]
+    assert model.tags == ["foo"]
 
 
 def test_description(sushi_context):
@@ -2158,6 +2161,45 @@ def test_model_ctas_query():
     assert (
         load_sql_based_model(expressions, dialect="bigquery").ctas_query().sql()
         == 'WITH RECURSIVE "a" AS (SELECT * FROM "x" AS "x" WHERE FALSE), "b" AS (SELECT * FROM "a" AS "a" WHERE FALSE UNION ALL SELECT * FROM "a" AS "a" WHERE FALSE) SELECT * FROM "b" AS "b" WHERE FALSE LIMIT 0'
+    )
+
+    expressions = d.parse(
+        """
+        MODEL (name `a-b-c.table`, kind FULL, dialect bigquery);
+        WITH RECURSIVE a AS (
+            SELECT * FROM (SELECT * FROM (SELECT * FROM x))
+        ), b AS (
+            SELECT * FROM a UNION ALL SELECT * FROM a
+        )
+        SELECT * FROM b
+
+    """
+    )
+
+    assert (
+        load_sql_based_model(expressions, dialect="bigquery").ctas_query().sql()
+        == 'WITH RECURSIVE "a" AS (SELECT * FROM (SELECT * FROM (SELECT * FROM "x" AS "x" WHERE FALSE) AS "_q_0" WHERE FALSE) AS "_q_1" WHERE FALSE), "b" AS (SELECT * FROM "a" AS "a" WHERE FALSE UNION ALL SELECT * FROM "a" AS "a" WHERE FALSE) SELECT * FROM "b" AS "b" WHERE FALSE LIMIT 0'
+    )
+
+    expressions = d.parse(
+        """
+        MODEL (name `a-b-c.table`, kind FULL, dialect bigquery);
+        WITH RECURSIVE a AS (
+            WITH nested_a AS (
+                SELECT * FROM (SELECT * FROM (SELECT * FROM x))
+            )
+            SELECT * FROM nested_a
+        ), b AS (
+            SELECT * FROM a UNION ALL SELECT * FROM a
+        )
+        SELECT * FROM b
+
+    """
+    )
+
+    assert (
+        load_sql_based_model(expressions, dialect="bigquery").ctas_query().sql()
+        == 'WITH RECURSIVE "a" AS (WITH "nested_a" AS (SELECT * FROM (SELECT * FROM (SELECT * FROM "x" AS "x" WHERE FALSE) AS "_q_0" WHERE FALSE) AS "_q_1" WHERE FALSE) SELECT * FROM "nested_a" AS "nested_a" WHERE FALSE), "b" AS (SELECT * FROM "a" AS "a" WHERE FALSE UNION ALL SELECT * FROM "a" AS "a" WHERE FALSE) SELECT * FROM "b" AS "b" WHERE FALSE LIMIT 0'
     )
 
 
@@ -4042,6 +4084,24 @@ def test_variables_in_templates() -> None:
         == "SELECT 'combo' AS \"col_test_value_overridden_value_col_in_memory\""
     )
 
+    model = load_sql_based_model(
+        parse(
+            """
+        MODEL(
+          name @{some_var}.bar,
+          dialect snowflake
+        );
+
+        SELECT 1 AS c
+        """
+        ),
+        variables={
+            "some_var": "foo",
+        },
+    )
+
+    assert model.name == "foo.bar"
+
 
 def test_variables_jinja():
     expressions = parse(
@@ -4672,3 +4732,50 @@ def my_model(context, **kwargs):
     context = Context(paths=tmp_path, config=config)
     assert context.get_model(expected_name).name == expected_name
     assert isinstance(context.get_model(expected_name), PythonModel)
+
+
+def test_custom_kind():
+    from sqlmesh import CustomMaterialization
+
+    expressions = d.parse(
+        """
+        MODEL (
+            name db.table,
+            kind CUSTOM (
+                materialization 'MyTestStrategy',
+                forward_only true,
+                disable_restatement true,
+                materialization_properties (
+                  'key_a' = 'value_a',
+                  key_b = 2,
+                  'key_c' = true,
+                  'key_d' = 1.23,
+                )
+            )
+        );
+
+        SELECT a, b
+        """
+    )
+
+    with pytest.raises(
+        ConfigError, match=r"Materialization strategy with name 'MyTestStrategy' was not found.*"
+    ):
+        load_sql_based_model(expressions)
+
+    class MyTestStrategy(CustomMaterialization):
+        pass
+
+    model = load_sql_based_model(expressions)
+    assert model.kind.is_custom
+
+    kind = t.cast(CustomKind, model.kind)
+    assert kind.disable_restatement
+    assert kind.forward_only
+    assert kind.materialization == "MyTestStrategy"
+    assert kind.materialization_properties == {
+        "key_a": "value_a",
+        "key_b": 2,
+        "key_c": True,
+        "key_d": 1.23,
+    }

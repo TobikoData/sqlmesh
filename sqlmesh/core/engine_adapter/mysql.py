@@ -18,6 +18,7 @@ from sqlmesh.core.engine_adapter.shared import (
     DataObjectType,
     set_catalog,
 )
+from sqlmesh.core.schema_diff import SchemaDiffer
 
 if t.TYPE_CHECKING:
     from sqlmesh.core._typing import SchemaName, TableName
@@ -39,6 +40,19 @@ class MySQLEngineAdapter(
     MAX_TABLE_COMMENT_LENGTH = 2048
     MAX_COLUMN_COMMENT_LENGTH = 1024
     SUPPORTS_REPLACE_TABLE = False
+    SCHEMA_DIFFER = SchemaDiffer(
+        parameterized_type_defaults={
+            exp.DataType.build("BIT", dialect=DIALECT).this: [(1,)],
+            exp.DataType.build("BINARY", dialect=DIALECT).this: [(1,)],
+            exp.DataType.build("DECIMAL", dialect=DIALECT).this: [(10, 0), (0,)],
+            exp.DataType.build("CHAR", dialect=DIALECT).this: [(1,)],
+            exp.DataType.build("NCHAR", dialect=DIALECT).this: [(1,)],
+            exp.DataType.build("TEXT", dialect=DIALECT).this: [(65535,)],
+            exp.DataType.build("TIME", dialect=DIALECT).this: [(0,)],
+            exp.DataType.build("DATETIME", dialect=DIALECT).this: [(0,)],
+            exp.DataType.build("TIMESTAMP", dialect=DIALECT).this: [(0,)],
+        },
+    )
 
     def get_current_catalog(self) -> t.Optional[str]:
         """Returns the catalog name of the current connection."""

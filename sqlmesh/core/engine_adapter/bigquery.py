@@ -73,6 +73,20 @@ class BigQueryEngineAdapter(InsertOverwriteWithMergeMixin):
             },
         },
         support_coercing_compatible_types=True,
+        parameterized_type_defaults={
+            exp.DataType.build("DECIMAL", dialect=DIALECT).this: [(38, 9), (0,)],
+            exp.DataType.build("BIGDECIMAL", dialect=DIALECT).this: [(76.76, 38), (0,)],
+        },
+        types_with_unlimited_length={
+            # parameterized `STRING(n)` can ALTER to unparameterized `STRING`
+            exp.DataType.build("STRING", dialect=DIALECT).this: {
+                exp.DataType.build("STRING", dialect=DIALECT).this,
+            },
+            # parameterized `BYTES(n)` can ALTER to unparameterized `BYTES`
+            exp.DataType.build("BYTES", dialect=DIALECT).this: {
+                exp.DataType.build("BYTES", dialect=DIALECT).this,
+            },
+        },
     )
 
     @property

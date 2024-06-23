@@ -7,6 +7,8 @@ from unittest.mock import PropertyMock, call, patch
 
 import freezegun
 import pytest
+import pandas as pd
+from pathlib import Path
 from pytest_mock.plugin import MockerFixture
 from sqlglot import parse_one
 from sqlglot.errors import SchemaError
@@ -24,7 +26,7 @@ from sqlmesh.core.config import (
 from sqlmesh.core.context import Context
 from sqlmesh.core.dialect import parse, schema_
 from sqlmesh.core.environment import Environment
-from sqlmesh.core.model import load_sql_based_model
+from sqlmesh.core.model import load_sql_based_model, model
 from sqlmesh.core.model.kind import ModelKindName
 from sqlmesh.core.plan import BuiltInPlanEvaluator, PlanBuilder
 from sqlmesh.utils.date import (
@@ -34,7 +36,7 @@ from sqlmesh.utils.date import (
     to_timestamp,
     yesterday_ds,
 )
-from sqlmesh.utils.errors import ConfigError
+from sqlmesh.utils.errors import ConfigError, SQLMeshError
 from tests.utils.test_filesystem import create_temp_file
 
 
@@ -285,6 +287,32 @@ def test_plan_execution_time():
     )
 
 
+def test_python_model_empty_df_raises(sushi_context, capsys):
+    @model(
+        "memory.sushi.test_model",
+        columns={"col": "int"},
+        kind=dict(name=ModelKindName.FULL),
+    )
+    def entrypoint(context, **kwargs):
+        yield pd.DataFrame({"col": []})
+
+    test_model = model.get_registry()["memory.sushi.test_model"].model(
+        module_path=Path("."), path=Path(".")
+    )
+    sushi_context.upsert_model(test_model)
+
+    capsys.readouterr()
+    with pytest.raises(SQLMeshError):
+        sushi_context.plan(no_prompts=True, auto_apply=True)
+
+    assert (
+        "Cannot construct source query from an empty \nDataFrame. This error "
+        "is commonly related to Python models that produce no data.\nFor such "
+        "models, consider yielding from an empty generator if the resulting set "
+        "\nis empty, i.e. use `yield from ()`"
+    ) in capsys.readouterr().out
+
+
 def test_env_and_default_schema_normalization(mocker: MockerFixture):
     from sqlglot.dialects import DuckDB
     from sqlglot.dialects.dialect import NormalizationStrategy
@@ -524,7 +552,7 @@ def test_janitor(sushi_context, mocker: MockerFixture) -> None:
     )
     # Assert that the views are dropped for each snapshot just once and make sure that the name used is the
     # view name with the environment as a suffix
-    assert adapter_mock.drop_view.call_count == 12
+    assert adapter_mock.drop_view.call_count == 13
     adapter_mock.drop_view.assert_has_calls(
         [
             call(

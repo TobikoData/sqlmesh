@@ -40,6 +40,8 @@ VERSIONS_PATH = f"{common.SQLMESH_API_BASE_PATH}/versions"
 class BaseAirflowClient(abc.ABC):
     def __init__(self, airflow_url: str, console: t.Optional[Console]):
         self._airflow_url = airflow_url
+        if not self._airflow_url.endswith("/"):
+            self._airflow_url += "/"
         self._console = console
 
     @property
@@ -230,6 +232,7 @@ class AirflowClient(BaseAirflowClient):
         response = self._session.post(
             urljoin(self._airflow_url, PLANS_PATH),
             data=request.json(),
+            headers={"Content-Type": "application/json"},
         )
         raise_for_status(response)
 

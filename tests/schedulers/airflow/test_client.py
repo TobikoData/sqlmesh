@@ -77,6 +77,7 @@ def test_apply_plan(mocker: MockerFixture, snapshot: Snapshot):
     args, data = apply_plan_mock.call_args_list[0]
 
     assert args[0] == "http://localhost:8080/sqlmesh/api/v1/plans"
+    assert data["headers"] == {"Content-Type": "application/json"}
     assert json.loads(data["data"]) == {
         "new_snapshots": [
             {
@@ -465,3 +466,18 @@ def test_get_variable(mocker: MockerFixture):
     assert client.get_variable("test_key") == "test_value"
 
     get_variable_mock.assert_called_once_with("http://localhost:8080/api/v1/variables/test_key")
+
+
+def test_url_no_trailing_slash(mocker: MockerFixture, snapshot: Snapshot):
+    get_variable_response_mock = mocker.Mock()
+    get_variable_response_mock.status_code = 200
+    get_variable_response_mock.json.return_value = {"value": "test_value", "key": "test_key"}
+    get_variable_mock = mocker.patch("requests.Session.get")
+    get_variable_mock.return_value = get_variable_response_mock
+
+    client = AirflowClient(airflow_url="http://localhost:8080/prefix", session=requests.Session())
+    client.get_variable("test_key")
+
+    get_variable_mock.assert_called_once_with(
+        "http://localhost:8080/prefix/api/v1/variables/test_key"
+    )

@@ -24,6 +24,7 @@ from sqlmesh.core.engine_adapter.shared import (
     SourceQuery,
     set_catalog,
 )
+from sqlmesh.core.schema_diff import SchemaDiffer
 from sqlmesh.utils.date import TimeLike
 
 if t.TYPE_CHECKING:
@@ -53,6 +54,14 @@ class TrinoEngineAdapter(
     SUPPORTS_REPLACE_TABLE = False
     DEFAULT_CATALOG_TYPE = "hive"
     QUOTE_IDENTIFIERS_IN_VIEWS = False
+    SCHEMA_DIFFER = SchemaDiffer(
+        parameterized_type_defaults={
+            # default decimal precision varies across backends
+            exp.DataType.build("DECIMAL", dialect=DIALECT).this: [(), (0,)],
+            exp.DataType.build("CHAR", dialect=DIALECT).this: [(1,)],
+            exp.DataType.build("TIMESTAMP", dialect=DIALECT).this: [(3,)],
+        },
+    )
 
     @property
     def connection(self) -> TrinoConnection:
