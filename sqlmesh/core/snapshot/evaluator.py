@@ -965,7 +965,7 @@ class EvaluationStrategy(abc.ABC):
         Args:
             table_name: The name of a table or a view.
             model: The target model.
-            is_table_deployable: Whether the table that is being created is deployable.
+            is_table_deployable: Whether the table that is being created is deployable (can be deployed to the production environment).
             render_kwargs: Additional kwargs for node rendering.
         """
 
