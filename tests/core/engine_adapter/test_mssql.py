@@ -80,22 +80,20 @@ def test_columns(make_mocked_engine_adapter: t.Callable):
 def test_varchar_workaround_to_max(make_mocked_engine_adapter: t.Callable, mocker: MockerFixture):
     adapter = make_mocked_engine_adapter(MSSQLEngineAdapter)
 
-    columns_to_max = adapter._default_precision_to_max(
-        {
-            "binary1": exp.DataType.build("BINARY(1)", dialect=adapter.dialect),
-            "varbinary": exp.DataType.build("VARBINARY", dialect=adapter.dialect),
-            "varbinary1": exp.DataType.build("VARBINARY(1)", dialect=adapter.dialect),
-            "varbinary2": exp.DataType.build("VARBINARY(2)", dialect=adapter.dialect),
-            "varchar": exp.DataType.build("VARCHAR", dialect=adapter.dialect),
-            "varchar1": exp.DataType.build("VARCHAR(1)", dialect=adapter.dialect),
-            "varchar2": exp.DataType.build("VARCHAR(2)", dialect=adapter.dialect),
-            "nvarchar": exp.DataType.build("NVARCHAR", dialect=adapter.dialect),
-            "nvarchar1": exp.DataType.build("NVARCHAR(1)", dialect=adapter.dialect),
-            "nvarchar2": exp.DataType.build("NVARCHAR(2)", dialect=adapter.dialect),
-        }
-    )
+    columns = {
+        "binary1": exp.DataType.build("BINARY(1)", dialect=adapter.dialect),
+        "varbinary": exp.DataType.build("VARBINARY", dialect=adapter.dialect),
+        "varbinary1": exp.DataType.build("VARBINARY(1)", dialect=adapter.dialect),
+        "varbinary2": exp.DataType.build("VARBINARY(2)", dialect=adapter.dialect),
+        "varchar": exp.DataType.build("VARCHAR", dialect=adapter.dialect),
+        "varchar1": exp.DataType.build("VARCHAR(1)", dialect=adapter.dialect),
+        "varchar2": exp.DataType.build("VARCHAR(2)", dialect=adapter.dialect),
+        "nvarchar": exp.DataType.build("NVARCHAR", dialect=adapter.dialect),
+        "nvarchar1": exp.DataType.build("NVARCHAR(1)", dialect=adapter.dialect),
+        "nvarchar2": exp.DataType.build("NVARCHAR(2)", dialect=adapter.dialect),
+    }
 
-    assert columns_to_max == {
+    assert adapter._default_precision_to_max(columns) == {
         "binary1": exp.DataType.build("BINARY(1)", dialect=adapter.dialect),
         "varbinary": exp.DataType.build("VARBINARY", dialect=adapter.dialect),
         "varbinary1": exp.DataType.build("VARBINARY(max)", dialect=adapter.dialect),
@@ -107,6 +105,30 @@ def test_varchar_workaround_to_max(make_mocked_engine_adapter: t.Callable, mocke
         "nvarchar1": exp.DataType.build("NVARCHAR(max)", dialect=adapter.dialect),
         "nvarchar2": exp.DataType.build("NVARCHAR(2)", dialect=adapter.dialect),
     }
+
+    mocker.patch(
+        "sqlmesh.core.engine_adapter.base.random_id",
+        return_value="test_random_id",
+    )
+
+    mocker.patch(
+        "sqlmesh.core.engine_adapter.mssql.MSSQLEngineAdapter.table_exists",
+        return_value=True,
+    )
+
+    adapter.ctas(
+        table_name="test_schema.test_table",
+        query_or_df=parse_one(
+            "SELECT binary, varbinary1 + 1 AS varbinary1, varbinary2 AS varbinary2, varchar, varchar1, varchar2, nvarchar, nvarchar1, nvarchar2 FROM (SELECT * FROM table WHERE FALSE LIMIT 0) WHERE d > 0 AND FALSE LIMIT 0"
+        ),
+        exists=False,
+    )
+
+    assert to_sql_calls(adapter) == [
+        "CREATE VIEW [__temp_ctas_test_random_id] AS SELECT [binary], [varbinary1] + 1 AS [varbinary1], [varbinary2] AS [varbinary2], [varchar], [varchar1], [varchar2], [nvarchar], [nvarchar1], [nvarchar2] FROM (SELECT * FROM [table]);",
+        "DROP VIEW IF EXISTS [__temp_ctas_test_random_id];",
+        "CREATE TABLE [test_schema].[test_table] ([binary1] BINARY(1), [varbinary] VARBINARY, [varbinary1] VARBINARY(max), [varbinary2] VARBINARY(2), [varchar] VARCHAR, [varchar1] VARCHAR(max), [varchar2] VARCHAR(2), [nvarchar] NVARCHAR, [nvarchar1] NVARCHAR(max), [nvarchar2] NVARCHAR(2));",
+    ]
 
 
 def test_table_exists(make_mocked_engine_adapter: t.Callable):
