@@ -100,8 +100,8 @@ def test_normalization(
     )
     renderer = runtime_renderer(context, engine_adapter=adapter_mock)
 
-    schema_bla = schema_("BLA", "TEST", quoted=True)
-    relation_bla_bob = exp.table_("BOB", db="BLA", catalog="TEST", quoted=True)
+    schema_bla = schema_("bla", "TEST", quoted=True)
+    relation_bla_bob = exp.table_("bob", db="bla", catalog="TEST", quoted=True)
 
     renderer("{{ adapter.get_relation(database=None, schema='bla', identifier='bob') }}")
     adapter_mock.table_exists.assert_has_calls([call(relation_bla_bob)])
