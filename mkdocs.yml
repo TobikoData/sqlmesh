@@ -22,6 +22,7 @@ nav:
       - guides/notifications.md
       - guides/migrations.md
       - guides/table_migration.md
+      - guides/custom_materializations.md
     - Project content:
       - guides/models.md
       - guides/incremental_time.md
