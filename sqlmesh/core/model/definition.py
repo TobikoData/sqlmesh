@@ -113,6 +113,7 @@ class _Model(ModelMeta, frozen=True):
     python_env_: t.Optional[t.Dict[str, Executable]] = Field(default=None, alias="python_env")
     jinja_macros: JinjaMacroRegistry = JinjaMacroRegistry()
     mapping_schema: t.Dict[str, t.Any] = {}
+    inline_audits: t.Optional[t.Dict[str, ModelAudit]] = None
 
     _expressions_validator = expression_validator
 
@@ -180,7 +181,12 @@ class _Model(ModelMeta, frozen=True):
                             value=exp.to_table(field_value, dialect=self.dialect),
                         )
                     )
-                elif field_name not in ("column_descriptions_", "default_catalog", "enabled"):
+                elif field_name not in (
+                    "column_descriptions_",
+                    "default_catalog",
+                    "enabled",
+                    "inline_audits",
+                ):
                     expressions.append(
                         exp.Property(
                             this=field_info.alias or field_name,
