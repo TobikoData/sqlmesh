@@ -4,7 +4,7 @@ SQLMesh supports a variety of [model kinds](../concepts/models/model_kinds.md) t
 
 There are times, however, when a specific use case doesn't align with any of the supported materialization strategies. For scenarios like this, SQLMesh allows users to create their own materialization implementation using Python.
 
-Please note that this is an advanced feature and should only be considered if all other approaches to addressing a use case have been exhausted.
+Please note that this is an advanced feature and should only be considered if all other approaches to addressing a use case have been exhausted. If you're at this decision point, we recommend you reach out to our team in the community slack: [here](https://tobikodata.com/community.html)
 
 ## Creating a materialization
 
@@ -120,6 +120,7 @@ class CustomFullMaterialization(CustomMaterialization):
     ) -> None:
         config_value = model.custom_materialization_properties["config_key"]
         # Proceed with implementing the insertion logic.
+        # Example for existing materialization for look and feel: https://github.com/TobikoData/sqlmesh/blob/273e913847173d20e9eb291df3eeaf998ec679e7/sqlmesh/core/snapshot/evaluator.py#L1227
 ```
 
 ## Packaging custom materializations
