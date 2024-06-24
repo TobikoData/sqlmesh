@@ -29,12 +29,12 @@ class BaseAdapter(abc.ABC):
         self,
         jinja_macros: JinjaMacroRegistry,
         jinja_globals: t.Optional[t.Dict[str, t.Any]] = None,
-        target_dialect: t.Optional[str] = None,
+        project_dialect: t.Optional[str] = None,
     ):
         self.jinja_macros = jinja_macros
         self.jinja_globals = jinja_globals.copy() if jinja_globals else {}
         self.jinja_globals["adapter"] = self
-        self.target_dialect = target_dialect
+        self.project_dialect = project_dialect
 
     @abc.abstractmethod
     def get_relation(self, database: str, schema: str, identifier: str) -> t.Optional[BaseRelation]:
@@ -93,7 +93,7 @@ class BaseAdapter(abc.ABC):
 
     def quote(self, identifier: str) -> str:
         """Returns a quoted identifier."""
-        return exp.to_column(identifier).sql(dialect=self.target_dialect, identify=True)
+        return exp.to_column(identifier).sql(dialect=self.project_dialect, identify=True)
 
     def dispatch(self, name: str, package: t.Optional[str] = None) -> t.Callable:
         """Returns a dialect-specific version of a macro with the given name."""
@@ -196,7 +196,9 @@ class RuntimeAdapter(BaseAdapter):
         from dbt.adapters.base.relation import Policy
 
         super().__init__(
-            jinja_macros, jinja_globals=jinja_globals, target_dialect=engine_adapter.dialect
+            jinja_macros,
+            jinja_globals=jinja_globals,
+            project_dialect=project_dialect or engine_adapter.dialect,
         )
 
         table_mapping = table_mapping or {}
@@ -209,7 +211,6 @@ class RuntimeAdapter(BaseAdapter):
             **to_table_mapping((snapshots or {}).values(), deployability_index),
             **table_mapping,
         }
-        self.project_dialect = project_dialect or engine_adapter.dialect
 
     def get_relation(
         self, database: t.Optional[str], schema: str, identifier: str
@@ -263,7 +264,9 @@ class RuntimeAdapter(BaseAdapter):
 
         mapped_table = self._map_table_name(self._normalize(self._relation_to_table(relation)))
         return [
-            Column.from_description(name=name, raw_data_type=dtype.sql(dialect=self.target_dialect))
+            Column.from_description(
+                name=name, raw_data_type=dtype.sql(dialect=self.project_dialect)
+            )
             for name, dtype in self.engine_adapter.columns(table_name=mapped_table).items()
         ]
 
@@ -304,10 +307,10 @@ class RuntimeAdapter(BaseAdapter):
 
         expression = parse_one(sql, read=self.project_dialect)
         with normalize_and_quote(
-            expression, t.cast(str, self.target_dialect), self.engine_adapter.default_catalog
+            expression, t.cast(str, self.project_dialect), self.engine_adapter.default_catalog
         ) as expression:
             expression = exp.replace_tables(
-                expression, self.table_mapping, dialect=self.target_dialect, copy=False
+                expression, self.table_mapping, dialect=self.project_dialect, copy=False
             )
 
         if auto_begin:
@@ -332,17 +335,17 @@ class RuntimeAdapter(BaseAdapter):
         return identifier if identifier else None
 
     def _map_table_name(self, table: exp.Table) -> exp.Table:
-        name = table.sql()
+        name = table.sql(dialect=self.project_dialect)
         physical_table_name = self.table_mapping.get(name)
         if not physical_table_name:
             return table
 
         logger.debug("Resolved ref '%s' to snapshot table '%s'", name, physical_table_name)
 
-        return exp.to_table(physical_table_name, dialect=self.target_dialect)
+        return exp.to_table(physical_table_name, dialect=self.project_dialect)
 
     def _relation_to_table(self, relation: BaseRelation) -> exp.Table:
-        return exp.to_table(relation.render(), dialect=self.target_dialect)
+        return exp.to_table(relation.render(), dialect=self.project_dialect)
 
     def _table_to_relation(self, table: exp.Table) -> BaseRelation:
         return self.relation_type.create(
@@ -362,7 +365,7 @@ class RuntimeAdapter(BaseAdapter):
 
     def _normalize(self, input_table: exp.Table) -> exp.Table:
         normalized_name = normalize_model_name(
-            input_table, self.engine_adapter.default_catalog, self.target_dialect
+            input_table, self.engine_adapter.default_catalog, self.project_dialect
         )
         normalized_table = exp.to_table(normalized_name)
         if not input_table.this:

@@ -100,11 +100,16 @@ def test_normalization(
     )
     renderer = runtime_renderer(context, engine_adapter=adapter_mock)
 
-    schema_bla = schema_("bla", "TEST", quoted=True)
-    relation_bla_bob = exp.table_("bob", db="bla", catalog="TEST", quoted=True)
+    schema_bla = schema_("bla", "test", quoted=True)
+    relation_bla_bob = exp.table_("bob", db="bla", catalog="test", quoted=True)
 
     renderer("{{ adapter.get_relation(database=None, schema='bla', identifier='bob') }}")
     adapter_mock.table_exists.assert_has_calls([call(relation_bla_bob)])
+
+    renderer("{{ adapter.get_relation(database='custom_db', schema='bla', identifier='bob') }}")
+    adapter_mock.table_exists.assert_has_calls(
+        [call(exp.table_("bob", db="bla", catalog="custom_db", quoted=True))]
+    )
 
     renderer(
         "{%- set relation = api.Relation.create(schema='bla') -%}"
@@ -125,7 +130,7 @@ def test_normalization(
     adapter_mock.drop_table.assert_has_calls([call(relation_bla_bob)])
 
     expected_star_query: exp.Select = exp.maybe_parse(
-        'SELECT * FROM "T" as "T"', dialect="snowflake"
+        'SELECT * FROM "t" as "t"', dialect="snowflake"
     )
 
     # The following call to run_query won't return dataframes and so we're expected to

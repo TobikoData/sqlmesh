@@ -43,7 +43,7 @@ class Exceptions:
 
 
 class Api:
-    def __init__(self, dialect: str) -> None:
+    def __init__(self, dialect: t.Optional[str]) -> None:
         if dialect:
             config_class = TARGET_TYPE_TO_CONFIG_CLASS[dialect]
             self.Relation = config_class.relation_class
@@ -301,7 +301,9 @@ def create_builtin_globals(
     jinja_globals = jinja_globals.copy()
 
     target: t.Optional[AttributeDict] = jinja_globals.get("target", None)
-    project_dialect = jinja_globals.pop("dialect", None) or (target.dialect if target else None)  # type: ignore
+    project_dialect = jinja_globals.pop("dialect", None) or (
+        target.get("dialect") if target else None
+    )
     api = Api(project_dialect)
 
     builtin_globals["api"] = api
@@ -356,7 +358,7 @@ def create_builtin_globals(
         adapter = ParsetimeAdapter(
             jinja_macros,
             jinja_globals={**builtin_globals, **jinja_globals},
-            target_dialect=(target.dialect if target else None),  # type: ignore
+            project_dialect=project_dialect,
         )
 
     sql_execution = SQLExecution(adapter)
