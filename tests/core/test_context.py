@@ -765,6 +765,25 @@ def test_disabled_model(copy_to_temp_path):
     assert not context.get_model("sushi.disabled")
 
 
+def test_get_model_mixed_dialects(copy_to_temp_path):
+    path = copy_to_temp_path("examples/sushi")
+
+    context = Context(paths=path)
+    expression = d.parse(
+        """
+    MODEL(
+        name sushi.snowflake_dialect,
+        dialect snowflake,
+    );
+
+    SELECT 1"""
+    )
+    model = load_sql_based_model(expression, default_catalog=context.default_catalog)
+    context.upsert_model(model)
+
+    assert context.get_model("sushi.snowflake_dialect") == model
+
+
 def test_override_dialect_normalization_strategy():
     config = Config(
         model_defaults=ModelDefaultsConfig(dialect="duckdb,normalization_strategy=lowercase")

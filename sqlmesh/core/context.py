@@ -325,6 +325,8 @@ class GenericContext(BaseContext, t.Generic[C]):
 
         self.path, self.config = t.cast(t.Tuple[Path, C], next(iter(self.configs.items())))
 
+        self._all_dialects: t.Set[str] = {self.config.dialect or ""}
+
         # This allows overriding the default dialect's normalization strategy, so for example
         # one can do `dialect="duckdb,normalization_strategy=lowercase"` and this will be
         # applied to the DuckDB dialect globally
@@ -435,6 +437,9 @@ class GenericContext(BaseContext, t.Generic[C]):
             self.path,
         )
 
+        if model.dialect:
+            self._all_dialects.add(model.dialect)
+
         model.validate_definition()
 
         return model
@@ -516,6 +521,10 @@ class GenericContext(BaseContext, t.Generic[C]):
                 raise ConfigError(
                     f"Models and Standalone audits cannot have the same name: {duplicates}"
                 )
+
+            self._all_dialects = {m.dialect for m in self._models.values() if m.dialect} | {
+                self.default_dialect or ""
+            }
 
         analytics.collector.on_project_loaded(
             project_type=(
@@ -624,21 +633,24 @@ class GenericContext(BaseContext, t.Generic[C]):
             The expected model.
         """
         if isinstance(model_or_snapshot, str):
-            normalized_name = normalize_model_name(
-                model_or_snapshot,
-                dialect=self.default_dialect,
-                default_catalog=self.default_catalog,
-            )
-            model = self._models.get(normalized_name)
+            # We should try all dialects referenced in the project for cases when models use mixed dialects.
+            for dialect in self._all_dialects:
+                normalized_name = normalize_model_name(
+                    model_or_snapshot,
+                    dialect=dialect,
+                    default_catalog=self.default_catalog,
+                )
+                if normalized_name in self._models:
+                    return self._models[normalized_name]
         elif isinstance(model_or_snapshot, Snapshot):
-            model = model_or_snapshot.model
+            return model_or_snapshot.model
         else:
-            model = model_or_snapshot
+            return model_or_snapshot
 
-        if raise_if_missing and not model:
+        if raise_if_missing:
             raise SQLMeshError(f"Cannot find model for '{model_or_snapshot}'")
 
-        return model
+        return None
 
     @t.overload
     def get_snapshot(self, node_or_snapshot: NodeOrSnapshot) -> t.Optional[Snapshot]: ...
