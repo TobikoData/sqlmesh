@@ -43,9 +43,9 @@ class Exceptions:
 
 
 class Api:
-    def __init__(self, target: t.Optional[AttributeDict] = None) -> None:
-        if target:
-            config_class = TARGET_TYPE_TO_CONFIG_CLASS[target["type"]]
+    def __init__(self, dialect: str) -> None:
+        if dialect:
+            config_class = TARGET_TYPE_TO_CONFIG_CLASS[dialect]
             self.Relation = config_class.relation_class
             self.Column = config_class.column_class
             self.quote_policy = config_class.quote_policy
@@ -301,8 +301,8 @@ def create_builtin_globals(
     jinja_globals = jinja_globals.copy()
 
     target: t.Optional[AttributeDict] = jinja_globals.get("target", None)
-    api = Api(target)
     project_dialect = jinja_globals.pop("dialect", None) or (target.dialect if target else None)  # type: ignore
+    api = Api(project_dialect)
 
     builtin_globals["api"] = api
 

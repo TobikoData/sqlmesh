@@ -852,5 +852,6 @@ TARGET_TYPE_TO_CONFIG_CLASS: t.Dict[str, t.Type[TargetConfig]] = {
     "snowflake": SnowflakeConfig,
     "bigquery": BigQueryConfig,
     "sqlserver": MSSQLConfig,
+    "tsql": MSSQLConfig,
     "trino": TrinoConfig,
 }
