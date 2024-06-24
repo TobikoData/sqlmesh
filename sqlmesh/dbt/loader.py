@@ -3,7 +3,6 @@ from __future__ import annotations
 import logging
 import typing as t
 from pathlib import Path
-
 from sqlmesh.core import constants as c
 from sqlmesh.core.audit import Audit
 from sqlmesh.core.config import (
@@ -43,7 +42,8 @@ def sqlmesh_config(
     context = DbtContext(project_root=project_root)
     profile = Profile.load(context, target_name=dbt_target_name)
     model_defaults = kwargs.pop("model_defaults", ModelDefaultsConfig())
-    model_defaults.dialect = profile.target.dialect
+    if model_defaults.dialect is None:
+        model_defaults.dialect = profile.target.dialect
 
     target_to_sqlmesh_args = {}
     if register_comments is not None:

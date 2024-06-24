@@ -2,6 +2,8 @@ version: 2
 
 models:
   - name: top_waiters
+    config:
+      dialect: postgres
   - name: waiters
   - name: waiter_as_customer_by_day
   - name: waiter_revenue_by_day

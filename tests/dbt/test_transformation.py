@@ -10,7 +10,6 @@ from dbt.exceptions import CompilationError
 from freezegun import freeze_time
 from pytest_mock.plugin import MockerFixture
 from sqlglot import exp, parse_one
-
 from sqlmesh.core import dialect as d
 from sqlmesh.core.audit import StandaloneAudit
 from sqlmesh.core.context import Context
@@ -100,6 +99,20 @@ def test_model_kind():
         execution_time_as_valid_from=True,
         dialect="duckdb",
     )
+    assert ModelConfig(
+        materialized=Materialization.SNAPSHOT,
+        unique_key=["id"],
+        strategy="check",
+        check_cols=["foo"],
+        dialect="bigquery",
+    ).model_kind(context) == SCDType2ByColumnKind(
+        unique_key=["id"],
+        valid_from_name="dbt_valid_from",
+        valid_to_name="dbt_valid_to",
+        columns=["foo"],
+        execution_time_as_valid_from=True,
+        dialect="bigquery",
+    )
 
     assert ModelConfig(materialized=Materialization.INCREMENTAL, time_column="foo").model_kind(
         context
@@ -118,9 +131,12 @@ def test_model_kind():
         time_column="foo", dialect="duckdb", forward_only=True
     )
     assert ModelConfig(
-        materialized=Materialization.INCREMENTAL, time_column="foo", unique_key=["bar"]
+        materialized=Materialization.INCREMENTAL,
+        time_column="foo",
+        unique_key=["bar"],
+        dialect="bigquery",
     ).model_kind(context) == IncrementalByTimeRangeKind(
-        time_column="foo", dialect="duckdb", forward_only=True
+        time_column="foo", dialect="bigquery", forward_only=True
     )
 
     assert ModelConfig(
@@ -286,6 +302,24 @@ def test_model_kind_snapshot_bigquery():
         dialect="bigquery",
     )
 
+    # time_data_type is bigquery version even though model dialect is DuckDB
+    # because model target is BigQuery
+    assert ModelConfig(
+        materialized=Materialization.SNAPSHOT,
+        unique_key=["id"],
+        updated_at="updated_at",
+        strategy="timestamp",
+        dialect="duckdb",
+    ).model_kind(context) == SCDType2ByTimeKind(
+        unique_key=["id"],
+        valid_from_name="dbt_valid_from",
+        valid_to_name="dbt_valid_to",
+        updated_at_as_valid_from=True,
+        updated_at_name="updated_at",
+        time_data_type=exp.DataType.build("TIMESTAMPTZ"),  # bigquery version
+        dialect="duckdb",
+    )
+
 
 def test_model_columns():
     model = ModelConfig(
@@ -387,6 +421,35 @@ def test_seed_column_inference(tmp_path):
         "boolean_col": exp.DataType.build("boolean"),
         "text_col": exp.DataType.build("text"),
     }
+
+
+@pytest.mark.xdist_group("dbt_manifest")
+def test_model_dialect(sushi_test_project: Project, assert_exp_eq):
+    model_config = ModelConfig(
+        name="model",
+        package_name="package",
+        schema="sushi",
+        alias="table",
+        sql="SELECT 1 AS `one` FROM {{ schema }}",
+    )
+    context = sushi_test_project.context
+
+    # cannot parse model sql without specifying bigquery dialect
+    with pytest.raises(ConfigError):
+        model_config.to_sqlmesh(context).render_query_or_raise().sql()
+
+    model_config = ModelConfig(
+        name="model",
+        package_name="package",
+        schema="sushi",
+        alias="table",
+        sql="SELECT 1 AS `one` FROM {{ schema }}",
+        dialect="bigquery",
+    )
+    assert_exp_eq(
+        model_config.to_sqlmesh(context).render_query_or_raise().sql(),
+        'SELECT 1 AS "one" FROM "sushi" AS "sushi"',
+    )
 
 
 @pytest.mark.xdist_group("dbt_manifest")
@@ -493,6 +556,31 @@ def test_test_this(assert_exp_eq, sushi_test_project: Project):
         sql="SELECT 1 AS one FROM {{ this.identifier }}",
     )
     context = sushi_test_project.context
+    audit = t.cast(StandaloneAudit, test_config.to_sqlmesh(context))
+    assert_exp_eq(
+        audit.render_query(audit).sql(),
+        'SELECT 1 AS "one" FROM "test" AS "test"',
+    )
+
+
+@pytest.mark.xdist_group("dbt_manifest")
+def test_test_dialect(assert_exp_eq, sushi_test_project: Project):
+    test_config = TestConfig(
+        name="test",
+        alias="alias",
+        database="database",
+        schema_="schema",
+        standalone=True,
+        sql="SELECT 1 AS `one` FROM {{ this.identifier }}",
+    )
+    context = sushi_test_project.context
+
+    # can't parse test sql without specifying bigquery as default dialect
+    with pytest.raises(ConfigError):
+        audit = t.cast(StandaloneAudit, test_config.to_sqlmesh(context))
+        audit.render_query(audit).sql()
+
+    test_config.dialect_ = "bigquery"
     audit = t.cast(StandaloneAudit, test_config.to_sqlmesh(context))
     assert_exp_eq(
         audit.render_query(audit).sql(),
