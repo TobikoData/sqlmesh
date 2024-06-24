@@ -59,9 +59,13 @@ class DbtContext:
     _manifest: t.Optional[ManifestHelper] = None
 
     @property
-    def dialect(self) -> str:
+    def default_dialect(self) -> str:
+        if self.sqlmesh_config.dialect:
+            return self.sqlmesh_config.dialect
         if not self.target:
-            raise SQLMeshError("Target must be configured before calling the dialect property.")
+            raise SQLMeshError(
+                "Target must be configured before calling the default_dialect property."
+            )
         return self.target.dialect
 
     @property
@@ -229,6 +233,9 @@ class DbtContext:
             output["project_name"] = self.project_name
         if self._target is not None:
             output["target"] = self._target.attribute_dict()
+        # pass user-specified default dialect if we have already loaded the config
+        if self.sqlmesh_config.dialect:
+            output["dialect"] = self.sqlmesh_config.dialect
         return output
 
     def context_for_dependencies(self, dependencies: Dependencies) -> DbtContext:

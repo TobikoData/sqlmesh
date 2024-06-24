@@ -43,9 +43,9 @@ class Exceptions:
 
 
 class Api:
-    def __init__(self, target: t.Optional[AttributeDict] = None) -> None:
-        if target:
-            config_class = TARGET_TYPE_TO_CONFIG_CLASS[target["type"]]
+    def __init__(self, dialect: t.Optional[str]) -> None:
+        if dialect:
+            config_class = TARGET_TYPE_TO_CONFIG_CLASS[dialect]
             self.Relation = config_class.relation_class
             self.Column = config_class.column_class
             self.quote_policy = config_class.quote_policy
@@ -301,8 +301,10 @@ def create_builtin_globals(
     jinja_globals = jinja_globals.copy()
 
     target: t.Optional[AttributeDict] = jinja_globals.get("target", None)
-    api = Api(target)
-    dialect = target.dialect if target else None  # type: ignore
+    project_dialect = jinja_globals.pop("dialect", None) or (
+        target.get("dialect") if target else None
+    )
+    api = Api(project_dialect)
 
     builtin_globals["api"] = api
 
@@ -349,13 +351,14 @@ def create_builtin_globals(
             snapshots=jinja_globals.get("snapshots", {}),
             table_mapping=jinja_globals.get("table_mapping", {}),
             deployability_index=jinja_globals.get("deployability_index"),
+            project_dialect=project_dialect,
         )
     else:
         builtin_globals["flags"] = Flags(which="parse")
         adapter = ParsetimeAdapter(
             jinja_macros,
             jinja_globals={**builtin_globals, **jinja_globals},
-            dialect=dialect,
+            project_dialect=project_dialect,
         )
 
     sql_execution = SQLExecution(adapter)

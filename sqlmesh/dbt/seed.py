@@ -50,7 +50,7 @@ class SeedConfig(BaseModelConfig):
         return create_seed_model(
             self.canonical_name(context),
             SeedKind(path=seed_path),
-            dialect=context.dialect,
+            dialect=self.dialect(context),
             **kwargs,
         )
 

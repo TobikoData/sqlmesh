@@ -201,7 +201,9 @@ class ModelConfig(BaseModelConfig):
         if materialization == Materialization.VIEW:
             return ViewKind()
         if materialization == Materialization.INCREMENTAL:
-            incremental_materialization_kwargs: t.Dict[str, t.Any] = {"dialect": context.dialect}
+            incremental_materialization_kwargs: t.Dict[str, t.Any] = {
+                "dialect": self.dialect(context)
+            }
             for field in ("batch_size", "lookback", "forward_only"):
                 field_val = getattr(self, field, None) or self.meta.get(field, None)
                 if field_val:
@@ -277,7 +279,7 @@ class ModelConfig(BaseModelConfig):
                     f"{self.canonical_name(context)}: SQLMesh snapshot strategy is required for snapshot materialization."
                 )
             shared_kwargs = {
-                "dialect": context.dialect,
+                "dialect": self.dialect(context),
                 "unique_key": self.unique_key,
                 "invalidate_hard_deletes": self.invalidate_hard_deletes,
                 "valid_from_name": "dbt_valid_from",
@@ -358,14 +360,14 @@ class ModelConfig(BaseModelConfig):
 
     def to_sqlmesh(self, context: DbtContext) -> Model:
         """Converts the dbt model into a SQLMesh model."""
-        dialect = context.dialect
+        model_dialect = self.dialect(context)
         query = d.jinja_query(self.sql_no_config)
 
         optional_kwargs: t.Dict[str, t.Any] = {}
 
         if self.partition_by:
             optional_kwargs["partitioned_by"] = (
-                [exp.to_column(val) for val in self.partition_by]
+                [exp.to_column(val, dialect=model_dialect) for val in self.partition_by]
                 if isinstance(self.partition_by, list)
                 else self._big_query_partition_by_expr(context)
             )
@@ -374,7 +376,7 @@ class ModelConfig(BaseModelConfig):
             clustered_by = []
             for c in self.cluster_by:
                 try:
-                    clustered_by.append(d.parse_one(c, dialect=dialect).name)
+                    clustered_by.append(d.parse_one(c, dialect=model_dialect).name)
                 except SqlglotError as e:
                     raise ConfigError(f"Failed to parse cluster_by field '{c}': {e}") from e
             optional_kwargs["clustered_by"] = clustered_by
@@ -403,7 +405,7 @@ class ModelConfig(BaseModelConfig):
         return create_sql_model(
             self.canonical_name(context),
             query,
-            dialect=dialect,
+            dialect=model_dialect,
             kind=self.model_kind(context),
             start=self.start,
             **optional_kwargs,
