@@ -73,10 +73,23 @@ def test_normalization(
     context = sushi_test_project.context
     assert context.target
 
+    # bla and bob will be normalized to lowercase since the target is duckdb
     adapter_mock = mocker.MagicMock()
-    adapter_mock.dialect = "snowflake"
     adapter_mock.default_catalog = "test"
+    adapter_mock.dialect = "duckdb"
 
+    duckdb_renderer = runtime_renderer(context, engine_adapter=adapter_mock)
+
+    schema_bla = schema_("bla", "test", quoted=True)
+    relation_bla_bob = exp.table_("bob", db="bla", catalog="test", quoted=True)
+
+    duckdb_renderer("{{ adapter.get_relation(database=None, schema='bla', identifier='bob') }}")
+    adapter_mock.table_exists.assert_has_calls([call(relation_bla_bob)])
+
+    # bla and bob will be normalized to uppercase since the target is Snowflake, even though the default dialect is duckdb
+    adapter_mock = mocker.MagicMock()
+    adapter_mock.default_catalog = "test"
+    adapter_mock.dialect = "snowflake"
     context.target = SnowflakeConfig(
         account="test",
         user="test",
@@ -85,10 +98,8 @@ def test_normalization(
         database="test",
         schema="test",
     )
-
     renderer = runtime_renderer(context, engine_adapter=adapter_mock)
 
-    # bla and bob will be normalized to uppercase since we're dealing with Snowflake
     schema_bla = schema_("BLA", "TEST", quoted=True)
     relation_bla_bob = exp.table_("BOB", db="BLA", catalog="TEST", quoted=True)
 

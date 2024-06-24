@@ -575,7 +575,7 @@ def test_test_dialect(assert_exp_eq, sushi_test_project: Project):
     )
     context = sushi_test_project.context
 
-    # can't parse test sql without specifying bigquery dialect
+    # can't parse test sql without specifying bigquery as default dialect
     with pytest.raises(ConfigError):
         audit = t.cast(StandaloneAudit, test_config.to_sqlmesh(context))
         audit.render_query(audit).sql()
