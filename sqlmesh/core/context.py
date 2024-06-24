@@ -325,6 +325,8 @@ class GenericContext(BaseContext, t.Generic[C]):
 
         self.path, self.config = t.cast(t.Tuple[Path, C], next(iter(self.configs.items())))
 
+        self._all_dialects: t.Set[str] = {self.config.dialect or ""}
+
         # This allows overriding the default dialect's normalization strategy, so for example
         # one can do `dialect="duckdb,normalization_strategy=lowercase"` and this will be
         # applied to the DuckDB dialect globally
@@ -435,6 +437,9 @@ class GenericContext(BaseContext, t.Generic[C]):
             self.path,
         )
 
+        if model.dialect:
+            self._all_dialects.add(model.dialect)
+
         model.validate_definition()
 
         return model
@@ -516,6 +521,10 @@ class GenericContext(BaseContext, t.Generic[C]):
                 raise ConfigError(
                     f"Models and Standalone audits cannot have the same name: {duplicates}"
                 )
+
+            self._all_dialects = {m.dialect for m in self._models.values() if m.dialect} | {
+                self.default_dialect or ""
+            }
 
         analytics.collector.on_project_loaded(
             project_type=(
@@ -625,10 +634,7 @@ class GenericContext(BaseContext, t.Generic[C]):
         """
         if isinstance(model_or_snapshot, str):
             # We should try all dialects referenced in the project for cases when models use mixed dialects.
-            all_dialects = {m.dialect for m in self._models.values() if m.dialect} | {
-                self.default_dialect
-            }
-            for dialect in all_dialects:
+            for dialect in self._all_dialects:
                 normalized_name = normalize_model_name(
                     model_or_snapshot,
                     dialect=dialect,
