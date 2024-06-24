@@ -32,20 +32,16 @@ def test_columns(adapter: t.Callable):
 def test_varchar_size_workaround(make_mocked_engine_adapter: t.Callable, mocker: MockerFixture):
     adapter = make_mocked_engine_adapter(RedshiftEngineAdapter)
 
-    columns_to_max = adapter._default_precision_to_max(
-        {
-            "nchar1": exp.DataType.build("NCHAR(1)", dialect=adapter.dialect),
-            "char": exp.DataType.build("CHAR", dialect=adapter.dialect),
-            "char1": exp.DataType.build("CHAR(1)", dialect=adapter.dialect),
-            "char2": exp.DataType.build("CHAR(2)", dialect=adapter.dialect),
-            "varchar": exp.DataType.build("VARCHAR", dialect=adapter.dialect),
-            "varchar256": exp.DataType.build("VARCHAR(256)", dialect=adapter.dialect),
-            "varchar2": exp.DataType.build("VARCHAR(2)", dialect=adapter.dialect),
-        }
-    )
+    columns = {
+        "char": exp.DataType.build("CHAR", dialect=adapter.dialect),
+        "char1": exp.DataType.build("CHAR(1)", dialect=adapter.dialect),
+        "char2": exp.DataType.build("CHAR(2)", dialect=adapter.dialect),
+        "varchar": exp.DataType.build("VARCHAR", dialect=adapter.dialect),
+        "varchar256": exp.DataType.build("VARCHAR(256)", dialect=adapter.dialect),
+        "varchar2": exp.DataType.build("VARCHAR(2)", dialect=adapter.dialect),
+    }
 
-    assert columns_to_max == {
-        "nchar1": exp.DataType.build("NCHAR(1)", dialect=adapter.dialect),
+    assert adapter._default_precision_to_max(columns) == {
         "char": exp.DataType.build("CHAR", dialect=adapter.dialect),
         "char1": exp.DataType.build("CHAR(max)", dialect=adapter.dialect),
         "char2": exp.DataType.build("CHAR(2)", dialect=adapter.dialect),
@@ -53,6 +49,30 @@ def test_varchar_size_workaround(make_mocked_engine_adapter: t.Callable, mocker:
         "varchar256": exp.DataType.build("VARCHAR(max)", dialect=adapter.dialect),
         "varchar2": exp.DataType.build("VARCHAR(2)", dialect=adapter.dialect),
     }
+
+    mocker.patch(
+        "sqlmesh.core.engine_adapter.base.random_id",
+        return_value="test_random_id",
+    )
+
+    mocker.patch(
+        "sqlmesh.core.engine_adapter.redshift.RedshiftEngineAdapter.table_exists",
+        return_value=True,
+    )
+
+    adapter.ctas(
+        table_name="test_schema.test_table",
+        query_or_df=parse_one(
+            "SELECT char, char1 + 1 AS char1, char2 AS char2, varchar, varchar256, varchar2 FROM (SELECT * FROM table WHERE FALSE LIMIT 0) WHERE d > 0 AND FALSE LIMIT 0"
+        ),
+        exists=False,
+    )
+
+    assert to_sql_calls(adapter) == [
+        'CREATE VIEW "__temp_ctas_test_random_id" AS SELECT "char", "char1" + 1 AS "char1", "char2" AS "char2", "varchar", "varchar256", "varchar2" FROM (SELECT * FROM "table")',
+        'DROP VIEW IF EXISTS "__temp_ctas_test_random_id" CASCADE',
+        'CREATE TABLE "test_schema"."test_table" ("char" CHAR, "char1" CHAR(max), "char2" CHAR(2), "varchar" VARCHAR, "varchar256" VARCHAR(max), "varchar2" VARCHAR(2))',
+    ]
 
 
 def test_create_table_from_query_exists_no_if_not_exists(
