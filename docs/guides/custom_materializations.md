@@ -120,7 +120,7 @@ class CustomFullMaterialization(CustomMaterialization):
     ) -> None:
         config_value = model.custom_materialization_properties["config_key"]
         # Proceed with implementing the insertion logic.
-        # Example for existing materialization for look and feel: https://github.com/TobikoData/sqlmesh/blob/273e913847173d20e9eb291df3eeaf998ec679e7/sqlmesh/core/snapshot/evaluator.py#L1227
+        # Example for existing materialization for look and feel: https://github.com/TobikoData/sqlmesh/blob/main/sqlmesh/core/snapshot/evaluator.py
 ```
 
 ## Packaging custom materializations
