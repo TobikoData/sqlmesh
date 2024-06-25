@@ -289,8 +289,8 @@ class PlanBuilder:
             is_valid_start = snapshot.is_valid_start(
                 self._start, start_date(snapshot, self._context_diff.snapshots.values(), cache)
             )
-            if not is_deployable or (
-                is_valid_start and set(snapshot.parents).isdisjoint(ignored_snapshot_ids)
+            if set(snapshot.parents).isdisjoint(ignored_snapshot_ids) and (
+                not is_deployable or is_valid_start
             ):
                 filtered_dag.add(s_id, snapshot.parents)
             else:

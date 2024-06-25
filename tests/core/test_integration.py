@@ -1306,6 +1306,60 @@ def test_custom_materialization(init_and_plan_context: t.Callable):
     assert custom_insert_called
 
 
+@freeze_time("2023-01-08 15:00:00")
+def test_ignored_snapshot_with_non_deployable_downstream(init_and_plan_context: t.Callable):
+    context, _ = init_and_plan_context("examples/sushi")
+
+    downstream_model_name = "memory.sushi.customer_max_revenue"
+
+    expressions = d.parse(
+        f"""
+        MODEL (
+            name {downstream_model_name},
+            kind INCREMENTAL_BY_UNIQUE_KEY (
+                unique_key customer_id,
+                forward_only true,
+            ),
+        );
+
+        SELECT
+          customer_id, MAX(revenue) AS max_revenue
+        FROM memory.sushi.customer_revenue_lifetime
+        GROUP BY 1;
+        """
+    )
+
+    downstream_model = load_sql_based_model(expressions)
+    assert downstream_model.forward_only
+    context.upsert_model(downstream_model)
+
+    context.plan(auto_apply=True, no_prompts=True)
+
+    customer_revenue_lifetime_model = context.get_model("sushi.customer_revenue_lifetime")
+    kwargs = {
+        **customer_revenue_lifetime_model.dict(),
+        "name": "memory.sushi.customer_revenue_lifetime_new",
+        "kind": dict(
+            name="INCREMENTAL_UNMANAGED"
+        ),  # Make it incremental unmanaged to ensure the depends_on_past behavior.
+    }
+    context.upsert_model(SqlModel.parse_obj(kwargs))
+    context.upsert_model(
+        downstream_model_name,
+        query=d.parse_one(
+            "SELECT customer_id, MAX(revenue) AS max_revenue FROM memory.sushi.customer_revenue_lifetime_new GROUP BY 1"
+        ),
+    )
+
+    plan = context.plan("dev", no_prompts=True, enable_preview=True)
+    assert {s.name for s in plan.ignored} == {
+        '"memory"."sushi"."customer_revenue_lifetime_new"',
+        '"memory"."sushi"."customer_max_revenue"',
+    }
+    assert not plan.new_snapshots
+    assert not plan.missing_intervals
+
+
 @pytest.mark.parametrize(
     "context_fixture",
     ["sushi_context", "sushi_dbt_context", "sushi_test_dbt_context", "sushi_no_default_catalog"],
