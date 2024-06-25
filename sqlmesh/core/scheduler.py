@@ -12,6 +12,7 @@ from sqlmesh.core.notification_target import (
     NotificationEvent,
     NotificationTargetManager,
 )
+from sqlmesh.core.signal import SignalFactory
 from sqlmesh.core.snapshot import (
     DeployabilityIndex,
     Snapshot,
@@ -58,6 +59,7 @@ class Scheduler:
         state_sync: The state sync to pull saved snapshots.
         max_workers: The maximum number of parallel queries to run.
         console: The rich instance used for printing scheduling information.
+        signal_factory: A factory method for building Signal instances from model signal configuration.
     """
 
     def __init__(
@@ -69,6 +71,7 @@ class Scheduler:
         max_workers: int = 1,
         console: t.Optional[Console] = None,
         notification_target_manager: t.Optional[NotificationTargetManager] = None,
+        signal_factory: t.Optional[SignalFactory] = None,
     ):
         self.state_sync = state_sync
         self.snapshots = {s.snapshot_id: s for s in snapshots}
@@ -80,6 +83,7 @@ class Scheduler:
         self.notification_target_manager = (
             notification_target_manager or NotificationTargetManager()
         )
+        self.signal_factory = signal_factory
 
     def batches(
         self,
@@ -278,6 +282,13 @@ class Scheduler:
             if batch_idx == -1:
                 return
             snapshot = snapshots_by_name[snapshot_name]
+
+            if self.signal_factory:
+                for rendered_signal in snapshot.model.render_signals(
+                    start=start, end=end, execution_time=execution_time
+                ):
+                    signal = self.signal_factory(rendered_signal)
+                    signal.wait()
 
             self.console.start_snapshot_evaluation_progress(snapshot)
 
