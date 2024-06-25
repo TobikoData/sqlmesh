@@ -2022,13 +2022,24 @@ def test_audit_set_blocking_at_use_site(adapter_mock, make_snapshot):
         query="SELECT * FROM test_schema.test_table",
     )
 
-    model = SqlModel(
-        name="test_schema.test_table",
-        kind=FullKind(),
-        query=parse_one("SELECT a::int FROM tbl"),
-        audits=[
-            ("always_fail", {"blocking": exp.false()}),
-        ],
+    @macro()
+    def blocking_value(evaluator):
+        return False
+
+    model = load_sql_based_model(
+        parse(  # type: ignore
+            """
+            MODEL (
+                name test_schema.test_table,
+                kind FULL,
+                audits (
+                    always_fail (blocking := @blocking_value())
+                )
+            );
+
+            SELECT a::int FROM tbl
+            """
+        ),
     )
     snapshot = make_snapshot(model, audits={always_failing_audit.name: always_failing_audit})
     snapshot.categorize_as(SnapshotChangeCategory.BREAKING)
