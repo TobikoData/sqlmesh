@@ -635,3 +635,15 @@ SELECT * from sushi.items
 WHERE ds BETWEEN @start_ds AND @end_ds AND
    price IS NULL;
 ```
+
+The `blocking` property can also be set at the use-site of an audit, using the special `blocking` argument:
+
+```sql linenums="1"
+MODEL (
+  name sushi.items,
+  audits (
+    does_not_exceed_threshold(column := id, threshold := 1000, blocking := false),
+    does_not_exceed_threshold(column := price, threshold := 100, blocking := false)
+  )
+);
+```

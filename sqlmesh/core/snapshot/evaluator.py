@@ -831,6 +831,10 @@ class SnapshotEvaluator:
                 skipped=True,
             )
 
+        # Model's "blocking" argument takes precedence over the audit's default setting
+        blocking = audit_args.pop("blocking", None)
+        blocking = blocking == exp.true() if blocking else audit.blocking
+
         query = audit.render_query(
             snapshot,
             start=start,
@@ -854,10 +858,11 @@ class SnapshotEvaluator:
                 query=query,
                 adapter_dialect=self.adapter.dialect,
             )
-            if audit.blocking:
+            if blocking:
                 raise audit_error
             else:
                 logger.warning(f"{audit_error}\nAudit is warn only so proceeding with execution.")
+
         return AuditResult(
             audit=audit,
             model=snapshot.model_or_none,
