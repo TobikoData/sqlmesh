@@ -193,7 +193,9 @@ def _on_destructive_change_validator(
     cls: t.Type, v: t.Union[OnDestructiveChange, str, exp.Identifier]
 ) -> t.Any:
     if v and not isinstance(v, OnDestructiveChange):
-        return OnDestructiveChange(v.this.upper() if isinstance(v, exp.Identifier) else v.upper())
+        return OnDestructiveChange(
+            v.this.upper() if isinstance(v, (exp.Identifier, exp.Literal)) else v.upper()
+        )
     return v
 
 
@@ -209,7 +211,10 @@ class _ModelKind(PydanticModel, ModelKindMixin):
     def model_kind_name(self) -> t.Optional[ModelKindName]:
         return self.name
 
-    def to_expression(self, **kwargs: t.Any) -> d.ModelKind:
+    def to_expression(
+        self, expressions: t.Optional[t.List[exp.Expression]] = None, **kwargs: t.Any
+    ) -> d.ModelKind:
+        kwargs["expressions"] = expressions
         return d.ModelKind(this=self.name.value.upper(), **kwargs)
 
     @property
@@ -326,6 +331,18 @@ class _Incremental(_ModelKind):
             str(self.on_destructive_change),
         ]
 
+    def to_expression(
+        self, expressions: t.Optional[t.List[exp.Expression]] = None, **kwargs: t.Any
+    ) -> d.ModelKind:
+        return super().to_expression(
+            expressions=[
+                *(expressions or []),
+                _property(
+                    "on_destructive_change", exp.Literal.string(self.on_destructive_change.value)
+                ),
+            ],
+        )
+
 
 class _IncrementalBy(_Incremental):
     dialect: t.Optional[str] = Field(None, validate_default=True)
@@ -354,6 +371,24 @@ class _IncrementalBy(_Incremental):
             str(self.disable_restatement),
         ]
 
+    def to_expression(
+        self, expressions: t.Optional[t.List[exp.Expression]] = None, **kwargs: t.Any
+    ) -> d.ModelKind:
+        return super().to_expression(
+            expressions=[
+                *(expressions or []),
+                *_properties(
+                    {
+                        "batch_size": self.batch_size,
+                        "batch_concurrency": self.batch_concurrency,
+                        "lookback": self.lookback,
+                        "forward_only": self.forward_only,
+                        "disable_restatement": self.disable_restatement,
+                    }
+                ),
+            ],
+        )
+
 
 class IncrementalByTimeRangeKind(_IncrementalBy):
     name: Literal[ModelKindName.INCREMENTAL_BY_TIME_RANGE] = ModelKindName.INCREMENTAL_BY_TIME_RANGE
@@ -361,8 +396,15 @@ class IncrementalByTimeRangeKind(_IncrementalBy):
 
     _time_column_validator = TimeColumn.validator()
 
-    def to_expression(self, dialect: str = "", **kwargs: t.Any) -> d.ModelKind:
-        return super().to_expression(expressions=[self.time_column.to_property(dialect)])
+    def to_expression(
+        self, expressions: t.Optional[t.List[exp.Expression]] = None, **kwargs: t.Any
+    ) -> d.ModelKind:
+        return super().to_expression(
+            expressions=[
+                *(expressions or []),
+                self.time_column.to_property(kwargs.get("dialect") or ""),
+            ]
+        )
 
     @property
     def data_hash_values(self) -> t.List[t.Optional[str]]:
@@ -415,6 +457,21 @@ class IncrementalByUniqueKeyKind(_IncrementalBy):
             gen(self.when_matched) if self.when_matched is not None else None,
         ]
 
+    def to_expression(
+        self, expressions: t.Optional[t.List[exp.Expression]] = None, **kwargs: t.Any
+    ) -> d.ModelKind:
+        return super().to_expression(
+            expressions=[
+                *(expressions or []),
+                *_properties(
+                    {
+                        "unique_key": exp.Tuple(expressions=self.unique_key),
+                        "when_matched": self.when_matched,
+                    }
+                ),
+            ],
+        )
+
 
 class IncrementalByPartitionKind(_Incremental):
     name: Literal[ModelKindName.INCREMENTAL_BY_PARTITION] = ModelKindName.INCREMENTAL_BY_PARTITION
@@ -428,6 +485,21 @@ class IncrementalByPartitionKind(_Incremental):
             str(self.forward_only),
             str(self.disable_restatement),
         ]
+
+    def to_expression(
+        self, expressions: t.Optional[t.List[exp.Expression]] = None, **kwargs: t.Any
+    ) -> d.ModelKind:
+        return super().to_expression(
+            expressions=[
+                *(expressions or []),
+                *_properties(
+                    {
+                        "forward_only": self.forward_only,
+                        "disable_restatement": self.disable_restatement,
+                    }
+                ),
+            ],
+        )
 
 
 class IncrementalUnmanagedKind(_Incremental):
@@ -448,6 +520,22 @@ class IncrementalUnmanagedKind(_Incremental):
             str(self.disable_restatement),
         ]
 
+    def to_expression(
+        self, expressions: t.Optional[t.List[exp.Expression]] = None, **kwargs: t.Any
+    ) -> d.ModelKind:
+        return super().to_expression(
+            expressions=[
+                *(expressions or []),
+                *_properties(
+                    {
+                        "insert_overwrite": self.insert_overwrite,
+                        "forward_only": self.forward_only,
+                        "disable_restatement": self.disable_restatement,
+                    }
+                ),
+            ],
+        )
+
 
 class ViewKind(_ModelKind):
     name: Literal[ModelKindName.VIEW] = ModelKindName.VIEW
@@ -456,6 +544,16 @@ class ViewKind(_ModelKind):
     @property
     def data_hash_values(self) -> t.List[t.Optional[str]]:
         return [*super().data_hash_values, str(self.materialized)]
+
+    def to_expression(
+        self, expressions: t.Optional[t.List[exp.Expression]] = None, **kwargs: t.Any
+    ) -> d.ModelKind:
+        return super().to_expression(
+            expressions=[
+                *(expressions or []),
+                _property("materialized", self.materialized),
+            ],
+        )
 
 
 class SeedKind(_ModelKind):
@@ -478,14 +576,18 @@ class SeedKind(_ModelKind):
             return CsvSettings(**v)
         return v
 
-    def to_expression(self, **kwargs: t.Any) -> d.ModelKind:
+    def to_expression(
+        self, expressions: t.Optional[t.List[exp.Expression]] = None, **kwargs: t.Any
+    ) -> d.ModelKind:
         """Convert the seed kind into a SQLGlot expression."""
         return super().to_expression(
             expressions=[
-                exp.Property(this=exp.Var(this="path"), value=exp.Literal.string(self.path)),
-                exp.Property(
-                    this=exp.Var(this="batch_size"),
-                    value=exp.Literal.number(self.batch_size),
+                *(expressions or []),
+                *_properties(
+                    {
+                        "path": exp.Literal.string(self.path),
+                        "batch_size": self.batch_size,
+                    }
                 ),
             ],
         )
@@ -564,6 +666,26 @@ class _SCDType2Kind(_Incremental):
             str(self.disable_restatement),
         ]
 
+    def to_expression(
+        self, expressions: t.Optional[t.List[exp.Expression]] = None, **kwargs: t.Any
+    ) -> d.ModelKind:
+        return super().to_expression(
+            expressions=[
+                *(expressions or []),
+                *_properties(
+                    {
+                        "unique_key": exp.Tuple(expressions=self.unique_key),
+                        "valid_from_name": self.valid_from_name,
+                        "valid_to_name": self.valid_to_name,
+                        "invalidate_hard_deletes": self.invalidate_hard_deletes,
+                        "time_data_type": self.time_data_type,
+                        "forward_only": self.forward_only,
+                        "disable_restatement": self.disable_restatement,
+                    }
+                ),
+            ],
+        )
+
 
 class SCDType2ByTimeKind(_SCDType2Kind):
     name: Literal[ModelKindName.SCD_TYPE_2, ModelKindName.SCD_TYPE_2_BY_TIME] = (
@@ -585,6 +707,21 @@ class SCDType2ByTimeKind(_SCDType2Kind):
             str(self.updated_at_as_valid_from),
         ]
 
+    def to_expression(
+        self, expressions: t.Optional[t.List[exp.Expression]] = None, **kwargs: t.Any
+    ) -> d.ModelKind:
+        return super().to_expression(
+            expressions=[
+                *(expressions or []),
+                *_properties(
+                    {
+                        "updated_at_name": self.updated_at_name,
+                        "updated_at_as_valid_from": self.updated_at_as_valid_from,
+                    }
+                ),
+            ],
+        )
+
 
 class SCDType2ByColumnKind(_SCDType2Kind):
     name: Literal[ModelKindName.SCD_TYPE_2_BY_COLUMN] = ModelKindName.SCD_TYPE_2_BY_COLUMN
@@ -599,6 +736,23 @@ class SCDType2ByColumnKind(_SCDType2Kind):
             else [gen(self.columns)]
         )
         return [*super().data_hash_values, *columns_sql, str(self.execution_time_as_valid_from)]
+
+    def to_expression(
+        self, expressions: t.Optional[t.List[exp.Expression]] = None, **kwargs: t.Any
+    ) -> d.ModelKind:
+        return super().to_expression(
+            expressions=[
+                *(expressions or []),
+                *_properties(
+                    {
+                        "columns": exp.Tuple(expressions=self.columns)
+                        if isinstance(self.columns, list)
+                        else self.columns,
+                        "execution_time_as_valid_from": self.execution_time_as_valid_from,
+                    }
+                ),
+            ],
+        )
 
 
 class EmbeddedKind(_ModelKind):
@@ -653,21 +807,19 @@ class CustomKind(_ModelKind):
             str(self.disable_restatement),
         ]
 
-    def to_expression(self, **kwargs: t.Any) -> d.ModelKind:
+    def to_expression(
+        self, expressions: t.Optional[t.List[exp.Expression]] = None, **kwargs: t.Any
+    ) -> d.ModelKind:
         return super().to_expression(
             expressions=[
-                exp.Property(
-                    this=exp.var("materialization"),
-                    value=exp.Literal.string(self.materialization),
-                ),
-                exp.Property(
-                    this=exp.var("materialization_properties"),
-                    value=self.materialization_properties_,
-                ),
-                exp.Property(this=exp.var("forward_only"), value=exp.convert(self.forward_only)),
-                exp.Property(
-                    this=exp.var("disable_restatement"),
-                    value=exp.convert(self.disable_restatement),
+                *(expressions or []),
+                *_properties(
+                    {
+                        "materialization": exp.Literal.string(self.materialization),
+                        "materialization_properties": self.materialization_properties_,
+                        "forward_only": self.forward_only,
+                        "disable_restatement": self.disable_restatement,
+                    }
                 ),
             ],
         )
@@ -759,3 +911,11 @@ def _model_kind_validator(cls: t.Type, v: t.Any, values: t.Dict[str, t.Any]) -> 
 
 
 model_kind_validator = field_validator("kind", mode="before")(_model_kind_validator)
+
+
+def _property(name: str, value: t.Any) -> exp.Property:
+    return exp.Property(this=exp.var(name), value=exp.convert(value))
+
+
+def _properties(name_value_pairs: t.Dict[str, t.Any]) -> t.List[exp.Property]:
+    return [_property(k, v) for k, v in name_value_pairs.items() if v is not None]
