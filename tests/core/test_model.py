@@ -966,7 +966,10 @@ def test_render_definition():
             owner owner_name,
             dialect spark,
             kind INCREMENTAL_BY_TIME_RANGE (
-                time_column (`a`, 'yyyymmdd')
+                time_column (`a`, 'yyyymmdd'),
+                forward_only FALSE,
+                disable_restatement FALSE,
+                on_destructive_change 'ERROR'
             ),
             storage_format iceberg,
             partitioned_by `a`,
@@ -1058,7 +1061,9 @@ def test_render_definition_with_defaults():
             owner owner_name,
             cron '@daily',
             dialect spark,
-            kind VIEW,
+            kind VIEW (
+                materialized FALSE
+            )
         );
 
         {query}
@@ -4779,3 +4784,315 @@ def test_custom_kind():
         "key_c": True,
         "key_d": 1.23,
     }
+
+    assert (
+        kind.to_expression().sql()
+        == """CUSTOM (
+materialization 'MyTestStrategy',
+materialization_properties ('key_a' = 'value_a', key_b = 2, 'key_c' = TRUE, 'key_d' = 1.23),
+forward_only TRUE,
+disable_restatement TRUE
+)"""
+    )
+
+
+def test_model_kind_to_expression():
+    assert (
+        load_sql_based_model(
+            d.parse(
+                """
+        MODEL (
+            name db.table,
+            kind INCREMENTAL_BY_TIME_RANGE(
+                time_column a,
+            ),
+        );
+        SELECT a, b
+        """
+            )
+        )
+        .kind.to_expression()
+        .sql()
+        == """INCREMENTAL_BY_TIME_RANGE (
+time_column ("a", '%Y-%m-%d'),
+forward_only FALSE,
+disable_restatement FALSE,
+on_destructive_change 'ERROR'
+)"""
+    )
+
+    assert (
+        load_sql_based_model(
+            d.parse(
+                """
+        MODEL (
+            name db.table,
+            kind INCREMENTAL_BY_TIME_RANGE(
+                time_column a,
+                batch_size 1,
+                batch_concurrency 2,
+                lookback 3,
+                forward_only TRUE,
+                disable_restatement TRUE,
+                on_destructive_change WARN,
+            ),
+        );
+        SELECT a, b
+        """
+            )
+        )
+        .kind.to_expression()
+        .sql()
+        == """INCREMENTAL_BY_TIME_RANGE (
+time_column ("a", '%Y-%m-%d'),
+batch_size 1,
+batch_concurrency 2,
+lookback 3,
+forward_only TRUE,
+disable_restatement TRUE,
+on_destructive_change 'WARN'
+)"""
+    )
+
+    assert (
+        load_sql_based_model(
+            d.parse(
+                """
+        MODEL (
+            name db.table,
+            kind INCREMENTAL_BY_UNIQUE_KEY(
+                unique_key a,
+            ),
+        );
+        SELECT a, b
+        """
+            )
+        )
+        .kind.to_expression()
+        .sql()
+        == """INCREMENTAL_BY_UNIQUE_KEY (
+unique_key ("a"),
+batch_concurrency 1,
+forward_only FALSE,
+disable_restatement FALSE,
+on_destructive_change 'ERROR'
+)"""
+    )
+
+    assert (
+        load_sql_based_model(
+            d.parse(
+                """
+        MODEL (
+            name db.table,
+            kind INCREMENTAL_BY_UNIQUE_KEY(
+                unique_key a,
+                when_matched WHEN MATCHED THEN UPDATE SET target.b = COALESCE(source.b, target.b)
+            ),
+        );
+        SELECT a, b
+        """
+            )
+        )
+        .kind.to_expression()
+        .sql()
+        == """INCREMENTAL_BY_UNIQUE_KEY (
+unique_key ("a"),
+when_matched WHEN MATCHED THEN UPDATE SET __MERGE_TARGET__.b = COALESCE(__MERGE_SOURCE__.b, __MERGE_TARGET__.b),
+batch_concurrency 1,
+forward_only FALSE,
+disable_restatement FALSE,
+on_destructive_change 'ERROR'
+)"""
+    )
+
+    assert (
+        load_sql_based_model(
+            d.parse(
+                """
+        MODEL (
+            name db.table,
+            kind INCREMENTAL_BY_PARTITION,
+            partitioned_by ["a"],
+        );
+        SELECT a, b
+        """
+            )
+        )
+        .kind.to_expression()
+        .sql()
+        == """INCREMENTAL_BY_PARTITION (
+forward_only TRUE,
+disable_restatement TRUE,
+on_destructive_change 'ERROR'
+)"""
+    )
+
+    assert (
+        load_sql_based_model(
+            d.parse(
+                """
+        MODEL (
+            name db.seed,
+            kind SEED (
+              path '../seeds/waiter_names.csv',
+            )
+        );
+        """
+            ),
+            path=Path("./examples/sushi/models/test_model.sql"),
+        )
+        .kind.to_expression()
+        .sql()
+        == """SEED (
+path '../seeds/waiter_names.csv',
+batch_size 1000
+)"""
+    )
+
+    assert (
+        load_sql_based_model(
+            d.parse(
+                """
+        MODEL (
+            name db.table,
+            kind SCD_TYPE_2_BY_TIME (
+                unique_key [a, b]
+            )
+        );
+        SELECT a, b
+        """
+            )
+        )
+        .kind.to_expression()
+        .sql()
+        == """SCD_TYPE_2_BY_TIME (
+updated_at_name "updated_at",
+updated_at_as_valid_from FALSE,
+unique_key ("a", "b"),
+valid_from_name "valid_from",
+valid_to_name "valid_to",
+invalidate_hard_deletes FALSE,
+time_data_type TIMESTAMP,
+forward_only TRUE,
+disable_restatement TRUE,
+on_destructive_change 'ERROR'
+)"""
+    )
+
+    assert (
+        load_sql_based_model(
+            d.parse(
+                """
+        MODEL (
+            name db.table,
+            kind SCD_TYPE_2_BY_COLUMN (
+                unique_key [a, b],
+                columns [b]
+            )
+        );
+        SELECT a, b, c
+        """
+            )
+        )
+        .kind.to_expression()
+        .sql()
+        == """SCD_TYPE_2_BY_COLUMN (
+columns ("b"),
+execution_time_as_valid_from FALSE,
+unique_key ("a", "b"),
+valid_from_name "valid_from",
+valid_to_name "valid_to",
+invalidate_hard_deletes FALSE,
+time_data_type TIMESTAMP,
+forward_only TRUE,
+disable_restatement TRUE,
+on_destructive_change 'ERROR'
+)"""
+    )
+
+    assert (
+        load_sql_based_model(
+            d.parse(
+                """
+        MODEL (
+            name db.table,
+            kind SCD_TYPE_2_BY_COLUMN (
+                unique_key [a, b],
+                columns *
+            )
+        );
+        SELECT a, b, c
+        """
+            )
+        )
+        .kind.to_expression()
+        .sql()
+        == """SCD_TYPE_2_BY_COLUMN (
+columns *,
+execution_time_as_valid_from FALSE,
+unique_key ("a", "b"),
+valid_from_name "valid_from",
+valid_to_name "valid_to",
+invalidate_hard_deletes FALSE,
+time_data_type TIMESTAMP,
+forward_only TRUE,
+disable_restatement TRUE,
+on_destructive_change 'ERROR'
+)"""
+    )
+
+    assert (
+        load_sql_based_model(
+            d.parse(
+                """
+        MODEL (
+            name db.table,
+            kind FULL
+        );
+        SELECT a, b, c
+        """
+            )
+        )
+        .kind.to_expression()
+        .sql()
+        == "FULL"
+    )
+
+    assert (
+        load_sql_based_model(
+            d.parse(
+                """
+        MODEL (
+            name db.table,
+            kind VIEW
+        );
+        SELECT a, b, c
+        """
+            )
+        )
+        .kind.to_expression()
+        .sql()
+        == """VIEW (
+materialized FALSE
+)"""
+    )
+
+    assert (
+        load_sql_based_model(
+            d.parse(
+                """
+        MODEL (
+            name db.table,
+            kind VIEW (materialized true)
+        );
+        SELECT a, b, c
+        """
+            )
+        )
+        .kind.to_expression()
+        .sql()
+        == """VIEW (
+materialized TRUE
+)"""
+    )
