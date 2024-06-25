@@ -366,7 +366,14 @@ function FormActionsModel({
     limit: 1000,
   })
 
-  const { refetch: getRender } = useApiRender(form as RenderInput)
+  const { refetch: getRender } = useApiRender({
+    model: form.model,
+    start: form.start,
+    end: form.end,
+    execution_time: form.execution_time,
+    dialect: model.dialect,
+    pretty: true,
+  })
   const {
     refetch: getEvaluate,
     isFetching,
