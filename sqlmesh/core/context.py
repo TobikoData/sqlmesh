@@ -83,6 +83,7 @@ from sqlmesh.core.reference import ReferenceGraph
 from sqlmesh.core.scheduler import Scheduler
 from sqlmesh.core.schema_loader import create_external_models_file
 from sqlmesh.core.selector import Selector
+from sqlmesh.core.signal import SignalFactory
 from sqlmesh.core.snapshot import (
     DeployabilityIndex,
     Snapshot,
@@ -308,6 +309,7 @@ class GenericContext(BaseContext, t.Generic[C]):
         load: bool = True,
         console: t.Optional[Console] = None,
         users: t.Optional[t.List[User]] = None,
+        signal_factory: t.Optional[SignalFactory] = None,
     ):
         self.configs = (
             config if isinstance(config, dict) else load_configs(config, self.CONFIG_TYPE, paths)
@@ -354,6 +356,7 @@ class GenericContext(BaseContext, t.Generic[C]):
         )
 
         self._snapshot_evaluator: t.Optional[SnapshotEvaluator] = None
+        self._signal_factory = signal_factory
 
         self._provided_state_sync: t.Optional[StateSync] = state_sync
         self._state_sync: t.Optional[StateSync] = None
@@ -474,6 +477,7 @@ class GenericContext(BaseContext, t.Generic[C]):
             max_workers=self.concurrent_tasks,
             console=self.console,
             notification_target_manager=self.notification_target_manager,
+            signal_factory=self._signal_factory,
         )
 
     @property
