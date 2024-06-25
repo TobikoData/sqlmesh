@@ -39,6 +39,7 @@ setup(
         "dateparser",
         "freezegun",
         "hyperscript",
+        "importlib-metadata; python_version<'3.12'",
         "ipywidgets",
         "jinja2",
         "pandas",
