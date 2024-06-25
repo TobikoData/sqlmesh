@@ -10,7 +10,7 @@ from sqlmesh.core.audit import (
     load_audit,
     load_multiple_audits,
 )
-from sqlmesh.core.dialect import parse
+from sqlmesh.core.dialect import parse, Audit
 from sqlmesh.core.model import (
     IncrementalByTimeRangeKind,
     Model,
@@ -777,8 +777,11 @@ def test_load_inline_audits(assert_exp_eq):
     )
 
     model = load_sql_based_model(expressions)
-    assert model.inline_audits
     assert len(model.audits) == 1
     assert len(model.inline_audits) == 2
-    assert type(model.inline_audits["assert_positive_id"]) == ModelAudit
-    assert type(model.inline_audits["does_not_exceed_threshold"]) == ModelAudit
+    assert type(model.inline_audits["assert_positive_id"][0]) == Audit
+    assert type(model.inline_audits["assert_positive_id"][1]) == exp.Select
+    assert type(model.inline_audits["does_not_exceed_threshold"][0]) == Audit
+    assert type(model.inline_audits["does_not_exceed_threshold"][1]) == exp.Select
+    audit = load_audit(model.inline_audits["assert_positive_id"], dialect="spark")
+    assert type(audit) == ModelAudit

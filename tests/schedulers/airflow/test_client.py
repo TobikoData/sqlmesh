@@ -101,6 +101,7 @@ def test_apply_plan(mocker: MockerFixture, snapshot: Snapshot):
                         "dialect": "spark",
                     },
                     "mapping_schema": {},
+                    "inline_audits": {},
                     "name": "test_model",
                     "partitioned_by": ["`a`"],
                     "query": "SELECT a, ds FROM tbl",

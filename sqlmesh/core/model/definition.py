@@ -113,7 +113,7 @@ class _Model(ModelMeta, frozen=True):
     python_env_: t.Optional[t.Dict[str, Executable]] = Field(default=None, alias="python_env")
     jinja_macros: JinjaMacroRegistry = JinjaMacroRegistry()
     mapping_schema: t.Dict[str, t.Any] = {}
-    inline_audits: t.Optional[t.Dict[str, ModelAudit]] = None
+    inline_audits: t.Dict[str, t.Any] = {}
 
     _expressions_validator = expression_validator
 
@@ -465,12 +465,15 @@ class _Model(ModelMeta, frozen=True):
         Args:
             audits: Available audits by name.
         """
-        from sqlmesh.core.audit import BUILT_IN_AUDITS
+        from sqlmesh.core.audit import BUILT_IN_AUDITS, load_audit, ModelAudit
 
         referenced_audits = []
+
         for audit_name, _ in self.audits:
-            if self.inline_audits and audit_name in self.inline_audits:
-                referenced_audits.append(self.inline_audits[audit_name])
+            if audit_name in self.inline_audits:
+                audit = load_audit(self.inline_audits[audit_name], dialect=self.dialect)
+                if isinstance(audit, ModelAudit):
+                    referenced_audits.append(audit)
             elif audit_name in audits:
                 referenced_audits.append(audits[audit_name])
             elif audit_name not in BUILT_IN_AUDITS:
@@ -746,7 +749,7 @@ class _Model(ModelMeta, frozen=True):
         Returns:
             The metadata hash for the node.
         """
-        from sqlmesh.core.audit import BUILT_IN_AUDITS
+        from sqlmesh.core.audit import BUILT_IN_AUDITS, load_audit, ModelAudit
 
         metadata = [
             self.dialect,
@@ -775,8 +778,10 @@ class _Model(ModelMeta, frozen=True):
                 for arg_name, arg_value in audit_args.items():
                     metadata.append(arg_name)
                     metadata.append(gen(arg_value))
-            elif self.inline_audits and audit_name in self.inline_audits:
-                audit = self.inline_audits[audit_name]
+            elif audit_name in self.inline_audits:
+                audit = load_audit(self.inline_audits[audit_name], dialect=self.dialect)
+                if not isinstance(audit, ModelAudit):
+                    audit = None
             elif audit_name in audits:
                 audit = audits[audit_name]
             else:
@@ -1859,7 +1864,7 @@ def _create_model(
     depends_on: t.Optional[t.Set[str]] = None,
     dialect: t.Optional[str] = None,
     physical_schema_override: t.Optional[t.Dict[str, str]] = None,
-    inline_audits: t.Optional[t.Dict[str, ModelAudit]] = None,
+    inline_audits: t.Optional[t.Dict[str, t.Any]] = None,
     **kwargs: t.Any,
 ) -> Model:
     _validate_model_fields(klass, {"name", *kwargs} - {"grain", "table_properties"}, path)
@@ -1880,7 +1885,7 @@ def _create_model(
     try:
         model = klass(
             name=name,
-            inline_audits=inline_audits,
+            inline_audits=inline_audits or {},
             **{
                 **(defaults or {}),
                 "jinja_macros": jinja_macros or JinjaMacroRegistry(),
@@ -1911,7 +1916,7 @@ def _split_sql_model_statements(
     t.Optional[exp.Expression],
     t.List[exp.Expression],
     t.List[exp.Expression],
-    UniqueKeyDict[str, ModelAudit],
+    UniqueKeyDict[str, t.Tuple[d.Audit, exp.Expression]],
 ]:
     """Extracts the SELECT query from a sequence of expressions.
 
@@ -1925,17 +1930,19 @@ def _split_sql_model_statements(
     Raises:
         ConfigError: If the model definition contains more than one SELECT query or `@INSERT_SEED()` call.
     """
-    from sqlmesh.core.audit.definition import load_audit, ModelAudit
 
     query_positions = []
-    inline_audits: UniqueKeyDict[str, ModelAudit] = UniqueKeyDict("inline_audits")
+    inline_audits: UniqueKeyDict[str, t.Tuple[d.Audit, exp.Expression]] = UniqueKeyDict(
+        "inline_audits"
+    )
     idx = 0
     while idx < len(expressions):
         expression = expressions[idx]
         if isinstance(expression, d.Audit):
-            audit = load_audit([expression, expressions[idx + 1]], dialect=dialect or "")
-            if isinstance(audit, ModelAudit):
-                inline_audits[audit.name] = audit
+            inline_audits[expression.expressions[0].args.get("value").this] = (
+                expression,
+                expressions[idx + 1],
+            )
             expressions = expressions[:idx] + expressions[idx + 2 :]
             idx -= 1
         elif (
