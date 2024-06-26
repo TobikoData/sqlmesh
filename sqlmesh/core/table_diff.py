@@ -256,10 +256,10 @@ class TableDiff:
                 exp.select(
                     *s_selects.values(),
                     *t_selects.values(),
-                    exp.func("IF", exp.or_(*(c.not_().is_(exp.Null()) for c in s_index)), 1, 0).as_(
+                    exp.func("IF", exp.or_(*(c.is_(exp.Null()).not_() for c in s_index)), 1, 0).as_(
                         "s_exists"
                     ),
-                    exp.func("IF", exp.or_(*(c.not_().is_(exp.Null()) for c in t_index)), 1, 0).as_(
+                    exp.func("IF", exp.or_(*(c.is_(exp.Null()).not_() for c in t_index)), 1, 0).as_(
                         "t_exists"
                     ),
                     exp.func(
@@ -268,8 +268,8 @@ class TableDiff:
                             *(
                                 exp.and_(
                                     exp.column(c, "s").eq(exp.column(c, "t")),
-                                    exp.column(c, "s").not_().is_(exp.Null()),
-                                    exp.column(c, "t").not_().is_(exp.Null()),
+                                    exp.column(c, "s").is_(exp.Null()).not_(),
+                                    exp.column(c, "t").is_(exp.Null()).not_(),
                                 )
                                 for c in index_cols
                             ),
