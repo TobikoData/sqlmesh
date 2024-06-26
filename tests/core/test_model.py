@@ -5096,3 +5096,67 @@ materialized FALSE
 materialized TRUE
 )"""
     )
+
+
+def test_macro_def_data_hash():
+    expressions = d.parse(
+        """
+        MODEL (
+            name db.model,
+        );
+
+        SELECT 1;
+    """
+    )
+    model = load_sql_based_model(expressions, path=Path("./examples/sushi/models/test_model.sql"))
+
+    expressions = d.parse(
+        """
+        MODEL (
+            name db.model,
+        );
+
+        @DEF(my_var, 1);
+
+        SELECT 1;
+    """
+    )
+    new_model = load_sql_based_model(
+        expressions, path=Path("./examples/sushi/models/test_model.sql")
+    )
+
+    assert model.data_hash != new_model.data_hash
+
+
+def test_macro_func_metadata_hash():
+    @macro()
+    def noop(evaluator: MacroEvaluator) -> None:
+        return None
+
+    expressions = d.parse(
+        """
+        MODEL (
+            name db.model,
+        );
+
+        SELECT 1;
+    """
+    )
+    model = load_sql_based_model(expressions, path=Path("./examples/sushi/models/test_model.sql"))
+
+    expressions = d.parse(
+        """
+        MODEL (
+            name db.model,
+        );
+
+        SELECT 1;
+
+        @noop();
+    """
+    )
+    new_model = load_sql_based_model(
+        expressions, path=Path("./examples/sushi/models/test_model.sql")
+    )
+
+    assert model.metadata_hash(audits={}) != new_model.metadata_hash(audits={})

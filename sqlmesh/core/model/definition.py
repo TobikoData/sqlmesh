@@ -934,6 +934,19 @@ class _SqlBasedModel(_Model):
 
         return data_hash_values
 
+    @property
+    def _additional_metadata(self) -> t.List[str]:
+        additional_metadata = super()._additional_metadata
+
+        for statement in (*self.pre_statements, *self.post_statements):
+            if isinstance(statement, d.MacroFunc) and not isinstance(statement, d.MacroDef):
+                if self._statement_renderer(statement).render() == []:
+                    # Macros that do not return any expressions should still be included
+                    # in a model's metadata hash.
+                    additional_metadata.append(gen(statement))
+
+        return additional_metadata
+
 
 class SqlModel(_SqlBasedModel):
     """The model definition which relies on a SQL query to fetch the data.
