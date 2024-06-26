@@ -383,7 +383,7 @@ class StateBasedAirflowPlanEvaluator(BaseAirflowPlanEvaluator):
             no_gaps=plan.no_gaps,
             skip_backfill=plan.skip_backfill,
             request_id=plan_request_id,
-            restatements=plan.restatements or {},
+            restatements={s.name: i for s, i in (plan.restatements or {}).items()},
             notification_targets=self.notification_targets or [],
             backfill_concurrent_tasks=self.backfill_concurrent_tasks,
             ddl_concurrent_tasks=self.ddl_concurrent_tasks,
