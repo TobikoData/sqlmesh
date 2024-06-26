@@ -103,3 +103,21 @@ sqlmesh_airflow = SQLMeshAirflow(
     }
 )
 ```
+
+## Model table properties to support altering tables
+
+If you are making a change to the structure of a table that is [forward only](../../guides/incremental_time.md#forward-only-models), then you may need to add the following to your model's `physical_properties`:
+
+
+```sql
+MODEL (
+    name sqlmesh_example.new_model,
+    ...
+    physical_properties (
+        'delta.columnMapping.mode' = 'name'
+    ),
+)
+```
+
+If you attempt to alter without having this property set, you will get an error similar to `databricks.sql.exc.ServerOperationError: [DELTA_UNSUPPORTED_DROP_COLUMN] DROP COLUMN is not supported for your Delta table.`.
+[Databricks Documentation for more details](https://docs.databricks.com/en/delta/column-mapping.html#requirements).
