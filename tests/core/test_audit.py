@@ -2,6 +2,7 @@ import pytest
 from sqlglot import exp, parse_one
 
 from sqlmesh.core import constants as c
+from sqlmesh.core.context import Context
 from sqlmesh.core.audit import (
     BUILT_IN_AUDITS,
     ModelAudit,
@@ -14,6 +15,7 @@ from sqlmesh.core.dialect import parse, Audit
 from sqlmesh.core.model import (
     IncrementalByTimeRangeKind,
     Model,
+    SqlModel,
     create_sql_model,
     load_sql_based_model,
 )
@@ -779,9 +781,23 @@ def test_load_inline_audits(assert_exp_eq):
     model = load_sql_based_model(expressions)
     assert len(model.audits) == 1
     assert len(model.inline_audits) == 2
-    assert type(model.inline_audits["assert_positive_id"][0]) == Audit
-    assert type(model.inline_audits["assert_positive_id"][1]) == exp.Select
-    assert type(model.inline_audits["does_not_exceed_threshold"][0]) == Audit
-    assert type(model.inline_audits["does_not_exceed_threshold"][1]) == exp.Select
-    audit = load_audit(model.inline_audits["assert_positive_id"], dialect="spark")
-    assert type(audit) == ModelAudit
+    assert type(model.inline_audits_["assert_positive_id"][0]) == Audit
+    assert type(model.inline_audits_["assert_positive_id"][1]) == exp.Select
+    assert type(model.inline_audits["assert_positive_id"]) == ModelAudit
+    assert type(model.inline_audits_["does_not_exceed_threshold"][0]) == Audit
+    assert type(model.inline_audits_["does_not_exceed_threshold"][1]) == exp.Select
+    assert type(model.inline_audits["does_not_exceed_threshold"]) == ModelAudit
+
+
+def test_model_inline_audits(sushi_context: Context):
+    model_name = "sushi.waiter_names_audit"
+    expected_query = 'SELECT * FROM (SELECT * FROM "memory"."sushi"."waiter_names_audit" AS "waiter_names_audit") AS "_q_0" WHERE "waiter_id" < 0'
+    model = sushi_context.get_snapshot(model_name, raise_if_missing=True).node
+
+    assert isinstance(model, SqlModel)
+    assert len(model.inline_audits_) == 3
+    assert len(model.inline_audits) == 3
+    assert type(model.inline_audits_["does_not_exceed_threshold"][0]) == Audit
+    assert type(model.inline_audits_["does_not_exceed_threshold"][1]) == exp.Select
+    assert type(model.inline_audits["assert_valid_name"]) == ModelAudit
+    assert model.inline_audits["assert_positive_id"].render_query(model).sql() == expected_query

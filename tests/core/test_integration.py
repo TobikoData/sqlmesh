@@ -1948,6 +1948,9 @@ def test_incremental_time_self_reference(
     revenue_by_day_snapshot = sushi_context.get_snapshot(
         "sushi.customer_revenue_by_day", raise_if_missing=True
     )
+    waiter_names_audit_snapshot = sushi_context.get_snapshot(
+        "sushi.waiter_names_audit", raise_if_missing=True
+    )
     assert sorted(plan.missing_intervals, key=lambda x: x.snapshot_id) == sorted(
         [
             SnapshotIntervals(
@@ -1969,6 +1972,12 @@ def test_incremental_time_self_reference(
                     (to_timestamp(to_date("6 days ago")), to_timestamp(to_date("5 days ago"))),
                 ],
             ),
+            SnapshotIntervals(
+                snapshot_id=waiter_names_audit_snapshot.snapshot_id,
+                intervals=[
+                    (to_timestamp(to_date("6 days ago")), to_timestamp(to_date("5 days ago"))),
+                ],
+            ),
         ],
         key=lambda x: x.snapshot_id,
     )
@@ -1981,6 +1990,7 @@ def test_incremental_time_self_reference(
     assert num_batch_calls == {
         sushi_context.get_snapshot("sushi.customer_revenue_lifetime", raise_if_missing=True): 7,
         sushi_context.get_snapshot("sushi.customer_revenue_by_day", raise_if_missing=True): 1,
+        sushi_context.get_snapshot("sushi.waiter_names_audit", raise_if_missing=True): 1,
     }
     # Validate that the results are the same as before the restate
     assert results == sushi_data_validator.validate(
@@ -2018,7 +2028,7 @@ def test_environment_suffix_target_table(init_and_plan_context: t.Callable):
     assert set(metadata.schemas) - starting_schemas == {"raw"}
     prod_views = {x for x in metadata.qualified_views if x.db in environments_schemas}
     # Make sure that all models are present
-    assert len(prod_views) == 13
+    assert len(prod_views) == 14
     apply_to_environment(context, "dev")
     # Make sure no new schemas are created
     assert set(metadata.schemas) - starting_schemas == {"raw"}
@@ -2076,7 +2086,7 @@ def test_environment_catalog_mapping(init_and_plan_context: t.Callable):
         user_default_tables,
         non_default_tables,
     ) = get_default_catalog_and_non_tables(metadata, context.default_catalog)
-    assert len(prod_views) == 13
+    assert len(prod_views) == 14
     assert len(dev_views) == 0
     assert len(user_default_tables) == 24
     assert state_metadata.schemas == ["sqlmesh"]
@@ -2095,8 +2105,8 @@ def test_environment_catalog_mapping(init_and_plan_context: t.Callable):
         user_default_tables,
         non_default_tables,
     ) = get_default_catalog_and_non_tables(metadata, context.default_catalog)
-    assert len(prod_views) == 13
-    assert len(dev_views) == 13
+    assert len(prod_views) == 14
+    assert len(dev_views) == 14
     assert len(user_default_tables) == 24
     assert len(non_default_tables) == 0
     assert state_metadata.schemas == ["sqlmesh"]
@@ -2115,8 +2125,8 @@ def test_environment_catalog_mapping(init_and_plan_context: t.Callable):
         user_default_tables,
         non_default_tables,
     ) = get_default_catalog_and_non_tables(metadata, context.default_catalog)
-    assert len(prod_views) == 13
-    assert len(dev_views) == 26
+    assert len(prod_views) == 14
+    assert len(dev_views) == 28
     assert len(user_default_tables) == 24
     assert len(non_default_tables) == 0
     assert state_metadata.schemas == ["sqlmesh"]
@@ -2136,8 +2146,8 @@ def test_environment_catalog_mapping(init_and_plan_context: t.Callable):
         user_default_tables,
         non_default_tables,
     ) = get_default_catalog_and_non_tables(metadata, context.default_catalog)
-    assert len(prod_views) == 13
-    assert len(dev_views) == 13
+    assert len(prod_views) == 14
+    assert len(dev_views) == 14
     assert len(user_default_tables) == 24
     assert len(non_default_tables) == 0
     assert state_metadata.schemas == ["sqlmesh"]

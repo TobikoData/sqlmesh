@@ -113,7 +113,7 @@ class _Model(ModelMeta, frozen=True):
     python_env_: t.Optional[t.Dict[str, Executable]] = Field(default=None, alias="python_env")
     jinja_macros: JinjaMacroRegistry = JinjaMacroRegistry()
     mapping_schema: t.Dict[str, t.Any] = {}
-    inline_audits: t.Dict[str, t.Any] = {}
+    inline_audits_: t.Dict[str, t.Any] = Field(default={}, alias="inline_audits")
 
     _expressions_validator = expression_validator
 
@@ -465,15 +465,13 @@ class _Model(ModelMeta, frozen=True):
         Args:
             audits: Available audits by name.
         """
-        from sqlmesh.core.audit import BUILT_IN_AUDITS, load_audit, ModelAudit
+        from sqlmesh.core.audit import BUILT_IN_AUDITS
 
         referenced_audits = []
 
         for audit_name, _ in self.audits:
-            if audit_name in self.inline_audits:
-                audit = load_audit(self.inline_audits[audit_name], dialect=self.dialect)
-                if isinstance(audit, ModelAudit):
-                    referenced_audits.append(audit)
+            if audit_name in self.inline_audits_:
+                referenced_audits.append(self.inline_audits[audit_name])
             elif audit_name in audits:
                 referenced_audits.append(audits[audit_name])
             elif audit_name not in BUILT_IN_AUDITS:
@@ -640,6 +638,18 @@ class _Model(ModelMeta, frozen=True):
     def wap_supported(self) -> bool:
         return self.kind.is_materialized and (self.storage_format or "").lower() == "iceberg"
 
+    @cached_property
+    def inline_audits(self) -> t.Dict[str, ModelAudit]:
+        """Load as ModelAudit and cache the inline audits."""
+        from sqlmesh.core.audit import load_audit, ModelAudit
+
+        audits: t.Dict[str, ModelAudit] = {}
+        for audit_name, audit in self.inline_audits_.items():
+            loaded_audit = load_audit(audit, dialect=self.dialect or "")
+            assert isinstance(loaded_audit, ModelAudit)
+            audits[audit_name] = loaded_audit
+        return audits
+
     def validate_definition(self) -> None:
         """Validates the model's definition.
 
@@ -749,7 +759,7 @@ class _Model(ModelMeta, frozen=True):
         Returns:
             The metadata hash for the node.
         """
-        from sqlmesh.core.audit import BUILT_IN_AUDITS, load_audit, ModelAudit
+        from sqlmesh.core.audit import BUILT_IN_AUDITS
 
         metadata = [
             self.dialect,
@@ -778,10 +788,8 @@ class _Model(ModelMeta, frozen=True):
                 for arg_name, arg_value in audit_args.items():
                     metadata.append(arg_name)
                     metadata.append(gen(arg_value))
-            elif audit_name in self.inline_audits:
-                audit = load_audit(self.inline_audits[audit_name], dialect=self.dialect)
-                if not isinstance(audit, ModelAudit):
-                    audit = None
+            elif audit_name in self.inline_audits_:
+                audit = self.inline_audits[audit_name]
             elif audit_name in audits:
                 audit = audits[audit_name]
             else:
@@ -1864,7 +1872,7 @@ def _create_model(
     depends_on: t.Optional[t.Set[str]] = None,
     dialect: t.Optional[str] = None,
     physical_schema_override: t.Optional[t.Dict[str, str]] = None,
-    inline_audits: t.Optional[t.Dict[str, t.Any]] = None,
+    inline_audits: t.Optional[t.Dict[str, t.List[exp.Expression]]] = None,
     **kwargs: t.Any,
 ) -> Model:
     _validate_model_fields(klass, {"name", *kwargs} - {"grain", "table_properties"}, path)
@@ -1916,7 +1924,7 @@ def _split_sql_model_statements(
     t.Optional[exp.Expression],
     t.List[exp.Expression],
     t.List[exp.Expression],
-    UniqueKeyDict[str, t.Tuple[d.Audit, exp.Expression]],
+    UniqueKeyDict[str, t.List[exp.Expression]],
 ]:
     """Extracts the SELECT query from a sequence of expressions.
 
@@ -1924,42 +1932,42 @@ def _split_sql_model_statements(
         expressions: The list of all SQL statements in the model definition.
 
     Returns:
-        A tuple containing the extracted SELECT query or the `@INSERT_SEED()` call, the statements before the it, and
-        the statements after it.
+        A tuple containing the extracted SELECT query or the `@INSERT_SEED()` call, the statements before the it,
+        the statements after it, and the inline audit definitions.
 
     Raises:
         ConfigError: If the model definition contains more than one SELECT query or `@INSERT_SEED()` call.
     """
 
     query_positions = []
-    inline_audits: UniqueKeyDict[str, t.Tuple[d.Audit, exp.Expression]] = UniqueKeyDict(
-        "inline_audits"
-    )
+    sql_statements = []
+    inline_audits: UniqueKeyDict[str, t.List[exp.Expression]] = UniqueKeyDict("inline_audits")
+
     idx = 0
     while idx < len(expressions):
-        expression = expressions[idx]
-        if isinstance(expression, d.Audit):
-            inline_audits[expression.expressions[0].args.get("value").this] = (
-                expression,
-                expressions[idx + 1],
-            )
-            expressions = expressions[:idx] + expressions[idx + 2 :]
-            idx -= 1
-        elif (
-            isinstance(expression, (exp.Query, d.JinjaQuery))
-            or expression == INSERT_SEED_MACRO_CALL
-            or (isinstance(expression, d.MacroFunc) and expression.this.name.lower() == "union")
-        ):
-            query_positions.append((expression, idx))
-        idx += 1
+        expr = expressions[idx]
+
+        if isinstance(expr, d.Audit):
+            inline_audits[expr.expressions[0].args.get("value").this] = [expr, expressions[idx + 1]]
+            idx += 2
+        else:
+            if (
+                isinstance(expr, (exp.Query, d.JinjaQuery))
+                or expr == INSERT_SEED_MACRO_CALL
+                or (isinstance(expr, d.MacroFunc) and expr.this.name.lower() == "union")
+            ):
+                query_positions.append((expr, idx))
+            sql_statements.append(expr)
+            idx += 1
+
     if not query_positions:
-        return None, expressions, [], inline_audits
+        return None, sql_statements, [], inline_audits
 
     elif len(query_positions) > 1:
         raise_config_error("Only one SELECT query is allowed per model", path)
 
     query, pos = query_positions[0]
-    return query, expressions[:pos], expressions[pos + 1 :], inline_audits
+    return query, sql_statements[:pos], sql_statements[pos + 1 :], inline_audits
 
 
 def _resolve_session_properties(
