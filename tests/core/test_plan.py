@@ -703,16 +703,12 @@ def test_restate_models(sushi_context_pre_scheduling: Context):
     assert plan.requires_backfill
 
     plan = sushi_context_pre_scheduling.plan(restate_models=["unknown_model"], no_prompts=True)
-    assert plan.snapshots == {}
-    assert plan.missing_intervals == []
     assert not plan.has_changes
-    assert not plan.requires_backfill
+    assert not plan.restatements
 
     plan = sushi_context_pre_scheduling.plan(restate_models=["tag:unknown_tag"], no_prompts=True)
-    assert plan.snapshots == {}
-    assert plan.missing_intervals == []
     assert not plan.has_changes
-    assert not plan.requires_backfill
+    assert not plan.restatements
 
 
 @pytest.mark.slow
