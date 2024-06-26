@@ -1089,7 +1089,7 @@ class GenericContext(BaseContext, t.Generic[C]):
             environment or c.PROD,
             snapshots=snapshots,
             create_from=create_from,
-            force_no_diff=(restate_models is not None and not expanded_restate_models)
+            force_no_diff=restate_models is not None
             or (backfill_models is not None and not backfill_models),
             ensure_finalized_snapshots=self.config.plan.use_finalized_state,
         )
@@ -1896,10 +1896,7 @@ class GenericContext(BaseContext, t.Generic[C]):
     ) -> ContextDiff:
         environment = Environment.sanitize_name(environment)
         if force_no_diff:
-            return ContextDiff.create_no_diff(
-                self.state_reader.get_environment(environment.lower())
-                or EnvironmentNamingInfo(name=environment)
-            )
+            return ContextDiff.create_no_diff(environment, self.state_reader)
 
         return ContextDiff.create(
             environment,
