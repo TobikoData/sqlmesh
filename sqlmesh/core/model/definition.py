@@ -962,8 +962,10 @@ class _SqlBasedModel(_Model):
 
         for statement in (*self.pre_statements, *self.post_statements):
             statement_exprs: t.List[exp.Expression] = []
-            if isinstance(statement, d.MacroDef):
-                statement_exprs = [statement]
+            if isinstance(statement, d.MacroFunc):
+                target_macro = macro.get_registry().get(statement.name)
+                if not getattr(target_macro, c.SQLMESH_METADATA, False):
+                    statement_exprs = [statement]
             else:
                 rendered = self._statement_renderer(statement).render()
                 if rendered is not None:
@@ -973,6 +975,18 @@ class _SqlBasedModel(_Model):
             data_hash_values.extend(gen(e) for e in statement_exprs)
 
         return data_hash_values
+
+    @property
+    def _additional_metadata(self) -> t.List[str]:
+        additional_metadata = super()._additional_metadata
+
+        for statement in (*self.pre_statements, *self.post_statements):
+            if isinstance(statement, d.MacroFunc) and not isinstance(statement, d.MacroDef):
+                target_macro = macro.get_registry().get(statement.name)
+                if getattr(target_macro, c.SQLMESH_METADATA, False):
+                    additional_metadata.append(gen(statement))
+
+        return additional_metadata
 
 
 class SqlModel(_SqlBasedModel):

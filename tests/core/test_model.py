@@ -1616,7 +1616,7 @@ FROM (VALUES
 WHERE
   FALSE
 LIMIT 0
-	""",
+""",
     )
 
 
@@ -5096,3 +5096,40 @@ materialized FALSE
 materialized TRUE
 )"""
     )
+
+
+def test_macro_func_metadata_hash():
+    @macro()
+    def noop(evaluator) -> None:
+        return None
+
+    expressions = d.parse(
+        """
+        MODEL (
+            name db.model,
+        );
+
+        SELECT 1;
+    """
+    )
+    model = load_sql_based_model(expressions, path=Path("./examples/sushi/models/test_model.sql"))
+
+    expressions = d.parse(
+        """
+        MODEL (
+            name db.model,
+        );
+
+        SELECT 1;
+
+        @noop();
+    """
+    )
+    new_model = load_sql_based_model(
+        expressions, path=Path("./examples/sushi/models/test_model.sql")
+    )
+
+    assert model.metadata_hash(audits={}) == new_model.metadata_hash(audits={})
+
+    setattr(macro.get_registry()["noop"], c.SQLMESH_METADATA, True)
+    assert model.metadata_hash(audits={}) != new_model.metadata_hash(audits={})
