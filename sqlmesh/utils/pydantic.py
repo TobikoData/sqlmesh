@@ -249,7 +249,7 @@ class PydanticModel(pydantic.BaseModel):
         for k, info in self.all_field_infos().items():
             v = getattr(self, k)
 
-            if v != info.default:
+            if type(v) != type(info.default) or v != info.default:
                 args.append(f"{k}: {v}")
 
         return f"{self.__class__.__name__}<{', '.join(args)}>"
