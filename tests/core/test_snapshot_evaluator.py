@@ -1134,6 +1134,57 @@ def test_create_clone_in_dev(mocker: MockerFixture, adapter_mock, make_snapshot)
     )
 
 
+def test_drop_clone_in_dev_when_migration_fails(mocker: MockerFixture, adapter_mock, make_snapshot):
+    adapter_mock.SUPPORTS_CLONING = True
+    adapter_mock.get_alter_expressions.return_value = []
+    evaluator = SnapshotEvaluator(adapter_mock)
+
+    adapter_mock.alter_table.side_effect = Exception("Migration failed")
+
+    model = load_sql_based_model(
+        parse(  # type: ignore
+            """
+            MODEL (
+                name test_schema.test_model,
+                kind INCREMENTAL_BY_TIME_RANGE (
+                    time_column ds
+                )
+            );
+
+            SELECT 1::INT as a, ds::DATE FROM a;
+            """
+        ),
+    )
+
+    snapshot = make_snapshot(model)
+    snapshot.categorize_as(SnapshotChangeCategory.FORWARD_ONLY)
+    snapshot.previous_versions = snapshot.all_versions
+
+    evaluator.create([snapshot], {})
+
+    adapter_mock.clone_table.assert_called_once_with(
+        f"sqlmesh__test_schema.test_schema__test_model__{snapshot.version}__temp",
+        f"sqlmesh__test_schema.test_schema__test_model__{snapshot.version}",
+        replace=True,
+    )
+
+    adapter_mock.get_alter_expressions.assert_called_once_with(
+        f"sqlmesh__test_schema.test_schema__test_model__{snapshot.version}__temp",
+        f"sqlmesh__test_schema.test_schema__test_model__{snapshot.version}__temp__schema_migration_source",
+    )
+
+    adapter_mock.alter_table.assert_called_once_with([])
+
+    adapter_mock.drop_table.assert_has_calls(
+        [
+            call(f"sqlmesh__test_schema.test_schema__test_model__{snapshot.version}__temp"),
+            call(
+                f"sqlmesh__test_schema.test_schema__test_model__{snapshot.version}__temp__schema_migration_source"
+            ),
+        ]
+    )
+
+
 def test_create_clone_in_dev_self_referencing(mocker: MockerFixture, adapter_mock, make_snapshot):
     adapter_mock.SUPPORTS_CLONING = True
     adapter_mock.get_alter_expressions.return_value = []

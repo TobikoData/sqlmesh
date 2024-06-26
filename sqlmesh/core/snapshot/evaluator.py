@@ -688,6 +688,9 @@ class SnapshotEvaluator:
                         snapshot, alter_expressions, allow_destructive_snapshots
                     )
                     self.adapter.alter_table(alter_expressions)
+                except Exception:
+                    self.adapter.drop_table(target_table_name)
+                    raise
                 finally:
                     self.adapter.drop_table(tmp_table_name)
             else:
