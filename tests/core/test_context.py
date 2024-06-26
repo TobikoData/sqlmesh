@@ -210,10 +210,15 @@ def test_diff(sushi_context: Context, mocker: MockerFixture):
     plan_evaluator = BuiltInPlanEvaluator(
         sushi_context.state_sync, sushi_context.snapshot_evaluator, sushi_context.default_catalog
     )
+
     plan = PlanBuilder(
         context_diff=sushi_context._context_diff("prod"),
         engine_schema_differ=sushi_context.engine_adapter.SCHEMA_DIFFER,
     ).build()
+
+    # stringify used to trigger an unhashable exception due to
+    # https://github.com/pydantic/pydantic/issues/8016
+    assert str(plan) != ""
 
     promotion_result = plan_evaluator._promote(plan)
     plan_evaluator._update_views(plan, promotion_result)
