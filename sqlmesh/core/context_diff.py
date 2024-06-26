@@ -21,7 +21,6 @@ from sqlmesh.utils.errors import SQLMeshError
 from sqlmesh.utils.pydantic import PydanticModel
 
 if t.TYPE_CHECKING:
-    from sqlmesh.core.environment import EnvironmentNamingInfo
     from sqlmesh.core.state_sync import StateReader
 
 logger = logging.getLogger(__name__)
@@ -178,29 +177,36 @@ class ContextDiff(PydanticModel):
         )
 
     @classmethod
-    def create_no_diff(cls, environment: EnvironmentNamingInfo) -> ContextDiff:
+    def create_no_diff(cls, environment: str, state_reader: StateReader) -> ContextDiff:
         """Create a no-op ContextDiff object.
 
         Args:
-            environment: The environment to diff.
+            environment: The target environment.
+            state_reader: StateReader to access the remote environment record.
 
         Returns:
             The ContextDiff object.
         """
+        env = state_reader.get_environment(environment.lower())
+        if not env:
+            raise SQLMeshError(f"Environment '{environment}' must exist for this operation.")
+
+        snapshots = state_reader.get_snapshots(env.snapshots)
+
         return ContextDiff(
-            environment=environment.name,
+            environment=env.name,
             is_new_environment=False,
             is_unfinalized_environment=False,
-            normalize_environment_name=environment.normalize_name,
+            normalize_environment_name=env.normalize_name,
             create_from="",
             added=set(),
             removed_snapshots={},
             modified_snapshots={},
-            snapshots={},
+            snapshots=snapshots,
             new_snapshots={},
-            previous_plan_id=None,
-            previously_promoted_snapshot_ids=set(),
-            previous_finalized_snapshots=None,
+            previous_plan_id=env.plan_id,
+            previously_promoted_snapshot_ids={s.snapshot_id for s in env.promoted_snapshots},
+            previous_finalized_snapshots=env.previous_finalized_snapshots,
         )
 
     @property
