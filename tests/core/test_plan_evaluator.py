@@ -191,3 +191,40 @@ def test_update_intervals_for_new_snapshots(
     else:
         assert not snapshot.dev_intervals
         state_sync_mock.add_interval.assert_not_called()
+
+
+def test_state_based_airflow_evaluator_with_restatements(
+    sushi_context: Context, mocker: MockerFixture
+):
+    model_fqn = sushi_context.get_model("sushi.waiter_revenue_by_day").fqn
+    downstream_model_fqn = sushi_context.get_model("sushi.top_waiters").fqn
+
+    plan = PlanBuilder(
+        sushi_context._context_diff("prod"),
+        sushi_context.engine_adapter.SCHEMA_DIFFER,
+        restate_models=[sushi_context.get_model("sushi.waiter_revenue_by_day").fqn],
+    ).build()
+
+    mwaa_client_mock = mocker.Mock()
+    mwaa_client_mock.wait_for_dag_run_completion.return_value = True
+    mwaa_client_mock.wait_for_first_dag_run.return_value = "test_plan_application_dag_run_id"
+    mwaa_client_mock.set_variable.return_value = "", ""
+
+    state_sync_mock = mocker.Mock()
+
+    plan_dag_spec_mock = mocker.Mock()
+
+    create_plan_dag_spec_mock = mocker.patch("sqlmesh.schedulers.airflow.plan.create_plan_dag_spec")
+    create_plan_dag_spec_mock.return_value = plan_dag_spec_mock
+
+    plan_dag_state_mock = mocker.Mock()
+    mocker.patch(
+        "sqlmesh.schedulers.airflow.plan.PlanDagState.from_state_sync",
+        return_value=plan_dag_state_mock,
+    )
+
+    evaluator = MWAAPlanEvaluator(mwaa_client_mock, state_sync_mock)
+    evaluator.evaluate(plan)
+
+    plan_application_request = create_plan_dag_spec_mock.call_args[0][0]
+    assert plan_application_request.restatements.keys() == {model_fqn, downstream_model_fqn}
