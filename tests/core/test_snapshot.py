@@ -114,6 +114,7 @@ def test_json(snapshot: Snapshot):
                 "dialect": "spark",
             },
             "mapping_schema": {},
+            "inline_audits": {},
             "start": "2020-01-01",
             "dialect": "spark",
             "name": "name",

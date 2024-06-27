@@ -67,6 +67,7 @@ class ModelMeta(_Node):
         default=None, alias="column_descriptions"
     )
     audits: t.List[AuditReference] = []
+    inline_audits: t.Dict[str, t.Any] = {}
     grains: t.List[exp.Expression] = []
     references: t.List[exp.Expression] = []
     physical_schema_override: t.Optional[str] = None
@@ -82,6 +83,24 @@ class ModelMeta(_Node):
     _properties_validator = properties_validator
     _default_catalog_validator = default_catalog_validator
     _depends_on_validator = depends_on_validator
+
+    @field_validator("inline_audits", mode="before")
+    @field_validator_v1_args
+    def _inline_audits_validator(cls, v: t.Any, values: t.Dict[str, t.Any]) -> t.Any:
+        if not isinstance(v, dict):
+            return {}
+
+        from sqlmesh.core.audit import ModelAudit
+
+        inline_audits = {}
+
+        for name, audit in v.items():
+            if isinstance(audit, ModelAudit):
+                inline_audits[name] = audit
+            elif isinstance(audit, dict):
+                inline_audits[name] = ModelAudit.parse_obj(audit)
+
+        return inline_audits
 
     @field_validator("audits", mode="before")
     def _audits_validator(cls, v: t.Any) -> t.Any:
