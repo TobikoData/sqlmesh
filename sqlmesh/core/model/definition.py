@@ -184,7 +184,7 @@ class _Model(ModelMeta, frozen=True):
                     "column_descriptions_",
                     "default_catalog",
                     "enabled",
-                    "inline_audits_",
+                    "inline_audits",
                 ):
                     expressions.append(
                         exp.Property(

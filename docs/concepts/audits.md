@@ -111,8 +111,6 @@ SELECT * FROM @this_model
 WHERE price IS NULL;
 ```
 
-The inline audits are extracted and then applied similarly to generic audits, when validating the model.
-
 ## Built-in audits
 SQLMesh comes with a suite of built-in generic audits that cover a broad set of common use cases. Built-in audits are blocking by default, but they all have non-blocking counterparts which you can use by appending `_non_blocking` - see [Non-blocking audits](#non-blocking-audits).
 
