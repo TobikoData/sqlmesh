@@ -113,7 +113,6 @@ class _Model(ModelMeta, frozen=True):
     python_env_: t.Optional[t.Dict[str, Executable]] = Field(default=None, alias="python_env")
     jinja_macros: JinjaMacroRegistry = JinjaMacroRegistry()
     mapping_schema: t.Dict[str, t.Any] = {}
-    inline_audits_: t.Dict[str, t.Any] = Field(default={}, alias="inline_audits")
 
     _expressions_validator = expression_validator
 
@@ -185,7 +184,7 @@ class _Model(ModelMeta, frozen=True):
                     "column_descriptions_",
                     "default_catalog",
                     "enabled",
-                    "inline_audits",
+                    "inline_audits_",
                 ):
                     expressions.append(
                         exp.Property(
@@ -637,18 +636,6 @@ class _Model(ModelMeta, frozen=True):
     @property
     def wap_supported(self) -> bool:
         return self.kind.is_materialized and (self.storage_format or "").lower() == "iceberg"
-
-    @cached_property
-    def inline_audits(self) -> t.Dict[str, ModelAudit]:
-        """Load as ModelAudit and cache the inline audits."""
-        from sqlmesh.core.audit import load_audit, ModelAudit
-
-        audits: t.Dict[str, ModelAudit] = {}
-        for audit_name, audit in self.inline_audits_.items():
-            loaded_audit = load_audit(audit, dialect=self.dialect or "")
-            assert isinstance(loaded_audit, ModelAudit)
-            audits[audit_name] = loaded_audit
-        return audits
 
     def validate_definition(self) -> None:
         """Validates the model's definition.
@@ -1893,7 +1880,7 @@ def _create_model(
     try:
         model = klass(
             name=name,
-            inline_audits=inline_audits or {},
+            inline_audits=inline_audits,
             **{
                 **(defaults or {}),
                 "jinja_macros": jinja_macros or JinjaMacroRegistry(),

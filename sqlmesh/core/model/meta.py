@@ -67,6 +67,7 @@ class ModelMeta(_Node):
         default=None, alias="column_descriptions"
     )
     audits: t.List[AuditReference] = []
+    inline_audits_: t.Dict[str, t.Any] = Field(default={}, alias="inline_audits")
     grains: t.List[exp.Expression] = []
     references: t.List[exp.Expression] = []
     physical_schema_override: t.Optional[str] = None
@@ -82,6 +83,29 @@ class ModelMeta(_Node):
     _properties_validator = properties_validator
     _default_catalog_validator = default_catalog_validator
     _depends_on_validator = depends_on_validator
+
+    @field_validator("inline_audits_", mode="before")
+    @field_validator_v1_args
+    def _inline_audits_validator(cls, v: t.Any, values: t.Dict[str, t.Any]) -> t.Any:
+        if not isinstance(v, dict):
+            return {}
+
+        from sqlmesh.core.audit import load_audit, ModelAudit
+
+        inline_audits = {}
+        dialect = values.get("dialect")
+
+        for name, audit in v.items():
+            if isinstance(audit, ModelAudit):
+                inline_audits[name] = audit
+            elif isinstance(audit, list):
+                loaded_audit = load_audit(audit, dialect=dialect)
+                assert isinstance(loaded_audit, ModelAudit)
+                inline_audits[name] = loaded_audit
+            elif isinstance(audit, dict):
+                inline_audits[name] = ModelAudit.parse_obj(audit)
+
+        return inline_audits
 
     @field_validator("audits", mode="before")
     def _audits_validator(cls, v: t.Any) -> t.Any:
@@ -358,6 +382,10 @@ class ModelMeta(_Node):
             if kind.is_incremental_by_partition and not values.get("partitioned_by_"):
                 raise ValueError(f"partitioned_by field is required for {kind.name} models")
         return values
+
+    @property
+    def inline_audits(self) -> t.Dict[str, t.Any]:
+        return self.inline_audits_
 
     @property
     def time_column(self) -> t.Optional[TimeColumn]:
