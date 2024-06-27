@@ -469,7 +469,7 @@ class _Model(ModelMeta, frozen=True):
         referenced_audits = []
 
         for audit_name, _ in self.audits:
-            if audit_name in self.inline_audits_:
+            if audit_name in self.inline_audits:
                 referenced_audits.append(self.inline_audits[audit_name])
             elif audit_name in audits:
                 referenced_audits.append(audits[audit_name])
@@ -775,7 +775,7 @@ class _Model(ModelMeta, frozen=True):
                 for arg_name, arg_value in audit_args.items():
                     metadata.append(arg_name)
                     metadata.append(gen(arg_value))
-            elif audit_name in self.inline_audits_:
+            elif audit_name in self.inline_audits:
                 audit = self.inline_audits[audit_name]
             elif audit_name in audits:
                 audit = audits[audit_name]
@@ -1859,7 +1859,7 @@ def _create_model(
     depends_on: t.Optional[t.Set[str]] = None,
     dialect: t.Optional[str] = None,
     physical_schema_override: t.Optional[t.Dict[str, str]] = None,
-    inline_audits: t.Optional[t.Dict[str, t.List[exp.Expression]]] = None,
+    inline_audits: t.Optional[t.Dict[str, ModelAudit]] = None,
     **kwargs: t.Any,
 ) -> Model:
     _validate_model_fields(klass, {"name", *kwargs} - {"grain", "table_properties"}, path)
@@ -1911,7 +1911,7 @@ def _split_sql_model_statements(
     t.Optional[exp.Expression],
     t.List[exp.Expression],
     t.List[exp.Expression],
-    UniqueKeyDict[str, t.List[exp.Expression]],
+    UniqueKeyDict[str, ModelAudit],
 ]:
     """Extracts the SELECT query from a sequence of expressions.
 
@@ -1925,17 +1925,21 @@ def _split_sql_model_statements(
     Raises:
         ConfigError: If the model definition contains more than one SELECT query or `@INSERT_SEED()` call.
     """
+    from sqlmesh.core.audit import ModelAudit, load_audit
 
     query_positions = []
     sql_statements = []
-    inline_audits: UniqueKeyDict[str, t.List[exp.Expression]] = UniqueKeyDict("inline_audits")
+    inline_audits: UniqueKeyDict[str, ModelAudit] = UniqueKeyDict("inline_audits")
 
     idx = 0
-    while idx < len(expressions):
+    length = len(expressions)
+    while idx < length:
         expr = expressions[idx]
 
         if isinstance(expr, d.Audit):
-            inline_audits[expr.expressions[0].args.get("value").this] = [expr, expressions[idx + 1]]
+            loaded_audit = load_audit([expr, expressions[idx + 1]], dialect=dialect)
+            assert isinstance(loaded_audit, ModelAudit)
+            inline_audits[loaded_audit.name] = loaded_audit
             idx += 2
         else:
             if (

@@ -90,18 +90,13 @@ class ModelMeta(_Node):
         if not isinstance(v, dict):
             return {}
 
-        from sqlmesh.core.audit import load_audit, ModelAudit
+        from sqlmesh.core.audit import ModelAudit
 
         inline_audits = {}
-        dialect = values.get("dialect")
 
         for name, audit in v.items():
             if isinstance(audit, ModelAudit):
                 inline_audits[name] = audit
-            elif isinstance(audit, list):
-                loaded_audit = load_audit(audit, dialect=dialect)
-                assert isinstance(loaded_audit, ModelAudit)
-                inline_audits[name] = loaded_audit
             elif isinstance(audit, dict):
                 inline_audits[name] = ModelAudit.parse_obj(audit)
 
