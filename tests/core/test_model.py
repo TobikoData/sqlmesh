@@ -5103,6 +5103,9 @@ def test_macro_func_metadata_hash():
     def noop(evaluator) -> None:
         return None
 
+    # Standardize the python_env of the below models
+    setattr(macro.get_registry()["noop"], c.SQLMESH_BUILTIN, True)
+
     expressions = d.parse(
         """
         MODEL (
@@ -5129,7 +5132,9 @@ def test_macro_func_metadata_hash():
         expressions, path=Path("./examples/sushi/models/test_model.sql")
     )
 
+    assert model.data_hash != new_model.data_hash
     assert model.metadata_hash(audits={}) == new_model.metadata_hash(audits={})
 
     setattr(macro.get_registry()["noop"], c.SQLMESH_METADATA, True)
+    assert model.data_hash == new_model.data_hash
     assert model.metadata_hash(audits={}) != new_model.metadata_hash(audits={})
