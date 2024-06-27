@@ -36,6 +36,7 @@ from sqlmesh.utils.jinja import (
     JinjaMacroRegistry,
     extract_macro_references_and_variables,
 )
+from sqlmesh.utils.pydantic import field_validator, field_validator_v1_args
 from sqlmesh.utils.metaprogramming import (
     Executable,
     build_env,
@@ -637,6 +638,10 @@ class _Model(ModelMeta, frozen=True):
     def wap_supported(self) -> bool:
         return self.kind.is_materialized and (self.storage_format or "").lower() == "iceberg"
 
+    @property
+    def inline_audits(self) -> t.Dict[str, ModelAudit]:
+        return {}
+
     def validate_definition(self) -> None:
         """Validates the model's definition.
 
@@ -834,10 +839,29 @@ class _SqlBasedModel(_Model):
     post_statements_: t.Optional[t.List[exp.Expression]] = Field(
         default=None, alias="post_statements"
     )
+    inline_audits_: t.Dict[str, t.Any] = Field(default={}, alias="inline_audits")
 
     __statement_renderers: t.Dict[int, ExpressionRenderer] = {}
 
     _expression_validator = expression_validator
+
+    @field_validator("inline_audits_", mode="before")
+    @field_validator_v1_args
+    def _inline_audits_validator(cls, v: t.Any, values: t.Dict[str, t.Any]) -> t.Any:
+        if not isinstance(v, dict):
+            return {}
+
+        from sqlmesh.core.audit import ModelAudit
+
+        inline_audits = {}
+
+        for name, audit in v.items():
+            if isinstance(audit, ModelAudit):
+                inline_audits[name] = audit
+            elif isinstance(audit, dict):
+                inline_audits[name] = ModelAudit.parse_obj(audit)
+
+        return inline_audits
 
     def render_pre_statements(
         self,
@@ -899,6 +923,10 @@ class _SqlBasedModel(_Model):
     def macro_definitions(self) -> t.List[d.MacroDef]:
         """All macro definitions from the list of expressions."""
         return [s for s in self.pre_statements + self.post_statements if isinstance(s, d.MacroDef)]
+
+    @property
+    def inline_audits(self) -> t.Dict[str, ModelAudit]:
+        return self.inline_audits_
 
     def _render_statements(
         self,
@@ -1859,7 +1887,6 @@ def _create_model(
     depends_on: t.Optional[t.Set[str]] = None,
     dialect: t.Optional[str] = None,
     physical_schema_override: t.Optional[t.Dict[str, str]] = None,
-    inline_audits: t.Optional[t.Dict[str, ModelAudit]] = None,
     **kwargs: t.Any,
 ) -> Model:
     _validate_model_fields(klass, {"name", *kwargs} - {"grain", "table_properties"}, path)
@@ -1880,7 +1907,6 @@ def _create_model(
     try:
         model = klass(
             name=name,
-            inline_audits=inline_audits,
             **{
                 **(defaults or {}),
                 "jinja_macros": jinja_macros or JinjaMacroRegistry(),
