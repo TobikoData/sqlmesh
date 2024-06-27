@@ -10,7 +10,7 @@ A comprehensive suite of audits can identify data issues upstream, whether they 
 **NOTE**: For incremental models, audits are only applied to intervals being processed - not for the entire underlying table.
 
 ## User-Defined Audits
-In SQLMesh, user-defined audits are defined in `.sql` files in an `audit` directory in your SQLMesh project. Multiple audits can be defined in a single file, so you can organize them to your liking.
+In SQLMesh, user-defined audits are defined in `.sql` files in an `audit` directory in your SQLMesh project. Multiple audits can be defined in a single file, so you can organize them to your liking. Alternatively, audits can be defined inline within the model definition itself.
 
 Audits are SQL queries that should not return any rows; in other words, they query for bad data, so returned rows indicates that something is wrong.
 
@@ -87,6 +87,28 @@ MODEL (
     my_audit(column := a, "values" := (1,2,3))
   )
 )
+```
+
+### Inline audits
+
+You can also define audits directly within a model definition using the same syntax. Multiple audits can be specified within the same SQL model file:
+
+
+```sql linenums="1"
+MODEL (
+    name sushi.items,
+    audits(does_not_exceed_threshold(column := id, threshold := 1000), price_is_not_null)
+);
+SELECT id, price 
+FROM sushi.seed;
+
+AUDIT (name does_not_exceed_threshold);
+SELECT * FROM @this_model
+WHERE @column >= @threshold;
+
+AUDIT (name price_is_not_null);
+SELECT * FROM @this_model
+WHERE price IS NULL;
 ```
 
 ## Built-in audits

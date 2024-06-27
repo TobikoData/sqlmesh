@@ -6,5 +6,25 @@ MODEL (
   ),
   owner jen,
   grain id,
-  description 'List of waiter names'
-)
+  description 'List of waiter names',
+  audits (
+    assert_positive_id,
+    does_not_exceed_threshold(column := id, threshold := 200),
+    assert_valid_name,
+  )
+);
+
+AUDIT (
+  name does_not_exceed_threshold,
+);
+SELECT * FROM @this_model WHERE @column >= @threshold;
+
+AUDIT (
+  name assert_positive_id,
+);
+SELECT * FROM @this_model WHERE id < 0;
+
+AUDIT (
+  name assert_valid_name,
+);
+SELECT * FROM @this_model WHERE LENGTH(name) < 1;

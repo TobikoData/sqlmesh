@@ -2,6 +2,7 @@ import pytest
 from sqlglot import exp, parse_one
 
 from sqlmesh.core import constants as c
+from sqlmesh.core.context import Context
 from sqlmesh.core.audit import (
     BUILT_IN_AUDITS,
     ModelAudit,
@@ -11,7 +12,13 @@ from sqlmesh.core.audit import (
     load_multiple_audits,
 )
 from sqlmesh.core.dialect import parse
-from sqlmesh.core.model import IncrementalByTimeRangeKind, Model, create_sql_model
+from sqlmesh.core.model import (
+    IncrementalByTimeRangeKind,
+    Model,
+    SeedModel,
+    create_sql_model,
+    load_sql_based_model,
+)
 from sqlmesh.utils.errors import AuditConfigError
 from sqlmesh.utils.jinja import JinjaMacroRegistry, MacroExtractor
 from sqlmesh.utils.metaprogramming import Executable
@@ -742,3 +749,48 @@ def test_variables(assert_exp_eq):
         audit.render_query(audit).sql(dialect="bigquery")
         == "SELECT * FROM `db`.`table` AS `table` WHERE `col` = 'test_val'"
     )
+
+
+def test_load_inline_audits(assert_exp_eq):
+    expressions = parse(
+        """
+        MODEL (
+            name db.table,
+            dialect spark,
+            audits(does_not_exceed_threshold)
+        );
+
+        SELECT id FROM tbl;
+
+        AUDIT (
+        name does_not_exceed_threshold,
+        );
+        SELECT * FROM @this_model
+        WHERE @column >= @threshold;
+
+        AUDIT (
+        name assert_positive_id,
+        );
+        SELECT *
+        FROM @this_model
+        WHERE
+        id < 0;
+    """
+    )
+
+    model = load_sql_based_model(expressions)
+    assert len(model.audits) == 1
+    assert len(model.inline_audits) == 2
+    assert isinstance(model.inline_audits["assert_positive_id"], ModelAudit)
+    assert isinstance(model.inline_audits["does_not_exceed_threshold"], ModelAudit)
+
+
+def test_model_inline_audits(sushi_context: Context):
+    model_name = "sushi.waiter_names"
+    expected_query = 'SELECT * FROM (SELECT * FROM "memory"."sushi"."waiter_names" AS "waiter_names") AS "_q_0" WHERE "id" < 0'
+    model = sushi_context.get_snapshot(model_name, raise_if_missing=True).node
+
+    assert isinstance(model, SeedModel)
+    assert len(model.inline_audits) == 3
+    assert isinstance(model.inline_audits["assert_valid_name"], ModelAudit)
+    assert model.inline_audits["assert_positive_id"].render_query(model).sql() == expected_query
