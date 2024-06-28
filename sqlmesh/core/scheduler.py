@@ -31,6 +31,7 @@ from sqlmesh.utils.date import (
     now,
     now_timestamp,
     to_datetime,
+    to_timestamp,
     validate_date_range,
 )
 from sqlmesh.utils.errors import AuditError, CircuitBreakerError, SQLMeshError
@@ -135,6 +136,7 @@ class Scheduler:
             restatements=restatements,
             ignore_cron=ignore_cron,
             end_bounded=end_bounded,
+            signal_factory=self.signal_factory,
         )
 
     def evaluate(
@@ -283,13 +285,6 @@ class Scheduler:
                 return
             snapshot = snapshots_by_name[snapshot_name]
 
-            if self.signal_factory:
-                for rendered_signal in snapshot.model.render_signals(
-                    start=start, end=end, execution_time=execution_time
-                ):
-                    signal = self.signal_factory(rendered_signal)
-                    signal.wait()
-
             self.console.start_snapshot_evaluation_progress(snapshot)
 
             execution_start_ts = now_timestamp()
@@ -404,6 +399,7 @@ def compute_interval_params(
     restatements: t.Optional[t.Dict[SnapshotId, SnapshotInterval]] = None,
     ignore_cron: bool = False,
     end_bounded: bool = False,
+    signal_factory: t.Optional[SignalFactory] = None,
 ) -> SnapshotToBatches:
     """Find the optimal date interval paramaters based on what needs processing and maximal batch size.
 
@@ -442,6 +438,37 @@ def compute_interval_params(
         ignore_cron=ignore_cron,
         end_bounded=end_bounded,
     ).items():
+
+        def intersect(left: SnapshotInterval, intervals: list[Interval]) -> SnapshotInterval | None:
+            """Returns the intersection of `left` against `intervals`. Returns None if it does not intersect. Assumes `intervals` are disjoint."""
+
+            left_lower, left_upper = left
+            for right in intervals:
+                right_lower, right_upper = to_timestamp(right[0]), to_timestamp(right[1])
+                lower = max(left_lower, right_lower)
+                upper = min(left_upper, right_upper)
+                if lower <= upper:
+                    return (lower, upper)
+            return None
+
+        if signal_factory:
+            for signal in snapshot.model.render_signals(
+                start=start, end=end, execution_time=execution_time
+            ):
+                ready_intervals = signal_factory(signal).poll_ready_intervals()
+                if isinstance(ready_intervals, bool):
+                    if not ready_intervals:
+                        intervals = []
+                        break
+                elif isinstance(ready_intervals, list):
+                    intervals = [
+                        ready
+                        for interval in intervals
+                        if (ready := intersect(interval, ready_intervals)) is not None
+                    ]
+                else:
+                    raise ValueError("unexpected return value from signal")
+
         batches = []
         batch_size = snapshot.node.batch_size
         next_batch: t.List[t.Tuple[int, int]] = []
