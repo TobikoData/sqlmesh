@@ -11,7 +11,7 @@ from sqlmesh.core.dialect import normalize_and_quote, normalize_model_name
 from sqlmesh.core.engine_adapter import EngineAdapter
 from sqlmesh.core.snapshot import DeployabilityIndex, Snapshot, to_table_mapping
 from sqlmesh.utils.errors import ConfigError, ParsetimeAdapterCallError
-from sqlmesh.utils.jinja import JinjaMacroRegistry, MacroReference
+from sqlmesh.utils.jinja import JinjaMacroRegistry
 
 if t.TYPE_CHECKING:
     import agate
@@ -98,18 +98,48 @@ class BaseAdapter(abc.ABC):
     def dispatch(self, name: str, package: t.Optional[str] = None) -> t.Callable:
         """Returns a dialect-specific version of a macro with the given name."""
         target_type = self.jinja_globals["target"]["type"]
-        references_to_try = [
-            MacroReference(package=f"{package}_{target_type}", name=f"{target_type}__{name}"),
-            MacroReference(package=package, name=f"{target_type}__{name}"),
-            MacroReference(package=package, name=f"default__{name}"),
-        ]
+        macro_suffix = f"__{name}"
 
-        for reference in references_to_try:
-            macro_callable = self.jinja_macros.build_macro(reference, **self.jinja_globals)
-            if macro_callable is not None:
-                return macro_callable
+        def _relevance(package_name_pair: t.Tuple[t.Optional[str], str]) -> t.Tuple[int, int]:
+            """Lower scores more relevant."""
+            macro_package, macro_name = package_name_pair
+
+            package_score = 0 if macro_package == package else 1
+            name_score = 1
+
+            if macro_name.startswith("default"):
+                name_score = 2
+            elif macro_name.startswith(target_type):
+                name_score = 0
+
+            return name_score, package_score
+
+        jinja_env = self.jinja_macros.build_environment(**self.jinja_globals).globals
+        packages_to_check: t.List[t.Optional[str]] = [
+            package,
+            *(k for k in jinja_env if k.startswith("dbt")),
+        ]
+        candidates = {}
+        for macro_package in packages_to_check:
+            macros = jinja_env.get(macro_package, {}) if macro_package else jinja_env
+            if not isinstance(macros, dict):
+                continue
+            candidates.update(
+                {
+                    (macro_package, macro_name): macro_callable
+                    for macro_name, macro_callable in macros.items()
+                    if macro_name.endswith(macro_suffix)
+                }
+            )
+
+        if candidates:
+            sorted_candidates = sorted(candidates, key=_relevance)
+            return candidates[sorted_candidates[0]]
 
         raise ConfigError(f"Macro '{name}', package '{package}' was not found.")
+
+    def type(self) -> str:
+        return self.project_dialect or ""
 
 
 class ParsetimeAdapter(BaseAdapter):

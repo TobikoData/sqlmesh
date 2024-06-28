@@ -7,6 +7,8 @@
     )
 }}
 
+{{ log(current_engine()) }}
+
 WITH order_total AS (
   SELECT
     oi.order_id AS order_id,
