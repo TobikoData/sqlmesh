@@ -992,10 +992,10 @@ class _SqlBasedModel(_Model):
         if isinstance(statement, d.MacroFunc):
             target_macro = macro.get_registry().get(statement.name)
             if target_macro:
-                return getattr(target_macro.func, c.SQLMESH_METADATA, False)
+                return target_macro.is_metadata
             target_macro = self.python_env.get(statement.name)
             if isinstance(target_macro, Executable):
-                return target_macro.is_metadata is True
+                return bool(target_macro.is_metadata)
         return False
 
 

@@ -565,7 +565,8 @@ class macro(registry_decorator):
     def __call__(
         self, func: t.Callable[..., DECORATOR_RETURN_TYPE]
     ) -> t.Callable[..., DECORATOR_RETURN_TYPE]:
-        setattr(func, c.SQLMESH_METADATA, self.is_metadata)
+        if self.is_metadata:
+            setattr(func, c.SQLMESH_METADATA, self.is_metadata)
         wrapper = super().__call__(func)
 
         # This is used to identify macros at runtime to unwrap during serialization.
