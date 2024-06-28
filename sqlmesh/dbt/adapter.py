@@ -97,15 +97,27 @@ class BaseAdapter(abc.ABC):
 
     def dispatch(self, name: str, package: t.Optional[str] = None) -> t.Callable:
         """Returns a dialect-specific version of a macro with the given name."""
+        package = package or "dbt"
         target_type = self.jinja_globals["target"]["type"]
-        references_to_try = [
-            MacroReference(package=f"{package}_{target_type}", name=f"{target_type}__{name}"),
-            MacroReference(package=package, name=f"{target_type}__{name}"),
-            MacroReference(package=package, name=f"default__{name}"),
-        ]
+        macro_suffix = f"__{name}"
 
-        for reference in references_to_try:
-            macro_callable = self.jinja_macros.build_macro(reference, **self.jinja_globals)
+        def _relevance(macro: MacroReference) -> int:
+            """Lower scores more relevant."""
+            if macro.name.startswith("default"):
+                return 2
+            elif macro.name.startswith(target_type):
+                return 0
+            return 1
+
+        macros = [
+            MacroReference(package=macro_package, name=macro_name)
+            for macro_package, macros in self.jinja_macros.packages.items()
+            if (macro_package == package) or (package == "dbt" and macro_package.startswith("dbt_"))
+            for macro_name in macros.keys()
+            if macro_name.endswith(macro_suffix)
+        ]
+        for macro in sorted(macros, key=_relevance):
+            macro_callable = self.jinja_macros.build_macro(macro, **self.jinja_globals)
             if macro_callable is not None:
                 return macro_callable
 
