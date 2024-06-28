@@ -612,7 +612,7 @@ def test_macro_metadata_flag():
         return None
 
     assert not hasattr(noop, c.SQLMESH_METADATA)
-    assert macro.get_registry()["noop"].is_metadata is False
+    assert not macro.get_registry()["noop"].is_metadata
 
     assert getattr(noop_metadata_only, c.SQLMESH_METADATA) is True
     assert macro.get_registry()["noop_metadata_only"].is_metadata is True
