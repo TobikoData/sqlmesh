@@ -675,7 +675,6 @@ class SnapshotEvaluator:
                     table_name=tmp_table_name,
                     model=snapshot.model,
                     is_table_deployable=False,
-                    snapshot=snapshot,
                     table_mapping={snapshot.name: tmp_table_name},
                     **create_render_kwargs,
                 )
