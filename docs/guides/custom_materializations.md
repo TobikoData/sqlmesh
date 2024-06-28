@@ -69,7 +69,8 @@ class CustomFullMaterialization(CustomMaterialization):
         table_name: str,
         model: Model,
         is_table_deployable: bool,
-        **render_kwargs: t.Any,
+        render_kwargs: t.Dict[str, t.Any],
+        **kwargs: t.Any,
     ) -> None:
         # Custom creation logic.
 

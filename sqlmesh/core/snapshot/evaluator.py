@@ -675,8 +675,10 @@ class SnapshotEvaluator:
                     table_name=tmp_table_name,
                     model=snapshot.model,
                     is_table_deployable=False,
-                    table_mapping={snapshot.name: tmp_table_name},
-                    **create_render_kwargs,
+                    render_kwargs=dict(
+                        table_mapping={snapshot.name: tmp_table_name},
+                        **create_render_kwargs,
+                    ),
                 )
                 try:
                     self.adapter.clone_table(target_table_name, snapshot.table_name(), replace=True)
@@ -701,7 +703,7 @@ class SnapshotEvaluator:
                         table_name=snapshot.table_name(is_deployable=is_table_deployable),
                         model=snapshot.model,
                         is_table_deployable=is_table_deployable,
-                        **create_render_kwargs,
+                        render_kwargs=create_render_kwargs,
                     )
 
             self.adapter.execute(snapshot.model.render_post_statements(**pre_post_render_kwargs))
@@ -964,7 +966,8 @@ class EvaluationStrategy(abc.ABC):
         table_name: str,
         model: Model,
         is_table_deployable: bool,
-        **render_kwargs: t.Any,
+        render_kwargs: t.Dict[str, t.Any],
+        **kwargs: t.Any,
     ) -> None:
         """Creates the target table or view.
 
@@ -972,7 +975,7 @@ class EvaluationStrategy(abc.ABC):
             table_name: The name of a table or a view.
             model: The target model.
             is_table_deployable: Whether the table that is being created is deployable (can be deployed to the production environment).
-            render_kwargs: Additional kwargs for node rendering.
+            render_kwargs: Additional key-value arguments to pass when rendering the model's query.
         """
 
     @abc.abstractmethod
@@ -1072,7 +1075,8 @@ class SymbolicStrategy(EvaluationStrategy):
         table_name: str,
         model: Model,
         is_table_deployable: bool,
-        **render_kwargs: t.Any,
+        render_kwargs: t.Dict[str, t.Any],
+        **kwargs: t.Any,
     ) -> None:
         pass
 
@@ -1154,7 +1158,8 @@ class MaterializableStrategy(PromotableStrategy):
         table_name: str,
         model: Model,
         is_table_deployable: bool,
-        **render_kwargs: t.Any,
+        render_kwargs: t.Dict[str, t.Any],
+        **kwargs: t.Any,
     ) -> None:
         ctas_query = model.ctas_query(**render_kwargs)
 
@@ -1331,7 +1336,8 @@ class SeedStrategy(MaterializableStrategy):
         table_name: str,
         model: Model,
         is_table_deployable: bool,
-        **render_kwargs: t.Any,
+        render_kwargs: t.Dict[str, t.Any],
+        **kwargs: t.Any,
     ) -> None:
         model = t.cast(SeedModel, model)
         if not model.is_hydrated and self.adapter.table_exists(table_name):
@@ -1344,7 +1350,7 @@ class SeedStrategy(MaterializableStrategy):
             )
             return
 
-        super().create(table_name, model, is_table_deployable, **render_kwargs)
+        super().create(table_name, model, is_table_deployable, render_kwargs, **kwargs)
         if is_table_deployable:
             # For seeds we insert data at the time of table creation.
             try:
@@ -1377,7 +1383,8 @@ class SCDType2Strategy(MaterializableStrategy):
         table_name: str,
         model: Model,
         is_table_deployable: bool,
-        **render_kwargs: t.Any,
+        render_kwargs: t.Dict[str, t.Any],
+        **kwargs: t.Any,
     ) -> None:
         assert isinstance(model.kind, (SCDType2ByTimeKind, SCDType2ByColumnKind))
         if model.annotated:
@@ -1404,7 +1411,8 @@ class SCDType2Strategy(MaterializableStrategy):
                 table_name,
                 model,
                 is_table_deployable,
-                **render_kwargs,
+                render_kwargs,
+                **kwargs,
             )
 
     def insert(
@@ -1555,7 +1563,8 @@ class ViewStrategy(PromotableStrategy):
         table_name: str,
         model: Model,
         is_table_deployable: bool,
-        **render_kwargs: t.Any,
+        render_kwargs: t.Dict[str, t.Any],
+        **kwargs: t.Any,
     ) -> None:
         logger.info("Creating view '%s'", table_name)
         self.adapter.create_view(
