@@ -1,7 +1,7 @@
 import typing as t
 
 import pytest
-from sqlglot import MappingSchema, exp, parse_one
+from sqlglot import MappingSchema, ParseError, exp, parse_one
 
 from sqlmesh.core.dialect import StagedFilePath
 from sqlmesh.core.macros import SQL, MacroEvalError, MacroEvaluator, macro
@@ -550,7 +550,7 @@ def test_macro_coercion(macro_evaluator: MacroEvaluator, assert_exp_eq):
 
     # Strict flag allows raising errors and is used when recursively coercing expressions
     # otherwise, in general, we want to be lenient and just warn the user when something is not possible
-    with pytest.raises(SQLMeshError):
+    with pytest.raises(ParseError):
         coerce(exp.Literal.string("order"), exp.Select, strict=True)
 
     with pytest.raises(SQLMeshError):
