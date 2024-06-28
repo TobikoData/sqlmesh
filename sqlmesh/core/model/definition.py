@@ -962,9 +962,7 @@ class _SqlBasedModel(_Model):
 
         for statement in (*self.pre_statements, *self.post_statements):
             statement_exprs: t.List[exp.Expression] = []
-            if isinstance(statement, d.MacroDef):
-                statement_exprs = [statement]
-            else:
+            if not isinstance(statement, d.MacroDef):
                 rendered = self._statement_renderer(statement).render()
                 if self._is_metadata_statement(statement):
                     continue
@@ -988,7 +986,7 @@ class _SqlBasedModel(_Model):
 
     def _is_metadata_statement(self, statement: exp.Expression) -> bool:
         if isinstance(statement, d.MacroDef):
-            return False
+            return True
         if isinstance(statement, d.MacroFunc):
             target_macro = macro.get_registry().get(statement.name)
             if target_macro:
