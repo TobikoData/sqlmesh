@@ -701,7 +701,6 @@ class SnapshotEvaluator:
                         table_name=snapshot.table_name(is_deployable=is_table_deployable),
                         model=snapshot.model,
                         is_table_deployable=is_table_deployable,
-                        snapshot=snapshot,
                         **create_render_kwargs,
                     )
 
