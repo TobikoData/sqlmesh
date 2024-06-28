@@ -37,6 +37,9 @@ class Exceptions:
 
             raise CompilationException(msg)
 
+    def raise_not_implemented(self, msg: str) -> None:
+        raise NotImplementedError(msg)
+
     def warn(self, msg: str) -> str:
         logger.warning(msg)
         return ""

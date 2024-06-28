@@ -164,6 +164,8 @@ def test_adapter_dispatch(sushi_test_project: Project, runtime_renderer: t.Calla
     context = sushi_test_project.context
     renderer = runtime_renderer(context)
     assert renderer("{{ adapter.dispatch('current_engine', 'customers')() }}") == "duckdb"
+    assert renderer("{{ adapter.dispatch('current_timestamp')() }}") == "now()"
+    assert renderer("{{ adapter.dispatch('current_timestamp', 'dbt')() }}") == "now()"
 
     with pytest.raises(ConfigError, match=r"Macro 'current_engine'.*was not found."):
         renderer("{{ adapter.dispatch('current_engine')() }}")
