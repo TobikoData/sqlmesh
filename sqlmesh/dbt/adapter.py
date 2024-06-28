@@ -121,14 +121,14 @@ class BaseAdapter(abc.ABC):
         ]
         candidates = {}
         for macro_package in packages_to_check:
-            macros: t.Dict[str, t.Any] = (
-                jinja_env.get(macro_package, {}) if macro_package else jinja_env  # type: ignore
-            )
-            matching_macro_names = [k for k in macros if k.endswith(macro_suffix)]
+            macros = jinja_env.get(macro_package, {}) if macro_package else jinja_env
+            if not isinstance(macros, dict):
+                continue
             candidates.update(
                 {
-                    (macro_package, macro_name): macros[macro_name]
-                    for macro_name in matching_macro_names
+                    (macro_package, macro_name): macro_callable
+                    for macro_name, macro_callable in macros.items()
+                    if macro_name.endswith(macro_suffix)
                 }
             )
 
