@@ -551,7 +551,7 @@ def test_macro_coercion(macro_evaluator: MacroEvaluator, assert_exp_eq):
     # Strict flag allows raising errors and is used when recursively coercing expressions
     # otherwise, in general, we want to be lenient and just warn the user when something is not possible
     with pytest.raises(SQLMeshError):
-        coerce(exp.Literal.string("order"), exp.Select, strict=True)
+        coerce(exp.Literal.string("order"), exp.Union, strict=True)
 
     with pytest.raises(SQLMeshError):
         _ = coerce(
