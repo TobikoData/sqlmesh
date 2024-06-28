@@ -3,6 +3,7 @@ import typing as t
 import pytest
 from sqlglot import MappingSchema, ParseError, exp, parse_one
 
+from sqlmesh.core import constants as c
 from sqlmesh.core.dialect import StagedFilePath
 from sqlmesh.core.macros import SQL, MacroEvalError, MacroEvaluator, macro
 from sqlmesh.utils.errors import SQLMeshError
@@ -599,3 +600,19 @@ def test_macro_parameter_resolution(macro_evaluator):
     with pytest.raises(MacroEvalError) as e:
         macro_evaluator.evaluate(parse_one("@test_arg_resolution(1, 2, 3)"))
     assert str(e.value.__cause__) == "too many positional arguments"
+
+
+def test_macro_metadata_flag():
+    @macro()
+    def noop(evaluator) -> None:
+        return None
+
+    @macro(is_metadata=True)
+    def noop_metadata_only(evaluator) -> None:
+        return None
+
+    assert not hasattr(noop, c.SQLMESH_METADATA)
+    assert macro.get_registry()["noop"].is_metadata is False
+
+    assert getattr(noop_metadata_only, c.SQLMESH_METADATA) is True
+    assert macro.get_registry()["noop_metadata_only"].is_metadata is True
