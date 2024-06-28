@@ -962,11 +962,13 @@ class _SqlBasedModel(_Model):
 
         for statement in (*self.pre_statements, *self.post_statements):
             statement_exprs: t.List[exp.Expression] = []
-            if isinstance(statement, d.MacroFunc) and not self._is_metadata_statement(statement):
+            if isinstance(statement, d.MacroDef):
                 statement_exprs = [statement]
             else:
                 rendered = self._statement_renderer(statement).render()
-                if rendered is not None:
+                if self._is_metadata_statement(statement):
+                    continue
+                if rendered:
                     statement_exprs = rendered
                 else:
                     statement_exprs = [statement]
@@ -989,9 +991,11 @@ class _SqlBasedModel(_Model):
             return False
         if isinstance(statement, d.MacroFunc):
             target_macro = macro.get_registry().get(statement.name)
-            if not target_macro:
-                target_macro = self.python_env.get(statement.name)
-            return getattr(target_macro, c.SQLMESH_METADATA, False)
+            if target_macro:
+                return getattr(target_macro.func, c.SQLMESH_METADATA, False)
+            target_macro = self.python_env.get(statement.name)
+            if isinstance(target_macro, Executable):
+                return target_macro.is_metadata is True
         return False
 
 

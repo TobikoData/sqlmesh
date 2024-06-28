@@ -5098,12 +5098,18 @@ materialized TRUE
     )
 
 
-def test_macro_func_metadata_hash():
-    @macro()
+@pytest.mark.parametrize(
+    "is_metadata",
+    [True, False],
+)
+def test_macro_func_hash(is_metadata):
+    macro.set_registry({})
+
+    @macro(is_metadata=is_metadata)
     def noop(evaluator) -> None:
         return None
 
-    # Standardize the python_env of the below models
+    # Prevent macro from entering python_env so data hash is consistent
     setattr(macro.get_registry()["noop"], c.SQLMESH_BUILTIN, True)
 
     expressions = d.parse(
@@ -5131,10 +5137,9 @@ def test_macro_func_metadata_hash():
     new_model = load_sql_based_model(
         expressions, path=Path("./examples/sushi/models/test_model.sql")
     )
-
-    assert model.data_hash != new_model.data_hash
-    assert model.metadata_hash(audits={}) == new_model.metadata_hash(audits={})
-
-    setattr(macro.get_registry()["noop"], c.SQLMESH_METADATA, True)
-    assert model.data_hash == new_model.data_hash
-    assert model.metadata_hash(audits={}) != new_model.metadata_hash(audits={})
+    if is_metadata:
+        assert model.data_hash == new_model.data_hash
+        assert model.metadata_hash(audits={}) != new_model.metadata_hash(audits={})
+    else:
+        assert model.data_hash != new_model.data_hash
+        assert model.metadata_hash(audits={}) == new_model.metadata_hash(audits={})
