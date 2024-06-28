@@ -169,8 +169,6 @@ def test_adapter_dispatch(sushi_test_project: Project, runtime_renderer: t.Calla
 
     with pytest.raises(ConfigError, match=r"Macro 'current_engine'.*was not found."):
         renderer("{{ adapter.dispatch('current_engine')() }}")
-    with pytest.raises(ConfigError, match=r"Macro 'current_timestamp'.*was not found."):
-        assert renderer("{{ adapter.dispatch('current_timestamp', 'customers')() }}")
 
 
 def test_adapter_map_snapshot_tables(
