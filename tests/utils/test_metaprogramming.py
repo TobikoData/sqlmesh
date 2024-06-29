@@ -9,6 +9,7 @@ from pytest_mock.plugin import MockerFixture
 from sqlglot.expressions import to_table
 
 import tests.utils.test_date as test_date
+from sqlmesh.core import constants as c
 from sqlmesh.utils.errors import SQLMeshError
 from sqlmesh.utils.metaprogramming import (
     Executable,
@@ -41,7 +42,7 @@ def test_print_exception(mocker: MockerFixture):
 
     expected_message = f"""Traceback (most recent call last):
 
-  File "{__file__}", line 38, in test_print_exception
+  File "{__file__}", line 39, in test_print_exception
     eval("test_fun()", env)
 
   File "<string>", line 1, in <module>
@@ -95,11 +96,19 @@ def other_func(a: int) -> int:
     return X + a
 
 
+def noop_metadata() -> None:
+    return None
+
+
+setattr(noop_metadata, c.SQLMESH_METADATA, True)
+
+
 def main_func(y: int) -> int:
     """DOC STRING"""
     sqlglot.parse_one("1")
     MyClass()
     DataClass(x=y)
+    noop_metadata()
 
     def closure(z: int) -> int:
         return z + Z
@@ -113,6 +122,7 @@ def test_func_globals() -> None:
         "Z": 3,
         "DataClass": DataClass,
         "MyClass": MyClass,
+        "noop_metadata": noop_metadata,
         "other_func": other_func,
         "sqlglot": sqlglot,
     }
@@ -144,6 +154,7 @@ def test_normalize_source() -> None:
     sqlglot.parse_one('1')
     MyClass()
     DataClass(x=y)
+    noop_metadata()
 
     def closure(z: int):
         return z + Z
@@ -183,6 +194,7 @@ def test_serialize_env() -> None:
     sqlglot.parse_one('1')
     MyClass()
     DataClass(x=y)
+    noop_metadata()
 
     def closure(z: int):
         return z + Z
@@ -232,6 +244,13 @@ class DataClass:
             name="my_lambda",
             path="test_metaprogramming.py",
             payload="my_lambda = lambda : print('z')",
+        ),
+        "noop_metadata": Executable(
+            name="noop_metadata",
+            path="test_metaprogramming.py",
+            payload="""def noop_metadata():
+    return None""",
+            is_metadata=True,
         ),
         "other_func": Executable(
             name="other_func",
