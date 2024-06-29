@@ -962,17 +962,39 @@ class _SqlBasedModel(_Model):
 
         for statement in (*self.pre_statements, *self.post_statements):
             statement_exprs: t.List[exp.Expression] = []
-            if isinstance(statement, d.MacroDef):
-                statement_exprs = [statement]
-            else:
+            if not isinstance(statement, d.MacroDef):
                 rendered = self._statement_renderer(statement).render()
-                if rendered is not None:
+                if self._is_metadata_statement(statement):
+                    continue
+                if rendered:
                     statement_exprs = rendered
                 else:
                     statement_exprs = [statement]
             data_hash_values.extend(gen(e) for e in statement_exprs)
 
         return data_hash_values
+
+    @property
+    def _additional_metadata(self) -> t.List[str]:
+        additional_metadata = super()._additional_metadata
+
+        for statement in (*self.pre_statements, *self.post_statements):
+            if self._is_metadata_statement(statement):
+                additional_metadata.append(gen(statement))
+
+        return additional_metadata
+
+    def _is_metadata_statement(self, statement: exp.Expression) -> bool:
+        if isinstance(statement, d.MacroDef):
+            return True
+        if isinstance(statement, d.MacroFunc):
+            target_macro = macro.get_registry().get(statement.name)
+            if target_macro:
+                return target_macro.is_metadata
+            target_macro = self.python_env.get(statement.name)
+            if isinstance(target_macro, Executable):
+                return bool(target_macro.is_metadata)
+        return False
 
 
 class SqlModel(_SqlBasedModel):

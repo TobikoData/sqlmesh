@@ -1616,7 +1616,7 @@ FROM (VALUES
 WHERE
   FALSE
 LIMIT 0
-	""",
+""",
     )
 
 
@@ -5096,3 +5096,50 @@ materialized FALSE
 materialized TRUE
 )"""
     )
+
+
+@pytest.mark.parametrize(
+    "is_metadata",
+    [True, False],
+)
+def test_macro_func_hash(is_metadata):
+    macro.set_registry({})
+
+    @macro(is_metadata=is_metadata)
+    def noop(evaluator) -> None:
+        return None
+
+    # Prevent macro from entering python_env so data hash is consistent
+    setattr(macro.get_registry()["noop"], c.SQLMESH_BUILTIN, True)
+
+    expressions = d.parse(
+        """
+        MODEL (
+            name db.model,
+        );
+
+        SELECT 1;
+    """
+    )
+    model = load_sql_based_model(expressions, path=Path("./examples/sushi/models/test_model.sql"))
+
+    expressions = d.parse(
+        """
+        MODEL (
+            name db.model,
+        );
+
+        SELECT 1;
+
+        @noop();
+    """
+    )
+    new_model = load_sql_based_model(
+        expressions, path=Path("./examples/sushi/models/test_model.sql")
+    )
+    if is_metadata:
+        assert model.data_hash == new_model.data_hash
+        assert model.metadata_hash(audits={}) != new_model.metadata_hash(audits={})
+    else:
+        assert model.data_hash != new_model.data_hash
+        assert model.metadata_hash(audits={}) == new_model.metadata_hash(audits={})

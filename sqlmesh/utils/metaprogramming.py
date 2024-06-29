@@ -314,6 +314,7 @@ class Executable(PydanticModel):
     name: t.Optional[str] = None
     path: t.Optional[str] = None
     alias: t.Optional[str] = None
+    is_metadata: t.Optional[bool] = None
 
     @property
     def is_definition(self) -> bool:
@@ -360,6 +361,7 @@ def serialize_env(env: t.Dict[str, t.Any], path: Path) -> t.Dict[str, Executable
                     # Do `as_posix` to serialize windows path back to POSIX
                     path=t.cast(Path, file_path).relative_to(path.absolute()).as_posix(),
                     alias=k if name != k else None,
+                    is_metadata=getattr(v, c.SQLMESH_METADATA, None),
                 )
             else:
                 serialized[k] = Executable(
