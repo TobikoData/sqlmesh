@@ -123,7 +123,9 @@ class Loader(abc.ABC):
         self._config_mtimes = {path: max(mtimes) for path, mtimes in config_mtimes.items()}
 
         macros, jinja_macros = self._load_scripts()
-        models = self._load_models(macros, jinja_macros, context.gateway)
+        models = self._load_models(
+            macros, jinja_macros, context.gateway or context.config.default_gateway
+        )
 
         for model in models.values():
             self._add_model_to_dag(model)
