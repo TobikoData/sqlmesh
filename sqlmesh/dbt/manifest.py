@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import json
 import logging
+import os
 import re
 import typing as t
 from argparse import Namespace
@@ -263,7 +264,7 @@ class ManifestHelper:
         if DBT_VERSION >= (1, 8):
             from dbt_common.context import set_invocation_context  # type: ignore
 
-            set_invocation_context({})
+            set_invocation_context(os.environ)
 
         profile = self._load_profile()
         project = self._load_project(profile)
