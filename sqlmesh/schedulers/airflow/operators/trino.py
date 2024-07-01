@@ -30,7 +30,7 @@ class SQLMeshTrinoOperator(BaseOperator):
         self._hook_params = kwargs
 
     def get_db_hook(self) -> TrinoHook:
-        """Gets the Postgres Hook which contains the DB API connection object"""
+        """Gets the Trino Hook which contains the DB API connection object"""
         return TrinoHook(self._trino_conn_id, **self._hook_params)
 
     def execute(self, context: Context) -> None:
