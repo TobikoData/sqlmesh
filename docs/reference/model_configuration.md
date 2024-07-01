@@ -86,44 +86,44 @@ Python model kind `name` enum value: [ModelKindName.FULL](https://sqlmesh.readth
 
 Configuration options for all incremental models (in addition to [general model properties](#general-model-properties)).
 
-| Option                  | Description                                                                                                                                                                                                                                                                                                                      | Type | Required |
-| ----------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | :--: | :------: |
-| `batch_size`            | The maximum number of intervals that can be evaluated in a single backfill task. If this is `None`, all intervals will be processed as part of a single task. If this is set, a model's backfill will be chunked such that each individual task only contains jobs with the maximum of `batch_size` intervals. (Default: `None`) | int  |    N     |
-| `batch_concurrency`     | The maximum number of batches that can run concurrently for this model. (Default: the number of concurrent tasks set in the connection settings)                                                                                                                                                                                 | int  |    N     |
-| `lookback`              | The number of time unit intervals prior to the current interval that should be processed. (Default: `0`)                                                                                                                                                                                                                         | int  |    N     |
-| `on_destructive_change` | What should happen when a change to a [forward-only model](../guides/incremental_time.md#forward-only-models) or incremental model in a [forward-only plan](../concepts/plans.md#forward-only-plans) causes a destructive modification to the model schema. Valid values: `allow`, `warn`, `error`. (Default: `error`)           | str  |    N     |
+| Option                  | Description                                                                                                                                                                                                                                                                                                            | Type | Required |
+|-------------------------|------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------|:----:|:--------:|
+| `on_destructive_change` | What should happen when a change to a [forward-only model](../guides/incremental_time.md#forward-only-models) or incremental model in a [forward-only plan](../concepts/plans.md#forward-only-plans) causes a destructive modification to the model schema. Valid values: `allow`, `warn`, `error`. (Default: `error`) | str  | N        |
+| `forward_only`          | Whether the model's changes should always be classified as [forward-only](../concepts/plans.md#forward-only-change). (Default: `False`)                                                                                                                                                                                | bool | N        |
+| `disable_restatement`   | Whether [restatements](../concepts/plans.md#restatement-plans) should be disabled for the model. (Default: `False`)                                                                                                                                                                                                    | bool | N        |
 
 #### Incremental by time range
 
 Configuration options for [`INCREMENTAL_BY_TIME_RANGE` models](../concepts/models/model_kinds.md#incremental_by_time_range) (in addition to [general model properties](#general-model-properties) and [incremental model properties](#incremental-models)).
 
-| Option                | Description                                                                                                                             | Type | Required |
-| --------------------- | --------------------------------------------------------------------------------------------------------------------------------------- | :--: | :------: |
-| `time_column`         | The model column containing each row's timestamp.                                                                                       | str  |    Y     |
-| `format`              | Argument to `time_column`. Format of the time column's data. (Default: `%Y-%m-%d`)                                                      | str  |    N     |
-| `forward_only`        | Whether the model's changes should always be classified as [forward-only](../concepts/plans.md#forward-only-change). (Default: `False`) | bool |    N     |
-| `disable_restatement` | Whether [restatements](../concepts/plans.md#restatement-plans) should be disabled for the model. (Default: `False`)                     | bool |    N     |
+| Option              | Description                                                                                                                                                                                                                                                                                                                      | Type | Required |
+|---------------------|----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------|:----:|:--------:|
+| `time_column`       | The model column containing each row's timestamp.                                                                                                                                                                                                                                                                                | str  | Y        |
+| `format`            | Argument to `time_column`. Format of the time column's data. (Default: `%Y-%m-%d`)                                                                                                                                                                                                                                               | str  | N        |
+| `batch_size`        | The maximum number of intervals that can be evaluated in a single backfill task. If this is `None`, all intervals will be processed as part of a single task. If this is set, a model's backfill will be chunked such that each individual task only contains jobs with the maximum of `batch_size` intervals. (Default: `None`) | int  | N        |
+| `batch_concurrency` | The maximum number of batches that can run concurrently for this model. (Default: the number of concurrent tasks set in the connection settings)                                                                                                                                                                                 | int  | N        |
+| `lookback`          | The number of time unit intervals prior to the current interval that should be processed. (Default: `0`)                                                                                                                                                                                                                         | int  | N        |
 
 Python model kind `name` enum value: [ModelKindName.INCREMENTAL_BY_TIME_RANGE](https://sqlmesh.readthedocs.io/en/stable/_readthedocs/html/sqlmesh/core/model/kind.html#ModelKindName)
+
+#### Incremental by unique key
+
+Configuration options for [`INCREMENTAL_BY_UNIQUE_KEY` models](../concepts/models/model_kinds.md#incremental_by_unique_key) (in addition to [general model properties](#general-model-properties) and [incremental model properties](#incremental-models)).
+
+| Option         | Description                                                                                                                                                                                                                                                                                                                      | Type              | Required |
+|----------------|----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------|-------------------|----------|
+| `unique_key`   | The model column(s) containing each row's unique key                                                                                                                                                                                                                                                                             | str \| array[str] | Y        |
+| `when_matched` | SQL logic used to update columns when a match occurs - only available on engines that support `MERGE`. (Default: update all columns)                                                                                                                                                                                             | str               | N        |
+| `batch_size`   | The maximum number of intervals that can be evaluated in a single backfill task. If this is `None`, all intervals will be processed as part of a single task. If this is set, a model's backfill will be chunked such that each individual task only contains jobs with the maximum of `batch_size` intervals. (Default: `None`) | int               | N        |
+| `lookback`     | The number of time unit intervals prior to the current interval that should be processed. (Default: `0`)                                                                                                                                                                                                                         | int               | N        |
+
+Python model kind `name` enum value: [ModelKindName.INCREMENTAL_BY_UNIQUE_KEY](https://sqlmesh.readthedocs.io/en/stable/_readthedocs/html/sqlmesh/core/model/kind.html#ModelKindName)
 
 #### Incremental by partition
 
 The [`INCREMENTAL_BY_PARTITION` models](../concepts/models/model_kinds.md#incremental_by_partition) kind does not support any configuration options other than the [general model properties](#general-model-properties) and [incremental model properties](#incremental-models).
 
 Python model kind `name` enum value: [ModelKindName.INCREMENTAL_BY_PARTITION](https://sqlmesh.readthedocs.io/en/stable/_readthedocs/html/sqlmesh/core/model/kind.html#ModelKindName)
-
-#### Incremental by unique key
-
-Configuration options for [`INCREMENTAL_BY_UNIQUE_KEY` models](../concepts/models/model_kinds.md#incremental_by_unique_key) (in addition to [general model properties](#general-model-properties) and [incremental model properties](#incremental-models)).
-
-| Option                | Description                                                                                                                             | Type              | Required |
-| --------------------- | --------------------------------------------------------------------------------------------------------------------------------------- | ----------------- | -------- |
-| `unique_key`          | The model column(s) containing each row's unique key                                                                                    | str \| array[str] | Y        |
-| `when_matched`        | SQL logic used to update columns when a match occurs - only available on engines that support `MERGE`. (Default: update all columns)    | str               | N        |
-| `forward_only`        | Whether the model's changes should always be classified as [forward-only](../concepts/plans.md#forward-only-change). (Default: `False`) | bool              | N        |
-| `disable_restatement` | Whether [restatements](../concepts/plans.md#restatement-plans) should be disabled for the model. (Default: `False`)                     | bool              | N        |
-
-Python model kind `name` enum value: [ModelKindName.INCREMENTAL_BY_UNIQUE_KEY](https://sqlmesh.readthedocs.io/en/stable/_readthedocs/html/sqlmesh/core/model/kind.html#ModelKindName)
 
 #### SCD Type 2 models
 
