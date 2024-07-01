@@ -1251,6 +1251,56 @@ def test_delete_expired_snapshots_shared_dev_table(
     assert set(state_sync.get_snapshots(None)) == {new_snapshot.snapshot_id}
 
 
+def test_delete_expired_snapshots_ignore_ttl(
+    state_sync: EngineAdapterStateSync, make_snapshot: t.Callable
+):
+    snapshot_a = make_snapshot(
+        SqlModel(
+            name="a",
+            query=parse_one("select a, ds"),
+        )
+    )
+    snapshot_a.categorize_as(SnapshotChangeCategory.NON_BREAKING)
+
+    snapshot_b = make_snapshot(
+        SqlModel(
+            name="a",
+            query=parse_one("select a, b, ds"),
+        ),
+        version="2",
+    )
+    snapshot_b.categorize_as(SnapshotChangeCategory.NON_BREAKING)
+
+    snapshot_c = make_snapshot(
+        SqlModel(
+            name="a",
+            query=parse_one("select a, b, c, ds"),
+        ),
+    )
+    snapshot_c.categorize_as(SnapshotChangeCategory.NON_BREAKING)
+
+    state_sync.push_snapshots([snapshot_a, snapshot_b, snapshot_c])
+
+    env = Environment(
+        name="test_environment",
+        snapshots=[snapshot_a.table_info, snapshot_b.table_info],
+        start_at="2022-01-01",
+        end_at="2022-01-01",
+        plan_id="test_plan_id",
+        previous_plan_id="test_plan_id",
+    )
+    state_sync.promote(env)
+
+    # default TTL = 1 week, nothing to clean up yet if we take TTL into account
+    assert not state_sync.delete_expired_snapshots()
+
+    # If we ignore TTL, only snapshot_c should get cleaned up because snapshot_a and snapshot_b are part of an environment
+    assert snapshot_a.table_info != snapshot_b.table_info != snapshot_c.table_info
+    assert state_sync.delete_expired_snapshots(ignore_ttl=True) == [
+        SnapshotTableCleanupTask(snapshot=snapshot_c.table_info, dev_table_only=False)
+    ]
+
+
 def test_environment_start_as_timestamp(
     state_sync: EngineAdapterStateSync, make_snapshot: t.Callable
 ):

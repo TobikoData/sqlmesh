@@ -439,6 +439,24 @@ def invalidate(ctx: click.Context, environment: str, **kwargs: t.Any) -> None:
     context.invalidate_environment(environment, **kwargs)
 
 
+@cli.command("janitor")
+@click.option(
+    "--ignore-ttl",
+    is_flag=True,
+    help="Cleanup snapshots that are not referenced in any environment, regardless of when they're set to expire",
+)
+@click.pass_context
+@error_handler
+@cli_analytics
+def janitor(ctx: click.Context, ignore_ttl: bool, **kwargs: t.Any) -> None:
+    """
+    Run the janitor task on-demand.
+
+    The janitor cleans up old environments and expired snapshots.
+    """
+    ctx.obj.run_janitor(ignore_ttl, **kwargs)
+
+
 @cli.command("dag")
 @click.argument("file", required=True)
 @click.option(

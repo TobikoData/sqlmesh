@@ -112,8 +112,27 @@ class Console(abc.ABC):
         """Stop the snapshot creation progress."""
 
     @abc.abstractmethod
+    def start_cleanup(self, ignore_ttl: bool) -> bool:
+        """Start a janitor / snapshot cleanup run.
+
+        Args:
+            ignore_ttl: Indicates that the user wants to ignore the snapshot TTL and clean up everything not promoted to an environment
+
+        Returns:
+            Whether or not the cleanup run should proceed
+        """
+
+    @abc.abstractmethod
     def update_cleanup_progress(self, object_name: str) -> None:
         """Update the snapshot cleanup progress."""
+
+    @abc.abstractmethod
+    def stop_cleanup(self, success: bool = True) -> None:
+        """Indicates the janitor / snapshot cleanup run has ended
+
+        Args:
+            success: Whether or not the cleanup completed successfully
+        """
 
     @abc.abstractmethod
     def start_promotion_progress(
@@ -441,9 +460,25 @@ class TerminalConsole(Console):
         self.environment_naming_info = EnvironmentNamingInfo()
         self.default_catalog = None
 
+    def start_cleanup(self, ignore_ttl: bool) -> bool:
+        if ignore_ttl:
+            self._print(
+                "Are you sure you want to delete all orphaned snapshots regardless of their environment?"
+            )
+            if not self._confirm("This may affect other users. Proceed?"):
+                self.log_error("Cleanup aborted")
+                return False
+        return True
+
     def update_cleanup_progress(self, object_name: str) -> None:
         """Update the snapshot cleanup progress."""
         self._print(f"Deleted object {object_name}")
+
+    def stop_cleanup(self, success: bool = False) -> None:
+        if success:
+            self.log_success("Cleanup complete.")
+        else:
+            self.log_error("Cleanup failed!")
 
     def start_promotion_progress(
         self,

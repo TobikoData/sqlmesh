@@ -30,6 +30,7 @@ Commands:
   info                    Print information about a SQLMesh project.
   init                    Create a new SQLMesh repository.
   invalidate              Invalidate the target environment, forcing its...
+  janitor                 Run the janitor task on-demand.
   migrate                 Migrate SQLMesh to the current running version.
   plan                    Apply local changes to the target environment.
   prompt                  Uses LLM to generate a SQL query from a prompt.
@@ -227,6 +228,21 @@ Options:
               janitor process. This option requires a connection to the data
               warehouse.
   --help      Show this message and exit.
+```
+
+## janitor
+
+```
+Usage: sqlmesh janitor [OPTIONS]
+
+  Run the janitor task on-demand.
+
+  The janitor cleans up old environments and expired snapshots.
+
+Options:
+  --ignore-ttl  Cleanup snapshots that are not referenced in any environment,
+                regardless of when they're set to expire
+  --help        Show this message and exit.
 ```
 
 ## migrate
