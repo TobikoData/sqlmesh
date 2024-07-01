@@ -232,6 +232,32 @@ def test_gateway_specific_external_models_mixed_with_others(tmpdir):
     assert external_models[0].name == '"memory"."landing"."source_table"'
 
 
+def test_gateway_specific_external_models_default_gateway(tmpdir: Path):
+    model_0 = {"name": "db.model0", "columns": {"a": "int"}}
+
+    model_1 = {"name": "db.model1", "gateway": "dev", "columns": {"a": "int"}}
+
+    model_2 = {"name": "db.model2", "gateway": "prod", "columns": {"a": "int"}}
+
+    with open(tmpdir / c.EXTERNAL_MODELS_YAML, "w", encoding="utf8") as fd:
+        YAML().dump([model_0, model_1, model_2], fd)
+
+    gateways = {
+        "dev": GatewayConfig(connection=DuckDBConnectionConfig()),
+        "prod": GatewayConfig(connection=DuckDBConnectionConfig()),
+    }
+
+    config = Config(gateways=gateways, default_gateway="prod")
+    ctx = Context(paths=[tmpdir], config=config)
+
+    ctx.load()
+
+    assert len(ctx.models) == 2
+    model_names = list(ctx.models.keys())
+    assert '"memory"."db"."model0"' in model_names
+    assert '"memory"."db"."model2"' in model_names
+
+
 def test_create_external_models_no_duplicates(tmpdir):
     config = Config(gateways={"": GatewayConfig(connection=DuckDBConnectionConfig())})
 
