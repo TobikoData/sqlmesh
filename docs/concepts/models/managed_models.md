@@ -58,7 +58,7 @@ MODEL (
     target_lag = '2 minutes',
     data_retention_time_in_days = 2
   )
-)
+);
 
 SELECT
   event_date::DATE as event_date,

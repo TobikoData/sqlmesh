@@ -39,7 +39,7 @@ from sqlmesh.core import dialect as d
 from sqlmesh.core.audit import Audit, AuditResult
 from sqlmesh.core.dialect import schema_
 from sqlmesh.core.engine_adapter import EngineAdapter
-from sqlmesh.core.engine_adapter.shared import InsertOverwriteStrategy, DataObjectType
+from sqlmesh.core.engine_adapter.shared import InsertOverwriteStrategy
 from sqlmesh.core.macros import RuntimeStage
 from sqlmesh.core.model import (
     IncrementalUnmanagedKind,
@@ -73,7 +73,7 @@ else:
     import importlib_metadata as metadata  # type: ignore
 
 if t.TYPE_CHECKING:
-    from sqlmesh.core.engine_adapter._typing import DF, Query, QueryOrDF
+    from sqlmesh.core.engine_adapter._typing import DF, QueryOrDF
     from sqlmesh.core.environment import EnvironmentNamingInfo
 
 logger = logging.getLogger(__name__)
@@ -652,9 +652,10 @@ class SnapshotEvaluator:
             **common_render_kwargs,
             # Refers to self as non-deployable to successfully create self-referential tables / views.
             deployability_index=deployability_index.with_non_deployable(snapshot),
-            # However, it can still be useful to know if the snapshot was actually deployable
-            is_snapshot_deployable=deployability_index.is_deployable(snapshot),
         )
+
+        # It can still be useful for some strategies to know if the snapshot was actually deployable
+        is_snapshot_deployable = deployability_index.is_deployable(snapshot)
 
         evaluation_strategy = _evaluation_strategy(snapshot, self.adapter)
 
@@ -681,6 +682,7 @@ class SnapshotEvaluator:
                         table_mapping={snapshot.name: tmp_table_name},
                         **create_render_kwargs,
                     ),
+                    is_snapshot_deployable=is_snapshot_deployable,
                 )
                 try:
                     self.adapter.clone_table(target_table_name, snapshot.table_name(), replace=True)
@@ -706,6 +708,7 @@ class SnapshotEvaluator:
                         model=snapshot.model,
                         is_table_deployable=is_table_deployable,
                         render_kwargs=create_render_kwargs,
+                        is_snapshot_deployable=is_snapshot_deployable,
                     )
 
             self.adapter.execute(snapshot.model.render_post_statements(**pre_post_render_kwargs))
@@ -1693,7 +1696,7 @@ class EngineManagedStrategy(MaterializableStrategy):
         render_kwargs: t.Dict[str, t.Any],
         **kwargs: t.Any,
     ) -> None:
-        is_snapshot_deployable: bool = render_kwargs["is_snapshot_deployable"]
+        is_snapshot_deployable: bool = kwargs["is_snapshot_deployable"]
 
         if is_table_deployable and is_snapshot_deployable:
             # We could deploy this to prod; create a proper managed table
@@ -1708,8 +1711,11 @@ class EngineManagedStrategy(MaterializableStrategy):
                 table_description=model.description,
                 column_descriptions=model.column_descriptions,
             )
-        else:
-            # Otherwise, fallback to the default logic of creating normal tables
+        elif not is_table_deployable:
+            # Only create the dev preview table as a normal table.
+            # For the main table, if the snapshot is cant be deployed to prod (eg upstream is forward-only) do nothing.
+            # Any downstream models that reference it will be updated to point to the dev preview table.
+            # If the user eventually tries to deploy it, the logic in insert() will see it doesnt exist and create it
             super().create(
                 table_name=table_name,
                 model=model,
@@ -1730,37 +1736,17 @@ class EngineManagedStrategy(MaterializableStrategy):
         snapshot: Snapshot = kwargs["snapshot"]
         is_snapshot_deployable = deployability_index.is_deployable(snapshot)
 
-        if is_first_insert and is_snapshot_deployable and self.adapter.table_exists(table_name):
-            table_name_parsed = exp.to_table(table_name)
-
-            table_metadata = self.adapter.get_data_objects(
-                table_name_parsed.db, {table_name_parsed.name}
+        if is_first_insert and is_snapshot_deployable and not self.adapter.table_exists(table_name):
+            self.adapter.create_managed_table(
+                table_name=table_name,
+                query=query_or_df,  # type: ignore
+                columns_to_types=model.columns_to_types,
+                partitioned_by=model.partitioned_by,
+                clustered_by=model.clustered_by,
+                table_properties=model.physical_properties,
+                table_description=model.description,
+                column_descriptions=model.column_descriptions,
             )
-            if len(table_metadata) == 0:
-                raise SQLMeshError(
-                    f"Table {table_name} exists but isnt being returned in the metadata. Cannot determine if it's a managed table or not"
-                )
-
-            if table_metadata[0].type != DataObjectType.MANAGED_TABLE:
-                # Snapshot is deployable but currently references a non-managed table
-                # This can happen if it was originally created as part of a forward-only plan and the user decides to deploy this plan to production
-                logger.info(
-                    f"Table {table_name} exists but is a currently normal table. Upgrading it to a managed table"
-                )
-
-                # note: the SnapshotEvaluator evaluates the snapshot within a transaction already; no need to start a new one here
-                self.adapter.drop_table(table_name)
-                self.adapter.create_managed_table(
-                    table_name=table_name,
-                    query=t.cast(Query, query_or_df),
-                    columns_to_types=model.columns_to_types,
-                    partitioned_by=model.partitioned_by,
-                    clustered_by=model.clustered_by,
-                    table_properties=model.physical_properties,
-                    table_description=model.description,
-                    column_descriptions=model.column_descriptions,
-                )
-
         elif not is_snapshot_deployable:
             # Snapshot isnt deployable; update the preview table instead
             # If the snapshot was deployable, then data would have already been loaded in create() because a managed table would have been created

@@ -136,7 +136,7 @@ class SnowflakeEngineAdapter(GetCurrentCatalogFromFunctionMixin):
         )
 
         self._create_table_from_source_queries(
-            quote_identifiers(target_table),
+            target_table,
             source_queries,
             columns_to_types,
             replace=self.SUPPORTS_REPLACE_TABLE,

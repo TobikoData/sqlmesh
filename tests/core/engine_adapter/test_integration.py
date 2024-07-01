@@ -492,7 +492,7 @@ class PlanResults(PydanticModel):
         table_name = snapshot.table_name(is_deployable)
         return exp.to_table(table_name).this.sql(dialect=self.ctx.dialect)
 
-    def temp_table_name_for(self, snapshot: Snapshot) -> str:
+    def dev_table_name_for(self, snapshot: Snapshot) -> str:
         return self.table_name_for(snapshot, is_deployable=False)
 
 
@@ -2370,19 +2370,19 @@ def test_managed_model_upstream_forward_only(ctx: TestContext):
 
     assert len(plan_1.internal_schema_metadata.tables) == 3
     assert plan_1.table_name_for(model_a) in plan_1.internal_schema_metadata.tables
-    assert plan_1.temp_table_name_for(model_a) in plan_1.internal_schema_metadata.tables
+    assert plan_1.dev_table_name_for(model_a) in plan_1.internal_schema_metadata.tables
     assert (
         plan_1.table_name_for(model_b) not in plan_1.internal_schema_metadata.tables
     )  # because its a managed table
     assert (
-        plan_1.temp_table_name_for(model_b) in plan_1.internal_schema_metadata.tables
-    )  # its __temp table is a normal table however
+        plan_1.dev_table_name_for(model_b) in plan_1.internal_schema_metadata.tables
+    )  # its dev table is a normal table however
 
     assert len(plan_1.internal_schema_metadata.managed_tables) == 1
     assert plan_1.table_name_for(model_b) in plan_1.internal_schema_metadata.managed_tables
     assert (
-        plan_1.temp_table_name_for(model_b) not in plan_1.internal_schema_metadata.managed_tables
-    )  # the __temp table should not be created as managed
+        plan_1.dev_table_name_for(model_b) not in plan_1.internal_schema_metadata.managed_tables
+    )  # the dev table should not be created as managed
 
     # Let's modify model A with a breaking change and plan it against a dev environment. This should trigger a forward-only plan
     new_model_a = load_sql_based_model(
@@ -2415,25 +2415,25 @@ def test_managed_model_upstream_forward_only(ctx: TestContext):
     # since model B depends on an upstream model with a forward-only change, it should also get recreated, but as a normal table, not a managed table
     assert plan_2.table_name_for(model_a) == plan_1.table_name_for(
         model_a
-    )  # no change in the main table because the dev preview changes go to the __temp table
-    assert plan_2.temp_table_name_for(model_a) != plan_1.temp_table_name_for(
+    )  # no change in the main table because the dev preview changes go to the dev table
+    assert plan_2.dev_table_name_for(model_a) != plan_1.dev_table_name_for(
         model_a
-    )  # it creates a new __temp table to hold the dev preview
-    assert plan_2.temp_table_name_for(model_a) in plan_2.internal_schema_metadata.tables
+    )  # it creates a new dev table to hold the dev preview
+    assert plan_2.dev_table_name_for(model_a) in plan_2.internal_schema_metadata.tables
 
     assert plan_2.table_name_for(model_b) != plan_1.table_name_for(
         model_b
     )  # model b gets a new table
-    assert plan_2.temp_table_name_for(model_b) != plan_1.temp_table_name_for(
+    assert plan_2.dev_table_name_for(model_b) != plan_1.dev_table_name_for(
         model_b
-    )  # model b gets a new __temp table as well
+    )  # model b gets a new dev table as well
     assert (
-        plan_2.table_name_for(model_b) in plan_2.internal_schema_metadata.tables
-    )  # the new table is a regular table, not a managed table, because it was triggered by a forward-only change
+        plan_2.table_name_for(model_b) not in plan_2.internal_schema_metadata.tables
+    )  # the new main table is not actually created, because it was triggered by a forward-only change. downstream models use the dev table
     assert plan_2.table_name_for(model_b) not in plan_2.internal_schema_metadata.managed_tables
     assert (
-        plan_2.temp_table_name_for(model_b) in plan_2.internal_schema_metadata.tables
-    )  # __temp tables are always regular tables for managed models
+        plan_2.dev_table_name_for(model_b) in plan_2.internal_schema_metadata.tables
+    )  # dev tables are always regular tables for managed models
 
     # modify model B, still in the dev environment
     new_model_b = load_sql_based_model(
@@ -2464,12 +2464,14 @@ def test_managed_model_upstream_forward_only(ctx: TestContext):
     # model A should be unchanged
     # the new model B should be a normal table, not a managed table
     assert plan_3.table_name_for(model_a) == plan_2.table_name_for(model_a)
-    assert plan_3.temp_table_name_for(model_a) == plan_2.temp_table_name_for(model_a)
+    assert plan_3.dev_table_name_for(model_a) == plan_2.dev_table_name_for(model_a)
     assert plan_3.table_name_for(model_b) != plan_2.table_name_for(model_b)
-    assert plan_3.temp_table_name_for(model_b) != plan_2.table_name_for(model_b)
+    assert plan_3.dev_table_name_for(model_b) != plan_2.table_name_for(model_b)
 
-    assert plan_3.table_name_for(model_b) in plan_3.internal_schema_metadata.tables
-    assert plan_3.temp_table_name_for(model_b) in plan_3.internal_schema_metadata.tables
+    assert (
+        plan_3.table_name_for(model_b) not in plan_3.internal_schema_metadata.tables
+    )  # still using the dev table, no main table created
+    assert plan_3.dev_table_name_for(model_b) in plan_3.internal_schema_metadata.tables
     assert (
         plan_3.table_name_for(model_b) not in plan_3.internal_schema_metadata.managed_tables
     )  # still not a managed table
@@ -2481,11 +2483,11 @@ def test_managed_model_upstream_forward_only(ctx: TestContext):
     assert plan_4.snapshot_for(model_a).change_category == SnapshotChangeCategory.FORWARD_ONLY
     assert plan_4.snapshot_for(model_b).change_category == SnapshotChangeCategory.NON_BREAKING
 
-    # verify the Model B table is a managed table in prod even though it was non-managed in the dev virtual env
+    # verify the Model B table is created as a managed table in prod
     assert plan_4.table_name_for(model_b) == plan_3.table_name_for(
         model_b
     )  # the model didnt change; the table should still have the same name
     assert (
         plan_4.table_name_for(model_b) not in plan_4.internal_schema_metadata.tables
-    )  # however, it should now be a managed table, not a normal table
+    )  # however, it should be a managed table, not a normal table
     assert plan_4.table_name_for(model_b) in plan_4.internal_schema_metadata.managed_tables

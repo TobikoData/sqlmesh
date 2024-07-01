@@ -441,7 +441,7 @@ class EngineAdapter:
         column_descriptions: t.Optional[t.Dict[str, str]] = None,
         **kwargs: t.Any,
     ) -> None:
-        """Create an managed table using a query.
+        """Create a managed table using a query.
 
         "Managed" means that once the table is created, the data is kept up to date by the underlying database engine and not SQLMesh.
 
