@@ -18,9 +18,11 @@ from sqlmesh.core.config import load_config_from_paths
 from sqlmesh.core.dialect import normalize_model_name
 import sqlmesh.core.dialect as d
 from sqlmesh.core.engine_adapter import SparkEngineAdapter, TrinoEngineAdapter
-from sqlmesh.core.model import load_sql_based_model
+from sqlmesh.core.model import Model, load_sql_based_model
 from sqlmesh.core.engine_adapter.shared import DataObject, DataObjectType
 from sqlmesh.core.model.definition import create_sql_model
+from sqlmesh.core.plan import Plan
+from sqlmesh.core.snapshot import Snapshot, SnapshotChangeCategory
 from sqlmesh.utils import random_id
 from sqlmesh.utils.date import now, to_date, to_ds, to_time_column, yesterday
 from sqlmesh.utils.pydantic import PydanticModel
@@ -35,6 +37,8 @@ TEST_SCHEMA = "test_schema"
 
 
 class TestContext:
+    __test__ = False  # prevent pytest trying to collect this as a test class
+
     def __init__(
         self,
         test_type: str,
@@ -423,12 +427,14 @@ class MetadataResults(PydanticModel):
     tables: t.List[str] = []
     views: t.List[str] = []
     materialized_views: t.List[str] = []
+    managed_tables: t.List[str] = []
 
     @classmethod
     def from_data_objects(cls, data_objects: t.List[DataObject]) -> MetadataResults:
         tables = []
         views = []
         materialized_views = []
+        managed_tables = []
         for obj in data_objects:
             if obj.type.is_table:
                 tables.append(obj.name)
@@ -436,13 +442,58 @@ class MetadataResults(PydanticModel):
                 views.append(obj.name)
             elif obj.type.is_materialized_view:
                 materialized_views.append(obj.name)
+            elif obj.type.is_managed_table:
+                managed_tables.append(obj.name)
             else:
                 raise ValueError(f"Unexpected object type: {obj.type}")
-        return MetadataResults(tables=tables, views=views, materialized_views=materialized_views)
+        return MetadataResults(
+            tables=tables,
+            views=views,
+            materialized_views=materialized_views,
+            managed_tables=managed_tables,
+        )
 
     @property
     def non_temp_tables(self) -> t.List[str]:
         return [x for x in self.tables if not x.startswith("__temp") and not x.startswith("temp")]
+
+
+class PlanResults(PydanticModel):
+    plan: Plan
+    ctx: TestContext
+    schema_metadata: MetadataResults
+    internal_schema_metadata: MetadataResults
+
+    @classmethod
+    def create(cls, plan: Plan, ctx: TestContext, schema_name: str):
+        schema_metadata = ctx.get_metadata_results(schema_name)
+        internal_schema_metadata = ctx.get_metadata_results(f"sqlmesh__{schema_name}")
+        return PlanResults(
+            plan=plan,
+            ctx=ctx,
+            schema_metadata=schema_metadata,
+            internal_schema_metadata=internal_schema_metadata,
+        )
+
+    def snapshot_for(self, model: Model) -> Snapshot:
+        return next((s for s in list(self.plan.snapshots.values()) if s.name == model.fqn))
+
+    def modified_snapshot_for(self, model: Model) -> Snapshot:
+        return next((s for s in list(self.plan.modified_snapshots.values()) if s.name == model.fqn))
+
+    def table_name_for(
+        self, snapshot_or_model: Snapshot | Model, is_deployable: bool = True
+    ) -> str:
+        snapshot = (
+            snapshot_or_model
+            if isinstance(snapshot_or_model, Snapshot)
+            else self.snapshot_for(snapshot_or_model)
+        )
+        table_name = snapshot.table_name(is_deployable)
+        return exp.to_table(table_name).this.sql(dialect=self.ctx.dialect)
+
+    def dev_table_name_for(self, snapshot: Snapshot) -> str:
+        return self.table_name_for(snapshot, is_deployable=False)
 
 
 @pytest.fixture(params=["df", "query", "pyspark"])
@@ -2242,3 +2293,201 @@ def test_batch_size_on_incremental_by_unique_key_model(
 
     finally:
         ctx.cleanup(context)
+
+
+def test_managed_model_upstream_forward_only(ctx: TestContext):
+    """
+    This scenario goes as follows:
+        - A managed model B is a downstream dependency of an incremental model A
+            (as a sidenote: this is an incorrect use of managed models, they should really only reference external models, but we dont prevent it specifically to be more user friendly)
+        - User plans a forward-only change against Model A in a virtual environment "dev"
+        - This causes a new non-deployable snapshot of Model B in "dev".
+        - In these situations, we create a normal table for Model B, not a managed table
+        - User modifies model B and applies a plan in "dev"
+            - This should also result in a normal table
+        - User decides they want to deploy so they run their plan against prod
+            - We need to ensure we ignore the normal table for Model B (it was just a dev preview) and create a new managed table for prod
+            - Upon apply to prod, Model B should be completely recreated as a managed table
+    """
+
+    if ctx.test_type != "query":
+        pytest.skip("This only needs to run once so we skip anything not query")
+
+    if not ctx.engine_adapter.SUPPORTS_MANAGED_MODELS:
+        pytest.skip("This test only runs for engines that support managed models")
+
+    def _run_plan(sqlmesh_context: Context, environment: str = None) -> PlanResults:
+        plan: Plan = sqlmesh_context.plan(auto_apply=True, no_prompts=True, environment=environment)
+        return PlanResults.create(plan, ctx, schema)
+
+    context = ctx.create_context()
+    schema = ctx.add_test_suffix(TEST_SCHEMA)
+
+    model_a = load_sql_based_model(
+        d.parse(  # type: ignore
+            f"""
+            MODEL (
+                name {schema}.upstream_model,
+                kind INCREMENTAL_BY_TIME_RANGE (
+                    time_column ts,
+                    forward_only True
+                ),
+            );
+
+            SELECT 1 as id, 'foo' as name, current_timestamp as ts;
+            """
+        )
+    )
+
+    model_b = load_sql_based_model(
+        d.parse(  # type: ignore
+            f"""
+            MODEL (
+                name {schema}.managed_model,
+                kind MANAGED,
+                physical_properties (
+                    target_lag = '5 minutes'
+                )
+            );
+
+            SELECT * from {schema}.upstream_model;
+            """
+        )
+    )
+
+    context.upsert_model(model_a)
+    context.upsert_model(model_b)
+
+    plan_1 = _run_plan(context)
+
+    assert plan_1.snapshot_for(model_a).change_category == SnapshotChangeCategory.BREAKING
+    assert plan_1.snapshot_for(model_b).change_category == SnapshotChangeCategory.BREAKING
+
+    # so far so good, model_a should exist as a normal table, model b should be a managed table and the prod views should exist
+    assert len(plan_1.schema_metadata.views) == 2
+    assert plan_1.snapshot_for(model_a).model.view_name in plan_1.schema_metadata.views
+    assert plan_1.snapshot_for(model_b).model.view_name in plan_1.schema_metadata.views
+
+    assert len(plan_1.internal_schema_metadata.tables) == 3
+    assert plan_1.table_name_for(model_a) in plan_1.internal_schema_metadata.tables
+    assert plan_1.dev_table_name_for(model_a) in plan_1.internal_schema_metadata.tables
+    assert (
+        plan_1.table_name_for(model_b) not in plan_1.internal_schema_metadata.tables
+    )  # because its a managed table
+    assert (
+        plan_1.dev_table_name_for(model_b) in plan_1.internal_schema_metadata.tables
+    )  # its dev table is a normal table however
+
+    assert len(plan_1.internal_schema_metadata.managed_tables) == 1
+    assert plan_1.table_name_for(model_b) in plan_1.internal_schema_metadata.managed_tables
+    assert (
+        plan_1.dev_table_name_for(model_b) not in plan_1.internal_schema_metadata.managed_tables
+    )  # the dev table should not be created as managed
+
+    # Let's modify model A with a breaking change and plan it against a dev environment. This should trigger a forward-only plan
+    new_model_a = load_sql_based_model(
+        d.parse(  # type: ignore
+            f"""
+            MODEL (
+                name {schema}.upstream_model,
+                kind INCREMENTAL_BY_TIME_RANGE (
+                    time_column ts,
+                    forward_only True
+                ),
+            );
+
+            SELECT 1 as id, 'foo' as name, 'bar' as extra, current_timestamp as ts;
+            """
+        )
+    )
+    context.upsert_model(new_model_a)
+
+    # apply plan to dev environment
+    plan_2 = _run_plan(context, "dev")
+
+    assert plan_2.plan.has_changes
+    assert len(plan_2.plan.modified_snapshots) == 2
+    assert plan_2.snapshot_for(new_model_a).change_category == SnapshotChangeCategory.FORWARD_ONLY
+    assert plan_2.snapshot_for(model_b).change_category == SnapshotChangeCategory.NON_BREAKING
+
+    # verify that the new snapshots were created correctly
+    # the forward-only change to model A should be in a new table separate from the one created in the first plan
+    # since model B depends on an upstream model with a forward-only change, it should also get recreated, but as a normal table, not a managed table
+    assert plan_2.table_name_for(model_a) == plan_1.table_name_for(
+        model_a
+    )  # no change in the main table because the dev preview changes go to the dev table
+    assert plan_2.dev_table_name_for(model_a) != plan_1.dev_table_name_for(
+        model_a
+    )  # it creates a new dev table to hold the dev preview
+    assert plan_2.dev_table_name_for(model_a) in plan_2.internal_schema_metadata.tables
+
+    assert plan_2.table_name_for(model_b) != plan_1.table_name_for(
+        model_b
+    )  # model b gets a new table
+    assert plan_2.dev_table_name_for(model_b) != plan_1.dev_table_name_for(
+        model_b
+    )  # model b gets a new dev table as well
+    assert (
+        plan_2.table_name_for(model_b) not in plan_2.internal_schema_metadata.tables
+    )  # the new main table is not actually created, because it was triggered by a forward-only change. downstream models use the dev table
+    assert plan_2.table_name_for(model_b) not in plan_2.internal_schema_metadata.managed_tables
+    assert (
+        plan_2.dev_table_name_for(model_b) in plan_2.internal_schema_metadata.tables
+    )  # dev tables are always regular tables for managed models
+
+    # modify model B, still in the dev environment
+    new_model_b = load_sql_based_model(
+        d.parse(  # type: ignore
+            f"""
+            MODEL (
+                name {schema}.managed_model,
+                kind MANAGED,
+                physical_properties (
+                    target_lag = '5 minutes'
+                )
+            );
+
+            SELECT *, 'modified' as extra_b from {schema}.upstream_model;
+            """
+        )
+    )
+    context.upsert_model(new_model_b)
+
+    plan_3 = _run_plan(context, "dev")
+
+    assert plan_3.plan.has_changes
+    assert len(plan_3.plan.modified_snapshots) == 1
+    assert (
+        plan_3.modified_snapshot_for(model_b).change_category == SnapshotChangeCategory.NON_BREAKING
+    )
+
+    # model A should be unchanged
+    # the new model B should be a normal table, not a managed table
+    assert plan_3.table_name_for(model_a) == plan_2.table_name_for(model_a)
+    assert plan_3.dev_table_name_for(model_a) == plan_2.dev_table_name_for(model_a)
+    assert plan_3.table_name_for(model_b) != plan_2.table_name_for(model_b)
+    assert plan_3.dev_table_name_for(model_b) != plan_2.table_name_for(model_b)
+
+    assert (
+        plan_3.table_name_for(model_b) not in plan_3.internal_schema_metadata.tables
+    )  # still using the dev table, no main table created
+    assert plan_3.dev_table_name_for(model_b) in plan_3.internal_schema_metadata.tables
+    assert (
+        plan_3.table_name_for(model_b) not in plan_3.internal_schema_metadata.managed_tables
+    )  # still not a managed table
+
+    # apply plan to prod
+    plan_4 = _run_plan(context)
+
+    assert plan_4.plan.has_changes
+    assert plan_4.snapshot_for(model_a).change_category == SnapshotChangeCategory.FORWARD_ONLY
+    assert plan_4.snapshot_for(model_b).change_category == SnapshotChangeCategory.NON_BREAKING
+
+    # verify the Model B table is created as a managed table in prod
+    assert plan_4.table_name_for(model_b) == plan_3.table_name_for(
+        model_b
+    )  # the model didnt change; the table should still have the same name
+    assert (
+        plan_4.table_name_for(model_b) not in plan_4.internal_schema_metadata.tables
+    )  # however, it should be a managed table, not a normal table
+    assert plan_4.table_name_for(model_b) in plan_4.internal_schema_metadata.managed_tables

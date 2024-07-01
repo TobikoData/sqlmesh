@@ -654,6 +654,9 @@ class SnapshotEvaluator:
             deployability_index=deployability_index.with_non_deployable(snapshot),
         )
 
+        # It can still be useful for some strategies to know if the snapshot was actually deployable
+        is_snapshot_deployable = deployability_index.is_deployable(snapshot)
+
         evaluation_strategy = _evaluation_strategy(snapshot, self.adapter)
 
         with self.adapter.transaction(), self.adapter.session(snapshot.model.session_properties):
@@ -679,6 +682,7 @@ class SnapshotEvaluator:
                         table_mapping={snapshot.name: tmp_table_name},
                         **create_render_kwargs,
                     ),
+                    is_snapshot_deployable=is_snapshot_deployable,
                 )
                 try:
                     self.adapter.clone_table(target_table_name, snapshot.table_name(), replace=True)
@@ -704,6 +708,7 @@ class SnapshotEvaluator:
                         model=snapshot.model,
                         is_table_deployable=is_table_deployable,
                         render_kwargs=create_render_kwargs,
+                        is_snapshot_deployable=is_snapshot_deployable,
                     )
 
             self.adapter.execute(snapshot.model.render_post_statements(**pre_post_render_kwargs))
@@ -913,6 +918,8 @@ def _evaluation_strategy(snapshot: SnapshotInfoLike, adapter: EngineAdapter) -> 
             )
         klass = get_custom_materialization_type(snapshot.custom_materialization)
         return klass(adapter)
+    elif snapshot.is_managed:
+        klass = EngineManagedStrategy
     else:
         raise SQLMeshError(f"Unexpected snapshot: {snapshot}")
 
@@ -971,10 +978,14 @@ class EvaluationStrategy(abc.ABC):
     ) -> None:
         """Creates the target table or view.
 
+        Note that the intention here is to just create the table structure, data is loaded in insert() and append()
+
         Args:
             table_name: The name of a table or a view.
             model: The target model.
-            is_table_deployable: Whether the table that is being created is deployable (can be deployed to the production environment).
+            is_table_deployable: True if this creation request is for the "main" table that *might* be deployed to a production environment.
+                False if this creation request is for the "dev preview" table. Note that this flag is not related to the DeployabilityIndex
+                which determines if the snapshot is deployable to production or not
             render_kwargs: Additional key-value arguments to pass when rendering the model's query.
         """
 
@@ -1674,6 +1685,99 @@ def get_custom_materialization_type(name: str) -> t.Type[CustomMaterialization]:
     strategy_type = _custom_materialization_type_cache[strategy_key]
     logger.debug("Resolved custom materialization '%s' to '%s'", name, strategy_type)
     return strategy_type
+
+
+class EngineManagedStrategy(MaterializableStrategy):
+    def create(
+        self,
+        table_name: str,
+        model: Model,
+        is_table_deployable: bool,
+        render_kwargs: t.Dict[str, t.Any],
+        **kwargs: t.Any,
+    ) -> None:
+        is_snapshot_deployable: bool = kwargs["is_snapshot_deployable"]
+
+        if is_table_deployable and is_snapshot_deployable:
+            # We could deploy this to prod; create a proper managed table
+            logger.info("Creating managed table: %s", table_name)
+            self.adapter.create_managed_table(
+                table_name=table_name,
+                query=model.render_query_or_raise(**render_kwargs),
+                columns_to_types=model.columns_to_types,
+                partitioned_by=model.partitioned_by,
+                clustered_by=model.clustered_by,
+                table_properties=model.physical_properties,
+                table_description=model.description,
+                column_descriptions=model.column_descriptions,
+            )
+        elif not is_table_deployable:
+            # Only create the dev preview table as a normal table.
+            # For the main table, if the snapshot is cant be deployed to prod (eg upstream is forward-only) do nothing.
+            # Any downstream models that reference it will be updated to point to the dev preview table.
+            # If the user eventually tries to deploy it, the logic in insert() will see it doesnt exist and create it
+            super().create(
+                table_name=table_name,
+                model=model,
+                is_table_deployable=is_table_deployable,
+                render_kwargs=render_kwargs,
+                **kwargs,
+            )
+
+    def insert(
+        self,
+        table_name: str,
+        query_or_df: QueryOrDF,
+        model: Model,
+        is_first_insert: bool,
+        **kwargs: t.Any,
+    ) -> None:
+        deployability_index: DeployabilityIndex = kwargs["deployability_index"]
+        snapshot: Snapshot = kwargs["snapshot"]
+        is_snapshot_deployable = deployability_index.is_deployable(snapshot)
+
+        if is_first_insert and is_snapshot_deployable and not self.adapter.table_exists(table_name):
+            self.adapter.create_managed_table(
+                table_name=table_name,
+                query=query_or_df,  # type: ignore
+                columns_to_types=model.columns_to_types,
+                partitioned_by=model.partitioned_by,
+                clustered_by=model.clustered_by,
+                table_properties=model.physical_properties,
+                table_description=model.description,
+                column_descriptions=model.column_descriptions,
+            )
+        elif not is_snapshot_deployable:
+            # Snapshot isnt deployable; update the preview table instead
+            # If the snapshot was deployable, then data would have already been loaded in create() because a managed table would have been created
+            logger.info(
+                "Updating preview table: %s (for managed model: %s)", table_name, model.name
+            )
+            self._replace_query_for_model(model=model, name=table_name, query_or_df=query_or_df)
+
+    def append(
+        self,
+        table_name: str,
+        query_or_df: QueryOrDF,
+        model: Model,
+        **kwargs: t.Any,
+    ) -> None:
+        raise ConfigError(f"Cannot append to a managed table '{table_name}'.")
+
+    def migrate(
+        self,
+        target_table_name: str,
+        source_table_name: str,
+        snapshot: Snapshot,
+        **kwargs: t.Any,
+    ) -> None:
+        # Not entirely true, many engines support modifying some of the metadata fields on a managed table
+        # eg Snowflake allows you to ALTER DYNAMIC TABLE foo SET WAREHOUSE=my_other_wh;
+        raise ConfigError(f"Cannot mutate managed table: {target_table_name}")
+
+    def delete(self, name: str, **kwargs: t.Any) -> None:
+        self.adapter.drop_managed_table(name)
+        logger.info("Dropped managed table '%s'", name)
 
 
 def _intervals(snapshot: Snapshot, deployability_index: DeployabilityIndex) -> Intervals:
