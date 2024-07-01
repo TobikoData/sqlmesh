@@ -7,6 +7,7 @@ from sqlglot import exp, parse_one
 
 from sqlmesh.core.dialect import normalize_model_name
 from sqlmesh.core.engine_adapter import SnowflakeEngineAdapter
+from sqlmesh.utils.errors import SQLMeshError
 from tests.core.engine_adapter import to_sql_calls
 
 pytestmark = [pytest.mark.engine, pytest.mark.snowflake]
@@ -169,3 +170,86 @@ def test_df_to_source_queries_use_schema(
         {"a": exp.DataType.build("INT"), "b": exp.DataType.build("INT")},
     )
     assert 'USE SCHEMA "other_catalog"."other_db"' in to_sql_calls(adapter)
+
+
+def test_create_managed_table(make_mocked_engine_adapter: t.Callable, mocker: MockerFixture):
+    adapter = make_mocked_engine_adapter(SnowflakeEngineAdapter)
+
+    mocker.patch(
+        "sqlmesh.core.engine_adapter.snowflake.SnowflakeEngineAdapter._current_warehouse",
+        return_value=exp.to_identifier("default_warehouse"),
+        new_callable=mocker.PropertyMock,
+    )
+
+    query = parse_one("SELECT a, b FROM source_table")
+    columns_to_types = {"a": exp.DataType.build("INT"), "b": exp.DataType.build("INT")}
+
+    # no properties, should raise about TARGET_LAG
+    with pytest.raises(SQLMeshError, match=r".*`target_lag` must be specified.*"):
+        adapter.create_managed_table(
+            table_name="test_table",
+            query=query,
+            columns_to_types=columns_to_types,
+        )
+
+    # warehouse not specified, should default to current_warehouse()
+    adapter.create_managed_table(
+        table_name="test_table",
+        query=query,
+        columns_to_types=columns_to_types,
+        table_properties={"target_lag": exp.Literal.string("20 minutes")},
+    )
+
+    # warehouse specified, should use it
+    adapter.create_managed_table(
+        table_name="test_table",
+        query=query,
+        columns_to_types=columns_to_types,
+        table_properties={
+            "target_lag": exp.Literal.string("20 minutes"),
+            "warehouse": exp.to_identifier("foo"),
+        },
+    )
+
+    # clustered by, partitioned by (partitioned by should get ignored)
+    adapter.create_managed_table(
+        table_name="test_table",
+        query=query,
+        columns_to_types=columns_to_types,
+        table_properties={
+            "target_lag": exp.Literal.string("20 minutes"),
+        },
+        clustered_by=["a"],
+        partitioned_by=["b"],
+    )
+
+    # other properties
+    adapter.create_managed_table(
+        table_name="test_table",
+        query=query,
+        columns_to_types=columns_to_types,
+        table_properties={
+            "target_lag": exp.Literal.string("20 minutes"),
+            "refresh_mode": exp.Literal.string("auto"),
+            "initialize": exp.Literal.string("on_create"),
+        },
+    )
+
+    assert to_sql_calls(adapter) == [
+        """CREATE OR REPLACE DYNAMIC TABLE "test_table" TARGET_LAG='20 minutes' WAREHOUSE="default_warehouse" AS SELECT CAST("a" AS INT) AS "a", CAST("b" AS INT) AS "b" FROM (SELECT "a", "b" FROM "source_table") AS "_subquery\"""",
+        """CREATE OR REPLACE DYNAMIC TABLE "test_table" TARGET_LAG='20 minutes' WAREHOUSE="foo" AS SELECT CAST("a" AS INT) AS "a", CAST("b" AS INT) AS "b" FROM (SELECT "a", "b" FROM "source_table") AS "_subquery\"""",
+        """CREATE OR REPLACE DYNAMIC TABLE "test_table" CLUSTER BY ("a") TARGET_LAG='20 minutes' WAREHOUSE="default_warehouse" AS SELECT CAST("a" AS INT) AS "a", CAST("b" AS INT) AS "b" FROM (SELECT "a", "b" FROM "source_table") AS "_subquery\"""",
+        """CREATE OR REPLACE DYNAMIC TABLE "test_table" TARGET_LAG='20 minutes' REFRESH_MODE='auto' INITIALIZE='on_create' WAREHOUSE="default_warehouse" AS SELECT CAST("a" AS INT) AS "a", CAST("b" AS INT) AS "b" FROM (SELECT "a", "b" FROM "source_table") AS "_subquery\"""",
+    ]
+
+
+def test_drop_managed_table(make_mocked_engine_adapter: t.Callable, mocker: MockerFixture):
+    adapter = make_mocked_engine_adapter(SnowflakeEngineAdapter)
+
+    adapter.drop_managed_table(table_name=exp.parse_identifier("foo"), exists=False)
+    adapter.drop_managed_table(table_name=exp.parse_identifier("foo"), exists=True)
+
+    assert to_sql_calls(adapter) == [
+        'DROP DYNAMIC TABLE "foo"',
+        'DROP DYNAMIC TABLE IF EXISTS "foo"',
+    ]

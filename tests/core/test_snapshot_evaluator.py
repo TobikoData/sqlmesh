@@ -2245,3 +2245,123 @@ def test_custom_materialization_strategy(adapter_mock, make_snapshot):
     )
 
     assert custom_insert_called
+
+
+def test_create_managed(adapter_mock, make_snapshot, mocker: MockerFixture):
+    evaluator = SnapshotEvaluator(adapter_mock)
+
+    model = load_sql_based_model(
+        parse(  # type: ignore
+            """
+            MODEL (
+                name test_schema.test_model,
+                kind MANAGED,
+                physical_properties (
+                    warehouse = 'small',
+                    target_lag = '10 minutes'
+                ),
+                clustered_by a
+            );
+
+            select a, b from foo;
+            """
+        )
+    )
+
+    snapshot = make_snapshot(model)
+    snapshot.categorize_as(SnapshotChangeCategory.BREAKING)
+
+    evaluator.create([snapshot], {})
+
+    # first call to evaluation_strategy.create(), is_table_deployable=False triggers a normal table
+    adapter_mock.ctas.assert_called_once_with(
+        f"{snapshot.table_name()}__temp",
+        mocker.ANY,
+        model.columns_to_types,
+        storage_format=model.storage_format,
+        partitioned_by=model.partitioned_by,
+        partition_interval_unit=model.interval_unit,
+        clustered_by=model.clustered_by,
+        table_properties=model.physical_properties,
+        table_description=None,
+        column_descriptions=None,
+    )
+
+    # second call to evaluation_strategy.create(), is_table_deployable=True and is_snapshot_deployable=True triggers a managed table
+    adapter_mock.create_managed_table.assert_called_with(
+        table_name=snapshot.table_name(),
+        query=mocker.ANY,
+        columns_to_types=model.columns_to_types,
+        partitioned_by=model.partitioned_by,
+        clustered_by=model.clustered_by,
+        table_properties=model.physical_properties,
+        table_description=model.description,
+        column_descriptions=model.column_descriptions,
+    )
+
+
+def test_evaluate_managed(adapter_mock, make_snapshot, mocker: MockerFixture):
+    evaluator = SnapshotEvaluator(adapter_mock)
+
+    model = load_sql_based_model(
+        parse(  # type: ignore
+            """
+            MODEL (
+                name test_schema.test_model,
+                kind MANAGED,
+                physical_properties (
+                    warehouse = 'small',
+                    target_lag = '10 minutes'
+                ),
+                clustered_by a
+            );
+
+            select a, b from foo;
+            """
+        )
+    )
+
+    snapshot = make_snapshot(model)
+    snapshot.categorize_as(SnapshotChangeCategory.BREAKING)
+
+    # insert() on the evaluation strategy with a deployable snapshot is a no-op because the table data is already loaded
+    # when the managed table is created
+    evaluator.evaluate(
+        snapshot,
+        start="2020-01-01",
+        end="2020-01-02",
+        execution_time="2020-01-02",
+        snapshots={},
+        deployability_index=DeployabilityIndex.all_deployable(),
+    )
+
+    adapter_mock.create_managed_table.assert_not_called()
+    adapter_mock.replace_table.assert_not_called()
+    adapter_mock.ctas.assert_not_called()
+
+    # insert() on the evaluation strategy with a non-deployable snapshot causes the temp table to be updated
+    adapter_mock.reset_mock()
+    adapter_mock.assert_not_called()
+
+    evaluator.evaluate(
+        snapshot,
+        start="2020-01-01",
+        end="2020-01-02",
+        execution_time="2020-01-02",
+        snapshots={},
+        deployability_index=DeployabilityIndex.none_deployable(),
+    )
+
+    adapter_mock.create_managed_table.assert_not_called()
+    adapter_mock.replace_query.assert_called_with(
+        f"{snapshot.table_name()}__temp",
+        mocker.ANY,
+        columns_to_types=None,
+        storage_format=model.storage_format,
+        partitioned_by=model.partitioned_by,
+        partition_interval_unit=model.interval_unit,
+        clustered_by=model.clustered_by,
+        table_properties=model.physical_properties,
+        table_description=model.description,
+        column_descriptions=model.column_descriptions,
+    )

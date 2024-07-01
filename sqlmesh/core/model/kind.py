@@ -115,6 +115,10 @@ class ModelKindMixin:
         return self.model_kind_name == ModelKindName.CUSTOM
 
     @property
+    def is_managed(self) -> bool:
+        return self.model_kind_name == ModelKindName.MANAGED
+
+    @property
     def is_symbolic(self) -> bool:
         """A symbolic model is one that doesn't execute at all."""
         return self.model_kind_name in (ModelKindName.EMBEDDED, ModelKindName.EXTERNAL)
@@ -136,7 +140,12 @@ class ModelKindMixin:
             ModelKindName.INCREMENTAL_BY_UNIQUE_KEY,
             ModelKindName.INCREMENTAL_BY_PARTITION,
             ModelKindName.SCD_TYPE_2,
+            ModelKindName.MANAGED,
         )
+
+    @property
+    def supports_python_models(self) -> bool:
+        return True
 
 
 class ModelKindName(str, ModelKindMixin, Enum):
@@ -157,6 +166,7 @@ class ModelKindName(str, ModelKindMixin, Enum):
     SEED = "SEED"
     EXTERNAL = "EXTERNAL"
     CUSTOM = "CUSTOM"
+    MANAGED = "MANAGED"
 
     @property
     def model_kind_name(self) -> t.Optional[ModelKindName]:
@@ -755,6 +765,15 @@ class SCDType2ByColumnKind(_SCDType2Kind):
         )
 
 
+class ManagedKind(_ModelKind):
+    name: Literal[ModelKindName.MANAGED] = ModelKindName.MANAGED
+    disable_restatement: t.Literal[True] = True
+
+    @property
+    def supports_python_models(self) -> bool:
+        return False
+
+
 class EmbeddedKind(_ModelKind):
     name: Literal[ModelKindName.EMBEDDED] = ModelKindName.EMBEDDED
 
@@ -839,6 +858,7 @@ ModelKind = Annotated[
         SCDType2ByTimeKind,
         SCDType2ByColumnKind,
         CustomKind,
+        ManagedKind,
     ],
     Field(discriminator="name"),
 ]
@@ -857,6 +877,7 @@ MODEL_KIND_NAME_TO_TYPE: t.Dict[str, t.Type[ModelKind]] = {
     ModelKindName.SCD_TYPE_2_BY_TIME: SCDType2ByTimeKind,
     ModelKindName.SCD_TYPE_2_BY_COLUMN: SCDType2ByColumnKind,
     ModelKindName.CUSTOM: CustomKind,
+    ModelKindName.MANAGED: ManagedKind,
 }
 
 

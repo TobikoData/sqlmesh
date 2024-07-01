@@ -810,3 +810,21 @@ GROUP BY
 ## EXTERNAL
 
 The EXTERNAL model kind is used to specify [external models](./external_models.md) that store metadata about external tables. External models are special; they are not specified in .sql files like the other model kinds. They are optional but useful for propagating column and type information for external tables queried in your SQLMesh project.
+
+## MANAGED
+
+!!! warning
+
+    Managed models are still under development and the API / semantics may change as support for more engines is added
+
+The `MANAGED` model kind is used to create models where the underlying database engine manages the data lifecycle.
+
+These models dont get updated with new intervals or refreshed when `sqlmesh run` is called. Responsibility for keeping the *data* up to date falls on the engine.
+
+You can control how the engine creates the managed model by using the [`physical_properties`](../overview#physical_properties-previously-table_properties) to pass engine-specific parameters for adapter to use when issuing commands to the underlying database.
+
+Due to there being no standard, each vendor has a different implementation with different semantics and different configuration parameters. Therefore, `MANAGED` models are not as portable between database engines as other SQLMesh model types. In addition, due to their black-box nature, SQLMesh has limited visibility into the integrity and state of the model.
+
+We would recommend using standard SQLMesh model types in the first instance. However, if you do need to use Managed models, you still gain other SQLMesh benefits like the ability to use them in [virtual environments](../../concepts/overview#build-a-virtual-environment).
+
+See [Managed Models](./managed_models.md) for more information on which engines are supported and which properties are available.

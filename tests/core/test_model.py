@@ -2,7 +2,7 @@
 import json
 import logging
 import typing as t
-from datetime import date
+from datetime import date, datetime
 from pathlib import Path
 from unittest.mock import patch
 
@@ -5143,3 +5143,61 @@ def test_macro_func_hash(is_metadata):
     else:
         assert model.data_hash != new_model.data_hash
         assert model.metadata_hash(audits={}) == new_model.metadata_hash(audits={})
+
+
+def test_managed_kind_sql():
+    expressions = d.parse(
+        """
+        MODEL (
+            name db.table,
+            kind MANAGED,
+            physical_properties (
+                warehouse = small,
+                target_lag = '20 minutes',
+                refresh_mode = auto
+            )
+        );
+
+        SELECT a, b
+        """
+    )
+
+    model = load_sql_based_model(expressions)
+
+    assert model.kind.is_managed
+
+    with pytest.raises(ConfigError, match=r".*must specify the 'target_lag' physical property.*"):
+        load_sql_based_model(
+            d.parse(
+                """
+            MODEL (
+                name db.table,
+                kind MANAGED,
+                dialect snowflake
+            );
+
+            SELECT a, b
+            """
+            )
+        ).validate_definition()
+
+
+def test_managed_kind_python():
+    @model("test_managed_python_model", kind="managed", columns={"a": "int"})
+    def execute(
+        context: ExecutionContext,
+        start: datetime,
+        end: datetime,
+        execution_time: datetime,
+        **kwargs: t.Any,
+    ) -> pd.DataFrame:
+        return pd.DataFrame.from_dict(data={"a": 1}, orient="index")
+
+    with pytest.raises(
+        SQLMeshError,
+        match=r".*Cannot create Python model.*the 'MANAGED' kind doesnt support Python models",
+    ):
+        model.get_registry()["test_managed_python_model"].model(
+            module_path=Path("."),
+            path=Path("."),
+        ).validate_definition()
