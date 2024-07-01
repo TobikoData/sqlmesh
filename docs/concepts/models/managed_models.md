@@ -26,7 +26,7 @@ Managed models follow the same lifecycle as other models:
 
 - Creating a Virtual Environment creates a pointer to the current model snapshot
 - Modifying the model causes a new snapshot to be created
-- Breaking upstream changes cause a new snapshot to be created
+- Any upstream changes cause a new snapshot to be created
 - The model can be deployed and rolled back via the usual pointer swap mechanism
 - Once the TTL expires, model snapshots are cleaned up
 

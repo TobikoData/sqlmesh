@@ -767,7 +767,7 @@ class SCDType2ByColumnKind(_SCDType2Kind):
 
 class ManagedKind(_ModelKind):
     name: Literal[ModelKindName.MANAGED] = ModelKindName.MANAGED
-    disable_restatement: SQLGlotBool = True
+    disable_restatement: t.Literal[True] = True
 
     @property
     def supports_python_models(self) -> bool:
