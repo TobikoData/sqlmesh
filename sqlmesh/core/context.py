@@ -1262,6 +1262,7 @@ class GenericContext(BaseContext, t.Generic[C]):
         show: bool = True,
         show_sample: bool = True,
         decimals: int = 3,
+        check_grain: bool = False,
     ) -> TableDiff:
         """Show a diff between two tables.
 
@@ -1324,7 +1325,11 @@ class GenericContext(BaseContext, t.Generic[C]):
         )
         if show:
             self.console.show_schema_diff(table_diff.schema_diff())
-            self.console.show_row_diff(table_diff.row_diff(), show_sample=show_sample)
+            self.console.show_row_diff(
+                table_diff.row_diff(check_grain=check_grain),
+                show_sample=show_sample,
+                check_grain=check_grain,
+            )
         return table_diff
 
     @python_api_analytics

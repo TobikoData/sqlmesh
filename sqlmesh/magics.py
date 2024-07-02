@@ -604,6 +604,11 @@ class SQLMeshMagics(Magics):
         default=3,
         help="The number of decimal places to keep when comparing floating point columns. Default: 3",
     )
+    @argument(
+        "--check-grain",
+        action="store_true",
+        help="An optional check if a primary key (grain) is missing or is not unique.",
+    )
     @line_magic
     @pass_sqlmesh_context
     def table_diff(self, context: Context, line: str) -> None:
@@ -622,6 +627,7 @@ class SQLMeshMagics(Magics):
             limit=args.limit,
             show_sample=args.show_sample,
             decimals=args.decimals,
+            check_grain=args.check_grain,
         )
 
     @magic_arguments()
