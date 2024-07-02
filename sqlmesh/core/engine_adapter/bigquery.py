@@ -65,9 +65,6 @@ class BigQueryEngineAdapter(InsertOverwriteWithMergeMixin):
                 exp.DataType.build("FLOAT64", dialect=DIALECT),
                 exp.DataType.build("BIGNUMERIC", dialect=DIALECT),
             },
-            exp.DataType.build("BIGNUMERIC", dialect=DIALECT): {
-                exp.DataType.build("FLOAT64", dialect=DIALECT),
-            },
             exp.DataType.build("DATE", dialect=DIALECT): {
                 exp.DataType.build("DATETIME", dialect=DIALECT),
             },
@@ -493,6 +490,7 @@ class BigQueryEngineAdapter(InsertOverwriteWithMergeMixin):
         table_properties: t.Optional[t.Dict[str, exp.Expression]] = None,
         columns_to_types: t.Optional[t.Dict[str, exp.DataType]] = None,
         table_description: t.Optional[str] = None,
+        table_kind: t.Optional[str] = None,
     ) -> t.Optional[exp.Properties]:
         properties: t.List[exp.Expression] = []
 

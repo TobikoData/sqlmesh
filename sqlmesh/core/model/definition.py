@@ -695,6 +695,13 @@ class _Model(ModelMeta, frozen=True):
                 self._path,
             )
 
+        if self.kind.is_managed:
+            # TODO: would this sort of logic be better off moved into the Kind?
+            if self.dialect == "snowflake" and "target_lag" not in self.physical_properties:
+                raise_config_error(
+                    "Snowflake managed tables must specify the 'target_lag' physical property"
+                )
+
     def is_breaking_change(self, previous: Model) -> t.Optional[bool]:
         """Determines whether this model is a breaking change in relation to the `previous` model.
 
@@ -1391,6 +1398,14 @@ class PythonModel(_Model):
 
     entrypoint: str
     source_type: Literal["python"] = "python"
+
+    def validate_definition(self) -> None:
+        super().validate_definition()
+
+        if self.kind and not self.kind.supports_python_models:
+            raise SQLMeshError(
+                f"Cannot create Python model '{self.name}' as the '{self.kind.name}' kind doesnt support Python models"
+            )
 
     def render(
         self,

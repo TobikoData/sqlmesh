@@ -27,6 +27,7 @@ class DataObjectType(str, Enum):
     TABLE = "table"
     VIEW = "view"
     MATERIALIZED_VIEW = "materialized_view"
+    MANAGED_TABLE = "managed_table"
 
     @property
     def is_unknown(self) -> bool:
@@ -44,6 +45,10 @@ class DataObjectType(str, Enum):
     def is_materialized_view(self) -> bool:
         return self == DataObjectType.MATERIALIZED_VIEW
 
+    @property
+    def is_managed_table(self) -> bool:
+        return self == DataObjectType.MANAGED_TABLE
+
     @classmethod
     def from_str(cls, s: str) -> DataObjectType:
         s = s.lower()
@@ -53,6 +58,8 @@ class DataObjectType(str, Enum):
             return DataObjectType.VIEW
         if s == "materialized_view":
             return DataObjectType.MATERIALIZED_VIEW
+        if s == "managed_table":
+            return DataObjectType.MANAGED_TABLE
         return DataObjectType.UNKNOWN
 
 
