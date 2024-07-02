@@ -244,7 +244,7 @@ class VarcharSizeWorkaroundMixin(EngineAdapter):
                 parameter = self.SCHEMA_DIFFER.get_type_parameters(col_type)
                 type_default = types_with_max_default_param[col_type.this]
                 if parameter == type_default:
-                    col_type.set("expressions", [exp.DataTypeParam(this=exp.Var(this="max"))])
+                    col_type.set("expressions", [exp.DataTypeParam(this=exp.var("max"))])
 
         return columns_to_types
 
