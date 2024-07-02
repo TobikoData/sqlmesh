@@ -450,7 +450,7 @@ def invalidate(ctx: click.Context, environment: str, **kwargs: t.Any) -> None:
 @cli_analytics
 def janitor(ctx: click.Context, ignore_ttl: bool, **kwargs: t.Any) -> None:
     """
-    Run the janitor task on-demand.
+    Run the janitor process on-demand.
 
     The janitor cleans up old environments and expired snapshots.
     """

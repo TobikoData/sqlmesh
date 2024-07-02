@@ -463,9 +463,15 @@ class TerminalConsole(Console):
     def start_cleanup(self, ignore_ttl: bool) -> bool:
         if ignore_ttl:
             self._print(
-                "Are you sure you want to delete all orphaned snapshots regardless of their environment?"
+                "Are you sure you want to delete all snapshots that are not referenced in any environment?"
             )
-            if not self._confirm("This may affect other users. Proceed?"):
+            self._print(
+                "Note that this may cause a race condition if there are any concurrently running plans."
+            )
+            self._print(
+                "It may also confuse users who were expecting to be able to rollback changes in their development environments."
+            )
+            if not self._confirm("Proceed?"):
                 self.log_error("Cleanup aborted")
                 return False
         return True
