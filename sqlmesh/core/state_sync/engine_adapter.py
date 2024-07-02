@@ -257,14 +257,16 @@ class EngineAdapterStateSync(CommonStateSyncMixin, StateSync):
         )
 
     @transactional()
-    def delete_expired_snapshots(self) -> t.List[SnapshotTableCleanupTask]:
+    def delete_expired_snapshots(
+        self, ignore_ttl: bool = False
+    ) -> t.List[SnapshotTableCleanupTask]:
         current_ts = now_timestamp(minute_floor=False)
 
-        expired_query = (
-            exp.select("name", "identifier", "version")
-            .from_(self.snapshots_table)
-            .where(exp.column("expiration_ts") <= current_ts)
-        )
+        expired_query = exp.select("name", "identifier", "version").from_(self.snapshots_table)
+
+        if not ignore_ttl:
+            expired_query = expired_query.where(exp.column("expiration_ts") <= current_ts)
+
         expired_candidates = {
             SnapshotId(name=name, identifier=identifier): SnapshotNameVersion(
                 name=name, version=version

@@ -420,6 +420,27 @@ def test_invalidate(
     ]
 
 
+@pytest.mark.slow
+def test_janitor(
+    notebook, loaded_sushi_context, convert_all_html_output_to_text, get_all_html_output
+):
+    with capture_output():
+        notebook.run_line_magic(
+            magic_name="plan", line="dev --include-unmodified --no-prompts --auto-apply"
+        )
+        notebook.run_line_magic(magic_name="invalidate", line="dev")
+
+    with capture_output() as output:
+        notebook.run_line_magic(magic_name="janitor", line="")
+
+    assert not output.stdout
+    assert not output.stderr
+    assert convert_all_html_output_to_text(output) == [
+        "Deleted object memory.sushi__dev",
+        "Cleanup complete.",
+    ]
+
+
 def test_dag(tmp_path_factory, notebook, sushi_context):
     temp_dir = tmp_path_factory.mktemp("dag")
     dag_file = temp_dir / "dag.html"
