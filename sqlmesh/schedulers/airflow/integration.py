@@ -68,7 +68,7 @@ class SQLMeshAirflow:
         sensor_mode: The mode to use for SQLMesh sensors. Supported values are "poke" and "reschedule".
             See https://airflow.apache.org/docs/apache-airflow/stable/core-concepts/sensors.html for more details. Default: "reschedule".
         high_water_mark_sensor_args: The dictionary of arguments that will be passed into the high water mark sensor operator during its construction.
-        high_water_mark_external_sensor_args: The dictionary of arguments that will be passed into the high water mark external sensor operator during its construction.
+        external_sensor_args: The dictionary of arguments that will be passed into the external sensor operator during its construction.
         generate_cadence_dags: Whether to generate cadence DAGs for model versions that are currently deployed to production.
     """
 
@@ -86,7 +86,7 @@ class SQLMeshAirflow:
         ] = None,
         sensor_mode: str = "reschedule",
         high_water_mark_sensor_args: t.Optional[t.Dict[str, t.Any]] = None,
-        high_water_mark_external_sensor_args: t.Optional[t.Dict[str, t.Any]] = None,
+        external_sensor_args: t.Optional[t.Dict[str, t.Any]] = None,
         generate_cadence_dags: bool = True,
     ):
         if isinstance(engine_operator, str):
@@ -114,7 +114,7 @@ class SQLMeshAirflow:
         self._default_catalog = default_catalog
         self._sensor_mode = sensor_mode
         self._high_water_mark_sensor_args = high_water_mark_sensor_args or {}
-        self._high_water_mark_external_sensor_args = high_water_mark_external_sensor_args or {}
+        self._external_sensor_args = external_sensor_args or {}
 
     @classmethod
     def set_default_catalog(cls, default_catalog: str) -> None:
@@ -200,7 +200,7 @@ class SQLMeshAirflow:
             self._external_table_sensor_factory,
             self._sensor_mode,
             self._high_water_mark_sensor_args,
-            self._high_water_mark_external_sensor_args,
+            self._external_sensor_args,
             state_reader,
         )
 
