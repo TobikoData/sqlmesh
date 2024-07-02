@@ -238,7 +238,10 @@ class VarcharSizeWorkaroundMixin(EngineAdapter):
             if k in self.SCHEMA_DIFFER.parameterized_type_defaults
         }
 
-        # if type supports "max" and has default length, convert to "max" length
+        # Redshift and MSSQL have a bug where CTAS statements have non-deterministic types. If a LIMIT
+        # is applied to a CTAS statement, VARCHAR (and possibly other) types sometimes revert to their
+        # default length of 256 (Redshift) or 1 (MSSQL). If we detect that a type has its default length
+        # and supports "max" length, we convert it to "max" length to prevent inadvertent data truncation.
         for col_name, col_type in columns_to_types.items():
             if col_type.this in types_with_max_default_param and col_type.expressions:
                 parameter = self.SCHEMA_DIFFER.get_type_parameters(col_type)
