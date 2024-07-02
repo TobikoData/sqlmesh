@@ -23,14 +23,10 @@ class HighWaterMarkSensor(BaseSensorOperator):
         self,
         target_snapshot_info: SnapshotTableInfo,
         this_snapshot: Snapshot,
-        poke_interval: float = 60.0,
-        timeout: float = 7.0 * 24.0 * 60.0 * 60.0,  # 7 days
         mode: str = "reschedule",
         **kwargs: t.Any,
     ) -> None:
         super().__init__(
-            poke_interval=poke_interval,
-            timeout=timeout,
             mode=mode,
             **kwargs,
         )
@@ -78,16 +74,12 @@ class HighWaterMarkExternalSensor(BaseSensorOperator):
         self,
         snapshot: Snapshot,
         external_table_sensor_factory: t.Callable[[t.Dict[str, t.Any]], BaseSensorOperator],
-        poke_interval: float = 60.0,
-        timeout: float = 7.0 * 24.0 * 60.0 * 60.0,  # 7 days
         mode: str = "reschedule",
         start: t.Optional[TimeLike] = None,
         end: t.Optional[TimeLike] = None,
         **kwargs: t.Any,
     ):
         super().__init__(
-            poke_interval=poke_interval,
-            timeout=timeout,
             mode=mode,
             **kwargs,
         )

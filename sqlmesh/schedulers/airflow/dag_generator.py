@@ -74,6 +74,8 @@ class SnapshotDagGenerator:
             t.Callable[[t.Dict[str, t.Any]], BaseSensorOperator]
         ],
         sensor_mode: str,
+        high_water_mark_sensor_args: t.Optional[t.Dict[str, t.Any]],
+        external_sensor_args: t.Optional[t.Dict[str, t.Any]],
         state_reader: StateReader,
     ):
         self._engine_operator = engine_operator
@@ -83,6 +85,8 @@ class SnapshotDagGenerator:
         self._external_table_sensor_factory = external_table_sensor_factory
         self._state_reader = state_reader
         self._sensor_mode = sensor_mode
+        self._high_water_mark_sensor_args = high_water_mark_sensor_args or {}
+        self._external_sensor_args = external_sensor_args or {}
 
     def generate_cadence_dags(self, snapshots: t.Iterable[SnapshotIdLike]) -> t.List[DAG]:
         dags = []
@@ -647,12 +651,13 @@ class SnapshotDagGenerator:
                         this_snapshot=snapshot,
                         task_id=f"{sanitize_name(upstream_snapshot.node.name)}_{upstream_snapshot.version}_high_water_mark_sensor",
                         mode=self._sensor_mode,
+                        **self._high_water_mark_sensor_args,
                     )
                 )
 
-        external_sesnor = self._create_hwm_external_sensor(snapshot)
-        if external_sesnor:
-            output.append(external_sesnor)
+        external_sensor = self._create_hwm_external_sensor(snapshot)
+        if external_sensor:
+            output.append(external_sensor)
 
         return output
 
@@ -670,6 +675,7 @@ class SnapshotDagGenerator:
                 mode=self._sensor_mode,
                 start=start,
                 end=end,
+                **self._external_sensor_args,
             )
         return None
 
