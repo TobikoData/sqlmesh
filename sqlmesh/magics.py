@@ -741,6 +741,19 @@ class SQLMeshMagics(Magics):
         context.invalidate_environment(args.environment)
 
     @magic_arguments()
+    @argument(
+        "--ignore-ttl",
+        action="store_true",
+        help="Cleanup snapshots that are not referenced in any environment, regardless of when they're set to expire",
+    )
+    @line_magic
+    @pass_sqlmesh_context
+    def janitor(self, context: Context, line: str) -> None:
+        """Run the janitor process to clean up old environments and expired snapshots."""
+        args = parse_argstring(self.janitor, line)
+        context.run_janitor(ignore_ttl=args.ignore_ttl)
+
+    @magic_arguments()
     @argument("model", type=str)
     @argument(
         "--query",

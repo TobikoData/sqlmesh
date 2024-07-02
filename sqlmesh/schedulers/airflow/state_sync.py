@@ -176,7 +176,9 @@ class HttpStateSync(StateSync):
         """
         raise NotImplementedError("Deleting snapshots is not supported by the Airflow state sync.")
 
-    def delete_expired_snapshots(self) -> t.List[SnapshotTableCleanupTask]:
+    def delete_expired_snapshots(
+        self, ignore_ttl: bool = False
+    ) -> t.List[SnapshotTableCleanupTask]:
         """Removes expired snapshots.
 
         Expired snapshots are snapshots that have exceeded their time-to-live

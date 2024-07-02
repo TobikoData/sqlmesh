@@ -608,6 +608,19 @@ class GenericContext(BaseContext, t.Generic[C]):
 
         return success
 
+    @python_api_analytics
+    def run_janitor(self, ignore_ttl: bool) -> bool:
+        success = False
+
+        if self.console.start_cleanup(ignore_ttl):
+            try:
+                self._run_janitor(ignore_ttl)
+                success = True
+            finally:
+                self.console.stop_cleanup(success=success)
+
+        return success
+
     @t.overload
     def get_model(
         self, model_or_snapshot: ModelOrSnapshot, raise_if_missing: Literal[True] = True
@@ -1906,9 +1919,9 @@ class GenericContext(BaseContext, t.Generic[C]):
             ensure_finalized_snapshots=ensure_finalized_snapshots,
         )
 
-    def _run_janitor(self) -> None:
+    def _run_janitor(self, ignore_ttl: bool = False) -> None:
         self._cleanup_environments()
-        expired_snapshots = self.state_sync.delete_expired_snapshots()
+        expired_snapshots = self.state_sync.delete_expired_snapshots(ignore_ttl=ignore_ttl)
         self.snapshot_evaluator.cleanup(
             expired_snapshots, on_complete=self.console.update_cleanup_progress
         )

@@ -287,11 +287,17 @@ class StateSync(StateReader, abc.ABC):
         """
 
     @abc.abstractmethod
-    def delete_expired_snapshots(self) -> t.List[SnapshotTableCleanupTask]:
+    def delete_expired_snapshots(
+        self, ignore_ttl: bool = False
+    ) -> t.List[SnapshotTableCleanupTask]:
         """Removes expired snapshots.
 
         Expired snapshots are snapshots that have exceeded their time-to-live
         and are no longer in use within an environment.
+
+        Args:
+            ignore_ttl: Ignore the TTL on the snapshot when considering it expired. This has the effect of deleting
+                all snapshots that are not referenced in any environment
 
         Returns:
             The list of table cleanup tasks.
