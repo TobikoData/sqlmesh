@@ -12,6 +12,7 @@ from sqlmesh.core.notification_target import (
     NotificationEvent,
     NotificationTargetManager,
 )
+from sqlmesh.core.signal import SignalFactory
 from sqlmesh.core.snapshot import (
     DeployabilityIndex,
     Snapshot,
@@ -30,6 +31,7 @@ from sqlmesh.utils.date import (
     now,
     now_timestamp,
     to_datetime,
+    to_timestamp,
     validate_date_range,
 )
 from sqlmesh.utils.errors import AuditError, CircuitBreakerError, SQLMeshError
@@ -58,6 +60,7 @@ class Scheduler:
         state_sync: The state sync to pull saved snapshots.
         max_workers: The maximum number of parallel queries to run.
         console: The rich instance used for printing scheduling information.
+        signal_factory: A factory method for building Signal instances from model signal configuration.
     """
 
     def __init__(
@@ -69,6 +72,7 @@ class Scheduler:
         max_workers: int = 1,
         console: t.Optional[Console] = None,
         notification_target_manager: t.Optional[NotificationTargetManager] = None,
+        signal_factory: t.Optional[SignalFactory] = None,
     ):
         self.state_sync = state_sync
         self.snapshots = {s.snapshot_id: s for s in snapshots}
@@ -80,6 +84,7 @@ class Scheduler:
         self.notification_target_manager = (
             notification_target_manager or NotificationTargetManager()
         )
+        self.signal_factory = signal_factory
 
     def batches(
         self,
@@ -131,6 +136,7 @@ class Scheduler:
             restatements=restatements,
             ignore_cron=ignore_cron,
             end_bounded=end_bounded,
+            signal_factory=self.signal_factory,
         )
 
     def evaluate(
@@ -393,6 +399,7 @@ def compute_interval_params(
     restatements: t.Optional[t.Dict[SnapshotId, SnapshotInterval]] = None,
     ignore_cron: bool = False,
     end_bounded: bool = False,
+    signal_factory: t.Optional[SignalFactory] = None,
 ) -> SnapshotToBatches:
     """Find the optimal date interval paramaters based on what needs processing and maximal batch size.
 
@@ -431,6 +438,37 @@ def compute_interval_params(
         ignore_cron=ignore_cron,
         end_bounded=end_bounded,
     ).items():
+
+        def intersect(left: SnapshotInterval, intervals: list[Interval]) -> SnapshotInterval | None:
+            """Returns the intersection of `left` against `intervals`. Returns None if it does not intersect. Assumes `intervals` are disjoint."""
+
+            left_lower, left_upper = left
+            for right in intervals:
+                right_lower, right_upper = to_timestamp(right[0]), to_timestamp(right[1])
+                lower = max(left_lower, right_lower)
+                upper = min(left_upper, right_upper)
+                if lower <= upper:
+                    return (lower, upper)
+            return None
+
+        if signal_factory:
+            for signal in snapshot.model.render_signals(
+                start=start, end=end, execution_time=execution_time
+            ):
+                ready_intervals = signal_factory(signal).poll_ready_intervals()
+                if isinstance(ready_intervals, bool):
+                    if not ready_intervals:
+                        intervals = []
+                        break
+                elif isinstance(ready_intervals, list):
+                    intervals = [
+                        ready
+                        for interval in intervals
+                        if (ready := intersect(interval, ready_intervals)) is not None
+                    ]
+                else:
+                    raise ValueError("unexpected return value from signal")
+
         batches = []
         batch_size = snapshot.node.batch_size
         next_batch: t.List[t.Tuple[int, int]] = []
