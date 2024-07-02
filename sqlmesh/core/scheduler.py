@@ -3,7 +3,6 @@ from __future__ import annotations
 import logging
 import traceback
 import typing as t
-from datetime import datetime
 
 from sqlmesh.core import constants as c
 from sqlmesh.core.console import Console, get_console
@@ -23,6 +22,7 @@ from sqlmesh.core.snapshot import (
 from sqlmesh.core.snapshot.definition import Interval as SnapshotInterval
 from sqlmesh.core.snapshot.definition import SnapshotId
 from sqlmesh.core.state_sync import StateSync
+from sqlmesh.core._typing import Batch, Interval
 from sqlmesh.utils import format_exception
 from sqlmesh.utils.concurrency import concurrent_apply_to_dag
 from sqlmesh.utils.dag import DAG
@@ -37,8 +37,6 @@ from sqlmesh.utils.date import (
 from sqlmesh.utils.errors import AuditError, CircuitBreakerError, SQLMeshError
 
 logger = logging.getLogger(__name__)
-Interval = t.Tuple[datetime, datetime]
-Batch = t.List[Interval]
 SnapshotToBatches = t.Dict[Snapshot, Batch]
 # we store snapshot name instead of snapshots/snapshotids because pydantic
 # is extremely slow to hash. snapshot names should be unique within a dag run

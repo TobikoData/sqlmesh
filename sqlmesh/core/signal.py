@@ -2,10 +2,7 @@ from __future__ import annotations
 
 import abc
 import typing as t
-from datetime import datetime
-
-Interval = t.Tuple[datetime, datetime]
-Batch = t.List[Interval]
+from sqlmesh.core._typing import Batch
 
 
 class Signal(abc.ABC):
