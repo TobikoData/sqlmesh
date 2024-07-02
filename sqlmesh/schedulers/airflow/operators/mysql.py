@@ -9,7 +9,7 @@ from airflow.utils.context import Context
 from sqlmesh.schedulers.airflow.operators.targets import BaseTarget
 
 
-class SQLMeshMysqlOperator(BaseOperator):
+class SQLMeshMySQLOperator(BaseOperator):
     """The operator that evaluates a SQLMesh model snapshot on a mysql target
 
     Args:
