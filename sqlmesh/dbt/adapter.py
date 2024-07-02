@@ -353,7 +353,9 @@ class RuntimeAdapter(BaseAdapter):
         return identifier if identifier else None
 
     def _map_table_name(self, table: exp.Table) -> exp.Table:
-        name = table.sql(dialect=self.project_dialect)
+        # Use the default dialect since this is the dialect used to normalize and quote keys in the
+        # mapping table.
+        name = table.sql(identify=True)
         physical_table_name = self.table_mapping.get(name)
         if not physical_table_name:
             return table
