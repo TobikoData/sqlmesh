@@ -228,6 +228,29 @@ class NonTransactionalTruncateMixin(EngineAdapter):
 
 
 class VarcharSizeWorkaroundMixin(EngineAdapter):
+    def _default_precision_to_max(
+        self, columns_to_types: t.Dict[str, exp.DataType]
+    ) -> t.Dict[str, exp.DataType]:
+        # get default lengths for types that support "max" length
+        types_with_max_default_param = {
+            k: [self.SCHEMA_DIFFER.parameterized_type_defaults[k][0][0]]
+            for k in self.SCHEMA_DIFFER.max_parameter_length
+            if k in self.SCHEMA_DIFFER.parameterized_type_defaults
+        }
+
+        # Redshift and MSSQL have a bug where CTAS statements have non-deterministic types. If a LIMIT
+        # is applied to a CTAS statement, VARCHAR (and possibly other) types sometimes revert to their
+        # default length of 256 (Redshift) or 1 (MSSQL). If we detect that a type has its default length
+        # and supports "max" length, we convert it to "max" length to prevent inadvertent data truncation.
+        for col_name, col_type in columns_to_types.items():
+            if col_type.this in types_with_max_default_param and col_type.expressions:
+                parameter = self.SCHEMA_DIFFER.get_type_parameters(col_type)
+                type_default = types_with_max_default_param[col_type.this]
+                if parameter == type_default:
+                    col_type.set("expressions", [exp.DataTypeParam(this=exp.var("max"))])
+
+        return columns_to_types
+
     def _build_create_table_exp(
         self,
         table_name_or_schema: t.Union[exp.Schema, TableName],
@@ -268,7 +291,9 @@ class VarcharSizeWorkaroundMixin(EngineAdapter):
                 temp_view_name, select_statement, replace=False, no_schema_binding=False
             )
             try:
-                columns_to_types_from_view = self.columns(temp_view_name)
+                columns_to_types_from_view = self._default_precision_to_max(
+                    self.columns(temp_view_name)
+                )
 
                 schema = self._build_schema_exp(
                     exp.to_table(table_name_or_schema),
