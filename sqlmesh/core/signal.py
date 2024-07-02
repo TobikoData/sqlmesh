@@ -2,7 +2,10 @@ from __future__ import annotations
 
 import abc
 import typing as t
-from sqlmesh.core.scheduler import Batch
+from datetime import datetime
+
+Interval = t.Tuple[datetime, datetime]
+Batch = t.List[Interval]
 
 
 class Signal(abc.ABC):
