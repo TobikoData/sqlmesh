@@ -277,7 +277,7 @@ class TableDiff:
                         1,
                         0,
                     ).as_("row_joined"),
-                     exp.func(
+                    exp.func(
                         "IF",
                         exp.or_(
                             *(
@@ -323,7 +323,6 @@ class TableDiff:
             temp_table = exp.table_("diff", db="sqlmesh_temp", quoted=True)
 
             with self.adapter.temp_table(query, name=temp_table) as table:
-
                 summary_sums = [
                     exp.func("SUM", "s_exists").as_("s_count"),
                     exp.func("SUM", "t_exists").as_("t_count"),
@@ -335,14 +334,22 @@ class TableDiff:
 
                 if check_grain:
                     distincts = [
-                        *(exp.func("COUNT", exp.func("DISTINCT", f"s__{c}")).as_("distinct_count_s") for c in index_cols),
-                        *(exp.func("COUNT", exp.func("DISTINCT", f"t__{c}")).as_("distinct_count_t") for c in index_cols),
+                        *(
+                            exp.func("COUNT", exp.func("DISTINCT", f"s__{c}")).as_(
+                                "distinct_count_s"
+                            )
+                            for c in index_cols
+                        ),
+                        *(
+                            exp.func("COUNT", exp.func("DISTINCT", f"t__{c}")).as_(
+                                "distinct_count_t"
+                            )
+                            for c in index_cols
+                        ),
                     ]
                     summary_sums.extend(distincts)
 
-                summary_query = exp.select(
-                    *summary_sums
-                ).from_(table)
+                summary_query = exp.select(*summary_sums).from_(table)
 
                 stats_df = self.adapter.fetchdf(summary_query, quote_identifiers=True)
                 stats_df["s_only_count"] = stats_df["s_count"] - stats_df["join_count"]

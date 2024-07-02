@@ -134,3 +134,42 @@ def test_data_diff_decimals(sushi_context_fixed_date):
     )
     assert diff.row_diff().full_match_count == 2
     assert diff.row_diff().partial_match_count == 1
+
+
+@pytest.mark.slow
+def test_data_diff_grain_check(sushi_context_fixed_date):
+    engine_adapter = sushi_context_fixed_date.engine_adapter
+
+    engine_adapter.ctas(
+        "table_diff_source",
+        pd.DataFrame(
+            {
+                "key": [1, 2, 3, 3],
+                "value": [1.0, 2.0, 3.0, 5.0],
+            }
+        ),
+    )
+
+    engine_adapter.ctas(
+        "table_diff_target",
+        pd.DataFrame(
+            {
+                "key": [1, 2, 3],
+                "value": [1.0, 2.0, 3.0],
+            }
+        ),
+    )
+
+    diff = sushi_context_fixed_date.table_diff(
+        source="table_diff_source",
+        target="table_diff_target",
+        on=["key"],
+        check_grain=True,
+    )
+
+    row_diff = diff.row_diff()
+    assert row_diff.full_match_count == 3
+    assert row_diff.stats["null_grain_count"] == 0
+    assert row_diff.stats["distinct_count_s"] == 3
+    assert row_diff.stats["join_count"] == 4
+    assert row_diff.partial_match_count == 1
