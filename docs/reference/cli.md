@@ -417,6 +417,8 @@ Options:
   --limit INTEGER         The limit of the sample dataframe.
   --show-sample           Show a sample of the rows that differ. With many
                           columns, the output can be very wide.
+  --check-grain           Display a warning if rows contain null or duplicate 
+                          grains.
   -d, --decimals INTEGER  The number of decimal places to keep when comparing
                           floating point columns. Default: 3
   --help                  Show this message and exit.

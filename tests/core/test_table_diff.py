@@ -1,9 +1,10 @@
 import pytest
 import pandas as pd
 from sqlglot import exp
+from sqlmesh.core import dialect as d
 
 from sqlmesh.core.config import AutoCategorizationMode, CategorizerConfig
-from sqlmesh.core.model import SqlModel
+from sqlmesh.core.model import SqlModel, load_sql_based_model
 
 
 @pytest.mark.slow
@@ -137,15 +138,15 @@ def test_data_diff_decimals(sushi_context_fixed_date):
 
 
 @pytest.mark.slow
-def test_data_diff_grain_check(sushi_context_fixed_date):
+def test_distinct_grain_check(sushi_context_fixed_date):
     engine_adapter = sushi_context_fixed_date.engine_adapter
 
     engine_adapter.ctas(
         "table_diff_source",
         pd.DataFrame(
             {
-                "key": [1, 2, 3, 3],
-                "value": [1.0, 2.0, 3.0, 5.0],
+                "key": [1, 2, 3, 3, 2],
+                "value": [1.0, 2.0, 3.0, 5.0, 1.0],
             }
         ),
     )
@@ -171,5 +172,74 @@ def test_data_diff_grain_check(sushi_context_fixed_date):
     assert row_diff.full_match_count == 3
     assert row_diff.stats["null_grain_count"] == 0
     assert row_diff.stats["distinct_count_s"] == 3
-    assert row_diff.stats["join_count"] == 4
-    assert row_diff.partial_match_count == 1
+    assert row_diff.stats["join_count"] == 5
+    assert row_diff.partial_match_count == 2
+
+
+@pytest.mark.slow
+def test_null_grain_check(sushi_context_fixed_date):
+    expressions = d.parse(
+        """
+        MODEL (name memory.sushi.null_grain_items, kind full, grain(item_id));
+        SELECT
+            item_id,
+            id,
+        FROM
+            (VALUES
+                (1, 1),
+                (3, 2),
+                (NULL, 4),
+            ) AS t (item_id, id)
+    """
+    )
+    model_s = load_sql_based_model(expressions)
+    sushi_context_fixed_date.upsert_model(model_s)
+    sushi_context_fixed_date.plan(
+        "source_dev",
+        no_prompts=True,
+        auto_apply=True,
+        skip_tests=True,
+        start="2023-01-31",
+        end="2023-01-31",
+    )
+
+    model = sushi_context_fixed_date.models['"memory"."sushi"."null_grain_items"']
+
+    modified_model = model.dict()
+    modified_model["query"] = (
+        exp.select("*")
+        .from_(model.query.subquery())
+        .union("SELECT item_id, id FROM (VALUES (1, 5),) AS t (item_id, id)")
+    )
+
+    modified_sqlmodel = SqlModel(**modified_model)
+    sushi_context_fixed_date.upsert_model(modified_sqlmodel)
+
+    sushi_context_fixed_date.auto_categorize_changes = CategorizerConfig(
+        sql=AutoCategorizationMode.FULL
+    )
+    sushi_context_fixed_date.plan(
+        "target_dev",
+        create_from="source_dev",
+        no_prompts=True,
+        auto_apply=True,
+        skip_tests=True,
+        start="2023-01-31",
+        end="2023-01-31",
+    )
+
+    diff = sushi_context_fixed_date.table_diff(
+        source="source_dev",
+        target="target_dev",
+        on=["item_id"],
+        model_or_snapshot="sushi.null_grain_items",
+        check_grain=True,
+    )
+
+    row_diff = diff.row_diff()
+    assert row_diff.full_match_count == 3
+    assert row_diff.stats["null_grain_count"] == 1
+    assert row_diff.stats["distinct_count_s"] == 2
+    assert row_diff.stats["distinct_count_t"] == 2
+    assert row_diff.stats["join_count"] == 3
+    assert row_diff.partial_match_count == 0
