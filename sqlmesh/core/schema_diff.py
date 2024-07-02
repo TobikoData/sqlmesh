@@ -372,8 +372,8 @@ class SchemaDiffer(PydanticModel):
         if current_type.this == new_type.this and not current_type.is_type(
             *exp.DataType.NESTED_TYPES
         ):
-            current_params = self._get_type_parameters(current_type)
-            new_params = self._get_type_parameters(new_type)
+            current_params = self.get_type_parameters(current_type)
+            new_params = self.get_type_parameters(new_type)
 
             if len(current_params) != len(new_params):
                 return False
@@ -381,7 +381,7 @@ class SchemaDiffer(PydanticModel):
             return all(new >= current for current, new in zip(current_params, new_params))
         return False
 
-    def _get_type_parameters(self, type: exp.DataType) -> t.List[t.Union[int, float]]:
+    def get_type_parameters(self, type: exp.DataType) -> t.List[t.Union[int, float]]:
         def _str_to_number(string: str, allows_max_param: bool) -> t.Union[int, float]:
             try:
                 return int(string)
