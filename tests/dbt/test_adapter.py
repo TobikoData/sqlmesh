@@ -9,7 +9,7 @@ import pytest
 from dbt.adapters.base import BaseRelation
 from dbt.adapters.base.column import Column
 from pytest_mock.plugin import MockerFixture
-from sqlglot import exp
+from sqlglot import exp, parse_one
 
 from sqlmesh import Context
 from sqlmesh.core.dialect import schema_
@@ -171,8 +171,12 @@ def test_adapter_dispatch(sushi_test_project: Project, runtime_renderer: t.Calla
         renderer("{{ adapter.dispatch('current_engine')() }}")
 
 
+@pytest.mark.parametrize("project_dialect", ["duckdb", "bigquery"])
 def test_adapter_map_snapshot_tables(
-    sushi_test_project: Project, runtime_renderer: t.Callable, mocker: MockerFixture
+    sushi_test_project: Project,
+    runtime_renderer: t.Callable,
+    mocker: MockerFixture,
+    project_dialect: str,
 ):
     snapshot_mock = mocker.Mock()
     snapshot_mock.name = '"memory"."test_db"."test_model"'
@@ -193,6 +197,7 @@ def test_adapter_map_snapshot_tables(
         test_model=BaseRelation.create(schema="test_db", identifier="test_model"),
         foo_bar=BaseRelation.create(schema="foo", identifier="bar"),
         default_catalog="memory",
+        dialect=project_dialect,
     )
 
     engine_adapter.create_schema("foo")
@@ -205,18 +210,24 @@ def test_adapter_map_snapshot_tables(
         table_name="foo.bar", columns_to_types={"col": exp.DataType.build("int")}
     )
 
+    expected_test_model_table_name = parse_one('"memory"."sqlmesh"."test_db__test_model"').sql(
+        dialect=project_dialect
+    )
+
     assert (
         renderer(
             "{{ adapter.get_relation(database=none, schema='test_db', identifier='test_model') }}"
         )
-        == '"memory"."sqlmesh"."test_db__test_model"'
+        == expected_test_model_table_name
     )
 
     assert "baz" in renderer("{{ run_query('SELECT * FROM test_db.test_model') }}")
 
+    expected_foo_bar_table_name = parse_one('"memory"."foo"."bar"').sql(dialect=project_dialect)
+
     assert (
         renderer("{{ adapter.get_relation(database=none, schema='foo', identifier='bar') }}")
-        == '"memory"."foo"."bar"'
+        == expected_foo_bar_table_name
     )
 
     assert renderer("{{ adapter.resolve_schema(test_model) }}") == "sqlmesh"
