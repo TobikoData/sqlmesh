@@ -65,9 +65,6 @@ class BigQueryEngineAdapter(InsertOverwriteWithMergeMixin):
                 exp.DataType.build("FLOAT64", dialect=DIALECT),
                 exp.DataType.build("BIGNUMERIC", dialect=DIALECT),
             },
-            exp.DataType.build("BIGNUMERIC", dialect=DIALECT): {
-                exp.DataType.build("FLOAT64", dialect=DIALECT),
-            },
             exp.DataType.build("DATE", dialect=DIALECT): {
                 exp.DataType.build("DATETIME", dialect=DIALECT),
             },
