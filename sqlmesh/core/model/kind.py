@@ -790,6 +790,9 @@ class CustomKind(_ModelKind):
     )
     forward_only: SQLGlotBool = False
     disable_restatement: SQLGlotBool = False
+    batch_size: t.Optional[SQLGlotPositiveInt] = None
+    batch_concurrency: t.Optional[SQLGlotPositiveInt] = None
+    lookback: t.Optional[SQLGlotPositiveInt] = None
 
     _properties_validator = properties_validator
 
@@ -816,12 +819,15 @@ class CustomKind(_ModelKind):
             *super().data_hash_values,
             self.materialization,
             gen(self.materialization_properties_) if self.materialization_properties_ else None,
+            str(self.lookback) if self.lookback is not None else None,
         ]
 
     @property
     def metadata_hash_values(self) -> t.List[t.Optional[str]]:
         return [
             *super().metadata_hash_values,
+            str(self.batch_size) if self.batch_size is not None else None,
+            str(self.batch_concurrency) if self.batch_concurrency is not None else None,
             str(self.forward_only),
             str(self.disable_restatement),
         ]
@@ -838,6 +844,9 @@ class CustomKind(_ModelKind):
                         "materialization_properties": self.materialization_properties_,
                         "forward_only": self.forward_only,
                         "disable_restatement": self.disable_restatement,
+                        "batch_size": self.batch_size,
+                        "batch_concurrency": self.batch_concurrency,
+                        "lookback": self.lookback,
                     }
                 ),
             ],
