@@ -6,6 +6,7 @@ import typing as t
 
 import pandas as pd
 from sqlglot import exp, parse_one
+from sqlglot.optimizer.qualify_columns import quote_identifiers
 
 from sqlmesh.core.dialect import normalize_and_quote, normalize_model_name
 from sqlmesh.core.engine_adapter import EngineAdapter
@@ -323,7 +324,9 @@ class RuntimeAdapter(BaseAdapter):
         return identifier if identifier else None
 
     def _map_table_name(self, table: exp.Table) -> exp.Table:
-        name = table.sql(dialect=self.project_dialect)
+        # Use the default dialect since this is the dialect used to normalize and quote keys in the
+        # mapping table.
+        name = quote_identifiers(table, dialect=self.project_dialect).sql()
         physical_table_name = self.table_mapping.get(name)
         if not physical_table_name:
             return table
