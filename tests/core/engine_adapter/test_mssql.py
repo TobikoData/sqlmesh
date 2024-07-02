@@ -116,6 +116,11 @@ def test_varchar_workaround_to_max(make_mocked_engine_adapter: t.Callable, mocke
         return_value=True,
     )
 
+    mocker.patch(
+        "sqlmesh.core.engine_adapter.mssql.MSSQLEngineAdapter.columns",
+        return_value=columns,
+    )
+
     adapter.ctas(
         table_name="test_schema.test_table",
         query_or_df=parse_one(

@@ -60,6 +60,11 @@ def test_varchar_size_workaround(make_mocked_engine_adapter: t.Callable, mocker:
         return_value=True,
     )
 
+    mocker.patch(
+        "sqlmesh.core.engine_adapter.redshift.RedshiftEngineAdapter.columns",
+        return_value=columns,
+    )
+
     adapter.ctas(
         table_name="test_schema.test_table",
         query_or_df=parse_one(
