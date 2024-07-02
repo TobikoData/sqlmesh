@@ -1,36 +1,66 @@
 # Custom materializations guide
 
-SQLMesh supports a variety of [model kinds](../concepts/models/model_kinds.md) to capture the most common semantics of how transformations can be evaluated and materialized.
+SQLMesh supports a variety of [model kinds](../concepts/models/model_kinds.md) that reflect the most common approaches to evaluating and materializing data transformations.
 
-There are times, however, when a specific use case doesn't align with any of the supported materialization strategies. For scenarios like this, SQLMesh allows users to create their own materialization implementation using Python.
+Sometimes, however, a specific use case cannot be addressed with an existing model kind. For scenarios like this, SQLMesh allows users to create their own materialization implementation using Python.
 
-Please note that this is an advanced feature and should only be considered if all other approaches to addressing a use case have been exhausted. If you're at this decision point, we recommend you reach out to our team in the community slack: [here](https://tobikodata.com/community.html)
+__NOTE__: this is an advanced feature and should only be considered if all other approaches have been exhausted. If you're at this decision point, we recommend you reach out to our team in the [community slack](https://tobikodata.com/community.html) before investing time building a custom materialization. If an existing model kind can solve your problem, we want to clarify the SQLMesh documentation; if an existing kind can _almost_ solve your problem, we want to consider modifying the kind so all SQLMesh users can solve the problem as well.
 
-## Creating a materialization
+## Background
 
-The fastest way to add a new custom materialization is to add a new `.py` file with the implementation to the `materializations/` folder of the project. SQLMesh will automatically import all Python modules in this folder at project load time and register the custom materializations accordingly.
+A SQLMesh model kind consists of methods for executing and managing the outputs of data transformations - collectively, these are the kind's "materialization."
 
-To create a custom materialization strategy, you need to inherit the `CustomMaterialization` base class and, at a very minimum, provide an implementation for the `insert` method.
+Some materializations are relatively simple. For example, the SQL [FULL model kind](../concepts/models/model_kinds.md#full) completely replaces existing data each time it is run, so its materialization boils down to executing `CREATE OR REPLACE [table name] AS [your model query]`.
 
-For example, a simple custom full-refresh materialization strategy might look like the following:
+The materializations for other kinds, such as [INCREMENTAL BY TIME RANGE](../concepts/models/model_kinds.md#incremental_by_time_range), require additional logic to process the correct time intervals and replace/insert their results into an existing table.
+
+A model kind's materialization may differ based on the SQL engine executing the model. For example, PostgreSQL does not support `CREATE OR REPLACE TABLE`, so `FULL` model kinds instead `DROP` the existing table then `CREATE` a new table. SQLMesh already contains the logic needed to materialize existing model kinds on all [supported engines](../integrations/overview.md#execution-engines).
+
+## Overview
+
+Custom materializations are analogous to new model kinds. Users [specify them by name](#using-custom-materializations-in-models) in a model definition's `MODEL` block, and they may accept user-specified arguments.
+
+A custom materialization must:
+
+- Be written in Python code
+- Be a Python class that inherits the SQLMesh `CustomMaterialization` base class
+- Use or override the `insert` method from the SQLMesh [`MaterializableStrategy`](https://github.com/TobikoData/sqlmesh/blob/034476e7f64d261860fd630c3ac56d8a9c9f3e3a/sqlmesh/core/snapshot/evaluator.py#L1146) class/subclasses
+- Be loaded or imported by SQLMesh at runtime
+
+A custom materialization may:
+
+- Use or override methods from the SQLMesh [`MaterializableStrategy`](https://github.com/TobikoData/sqlmesh/blob/034476e7f64d261860fd630c3ac56d8a9c9f3e3a/sqlmesh/core/snapshot/evaluator.py#L1146) class/subclasses
+- Use or override methods from the SQLMesh [`EngineAdapter`](https://github.com/TobikoData/sqlmesh/blob/034476e7f64d261860fd630c3ac56d8a9c9f3e3a/sqlmesh/core/engine_adapter/base.py#L67) class/subclasses
+- Execute arbitrary SQL code and fetch results with the engine adapter `execute` and related methods
+
+A custom materialization may perform arbitrary Python processing with Pandas or other libraries, but in most cases that logic should reside in a [Python model](../concepts/models/python_models.md) instead of the materialization.
+
+A SQLMesh project will automatically load any custom materializations present in its `materializations/` directory. Alternatively, the materialization may be bundled into a [Python package](#python-packaging) and installed with standard methods.
+
+## Creating a custom materialization
+
+Create a new custom materialization by adding a `.py` file containing the implementation to the `materializations/` folder in the project directory. SQLMesh will automatically import all Python modules in this folder at project load time and register the custom materializations. (Find more information about sharing and packaging custom materializations [below](#sharing-custom-materializations).)
+
+A custom materialization must be a class that inherits the `CustomMaterialization` base class and provides an implementation for the `insert` method.
+
+For example, a minimal full-refresh custom materialization might look like the following:
 
 ```python linenums="1"
+from sqlmesh import CustomMaterialization # required
+
+# argument typing: strongly recommended but optional best practice
 from __future__ import annotations
-
+from sqlmesh import Model
 import typing as t
-
-from sqlmesh import CustomMaterialization, Model
-
 if t.TYPE_CHECKING:
     from sqlmesh import QueryOrDF
-
 
 class CustomFullMaterialization(CustomMaterialization):
     NAME = "my_custom_full"
 
     def insert(
         self,
-        table_name: str,
+        table_name: str, # ": str" is optional argument typing
         query_or_df: QueryOrDF,
         model: Model,
         is_first_insert: bool,
@@ -40,28 +70,29 @@ class CustomFullMaterialization(CustomMaterialization):
 
 ```
 
-Let's unpack the above implementation:
+Let's unpack this materialization:
 
-* `NAME` - determines the name of the custom materialization. This name will be used in model definitions to reference a specific strategy. If not specified, the name of the class will be used instead.
-* The `insert` method comes with the following arguments:
-    * `table_name` - the name of a target table (or a view) into which the data should be inserted.
-    * `query_or_df` - a query (a SQLGlot expression) or a DataFrame (pandas, PySpark, or Snowpark) instance which has to be inserted.
-    * `model` - the associated model definition object which can be used to get any model parameters as well as custom materialization settings.
-    * `is_first_insert` - whether this is the first insert for the current version of the model.
-    * `kwargs` - contains additional and future arguments.
-* The `self.adapter` instance is used to interact with the target engine. It comes with a set of useful high-level APIs like `replace_query`, `create_table`, and `table_exists`, but also supports execution of arbitrary SQL expressions with its `execute` method.
+* `NAME` - name of the custom materialization. This name is used to specify the materialization in a model definition `MODEL` block. If not specified in the custom materialization, the name of the class is used in the `MODEL` block instead.
+* The `insert` method has the following arguments:
+    * `table_name` - the name of a target table or view into which the data should be inserted
+    * `query_or_df` - a query (of SQLGlot expression type) or DataFrame (Pandas, PySpark, or Snowpark) instance to be inserted
+    * `model` - the model definition object used to access model parameters and user-specified materialization arguments
+    * `is_first_insert` - whether this is the first insert for the current version of the model (used with batched or multi-step inserts)
+    * `kwargs` - additional and future arguments
+* The `self.adapter` instance is used to interact with the target engine. It comes with a set of useful high-level APIs like `replace_query`, `columns`, and `table_exists`, but also supports executing arbitrary SQL expressions with its `execute` method.
 
-You can also control how the associated data objects (tables, views, etc.) are created and deleted by overriding the `create` and `delete` methods accordingly:
+You can control how data objects (tables, views, etc.) are created and deleted by overriding the `MaterializableStrategy` class's `create` and `delete` methods:
 
 ```python linenums="1"
-from __future__ import annotations
+from sqlmesh import CustomMaterialization # required
 
+# argument typing: strongly recommended but optional best practice
+from __future__ import annotations
+from sqlmesh import Model
 import typing as t
 
-from sqlmesh import CustomMaterialization, Model
-
-
 class CustomFullMaterialization(CustomMaterialization):
+    # NAME and `insert` method code here
     ...
 
     def create(
@@ -72,28 +103,30 @@ class CustomFullMaterialization(CustomMaterialization):
         render_kwargs: t.Dict[str, t.Any],
         **kwargs: t.Any,
     ) -> None:
-        # Custom creation logic.
+        # Custom table/view creation logic.
+        # Likely uses `self.adapter` methods like `create_table`, `create_view`, or `ctas`.
 
     def delete(self, name: str, **kwargs: t.Any) -> None:
-        # Custom deletion logic.
+        # Custom table/view deletion logic.
+        # Likely uses `self.adapter` methods like `drop_table` or `drop_view`.
 ```
 
-## Using custom materializations in models
+## Using a custom materialization
 
-In order to use the newly created materialization, use the special model kind `CUSTOM`:
+Specify the model kind `CUSTOM` in a model definition `MODEL` block to use the custom materialization. Specify the `NAME` from the custom materialization code in the `materialization` attribute of the `CUSTOM` kind:
 
 ```sql linenums="1"
 MODEL (
   name my_db.my_model,
-  kind CUSTOM (materialization 'my_custom_full')
+  kind CUSTOM (
+      materialization 'my_custom_full'
+  )
 );
 ```
 
-The name of the materialization strategy is provided in the `materialization` attribute of the `CUSTOM` kind.
+A custom materialization may accept arguments specified in an array of key-value pairs in the `CUSTOM` kind's `materialization_properties` attribute:
 
-Additionally, you can provide an optional list of arbitrary key-value pairs in the `materialization_properties` attribute:
-
-```sql linenums="1"
+```sql linenums="1" hl_lines="5-7"
 MODEL (
   name my_db.my_model,
   kind CUSTOM (
@@ -105,7 +138,7 @@ MODEL (
 );
 ```
 
-These properties can be accessed with the model reference within the materialization implementation:
+The custom materialization implementation accesses the `materialization_properties` via the `model` object's `custom_materialization_properties` dictionary:
 
 ```python linenums="1" hl_lines="12"
 class CustomFullMaterialization(CustomMaterialization):
@@ -121,18 +154,28 @@ class CustomFullMaterialization(CustomMaterialization):
     ) -> None:
         config_value = model.custom_materialization_properties["config_key"]
         # Proceed with implementing the insertion logic.
-        # Example for existing materialization for look and feel: https://github.com/TobikoData/sqlmesh/blob/main/sqlmesh/core/snapshot/evaluator.py
+        # Example existing materialization for look and feel: https://github.com/TobikoData/sqlmesh/blob/main/sqlmesh/core/snapshot/evaluator.py
 ```
 
-## Packaging custom materializations
+## Sharing custom materializations
 
-To share custom materializations across multiple SQLMesh projects, you need to create and publish a Python package containing your implementation.
+### Copying files
 
-When using SQLMesh with Airflow or other external schedulers, note that the `materializations/` folder might not be available on the Airflow cluster side. Therefore, you'll need a package that can be installed there.
+The simplest (but least robust) way to use a custom materialization in multiple SQLMesh projects is for each project to place a copy of the materialization's Python code in its `materializations/` directory.
 
-Custom materializations can be packaged into a Python package and exposed via [setuptools entrypoints](https://packaging.python.org/en/latest/guides/creating-and-discovering-plugins/#using-package-metadata) mechanism. Once the package is installed, SQLMesh will automatically load custom materializations from the entrypoint list.
+If you use this approach, we strongly recommend storing the materialization code in a version-controlled repository and creating a reliable method of notifying users when it is updated.
 
-If your custom materialization class is defined in the `my_package/my_materialization.py` module, you can expose it as an entry point in the `pyproject.toml` file as follows:
+This approach may be appropriate for smaller organizations, but it is not robust.
+
+### Python packaging
+
+A more complex (but robust) way to use a custom materialization in multiple SQLMesh projects is to create and publish a Python package containing the implementation.
+
+One scenario that requires Python packaging is when a SQLMesh project uses Airflow or other external schedulers, and the scheduler cluster does not have the `materializations/` folder available. The cluster will use standard Python package installation methods to import the custom materialization.
+
+Package and expose custom materializations with the [setuptools entrypoints](https://packaging.python.org/en/latest/guides/creating-and-discovering-plugins/#using-package-metadata) mechanism. Once the package is installed, SQLMesh will automatically load custom materializations from the entrypoint list.
+
+For example, if your custom materialization class is defined in the `my_package/my_materialization.py` module, you can expose it as an entrypoint in the `pyproject.toml` file as follows:
 
 ```toml
 [project.entry-points."sqlmesh.materializations"]
@@ -152,4 +195,4 @@ setup(
 )
 ```
 
-Refer to the [custom_materializations](https://github.com/TobikoData/sqlmesh/tree/main/examples/custom_materializations) package example for more details.
+Refer to the SQLMesh Github [custom_materializations](https://github.com/TobikoData/sqlmesh/tree/main/examples/custom_materializations) example for more details on Python packaging.
