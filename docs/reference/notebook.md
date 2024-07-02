@@ -329,6 +329,16 @@ positional arguments:
   environment  The environment to invalidate.
 ```
 
+#### janitor
+```
+%janitor
+
+Run the janitor process to clean up old environments and expired snapshots.
+
+options:
+  --ignore-ttl Cleanup snapshots that are not referenced in any environment, regardless of when they're set to expire
+```
+
 #### create_test
 ```
 %create_test --query QUERY [QUERY ...] [--overwrite]
