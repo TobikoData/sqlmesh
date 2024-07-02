@@ -982,14 +982,17 @@ class TerminalConsole(Console):
         ):
             plan_builder.apply()
 
-    def _check_grain_uniqueness(self, stats: t.Dict[str, float], check_grain: bool = False)-> bool:
-
+    def _check_grain_uniqueness(self, stats: t.Dict[str, float], check_grain: bool = False) -> bool:
         if stats["null_grain_count"] > 0:
             return True
-        
+
         if check_grain:
             join_count = stats["join_count"]
-            return all(count != join_count for key, count in stats.items() if key.startswith('distinct_count_'))
+            return all(
+                count != join_count
+                for key, count in stats.items()
+                if key.startswith("distinct_count_")
+            )
 
         return False
 
@@ -1087,7 +1090,7 @@ class TerminalConsole(Console):
         target_name = row_diff.target
         if row_diff.target_alias:
             target_name = row_diff.target_alias.upper()
-        
+
         if self._check_grain_uniqueness(row_diff.stats, check_grain):
             self.console.print(
                 "[b][red]\nGrain should have unique and not-null audits for accurate results.[/red][/b]"
