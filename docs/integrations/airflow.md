@@ -123,6 +123,7 @@ SQLMesh supports a variety of engines in Airflow. Support for each engine is pro
 * [Snowflake](engines/snowflake.md#airflow-scheduler)
 * [Spark](engines/spark.md#airflow-scheduler)
 * [Trino](engines/trino.md#airflow-scheduler)
+* [MySQL](engines/mysql.md#airflow-scheduler)
 
 ## Managed Airflow instances
 
