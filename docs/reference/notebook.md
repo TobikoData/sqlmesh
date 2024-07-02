@@ -267,7 +267,7 @@ Create a schema file containing external model schemas.
 #### table_diff
 ```
 %table_diff [--on [ON ...]] [--model MODEL] [--where WHERE]
-                  [--limit LIMIT] [--show-sample]
+                  [--limit LIMIT] [--show-sample] [--check-grain]
                   SOURCE:TARGET
 
 Show the diff between two tables.
@@ -285,7 +285,8 @@ options:
   --where WHERE    An optional where statement to filter results.
   --limit LIMIT    The limit of the sample dataframe.
   --show-sample    Show a sample of the rows that differ. With many columns,
-                   the output can be very wide.
+                   the output can be very wide.  
+  --check-grain    Display a warning if rows contain null or duplicate grains.
 ```
 
 #### model
