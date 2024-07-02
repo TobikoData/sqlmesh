@@ -792,19 +792,19 @@ class SnapshotEvaluator:
     ) -> None:
         snapshot = snapshot.table_info
 
-        table_names = [snapshot.table_name(is_deployable=False)]
+        table_names = [(False, snapshot.table_name(is_deployable=False))]
         if not dev_table_only:
-            table_names.append(snapshot.table_name(is_deployable=True))
+            table_names.append((True, snapshot.table_name(is_deployable=True)))
 
         evaluation_strategy = _evaluation_strategy(snapshot, self.adapter)
 
-        for table_name in table_names:
+        for is_table_deployable, table_name in table_names:
             table = exp.to_table(table_name)
             if table.db != snapshot.physical_schema:
                 raise SQLMeshError(
                     f"Table '{table_name}' is not a part of the physical schema '{snapshot.physical_schema}' and so can't be dropped."
                 )
-            evaluation_strategy.delete(table_name)
+            evaluation_strategy.delete(table_name, is_table_deployable=is_table_deployable)
 
             if on_complete is not None:
                 on_complete(table_name)
@@ -1776,8 +1776,13 @@ class EngineManagedStrategy(MaterializableStrategy):
         raise ConfigError(f"Cannot mutate managed table: {target_table_name}")
 
     def delete(self, name: str, **kwargs: t.Any) -> None:
-        self.adapter.drop_managed_table(name)
-        logger.info("Dropped managed table '%s'", name)
+        # a dev preview table is created as a normal table, so it needs to be dropped as a normal table
+        if kwargs["is_table_deployable"]:
+            self.adapter.drop_managed_table(name)
+            logger.info("Dropped managed table '%s'", name)
+        else:
+            self.adapter.drop_table(name)
+            logger.info("Dropped dev preview for managed table '%s'", name)
 
 
 def _intervals(snapshot: Snapshot, deployability_index: DeployabilityIndex) -> Intervals:
