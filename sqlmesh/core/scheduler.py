@@ -438,36 +438,26 @@ def compute_interval_params(
         ignore_cron=ignore_cron,
         end_bounded=end_bounded,
     ).items():
-
-        def intersect(left: SnapshotInterval, intervals: list[Interval]) -> SnapshotInterval | None:
-            """Returns the intersection of `left` against `intervals`. Returns None if it does not intersect. Assumes `intervals` are disjoint."""
-
-            left_lower, left_upper = left
-            for right in intervals:
-                right_lower, right_upper = to_timestamp(right[0]), to_timestamp(right[1])
-                lower = max(left_lower, right_lower)
-                upper = min(left_upper, right_upper)
-                if lower <= upper:
-                    return (lower, upper)
-            return None
-
         if signal_factory:
+            batch = [(to_datetime(start), to_datetime(end)) for start, end in intervals]
             for signal in snapshot.model.render_signals(
                 start=start, end=end, execution_time=execution_time
             ):
-                ready_intervals = signal_factory(signal).poll_ready_intervals()
+                ready_intervals = signal_factory(signal).get_intervals(batch=batch)
                 if isinstance(ready_intervals, bool):
                     if not ready_intervals:
-                        intervals = []
+                        batch = []
                         break
                 elif isinstance(ready_intervals, list):
-                    intervals = [
-                        ready
-                        for interval in intervals
-                        if (ready := intersect(interval, ready_intervals)) is not None
-                    ]
+                    for i in ready_intervals:
+                        if i not in batch:
+                            raise RuntimeError(f"Signal returned unknown interval {i}")
+                    batch = ready_intervals
                 else:
-                    raise ValueError("unexpected return value from signal")
+                    raise ValueError(
+                        f"unexpected return value from signal, expected bool | list, got {ready_intervals}"
+                    )
+            intervals = [(to_timestamp(start), to_timestamp(end)) for start, end in batch]
 
         batches = []
         batch_size = snapshot.node.batch_size
