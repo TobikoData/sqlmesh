@@ -70,6 +70,8 @@ def test_generate_plan_application_dag__batch_index_populated(mocker: MockerFixt
         external_table_sensor_factory=None,
         sensor_mode="reschedule",
         state_reader=state_reader_mock,
+        external_sensor_args=None,
+        high_water_mark_sensor_args=None,
     )
 
     environment_name = "test_env"
@@ -157,6 +159,8 @@ def test_sensor_mode_override(mocker: MockerFixture, make_snapshot):
         external_table_sensor_factory=None,
         sensor_mode="poke",
         state_reader=state_reader_mock,
+        external_sensor_args=None,
+        high_water_mark_sensor_args=None,
     )
 
     dags = generator.generate_cadence_dags([snapshot_a, snapshot_b])
