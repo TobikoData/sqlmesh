@@ -4755,7 +4755,10 @@ def test_custom_kind():
                   key_b = 2,
                   'key_c' = true,
                   'key_d' = 1.23,
-                )
+                ),
+                batch_size 1,
+                batch_concurrency 2,
+                lookback 3,
             )
         );
 
@@ -4784,6 +4787,9 @@ def test_custom_kind():
         "key_c": True,
         "key_d": 1.23,
     }
+    assert kind.batch_size == 1
+    assert kind.batch_concurrency == 2
+    assert kind.lookback == 3
 
     assert (
         kind.to_expression().sql()
@@ -4791,7 +4797,10 @@ def test_custom_kind():
 materialization 'MyTestStrategy',
 materialization_properties ('key_a' = 'value_a', key_b = 2, 'key_c' = TRUE, 'key_d' = 1.23),
 forward_only TRUE,
-disable_restatement TRUE
+disable_restatement TRUE,
+batch_size 1,
+batch_concurrency 2,
+lookback 3
 )"""
     )
 
