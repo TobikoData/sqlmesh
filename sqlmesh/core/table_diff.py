@@ -277,11 +277,11 @@ class TableDiff:
                         1,
                         0,
                     ).as_("row_joined"),
-                    exp.func(
+                     exp.func(
                         "IF",
-                        exp.and_(
+                        exp.or_(
                             *(
-                                exp.or_(
+                                exp.and_(
                                     exp.column(c, "s").is_(exp.Null()),
                                     exp.column(c, "t").is_(exp.Null()),
                                 )
@@ -323,60 +323,31 @@ class TableDiff:
             temp_table = exp.table_("diff", db="sqlmesh_temp", quoted=True)
 
             with self.adapter.temp_table(query, name=temp_table) as table:
-                summary_query = exp.select(
+
+                summary_sums = [
                     exp.func("SUM", "s_exists").as_("s_count"),
                     exp.func("SUM", "t_exists").as_("t_count"),
-                    exp.func("SUM", "null_grain").as_("null_grain_count"),
                     exp.func("SUM", "row_joined").as_("join_count"),
+                    exp.func("SUM", "null_grain").as_("null_grain_count"),
                     exp.func("SUM", "row_full_match").as_("full_match_count"),
                     *(exp.func("SUM", name(c)).as_(c.alias) for c in comparisons),
+                ]
+
+                if check_grain:
+                    distincts = [
+                        *(exp.func("COUNT", exp.func("DISTINCT", f"s__{c}")).as_("distinct_count_s") for c in index_cols),
+                        *(exp.func("COUNT", exp.func("DISTINCT", f"t__{c}")).as_("distinct_count_t") for c in index_cols),
+                    ]
+                    summary_sums.extend(distincts)
+
+                summary_query = exp.select(
+                    *summary_sums
                 ).from_(table)
 
                 stats_df = self.adapter.fetchdf(summary_query, quote_identifiers=True)
                 stats_df["s_only_count"] = stats_df["s_count"] - stats_df["join_count"]
                 stats_df["t_only_count"] = stats_df["t_count"] - stats_df["join_count"]
                 stats = stats_df.iloc[0].to_dict()
-
-                if check_grain:
-                    query_grain_distinct = (
-                        exp.select(
-                            "*",
-                            exp.func(
-                                "IF",
-                                exp.and_(
-                                    *(
-                                        exp.and_(
-                                            exp.column(pk, "s").eq(exp.column(pk, "t")),
-                                        )
-                                        for pk in index_cols
-                                    ),
-                                ),
-                                1,
-                                0,
-                            ).as_("distinct_check"),
-                        )
-                        .from_(exp.alias_(self.source, "s"))
-                        .join(
-                            self.target,
-                            on=self.on,
-                            join_type="FULL",
-                            join_alias="t",
-                        )
-                        .where(self.where)
-                    ).distinct()
-
-                    query_grain_distinct = (
-                        exp.select(
-                            exp.func("SUM", exp.column("distinct_check")).as_("distinct_count"),
-                        )
-                    ).from_(query_grain_distinct.subquery("distinct_grain_count"))
-
-                    distinct_count = self.adapter.fetchdf(
-                        query_grain_distinct, quote_identifiers=True
-                    )
-                    stats["distinct_grain_count"] = distinct_count.iloc[0].to_dict()[
-                        "distinct_count"
-                    ]
 
                 column_stats_query = (
                     exp.select(
