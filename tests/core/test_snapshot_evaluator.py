@@ -2365,3 +2365,41 @@ def test_evaluate_managed(adapter_mock, make_snapshot, mocker: MockerFixture):
         table_description=model.description,
         column_descriptions=model.column_descriptions,
     )
+
+
+def test_cleanup_managed(adapter_mock, make_snapshot, mocker: MockerFixture):
+    evaluator = SnapshotEvaluator(adapter_mock)
+
+    model = load_sql_based_model(
+        parse(  # type: ignore
+            """
+            MODEL (
+                name test_schema.test_model,
+                kind MANAGED,
+                physical_properties (
+                    warehouse = 'small',
+                    target_lag = '10 minutes'
+                ),
+                clustered_by a
+            );
+
+            select a, b from foo;
+            """
+        )
+    )
+
+    snapshot = make_snapshot(model)
+    snapshot.categorize_as(SnapshotChangeCategory.BREAKING)
+
+    adapter_mock.assert_not_called()
+
+    cleanup_task = SnapshotTableCleanupTask(snapshot=snapshot.table_info, dev_table_only=False)
+
+    evaluator.cleanup(target_snapshots=[cleanup_task])
+
+    adapter_mock.drop_table.assert_called_once_with(
+        "sqlmesh__test_schema.test_schema__test_model__1556851963__temp"
+    )
+    adapter_mock.drop_managed_table.assert_called_once_with(
+        "sqlmesh__test_schema.test_schema__test_model__1556851963"
+    )
