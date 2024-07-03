@@ -53,16 +53,16 @@ def sqlmesh_config(
         loader=DbtLoader,
         model_defaults=model_defaults,
         variables=variables or {},
-        **dict(
-            default_gateway=profile.target_name if "gateways" not in kwargs else "",
-            gateways={
+        **{
+            "default_gateway": profile.target_name if "gateways" not in kwargs else "",
+            "gateways": {
                 profile.target_name: GatewayConfig(
                     connection=profile.target.to_sqlmesh(**target_to_sqlmesh_args),
                     state_connection=state_connection,
                 )
             },  # type: ignore
             **kwargs,
-        ),
+        },
     )
 
 
