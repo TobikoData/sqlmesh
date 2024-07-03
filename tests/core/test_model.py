@@ -1340,6 +1340,8 @@ def test_render_query(assert_exp_eq, sushi_context):
         WITH "test_macros" AS (
           SELECT
             2 AS "lit_two",
+            3 AS "lit_three",
+            6 AS "lit_six",
             "waiter_revenue_by_day"."revenue" * 2.0 AS "sql_exp",
             CAST("waiter_revenue_by_day"."revenue" AS TEXT) AS "sql_lit"
           FROM "memory"."sushi"."waiter_revenue_by_day" AS "waiter_revenue_by_day"

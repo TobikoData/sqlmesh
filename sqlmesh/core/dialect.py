@@ -708,6 +708,7 @@ def parse(
     default_dialect: t.Optional[str] = None,
     match_dialect: bool = True,
     into: t.Optional[exp.IntoType] = None,
+    tokens: t.Optional[t.List[Token]] = None,
 ) -> t.List[exp.Expression]:
     """Parse a sql string.
 
@@ -717,6 +718,9 @@ def parse(
     Args:
         sql: The sql based definition.
         default_dialect: The dialect to use if the model does not specify one.
+        match_dialect: Whether to search `sql` for a `dialect <name>` pattern.
+        into: The target expression to be returned.
+        tokens: An existing list of tokens. If this is provided, `sql` won't be tokenized.
 
     Returns:
         A list of the parsed expressions: [Model, *Statements, Query, *Statements]
@@ -724,7 +728,7 @@ def parse(
     match = match_dialect and DIALECT_PATTERN.search(sql[:MAX_MODEL_DEFINITION_SIZE])
     dialect = Dialect.get_or_raise(match.group(2) if match else default_dialect)
 
-    tokens = dialect.tokenizer.tokenize(sql)
+    tokens = tokens or dialect.tokenizer.tokenize(sql)
     chunks: t.List[t.Tuple[t.List[Token], ChunkType]] = [([], ChunkType.SQL)]
     total = len(tokens)
 

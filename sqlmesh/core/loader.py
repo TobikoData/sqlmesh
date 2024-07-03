@@ -11,10 +11,11 @@ from pathlib import Path
 
 from sqlglot.errors import SchemaError, SqlglotError
 from sqlglot.schema import MappingSchema
+from sqlglot import TokenType, exp, tokenize
 
 from sqlmesh.core import constants as c
 from sqlmesh.core.audit import Audit, load_multiple_audits
-from sqlmesh.core.dialect import parse
+from sqlmesh.core.dialect import parse, MacroDef
 from sqlmesh.core.macros import MacroRegistry, macro
 from sqlmesh.core.metric import Metric, MetricMeta, expand_metrics, load_metric_ddl
 from sqlmesh.core.model import (
@@ -31,7 +32,7 @@ from sqlmesh.utils import UniqueKeyDict
 from sqlmesh.utils.dag import DAG
 from sqlmesh.utils.errors import ConfigError
 from sqlmesh.utils.jinja import JinjaMacroRegistry, MacroExtractor
-from sqlmesh.utils.metaprogramming import import_python_file
+from sqlmesh.utils.metaprogramming import Executable, import_python_file
 from sqlmesh.utils.yaml import YAML
 
 if t.TYPE_CHECKING:
@@ -249,6 +250,7 @@ class SqlMeshLoader(Loader):
         extractor = MacroExtractor()
 
         macros_max_mtime: t.Optional[float] = None
+        dialect = self._context.config.dialect
 
         for context_path, config in self._context.configs.items():
             for path in self._glob_paths(context_path / c.MACROS, config=config, extension=".py"):
@@ -261,6 +263,7 @@ class SqlMeshLoader(Loader):
                         else macro_file_mtime
                     )
 
+            macro_definitions = []
             for path in self._glob_paths(context_path / c.MACROS, config=config, extension=".sql"):
                 self._track_file(path)
                 macro_file_mtime = self._path_mtimes[path]
@@ -269,12 +272,41 @@ class SqlMeshLoader(Loader):
                     if macros_max_mtime
                     else macro_file_mtime
                 )
+
                 with open(path, "r", encoding="utf-8") as file:
-                    jinja_macros.add_macros(extractor.extract(file.read()))
+                    sql_file = file.read()
+
+                    tokens = tokenize(sql_file, dialect=dialect)
+                    if tokens and tokens[0].token_type != TokenType.BLOCK_START:
+                        for node in parse(sql_file, default_dialect=dialect, tokens=tokens):
+                            if isinstance(node, MacroDef) and isinstance(
+                                node.expression, exp.Lambda
+                            ):
+                                macro_definitions.append(node)
+                            else:
+                                logger.warning(f"Unsupported expression {type(node)} at '{path}'.")
+                    else:
+                        jinja_macros.add_macros(extractor.extract(jinja=sql_file, tokens=tokens))
 
         self._macros_max_mtime = macros_max_mtime
 
         macros = macro.get_registry()
+
+        for definition in macro_definitions:
+            name = definition.name
+            expr = definition.expression
+            args = [arg.name for arg in expr.expressions]
+            tuple_args = f"exp.Tuple(expressions=[{', '.join(args)}])"
+            payload = (
+                "from sqlglot import exp, parse_one\n"
+                "from sqlmesh.core.macros import _norm_var_arg_lambda\n\n"
+                f"def {name}({', '.join(['evaluator', *args])}):\n"
+                f"\texpr = parse_one({repr(expr.sql(dialect=dialect))}, into=exp.Lambda, dialect='{dialect}')\n"
+                "\t_, fn = _norm_var_arg_lambda(evaluator, expr)\n"
+                f"\treturn fn({args[0] if len(args) == 1 else tuple_args})"
+            )
+            macros[name] = Executable(payload=payload, name=name)
+
         macro.set_registry(standard_macros)
 
         return macros, jinja_macros
