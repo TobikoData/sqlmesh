@@ -11,7 +11,7 @@ from sqlmesh.core.notification_target import (
     NotificationEvent,
     NotificationTargetManager,
 )
-from sqlmesh.core.signal import SignalFactory
+from sqlmesh.core.signal import SignalFactory, Signal
 from sqlmesh.core.snapshot import (
     DeployabilityIndex,
     Snapshot,
@@ -437,25 +437,13 @@ def compute_interval_params(
         end_bounded=end_bounded,
     ).items():
         if signal_factory:
-            batch = [(to_datetime(start), to_datetime(end)) for start, end in intervals]
             for signal in snapshot.model.render_signals(
                 start=start, end=end, execution_time=execution_time
             ):
-                ready_intervals = signal_factory(signal).get_intervals(batch=batch)
-                if isinstance(ready_intervals, bool):
-                    if not ready_intervals:
-                        batch = []
-                        break
-                elif isinstance(ready_intervals, list):
-                    for i in ready_intervals:
-                        if i not in batch:
-                            raise RuntimeError(f"Signal returned unknown interval {i}")
-                    batch = ready_intervals
-                else:
-                    raise ValueError(
-                        f"unexpected return value from signal, expected bool | list, got {ready_intervals}"
-                    )
-            intervals = [(to_timestamp(start), to_timestamp(end)) for start, end in batch]
+                intervals = _check_ready_intervals(
+                    signal=signal_factory(signal),
+                    intervals=intervals,
+                )
 
         batches = []
         batch_size = snapshot.node.batch_size
@@ -491,3 +479,53 @@ def _resolve_one_snapshot_per_version(
                 snapshot_per_version[key] = snapshot
 
     return snapshot_per_version
+
+
+def _contiguous_intervals(
+    intervals: t.List[SnapshotInterval],
+) -> t.List[t.List[SnapshotInterval]]:
+    """Given a list of intervals with gaps, returns a list of sequences of contiguous intervals."""
+    contiguous_intervals = []
+    current_batch: t.List[SnapshotInterval] = []
+    for interval in intervals:
+        if len(current_batch) == 0 or interval[0] == current_batch[-1][-1]:
+            current_batch.append(interval)
+        else:
+            contiguous_intervals.append(current_batch)
+            current_batch = [interval]
+
+    if len(current_batch) > 0:
+        contiguous_intervals.append(current_batch)
+
+    return contiguous_intervals
+
+
+def _check_ready_intervals(
+    signal: Signal,
+    intervals: t.List[SnapshotInterval],
+) -> t.List[SnapshotInterval]:
+    """Returns a list of intervals that are considered ready by the provided signal.
+
+    Note that this will handle gaps in the provided intervals. The returned intervals
+    may introduce new gaps.
+    """
+    checked_intervals = []
+    for interval_batch in _contiguous_intervals(intervals):
+        batch = [(to_datetime(start), to_datetime(end)) for start, end in interval_batch]
+
+        ready_intervals = signal.check_intervals(batch=batch)
+        if isinstance(ready_intervals, bool):
+            if not ready_intervals:
+                batch = []
+        elif isinstance(ready_intervals, list):
+            for i in ready_intervals:
+                if i not in batch:
+                    raise RuntimeError(f"Signal returned unknown interval {i}")
+            batch = ready_intervals
+        else:
+            raise ValueError(
+                f"unexpected return value from signal, expected bool | list, got {type(ready_intervals)}"
+            )
+
+        checked_intervals.extend([(to_timestamp(start), to_timestamp(end)) for start, end in batch])
+    return checked_intervals
