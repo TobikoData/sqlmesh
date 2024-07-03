@@ -50,17 +50,19 @@ def sqlmesh_config(
         target_to_sqlmesh_args["register_comments"] = register_comments
 
     return Config(
-        default_gateway=profile.target_name,
-        gateways={
-            profile.target_name: GatewayConfig(
-                connection=profile.target.to_sqlmesh(**target_to_sqlmesh_args),
-                state_connection=state_connection,
-            )
-        },  # type: ignore
         loader=DbtLoader,
         model_defaults=model_defaults,
         variables=variables or {},
-        **kwargs,
+        **dict(
+            default_gateway=profile.target_name,
+            gateways={
+                profile.target_name: GatewayConfig(
+                    connection=profile.target.to_sqlmesh(**target_to_sqlmesh_args),
+                    state_connection=state_connection,
+                )
+            },  # type: ignore
+            **kwargs,
+        ),
     )
 
 
