@@ -1545,6 +1545,17 @@ The methods are available because the `column` argument is parsed as a SQLGlot [
 
 Column expressions are sub-classes of the [Condition class](https://sqlglot.com/sqlglot/expressions.html#Condition), so they have builder methods like [`between`](https://sqlglot.com/sqlglot/expressions.html#Condition.between) and [`like`](https://sqlglot.com/sqlglot/expressions.html#Condition.like).
 
+#### Metadata only macros as model pre/post-statements
+When you first use your macro functions in your models as pre/post-statements, SQLMesh will identify those models as directly modified the next time you create a plan. These models will then need backfills. The same thing applies when you edit or remove these pre/post-statements. If your macro does not have any effect on your models' data and you do not want it to trigger backfills, you can configure your macro to be part of a model's metadata. That way, SQLMesh can still detect changes and create new snapshots for your models when you add, edit, or delete your macro pre/post-statements. To do this, pass in True to the `is_metadata` parameter of the `@macro()` decorator.
+
+```python linenums="1"
+from sqlmesh import macro
+
+@macro(is_metadata=True)
+def print_message(evaluator, message):
+  print(message)
+```
+
 ### Typed Macros
 
 Typed macros in SQLMesh bring the power of type hints from Python, enhancing readability, maintainability, and usability of your SQL macros. These macros enable developers to specify expected types for arguments, making the macros more intuitive and less error-prone.
