@@ -7,8 +7,8 @@ from pytest_mock.plugin import MockerFixture
 from sqlmesh.core.dialect import parse_one
 from sqlmesh.core.model import SqlModel
 from sqlmesh.core.snapshot import SnapshotChangeCategory
-from sqlmesh.schedulers.airflow.operators.hwm_sensor import (
-    HighWaterMarkExternalSensor,
+from sqlmesh.schedulers.airflow.operators.sensor import (
+    ExternalSensor,
     HighWaterMarkSensor,
 )
 from sqlmesh.utils.date import to_datetime
@@ -116,7 +116,7 @@ def test_current_hwm_above_target(mocker: MockerFixture, make_snapshot, set_airf
     get_snapshots_mock.assert_called_once_with([target_snapshot_v1.table_info])
 
 
-def test_hwm_external_sensor(mocker: MockerFixture, make_snapshot, set_airflow_as_library):
+def test_external_sensor(mocker: MockerFixture, make_snapshot, set_airflow_as_library):
     snapshot = make_snapshot(
         SqlModel(
             name="this",
@@ -144,7 +144,7 @@ def test_hwm_external_sensor(mocker: MockerFixture, make_snapshot, set_airflow_a
 
     context = Context(dag_run=dag_run_mock)  # type: ignore
 
-    task = HighWaterMarkExternalSensor(
+    task = ExternalSensor(
         snapshot=snapshot,
         external_table_sensor_factory=factory_mock,
         task_id="test_hwm_task",

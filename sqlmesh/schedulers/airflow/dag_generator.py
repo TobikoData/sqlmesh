@@ -23,8 +23,8 @@ from sqlmesh.core.snapshot import (
 from sqlmesh.core.state_sync import StateReader
 from sqlmesh.schedulers.airflow import common, util
 from sqlmesh.schedulers.airflow.operators import targets
-from sqlmesh.schedulers.airflow.operators.hwm_sensor import (
-    HighWaterMarkExternalSensor,
+from sqlmesh.schedulers.airflow.operators.sensor import (
+    ExternalSensor,
     HighWaterMarkSensor,
 )
 from sqlmesh.schedulers.airflow.operators.notification import (
@@ -475,9 +475,7 @@ class SnapshotDagGenerator:
                     execution_time=execution_time,
                     batch_index=batch_idx,
                 )
-                external_sensor_task = self._create_hwm_external_sensor(
-                    snapshot, start=start, end=end
-                )
+                external_sensor_task = self._create_external_sensor(snapshot, start=start, end=end)
                 if external_sensor_task:
                     (
                         snapshot_start_task
@@ -655,20 +653,20 @@ class SnapshotDagGenerator:
                     )
                 )
 
-        external_sensor = self._create_hwm_external_sensor(snapshot)
+        external_sensor = self._create_external_sensor(snapshot)
         if external_sensor:
             output.append(external_sensor)
 
         return output
 
-    def _create_hwm_external_sensor(
+    def _create_external_sensor(
         self,
         snapshot: Snapshot,
         start: t.Optional[TimeLike] = None,
         end: t.Optional[TimeLike] = None,
     ) -> t.Optional[BaseSensorOperator]:
         if self._external_table_sensor_factory and snapshot.model.signals:
-            return HighWaterMarkExternalSensor(
+            return ExternalSensor(
                 snapshot=snapshot,
                 external_table_sensor_factory=self._external_table_sensor_factory,
                 task_id="external_high_water_mark_sensor",

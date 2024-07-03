@@ -2,14 +2,13 @@ from __future__ import annotations
 
 import typing as t
 
-from airflow.models import BaseOperator
 from airflow.providers.mysql.hooks.mysql import MySqlHook
-from airflow.utils.context import Context
 
+from sqlmesh.schedulers.airflow.operators.base import BaseDbApiOperator
 from sqlmesh.schedulers.airflow.operators.targets import BaseTarget
 
 
-class SQLMeshMySQLOperator(BaseOperator):
+class SQLMeshMySqlOperator(BaseDbApiOperator):
     """The operator that evaluates a SQLMesh model snapshot on a mysql target
 
     Args:
@@ -24,15 +23,6 @@ class SQLMeshMySQLOperator(BaseOperator):
         mysql_conn_id: str = MySqlHook.default_conn_name,
         **kwargs: t.Any,
     ) -> None:
-        super().__init__(**kwargs)
-        self._target = target
-        self._mysql_conn_id = mysql_conn_id
-        self._hook_params = kwargs
-
-    def get_db_hook(self) -> MySqlHook:
-        """Gets the mysql Hook which contains the DB API connection object"""
-        return MySqlHook(self._mysql_conn_id, **self._hook_params)
-
-    def execute(self, context: Context) -> None:
-        """Executes the desired target against the configured mysql connection"""
-        self._target.execute(context, lambda: self.get_db_hook().get_conn(), "mysql")
+        super().__init__(
+            target=target, conn_id=mysql_conn_id, dialect="mysql", hook_type=MySqlHook, **kwargs
+        )
