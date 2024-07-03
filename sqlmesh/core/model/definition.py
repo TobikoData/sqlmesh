@@ -727,7 +727,13 @@ class _Model(ModelMeta, frozen=True):
     @property
     def _data_hash_values(self) -> t.List[str]:
         data = [
-            str(self.sorted_python_env),
+            str(  # Exclude metadata only macro funcs
+                [
+                    (k, v)
+                    for k, v in self.sorted_python_env
+                    if isinstance(v, Executable) and not v.is_metadata
+                ]
+            ),
             *self.kind.data_hash_values,
             self.storage_format,
             str(self.lookback),
@@ -779,6 +785,11 @@ class _Model(ModelMeta, frozen=True):
             str(self.allow_partials),
             gen(self.session_properties_) if self.session_properties_ else None,
         ]
+        metadata_only_macros = [
+            (k, v) for k, v in self.sorted_python_env if isinstance(v, Executable) and v.is_metadata
+        ]
+        if metadata_only_macros:
+            metadata.append(str(metadata_only_macros))
 
         for audit_name, audit_args in sorted(self.audits, key=lambda a: a[0]):
             metadata.append(audit_name)

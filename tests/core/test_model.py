@@ -5118,9 +5118,6 @@ def test_macro_func_hash(is_metadata):
     def noop(evaluator) -> None:
         return None
 
-    # Prevent macro from entering python_env so data hash is consistent
-    setattr(macro.get_registry()["noop"], c.SQLMESH_BUILTIN, True)
-
     expressions = d.parse(
         """
         MODEL (
