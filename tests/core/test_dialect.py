@@ -375,6 +375,20 @@ def test_select_from_values_for_batch_range_json():
     )
 
 
+def test_select_from_values_that_include_null():
+    values = [(1, exp.null())]
+    columns_to_types = {
+        "id": exp.DataType.build("int", dialect="bigquery"),
+        "ts": exp.DataType.build("timestamp", dialect="bigquery"),
+    }
+
+    values_expr = select_from_values_for_batch_range(values, columns_to_types, 0, len(values))
+    assert values_expr.sql(dialect="bigquery") == (
+        "SELECT CAST(id AS INT64) AS id, CAST(ts AS TIMESTAMP) AS ts FROM "
+        "UNNEST([STRUCT(1 AS id, CAST(NULL AS TIMESTAMP) AS ts)]) AS t"
+    )
+
+
 @pytest.fixture(params=["mysql", "duckdb", "postgres", "snowflake"])
 def normalization_dialect(request):
     if request.param == "duckdb":
