@@ -69,7 +69,7 @@ class HighWaterMarkSensor(BaseSensorOperator):
         return min(target_prev, this_prev)
 
 
-class HighWaterMarkExternalSensor(BaseSensorOperator):
+class ExternalSensor(BaseSensorOperator):
     def __init__(
         self,
         snapshot: Snapshot,
