@@ -728,11 +728,7 @@ class _Model(ModelMeta, frozen=True):
     def _data_hash_values(self) -> t.List[str]:
         data = [
             str(  # Exclude metadata only macro funcs
-                [
-                    (k, v)
-                    for k, v in self.sorted_python_env
-                    if isinstance(v, Executable) and not v.is_metadata
-                ]
+                [(k, v) for k, v in self.sorted_python_env if not v.is_metadata]
             ),
             *self.kind.data_hash_values,
             self.storage_format,
@@ -832,9 +828,7 @@ class _Model(ModelMeta, frozen=True):
     def _additional_metadata(self) -> t.List[str]:
         additional_metadata = []
 
-        metadata_only_macros = [
-            (k, v) for k, v in self.sorted_python_env if isinstance(v, Executable) and v.is_metadata
-        ]
+        metadata_only_macros = [(k, v) for k, v in self.sorted_python_env if v.is_metadata]
         if metadata_only_macros:
             additional_metadata.append(str(metadata_only_macros))
 
@@ -1011,9 +1005,9 @@ class _SqlBasedModel(_Model):
         if isinstance(statement, d.MacroFunc):
             target_macro = macro.get_registry().get(statement.name)
             if target_macro:
-                return target_macro.is_metadata
+                return target_macro.metadata_only
             target_macro = self.python_env.get(statement.name)
-            if isinstance(target_macro, Executable):
+            if target_macro:
                 return bool(target_macro.is_metadata)
         return False
 

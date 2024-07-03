@@ -558,15 +558,15 @@ class macro(registry_decorator):
 
     registry_name = "macros"
 
-    def __init__(self, *args: t.Any, is_metadata: bool = False, **kwargs: t.Any) -> None:
+    def __init__(self, *args: t.Any, metadata_only: bool = False, **kwargs: t.Any) -> None:
         super().__init__(*args, **kwargs)
-        self.is_metadata = is_metadata
+        self.metadata_only = metadata_only
 
     def __call__(
         self, func: t.Callable[..., DECORATOR_RETURN_TYPE]
     ) -> t.Callable[..., DECORATOR_RETURN_TYPE]:
-        if self.is_metadata:
-            setattr(func, c.SQLMESH_METADATA, self.is_metadata)
+        if self.metadata_only:
+            setattr(func, c.SQLMESH_METADATA, self.metadata_only)
         wrapper = super().__call__(func)
 
         # This is used to identify macros at runtime to unwrap during serialization.
