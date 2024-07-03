@@ -333,14 +333,12 @@ class TableDiff:
                 ]
 
                 if check_grain:
+                    s_grains = ", ".join((f"s__{c}" for c in index_cols))
+                    t_grains = ", ".join((f"t__{c}" for c in index_cols))
                     summary_sums.extend(
                         [
-                            parse_one(
-                                f"COUNT(DISTINCT({", ".join((f"s__{c}" for c in index_cols))}))"
-                            ).as_("distinct_count_s"),
-                            parse_one(
-                                f"COUNT(DISTINCT({", ".join((f"t__{c}" for c in index_cols))}))"
-                            ).as_("distinct_count_t"),
+                            parse_one(f"COUNT(DISTINCT({s_grains}))").as_("distinct_count_s"),
+                            parse_one(f"COUNT(DISTINCT({t_grains}))").as_("distinct_count_t"),
                         ]
                     )
 
