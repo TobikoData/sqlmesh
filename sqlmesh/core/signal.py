@@ -7,7 +7,7 @@ from sqlmesh.core._typing import Batch
 
 class Signal(abc.ABC):
     @abc.abstractmethod
-    def get_intervals(self, batch: Batch) -> bool | Batch:
+    def check_intervals(self, batch: Batch) -> bool | Batch:
         """Returns which intervals are ready from a list of scheduled intervals.
 
         When SQLMesh wishes to execute a batch of intervals, say between `a` and `d`, then
