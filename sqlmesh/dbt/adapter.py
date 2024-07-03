@@ -141,6 +141,11 @@ class BaseAdapter(abc.ABC):
     def type(self) -> str:
         return self.project_dialect or ""
 
+    def compare_dbr_version(self, major: int, minor: int) -> int:
+        # This method is specific to the Databricks dbt adapter implementation and is used in some macros.
+        # Always return -1 to fallback to Spark macro implementations.
+        return -1
+
 
 class ParsetimeAdapter(BaseAdapter):
     def get_relation(self, database: str, schema: str, identifier: str) -> t.Optional[BaseRelation]:
