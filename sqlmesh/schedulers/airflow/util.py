@@ -175,9 +175,9 @@ def discover_engine_operator(name: str, sql_only: bool = False) -> t.Type[BaseOp
             return SQLMeshMsSqlOperator
 
         if name == "mysql":
-            from sqlmesh.schedulers.airflow.operators.mysql import SQLMeshMySQLOperator
+            from sqlmesh.schedulers.airflow.operators.mysql import SQLMeshMySqlOperator
 
-            return SQLMeshMySQLOperator
+            return SQLMeshMySqlOperator
     except ImportError:
         raise SQLMeshError(f"Failed to automatically discover an operator for '{name}'.'")
 

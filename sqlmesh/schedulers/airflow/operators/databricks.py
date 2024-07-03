@@ -4,7 +4,6 @@ import os
 import tempfile
 import typing as t
 
-from airflow.models import BaseOperator
 from airflow.providers.databricks.hooks.databricks_base import BaseDatabricksHook
 from airflow.providers.databricks.hooks.databricks_sql import DatabricksSqlHook
 from airflow.providers.databricks.operators.databricks import (
@@ -15,6 +14,7 @@ from airflow.utils.context import Context
 import sqlmesh
 from sqlmesh import utils
 from sqlmesh.engines import commands
+from sqlmesh.schedulers.airflow.operators.base import BaseDbApiOperator
 from sqlmesh.schedulers.airflow.operators.targets import BaseTarget
 
 
@@ -115,7 +115,7 @@ class SQLMeshDatabricksSubmitOperator(DatabricksSubmitRunOperator):
         self._target.post_hook(context)
 
 
-class SQLMeshDatabricksSQLOperator(BaseOperator):
+class SQLMeshDatabricksSQLOperator(BaseDbApiOperator):
     """Operator for running just SQL operations against Databricks.
 
     Args:
@@ -130,15 +130,10 @@ class SQLMeshDatabricksSQLOperator(BaseOperator):
         databricks_conn_id: str = BaseDatabricksHook.default_conn_name,
         **kwargs: t.Any,
     ) -> None:
-        super().__init__(**kwargs)
-        self._target = target
-        self._databricks_conn_id = databricks_conn_id
-        self._hook_params = kwargs
-
-    def get_db_hook(self) -> DatabricksSqlHook:
-        """Gets the Databricks SQL Hook which contains the DB API connection object"""
-        return DatabricksSqlHook(self._databricks_conn_id, **self._hook_params)
-
-    def execute(self, context: Context) -> None:
-        """Executes the desired target against the configured Databricks connection"""
-        self._target.execute(context, lambda: self.get_db_hook().get_conn(), "databricks")
+        super().__init__(
+            target=target,
+            conn_id=databricks_conn_id,
+            dialect="databricks",
+            hook_type=DatabricksSqlHook,
+            **kwargs,
+        )

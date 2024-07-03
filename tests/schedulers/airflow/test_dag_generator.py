@@ -15,7 +15,7 @@ from sqlmesh.core.snapshot import (
 from sqlmesh.schedulers.airflow.dag_generator import SnapshotDagGenerator
 from sqlmesh.schedulers.airflow import common
 from sqlmesh.schedulers.airflow.operators.targets import BaseTarget, SnapshotEvaluationTarget
-from sqlmesh.schedulers.airflow.operators.hwm_sensor import HighWaterMarkSensor
+from sqlmesh.schedulers.airflow.operators.sensor import HighWaterMarkSensor
 from sqlmesh.utils.date import to_datetime, to_timestamp
 
 
