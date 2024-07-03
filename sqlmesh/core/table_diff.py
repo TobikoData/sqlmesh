@@ -4,7 +4,7 @@ import math
 import typing as t
 
 import pandas as pd
-from sqlglot import exp
+from sqlglot import exp, parse_one
 from sqlglot.optimizer.normalize_identifiers import normalize_identifiers
 from sqlglot.optimizer.qualify_columns import quote_identifiers
 
@@ -205,7 +205,7 @@ class TableDiff:
             model_name=self.model_name,
         )
 
-    def row_diff(self, check_grain: bool = False) -> RowDiff:
+    def row_diff(self, check_grain: bool = True) -> RowDiff:
         if self._row_diff is None:
             s_selects = {c: exp.column(c, "s").as_(f"s__{c}") for c in self.source_schema}
             t_selects = {c: exp.column(c, "t").as_(f"t__{c}") for c in self.target_schema}
@@ -333,21 +333,16 @@ class TableDiff:
                 ]
 
                 if check_grain:
-                    distincts = [
-                        *(
-                            exp.func("COUNT", exp.func("DISTINCT", f"s__{c}")).as_(
-                                "distinct_count_s"
-                            )
-                            for c in index_cols
-                        ),
-                        *(
-                            exp.func("COUNT", exp.func("DISTINCT", f"t__{c}")).as_(
-                                "distinct_count_t"
-                            )
-                            for c in index_cols
-                        ),
-                    ]
-                    summary_sums.extend(distincts)
+                    summary_sums.extend(
+                        [
+                            parse_one(
+                                f"COUNT(DISTINCT({", ".join((f"s__{c}" for c in index_cols))}))"
+                            ).as_("distinct_count_s"),
+                            parse_one(
+                                f"COUNT(DISTINCT({", ".join((f"t__{c}" for c in index_cols))}))"
+                            ).as_("distinct_count_t"),
+                        ]
+                    )
 
                 summary_query = exp.select(*summary_sums).from_(table)
 

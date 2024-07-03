@@ -138,58 +138,24 @@ def test_data_diff_decimals(sushi_context_fixed_date):
 
 
 @pytest.mark.slow
-def test_distinct_grain_check(sushi_context_fixed_date):
-    engine_adapter = sushi_context_fixed_date.engine_adapter
-
-    engine_adapter.ctas(
-        "table_diff_source",
-        pd.DataFrame(
-            {
-                "key": [1, 2, 3, 3, 2],
-                "value": [1.0, 2.0, 3.0, 5.0, 1.0],
-            }
-        ),
-    )
-
-    engine_adapter.ctas(
-        "table_diff_target",
-        pd.DataFrame(
-            {
-                "key": [1, 2, 3],
-                "value": [1.0, 2.0, 3.0],
-            }
-        ),
-    )
-
-    diff = sushi_context_fixed_date.table_diff(
-        source="table_diff_source",
-        target="table_diff_target",
-        on=["key"],
-        check_grain=True,
-    )
-
-    row_diff = diff.row_diff()
-    assert row_diff.full_match_count == 3
-    assert row_diff.stats["null_grain_count"] == 0
-    assert row_diff.stats["distinct_count_s"] == 3
-    assert row_diff.stats["join_count"] == 5
-    assert row_diff.partial_match_count == 2
-
-
-@pytest.mark.slow
-def test_null_grain_check(sushi_context_fixed_date):
+def test_grain_check(sushi_context_fixed_date):
     expressions = d.parse(
         """
-        MODEL (name memory.sushi.null_grain_items, kind full, grain(item_id));
+        MODEL (name memory.sushi.grain_items, kind full, grain(key_1, key_2));
         SELECT
-            item_id,
-            id,
+            key_1,
+            key_2,
+            value,
         FROM
             (VALUES
-                (1, 1),
-                (3, 2),
-                (NULL, 4),
-            ) AS t (item_id, id)
+                (1, 1, 1),
+                (7, 4, 2),
+                (NULL, 3, 3),
+                (NULL, NULL, 3),
+                (1, 2, 2),
+                (4, NULL, 3),
+                (2, 3, 2),
+            ) AS t (key_1,key_2, value)
     """
     )
     model_s = load_sql_based_model(expressions)
@@ -203,13 +169,15 @@ def test_null_grain_check(sushi_context_fixed_date):
         end="2023-01-31",
     )
 
-    model = sushi_context_fixed_date.models['"memory"."sushi"."null_grain_items"']
+    model = sushi_context_fixed_date.models['"memory"."sushi"."grain_items"']
 
     modified_model = model.dict()
     modified_model["query"] = (
         exp.select("*")
         .from_(model.query.subquery())
-        .union("SELECT item_id, id FROM (VALUES (1, 5),) AS t (item_id, id)")
+        .union(
+            "SELECT key_1, key_2, value FROM (VALUES (1, 6, 1),(1, 5, 3),(NULL, 2, 3),) AS t (key_1, key_2, value)"
+        )
     )
 
     modified_sqlmodel = SqlModel(**modified_model)
@@ -231,15 +199,21 @@ def test_null_grain_check(sushi_context_fixed_date):
     diff = sushi_context_fixed_date.table_diff(
         source="source_dev",
         target="target_dev",
-        on=["item_id"],
-        model_or_snapshot="sushi.null_grain_items",
+        on=["key_1", "key_2"],
+        model_or_snapshot="sushi.grain_items",
         check_grain=True,
     )
 
     row_diff = diff.row_diff()
-    assert row_diff.full_match_count == 3
-    assert row_diff.stats["null_grain_count"] == 1
-    assert row_diff.stats["distinct_count_s"] == 2
-    assert row_diff.stats["distinct_count_t"] == 2
-    assert row_diff.stats["join_count"] == 3
-    assert row_diff.partial_match_count == 0
+    assert row_diff.full_match_count == 7
+    assert row_diff.full_match_pct == 93.33
+    assert row_diff.s_only_count == 2
+    assert row_diff.t_only_count == 5
+    assert row_diff.stats["join_count"] == 4
+    assert row_diff.stats["null_grain_count"] == 4
+    assert row_diff.stats["s_count"] != row_diff.stats["distinct_count_s"]
+    assert row_diff.stats["distinct_count_s"] == 7
+    assert row_diff.stats["t_count"] != row_diff.stats["distinct_count_t"]
+    assert row_diff.stats["distinct_count_t"] == 10
+    assert row_diff.s_sample.shape == (0, 3)
+    assert row_diff.t_sample.shape == (3, 3)
