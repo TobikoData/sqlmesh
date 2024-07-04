@@ -230,7 +230,10 @@ class SnowflakeEngineAdapter(GetCurrentCatalogFromFunctionMixin):
                             df[column] = pd.to_datetime(df[column]).dt.strftime(
                                 "%Y-%m-%d %H:%M:%S.%f"
                             )  # type: ignore
-                self.create_table(temp_table, columns_to_types)
+
+                # create the table first using our usual method ensure the column datatypes match what we parsed with sqlglot
+                # otherwise we would be trusting `write_pandas()` from the snowflake lib to do this correctly
+                self.create_table(temp_table, columns_to_types, table_kind="TEMPORARY TABLE")
 
                 write_pandas(
                     self._connection_pool.get(),
@@ -240,7 +243,7 @@ class SnowflakeEngineAdapter(GetCurrentCatalogFromFunctionMixin):
                     database=temp_table.catalog or None,
                     chunk_size=self.DEFAULT_BATCH_SIZE,
                     overwrite=True,
-                    table_type="temp",
+                    table_type="temp",  # if you dont have this, it will convert the table we created above into a normal table and it wont get dropped when the session ends
                 )
             else:
                 raise SQLMeshError(
@@ -292,6 +295,7 @@ class SnowflakeEngineAdapter(GetCurrentCatalogFromFunctionMixin):
                 )
                 .when(exp.column("TABLE_TYPE").eq("BASE TABLE"), exp.Literal.string("TABLE"))
                 .when(exp.column("TABLE_TYPE").eq("TEMPORARY TABLE"), exp.Literal.string("TABLE"))
+                .when(exp.column("TABLE_TYPE").eq("LOCAL TEMPORARY"), exp.Literal.string("TABLE"))
                 .when(exp.column("TABLE_TYPE").eq("EXTERNAL TABLE"), exp.Literal.string("TABLE"))
                 .when(exp.column("TABLE_TYPE").eq("EVENT TABLE"), exp.Literal.string("TABLE"))
                 .when(exp.column("TABLE_TYPE").eq("VIEW"), exp.Literal.string("VIEW"))
