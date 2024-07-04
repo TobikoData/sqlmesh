@@ -267,7 +267,7 @@ Create a schema file containing external model schemas.
 #### table_diff
 ```
 %table_diff [--on [ON ...]] [--model MODEL] [--where WHERE]
-                  [--limit LIMIT] [--show-sample] [--check-grain]
+                  [--limit LIMIT] [--show-sample] [--skip-grain-check]
                   SOURCE:TARGET
 
 Show the diff between two tables.
@@ -278,15 +278,15 @@ positional arguments:
   SOURCE:TARGET    Source and target in `SOURCE:TARGET` format
 
 options:
-  --on <[ON ...]>  The column to join on. Can be specified multiple times. The
-                   model grain will be used if not specified.
-  --model MODEL    The model to diff against when source and target are
-                   environments and not tables.
-  --where WHERE    An optional where statement to filter results.
-  --limit LIMIT    The limit of the sample dataframe.
-  --show-sample    Show a sample of the rows that differ. With many columns,
-                   the output can be very wide.  
-  --check-grain    Display a warning if rows contain null or duplicate grains.
+  --on <[ON ...]>     The column to join on. Can be specified multiple times. The
+                      model grain will be used if not specified.
+  --model MODEL       The model to diff against when source and target are
+                      environments and not tables.
+  --where WHERE       An optional where statement to filter results.
+  --limit LIMIT       The limit of the sample dataframe.
+  --show-sample       Show a sample of the rows that differ. With many columns,
+                      the output can be very wide.  
+  --skip-grain-check  Disable the check for a primary key (grain) that is missing or is not unique.
 ```
 
 #### model

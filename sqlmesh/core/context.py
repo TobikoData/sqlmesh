@@ -1275,7 +1275,7 @@ class GenericContext(BaseContext, t.Generic[C]):
         show: bool = True,
         show_sample: bool = True,
         decimals: int = 3,
-        check_grain: bool = True,
+        skip_grain_check: bool = False,
     ) -> TableDiff:
         """Show a diff between two tables.
 
@@ -1290,7 +1290,7 @@ class GenericContext(BaseContext, t.Generic[C]):
             show: Show the table diff output in the console.
             show_sample: Show the sample dataframe in the console. Requires show=True.
             decimals: The number of decimal places to keep when comparing floating point columns.
-            check_grain: Display a warning if rows contain null or duplicate grains.
+            skip_grain_check: Skip check for rows that contain null or duplicate grains.
 
         Returns:
             The TableDiff object containing schema and summary differences.
@@ -1340,9 +1340,9 @@ class GenericContext(BaseContext, t.Generic[C]):
         if show:
             self.console.show_schema_diff(table_diff.schema_diff())
             self.console.show_row_diff(
-                table_diff.row_diff(check_grain=check_grain),
+                table_diff.row_diff(skip_grain_check=skip_grain_check),
                 show_sample=show_sample,
-                check_grain=check_grain,
+                skip_grain_check=skip_grain_check,
             )
         return table_diff
 

@@ -201,7 +201,7 @@ def test_grain_check(sushi_context_fixed_date):
         target="target_dev",
         on=["key_1", "key_2"],
         model_or_snapshot="sushi.grain_items",
-        check_grain=True,
+        skip_grain_check=False,
     )
 
     row_diff = diff.row_diff()

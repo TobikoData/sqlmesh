@@ -605,9 +605,9 @@ class SQLMeshMagics(Magics):
         help="The number of decimal places to keep when comparing floating point columns. Default: 3",
     )
     @argument(
-        "--check-grain",
+        "--skip-grain-check",
         action="store_true",
-        help="An optional check if a primary key (grain) is missing or is not unique.",
+        help="Disable the check for a primary key (grain) that is missing or is not unique.",
     )
     @line_magic
     @pass_sqlmesh_context
@@ -627,7 +627,7 @@ class SQLMeshMagics(Magics):
             limit=args.limit,
             show_sample=args.show_sample,
             decimals=args.decimals,
-            check_grain=args.check_grain,
+            skip_grain_check=args.skip_grain_check,
         )
 
     @magic_arguments()

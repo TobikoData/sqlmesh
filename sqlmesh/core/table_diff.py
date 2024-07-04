@@ -205,7 +205,7 @@ class TableDiff:
             model_name=self.model_name,
         )
 
-    def row_diff(self, check_grain: bool = True) -> RowDiff:
+    def row_diff(self, skip_grain_check: bool = False) -> RowDiff:
         if self._row_diff is None:
             s_selects = {c: exp.column(c, "s").as_(f"s__{c}") for c in self.source_schema}
             t_selects = {c: exp.column(c, "t").as_(f"t__{c}") for c in self.target_schema}
@@ -332,7 +332,7 @@ class TableDiff:
                     *(exp.func("SUM", name(c)).as_(c.alias) for c in comparisons),
                 ]
 
-                if check_grain:
+                if not skip_grain_check:
                     s_grains = ", ".join((f"s__{c}" for c in index_cols))
                     t_grains = ", ".join((f"t__{c}" for c in index_cols))
                     summary_sums.extend(
