@@ -80,10 +80,9 @@ from sqlmesh.core.notification_target import (
 )
 from sqlmesh.core.plan import Plan, PlanBuilder
 from sqlmesh.core.reference import ReferenceGraph
-from sqlmesh.core.scheduler import Scheduler
+from sqlmesh.core.scheduler import Scheduler, SignalFactory
 from sqlmesh.core.schema_loader import create_external_models_file
 from sqlmesh.core.selector import Selector
-from sqlmesh.core.signal import SignalFactory
 from sqlmesh.core.snapshot import (
     DeployabilityIndex,
     Snapshot,

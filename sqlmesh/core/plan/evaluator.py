@@ -26,8 +26,7 @@ from sqlmesh.core.notification_target import (
     NotificationTargetManager,
 )
 from sqlmesh.core.plan.definition import Plan
-from sqlmesh.core.scheduler import Scheduler
-from sqlmesh.core.signal import SignalFactory
+from sqlmesh.core.scheduler import Scheduler, SignalFactory
 from sqlmesh.core.snapshot import DeployabilityIndex, Snapshot, SnapshotEvaluator
 from sqlmesh.core.state_sync import StateSync
 from sqlmesh.core.state_sync.base import PromotionResult

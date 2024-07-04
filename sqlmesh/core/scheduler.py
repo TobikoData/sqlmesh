@@ -1,8 +1,10 @@
 from __future__ import annotations
 
+import abc
 import logging
 import traceback
 import typing as t
+from datetime import datetime
 
 from sqlmesh.core import constants as c
 from sqlmesh.core.console import Console, get_console
@@ -11,7 +13,6 @@ from sqlmesh.core.notification_target import (
     NotificationEvent,
     NotificationTargetManager,
 )
-from sqlmesh.core.signal import SignalFactory, Signal
 from sqlmesh.core.snapshot import (
     DeployabilityIndex,
     Snapshot,
@@ -22,7 +23,6 @@ from sqlmesh.core.snapshot import (
 from sqlmesh.core.snapshot.definition import Interval as SnapshotInterval
 from sqlmesh.core.snapshot.definition import SnapshotId
 from sqlmesh.core.state_sync import StateSync
-from sqlmesh.core._typing import Batch, Interval
 from sqlmesh.utils import format_exception
 from sqlmesh.utils.concurrency import concurrent_apply_to_dag
 from sqlmesh.utils.dag import DAG
@@ -37,10 +37,45 @@ from sqlmesh.utils.date import (
 from sqlmesh.utils.errors import AuditError, CircuitBreakerError, SQLMeshError
 
 logger = logging.getLogger(__name__)
+Interval = t.Tuple[datetime, datetime]
+Batch = t.List[Interval]
 SnapshotToBatches = t.Dict[Snapshot, Batch]
 # we store snapshot name instead of snapshots/snapshotids because pydantic
 # is extremely slow to hash. snapshot names should be unique within a dag run
 SchedulingUnit = t.Tuple[str, t.Tuple[Interval, int]]
+
+
+class Signal(abc.ABC):
+    @abc.abstractmethod
+    def check_intervals(self, batch: Batch) -> t.Union[bool, Batch]:
+        """Returns which intervals are ready from a list of scheduled intervals.
+
+        When SQLMesh wishes to execute a batch of intervals, say between `a` and `d`, then
+        the `batch` parameter will contain each individual interval within this batch,
+        i.e.: `[a,b),[b,c),[c,d)`.
+
+        This function may return `True` to indicate that the whole batch is ready,
+        `False` to indicate none of the batch's intervals are ready, or a list of
+        intervals (a batch) to indicate exactly which ones are ready.
+
+        When returning a batch, the function is expected to return a subset of
+        the `batch` parameter, e.g.: `[a,b),[b,c)`. Note that it may return
+        gaps, e.g.: `[a,b),[c,d)`, but it may not alter the bounds of any of the
+        intervals.
+
+        The interface allows an implementation to check batches of intervals without
+        having to actually compute individual intervals itself.
+
+        Args:
+            batch: the list of intervals that are missing and scheduled to run.
+
+        Returns:
+            Either `True` to indicate all intervals are ready, `False` to indicate none are
+            ready or a list of intervals to indicate exactly which ones are ready.
+        """
+
+
+SignalFactory = t.Callable[[t.Dict[str, str | int | float | bool]], Signal]
 
 
 class Scheduler:
