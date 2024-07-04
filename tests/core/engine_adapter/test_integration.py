@@ -781,13 +781,22 @@ def test_temp_table(ctx: TestContext):
         ]
     )
     table = ctx.table("example")
+
+    # The snowflake adapter persists the DataFrame to an intermediate table because we use the `write_pandas()` function from the Snowflake python library
+    # Other adapters just use SQLGlot to convert the dataframe directly into a SELECT query
+    expected_tables = 2 if ctx.dialect == "snowflake" and ctx.test_type == "df" else 1
     with ctx.engine_adapter.temp_table(ctx.input_data(input_data), table.sql()) as table_name:
         results = ctx.get_metadata_results()
         assert len(results.views) == 0
-        assert len(results.tables) == 1
+        assert len(results.tables) == expected_tables
         assert len(results.non_temp_tables) == 0
         assert len(results.materialized_views) == 0
         ctx.compare_with_current(table_name, input_data)
+
+    if ctx.dialect == "snowflake":
+        # force the next query to create a new connection to prove temp tables have been dropped
+        ctx.engine_adapter._connection_pool.close()
+
     results = ctx.get_metadata_results()
     assert len(results.views) == len(results.tables) == len(results.non_temp_tables) == 0
 
