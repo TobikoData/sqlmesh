@@ -743,6 +743,11 @@ def create_external_models(obj: Context) -> None:
     default=3,
     help="The number of decimal places to keep when comparing floating point columns. Default: 3",
 )
+@click.option(
+    "--skip-grain-check",
+    is_flag=True,
+    help="Disable the check for a primary key (grain) that is missing or is not unique.",
+)
 @click.pass_obj
 @error_handler
 @cli_analytics

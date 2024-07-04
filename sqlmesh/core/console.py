@@ -254,7 +254,9 @@ class Console(abc.ABC):
         """Show table schema diff."""
 
     @abc.abstractmethod
-    def show_row_diff(self, row_diff: RowDiff, show_sample: bool = True) -> None:
+    def show_row_diff(
+        self, row_diff: RowDiff, show_sample: bool = True, skip_grain_check: bool = False
+    ) -> None:
         """Show table summary diff."""
 
     def _limit_model_names(self, tree: Tree, verbose: bool = False) -> Tree:
@@ -1065,13 +1067,26 @@ class TerminalConsole(Console):
 
         self.console.print(tree)
 
-    def show_row_diff(self, row_diff: RowDiff, show_sample: bool = True) -> None:
+    def show_row_diff(
+        self, row_diff: RowDiff, show_sample: bool = True, skip_grain_check: bool = False
+    ) -> None:
         source_name = row_diff.source
         if row_diff.source_alias:
             source_name = row_diff.source_alias.upper()
         target_name = row_diff.target
         if row_diff.target_alias:
             target_name = row_diff.target_alias.upper()
+
+        if row_diff.stats["null_grain_count"] > 0 or (
+            not skip_grain_check
+            and (
+                row_diff.stats["distinct_count_s"] != row_diff.stats["s_count"]
+                or row_diff.stats["distinct_count_t"] != row_diff.stats["t_count"]
+            )
+        ):
+            self.console.print(
+                "[b][red]\nGrain should have unique and not-null audits for accurate results.[/red][/b]"
+            )
 
         tree = Tree("[b]Row Counts:[/b]")
         if row_diff.full_match_count:
@@ -2032,7 +2047,9 @@ class DebuggerTerminalConsole(TerminalConsole):
     def show_schema_diff(self, schema_diff: SchemaDiff) -> None:
         self._write(schema_diff)
 
-    def show_row_diff(self, row_diff: RowDiff, show_sample: bool = True) -> None:
+    def show_row_diff(
+        self, row_diff: RowDiff, show_sample: bool = True, skip_grain_check: bool = False
+    ) -> None:
         self._write(row_diff)
 
 

@@ -109,6 +109,15 @@ The `COMMON ROWS sample data differences` section displays the row whose `item_i
 
 The `PROD ONLY sample rows` section shows the one row that is present in `PROD` but not in `DEV`.
 
+If we add the `--skip-grain-check` option, the grain is not validated. By default without this flag, a warning is displayed to the user if rows contain null or duplicate grains.
+
+```bash linenums="1"
+$ sqlmesh table_diff prod:dev2 sqlmesh_example.incremental_model
+
+Grain should have unique and not-null audits for accurate results.
+
+```
+
 ## Diffing tables or views
 
 Compare specific tables or views with the SQLMesh CLI interface by using the command `sqlmesh table_diff [source table]:[target table]`.
