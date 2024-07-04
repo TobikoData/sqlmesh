@@ -38,7 +38,7 @@ setup(
         "duckdb!=0.10.3",
         "dateparser",
         "freezegun",
-        "hyperscript",
+        "hyperscript>=0.1.0",
         "importlib-metadata; python_version<'3.12'",
         "ipywidgets",
         "jinja2",
