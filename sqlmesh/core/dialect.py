@@ -897,6 +897,14 @@ def select_from_values_for_batch_range(
         ]
 
     values_exp = exp.values(expressions, alias=alias, columns=columns_to_types)
+    if values:
+        # BigQuery crashes on `SELECT CAST(x AS TIMESTAMP) FROM UNNEST([NULL]) AS x`, but not
+        # on `SELECT CAST(x AS TIMESTAMP) FROM UNNEST([CAST(NULL AS TIMESTAMP)]) AS x`. This
+        # ensures nulls under the `Values` expression are cast to avoid similar issues.
+        for value, kind in zip(values_exp.expressions[0].expressions, columns_to_types.values()):
+            if isinstance(value, exp.Null):
+                value.replace(exp.cast(value, to=kind))
+
     return exp.select(*casted_columns).from_(values_exp, copy=False).where(where, copy=False)
 
 
