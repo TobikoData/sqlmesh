@@ -11,6 +11,7 @@ import numpy as np
 import pandas as pd
 import pytest
 from sqlglot import exp, parse_one
+from sqlglot.optimizer.normalize_identifiers import normalize_identifiers
 
 from sqlmesh import Config, Context, EngineAdapter
 from sqlmesh.cli.example_project import init_example_project
@@ -51,6 +52,7 @@ class TestContext:
         self.gateway = gateway
         self._columns_to_types = columns_to_types
         self.test_id = random_id(short=True)
+        self._context = None
 
     @property
     def columns_to_types(self):
@@ -411,11 +413,14 @@ class TestContext:
         self._context = Context(paths=".", config=config, gateway=self.gateway)
         return self._context
 
-    def cleanup(self, ctx: Context):
-        schemas = []
-        for _, model in ctx.models.items():
-            schemas.append(model.schema_name)
-            schemas.append(model.physical_schema)
+    def cleanup(self, ctx: t.Optional[Context] = None):
+        schemas = [self.schema(TEST_SCHEMA)]
+
+        ctx = ctx or self._context
+        if ctx and ctx.models:
+            for _, model in ctx.models.items():
+                schemas.append(model.schema_name)
+                schemas.append(model.physical_schema)
 
         for schema_name in set(schemas):
             self.engine_adapter.drop_schema(
@@ -662,6 +667,14 @@ def ctx(engine_adapter, test_type, mark_gateway):
     return TestContext(test_type, engine_adapter, gateway)
 
 
+@pytest.fixture(autouse=True)
+def cleanup(ctx: TestContext):
+    yield  # run test
+
+    if ctx:
+        ctx.cleanup()
+
+
 def test_catalog_operations(ctx: TestContext):
     if (
         ctx.engine_adapter.CATALOG_SUPPORT.is_unsupported
@@ -691,11 +704,11 @@ def test_catalog_operations(ctx: TestContext):
             ctx.engine_adapter.execute(f'CREATE DATABASE IF NOT EXISTS "{catalog_name}"')
         except Exception:
             pass
-    current_catalog = ctx.engine_adapter.get_current_catalog()
+    current_catalog = ctx.engine_adapter.get_current_catalog().lower()
     ctx.engine_adapter.set_current_catalog(catalog_name)
-    assert ctx.engine_adapter.get_current_catalog() == catalog_name
+    assert ctx.engine_adapter.get_current_catalog().lower() == catalog_name
     ctx.engine_adapter.set_current_catalog(current_catalog)
-    assert ctx.engine_adapter.get_current_catalog() == current_catalog
+    assert ctx.engine_adapter.get_current_catalog().lower() == current_catalog
 
 
 def test_drop_schema_catalog(ctx: TestContext, caplog):
@@ -782,20 +795,13 @@ def test_temp_table(ctx: TestContext):
     )
     table = ctx.table("example")
 
-    # The snowflake adapter persists the DataFrame to an intermediate table because we use the `write_pandas()` function from the Snowflake python library
-    # Other adapters just use SQLGlot to convert the dataframe directly into a SELECT query
-    expected_tables = 2 if ctx.dialect == "snowflake" and ctx.test_type == "df" else 1
     with ctx.engine_adapter.temp_table(ctx.input_data(input_data), table.sql()) as table_name:
         results = ctx.get_metadata_results()
         assert len(results.views) == 0
-        assert len(results.tables) == expected_tables
+        assert len(results.tables) == 1
         assert len(results.non_temp_tables) == 0
         assert len(results.materialized_views) == 0
         ctx.compare_with_current(table_name, input_data)
-
-    if ctx.dialect == "snowflake":
-        # force the next query to create a new connection to prove temp tables have been dropped
-        ctx.engine_adapter._connection_pool.close()
 
     results = ctx.get_metadata_results()
     assert len(results.views) == len(results.tables) == len(results.non_temp_tables) == 0
@@ -1735,6 +1741,14 @@ def test_sushi(mark_gateway: t.Tuple[str, str], ctx: TestContext):
         personal_paths=[pathlib.Path("~/.sqlmesh/config.yaml").expanduser()],
     )
     _, gateway = mark_gateway
+
+    # clear cache from prior runs
+    cache_dir = pathlib.Path("./examples/sushi/.cache")
+    if cache_dir.exists():
+        import shutil
+
+        shutil.rmtree(cache_dir)
+
     context = Context(paths="./examples/sushi", config=config, gateway=gateway)
 
     # clean up any leftover schemas from previous runs (requires context)
@@ -1769,7 +1783,7 @@ def test_sushi(mark_gateway: t.Tuple[str, str], ctx: TestContext):
 
         context._models.update({cust_rev_by_day_key: cust_rev_by_day_model_tbl_props})
 
-    context.plan(
+    plan: Plan = context.plan(
         environment="test_prod",
         start=start,
         end=end,
@@ -1785,6 +1799,7 @@ def test_sushi(mark_gateway: t.Tuple[str, str], ctx: TestContext):
         yesterday(),
         env_name="test_prod",
         dialect=ctx.dialect,
+        environment_naming_info=plan.environment_naming_info,
     )
 
     # Ensure table and column comments were correctly registered with engine
@@ -1977,10 +1992,13 @@ def test_sushi(mark_gateway: t.Tuple[str, str], ctx: TestContext):
         # confirm physical temp table comments are not registered
         validate_no_comments("sqlmesh__sushi", table_name_suffix="__temp", check_temp_tables=True)
         # confirm view layer comments are not registered in non-PROD environment
-        validate_no_comments("sushi__test_prod", is_physical_layer=False)
+        env_name = "test_prod"
+        if plan.environment_naming_info and plan.environment_naming_info.normalize_name:
+            env_name = normalize_identifiers(env_name, dialect=ctx.dialect).name
+        validate_no_comments(f"sushi__{env_name}", is_physical_layer=False)
 
     # Ensure that the plan has been applied successfully.
-    no_change_plan = context.plan(
+    no_change_plan: Plan = context.plan(
         environment="test_dev",
         start=start,
         end=end,
@@ -2000,6 +2018,7 @@ def test_sushi(mark_gateway: t.Tuple[str, str], ctx: TestContext):
         yesterday(),
         env_name="test_dev",
         dialect=ctx.dialect,
+        environment_naming_info=no_change_plan.environment_naming_info,
     )
 
     # confirm view layer comments are registered in PROD

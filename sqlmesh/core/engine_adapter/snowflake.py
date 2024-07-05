@@ -200,7 +200,9 @@ class SnowflakeEngineAdapter(GetCurrentCatalogFromFunctionMixin):
         batch_size: int,
         target_table: TableName,
     ) -> t.List[SourceQuery]:
-        temp_table = self._get_temp_table(target_table or "pandas")
+        temp_table = self._get_temp_table(
+            target_table or "pandas", quoted=False
+        )  # write_pandas() re-quotes everything without checking if its already quoted
 
         def query_factory() -> Query:
             if snowpark and isinstance(df, snowpark.dataframe.DataFrame):
@@ -211,10 +213,10 @@ class SnowflakeEngineAdapter(GetCurrentCatalogFromFunctionMixin):
                 # Workaround for https://github.com/snowflakedb/snowflake-connector-python/issues/1034
                 # The above issue has already been fixed upstream, but we keep the following
                 # line anyway in order to support a wider range of Snowflake versions.
-                schema = f'"{temp_table.db}"'
+                schema = temp_table.db
                 if temp_table.catalog:
-                    schema = f'"{temp_table.catalog}".{schema}'
-                self.cursor.execute(f"USE SCHEMA {schema}")
+                    schema = f"{temp_table.catalog}.{schema}"
+                self.set_current_schema(schema)
 
                 # See: https://stackoverflow.com/a/75627721
                 for column, kind in columns_to_types.items():
@@ -240,7 +242,11 @@ class SnowflakeEngineAdapter(GetCurrentCatalogFromFunctionMixin):
                     df,
                     temp_table.name,
                     schema=temp_table.db or None,
-                    database=temp_table.catalog or None,
+                    database=normalize_identifiers(temp_table.catalog, dialect=self.dialect).sql(
+                        dialect=self.dialect
+                    )
+                    if temp_table.catalog
+                    else None,
                     chunk_size=self.DEFAULT_BATCH_SIZE,
                     overwrite=True,
                     table_type="temp",  # if you dont have this, it will convert the table we created above into a normal table and it wont get dropped when the session ends
@@ -252,7 +258,13 @@ class SnowflakeEngineAdapter(GetCurrentCatalogFromFunctionMixin):
 
             return exp.select(*self._casted_columns(columns_to_types)).from_(temp_table)
 
-        return [SourceQuery(query_factory=query_factory)]
+        # the cleanup_func technically isnt needed because the temp table gets dropped when the session ends
+        # but boy does it make our multi-adapter integration tests easier to write
+        return [
+            SourceQuery(
+                query_factory=query_factory, cleanup_func=lambda: self.drop_table(temp_table)
+            )
+        ]
 
     def _fetch_native_df(
         self, query: t.Union[exp.Expression, str], quote_identifiers: bool = False
@@ -280,6 +292,11 @@ class SnowflakeEngineAdapter(GetCurrentCatalogFromFunctionMixin):
 
         schema = to_schema(schema_name)
         catalog_name = schema.catalog or self.get_current_catalog()
+        if catalog_name:
+            catalog_name = normalize_identifiers(catalog_name, dialect=self.dialect).sql(
+                dialect=self.dialect
+            )
+
         query = (
             exp.select(
                 exp.column("TABLE_CATALOG").as_("catalog"),
@@ -308,6 +325,8 @@ class SnowflakeEngineAdapter(GetCurrentCatalogFromFunctionMixin):
             )
             .from_(exp.table_("TABLES", db="INFORMATION_SCHEMA", catalog=catalog_name))
             .where(exp.column("TABLE_SCHEMA").eq(schema.db))
+            # Snowflake seems to have delayed internal metadata updates and will sometimes return duplicates
+            .distinct()
         )
         if object_names:
             query = query.where(exp.column("TABLE_NAME").isin(*object_names))
@@ -326,7 +345,39 @@ class SnowflakeEngineAdapter(GetCurrentCatalogFromFunctionMixin):
         ]
 
     def set_current_catalog(self, catalog: str) -> None:
-        self.execute(exp.Use(this=exp.to_identifier(catalog)))
+        self.execute(exp.Use(this=normalize_identifiers(catalog, dialect=self.dialect)))
+
+    def set_current_schema(self, schema: str) -> None:
+        self.execute(exp.Use(kind="SCHEMA", this=to_schema(schema)))
+
+    def _to_sql(self, expression: exp.Expression, quote: bool = True, **kwargs: t.Any) -> str:
+        # note: important to use self._default_catalog instead of the self.default_catalog property
+        # otherwise we get RecursionError: maximum recursion depth exceeded
+        # because it calls get_current_catalog(), which executes a query, which needs the default catalog, which calls get_current_catalog()... etc
+        if self._default_catalog:
+
+            def unquote_and_lower(identifier: str) -> str:
+                return exp.to_identifier(identifier).name.lower()
+
+            default_catalog_unquoted = unquote_and_lower(self._default_catalog)
+            default_catalog_normalized = normalize_identifiers(
+                self._default_catalog, dialect=self.dialect
+            )
+
+            def catalog_rewriter(node: exp.Expression) -> exp.Expression:
+                if isinstance(node, exp.Table):
+                    if node.catalog:
+                        # only replace the catalog on the model with the target catalog if the two are functionally equivalent
+                        if unquote_and_lower(node.catalog) == default_catalog_unquoted:
+                            node.set("catalog", default_catalog_normalized)
+                return node
+
+            # Rewrite whatever default catalog is present on the query to be compatible with what the user supplied in the
+            # Snowflake connection config. This is because the catalog present on the model gets normalized and quoted to match
+            # the source dialect, which isnt always compatible with Snowflake
+            expression = expression.transform(catalog_rewriter)
+
+        return super()._to_sql(expression=expression, quote=quote, **kwargs)
 
     def _build_create_comment_column_exp(
         self, table: exp.Table, column_name: str, column_comment: str, table_kind: str = "TABLE"
