@@ -593,8 +593,12 @@ def test_macro_parameter_resolution(macro_evaluator):
 
     with pytest.raises(MacroEvalError) as e:
         macro_evaluator.evaluate(parse_one("@test_arg_resolution(pos_only := 1)"))
-    assert str(e.value.__cause__) == (
-        "'pos_only' parameter is positional only, but was passed as a keyword"
+
+    # The CI was failing for Python 3.12 with the latter message, but other versions fail
+    # with the former one. This ensures we capture both.
+    assert str(e.value.__cause__) in (
+        "'pos_only' parameter is positional only, but was passed as a keyword",
+        "missing a required argument: 'a1'",
     )
 
     with pytest.raises(MacroEvalError) as e:
