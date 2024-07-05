@@ -3,6 +3,7 @@ from __future__ import annotations
 import fnmatch
 import itertools
 import pathlib
+import re
 import typing as t
 from collections.abc import Iterator
 
@@ -12,6 +13,7 @@ from sqlmesh.utils import unique
 from sqlmesh.utils.pydantic import PydanticModel
 from sqlmesh.utils.yaml import load as yaml_load
 
+_variables: dict[str, str] | None = {}
 
 class ModelTestMetadata(PydanticModel):
     path: pathlib.Path
@@ -26,6 +28,11 @@ class ModelTestMetadata(PydanticModel):
         return self.fully_qualified_test_name.__hash__()
 
 
+def var_replace(m: re.Match) -> str:
+    replacement = _variables.get(m.group(1))
+    return replacement if replacement else "disaster"
+
+
 def load_model_test_file(path: pathlib.Path) -> dict[str, ModelTestMetadata]:
     """Load a single model test file.
 
@@ -36,7 +43,14 @@ def load_model_test_file(path: pathlib.Path) -> dict[str, ModelTestMetadata]:
         A list of ModelTestMetadata named tuples.
     """
     model_test_metadata = {}
-    contents = yaml_load(path)
+    with open(path) as f:
+        file_contents = f.read()
+
+    replaced_file_contents = re.sub(r"@{(.*)}", var_replace, file_contents)
+    print(replaced_file_contents)
+
+
+    contents = yaml_load(replaced_file_contents)
 
     for test_name, value in contents.items():
         model_test_metadata[test_name] = ModelTestMetadata(
@@ -46,8 +60,7 @@ def load_model_test_file(path: pathlib.Path) -> dict[str, ModelTestMetadata]:
 
 
 def discover_model_tests(
-    path: pathlib.Path, ignore_patterns: list[str] | None = None
-) -> Iterator[ModelTestMetadata]:
+        path: pathlib.Path, ignore_patterns: list[str] | None = None) -> Iterator[ModelTestMetadata]:
     """Discover model tests.
 
     Model tests are defined in YAML files and contain the inputs and outputs used to test model queries.
@@ -97,7 +110,11 @@ def get_all_model_tests(
     *paths: pathlib.Path,
     patterns: list[str] | None = None,
     ignore_patterns: list[str] | None = None,
+    variables: dict[str, str] | None = None,
 ) -> list[ModelTestMetadata]:
+    print(variables)
+    global _variables
+    _variables = variables
     model_test_metadatas = [
         meta for path in paths for meta in discover_model_tests(pathlib.Path(path), ignore_patterns)
     ]
