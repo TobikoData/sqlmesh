@@ -1325,7 +1325,7 @@ class GenericContext(BaseContext, t.Generic[C]):
                         expr = ref.expression
 
                         def _quote_identifier(expr: exp.Expression) -> str:
-                            return f"'{expr.this.this}'" if expr.this.quoted else expr.this.this
+                            return f'"{expr.this.this}"' if expr.this.quoted else expr.this.this
 
                         on = (
                             [_quote_identifier(key) for key in expr.expressions]
