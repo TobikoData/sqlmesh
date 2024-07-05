@@ -3,6 +3,7 @@ from __future__ import annotations
 import fnmatch
 import itertools
 import pathlib
+import re
 import typing as t
 from collections.abc import Iterator
 
@@ -26,7 +27,16 @@ class ModelTestMetadata(PydanticModel):
         return self.fully_qualified_test_name.__hash__()
 
 
-def load_model_test_file(path: pathlib.Path) -> dict[str, ModelTestMetadata]:
+def replace_placeholder_identifiers(file_contents: str, variables: dict[str, str]) -> str:
+    replaced_file_contents = file_contents
+    for m in re.finditer(r"@{(.*)}", file_contents):
+        thing_to_replace = file_contents[m.span()[0]:m.span()[1]]
+        thing_to_replace_with = variables.get(m.group(1))
+        replaced_file_contents = re.sub(thing_to_replace, thing_to_replace_with, replaced_file_contents)
+    return replaced_file_contents
+
+
+def load_model_test_file(path: pathlib.Path, variables: dict[str, str]| None) -> dict[str, ModelTestMetadata]:
     """Load a single model test file.
 
     Args:
@@ -36,7 +46,13 @@ def load_model_test_file(path: pathlib.Path) -> dict[str, ModelTestMetadata]:
         A list of ModelTestMetadata named tuples.
     """
     model_test_metadata = {}
-    contents = yaml_load(path)
+    with open(path) as f:
+        file_contents = f.read()
+
+    if variables:
+        file_contents = replace_placeholder_identifiers(file_contents, variables)
+
+    contents = yaml_load(file_contents)
 
     for test_name, value in contents.items():
         model_test_metadata[test_name] = ModelTestMetadata(
@@ -46,8 +62,8 @@ def load_model_test_file(path: pathlib.Path) -> dict[str, ModelTestMetadata]:
 
 
 def discover_model_tests(
-    path: pathlib.Path, ignore_patterns: list[str] | None = None
-) -> Iterator[ModelTestMetadata]:
+        path: pathlib.Path, ignore_patterns: list[str] | None = None, variables: dict[str, str] | None = None
+    ) -> Iterator[ModelTestMetadata]:
     """Discover model tests.
 
     Model tests are defined in YAML files and contain the inputs and outputs used to test model queries.
@@ -69,7 +85,7 @@ def discover_model_tests(
             if yaml_file.match(ignore_pattern):
                 break
         else:
-            for model_test_metadata in load_model_test_file(yaml_file).values():
+            for model_test_metadata in load_model_test_file(yaml_file, variables).values():
                 yield model_test_metadata
 
 
@@ -97,9 +113,10 @@ def get_all_model_tests(
     *paths: pathlib.Path,
     patterns: list[str] | None = None,
     ignore_patterns: list[str] | None = None,
+    variables: dict[str, str] | None = None,
 ) -> list[ModelTestMetadata]:
     model_test_metadatas = [
-        meta for path in paths for meta in discover_model_tests(pathlib.Path(path), ignore_patterns)
+        meta for path in paths for meta in discover_model_tests(pathlib.Path(path), ignore_patterns, variables)
     ]
     if patterns:
         model_test_metadatas = filter_tests_by_patterns(model_test_metadatas, patterns)
