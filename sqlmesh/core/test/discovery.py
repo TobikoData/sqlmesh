@@ -36,11 +36,6 @@ def replace_placeholder_identifiers(file_contents: str, variables: dict[str, str
     return replaced_file_contents
 
 
-def var_replace(m: re.Match, vars: dict[str, str]) -> str | None:
-    replacement = vars.get(m.group(1))
-    return replacement
-
-
 def load_model_test_file(path: pathlib.Path, variables: dict[str, str]| None) -> dict[str, ModelTestMetadata]:
     """Load a single model test file.
 
