@@ -1271,7 +1271,7 @@ class GenericContext(BaseContext, t.Generic[C]):
         self,
         source: str,
         target: str,
-        on: t.List[str] | exp.Condition | None = None,
+        on: t.List[str | exp.Identifier] | exp.Condition | None = None,
         model_or_snapshot: t.Optional[ModelOrSnapshot] = None,
         where: t.Optional[str | exp.Condition] = None,
         limit: int = 20,
@@ -1299,6 +1299,10 @@ class GenericContext(BaseContext, t.Generic[C]):
             The TableDiff object containing schema and summary differences.
         """
         source_alias, target_alias = source, target
+
+        if on and not isinstance(on, exp.Condition):
+            on = [exp.to_identifier(key, quoted=True) for key in on]
+
         if model_or_snapshot:
             model = self.get_model(model_or_snapshot, raise_if_missing=True)
             source_env = self.state_reader.get_environment(source)
@@ -1321,7 +1325,13 @@ class GenericContext(BaseContext, t.Generic[C]):
             if not on:
                 for ref in model.all_references:
                     if ref.unique:
-                        on = ref.columns
+                        on = (
+                            [key.this for key in ref.expression.expressions]
+                            if isinstance(ref.expression, exp.Tuple)
+                            else [ref.expression.this.this]
+                            if isinstance(ref.expression.this.this, str)
+                            else [ref.expression.this.this.this]
+                        )
 
         if not on:
             raise SQLMeshError(
@@ -1337,6 +1347,7 @@ class GenericContext(BaseContext, t.Generic[C]):
             source_alias=source_alias,
             target_alias=target_alias,
             model_name=model.name if model_or_snapshot else None,
+            model_dialect=model.dialect if model_or_snapshot else None,
             limit=limit,
             decimals=decimals,
         )
