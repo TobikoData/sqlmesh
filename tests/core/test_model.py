@@ -5230,3 +5230,36 @@ def test_managed_kind_python():
             module_path=Path("."),
             path=Path("."),
         ).validate_definition()
+
+
+def test_trailing_comments():
+    expressions = d.parse(
+        """
+        MODEL (name db.table);
+
+        /* some comment A */
+
+        SELECT 1;
+        /* some comment B */
+        """
+    )
+    model = load_sql_based_model(expressions)
+    assert not model.render_pre_statements()
+    assert not model.render_post_statements()
+
+    expressions = d.parse(
+        """
+        MODEL (
+            name db.seed,
+            kind SEED (
+              path '../seeds/waiter_names.csv',
+              batch_size 100,
+            )
+        );
+
+        /* some comment A */
+        """
+    )
+    model = load_sql_based_model(expressions, path=Path("./examples/sushi/models/test_model.sql"))
+    assert not model.render_pre_statements()
+    assert not model.render_post_statements()

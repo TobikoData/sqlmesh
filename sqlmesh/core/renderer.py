@@ -347,7 +347,7 @@ class ExpressionRenderer(BaseExpressionRenderer):
                 **kwargs,
             )
             for e in expressions
-            if e
+            if e and not isinstance(e, exp.Semicolon)
         ]
 
 
