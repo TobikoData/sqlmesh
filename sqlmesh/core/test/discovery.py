@@ -13,7 +13,6 @@ from sqlmesh.utils import unique
 from sqlmesh.utils.pydantic import PydanticModel
 from sqlmesh.utils.yaml import load as yaml_load
 
-_variables: dict[str, str] | None = {}
 
 class ModelTestMetadata(PydanticModel):
     path: pathlib.Path
@@ -28,12 +27,21 @@ class ModelTestMetadata(PydanticModel):
         return self.fully_qualified_test_name.__hash__()
 
 
-def var_replace(m: re.Match) -> str:
-    replacement = _variables.get(m.group(1))
-    return replacement if replacement else "disaster"
+def replace_placeholder_identifiers(file_contents: str, variables: dict[str, str]) -> str:
+    replaced_file_contents = file_contents
+    for m in re.finditer(r"@{(.*)}", file_contents):
+        thing_to_replace = file_contents[m.span()[0]:m.span()[1]]
+        thing_to_replace_with = variables.get(m.group(1))
+        replaced_file_contents = re.sub(thing_to_replace, thing_to_replace_with, replaced_file_contents)
+    return replaced_file_contents
 
 
-def load_model_test_file(path: pathlib.Path) -> dict[str, ModelTestMetadata]:
+def var_replace(m: re.Match, vars: dict[str, str]) -> str | None:
+    replacement = vars.get(m.group(1))
+    return replacement
+
+
+def load_model_test_file(path: pathlib.Path, variables: dict[str, str]| None) -> dict[str, ModelTestMetadata]:
     """Load a single model test file.
 
     Args:
@@ -46,11 +54,10 @@ def load_model_test_file(path: pathlib.Path) -> dict[str, ModelTestMetadata]:
     with open(path) as f:
         file_contents = f.read()
 
-    replaced_file_contents = re.sub(r"@{(.*)}", var_replace, file_contents)
-    print(replaced_file_contents)
+    if variables:
+        file_contents = replace_placeholder_identifiers(file_contents, variables)
 
-
-    contents = yaml_load(replaced_file_contents)
+    contents = yaml_load(file_contents)
 
     for test_name, value in contents.items():
         model_test_metadata[test_name] = ModelTestMetadata(
@@ -60,7 +67,8 @@ def load_model_test_file(path: pathlib.Path) -> dict[str, ModelTestMetadata]:
 
 
 def discover_model_tests(
-        path: pathlib.Path, ignore_patterns: list[str] | None = None) -> Iterator[ModelTestMetadata]:
+        path: pathlib.Path, ignore_patterns: list[str] | None = None, variables: dict[str, str] | None = None
+    ) -> Iterator[ModelTestMetadata]:
     """Discover model tests.
 
     Model tests are defined in YAML files and contain the inputs and outputs used to test model queries.
@@ -82,7 +90,7 @@ def discover_model_tests(
             if yaml_file.match(ignore_pattern):
                 break
         else:
-            for model_test_metadata in load_model_test_file(yaml_file).values():
+            for model_test_metadata in load_model_test_file(yaml_file, variables).values():
                 yield model_test_metadata
 
 
@@ -112,11 +120,8 @@ def get_all_model_tests(
     ignore_patterns: list[str] | None = None,
     variables: dict[str, str] | None = None,
 ) -> list[ModelTestMetadata]:
-    print(variables)
-    global _variables
-    _variables = variables
     model_test_metadatas = [
-        meta for path in paths for meta in discover_model_tests(pathlib.Path(path), ignore_patterns)
+        meta for path in paths for meta in discover_model_tests(pathlib.Path(path), ignore_patterns, variables)
     ]
     if patterns:
         model_test_metadatas = filter_tests_by_patterns(model_test_metadatas, patterns)
