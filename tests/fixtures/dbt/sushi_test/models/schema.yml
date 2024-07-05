@@ -7,6 +7,9 @@ models:
   - name: waiters
   - name: waiter_as_customer_by_day
   - name: waiter_revenue_by_day
+    versions:
+      - v: 1
+      - v: 2
   - name: disabled_model
     columns:
       - name: one

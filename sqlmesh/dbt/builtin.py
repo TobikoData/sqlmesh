@@ -171,11 +171,33 @@ def log(msg: str, info: bool = False) -> str:
 
 
 def generate_ref(refs: t.Dict[str, t.Any], api: Api) -> t.Callable:
-    def ref(package: str, name: t.Optional[str] = None) -> t.Optional[BaseRelation]:
+    def ref(
+        package: str, name: t.Optional[str] = None, **kwargs: t.Any
+    ) -> t.Optional[BaseRelation]:
+        version = kwargs.get("version", kwargs.get("v"))
         ref_name = f"{package}.{name}" if name else package
-        relation_info = refs.get(ref_name)
+
+        if version is not None:
+            relation_info = refs.get(f"{ref_name}_v{version}")
+            if relation_info is None:
+                logger.warning(
+                    "Could not resolve ref '%s' with version '%s'. Falling back to unversioned reference",
+                    ref_name,
+                    version,
+                )
+                relation_info = refs.get(ref_name)
+        else:
+            relation_info = refs.get(ref_name)
+            if not relation_info:
+                versioned_infos = sorted(
+                    [(r, info) for r, info in refs.items() if r.startswith(f"{ref_name}_v")],
+                    key=lambda i: i[0],
+                )
+                if versioned_infos:
+                    relation_info = versioned_infos[-1][1]
+
         if relation_info is None:
-            logger.debug("Could not resolve ref '%s'", ref_name)
+            logger.debug("Could not resolve ref '%s', version '%s'", ref_name, version)
             return None
 
         return _relation_info_to_relation(relation_info, api.Relation, api.quote_policy)
