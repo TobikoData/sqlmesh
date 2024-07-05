@@ -138,7 +138,7 @@ class TableDiff:
         adapter: EngineAdapter,
         source: TableName,
         target: TableName,
-        on: t.List[str | exp.Identifier] | exp.Condition,
+        on: t.List[str] | exp.Condition,
         where: t.Optional[str | exp.Condition] = None,
         limit: int = 20,
         source_alias: t.Optional[str] = None,
@@ -161,7 +161,8 @@ class TableDiff:
         self.source_alias = source_alias
         self.target_alias = target_alias
 
-        if isinstance(on, (list, tuple)):
+        join_condition = [exp.parse_identifier(key) for key in on]
+        if isinstance(join_condition, (list, tuple)):
             s_table = exp.to_identifier("s", quoted=True)
             t_table = exp.to_identifier("t", quoted=True)
 
@@ -172,11 +173,11 @@ class TableDiff:
                         exp.column(c, s_table).is_(exp.null())
                         & exp.column(c, t_table).is_(exp.null())
                     )
-                    for c in on
+                    for c in join_condition
                 )
             )
         else:
-            self.on = on
+            self.on = join_condition
 
         normalize_identifiers(self.on, dialect=self.model_dialect or self.dialect)
 

@@ -1271,7 +1271,7 @@ class GenericContext(BaseContext, t.Generic[C]):
         self,
         source: str,
         target: str,
-        on: t.List[str | exp.Identifier] | exp.Condition | None = None,
+        on: t.List[str] | exp.Condition | None = None,
         model_or_snapshot: t.Optional[ModelOrSnapshot] = None,
         where: t.Optional[str | exp.Condition] = None,
         limit: int = 20,
@@ -1300,9 +1300,6 @@ class GenericContext(BaseContext, t.Generic[C]):
         """
         source_alias, target_alias = source, target
 
-        if on and not isinstance(on, exp.Condition):
-            on = [exp.to_identifier(key, quoted=True) for key in on]
-
         if model_or_snapshot:
             model = self.get_model(model_or_snapshot, raise_if_missing=True)
             source_env = self.state_reader.get_environment(source)
@@ -1325,12 +1322,17 @@ class GenericContext(BaseContext, t.Generic[C]):
             if not on:
                 for ref in model.all_references:
                     if ref.unique:
+                        expr = ref.expression
+
+                        def _quote_identifier(expr: exp.Expression) -> str:
+                            return f"'{expr.this.this}'" if expr.this.quoted else expr.this.this
+
                         on = (
-                            [key.this for key in ref.expression.expressions]
-                            if isinstance(ref.expression, exp.Tuple)
-                            else [ref.expression.this.this]
-                            if isinstance(ref.expression.this.this, str)
-                            else [ref.expression.this.this.this]
+                            [_quote_identifier(key) for key in expr.expressions]
+                            if isinstance(expr, exp.Tuple)
+                            else [_quote_identifier(expr)]
+                            if isinstance(expr.this.this, str)
+                            else [_quote_identifier(expr.this)]
                         )
 
         if not on:
