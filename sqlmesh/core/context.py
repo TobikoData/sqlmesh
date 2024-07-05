@@ -1506,6 +1506,7 @@ class GenericContext(BaseContext, t.Generic[C]):
                         path / c.TESTS,
                         patterns=match_patterns,
                         ignore_patterns=config.ignore_patterns,
+                        variables=config.variables
                     )
                 )
 

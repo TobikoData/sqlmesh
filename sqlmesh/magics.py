@@ -247,6 +247,7 @@ class SQLMeshMagics(Magics):
                 get_all_model_tests(
                     path / c.TESTS,
                     ignore_patterns=config.ignore_patterns,
+                    variables=config.variables,
                 )
             )
 

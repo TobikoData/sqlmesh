@@ -111,9 +111,9 @@ def run_model_tests(
         path = pathlib.Path(filename)
 
         if test_name:
-            loaded_tests.append(load_model_test_file(path)[test_name])
+            loaded_tests.append(load_model_test_file(path, config.variables)[test_name])
         else:
-            loaded_tests.extend(load_model_test_file(path).values())
+            loaded_tests.extend(load_model_test_file(path, config.variables).values())
 
     if patterns:
         loaded_tests = filter_tests_by_patterns(loaded_tests, patterns)
