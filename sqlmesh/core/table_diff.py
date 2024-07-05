@@ -161,8 +161,8 @@ class TableDiff:
         self.source_alias = source_alias
         self.target_alias = target_alias
 
-        join_condition = [exp.parse_identifier(key) for key in on]
-        if isinstance(join_condition, (list, tuple)):
+        if isinstance(on, (list, tuple)):
+            join_condition = [exp.parse_identifier(key) for key in on]
             s_table = exp.to_identifier("s", quoted=True)
             t_table = exp.to_identifier("t", quoted=True)
 
@@ -177,7 +177,7 @@ class TableDiff:
                 )
             )
         else:
-            self.on = join_condition
+            self.on = on
 
         normalize_identifiers(self.on, dialect=self.model_dialect or self.dialect)
 
