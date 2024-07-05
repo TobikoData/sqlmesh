@@ -5108,18 +5108,15 @@ materialized TRUE
 
 
 @pytest.mark.parametrize(
-    "is_metadata",
+    "metadata_only",
     [True, False],
 )
-def test_macro_func_hash(is_metadata):
+def test_macro_func_hash(metadata_only):
     macro.set_registry({})
 
-    @macro(is_metadata=is_metadata)
+    @macro(metadata_only=metadata_only)
     def noop(evaluator) -> None:
         return None
-
-    # Prevent macro from entering python_env so data hash is consistent
-    setattr(macro.get_registry()["noop"], c.SQLMESH_BUILTIN, True)
 
     expressions = d.parse(
         """
@@ -5146,12 +5143,35 @@ def test_macro_func_hash(is_metadata):
     new_model = load_sql_based_model(
         expressions, path=Path("./examples/sushi/models/test_model.sql")
     )
-    if is_metadata:
+    if metadata_only:
+        assert "noop" not in new_model._data_hash_values[0]
+        assert "noop" in new_model._additional_metadata[0]
         assert model.data_hash == new_model.data_hash
         assert model.metadata_hash(audits={}) != new_model.metadata_hash(audits={})
     else:
+        assert "noop" in new_model._data_hash_values[0]
+        assert not new_model._additional_metadata
         assert model.data_hash != new_model.data_hash
         assert model.metadata_hash(audits={}) == new_model.metadata_hash(audits={})
+
+    @macro(metadata_only=metadata_only)
+    def noop(evaluator) -> None:
+        print("noop")
+        return None
+
+    updated_model = load_sql_based_model(
+        expressions, path=Path("./examples/sushi/models/test_model.sql")
+    )
+    if metadata_only:
+        assert "print" not in new_model._additional_metadata[0]
+        assert "print" in updated_model._additional_metadata[0]
+        assert new_model.data_hash == updated_model.data_hash
+        assert new_model.metadata_hash(audits={}) != updated_model.metadata_hash(audits={})
+    else:
+        assert "print" not in new_model._data_hash_values[0]
+        assert "print" in updated_model._data_hash_values[0]
+        assert new_model.data_hash != updated_model.data_hash
+        assert new_model.metadata_hash(audits={}) == updated_model.metadata_hash(audits={})
 
 
 def test_managed_kind_sql():
