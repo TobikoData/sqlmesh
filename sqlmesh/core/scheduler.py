@@ -75,7 +75,7 @@ class Signal(abc.ABC):
         """
 
 
-SignalFactory = t.Callable[[t.Dict[str, str | int | float | bool]], Signal]
+SignalFactory = t.Callable[[t.Dict[str, t.Union[str, int, float, bool]]], Signal]
 
 
 class Scheduler:
