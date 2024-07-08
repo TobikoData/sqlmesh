@@ -193,9 +193,13 @@ Below is the list of configuration options specific to each corresponding schedu
 
 #### Builtin
 
+**Type:** `builtin`
+
 No configuration options are supported by this scheduler type.
 
 #### Airflow
+
+**Type:** `airflow`
 
 See [Airflow Integration Guide](../integrations/airflow.md) for information about how to integrate Airflow with SQLMesh.
 
@@ -215,6 +219,8 @@ See [Airflow Integration Guide](../integrations/airflow.md) for information abou
 
 
 #### Cloud Composer
+
+**Type:** `cloud_composer`
 
 The Google Cloud Composer scheduler type shares the same configuration options as the `airflow` type, except for `username` and `password`. Cloud Composer relies on `gcloud` authentication, so the `username` and `password` options are not required.
 
