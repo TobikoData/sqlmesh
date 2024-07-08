@@ -120,6 +120,9 @@ class BaseModelConfig(GeneralConfig):
     columns: t.Dict[str, ColumnConfig] = {}
     quoting: t.Dict[str, t.Optional[bool]] = {}
 
+    version: t.Optional[int] = None
+    latest_version: t.Optional[int] = None
+
     _canonical_name: t.Optional[str] = None
 
     @field_validator("pre_hook", "post_hook", mode="before")
@@ -184,9 +187,9 @@ class BaseModelConfig(GeneralConfig):
     @property
     def config_name(self) -> str:
         """
-        Get the model's config name (package_name.name)
+        Get the model's config name (package_name.alias)
         """
-        return f"{self.package_name}.{self.name}"
+        return f"{self.package_name}.{self.alias}"
 
     def dialect(self, context: DbtContext) -> str:
         return self.dialect_ or context.default_dialect

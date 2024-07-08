@@ -77,3 +77,6 @@ models:
               amount: 10000
       - name: ds
         description: Date
+    versions:
+      - v: 1
+      - v: 2
