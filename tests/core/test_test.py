@@ -1449,6 +1449,45 @@ test_pyspark_model:
     )
 
 
+def test_variable_usage(tmp_path: Path) -> None:
+    init_example_project(tmp_path, dialect="duckdb")
+
+    config = Config(
+        default_connection=DuckDBConnectionConfig(),
+        model_defaults=ModelDefaultsConfig(dialect="duckdb"),
+        variables={"gold": "gold_db", "silver": "silver_db"},
+    )
+    context = Context(paths=tmp_path, config=config)
+
+    parent = _create_model("SELECT 1 as id", meta="MODEL (name silver_db.sch.b)")
+    parent = t.cast(SqlModel, context.upsert_model(parent))
+
+    child = _create_model("SELECT id FROM silver_db.sch.b", meta="MODEL (name gold_db.sch.a)")
+    child = t.cast(SqlModel, context.upsert_model(child))
+
+    test_file = tmp_path / "tests" / "test_parameterized_model_names.yaml"
+    test_file.write_text(
+        """
+test_parameterized_model_names:
+  model: {{ var('gold') }}.sch.a
+  inputs:
+    {{ var('silver') }}.sch.b:
+      - id: 1
+  outputs:
+    query:
+      - id: 1
+        """
+    )
+
+    results = context.test()
+
+    assert not results.failures
+    assert not results.errors
+
+    # The example project has one test and we added another one above
+    assert len(results.successes) == 2
+
+
 def test_test_generation(tmp_path: Path) -> None:
     init_example_project(tmp_path, dialect="duckdb")
 

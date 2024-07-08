@@ -26,7 +26,9 @@ class ModelTestMetadata(PydanticModel):
         return self.fully_qualified_test_name.__hash__()
 
 
-def load_model_test_file(path: pathlib.Path) -> dict[str, ModelTestMetadata]:
+def load_model_test_file(
+    path: pathlib.Path, variables: dict[str, t.Any] | None = None
+) -> dict[str, ModelTestMetadata]:
     """Load a single model test file.
 
     Args:
@@ -36,7 +38,7 @@ def load_model_test_file(path: pathlib.Path) -> dict[str, ModelTestMetadata]:
         A list of ModelTestMetadata named tuples.
     """
     model_test_metadata = {}
-    contents = yaml_load(path)
+    contents = yaml_load(path, variables=variables)
 
     for test_name, value in contents.items():
         model_test_metadata[test_name] = ModelTestMetadata(
@@ -46,7 +48,9 @@ def load_model_test_file(path: pathlib.Path) -> dict[str, ModelTestMetadata]:
 
 
 def discover_model_tests(
-    path: pathlib.Path, ignore_patterns: list[str] | None = None
+    path: pathlib.Path,
+    ignore_patterns: list[str] | None = None,
+    variables: dict[str, t.Any] | None = None,
 ) -> Iterator[ModelTestMetadata]:
     """Discover model tests.
 
@@ -69,7 +73,9 @@ def discover_model_tests(
             if yaml_file.match(ignore_pattern):
                 break
         else:
-            for model_test_metadata in load_model_test_file(yaml_file).values():
+            for model_test_metadata in load_model_test_file(
+                yaml_file, variables=variables
+            ).values():
                 yield model_test_metadata
 
 
@@ -97,9 +103,12 @@ def get_all_model_tests(
     *paths: pathlib.Path,
     patterns: list[str] | None = None,
     ignore_patterns: list[str] | None = None,
+    variables: dict[str, t.Any] | None = None,
 ) -> list[ModelTestMetadata]:
     model_test_metadatas = [
-        meta for path in paths for meta in discover_model_tests(pathlib.Path(path), ignore_patterns)
+        meta
+        for path in paths
+        for meta in discover_model_tests(pathlib.Path(path), ignore_patterns, variables=variables)
     ]
     if patterns:
         model_test_metadatas = filter_tests_by_patterns(model_test_metadatas, patterns)

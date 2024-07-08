@@ -7,8 +7,9 @@ from pathlib import Path
 
 from ruamel import yaml
 
+from sqlmesh.core.constants import VAR
 from sqlmesh.utils.errors import SQLMeshError
-from sqlmesh.utils.jinja import ENVIRONMENT
+from sqlmesh.utils.jinja import ENVIRONMENT, create_var
 
 JINJA_METHODS = {
     "env_var": lambda key, default=None: getenv(key, default),
@@ -22,6 +23,7 @@ def load(
     raise_if_empty: bool = True,
     render_jinja: bool = True,
     allow_duplicate_keys: bool = False,
+    variables: t.Optional[t.Dict[str, t.Any]] = None,
 ) -> t.Dict:
     """Loads a YAML object from either a raw string or a file."""
     path: t.Optional[Path] = None
@@ -32,7 +34,12 @@ def load(
             source = file.read()
 
     if render_jinja:
-        source = ENVIRONMENT.from_string(source).render(JINJA_METHODS)
+        source = ENVIRONMENT.from_string(source).render(
+            {
+                **JINJA_METHODS,
+                VAR: create_var(variables or {}),
+            }
+        )
 
     yaml = YAML()
     yaml.allow_duplicate_keys = allow_duplicate_keys
