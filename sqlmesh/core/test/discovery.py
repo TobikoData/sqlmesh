@@ -32,7 +32,10 @@ def replace_placeholder_identifiers(file_contents: str, variables: dict[str, str
     for m in re.finditer(r"@{(.*)}", file_contents):
         thing_to_replace = file_contents[m.span()[0]:m.span()[1]]
         thing_to_replace_with = variables.get(m.group(1))
-        replaced_file_contents = re.sub(thing_to_replace, thing_to_replace_with, replaced_file_contents)
+        if thing_to_replace_with:
+            replaced_file_contents = re.sub(thing_to_replace, thing_to_replace_with, replaced_file_contents)
+        else:
+            raise ValueError(f"Could not find value for {thing_to_replace}")
     return replaced_file_contents
 
 

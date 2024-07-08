@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import datetime
+import tempfile
 import typing as t
 from pathlib import Path
 from unittest.mock import call
@@ -32,7 +33,6 @@ from sqlmesh.utils.yaml import load as load_yaml
 if t.TYPE_CHECKING:
     from unittest import TestResult
 
-pytestmark = pytest.mark.slow
 
 SUSHI_FOO_META = "MODEL (name sushi.foo, kind FULL)"
 
@@ -1635,3 +1635,31 @@ def test_test_generation_with_timestamp(tmp_path: Path) -> None:
     assert test["test_foo"]["outputs"] == {
         "query": [{"ts_col": datetime.datetime(2024, 9, 20, 11, 30, 0, 123456)}]
     }
+
+
+def test_identifier_placeholders() -> None:
+    ctx = Context(config=Config(model_defaults=ModelDefaultsConfig(dialect="duckdb"),
+                                variables={"gold": "gold_db", "silver": "silver_db"}))
+
+    gold_model = _create_model("SELECT id FROM silver_db.sushi.bar", "MODEL (name gold_db.sushi.foo)")
+    ctx.upsert_model(gold_model)
+
+    silver_model = _create_model("SELECT 1 as id", "MODEL (name silver_db.sushi.bar)")
+    ctx.upsert_model(silver_model)
+
+    test = """
+test_foo:
+  model: '@{gold}.sushi.foo'
+  inputs:
+    '@{silver}.sushi.bar':
+      - id: 1
+  outputs:
+    query:
+      - id: 1
+"""
+    with tempfile.NamedTemporaryFile(mode="w", delete=False) as t:
+        t.write(test)
+        t.close()
+        results = ctx.test(tests=[t.name])
+        successful_tests = [success.test_name for success in results.successes]  # type: ignore
+        assert len(successful_tests) == 1
