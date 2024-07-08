@@ -221,6 +221,8 @@ class TableDiff:
                 elif col.table == "t":
                     t_index.append(col)
             index_cols = list(dict.fromkeys(index_cols))
+            s_index = list(dict.fromkeys(s_index))
+            t_index = list(dict.fromkeys(t_index))
 
             matched_columns = {
                 c: t for c, t in self.source_schema.items() if t == self.target_schema.get(c)
