@@ -1324,16 +1324,12 @@ class GenericContext(BaseContext, t.Generic[C]):
                     if ref.unique:
                         expr = ref.expression
 
-                        def _quote_identifier(expr: exp.Expression) -> str:
-                            return f'"{expr.this.this}"' if expr.this.quoted else expr.this.this
-
-                        on = (
-                            [_quote_identifier(key) for key in expr.expressions]
-                            if isinstance(expr, exp.Tuple)
-                            else [_quote_identifier(expr)]
-                            if isinstance(expr.this.this, str)
-                            else [_quote_identifier(expr.this)]
-                        )
+                        if isinstance(expr, exp.Tuple):
+                            on = [key.this.sql() for key in expr.expressions]
+                        elif isinstance(expr, exp.Paren):
+                            on = [expr.this.this.sql()]
+                        else:
+                            on = [expr.this.sql()]
 
         if not on:
             raise SQLMeshError(
