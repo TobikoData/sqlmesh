@@ -110,6 +110,24 @@ def test_star(assert_exp_eq) -> None:
     evaluator = MacroEvaluator(schema=schema, dialect="tsql")
     assert_exp_eq(evaluator.transform(parse_one(sql, read="tsql")), expected_sql, dialect="tsql")
 
+    sql = """SELECT @STAR(foo, exclude := [SomeColumn]) FROM foo"""
+    expected_sql = "SELECT CAST(`foo`.`a` AS STRING) AS `a` FROM foo"
+    schema = MappingSchema(
+        {
+            "foo": {
+                "a": exp.DataType.build("string"),
+                "somecolumn": "int",
+            },
+        },
+        dialect="databricks",
+    )
+    evaluator = MacroEvaluator(schema=schema, dialect="databricks")
+    assert_exp_eq(
+        evaluator.transform(parse_one(sql, read="databricks")),
+        expected_sql,
+        dialect="databricks",
+    )
+
 
 def test_start_no_column_types(assert_exp_eq) -> None:
     sql = """SELECT @STAR(foo) FROM foo"""
