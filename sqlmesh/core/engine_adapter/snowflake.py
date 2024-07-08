@@ -382,7 +382,7 @@ class SnowflakeEngineAdapter(GetCurrentCatalogFromFunctionMixin):
     def _build_create_comment_column_exp(
         self, table: exp.Table, column_name: str, column_comment: str, table_kind: str = "TABLE"
     ) -> exp.Comment | str:
-        table_sql = table.sql(dialect=self.dialect, identify=True)
+        table_sql = self._to_sql(table)  # so that catalog replacement happens
         column_sql = exp.column(column_name).sql(dialect=self.dialect, identify=True)
 
         truncated_comment = self._truncate_column_comment(column_comment)
