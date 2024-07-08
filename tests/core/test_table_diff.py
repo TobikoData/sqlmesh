@@ -1,8 +1,9 @@
 import pytest
+from pytest_mock.plugin import MockerFixture
 import pandas as pd
 from sqlglot import exp
 from sqlmesh.core import dialect as d
-
+from sqlmesh.core.context import Context
 from sqlmesh.core.config import AutoCategorizationMode, CategorizerConfig
 from sqlmesh.core.model import SqlModel, load_sql_based_model
 
@@ -217,3 +218,43 @@ def test_grain_check(sushi_context_fixed_date):
     assert row_diff.stats["distinct_count_t"] == 10
     assert row_diff.s_sample.shape == (0, 3)
     assert row_diff.t_sample.shape == (3, 3)
+
+
+@pytest.mark.slow
+def test_generated_sql(sushi_context_fixed_date: Context, mocker: MockerFixture):
+    engine_adapter = sushi_context_fixed_date.engine_adapter
+
+    engine_adapter.ctas(
+        "table_diff_source",
+        pd.DataFrame(
+            {
+                "key": [1, 2, 3],
+                "value": [1.0, 4.2, 4.1],
+            }
+        ),
+    )
+
+    engine_adapter.ctas(
+        "table_diff_target",
+        pd.DataFrame(
+            {
+                "key": [1, 2, 6],
+                "value": [1.0, 3.0, -2.2],
+            }
+        ),
+    )
+
+    query_sql = 'CREATE TABLE IF NOT EXISTS "sqlmesh_temp"."__temp_diff_6mexbir9" AS SELECT *, CASE WHEN "key_matches" = 1 AND "value_matches" = 1 THEN 1 ELSE 0 END AS "row_full_match" FROM (SELECT "s"."key" AS "s__key", "s"."value" AS "s__value", "t"."key" AS "t__key", "t"."value" AS "t__value", CASE WHEN NOT "s"."key" IS NULL THEN 1 ELSE 0 END AS "s_exists", CASE WHEN NOT "t"."key" IS NULL THEN 1 ELSE 0 END AS "t_exists", CASE WHEN "s"."key" = "t"."key" AND NOT "s"."key" IS NULL AND NOT "t"."key" IS NULL THEN 1 ELSE 0 END AS "row_joined", CASE WHEN "s"."key" IS NULL AND "t"."key" IS NULL THEN 1 ELSE 0 END AS "null_grain", CASE WHEN "s"."key" = "t"."key" THEN 1 WHEN ("s"."key" IS NULL) AND ("t"."key" IS NULL) THEN 1 WHEN ("s"."key" IS NULL) OR ("t"."key" IS NULL) THEN 0 ELSE 0 END AS "key_matches", CASE WHEN ROUND("s"."value", 3) = ROUND("t"."value", 3) THEN 1 WHEN ("s"."value" IS NULL) AND ("t"."value" IS NULL) THEN 1 WHEN ("s"."value" IS NULL) OR ("t"."value" IS NULL) THEN 0 ELSE 0 END AS "value_matches" FROM "table_diff_source" AS "s" FULL JOIN "table_diff_target" AS "t" ON ("s"."key" = "t"."key") OR (("s"."key" IS NULL) AND ("t"."key" IS NULL))) AS "stats"'
+    summary_query_sql = 'SELECT SUM("s_exists") AS "s_count", SUM("t_exists") AS "t_count", SUM("row_joined") AS "join_count", SUM("null_grain") AS "null_grain_count", SUM("row_full_match") AS "full_match_count", SUM("key_matches") AS "key_matches", SUM("value_matches") AS "value_matches", COUNT(DISTINCT ("s__key")) AS "distinct_count_s", COUNT(DISTINCT ("t__key")) AS "distinct_count_t" FROM "sqlmesh_temp"."__temp_diff_6mexbir9"'
+    sample_query_sql = 'SELECT "s_exists", "t_exists", "row_joined", "row_full_match", "s__key", "s__value", "t__key", "t__value" FROM "sqlmesh_temp"."__temp_diff_6mexbir9" WHERE "key_matches" = 0 OR "value_matches" = 0 ORDER BY "s__key" NULLS FIRST, "t__key" NULLS FIRST LIMIT 20'
+
+    spy_execute = mocker.spy(engine_adapter, "_execute")
+    sushi_context_fixed_date.table_diff(
+        source="table_diff_source",
+        target="table_diff_target",
+        on=["key"],
+    )
+
+    spy_execute.assert_any_call(query_sql)
+    spy_execute.assert_any_call(summary_query_sql)
+    spy_execute.assert_any_call(sample_query_sql)
