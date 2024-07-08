@@ -34,8 +34,12 @@ def load(
             source = file.read()
 
     if render_jinja:
-        JINJA_METHODS[VAR] = create_var(variables or {})
-        source = ENVIRONMENT.from_string(source).render(JINJA_METHODS)
+        source = ENVIRONMENT.from_string(source).render(
+            {
+                **JINJA_METHODS,
+                VAR: create_var(variables or {}),
+            }
+        )
 
     yaml = YAML()
     yaml.allow_duplicate_keys = allow_duplicate_keys
