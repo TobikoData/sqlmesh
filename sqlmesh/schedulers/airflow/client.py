@@ -14,7 +14,7 @@ from sqlmesh.core.snapshot import Snapshot, SnapshotId
 from sqlmesh.core.snapshot.definition import Interval
 from sqlmesh.core.state_sync import Versions
 from sqlmesh.core.user import User
-from sqlmesh.schedulers.airflow import common
+from sqlmesh.schedulers.airflow import common, NO_DEFAULT_CATALOG
 from sqlmesh.utils import unique
 from sqlmesh.utils.date import TimeLike
 from sqlmesh.utils.errors import (
@@ -45,12 +45,14 @@ class BaseAirflowClient(abc.ABC):
         self._console = console
 
     @property
-    def default_catalog(self) -> str:
+    def default_catalog(self) -> t.Optional[str]:
         default_catalog = self.get_variable(common.DEFAULT_CATALOG_VARIABLE_NAME)
         if not default_catalog:
             raise SQLMeshError(
                 "Must define `default_catalog` when creating `SQLMeshAirflow` object. See docs for more info: https://sqlmesh.readthedocs.io/en/stable/integrations/airflow/#airflow-cluster-configuration"
             )
+        if default_catalog == NO_DEFAULT_CATALOG:
+            return None
         return default_catalog
 
     def print_tracking_url(self, dag_id: str, dag_run_id: str, op_name: str) -> None:

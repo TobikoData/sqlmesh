@@ -9,9 +9,11 @@ from airflow.models import Variable
 from airflow.plugins_manager import AirflowPlugin
 
 from sqlmesh.core import constants as c
-from sqlmesh.schedulers.airflow import util
+from sqlmesh.schedulers.airflow import util, NO_DEFAULT_CATALOG
 from sqlmesh.schedulers.airflow.api import sqlmesh_api_v1
-from sqlmesh.schedulers.airflow.common import DEFAULT_CATALOG_VARIABLE_NAME
+from sqlmesh.schedulers.airflow.common import (
+    DEFAULT_CATALOG_VARIABLE_NAME,
+)
 from sqlmesh.utils.errors import SQLMeshError
 
 logger = logging.getLogger(__name__)
@@ -28,14 +30,16 @@ class SqlmeshAirflowPlugin(AirflowPlugin):
             logger.info("MWAA Webserver instance detected. Skipping SQLMesh state migration...")
             return
 
-        default_catalog = Variable.get(DEFAULT_CATALOG_VARIABLE_NAME, default_var=None)
+        default_catalog = Variable.get(DEFAULT_CATALOG_VARIABLE_NAME, default_var="MISSING")
+        if default_catalog == NO_DEFAULT_CATALOG:
+            default_catalog = None
 
         with util.scoped_state_sync() as state_sync:
             try:
                 # If default catalog is not defined then we want to raise an error unless
                 # this is a fresh install since we know nothing needs to be migrated and
                 # the client will prevent making any changes until the default catalog is set.
-                if not default_catalog:
+                if default_catalog == "MISSING":
                     versions = state_sync.get_versions(validate=False)
                     if versions.schema_version != 0:
                         raise SQLMeshError(

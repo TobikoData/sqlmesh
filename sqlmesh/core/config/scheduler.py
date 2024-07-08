@@ -192,7 +192,6 @@ class _BaseAirflowSchedulerConfig(_EngineAdapterStateSyncSchedulerConfig):
         )
 
     def get_default_catalog(self, context: GenericContext) -> t.Optional[str]:
-        # The default catalog must still be set on the Airflow side.
         default_catalog = self.get_client(context.console).default_catalog
         return self.default_catalog_override or default_catalog
 
@@ -368,7 +367,6 @@ class MWAASchedulerConfig(_EngineAdapterStateSyncSchedulerConfig, BaseConfig):
         )
 
     def get_default_catalog(self, context: GenericContext) -> t.Optional[str]:
-        # The default catalog must still be set on the Airflow side.
         default_catalog = self.get_client(context.console).default_catalog
         return self.default_catalog_override or default_catalog
 
