@@ -458,3 +458,91 @@ def test_external_model_audit(mocker, make_snapshot):
     )
 
     spy.assert_called_once()
+
+
+def test_contiguous_intervals():
+    from sqlmesh.core.scheduler import _contiguous_intervals as ci
+
+    assert ci([]) == []
+    assert ci([(0, 1)]) == [[(0, 1)]]
+    assert ci([(0, 1), (1, 2), (2, 3)]) == [[(0, 1), (1, 2), (2, 3)]]
+    assert ci([(0, 1), (3, 4), (4, 5), (6, 7)]) == [
+        [(0, 1)],
+        [(3, 4), (4, 5)],
+        [(6, 7)],
+    ]
+
+
+def test_check_ready_intervals(mocker: MockerFixture):
+    from sqlmesh.core.scheduler import _check_ready_intervals, Interval
+
+    def const_signal(const):
+        signal_mock = mocker.Mock()
+        signal_mock.check_intervals = mocker.MagicMock(return_value=const)
+        return signal_mock
+
+    def assert_always_signal(intervals):
+        _check_ready_intervals(const_signal(True), intervals) == intervals
+
+    assert_always_signal([])
+    assert_always_signal([(0, 1)])
+    assert_always_signal([(0, 1), (1, 2)])
+    assert_always_signal([(0, 1), (2, 3)])
+
+    def assert_never_signal(intervals):
+        _check_ready_intervals(const_signal(False), intervals) == []
+
+    assert_never_signal([])
+    assert_never_signal([(0, 1)])
+    assert_never_signal([(0, 1), (1, 2)])
+    assert_never_signal([(0, 1), (2, 3)])
+
+    def to_intervals(values: t.List[t.Tuple[int, int]]) -> t.List[Interval]:
+        return [(to_datetime(s), to_datetime(e)) for s, e in values]
+
+    def assert_check_intervals(
+        intervals: t.List[t.Tuple[int, int]],
+        ready: t.List[t.List[t.Tuple[int, int]]],
+        expected: t.List[t.Tuple[int, int]],
+    ):
+        signal_mock = mocker.Mock()
+        signal_mock.check_intervals = mocker.MagicMock(side_effect=[to_intervals(r) for r in ready])
+        _check_ready_intervals(signal_mock, intervals) == expected
+
+    assert_check_intervals([], [], [])
+    assert_check_intervals([(0, 1)], [[]], [])
+    assert_check_intervals(
+        [(0, 1)],
+        [[(0, 1)]],
+        [(0, 1)],
+    )
+    assert_check_intervals(
+        [(0, 1), (1, 2)],
+        [[(0, 1)]],
+        [(0, 1)],
+    )
+    assert_check_intervals(
+        [(0, 1), (1, 2)],
+        [[(1, 2)]],
+        [(1, 2)],
+    )
+    assert_check_intervals(
+        [(0, 1), (1, 2)],
+        [[(0, 1), (1, 2)]],
+        [(0, 1), (1, 2)],
+    )
+    assert_check_intervals(
+        [(0, 1), (1, 2), (3, 4)],
+        [[], []],
+        [],
+    )
+    assert_check_intervals(
+        [(0, 1), (1, 2), (3, 4)],
+        [[(0, 1)], []],
+        [(0, 1)],
+    )
+    assert_check_intervals(
+        [(0, 1), (1, 2), (3, 4)],
+        [[(0, 1)], [(3, 4)]],
+        [(0, 1), (3, 4)],
+    )

@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import abc
 import logging
 import traceback
 import typing as t
@@ -30,6 +31,7 @@ from sqlmesh.utils.date import (
     now,
     now_timestamp,
     to_datetime,
+    to_timestamp,
     validate_date_range,
 )
 from sqlmesh.utils.errors import AuditError, CircuitBreakerError, SQLMeshError
@@ -41,6 +43,39 @@ SnapshotToBatches = t.Dict[Snapshot, Batch]
 # we store snapshot name instead of snapshots/snapshotids because pydantic
 # is extremely slow to hash. snapshot names should be unique within a dag run
 SchedulingUnit = t.Tuple[str, t.Tuple[Interval, int]]
+
+
+class Signal(abc.ABC):
+    @abc.abstractmethod
+    def check_intervals(self, batch: Batch) -> t.Union[bool, Batch]:
+        """Returns which intervals are ready from a list of scheduled intervals.
+
+        When SQLMesh wishes to execute a batch of intervals, say between `a` and `d`, then
+        the `batch` parameter will contain each individual interval within this batch,
+        i.e.: `[a,b),[b,c),[c,d)`.
+
+        This function may return `True` to indicate that the whole batch is ready,
+        `False` to indicate none of the batch's intervals are ready, or a list of
+        intervals (a batch) to indicate exactly which ones are ready.
+
+        When returning a batch, the function is expected to return a subset of
+        the `batch` parameter, e.g.: `[a,b),[b,c)`. Note that it may return
+        gaps, e.g.: `[a,b),[c,d)`, but it may not alter the bounds of any of the
+        intervals.
+
+        The interface allows an implementation to check batches of intervals without
+        having to actually compute individual intervals itself.
+
+        Args:
+            batch: the list of intervals that are missing and scheduled to run.
+
+        Returns:
+            Either `True` to indicate all intervals are ready, `False` to indicate none are
+            ready or a list of intervals to indicate exactly which ones are ready.
+        """
+
+
+SignalFactory = t.Callable[[t.Dict[str, t.Union[str, int, float, bool]]], Signal]
 
 
 class Scheduler:
@@ -58,6 +93,7 @@ class Scheduler:
         state_sync: The state sync to pull saved snapshots.
         max_workers: The maximum number of parallel queries to run.
         console: The rich instance used for printing scheduling information.
+        signal_factory: A factory method for building Signal instances from model signal configuration.
     """
 
     def __init__(
@@ -69,6 +105,7 @@ class Scheduler:
         max_workers: int = 1,
         console: t.Optional[Console] = None,
         notification_target_manager: t.Optional[NotificationTargetManager] = None,
+        signal_factory: t.Optional[SignalFactory] = None,
     ):
         self.state_sync = state_sync
         self.snapshots = {s.snapshot_id: s for s in snapshots}
@@ -80,6 +117,7 @@ class Scheduler:
         self.notification_target_manager = (
             notification_target_manager or NotificationTargetManager()
         )
+        self.signal_factory = signal_factory
 
     def batches(
         self,
@@ -131,6 +169,7 @@ class Scheduler:
             restatements=restatements,
             ignore_cron=ignore_cron,
             end_bounded=end_bounded,
+            signal_factory=self.signal_factory,
         )
 
     def evaluate(
@@ -393,6 +432,7 @@ def compute_interval_params(
     restatements: t.Optional[t.Dict[SnapshotId, SnapshotInterval]] = None,
     ignore_cron: bool = False,
     end_bounded: bool = False,
+    signal_factory: t.Optional[SignalFactory] = None,
 ) -> SnapshotToBatches:
     """Find the optimal date interval paramaters based on what needs processing and maximal batch size.
 
@@ -431,6 +471,15 @@ def compute_interval_params(
         ignore_cron=ignore_cron,
         end_bounded=end_bounded,
     ).items():
+        if signal_factory:
+            for signal in snapshot.model.render_signals(
+                start=start, end=end, execution_time=execution_time
+            ):
+                intervals = _check_ready_intervals(
+                    signal=signal_factory(signal),
+                    intervals=intervals,
+                )
+
         batches = []
         batch_size = snapshot.node.batch_size
         next_batch: t.List[t.Tuple[int, int]] = []
@@ -465,3 +514,53 @@ def _resolve_one_snapshot_per_version(
                 snapshot_per_version[key] = snapshot
 
     return snapshot_per_version
+
+
+def _contiguous_intervals(
+    intervals: t.List[SnapshotInterval],
+) -> t.List[t.List[SnapshotInterval]]:
+    """Given a list of intervals with gaps, returns a list of sequences of contiguous intervals."""
+    contiguous_intervals = []
+    current_batch: t.List[SnapshotInterval] = []
+    for interval in intervals:
+        if len(current_batch) == 0 or interval[0] == current_batch[-1][-1]:
+            current_batch.append(interval)
+        else:
+            contiguous_intervals.append(current_batch)
+            current_batch = [interval]
+
+    if len(current_batch) > 0:
+        contiguous_intervals.append(current_batch)
+
+    return contiguous_intervals
+
+
+def _check_ready_intervals(
+    signal: Signal,
+    intervals: t.List[SnapshotInterval],
+) -> t.List[SnapshotInterval]:
+    """Returns a list of intervals that are considered ready by the provided signal.
+
+    Note that this will handle gaps in the provided intervals. The returned intervals
+    may introduce new gaps.
+    """
+    checked_intervals = []
+    for interval_batch in _contiguous_intervals(intervals):
+        batch = [(to_datetime(start), to_datetime(end)) for start, end in interval_batch]
+
+        ready_intervals = signal.check_intervals(batch=batch)
+        if isinstance(ready_intervals, bool):
+            if not ready_intervals:
+                batch = []
+        elif isinstance(ready_intervals, list):
+            for i in ready_intervals:
+                if i not in batch:
+                    raise RuntimeError(f"Signal returned unknown interval {i}")
+            batch = ready_intervals
+        else:
+            raise ValueError(
+                f"unexpected return value from signal, expected bool | list, got {type(ready_intervals)}"
+            )
+
+        checked_intervals.extend([(to_timestamp(start), to_timestamp(end)) for start, end in batch])
+    return checked_intervals

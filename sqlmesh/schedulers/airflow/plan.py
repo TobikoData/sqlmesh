@@ -134,6 +134,7 @@ def create_plan_dag_spec(
             deployability_index=deployability_index_for_evaluation,
             restatements=restatements,
             end_bounded=request.end_bounded,
+            signal_factory=None,
         )
     else:
         backfill_batches = {}

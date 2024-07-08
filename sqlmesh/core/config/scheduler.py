@@ -136,6 +136,7 @@ class BuiltInSchedulerConfig(_EngineAdapterStateSyncSchedulerConfig, BaseConfig)
             backfill_concurrent_tasks=context.concurrent_tasks,
             console=context.console,
             notification_target_manager=context.notification_target_manager,
+            signal_factory=context._signal_factory,
         )
 
     def get_default_catalog(self, context: GenericContext) -> t.Optional[str]:
