@@ -1326,8 +1326,6 @@ class GenericContext(BaseContext, t.Generic[C]):
 
                         if isinstance(expr, exp.Tuple):
                             on = [key.this.sql() for key in expr.expressions]
-                        elif isinstance(expr, exp.Paren):
-                            on = [expr.this.this.sql()]
                         else:
                             on = [expr.this.sql()]
 
