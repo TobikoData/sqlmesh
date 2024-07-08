@@ -249,7 +249,7 @@ class SnowflakeEngineAdapter(GetCurrentCatalogFromFunctionMixin):
                     else None,
                     chunk_size=self.DEFAULT_BATCH_SIZE,
                     overwrite=True,
-                    table_type="temp",  # if you dont have this, it will convert the table we created above into a normal table and it wont get dropped when the session ends
+                    table_type="temp",
                 )
             else:
                 raise SQLMeshError(
