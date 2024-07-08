@@ -25,38 +25,45 @@ def test_manifest_helper(caplog):
         variable_overrides={"start": "2020-01-01"},
     )
 
-    assert helper.models()["top_waiters"].dependencies == Dependencies(
+    models = helper.models()
+
+    assert models["top_waiters"].dependencies == Dependencies(
         refs={"sushi.waiter_revenue_by_day", "waiter_revenue_by_day"},
         variables={"top_waiters:revenue", "top_waiters:limit"},
         macros=[MacroReference(name="ref"), MacroReference(name="var")],
     )
-    assert helper.models()["top_waiters"].materialized == "view"
-    assert helper.models()["top_waiters"].dialect_ == "postgres"
+    assert models["top_waiters"].materialized == "view"
+    assert models["top_waiters"].dialect_ == "postgres"
 
-    assert helper.models()["waiters"].dependencies == Dependencies(
+    assert models["waiters"].dependencies == Dependencies(
         macros={MacroReference(name="incremental_by_time"), MacroReference(name="source")},
         sources={"streaming.orders"},
     )
-    assert helper.models()["waiters"].materialized == "ephemeral"
-    assert helper.models()["items_snapshot"].materialized == "snapshot"
-    assert helper.models()["items_snapshot"].updated_at == "ds"
-    assert helper.models()["items_snapshot"].unique_key == ["id"]
-    assert helper.models()["items_snapshot"].strategy == "timestamp"
-    assert helper.models()["items_snapshot"].table_schema == "snapshots"
-    assert helper.models()["items_snapshot"].invalidate_hard_deletes is True
-    assert helper.models()["items_check_snapshot"].materialized == "snapshot"
-    assert helper.models()["items_check_snapshot"].check_cols == ["ds"]
-    assert helper.models()["items_check_snapshot"].unique_key == ["id"]
-    assert helper.models()["items_check_snapshot"].strategy == "check"
-    assert helper.models()["items_check_snapshot"].table_schema == "snapshots"
-    assert helper.models()["items_check_snapshot"].invalidate_hard_deletes is True
-    assert helper.models()["items_no_hard_delete_snapshot"].materialized == "snapshot"
-    assert helper.models()["items_no_hard_delete_snapshot"].unique_key == ["id"]
-    assert helper.models()["items_no_hard_delete_snapshot"].strategy == "timestamp"
-    assert helper.models()["items_no_hard_delete_snapshot"].table_schema == "snapshots"
-    assert helper.models()["items_no_hard_delete_snapshot"].invalidate_hard_deletes is False
+    assert models["waiters"].materialized == "ephemeral"
+    assert models["items_snapshot"].materialized == "snapshot"
+    assert models["items_snapshot"].updated_at == "ds"
+    assert models["items_snapshot"].unique_key == ["id"]
+    assert models["items_snapshot"].strategy == "timestamp"
+    assert models["items_snapshot"].table_schema == "snapshots"
+    assert models["items_snapshot"].invalidate_hard_deletes is True
+    assert models["items_check_snapshot"].materialized == "snapshot"
+    assert models["items_check_snapshot"].check_cols == ["ds"]
+    assert models["items_check_snapshot"].unique_key == ["id"]
+    assert models["items_check_snapshot"].strategy == "check"
+    assert models["items_check_snapshot"].table_schema == "snapshots"
+    assert models["items_check_snapshot"].invalidate_hard_deletes is True
+    assert models["items_no_hard_delete_snapshot"].materialized == "snapshot"
+    assert models["items_no_hard_delete_snapshot"].unique_key == ["id"]
+    assert models["items_no_hard_delete_snapshot"].strategy == "timestamp"
+    assert models["items_no_hard_delete_snapshot"].table_schema == "snapshots"
+    assert models["items_no_hard_delete_snapshot"].invalidate_hard_deletes is False
 
-    waiter_as_customer_by_day_config = helper.models()["waiter_as_customer_by_day"]
+    # Test versioned models
+    assert models["waiter_revenue_by_day_v1"].version == 1
+    assert models["waiter_revenue_by_day_v2"].version == 2
+    assert "waiter_revenue_by_day" not in models
+
+    waiter_as_customer_by_day_config = models["waiter_as_customer_by_day"]
     assert waiter_as_customer_by_day_config.dependencies == Dependencies(
         refs={"waiters", "waiter_names", "customers"},
         macros=[MacroReference(name="ref")],
@@ -66,7 +73,7 @@ def test_manifest_helper(caplog):
     assert waiter_as_customer_by_day_config.cluster_by == ["ds"]
     assert waiter_as_customer_by_day_config.time_column == "ds"
 
-    waiter_revenue_by_day_config = helper.models()["waiter_revenue_by_day"]
+    waiter_revenue_by_day_config = models["waiter_revenue_by_day_v2"]
     assert waiter_revenue_by_day_config.dependencies == Dependencies(
         macros={
             MacroReference(name="log_value"),
@@ -96,12 +103,14 @@ def test_manifest_helper(caplog):
 
     assert helper.seeds()["waiter_names"].path == Path("seeds/waiter_names.csv")
 
-    assert helper.sources()["streaming.items"].table_name == "items"
-    assert helper.sources()["streaming.items"].schema_ == "raw"
-    assert helper.sources()["streaming.orders"].table_name == "orders"
-    assert helper.sources()["streaming.orders"].schema_ == "raw"
-    assert helper.sources()["streaming.order_items"].table_name == "order_items"
-    assert helper.sources()["streaming.order_items"].schema_ == "raw"
+    sources = helper.sources()
+
+    assert sources["streaming.items"].table_name == "items"
+    assert sources["streaming.items"].schema_ == "raw"
+    assert sources["streaming.orders"].table_name == "orders"
+    assert sources["streaming.orders"].schema_ == "raw"
+    assert sources["streaming.order_items"].table_name == "order_items"
+    assert sources["streaming.order_items"].schema_ == "raw"
 
 
 @pytest.mark.xdist_group("dbt_manifest")

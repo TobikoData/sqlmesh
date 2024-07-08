@@ -185,8 +185,11 @@ class DbtContext:
             for model in t.cast(
                 t.Dict[str, t.Union[ModelConfig, SeedConfig]], {**self._seeds, **self._models}
             ).values():
-                self._refs[model.name] = model
+                self._refs[model.alias or model.name] = model
                 self._refs[model.config_name] = model
+                if model.version is not None and model.version == model.latest_version:
+                    self._refs[model.name] = model
+                    self._refs[f"{model.package_name}.{model.name}"] = model
         return self._refs
 
     @property
@@ -270,7 +273,6 @@ class DbtContext:
         dependency_context.seeds = seeds
         dependency_context.models = models
         dependency_context.variables = variables
-        dependency_context._refs = {**dependency_context._seeds, **dependency_context._models}  # type: ignore
 
         return dependency_context
 

@@ -223,14 +223,15 @@ class ManifestHelper:
                     self._flatten_dependencies_from_macros(dependencies.macros, node.package_name)
                 )
 
-                self._models_per_package[node.package_name][node.name] = ModelConfig(
+                # Using the alias instead of the name because the alias captures the version of the model.
+                self._models_per_package[node.package_name][node.alias] = ModelConfig(
                     sql=sql,
                     dependencies=dependencies,
                     tests=tests,
                     **node_config,
                 )
             else:
-                self._seeds_per_package[node.package_name][node.name] = SeedConfig(
+                self._seeds_per_package[node.package_name][node.alias] = SeedConfig(
                     dependencies=Dependencies(macros=macro_references),
                     tests=tests,
                     **node_config,
@@ -451,7 +452,13 @@ def _macro_references(
 
 def _refs(node: ManifestNode) -> t.Set[str]:
     if DBT_VERSION >= (1, 5):
-        return {f"{r.package}.{r.name}" if r.package else r.name for r in node.refs}  # type: ignore
+        result = set()
+        for r in node.refs:
+            ref_name = f"{r.package}.{r.name}" if r.package else r.name
+            if getattr(r, "version", None):
+                ref_name = f"{ref_name}_v{r.version}"
+            result.add(ref_name)
+        return result
     else:
         return {".".join(r) for r in node.refs}  # type: ignore
 
