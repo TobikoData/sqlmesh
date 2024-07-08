@@ -17,6 +17,7 @@ from sqlglot import Generator, exp, parse_one
 from sqlglot.executor.env import ENV
 from sqlglot.executor.python import Python
 from sqlglot.helper import csv, ensure_collection
+from sqlglot.optimizer.normalize_identifiers import normalize_identifiers
 from sqlglot.schema import MappingSchema
 
 from sqlmesh.core import constants as c
@@ -799,11 +800,11 @@ def star(
     evaluator: MacroEvaluator,
     relation: exp.Table,
     alias: exp.Column = t.cast(exp.Column, exp.column("")),
-    exclude: t.Union[exp.Array, exp.Tuple] = exp.Tuple(this=[]),
+    exclude: t.Union[exp.Array, exp.Tuple] = exp.Tuple(expressions=[]),
     prefix: exp.Literal = exp.Literal.string(""),
     suffix: exp.Literal = exp.Literal.string(""),
     quote_identifiers: exp.Boolean = exp.true(),
-    except_: t.Union[exp.Array, exp.Tuple] = exp.Tuple(this=[]),
+    except_: t.Union[exp.Array, exp.Tuple] = exp.Tuple(expressions=[]),
 ) -> t.List[exp.Alias]:
     """Returns a list of projections for the given relation.
 
@@ -832,7 +833,7 @@ def star(
         raise SQLMeshError(f"Invalid alias '{alias}'. Expected an identifier.")
     if exclude and not isinstance(exclude, (exp.Array, exp.Tuple)):
         raise SQLMeshError(f"Invalid exclude '{exclude}'. Expected an array.")
-    if except_:
+    if except_ != exp.tuple_():
         logger.warning(
             "The 'except_' argument in @STAR will soon be deprecated. Use 'exclude' instead."
         )
@@ -845,7 +846,10 @@ def star(
     if not isinstance(quote_identifiers, exp.Boolean):
         raise SQLMeshError(f"Invalid quote_identifiers '{quote_identifiers}'. Expected a boolean.")
 
-    excluded_names = {e.name for e in exclude.expressions or except_.expressions}
+    excluded_names = {
+        normalize_identifiers(excluded, dialect=evaluator.dialect).name
+        for excluded in exclude.expressions or except_.expressions
+    }
     quoted = quote_identifiers.this
     table_identifier = alias.name or relation.name
 
