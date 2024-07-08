@@ -255,6 +255,24 @@ test_colors:
     execution_time: "2023-01-01 12:05:03+02:00"
 ```
 
+## Parameterized model names
+
+Testing models with parameterized names, such as `@{gold}.some_schema.some_table`, is possible using Jinja:
+
+```yaml linenums="1"
+test_parameterized_model:
+  model: {{ var('gold') }}.some_schema.some_table
+  ...
+```
+
+For example, assuming `gold` is a [config variable](../reference/configuration/#variables) with value `gold_db`, the above test would be rendered as:
+
+```yaml linenums="1"
+test_parameterized_model:
+  model: gold_db.some_schema.some_table
+  ...
+```
+
 ## Automatic test generation
 
 Creating tests manually can be repetitive and error-prone, which is why SQLMesh also provides a way to automate this process using the [`create_test` command](../reference/cli.md#create_test).
