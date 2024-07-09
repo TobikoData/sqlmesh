@@ -59,12 +59,13 @@ class ModelCache:
         return loaded_model
 
 
-class OptimizedQueryCacheEntry(PydanticModel):
-    optimized_rendered_query: exp.Expression
+class RenderedQueryCacheEntry(PydanticModel):
+    optimized_query: t.Optional[exp.Expression]
+    rendered_query: exp.Expression
 
 
-class OptimizedQueryCache:
-    """File-based cache implementation for optimized model queries.
+class RenderedQueryCache:
+    """File-based cache implementation for rendered and optimized model queries.
 
     Args:
         path: The path to the cache folder.
@@ -72,36 +73,41 @@ class OptimizedQueryCache:
 
     def __init__(self, path: Path):
         self.path = path
-        self._file_cache: FileCache[OptimizedQueryCacheEntry] = FileCache(
-            path, OptimizedQueryCacheEntry, prefix="optimized_query"
+        self._file_cache: FileCache[RenderedQueryCacheEntry] = FileCache(
+            path, RenderedQueryCacheEntry, prefix="rendered_query"
         )
 
-    def with_optimized_query(self, model: Model) -> bool:
-        """Adds an optimized query to the model's in-memory cache.
+    def with_rendered_query(self, model: Model) -> bool:
+        """Adds the rendered query and the optimized query  to the model's in-memory cache.
 
         Args:
-            model: The model to add the optimized query to.
+            model: The model to add the rendered queries to.
         """
         if not isinstance(model, SqlModel):
             return False
+
+        hash_data = _mapping_schema_hash_data(model.mapping_schema)
+        hash_data.append(gen(model.query))
+        hash_data.append(str([(k, v) for k, v in model.sorted_python_env]))
+        name = f"{model.name}_{crc32(hash_data)}"
+        cache_entry = self._file_cache.get(name)
+
+        if cache_entry:
+            model._query_renderer.update_cache(cache_entry.rendered_query, optimized=False)
+            if cache_entry.optimized_query:
+                model._query_renderer.update_cache(cache_entry.optimized_query, optimized=True)
+            return True
 
         unoptimized_query = model.render_query(optimize=False)
         if unoptimized_query is None:
             return False
 
-        hash_data = _mapping_schema_hash_data(model.mapping_schema)
-        hash_data.append(gen(unoptimized_query))
-        name = f"{model.name}_{crc32(hash_data)}"
-        cache_entry = self._file_cache.get(name)
-
-        if cache_entry:
-            model._query_renderer.update_cache(cache_entry.optimized_rendered_query, optimized=True)
-            return True
-
         optimized_query = model.render_query(optimize=True)
-        if optimized_query is not None:
-            new_entry = OptimizedQueryCacheEntry(optimized_rendered_query=optimized_query)
-            self._file_cache.put(name, value=new_entry)
+
+        new_entry = RenderedQueryCacheEntry(
+            optimized_query=optimized_query, rendered_query=unoptimized_query
+        )
+        self._file_cache.put(name, value=new_entry)
 
         return False
 

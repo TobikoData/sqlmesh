@@ -4,7 +4,7 @@ from pytest_mock.plugin import MockerFixture
 from sqlglot import parse_one
 
 from sqlmesh.core.model import SqlModel
-from sqlmesh.core.model.cache import OptimizedQueryCache
+from sqlmesh.core.model.cache import RenderedQueryCache
 from sqlmesh.utils.cache import FileCache
 from sqlmesh.utils.pydantic import PydanticModel
 
@@ -46,7 +46,14 @@ def test_optimized_query_cache(tmp_path: Path, mocker: MockerFixture):
         mapping_schema={"tbl": {"a": "int"}},
     )
 
-    cache = OptimizedQueryCache(tmp_path)
+    cache = RenderedQueryCache(tmp_path)
 
-    assert not cache.with_optimized_query(model)
-    assert cache.with_optimized_query(model)
+    assert not cache.with_rendered_query(model)
+
+    model._query_renderer._cache = []
+    model._query_renderer._optimized_cache = None
+
+    assert cache.with_rendered_query(model)
+
+    assert bool(model._query_renderer._cache)
+    assert model._query_renderer._optimized_cache is not None

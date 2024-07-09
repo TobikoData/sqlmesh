@@ -6,15 +6,23 @@ from datetime import timedelta
 
 import pandas as pd
 import pytest
+from pathlib import Path
 from freezegun import freeze_time
 from pytest_mock.plugin import MockerFixture
 from sqlglot import exp
 from sqlglot.expressions import DataType
 
 from sqlmesh import CustomMaterialization
+from sqlmesh.cli.example_project import init_example_project
 from sqlmesh.core import constants as c
 from sqlmesh.core import dialect as d
-from sqlmesh.core.config import AutoCategorizationMode
+from sqlmesh.core.config import (
+    AutoCategorizationMode,
+    Config,
+    GatewayConfig,
+    ModelDefaultsConfig,
+    DuckDBConnectionConfig,
+)
 from sqlmesh.core.console import Console
 from sqlmesh.core.context import Context
 from sqlmesh.core.engine_adapter import EngineAdapter
@@ -1389,6 +1397,43 @@ def test_restatement_plan_ignores_changes(init_and_plan_context: t.Callable):
     ]
 
     context.apply(plan)
+
+
+def test_plan_twice_with_star_macro_yields_no_diff(tmp_path: Path):
+    init_example_project(tmp_path, dialect="duckdb")
+
+    star_model_definition = """
+        MODEL (
+          name sqlmesh_example.star_model,
+          kind FULL
+        );
+
+        SELECT @STAR(sqlmesh_example.full_model) FROM sqlmesh_example.full_model
+    """
+
+    star_model_path = tmp_path / "models" / "star_model.sql"
+    star_model_path.write_text(star_model_definition)
+
+    db_path = str(tmp_path / "db.db")
+    config = Config(
+        gateways={"main": GatewayConfig(connection=DuckDBConnectionConfig(database=db_path))},
+        model_defaults=ModelDefaultsConfig(dialect="duckdb"),
+    )
+    context = Context(paths=tmp_path, config=config)
+    context.plan(auto_apply=True, no_prompts=True)
+
+    # Instantiate new context to remove caches etc
+    new_context = Context(paths=tmp_path, config=config)
+
+    star_model = new_context.get_model("sqlmesh_example.star_model")
+    assert (
+        star_model.render_query_or_raise().sql()
+        == 'SELECT CAST("full_model"."item_id" AS INT) AS "item_id", CAST("full_model"."num_orders" AS BIGINT) AS "num_orders" FROM "db"."sqlmesh_example"."full_model" AS "full_model"'
+    )
+
+    new_plan = new_context.plan(no_prompts=True)
+    assert not new_plan.has_changes
+    assert not new_plan.new_snapshots
 
 
 @pytest.mark.parametrize(
