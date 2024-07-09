@@ -144,6 +144,7 @@ class TableDiff:
         source_alias: t.Optional[str] = None,
         target_alias: t.Optional[str] = None,
         model_name: t.Optional[str] = None,
+        model_dialect: t.Optional[str] = None,
         decimals: int = 3,
     ):
         self.adapter = adapter
@@ -153,6 +154,7 @@ class TableDiff:
         self.where = exp.condition(where, dialect=self.dialect) if where else None
         self.limit = limit
         self.model_name = model_name
+        self.model_dialect = model_dialect
         self.decimals = decimals
 
         # Support environment aliases for diff output improvement in certain cases
@@ -160,6 +162,7 @@ class TableDiff:
         self.target_alias = target_alias
 
         if isinstance(on, (list, tuple)):
+            join_condition = [exp.parse_identifier(key) for key in on]
             s_table = exp.to_identifier("s", quoted=True)
             t_table = exp.to_identifier("t", quoted=True)
 
@@ -170,13 +173,13 @@ class TableDiff:
                         exp.column(c, s_table).is_(exp.null())
                         & exp.column(c, t_table).is_(exp.null())
                     )
-                    for c in on
+                    for c in join_condition
                 )
             )
         else:
             self.on = on
 
-        normalize_identifiers(self.on, dialect=self.dialect)
+        normalize_identifiers(self.on, dialect=self.model_dialect or self.dialect)
 
         self._source_schema: t.Optional[t.Dict[str, exp.DataType]] = None
         self._target_schema: t.Optional[t.Dict[str, exp.DataType]] = None
@@ -321,7 +324,7 @@ class TableDiff:
                 .as_("row_full_match"),
             ).from_(query.subquery("stats"))
 
-            query = quote_identifiers(query, dialect=self.dialect)
+            query = quote_identifiers(query, dialect=self.model_dialect or self.dialect)
             temp_table = exp.table_("diff", db="sqlmesh_temp", quoted=True)
 
             with self.adapter.temp_table(query, name=temp_table) as table:

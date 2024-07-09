@@ -1299,6 +1299,7 @@ class GenericContext(BaseContext, t.Generic[C]):
             The TableDiff object containing schema and summary differences.
         """
         source_alias, target_alias = source, target
+
         if model_or_snapshot:
             model = self.get_model(model_or_snapshot, raise_if_missing=True)
             source_env = self.state_reader.get_environment(source)
@@ -1321,7 +1322,13 @@ class GenericContext(BaseContext, t.Generic[C]):
             if not on:
                 for ref in model.all_references:
                     if ref.unique:
-                        on = ref.columns
+                        expr = ref.expression
+
+                        if isinstance(expr, exp.Tuple):
+                            on = [key.this.sql() for key in expr.expressions]
+                        else:
+                            # Handle a single Column or Paren expression
+                            on = [expr.this.sql()]
 
         if not on:
             raise SQLMeshError(
@@ -1337,6 +1344,7 @@ class GenericContext(BaseContext, t.Generic[C]):
             source_alias=source_alias,
             target_alias=target_alias,
             model_name=model.name if model_or_snapshot else None,
+            model_dialect=model.dialect if model_or_snapshot else None,
             limit=limit,
             decimals=decimals,
         )

@@ -142,10 +142,10 @@ def test_data_diff_decimals(sushi_context_fixed_date):
 def test_grain_check(sushi_context_fixed_date):
     expressions = d.parse(
         """
-        MODEL (name memory.sushi.grain_items, kind full, grain(key_1, key_2));
+        MODEL (name memory.sushi.grain_items, kind full, grain("key_1", KEY_2));
         SELECT
-            key_1,
-            key_2,
+            key_1 as "key_1",
+            KEY_2,
             value,
         FROM
             (VALUES
@@ -156,10 +156,10 @@ def test_grain_check(sushi_context_fixed_date):
                 (1, 2, 2),
                 (4, NULL, 3),
                 (2, 3, 2),
-            ) AS t (key_1,key_2, value)
+            ) AS t (key_1,KEY_2, value)
     """
     )
-    model_s = load_sql_based_model(expressions)
+    model_s = load_sql_based_model(expressions, dialect="snowflake")
     sushi_context_fixed_date.upsert_model(model_s)
     sushi_context_fixed_date.plan(
         "source_dev",
@@ -170,14 +170,14 @@ def test_grain_check(sushi_context_fixed_date):
         end="2023-01-31",
     )
 
-    model = sushi_context_fixed_date.models['"memory"."sushi"."grain_items"']
+    model = sushi_context_fixed_date.models['"MEMORY"."SUSHI"."GRAIN_ITEMS"']
 
     modified_model = model.dict()
     modified_model["query"] = (
         exp.select("*")
         .from_(model.query.subquery())
         .union(
-            "SELECT key_1, key_2, value FROM (VALUES (1, 6, 1),(1, 5, 3),(NULL, 2, 3),) AS t (key_1, key_2, value)"
+            'SELECT key_1 as "key_1", KEY_2, value FROM (VALUES (1, 6, 1),(1, 5, 3),(NULL, 2, 3),) AS t (key_1, KEY_2, value)'
         )
     )
 
@@ -200,8 +200,8 @@ def test_grain_check(sushi_context_fixed_date):
     diff = sushi_context_fixed_date.table_diff(
         source="source_dev",
         target="target_dev",
-        on=["key_1", "key_2"],
-        model_or_snapshot="sushi.grain_items",
+        on=["'key_1'", "key_2"],
+        model_or_snapshot="SUSHI.GRAIN_ITEMS",
         skip_grain_check=False,
     )
 
