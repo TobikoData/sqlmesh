@@ -51,7 +51,7 @@ class IntervalUnit(str, Enum):
         for unit, seconds in INTERVAL_SECONDS.items():
             if seconds <= interval_seconds:
                 return unit
-        raise ConfigError(f"Invalid cron '{cron}': must have a cadence of 5 minutes or more.")
+        raise ConfigError(f"Invalid cron '{cron}': must run at a frequency of 5 minutes or slower.")
 
     @property
     def is_date_granularity(self) -> bool:
