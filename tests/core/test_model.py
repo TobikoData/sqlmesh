@@ -4176,6 +4176,29 @@ def test_variables_python_model(mocker: MockerFixture) -> None:
     assert df.to_dict(orient="records") == [{"a": "test_value", "b": "default_value", "c": None}]
 
 
+def test_load_external_model_python(sushi_context) -> None:
+    @model(
+        "test_load_external_model_python",
+        columns={"customer_id": "int", "zip": "str"},
+        kind={"name": ModelKindName.FULL},
+    )
+    def external_model_python(context, **kwargs):
+        demographics_table = context.table("memory.raw.demographics")
+        return context.fetchdf(
+            exp.select("customer_id", "zip").from_(demographics_table),
+        )
+
+    python_model = model.get_registry()["test_load_external_model_python"].model(
+        module_path=Path("."),
+        path=Path("."),
+    )
+
+    context = ExecutionContext(sushi_context.engine_adapter, sushi_context.snapshots, None, None)
+    df = list(python_model.render(context=context))[0]
+
+    assert df.to_dict(orient="records") == [{"customer_id": 1, "zip": "00000"}]
+
+
 def test_variables_python_sql_model(mocker: MockerFixture) -> None:
     @model(
         "test_variables_python_model",

@@ -739,6 +739,11 @@ def test_load_external_models(copy_to_temp_path):
     # from external_models/prod.yaml, should not show unless --gateway=prod
     assert "prod_raw.model1" not in external_model_names
 
+    # get physical table names of external models using table
+    assert context.table("raw.model1") == "memory.raw.model1"
+    assert context.table("raw.demographics") == "memory.raw.demographics"
+    assert context.table("raw.model2") == "memory.raw.model2"
+
 
 def test_load_gateway_specific_external_models(copy_to_temp_path):
     path = copy_to_temp_path("examples/sushi")
