@@ -195,6 +195,7 @@ import typing as t
 from datetime import datetime
 
 import pandas as pd
+from sqlglot import exp
 from sqlmesh import ExecutionContext, model
 
 @model(
@@ -207,8 +208,11 @@ from sqlmesh import ExecutionContext, model
     },
     column_descriptions={
         "id": "Unique ID",
-        "name": "Name corresponding to the ID"
+        "name": "Name corresponding to the ID",
     },
+    audits=[
+        ("not_null", {"columns": [exp.to_column("id")]}),
+    ],
 )
 def execute(
     context: ExecutionContext,
