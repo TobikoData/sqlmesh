@@ -378,7 +378,8 @@ class SqlMeshLoader(Loader):
                             variables=variables,
                             infer_names=config.model_naming.infer_names,
                         )
-                        models[model.fqn] = model
+                        if model.enabled:
+                            models[model.fqn] = model
             finally:
                 model_registry._dialect = None
 
