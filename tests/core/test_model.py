@@ -691,6 +691,21 @@ def test_seed():
     assert model.batch_size is None
 
 
+def test_seed_model_creation_error():
+    expressions = d.parse(
+        """
+        MODEL (
+            name db.seed,
+            kind SEED (
+              path 'gibberish',
+            )
+        );
+    """
+    )
+    with pytest.raises(ConfigError, match="No such file or directory"):
+        load_sql_based_model(expressions)
+
+
 def test_seed_provided_columns():
     expressions = d.parse(
         """

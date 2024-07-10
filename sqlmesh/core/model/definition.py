@@ -1663,10 +1663,9 @@ def load_sql_based_model(
                 SeedKind(**seed_properties),
                 **common_kwargs,
             )
-        except Exception:
+        except Exception as ex:
             raise_config_error(
-                "The model definition must either have a SELECT query, a JINJA_QUERY block, or a valid Seed kind",
-                path,
+                f"The model definition must either have a SELECT query, a JINJA_QUERY block, or a valid Seed kind. {ex}."
             )
             raise
 
