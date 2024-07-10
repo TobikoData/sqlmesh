@@ -703,7 +703,7 @@ def test_seed_model_creation_error():
     """
     )
     with pytest.raises(ConfigError, match="No such file or directory"):
-        model = load_sql_based_model(expressions)
+        load_sql_based_model(expressions)
 
 
 def test_seed_provided_columns():
