@@ -774,6 +774,9 @@ def test_disabled_model(copy_to_temp_path):
     assert (path[0] / "models" / "disabled.sql").exists()
     assert not context.get_model("sushi.disabled")
 
+    assert (path[0] / "models" / "disabled.py").exists()
+    assert not context.get_model("sushi.disabled_py")
+
 
 def test_get_model_mixed_dialects(copy_to_temp_path):
     path = copy_to_temp_path("examples/sushi")

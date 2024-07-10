@@ -1589,7 +1589,7 @@ CONST = "bar"
 def test_python_model(assert_exp_eq) -> None:
     from functools import reduce
 
-    @model(name="my_model", kind="full", columns={'"COL"': "int"})
+    @model(name="my_model", kind="full", columns={'"COL"': "int"}, enabled=True)
     def my_model(context, **kwargs):
         context.table("foo")
         context.table(model_name=CONST + ".baz")
@@ -1603,6 +1603,7 @@ def test_python_model(assert_exp_eq) -> None:
         dialect="duckdb",
     )
 
+    assert m.enabled
     assert m.dialect == "duckdb"
     assert m.depends_on == {'"foo"', '"bar"."baz"'}
     assert m.columns_to_types == {"col": exp.DataType.build("int")}
