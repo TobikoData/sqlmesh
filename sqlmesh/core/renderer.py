@@ -66,7 +66,6 @@ class BaseExpressionRenderer:
 
     def update_schema(self, schema: t.Dict[str, t.Any]) -> None:
         self.schema = d.normalize_mapping_schema(schema, dialect=self._dialect)
-        self._cache = []
 
     def _render(
         self,
@@ -207,7 +206,10 @@ class BaseExpressionRenderer:
                                 select.replace(alias)
                 resolved_expressions.append(expression)
 
-        if should_cache:
+        # We dont cache here if columns_to_type was called in a macro.
+        # This allows the model's query to be re-rendered so that the
+        # MacroEvaluator can resolve columns_to_types calls and provide true schemas.
+        if should_cache and (not self.schema.empty or not macro_evaluator.columns_to_types_called):
             self._cache = resolved_expressions
         return resolved_expressions
 

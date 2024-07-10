@@ -14,7 +14,7 @@ from sqlmesh.utils.pydantic import PydanticModel
 
 class SqlModelCacheEntry(PydanticModel):
     model: SqlModel
-    rendered_query: t.Optional[exp.Expression] = None
+    full_depends_on: t.Set[str]
 
 
 class ModelCache:
@@ -46,13 +46,13 @@ class ModelCache:
         cache_entry = self._file_cache.get(name, entry_id)
         if cache_entry:
             model = cache_entry.model
-            model._query_renderer.update_cache(cache_entry.rendered_query, optimized=False)
+            model._full_depends_on = cache_entry.full_depends_on
             return model
 
         loaded_model = loader()
         if isinstance(loaded_model, SqlModel):
             new_entry = SqlModelCacheEntry(
-                model=loaded_model, rendered_query=loaded_model.render_query(optimize=False)
+                model=loaded_model, full_depends_on=loaded_model.full_depends_on
             )
             self._file_cache.put(name, entry_id, value=new_entry)
 
@@ -89,6 +89,8 @@ class RenderedQueryCache:
         hash_data = _mapping_schema_hash_data(model.mapping_schema)
         hash_data.append(gen(model.query))
         hash_data.append(str([(k, v) for k, v in model.sorted_python_env]))
+        hash_data.extend(model.jinja_macros.data_hash_values)
+
         name = f"{model.name}_{crc32(hash_data)}"
         cache_entry = self._file_cache.get(name)
 
