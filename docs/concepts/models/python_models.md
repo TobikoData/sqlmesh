@@ -207,8 +207,11 @@ from sqlmesh import ExecutionContext, model
     },
     column_descriptions={
         "id": "Unique ID",
-        "name": "Name corresponding to the ID"
+        "name": "Name corresponding to the ID",
     },
+    audits=[
+        ("not_null", {"columns": ["id"]}),
+    ],
 )
 def execute(
     context: ExecutionContext,
