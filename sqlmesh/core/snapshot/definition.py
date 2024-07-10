@@ -1552,7 +1552,7 @@ def to_table_mapping(
     return {
         snapshot.name: snapshot.table_name(deployability_index.is_representative(snapshot))
         for snapshot in snapshots
-        if snapshot.version and not snapshot.is_symbolic and snapshot.is_model
+        if snapshot.version and not snapshot.is_embedded and snapshot.is_model
     }
 
 

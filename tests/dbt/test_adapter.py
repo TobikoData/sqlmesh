@@ -181,7 +181,7 @@ def test_adapter_map_snapshot_tables(
     snapshot_mock = mocker.Mock()
     snapshot_mock.name = '"memory"."test_db"."test_model"'
     snapshot_mock.version = "1"
-    snapshot_mock.is_symbolic = False
+    snapshot_mock.is_embedded = False
     snapshot_mock.table_name.return_value = '"memory"."sqlmesh"."test_db__test_model"'
     snapshot_mock.snapshot_id = SnapshotId(
         name='"memory"."test_db"."test_model"', identifier="12345"
