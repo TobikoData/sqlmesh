@@ -1096,7 +1096,7 @@ class SqlModel(_SqlBasedModel):
         if self.column_descriptions_ is not None:
             return self.column_descriptions_
 
-        query = self.render_query(optimize=False)
+        query = self.render_query()
         if query is None:
             return {}
 

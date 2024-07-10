@@ -1,6 +1,6 @@
 from sqlmesh.core.model.cache import (
     ModelCache as ModelCache,
-    RenderedQueryCache as RenderedQueryCache,
+    OptimizedQueryCache as OptimizedQueryCache,
 )
 from sqlmesh.core.model.decorator import model as model
 from sqlmesh.core.model.definition import (

@@ -4,7 +4,7 @@ from pytest_mock.plugin import MockerFixture
 from sqlglot import parse_one
 
 from sqlmesh.core.model import SqlModel
-from sqlmesh.core.model.cache import RenderedQueryCache
+from sqlmesh.core.model.cache import OptimizedQueryCache
 from sqlmesh.utils.cache import FileCache
 from sqlmesh.utils.pydantic import PydanticModel
 
@@ -46,14 +46,36 @@ def test_optimized_query_cache(tmp_path: Path, mocker: MockerFixture):
         mapping_schema={"tbl": {"a": "int"}},
     )
 
-    cache = RenderedQueryCache(tmp_path)
+    cache = OptimizedQueryCache(tmp_path)
 
-    assert not cache.with_rendered_query(model)
+    assert not cache.with_optimized_query(model)
 
     model._query_renderer._cache = []
     model._query_renderer._optimized_cache = None
 
-    assert cache.with_rendered_query(model)
+    assert cache.with_optimized_query(model)
 
-    assert bool(model._query_renderer._cache)
+    assert not model._query_renderer._cache
     assert model._query_renderer._optimized_cache is not None
+
+
+def test_optimized_query_cache_missing_rendered_query(tmp_path: Path, mocker: MockerFixture):
+    model = SqlModel(
+        name="test_model",
+        query=parse_one("SELECT a FROM tbl"),
+        mapping_schema={"tbl": {"a": "int"}},
+    )
+    render_mock = mocker.patch.object(model._query_renderer, "render")
+    render_mock.return_value = None
+
+    cache = OptimizedQueryCache(tmp_path)
+
+    assert not cache.with_optimized_query(model)
+
+    model._query_renderer._cache = []
+    model._query_renderer._optimized_cache = None
+
+    assert cache.with_optimized_query(model)
+
+    assert model._query_renderer._cache == [None]
+    assert model._query_renderer._optimized_cache is None

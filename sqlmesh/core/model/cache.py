@@ -59,13 +59,12 @@ class ModelCache:
         return loaded_model
 
 
-class RenderedQueryCacheEntry(PydanticModel):
-    optimized_query: t.Optional[exp.Expression]
-    rendered_query: exp.Expression
+class OptimizedQueryCacheEntry(PydanticModel):
+    optimized_rendered_query: t.Optional[exp.Expression]
 
 
-class RenderedQueryCache:
-    """File-based cache implementation for rendered and optimized model queries.
+class OptimizedQueryCache:
+    """File-based cache implementation for optimized model queries.
 
     Args:
         path: The path to the cache folder.
@@ -73,15 +72,15 @@ class RenderedQueryCache:
 
     def __init__(self, path: Path):
         self.path = path
-        self._file_cache: FileCache[RenderedQueryCacheEntry] = FileCache(
-            path, RenderedQueryCacheEntry, prefix="rendered_query"
+        self._file_cache: FileCache[OptimizedQueryCacheEntry] = FileCache(
+            path, OptimizedQueryCacheEntry, prefix="optimized_query"
         )
 
-    def with_rendered_query(self, model: Model) -> bool:
-        """Adds the rendered query and the optimized query  to the model's in-memory cache.
+    def with_optimized_query(self, model: Model) -> bool:
+        """Adds an optimized query to the model's in-memory cache.
 
         Args:
-            model: The model to add the rendered queries to.
+            model: The model to add the optimized query to.
         """
         if not isinstance(model, SqlModel):
             return False
@@ -95,20 +94,19 @@ class RenderedQueryCache:
         cache_entry = self._file_cache.get(name)
 
         if cache_entry:
-            model._query_renderer.update_cache(cache_entry.rendered_query, optimized=False)
-            if cache_entry.optimized_query:
-                model._query_renderer.update_cache(cache_entry.optimized_query, optimized=True)
+            if cache_entry.optimized_rendered_query:
+                model._query_renderer.update_cache(
+                    cache_entry.optimized_rendered_query, optimized=True
+                )
+            else:
+                # If the optimized rendered query is None, then there are likely adapter calls in the query
+                # that prevent us from rendering it at load time. This means that we can safely set the
+                # unoptimized cache to None as well to prevent attempts to render it downstream.
+                model._query_renderer.update_cache(None, optimized=False)
             return True
 
-        unoptimized_query = model.render_query(optimize=False)
-        if unoptimized_query is None:
-            return False
-
-        optimized_query = model.render_query(optimize=True)
-
-        new_entry = RenderedQueryCacheEntry(
-            optimized_query=optimized_query, rendered_query=unoptimized_query
-        )
+        optimized_query = model.render_query()
+        new_entry = OptimizedQueryCacheEntry(optimized_rendered_query=optimized_query)
         self._file_cache.put(name, value=new_entry)
 
         return False

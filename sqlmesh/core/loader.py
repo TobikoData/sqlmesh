@@ -21,7 +21,7 @@ from sqlmesh.core.model import (
     Model,
     ExternalModel,
     ModelCache,
-    RenderedQueryCache,
+    OptimizedQueryCache,
     SeedModel,
     create_external_model,
     load_sql_based_model,
@@ -49,7 +49,7 @@ def update_model_schemas(
     context_path: Path,
 ) -> None:
     schema = MappingSchema(normalize=False)
-    rendered_query_cache: RenderedQueryCache = RenderedQueryCache(context_path / c.CACHE)
+    optimized_query_cache: OptimizedQueryCache = OptimizedQueryCache(context_path / c.CACHE)
 
     for name in dag.sorted:
         model = models.get(name)
@@ -60,7 +60,7 @@ def update_model_schemas(
 
         try:
             model.update_schema(schema)
-            rendered_query_cache.with_rendered_query(model)
+            optimized_query_cache.with_optimized_query(model)
 
             columns_to_types = model.columns_to_types
             if columns_to_types is not None:
