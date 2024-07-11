@@ -14,7 +14,7 @@ from sqlmesh.utils.pydantic import PydanticModel
 
 class SqlModelCacheEntry(PydanticModel):
     model: SqlModel
-    rendered_query: t.Optional[exp.Expression] = None
+    full_depends_on: t.Set[str]
 
 
 class ModelCache:
@@ -46,13 +46,13 @@ class ModelCache:
         cache_entry = self._file_cache.get(name, entry_id)
         if cache_entry:
             model = cache_entry.model
-            model._query_renderer.update_cache(cache_entry.rendered_query, optimized=False)
+            model._full_depends_on = cache_entry.full_depends_on
             return model
 
         loaded_model = loader()
         if isinstance(loaded_model, SqlModel):
             new_entry = SqlModelCacheEntry(
-                model=loaded_model, rendered_query=loaded_model.render_query(optimize=False)
+                model=loaded_model, full_depends_on=loaded_model.full_depends_on
             )
             self._file_cache.put(name, entry_id, value=new_entry)
 
@@ -60,7 +60,7 @@ class ModelCache:
 
 
 class OptimizedQueryCacheEntry(PydanticModel):
-    optimized_rendered_query: exp.Expression
+    optimized_rendered_query: t.Optional[exp.Expression]
 
 
 class OptimizedQueryCache:
@@ -85,23 +85,29 @@ class OptimizedQueryCache:
         if not isinstance(model, SqlModel):
             return False
 
-        unoptimized_query = model.render_query(optimize=False)
-        if unoptimized_query is None:
-            return False
-
         hash_data = _mapping_schema_hash_data(model.mapping_schema)
-        hash_data.append(gen(unoptimized_query))
+        hash_data.append(gen(model.query))
+        hash_data.append(str([(k, v) for k, v in model.sorted_python_env]))
+        hash_data.extend(model.jinja_macros.data_hash_values)
+
         name = f"{model.name}_{crc32(hash_data)}"
         cache_entry = self._file_cache.get(name)
 
         if cache_entry:
-            model._query_renderer.update_cache(cache_entry.optimized_rendered_query, optimized=True)
+            if cache_entry.optimized_rendered_query:
+                model._query_renderer.update_cache(
+                    cache_entry.optimized_rendered_query, optimized=True
+                )
+            else:
+                # If the optimized rendered query is None, then there are likely adapter calls in the query
+                # that prevent us from rendering it at load time. This means that we can safely set the
+                # unoptimized cache to None as well to prevent attempts to render it downstream.
+                model._query_renderer.update_cache(None, optimized=False)
             return True
 
-        optimized_query = model.render_query(optimize=True)
-        if optimized_query is not None:
-            new_entry = OptimizedQueryCacheEntry(optimized_rendered_query=optimized_query)
-            self._file_cache.put(name, value=new_entry)
+        optimized_query = model.render_query()
+        new_entry = OptimizedQueryCacheEntry(optimized_rendered_query=optimized_query)
+        self._file_cache.put(name, value=new_entry)
 
         return False
 

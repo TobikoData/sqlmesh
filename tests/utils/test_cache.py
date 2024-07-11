@@ -49,4 +49,33 @@ def test_optimized_query_cache(tmp_path: Path, mocker: MockerFixture):
     cache = OptimizedQueryCache(tmp_path)
 
     assert not cache.with_optimized_query(model)
+
+    model._query_renderer._cache = []
+    model._query_renderer._optimized_cache = None
+
     assert cache.with_optimized_query(model)
+
+    assert not model._query_renderer._cache
+    assert model._query_renderer._optimized_cache is not None
+
+
+def test_optimized_query_cache_missing_rendered_query(tmp_path: Path, mocker: MockerFixture):
+    model = SqlModel(
+        name="test_model",
+        query=parse_one("SELECT a FROM tbl"),
+        mapping_schema={"tbl": {"a": "int"}},
+    )
+    render_mock = mocker.patch.object(model._query_renderer, "render")
+    render_mock.return_value = None
+
+    cache = OptimizedQueryCache(tmp_path)
+
+    assert not cache.with_optimized_query(model)
+
+    model._query_renderer._cache = []
+    model._query_renderer._optimized_cache = None
+
+    assert cache.with_optimized_query(model)
+
+    assert model._query_renderer._cache == [None]
+    assert model._query_renderer._optimized_cache is None
