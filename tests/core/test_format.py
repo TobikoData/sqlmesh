@@ -30,7 +30,7 @@ def test_format_files(tmp_path: pathlib.Path):
     f4 = create_temp_file(
         tmp_path,
         pathlib.Path(models_dir, "model_3.sql"),
-        "MODEL(name audit.model); SELECT 3 AS item_id; AUDIT(name inline_audit); SELECT  * FROM @this_model WHERE  item_id < 0;",
+        "MODEL(name audit.model, audits (inline_audit)); SELECT 3 AS item_id; AUDIT(name inline_audit); SELECT  * FROM @this_model WHERE  item_id < 0;",
     )
 
     config = Config()
@@ -73,12 +73,12 @@ def test_format_files(tmp_path: pathlib.Path):
     upd3 = f3.read_text(encoding="utf-8")
     assert (
         upd3
-        == "Audit (\n  name assert_positive_id,\n  dialect 'bigquery'\n);\n\nSELECT\n  *\nFROM @this_model\nWHERE\n  `CaseSensitive_item_id` < 0"
+        == "AUDIT (\n  name assert_positive_id,\n  dialect 'bigquery'\n);\n\nSELECT\n  *\nFROM @this_model\nWHERE\n  `CaseSensitive_item_id` < 0"
     )
 
     # Ensure inline audit is formatted within model definition
     upd4 = f4.read_text(encoding="utf-8")
     assert (
         upd4
-        == "MODEL (\n  name audit.model\n);\n\nSELECT\n  3 AS item_id;\n\nAudit (\n  name inline_audit\n);\n\nSELECT\n  *\nFROM @this_model\nWHERE\n  item_id < 0"
+        == "MODEL (\n  name audit.model,\n  audits (\n    inline_audit\n  )\n);\n\nSELECT\n  3 AS item_id;\n\nAUDIT (\n  name inline_audit\n);\n\nSELECT\n  *\nFROM @this_model\nWHERE\n  item_id < 0"
     )
