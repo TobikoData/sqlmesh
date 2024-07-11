@@ -99,6 +99,7 @@ class EngineAdapter:
     SUPPORTS_REPLACE_TABLE = True
     DEFAULT_CATALOG_TYPE = DIALECT
     QUOTE_IDENTIFIERS_IN_VIEWS = True
+    REQUIRE_APPLICATION_LOCK = False
 
     def __init__(
         self,
@@ -1886,6 +1887,12 @@ class EngineAdapter:
     def _is_session_active(self) -> bool:
         """Indicates whether or not a session is active."""
         return False
+
+    def _acquire_application_lock(self, lock_id: t.Optional[int] = None) -> None:
+        """Acquire a cross-process application-specific lock, blocking if needed."""
+
+    def _release_application_lock(self, lock_id: t.Optional[int] = None) -> None:
+        """Release the cross-process application-specific lock."""
 
     def execute(
         self,

@@ -454,6 +454,22 @@ class SnapshotEvaluator:
         except Exception:
             logger.exception("Failed to close Snapshot Evaluator")
 
+    @contextmanager
+    def _application_lock(
+        self, lock_id: t.Optional[int] = None, condition: t.Optional[bool] = None
+    ) -> t.Iterator[None]:
+        """Acquires a cross-process application-specific lock if the adapter requires it."""
+        if not self.adapter.REQUIRE_APPLICATION_LOCK or (condition is not None and not condition):
+            yield
+            return
+        logger.info("Acquiring an application lock for Snapshot Evaluator")
+        self.adapter._acquire_application_lock(lock_id)
+        try:
+            yield
+        finally:
+            logger.info("Releasing an application lock for Snapshot Evaluator")
+            self.adapter._release_application_lock(lock_id)
+
     def _evaluate_snapshot(
         self,
         snapshot: Snapshot,

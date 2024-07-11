@@ -80,61 +80,64 @@ class BuiltInPlanEvaluator(PlanEvaluator):
         plan: Plan,
         circuit_breaker: t.Optional[t.Callable[[], bool]] = None,
     ) -> None:
-        self.console.start_plan_evaluation(plan)
-        analytics.collector.on_plan_apply_start(
-            plan=plan,
-            engine_type=self.snapshot_evaluator.adapter.dialect,
-            state_sync_type=self.state_sync.state_type(),
-            scheduler_type=c.BUILTIN,
-        )
+        with self.snapshot_evaluator._application_lock(
+            condition=any(s.is_view for s in plan.modified_snapshots.values())
+        ):
+            self.console.start_plan_evaluation(plan)
+            analytics.collector.on_plan_apply_start(
+                plan=plan,
+                engine_type=self.snapshot_evaluator.adapter.dialect,
+                state_sync_type=self.state_sync.state_type(),
+                scheduler_type=c.BUILTIN,
+            )
 
-        try:
-            snapshots = plan.snapshots
-            all_names = {
-                s.name for s in snapshots.values() if plan.is_selected_for_backfill(s.name)
-            }
-            deployability_index_for_evaluation = DeployabilityIndex.create(snapshots)
-            deployability_index_for_creation = deployability_index_for_evaluation
-            if plan.is_dev:
-                before_promote_snapshots = all_names
-                after_promote_snapshots = set()
-            else:
-                before_promote_snapshots = {
-                    s.name
-                    for s in snapshots.values()
-                    if deployability_index_for_evaluation.is_representative(s)
-                    and plan.is_selected_for_backfill(s.name)
+            try:
+                snapshots = plan.snapshots
+                all_names = {
+                    s.name for s in snapshots.values() if plan.is_selected_for_backfill(s.name)
                 }
-                after_promote_snapshots = all_names - before_promote_snapshots
-                deployability_index_for_evaluation = DeployabilityIndex.all_deployable()
+                deployability_index_for_evaluation = DeployabilityIndex.create(snapshots)
+                deployability_index_for_creation = deployability_index_for_evaluation
+                if plan.is_dev:
+                    before_promote_snapshots = all_names
+                    after_promote_snapshots = set()
+                else:
+                    before_promote_snapshots = {
+                        s.name
+                        for s in snapshots.values()
+                        if deployability_index_for_evaluation.is_representative(s)
+                        and plan.is_selected_for_backfill(s.name)
+                    }
+                    after_promote_snapshots = all_names - before_promote_snapshots
+                    deployability_index_for_evaluation = DeployabilityIndex.all_deployable()
 
-            self._push(plan, deployability_index_for_creation)
-            update_intervals_for_new_snapshots(plan.new_snapshots, self.state_sync)
-            self._restate(plan)
-            self._backfill(
-                plan,
-                before_promote_snapshots,
-                deployability_index_for_evaluation,
-                circuit_breaker=circuit_breaker,
-            )
-            promotion_result = self._promote(plan, before_promote_snapshots)
-            self._backfill(
-                plan,
-                after_promote_snapshots,
-                deployability_index_for_evaluation,
-                circuit_breaker=circuit_breaker,
-            )
-            self._update_views(plan, promotion_result, deployability_index_for_evaluation)
+                self._push(plan, deployability_index_for_creation)
+                update_intervals_for_new_snapshots(plan.new_snapshots, self.state_sync)
+                self._restate(plan)
+                self._backfill(
+                    plan,
+                    before_promote_snapshots,
+                    deployability_index_for_evaluation,
+                    circuit_breaker=circuit_breaker,
+                )
+                promotion_result = self._promote(plan, before_promote_snapshots)
+                self._backfill(
+                    plan,
+                    after_promote_snapshots,
+                    deployability_index_for_evaluation,
+                    circuit_breaker=circuit_breaker,
+                )
+                self._update_views(plan, promotion_result, deployability_index_for_evaluation)
 
-            if not plan.requires_backfill:
-                self.console.log_success("Virtual Update executed successfully")
-        except Exception as e:
-            analytics.collector.on_plan_apply_end(plan_id=plan.plan_id, error=e)
-            raise
-        else:
-            analytics.collector.on_plan_apply_end(plan_id=plan.plan_id)
-        finally:
-            self.console.stop_plan_evaluation()
+                if not plan.requires_backfill:
+                    self.console.log_success("Virtual Update executed successfully")
+            except Exception as e:
+                analytics.collector.on_plan_apply_end(plan_id=plan.plan_id, error=e)
+                raise
+            else:
+                analytics.collector.on_plan_apply_end(plan_id=plan.plan_id)
+            finally:
+                self.console.stop_plan_evaluation()
 
     def _backfill(
         self,

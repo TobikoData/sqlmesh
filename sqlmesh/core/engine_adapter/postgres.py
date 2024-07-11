@@ -57,6 +57,12 @@ class PostgresEngineAdapter(
             },
         },
     )
+    REQUIRE_APPLICATION_LOCK = True
+
+    _default_advisory_lock_id = 440077
+    """Default sqlmesh advisory lock id for `pg_advisory_lock`, can be manipulated by the user if needed"""
+    _active_advisory_lock_ids: t.Set[int] = set()
+    """A set of active advisory lock ids used to ensure idempotency within a single engine adapter instance"""
 
     def _fetch_native_df(
         self, query: t.Union[exp.Expression, str], quote_identifiers: bool = False
@@ -70,3 +76,26 @@ class PostgresEngineAdapter(
         if not self._connection_pool.is_transaction_active:
             self._connection_pool.commit()
         return df
+
+    def _acquire_application_lock(self, lock_id: t.Optional[int] = None) -> None:
+        """Use `pg_advisory_lock` to acquire a lock for the application, idempotent for an engine adapter instance
+
+        Reference: https://www.postgresql.org/docs/current/functions-admin.html#FUNCTIONS-ADVISORY-LOCKS
+        """
+        lock_id = lock_id or self._default_advisory_lock_id
+        if lock_id in self._active_advisory_lock_ids:
+            return
+        self._execute(f"SELECT pg_advisory_lock({lock_id});")
+        self._active_advisory_lock_ids.add(lock_id)
+
+    def _release_application_lock(self, lock_id: t.Optional[int] = None) -> None:
+        """Release the application lock, idempotent for an engine adapter instance
+
+        Note the lock is released when the connection is closed so we don't need to worry about stale locks in
+        the event of application crashes or unexpected terminations
+        """
+        lock_id = lock_id or self._default_advisory_lock_id
+        if lock_id not in self._active_advisory_lock_ids:
+            return
+        self._execute(f"SELECT pg_advisory_unlock({lock_id});")
+        self._active_advisory_lock_ids.remove(lock_id)
