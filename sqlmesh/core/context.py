@@ -858,29 +858,26 @@ class GenericContext(BaseContext, t.Generic[C]):
         append_newline: t.Optional[bool] = None,
         **kwargs: t.Any,
     ) -> None:
-        """Format all SQL models."""
-        for model in self._models.values():
-            if not model._path.suffix == ".sql":
+        """Format all SQL models and audits."""
+        combined_models_audits = {**self._models, **self._audits}
+        for node in combined_models_audits.values():
+            if not node._path.suffix == ".sql":
                 continue
-            with open(model._path, "r+", encoding="utf-8") as file:
-                expressions = parse(
-                    file.read(), default_dialect=self.config_for_node(model).dialect
-                )
+            with open(node._path, "r+", encoding="utf-8") as file:
+                expressions = parse(file.read(), default_dialect=self.config_for_node(node).dialect)
                 if transpile:
                     for prop in expressions[0].expressions:
                         if prop.name.lower() == "dialect":
                             prop.replace(
                                 exp.Property(
                                     this="dialect",
-                                    value=exp.Literal.string(transpile or model.dialect),
+                                    value=exp.Literal.string(transpile or node.dialect),
                                 )
                             )
-                format = self.config_for_node(model).format
+                format = self.config_for_node(node).format
                 opts = {**format.generator_options, **kwargs}
                 file.seek(0)
-                file.write(
-                    format_model_expressions(expressions, transpile or model.dialect, **opts)
-                )
+                file.write(format_model_expressions(expressions, transpile or node.dialect, **opts))
                 if append_newline is None:
                     append_newline = format.append_newline
                 if append_newline:

@@ -259,7 +259,7 @@ def evaluate(
 @error_handler
 @cli_analytics
 def format(ctx: click.Context, **kwargs: t.Any) -> None:
-    """Format all SQL models."""
+    """Format all SQL models and audits."""
     ctx.obj.format(**{k: v for k, v in kwargs.items() if v is not None})
 
 
