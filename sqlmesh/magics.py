@@ -578,6 +578,12 @@ class SQLMeshMagics(Magics):
         help="The column to join on. Can be specified multiple times. The model grain will be used if not specified.",
     )
     @argument(
+        "--skip-columns",
+        type=str,
+        nargs="*",
+        help="The column(s) to skip when comparing the source and target table.",
+    )
+    @argument(
         "--model",
         type=str,
         help="The model to diff against when source and target are environments and not tables.",
@@ -622,6 +628,7 @@ class SQLMeshMagics(Magics):
             source=source,
             target=target,
             on=args.on,
+            skip_columns=args.skip_columns,
             model_or_snapshot=args.model,
             where=args.where,
             limit=args.limit,

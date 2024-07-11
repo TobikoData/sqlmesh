@@ -5,6 +5,7 @@ import typing as t
 
 import pandas as pd
 from sqlglot import exp, parse_one
+from sqlglot.helper import ensure_list
 from sqlglot.optimizer.normalize_identifiers import normalize_identifiers
 from sqlglot.optimizer.qualify_columns import quote_identifiers
 
@@ -139,6 +140,7 @@ class TableDiff:
         source: TableName,
         target: TableName,
         on: t.List[str] | exp.Condition,
+        skip_columns: t.List[str] | None = None,
         where: t.Optional[str | exp.Condition] = None,
         limit: int = 20,
         source_alias: t.Optional[str] = None,
@@ -178,6 +180,14 @@ class TableDiff:
             )
         else:
             self.on = on
+
+        self.skip_columns = {
+            normalize_identifiers(
+                exp.parse_identifier(t.cast(str, col)),
+                dialect=self.model_dialect or self.dialect,
+            ).name
+            for col in ensure_list(skip_columns)
+        }
 
         normalize_identifiers(self.on, dialect=self.model_dialect or self.dialect)
 
@@ -228,7 +238,9 @@ class TableDiff:
             t_index = list(dict.fromkeys(t_index))
 
             matched_columns = {
-                c: t for c, t in self.source_schema.items() if t == self.target_schema.get(c)
+                c: t
+                for c, t in self.source_schema.items()
+                if t == self.target_schema.get(c) and c not in self.skip_columns
             }
 
             def _column_expr(name: str, table: str) -> exp.Expression:

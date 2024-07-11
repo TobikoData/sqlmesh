@@ -410,18 +410,20 @@ Usage: sqlmesh table_diff [OPTIONS] SOURCE:TARGET [MODEL]
   Show the diff between two tables.
 
 Options:
-  -o, --on TEXT           The column to join on. Can be specified multiple
-                          times. The model grain will be used if not
-                          specified.
-  --where TEXT            An optional where statement to filter results.
-  --limit INTEGER         The limit of the sample dataframe.
-  --show-sample           Show a sample of the rows that differ. With many
-                          columns, the output can be very wide.
-  --skip-grain-check      Disable the check for a primary key (grain) that 
-                          is missing or is not unique.
-  -d, --decimals INTEGER  The number of decimal places to keep when comparing
-                          floating point columns. Default: 3
-  --help                  Show this message and exit.
+  -o, --on TEXT            The column to join on. Can be specified multiple
+                           times. The model grain will be used if not
+                           specified.
+  -s, --skip-columns TEXT  The column(s) to skip when comparing the source and
+                           target table.
+  --where TEXT             An optional where statement to filter results.
+  --limit INTEGER          The limit of the sample dataframe.
+  --show-sample            Show a sample of the rows that differ. With many
+                           columns, the output can be very wide.
+  -d, --decimals INTEGER   The number of decimal places to keep when comparing
+                           floating point columns. Default: 3
+  --skip-grain-check       Disable the check for a primary key (grain) that is
+                           missing or is not unique.
+  --help                   Show this message and exit.
 ```
 
 ## table_name
