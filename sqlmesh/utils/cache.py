@@ -119,7 +119,7 @@ class FileCache(t.Generic[T]):
             raise SQLMeshError(f"Cache path '{self._path}' is not a directory.")
 
         with gzip.open(self._cache_entry_path(name, entry_id), "wb", compresslevel=1) as fd:
-            pickle.dump(value.dict(), fd)
+            pickle.dump(value.dict(exclude_none=False), fd)
 
     def _cache_entry_path(self, name: str, entry_id: str = "") -> Path:
         entry_file_name = "__".join(p for p in (self._cache_version, name, entry_id) if p)
