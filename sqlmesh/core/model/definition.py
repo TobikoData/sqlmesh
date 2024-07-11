@@ -115,6 +115,8 @@ class _Model(ModelMeta, frozen=True):
     jinja_macros: JinjaMacroRegistry = JinjaMacroRegistry()
     mapping_schema: t.Dict[str, t.Any] = {}
 
+    _full_depends_on: t.Optional[t.Set[str]] = None
+
     _expressions_validator = expression_validator
 
     def render(
@@ -560,7 +562,7 @@ class _Model(ModelMeta, frozen=True):
         Returns:
             A list of all the upstream table names.
         """
-        return self._full_depends_on - {self.fqn}
+        return self.full_depends_on - {self.fqn}
 
     @property
     def columns_to_types(self) -> t.Optional[t.Dict[str, exp.DataType]]:
@@ -624,7 +626,7 @@ class _Model(ModelMeta, frozen=True):
 
     @cached_property
     def depends_on_self(self) -> bool:
-        return self.fqn in self._full_depends_on
+        return self.fqn in self.full_depends_on
 
     @property
     def forward_only(self) -> bool:
@@ -819,17 +821,19 @@ class _Model(ModelMeta, frozen=True):
     def _additional_metadata(self) -> t.List[str]:
         return []
 
-    @cached_property
-    def _full_depends_on(self) -> t.Set[str]:
-        depends_on = self.depends_on_ or set()
+    @property
+    def full_depends_on(self) -> t.Set[str]:
+        if not self._full_depends_on:
+            depends_on = self.depends_on_ or set()
 
-        query = self.render_query(optimize=False)
-        if query is not None:
-            depends_on |= d.find_tables(
-                query, default_catalog=self.default_catalog, dialect=self.dialect
-            )
+            query = self.render_query(optimize=False)
+            if query is not None:
+                depends_on |= d.find_tables(
+                    query, default_catalog=self.default_catalog, dialect=self.dialect
+                )
+            self._full_depends_on = depends_on
 
-        return depends_on
+        return self._full_depends_on
 
 
 class _SqlBasedModel(_Model):
@@ -1055,7 +1059,7 @@ class SqlModel(_SqlBasedModel):
         if self.column_descriptions_ is not None:
             return self.column_descriptions_
 
-        query = self.render_query(optimize=False)
+        query = self.render_query()
         if query is None:
             return {}
 
