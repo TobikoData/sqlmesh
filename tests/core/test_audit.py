@@ -670,7 +670,7 @@ def test_text_diff():
 
 @@ -1,5 +1,5 @@
 
- Audit (
+ AUDIT (
 -  name my_audit,
 +  name my_audit_2,
    dialect spark,

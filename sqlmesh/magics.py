@@ -724,7 +724,7 @@ class SQLMeshMagics(Magics):
     @line_magic
     @pass_sqlmesh_context
     def format(self, context: Context, line: str) -> None:
-        """Format all SQL models."""
+        """Format all SQL models and audits."""
         args = parse_argstring(self.format, line)
         context.format(**{k: v for k, v in vars(args).items() if v is not None})
 

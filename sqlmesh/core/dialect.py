@@ -804,7 +804,7 @@ def extend_sqlglot() -> None:
         if MacroFunc not in generator.TRANSFORMS:
             generator.TRANSFORMS.update(
                 {
-                    Audit: lambda self, e: _sqlmesh_ddl_sql(self, e, "Audit"),
+                    Audit: lambda self, e: _sqlmesh_ddl_sql(self, e, "AUDIT"),
                     DColonCast: lambda self, e: f"{self.sql(e, 'this')}::{self.sql(e, 'to')}",
                     Jinja: lambda self, e: e.name,
                     JinjaQuery: lambda self, e: f"{JINJA_QUERY_BEGIN};\n{e.name}\n{JINJA_END};",
