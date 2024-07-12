@@ -220,8 +220,15 @@ class TableDiff:
 
     def row_diff(self, skip_grain_check: bool = False) -> RowDiff:
         if self._row_diff is None:
-            s_selects = {c: exp.column(c, "s").as_(f"s__{c}") for c in self.source_schema}
-            t_selects = {c: exp.column(c, "t").as_(f"t__{c}") for c in self.target_schema}
+            source_schema = {
+                c: t for c, t in self.source_schema.items() if c not in self.skip_columns
+            }
+            target_schema = {
+                c: t for c, t in self.target_schema.items() if c not in self.skip_columns
+            }
+
+            s_selects = {c: exp.column(c, "s").as_(f"s__{c}") for c in source_schema}
+            t_selects = {c: exp.column(c, "t").as_(f"t__{c}") for c in target_schema}
 
             index_cols = []
             s_index = []
@@ -238,9 +245,7 @@ class TableDiff:
             t_index = list(dict.fromkeys(t_index))
 
             matched_columns = {
-                c: t
-                for c, t in self.source_schema.items()
-                if t == self.target_schema.get(c) and c not in self.skip_columns
+                c: t for c, t in source_schema.items() if t == target_schema.get(c)
             }
 
             def _column_expr(name: str, table: str) -> exp.Expression:
@@ -447,7 +452,7 @@ class TableDiff:
                 s_sample = sample[(sample["s_exists"] == 1) & (sample["row_joined"] == 0)][
                     [
                         *[f"s__{c}" for c in index_cols],
-                        *[f"s__{c}" for c in self.source_schema if c not in index_cols],
+                        *[f"s__{c}" for c in source_schema if c not in index_cols],
                     ]
                 ]
                 s_sample.rename(
@@ -457,7 +462,7 @@ class TableDiff:
                 t_sample = sample[(sample["t_exists"] == 1) & (sample["row_joined"] == 0)][
                     [
                         *[f"t__{c}" for c in index_cols],
-                        *[f"t__{c}" for c in self.target_schema if c not in index_cols],
+                        *[f"t__{c}" for c in target_schema if c not in index_cols],
                     ]
                 ]
                 t_sample.rename(

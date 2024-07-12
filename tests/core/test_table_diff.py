@@ -230,6 +230,7 @@ def test_generated_sql(sushi_context_fixed_date: Context, mocker: MockerFixture)
             {
                 "key": [1, 2, 3],
                 "value": [1.0, 4.2, 4.1],
+                "ignored": [1, 2, 3],
             }
         ),
     )
@@ -240,6 +241,7 @@ def test_generated_sql(sushi_context_fixed_date: Context, mocker: MockerFixture)
             {
                 "key": [1, 2, 6],
                 "value": [1.0, 3.0, -2.2],
+                "ignored": [1, 2, 3],
             }
         ),
     )
@@ -255,6 +257,7 @@ def test_generated_sql(sushi_context_fixed_date: Context, mocker: MockerFixture)
         source="table_diff_source",
         target="table_diff_target",
         on=["key"],
+        skip_columns=["ignored"],
     )
 
     spy_execute.assert_any_call(query_sql)
