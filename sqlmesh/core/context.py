@@ -858,13 +858,14 @@ class GenericContext(BaseContext, t.Generic[C]):
         append_newline: t.Optional[bool] = None,
         **kwargs: t.Any,
     ) -> None:
-        """Format all SQL models."""
-        for model in self._models.values():
-            if not model._path.suffix == ".sql":
+        """Format all SQL models and audits."""
+        format_targets = {**self._models, **self._audits}
+        for target in format_targets.values():
+            if not target._path.suffix == ".sql":
                 continue
-            with open(model._path, "r+", encoding="utf-8") as file:
+            with open(target._path, "r+", encoding="utf-8") as file:
                 expressions = parse(
-                    file.read(), default_dialect=self.config_for_node(model).dialect
+                    file.read(), default_dialect=self.config_for_node(target).dialect
                 )
                 if transpile:
                     for prop in expressions[0].expressions:
@@ -872,14 +873,14 @@ class GenericContext(BaseContext, t.Generic[C]):
                             prop.replace(
                                 exp.Property(
                                     this="dialect",
-                                    value=exp.Literal.string(transpile or model.dialect),
+                                    value=exp.Literal.string(transpile or target.dialect),
                                 )
                             )
-                format = self.config_for_node(model).format
+                format = self.config_for_node(target).format
                 opts = {**format.generator_options, **kwargs}
                 file.seek(0)
                 file.write(
-                    format_model_expressions(expressions, transpile or model.dialect, **opts)
+                    format_model_expressions(expressions, transpile or target.dialect, **opts)
                 )
                 if append_newline is None:
                     append_newline = format.append_newline

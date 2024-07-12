@@ -27,7 +27,7 @@ Runs all audits.
 Read more about [auditing](../concepts/audits.md).
 
 ## format
-Formats all SQL model files in place.
+Formats all SQL model and audit files in place.
 
 ## diff
 Shows the diff between the local model and a model in an environment.

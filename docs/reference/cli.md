@@ -26,7 +26,7 @@ Commands:
   diff                    Show the diff between the local state and the...
   evaluate                Evaluate a model and return a dataframe with a...
   fetchdf                 Run a SQL query and display the results.
-  format                  Format all SQL models.
+  format                  Format all SQL models and audits.
   info                    Print information about a SQLMesh project.
   init                    Create a new SQLMesh repository.
   invalidate              Invalidate the target environment, forcing its...
@@ -166,7 +166,7 @@ Options:
 ```
 Usage: sqlmesh format [OPTIONS]
 
-  Format all SQL models.
+  Format all SQL models and audits.
 
 Options:
   -t, --transpile TEXT        Transpile project models to the specified
