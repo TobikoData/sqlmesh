@@ -117,6 +117,14 @@ class _Model(ModelMeta, frozen=True):
     mapping_schema: t.Dict[str, t.Any] = {}
 
     _full_depends_on: t.Optional[t.Set[str]] = None
+    __statement_renderers: t.Dict[int, ExpressionRenderer] = {}
+
+    pre_statements_: t.Optional[t.List[exp.Expression]] = Field(
+        default=None, alias="pre_statements"
+    )
+    post_statements_: t.Optional[t.List[exp.Expression]] = Field(
+        default=None, alias="post_statements"
+    )
 
     _expressions_validator = expression_validator
 
@@ -335,7 +343,17 @@ class _Model(ModelMeta, frozen=True):
         Returns:
             The list of rendered expressions.
         """
-        return []
+        return self._render_statements(
+            self.pre_statements,
+            start=start,
+            end=end,
+            execution_time=execution_time,
+            snapshots=snapshots,
+            expand=expand,
+            deployability_index=deployability_index,
+            engine_adapter=engine_adapter,
+            **kwargs,
+        )
 
     def render_post_statements(
         self,
@@ -367,7 +385,58 @@ class _Model(ModelMeta, frozen=True):
         Returns:
             The list of rendered expressions.
         """
-        return []
+        return self._render_statements(
+            self.post_statements,
+            start=start,
+            end=end,
+            execution_time=execution_time,
+            snapshots=snapshots,
+            expand=expand,
+            deployability_index=deployability_index,
+            engine_adapter=engine_adapter,
+            **kwargs,
+        )
+
+    @property
+    def pre_statements(self) -> t.List[exp.Expression]:
+        return self.pre_statements_ or []
+
+    @property
+    def post_statements(self) -> t.List[exp.Expression]:
+        return self.post_statements_ or []
+
+    @property
+    def macro_definitions(self) -> t.List[d.MacroDef]:
+        """All macro definitions from the list of expressions."""
+        return [s for s in self.pre_statements + self.post_statements if isinstance(s, d.MacroDef)]
+
+    def _render_statements(
+        self,
+        statements: t.Iterable[exp.Expression],
+        **kwargs: t.Any,
+    ) -> t.List[exp.Expression]:
+        rendered = (
+            self._statement_renderer(statement).render(**kwargs)
+            for statement in statements
+            if not isinstance(statement, d.MacroDef)
+        )
+        return [r for expressions in rendered if expressions for r in expressions]
+
+    def _statement_renderer(self, expression: exp.Expression) -> ExpressionRenderer:
+        expression_key = id(expression)
+        if expression_key not in self.__statement_renderers:
+            self.__statement_renderers[expression_key] = ExpressionRenderer(
+                expression,
+                self.dialect,
+                self.macro_definitions,
+                path=self._path,
+                jinja_macro_registry=self.jinja_macros,
+                python_env=self.python_env,
+                only_execution_time=self.kind.only_execution_time,
+                default_catalog=self.default_catalog,
+                model_fqn=self.fqn,
+            )
+        return self.__statement_renderers[expression_key]
 
     def render_signals(
         self,
@@ -857,15 +926,7 @@ class _Model(ModelMeta, frozen=True):
 
 
 class _SqlBasedModel(_Model):
-    pre_statements_: t.Optional[t.List[exp.Expression]] = Field(
-        default=None, alias="pre_statements"
-    )
-    post_statements_: t.Optional[t.List[exp.Expression]] = Field(
-        default=None, alias="post_statements"
-    )
     inline_audits_: t.Dict[str, t.Any] = Field(default={}, alias="inline_audits")
-
-    __statement_renderers: t.Dict[int, ExpressionRenderer] = {}
 
     _expression_validator = expression_validator
 
@@ -887,98 +948,9 @@ class _SqlBasedModel(_Model):
 
         return inline_audits
 
-    def render_pre_statements(
-        self,
-        *,
-        start: t.Optional[TimeLike] = None,
-        end: t.Optional[TimeLike] = None,
-        execution_time: t.Optional[TimeLike] = None,
-        snapshots: t.Optional[t.Collection[Snapshot]] = None,
-        expand: t.Iterable[str] = tuple(),
-        deployability_index: t.Optional[DeployabilityIndex] = None,
-        engine_adapter: t.Optional[EngineAdapter] = None,
-        **kwargs: t.Any,
-    ) -> t.List[exp.Expression]:
-        return self._render_statements(
-            self.pre_statements,
-            start=start,
-            end=end,
-            execution_time=execution_time,
-            snapshots=snapshots,
-            expand=expand,
-            deployability_index=deployability_index,
-            engine_adapter=engine_adapter,
-            **kwargs,
-        )
-
-    def render_post_statements(
-        self,
-        *,
-        start: t.Optional[TimeLike] = None,
-        end: t.Optional[TimeLike] = None,
-        execution_time: t.Optional[TimeLike] = None,
-        snapshots: t.Optional[t.Collection[Snapshot]] = None,
-        expand: t.Iterable[str] = tuple(),
-        deployability_index: t.Optional[DeployabilityIndex] = None,
-        engine_adapter: t.Optional[EngineAdapter] = None,
-        **kwargs: t.Any,
-    ) -> t.List[exp.Expression]:
-        return self._render_statements(
-            self.post_statements,
-            start=start,
-            end=end,
-            execution_time=execution_time,
-            snapshots=snapshots,
-            expand=expand,
-            deployability_index=deployability_index,
-            engine_adapter=engine_adapter,
-            **kwargs,
-        )
-
-    @property
-    def pre_statements(self) -> t.List[exp.Expression]:
-        return self.pre_statements_ or []
-
-    @property
-    def post_statements(self) -> t.List[exp.Expression]:
-        return self.post_statements_ or []
-
-    @property
-    def macro_definitions(self) -> t.List[d.MacroDef]:
-        """All macro definitions from the list of expressions."""
-        return [s for s in self.pre_statements + self.post_statements if isinstance(s, d.MacroDef)]
-
     @property
     def inline_audits(self) -> t.Dict[str, ModelAudit]:
         return self.inline_audits_
-
-    def _render_statements(
-        self,
-        statements: t.Iterable[exp.Expression],
-        **kwargs: t.Any,
-    ) -> t.List[exp.Expression]:
-        rendered = (
-            self._statement_renderer(statement).render(**kwargs)
-            for statement in statements
-            if not isinstance(statement, d.MacroDef)
-        )
-        return [r for expressions in rendered if expressions for r in expressions]
-
-    def _statement_renderer(self, expression: exp.Expression) -> ExpressionRenderer:
-        expression_key = id(expression)
-        if expression_key not in self.__statement_renderers:
-            self.__statement_renderers[expression_key] = ExpressionRenderer(
-                expression,
-                self.dialect,
-                self.macro_definitions,
-                path=self._path,
-                jinja_macro_registry=self.jinja_macros,
-                python_env=self.python_env,
-                only_execution_time=self.kind.only_execution_time,
-                default_catalog=self.default_catalog,
-                model_fqn=self.fqn,
-            )
-        return self.__statement_renderers[expression_key]
 
     @property
     def _data_hash_values(self) -> t.List[str]:
