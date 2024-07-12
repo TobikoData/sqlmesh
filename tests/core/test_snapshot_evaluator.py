@@ -475,6 +475,7 @@ def test_evaluate_materialized_view(
             snapshot.table_name(),
             model.render_query(),
             model.columns_to_types,
+            replace=True,
             materialized=True,
             view_properties={},
             table_description=None,
@@ -517,6 +518,7 @@ def test_evaluate_materialized_view_with_execution_time_macro(
         snapshot.table_name(),
         model.render_query(execution_time="2020-01-02"),
         model.columns_to_types,
+        replace=True,
         materialized=True,
         view_properties={},
         table_description=None,
@@ -664,28 +666,12 @@ def test_create_only_dev_table_exists(mocker: MockerFixture, adapter_mock, make_
             type=DataObjectType.VIEW,
         ),
     ]
+    adapter_mock.table_exists.return_value = True
     evaluator = SnapshotEvaluator(adapter_mock)
 
     evaluator.create([snapshot], {})
 
-    common_kwargs = dict(
-        materialized=False,
-        view_properties={},
-        table_description=None,
-    )
-    rendered_query = model.render_query()
-    adapter_mock.create_view.assert_has_calls(
-        [
-            call(
-                snapshot.table_name(False),
-                rendered_query,
-                column_descriptions=None,
-                **common_kwargs,
-            ),
-            call(snapshot.table_name(), rendered_query, column_descriptions={}, **common_kwargs),
-        ]
-    )
-
+    adapter_mock.create_view.assert_not_called
     adapter_mock.get_data_objects.assert_called_once_with(
         schema_("sqlmesh__test_schema"),
         {
@@ -695,7 +681,45 @@ def test_create_only_dev_table_exists(mocker: MockerFixture, adapter_mock, make_
     )
 
 
+def test_create_view_non_deployable_snapshot(mocker: MockerFixture, adapter_mock, make_snapshot):
+    model = load_sql_based_model(
+        parse(  # type: ignore
+            """
+            MODEL (
+                name test_schema.test_model,
+                kind VIEW
+            );
+
+            SELECT a::int FROM tbl;
+            """
+        ),
+    )
+
+    snapshot = make_snapshot(model)
+    snapshot.categorize_as(SnapshotChangeCategory.BREAKING)
+
+    adapter_mock.get_data_objects.return_value = []
+    adapter_mock.table_exists.return_value = False
+    evaluator = SnapshotEvaluator(adapter_mock)
+
+    deployability_index = DeployabilityIndex.none_deployable()
+    evaluator.create([snapshot], {}, deployability_index=deployability_index)
+
+    adapter_mock.create_view.assert_called_once_with(
+        snapshot.table_name(is_deployable=False),
+        model.render_query(),
+        column_descriptions=None,
+        view_properties={},
+        table_description=None,
+        materialized=False,
+        replace=False,
+    )
+
+
 def test_create_materialized_view(mocker: MockerFixture, adapter_mock, make_snapshot):
+    adapter_mock.get_data_objects.return_value = []
+    adapter_mock.table_exists.return_value = False
+
     evaluator = SnapshotEvaluator(adapter_mock)
 
     model = load_sql_based_model(
@@ -722,6 +746,7 @@ def test_create_materialized_view(mocker: MockerFixture, adapter_mock, make_snap
         materialized=True,
         view_properties={},
         table_description=None,
+        replace=False,
     )
 
     adapter_mock.create_view.assert_has_calls(
@@ -740,6 +765,9 @@ def test_create_materialized_view(mocker: MockerFixture, adapter_mock, make_snap
 
 
 def test_create_view_with_properties(mocker: MockerFixture, adapter_mock, make_snapshot):
+    adapter_mock.get_data_objects.return_value = []
+    adapter_mock.table_exists.return_value = False
+
     evaluator = SnapshotEvaluator(adapter_mock)
 
     model = load_sql_based_model(
@@ -771,6 +799,7 @@ def test_create_view_with_properties(mocker: MockerFixture, adapter_mock, make_s
             "key": exp.convert("value"),
         },
         table_description=None,
+        replace=False,
     )
 
     adapter_mock.create_view.assert_has_calls(
