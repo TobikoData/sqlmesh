@@ -32,6 +32,8 @@ if t.TYPE_CHECKING:
 
     Row = t.Dict[str, t.Any]
 
+TIME_KWARG_KEYS = {"start", "end", "execution_time", "latest"}
+
 
 class ModelTest(unittest.TestCase):
     __test__ = False
@@ -545,8 +547,12 @@ class SqlModelTest(ModelTest):
             self.assert_equal(expected, actual, sort=sort, partial=partial)
 
     def _render_model_query(self) -> exp.Query:
+        variables = self.body.get("vars", {}).copy()
+        time_kwargs = {key: variables.pop(key, None) for key in TIME_KWARG_KEYS}
+
         return self.model.render_query_or_raise(
-            **self.body.get("vars", {}),
+            **time_kwargs,
+            variables=variables,
             engine_adapter=self.engine_adapter,
             table_mapping={
                 name: self._test_fixture_table(name).sql() for name in self.body.get("inputs", {})
@@ -618,7 +624,9 @@ class PythonModelTest(ModelTest):
         time_ctx = freeze_time(self._execution_time) if self._execution_time else nullcontext()
         with patch.dict(self._test_adapter_dialect.generator_class.TRANSFORMS, self._transforms):
             with t.cast(AbstractContextManager, time_ctx):
-                df = next(self.model.render(context=self.context, **self.body.get("vars", {})))
+                variables = self.body.get("vars", {}).copy()
+                time_kwargs = {key: variables.pop(key, None) for key in TIME_KWARG_KEYS}
+                df = next(self.model.render(context=self.context, **time_kwargs, **variables))
                 assert not isinstance(df, exp.Expression)
                 return df if isinstance(df, pd.DataFrame) else df.toPandas()
 

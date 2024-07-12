@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import ast
 import logging
 import typing as t
 from contextlib import contextmanager
@@ -116,6 +117,7 @@ class BaseExpressionRenderer:
 
         expressions = [self._expression]
 
+        variables = kwargs.pop("variables", None)
         render_kwargs = {
             **date_dict(
                 to_datetime(execution_time or c.EPOCH),
@@ -124,6 +126,13 @@ class BaseExpressionRenderer:
             ),
             **kwargs,
         }
+
+        if variables:
+            if c.SQLMESH_VARS not in self._python_env:
+                self._python_env[c.SQLMESH_VARS] = Executable.value({})
+
+            existing_variables = ast.literal_eval(self._python_env[c.SQLMESH_VARS].payload)
+            self._python_env[c.SQLMESH_VARS] = Executable.value(existing_variables | variables)
 
         jinja_env = self._jinja_macro_registry.build_environment(
             **{**render_kwargs, **prepare_env(self._python_env)},
