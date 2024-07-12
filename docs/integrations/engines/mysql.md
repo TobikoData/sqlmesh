@@ -35,11 +35,15 @@ The operator requires an [Airflow connection](https://airflow.apache.org/docs/ap
 
 By default, the connection ID is set to `mysql_default`, but can be overridden using the `engine_operator_args` parameter to the `SQLMeshAirflow` instance as in the example below:
 ```python linenums="1"
+from sqlmesh.schedulers.airflow import NO_DEFAULT_CATALOG
+
 sqlmesh_airflow = SQLMeshAirflow(
     "mysql",
-    default_catalog="<database name>",
+    default_catalog=NO_DEFAULT_CATALOG,
     engine_operator_args={
         "mysql_conn_id": "<Connection ID>"
     },
 )
 ```
+
+Note: `NO_DEFAULT_CATALOG` is required for MySQL since MySQL doesn't support catalogs. 

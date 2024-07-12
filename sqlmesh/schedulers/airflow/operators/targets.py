@@ -17,7 +17,7 @@ from sqlmesh.core.snapshot import (
     SnapshotTableInfo,
 )
 from sqlmesh.engines import commands
-from sqlmesh.schedulers.airflow import common, util
+from sqlmesh.schedulers.airflow import common, util, NO_DEFAULT_CATALOG
 from sqlmesh.utils.date import TimeLike
 from sqlmesh.utils.pydantic import PydanticModel
 
@@ -30,8 +30,11 @@ class BaseTarget(abc.ABC, t.Generic[CP]):
     ddl_concurrent_tasks: int
 
     @property
-    def default_catalog(self) -> str:
-        return Variable.get(common.DEFAULT_CATALOG_VARIABLE_NAME)
+    def default_catalog(self) -> t.Optional[str]:
+        default_catalog = Variable.get(common.DEFAULT_CATALOG_VARIABLE_NAME)
+        if default_catalog == NO_DEFAULT_CATALOG:
+            return None
+        return default_catalog
 
     def serialized_command_payload(self, context: Context) -> str:
         """Returns the serialized command payload for the Spark application.
