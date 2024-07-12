@@ -1273,6 +1273,7 @@ class GenericContext(BaseContext, t.Generic[C]):
         source: str,
         target: str,
         on: t.List[str] | exp.Condition | None = None,
+        skip_columns: t.List[str] | None = None,
         model_or_snapshot: t.Optional[ModelOrSnapshot] = None,
         where: t.Optional[str | exp.Condition] = None,
         limit: int = 20,
@@ -1288,6 +1289,7 @@ class GenericContext(BaseContext, t.Generic[C]):
             target: The target environment or table.
             on: The join condition, table aliases must be "s" and "t" for source and target.
                 If omitted, the table's grain will be used.
+            skip_columns: The columns to skip when computing the table diff.
             model_or_snapshot: The model or snapshot to use when environments are passed in.
             where: An optional where statement to filter results.
             limit: The limit of the sample dataframe.
@@ -1341,6 +1343,7 @@ class GenericContext(BaseContext, t.Generic[C]):
             source=source,
             target=target,
             on=on,
+            skip_columns=skip_columns,
             where=where,
             source_alias=source_alias,
             target_alias=target_alias,

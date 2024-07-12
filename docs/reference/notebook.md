@@ -266,27 +266,34 @@ Create a schema file containing external model schemas.
 
 #### table_diff
 ```
-%table_diff [--on [ON ...]] [--model MODEL] [--where WHERE]
-                  [--limit LIMIT] [--show-sample] [--skip-grain-check]
-                  SOURCE:TARGET
+%table_diff [--on [ON ...]] [--skip-columns [SKIP_COLUMNS ...]]
+                [--model MODEL] [--where WHERE] [--limit LIMIT]
+                [--show-sample] [--decimals DECIMALS] [--skip-grain-check]
+                SOURCE:TARGET
 
 Show the diff between two tables.
 
 Can either be two tables or two environments and a model.
 
 positional arguments:
-  SOURCE:TARGET    Source and target in `SOURCE:TARGET` format
+  SOURCE:TARGET         Source and target in `SOURCE:TARGET` format
 
 options:
-  --on <[ON ...]>     The column to join on. Can be specified multiple times. The
-                      model grain will be used if not specified.
-  --model MODEL       The model to diff against when source and target are
-                      environments and not tables.
-  --where WHERE       An optional where statement to filter results.
-  --limit LIMIT       The limit of the sample dataframe.
-  --show-sample       Show a sample of the rows that differ. With many columns,
-                      the output can be very wide.  
-  --skip-grain-check  Disable the check for a primary key (grain) that is missing or is not unique.
+  --on <[ON ...]>       The column to join on. Can be specified multiple
+                        times. The model grain will be used if not specified.
+  --skip-columns <[SKIP_COLUMNS ...]>
+                        The column(s) to skip when comparing the source and
+                        target table.
+  --model MODEL         The model to diff against when source and target are
+                        environments and not tables.
+  --where WHERE         An optional where statement to filter results.
+  --limit LIMIT         The limit of the sample dataframe.
+  --show-sample         Show a sample of the rows that differ. With many
+                        columns, the output can be very wide.
+  --decimals DECIMALS   The number of decimal places to keep when comparing
+                        floating point columns. Default: 3
+  --skip-grain-check    Disable the check for a primary key (grain) that is
+                        missing or is not unique.
 ```
 
 #### model

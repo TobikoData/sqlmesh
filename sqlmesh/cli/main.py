@@ -721,6 +721,13 @@ def create_external_models(obj: Context) -> None:
     help="The column to join on. Can be specified multiple times. The model grain will be used if not specified.",
 )
 @click.option(
+    "-s",
+    "--skip-columns",
+    type=str,
+    multiple=True,
+    help="The column(s) to skip when comparing the source and target table.",
+)
+@click.option(
     "--where",
     type=str,
     help="An optional where statement to filter results.",
