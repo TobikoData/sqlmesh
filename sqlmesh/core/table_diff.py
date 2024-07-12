@@ -244,9 +244,7 @@ class TableDiff:
             s_index = list(dict.fromkeys(s_index))
             t_index = list(dict.fromkeys(t_index))
 
-            matched_columns = {
-                c: t for c, t in source_schema.items() if t == target_schema.get(c)
-            }
+            matched_columns = {c: t for c, t in source_schema.items() if t == target_schema.get(c)}
 
             def _column_expr(name: str, table: str) -> exp.Expression:
                 if matched_columns[name].this in exp.DataType.FLOAT_TYPES:
