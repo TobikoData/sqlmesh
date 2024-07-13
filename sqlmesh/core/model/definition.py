@@ -1431,7 +1431,10 @@ class PythonModel(_Model):
         env = prepare_env(self.python_env)
         start, end = make_inclusive(start or c.EPOCH, end or c.EPOCH)
         execution_time = to_datetime(execution_time or c.EPOCH)
-        variables = env.get(c.SQLMESH_VARS, {}) | kwargs.pop("variables", {})
+
+        variables = env.get(c.SQLMESH_VARS, {})
+        variables.update(kwargs.pop("variables", {}))
+
         try:
             kwargs = {
                 **variables,

@@ -1,6 +1,5 @@
 from __future__ import annotations
 
-import ast
 import logging
 import typing as t
 from contextlib import contextmanager
@@ -117,7 +116,6 @@ class BaseExpressionRenderer:
 
         expressions = [self._expression]
 
-        variables = kwargs.pop("variables", None)
         render_kwargs = {
             **date_dict(
                 to_datetime(execution_time or c.EPOCH),
@@ -127,15 +125,9 @@ class BaseExpressionRenderer:
             **kwargs,
         }
 
-        if variables:
-            if c.SQLMESH_VARS not in self._python_env:
-                self._python_env[c.SQLMESH_VARS] = Executable.value({})
-
-            existing_variables = ast.literal_eval(self._python_env[c.SQLMESH_VARS].payload)
-            self._python_env[c.SQLMESH_VARS] = Executable.value(existing_variables | variables)
-
+        variables = kwargs.pop("variables", {})
         jinja_env = self._jinja_macro_registry.build_environment(
-            **{**render_kwargs, **prepare_env(self._python_env)},
+            **{**render_kwargs, **prepare_env(self._python_env), **variables},
             snapshots=(snapshots or {}),
             table_mapping=table_mapping,
             deployability_index=deployability_index,
@@ -187,6 +179,9 @@ class BaseExpressionRenderer:
                 raise_config_error(f"Failed to evaluate macro '{definition}'. {ex}", self._path)
 
         macro_evaluator.locals.update(render_kwargs)
+
+        if variables:
+            macro_evaluator.locals.setdefault(c.SQLMESH_VARS, {}).update(variables)
 
         resolved_expressions: t.List[t.Optional[exp.Expression]] = []
 

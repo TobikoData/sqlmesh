@@ -550,7 +550,7 @@ class SqlModelTest(ModelTest):
         variables = self.body.get("vars", {}).copy()
         time_kwargs = {key: variables.pop(key, None) for key in TIME_KWARG_KEYS}
 
-        return self.model.render_query_or_raise(
+        query = self.model.render_query_or_raise(
             **time_kwargs,
             variables=variables,
             engine_adapter=self.engine_adapter,
@@ -559,6 +559,7 @@ class SqlModelTest(ModelTest):
             },
             runtime_stage=RuntimeStage.TESTING,
         )
+        return query
 
 
 class PythonModelTest(ModelTest):
