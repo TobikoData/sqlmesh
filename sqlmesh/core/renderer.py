@@ -125,8 +125,9 @@ class BaseExpressionRenderer:
             **kwargs,
         }
 
+        variables = kwargs.pop("variables", {})
         jinja_env = self._jinja_macro_registry.build_environment(
-            **{**render_kwargs, **prepare_env(self._python_env)},
+            **{**render_kwargs, **prepare_env(self._python_env), **variables},
             snapshots=(snapshots or {}),
             table_mapping=table_mapping,
             deployability_index=deployability_index,
@@ -178,6 +179,9 @@ class BaseExpressionRenderer:
                 raise_config_error(f"Failed to evaluate macro '{definition}'. {ex}", self._path)
 
         macro_evaluator.locals.update(render_kwargs)
+
+        if variables:
+            macro_evaluator.locals.setdefault(c.SQLMESH_VARS, {}).update(variables)
 
         resolved_expressions: t.List[t.Optional[exp.Expression]] = []
 
