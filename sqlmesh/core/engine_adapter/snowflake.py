@@ -357,7 +357,7 @@ class SnowflakeEngineAdapter(GetCurrentCatalogFromFunctionMixin):
         if self._default_catalog:
 
             def unquote_and_lower(identifier: str) -> str:
-                return exp.to_identifier(identifier).name.lower()
+                return exp.parse_identifier(identifier).name.lower()
 
             default_catalog_unquoted = unquote_and_lower(self._default_catalog)
             default_catalog_normalized = normalize_identifiers(

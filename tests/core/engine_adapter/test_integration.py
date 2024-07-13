@@ -2070,7 +2070,7 @@ def test_init_project(ctx: TestContext, mark_gateway: t.Tuple[str, str], tmp_pat
     assert len(physical_layer_results.tables) == len(physical_layer_results.non_temp_tables) == 6
 
     # make and validate unmodified dev environment
-    no_change_plan = context.plan(
+    no_change_plan: Plan = context.plan(
         environment="test_dev",
         skip_tests=True,
         no_prompts=True,
@@ -2081,7 +2081,12 @@ def test_init_project(ctx: TestContext, mark_gateway: t.Tuple[str, str], tmp_pat
 
     context.apply(no_change_plan)
 
-    dev_schema_results = ctx.get_metadata_results("sqlmesh_example__test_dev")
+    environment = no_change_plan.environment
+    first_snapshot = no_change_plan.environment.snapshots[0]
+    schema_name = first_snapshot.qualified_view_name.schema_for_environment(
+        environment, dialect=ctx.dialect
+    )
+    dev_schema_results = ctx.get_metadata_results(schema_name)
     assert sorted(dev_schema_results.views) == [
         "full_model",
         "incremental_model",
@@ -2253,6 +2258,7 @@ def test_batch_size_on_incremental_by_unique_key_model(
         connection.concurrent_tasks = 1
 
     context = ctx.create_context(_mutate_config)
+    assert context.default_dialect == "duckdb"
 
     schema = ctx.schema(TEST_SCHEMA)
     seed_query = ctx.input_data(
@@ -2297,13 +2303,13 @@ def test_batch_size_on_incremental_by_unique_key_model(
     try:
         context.plan(auto_apply=True, no_prompts=True)
 
-        results = ctx.get_metadata_results(schema)
+        test_model = context.get_model(f"{schema}.test_model")
+        normalized_schema_name = test_model.fully_qualified_table.db
+        results = ctx.get_metadata_results(normalized_schema_name)
         assert "test_model" in results.views
 
         actual_df = (
-            ctx.get_current_data(f"{schema}.test_model")
-            .sort_values(by="event_date")
-            .reset_index(drop=True)
+            ctx.get_current_data(test_model.fqn).sort_values(by="event_date").reset_index(drop=True)
         )
         actual_df["event_date"] = actual_df["event_date"].astype(str)
         assert actual_df.count()[0] == 3
