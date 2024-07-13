@@ -1459,10 +1459,16 @@ def test_variable_usage(tmp_path: Path) -> None:
     )
     context = Context(paths=tmp_path, config=config)
 
-    parent = _create_model("SELECT 1 as id", meta="MODEL (name silver_db.sch.b)")
+    parent = _create_model(
+        "SELECT 1 AS id, '2022-01-01 01:00:00'::TIMESTAMP AS ts",
+        meta="MODEL (name silver_db.sch.b)",
+    )
     parent = t.cast(SqlModel, context.upsert_model(parent))
 
-    child = _create_model("SELECT id FROM silver_db.sch.b", meta="MODEL (name gold_db.sch.a)")
+    child = _create_model(
+        "SELECT @IF(@VAR('myvar'), id, id + 1) AS id FROM silver_db.sch.b",
+        meta="MODEL (name gold_db.sch.a)",
+    )
     child = t.cast(SqlModel, context.upsert_model(child))
 
     test_file = tmp_path / "tests" / "test_parameterized_model_names.yaml"
@@ -1470,12 +1476,16 @@ def test_variable_usage(tmp_path: Path) -> None:
         """
 test_parameterized_model_names:
   model: {{ var('gold') }}.sch.a
+  vars:
+    myvar: True
   inputs:
     {{ var('silver') }}.sch.b:
       - id: 1
+      - id: 2
   outputs:
     query:
       - id: 1
+      - id: 2
         """
     )
 
