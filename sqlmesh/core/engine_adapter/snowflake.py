@@ -292,10 +292,6 @@ class SnowflakeEngineAdapter(GetCurrentCatalogFromFunctionMixin):
 
         schema = to_schema(schema_name)
         catalog_name = schema.catalog or self.get_current_catalog()
-        if catalog_name:
-            catalog_name = normalize_identifiers(catalog_name, dialect=self.dialect).sql(
-                dialect=self.dialect
-            )
 
         query = (
             exp.select(
