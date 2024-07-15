@@ -1530,22 +1530,18 @@ class ViewStrategy(PromotableStrategy):
         snapshots = kwargs["snapshots"]
         if (
             (
-                (
-                    isinstance(query_or_df, exp.Expression)
-                    and snapshot.is_materialized_view
-                    and deployability_index.is_deployable(snapshot)
-                    and model.render_query(
-                        snapshots=snapshots,
-                        deployability_index=deployability_index,
-                        engine_adapter=self.adapter,
-                    )
-                    == query_or_df
+                isinstance(query_or_df, exp.Expression)
+                and snapshot.is_materialized_view
+                and deployability_index.is_deployable(snapshot)
+                and model.render_query(
+                    snapshots=snapshots,
+                    deployability_index=deployability_index,
+                    engine_adapter=self.adapter,
                 )
-                or self.adapter.HAS_VIEW_BINDING
+                == query_or_df
             )
-            and snapshot.intervals  # Re-create the view during the first evaluation.
-            and self.adapter.table_exists(table_name)
-        ):
+            or self.adapter.HAS_VIEW_BINDING
+        ) and self.adapter.table_exists(table_name):
             logger.info("Skipping creation of the view '%s'", table_name)
             return
 
@@ -1554,6 +1550,7 @@ class ViewStrategy(PromotableStrategy):
             table_name,
             query_or_df,
             model.columns_to_types,
+            replace=not self.adapter.HAS_VIEW_BINDING,
             materialized=self._is_materialized_view(model),
             view_properties=model.physical_properties,
             table_description=model.description,
@@ -1577,10 +1574,28 @@ class ViewStrategy(PromotableStrategy):
         render_kwargs: t.Dict[str, t.Any],
         **kwargs: t.Any,
     ) -> None:
+        is_snapshot_deployable: bool = kwargs["is_snapshot_deployable"]
+        if not is_snapshot_deployable and is_table_deployable:
+            # If the snapshot is not deployable, the query may contain references to non-deployable tables or views.
+            # Therefore, we postpone the creation of the deployable view until the snapshot is deployed to production.
+            logger.info(
+                "Skipping creation of the deployable view '%s' for the non-deployable snapshot",
+                table_name,
+            )
+            return
+
+        if self.adapter.table_exists(table_name):
+            # Make sure we don't recreate the view to prevent deletion of downstream views in engines with no late
+            # binding support (because of DROP CASCADE).
+            logger.info("View '%s' already exists", table_name)
+            return
+
         logger.info("Creating view '%s'", table_name)
         self.adapter.create_view(
             table_name,
             model.render_query_or_raise(**render_kwargs),
+            # Make sure we never replace the view during creation to avoid race conditions in engines with no late binding support.
+            replace=False,
             materialized=self._is_materialized_view(model),
             view_properties=model.physical_properties,
             table_description=model.description if is_table_deployable else None,
