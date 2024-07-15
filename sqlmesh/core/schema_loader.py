@@ -12,6 +12,7 @@ from sqlmesh.core.engine_adapter import EngineAdapter
 from sqlmesh.core.model.definition import Model
 from sqlmesh.core.state_sync import StateReader
 from sqlmesh.utils import UniqueKeyDict, yaml
+from sqlmesh.utils.errors import SQLMeshError
 
 logger = logging.getLogger(__name__)
 
@@ -24,6 +25,7 @@ def create_external_models_file(
     dialect: DialectType,
     gateway: t.Optional[str] = None,
     max_workers: int = 1,
+    strict: bool = False,
 ) -> None:
     """Create or replace a YAML file with column and types of all columns in all external models.
 
@@ -35,6 +37,7 @@ def create_external_models_file(
         dialect: The dialect to serialize the schema as.
         gateway: If the model should be associated with a specific gateway; the gateway key
         max_workers: The max concurrent workers to fetch columns.
+        strict: If True, raise an error if the external model is missing in the database.
     """
     external_model_fqns = set()
 
@@ -61,7 +64,10 @@ def create_external_models_file(
             try:
                 return adapter.columns(table, include_pseudo_columns=True)
             except Exception as e:
-                logger.warning(f"Unable to get schema for '{table}': '{e}'.")
+                msg = f"Unable to get schema for '{table}': '{e}'."
+                if strict:
+                    raise SQLMeshError(msg) from e
+                logger.warning(msg)
                 return None
 
         gateway_part = {"gateway": gateway} if gateway else {}

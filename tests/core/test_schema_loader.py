@@ -1,3 +1,4 @@
+import pytest
 import logging
 import typing as t
 from pathlib import Path
@@ -16,6 +17,7 @@ from sqlmesh.core.model.definition import ExternalModel
 from sqlmesh.core.schema_loader import create_external_models_file
 from sqlmesh.core.snapshot import SnapshotChangeCategory
 from sqlmesh.utils.yaml import YAML
+from sqlmesh.utils.errors import SQLMeshError
 
 
 def test_create_external_models(tmpdir, assert_exp_eq):
@@ -354,3 +356,13 @@ def test_missing_table(tmp_path: Path):
     with open(filename, "r", encoding="utf8") as fd:
         schema = YAML().load(fd)
     assert len(schema) == 0
+
+    with pytest.raises(SQLMeshError, match=r"""Unable to get schema for '"tbl_source"'.*"""):
+        create_external_models_file(
+            filename,
+            {"a": model},  # type: ignore
+            context.engine_adapter,
+            context.state_reader,
+            "",
+            strict=True,
+        )
