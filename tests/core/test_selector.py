@@ -392,6 +392,9 @@ def test_model_selection_normalized(mocker: MockerFixture, make_snapshot):
     [
         (["git:main"], {'"test_model_a"', '"test_model_c"'}),
         (["git:main & +*model_c"], {'"test_model_c"'}),
+        (["git:main+"], {'"test_model_a"', '"test_model_c"', '"test_model_d"'}),
+        (["+git:main"], {'"test_model_a"', '"test_model_c"', '"test_model_b"'}),
+        (["+git:main+"], {'"test_model_a"', '"test_model_c"', '"test_model_b"', '"test_model_d"'}),
     ],
 )
 def test_expand_git_selection(
@@ -407,7 +410,11 @@ def test_expand_git_selection(
     model_b._path = Path("/path/to/test_model_b.sql")
     models[model_b.fqn] = model_b
 
-    model_c = SqlModel(name="test_model_c", query=d.parse_one("SELECT 3 AS c"))
+    model_c = SqlModel(
+        name="test_model_c",
+        query=d.parse_one("SELECT b AS c FROM test_model_b"),
+        depends_on={"test_model_b"},
+    )
     model_c._path = Path("/path/to/test_model_c.sql")
     models[model_c.fqn] = model_c
 
