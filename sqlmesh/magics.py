@@ -558,11 +558,17 @@ class SQLMeshMagics(Magics):
         context.console.log_success("Migration complete")
 
     @magic_arguments()
+    @argument(
+        "--strict",
+        action="store_true",
+        help="Raise an error if the external model is missing in the database",
+    )
     @line_magic
     @pass_sqlmesh_context
     def create_external_models(self, context: Context, line: str) -> None:
         """Create a schema file containing external model schemas."""
-        context.create_external_models()
+        args = parse_argstring(self.create_external_models, line)
+        context.create_external_models(strict=args.strict)
 
     @magic_arguments()
     @argument(

@@ -1655,11 +1655,14 @@ class GenericContext(BaseContext, t.Generic[C]):
         self._new_state_sync().rollback()
 
     @python_api_analytics
-    def create_external_models(self) -> None:
+    def create_external_models(self, strict: bool = False) -> None:
         """Create a file to document the schema of external models.
 
         The external models file contains all columns and types of external models, allowing for more
         robust lineage, validation, and optimizations.
+
+        Args:
+            strict: If True, raise an error if the external model is missing in the database.
         """
         if not self._models:
             self.load(update_schemas=False)
@@ -1685,6 +1688,7 @@ class GenericContext(BaseContext, t.Generic[C]):
                 dialect=config.model_defaults.dialect,
                 gateway=self.gateway,
                 max_workers=self.concurrent_tasks,
+                strict=strict,
             )
 
     @python_api_analytics

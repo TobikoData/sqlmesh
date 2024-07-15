@@ -702,12 +702,17 @@ def rollback(obj: Context) -> None:
 
 
 @cli.command("create_external_models")
+@click.option(
+    "--strict",
+    is_flag=True,
+    help="Raise an error if the external model is missing in the database",
+)
 @click.pass_obj
 @error_handler
 @cli_analytics
-def create_external_models(obj: Context) -> None:
+def create_external_models(obj: Context, **kwargs: t.Any) -> None:
     """Create a schema file containing external model schemas."""
-    obj.create_external_models()
+    obj.create_external_models(**kwargs)
 
 
 @cli.command("table_diff")
