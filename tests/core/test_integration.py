@@ -739,8 +739,12 @@ def test_plan_set_choice_is_reflected_in_missing_intervals(init_and_plan_context
 
 
 @freeze_time("2023-01-08 15:00:00")
-def test_non_breaking_change_after_forward_only_in_dev(init_and_plan_context: t.Callable):
+@pytest.mark.parametrize("has_view_binding", [False, True])
+def test_non_breaking_change_after_forward_only_in_dev(
+    init_and_plan_context: t.Callable, has_view_binding: bool
+):
     context, plan = init_and_plan_context("examples/sushi")
+    context.snapshot_evaluator.adapter.HAS_VIEW_BINDING = has_view_binding
     context.apply(plan)
 
     model = context.get_model("sushi.waiter_revenue_by_day")
