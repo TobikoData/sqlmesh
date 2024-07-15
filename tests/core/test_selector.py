@@ -392,6 +392,7 @@ def test_model_selection_normalized(mocker: MockerFixture, make_snapshot):
     [
         (["git:main"], {'"test_model_a"', '"test_model_c"'}),
         (["git:main & +*model_c"], {'"test_model_c"'}),
+        (["git:main+"], {'"test_model_a"', '"test_model_c"', '"test_model_d"'}),
     ],
 )
 def test_expand_git_selection(

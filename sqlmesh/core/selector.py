@@ -159,7 +159,7 @@ class Selector:
                         self._expand_model_tag(sub_selection[4:], models, models_by_tag)
                     )
                 elif sub_selection.startswith("git:"):
-                    add_sub_results(self._expand_git(sub_selection[4:]))
+                    add_sub_results(self._expand_git(sub_selection[4:], models))
                 else:
                     add_sub_results(self._expand_model_name(sub_selection, models))
 
@@ -170,7 +170,15 @@ class Selector:
 
         return results
 
-    def _expand_git(self, target_branch: str) -> t.Set[str]:
+    def _expand_git(self, target_branch: str, models: t.Dict[str, Model]) -> t.Set[str]:
+        results: t.Set[str] = set()
+
+        (
+            target_branch,
+            include_upstream,
+            include_downstream,
+        ) = self._get_value_and_dependency_inclusion(target_branch)
+
         git_modified_files = {
             *self._git_client.list_untracked_files(),
             *self._git_client.list_uncommitted_changed_files(),
@@ -180,8 +188,14 @@ class Selector:
 
         if not matched_models:
             logger.warning(f"Expression 'git:{target_branch}' doesn't match any models.")
+            return matched_models
 
-        return matched_models
+        for model_fqn in matched_models:
+            results.update(
+                self._get_models(model_fqn, include_upstream, include_downstream, models)
+            )
+
+        return results
 
     def _expand_model_name(self, selection: str, models: t.Dict[str, Model]) -> t.Set[str]:
         results = set()
