@@ -158,8 +158,9 @@ class Selector:
                     add_sub_results(
                         self._expand_model_tag(sub_selection[4:], models, models_by_tag)
                     )
-                elif sub_selection.startswith("git:"):
-                    add_sub_results(self._expand_git(sub_selection[4:], models))
+                elif sub_selection.startswith(("git:", "+git:")):
+                    sub_selection = sub_selection.replace("git:", "")
+                    add_sub_results(self._expand_git(sub_selection, models))
                 else:
                     add_sub_results(self._expand_model_name(sub_selection, models))
 
