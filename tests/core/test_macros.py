@@ -3,7 +3,7 @@ import typing as t
 import pytest
 from sqlglot import MappingSchema, ParseError, exp, parse_one
 
-from sqlmesh.core import constants as c
+from sqlmesh.core import constants as c, dialect as d
 from sqlmesh.core.dialect import StagedFilePath
 from sqlmesh.core.macros import SQL, MacroEvalError, MacroEvaluator, macro
 from sqlmesh.utils.errors import SQLMeshError
@@ -638,3 +638,24 @@ def test_macro_metadata_flag():
 
     assert getattr(noop_metadata_only, c.SQLMESH_METADATA) is True
     assert macro.get_registry()["noop_metadata_only"].metadata_only is True
+
+
+def test_macro_first_value_ignore_respect_nulls(assert_exp_eq) -> None:
+    schema = MappingSchema({}, dialect="duckdb")
+    evaluator = MacroEvaluator(schema=schema, dialect="duckdb")
+
+    evaluator.evaluate(t.cast(d.MacroDef, d.parse_one("@DEF(test, x -> x)")))
+
+    expected_sql = "SELECT FIRST_VALUE(x IGNORE NULLS) OVER (ORDER BY y NULLS FIRST) AS column_test"
+    actual_expr = d.parse_one(
+        "SELECT FIRST_VALUE(@test(x) IGNORE NULLS) OVER (ORDER BY y) AS column_test"
+    )
+    assert_exp_eq(evaluator.transform(actual_expr), expected_sql, dialect="duckdb")
+
+    expected_sql = (
+        "SELECT FIRST_VALUE(x RESPECT NULLS) OVER (ORDER BY y NULLS FIRST) AS column_test"
+    )
+    actual_expr = d.parse_one(
+        "SELECT FIRST_VALUE(@test(x) RESPECT NULLS) OVER (ORDER BY y) AS column_test"
+    )
+    assert_exp_eq(evaluator.transform(actual_expr), expected_sql, dialect="duckdb")

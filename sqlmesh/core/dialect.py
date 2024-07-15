@@ -241,7 +241,7 @@ def _parse_macro(self: Parser, keyword_macro: str = "") -> t.Optional[exp.Expres
             return field
         return self.expression(MacroVar, this=field.this, comments=comments)
 
-    if isinstance(field, exp.Window):
+    if isinstance(field, (exp.Window, exp.IgnoreNulls, exp.RespectNulls)):
         field.set("this", _build_macro(field.this))
     else:
         field = _build_macro(field)
