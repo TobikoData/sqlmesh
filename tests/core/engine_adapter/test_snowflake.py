@@ -253,3 +253,26 @@ def test_drop_managed_table(make_mocked_engine_adapter: t.Callable, mocker: Mock
         'DROP DYNAMIC TABLE "foo"',
         'DROP DYNAMIC TABLE IF EXISTS "foo"',
     ]
+
+
+def test_ctas_skips_dynamic_table_properties(make_mocked_engine_adapter: t.Callable):
+    adapter = make_mocked_engine_adapter(SnowflakeEngineAdapter)
+
+    query = parse_one("SELECT a, b FROM source_table")
+    columns_to_types = {"a": exp.DataType.build("INT"), "b": exp.DataType.build("INT")}
+
+    adapter.ctas(
+        table_name="test_table",
+        query_or_df=query,
+        columns_to_types=columns_to_types,
+        table_properties={
+            "warehouse": exp.to_identifier("foo"),
+            "target_lag": exp.Literal.string("20 minutes"),
+            "refresh_mode": exp.Literal.string("auto"),
+            "initialize": exp.Literal.string("on_create"),
+        },
+    )
+
+    assert to_sql_calls(adapter) == [
+        'CREATE TABLE IF NOT EXISTS "test_table" AS SELECT CAST("a" AS INT) AS "a", CAST("b" AS INT) AS "b" FROM (SELECT "a", "b" FROM "source_table") AS "_subquery"',
+    ]
