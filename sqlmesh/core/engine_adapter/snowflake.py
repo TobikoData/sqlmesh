@@ -183,7 +183,7 @@ class SnowflakeEngineAdapter(GetCurrentCatalogFromFunctionMixin):
             table_properties = {k.upper(): v for k, v in table_properties.items()}
             # if we are creating a non-dynamic table; remove any properties that are only valid for dynamic tables
             if table_kind != self.MANAGED_TABLE_KIND:
-                for prop in {"TARGET_LAG", "REFRESH_MODE", "INITIALIZE"}:
+                for prop in {"WAREHOUSE", "TARGET_LAG", "REFRESH_MODE", "INITIALIZE"}:
                     table_properties.pop(prop, None)
 
             properties.extend(self._table_or_view_properties_to_expressions(table_properties))
