@@ -389,6 +389,10 @@ class GithubController:
     @property
     def pr_plan(self) -> Plan:
         if not self._pr_plan_builder:
+            if self.bot_config.pr_environment_git_selector:
+                logger.debug(
+                    f"Creating PR plan with git selector: {self.bot_config.pr_environment_git_selector}"
+                )
             self._pr_plan_builder = self._context.plan_builder(
                 environment=self.pr_environment_name,
                 skip_tests=True,
@@ -396,6 +400,9 @@ class GithubController:
                 start=self.bot_config.default_pr_start,
                 skip_backfill=self.bot_config.skip_pr_backfill,
                 include_unmodified=self.bot_config.pr_include_unmodified,
+                select_models=[self.bot_config.pr_environment_git_selector]
+                if self.bot_config.pr_environment_ref_branch
+                else None,
             )
         assert self._pr_plan_builder
         return self._pr_plan_builder.build()

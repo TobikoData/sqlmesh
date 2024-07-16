@@ -1186,3 +1186,67 @@ def test_comment_command_deploy_prod_not_enabled(
     with open(github_output_file, "r", encoding="utf-8") as f:
         output = f.read()
         assert output == ""
+
+
+def test_pr_environment_ref_branch(
+    github_client,
+    make_controller,
+    make_mock_check_run,
+    make_mock_issue_comment,
+    tmp_path: pathlib.Path,
+    mocker: MockerFixture,
+):
+    """
+    Scenario:
+    - PR is not merged
+    - Tests passed
+    - No PR Merge Method defined
+    - Delete environment is disabled
+    """
+    mock_repo = github_client.get_repo()
+    mock_repo.create_check_run = mocker.MagicMock(
+        side_effect=lambda **kwargs: make_mock_check_run(**kwargs)
+    )
+
+    created_comments = []
+    mock_issue = mock_repo.get_issue()
+    mock_issue.create_comment = mocker.MagicMock(
+        side_effect=lambda comment: make_mock_issue_comment(
+            comment=comment, created_comments=created_comments
+        )
+    )
+    mock_issue.get_comments = mocker.MagicMock(side_effect=lambda: created_comments)
+
+    mock_pull_request = mock_repo.get_pull()
+    mock_pull_request.merged = False
+    mock_pull_request.merge = mocker.MagicMock()
+
+    controller = make_controller(
+        "tests/fixtures/github/pull_request_synchronized.json",
+        github_client,
+        bot_config=GithubCICDBotConfig(
+            invalidate_environment_after_deploy=False,
+            pr_environment_name="MyOverride",
+            pr_environment_ref_branch="main_branch",
+        ),
+    )
+    controller._context._run_tests = mocker.MagicMock(
+        side_effect=lambda **kwargs: (TestResult(), "")
+    )
+    controller._context.invalidate_environment = mocker.MagicMock()
+    mock_selector = mocker.MagicMock()
+    controller._context._new_selector = mocker.MagicMock(return_value=mock_selector)
+
+    github_output_file = tmp_path / "github_output.txt"
+
+    with mock.patch.dict(os.environ, {"GITHUB_OUTPUT": str(github_output_file)}):
+        command._run_all(controller)
+
+    # Verify model selector is called to expand on the branch
+    assert mock_selector.method_calls[0] == mock.call.select_models(
+        ["git:main_branch+"],
+        "myoverride_2",
+        fallback_env_name="prod",
+        ensure_finalized_snapshots=False,
+    )
+    assert mock_selector.method_calls[1] == mock.call.expand_model_selections(["git:main_branch+"])
