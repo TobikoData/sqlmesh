@@ -296,6 +296,7 @@ Below is an example of how to define the default config for the bot in either YA
 | `pr_include_unmodified`               | Indicates whether to include unmodified models in the PR environment. Default to the project's config value (which defaults to `False`)                                                                                                                                                                                                                                                                   |  bool  |    N     |
 | `run_on_deploy_to_prod`               | Indicates whether to run latest intervals when deploying to prod. If set to false, the deployment will backfill only the changed models up to the existing latest interval in production, ignoring any missing intervals beyond this point. Default: `True`                                                                                                                                               |  bool  |    N     |
 | `pr_environment_name`                 | The name of the PR environment to create for which a PR number will be appended to. Defaults to the repo name if not provided. Note: The name will be normalized to alphanumeric + underscore and lowercase.                                                                                                                                                                                              |  str   |    N     |	
+| `pr_environment_ref_branch`           | The base branch to use to check for changes instead of prod state. Defaults to `main` if not provided.                                                                                                                                                                                                                                                                                                    |  str   |    N     |
 
 Example with all properties defined:
 
@@ -316,6 +317,8 @@ Example with all properties defined:
       default_pr_start: "1 week ago"
       skip_pr_backfill: false
       run_on_deploy_to_prod: true
+      pr_environment_name: customenv
+      pr_environment_ref_branch: main
     ```
 
 === "Python"
@@ -339,9 +342,30 @@ Example with all properties defined:
             default_pr_start="1 week ago",
             skip_pr_backfill=False,
             run_on_deploy_to_prod=True,
+            pr_environment_name="customenv",
+            pr_environment_ref_branch="main"
         )
     )
     ```
+
+#### (Advanced) Have PR environment compare against a branch instead of prod state
+
+By default, SQLMesh will compare the PR environment against what is in prod to see what has changed or what intervals need to be loaded.
+Instead, you can compare against the branch that is correlated to the prod environment for changes.
+Make sure that if you enable this that the branch you are referencing is available in the repo that is checked out.
+See example of how to configure this for a branch named `main` (`pr_environment_ref_branch: main`):
+
+```yaml
+- name: Checkout PR branch
+  uses: actions/checkout@v4
+  with:
+    ref: refs/pull/${{ github.event.issue.pull_request && github.event.issue.number || github.event.pull_request.number }}/merge
+    fetch-depth: 0
+- name: Fetch main branch
+  run: |
+    git fetch origin main
+    git branch main origin/main
+```
 
 ## Bot Output
 
