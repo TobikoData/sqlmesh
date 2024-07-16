@@ -20,6 +20,10 @@ if t.TYPE_CHECKING:
 router = APIRouter()
 
 
+def quote_column(column: str, dialect: str) -> str:
+    return exp.to_identifier(column, quoted=True).sql(dialect=dialect)
+
+
 def get_source_name(
     node: Node, default_catalog: t.Optional[str], dialect: str, model_name: str
 ) -> str:
@@ -57,7 +61,8 @@ def create_lineage_adjacency_list(
                 models={},
             )
             continue
-        root = lineage(column, model)
+
+        root = lineage(quote_column(column, model.dialect), model)
 
         for node in root.walk():
             if root.name == "UNION" and node is root:
@@ -109,7 +114,9 @@ def create_models_only_lineage_adjacency_list(
         model = context.get_model(model_name)
         dependencies = defaultdict(set)
         if model:
-            for table, column_names in column_dependencies(context, model_name, column).items():
+            for table, column_names in column_dependencies(
+                context, model_name, quote_column(column, model.dialect)
+            ).items():
                 for column_name in column_names:
                     dependencies[table].add(column_name)
                     nodes.append((table, column_name))
