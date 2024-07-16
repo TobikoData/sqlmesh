@@ -555,6 +555,10 @@ class ViewKind(_ModelKind):
     def data_hash_values(self) -> t.List[t.Optional[str]]:
         return [*super().data_hash_values, str(self.materialized)]
 
+    @property
+    def supports_python_models(self) -> bool:
+        return False
+
     def to_expression(
         self, expressions: t.Optional[t.List[exp.Expression]] = None, **kwargs: t.Any
     ) -> d.ModelKind:
