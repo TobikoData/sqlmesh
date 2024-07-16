@@ -552,7 +552,7 @@ def test_info(notebook, sushi_context, convert_all_html_output_to_text, get_all_
     assert len(output.outputs) == 3
     assert convert_all_html_output_to_text(output) == [
         "Models: 17",
-        "Macros: 5",
+        "Macros: 0",
         "Data warehouse connection succeeded",
     ]
     assert get_all_html_output(output) == [
@@ -582,7 +582,7 @@ def test_info(notebook, sushi_context, convert_all_html_output_to_text, get_all_
                     h(
                         "span",
                         {"style": f"{NEUTRAL_STYLE}; font-weight: bold"},
-                        "5",
+                        "0",
                         autoescape=False,
                     )
                 ),

@@ -329,7 +329,7 @@ class SqlMeshLoader(Loader):
         """
         models = self._load_sql_models(macros, jinja_macros, audits)
         models.update(self._load_external_models(gateway))
-        models.update(self._load_python_models())
+        models.update(self._load_python_models(macros))
 
         return models
 
@@ -392,7 +392,7 @@ class SqlMeshLoader(Loader):
 
         return models
 
-    def _load_python_models(self) -> UniqueKeyDict[str, Model]:
+    def _load_python_models(self, macros: MacroRegistry) -> UniqueKeyDict[str, Model]:
         """Loads the python models into a Dict"""
         models: UniqueKeyDict[str, Model] = UniqueKeyDict("models")
         registry = model_registry.registry()
@@ -414,6 +414,9 @@ class SqlMeshLoader(Loader):
                     new = registry.keys() - registered
                     registered |= new
                     for name in new:
+                        if macros:
+                            macro.set_registry(macros)
+
                         model = registry[name].model(
                             path=path,
                             module_path=context_path,

@@ -1638,7 +1638,14 @@ CONST = "bar"
 def test_python_model(assert_exp_eq) -> None:
     from functools import reduce
 
-    @model(name="my_model", kind="full", columns={'"COL"': "int"}, enabled=True)
+    @model(
+        name="my_model",
+        kind="full",
+        columns={'"COL"': "int"},
+        pre_statements=["CACHE TABLE x AS SELECT 1;"],
+        post_statements=["DROP TABLE x;"],
+        enabled=True,
+    )
     def my_model(context, **kwargs):
         context.table("foo")
         context.table(model_name=CONST + ".baz")
@@ -1652,6 +1659,12 @@ def test_python_model(assert_exp_eq) -> None:
         dialect="duckdb",
     )
 
+    assert list(m.pre_statements) == [
+        d.parse_one("CACHE TABLE x AS SELECT 1"),
+    ]
+    assert list(m.post_statements) == [
+        d.parse_one("DROP TABLE x"),
+    ]
     assert m.enabled
     assert m.dialect == "duckdb"
     assert m.depends_on == {'"foo"', '"bar"."baz"'}
