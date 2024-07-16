@@ -351,7 +351,11 @@ class SnowflakeEngineAdapter(GetCurrentCatalogFromFunctionMixin):
         # otherwise we get RecursionError: maximum recursion depth exceeded
         # because it calls get_current_catalog(), which executes a query, which needs the default catalog, which calls get_current_catalog()... etc
         if self._default_catalog:
-
+            # the purpose of this function is to identify instances where the default catalog is being used
+            # (so that we can replace it with the actual catalog as specified in the gateway)
+            #
+            # we can't do a direct string comparison because the catalog value on the model
+            # gets changed when it's normalized as part of generating `model.fqn`
             def unquote_and_lower(identifier: str) -> str:
                 return exp.parse_identifier(identifier).name.lower()
 
