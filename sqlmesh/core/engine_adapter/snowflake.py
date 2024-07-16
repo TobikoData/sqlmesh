@@ -341,7 +341,7 @@ class SnowflakeEngineAdapter(GetCurrentCatalogFromFunctionMixin):
         ]
 
     def set_current_catalog(self, catalog: str) -> None:
-        self.execute(exp.Use(this=normalize_identifiers(catalog, dialect=self.dialect)))
+        self.execute(exp.Use(this=exp.to_identifier(catalog)))
 
     def set_current_schema(self, schema: str) -> None:
         self.execute(exp.Use(kind="SCHEMA", this=to_schema(schema)))
@@ -370,6 +370,9 @@ class SnowflakeEngineAdapter(GetCurrentCatalogFromFunctionMixin):
                         # only replace the catalog on the model with the target catalog if the two are functionally equivalent
                         if unquote_and_lower(node.catalog) == default_catalog_unquoted:
                             node.set("catalog", default_catalog_normalized)
+                elif isinstance(node, exp.Use) and isinstance(node.this, exp.Identifier):
+                    if unquote_and_lower(node.this.output_name) == default_catalog_unquoted:
+                        node.set("this", default_catalog_normalized)
                 return node
 
             # Rewrite whatever default catalog is present on the query to be compatible with what the user supplied in the
