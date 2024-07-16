@@ -280,6 +280,7 @@ def test_ctas_skips_dynamic_table_properties(make_mocked_engine_adapter: t.Calla
         'CREATE TABLE IF NOT EXISTS "test_table" AS SELECT CAST("a" AS INT) AS "a", CAST("b" AS INT) AS "b" FROM (SELECT "a", "b" FROM "source_table") AS "_subquery"'
     ]
 
+
 def test_set_current_catalog(make_mocked_engine_adapter: t.Callable):
     adapter = make_mocked_engine_adapter(SnowflakeEngineAdapter)
     adapter._default_catalog = "foo"
@@ -347,6 +348,10 @@ def test_set_current_schema(make_mocked_engine_adapter: t.Callable):
 
     adapter.set_current_schema('"foo"')
     adapter.set_current_schema('foo."foo"')
+
+    # in this example, the catalog of '"foo"' is normalized in duckdb.
+    # even though it's quoted, it should get replaced with "FOO"
+    # because it matches the default catalog
     adapter.set_current_schema('"foo"."fOo"')
 
     assert to_sql_calls(adapter) == [
