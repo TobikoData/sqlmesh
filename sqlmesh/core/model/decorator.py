@@ -8,6 +8,8 @@ import inspect
 from sqlglot import exp
 from sqlglot.dialects.dialect import DialectType
 
+from sqlmesh.core.macros import MacroRegistry
+from sqlmesh.utils.jinja import JinjaMacroRegistry
 from sqlmesh.core import constants as c
 from sqlmesh.core.dialect import MacroFunc
 from sqlmesh.core.model.definition import (
@@ -75,6 +77,8 @@ class model(registry_decorator):
         module_path: Path,
         path: Path,
         defaults: t.Optional[t.Dict[str, t.Any]] = None,
+        macros: t.Optional[MacroRegistry] = None,
+        jinja_macros: t.Optional[JinjaMacroRegistry] = None,
         dialect: t.Optional[str] = None,
         time_column_format: str = c.DEFAULT_TIME_COLUMN_FORMAT,
         physical_schema_override: t.Optional[t.Dict[str, str]] = None,
@@ -132,5 +136,12 @@ class model(registry_decorator):
             )
 
         return create_python_model(
-            self.name, entrypoint, columns=self.columns, dialect=dialect, **common_kwargs
+            self.name,
+            entrypoint,
+            module_path=module_path,
+            macros=macros,
+            jinja_macros=jinja_macros,
+            columns=self.columns,
+            dialect=dialect,
+            **common_kwargs,
         )

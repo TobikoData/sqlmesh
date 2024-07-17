@@ -329,7 +329,7 @@ class SqlMeshLoader(Loader):
         """
         models = self._load_sql_models(macros, jinja_macros, audits)
         models.update(self._load_external_models(gateway))
-        models.update(self._load_python_models(macros))
+        models.update(self._load_python_models(macros, jinja_macros))
 
         return models
 
@@ -392,7 +392,9 @@ class SqlMeshLoader(Loader):
 
         return models
 
-    def _load_python_models(self, macros: MacroRegistry) -> UniqueKeyDict[str, Model]:
+    def _load_python_models(
+        self, macros: MacroRegistry, jinja_macros: JinjaMacroRegistry
+    ) -> UniqueKeyDict[str, Model]:
         """Loads the python models into a Dict"""
         models: UniqueKeyDict[str, Model] = UniqueKeyDict("models")
         registry = model_registry.registry()
@@ -421,6 +423,8 @@ class SqlMeshLoader(Loader):
                             path=path,
                             module_path=context_path,
                             defaults=config.model_defaults.dict(),
+                            macros=macros,
+                            jinja_macros=jinja_macros,
                             dialect=config.model_defaults.dialect,
                             time_column_format=config.time_column_format,
                             physical_schema_override=config.physical_schema_override,

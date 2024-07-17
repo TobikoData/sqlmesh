@@ -1838,8 +1838,11 @@ def create_seed_model(
 def create_python_model(
     name: str,
     entrypoint: str,
+    module_path: Path,
     python_env: t.Dict[str, Executable],
     *,
+    macros: t.Optional[MacroRegistry] = None,
+    jinja_macros: t.Optional[JinjaMacroRegistry] = None,
     defaults: t.Optional[t.Dict[str, t.Any]] = None,
     path: Path = Path(),
     time_column_format: str = c.DEFAULT_TIME_COLUMN_FORMAT,
@@ -1862,6 +1865,21 @@ def create_python_model(
     """
     # Find dependencies for python models by parsing code if they are not explicitly defined
     # Also remove self-references that are found
+
+    pre_statements = kwargs.get("pre_statements", None) or []
+    post_statements = kwargs.get("post_statements", None) or []
+
+    python_env.update(
+        _python_env(
+            expressions=[*pre_statements, *post_statements],
+            jinja_macro_references=None,
+            module_path=module_path,
+            macros=macros or macro.get_registry(),
+            variables=variables,
+            path=path,
+        )
+    )
+
     parsed_depends_on, referenced_variables = (
         _parse_dependencies(python_env, entrypoint) if python_env is not None else (set(), set())
     )
@@ -1881,6 +1899,7 @@ def create_python_model(
         depends_on=depends_on,
         entrypoint=entrypoint,
         python_env=python_env,
+        jinja_macros=jinja_macros,
         physical_schema_override=physical_schema_override,
         **kwargs,
     )
