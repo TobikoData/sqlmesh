@@ -303,6 +303,49 @@ def test_load_multiple(assert_exp_eq):
     )
 
 
+def test_load_with_dictionary_defaults():
+    expressions = parse(
+        """
+        AUDIT (
+            name my_audit,
+            dialect spark,
+            defaults (
+                field1 = some_column,
+                field2 = 3
+            ),
+        );
+
+        SELECT 1
+    """
+    )
+
+    audit = load_audit(expressions, dialect="spark")
+    assert audit.defaults.keys() == {"field1", "field2"}
+    for value in audit.defaults.values():
+        assert isinstance(value, exp.Expression)
+
+
+def test_load_with_single_defaults():
+    # testing it also works with a single default with no trailing comma
+    expressions = parse(
+        """
+        AUDIT (
+            name my_audit,
+            defaults (
+                field1 = some_column
+            ),
+        );
+
+        SELECT 1
+    """
+    )
+
+    audit = load_audit(expressions, dialect="duckdb")
+    assert audit.defaults.keys() == {"field1"}
+    for value in audit.defaults.values():
+        assert isinstance(value, exp.Expression)
+
+
 def test_no_audit_statement():
     expressions = parse(
         """
