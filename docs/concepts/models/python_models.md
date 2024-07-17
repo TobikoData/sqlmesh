@@ -52,9 +52,12 @@ Supported `kind` dictionary `name` values are:
 - `ModelKindName.SEED`
 - `ModelKindName.INCREMENTAL_BY_TIME_RANGE`
 - `ModelKindName.INCREMENTAL_BY_UNIQUE_KEY`
+- `ModelKindName.INCREMENTAL_BY_PARTITION`
 - `ModelKindName.SCD_TYPE_2_BY_TIME`
 - `ModelKindName.SCD_TYPE_2_BY_COLUMN`
 - `ModelKindName.EMBEDDED`
+- `ModelKindName.CUSTOM`
+- `ModelKindName.MANAGED`
 - `ModelKindName.EXTERNAL`
 
 This example demonstrates how to specify an incremental by time range model kind in Python:
