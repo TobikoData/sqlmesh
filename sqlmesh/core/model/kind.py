@@ -781,6 +781,10 @@ class ManagedKind(_ModelKind):
 class EmbeddedKind(_ModelKind):
     name: Literal[ModelKindName.EMBEDDED] = ModelKindName.EMBEDDED
 
+    @property
+    def supports_python_models(self) -> bool:
+        return False
+
 
 class ExternalKind(_ModelKind):
     name: Literal[ModelKindName.EXTERNAL] = ModelKindName.EXTERNAL
