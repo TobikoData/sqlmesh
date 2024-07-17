@@ -333,6 +333,7 @@ class SnowflakeConnectionConfig(ConnectionConfig):
         private_key_passphrase: The optional passphrase to use to decrypt `private_key` or `private_key_path`. Keys can be created without encryption so only provide this if needed.
         register_comments: Whether or not to register model comments with the SQL engine.
         pre_ping: Whether or not to pre-ping the connection before starting a new transaction to ensure it is still alive.
+        session_parameters: The optional session parameters to set for the connection.
     """
 
     account: str
@@ -352,6 +353,8 @@ class SnowflakeConnectionConfig(ConnectionConfig):
     concurrent_tasks: int = 4
     register_comments: bool = True
     pre_ping: bool = False
+
+    session_parameters: t.Optional[dict] = None
 
     type_: Literal["snowflake"] = Field(alias="type", default="snowflake")
 
@@ -471,6 +474,7 @@ class SnowflakeConnectionConfig(ConnectionConfig):
             "authenticator",
             "token",
             "private_key",
+            "session_parameters",
         }
 
     @property
