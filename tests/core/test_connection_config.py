@@ -183,6 +183,17 @@ def test_snowflake(make_config, snowflake_key_passphrase_bytes, snowflake_oauth_
             authenticator="oauth",
         )
 
+    # Can pass in session parameters
+    config = make_config(
+        type="snowflake",
+        account="test",
+        user="test",
+        password="test",
+        authenticator="externalbrowser",
+        session_parameters={"query_tag": "test", "timezone": "UTC"},
+    )
+    assert isinstance(config, SnowflakeConnectionConfig)
+
 
 @pytest.mark.parametrize(
     "key_path_fixture, key_pem_fixture, key_b64_fixture, key_bytes_fixture, key_passphrase",

@@ -24,6 +24,7 @@ pip install "sqlmesh[snowflake]"
 | `private_key`            | The optional private key to use for authentication. Key can be Base64-encoded DER format (representing the key bytes), a plain-text PEM format, or bytes (Python config only). | string |    N     |
 | `private_key_path`       | The optional path to the private key to use for authentication. This would be used instead of `private_key`.                                                                   | string |    N     |
 | `private_key_passphrase` | The optional passphrase to use to decrypt `private_key` (if in PEM format) or `private_key_path`. Keys can be created without encryption so only provide this if needed.       | string |    N     |
+| `session_parameters`     | The optional session parameters to set for the connection.                                                                                                                     | dict   |    N     |
 
 
 #### Lowercase object names
