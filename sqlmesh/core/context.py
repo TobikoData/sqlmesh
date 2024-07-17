@@ -1057,6 +1057,9 @@ class GenericContext(BaseContext, t.Generic[C]):
         environment = Environment.sanitize_name(environment)
         is_dev = environment != c.PROD
 
+        if include_unmodified is None:
+            include_unmodified = self.config.plan.include_unmodified
+
         if skip_backfill and not no_gaps and not is_dev:
             raise ConfigError(
                 "When targeting the production environment either the backfill should not be skipped or the lack of data gaps should be enforced (--no-gaps flag)."
@@ -1111,6 +1114,19 @@ class GenericContext(BaseContext, t.Generic[C]):
             ensure_finalized_snapshots=self.config.plan.use_finalized_state,
         )
 
+        if (
+            is_dev
+            and not include_unmodified
+            and backfill_models is None
+            and expanded_restate_models is None
+        ):
+            # Only backfill modified and added models.
+            # This ensures that no models outside the impacted sub-DAG(s) will be backfilled unexpectedly.
+            backfill_models = {
+                *context_diff.modified_snapshots,
+                *[s.name for s in context_diff.added],
+            }
+
         # If no end date is specified, use the max interval end from prod
         # to prevent unintended evaluation of the entire DAG.
         if not run:
@@ -1164,11 +1180,7 @@ class GenericContext(BaseContext, t.Generic[C]):
             categorizer_config=categorizer_config or self.auto_categorize_changes,
             auto_categorization_enabled=not no_auto_categorization,
             effective_from=effective_from,
-            include_unmodified=(
-                include_unmodified
-                if include_unmodified is not None
-                else self.config.plan.include_unmodified
-            ),
+            include_unmodified=include_unmodified,
             default_start=default_start,
             default_end=default_end,
             enable_preview=(
