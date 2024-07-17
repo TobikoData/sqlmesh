@@ -356,7 +356,7 @@ test_foo:
           - id: 3
             name: 'bob'
         """,
-        """sushi.waiter_names: 
+        """sushi.waiter_names:
       format: csv
       rows: |
         id,name
@@ -410,21 +410,21 @@ test_foo:
     [
         """sushi.waiter_names:
         format: yaml
-        rows: 
+        rows:
         - id: 1
           name: alice
         - id: 2
           name: 'bob'
         """,
-        """sushi.waiter_names: 
+        """sushi.waiter_names:
       format: csv
       rows: |
         id,name
         1,alice
         2,bob""",
-        """sushi.waiter_names: 
+        """sushi.waiter_names:
       format: csv
-      csv_settings: 
+      csv_settings:
         sep: "#"
       rows: |
         id#name
@@ -1460,14 +1460,14 @@ def test_variable_usage(tmp_path: Path) -> None:
     context = Context(paths=tmp_path, config=config)
 
     parent = _create_model(
-        "SELECT 1 AS id, '2022-01-01 01:00:00'::TIMESTAMP AS ts",
-        meta="MODEL (name silver_db.sch.b)",
+        "SELECT 1 AS id, '2022-01-02'::DATE AS ds, @start_ts AS start_ts",
+        meta="MODEL (name silver_db.sch.b, kind INCREMENTAL_BY_TIME_RANGE(time_column ds))",
     )
     parent = t.cast(SqlModel, context.upsert_model(parent))
 
     child = _create_model(
-        "SELECT @IF(@VAR('myvar'), id, id + 1) AS id FROM silver_db.sch.b",
-        meta="MODEL (name gold_db.sch.a)",
+        "SELECT ds, @IF(@VAR('myvar'), id, id + 1) AS id FROM silver_db.sch.b WHERE ds BETWEEN @start_ds and @end_ds",
+        meta="MODEL (name gold_db.sch.a, kind INCREMENTAL_BY_TIME_RANGE(time_column ds))",
     )
     child = t.cast(SqlModel, context.upsert_model(child))
 
@@ -1478,14 +1478,20 @@ test_parameterized_model_names:
   model: {{ var('gold') }}.sch.a
   vars:
     myvar: True
+    start_ds: 2022-01-01
+    end_ds: 2022-01-03
   inputs:
     {{ var('silver') }}.sch.b:
-      - id: 1
-      - id: 2
+      - ds: 2022-01-01
+        id: 1
+      - ds: 2022-01-01
+        id: 2
   outputs:
     query:
-      - id: 1
-      - id: 2
+      - ds: 2022-01-01
+        id: 1
+      - ds: 2022-01-01
+        id: 2
         """
     )
 

@@ -23,7 +23,7 @@ from sqlmesh.core.engine_adapter import EngineAdapter
 from sqlmesh.core.macros import RuntimeStage
 from sqlmesh.core.model import Model, PythonModel, SqlModel
 from sqlmesh.utils import UniqueKeyDict, random_id, type_is_known, yaml
-from sqlmesh.utils.date import pandas_timestamp_to_pydatetime
+from sqlmesh.utils.date import date_dict, pandas_timestamp_to_pydatetime
 from sqlmesh.utils.errors import ConfigError, TestError
 from sqlmesh.utils.yaml import load as yaml_load
 
@@ -32,7 +32,14 @@ if t.TYPE_CHECKING:
 
     Row = t.Dict[str, t.Any]
 
-TIME_KWARG_KEYS = {"start", "end", "execution_time", "latest"}
+TIME_KWARG_KEYS = {
+    "start",
+    "end",
+    "execution_time",
+    "latest",
+    # all built-in datetime macro var names
+    *date_dict(execution_time="1970-01-01", start="1970-01-01", end="1970-01-01").keys(),
+}
 
 
 class ModelTest(unittest.TestCase):
@@ -177,7 +184,7 @@ class ModelTest(unittest.TestCase):
         """Compare two DataFrames"""
         if partial:
             intersection = actual[actual.columns.intersection(expected.columns)]
-            if not intersection.empty:
+            if len(intersection.columns) > 0:
                 actual = intersection
 
         # Two astypes are necessary, pandas converts strings to times as NS,
@@ -548,7 +555,7 @@ class SqlModelTest(ModelTest):
 
     def _render_model_query(self) -> exp.Query:
         variables = self.body.get("vars", {}).copy()
-        time_kwargs = {key: variables.pop(key, None) for key in TIME_KWARG_KEYS}
+        time_kwargs = {key: variables.pop(key) for key in TIME_KWARG_KEYS if key in variables}
 
         query = self.model.render_query_or_raise(
             **time_kwargs,
@@ -626,7 +633,9 @@ class PythonModelTest(ModelTest):
         with patch.dict(self._test_adapter_dialect.generator_class.TRANSFORMS, self._transforms):
             with t.cast(AbstractContextManager, time_ctx):
                 variables = self.body.get("vars", {}).copy()
-                time_kwargs = {key: variables.pop(key, None) for key in TIME_KWARG_KEYS}
+                time_kwargs = {
+                    key: variables.pop(key) for key in TIME_KWARG_KEYS if key in variables
+                }
                 df = next(self.model.render(context=self.context, **time_kwargs, **variables))
                 assert not isinstance(df, exp.Expression)
                 return df if isinstance(df, pd.DataFrame) else df.toPandas()
