@@ -555,8 +555,7 @@ class SqlModelTest(ModelTest):
 
     def _render_model_query(self) -> exp.Query:
         variables = self.body.get("vars", {}).copy()
-        variables_keys = variables.copy().keys()
-        time_kwargs = {key: variables.pop(key) for key in variables_keys if key in TIME_KWARG_KEYS}
+        time_kwargs = {key: variables.pop(key) for key in TIME_KWARG_KEYS if key in variables}
 
         query = self.model.render_query_or_raise(
             **time_kwargs,
@@ -634,9 +633,8 @@ class PythonModelTest(ModelTest):
         with patch.dict(self._test_adapter_dialect.generator_class.TRANSFORMS, self._transforms):
             with t.cast(AbstractContextManager, time_ctx):
                 variables = self.body.get("vars", {}).copy()
-                variables_keys = variables.copy().keys()
                 time_kwargs = {
-                    key: variables.pop(key) for key in variables_keys if key in TIME_KWARG_KEYS
+                    key: variables.pop(key) for key in TIME_KWARG_KEYS if key in variables
                 }
                 df = next(self.model.render(context=self.context, **time_kwargs, **variables))
                 assert not isinstance(df, exp.Expression)
