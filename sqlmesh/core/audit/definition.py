@@ -7,6 +7,7 @@ from functools import cached_property
 from pathlib import Path
 
 from pydantic import Field
+from pydantic_core.core_schema import ValidationInfo
 from sqlglot import exp
 from sqlglot.optimizer.qualify_columns import quote_identifiers
 from sqlglot.optimizer.simplify import gen
@@ -148,7 +149,7 @@ def audit_string_validator(cls: t.Type, v: t.Any) -> t.Optional[str]:
 
 
 @field_validator("defaults", mode="before", check_fields=False)
-def audit_map_validator(cls: t.Type, v: t.Any, values: t.Dict[str, t.Any]) -> t.Dict[str, t.Any]:
+def audit_map_validator(cls: t.Type, v: t.Any, values: ValidationInfo) -> t.Dict[str, t.Any]:
     if isinstance(v, exp.Paren):
         return dict([_maybe_parse_arg_pair(v.unnest())])
     if isinstance(v, (exp.Tuple, exp.Array)):
