@@ -149,13 +149,13 @@ def audit_string_validator(cls: t.Type, v: t.Any) -> t.Optional[str]:
 
 
 @field_validator("defaults", mode="before", check_fields=False)
-def audit_map_validator(cls: t.Type, v: t.Any, values: ValidationInfo) -> t.Dict[str, t.Any]:
+def audit_map_validator(cls: t.Type, v: t.Any, values: t.Any) -> t.Dict[str, t.Any]:
     if isinstance(v, exp.Paren):
         return dict([_maybe_parse_arg_pair(v.unnest())])
     if isinstance(v, (exp.Tuple, exp.Array)):
         return dict(map(_maybe_parse_arg_pair, v.expressions))
     elif isinstance(v, dict):
-        dialect = values.data.get("dialect")
+        dialect = (values if isinstance(values, dict) else values.data).get("dialect")
         return {
             key: value
             if isinstance(value, exp.Expression)
