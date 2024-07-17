@@ -2235,7 +2235,7 @@ def test_python_model_default_kind_change(init_and_plan_context: t.Callable):
 
     This test ensures that if a user had a Python `kind: VIEW` model stored in state,
     it can still be loaded without error and just show as a breaking change from `kind: VIEW`
-    to `KIND: FULL`
+    to `kind: FULL`
     """
 
     # note: we deliberately dont specify a Kind here to allow the defaults to be picked up
