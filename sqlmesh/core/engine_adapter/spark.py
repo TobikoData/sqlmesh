@@ -284,9 +284,7 @@ class SparkEngineAdapter(GetCurrentCatalogFromFunctionMixin, HiveMetastoreTableP
         return self.spark.createDataFrame(df, **kwargs)  # type: ignore
 
     def _get_temp_table(
-        self,
-        table: TableName,
-        table_only: bool = False,
+        self, table: TableName, table_only: bool = False, quoted: bool = True
     ) -> exp.Table:
         """
         Returns the name of the temp table that should be used for the given table name.

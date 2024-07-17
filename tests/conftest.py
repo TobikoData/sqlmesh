@@ -17,11 +17,13 @@ from pytest_mock.plugin import MockerFixture
 from sqlglot import exp, maybe_parse, parse_one
 from sqlglot.dialects.dialect import DialectType
 from sqlglot.helper import ensure_list
+from sqlglot.optimizer.normalize_identifiers import normalize_identifiers
 
 from sqlmesh.core.config import DuckDBConnectionConfig
 from sqlmesh.core.context import Context
 from sqlmesh.core.engine_adapter import SparkEngineAdapter
 from sqlmesh.core.engine_adapter.base import EngineAdapter
+from sqlmesh.core.environment import EnvironmentNamingInfo
 from sqlmesh.core.macros import macro
 from sqlmesh.core.model import IncrementalByTimeRangeKind, SqlModel, model
 from sqlmesh.core.model.kind import OnDestructiveChange
@@ -126,7 +128,28 @@ class SushiDataValidator:
         *,
         env_name: t.Optional[str] = None,
         dialect: t.Optional[str] = None,
+        environment_naming_info: t.Optional[EnvironmentNamingInfo] = None,
     ) -> t.Dict[t.Any, t.Any]:
+        if (
+            env_name
+            and dialect
+            and environment_naming_info
+            and environment_naming_info.normalize_name
+        ):
+            # if the environment_naming_info was configured to normalize names, then Snapshot.qualified_view_name.table_for_enviromnent()
+            # returns schemas that contain the environment_name normalised for that engine
+            #
+            # in practice, this means "test_prod" becomes "TEST_PROD" on some engines so the final views are named like:
+            #
+            # "sushi__TEST_PROD"."waiter_as_customer_by_day"
+            #
+            # instead of:
+            #
+            # "sushi__test_prod"."waiter_as_customer_by_day"
+            #
+            # this matters for the reading the data back below to validate it
+            env_name = normalize_identifiers(env_name, dialect=dialect).name
+
         """
         Both start and end are inclusive.
         """

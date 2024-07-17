@@ -5,8 +5,11 @@ import pytest
 from pytest_mock.plugin import MockerFixture
 from sqlglot import exp, parse_one
 
+import sqlmesh.core.dialect as d
 from sqlmesh.core.dialect import normalize_model_name
+from sqlmesh.core.model import load_sql_based_model
 from sqlmesh.core.engine_adapter import SnowflakeEngineAdapter
+from sqlmesh.core.model.definition import SqlModel
 from sqlmesh.utils.errors import SQLMeshError
 from tests.core.engine_adapter import to_sql_calls
 
@@ -274,5 +277,85 @@ def test_ctas_skips_dynamic_table_properties(make_mocked_engine_adapter: t.Calla
     )
 
     assert to_sql_calls(adapter) == [
-        'CREATE TABLE IF NOT EXISTS "test_table" AS SELECT CAST("a" AS INT) AS "a", CAST("b" AS INT) AS "b" FROM (SELECT "a", "b" FROM "source_table") AS "_subquery"',
+        'CREATE TABLE IF NOT EXISTS "test_table" AS SELECT CAST("a" AS INT) AS "a", CAST("b" AS INT) AS "b" FROM (SELECT "a", "b" FROM "source_table") AS "_subquery"'
+    ]
+
+
+def test_set_current_catalog(make_mocked_engine_adapter: t.Callable):
+    adapter = make_mocked_engine_adapter(SnowflakeEngineAdapter)
+    adapter._default_catalog = "foo"
+
+    adapter.set_current_catalog("foo")
+    adapter.set_current_catalog("FOO")
+    adapter.set_current_catalog("fOo")
+    adapter.set_current_catalog("bar")
+    adapter.set_current_catalog("BAR")
+
+    model_a: SqlModel = t.cast(
+        SqlModel,
+        load_sql_based_model(
+            d.parse(
+                """
+        MODEL (
+            name external.test.table,
+            kind full,
+            dialect bigquery
+        );
+
+        SELECT 1;
+    """
+            )
+        ),
+    )
+
+    model_b: SqlModel = t.cast(
+        SqlModel,
+        load_sql_based_model(
+            d.parse(
+                """
+        MODEL (
+            name "exTERnal".test.table,
+            kind full,
+            dialect bigquery
+        );
+
+        SELECT 1;
+    """
+            )
+        ),
+    )
+
+    assert model_a.catalog == "external"
+    assert model_b.catalog == "exTERnal"
+
+    adapter.set_current_catalog(model_a.catalog)
+    adapter.set_current_catalog(model_b.catalog)
+
+    assert to_sql_calls(adapter) == [
+        'USE "FOO"',
+        'USE "FOO"',
+        'USE "FOO"',
+        'USE "bar"',
+        'USE "BAR"',
+        'USE "external"',
+        'USE "exTERnal"',
+    ]
+
+
+def test_set_current_schema(make_mocked_engine_adapter: t.Callable):
+    adapter = make_mocked_engine_adapter(SnowflakeEngineAdapter)
+    adapter._default_catalog = "foo"
+
+    adapter.set_current_schema('"foo"')
+    adapter.set_current_schema('foo."foo"')
+
+    # in this example, the catalog of '"foo"' is normalized in duckdb.
+    # even though it's quoted, it should get replaced with "FOO"
+    # because it matches the default catalog
+    adapter.set_current_schema('"foo"."fOo"')
+
+    assert to_sql_calls(adapter) == [
+        'USE SCHEMA "foo"',
+        'USE SCHEMA "FOO"."foo"',
+        'USE SCHEMA "FOO"."fOo"',
     ]
