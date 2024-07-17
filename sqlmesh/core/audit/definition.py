@@ -7,7 +7,6 @@ from functools import cached_property
 from pathlib import Path
 
 from pydantic import Field
-from pydantic_core.core_schema import ValidationInfo
 from sqlglot import exp
 from sqlglot.optimizer.qualify_columns import quote_identifiers
 from sqlglot.optimizer.simplify import gen
