@@ -14,6 +14,7 @@ from sqlmesh.schedulers.airflow.api import sqlmesh_api_v1
 from sqlmesh.schedulers.airflow.common import (
     DEFAULT_CATALOG_VARIABLE_NAME,
 )
+from sqlmesh.utils import str_to_bool
 from sqlmesh.utils.errors import SQLMeshError
 
 logger = logging.getLogger(__name__)
@@ -28,6 +29,10 @@ class SqlmeshAirflowPlugin(AirflowPlugin):
         if os.environ.get("MWAA_AIRFLOW_COMPONENT", "").lower() == "webserver":
             # When using MWAA, the Webserver instance might not have access to the external state database.
             logger.info("MWAA Webserver instance detected. Skipping SQLMesh state migration...")
+            return
+
+        if str_to_bool(os.environ.get("SQLMESH__AIRFLOW__DISABLE_STATE_MIGRATION", "0")):
+            logger.info("SQLMesh state migration disabled. Must be handled outside of Airflow")
             return
 
         # We want to different an expected None default catalog (where the user set `NO_DEFAULT_CATALOG`)
