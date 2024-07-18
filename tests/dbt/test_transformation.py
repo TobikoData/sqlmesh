@@ -1,3 +1,5 @@
+import agate
+from datetime import datetime
 import json
 import logging
 import typing as t
@@ -34,7 +36,7 @@ from sqlmesh.dbt.context import DbtContext
 from sqlmesh.dbt.model import Materialization, ModelConfig
 from sqlmesh.dbt.project import Project
 from sqlmesh.dbt.relation import Policy
-from sqlmesh.dbt.seed import SeedConfig
+from sqlmesh.dbt.seed import SeedConfig, Integer
 from sqlmesh.dbt.target import BigQueryConfig, DuckDbConfig, SnowflakeConfig
 from sqlmesh.dbt.test import TestConfig
 from sqlmesh.utils.errors import ConfigError, MacroEvalError, SQLMeshError
@@ -402,6 +404,7 @@ def test_seed_column_inference(tmp_path):
         fd.write("int_col,double_col,datetime_col,date_col,boolean_col,text_col\n")
         fd.write("1,1.2,2021-01-01 00:00:00,2021-01-01,true,foo\n")
         fd.write("2,2.3,2021-01-02 00:00:00,2021-01-02,false,bar\n")
+        fd.write("null,,null,,,null\n")
 
     seed = SeedConfig(
         name="test_model",
@@ -421,6 +424,23 @@ def test_seed_column_inference(tmp_path):
         "boolean_col": exp.DataType.build("boolean"),
         "text_col": exp.DataType.build("text"),
     }
+
+
+def test_agate_integer_cast():
+    agate_integer = Integer(null_values=("null", ""))
+    assert agate_integer.cast("1") == 1
+    assert agate_integer.cast(1) == 1
+    assert agate_integer.cast("null") is None
+    assert agate_integer.cast("") is None
+
+    with pytest.raises(agate.exceptions.CastError):
+        agate_integer.cast("1.2")
+
+    with pytest.raises(agate.exceptions.CastError):
+        agate_integer.cast(1.2)
+
+    with pytest.raises(agate.exceptions.CastError):
+        agate_integer.cast(datetime.now())
 
 
 @pytest.mark.xdist_group("dbt_manifest")
