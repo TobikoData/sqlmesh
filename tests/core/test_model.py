@@ -34,7 +34,7 @@ from sqlmesh.core.model import (
     SeedKind,
     SqlModel,
     TimeColumn,
-    ViewKind,
+    ExternalKind,
     create_external_model,
     create_seed_model,
     create_sql_model,
@@ -1754,7 +1754,7 @@ def test_python_models_returning_sql(assert_exp_eq) -> None:
 def test_python_model_decorator_kind() -> None:
     logger = logging.getLogger("sqlmesh.core.model.decorator")
 
-    # no kind specified -> default View kind
+    # no kind specified -> default Full kind
     @model("default_kind", columns={'"COL"': "int"})
     def a_model(context):
         pass
@@ -1764,10 +1764,10 @@ def test_python_model_decorator_kind() -> None:
         path=Path("."),
     )
 
-    assert isinstance(python_model.kind, ViewKind)
+    assert isinstance(python_model.kind, FullKind)
 
     # string kind name specified
-    @model("kind_string", kind="full", columns={'"COL"': "int"})
+    @model("kind_string", kind="external", columns={'"COL"': "int"})
     def b_model(context):
         pass
 
@@ -1776,7 +1776,7 @@ def test_python_model_decorator_kind() -> None:
         path=Path("."),
     )
 
-    assert isinstance(python_model.kind, FullKind)
+    assert isinstance(python_model.kind, ExternalKind)
 
     @model("kind_empty_dict", kind=dict(), columns={'"COL"': "int"})
     def my_model(context):
@@ -1787,6 +1787,23 @@ def test_python_model_decorator_kind() -> None:
         python_model = model.get_registry()["kind_empty_dict"].model(
             module_path=Path("."),
             path=Path("."),
+        )
+
+    @model("kind_view", kind="view", columns={'"COL"': "int"})
+    def kind_view(context):
+        pass
+
+    # error if kind = view
+    with pytest.raises(
+        SQLMeshError, match=r".*Cannot create Python model.*doesnt support Python models"
+    ):
+        python_model = (
+            model.get_registry()["kind_view"]
+            .model(
+                module_path=Path("."),
+                path=Path("."),
+            )
+            .validate_definition()
         )
 
     @model("kind_dict_badname", kind=dict(name="test"), columns={'"COL"': "int"})

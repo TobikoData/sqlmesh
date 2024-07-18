@@ -3,6 +3,7 @@ from __future__ import annotations
 import typing as t
 from collections import Counter
 from datetime import timedelta
+from unittest import mock
 
 import pandas as pd
 import pytest
@@ -25,6 +26,7 @@ from sqlmesh.core.config import (
 )
 from sqlmesh.core.console import Console
 from sqlmesh.core.context import Context
+from sqlmesh.core.config.categorizer import CategorizerConfig
 from sqlmesh.core.engine_adapter import EngineAdapter
 from sqlmesh.core.environment import EnvironmentNamingInfo
 from sqlmesh.core.model import (
@@ -34,6 +36,8 @@ from sqlmesh.core.model import (
     ModelKind,
     ModelKindName,
     SqlModel,
+    PythonModel,
+    ViewKind,
     TimeColumn,
     load_sql_based_model,
 )
@@ -1586,17 +1590,7 @@ def validate_query_change(
 @pytest.mark.parametrize(
     "from_, to",
     [
-        (ModelKindName.INCREMENTAL_BY_TIME_RANGE, ModelKindName.VIEW),
-        (ModelKindName.INCREMENTAL_BY_TIME_RANGE, ModelKindName.EMBEDDED),
         (ModelKindName.INCREMENTAL_BY_TIME_RANGE, ModelKindName.FULL),
-        (ModelKindName.VIEW, ModelKindName.EMBEDDED),
-        (ModelKindName.VIEW, ModelKindName.FULL),
-        (ModelKindName.VIEW, ModelKindName.INCREMENTAL_BY_TIME_RANGE),
-        (ModelKindName.EMBEDDED, ModelKindName.VIEW),
-        (ModelKindName.EMBEDDED, ModelKindName.FULL),
-        (ModelKindName.EMBEDDED, ModelKindName.INCREMENTAL_BY_TIME_RANGE),
-        (ModelKindName.FULL, ModelKindName.VIEW),
-        (ModelKindName.FULL, ModelKindName.EMBEDDED),
         (ModelKindName.FULL, ModelKindName.INCREMENTAL_BY_TIME_RANGE),
     ],
 )
@@ -2232,6 +2226,93 @@ def test_ignored_snapshots(context_fixture: Context, request):
     )
     # Make sure that dev view for order items was created
     assert exp.table_("order_items", "sushi__dev", catalog) in metadata.qualified_views
+
+
+def test_python_model_default_kind_change(init_and_plan_context: t.Callable):
+    """
+    Around 2024-07-17 Python models had their default Kind changed from VIEW to FULL in order to
+    avoid some edge cases where the views might not get updated in certain situations.
+
+    This test ensures that if a user had a Python `kind: VIEW` model stored in state,
+    it can still be loaded without error and just show as a breaking change from `kind: VIEW`
+    to `kind: FULL`
+    """
+
+    # note: we deliberately dont specify a Kind here to allow the defaults to be picked up
+    python_model_file = """import typing as t
+import pandas as pd
+from sqlmesh import ExecutionContext, model
+
+@model(
+    "sushi.python_view_model",
+    columns={
+        "id": "int",
+    }
+)
+def execute(
+    context: ExecutionContext,
+    **kwargs: t.Any,
+) -> pd.DataFrame:
+    return pd.DataFrame([
+        {"id": 1}
+    ])
+"""
+
+    context: Context
+    context, _ = init_and_plan_context("examples/sushi")
+
+    with open(context.path / "models" / "python_view_model.py", mode="w", encoding="utf8") as f:
+        f.write(python_model_file)
+
+    # monkey-patch PythonModel to default to kind: View again
+    # and ViewKind to allow python models again
+    with mock.patch.object(ViewKind, "supports_python_models", return_value=True):
+
+        class OldPythonModel(PythonModel):
+            kind: ModelKind = ViewKind()
+
+        with mock.patch("sqlmesh.core.model.definition.PythonModel", OldPythonModel):
+            context.load()
+
+    # check the monkey-patching worked
+    model = context.get_model("sushi.python_view_model")
+    assert model.kind.name == ModelKindName.VIEW
+    assert model.source_type == "python"
+
+    # apply plan
+    plan: Plan = context.plan(auto_apply=True)
+
+    # check that run() still works even though we have a Python model with kind: View in the state
+    snapshot_ids = [s for s in plan.directly_modified if "python_view_model" in s.name]
+    snapshot_from_state = list(context.state_sync.get_snapshots(snapshot_ids).values())[0]
+    assert snapshot_from_state.model.kind.name == ModelKindName.VIEW
+    assert snapshot_from_state.model.source_type == "python"
+    context.run()
+
+    # reload context to load model with new defaults
+    # this also shows the earlier monkey-patching is no longer in effect
+    context.load()
+    model = context.get_model("sushi.python_view_model")
+    assert model.kind.name == ModelKindName.FULL
+    assert model.source_type == "python"
+
+    plan = context.plan(
+        categorizer_config=CategorizerConfig.all_full()
+    )  # the default categorizer_config doesnt auto-categorize python models
+
+    assert plan.has_changes
+    assert not plan.indirectly_modified
+    assert not plan.ignored
+
+    assert len(plan.directly_modified) == 1
+    snapshot_id = list(plan.directly_modified)[0]
+    assert snapshot_id.name == '"memory"."sushi"."python_view_model"'
+    assert plan.modified_snapshots[snapshot_id].change_category == SnapshotChangeCategory.BREAKING
+
+    context.apply(plan)
+
+    df = context.engine_adapter.fetchdf("SELECT id FROM sushi.python_view_model")
+    assert df["id"].to_list() == [1]
 
 
 def initial_add(context: Context, environment: str):
