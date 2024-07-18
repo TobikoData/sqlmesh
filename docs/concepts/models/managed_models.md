@@ -35,7 +35,7 @@ However, there is usually extra vendor-imposed costs associated with Managed mod
 Therefore, we try to not create managed tables unnecessarily. For example, in [forward-only plans](../plans.md#forward-only-change) we just create a normal table to preview the changes and only re-create the managed table on deployment to prod.
 
 !!! warning
-    Due to the use of normal tables for dev previews, it is possible to write a query that uses features that are available to normal tables in the target engine but not managed tables. This could result in a scenario where a plan works in a virtual environment but fails when deployed to production.
+    Due to the use of normal tables for dev previews, it is possible to write a query that uses features that are available to normal tables in the target engine but not managed tables. This could result in a scenario where a plan works in a dev environment but fails when deployed to production.
     
     We believe the cost savings are worth it, however please [reach out](https://tobikodata.com/slack) if this is causes problems for you.
 
