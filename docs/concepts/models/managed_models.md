@@ -10,7 +10,7 @@ Due to this, managed models would typically be built off an [External Model](./e
 ## Difference from materialized views
 The difference between an Managed model and a materialized view is down to semantics and in some engines there is no difference.
 
-SQLMesh has support for [materialized views](./model_kinds#materialized-views) already. However, depending on the engine, these are subject to some limitations, such as:
+SQLMesh has support for [materialized views](../model_kinds#materialized-views) already. However, depending on the engine, these are subject to some limitations, such as:
 
 - A Materialized View query can only be derived from a single base table
 - The Materialized View is not automatically maintained by the engine. To refresh the data, a `REFRESH MATERIALIZED VIEW` or equivalent command must be issued
@@ -33,6 +33,11 @@ Managed models follow the same lifecycle as other models:
 However, there is usually extra vendor-imposed costs associated with Managed models. For example, Snowflake has [additional costs](https://docs.snowflake.com/en/user-guide/dynamic-tables-cost) for Dynamic Tables.
 
 Therefore, we try to not create managed tables unnecessarily. For example, in [forward-only plans](../plans.md#forward-only-change) we just create a normal table to preview the changes and only re-create the managed table on deployment to prod.
+
+!!! warning
+    Due to the use of normal tables for dev previews, it is possible to write a query that uses features that are available to normal tables in the target engine but not managed tables. This could result in a scenario where a plan works in a virtual environment but fails when deployed to production.
+    
+    We believe the cost savings are worth it, however please [reach out](https://tobikodata.com/slack) if this is causes problems for you.
 
 ## Supported Engines
 SQLMesh supports managed models in the following database engines:
