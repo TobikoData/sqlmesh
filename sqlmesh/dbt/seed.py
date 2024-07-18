@@ -55,21 +55,22 @@ class SeedConfig(BaseModelConfig):
         )
 
 
-class Integer(agate.data_types.DataType):
-    def cast(self, d: str) -> t.Optional[int]:
-        if d is None:
-            return d
-        try:
-            return int(d)
-        except ValueError:
-            raise agate.exceptions.CastError('Can not parse value "%s" as Integer.' % d)
+class Integer(agate_helper.Integer):
+    def cast(self, d: t.Any) -> t.Optional[int]:
+        if isinstance(d, str):
+            # The dbt's implementation doesn't support coercion of strings to integers.
+            if d.strip().lower() in self.null_values:
+                return None
+            try:
+                return int(d)
+            except ValueError:
+                raise agate.exceptions.CastError('Can not parse value "%s" as Integer.' % d)
+        return super().cast(d)
 
-    def jsonify(self, d: str) -> str:
+    def jsonify(self, d: t.Any) -> str:
         return d
 
 
-# The dbt version has a bug in which they check whether the type of the input value
-# is int, while the input value is actually always a string.
 agate_helper.Integer = Integer  # type: ignore
 
 
