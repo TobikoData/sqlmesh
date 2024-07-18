@@ -488,26 +488,29 @@ These pages describe the connection configuration options for each execution eng
 #### State connection
 
 Configuration for the state backend connection if different from the data warehouse connection.
-**Using the same connection for data warehouse and state is only recommended for non-production deployments of SQLMesh.**
-Unlike data transformations, storing state information requires database transactions. Data warehouses aren’t optimized for executing transactions, so storing state information in them can slow down your project.
-Even worse data corruption can occur with simultaneous writes to the same table.
-Therefore, using your data warehouse is fine for testing but once you start running SQLMesh in production, you should use a dedicated state connection.
 
-Recommended state backend engines for production deployments:
+The data warehouse connection is used to store SQLMesh state if the `state_connection` key is not specified, unless the configuration uses an Airflow or Google Cloud Composer scheduler. If using one of those schedulers and the `state_connection` key is not specified, the scheduler's database is used (not the data warehouse).
+
+**NOTE: Using the same connection for data warehouse and state is only recommended for non-production deployments of SQLMesh.**
+
+Unlike data transformations, storing state information requires database transactions. Data warehouses aren’t optimized for executing transactions, and storing state information in them can slow down your project or produce corrupted data due to simultaneous writes to the same table. Therefore, production SQLMesh deployments should use a dedicated state connection.
+
+The easiest and most reliable way to manage your state connection is for [Tobiko Cloud](https://tobikodata.com/product.html) to do it for you. If you'd rather handle it yourself, we list recommended and unsupported state engines below.
+
+Recommended state engines for production deployments:
 
 * [Postgres](../integrations/engines/postgres.md)
 * [GCP Postgres](../integrations/engines/gcp-postgres.md)
 
-Other supported state backend engines (less tested than recommended):
+Other state engines with fast and reliable database transactions (less tested than the recommended engines):
 
+* [DuckDB](../integrations/engines/duckdb.md)
 * [MySQL](../integrations/engines/mysql.md)
 
-Ineligible state backends even for development:
+Unsupported state engines, even for development:
 
 * [Spark](../integrations/engines/spark.md)
 * [Trino](../integrations/engines/trino.md)
-
-The data warehouse connection is used if the `state_connection` key is not specified, unless the configuration uses an Airflow or Google Cloud Composer scheduler. If using one of those schedulers and no state connection is specified, the state connection defaults to the scheduler's database.
 
 Example postgres state connection configuration:
 

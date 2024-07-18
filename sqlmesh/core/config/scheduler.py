@@ -88,6 +88,11 @@ class _EngineAdapterStateSyncSchedulerConfig(_SchedulerConfig):
                 f"The {engine_adapter.DIALECT.upper()} engine cannot be used to store SQLMesh state - please specify a different `state_connection` engine."
                 + " See https://sqlmesh.readthedocs.io/en/stable/reference/configuration/#gateways for more information."
             )
+        if not state_connection.is_recommended_for_state_sync:
+            logger.warning(
+                f"The {state_connection.type_} engine is not recommended for storing SQLMesh state in production deployments. Please see"
+                + " https://sqlmesh.readthedocs.io/en/stable/guides/configuration/#state-connection for a list of recommended engines and more information."
+            )
         schema = context.config.get_state_schema(context.gateway)
         return EngineAdapterStateSync(
             engine_adapter, schema=schema, context_path=context.path, console=context.console
