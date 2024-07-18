@@ -1340,11 +1340,13 @@ test_example_full_model_alt:
   inputs:
     sqlmesh_example.incremental_model:
       query: |
-        SELECT 1 AS id, 1 AS item_id
+        SELECT 1 AS item_id, 1 AS id
         UNION ALL
-        SELECT 2 AS id, 1 AS item_id
+        SELECT 1 AS item_id, 2 AS id
         UNION ALL
         SELECT 3 AS id, 2 AS item_id
+        UNION ALL
+        SELECT 3 as item_id
   outputs:
     query:
       rows:
@@ -1352,9 +1354,40 @@ test_example_full_model_alt:
         num_orders: 2
       - item_id: 2
         num_orders: 1
+      - item_id: 3
+        num_orders: 0
                 """
             ),
             test_name="test_example_full_model_alt",
+            model=context.get_model("sqlmesh_example.full_model"),
+            context=context,
+        ).run()
+    )
+
+    _check_successful_or_raise(
+        _create_test(
+            body=load_yaml(
+                """
+test_example_full_model_partial:
+  model: sqlmesh_example.full_model
+  inputs:
+    sqlmesh_example.incremental_model:
+      query: |
+        SELECT 1 AS item_id, 1 AS id
+        UNION ALL
+        SELECT 2 AS item_id
+        UNION ALL
+        SELECT 3 AS id
+  outputs:
+    query:
+      partial: true
+      rows:
+      - item_id: 1
+      - item_id: 2
+      - item_id: null
+                """
+            ),
+            test_name="test_example_full_model_partial",
             model=context.get_model("sqlmesh_example.full_model"),
             context=context,
         ).run()

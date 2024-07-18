@@ -506,7 +506,21 @@ class ModelTest(unittest.TestCase):
         query_columns = set(query.named_selects)
         missing_columns = [col for col in all_columns if col not in query_columns]
         if missing_columns:
-            query.select(*[exp.null().as_(col) for col in missing_columns], copy=False)
+            if isinstance(query, exp.Union):
+                if isinstance(query.left, exp.Query):
+                    self._add_missing_columns(query.left, all_columns)
+                if isinstance(query.right, exp.Query):
+                    self._add_missing_columns(query.right, all_columns)
+            else:
+                selects = {select.alias: select for select in query.selects}
+                query.select(
+                    *[
+                        exp.null().as_(col) if col not in query_columns else selects[col]
+                        for col in all_columns
+                    ],
+                    append=False,
+                    copy=False,
+                )
 
         return query
 
