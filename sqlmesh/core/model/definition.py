@@ -24,7 +24,7 @@ from sqlmesh.core import constants as c
 from sqlmesh.core import dialect as d
 from sqlmesh.core.macros import MacroRegistry, MacroStrTemplate, macro
 from sqlmesh.core.model.common import expression_validator
-from sqlmesh.core.model.kind import ModelKindName, SeedKind, create_model_kind
+from sqlmesh.core.model.kind import ModelKindName, SeedKind, ModelKind, FullKind, create_model_kind
 from sqlmesh.core.model.meta import ModelMeta
 from sqlmesh.core.model.seed import CsvSeedReader, Seed, create_seed
 from sqlmesh.core.renderer import ExpressionRenderer, QueryRenderer
@@ -1408,6 +1408,7 @@ class PythonModel(_Model):
         entrypoint: The name of a Python function which contains the data fetching / transformation logic.
     """
 
+    kind: ModelKind = FullKind()
     entrypoint: str
     source_type: Literal["python"] = "python"
 
