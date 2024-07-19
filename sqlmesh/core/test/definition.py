@@ -162,6 +162,10 @@ class ModelTest(unittest.TestCase):
                 query_or_df: exp.Query | pd.DataFrame = self._add_missing_columns(
                     values["query"], known_columns_to_types
                 )
+                if known_columns_to_types:
+                    known_columns_to_types = {
+                        col: known_columns_to_types[col] for col in query_or_df.named_selects
+                    }
             else:
                 query_or_df = self._create_df(values, columns=known_columns_to_types)
 
