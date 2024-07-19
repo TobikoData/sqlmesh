@@ -62,9 +62,33 @@ Refer to `MODEL` [properties](./overview.md#properties) for the full list of all
 
 Optional pre/post-statements allow you to execute SQL commands before and after a model runs, respectively.
 
-For example, post/post-statements might modify settings or create indexes. However, be careful not to run any statement that could conflict with the execution of another statement if the models run concurrently, such as creating a physical table.
+For example, pre/post-statements might modify settings or create a table index. However, be careful not to run any statement that could conflict with the execution of another model if they are run concurrently, such as creating a physical table.
 
-Pre/post-statements are evaluated twice: when a model's table is created and when its query logic is evaluated. Since executing such statements more than once can have unintended side-effects, it is also possible to [conditionally execute](../macros/sqlmesh_macros.md#if) them depending on SQLMesh's [runtime stage](../macros/macro_variables.md#predefined-variables).
+Pre/post-statements are just standard SQL commands located before/after the model query. They must end with a semi-colon, and the model query must end with a semi-colon if a post-statement is present. The [example above](#example) contains both pre- and post-statements.
+
+!!! warning
+
+    Pre/post-statements are evaluated twice: when a model's table is created and when its query logic is evaluated. Executing statements more than once can have unintended side-effects, so you can [conditionally execute](../macros/sqlmesh_macros.md#prepost-statements) them based on SQLMesh's [runtime stage](../macros/macro_variables.md#runtime-variables).
+
+The pre/post-statements in the [example above](#example) will run twice because they are not conditioned on runtime stage.
+
+We can condition the post-statement to only run after the model query is evaluated using the [`@IF` macro operator](../macros/sqlmesh_macros.md#if) and [`@runtime_stage` macro variable](../macros/macro_variables.md#runtime-variables) like this:
+
+```sql linenums="1" hl_lines="8-11"
+MODEL (
+  name db.customers,
+  kind FULL,
+);
+
+[...same as example above...]
+
+@IF(
+  @runtime_stage = 'evaluating',
+  UNCACHE TABLE countries
+);
+```
+
+Note that the SQL command `UNCACHE TABLE countries` inside the `@IF()` macro does **not** end with a semi-colon. Instead, the semi-colon comes after the `@IF()` macro's closing parenthesis.
 
 ### The model query
 
@@ -107,13 +131,19 @@ def entrypoint(evaluator: MacroEvaluator) -> str | exp.Expression:
 
 One could also define this model by simply returning a string that contained the SQL query of the SQL-based example. Strings used as pre/post-statements or return values in Python-based models will be parsed into SQLGlot expressions, which means that SQLMesh will still be able to understand them semantically and thus provide information such as column-level lineage.
 
-**Note:** Since python models have access to the macro evaluation context (`MacroEvaluator`), they can also [access model schemas](../macros/sqlmesh_macros.md#accessing-model-schemas) through its `columns_to_types` method.
+!!! note
+
+    Since python models have access to the macro evaluation context (`MacroEvaluator`), they can also [access model schemas](../macros/sqlmesh_macros.md#accessing-model-schemas) through its `columns_to_types` method.
 
 ### `@model` decorator
 
-The `@model` decorator is the Python equivalent of the `MODEL` DDL. In addition to model metadata and configuration information, one can also set the keyword arguments `pre_statements` and `post_statements` to a list of SQL strings and/or SQLGlot expressions to define the pre/post-statements of the model, respectively.
+The `@model` decorator is the Python equivalent of the `MODEL` DDL.
 
-**Note:** All of the [metadata](./overview.md#properties) field names are the same as those in the `MODEL` DDL.
+In addition to model metadata and configuration information, one can also set the keyword arguments `pre_statements` and `post_statements` to a list of SQL strings and/or SQLGlot expressions to define the pre/post-statements of the model, respectively.
+
+!!! note
+
+    All of the [metadata property](./overview.md#model-properties) field names are the same as those in the `MODEL` DDL.
 
 ## Automatic dependencies
 
