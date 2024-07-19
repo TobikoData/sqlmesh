@@ -34,6 +34,7 @@ from sqlmesh.utils.metaprogramming import Executable
 from sqlmesh.utils.pydantic import (
     PydanticModel,
     field_validator,
+    get_dialect,
     model_validator,
     model_validator_v1_args,
 )
@@ -154,7 +155,7 @@ def audit_map_validator(cls: t.Type, v: t.Any, values: t.Any) -> t.Dict[str, t.A
     if isinstance(v, (exp.Tuple, exp.Array)):
         return dict(map(_maybe_parse_arg_pair, v.expressions))
     elif isinstance(v, dict):
-        dialect = (values if isinstance(values, dict) else values.data).get("dialect")
+        dialect = get_dialect(values)
         return {
             key: value
             if isinstance(value, exp.Expression)
