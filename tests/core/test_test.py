@@ -1344,9 +1344,11 @@ test_example_full_model_alt:
         UNION ALL
         SELECT 1 AS item_id, 2 AS id
         UNION ALL
-        SELECT 3 AS id, 2 AS item_id
+        SELECT 2 AS item_id, 3 AS id
         UNION ALL
-        SELECT 3 as item_id
+        SELECT 3 AS item_id, 4 AS id
+        UNION ALL
+        SELECT 4 AS item_id, null AS id
   outputs:
     query:
       rows:
@@ -1355,6 +1357,8 @@ test_example_full_model_alt:
       - item_id: 2
         num_orders: 1
       - item_id: 3
+        num_orders: 1
+      - item_id: 4
         num_orders: 0
                 """
             ),
@@ -1373,18 +1377,15 @@ test_example_full_model_partial:
   inputs:
     sqlmesh_example.incremental_model:
       query: |
-        SELECT 1 AS item_id, 1 AS id
+        SELECT 1 as id,
         UNION ALL
-        SELECT 2 AS item_id
-        UNION ALL
-        SELECT 3 AS id
+        SELECT 2 as id,
   outputs:
     query:
       partial: true
       rows:
-      - item_id: 1
-      - item_id: 2
       - item_id: null
+        num_orders: 2
                 """
             ),
             test_name="test_example_full_model_partial",

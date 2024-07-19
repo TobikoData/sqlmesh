@@ -162,6 +162,10 @@ class ModelTest(unittest.TestCase):
                 query_or_df: exp.Query | pd.DataFrame = self._add_missing_columns(
                     values["query"], known_columns_to_types
                 )
+                if known_columns_to_types:
+                    known_columns_to_types = {
+                        col: known_columns_to_types[col] for col in query_or_df.named_selects
+                    }
             else:
                 query_or_df = self._create_df(values, columns=known_columns_to_types)
 
@@ -503,22 +507,10 @@ class ModelTest(unittest.TestCase):
         if not all_columns or query.is_star:
             return query
 
-        if isinstance(query, exp.Union):
-            if isinstance(query.left, exp.Query):
-                self._add_missing_columns(query.left, all_columns)
-            if isinstance(query.right, exp.Query):
-                self._add_missing_columns(query.right, all_columns)
-        else:
-            query_columns = set(query.named_selects)
-            selects = {select.alias: select for select in query.selects}
-            query.select(
-                *[
-                    exp.null().as_(col) if col not in query_columns else selects[col]
-                    for col in all_columns
-                ],
-                append=False,
-                copy=False,
-            )
+        query_columns = set(query.named_selects)
+        missing_columns = [col for col in all_columns if col not in query_columns]
+        if missing_columns:
+            query.select(*[exp.null().as_(col) for col in missing_columns], copy=False)
 
         return query
 
