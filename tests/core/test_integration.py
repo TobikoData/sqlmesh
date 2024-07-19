@@ -742,7 +742,7 @@ def test_plan_set_choice_is_reflected_in_missing_intervals(init_and_plan_context
     ]
 
 
-@freeze_time("2023-01-08 15:00:00")
+@freeze_time("2023-01-08 15:00:00", tick=True)
 @pytest.mark.parametrize("has_view_binding", [False, True])
 def test_non_breaking_change_after_forward_only_in_dev(
     init_and_plan_context: t.Callable, has_view_binding: bool
@@ -787,12 +787,6 @@ def test_non_breaking_change_after_forward_only_in_dev(
         "SELECT DISTINCT event_date FROM sushi__dev.waiter_revenue_by_day ORDER BY event_date"
     )
     assert dev_df["event_date"].tolist() == [pd.to_datetime("2023-01-07")]
-
-    # FIXME: Due to freezgun freezing the time, all interval records have the same creation timestamp.
-    # As a result removal records are always being applied after any addition records. Running the plan repeatedly
-    # to make sure there are no missing intervals.
-    context._run_janitor()
-    context.plan("dev", no_prompts=True, skip_tests=True, auto_apply=True)
 
     # Make a non-breaking change to a model downstream.
     model = context.get_model("sushi.top_waiters")
