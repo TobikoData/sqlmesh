@@ -75,6 +75,19 @@ Notice how `column` and `threshold` parameters have been set. These values will 
 
 Note that the same audit can be applied more than once to the a model using different sets of parameters.
 
+Generic audits can define default values as follows:
+```sql linenums="1"
+AUDIT (
+  name does_not_exceed_threshold,
+  defaults (
+    threshold = 10,
+    column = id
+  )
+);
+SELECT * FROM @this_model
+WHERE @column >= @threshold;
+```
+
 ### Naming
 We recommended avoiding SQL keywords when naming audit parameters. Quote any audit argument that is also a SQL keyword.
 
