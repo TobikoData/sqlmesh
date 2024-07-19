@@ -1923,6 +1923,7 @@ class DebuggerTerminalConsole(TerminalConsole):
     ) -> None:
         self.console: RichConsole = console or srich.console
         self.dialect = dialect
+        self.verbose = False
 
     def _write(self, msg: t.Any, *args: t.Any, **kwargs: t.Any) -> None:
         self.console.log(msg, *args, **kwargs)
