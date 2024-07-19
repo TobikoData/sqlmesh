@@ -112,24 +112,29 @@ theme:
         name: Switch to light mode
   features:
     - content.tabs.link
+    - content.code.copy
     - navigation.tracking
     - navigation.tabs
     - navigation.sections
     - navigation.top
     - toc.integrate
     - toc.follow
+    - search.suggest
+    - search.highlight
 plugins:
   - include-markdown
-  - search
+  - search:
+      separator: '[\s\-,:!=\[\]()"/_]+'
   - glightbox
 markdown_extensions:
+  - def_list
   - tables
   - pymdownx.highlight:
       anchor_linenums: true
   - pymdownx.inlinehilite
   - pymdownx.snippets
   - pymdownx.superfences
-  - pymdownx.tabbed:
+  - pymdownx.blocks.tab:
       alternate_style: true
   - admonition
   - pymdownx.details
