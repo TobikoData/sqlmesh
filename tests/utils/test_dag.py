@@ -44,6 +44,11 @@ def test_sorted():
     assert result[6] == "a"
 
 
+def test_upstream():
+    dag = DAG({"a": {"b", "c"}, "b": {"d", "e"}, "c": {"f", "g"}})
+    assert dag.upstream("a") == {"b", "c", "d", "e", "f", "g"}
+
+
 def test_sorted_with_cycles():
     dag = DAG({"a": {}, "b": {"a"}, "c": {"b"}, "d": {"b", "e"}, "e": {"b", "d"}})
 

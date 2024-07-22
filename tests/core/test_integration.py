@@ -1791,9 +1791,11 @@ def test_no_override(sushi_context: Context) -> None:
     plan_builder.set_choice(items, SnapshotChangeCategory.BREAKING).set_choice(
         order_items, SnapshotChangeCategory.NON_BREAKING
     )
+    plan_builder.build()
     assert items.is_new_version
     assert waiter_revenue.is_new_version
     plan_builder.set_choice(items, SnapshotChangeCategory.NON_BREAKING)
+    plan_builder.build()
     assert not waiter_revenue.is_new_version
 
 

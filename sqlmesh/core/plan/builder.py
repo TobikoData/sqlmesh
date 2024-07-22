@@ -123,6 +123,7 @@ class PlanBuilder:
         self._apply = apply
         self._engine_schema_differ = engine_schema_differ
         self._console = console or get_console()
+        self._choices: t.Dict[SnapshotId, SnapshotChangeCategory] = {}
 
         self._start = start
         if not self._start and self._forward_only_preview_needed:
@@ -180,9 +181,22 @@ class PlanBuilder:
             snapshot: The target snapshot.
             choice: The user decision on how to version the target snapshot and its children.
         """
-        plan = self.build()
-        self._set_choice(snapshot, choice, plan.directly_modified, plan.indirectly_modified)
-        self._adjust_new_snapshot_intervals()
+        if self._forward_only:
+            raise PlanError("Choice setting is not supported by a forward-only plan.")
+        if not self._is_new_snapshot(snapshot):
+            raise SQLMeshError(
+                f"A choice can't be changed for the existing version of '{snapshot.name}'."
+            )
+        if (
+            not self._context_diff.directly_modified(snapshot.name)
+            and snapshot.snapshot_id not in self._context_diff.added
+        ):
+            raise SQLMeshError(
+                f"Only directly modified models can be categorized ({snapshot.name})."
+            )
+
+        self._choices[snapshot.snapshot_id] = choice
+        self._latest_plan = None
         return self
 
     def apply(self) -> None:
@@ -208,7 +222,7 @@ class PlanBuilder:
         directly_modified, indirectly_modified = self._build_directly_and_indirectly_modified(dag)
 
         self._check_destructive_changes(directly_modified)
-        self._categorize_snapshots(dag, directly_modified, indirectly_modified)
+        self._categorize_snapshots(dag, indirectly_modified)
         self._adjust_new_snapshot_intervals()
 
         deployability_index = (
@@ -482,10 +496,7 @@ class PlanBuilder:
                         )
 
     def _categorize_snapshots(
-        self,
-        dag: DAG[SnapshotId],
-        directly_modified: t.Set[SnapshotId],
-        indirectly_modified: SnapshotMapping,
+        self, dag: DAG[SnapshotId], indirectly_modified: SnapshotMapping
     ) -> None:
         """Automatically categorizes snapshots that can be automatically categorized and
         returns a list of added and directly modified snapshots as well as the mapping of
@@ -496,152 +507,79 @@ class PlanBuilder:
         # assigned to its upstream dependencies.
         for s_id in dag:
             snapshot = self._context_diff.snapshots.get(s_id)
-            if not snapshot or snapshot.change_category:
+
+            if not snapshot or not self._is_new_snapshot(snapshot):
                 continue
 
-            if s_id.name in self._context_diff.modified_snapshots:
-                is_directly_modified = self._context_diff.directly_modified(s_id.name)
-                if self._is_new_snapshot(snapshot):
-                    if self._forward_only:
-                        # In case of the forward only plan any modifications result in reuse of the
-                        # previous version for non-seed models.
-                        # New snapshots of seed models are considered non-breaking ones.
-                        if not snapshot.is_seed:
-                            snapshot.categorize_as(SnapshotChangeCategory.FORWARD_ONLY)
-                        else:
-                            snapshot.categorize_as(SnapshotChangeCategory.NON_BREAKING)
-                    elif self._is_forward_only_change(s_id) and is_directly_modified:
-                        self._set_choice(
-                            snapshot,
-                            SnapshotChangeCategory.FORWARD_ONLY,
-                            directly_modified,
-                            indirectly_modified,
-                        )
-                    elif self._auto_categorization_enabled and is_directly_modified:
-                        s_id_with_missing_columns: t.Optional[SnapshotId] = None
-                        this_sid_with_downstream = indirectly_modified.get(s_id, set()) | {s_id}
-                        for downstream_s_id in this_sid_with_downstream:
-                            downstream_snapshot = self._context_diff.snapshots[downstream_s_id]
-                            if (
-                                downstream_snapshot.is_model
-                                and downstream_snapshot.model.columns_to_types is None
-                            ):
-                                s_id_with_missing_columns = downstream_s_id
-                                break
+            if s_id in self._choices:
+                snapshot.categorize_as(self._choices[s_id])
+                continue
 
-                        new, old = self._context_diff.modified_snapshots[s_id.name]
-                        if s_id_with_missing_columns is None:
-                            change_category = categorize_change(
-                                new, old, config=self._categorizer_config
-                            )
-                            if change_category is not None:
-                                self._set_choice(
-                                    new, change_category, directly_modified, indirectly_modified
-                                )
-                        else:
-                            mode = self._categorizer_config.dict().get(
-                                new.model.source_type, AutoCategorizationMode.OFF
-                            )
-                            if mode == AutoCategorizationMode.FULL:
-                                self._set_choice(
-                                    new,
-                                    SnapshotChangeCategory.BREAKING,
-                                    directly_modified,
-                                    indirectly_modified,
-                                )
-
-                if (
-                    not is_directly_modified
-                    and not snapshot.version
-                    and not any(
-                        self._context_diff.directly_modified(upstream.name)
-                        and not self._context_diff.snapshots[upstream].version
-                        for upstream in dag.upstream(s_id)
-                    )
-                ):
-                    if self._context_diff.indirectly_modified(snapshot.name):
-                        # Set to breaking if an indirect child has no directly modified parents
-                        # that need a decision. this can happen when a revert to a parent causes
-                        # an indirectly modified snapshot to be created because of a new parent
-                        snapshot.categorize_as(
-                            SnapshotChangeCategory.FORWARD_ONLY
-                            if self._is_forward_only_change(s_id)
-                            else SnapshotChangeCategory.INDIRECT_BREAKING
-                        )
-                    else:
-                        # Metadata updated.
-                        snapshot.categorize_as(SnapshotChangeCategory.METADATA)
-
-            elif s_id in self._context_diff.added and self._is_new_snapshot(snapshot):
+            if s_id in self._context_diff.added:
+                snapshot.categorize_as(SnapshotChangeCategory.BREAKING)
+            elif self._is_forward_only_change(s_id) or self._forward_only:
+                # In case of the forward only plan any modifications result in reuse of the
+                # previous version for non-seed models.
+                # New snapshots of seed models are considered non-breaking ones.
                 snapshot.categorize_as(
-                    SnapshotChangeCategory.FORWARD_ONLY
-                    if self._is_forward_only_change(s_id)
-                    else SnapshotChangeCategory.BREAKING
+                    SnapshotChangeCategory.NON_BREAKING
+                    if snapshot.is_seed
+                    else SnapshotChangeCategory.FORWARD_ONLY
                 )
+            elif s_id.name in self._context_diff.modified_snapshots:
+                self._categorize_snapshot(snapshot, dag, indirectly_modified)
 
-    def _set_choice(
-        self,
-        snapshot: Snapshot,
-        choice: SnapshotChangeCategory,
-        directly_modified: t.Set[SnapshotId],
-        indirectly_modified: SnapshotMapping,
+    def _categorize_snapshot(
+        self, snapshot: Snapshot, dag: DAG[SnapshotId], indirectly_modified: SnapshotMapping
     ) -> None:
-        if self._forward_only:
-            raise PlanError("Choice setting is not supported by a forward-only plan.")
-        if not self._is_new_snapshot(snapshot):
-            raise SQLMeshError(
-                f"A choice can't be changed for the existing version of '{snapshot.name}'."
-            )
+        s_id = snapshot.snapshot_id
 
-        snapshot.categorize_as(choice)
+        if self._context_diff.directly_modified(s_id.name):
+            if self._auto_categorization_enabled:
+                s_id_with_missing_columns: t.Optional[SnapshotId] = None
+                this_sid_with_downstream = indirectly_modified.get(s_id, set()) | {s_id}
+                for downstream_s_id in this_sid_with_downstream:
+                    downstream_snapshot = self._context_diff.snapshots[downstream_s_id]
+                    if (
+                        downstream_snapshot.is_model
+                        and downstream_snapshot.model.columns_to_types is None
+                    ):
+                        s_id_with_missing_columns = downstream_s_id
+                        break
 
-        is_breaking_choice = choice in (
-            SnapshotChangeCategory.BREAKING,
-            SnapshotChangeCategory.INDIRECT_BREAKING,
-        )
-
-        for child_s_id in indirectly_modified.get(snapshot.snapshot_id, set()):
-            child_snapshot = self._context_diff.snapshots[child_s_id]
-            # If the snapshot isn't new then we are reverting to a previously existing snapshot
-            # and therefore we don't want to recategorize it.
-            if not self._is_new_snapshot(child_snapshot):
-                continue
-
-            is_forward_only_child = self._is_forward_only_change(child_s_id)
-
-            if is_breaking_choice:
-                child_snapshot.categorize_as(
-                    SnapshotChangeCategory.FORWARD_ONLY
-                    if is_forward_only_child
-                    else SnapshotChangeCategory.INDIRECT_BREAKING
-                )
-            elif choice == SnapshotChangeCategory.FORWARD_ONLY:
-                child_snapshot.categorize_as(SnapshotChangeCategory.FORWARD_ONLY)
-            else:
-                child_snapshot.categorize_as(SnapshotChangeCategory.INDIRECT_NON_BREAKING)
-
-            for upstream_id in directly_modified:
-                if upstream_id == snapshot.snapshot_id or child_s_id not in indirectly_modified.get(
-                    upstream_id, set()
-                ):
-                    continue
-
-                upstream = self._context_diff.snapshots[upstream_id]
-                if upstream.change_category == SnapshotChangeCategory.BREAKING:
-                    # If any other snapshot specified breaking this child, then that child
-                    # needs to be backfilled as a part of the plan.
-                    child_snapshot.categorize_as(
-                        SnapshotChangeCategory.FORWARD_ONLY
-                        if is_forward_only_child
-                        else SnapshotChangeCategory.INDIRECT_BREAKING
+                new, old = self._context_diff.modified_snapshots[s_id.name]
+                if s_id_with_missing_columns is None:
+                    change_category = categorize_change(new, old, config=self._categorizer_config)
+                    if change_category is not None:
+                        snapshot.categorize_as(change_category)
+                else:
+                    mode = self._categorizer_config.dict().get(
+                        new.model.source_type, AutoCategorizationMode.OFF
                     )
-                    break
-                elif (
-                    upstream.change_category == SnapshotChangeCategory.FORWARD_ONLY
-                    and child_snapshot.is_indirect_non_breaking
-                ):
-                    # FORWARD_ONLY takes precedence over INDIRECT_NON_BREAKING.
-                    child_snapshot.categorize_as(SnapshotChangeCategory.FORWARD_ONLY)
+                    if mode == AutoCategorizationMode.FULL:
+                        snapshot.categorize_as(SnapshotChangeCategory.BREAKING)
+        elif self._context_diff.indirectly_modified(snapshot.name):
+            categories = []
+
+            for p_id in dag.upstream(s_id):
+                parent = self._context_diff.snapshots.get(p_id)
+
+                if parent and self._is_new_snapshot(parent):
+                    categories.append(parent.change_category)
+
+            if not categories or any(
+                category.is_breaking or category.is_indirect_breaking
+                for category in categories
+                if category
+            ):
+                snapshot.categorize_as(SnapshotChangeCategory.INDIRECT_BREAKING)
+            elif any(category.is_forward_only for category in categories if category):
+                snapshot.categorize_as(SnapshotChangeCategory.FORWARD_ONLY)
+            else:
+                snapshot.categorize_as(SnapshotChangeCategory.INDIRECT_NON_BREAKING)
+        else:
+            # Metadata updated.
+            snapshot.categorize_as(SnapshotChangeCategory.METADATA)
 
     def _apply_effective_from(self) -> None:
         if self._effective_from:
