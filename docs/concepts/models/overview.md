@@ -8,8 +8,8 @@ SQLMesh will automatically determine the relationships among and lineage of your
 The following is an example of a model defined in SQL. Note the following aspects:
 
   - Models can include descriptive information as comments, such as the first line.
-  - The first non-comment statement of a `model.sql` file is the `MODEL` DDL.
-  - The last non-comment statement should be a `SELECT` statement that defines the logic needed to create the table
+  - The first non-comment statement in the file is the `MODEL` DDL.
+  - The last non-comment statement is a `SELECT` query containing the logic that transforms the data.
 
 ```sql linenums="1"
 -- Customer revenue computed and stored daily.
@@ -197,133 +197,145 @@ The `MODEL` DDL statement takes various properties, which are used for both meta
 Learn more about these properties and their default values in the [model configuration reference](../../reference/model_configuration.md#general-model-properties).
 
 ### name
-- Name specifies the name of the model. This name represents the production view name that the model outputs, so it generally takes the form of `"schema"."view_name"`. The name of a model must be unique in a SQLMesh project.<br /><br />
-When models are used in non-production environments, SQLMesh automatically prefixes the names. For example, consider a model named `"sushi"."customers"`. In production its view is named `"sushi"."customers"`, and in dev its view is named `"sushi__dev"."customers"`.<br /><br />
-Name is ***required*** and must be ***unique***, unless [name inference](../../reference/model_configuration.md#model-naming) is enabled.
+:   Name specifies the name of the model. This name represents the production view name that the model outputs, so it generally takes the form of `"schema"."view_name"`. The name of a model must be unique in a SQLMesh project.
+
+    When models are used in non-production environments, SQLMesh automatically prefixes the names. For example, consider a model named `"sushi"."customers"`. In production its view is named `"sushi"."customers"`, and in dev its view is named `"sushi__dev"."customers"`.
+
+    Name is ***required*** and must be ***unique***, unless [name inference](../../reference/model_configuration.md#model-naming) is enabled.
 
 ### project
-- Project specifies the name of the project the model belongs to. Used in multi-repo SQLMesh deployments.
+:   Project specifies the name of the project the model belongs to. Used in multi-repo SQLMesh deployments.
 
 ### kind
-- Kind specifies what [kind](model_kinds.md) a model is. A model's kind determines how it is computed and stored. The default kind is `VIEW`, which means a view is created and your query is run each time that view is accessed. See [below](#incremental-model-properties) for properties that apply to incremental model kinds.
+:   Kind specifies what [kind](model_kinds.md) a model is. A model's kind determines how it is computed and stored. The default kind is `VIEW`, which means a view is created and your query is run each time that view is accessed. See [below](#incremental-model-properties) for properties that apply to incremental model kinds.
 
 ### audits
-- Audits specifies which [audits](../audits.md) should run after the model is evaluated.
+:   Audits specifies which [audits](../audits.md) should run after the model is evaluated.
 
 ### dialect
-- Dialect defines the SQL dialect of the model. By default, this uses the dialect in the [configuration file `model_defaults` `dialect` key](../../reference/configuration.md#model-configuration). All SQL dialects [supported by the SQLGlot library](https://github.com/tobymao/sqlglot/blob/main/sqlglot/dialects/__init__.py) are allowed.
+:   Dialect defines the SQL dialect of the model. By default, this uses the dialect in the [configuration file `model_defaults` `dialect` key](../../reference/configuration.md#model-configuration). All SQL dialects [supported by the SQLGlot library](https://github.com/tobymao/sqlglot/blob/main/sqlglot/dialects/__init__.py) are allowed.
 
 ### owner
-- Owner specifies who the main point of contact is for the model. It is an important field for organizations that have many data collaborators.
+:   Owner specifies who the main point of contact is for the model. It is an important field for organizations that have many data collaborators.
 
 ### stamp
-- An optional arbitrary string sequence used to create a new model version without changing the functional components of the definition.
+:   An optional arbitrary string sequence used to create a new model version without changing the functional components of the definition.
 
 ### tags
-- Tags are one or more labels used to organize your models.
+:   Tags are one or more labels used to organize your models.
 
 ### cron
-- Cron is used to schedule your model to process or refresh at a certain interval. It accepts a [cron expression](https://en.wikipedia.org/wiki/Cron) or any of `@hourly`, `@daily`, `@weekly`, or `@monthly`.
+:   Cron is used to schedule your model to process or refresh at a certain interval. It accepts a [cron expression](https://en.wikipedia.org/wiki/Cron) or any of `@hourly`, `@daily`, `@weekly`, or `@monthly`.
 
 ### interval_unit
-- Interval unit determines the granularity of data intervals for this model. By default the interval unit is automatically derived from the `cron` expression. Supported values are: `year`, `month`, `day`, `hour`, `half_hour`, `quarter_hour`, and `five_minute`.
+:   Interval unit determines the granularity of data intervals for this model. By default the interval unit is automatically derived from the `cron` expression. Supported values are: `year`, `month`, `day`, `hour`, `half_hour`, `quarter_hour`, and `five_minute`.
 
 ### start
-- Start is used to determine the earliest time needed to process the model. It can be an absolute date/time (`2022-01-01`), or a relative one (`1 year ago`).
+:   Start is used to determine the earliest time needed to process the model. It can be an absolute date/time (`2022-01-01`), or a relative one (`1 year ago`).
 
 ### end
-- End is used to determine the latest time needed to process the model. It can be an absolute date/time (`2022-01-01`), or a relative one (`1 year ago`).
+:   End is used to determine the latest time needed to process the model. It can be an absolute date/time (`2022-01-01`), or a relative one (`1 year ago`).
 
 ### description
-- Optional description of the model. Automatically registered as a table description/comment with the underlying SQL engine (if supported by the engine).
+:   Optional description of the model. Automatically registered as a table description/comment with the underlying SQL engine (if supported by the engine).
 
 ### column_descriptions
-- Optional dictionary of [key/value pairs](#explicit-column-comments). Automatically registered as column descriptions/comments with the underlying SQL engine (if supported by the engine). If not present, [inline comments](#inline-column-comments) will automatically be registered.
+:   Optional dictionary of [key/value pairs](#explicit-column-comments). Automatically registered as column descriptions/comments with the underlying SQL engine (if supported by the engine). If not present, [inline comments](#inline-column-comments) will automatically be registered.
 
 ### grain
-- A model's grain is the column or combination of columns that uniquely identify a row in the results returned by the model's query. If the grain is set, SQLMesh tools like `table_diff` are simpler to run because they automatically use the model grain for parameters that would otherwise need to be specified manually.
+:   A model's grain is the column or combination of columns that uniquely identify a row in the results returned by the model's query. If the grain is set, SQLMesh tools like `table_diff` are simpler to run because they automatically use the model grain for parameters that would otherwise need to be specified manually.
 
 ### grains
-- A model can define multiple grains if it has more than one unique key or combination of keys.
+:   A model can define multiple grains if it has more than one unique key or combination of keys.
 
 ### references
-- References are non-unique columns or combinations of columns that identify a join relationship to another model.
-- For example, a model could define a reference `account_id`, which would indicate that it can now automatically join to any model with an `account_id` grain. It cannot safely join to a table with an `account_id` reference because references are not unique and doing so would constitute a many-to-many join.
-- Sometimes columns are named differently, in that case you can alias column names to a common entity name. For example `guest_id AS account_id` would allow a model with the column guest\_id to join to a model with the grain account\_id.
+:   References are non-unique columns or combinations of columns that identify a join relationship to another model.
+
+    For example, a model could define a reference `account_id`, which would indicate that it can now automatically join to any model with an `account_id` grain. It cannot safely join to a table with an `account_id` reference because references are not unique and doing so would constitute a many-to-many join.
+
+    Sometimes columns are named differently, in that case you can alias column names to a common entity name. For example `guest_id AS account_id` would allow a model with the column guest\_id to join to a model with the grain account\_id.
 
 ### depends_on
-- Depends on explicitly specifies the models on which the model depends, in addition to the ones automatically inferred by from the model code.
+:   Depends on explicitly specifies the models on which the model depends, in addition to the ones automatically inferred by from the model code.
 
 ### storage_format
-- Storage format is a property for engines such as Spark or Hive that support storage formats such as  `parquet` and `orc`.
+:   Storage format is a property for engines such as Spark or Hive that support storage formats such as  `parquet` and `orc`.
 
 ### partitioned_by
-- Partitioned by plays two roles. For most model kinds, it is an optional property for engines that support table partitioning such as Spark or BigQuery.
-- For the [`INCREMENTAL_BY_PARTITION` model kind](./model_kinds.md#incremental_by_partition), it defines the partition key used to incrementally load data.
-- It can specify a multi-column partition key or modify a date column for partitioning. For example, in BigQuery you could partition by day by extracting the day component of a timestamp column `event_ts` with `partitioned_by TIMESTAMP_TRUNC(event_ts, DAY)`.
+:   Partitioned by plays two roles. For most model kinds, it is an optional property for engines that support table partitioning such as Spark or BigQuery.
+
+    For the [`INCREMENTAL_BY_PARTITION` model kind](./model_kinds.md#incremental_by_partition), it defines the partition key used to incrementally load data.
+
+    It can specify a multi-column partition key or modify a date column for partitioning. For example, in BigQuery you could partition by day by extracting the day component of a timestamp column `event_ts` with `partitioned_by TIMESTAMP_TRUNC(event_ts, DAY)`.
 
 ### clustered_by
-- Clustered by is an optional property for engines such as Bigquery that support clustering.
+:   Clustered by is an optional property for engines such as Bigquery that support clustering.
 
 ### columns
-- By default, SQLMesh [infers a model's column names and types](#conventions) from its SQL query. Disable that behavior by manually specifying all column names and data types in the model's `columns` property.
-- **WARNING**: SQLMesh may exhibit unexpected behavior if the `columns` property includes columns not returned by the query, omits columns returned by the query, or specifies data types other than the ones returned by the query.
-- NOTE: Specifying column names and data types is required for [Python models](../models/python_models.md) that return DataFrames.
+:   By default, SQLMesh [infers a model's column names and types](#conventions) from its SQL query. Disable that behavior by manually specifying all column names and data types in the model's `columns` property.
 
-For example, this shows a seed model definition that includes the `columns` key. It specifies the data types for all columns in the file: the `holiday_name` column is data type `VARCHAR` and the `holiday_date` column is data type `DATE`.
+    **WARNING**: SQLMesh may exhibit unexpected behavior if the `columns` property includes columns not returned by the query, omits columns returned by the query, or specifies data types other than the ones returned by the query.
 
-```sql linenums="1" hl_lines="6-9"
-MODEL (
-  name test_db.national_holidays,
-  kind SEED (
-    path 'national_holidays.csv'
-  ),
-  columns (
-    holiday_name VARCHAR,
-    holiday_date DATE
-  )
-);
-```
+    For example, this shows a seed model definition that includes the `columns` key. It specifies the data types for all columns in the file: the `holiday_name` column is data type `VARCHAR` and the `holiday_date` column is data type `DATE`.
+
+    ```sql linenums="1" hl_lines="6-9"
+    MODEL (
+      name test_db.national_holidays,
+      kind SEED (
+        path 'national_holidays.csv'
+      ),
+      columns (
+        holiday_name VARCHAR,
+        holiday_date DATE
+      )
+    );
+    ```
+
+    NOTE: Specifying column names and data types is required for [Python models](../models/python_models.md) that return DataFrames.
 
 ### physical_properties
-- Previously named `table_properties`
-- Physical properties is a key-value mapping of arbitrary properties specific to the target engine that are applied to the model table / view in the physical layer. For example:
+:   Previously named `table_properties`
 
-```sql linenums="1"
-MODEL (
-  ...,
-  physical_properties (
-    partition_expiration_days = 7,
-    require_partition_filter = true
-  )
-);
+    Physical properties is a key-value mapping of arbitrary properties specific to the target engine that are applied to the model table / view in the physical layer. For example:
 
-```
+    ```sql linenums="1"
+    MODEL (
+      ...,
+      physical_properties (
+        partition_expiration_days = 7,
+        require_partition_filter = true
+      )
+    );
+
+    ```
 
 ### virtual_properties
-- Virtual properties is a key-value mapping of arbitrary properties specific to the target engine that are applied to the model view in the virtual layer. For example:
+:   Virtual properties is a key-value mapping of arbitrary properties specific to the target engine that are applied to the model view in the virtual layer. For example:
 
-```sql linenums="1"
-MODEL (
-  ...,
-  virtual_properties (
-    labels = [('test-label', 'label-value')]
-  )
-);
+    ```sql linenums="1"
+    MODEL (
+      ...,
+      virtual_properties (
+        labels = [('test-label', 'label-value')]
+      )
+    );
 
-```
+    ```
 
 ### session_properties
-- Session properties is a key-value mapping of arbitrary properties specific to the target engine that are applied to the engine session.
+:   Session properties is a key-value mapping of arbitrary properties specific to the target engine that are applied to the engine session.
 
 ### allow_partials
-- Indicates that this model can be executed for partial (incomplete) data intervals.
-- By default, each model processes only complete intervals to prevent common errors caused by partial data. The size of the interval is determined by the model's [interval_unit](#interval_unit).
-- Setting `allow_partials` to `true` overrides this behavior, indicating that the model may process a segment of input data that is missing some of the data points.
-- NOTE: setting this attribute to `true` disregards the [cron](#cron) property.
+:   Indicates that this model can be executed for partial (incomplete) data intervals.
+
+    By default, each model processes only complete intervals to prevent common errors caused by partial data. The size of the interval is determined by the model's [interval_unit](#interval_unit).
+
+    Setting `allow_partials` to `true` overrides this behavior, indicating that the model may process a segment of input data that is missing some of the data points.
+
+    NOTE: setting this attribute to `true` disregards the [cron](#cron) property.
 
 ### enabled
-- Whether the model is enabled. This attribute is `true` by default. Setting it to `false` causes SQLMesh to ignore this model when loading the project.
+:   Whether the model is enabled. This attribute is `true` by default. Setting it to `false` causes SQLMesh to ignore this model when loading the project.
 
 ## Incremental Model Properties
 
@@ -332,30 +344,35 @@ These properties can be specified in an incremental model's `kind` definition.
 Some properties are only available in specific model kinds - see the [model configuration reference](../../reference/model_configuration.md#incremental-models) for more information and a complete list of each `kind`'s properties.
 
 ### time_column
-- Time column is a required property for incremental models. It is used to determine which records to overwrite when doing an incremental insert. Time column can have an optional format string specified in the SQL dialect of the model.
-- Engines that support partitioning, such as Spark and BigQuery, use the time column as the model's partition key. Multi-column partitions or modifications to columns can be specified with the [`partitioned_by` property](#partitioned_by).
+:   Time column is a required property for incremental models. It is used to determine which records to overwrite when doing an incremental insert. Time column can have an optional format string specified in the SQL dialect of the model.
+
+    Engines that support partitioning, such as Spark and BigQuery, use the time column as the model's partition key. Multi-column partitions or modifications to columns can be specified with the [`partitioned_by` property](#partitioned_by).
 
 ### batch_size
-- Batch size is used to optimize backfilling incremental data. It determines the maximum number of intervals to run in a single job.
-- For example, if a model specifies a cron of `@hourly` and a batch_size of `12`, when backfilling 3 days of data, the scheduler will spawn 6 jobs. (3 days * 24 hours/day = 72 hour intervals to fill. 72 intervals / 12 intervals per job = 6 jobs.)
+:   Batch size is used to optimize backfilling incremental data. It determines the maximum number of intervals to run in a single job.
+
+    For example, if a model specifies a cron of `@hourly` and a batch_size of `12`, when backfilling 3 days of data, the scheduler will spawn 6 jobs. (3 days * 24 hours/day = 72 hour intervals to fill. 72 intervals / 12 intervals per job = 6 jobs.)
 
 ### batch_concurrency
-- The maximum number of [batches](#batch_size) that can run concurrently for this model. If not specified, the concurrency is only constrained by the number of concurrent tasks set in the connection settings.
+:   The maximum number of [batches](#batch_size) that can run concurrently for this model. If not specified, the concurrency is only constrained by the number of concurrent tasks set in the connection settings.
 
 ### lookback
-- Lookback is used with [incremental by time range](model_kinds.md#incremental_by_time_range) models to capture late-arriving data. It must be a positive integer and specifies the number of interval time units prior to the current interval the model should include.
-- For example, a model with cron `@daily` and `lookback` of 7 would include the previous 7 days each time it ran, while a model with cron `@weekly` and `lookback` of 7 would include the previous 7 weeks each time it ran.
+:   Lookback is used with [incremental by time range](model_kinds.md#incremental_by_time_range) models to capture late-arriving data. It must be a positive integer and specifies the number of interval time units prior to the current interval the model should include.
+
+    For example, a model with cron `@daily` and `lookback` of 7 would include the previous 7 days each time it ran, while a model with cron `@weekly` and `lookback` of 7 would include the previous 7 weeks each time it ran.
 
 ### forward_only
-- Set this to true to indicate that all changes to this model should be [forward-only](../plans.md#forward-only-plans).
+:   Set this to true to indicate that all changes to this model should be [forward-only](../plans.md#forward-only-plans).
 
 ### on_destructive_change
-- What should happen when a change to a [forward-only model](../../guides/incremental_time.md#forward-only-models) or incremental model in a [forward-only plan](../plans.md#forward-only-plans) causes a destructive modification to the table schema (i.e., requires dropping an existing column).
-- SQLMesh checks for destructive changes at plan time based on the model definition and run time based on the model's underlying physical tables.
-- Must be one of the following values: `allow`, `warn`, or `error` (default).
+:   What should happen when a change to a [forward-only model](../../guides/incremental_time.md#forward-only-models) or incremental model in a [forward-only plan](../plans.md#forward-only-plans) causes a destructive modification to the table schema (i.e., requires dropping an existing column).
+
+    SQLMesh checks for destructive changes at plan time based on the model definition and run time based on the model's underlying physical tables.
+
+    Must be one of the following values: `allow`, `warn`, or `error` (default).
 
 ### disable_restatement
-- Set this to true to indicate that [data restatement](../plans.md#restatement-plans) is disabled for this model.
+:   Set this to true to indicate that [data restatement](../plans.md#restatement-plans) is disabled for this model.
 
 ## Macros
 Macros can be used for passing in parameterized arguments such as dates, as well as for making SQL less repetitive. By default, SQLMesh provides several predefined macro variables that can be used. Macros are used by prefixing with the `@` symbol. For more information, refer to [macros](../macros/overview.md).
