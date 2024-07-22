@@ -19,6 +19,7 @@ class DAG(t.Generic[T]):
     def __init__(self, graph: t.Optional[t.Dict[T, t.Set[T]]] = None):
         self._dag: t.Dict[T, t.Set[T]] = {}
         self._sorted: t.Optional[t.List[T]] = None
+        self._upstream: t.Dict[T, t.Set[T]] = {}
 
         for node, dependencies in (graph or {}).items():
             self.add(node, dependencies)
@@ -31,6 +32,7 @@ class DAG(t.Generic[T]):
             dependencies: Optional dependencies to add to the node.
         """
         self._sorted = None
+        self._upstream.clear()
         if node not in self._dag:
             self._dag[node] = set()
         if dependencies:
@@ -60,15 +62,15 @@ class DAG(t.Generic[T]):
             A new dag consisting of the specified nodes and upstream.
         """
         queue = set(nodes)
-        graph = {}
+        dag: DAG[T] = DAG()
 
         while queue:
             node = queue.pop()
             deps = self._dag.get(node, set())
-            graph[node] = deps
+            dag.add(node, deps)
             queue.update(deps)
 
-        return DAG(graph)
+        return dag
 
     def prune(self, *nodes: T) -> DAG[T]:
         """Create a dag keeping only the included nodes.
@@ -79,17 +81,23 @@ class DAG(t.Generic[T]):
         Returns:
             A new dag consisting of the specified nodes.
         """
-        graph = {}
+        dag: DAG[T] = DAG()
 
         for node, deps in self._dag.items():
             if node in nodes:
-                graph[node] = {dep for dep in deps if dep in nodes}
+                dag.add(node, (dep for dep in deps if dep in nodes))
 
-        return DAG(graph)
+        return dag
 
-    def upstream(self, node: T) -> t.List[T]:
-        """Returns all upstream dependencies in topologically sorted order."""
-        return self.subdag(node).sorted[:-1]
+    def upstream(self, node: T) -> t.Set[T]:
+        """Returns all upstream dependencies."""
+        if node not in self._upstream:
+            deps = self._dag.get(node, set())
+            self._upstream[node] = {
+                upstream for dep in deps for upstream in self.upstream(dep)
+            } | deps
+
+        return self._upstream[node]
 
     @property
     def roots(self) -> t.Set[T]:
@@ -108,7 +116,6 @@ class DAG(t.Generic[T]):
         """Returns a list of nodes sorted in topological order."""
         if self._sorted is None:
             self._sorted = []
-
             unprocessed_nodes = self.graph
 
             last_processed_nodes: t.Set[T] = set()

@@ -1508,6 +1508,19 @@ def test_indirectly_modified_forward_only_model(make_snapshot, mocker: MockerFix
     )
     updated_snapshot_c.previous_versions = snapshot_c.all_versions
 
+    snapshot_d = make_snapshot(
+        SqlModel(name="d", query=parse_one("select a.a from a, b")),
+        nodes={
+            '"a"': snapshot_a.model,
+            '"b"': snapshot_b.model,
+        },
+    )
+    snapshot_d.categorize_as(SnapshotChangeCategory.BREAKING)
+    updated_snapshot_d = make_snapshot(
+        snapshot_d.model, nodes={'"b"': updated_snapshot_b.model, '"a"': updated_snapshot_a.model}
+    )
+    updated_snapshot_d.previous_versions = snapshot_d.all_versions
+
     context_diff = ContextDiff(
         environment="test_environment",
         is_new_environment=True,
@@ -1520,16 +1533,19 @@ def test_indirectly_modified_forward_only_model(make_snapshot, mocker: MockerFix
             updated_snapshot_a.name: (updated_snapshot_a, snapshot_a),
             updated_snapshot_b.name: (updated_snapshot_b, snapshot_b),
             updated_snapshot_c.name: (updated_snapshot_c, snapshot_c),
+            updated_snapshot_d.name: (updated_snapshot_d, snapshot_d),
         },
         snapshots={
             updated_snapshot_a.snapshot_id: updated_snapshot_a,
             updated_snapshot_b.snapshot_id: updated_snapshot_b,
             updated_snapshot_c.snapshot_id: updated_snapshot_c,
+            updated_snapshot_d.snapshot_id: updated_snapshot_d,
         },
         new_snapshots={
             updated_snapshot_a.snapshot_id: updated_snapshot_a,
             updated_snapshot_b.snapshot_id: updated_snapshot_b,
             updated_snapshot_c.snapshot_id: updated_snapshot_c,
+            updated_snapshot_d.snapshot_id: updated_snapshot_d,
         },
         previous_plan_id=None,
         previously_promoted_snapshot_ids=set(),
@@ -1541,6 +1557,7 @@ def test_indirectly_modified_forward_only_model(make_snapshot, mocker: MockerFix
         updated_snapshot_a.snapshot_id: {
             updated_snapshot_b.snapshot_id,
             updated_snapshot_c.snapshot_id,
+            updated_snapshot_d.snapshot_id,
         }
     }
 
@@ -1549,6 +1566,7 @@ def test_indirectly_modified_forward_only_model(make_snapshot, mocker: MockerFix
     assert updated_snapshot_a.change_category == SnapshotChangeCategory.BREAKING
     assert updated_snapshot_b.change_category == SnapshotChangeCategory.FORWARD_ONLY
     assert updated_snapshot_c.change_category == SnapshotChangeCategory.INDIRECT_BREAKING
+    assert updated_snapshot_d.change_category == SnapshotChangeCategory.INDIRECT_BREAKING
 
     deployability_index = DeployabilityIndex.create(
         {
@@ -2053,7 +2071,6 @@ def test_dev_plan_depends_past_non_deployable(make_snapshot, mocker: MockerFixtu
             }
         ),
     )
-    updated_snapshot.categorize_as(SnapshotChangeCategory.FORWARD_ONLY)
 
     snapshot_child = make_snapshot(
         SqlModel(
@@ -2064,7 +2081,6 @@ def test_dev_plan_depends_past_non_deployable(make_snapshot, mocker: MockerFixtu
         ),
         nodes={'"a"': updated_snapshot.model},
     )
-    snapshot_child.categorize_as(SnapshotChangeCategory.BREAKING)
     unrelated_snapshot = make_snapshot(
         SqlModel(
             name="b",
@@ -2073,7 +2089,6 @@ def test_dev_plan_depends_past_non_deployable(make_snapshot, mocker: MockerFixtu
             kind=IncrementalByTimeRangeKind(time_column="ds"),
         ),
     )
-    unrelated_snapshot.categorize_as(SnapshotChangeCategory.BREAKING)
 
     assert updated_snapshot.depends_on_self
     assert not snapshot_child.depends_on_self
@@ -2107,10 +2122,15 @@ def test_dev_plan_depends_past_non_deployable(make_snapshot, mocker: MockerFixtu
     )
 
     schema_differ = DuckDBEngineAdapter.SCHEMA_DIFFER
-    dev_plan_start_aligned = PlanBuilder(
-        context_diff, schema_differ, start="2023-01-01", end="2023-01-10", is_dev=True
-    ).build()
-    assert len(dev_plan_start_aligned.new_snapshots) == 3
+
+    def new_builder(start, end):
+        builder = PlanBuilder(context_diff, schema_differ, start=start, end=end, is_dev=True)
+        builder.set_choice(updated_snapshot, SnapshotChangeCategory.FORWARD_ONLY)
+        builder.set_choice(snapshot_child, SnapshotChangeCategory.BREAKING)
+        builder.set_choice(unrelated_snapshot, SnapshotChangeCategory.BREAKING)
+        return builder
+
+    dev_plan_start_aligned = new_builder("2023-01-01", "2023-01-10").build()
     assert sorted([x.name for x in dev_plan_start_aligned.new_snapshots]) == [
         '"a"',
         '"a_child"',
@@ -2118,11 +2138,8 @@ def test_dev_plan_depends_past_non_deployable(make_snapshot, mocker: MockerFixtu
     ]
 
     # There should be no ignored snapshots because all changes are non-deployable.
-    dev_plan_start_ahead_of_model = PlanBuilder(
-        context_diff, schema_differ, start="2023-01-02", end="2023-01-10", is_dev=True
-    ).build()
-    assert len(dev_plan_start_ahead_of_model.new_snapshots) == 3
-    assert sorted([x.name for x in dev_plan_start_aligned.new_snapshots]) == [
+    dev_plan_start_ahead_of_model = new_builder(start="2023-01-02", end="2023-01-10").build()
+    assert sorted([x.name for x in dev_plan_start_ahead_of_model.new_snapshots]) == [
         '"a"',
         '"a_child"',
         '"b"',
