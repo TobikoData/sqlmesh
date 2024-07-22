@@ -86,11 +86,9 @@ dev-publish: ui-build clean-build publish
 jupyter-example:
 	jupyter lab tests/slows/jupyter/example_outputs.ipynb
 
-engine-up:
-	docker-compose -f ./tests/core/engine_adapter/docker-compose.yaml up -d
+engine-up: engine-mssql-up engine-mysql-up engine-postgres-up engine-spark-up engine-trino-up
 
-engine-down:
-	docker-compose -f ./tests/core/engine_adapter/docker-compose.yaml down
+engine-down: engine-mssql-down engine-mysql-down engine-postgres-down engine-spark-down engine-trino-down
 
 fast-test:
 	pytest -n auto -m "fast and not cicdonly"
@@ -148,35 +146,56 @@ jupyter-test:
 web-test:
 	pytest -n auto -m "web"
 
-bigquery-test:
-	pytest -n auto -m "bigquery"
+guard-%:
+	@ if [ "${${*}}" = "" ]; then \
+		echo "Environment variable $* not set"; \
+		exit 1; \
+	fi
 
-databricks-test:
-	pytest -n auto -m "databricks"
+engine-%-install:
+	pip3 install -e ".[dev,web,slack,${*}]"
 
-duckdb-test:
-	pytest -n auto -m "duckdb"
+engine-%-up: engine-%-install
+	docker compose -f ./tests/core/engine_adapter/docker/compose.${*}.yaml up -d
+	./.circleci/wait-for-db.sh ${*}
 
-mssql-test:
-	pytest -n auto -m "mssql"
+engine-%-down:
+	docker compose -f ./tests/core/engine_adapter/docker/compose.${*}.yaml down -v
 
-mysql-test:
-	pytest -n auto -m "mysql"
+##################
+# Docker Engines #
+##################
 
-postgres-test:
-	pytest -n auto -m "postgres"
+duckdb-test: engine-duckdb-install
+	pytest -n auto -x -m "duckdb" --junitxml=test-results/junit-duckdb.xml
 
-redshift-test:
-	pytest -n auto -m "redshift"
+mssql-test: engine-mssql-up
+	pytest -n auto -x -m "mssql" --junitxml=test-results/junit-mssql.xml
 
-snowflake-test:
-	pytest -n auto -m "snowflake"
+mysql-test: engine-mysql-up
+	pytest -n auto -x -m "mysql" --junitxml=test-results/junit-mysql.xml
 
-spark-test:
-	pytest -n auto -m "spark"
+postgres-test: engine-postgres-up
+	pytest -n auto -x -m "postgres" --junitxml=test-results/junit-postgres.xml
 
-spark-pyspark-test:
-	pytest -n auto -m "spark_pyspark"
+spark-test: engine-spark-up
+	pytest -n auto -x -m "spark or pyspark" --junitxml=test-results/junit-spark.xml
 
-trino-test:
-	pytest -n auto -m "trino or trino_iceberg or trino_delta"
+trino-test: engine-trino-up
+	pytest -n auto -x -m "trino or trino_iceberg or trino_delta" --retries 2 --junitxml=test-results/junit-trino.xml
+
+#################
+# Cloud Engines #
+#################
+
+snowflake-test: guard-SNOWFLAKE_ACCOUNT guard-SNOWFLAKE_WAREHOUSE guard-SNOWFLAKE_DATABASE guard-SNOWFLAKE_USER guard-SNOWFLAKE_PASSWORD engine-snowflake-install
+	pytest -n auto -x -m "snowflake" --junitxml=test-results/junit-snowflake.xml
+
+bigquery-test: guard-BIGQUERY_KEYFILE engine-bigquery-install
+	pytest -n auto -x -m "bigquery" --junitxml=test-results/junit-bigquery.xml
+
+databricks-test: guard-DATABRICKS_CATALOG guard-DATABRICKS_SERVER_HOSTNAME guard-DATABRICKS_HTTP_PATH guard-DATABRICKS_ACCESS_TOKEN engine-databricks-install
+	pytest -n auto -x -m "databricks" --junitxml=test-results/junit-databricks.xml
+
+redshift-test: guard-REDSHIFT_HOST guard-REDSHIFT_USER guard-REDSHIFT_PASSWORD guard-REDSHIFT_DATABASE engine-redshift-install
+	pytest -n auto -x -m "redshift" --junitxml=test-results/junit-redshift.xml

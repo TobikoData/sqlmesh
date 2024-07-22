@@ -45,6 +45,7 @@ class TestContext:
         test_type: str,
         engine_adapter: EngineAdapter,
         gateway: str,
+        is_cloud_database: bool = False,
         columns_to_types: t.Optional[t.Dict[str, t.Union[str, exp.DataType]]] = None,
     ):
         self.test_type = test_type
@@ -53,6 +54,7 @@ class TestContext:
         self._columns_to_types = columns_to_types
         self.test_id = random_id(short=True)
         self._context = None
+        self.is_cloud_database = is_cloud_database
 
     @property
     def columns_to_types(self):
@@ -413,6 +415,33 @@ class TestContext:
         self._context = Context(paths=".", config=config, gateway=self.gateway)
         return self._context
 
+    def create_catalog(self, catalog_name: str):
+        if self.dialect == "databricks":
+            self.engine_adapter.execute(f"CREATE CATALOG IF NOT EXISTS {catalog_name}")
+        elif self.dialect == "tsql":
+            self.engine_adapter.cursor.connection.autocommit(True)
+            try:
+                self.engine_adapter.cursor.execute(f"CREATE DATABASE {catalog_name}")
+            except Exception:
+                pass
+            self.engine_adapter.cursor.connection.autocommit(False)
+        elif self.dialect == "snowflake":
+            self.engine_adapter.execute(f'CREATE DATABASE IF NOT EXISTS "{catalog_name}"')
+        elif self.dialect == "duckdb":
+            try:
+                # Only applies to MotherDuck
+                self.engine_adapter.execute(f'CREATE DATABASE IF NOT EXISTS "{catalog_name}"')
+            except Exception:
+                pass
+
+    def drop_catalog(self, catalog_name: str):
+        if self.dialect == "bigquery":
+            return  # bigquery cannot create/drop catalogs
+        elif self.dialect == "databricks":
+            self.engine_adapter.execute(f"DROP CATALOG IF EXISTS {catalog_name} CASCADE")
+        else:
+            self.engine_adapter.execute(f'DROP DATABASE IF EXISTS "{catalog_name}"')
+
     def cleanup(self, ctx: t.Optional[Context] = None):
         schemas = [self.schema(TEST_SCHEMA)]
 
@@ -662,9 +691,10 @@ def default_columns_to_types():
 
 
 @pytest.fixture
-def ctx(engine_adapter, test_type, mark_gateway):
+def ctx(request, engine_adapter, test_type, mark_gateway):
     _, gateway = mark_gateway
-    return TestContext(test_type, engine_adapter, gateway)
+    is_cloud_database = request.node.get_closest_marker("remote") is not None
+    return TestContext(test_type, engine_adapter, gateway, is_cloud_database=is_cloud_database)
 
 
 @pytest.fixture(autouse=True)
@@ -685,30 +715,21 @@ def test_catalog_operations(ctx: TestContext):
         )
     if ctx.test_type != "query":
         pytest.skip("Catalog operation tests only need to run once so we skip anything not query")
-    catalog_name = "testing"
-    if ctx.dialect == "databricks":
-        catalog_name = "catalogtest"
-        ctx.engine_adapter.execute(f"CREATE CATALOG IF NOT EXISTS {catalog_name}")
-    elif ctx.dialect == "tsql":
-        ctx.engine_adapter.cursor.connection.autocommit(True)
-        try:
-            ctx.engine_adapter.cursor.execute(f"CREATE DATABASE {catalog_name}")
-        except Exception:
-            pass
-        ctx.engine_adapter.cursor.connection.autocommit(False)
-    elif ctx.dialect == "snowflake":
-        ctx.engine_adapter.execute(f'CREATE DATABASE IF NOT EXISTS "{catalog_name}"')
-    elif ctx.dialect == "duckdb":
-        try:
-            # Only applies to MotherDuck
-            ctx.engine_adapter.execute(f'CREATE DATABASE IF NOT EXISTS "{catalog_name}"')
-        except Exception:
-            pass
+
+    # use a unique name so that integration tests on cloud databases can run in parallel
+    catalog_name = "testing" if not ctx.is_cloud_database else ctx.add_test_suffix("testing")
+
+    ctx.create_catalog(catalog_name)
+
     current_catalog = ctx.engine_adapter.get_current_catalog().lower()
     ctx.engine_adapter.set_current_catalog(catalog_name)
     assert ctx.engine_adapter.get_current_catalog().lower() == catalog_name
     ctx.engine_adapter.set_current_catalog(current_catalog)
     assert ctx.engine_adapter.get_current_catalog().lower() == current_catalog
+
+    # cleanup cloud databases since they persist between runs
+    if ctx.is_cloud_database:
+        ctx.drop_catalog(catalog_name)
 
 
 def test_drop_schema_catalog(ctx: TestContext, caplog):
@@ -753,27 +774,14 @@ def test_drop_schema_catalog(ctx: TestContext, caplog):
         )
     if ctx.test_type != "query":
         pytest.skip("Drop Schema Catalog tests only need to run once so we skip anything not query")
-    catalog_name = "testing"
-    if ctx.dialect == "databricks":
-        catalog_name = "catalogtest"
-        ctx.engine_adapter.execute(f"CREATE CATALOG IF NOT EXISTS {catalog_name}")
-    elif ctx.dialect == "tsql":
-        ctx.engine_adapter.cursor.connection.autocommit(True)
-        try:
-            ctx.engine_adapter.cursor.execute(f"CREATE DATABASE {catalog_name}")
-        except Exception:
-            pass
-        ctx.engine_adapter.cursor.connection.autocommit(False)
-    elif ctx.dialect == "snowflake":
-        ctx.engine_adapter.execute(f'CREATE DATABASE IF NOT EXISTS "{catalog_name}"')
-    elif ctx.dialect == "duckdb":
-        try:
-            # Only applies to MotherDuck
-            ctx.engine_adapter.execute(f'CREATE DATABASE IF NOT EXISTS "{catalog_name}"')
-        except Exception:
-            pass
-    elif ctx.dialect == "bigquery":
-        catalog_name = "tobiko-test"
+
+    catalog_name = "testing" if not ctx.is_cloud_database else ctx.add_test_suffix("testing")
+    if ctx.dialect == "bigquery":
+        catalog_name = ctx.engine_adapter.get_current_catalog()
+
+    catalog_name = normalize_identifiers(catalog_name, dialect=ctx.dialect).sql(dialect=ctx.dialect)
+
+    ctx.create_catalog(catalog_name)
 
     schema = ctx.schema("drop_schema_catalog_test", catalog_name)
     if ctx.engine_adapter.CATALOG_SUPPORT.is_single_catalog_only:
@@ -782,6 +790,9 @@ def test_drop_schema_catalog(ctx: TestContext, caplog):
         return
     drop_schema_and_validate(schema)
     create_objects_and_validate(schema)
+
+    if ctx.is_cloud_database:
+        ctx.drop_catalog(catalog_name)
 
 
 def test_temp_table(ctx: TestContext):
@@ -856,18 +867,8 @@ def test_ctas(ctx: TestContext):
         table_description = ctx.get_table_comment(table.db, "test_table")
         column_comments = ctx.get_column_comments(table.db, "test_table")
 
-        # Trino on Hive COMMENT permissions are separate from standard SQL object permissions.
-        # Trino has a bug where CREATE SQL permissions are not passed to COMMENT permissions,
-        # which generates permissions errors when COMMENT commands are issued.
-        #
-        # The errors are thrown for both table and comments, but apparently the
-        # table comments are actually registered with the engine. Column comments are not.
         assert table_description == "test table description"
-        assert column_comments == (
-            {}
-            if (ctx.dialect == "trino" and ctx.current_catalog_type == "hive")
-            else {"id": "test id column description"}
-        )
+        assert column_comments == {"id": "test id column description"}
 
 
 def test_create_view(ctx: TestContext):
@@ -897,14 +898,6 @@ def test_create_view(ctx: TestContext):
         table_description = ctx.get_table_comment(view.db, "test_view", table_kind="VIEW")
         column_comments = ctx.get_column_comments(view.db, "test_view", table_kind="VIEW")
 
-        # Trino:
-        #   Trino on Hive COMMENT permissions are separate from standard SQL object permissions.
-        #   Trino has a bug where CREATE SQL permissions are not passed to COMMENT permissions,
-        #   which generates permissions errors when COMMENT commands are issued.
-        #
-        #   The errors are thrown for both table and comments, but apparently the
-        #   table comments are actually registered with the engine. Column comments are not.
-        #
         # Query:
         #   In the query test, columns_to_types are not available when the view is created. Since we
         #   can only register column comments in the CREATE VIEW schema expression with columns_to_types
@@ -913,8 +906,7 @@ def test_create_view(ctx: TestContext):
         assert table_description == "test view description"
         assert column_comments == (
             {}
-            if (ctx.dialect == "trino" and ctx.current_catalog_type == "hive")
-            or (
+            if (
                 ctx.test_type == "query"
                 and not ctx.engine_adapter.COMMENT_CREATION_VIEW.supports_column_comment_commands
             )
@@ -2183,30 +2175,14 @@ def test_dialects(ctx: TestContext):
                 "default": pd.Timestamp("2020-01-01 00:00:00+00:00"),
                 "mysql": pd.Timestamp("2020-01-01 00:00:00"),
                 "spark": pd.Timestamp("2020-01-01 00:00:00"),
+                "databricks": pd.Timestamp("2020-01-01 00:00:00"),
             },
         ),
         (
             "2020-01-01 00:00:00+00:00",
             exp.DataType.build("TIMESTAMP"),
             None,
-            {
-                "default": pd.Timestamp("2020-01-01 00:00:00"),
-                # Databricks' timestamp type is tz-aware:
-                # "Represents values comprising values of fields year, month, day, hour, minute, and second,
-                # with the session local time-zone.
-                # The timestamp value represents an absolute point in time."
-                # https://docs.databricks.com/en/sql/language-manual/data-types/timestamp-type.html
-                #
-                # They are adding a non-aware version TIMESTAMP_NTZ that's currently in public preview -
-                # you have to specify a table option to use it:
-                # "Feature support is enabled automatically when you create a new Delta table with a column of
-                # TIMESTAMP_NTZ type. It is not enabled automatically when you add a column of
-                # TIMESTAMP_NTZ type to an existing table.
-                # To enable support for TIMESTAMP_NTZ columns, support for the feature must be explicitly enabled for
-                # the existing table."
-                # https://docs.databricks.com/en/sql/language-manual/data-types/timestamp-ntz-type.html
-                "databricks": pd.Timestamp("2020-01-01 00:00:00+00:00"),
-            },
+            {"default": pd.Timestamp("2020-01-01 00:00:00")},
         ),
         (
             "2020-01-01 00:00:00+00:00",
