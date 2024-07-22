@@ -57,17 +57,37 @@ Access global variable values in a model definition using the `@<VAR_NAME>` macr
 
 For example, this SQLMesh configuration key defines six variables of different data types:
 
-```yaml linenums="1"
-variables:
-  int_var: 1
-  float_var: 2.0
-  bool_var: true
-  str_var: "cat"
-  list_var: [1, 2, 3]
-  dict_var:
-    key1: 1
-    key2: 2
-```
+=== "YAML"
+
+    ```yaml linenums="1"
+    variables:
+      int_var: 1
+      float_var: 2.0
+      bool_var: true
+      str_var: "cat"
+      list_var: [1, 2, 3]
+      dict_var:
+        key1: 1
+        key2: 2
+    ```
+
+=== "Python"
+
+    ``` python linenums="1"
+    variables = {
+        "int_var": 1,
+        "float_var": 2.0,
+        "bool_var": True,
+        "str_var": "cat",
+        "list_var": [1, 2, 3],
+        "dict_var": {"key1": 1, "key2": 2},
+    }
+
+    config = Config(
+        variables=variables,
+        ... # other Config arguments
+    )
+    ```
 
 A model definition could access the `int_var` value in a `WHERE` clause like this:
 
@@ -101,13 +121,32 @@ A similar API is available for [Python macro functions](#accessing-global-variab
 
 Like global variables, gateway variables are defined in the project configuration file. However, they are specified in a specific gateway's `variables` key:
 
-```yaml linenums="1"
-gateways:
-  my_gateway:
-    variables:
-      int_var: 1
-    ...
-```
+=== "YAML"
+
+    ```yaml linenums="1"
+    gateways:
+      my_gateway:
+        variables:
+          int_var: 1
+        ...
+    ```
+
+=== "Python"
+
+    ``` python linenums="1"
+    gateway_variables = {
+      "int_var": 1
+    }
+
+    config = Config(
+        gateways={
+          "my_gateway": GatewayConfig(
+            variables=gateway_variables
+            ... # other GatewayConfig arguments
+            ),
+          }
+    )
+    ```
 
 Access them in models using the same methods as [global variables](#global-variables).
 
