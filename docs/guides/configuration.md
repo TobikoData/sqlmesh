@@ -512,13 +512,16 @@ Unsupported state engines, even for development:
 * [Spark](../integrations/engines/spark.md)
 * [Trino](../integrations/engines/trino.md)
 
-Example postgres state connection configuration:
+Example postgres state connection configuration if using a snowflake data warehouse:
 
 === "YAML"
 
     ```yaml linenums="1"
     gateways:
       my_gateway:
+        connection:
+          type: snowflake
+          ...
         state_connection:
           type: postgres
           host: <host>
@@ -544,6 +547,9 @@ Example postgres state connection configuration:
         model_defaults=ModelDefaultsConfig(dialect=<dialect>),
         gateways={
             "my_gateway": GatewayConfig(
+                connection=SnowflakeConnectionConfig(
+                    ...
+                ),
                 state_connection=PostgresConnectionConfig(
                     host=<host>,
                     port=<port>,
