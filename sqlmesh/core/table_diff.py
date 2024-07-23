@@ -400,7 +400,7 @@ class TableDiff:
                         *(name(c) for c in t_selects.values()),
                     )
                     .from_(table)
-                    .where(exp.or_(*(exp.column(c.alias).eq(0) for c in comparisons)))
+                    # .where(exp.or_(*(exp.column(c.alias).eq(0) for c in comparisons)))
                     .order_by(
                         *(name(s_selects[c.name]) for c in s_index),
                         *(name(t_selects[c.name]) for c in t_index),

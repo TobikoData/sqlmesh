@@ -118,20 +118,21 @@ export default function TableDiff({ diff }: { diff: any }): JSX.Element {
                         )
                       </small>
                     </div>
-                    {isFalse(grain.includes(header)) && (
-                      <div className="ml-2">
-                        <small className="inline-block bg-neutral-10 px-2 py-0.5 rounded-full">
-                          {Math.round(
-                            (rows.all.filter(key =>
-                              isModified(diff, header, key),
-                            ).length /
-                              rows.all.length) *
-                              100,
-                          )}
-                          %
-                        </small>
-                      </div>
-                    )}
+                    {isFalse(grain.includes(header)) &&
+                      isArrayNotEmpty(rows.all) && (
+                        <div className="ml-2">
+                          <small className="inline-block bg-neutral-10 px-2 py-0.5 rounded-full">
+                            {Math.round(
+                              (rows.all.filter(key =>
+                                isModified(diff, header, key),
+                              ).length /
+                                rows.all.length) *
+                                100,
+                            )}
+                            %
+                          </small>
+                        </div>
+                      )}
                   </div>
                 </th>
               ))}

@@ -1564,7 +1564,8 @@
           "VIEW",
           "EMBEDDED",
           "SEED",
-          "EXTERNAL"
+          "EXTERNAL",
+          "CUSTOM"
         ],
         "title": "ModelKindName",
         "description": "The kind of model, determining how this data is computed and stored in the warehouse."
@@ -2234,6 +2235,10 @@
           "node_type": {
             "allOf": [{ "$ref": "#/components/schemas/NodeType" }],
             "default": "model"
+          },
+          "custom_materialization": {
+            "anyOf": [{ "type": "string" }, { "type": "null" }],
+            "title": "Custom Materialization"
           }
         },
         "additionalProperties": false,

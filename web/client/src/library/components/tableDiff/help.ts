@@ -22,9 +22,15 @@ export {
 
 function getHeaders(
   {
+    added,
+    removed,
+    modified,
     source_schema,
     target_schema,
   }: {
+    added: Record<string, string>
+    removed: Record<string, string>
+    modified: Record<string, string>
     source_schema: Record<string, string>
     target_schema: Record<string, string>
   },
@@ -36,32 +42,26 @@ function getHeaders(
   deleted: number
   added: number
 } {
-  const grain: string[] = Array.from(new Set(on.flat()))
-  const source = Object.keys(source_schema)
-  const target = Object.keys(target_schema)
-  const union = Array.from(new Set(source.concat(target)))
-  const intersection = union.filter(
-    s => source.includes(s) && target.includes(s),
-  )
-  const differenceSource = source.filter(s => !target.includes(s))
-  const differenceTarget = target.filter(s => !source.includes(s))
+  const grain = new Set(on.flat())
+  const source = new Set(Object.keys(source_schema))
+  const target = new Set(Object.keys(target_schema))
+  const intersection = target.intersection(source)
+  const differenceSource = source.difference(target)
+  const differenceTarget = target.difference(source)
+  const union = (
+    [
+      grain,
+      filters.modifiedColumns && intersection,
+      filters.addedColumns && differenceTarget,
+      filters.removedColumns && differenceSource,
+    ].filter(Boolean) as Array<Set<string>>
+  ).reduce((acc, set) => acc.union(set), new Set())
 
   return {
-    all: Array.from(
-      new Set(
-        [
-          grain,
-          filters.modifiedColumns && intersection,
-          filters.addedColumns && differenceTarget,
-          filters.removedColumns && differenceSource,
-        ]
-          .filter(Boolean)
-          .flat(),
-      ),
-    ) as string[],
-    added: differenceTarget.length,
-    deleted: differenceSource.length,
-    modified: intersection.length - grain.length,
+    all: Array.from(union),
+    added: Object.keys(added).length,
+    deleted: Object.keys(removed).length,
+    modified: Object.keys(modified).length,
   }
 }
 
