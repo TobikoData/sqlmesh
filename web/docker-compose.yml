@@ -46,7 +46,7 @@ services:
       - tobiko-development
     environment:
       - PYTHONPATH=/sqlmesh
-      - PROJECT_PATH=/sqlmesh/examples/sushi
+      - PROJECT_PATH=${PROJECT_PATH:-/sqlmesh/examples/sushi}
       - UI_MODE=ide
 
 networks:
