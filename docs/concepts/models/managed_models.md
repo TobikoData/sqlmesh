@@ -84,9 +84,9 @@ AS SELECT
 FROM raw_events
 ```
 
-!!! info
+!!! note
 
-    Note that SQLMesh will not create intervals and run this model for each interval, so there is no need to add a WHERE clause with date filters like you would for a normal incremental model. How the data in this model is refreshed is completely up to Snowflake.
+    SQLMesh will not create intervals and run this model for each interval, so there is no need to add a WHERE clause with date filters like you would for a normal incremental model. How the data in this model is refreshed is completely up to Snowflake.
 
 #### Table properties
 
