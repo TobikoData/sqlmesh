@@ -97,7 +97,7 @@ slow-test:
 	pytest -n auto -m "(fast or slow) and not cicdonly"
 
 cicd-test:
-	pytest -n auto -m "fast or slow"
+	pytest -n auto -m "fast or slow" --junitxml=test-results/junit-cicd.xml
 
 core-fast-test:
 	pytest -n auto -m "fast and not web and not github and not dbt and not airflow and not jupyter"

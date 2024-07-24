@@ -75,6 +75,8 @@ jobs:
       - run:
           name: Run slow tests
           command: make cicd-test
+      - store_test_results:
+          path: test-results
 
   style_and_slow_tests_pydantic_v1:
     docker:
