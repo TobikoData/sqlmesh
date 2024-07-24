@@ -4,6 +4,7 @@ from sqlmesh.core.config.categorizer import (
 )
 from sqlmesh.core.config.common import EnvironmentSuffixTarget as EnvironmentSuffixTarget
 from sqlmesh.core.config.connection import (
+    BaseDuckDBConnectionConfig as BaseDuckDBConnectionConfig,
     BigQueryConnectionConfig as BigQueryConnectionConfig,
     ConnectionConfig as ConnectionConfig,
     DatabricksConnectionConfig as DatabricksConnectionConfig,
@@ -16,6 +17,7 @@ from sqlmesh.core.config.connection import (
     RedshiftConnectionConfig as RedshiftConnectionConfig,
     SnowflakeConnectionConfig as SnowflakeConnectionConfig,
     SparkConnectionConfig as SparkConnectionConfig,
+    TrinoConnectionConfig as TrinoConnectionConfig,
     parse_connection_config as parse_connection_config,
 )
 from sqlmesh.core.config.gateway import GatewayConfig as GatewayConfig
