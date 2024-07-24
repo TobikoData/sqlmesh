@@ -47,7 +47,7 @@ def test_global_config(copy_to_temp_path: t.Callable):
 
 
 def test_named_config(copy_to_temp_path: t.Callable):
-    context = Context(paths=copy_to_temp_path("examples/sushi"), config="local_config")
+    context = Context(paths=copy_to_temp_path("examples/sushi"), config="test_config")
     assert len(context.config.gateways) == 1
 
 
@@ -85,7 +85,7 @@ def test_config_not_found(copy_to_temp_path: t.Callable):
         ConfigError,
         match=r".*config could not be found.*",
     ):
-        Context(paths="nonexistent/directory", config="local_config")
+        Context(paths="nonexistent/directory", config="config")
 
 
 def test_custom_macros(sushi_context):
@@ -594,14 +594,14 @@ def test_plan_default_end(sushi_context_pre_scheduling: Context):
 def test_plan_start_ahead_of_end(copy_to_temp_path):
     path = copy_to_temp_path("examples/sushi")
     with freezegun.freeze_time("2024-01-02 00:00:00"):
-        context = Context(paths=path, config="local_config")
+        context = Context(paths=path, gateway="duckdb_persistent")
         context.plan("prod", no_prompts=True, auto_apply=True)
         assert context.state_sync.max_interval_end_for_environment("prod") == to_timestamp(
             "2024-01-02"
         )
         context.close()
     with freezegun.freeze_time("2024-01-03 00:00:00"):
-        context = Context(paths=path, config="local_config")
+        context = Context(paths=path, gateway="duckdb_persistent")
         expression = d.parse(
             """
                 MODEL(
