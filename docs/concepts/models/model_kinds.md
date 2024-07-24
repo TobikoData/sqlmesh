@@ -819,7 +819,7 @@ The EXTERNAL model kind is used to specify [external models](./external_models.m
 
 The `MANAGED` model kind is used to create models where the underlying database engine manages the data lifecycle.
 
-These models dont get updated with new intervals or refreshed when `sqlmesh run` is called. Responsibility for keeping the *data* up to date falls on the engine.
+These models don't get updated with new intervals or refreshed when `sqlmesh run` is called. Responsibility for keeping the *data* up to date falls on the engine.
 
 You can control how the engine creates the managed model by using the [`physical_properties`](../overview#physical_properties-previously-table_properties) to pass engine-specific parameters for adapter to use when issuing commands to the underlying database.
 

@@ -112,7 +112,7 @@ MODEL (
     name sushi.items,
     audits(does_not_exceed_threshold(column := id, threshold := 1000), price_is_not_null)
 );
-SELECT id, price 
+SELECT id, price
 FROM sushi.seed;
 
 AUDIT (name does_not_exceed_threshold);
@@ -259,7 +259,8 @@ MODEL (
 #### accepted_values, accepted_values_non_blocking
 Ensures that all rows of the specified column contain one of the accepted values.
 
-NOTE: rows with `NULL` values for the column will pass this audit in most databases/engines. Use the [`not_null` audit](#not_null) to ensure there are no `NULL` values present in a column.
+!!! note
+    Rows with `NULL` values for the column will pass this audit in most databases/engines. Use the [`not_null` audit](#not_null) to ensure there are no `NULL` values present in a column.
 
 This example asserts that column `name` has a value of 'Hamachi', 'Unagi', or 'Sake':
 
@@ -275,7 +276,8 @@ MODEL (
 #### not_accepted_values, not_accepted_values_non_blocking
 Ensures that no rows of the specified column contain one of the not accepted values.
 
-NOTE: this audit does not support rejecting `NULL` values. Use the [`not_null` audit](#not_null) to ensure there are no `NULL` values present in a column.
+!!! note
+    This audit does not support rejecting `NULL` values. Use the [`not_null` audit](#not_null) to ensure there are no `NULL` values present in a column.
 
 This example asserts that column `name` is not one of 'Hamburger' or 'French fries':
 
@@ -350,7 +352,8 @@ MODEL (
 
 These audits concern the characteristics of values in character/string columns.
 
-NOTE: databases/engines may exhibit different behavior for different character sets or languages.
+!!! warning
+    Databases/engines may exhibit different behavior for different character sets or languages.
 
 #### not_empty_string, not_empty_string_non_blocking
 Ensures that no rows of a column contain an empty string value `''`.
@@ -522,7 +525,9 @@ MODEL (
 
 These audits concern the statistical distributions of numeric columns.
 
-NOTE: audit thresholds will likely require fine-tuning via trial and error for each column being audited.
+!!! note
+
+    Audit thresholds will likely require fine-tuning via trial and error for each column being audited.
 
 #### mean_in_range, mean_in_range_non_blocking
 Ensures that a numeric column's mean is in the specified range. Range is inclusive by default, such that values equal to the range boundaries will pass the audit.
