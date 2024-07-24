@@ -1100,6 +1100,36 @@ def var(
     return exp.convert(evaluator.var(var_name.this, default))
 
 
+@macro("deduplicate")
+def deduplicate(
+    evaluator: MacroEvaluator, var_name: exp.Expression, default: t.Optional[exp.Expression] = None
+) -> exp.Expression:
+    if not var_name.is_string:
+        raise SQLMeshError(f"Invalid variable name '{var_name.sql()}'. Expected a string literal.")
+
+    return exp.convert(evaluator.var(var_name.this, default))
+
+
+@macro("date_spine")
+def date_spine(
+    evaluator: MacroEvaluator, var_name: exp.Expression, default: t.Optional[exp.Expression] = None
+) -> exp.Expression:
+    if not var_name.is_string:
+        raise SQLMeshError(f"Invalid variable name '{var_name.sql()}'. Expected a string literal.")
+
+    return exp.convert(evaluator.var(var_name.this, default))
+
+
+@macro("metric_decompose")
+def metric_decompose(
+    evaluator: MacroEvaluator, var_name: exp.Expression, default: t.Optional[exp.Expression] = None
+) -> exp.Expression:
+    if not var_name.is_string:
+        raise SQLMeshError(f"Invalid variable name '{var_name.sql()}'. Expected a string literal.")
+
+    return exp.convert(evaluator.var(var_name.this, default))
+
+
 def normalize_macro_name(name: str) -> str:
     """Prefix macro name with @ and upcase"""
     return f"@{name.upper()}"
