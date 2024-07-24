@@ -1594,11 +1594,30 @@ Usage in SQLMesh:
 
 ```sql linenums="1"
 SELECT
-  @repeat_string('SQLMesh ', 3) as repeated_string
+  @repeat_string('SQLMesh_', 3) as repeated_string
 FROM some_table;
 ```
 
 This macro takes two arguments: `text` of type `str` and `count` of type `int`, and it returns a string. Without type hints, the inputs to the macro would have been two `exp.Literal` objects you would have had to convert to strings and integers manually.
+
+If the string you pass to the macro contains spaces then you need to wrap it in a `exp.Literal` string:
+
+```python linenums="1"
+from sqlmesh import macro
+from sqlglot import exp
+
+@macro()
+def repeat_string(evaluator, text: str, count: int) -> str:
+    return exp.Literal.string(text * count)
+```
+
+Usage in SQLMesh:
+
+```sql linenums="1"
+SELECT
+  @repeat_string('SQLMesh ', 3) as repeated_string
+FROM some_table;
+```
 
 #### Supported Types
 
