@@ -29,9 +29,17 @@ model_defaults = ModelDefaultsConfig(**defaults)
 model_defaults_iceberg = ModelDefaultsConfig(**defaults, storage_format="iceberg")
 
 
-# An in memory DuckDB config.
+# A DuckDB config, in-memory by default.
 config = Config(
-    default_connection=DuckDBConnectionConfig(),
+    gateways={
+        "duckdb": GatewayConfig(
+            connection=DuckDBConnectionConfig(),
+        ),
+        "duckdb_persistent": GatewayConfig(
+            connection=DuckDBConnectionConfig(database=f"{DATA_DIR}/duckdb.db"),
+        ),
+    },
+    default_gateway="duckdb",
     model_defaults=model_defaults,
 )
 
