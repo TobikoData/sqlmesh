@@ -1163,4 +1163,4 @@ def test_snowflake_dynamic_table():
     # https://docs.getdbt.com/reference/resource-configs/snowflake-configs#dynamic-tables
     for required_property in ["target_lag", "snowflake_warehouse"]:
         with pytest.raises(ConfigError, match=r".*must be set for dynamic tables"):
-            model.model_copy(update={required_property: None}).to_sqlmesh(context)
+            model.copy(update={required_property: None}).to_sqlmesh(context)
