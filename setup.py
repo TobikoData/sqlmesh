@@ -54,7 +54,7 @@ setup(
             "google-cloud-bigquery[pandas]",
             "google-cloud-bigquery-storage",
         ],
-        "databricks": ["databricks-sql-connector", "databricks-connect"],
+        "databricks": ["databricks-sql-connector"],
         "dev": [
             f"apache-airflow=={os.environ.get('AIRFLOW_VERSION', '2.9.1')}",
             "agate==1.7.1",

@@ -45,7 +45,7 @@ class TestContext:
         test_type: str,
         engine_adapter: EngineAdapter,
         gateway: str,
-        is_cloud_database: bool = False,
+        is_remote: bool = False,
         columns_to_types: t.Optional[t.Dict[str, t.Union[str, exp.DataType]]] = None,
     ):
         self.test_type = test_type
@@ -54,7 +54,7 @@ class TestContext:
         self._columns_to_types = columns_to_types
         self.test_id = random_id(short=True)
         self._context = None
-        self.is_cloud_database = is_cloud_database
+        self.is_remote = is_remote
 
     @property
     def columns_to_types(self):
@@ -693,8 +693,8 @@ def default_columns_to_types():
 @pytest.fixture
 def ctx(request, engine_adapter, test_type, mark_gateway):
     _, gateway = mark_gateway
-    is_cloud_database = request.node.get_closest_marker("remote") is not None
-    return TestContext(test_type, engine_adapter, gateway, is_cloud_database=is_cloud_database)
+    is_remote = request.node.get_closest_marker("remote") is not None
+    return TestContext(test_type, engine_adapter, gateway, is_remote=is_remote)
 
 
 @pytest.fixture(autouse=True)
@@ -717,7 +717,7 @@ def test_catalog_operations(ctx: TestContext):
         pytest.skip("Catalog operation tests only need to run once so we skip anything not query")
 
     # use a unique name so that integration tests on cloud databases can run in parallel
-    catalog_name = "testing" if not ctx.is_cloud_database else ctx.add_test_suffix("testing")
+    catalog_name = "testing" if not ctx.is_remote else ctx.add_test_suffix("testing")
 
     ctx.create_catalog(catalog_name)
 
@@ -728,7 +728,7 @@ def test_catalog_operations(ctx: TestContext):
     assert ctx.engine_adapter.get_current_catalog().lower() == current_catalog
 
     # cleanup cloud databases since they persist between runs
-    if ctx.is_cloud_database:
+    if ctx.is_remote:
         ctx.drop_catalog(catalog_name)
 
 
@@ -775,7 +775,7 @@ def test_drop_schema_catalog(ctx: TestContext, caplog):
     if ctx.test_type != "query":
         pytest.skip("Drop Schema Catalog tests only need to run once so we skip anything not query")
 
-    catalog_name = "testing" if not ctx.is_cloud_database else ctx.add_test_suffix("testing")
+    catalog_name = "testing" if not ctx.is_remote else ctx.add_test_suffix("testing")
     if ctx.dialect == "bigquery":
         catalog_name = ctx.engine_adapter.get_current_catalog()
 
@@ -791,7 +791,7 @@ def test_drop_schema_catalog(ctx: TestContext, caplog):
     drop_schema_and_validate(schema)
     create_objects_and_validate(schema)
 
-    if ctx.is_cloud_database:
+    if ctx.is_remote:
         ctx.drop_catalog(catalog_name)
 
 
