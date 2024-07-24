@@ -607,7 +607,7 @@ If the column data types are known, the resulting query `CAST`s columns to their
 
 **NOTE**: the `exclude` argument used to be named `except_`. The latter is still supported but we discourage its use because it will be deprecated in the future.
 
-Like all SQLMesh macro functions, omitting an argument when calling `@STAR` requires passing all subsequent arguments with their name and the special `:=` keyword operator. For example, we might omit the `alias` argument with `@STAR(foo, exclude := [c])`. Learn more about macro function arguments [below](#positional-and-keyword-arguments).
+Like all SQLMesh macro functions, omitting an argument when calling `@STAR` requires passing subsequent arguments with their name and the special `:=` keyword operator. For example, we might omit the `alias` argument with `@STAR(foo, exclude := [c])`. Learn more about macro function arguments [below](#positional-and-keyword-arguments).
 
 As a `@STAR` example, consider the following query:
 
@@ -618,6 +618,7 @@ FROM foo AS bar
 ```
 
 The arguments to `@STAR` are:
+
 1. The name of the table `foo` (from the query's `FROM foo`)
 2. The table alias `bar` (from the query's `AS bar`)
 3. A list of columns to exclude from the selection, containing one column `c`
@@ -635,6 +636,7 @@ FROM foo AS bar
 ```
 
 Note these aspects of the rendered query:
+
 - Each column is `CAST` to its data type in the table `foo` (e.g., `a` to `TEXT`)
 - Each column selection uses the alias `bar` (e.g., `"bar"."a"`)
 - Column `c` is not present because it was passed to `@STAR`'s `exclude` argument
@@ -662,6 +664,7 @@ FROM foo AS bar
 ```
 
 Note these aspects of the rendered query:
+
 - Columns `a` and `b` have the prefix `"ab_pre_"` , while column `d` has the prefix `"d_pre_"`
 - Column `c` is not present because it was passed to the `exclude` argument in both `@STAR` calls
 - `my_column` is present in the query
@@ -761,7 +764,7 @@ FROM foo
 
 `@UNION` returns a `UNION` query that selects all columns with matching names and data types from the tables.
 
-Its first argument is the `UNION` "type", `'DISTINCT` (removing duplicated rows) or `'ALL'` (returning all rows). Subsequent arguments are the tables to be combined.
+Its first argument is the `UNION` "type", `'DISTINCT'` (removing duplicated rows) or `'ALL'` (returning all rows). Subsequent arguments are the tables to be combined.
 
 Let's assume that:
 
@@ -826,7 +829,7 @@ It supports the following arguments, in this order:
 
 - `column`: The column to pivot
 - `values`: The values to use for pivoting (one column is created for each value in `values`)
-- `alias`: Whether to create aliases for the resulting columns, defaults to true
+- `alias` (optional): Whether to create aliases for the resulting columns, defaults to true
 - `agg` (optional): The aggregation function to use, defaults to `SUM`
 - `cmp` (optional): The comparison operator to use for comparing the column values, defaults to `=`
 - `prefix` (optional): A prefix to use for all aliases
@@ -836,7 +839,7 @@ It supports the following arguments, in this order:
 - `quote` (optional): Whether to quote the resulting aliases, defaults to true
 - `distinct` (optional): Whether to apply a `DISTINCT` clause for the aggregation function, defaults to false
 
-SQLMesh macro operators do not accept named arguments. For example, `@PIVOT(column=column_to_pivot)` will error.
+Like all SQLMesh macro functions, omitting an argument when calling `@PIVOT` requires passing subsequent arguments with their name and the special `:=` keyword operator. For example, we might omit the `agg` argument with `@PIVOT(status, ['cancelled', 'completed'], cmp := '<')`. Learn more about macro function arguments [below](#positional-and-keyword-arguments).
 
 For example, the following query:
 
@@ -1262,7 +1265,9 @@ If an argument has a default value, the value is not parsed by SQLGlot before th
 
 #### Positional and keyword arguments
 
-In a macro call, the arguments may be provided by position if none are skipped. For example, consider the `add_args()` function - it has three arguments with default values provided in the function definition:
+In a macro call, the arguments may be provided by position if none are skipped.
+
+For example, consider the `add_args()` function - it has three arguments with default values provided in the function definition:
 
 ```python linenums="1"
 from sqlmesh import macro
@@ -1279,7 +1284,7 @@ def add_args(
 
 An `@add_args` call providing values for all arguments accepts positional arguments like this: `@add_args(5, 6, 7)` (which returns 5 + 6 + 7 = `18`). A call omitting and using the default value for the the final `argument_3` can also use positional arguments: `@add_args(5, 6)` (which returns 5 + 6 + 3 = `14`).
 
-However, skipping an argument requires providing all subsequent argument names (i.e., using "keyword arguments"). For example, skipping the second argument above by just omitting it - `@add_args(5, , 7)` - results in an error.
+However, skipping an argument requires specifying the names of subsequent arguments (i.e., using "keyword arguments"). For example, skipping the second argument above by just omitting it - `@add_args(5, , 7)` - results in an error.
 
 Unlike Python, SQLMesh keyword arguments must use the special operator `:=`. To skip and use the default value for the second argument above, the call must name the third argument: `@add_args(5, argument_3 := 8)` (which returns 5 + 2 + 8 = `15`).
 
@@ -1545,10 +1550,17 @@ The methods are available because the `column` argument is parsed as a SQLGlot [
 
 Column expressions are sub-classes of the [Condition class](https://sqlglot.com/sqlglot/expressions.html#Condition), so they have builder methods like [`between`](https://sqlglot.com/sqlglot/expressions.html#Condition.between) and [`like`](https://sqlglot.com/sqlglot/expressions.html#Condition.like).
 
-#### Metadata only macros as model pre/post-statements
-When you first use your macro functions in your models as pre/post-statements, SQLMesh will identify those models as directly modified the next time you create a plan. These models will then need backfills. The same thing applies when you edit or remove these pre/post-statements. If your macro does not have any effect on your models' data and you do not want it to trigger backfills, you can configure your macro to be part of a model's metadata. That way, SQLMesh can still detect changes and create new snapshots for your models when you add, edit, or delete your macro pre/post-statements. To do this, pass in True to the `metadata_only` parameter of the `@macro()` decorator.
+#### Macro pre/post-statements
 
-```python linenums="1"
+Macro functions may be used to generate pre/post-statements in a model.
+
+By default, when you first add the pre/post-statement macro functions to a model, SQLMesh will treat those models as directly modified and require a backfill in the next plan. SQLMesh will also treat edits to or removals of pre/post-statement macros as a breaking change.
+
+If your macro does not affect the data returned by a model and you do not want its addition/editing/removal to trigger a backfill, you can specify in the macro definition that it only affects the model's metadata. SQLMesh will still detect changes and create new snapshots for a model when you add/edit/remove the macro, but it will not view the change as breaking and require a backfill.
+
+Specify that a macro only affects a model's metadata by setting the `@macro()` decorator's `metadata_only` argument to `True`. For example:
+
+```python linenums="1" hl_lines="3"
 from sqlmesh import macro
 
 @macro(metadata_only=True)
