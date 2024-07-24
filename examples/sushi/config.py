@@ -62,12 +62,6 @@ test_config = Config(
     model_defaults=model_defaults,
 )
 
-# A stateful DuckDB config.
-local_config = Config(
-    default_connection=DuckDBConnectionConfig(database=f"{DATA_DIR}/local.duckdb"),
-    model_defaults=model_defaults,
-)
-
 airflow_config = Config(
     default_scheduler=AirflowSchedulerConfig(),
     gateways=GatewayConfig(
