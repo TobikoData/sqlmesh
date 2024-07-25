@@ -46,6 +46,7 @@ else:
 if t.TYPE_CHECKING:
     from sqlglot.dialects.dialect import DialectType
     from sqlmesh.core.environment import EnvironmentNamingInfo
+    from sqlmesh.core.config import Config
 
 Interval = t.Tuple[int, int]
 Intervals = t.List[Interval]
@@ -617,6 +618,7 @@ class Snapshot(PydanticModel, SnapshotInfoMixin):
         version: t.Optional[str] = None,
         audits: t.Optional[t.Dict[str, ModelAudit]] = None,
         cache: t.Optional[t.Dict[str, SnapshotFingerprint]] = None,
+        config: t.Optional[Config] = None,
     ) -> Snapshot:
         """Creates a new snapshot for a node.
 
@@ -634,8 +636,11 @@ class Snapshot(PydanticModel, SnapshotInfoMixin):
         """
         created_ts = now_timestamp()
         kwargs = {}
+        config_audits = config.model_defaults.audits if config else []
         if node.is_model:
-            kwargs["audits"] = tuple(t.cast(_Model, node).referenced_audits(audits or {}))
+            kwargs["audits"] = tuple(
+                t.cast(_Model, node).referenced_audits(audits or {}, config_audits)
+            )
 
         return cls(
             name=node.fqn,

@@ -2,6 +2,8 @@ from __future__ import annotations
 
 import typing as t
 
+from sqlglot import exp
+from sqlmesh.core.dialect import parse
 from sqlmesh.core.config.base import BaseConfig
 from sqlmesh.core.model.kind import (
     ModelKind,
@@ -10,6 +12,9 @@ from sqlmesh.core.model.kind import (
     on_destructive_change_validator,
 )
 from sqlmesh.utils.date import TimeLike
+from sqlmesh.core.model.meta import AuditReference
+from sqlmesh.utils.pydantic import field_validator
+from sqlmesh.utils.errors import ConfigError
 
 
 class ModelDefaultsConfig(BaseConfig):
@@ -37,6 +42,35 @@ class ModelDefaultsConfig(BaseConfig):
     storage_format: t.Optional[str] = None
     on_destructive_change: t.Optional[OnDestructiveChange] = None
     session_properties: t.Optional[t.Dict[str, t.Any]] = None
+    audits: t.Optional[t.List[AuditReference]] = None
 
     _model_kind_validator = model_kind_validator
     _on_destructive_change_validator = on_destructive_change_validator
+
+    @field_validator("audits", mode="before")
+    def _audits_validator(cls, v: t.Any) -> t.Any:
+        def extract(v: exp.Expression) -> t.Tuple[str, t.Dict[str, exp.Expression]]:
+            kwargs = {}
+
+            if isinstance(v, exp.Anonymous):
+                func = v.name
+                args = v.expressions
+            elif isinstance(v, exp.Func):
+                func = v.sql_name()
+                args = list(v.args.values())
+            else:
+                return v.name.lower(), {}
+
+            for arg in args:
+                if not isinstance(arg, (exp.PropertyEQ, exp.EQ)):
+                    raise ConfigError(
+                        f"Function '{func}' must be called with key-value arguments like {func}(arg := value)."
+                    )
+                kwargs[arg.left.name.lower()] = arg.right
+            return func.lower(), kwargs
+
+        breakpoint()
+        if isinstance(v, list):
+            return [extract(parse(audit)[0]) for audit in v]
+
+        return v
