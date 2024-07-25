@@ -19,6 +19,7 @@ from sqlmesh.core.model import (
     ModelKind,
     SCDType2ByColumnKind,
     ViewKind,
+    ManagedKind,
     create_sql_model,
 )
 from sqlmesh.core.model.kind import SCDType2ByTimeKind, OnDestructiveChange
@@ -104,6 +105,9 @@ class ModelConfig(BaseModelConfig):
 
     # snowflake
     snowflake_warehouse: t.Optional[str] = None
+    # note: for Snowflake dynamic tables, in the DBT adapter we only support properties that DBT supports
+    # which are defined here: https://docs.getdbt.com/reference/resource-configs/snowflake-configs#dynamic-tables
+    target_lag: t.Optional[str] = None
 
     # Private fields
     _sql_embedded_config: t.Optional[SqlStr] = None
@@ -298,6 +302,10 @@ class ModelConfig(BaseModelConfig):
             return SCDType2ByTimeKind(
                 updated_at_name=self.updated_at, updated_at_as_valid_from=True, **shared_kwargs
             )
+
+        if materialization == Materialization.DYNAMIC_TABLE:
+            return ManagedKind()
+
         raise ConfigError(f"{materialization.value} materialization not supported.")
 
     @property
@@ -399,8 +407,20 @@ class ModelConfig(BaseModelConfig):
             if physical_properties:
                 model_kwargs["physical_properties"] = physical_properties
 
-        if context.target.dialect == "snowflake" and self.snowflake_warehouse is not None:
-            model_kwargs["session_properties"] = {"warehouse": self.snowflake_warehouse}
+        if context.target.dialect == "snowflake":
+            if self.snowflake_warehouse is not None:
+                model_kwargs["session_properties"] = {"warehouse": self.snowflake_warehouse}
+
+            if self.model_materialization == Materialization.DYNAMIC_TABLE:
+                if not self.snowflake_warehouse:
+                    raise ConfigError("`snowflake_warehouse` must be set for dynamic tables")
+                if not self.target_lag:
+                    raise ConfigError("`target_lag` must be set for dynamic tables")
+
+                model_kwargs["physical_properties"] = {
+                    "warehouse": self.snowflake_warehouse,
+                    "target_lag": self.target_lag,
+                }
 
         return create_sql_model(
             self.canonical_name(context),

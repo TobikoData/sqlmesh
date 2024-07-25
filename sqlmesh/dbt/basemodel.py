@@ -46,6 +46,9 @@ class Materialization(str, Enum):
     EPHEMERAL = "ephemeral"
     SNAPSHOT = "snapshot"
 
+    # Snowflake, https://docs.getdbt.com/reference/resource-configs/snowflake-configs#dynamic-tables
+    DYNAMIC_TABLE = "dynamic_table"
+
 
 class SnapshotStrategy(str, Enum):
     """DBT snapshot strategies"""
