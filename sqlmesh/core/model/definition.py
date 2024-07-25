@@ -464,7 +464,7 @@ class _Model(ModelMeta, frozen=True):
     def referenced_audits(
         self,
         audits: t.Dict[str, ModelAudit],
-        config_audits: t.Optional[t.List[AuditReference]] = None,
+        default_audits: t.Optional[t.List[AuditReference]] = None,
     ) -> t.List[ModelAudit]:
         """Returns audits referenced in this model.
 
@@ -475,7 +475,7 @@ class _Model(ModelMeta, frozen=True):
 
         referenced_audits = []
 
-        combined_audits = self.audits + config_audits if config_audits else self.audits
+        combined_audits = self.audits + default_audits if default_audits else self.audits
         for audit_name, _ in combined_audits:
             if audit_name in self.inline_audits:
                 referenced_audits.append(self.inline_audits[audit_name])

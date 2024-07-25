@@ -636,10 +636,10 @@ class Snapshot(PydanticModel, SnapshotInfoMixin):
         """
         created_ts = now_timestamp()
         kwargs = {}
-        config_audits = config.model_defaults.audits if config else []
+        default_audits = config.model_defaults.audits if config else []
         if node.is_model:
             kwargs["audits"] = tuple(
-                t.cast(_Model, node).referenced_audits(audits or {}, config_audits)
+                t.cast(_Model, node).referenced_audits(audits or {}, default_audits)
             )
 
         return cls(
