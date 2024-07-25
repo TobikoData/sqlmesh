@@ -69,7 +69,6 @@ class ModelDefaultsConfig(BaseConfig):
                 kwargs[arg.left.name.lower()] = arg.right
             return func.lower(), kwargs
 
-        breakpoint()
         if isinstance(v, list):
             return [extract(parse(audit)[0]) for audit in v]
 
