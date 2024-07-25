@@ -32,6 +32,7 @@ from sqlmesh.core.model.kind import (
     SeedKind as SeedKind,
     TimeColumn as TimeColumn,
     ViewKind as ViewKind,
+    ManagedKind as ManagedKind,
     model_kind_validator as model_kind_validator,
 )
 from sqlmesh.core.model.meta import ModelMeta as ModelMeta
