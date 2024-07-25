@@ -298,7 +298,7 @@ def test_parse():
           dialect snowflake
         );
 
-        SELECT a FROM @if(true, m2, m3)
+        SELECT a FROM @If(true, m2, m3)
         """,
     )
     assert len(expressions) == 2
