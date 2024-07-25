@@ -418,7 +418,10 @@ def _parse_table_parts(
 
     if isinstance(table_arg, exp.Var) and name.startswith(SQLMESH_MACRO_PREFIX):
         # Macro functions do not clash with the staged file syntax, so we can safely parse them
-        if self._prev.token_type == TokenType.STRING or any(ch in name for ch in ("(", "{")):
+        from sqlmesh.core.macros import macro
+
+        macros = macro.get_registry()
+        if self._prev.token_type == TokenType.STRING or "{" in name or name[1:].lower() in macros:
             self._retreat(index)
             return Parser._parse_table_parts(self, schema=schema, is_db_reference=is_db_reference)
 

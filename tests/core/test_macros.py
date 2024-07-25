@@ -171,6 +171,10 @@ def test_macro_var(macro_evaluator):
     # Parsing a "parameter" like Snowflake's $1 should not produce a MacroVar expression
     e = parse_one("select $1 from @path (file_format => bla.foo)", read="snowflake")
     assert e.find(exp.Parameter) is e.selects[0]
+    assert e.find(StagedFilePath)
+    # test no space
+    e = parse_one("select $1 from @path(file_format => bla.foo)", read="snowflake")
+    assert e.find(StagedFilePath)
     assert e.sql(dialect="snowflake") == "SELECT $1 FROM @path (FILE_FORMAT => bla.foo)"
 
     macro_evaluator.locals = {"x": 1}
