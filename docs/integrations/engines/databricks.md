@@ -1,5 +1,156 @@
 # Databricks
 
+This page provides information about how to use SQLMesh with the Databricks SQL engine.
+
+It begins with a quickstart that demonstrates how to connect to Databricks, or you can skip directly to information about using Databricks with the [built-in](#localbuilt-in-scheduler) or [airflow](#airflow-scheduler) schedulers.
+
+## Connection quickstart
+
+Connecting to cloud warehouses involves a few steps, so this connection quickstart provides the info you need to get up and running with Databricks.
+
+It demonstrates connecting to a Databricks [All-Purpose Compute](https://docs.databricks.com/en/compute/index.html) instance with the `databricks-sql-connector` Python library bundled with SQLMesh.
+
+!!! tip
+    This quickstart assumes you are familiar with basic SQLMesh commands and functionality.
+
+    If you're not, work through the [SQLMesh Quickstart](../../quick_start.md) before continuing!
+
+### Prerequisites
+
+Before working through this connection quickstart, ensure that:
+
+1. You have a Databricks account with access to an appropriate Databricks Workspace
+    - The Workspace must support authenticating with [personal access tokens](https://docs.databricks.com/en/dev-tools/auth/pat.html) (Databricks [Community Edition workspaces do not](https://docs.databricks.com/en/admin/access-control/tokens.html))
+    - Your account must have Workspace Access and Create Compute permissions (these permissions are enabled by default)
+2. Your computer has [SQLMesh installed](../../installation.md) with the [Databricks add-on available](../../installation.md#install-extras)
+    - Install from the command line with the command `pip install "sqlmesh[databricks]"`
+3. You have initialized a [SQLMesh example project](../../quickstart/cli#1-create-the-sqlmesh-project) on your computer
+    - Open a command line interface and navigate to the directory where the project should go
+    - Initialize the project with the command `sqlmesh init duckdb`
+
+### Get connection info
+
+The first step to configuring a Databricks connection is gathering the necessary information from your Databricks compute instance.
+
+#### Create Compute
+
+We must have something to connect to, so we first create and activate a Databricks compute instance. If you already have one running, skip to the [next section](#get-jdbcodbc-info)!
+
+We begin in the default view for our Databricks Workspace. Access the Compute view by clicking the `Compute` entry in the left-hand menu:
+
+![Databricks Workspace default view](./databricks/db-guide_workspace.png){ loading=lazy }
+
+In the Compute view, click the `Create compute` button:
+
+![Databricks Compute default view](./databricks/db-guide_compute.png){ loading=lazy }
+
+Modify compute cluster options if desired and click the `Create compute` button:
+
+![Databricks Create Compute view](./databricks/db-guide_compute-create.png){ loading=lazy }
+
+#### Get JDBC/ODBC info
+
+Scroll to the bottom of the view and click the open the `Advanced Options` view:
+
+![Databricks Compute Advanced Options link](./databricks/db-guide_compute-advanced-options-link.png){ loading=lazy }
+
+Click the `JDBC/ODBC` tab:
+
+![Databricks Compute Advanced Options JDBC/ODBC tab](./databricks/db-guide_advanced-options.png){ loading=lazy }
+
+Open your project's `config.yaml` configuration file in a text editor and add a new gateway named `databricks` below the existing `local` gateway:
+
+![Project config.yaml databricks gateway](./databricks/db-guide_config-yaml.png){ loading=lazy }
+
+Copy the `server_hostname` and `http_path` connection values from the Databricks JDBC/ODBC tab to the `config.yaml` file:
+
+![Copy server_hostname and http_path to config.yaml](./databricks/db-guide_copy-server-http.png){ loading=lazy }
+
+#### Get personal access token
+
+The final piece of information we need for the `config.yaml` file is your personal access token.
+
+!!! warning
+    **Do not share your personal access token with anyone.**
+
+    Best practice for storing secrets like access tokens is placing them in environment variables that the configuration file loads dynamically. For clarity, this guide instead places the value directly in the configuration file.
+
+<br></br>
+To create a personal access token, click on your profile logo and go to your profile's `Settings` page:
+
+![Navigate to profile Settings page](./databricks/db-guide_profile-settings-link.png){ loading=lazy }
+
+Go to the `Developer` view in the User menu. Depending on your account's role, your page may not display the Workspace Admin section of the page.
+
+![Navigate to User Developer view](./databricks/db-guide_profile-settings-developer.png){ loading=lazy }
+
+Click the `Manage` button in the Access Tokens section:
+
+![Navigate to Access Tokens management](./databricks/db-guide_access-tokens-link.png){ loading=lazy }
+
+Click the `Generate new token` button:
+
+![Open the token generation menu](./databricks/db-guide_access-tokens-generate-button.png){ loading=lazy }
+
+Name your token in the `Comment` field, and click the `Generate` button:
+
+![Generate a new token](./databricks/db-guide_access-tokens-generate.png){ loading=lazy }
+
+Click the copy button and paste the token into the `access_token` key:
+
+![Copy token to config.yaml access_token key](./databricks/db-guide_copy-token.png){ loading=lazy }
+
+!!! warning
+    **Do not share your personal access token with anyone.**
+
+    Best practice for storing secrets like access tokens is placing them in environment variables that the configuration file loads dynamically. For clarity, this guide instead places the value directly in the configuration file.
+
+### Check connection
+
+We have now specified the `databricks` gateway connection information, so we can confirm that SQLMesh is able to successfully connect to Databricks. We will test the connection with the `sqlmesh info` command.
+
+First, open a command line interface terminal. Now enter the command `sqlmesh --gateway databricks info`.
+
+We manually specify the `databricks` gateway because it is not our project's default gateway:
+
+![Run sqlmesh info command in CLI](./databricks/db-guide_sqlmesh-info.png){ loading=lazy }
+
+The output shows that our data warehouse connection succeeded:
+
+![Successful data warehouse connection](./databricks/db-guide_sqlmesh-info-succeeded.png){ loading=lazy }
+
+However, the output includes a `WARNING` about using the Databricks SQL engine for storing SQLMesh state:
+
+![Databricks state connection warning](./databricks/db-guide_sqlmesh-info-warning.png){ loading=lazy }
+
+Databricks is not designed for transactional workloads and should not be used to store SQLMesh state in production deployments.
+
+### Specify state connection
+
+We can store SQLMesh state in a different SQL engine by specifying a `state_connection` in our `databricks` gateway.
+
+This example uses the DuckDB engine to store state in the local `databricks_state.db` file:
+
+![Specify DuckDB state connection](./databricks/db-guide_state-connection.png){ loading=lazy }
+
+Now we no longer see the warning when running `sqlmesh --gateway databricks info`, and we see a new entry `State backend connection succeeded`:
+
+![No state connection warning](./databricks/db-guide_sqlmesh-info-no-warning.png){ loading=lazy }
+
+### Run a `sqlmesh plan`
+
+For convenience, we can omit the `--gateway` option from our CLI commands by specifying `databricks` as our project's `default_gateway`:
+
+![Specify databricks as default gateway](./databricks/db-guide_default-gateway.png){ loading=lazy }
+
+And run `sqlmesh plan` in Databricks:
+
+![Run sqlmesh plan in databricks](./databricks/db-guide_sqlmesh-plan.png){ loading=lazy }
+
+And confirm that our schemas and objects exist in our Databricks catalog:
+
+![Sqlmesh plan objects in databricks](./databricks/db-guide_sqlmesh-plan-objects.png){ loading=lazy }
+
 ## Local/Built-in Scheduler
 **Engine Adapter Type**: `databricks`
 
@@ -8,19 +159,32 @@
 pip install "sqlmesh[databricks]"
 ```
 
-### Connection info
+### Connection options
 
-If you are always running SQLMesh commands directly on a Databricks Cluster (like in a Databricks Notebook using the [notebook magic commands](../../reference/notebook.md)) then the only relevant configuration is `catalog` and it is optional.
+Databricks provides multiple computing options and connection methods. This section explains how to use them with SQLMesh.
+
+#### Databricks SQL Connector
+
+SQLMesh uses the [Databricks SQL Connector](https://docs.databricks.com/dev-tools/python-sql-connector.html) to connect to Databricks by default.
+
+#### Databricks Connect
+
+If your project uses PySpark DataFrames in Python models, then SQLMesh needs to use [Databricks Connect](https://docs.databricks.com/dev-tools/databricks-connect.html) to connect to Databricks.
+
+SQLMesh's Databricks Connect implementation supports Databricks Runtime 13.0 or higher. If SQLMesh detects that you have Databricks Connect installed, then it will use it for all Python models (both Pandas and PySpark DataFrames).
+
+SQLMesh does not include/bundle the Databricks Connect library. You must [install the version of Databricks Connect](https://docs.databricks.com/en/dev-tools/databricks-connect/python/install.html) that matches the Databricks Runtime used in your warehouse.
+
+Databricks Connect can execute SQL and DataFrame operations on different clusters by setting the SQLMesh `databricks_connect_*` connection options. For example, these options could configure SQLMesh to run SQL on a [Databricks SQL Warehouse](https://docs.databricks.com/sql/admin/create-sql-warehouse.html) while still routing DataFrame operations to a normal Databricks Cluster.
+
+!!! note
+    If using Databricks Connect, please note the Databricks [requirements](https://docs.databricks.com/dev-tools/databricks-connect.html#requirements) and [limitations](https://docs.databricks.com/dev-tools/databricks-connect.html#limitations).
+
+#### Databricks notebook interface
+
+If you are always running SQLMesh commands directly on a Databricks Cluster (like in a Databricks Notebook using the [notebook magic commands](../../reference/notebook.md)), then the only relevant configuration parameter is the optional `catalog` parameter.
+
 The SparkSession provided by Databricks will be used to execute all SQLMesh commands.
-
-Otherwise SQLMesh's Databricks implementation uses the [Databricks SQL Connector](https://docs.databricks.com/dev-tools/python-sql-connector.html) to connect to Databricks by default.
-If your project contains PySpark DataFrames in Python models then it will use [Databricks Connect](https://docs.databricks.com/dev-tools/databricks-connect.html) to connect to Databricks.
-SQLMesh's Databricks Connect implementation supports Databricks Runtime 13.0 or higher. If SQLMesh detects you have Databricks Connect installed then it will use it for all Python models (so both Pandas and PySpark DataFrames).
-
-Databricks connect execution can be routed to a different cluster than the SQL Connector by setting the `databricks_connect_*` properties.
-For example this allows SQLMesh to be configured to run SQL on a [Databricks SQL Warehouse](https://docs.databricks.com/sql/admin/create-sql-warehouse.html) while still routing DataFrame operations to a normal Databricks Cluster.
-
-Note: If using Databricks Connect please note the [requirements](https://docs.databricks.com/dev-tools/databricks-connect.html#requirements) and [limitations](https://docs.databricks.com/dev-tools/databricks-connect.html#limitations)
 
 ### Connection options
 
@@ -43,7 +207,7 @@ Note: If using Databricks Connect please note the [requirements](https://docs.da
 ## Airflow Scheduler
 **Engine Name:** `databricks` / `databricks-submit` / `databricks-sql`.
 
-Databricks has multiple operators to help differentiate running a SQL query vs. running a Python script.
+Databricks has multiple operators to help differentiate running a SQL query from running a Python script.
 
 ### Engine: `databricks` (Recommended)
 
@@ -92,17 +256,21 @@ for dag in sqlmesh_airflow.dags:
     globals()[dag.dag_id] = dag
 ```
 
-**Note:** If your Databricks connection is configured to run on serverless [DBSQL](https://www.databricks.com/product/databricks-sql), then you need to define `existing_cluster_id` or `new_cluster` in your `engine_operator_args`. Example:
-```python linenums="1"
-sqlmesh_airflow = SQLMeshAirflow(
-    "databricks",
-    default_catalog="<catalog name>",
-    engine_operator_args={
-        "dbfs_location": "dbfs:/FileStore/sqlmesh",
-        "existing_cluster_id": "1234-123456-slid123",
-    }
-)
-```
+!!! note
+    If your Databricks connection is configured to run on serverless [DBSQL](https://www.databricks.com/product/databricks-sql), then you need to define `existing_cluster_id` or `new_cluster` in your `engine_operator_args`.
+
+    Example:
+
+    ```python linenums="1"
+    sqlmesh_airflow = SQLMeshAirflow(
+        "databricks",
+        default_catalog="<catalog name>",
+        engine_operator_args={
+            "dbfs_location": "dbfs:/FileStore/sqlmesh",
+            "existing_cluster_id": "1234-123456-slid123",
+        }
+    )
+    ```
 
 ## Model table properties to support altering tables
 
