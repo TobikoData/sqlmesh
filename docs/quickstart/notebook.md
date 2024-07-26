@@ -38,13 +38,13 @@ If using a python virtual environment, ensure it's activated first by running th
 
 Import the SQLMesh library to load the notebook magic commands:
 
-![Cell importing the SQLMesh library](./notebook/nb-quickstart_import.png)
+![Cell importing the SQLMesh library](./notebook/nb-quickstart_import.png){ loading=lazy }
 
 Next, create a SQLMesh scaffold with the `%init` notebook magic, specifying a default SQL dialect for your models. The dialect should correspond to the dialect most of your models are written in; it can be overridden for specific models in the model's `MODEL` specification. All SQL dialects [supported by the SQLGlot library](https://github.com/tobymao/sqlglot/blob/main/sqlglot/dialects/dialect.py) are allowed.
 
 In this example, we specify the `duckdb` dialect:
 
-![Notebook output after project initiation](./notebook/nb-quickstart_init.png)
+![Notebook output after project initiation](./notebook/nb-quickstart_init.png){ loading=lazy }
 
 If the scaffold is successfully created, it will return `SQLMesh project scaffold created`.
 
@@ -126,7 +126,7 @@ Finally, the scaffold will include data for the example project to use.
 
 Inform SQLMesh of the project location by setting a context with the `%context` notebook magic. If the context is set successfully, it will return a message including the repository or list of repositories:
 
-![Notebook output after setting SQLMesh context](./notebook/nb-quickstart_context.png)
+![Notebook output after setting SQLMesh context](./notebook/nb-quickstart_context.png){ loading=lazy }
 
 You can specify multiple directories in one call to `%context` if your SQLMesh project has [multiple repositories](../guides/multi_repo.md).
 
@@ -240,7 +240,7 @@ The `seed_model` date range begins on the same day the plan was made because `SE
 
 Click the green button labeled `Apply - Backfill Tables` to apply the plan and initiate backfill. The following output will be displayed:
 
-![Notebook output after plan application](./notebook/nb-quickstart_apply-plan.png)
+![Notebook output after plan application](./notebook/nb-quickstart_apply-plan.png){ loading=lazy }
 
 The first output block shows the completion percentage and run time for each model (very fast in this simple example). The following line shows that the `prod` environment now points to the tables created during model execution.
 
@@ -252,15 +252,15 @@ Now that we have have populated the `prod` environment, let's modify one of the 
 
 We can modify the incremental SQL model using the `%model` *line* notebook magic (note the single `%`) and the model name:
 
-![%model line magic for sqlmesh_example.incremental_model](./notebook/nb-quickstart_model-line.png)
+![%model line magic for sqlmesh_example.incremental_model](./notebook/nb-quickstart_model-line.png){ loading=lazy }
 
 After we execute the cell, the contents will be replaced by the `%%model` *cell* notebook magic (note the double `%%`) and the model contents, along with a rendered version of the model SQL query. SQLMesh has automatically added explicit column aliases to the query (e.g., `id AS id`):
 
-![%%model cell magic for sqlmesh_example.incremental_model](./notebook/nb-quickstart_model-cell.png)
+![%%model cell magic for sqlmesh_example.incremental_model](./notebook/nb-quickstart_model-cell.png){ loading=lazy }
 
 We modify the incremental SQL model by adding a new column to the query. When we execute the cell it will write the updated model contents to the file and update the rendered version of the query:
 
-![%%model cell magic for updated sqlmesh_example.incremental_model](./notebook/nb-quickstart_model-cell-updated.png)
+![%%model cell magic for updated sqlmesh_example.incremental_model](./notebook/nb-quickstart_model-cell-updated.png){ loading=lazy }
 
 ## 4. Work with a development environment
 
@@ -269,7 +269,7 @@ Now that you've modified a model, it's time to create a development environment 
 
 Run `%plan dev` to create a development environment called `dev`. The following output will be displayed:
 
-![Notebook output after dev plan creation](./notebook/nb-quickstart_plan-dev.png)
+![Notebook output after dev plan creation](./notebook/nb-quickstart_plan-dev.png){ loading=lazy }
 
 The first block of output notes that `%plan` successfully executed the project's test `tests/test_full_model.yaml` with duckdb.
 
@@ -283,7 +283,7 @@ The `Models needing backfill` section shows that only the directly modified `inc
 
 Click the green button to perform the backfill:
 
-![Notebook output after dev plan application](./notebook/nb-quickstart_apply-plan-dev.png)
+![Notebook output after dev plan application](./notebook/nb-quickstart_apply-plan-dev.png){ loading=lazy }
 
 The output shows that SQLMesh created a new model version in `dev`. The last line of the output shows that SQLMesh applied the change to `sqlmesh_example__dev.incremental_model`. In the model schema, the suffix "`__dev`" indicates that it is in the `dev` environment.
 
@@ -294,7 +294,7 @@ You can now view this change by querying data from `incremental_model` with the 
 
 Note that the environment name `__dev` is appended to the schema namespace `sqlmesh_example` in the query:
 
-![Notebook output after executing %%fetchdf on `dev` incremental_model](./notebook/nb-quickstart_fetchdf-dev.png)
+![Notebook output after executing %%fetchdf on `dev` incremental_model](./notebook/nb-quickstart_fetchdf-dev.png){ loading=lazy }
 
 You can see that `new_column` was added to the dataset.
 
@@ -302,25 +302,25 @@ The production table was not modified; you can validate this by querying the pro
 
 Note that nothing has been appended to the schema namespace `sqlmesh_example` because `prod` is the default environment:
 
-![Notebook output after executing %%fetchdf on prod incremental_model before model update applied](./notebook/nb-quickstart_fetchdf-prod.png)
+![Notebook output after executing %%fetchdf on prod incremental_model before model update applied](./notebook/nb-quickstart_fetchdf-prod.png){ loading=lazy }
 
 The production table does not have `new_column` because the changes to `dev` have not yet been applied to `prod`.
 
 ## 5. Update the prod environment
 Now that we've tested the changes in dev, it's time to move them to production. Run `%plan` to plan and apply your changes to the `prod` environment:
 
-![Notebook output after executing %plan on prod](./notebook/nb-quickstart_apply-plan-prod-modified.png)
+![Notebook output after executing %plan on prod](./notebook/nb-quickstart_apply-plan-prod-modified.png){ loading=lazy }
 
 Click the green `Apply - Virtual Update` button to apply the plan and execute the backfill:
 
-![Notebook output after executing applying virtual update on prod](./notebook/nb-quickstart_apply-plan-prod-modified-update.png)
+![Notebook output after executing applying virtual update on prod](./notebook/nb-quickstart_apply-plan-prod-modified-update.png){ loading=lazy }
 
 Note that a backfill was not necessary and only a Virtual Update occurred.
 
 ### 5.2 Validate updates in prod
 Double-check that the data updated in `prod` by running `%%fetchdf` with the SQL query `select * from sqlmesh_example.incremental_model`:
 
-![Notebook output after executing %%fetchdf on prod incremental_model after model update applied](./notebook/nb-quickstart_fetchdf-prod-modified.png)
+![Notebook output after executing %%fetchdf on prod incremental_model after model update applied](./notebook/nb-quickstart_fetchdf-prod-modified.png){ loading=lazy }
 
 `new_column` is now present in the `prod` incremental model.
 
