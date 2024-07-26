@@ -30,6 +30,7 @@ class ModelDefaultsConfig(BaseConfig):
         storage_format: The storage format used to store the physical table, only applicable in certain engines.
             (eg. 'parquet')
         on_destructive_change: What should happen when a forward-only model requires a destructive schema change.
+        audits: The audits to be applied globally to all models in the project.
     """
 
     kind: t.Optional[ModelKind] = None

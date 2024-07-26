@@ -61,7 +61,7 @@ You create audits by writing SQL queries that should return 0 rows. For example,
 
 Audits are flexible &mdash; they can be tied to a specific model's contents, or you can use [macros](./macros/overview.md) to create audits that are usable by multiple models. SQLMesh also includes pre-made audits for common use cases, such as detecting NULL or duplicated values.
 
-You specify which audits should run for a model by including them in the model's metadata properties.
+You specify which audits should run for a model by including them in the model's metadata properties. To apply them globally across your project, include them in the model defaults configuration.
 
 SQLMesh automatically runs audits when you apply a `plan` to an environment, or you can run them on demand with the [`audit` command](../reference/cli.md#audit).
 
