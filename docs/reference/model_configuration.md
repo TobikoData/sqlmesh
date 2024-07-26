@@ -51,6 +51,7 @@ The SQLMesh project-level `model_defaults` key supports the following options, d
 - storage_format
 - session_properties (on per key basis)
 - on_destructive_change (described [below](#incremental-models))
+- audits (described [here](../concepts/audits.md#generic-audits))
 
 
 ### Model Naming

@@ -10,7 +10,7 @@ from sqlglot.helper import ensure_collection, ensure_list
 from sqlglot.optimizer.normalize_identifiers import normalize_identifiers
 
 from sqlmesh.core import dialect as d
-from sqlmesh.core.dialect import normalize_model_name
+from sqlmesh.core.dialect import normalize_model_name, extract_audit
 from sqlmesh.core.model.common import (
     bool_validator,
     default_catalog_validator,
@@ -85,32 +85,12 @@ class ModelMeta(_Node):
 
     @field_validator("audits", mode="before")
     def _audits_validator(cls, v: t.Any) -> t.Any:
-        def extract(v: exp.Expression) -> t.Tuple[str, t.Dict[str, exp.Expression]]:
-            kwargs = {}
-
-            if isinstance(v, exp.Anonymous):
-                func = v.name
-                args = v.expressions
-            elif isinstance(v, exp.Func):
-                func = v.sql_name()
-                args = list(v.args.values())
-            else:
-                return v.name.lower(), {}
-
-            for arg in args:
-                if not isinstance(arg, (exp.PropertyEQ, exp.EQ)):
-                    raise ConfigError(
-                        f"Function '{func}' must be called with key-value arguments like {func}(arg := value)."
-                    )
-                kwargs[arg.left.name.lower()] = arg.right
-            return func.lower(), kwargs
-
         if isinstance(v, (exp.Tuple, exp.Array)):
-            return [extract(i) for i in v.expressions]
+            return [extract_audit(i) for i in v.expressions]
         if isinstance(v, exp.Paren):
-            return [extract(v.this)]
+            return [extract_audit(v.this)]
         if isinstance(v, exp.Expression):
-            return [extract(v)]
+            return [extract_audit(v)]
         if isinstance(v, list):
             audits = []
 
