@@ -1,3 +1,4 @@
+# ruff: noqa: E402
 from __future__ import annotations
 
 import json
@@ -9,7 +10,11 @@ from argparse import Namespace
 from collections import defaultdict
 from pathlib import Path
 
-from dbt import flags
+from dbt import constants as dbt_constants, flags
+
+# Override the file name to prevent dbt commands from invalidating the cache.
+dbt_constants.PARTIAL_PARSE_FILE_NAME = "sqlmesh_partial_parse.msgpack"
+
 from dbt.adapters.factory import register_adapter, reset_adapters
 from dbt.config import Profile, Project, RuntimeConfig
 from dbt.config.profile import read_profile
