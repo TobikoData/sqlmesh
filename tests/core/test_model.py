@@ -4755,6 +4755,24 @@ def test_incremental_by_partition(sushi_context, assert_exp_eq):
         )
         load_sql_based_model(expressions)
 
+    with pytest.raises(
+        ConfigError,
+        match=r".*Do not specify the `forward_only` configuration key.*",
+    ):
+        expressions = d.parse(
+            """
+            MODEL (
+                name db.table,
+                kind INCREMENTAL_BY_PARTITION (
+                    forward_only true
+                ),
+            );
+
+            SELECT a, b
+            """
+        )
+        load_sql_based_model(expressions)
+
 
 @pytest.mark.parametrize(
     ["model_def", "path", "expected_name"],

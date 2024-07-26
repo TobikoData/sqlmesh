@@ -488,6 +488,14 @@ class IncrementalByPartitionKind(_Incremental):
     forward_only: Literal[True] = True
     disable_restatement: SQLGlotBool = True
 
+    @field_validator("forward_only", mode="before")
+    def _forward_only_validator(cls, v: t.Union[bool, exp.Expression]) -> Literal[True]:
+        if v is not True:
+            raise ConfigError(
+                "Do not specify the `forward_only` configuration key - INCREMENTAL_BY_PARTITION models are always forward_only."
+            )
+        return v
+
     @property
     def metadata_hash_values(self) -> t.List[t.Optional[str]]:
         return [
