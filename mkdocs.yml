@@ -138,6 +138,8 @@ markdown_extensions:
       alternate_style: true
   - admonition
   - pymdownx.details
+  - attr_list
+  - md_in_html
 extra_css:
   - stylesheets/extra.css
 copyright: Tobiko Data Inc.
