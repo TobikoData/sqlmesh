@@ -1907,6 +1907,7 @@ class GenericContext(BaseContext, t.Generic[C]):
                     audits=audits,
                     cache=fingerprint_cache,
                     ttl=ttl,
+                    config=self.config_for_node(node),
                 )
                 snapshots[snapshot.name] = snapshot
             return snapshots

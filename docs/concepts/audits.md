@@ -88,6 +88,15 @@ SELECT * FROM @this_model
 WHERE @column >= @threshold;
 ```
 
+Alternatively, you can apply specific audits globally by including them in the model defaults configuration:
+
+```sql linenums="1"
+model_defaults:
+  audits: 
+    - assert_positive_order_ids
+    - does_not_exceed_threshold(column := id, threshold := 1000)
+```
+
 ### Naming
 We recommended avoiding SQL keywords when naming audit parameters. Quote any audit argument that is also a SQL keyword.
 
