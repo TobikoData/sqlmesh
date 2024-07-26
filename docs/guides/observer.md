@@ -70,7 +70,7 @@ SQLMesh Observer is part of the `sqlmesh-enterprise` Python library and is insta
 
 Installation requires a license key provided by Tobiko Data. You include the license key in the `pip` install command executed from the command line. It is quite long, so we recommend placing it in a file that the installation command reads. In this example, we have stored the key in a `txt` file:
 
-![SQLMesh Enterprise key stored in txt file](./observer/observer_key-file.png)
+![SQLMesh Enterprise key stored in txt file](./observer/observer_key-file.png){ loading=lazy }
 
 Run the installation command and read the key file with the following command. The key is passed to the `--extra-index-url` argument, either directly by pasting the key into the command or by reading the key from file with an embedded `cat` command. You should replace `<path to key file>` with the path to your key file:
 
@@ -100,11 +100,11 @@ sqlmesh observe
 
 After starting up, SQLMesh Observer is served at `http://127.0.0.1:8000` by default:
 
-![SQLMesh Observer startup on CLI](./observer/observer_cli.png)
+![SQLMesh Observer startup on CLI](./observer/observer_cli.png){ loading=lazy }
 
 Navigate to the URL by clicking the link in your terminal (if supported) or copy-pasting it into your web browser:
 
-![SQLMesh Observer dashboard interface](./observer/observer_dashboard.png)
+![SQLMesh Observer dashboard interface](./observer/observer_dashboard.png){ loading=lazy }
 
 ## Interface
 
@@ -120,7 +120,7 @@ The "Dashboard" page is displayed when Observer starts - it consists of the foll
 4. Interactive chart of historical audit failure counts in the bottom left
 5. Interactive chart of historical `run` failures in the bottom right
 
-![SQLMesh Observer dashboard](./observer/observer_dashboard-components.png)
+![SQLMesh Observer dashboard](./observer/observer_dashboard-components.png){ loading=lazy }
 
 ### Charts
 
@@ -128,44 +128,44 @@ Observer presents historical information via charts and tables. Most charts repr
 
 In a chart's top left corner is the `Time` selector, which sets the range of the x-axis. For example, the first chart displays 1 week of data, from November 27 through December 4. The second chart displays the same data but includes 3 months of historical data beginning on September 4:
 
-![SQLMesh Observer chart x-axis time selector](./observer/observer_chart-time-selector.png)
+![SQLMesh Observer chart x-axis time selector](./observer/observer_chart-time-selector.png){ loading=lazy }
 
 In a chart's top right corner is the `Scale` selector, which toggles between a linear and log y-axis scale. A log scale may be helpful for comparing highly variable data series over time. This example displays the data from the second chart in the previous figure with a log y-axis scale:
 
-![SQLMesh Observer chart y-axis scale selector](./observer/observer_chart-scale-selector.png)
+![SQLMesh Observer chart y-axis scale selector](./observer/observer_chart-scale-selector.png){ loading=lazy }
 
 Charts also display the data underlying a specific data point when the mouse hovers over it:
 
-![SQLMesh Observer chart mouse hover](./observer/observer_chart-hover.png)
+![SQLMesh Observer chart mouse hover](./observer/observer_chart-hover.png){ loading=lazy }
 
 Many charts display purple `Plan` markers, which provide contextual information about when changes to the project occurred. Clicking on the marker will open a page containing [more information about the plan](#plan-applications).
 
 Some Observer tables include a button that toggles a chart of the measures in the table:
 
-![SQLMesh Observer table chart toggle](./observer/observer_table-chart-toggle.png)
+![SQLMesh Observer table chart toggle](./observer/observer_table-chart-toggle.png){ loading=lazy }
 
 
 ### Environments
 
 Access the `Environments` landing page via the navigation links in the dashboard's top left. It displays a table listing each SQLMesh environment, the date it was created, the date it was last updated, and the date it expires (after which the SQLMesh janitor will delete it). The `prod` environment is always present and has no expiration date.
 
-![SQLMesh Observer environment landing page](./observer/observer_environments-landing.png)
+![SQLMesh Observer environment landing page](./observer/observer_environments-landing.png){ loading=lazy }
 
 Clicking an environment's name in the table open's the environment's information page. The page begins with historical charts of run time, audit failures, and evaluation failures:
 
-![SQLMesh Observer environment information page](./observer/observer_environments-info-1.png)
+![SQLMesh Observer environment information page](./observer/observer_environments-info-1.png){ loading=lazy }
 
 The page continues with lists of recent audit failures, evaluation failure, and model evaluations:
 
-![SQLMesh Observer environment information: recent occurrences](./observer/observer_environments-info-2.png)
+![SQLMesh Observer environment information: recent occurrences](./observer/observer_environments-info-2.png){ loading=lazy }
 
 The page finishes with a list of models that differ from those currently in the `prod` environment, a list of the audits that have historically failed most frequently, a list of the models that have historically failed most frequently, and a list of the models with the longest run times:
 
-![SQLMesh Observer environment information: historical outliers](./observer/observer_environments-info-3.png)
+![SQLMesh Observer environment information: historical outliers](./observer/observer_environments-info-3.png){ loading=lazy }
 
 Each model differing from the `prod` environment may be expanded to view the text diff between the two. The models are listed separately based on whether the plan directly or indirectly modified them, and breaking changes are indicated with an orange "Breaking" label:
 
-![SQLMesh Observer environment information: model text diff](./observer/observer_environments-info-prod-diff.png)
+![SQLMesh Observer environment information: model text diff](./observer/observer_environments-info-prod-diff.png){ loading=lazy }
 
 ### Plan Applications
 
@@ -180,15 +180,15 @@ Access the `Plan Applications` landing page via the navigation links in the dash
 - The start and end dates of the time interval covered by the plan
 - The start and end times of the plan application
 
-![SQLMesh Observer plans list](./observer/observer_plans-list.png)
+![SQLMesh Observer plans list](./observer/observer_plans-list.png){ loading=lazy }
 
 Clicking a Plan ID opens its information page, which lists the information included in the landing page table and links to models added or modified by the plan:
 
-![SQLMesh Observer plan information page](./observer/observer_plans-information.png)
+![SQLMesh Observer plan information page](./observer/observer_plans-information.png){ loading=lazy }
 
 Modified models can be expanded to display a text diff of the change:
 
-![SQLMesh Observer plan text diff](./observer/observer_plans-text-diff.png)
+![SQLMesh Observer plan text diff](./observer/observer_plans-text-diff.png){ loading=lazy }
 
 ### Models
 
@@ -196,19 +196,19 @@ A model can change over time, so its information is associated with a specific S
 
 The model information page begins with historical charts of model run time, audit failures, and evaluation failures:
 
-![SQLMesh Observer model charts](./observer/observer_model-information-1.png)
+![SQLMesh Observer model charts](./observer/observer_model-information-1.png){ loading=lazy }
 
 It continues with details about the model, including its metadata (e.g., model dialect and kind), model text, and list of previous model versions and text diffs:
 
-![SQLMesh Observer model details](./observer/observer_model-information-2.png)
+![SQLMesh Observer model details](./observer/observer_model-information-2.png){ loading=lazy }
 
 Next, the Loaded Intervals section displays the time intervals that have been loaded and are currently present in the model's physical table, and the Recent Model Evaluations section lists the time interval each evaluation processed and the evaluation's start and end times:
 
-![SQLMesh Observer model time intervals](./observer/observer_model-information-3.png)
+![SQLMesh Observer model time intervals](./observer/observer_model-information-3.png){ loading=lazy }
 
 The model information page concludes with a list of most frequent audits the model has failed, the most frequent time intervals that failed, and the largest historical model run times:
 
-![SQLMesh Observer historical outliers](./observer/observer_model-information-4.png)
+![SQLMesh Observer historical outliers](./observer/observer_model-information-4.png){ loading=lazy }
 
 ## Custom measures
 

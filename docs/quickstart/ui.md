@@ -148,11 +148,11 @@ sqlmesh ui
 
 After starting up, the SQLMesh web UI is served at `http://127.0.0.1:8000` by default:
 
-![SQLMesh web UI startup on CLI](./ui/ui-quickstart_cli.png)
+![SQLMesh web UI startup on CLI](./ui/ui-quickstart_cli.png){ loading=lazy }
 
 Navigate to the URL by clicking the link in your terminal (if supported) or copy-pasting it into your web browser:
 
-![SQLMesh web UI startup in browser](./ui/ui-quickstart_ui-startup.png)
+![SQLMesh web UI startup in browser](./ui/ui-quickstart_ui-startup.png){ loading=lazy }
 
 The SQLMesh UI default view contains five panes:
 
@@ -162,7 +162,7 @@ The SQLMesh UI default view contains five panes:
 4. Inspector provides settings and information based on recent actions and the currently active pane. (Note: inspector pane is collapsed by default. Expand it by clicking the hamburger button at the top of the collapsed pane - see previous image.)
 5. Details displays column-level lineage for models open in the editor and results of queries. (Note: details pane is collapsed by default. It will automatically expand upon opening a model in the editor or running a query.)
 
-![SQLMesh web UI panes](./ui/ui-quickstart_ui-startup-panes.png)
+![SQLMesh web UI panes](./ui/ui-quickstart_ui-startup-panes.png){ loading=lazy }
 
 It also contains nine buttons:
 
@@ -176,7 +176,7 @@ It also contains nine buttons:
 8. Format SQL query reformats a SQL query using SQLGlot's pretty layout.
 9. Change SQL dialect specifies the SQL dialect of the current tab for custom SQL queries. It does not affect the SQL dialect for the project.
 
-![SQLMesh web UI buttons](./ui/ui-quickstart_ui-startup-buttons.png)
+![SQLMesh web UI buttons](./ui/ui-quickstart_ui-startup-buttons.png){ loading=lazy }
 
 The default view contains four status indicators:
 
@@ -185,7 +185,7 @@ The default view contains four status indicators:
 3. Change indicator displays a summary of the changes in the project files relative to the most recently run SQLMesh plan in the selected environment.
 4. Error indicator displays the count of errors in the project.
 
-![SQLMesh web UI status indicators](./ui/ui-quickstart_ui-startup-status.png)
+![SQLMesh web UI status indicators](./ui/ui-quickstart_ui-startup-status.png){ loading=lazy }
 
 ## 3. Plan and apply environments
 ### 3.1 Create a prod environment
@@ -288,7 +288,7 @@ The pane contains multiple pieces of information about the plan:
     GROUP BY item_id
     ```
 
-![Run plan pane](./ui/ui-quickstart_run-plan.png)
+![Run plan pane](./ui/ui-quickstart_run-plan.png){ loading=lazy }
 
 Click the blue button labeled `Apply Changes And Backfill` to apply the plan and initiate backfill.
 
@@ -301,7 +301,7 @@ The `Snapshot Tables Created` indicates that [snapshots](../concepts/architectur
 
 The `Backfilled` section shows progress indicators for the backfill operations. The first progress indicator shows the total number of tasks and completion percentage for the entire backfill operation. The remaining progress bars show completion percentage and run time for each model (very fast in this simple example).
 
-![Apply plan pane](./ui/ui-quickstart_apply-plan.png)
+![Apply plan pane](./ui/ui-quickstart_apply-plan.png){ loading=lazy }
 
 Click the `Go Back` button to close the pane.
 
@@ -312,21 +312,21 @@ Now that you've created the production environment, it's time to create a develo
 
 Open the environment menu by clicking the button labeled `prod \/` next to the green `Plan` button on the top right. Type `dev` into the Environment field and click the blue `Add` button.
 
-![Open environment menu](./ui/ui-quickstart_create-dev.png)
+![Open environment menu](./ui/ui-quickstart_create-dev.png){ loading=lazy }
 
 The button now shows that the SQLMesh UI is working in the `dev` environment:
 
-![Working in dev environment](./ui/ui-quickstart_plan-dev.png)
+![Working in dev environment](./ui/ui-quickstart_plan-dev.png){ loading=lazy }
 
 Click the green `Plan` button, and a new pane will open:
 
-![Run plan on dev pane](./ui/ui-quickstart_run-plan-dev.png)
+![Run plan on dev pane](./ui/ui-quickstart_run-plan-dev.png){ loading=lazy }
 
 The output section does not list any added/modified models or backfills because `dev` is being created from the existing `prod` environment without modification. Because the project has not been modified, no new computations need to run and a virtual update occurs.
 
 Click the blue `Apply Virtual Update` button to apply the new plan:
 
-![Run plan on dev pane output](./ui/ui-quickstart_run-plan-dev-output.png)
+![Run plan on dev pane output](./ui/ui-quickstart_run-plan-dev-output.png){ loading=lazy }
 
 The output confirms that the tests, virtual update, snapshot table creation, and environment promotion steps have completed. Click the `Go Back` button to close the pane.
 
@@ -339,68 +339,68 @@ To modify the incremental SQL model, open it in the editor by clicking on it in 
 
 The `Details` pane at the bottom displays the project's table and column lineage.
 
-![Incremental model open in editor](./ui/ui-quickstart_incremental-model.png)
+![Incremental model open in editor](./ui/ui-quickstart_incremental-model.png){ loading=lazy }
 
 Modify the incremental SQL model by adding a new column to the query. Press `Cmd + S` (`Ctrl + S` on Windows) to save the modified model file and display the updated lineage:
 
-![Incremental model modified in editor](./ui/ui-quickstart_incremental-model-modified.png)
+![Incremental model modified in editor](./ui/ui-quickstart_incremental-model-modified.png){ loading=lazy }
 
 
 ## 4. Plan and apply updates
 Preview the impact of the change by clicking the green `Plan` button in the top right.
 
-![Plan pane after running plan with modified incremental model](./ui/ui-quickstart_run-plan-dev-modified.png)
+![Plan pane after running plan with modified incremental model](./ui/ui-quickstart_run-plan-dev-modified.png){ loading=lazy }
 
 The `Changes` section detects that we directly modified `incremental_model` and that `full_model` was indirectly modified because it selects from the incremental model. SQLMesh understood that the change was additive (added a column not used by `full_model`) and was automatically classified as a non-breaking change.
 
 The `Backfill` section shows that only `incremental_model` requires backfill. Click the blue `Apply Changes And Backfill` button to apply the plan and execute the backfill:
 
-![Plan after applying updated plan with modified incremental model](./ui/ui-quickstart_apply-plan-dev-modified.png)
+![Plan after applying updated plan with modified incremental model](./ui/ui-quickstart_apply-plan-dev-modified.png){ loading=lazy }
 
 SQLMesh applies the change to `sqlmesh_example.incremental_model` and backfills the model. The `Backfilled` section shows that the backfill completed successfully.
 
 ### 4.1 Validate updates in dev
 You can now view this change by querying data from `incremental_model`. Add the SQL query `select * from sqlmesh_example__dev.incremental_model` to the Custom SQL 1 tab in the editor:
 
-![Querying `dev` incremental model with SQL query in editor](./ui/ui-quickstart_fetchdf-dev.png)
+![Querying `dev` incremental model with SQL query in editor](./ui/ui-quickstart_fetchdf-dev.png){ loading=lazy }
 
 Note that the environment name `__dev` is appended to the schema namespace `sqlmesh_example` in the query: `select * from sqlmesh_example__dev.incremental_model`.
 
 Click the `Run Query` button in the bottom right to execute the query:
 
-![Results from querying dev incremental model with SQL query in editor](./ui/ui-quickstart_fetchdf-dev-results.png)
+![Results from querying dev incremental model with SQL query in editor](./ui/ui-quickstart_fetchdf-dev-results.png){ loading=lazy }
 
 You can see that `new_column` was added to the dataset. The production table was not modified; you can validate this by modifying the query so it selects from the production table with `select * from sqlmesh_example.incremental_model`.
 
 Note that nothing has been appended to the schema namespace `sqlmesh_example` because `prod` is the default environment.
 
-![Results from querying `prod` incremental model with SQL query in editor](./ui/ui-quickstart_fetchdf-prod.png)
+![Results from querying `prod` incremental model with SQL query in editor](./ui/ui-quickstart_fetchdf-prod.png){ loading=lazy }
 
 The production table does not have `new_column` because the changes to `dev` have not yet been applied to `prod`.
 
 ### 4.2 Apply updates to prod
 Now that we've tested the changes in dev, it's time to move them to prod. Open the environment menu in top right and select the `prod` environment:
 
-![`prod` environment selected in environment menu](./ui/ui-quickstart_plan-prod-modified.png)
+![`prod` environment selected in environment menu](./ui/ui-quickstart_plan-prod-modified.png){ loading=lazy }
 
 Click the green `Plan` button to open the run plan interface:
 
-![`prod` environment plan pane](./ui/ui-quickstart_plan-prod-modified-pane.png)
+![`prod` environment plan pane](./ui/ui-quickstart_plan-prod-modified-pane.png){ loading=lazy }
 
 Click the blue `Apply Virtual Update` button, and a warning screen will appear:
 
-![`prod` environment modification warning](./ui/ui-quickstart_plan-prod-modified-warning.png)
+![`prod` environment modification warning](./ui/ui-quickstart_plan-prod-modified-warning.png){ loading=lazy }
 
 Click the `Yes, Run prod` button to proceed with applying the plan:
 
-![`prod` environment after applying plan](./ui/ui-quickstart_apply-plan-prod-modified.png)
+![`prod` environment after applying plan](./ui/ui-quickstart_apply-plan-prod-modified.png){ loading=lazy }
 
 Note that a backfill was not necessary and only a Virtual Update occurred - the computations have already occurred when backfilling the model in `dev`. Click the `Go Back` button to close the pane.
 
 ### 4.3. Validate updates in prod
 Double-check that the data updated in `prod` by re-running the SQL query from the editor. Click the `Run Query` button to execute the query:
 
-![Results from querying updated `prod` incremental model with SQL query in editor](./ui/ui-quickstart_fetchdf-prod-modified.png)
+![Results from querying updated `prod` incremental model with SQL query in editor](./ui/ui-quickstart_fetchdf-prod-modified.png){ loading=lazy }
 
 `new_column` is now present in the `prod` incremental model.
 
