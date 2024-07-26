@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 set -ex
 
-CONFIG_NAME="local_config"
+GATEWAY_NAME="duckdb_persistent"
 TMP_DIR=$(mktemp -d)
 SUSHI_DIR="$TMP_DIR/sushi"
 
@@ -24,7 +24,7 @@ cp -r ./examples/sushi $TMP_DIR
 # Run initial plan
 pushd $SUSHI_DIR
 rm -rf ./data/*
-sqlmesh --config $CONFIG_NAME plan --no-prompts --auto-apply
+sqlmesh --gateway $GATEWAY_NAME plan --no-prompts --auto-apply
 popd
 
 # Switch back to the starting state of the repository
@@ -35,7 +35,6 @@ make install-dev
 
 # Migrate and make sure the diff is empty
 pushd $SUSHI_DIR
-sqlmesh --config $CONFIG_NAME migrate
-sqlmesh --config $CONFIG_NAME diff prod
+sqlmesh --gateway $GATEWAY_NAME migrate
+sqlmesh --gateway $GATEWAY_NAME diff prod
 popd
-
