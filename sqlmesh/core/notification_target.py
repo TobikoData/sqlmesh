@@ -394,9 +394,36 @@ class BasicSMTPNotificationTarget(BaseTextBasedNotificationTarget):
         return all((self.host, self.user, self.password, self.sender))
 
 
+class GenericNotificationTarget(BaseNotificationTarget):
+    """A generic notification target that can be used to create custom notification targets.
+
+    This target is not meant to be used directly, but rather as a base class for custom notification targets.
+
+    The `send` method should be overridden to provide the actual notification functionality.
+
+    Example:
+    ```python
+    class MyCustomNotificationTarget(GenericNotificationTarget):
+        def send(self, notification_status: NotificationStatus, msg: str, audit_error: t.Optional[AuditError] = None, exc: t.Optional[str] = None, **kwargs: t.Any) -> None:
+            error = None
+            if audit_error:
+                error = str(audit_error)
+            elif exc:
+                error = exc
+
+            if error:
+                msg = f"{error} - {msg}"
+            print(f"Sending notification: {msg}")
+    ```
+    """
+
+    type_: Literal["generic"] = Field(alias="type", default="generic")
+
+
 NotificationTarget = Annotated[
     t.Union[
         BasicSMTPNotificationTarget,
+        GenericNotificationTarget,
         ConsoleNotificationTarget,
         SlackApiNotificationTarget,
         SlackWebhookNotificationTarget,
