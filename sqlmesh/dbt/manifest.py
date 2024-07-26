@@ -11,6 +11,7 @@ from pathlib import Path
 
 from dbt import flags
 from dbt.adapters.factory import register_adapter, reset_adapters
+from dbt.constants import PARTIAL_PARSE_FILE_NAME
 from dbt.config import Profile, Project, RuntimeConfig
 from dbt.config.profile import read_profile
 from dbt.config.renderer import DbtProjectYamlRenderer, ProfileRenderer
@@ -286,7 +287,25 @@ class ManifestHelper:
         else:
             register_adapter(runtime_config)  # type: ignore
 
+        # dbt and sqlmesh can invalidate each other's partial parsing, shuffle around files so we can reuse the cache
+        sqlmesh_partial_path = Path(
+            runtime_config.project_target_path, "sqlmesh_partial_parse.msgpack"
+        )
+        dbt_partial_path = Path(runtime_config.project_target_path, PARTIAL_PARSE_FILE_NAME)
+        temp_partial_path = Path(runtime_config.project_target_path, "temp_partial_parse.msgpack")
+
+        if dbt_partial_path.exists():
+            dbt_partial_path.rename(temp_partial_path)
+        if sqlmesh_partial_path.exists():
+            sqlmesh_partial_path.rename(dbt_partial_path)
+
         manifest = ManifestLoader.get_full_manifest(runtime_config)
+
+        if dbt_partial_path.exists():
+            dbt_partial_path.rename(sqlmesh_partial_path)
+        if temp_partial_path.exists():
+            temp_partial_path.rename(dbt_partial_path)
+
         reset_adapters()
         return manifest
 
