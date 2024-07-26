@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import typing as t
 
-from sqlmesh.core.dialect import parse, extract_audit
+from sqlmesh.core.dialect import parse_one, extract_audit
 from sqlmesh.core.config.base import BaseConfig
 from sqlmesh.core.model.kind import (
     ModelKind,
@@ -48,6 +48,6 @@ class ModelDefaultsConfig(BaseConfig):
     @field_validator("audits", mode="before")
     def _audits_validator(cls, v: t.Any) -> t.Any:
         if isinstance(v, list):
-            return [extract_audit(parse(audit)[0]) for audit in v]
+            return [extract_audit(parse_one(audit)) for audit in v]
 
         return v
