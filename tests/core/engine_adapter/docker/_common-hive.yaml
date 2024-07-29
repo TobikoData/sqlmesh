@@ -1,0 +1,40 @@
+services:
+
+  # Postgres backing storage for Hive metastores
+  metastore:
+    image: postgres
+    environment:
+      POSTGRES_USER: hive
+      POSTGRES_PASSWORD: hive
+    volumes:
+      - ./init-metastore-db.sql:/docker-entrypoint-initdb.d/initdb.sql
+
+  # S3-style object storage
+  minio:
+    image: 'minio/minio:RELEASE.2022-05-26T05-48-41Z'
+    ports:
+      - '9000:9000'
+      - '9001:9001'
+    environment:
+      MINIO_ACCESS_KEY: minio
+      MINIO_SECRET_KEY: minio123
+    command: server /data --console-address ":9001"
+
+  # Set up minio with default buckets / paths
+  mc-job:
+    image: 'minio/mc:RELEASE.2022-05-09T04-08-26Z'
+    entrypoint: |
+      /bin/bash -c "
+      sleep 5;
+      /usr/bin/mc config --quiet host add myminio http://minio:9000 minio minio123;
+      /usr/bin/mc mb --quiet myminio/trino/datalake;
+      /usr/bin/mc mb --quiet myminio/trino/datalake_iceberg;
+      /usr/bin/mc mb --quiet myminio/trino/datalake_delta;
+      /usr/bin/mc mb --quiet myminio/trino/testing;
+      /usr/bin/mc mb --quiet myminio/trino/testing_iceberg;
+      /usr/bin/mc mb --quiet myminio/trino/testing_delta;
+      /usr/bin/mc mb --quiet myminio/spark/datalake;
+      /usr/bin/mc mb --quiet myminio/spark/testing
+      "
+    depends_on:
+      - minio
