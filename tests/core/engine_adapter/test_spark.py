@@ -369,7 +369,6 @@ test_primitive_params = [
     ("double", spark_types.DoubleType()),
     ("decimal", spark_types.DecimalType()),
     ("text", spark_types.StringType()),
-    # Spark supports VARCHAR and CHAR but SQLGlot currently converts them to strings
     ("varchar(25)", spark_types.StringType()),
     ("char(30)", spark_types.StringType()),
     ("binary", spark_types.BinaryType()),
@@ -536,7 +535,13 @@ def test_spark_struct_primitives_to_col_to_types(type_name, spark_type):
     actual = SparkEngineAdapter.spark_to_sqlglot_types(
         spark_types.StructType([spark_types.StructField(f"col_{type_name}", spark_type)])
     )
-    expected = {f"col_{type_name}": exp.DataType.build(type_name, dialect="spark")}
+
+    expected_type = (
+        exp.DataType.build("string")
+        if "char" in type_name
+        else exp.DataType.build(type_name, dialect="spark")
+    )
+    expected = {f"col_{type_name}": expected_type}
     assert actual == expected
 
 

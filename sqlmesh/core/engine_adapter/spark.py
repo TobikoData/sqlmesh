@@ -90,7 +90,6 @@ class SparkEngineAdapter(GetCurrentCatalogFromFunctionMixin, HiveMetastoreTableP
             exp.DataType.Type.FLOAT: spark_types.FloatType,
             exp.DataType.Type.DOUBLE: spark_types.DoubleType,
             exp.DataType.Type.DECIMAL: spark_types.DecimalType,
-            # SQLGlot currently converts VARCHAR and CHAR to Strings
             exp.DataType.Type.VARCHAR: spark_types.StringType,
             exp.DataType.Type.CHAR: spark_types.StringType,
             exp.DataType.Type.TEXT: spark_types.StringType,
