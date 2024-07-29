@@ -1,8 +1,34 @@
 # Databricks
 
-This page provides information about how to use SQLMesh with the Databricks SQL engine.
+This page provides information about how to use SQLMesh with the Databricks SQL engine. It begins with a description of the three methods for connecting SQLMesh to Databricks.
 
-It begins with a quickstart that demonstrates how to connect to Databricks, or you can skip directly to information about using Databricks with the [built-in](#localbuilt-in-scheduler) or [airflow](#airflow-scheduler) schedulers.
+After that is a [Connection Quickstart](#connection-quickstart) that demonstrates how to connect to Databricks, or you can skip directly to information about using Databricks with the [built-in](#localbuilt-in-scheduler) or [airflow](#airflow-scheduler) schedulers.
+
+## Databricks connection methods
+
+Databricks provides multiple computing options and connection methods. This section describes the three methods for connecting with SQLMesh.
+
+### Databricks SQL Connector
+
+SQLMesh connects to Databricks with the [Databricks SQL Connector](https://docs.databricks.com/dev-tools/python-sql-connector.html) library by default.
+
+The SQL Connector is bundled with SQLMesh and automatically installed when you include the `databricks` extra in the command `pip install "sqlmesh[databricks]"`.
+
+The SQL Connector has all the functionality needed for SQLMesh to execute SQL models on Databricks and Python models locally (the default SQLMesh approach).
+
+### Databricks Connect
+
+If you want Databricks to process PySpark DataFrames in SQLMesh Python models, then SQLMesh must use the [Databricks Connect](https://docs.databricks.com/dev-tools/databricks-connect.html) library to connect to Databricks (instead of the Databricks SQL Connector library).
+
+SQLMesh **DOES NOT** include/bundle the Databricks Connect library. You must [install the version of Databricks Connect](https://docs.databricks.com/en/dev-tools/databricks-connect/python/install.html) that matches the Databricks Runtime used in your Databricks cluster.
+
+Find [more configuration details below](#databricks-connect-1).
+
+### Databricks notebook interface
+
+If you are always running SQLMesh commands directly in a Databricks Cluster interface (like in a Databricks Notebook using the [notebook magic commands](../../reference/notebook.md)), the SparkSession provided by Databricks is used to execute all SQLMesh commands.
+
+Find [more configuration details below](#databricks-notebook-interface-1).
 
 ## Connection quickstart
 
@@ -34,7 +60,7 @@ The first step to configuring a Databricks connection is gathering the necessary
 
 #### Create Compute
 
-We must have something to connect to, so we first create and activate a Databricks compute instance. If you already have one running, skip to the [next section](#get-jdbcodbc-info)!
+We must have something to connect to, so we first create and activate a Databricks compute instance. If you already have one running, skip to the [next section](#get-jdbcodbc-info).
 
 We begin in the default view for our Databricks Workspace. Access the Compute view by clicking the `Compute` entry in the left-hand menu:
 
@@ -73,7 +99,17 @@ The final piece of information we need for the `config.yaml` file is your person
 !!! warning
     **Do not share your personal access token with anyone.**
 
-    Best practice for storing secrets like access tokens is placing them in environment variables that the configuration file loads dynamically. For clarity, this guide instead places the value directly in the configuration file.
+    Best practice for storing secrets like access tokens is placing them in [environment variables that the configuration file loads dynamically](../../guides/configuration.md#environment-variables). For simplicity, this guide instead places the value directly in the configuration file.
+
+    This code demonstrates how to use the environment variable `DATABRICKS_SERVER_HOSTNAME` for the configuration's `server_hostname` parameter:
+
+    ```yaml linenums="1"
+    gateways:
+      databricks:
+          connection:
+            type: databricks
+            server_hostname: {{ env_var('DATABRICKS_SERVER_HOSTNAME') }}
+    ```
 
 <br></br>
 To create a personal access token, click on your profile logo and go to your profile's `Settings` page:
@@ -103,13 +139,23 @@ Click the copy button and paste the token into the `access_token` key:
 !!! warning
     **Do not share your personal access token with anyone.**
 
-    Best practice for storing secrets like access tokens is placing them in environment variables that the configuration file loads dynamically. For clarity, this guide instead places the value directly in the configuration file.
+    Best practice for storing secrets like access tokens is placing them in [environment variables that the configuration file loads dynamically](../../guides/configuration.md#environment-variables). For simplicity, this guide instead places the value directly in the configuration file.
+
+    This code demonstrates how to use the environment variable `DATABRICKS_SERVER_HOSTNAME` for the configuration's `server_hostname` parameter:
+
+    ```yaml linenums="1"
+    gateways:
+      databricks:
+          connection:
+            type: databricks
+            server_hostname: {{ env_var('DATABRICKS_SERVER_HOSTNAME') }}
+    ```
 
 ### Check connection
 
 We have now specified the `databricks` gateway connection information, so we can confirm that SQLMesh is able to successfully connect to Databricks. We will test the connection with the `sqlmesh info` command.
 
-First, open a command line interface terminal. Now enter the command `sqlmesh --gateway databricks info`.
+First, open a command line terminal. Now enter the command `sqlmesh --gateway databricks info`.
 
 We manually specify the `databricks` gateway because it is not our project's default gateway:
 
@@ -151,6 +197,11 @@ And confirm that our schemas and objects exist in our Databricks catalog:
 
 ![Sqlmesh plan objects in databricks](./databricks/db-guide_sqlmesh-plan-objects.png){ loading=lazy }
 
+Congratulations - your SQLMesh project is up and running on Databricks!
+
+!!! tip
+    SQLMesh connects to your Databricks Cluster's default catalog by default. Connect to a different catalog by specifying its name in the connection configuration's [`catalog` parameter](#connection-options).
+
 ## Local/Built-in Scheduler
 **Engine Adapter Type**: `databricks`
 
@@ -159,32 +210,32 @@ And confirm that our schemas and objects exist in our Databricks catalog:
 pip install "sqlmesh[databricks]"
 ```
 
-### Connection options
+### Connection method details
 
-Databricks provides multiple computing options and connection methods. This section explains how to use them with SQLMesh.
+Databricks provides multiple computing options and connection methods. The [section above](#databricks-connection-methods) explains how to use them with SQLMesh, and this section provides additional configuration details.
 
 #### Databricks SQL Connector
 
-SQLMesh uses the [Databricks SQL Connector](https://docs.databricks.com/dev-tools/python-sql-connector.html) to connect to Databricks by default.
+SQLMesh uses the [Databricks SQL Connector](https://docs.databricks.com/dev-tools/python-sql-connector.html) to connect to Databricks by default. Learn [more above](#databricks-sql-connector).
 
 #### Databricks Connect
 
-If your project uses PySpark DataFrames in Python models, then SQLMesh needs to use [Databricks Connect](https://docs.databricks.com/dev-tools/databricks-connect.html) to connect to Databricks.
+If you want Databricks to process PySpark DataFrames in SQLMesh Python models, then SQLMesh needs to use the [Databricks Connect](https://docs.databricks.com/dev-tools/databricks-connect.html) to connect to Databricks (instead of the Databricks SQL Connector).
+
+SQLMesh **DOES NOT** include/bundle the Databricks Connect library. You must [install the version of Databricks Connect](https://docs.databricks.com/en/dev-tools/databricks-connect/python/install.html) that matches the Databricks Runtime used in your Databricks cluster.
 
 SQLMesh's Databricks Connect implementation supports Databricks Runtime 13.0 or higher. If SQLMesh detects that you have Databricks Connect installed, then it will use it for all Python models (both Pandas and PySpark DataFrames).
-
-SQLMesh does not include/bundle the Databricks Connect library. You must [install the version of Databricks Connect](https://docs.databricks.com/en/dev-tools/databricks-connect/python/install.html) that matches the Databricks Runtime used in your warehouse.
 
 Databricks Connect can execute SQL and DataFrame operations on different clusters by setting the SQLMesh `databricks_connect_*` connection options. For example, these options could configure SQLMesh to run SQL on a [Databricks SQL Warehouse](https://docs.databricks.com/sql/admin/create-sql-warehouse.html) while still routing DataFrame operations to a normal Databricks Cluster.
 
 !!! note
-    If using Databricks Connect, please note the Databricks [requirements](https://docs.databricks.com/dev-tools/databricks-connect.html#requirements) and [limitations](https://docs.databricks.com/dev-tools/databricks-connect.html#limitations).
+    If using Databricks Connect, make sure to learn about the Databricks [requirements](https://docs.databricks.com/dev-tools/databricks-connect.html#requirements) and [limitations](https://docs.databricks.com/dev-tools/databricks-connect.html#limitations).
 
 #### Databricks notebook interface
 
-If you are always running SQLMesh commands directly on a Databricks Cluster (like in a Databricks Notebook using the [notebook magic commands](../../reference/notebook.md)), then the only relevant configuration parameter is the optional `catalog` parameter.
+If you are always running SQLMesh commands directly on a Databricks Cluster (like in a Databricks Notebook using the [notebook magic commands](../../reference/notebook.md)), the SparkSession provided by Databricks is used to execute all SQLMesh commands.
 
-The SparkSession provided by Databricks will be used to execute all SQLMesh commands.
+The only relevant SQLMesh configuration parameter is the optional `catalog` parameter.
 
 ### Connection options
 
@@ -194,7 +245,7 @@ The SparkSession provided by Databricks will be used to execute all SQLMesh comm
 | `server_hostname`                    | Databricks instance host name                                                                                                                                                                                                                                                                   | string |    N     |
 | `http_path`                          | HTTP path, either to a DBSQL endpoint (such as `/sql/1.0/endpoints/1234567890abcdef`) or to an All-Purpose cluster (such as `/sql/protocolv1/o/1234567890123456/1234-123456-slid123`)                                                                                                           | string |    N     |
 | `access_token`                       | HTTP Bearer access token, such as Databricks Personal Access Token                                                                                                                                                                                                                              | string |    N     |
-| `catalog`                            | Spark 3.4+ Only if not using SQL Connector. The name of the catalog to use for the connection. [Defaults to use Databricks cluster default](https://docs.databricks.com/en/data-governance/unity-catalog/create-catalogs.html#the-default-catalog-configuration-when-unity-catalog-is-enabled). | string |    N     |
+| `catalog`                            | The name of the catalog to use for the connection. [Defaults to use Databricks cluster default](https://docs.databricks.com/en/data-governance/unity-catalog/create-catalogs.html#the-default-catalog-configuration-when-unity-catalog-is-enabled). | string |    N     |
 | `http_headers`                       | SQL Connector Only: An optional dictionary of HTTP headers that will be set on every request                                                                                                                                                                                                    |  dict  |    N     |
 | `session_configuration`              | SQL Connector Only: An optional dictionary of Spark session parameters. Execute the SQL command `SET -v` to get a full list of available commands.                                                                                                                                              |  dict  |    N     |
 | `databricks_connect_server_hostname` | Databricks Connect Only: Databricks Connect server hostname. Uses `server_hostname` if not set.                                                                                                                                                                                                 | string |    N     |
