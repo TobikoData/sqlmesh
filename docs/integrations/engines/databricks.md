@@ -169,7 +169,10 @@ However, the output includes a `WARNING` about using the Databricks SQL engine f
 
 ![Databricks state connection warning](./databricks/db-guide_sqlmesh-info-warning.png){ loading=lazy }
 
-Databricks is not designed for transactional workloads and should not be used to store SQLMesh state in production deployments.
+!!! warning
+    Databricks is not designed for transactional workloads and should not be used to store SQLMesh state even in testing deployments.
+
+    Learn more about storing SQLMesh state [here](../../guides/configuration.md#state-connection).
 
 ### Specify state connection
 
