@@ -194,7 +194,8 @@ snowflake-test: guard-SNOWFLAKE_ACCOUNT guard-SNOWFLAKE_WAREHOUSE guard-SNOWFLAK
 bigquery-test: guard-BIGQUERY_KEYFILE engine-bigquery-install
 	pytest -n auto -x -m "bigquery" --junitxml=test-results/junit-bigquery.xml
 
-databricks-test: guard-DATABRICKS_CATALOG guard-DATABRICKS_SERVER_HOSTNAME guard-DATABRICKS_HTTP_PATH guard-DATABRICKS_ACCESS_TOKEN engine-databricks-install
+databricks-test: guard-DATABRICKS_CATALOG guard-DATABRICKS_SERVER_HOSTNAME guard-DATABRICKS_HTTP_PATH guard-DATABRICKS_ACCESS_TOKEN guard-DATABRICKS_CONNECT_VERSION engine-databricks-install
+	pip install 'databricks-connect==${DATABRICKS_CONNECT_VERSION}'
 	pytest -n auto -x -m "databricks" --junitxml=test-results/junit-databricks.xml
 
 redshift-test: guard-REDSHIFT_HOST guard-REDSHIFT_USER guard-REDSHIFT_PASSWORD guard-REDSHIFT_DATABASE engine-redshift-install
