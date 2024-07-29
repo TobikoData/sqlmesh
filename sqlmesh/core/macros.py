@@ -1100,14 +1100,70 @@ def var(
     return exp.convert(evaluator.var(var_name.this, default))
 
 
-@macro("deduplicate")
+@macro()
 def deduplicate(
-    evaluator: MacroEvaluator, var_name: exp.Expression, default: t.Optional[exp.Expression] = None
-) -> exp.Expression:
-    if not var_name.is_string:
-        raise SQLMeshError(f"Invalid variable name '{var_name.sql()}'. Expected a string literal.")
+    evaluator: MacroEvaluator,
+    relation: exp.Expression,
+    partition_by: list[exp.Expression],
+    order_by: list[str],
+) -> exp.Query:
+    """Returns a QUERY to deduplicate rows within a table
 
-    return exp.convert(evaluator.var(var_name.this, default))
+    Args:
+        relation: table or CTE name to deduplicate
+        partition_by: column names, or expressions to use to identify a window of rows out of which to select one as the deduplicated row
+        order_by: A list of strings representing the ORDER BY clause
+
+    Example:
+        >>> from sqlglot import parse_one
+        >>> from sqlglot.schema import MappingSchema
+        >>> from sqlmesh.core.macros import MacroEvaluator
+        >>> sql = "@deduplicate(demo.table, [user_id, cast(timestamp as date)], ['timestamp desc', 'status asc'])"
+        >>> MacroEvaluator().transform(parse_one(sql)).sql()
+        'SELECT * FROM demo.table QUALIFY ROW_NUMBER() OVER (PARTITION BY user_id, CAST(timestamp AS date) ORDER BY timestamp DESC, status ASC NULLS LAST) = 1'
+    """
+
+    partition_clause = exp.Tuple(
+        expressions=[
+            col if not isinstance(col, exp.Cast) else exp.Cast(this=col.this, to=col.args.get("to"))
+            for col in partition_by
+        ]
+    )
+
+    order_expressions = []
+    for order_item in order_by:
+        parts = order_item.split()
+        if len(parts) != 2:
+            raise SQLMeshError(
+                f"Invalid order_by expression: '{order_item}'. Expected format: '<column> <asc|desc>'"
+            )
+        column, direction = parts
+        if direction.upper() not in ("ASC", "DESC"):
+            raise SQLMeshError(
+                f"Invalid direction in order_by expression: '{direction}'. Expected 'ASC' or 'DESC'"
+            )
+        order_expressions.append(
+            exp.Ordered(this=exp.Column(this=column), desc=direction.upper() == "DESC")
+        )
+
+    if not order_expressions:
+        raise SQLMeshError("At least one order_by expression is required: '<column> <asc|desc>'")
+
+    order_clause = exp.Order(expressions=order_expressions)
+
+    window_function = exp.Window(
+        this=exp.RowNumber(), partition_by=partition_clause, order=order_clause
+    )
+
+    first_unique_row = exp.EQ(this=window_function, expression=exp.Literal.number(1))
+
+    query = (
+        exp.Select(expressions=[exp.Star()])
+        .from_(relation, dialect=evaluator.dialect)
+        .qualify(first_unique_row)
+    )
+
+    return query
 
 
 @macro("date_spine")
