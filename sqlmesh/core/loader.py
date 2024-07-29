@@ -201,7 +201,7 @@ class Loader(abc.ABC):
                 paths_to_load.append(deprecated_yaml)
 
             if external_models_path.exists() and external_models_path.is_dir():
-                paths_to_load.extend(external_models_path.glob("*.yaml"))
+                paths_to_load.extend(self._glob_paths(external_models_path, extension=".yaml"))
 
             for path in paths_to_load:
                 self._track_file(path)
@@ -230,6 +230,34 @@ class Loader(abc.ABC):
 
         return models
 
+    def _glob_paths(
+        self,
+        path: Path,
+        ignore_patterns: t.Optional[t.List[str]] = None,
+        extension: t.Optional[str] = None,
+    ) -> t.Generator[Path, None, None]:
+        """
+        Globs the provided path for the file extension but also removes any filepaths that match an ignore
+        pattern either set in constants or provided in config
+
+        Args:
+            path: The filepath to glob
+            ignore_patterns: A list of patterns for glob to ignore
+            extension: The extension to check for in that path (checks recursively in zero or more subdirectories)
+
+        Returns:
+            Matched paths that are not ignored
+        """
+        ignore_patterns = ignore_patterns or []
+        extension = extension or ""
+
+        for filepath in path.glob(f"**/*{extension}"):
+            for ignore_pattern in ignore_patterns:
+                if filepath.match(ignore_pattern):
+                    break
+            else:
+                yield filepath
+
     def _add_model_to_dag(self, model: Model) -> None:
         self._dag.add(model.fqn, model.depends_on)
 
@@ -251,7 +279,9 @@ class SqlMeshLoader(Loader):
         macros_max_mtime: t.Optional[float] = None
 
         for context_path, config in self._context.configs.items():
-            for path in self._glob_paths(context_path / c.MACROS, config=config, extension=".py"):
+            for path in self._glob_paths(
+                context_path / c.MACROS, ignore_patterns=config.ignore_patterns, extension=".py"
+            ):
                 if import_python_file(path, context_path):
                     self._track_file(path)
                     macro_file_mtime = self._path_mtimes[path]
@@ -261,7 +291,9 @@ class SqlMeshLoader(Loader):
                         else macro_file_mtime
                     )
 
-            for path in self._glob_paths(context_path / c.MACROS, config=config, extension=".sql"):
+            for path in self._glob_paths(
+                context_path / c.MACROS, ignore_patterns=config.ignore_patterns, extension=".sql"
+            ):
                 self._track_file(path)
                 macro_file_mtime = self._path_mtimes[path]
                 macros_max_mtime = (
@@ -301,7 +333,9 @@ class SqlMeshLoader(Loader):
             cache = SqlMeshLoader._Cache(self, context_path)
             variables = self._variables(config)
 
-            for path in self._glob_paths(context_path / c.MODELS, config=config, extension=".sql"):
+            for path in self._glob_paths(
+                context_path / c.MODELS, ignore_patterns=config.ignore_patterns, extension=".sql"
+            ):
                 if not os.path.getsize(path):
                     continue
 
@@ -356,7 +390,7 @@ class SqlMeshLoader(Loader):
             model_registry._dialect = config.model_defaults.dialect
             try:
                 for path in self._glob_paths(
-                    context_path / c.MODELS, config=config, extension=".py"
+                    context_path / c.MODELS, ignore_patterns=config.ignore_patterns, extension=".py"
                 ):
                     if not os.path.getsize(path):
                         continue
@@ -389,7 +423,9 @@ class SqlMeshLoader(Loader):
         """Loads custom materializations."""
         for context_path, config in self._context.configs.items():
             for path in self._glob_paths(
-                context_path / c.MATERIALIZATIONS, config=config, extension=".py"
+                context_path / c.MATERIALIZATIONS,
+                ignore_patterns=config.ignore_patterns,
+                extension=".py",
             ):
                 if os.path.getsize(path):
                     import_python_file(path, context_path)
@@ -401,7 +437,9 @@ class SqlMeshLoader(Loader):
         audits_by_name: UniqueKeyDict[str, Audit] = UniqueKeyDict("audits")
         for context_path, config in self._context.configs.items():
             variables = self._variables(config)
-            for path in self._glob_paths(context_path / c.AUDITS, config=config, extension=".sql"):
+            for path in self._glob_paths(
+                context_path / c.AUDITS, ignore_patterns=config.ignore_patterns, extension=".sql"
+            ):
                 self._track_file(path)
                 with open(path, "r", encoding="utf-8") as file:
                     expressions = parse(file.read(), default_dialect=config.model_defaults.dialect)
@@ -424,7 +462,9 @@ class SqlMeshLoader(Loader):
         metrics: UniqueKeyDict[str, MetricMeta] = UniqueKeyDict("metrics")
 
         for context_path, config in self._context.configs.items():
-            for path in self._glob_paths(context_path / c.METRICS, config=config, extension=".sql"):
+            for path in self._glob_paths(
+                context_path / c.METRICS, ignore_patterns=config.ignore_patterns, extension=".sql"
+            ):
                 if not os.path.getsize(path):
                     continue
                 self._track_file(path)
@@ -439,27 +479,6 @@ class SqlMeshLoader(Loader):
                         raise ConfigError(f"Failed to parse metric definitions at '{path}': {ex}.")
 
         return metrics
-
-    def _glob_paths(
-        self, path: Path, config: Config, extension: str
-    ) -> t.Generator[Path, None, None]:
-        """
-        Globs the provided path for the file extension but also removes any filepaths that match an ignore
-        pattern either set in constants or provided in config
-
-        Args:
-            path: The filepath to glob
-            extension: The extension to check for in that path (checks recursively in zero or more subdirectories)
-
-        Returns:
-            Matched paths that are not ignored
-        """
-        for filepath in path.glob(f"**/*{extension}"):
-            for ignore_pattern in config.ignore_patterns:
-                if filepath.match(ignore_pattern):
-                    break
-            else:
-                yield filepath
 
     def _variables(self, config: Config) -> t.Dict[str, t.Any]:
         gateway_name = self._context.gateway or self._context.config.default_gateway_name

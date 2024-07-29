@@ -15,6 +15,7 @@ from sqlmesh.cli.example_project import init_example_project
 
 from sqlmesh.core import constants as c
 from sqlmesh.core import dialect as d
+from sqlmesh.core.audit import ModelAudit
 from sqlmesh.core.config import (
     Config,
     NameInferenceConfig,
@@ -967,6 +968,39 @@ def test_audits():
         ("audit_b", {"key": exp.Literal.string("value")}),
     ]
     assert model.tags == ["foo"]
+
+
+def test_enable_audits_from_model_defaults():
+    expressions = d.parse(
+        """
+        MODEL (
+            name db.audit_model,
+        );
+        SELECT 1 as id;
+
+        AUDIT (
+    name assert_positive_order_ids,
+    );
+    SELECT *
+    FROM @this_model
+    WHERE
+    id < 0;
+    """
+    )
+
+    model = load_sql_based_model(expressions, path=Path("./examples/sushi/models/test_model.sql"))
+    assert len(model.audits) == 0
+    assert len(model.inline_audits) == 1
+
+    config = Config(
+        model_defaults=ModelDefaultsConfig(dialect="duckdb", audits=["assert_positive_order_ids"])
+    )
+    assert config.model_defaults.audits[0] == ("assert_positive_order_ids", {})
+
+    snapshot = Snapshot.from_node(model, nodes={}, config=config)
+    assert len(snapshot.audits) == 1
+    assert type(snapshot.audits[0]) == ModelAudit
+    assert snapshot.audits[0].query.sql() == "SELECT * FROM @this_model WHERE id < 0"
 
 
 def test_description(sushi_context):
@@ -4714,6 +4748,24 @@ def test_incremental_by_partition(sushi_context, assert_exp_eq):
             MODEL (
                 name db.table,
                 kind INCREMENTAL_BY_PARTITION,
+            );
+
+            SELECT a, b
+            """
+        )
+        load_sql_based_model(expressions)
+
+    with pytest.raises(
+        ConfigError,
+        match=r".*Do not specify the `forward_only` configuration key.*",
+    ):
+        expressions = d.parse(
+            """
+            MODEL (
+                name db.table,
+                kind INCREMENTAL_BY_PARTITION (
+                    forward_only true
+                ),
             );
 
             SELECT a, b

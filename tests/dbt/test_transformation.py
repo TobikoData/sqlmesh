@@ -21,6 +21,7 @@ from sqlmesh.core.model import (
     IncrementalByTimeRangeKind,
     IncrementalByUniqueKeyKind,
     IncrementalUnmanagedKind,
+    ManagedKind,
     SqlModel,
     ViewKind,
 )
@@ -262,6 +263,13 @@ def test_model_kind():
         disable_restatement=True,
     ).model_kind(context) == IncrementalUnmanagedKind(
         insert_overwrite=True, disable_restatement=True
+    )
+
+    assert (
+        ModelConfig(materialized=Materialization.DYNAMIC_TABLE, target_lag="1 hour").model_kind(
+            context
+        )
+        == ManagedKind()
     )
 
     with pytest.raises(ConfigError):
@@ -1120,3 +1128,39 @@ def test_model_cluster_by():
         materialized=Materialization.TABLE.value,
     )
     assert model.to_sqlmesh(context).clustered_by == ["BAR", "QUX"]
+
+
+def test_snowflake_dynamic_table():
+    context = DbtContext()
+    context._target = SnowflakeConfig(
+        name="target",
+        schema="test",
+        database="test",
+        account="account",
+        user="user",
+        password="password",
+    )
+
+    model = ModelConfig(
+        name="model",
+        alias="model",
+        package_name="package",
+        target_schema="test",
+        sql="SELECT * FROM baz",
+        materialized=Materialization.DYNAMIC_TABLE.value,
+        target_lag="1 hour",
+        snowflake_warehouse="SMALL",
+    )
+
+    as_sqlmesh = model.to_sqlmesh(context)
+    assert as_sqlmesh.kind == ManagedKind()
+    assert as_sqlmesh.physical_properties == {
+        "target_lag": exp.Literal.string("1 hour"),
+        "warehouse": exp.Literal.string("SMALL"),
+    }
+
+    # both target_lag and snowflake_warehouse are required properties
+    # https://docs.getdbt.com/reference/resource-configs/snowflake-configs#dynamic-tables
+    for required_property in ["target_lag", "snowflake_warehouse"]:
+        with pytest.raises(ConfigError, match=r".*must be set for dynamic tables"):
+            model.copy(update={required_property: None}).to_sqlmesh(context)

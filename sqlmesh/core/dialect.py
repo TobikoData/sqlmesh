@@ -21,7 +21,7 @@ from sqlglot.schema import MappingSchema
 from sqlglot.tokens import Token
 
 from sqlmesh.core.constants import MAX_MODEL_DEFINITION_SIZE
-from sqlmesh.utils.errors import SQLMeshError
+from sqlmesh.utils.errors import SQLMeshError, ConfigError
 from sqlmesh.utils.pandas import columns_to_types_from_df
 
 if t.TYPE_CHECKING:
@@ -418,7 +418,10 @@ def _parse_table_parts(
 
     if isinstance(table_arg, exp.Var) and name.startswith(SQLMESH_MACRO_PREFIX):
         # Macro functions do not clash with the staged file syntax, so we can safely parse them
-        if self._prev.token_type == TokenType.STRING or any(ch in name for ch in ("(", "{")):
+        from sqlmesh.core.macros import macro
+
+        macros = macro.get_registry()
+        if self._prev.token_type == TokenType.STRING or "{" in name or name[1:].lower() in macros:
             self._retreat(index)
             return Parser._parse_table_parts(self, schema=schema, is_db_reference=is_db_reference)
 
@@ -1096,3 +1099,24 @@ def interpret_key_value_pairs(
     e: exp.Tuple,
 ) -> t.Dict[str, exp.Expression | str | int | float | bool]:
     return {i.this.name: interpret_expression(i.expression) for i in e.expressions}
+
+
+def extract_audit(v: exp.Expression) -> t.Tuple[str, t.Dict[str, exp.Expression]]:
+    kwargs = {}
+
+    if isinstance(v, exp.Anonymous):
+        func = v.name
+        args = v.expressions
+    elif isinstance(v, exp.Func):
+        func = v.sql_name()
+        args = list(v.args.values())
+    else:
+        return v.name.lower(), {}
+
+    for arg in args:
+        if not isinstance(arg, (exp.PropertyEQ, exp.EQ)):
+            raise ConfigError(
+                f"Function '{func}' must be called with key-value arguments like {func}(arg := value)."
+            )
+        kwargs[arg.left.name.lower()] = arg.right
+    return func.lower(), kwargs

@@ -557,3 +557,30 @@ model_defaults:
     assert attach_config_2.type == "postgres"
     assert attach_config_2.path == "dbname=postgres user=postgres host=127.0.0.1"
     assert attach_config_2.read_only is True
+
+
+def test_load_model_defaults_audits(tmp_path):
+    config_path = tmp_path / "config_model_defaults_audits.yaml"
+    with open(config_path, "w", encoding="utf-8") as fd:
+        fd.write(
+            """
+model_defaults:
+    dialect: ''
+    audits: 
+        - assert_positive_order_ids
+        - does_not_exceed_threshold(column := id, threshold := 1000)
+        """
+        )
+
+    config = load_config_from_paths(
+        Config,
+        project_paths=[config_path],
+    )
+
+    assert len(config.model_defaults.audits) == 2
+    assert config.model_defaults.audits[0] == ("assert_positive_order_ids", {})
+    assert config.model_defaults.audits[1][0] == "does_not_exceed_threshold"
+    assert type(config.model_defaults.audits[1][1]["column"]) == exp.Column
+    assert config.model_defaults.audits[1][1]["column"].this.this == "id"
+    assert type(config.model_defaults.audits[1][1]["threshold"]) == exp.Literal
+    assert config.model_defaults.audits[1][1]["threshold"].this == "1000"

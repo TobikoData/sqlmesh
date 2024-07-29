@@ -1,10 +1,20 @@
 # Macro variables
 
-The most common use case for macros is variable substitution. For example, you might have a SQL query that filters by date in the `WHERE` clause.
+Macro variables are placeholders whose values are substituted in when the macro is rendered.
+
+They enable dynamic macro behavior - for example, a date parameter's value might be based on when the macro was run.
+
+!!! note
+
+    This page discusses SQLMesh's built-in macro variables. Learn more about custom, user-defined macro variables on the [SQLMesh macros page](./sqlmesh_macros.md#user-defined-variables).
+
+## Example
+
+Consider a SQL query that filters by date in the `WHERE` clause.
 
 Instead of manually changing the date each time the model is run, you can use a macro variable to make the date dynamic. With the dynamic approach, the date changes automatically based on when the query is run.
 
-Consider this query that filters for rows where column `my_date` is after '2023-01-01':
+This query filters for rows where column `my_date` is after '2023-01-01':
 
 ```sql linenums="1"
 SELECT *
@@ -37,38 +47,42 @@ We describe SQLMesh's predefined variables below; user-defined macro variables a
 ## Predefined Variables
 SQLMesh comes with predefined variables that can be used in your queries. They are automatically set by the SQLMesh runtime.
 
-Most predefined variables are related to time and use a combination of prefixes (start, end, execution) and postfixes (date, ds, ts, epoch, millis). They are described in the next section; [other predefined variables](#runtime-variables) are discussed in the following section.
+Most predefined variables are related to time and use a combination of prefixes (start, end, etc.) and postfixes (date, ds, ts, etc.). They are described in the next section; [other predefined variables](#runtime-variables) are discussed in the following section.
 
 ### Temporal variables
 
-SQLMesh uses the python [datetime module](https://docs.python.org/3/library/datetime.html) for handling dates and times. It uses the standard [Unix epoch](https://en.wikipedia.org/wiki/Unix_time) start of 1970-01-01. *All predefined variables with a time component use the [UTC time zone](https://en.wikipedia.org/wiki/Coordinated_Universal_Time).*
+SQLMesh uses the python [datetime module](https://docs.python.org/3/library/datetime.html) for handling dates and times. It uses the standard [Unix epoch](https://en.wikipedia.org/wiki/Unix_time) start of 1970-01-01.
+
+*All predefined variables with a time component use the [UTC time zone](https://en.wikipedia.org/wiki/Coordinated_Universal_Time).*
 
 Prefixes:
 
-* start - The inclusive starting interval of a model run.
-* end - The inclusive end interval of a model run.
-* execution - The timestamp of when the execution started.
+* start - The inclusive starting interval of a model run
+* end - The inclusive end interval of a model run
+* execution - The timestamp of when the execution started
 
 Postfixes:
 
-* date - A python date object that converts into a native SQL Date.
+* dt - A python datetime object that converts into a native SQL `TIMESTAMP` (or SQL engine equivalent)
+* date - A python date object that converts into a native SQL `DATE`
 * ds - A date string with the format: '%Y-%m-%d'
-* ts - An ISO 8601 datetime formatted string: '%Y-%m-%d %H:%M:%S'.
-* tstz - An ISO 8601 datetime formatted string with timezone: '%Y-%m-%d %H:%M:%S%z'.
-* epoch - An integer representing seconds since Unix epoch.
-* millis - An integer representing milliseconds since Unix epoch.
+* ts - An ISO 8601 datetime formatted string: '%Y-%m-%d %H:%M:%S'
+* tstz - An ISO 8601 datetime formatted string with timezone: '%Y-%m-%d %H:%M:%S%z'
+* hour - An integer representing the hour of the day, with values 0-23
+* epoch - An integer representing seconds since Unix epoch
+* millis - An integer representing milliseconds since Unix epoch
 
 All predefined temporal macro variables:
+
+* dt
+    * @start_dt
+    * @end_dt
+    * @execution_dt
 
 * date
     * @start_date
     * @end_date
     * @execution_date
-
-* datetime
-    * @start_dt
-    * @end_dt
-    * @execution_dt
 
 * ds
     * @start_ds
@@ -85,6 +99,11 @@ All predefined temporal macro variables:
     * @end_tstz
     * @execution_tstz
 
+* hour
+    * @start_hour
+    * @end_hour
+    * @execution_hour
+
 * epoch
     * @start_epoch
     * @end_epoch
@@ -99,12 +118,12 @@ All predefined temporal macro variables:
 
 SQLMesh provides two other predefined variables used to modify model behavior based on information available at runtime.
 
-* @runtime_stage - A string value that denotes the current stage of the SQLMesh runtime. It can take one of the following values:
-    * 'loading' - The project is currently being loaded into SQLMesh's runtime context.
+* @runtime_stage - A string value denoting the current stage of the SQLMesh runtime. Typically used in models to conditionally execute pre/post-statements (learn more [here](../models/sql_models.md#optional-prepost-statements)). It returns one of these values:
+    * 'loading' - The project is being loaded into SQLMesh's runtime context.
     * 'creating' - The model tables are being created.
-    * 'evaluating' - The models' logic is being evaluated.
-    * 'testing' - The models' logic is being evaluated in the context of a unit test.
-* @gateway - A string value that represents the name of the selected [gateway](../../guides/connections.md).
+    * 'evaluating' - The model query logic is being evaluated.
+    * 'testing' - The model query logic is being evaluated in the context of a unit test.
+* @gateway - A string value containing the name of the current [gateway](../../guides/connections.md).
 
 ### Audit-only variables
 

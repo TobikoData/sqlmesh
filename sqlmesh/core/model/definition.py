@@ -25,7 +25,7 @@ from sqlmesh.core import dialect as d
 from sqlmesh.core.macros import MacroRegistry, MacroStrTemplate, macro
 from sqlmesh.core.model.common import expression_validator
 from sqlmesh.core.model.kind import ModelKindName, SeedKind, ModelKind, FullKind, create_model_kind
-from sqlmesh.core.model.meta import ModelMeta
+from sqlmesh.core.model.meta import ModelMeta, AuditReference
 from sqlmesh.core.model.seed import CsvSeedReader, Seed, create_seed
 from sqlmesh.core.renderer import ExpressionRenderer, QueryRenderer
 from sqlmesh.utils import columns_to_types_all_known, str_to_bool, UniqueKeyDict
@@ -461,7 +461,11 @@ class _Model(ModelMeta, frozen=True):
             )
         return query
 
-    def referenced_audits(self, audits: t.Dict[str, ModelAudit]) -> t.List[ModelAudit]:
+    def referenced_audits(
+        self,
+        audits: t.Dict[str, ModelAudit],
+        default_audits: t.List[AuditReference] = [],
+    ) -> t.List[ModelAudit]:
         """Returns audits referenced in this model.
 
         Args:
@@ -471,7 +475,7 @@ class _Model(ModelMeta, frozen=True):
 
         referenced_audits = []
 
-        for audit_name, _ in self.audits:
+        for audit_name, _ in self.audits + default_audits:
             if audit_name in self.inline_audits:
                 referenced_audits.append(self.inline_audits[audit_name])
             elif audit_name in audits:

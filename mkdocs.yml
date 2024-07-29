@@ -134,10 +134,12 @@ markdown_extensions:
   - pymdownx.inlinehilite
   - pymdownx.snippets
   - pymdownx.superfences
-  - pymdownx.blocks.tab:
+  - pymdownx.tabbed:
       alternate_style: true
   - admonition
   - pymdownx.details
+  - attr_list
+  - md_in_html
 extra_css:
   - stylesheets/extra.css
 copyright: Tobiko Data Inc.

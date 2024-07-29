@@ -57,17 +57,37 @@ Access global variable values in a model definition using the `@<VAR_NAME>` macr
 
 For example, this SQLMesh configuration key defines six variables of different data types:
 
-```yaml linenums="1"
-variables:
-  int_var: 1
-  float_var: 2.0
-  bool_var: true
-  str_var: "cat"
-  list_var: [1, 2, 3]
-  dict_var:
-    key1: 1
-    key2: 2
-```
+=== "YAML"
+
+    ```yaml linenums="1"
+    variables:
+      int_var: 1
+      float_var: 2.0
+      bool_var: true
+      str_var: "cat"
+      list_var: [1, 2, 3]
+      dict_var:
+        key1: 1
+        key2: 2
+    ```
+
+=== "Python"
+
+    ``` python linenums="1"
+    variables = {
+        "int_var": 1,
+        "float_var": 2.0,
+        "bool_var": True,
+        "str_var": "cat",
+        "list_var": [1, 2, 3],
+        "dict_var": {"key1": 1, "key2": 2},
+    }
+
+    config = Config(
+        variables=variables,
+        ... # other Config arguments
+    )
+    ```
 
 A model definition could access the `int_var` value in a `WHERE` clause like this:
 
@@ -101,13 +121,32 @@ A similar API is available for [Python macro functions](#accessing-global-variab
 
 Like global variables, gateway variables are defined in the project configuration file. However, they are specified in a specific gateway's `variables` key:
 
-```yaml linenums="1"
-gateways:
-  my_gateway:
-    variables:
-      int_var: 1
-    ...
-```
+=== "YAML"
+
+    ```yaml linenums="1"
+    gateways:
+      my_gateway:
+        variables:
+          int_var: 1
+        ...
+    ```
+
+=== "Python"
+
+    ``` python linenums="1"
+    gateway_variables = {
+      "int_var": 1
+    }
+
+    config = Config(
+        gateways={
+          "my_gateway": GatewayConfig(
+            variables=gateway_variables
+            ... # other GatewayConfig arguments
+            ),
+          }
+    )
+    ```
 
 Access them in models using the same methods as [global variables](#global-variables).
 
@@ -1586,11 +1625,15 @@ Typed macros in SQLMesh use Python's type hints. Here's a simple example of a ty
 from sqlmesh import macro
 
 @macro()
-def repeat_string(evaluator, text: str, count: int) -> str:
+def repeat_string(evaluator, text: str, count: int):
     return text * count
 ```
 
-Usage in SQLMesh:
+This macro takes two arguments: `text` of type `str` and `count` of type `int`, and it returns a string.
+
+Without type hints, the inputs are two SQLGlot `exp.Literal` objects you would need to manually convert to Python `str` and `int` types. With type hints, you can work with them as string and integer types directly.
+
+Let's try to use the macro in a SQLMesh model:
 
 ```sql linenums="1"
 SELECT
@@ -1598,7 +1641,44 @@ SELECT
 FROM some_table;
 ```
 
-This macro takes two arguments: `text` of type `str` and `count` of type `int`, and it returns a string. Without type hints, the inputs to the macro would have been two `exp.Literal` objects you would have had to convert to strings and integers manually.
+Unfortunately, this model generates an error when rendered:
+
+```
+Error: Invalid expression / Unexpected token. Line 1, Col: 23.
+  SQLMesh SQLMesh SQLMesh
+```
+
+Why? The macro returned `SQLMesh SQLMesh SQLMesh` as expected, but that string is not valid SQL in the rendered query:
+
+```sql linenums="1" hl_lines="2"
+SELECT
+  SQLMesh SQLMesh SQLMesh as repeated_string ### invalid SQL code
+FROM some_table;
+```
+
+The problem is a mismatch between our macro's Python return type `str` and the type expected by the parsed SQL query.
+
+Recall that SQLMesh macros work by modifying the query's semantic representation. In that representation, a SQLGlot string literal type is expected. SQLMesh will do its best to return the type expected by the query's semantic representation, but that is not possible in all scenarios.
+
+Therefore, we must explicitly convert the output with SQLGlot's `exp.Literal.string()` method:
+
+```python linenums="1" hl_lines="5"
+from sqlmesh import macro
+
+@macro()
+def repeat_string(evaluator, text: str, count: int):
+    return exp.Literal.string(text * count)
+```
+
+Now the query will render with a valid single-quoted string literal:
+
+```sql linenums="1"
+SELECT
+  'SQLMesh SQLMesh SQLMesh ' AS "repeated_string"
+FROM "some_table" AS "some_table"
+```
+
+Typed macros coerce the **inputs** to a macro function, but the macro code is responsible for coercing the **output** to the type expected by the query's semantic representation.
 
 #### Supported Types
 
