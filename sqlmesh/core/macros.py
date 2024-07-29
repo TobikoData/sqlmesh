@@ -1120,7 +1120,7 @@ def deduplicate(
         >>> from sqlmesh.core.macros import MacroEvaluator
         >>> sql = "@deduplicate(demo.table, [user_id, cast(timestamp as date)], ['timestamp desc', 'status asc'])"
         >>> MacroEvaluator().transform(parse_one(sql)).sql()
-        'SELECT * FROM demo.table QUALIFY ROW_NUMBER() OVER (PARTITION BY user_id, CAST(timestamp AS date) ORDER BY timestamp DESC, status ASC NULLS LAST) = 1'
+        'SELECT * FROM demo.table QUALIFY ROW_NUMBER() OVER (PARTITION BY user_id, CAST(timestamp AS DATE) ORDER BY timestamp DESC, status ASC NULLS LAST) = 1'
     """
 
     partition_clause = exp.Tuple(
