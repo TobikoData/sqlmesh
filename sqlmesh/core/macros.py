@@ -1168,24 +1168,91 @@ def deduplicate(
     return query
 
 
-@macro("date_spine")
-def date_spine(
-    evaluator: MacroEvaluator, var_name: exp.Expression, default: t.Optional[exp.Expression] = None
-) -> exp.Expression:
-    if not var_name.is_string:
-        raise SQLMeshError(f"Invalid variable name '{var_name.sql()}'. Expected a string literal.")
+# @macro()
+# def date_spine(
+#     evaluator: MacroEvaluator,
+#     datepart: exp.Expression,
+#     start_date: exp.Expression,
+#     end_date: exp.Expression,
+# ) -> exp.Expression:
+#     """Returns a QUERY to create a date lookup table
 
-    return exp.convert(evaluator.var(var_name.this, default))
+#     Args:
+#         datepart: granularity level of date to generate (e.g., 'day', 'week', 'month', 'year')
+#         start_date: start date of date spine
+#         end_date: end date of date spine
+
+#     Example:
+#         >>> from sqlglot import parse_one
+#         >>> from sqlmesh.core.macros import MacroEvaluator
+#         >>> sql = "@date_spine('day', '2019-01-01', '2024-01-01')"
+#         >>> MacroEvaluator().transform(parse_one(sql)).sql()
+#         'WITH rawdata AS (SELECT ROW_NUMBER() OVER (ORDER BY 1) - 1 AS n FROM (SELECT 1) t CROSS JOIN (SELECT 1) t2 CROSS JOIN (SELECT 1) t3 CROSS JOIN (SELECT 1) t4 CROSS JOIN (SELECT 1) t5 CROSS JOIN (SELECT 1) t6 CROSS JOIN (SELECT 1) t7 CROSS JOIN (SELECT 1) t8 CROSS JOIN (SELECT 1) t9 CROSS JOIN (SELECT 1) t10), all_periods AS (SELECT DATEADD(day, n, CAST(2019-01-01 AS DATE)) AS date_day FROM rawdata), filtered AS (SELECT * FROM all_periods WHERE date_day <= CAST(2024-01-01 AS DATE)) SELECT * FROM filtered'
+#     """
+#     if not datepart.is_string:
+#         raise SQLMeshError(
+#             f"Invalid datepart '{datepart.sql()}'. Expected a string literal: day, week, month, year"
+#         )
+
+#     # Calculate the number of intervals between start_date and end_date
+#     intervals = exp.func(
+#         "DATEDIFF",
+#         this=exp.func("cast", this=datepart, to=exp.DataType.build("string")),
+#         expressions=[
+#             exp.func("cast", this=start_date, to=exp.DataType.build("date")),
+#             exp.func("cast", this=end_date, to=exp.DataType.build("date")),
+#         ],
+#     )
+
+#     # Generate series CTE
+#     rawdata = (
+#         exp.select(exp.func("ROW_NUMBER").over(exp.Order(expressions=[exp.Literal.number(1)])) - 1)
+#         .from_(exp.select(exp.Literal.number(1)))
+#         .cross_join(*[exp.select(exp.Literal.number(1)) for _ in range(9)])
+#         .subquery("rawdata")
+#     )
+
+#     # Generate all periods
+#     all_periods = (
+#         exp.select(
+#             exp.func(
+#                 "DATEADD",
+#                 this=exp.func("cast", this=datepart, to=exp.DataType.build("string")),
+#                 expressions=[
+#                     exp.column("n"),
+#                     exp.func("cast", this=start_date, to=exp.DataType.build("date")),
+#                 ],
+#             ).as_(f"date_{datepart.this}")
+#         )
+#         .from_(rawdata)
+#         .subquery("all_periods")
+#     )
+
+#     # Filter periods
+#     filtered = (
+#         exp.select(exp.star())
+#         .from_(all_periods)
+#         .where(
+#             exp.column(f"date_{datepart.this}")
+#             <= exp.func("cast", this=end_date, to=exp.DataType.build("date"))
+#         )
+#         .subquery("filtered")
+#     )
+
+#     # Construct the final query
+#     query = exp.select(exp.star()).from_(filtered, dialect=evaluator.dialect)
+
+#     return query
 
 
-@macro("metric_decompose")
-def metric_decompose(
-    evaluator: MacroEvaluator, var_name: exp.Expression, default: t.Optional[exp.Expression] = None
-) -> exp.Expression:
-    if not var_name.is_string:
-        raise SQLMeshError(f"Invalid variable name '{var_name.sql()}'. Expected a string literal.")
+# @macro()
+# def metric_decompose(
+#     evaluator: MacroEvaluator, var_name: exp.Expression, default: t.Optional[exp.Expression] = None
+# ) -> exp.Expression:
+#     if not var_name.is_string:
+#         raise SQLMeshError(f"Invalid variable name '{var_name.sql()}'. Expected a string literal.")
 
-    return exp.convert(evaluator.var(var_name.this, default))
+#     return exp.convert(evaluator.var(var_name.this, default))
 
 
 def normalize_macro_name(name: str) -> str:
