@@ -1125,7 +1125,9 @@ def deduplicate(
 
     partition_clause = exp.Tuple(
         expressions=[
-            col if not isinstance(col, exp.Cast) else exp.Cast(this=col.this, to=col.args.get("to"))
+            col
+            if not isinstance(col, exp.Cast)
+            else exp.func("cast", this=col.this, to=col.args.get("to"))
             for col in partition_by
         ]
     )
