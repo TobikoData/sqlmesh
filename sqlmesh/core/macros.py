@@ -1104,8 +1104,8 @@ def var(
 def deduplicate(
     evaluator: MacroEvaluator,
     relation: exp.Expression,
-    partition_by: list[exp.Expression],
-    order_by: list[str],
+    partition_by: t.List[exp.Expression],
+    order_by: t.List[str],
 ) -> exp.Query:
     """Returns a QUERY to deduplicate rows within a table
 
