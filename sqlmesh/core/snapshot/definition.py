@@ -902,10 +902,23 @@ class Snapshot(PydanticModel, SnapshotInfoMixin):
             upper_bound_ts = to_timestamp(execution_time)
             end_ts = min(end_ts, upper_bound_ts)
 
-        lookback = self.model.lookback if self.is_model else 0
+        lookback = 0
+        model_end_ts: t.Optional[int] = None
+
+        if self.is_model:
+            lookback = self.model.lookback
+            model_end_ts = (
+                to_timestamp(make_inclusive_end(self.model.end)) if self.model.end else None
+            )
 
         return compute_missing_intervals(
-            interval_unit, tuple(intervals), start_ts, end_ts, upper_bound_ts, lookback
+            interval_unit,
+            tuple(intervals),
+            start_ts,
+            end_ts,
+            upper_bound_ts,
+            lookback,
+            model_end_ts,
         )
 
     def categorize_as(self, category: SnapshotChangeCategory) -> None:
@@ -1641,6 +1654,7 @@ def compute_missing_intervals(
     end_ts: int,
     upper_bound_ts: int,
     lookback: int,
+    model_end_ts: t.Optional[int],
 ) -> Intervals:
     """Computes all missing intervals between start and end given intervals.
 
@@ -1651,6 +1665,7 @@ def compute_missing_intervals(
         end_ts: Exclusive timestamp end.
         upper_bound_ts: The exclusive upper bound timestamp for lookback.
         lookback: A lookback window.
+        model_end_ts: The inclusive end timestamp set on the model (if one is set)
 
     Returns:
         A list of all timestamps in this range.
@@ -1660,20 +1675,17 @@ def compute_missing_intervals(
 
     # get all individual timestamps with the addition of extra lookback timestamps up to the execution date
     # when a model has lookback, we need to check all the intervals between itself and its lookback exist.
+    intervals_beyond_end_ts = 0
     while True:
         ts = to_timestamp(croniter.get_next(estimate=True))
 
         if ts < end_ts:
             timestamps.append(ts)
+        elif lookback and ts < upper_bound_ts:
+            timestamps.append(ts)
+            intervals_beyond_end_ts += 1
         else:
             croniter.get_prev(estimate=True)
-            break
-
-    for _ in range(lookback):
-        ts = to_timestamp(croniter.get_next(estimate=True))
-        if ts < upper_bound_ts:
-            timestamps.append(ts)
-        else:
             break
 
     missing = []
@@ -1697,7 +1709,8 @@ def compute_missing_intervals(
             elif current_ts >= low and compare_ts < high:
                 break
         else:
-            missing.append((current_ts, next_ts))
+            if model_end_ts is None or compare_ts < model_end_ts or i > intervals_beyond_end_ts + 1:
+                missing.append((current_ts, next_ts))
 
     return missing
 
