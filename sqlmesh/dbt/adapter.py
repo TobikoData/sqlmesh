@@ -30,11 +30,15 @@ class BaseAdapter(abc.ABC):
         jinja_macros: JinjaMacroRegistry,
         jinja_globals: t.Optional[t.Dict[str, t.Any]] = None,
         project_dialect: t.Optional[str] = None,
+        quote_policy: t.Optional[Policy] = None,
     ):
+        from dbt.adapters.base.relation import Policy
+
         self.jinja_macros = jinja_macros
         self.jinja_globals = jinja_globals.copy() if jinja_globals else {}
         self.jinja_globals["adapter"] = self
         self.project_dialect = project_dialect
+        self.quote_policy = quote_policy or Policy()
 
     @abc.abstractmethod
     def get_relation(self, database: str, schema: str, identifier: str) -> t.Optional[BaseRelation]:
@@ -94,6 +98,10 @@ class BaseAdapter(abc.ABC):
     def quote(self, identifier: str) -> str:
         """Returns a quoted identifier."""
         return exp.to_column(identifier).sql(dialect=self.project_dialect, identify=True)
+
+    def quote_as_configured(self, value: str, component_type: str) -> str:
+        """Returns the value quoted according to the quote policy."""
+        return self.quote(value) if getattr(self.quote_policy, component_type, False) else value
 
     def dispatch(self, name: str, package: t.Optional[str] = None) -> t.Callable:
         """Returns a dialect-specific version of a macro with the given name."""
@@ -216,12 +224,12 @@ class RuntimeAdapter(BaseAdapter):
     ):
         from dbt.adapters.base import BaseRelation
         from dbt.adapters.base.column import Column
-        from dbt.adapters.base.relation import Policy
 
         super().__init__(
             jinja_macros,
             jinja_globals=jinja_globals,
             project_dialect=project_dialect or engine_adapter.dialect,
+            quote_policy=quote_policy,
         )
 
         table_mapping = table_mapping or {}
@@ -229,7 +237,6 @@ class RuntimeAdapter(BaseAdapter):
         self.engine_adapter = engine_adapter
         self.relation_type = relation_type or BaseRelation
         self.column_type = column_type or Column
-        self.quote_policy = quote_policy or Policy()
         self.table_mapping = {
             **to_table_mapping((snapshots or {}).values(), deployability_index),
             **table_mapping,
