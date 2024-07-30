@@ -382,6 +382,7 @@ def create_builtin_globals(
             jinja_macros,
             jinja_globals={**builtin_globals, **jinja_globals},
             project_dialect=project_dialect,
+            quote_policy=api.quote_policy,
         )
 
     sql_execution = SQLExecution(adapter)
