@@ -370,6 +370,85 @@ def test_missing_intervals_end_bounded_with_ignore_cron(make_snapshot):
     ]
 
 
+def test_missing_intervals_past_end_date_with_lookback(make_snapshot):
+    snapshot: Snapshot = make_snapshot(
+        SqlModel(
+            name="test_model",
+            kind=IncrementalByTimeRangeKind(time_column=TimeColumn(column="ds"), lookback=2),
+            owner="owner",
+            cron="@daily",
+            query=parse_one("SELECT 1, ds FROM name"),
+            start="2023-01-01",
+            end="2023-01-05",  # inclusive, equivalent to to_timestamp('2023-01-05 23:59:59.999999')
+        )
+    )
+
+    start_time = to_timestamp("2023-01-01")
+    end_time = to_timestamp(
+        "2023-01-06"
+    )  # exclusive because to_timestamp() returns a timestamp and not a date
+    assert snapshot.inclusive_exclusive(snapshot.node.start, snapshot.node.end) == (
+        start_time,
+        end_time,
+    )
+
+    # baseline - all intervals missing
+    assert snapshot.missing_intervals(start_time, end_time, execution_time=end_time) == [
+        (to_timestamp("2023-01-01"), to_timestamp("2023-01-02")),
+        (to_timestamp("2023-01-02"), to_timestamp("2023-01-03")),
+        (to_timestamp("2023-01-03"), to_timestamp("2023-01-04")),
+        (to_timestamp("2023-01-04"), to_timestamp("2023-01-05")),
+        (to_timestamp("2023-01-05"), to_timestamp("2023-01-06")),
+    ]
+
+    # fully backfill model - no intervals missing
+    snapshot.add_interval(start_time, end_time)
+
+    # even though lookback=2, because every interval has been filled,
+    # there should be no missing intervals
+    assert snapshot.missing_intervals(start_time, end_time, execution_time=end_time) == []
+
+    # however, when running for a new interval, this triggers lookback
+    # in this case, we remove the most recent interval (the one for 2023-01-05) to simulate it being new
+    # since lookback=2 days, this triggers missing intervals for 2023-01-03, 2023-01-04, 2023-01-05
+    snapshot.remove_interval(interval=(to_timestamp("2023-01-05"), to_timestamp("2023-01-06")))
+    assert snapshot.missing_intervals(start_time, end_time, execution_time=end_time) == [
+        (to_timestamp("2023-01-03"), to_timestamp("2023-01-04")),
+        (to_timestamp("2023-01-04"), to_timestamp("2023-01-05")),
+        (to_timestamp("2023-01-05"), to_timestamp("2023-01-06")),
+    ]
+
+    # put the interval we just removed back to make the model fully backfilled again
+    snapshot.add_interval(to_timestamp("2023-01-05"), to_timestamp("2023-01-06"))
+    assert snapshot.missing_intervals(start_time, end_time, execution_time=end_time) == []
+
+    # running on the end date + 1 day (2023-01-07)
+    # 2023-01-06 "would" run and since lookback=2 this pulls in 2023-01-04 and 2023-01-05 as well
+    # however, only 2023-01-04 and 2023-01-05 are within the model end date
+    end_time = to_timestamp("2023-01-07")
+    assert snapshot.missing_intervals(start_time, end_time, execution_time=end_time) == [
+        (to_timestamp("2023-01-04"), to_timestamp("2023-01-05")),
+        (to_timestamp("2023-01-05"), to_timestamp("2023-01-06")),
+    ]
+
+    # running on the end date + 2 days (2023-01-08)
+    # 2023-01-07 "would" run and since lookback=2 this pulls in 2023-01-06 and 2023-01-05 as well
+    # however, only 2023-01-05 is within the model end date
+    end_time = to_timestamp("2023-01-08")
+    assert snapshot.missing_intervals(start_time, end_time, execution_time=end_time) == [
+        (to_timestamp("2023-01-05"), to_timestamp("2023-01-06"))
+    ]
+
+    # running on the end date + 3 days (2023-01-09)
+    # no missing intervals because subtracting 2 days for lookback exceeds the models end date
+    end_time = to_timestamp("2023-01-09")
+    assert snapshot.missing_intervals(start_time, end_time, execution_time=end_time) == []
+
+    # running way in the future, no missing intervals because subtracting 2 days for lookback still exceeds the models end date
+    end_time = to_timestamp("2024-01-01")
+    assert snapshot.missing_intervals(start_time, end_time, execution_time=end_time) == []
+
+
 def test_incremental_time_self_reference(make_snapshot):
     snapshot = make_snapshot(
         SqlModel(
