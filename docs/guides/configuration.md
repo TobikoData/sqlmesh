@@ -489,11 +489,12 @@ These pages describe the connection configuration options for each execution eng
 
 Configuration for the state backend connection if different from the data warehouse connection.
 
-The data warehouse connection is used to store SQLMesh state if the `state_connection` key is not specified, unless the configuration uses an Airflow or Google Cloud Composer scheduler. If using one of those schedulers and the `state_connection` key is not specified, the scheduler's database is used (not the data warehouse).
-
-**NOTE: Using the same connection for data warehouse and state is only recommended for non-production deployments of SQLMesh.**
+The data warehouse connection is used to store SQLMesh state if the `state_connection` key is not specified, unless the configuration uses an Airflow or Google Cloud Composer scheduler. If using one of those schedulers, the scheduler's database is used (not the data warehouse) unless an [Airflow Connection has been configured](../integrations/airflow.md#state-connection).
 
 Unlike data transformations, storing state information requires database transactions. Data warehouses aren’t optimized for executing transactions, and storing state information in them can slow down your project or produce corrupted data due to simultaneous writes to the same table. Therefore, production SQLMesh deployments should use a dedicated state connection.
+
+!!! note
+    Using the same connection for data warehouse and state is not recommended for production deployments of SQLMesh.
 
 The easiest and most reliable way to manage your state connection is for [Tobiko Cloud](https://tobikodata.com/product.html) to do it for you. If you'd rather handle it yourself, we list recommended and unsupported state engines below.
 
