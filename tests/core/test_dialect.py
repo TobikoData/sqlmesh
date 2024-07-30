@@ -606,3 +606,6 @@ def test_conditional_statement():
         q.sql("snowflake")
         == "@IF(TRUE, COPY INTO 's3://example/data.csv' FROM EXTRA.EXAMPLE.TABLE STORAGE_INTEGRATION = S3_INTEGRATION FILE_FORMAT = (TYPE=CSV COMPRESSION=NONE NULL_IF=('') FIELD_OPTIONALLY_ENCLOSED_BY='\"') HEADER = TRUE OVERWRITE = TRUE SINGLE = TRUE /* this is a comment */)"
     )
+
+    q = parse_one("@IF(cond, VACUUM ANALYZE);", read="postgres")
+    assert q.sql(dialect="postgres") == "@IF(cond, VACUUM ANALYZE)"

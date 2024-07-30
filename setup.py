@@ -47,17 +47,14 @@ setup(
         "requests",
         "rich[jupyter]",
         "ruamel.yaml",
-        "sqlglot[rs]~=25.7.1",
+        "sqlglot[rs]~=25.8.1",
     ],
     extras_require={
         "bigquery": [
             "google-cloud-bigquery[pandas]",
             "google-cloud-bigquery-storage",
         ],
-        "databricks": [
-            "databricks-sql-connector",
-            "databricks-cli",
-        ],
+        "databricks": ["databricks-sql-connector"],
         "dev": [
             f"apache-airflow=={os.environ.get('AIRFLOW_VERSION', '2.9.1')}",
             "agate==1.7.1",
@@ -82,6 +79,7 @@ setup(
             "pytest-asyncio<0.23.0",
             "pytest-mock",
             "pytest-xdist",
+            "pytest-retry; python_version>='3.9'",
             "pyspark~=3.5.0",
             "pytz",
             "snowflake-connector-python[pandas,secure-local-storage]>=3.0.2",
