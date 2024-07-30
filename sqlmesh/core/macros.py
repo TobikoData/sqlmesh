@@ -1122,6 +1122,14 @@ def deduplicate(
         >>> MacroEvaluator().transform(parse_one(sql)).sql()
         'SELECT * FROM demo.table QUALIFY ROW_NUMBER() OVER (PARTITION BY user_id, CAST(timestamp AS DATE) ORDER BY timestamp DESC, status ASC) = 1'
     """
+    if not isinstance(partition_by, list):
+        raise SQLMeshError(
+            "partition_by must be a list of columns: [<column>, cast(<column> as <type>)]"
+        )
+
+    if not isinstance(order_by, list):
+        raise SQLMeshError("order_by must be a list of strings: ['<column> <asc|desc>']")
+
     partition_clause = exp.tuple_(
         *[
             col

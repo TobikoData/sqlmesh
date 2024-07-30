@@ -663,3 +663,65 @@ def test_macro_first_value_ignore_respect_nulls(assert_exp_eq) -> None:
         "SELECT FIRST_VALUE(@test(x) RESPECT NULLS) OVER (ORDER BY y) AS column_test"
     )
     assert_exp_eq(evaluator.transform(actual_expr), expected_sql, dialect="duckdb")
+
+
+def test_deduplicate(assert_exp_eq):
+    schema = MappingSchema({}, dialect="duckdb")
+    evaluator = MacroEvaluator(schema=schema, dialect="duckdb")
+
+    # Test successful case
+    sql = """
+    @deduplicate(
+        my_table,
+        [user_id, CAST(timestamp AS DATE)],
+        ['timestamp DESC', 'status ASC']
+    )
+    """
+    expected_sql = """
+    SELECT *
+    FROM my_table
+    QUALIFY ROW_NUMBER() OVER (
+        PARTITION BY user_id, CAST(timestamp AS DATE)
+        ORDER BY timestamp DESC, status ASC NULLS LAST
+    ) = 1
+    """
+    assert_exp_eq(evaluator.transform(d.parse_one(sql)), expected_sql)
+
+    # Test with a single partition and order column
+    sql = """
+    @deduplicate(
+        my_table,
+        [user_id],
+        ['timestamp DESC']
+    )
+    """
+    expected_sql = """
+    SELECT *
+    FROM my_table
+    QUALIFY ROW_NUMBER() OVER (
+        PARTITION BY user_id
+        ORDER BY timestamp DESC
+    ) = 1
+    """
+    assert_exp_eq(evaluator.transform(d.parse_one(sql)), expected_sql)
+
+    # Test error handling: non-list partition_by
+    with pytest.raises(SQLMeshError) as e:
+        evaluator.evaluate(d.parse_one("@deduplicate(my_table, user_id, ['timestamp DESC'])"))
+    assert (
+        str(e.value.__cause__)
+        == "partition_by must be a list of columns: [<column>, cast(<column> as <type>)]"
+    )
+
+    # Test error handling: non-list order_by
+    with pytest.raises(SQLMeshError) as e:
+        evaluator.evaluate(d.parse_one("@deduplicate(my_table, [user_id], 'timestamp DESC')"))
+    assert str(e.value.__cause__) == "order_by must be a list of strings: ['<column> <asc|desc>']"
+
+    # Test error handling: missing order_by
+    with pytest.raises(MacroEvalError) as e:
+        evaluator.evaluate(d.parse_one("@deduplicate(my_table, [user_id], [])"))
+    assert (
+        str(e.value.__cause__)
+        == "At least one order_by expression is required: '<column> <asc|desc>'"
+    )
