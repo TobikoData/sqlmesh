@@ -454,7 +454,13 @@ def _parse_if(self: Parser) -> t.Optional[exp.Expression]:
         else:
             self.raise_error("Expecting )")
 
-        return exp.Anonymous(this="IF", expressions=[cond, self._parse_statement()])
+        index = self._index
+        stmt = self._parse_statement()
+        if self._curr:
+            self._retreat(index)
+            stmt = self._parse_as_command(self._tokens[index])
+
+        return exp.Anonymous(this="IF", expressions=[cond, stmt])
 
 
 def _create_parser(parser_type: t.Type[exp.Expression], table_keys: t.List[str]) -> t.Callable:
