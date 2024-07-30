@@ -89,7 +89,11 @@ class DbtLoader(Loader):
         )
 
     def _load_models(
-        self, macros: MacroRegistry, jinja_macros: JinjaMacroRegistry, gateway: t.Optional[str]
+        self,
+        macros: MacroRegistry,
+        jinja_macros: JinjaMacroRegistry,
+        gateway: t.Optional[str],
+        audits: t.Optional[t.Dict[str, Audit]],
     ) -> UniqueKeyDict[str, Model]:
         models: UniqueKeyDict[str, Model] = UniqueKeyDict("models")
 

@@ -15,7 +15,7 @@ from sqlmesh.cli.example_project import init_example_project
 
 from sqlmesh.core import constants as c
 from sqlmesh.core import dialect as d
-from sqlmesh.core.audit import ModelAudit
+from sqlmesh.core.audit import ModelAudit, load_audit
 from sqlmesh.core.config import (
     Config,
     NameInferenceConfig,
@@ -4539,6 +4539,59 @@ def test_macros_in_model_statement(sushi_context, assert_exp_eq):
     assert model.time_column.column == exp.column("a", quoted=True)
     assert model.start == "2023-01-01"
     assert model.session_properties == {"foo": exp.column("bar_baz", quoted=False)}
+
+
+def test_macro_references_in_audits():
+    @macro()
+    def min_value(evaluator: MacroEvaluator) -> int:
+        return 0
+
+    @macro()
+    def not_loaded_macro(evaluator: MacroEvaluator) -> int:
+        return 10
+
+    @macro()
+    def max_value(evaluator: MacroEvaluator) -> int:
+        return 1000
+
+    audit_expression = parse(
+        """
+        AUDIT (
+    name assert_max_value,
+    );
+    SELECT *
+    FROM @this_model
+    WHERE
+    id > @max_value;
+    """
+    )
+
+    model_expression = d.parse(
+        """
+        MODEL (
+            name db.audit_model,
+            audits (assert_max_value, assert_positive_ids),
+        );
+        SELECT 1 as id;
+
+        AUDIT (
+    name assert_positive_ids,
+    );
+    SELECT *
+    FROM @this_model
+    WHERE
+    id < @min_value;
+    """
+    )
+
+    audit = load_audit(audit_expression, dialect="duckdb")
+    model = load_sql_based_model(model_expression, audits={audit.name: audit})
+
+    assert len(model.audits) == 2
+    assert len(model.inline_audits) == 1
+    assert isinstance(model.python_env["min_value"], Executable)
+    assert isinstance(model.python_env["max_value"], Executable)
+    assert "not_loaded_macro" not in model.python_env
 
 
 def test_python_model_dialect():
