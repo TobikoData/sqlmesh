@@ -57,7 +57,7 @@
 ??? question "What is semantic understanding of SQL?"
     Semantic understanding is the result of analyzing SQL code to determine what it does at a granular level. SQLMesh uses the free, open-source Python library [SQLGlot](https://github.com/tobymao/sqlglot) to parse the SQL code and build the semantic understanding.
 
-    Semantic understanding allows SQLMesh to do things like transpilation (executing one SQL dialect on an engine running another dialect) and protecting incremental loading queries from duplicating data.
+    Semantic understanding allows SQLMesh to do things like transpilation (executing one SQL dialect on an engine running another dialect) and preventing incremental loading queries from duplicating data.
 
 ??? question "Does SQLMesh work like Terraform?"
     SQLMesh was inspired by Terraform, but its commands are not equivalent.
@@ -74,7 +74,7 @@
     SQLMesh is a Python library. After ensuring you have [an appropriate Python runtime](../prerequisites.md), install it [with `pip`](../installation.md).
 
 ??? question "How do I use SQLMesh?"
-    SQLMesh has three interfaces: [command line](../reference/cli.md), [Jupyter or Databricks notebook](../reference/notebook.md), and graphical user interface.
+    SQLMesh has three interfaces: [command line](../reference/cli.md), [Jupyter or Databricks notebook](../reference/notebook.md), and [graphical user interface](../guides/ui.md).
 
     The [quickstart guide](../quick_start.md) demonstrates an example project in each of the interfaces.
 
@@ -85,7 +85,9 @@
     SQLMesh creates schemas for two reasons:
 
     - SQLMesh stores state/metadata information about a project in the `sqlmesh` schema. This schema is created in the project's default gateway, or you can [specify a different location](../reference/configuration.md#state-connection).
-    - SQLMesh uses [Virtual Data Environments](https://tobikodata.com/virtual-data-environments.html) to prevent duplicative computation whenever possible.
+    - SQLMesh uses [Virtual Data Environments](https://tobikodata.com/virtual-data-environments.html) to prevent duplicative computation whenever possible, and stores environment-specific objects in separate schemas by default.
+
+    How Virtual Data Environments work:
 
     Virtual Data Environments work by maintaining a *virtual layer* of views that users interact with when building models and a *physical layer* of tables that stores the actual data.
 
@@ -102,7 +104,11 @@
 ??? question "What's the difference between a `test` and an `audit`?"
     A SQLMesh [`test`](../concepts/tests.md) is analogous to a "unit test" in software engineering. It tests *code* based on known inputs and outputs. In SQLMesh, the inputs and outputs are specified in a YAML file, and SQLMesh automatically runs them when `sqlmesh plan` is executed.
 
+    Writing YAML is annoying and error-prone, so SQLMesh's [`create_test` command](../concepts/tests.md#automatic-test-generation) allows you to automatically generate YAML test files based on queries of existing data tables.
+
     A SQLMesh [`audit`](../concepts/audits.md) validates that transformed *data* meet some criteria. For example, an `audit` might verify that a column contains no `NULL` values or has no duplicated values. SQLMesh automatically runs audits when a `sqlmesh plan` is executed and the plan is applied or when `sqlmesh run` is executed.
+
+    When the `sqlmesh plan` command is executed, SQLMesh `test`s run _before_ any model's code is executed. A SQLMesh model's `audit`s run _after_ the model's code is executed to validate the data output by the model.
 
 ??? question "How does a model know when to run?"
     A SQLMesh model determines when to run based on its [`cron`](#cron-question) parameter and how much time has elapsed since its previous run.
@@ -221,14 +227,14 @@
 
     SQLMesh always maintains state about the project structure, contents, and past runs. State information enables powerful SQLMesh features like virtual data environments and easy incremental loads.
 
-    State information is stored by default - you do not need to take any action to maintain or to use it when executing models. As the dbt caveats page says, state information is powerful but complex. SQLMesh handles that complexity for you so you don't need to learn about or understand the underlying mechanics.
+    State information is stored by default - you do not need to take any action to maintain or to use it when executing models. As the dbt caveats page says, state information is powerful but complex. SQLMesh handles that complexity for you so you don't need to worry about the underlying mechanics.
 
-    SQLMesh stores state information in database tables. By default, it stores this information in the same [database/connection where your project models run](../reference/configuration.md#gateways). You can specify a [different database/connection](../reference/configuration.md#state-connection) if you would prefer to store state information somewhere else.
+    SQLMesh stores state information in database tables. By default, it stores this information in the same [database/connection where your project models run](../reference/configuration.md#gateways). You can specify a [different database/connection](../reference/configuration.md#state-connection) if you would prefer to store state information somewhere else. We recommend using a separate connection for storing state in production deployments.
 
     SQLMesh adds information to the state tables via transactions, and some databases like BigQuery are not optimized to execute transactions. Changing the state connection to another database like PostgreSQL can alleviate performance issues you may encounter due to state transactions.
 
 ??? question "How do I get column-level lineage for my dbt project?"
-    SQLMesh can run dbt projects with its [dbt adapter](../integrations/dbt.md). After configuring the dbt project to work with SQLMesh, you can view the column-level lineage in the SQLMesh browser UI:
+    SQLMesh can run dbt projects with its [dbt adapter](../integrations/dbt.md). After configuring the dbt project to work with SQLMesh, you can view the column-level lineage in the [SQLMesh browser UI](../guides/ui.md):
 
     ![SQLMesh UI displaying column-level lineage for Sushi dbt example](./faq/ui-colum-lineage_sushi-dbt.png)
 
@@ -240,7 +246,7 @@
 ??? question "How do incremental models determine which dates to ingest?"
     dbt uses the "most recent record" approach to determine which dates should be included in an incremental load. It works by querying the existing data for the most recent date it contains, then ingesting all records after that date from the source system in a single query.
 
-    SQLMesh uses the "intervals" approach instead. It divides time into disjoint intervals based on a model's `cron` parameter then records which intervals have ever been processed. It ingests source records from only unprocessed intervals. The intervals approach enables features like loading in batches.
+    SQLMesh uses the ["intervals" approach](https://tobikodata.com/data_load_patterns_101.html) instead. It divides time into disjoint intervals based on a model's `cron` parameter then records which intervals have ever been processed. It ingests source records from only unprocessed intervals. The intervals approach enables features like loading in batches.
 
 ??? question "How do I run an append only model in SQLMesh?"
     SQLMesh does not support append-only models as implemented in dbt. You can achieve a similar outcome by defining a time column and using an [incremental by time range](../concepts/models/model_kinds.md#incremental_by_time_range) model or specifying a unique key and using an [incremental by unique key](../concepts/models/model_kinds.md#incremental_by_unique_key) model.
@@ -249,7 +255,7 @@
 
 ??? question "How does Tobiko Data make money?"
 
-    - Model execution observability and monitoring tools (in development)
+    - Tobiko Cloud: learn more [here](https://tobikodata.com/product.html)
     - Enterprise Github Actions CI/CD App (in development)
         - Advanced version of [open source CI/CD bot](../integrations/github.md)
     - Providing hands-on support for companies' SQLMesh projects
