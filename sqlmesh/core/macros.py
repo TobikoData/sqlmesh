@@ -1122,9 +1122,8 @@ def deduplicate(
         >>> MacroEvaluator().transform(parse_one(sql)).sql()
         'SELECT * FROM demo.table QUALIFY ROW_NUMBER() OVER (PARTITION BY user_id, CAST(timestamp AS DATE) ORDER BY timestamp DESC, status ASC NULLS LAST) = 1'
     """
-
-    partition_clause = exp.Tuple(
-        expressions=[
+    partition_clause = exp.tuple_(
+        *[
             col
             if not isinstance(col, exp.Cast)
             else exp.func("cast", this=col.this, to=col.args.get("to"))
@@ -1132,21 +1131,9 @@ def deduplicate(
         ]
     )
 
-    order_expressions = []
-    for order_item in order_by:
-        parts = order_item.split()
-        if len(parts) != 2:
-            raise SQLMeshError(
-                f"Invalid order_by expression: '{order_item}'. Expected format: '<column> <asc|desc>'"
-            )
-        column, direction = parts
-        if direction.upper() not in ("ASC", "DESC"):
-            raise SQLMeshError(
-                f"Invalid direction in order_by expression: '{direction}'. Expected 'ASC' or 'DESC'"
-            )
-        order_expressions.append(
-            exp.Ordered(this=exp.Column(this=column), desc=direction.upper() == "DESC")
-        )
+    order_expressions = [
+        evaluator.parse_one(order_item, into=exp.Ordered) for order_item in order_by
+    ]
 
     if not order_expressions:
         raise SQLMeshError("At least one order_by expression is required: '<column> <asc|desc>'")
@@ -1157,35 +1144,11 @@ def deduplicate(
         this=exp.RowNumber(), partition_by=partition_clause, order=order_clause
     )
 
-    first_unique_row = exp.EQ(this=window_function, expression=exp.Literal.number(1))
+    first_unique_row = window_function.eq(1)
 
-    query = (
-        exp.Select(expressions=[exp.Star()])
-        .from_(relation, dialect=evaluator.dialect)
-        .qualify(first_unique_row)
-    )
+    query = exp.select("*").from_(relation, dialect=evaluator.dialect).qualify(first_unique_row)
 
     return query
-
-
-@macro("date_spine")
-def date_spine(
-    evaluator: MacroEvaluator, var_name: exp.Expression, default: t.Optional[exp.Expression] = None
-) -> exp.Expression:
-    if not var_name.is_string:
-        raise SQLMeshError(f"Invalid variable name '{var_name.sql()}'. Expected a string literal.")
-
-    return exp.convert(evaluator.var(var_name.this, default))
-
-
-@macro("metric_decompose")
-def metric_decompose(
-    evaluator: MacroEvaluator, var_name: exp.Expression, default: t.Optional[exp.Expression] = None
-) -> exp.Expression:
-    if not var_name.is_string:
-        raise SQLMeshError(f"Invalid variable name '{var_name.sql()}'. Expected a string literal.")
-
-    return exp.convert(evaluator.var(var_name.this, default))
 
 
 def normalize_macro_name(name: str) -> str:
