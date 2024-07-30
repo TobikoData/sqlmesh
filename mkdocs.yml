@@ -97,16 +97,16 @@ theme:
   palette:
     - media: "(prefers-color-scheme: light)"
       scheme: default
-      primary: #091c79
-      accent: #cce8fe
+      primary: #3C64E2
+      accent: #3C64E2
       toggle:
         icon: material/weather-sunny
         name: Switch to dark mode
     # Palette toggle for dark mode
     - media: "(prefers-color-scheme: dark)"
       scheme: slate
-      primary: #cce8fe
-      accent: #091c79
+      primary: #3C64E2
+      accent: #3C64E2
       toggle:
         icon: material/weather-night
         name: Switch to light mode
