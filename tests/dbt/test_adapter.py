@@ -14,10 +14,12 @@ from sqlglot import exp, parse_one
 from sqlmesh import Context
 from sqlmesh.core.dialect import schema_
 from sqlmesh.core.snapshot import SnapshotId
+from sqlmesh.dbt.adapter import ParsetimeAdapter
 from sqlmesh.dbt.project import Project
 from sqlmesh.dbt.relation import Policy
 from sqlmesh.dbt.target import SnowflakeConfig
 from sqlmesh.utils.errors import ConfigError
+from sqlmesh.utils.jinja import JinjaMacroRegistry
 
 pytestmark = pytest.mark.dbt
 
@@ -257,3 +259,14 @@ def test_feature_flag_scd_type_2(copy_to_temp_path, caplog):
             "Skipping loading Snapshot (SCD Type 2) models due to the feature flag disabling this feature"
             in caplog.text
         )
+
+
+def test_quote_as_configured():
+    adapter = ParsetimeAdapter(
+        JinjaMacroRegistry(),
+        project_dialect="duckdb",
+        quote_policy=Policy(schema=False, identifier=True),
+    )
+    adapter.quote_as_configured("foo", "identifier") == '"foo"'
+    adapter.quote_as_configured("foo", "schema") == "foo"
+    adapter.quote_as_configured("foo", "database") == "foo"
