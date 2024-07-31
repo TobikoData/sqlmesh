@@ -273,19 +273,19 @@ class TableDiff:
                 return e.args["alias"].sql(identify=True)
 
             source_query = (
-                exp.select(*(exp.column(c) for c in source_schema.keys()))
+                exp.select(*(exp.column(c) for c in source_schema))
                 .from_(self.source)
                 .where(self.where)
             )
             target_query = (
-                exp.select(*(exp.column(t) for t in target_schema.keys()))
+                exp.select(*(exp.column(c) for c in target_schema))
                 .from_(self.target)
                 .where(self.where)
             )
 
-            source_identifier = exp.to_identifier("__source")
-            target_identifier = exp.to_identifier("__target")
-            stats_identifier = exp.to_identifier("__stats")
+            source_table = exp.table_("__source")
+            target_table = exp.table_("__target")
+            stats_table = exp.table_("__stats")
 
             stats_query = (
                 exp.select(
@@ -328,35 +328,32 @@ class TableDiff:
                     ).as_("null_grain"),
                     *comparisons,
                 )
-                .from_(exp.alias_(source_identifier, "s"))
-                .join(exp.alias_(target_identifier, "t"), on=self.on, join_type="FULL")
+                .from_(source_table.as_("s"))
+                .join(target_table.as_("t"), on=self.on, join_type="FULL")
             )
 
-            ctes = exp.With(
-                expressions=[
-                    exp.CTE(this=source_query, alias=exp.TableAlias(this=source_identifier)),
-                    exp.CTE(this=target_query, alias=exp.TableAlias(this=target_identifier)),
-                    exp.CTE(this=stats_query, alias=exp.TableAlias(this=stats_identifier)),
-                ]
-            )
-
-            query = exp.select(
-                "*",
-                exp.Case()
-                .when(
-                    exp.and_(
-                        *[
-                            exp.column(f"{c}_matches").eq(exp.Literal.number(1))
-                            for c in matched_columns
-                        ]
-                    ),
-                    exp.Literal.number(1),
+            query = (
+                exp.Select()
+                .with_(source_table, source_query)
+                .with_(target_table, target_query)
+                .with_(stats_table, stats_query)
+                .select(
+                    "*",
+                    exp.Case()
+                    .when(
+                        exp.and_(
+                            *[
+                                exp.column(f"{c}_matches").eq(exp.Literal.number(1))
+                                for c in matched_columns
+                            ]
+                        ),
+                        exp.Literal.number(1),
+                    )
+                    .else_(exp.Literal.number(0))
+                    .as_("row_full_match"),
                 )
-                .else_(exp.Literal.number(0))
-                .as_("row_full_match"),
-            ).from_(stats_identifier)
-
-            query.set("with", ctes)
+                .from_(stats_table)
+            )
 
             query = quote_identifiers(query, dialect=self.model_dialect or self.dialect)
             temp_table = exp.table_("diff", db="sqlmesh_temp", quoted=True)
