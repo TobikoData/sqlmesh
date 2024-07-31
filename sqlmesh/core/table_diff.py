@@ -272,7 +272,22 @@ class TableDiff:
             def name(e: exp.Expression) -> str:
                 return e.args["alias"].sql(identify=True)
 
-            query = (
+            source_query = (
+                exp.select(*(exp.column(c) for c in source_schema.keys()))
+                .from_(self.source)
+                .where(self.where)
+            )
+            target_query = (
+                exp.select(*(exp.column(t) for t in target_schema.keys()))
+                .from_(self.target)
+                .where(self.where)
+            )
+
+            source_identifier = exp.to_identifier("__source")
+            target_identifier = exp.to_identifier("__target")
+            stats_identifier = exp.to_identifier("__stats")
+
+            stats_query = (
                 exp.select(
                     *s_selects.values(),
                     *t_selects.values(),
@@ -313,14 +328,16 @@ class TableDiff:
                     ).as_("null_grain"),
                     *comparisons,
                 )
-                .from_(exp.alias_(self.source, "s"))
-                .join(
-                    self.target,
-                    on=self.on,
-                    join_type="FULL",
-                    join_alias="t",
-                )
-                .where(self.where)
+                .from_(exp.alias_(source_identifier, "s"))
+                .join(exp.alias_(target_identifier, "t"), on=self.on, join_type="FULL")
+            )
+
+            ctes = exp.With(
+                expressions=[
+                    exp.CTE(this=source_query, alias=exp.TableAlias(this=source_identifier)),
+                    exp.CTE(this=target_query, alias=exp.TableAlias(this=target_identifier)),
+                    exp.CTE(this=stats_query, alias=exp.TableAlias(this=stats_identifier)),
+                ]
             )
 
             query = exp.select(
@@ -337,7 +354,9 @@ class TableDiff:
                 )
                 .else_(exp.Literal.number(0))
                 .as_("row_full_match"),
-            ).from_(query.subquery("stats"))
+            ).from_(stats_identifier)
+
+            query.set("with", ctes)
 
             query = quote_identifiers(query, dialect=self.model_dialect or self.dialect)
             temp_table = exp.table_("diff", db="sqlmesh_temp", quoted=True)

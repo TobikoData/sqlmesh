@@ -246,7 +246,7 @@ def test_generated_sql(sushi_context_fixed_date: Context, mocker: MockerFixture)
         ),
     )
 
-    query_sql = 'CREATE TABLE IF NOT EXISTS "sqlmesh_temp"."__temp_diff_abcdefgh" AS SELECT *, CASE WHEN "key_matches" = 1 AND "value_matches" = 1 THEN 1 ELSE 0 END AS "row_full_match" FROM (SELECT "s"."key" AS "s__key", "s"."value" AS "s__value", "t"."key" AS "t__key", "t"."value" AS "t__value", CASE WHEN NOT "s"."key" IS NULL THEN 1 ELSE 0 END AS "s_exists", CASE WHEN NOT "t"."key" IS NULL THEN 1 ELSE 0 END AS "t_exists", CASE WHEN "s"."key" = "t"."key" AND NOT "s"."key" IS NULL AND NOT "t"."key" IS NULL THEN 1 ELSE 0 END AS "row_joined", CASE WHEN "s"."key" IS NULL AND "t"."key" IS NULL THEN 1 ELSE 0 END AS "null_grain", CASE WHEN "s"."key" = "t"."key" THEN 1 WHEN ("s"."key" IS NULL) AND ("t"."key" IS NULL) THEN 1 WHEN ("s"."key" IS NULL) OR ("t"."key" IS NULL) THEN 0 ELSE 0 END AS "key_matches", CASE WHEN ROUND("s"."value", 3) = ROUND("t"."value", 3) THEN 1 WHEN ("s"."value" IS NULL) AND ("t"."value" IS NULL) THEN 1 WHEN ("s"."value" IS NULL) OR ("t"."value" IS NULL) THEN 0 ELSE 0 END AS "value_matches" FROM "table_diff_source" AS "s" FULL JOIN "table_diff_target" AS "t" ON ("s"."key" = "t"."key") OR (("s"."key" IS NULL) AND ("t"."key" IS NULL))) AS "stats"'
+    query_sql = 'CREATE TABLE IF NOT EXISTS "sqlmesh_temp"."__temp_diff_abcdefgh" AS WITH "__source" AS (SELECT "key", "value" FROM "table_diff_source"), "__target" AS (SELECT "key", "value" FROM "table_diff_target"), "__stats" AS (SELECT "s"."key" AS "s__key", "s"."value" AS "s__value", "t"."key" AS "t__key", "t"."value" AS "t__value", CASE WHEN NOT "s"."key" IS NULL THEN 1 ELSE 0 END AS "s_exists", CASE WHEN NOT "t"."key" IS NULL THEN 1 ELSE 0 END AS "t_exists", CASE WHEN "s"."key" = "t"."key" AND NOT "s"."key" IS NULL AND NOT "t"."key" IS NULL THEN 1 ELSE 0 END AS "row_joined", CASE WHEN "s"."key" IS NULL AND "t"."key" IS NULL THEN 1 ELSE 0 END AS "null_grain", CASE WHEN "s"."key" = "t"."key" THEN 1 WHEN ("s"."key" IS NULL) AND ("t"."key" IS NULL) THEN 1 WHEN ("s"."key" IS NULL) OR ("t"."key" IS NULL) THEN 0 ELSE 0 END AS "key_matches", CASE WHEN ROUND("s"."value", 3) = ROUND("t"."value", 3) THEN 1 WHEN ("s"."value" IS NULL) AND ("t"."value" IS NULL) THEN 1 WHEN ("s"."value" IS NULL) OR ("t"."value" IS NULL) THEN 0 ELSE 0 END AS "value_matches" FROM "__source" AS "s" FULL JOIN "__target" AS "t" ON ("s"."key" = "t"."key") OR (("s"."key" IS NULL) AND ("t"."key" IS NULL))) SELECT *, CASE WHEN "key_matches" = 1 AND "value_matches" = 1 THEN 1 ELSE 0 END AS "row_full_match" FROM "__stats"'
     summary_query_sql = 'SELECT SUM("s_exists") AS "s_count", SUM("t_exists") AS "t_count", SUM("row_joined") AS "join_count", SUM("null_grain") AS "null_grain_count", SUM("row_full_match") AS "full_match_count", SUM("key_matches") AS "key_matches", SUM("value_matches") AS "value_matches", COUNT(DISTINCT ("s__key")) AS "distinct_count_s", COUNT(DISTINCT ("t__key")) AS "distinct_count_t" FROM "sqlmesh_temp"."__temp_diff_abcdefgh"'
     sample_query_sql = 'SELECT "s_exists", "t_exists", "row_joined", "row_full_match", "s__key", "s__value", "t__key", "t__value" FROM "sqlmesh_temp"."__temp_diff_abcdefgh" WHERE "key_matches" = 0 OR "value_matches" = 0 ORDER BY "s__key" NULLS FIRST, "t__key" NULLS FIRST LIMIT 20'
 
@@ -263,3 +263,17 @@ def test_generated_sql(sushi_context_fixed_date: Context, mocker: MockerFixture)
     spy_execute.assert_any_call(query_sql)
     spy_execute.assert_any_call(summary_query_sql)
     spy_execute.assert_any_call(sample_query_sql)
+
+    spy_execute.reset_mock()
+
+    # Also check WHERE clause is propagated correctly
+    sushi_context_fixed_date.table_diff(
+        source="table_diff_source",
+        target="table_diff_target",
+        on=["key"],
+        skip_columns=["ignored"],
+        where="key = 2",
+    )
+
+    query_sql_where = 'CREATE TABLE IF NOT EXISTS "sqlmesh_temp"."__temp_diff_abcdefgh" AS WITH "__source" AS (SELECT "key", "value" FROM "table_diff_source" WHERE "key" = 2), "__target" AS (SELECT "key", "value" FROM "table_diff_target" WHERE "key" = 2), "__stats" AS (SELECT "s"."key" AS "s__key", "s"."value" AS "s__value", "t"."key" AS "t__key", "t"."value" AS "t__value", CASE WHEN NOT "s"."key" IS NULL THEN 1 ELSE 0 END AS "s_exists", CASE WHEN NOT "t"."key" IS NULL THEN 1 ELSE 0 END AS "t_exists", CASE WHEN "s"."key" = "t"."key" AND NOT "s"."key" IS NULL AND NOT "t"."key" IS NULL THEN 1 ELSE 0 END AS "row_joined", CASE WHEN "s"."key" IS NULL AND "t"."key" IS NULL THEN 1 ELSE 0 END AS "null_grain", CASE WHEN "s"."key" = "t"."key" THEN 1 WHEN ("s"."key" IS NULL) AND ("t"."key" IS NULL) THEN 1 WHEN ("s"."key" IS NULL) OR ("t"."key" IS NULL) THEN 0 ELSE 0 END AS "key_matches", CASE WHEN ROUND("s"."value", 3) = ROUND("t"."value", 3) THEN 1 WHEN ("s"."value" IS NULL) AND ("t"."value" IS NULL) THEN 1 WHEN ("s"."value" IS NULL) OR ("t"."value" IS NULL) THEN 0 ELSE 0 END AS "value_matches" FROM "__source" AS "s" FULL JOIN "__target" AS "t" ON ("s"."key" = "t"."key") OR (("s"."key" IS NULL) AND ("t"."key" IS NULL))) SELECT *, CASE WHEN "key_matches" = 1 AND "value_matches" = 1 THEN 1 ELSE 0 END AS "row_full_match" FROM "__stats"'
+    spy_execute.assert_any_call(query_sql_where)
