@@ -272,7 +272,22 @@ class TableDiff:
             def name(e: exp.Expression) -> str:
                 return e.args["alias"].sql(identify=True)
 
-            query = (
+            source_query = (
+                exp.select(*(exp.column(c) for c in source_schema))
+                .from_(self.source)
+                .where(self.where)
+            )
+            target_query = (
+                exp.select(*(exp.column(c) for c in target_schema))
+                .from_(self.target)
+                .where(self.where)
+            )
+
+            source_table = exp.table_("__source")
+            target_table = exp.table_("__target")
+            stats_table = exp.table_("__stats")
+
+            stats_query = (
                 exp.select(
                     *s_selects.values(),
                     *t_selects.values(),
@@ -313,31 +328,32 @@ class TableDiff:
                     ).as_("null_grain"),
                     *comparisons,
                 )
-                .from_(exp.alias_(self.source, "s"))
-                .join(
-                    self.target,
-                    on=self.on,
-                    join_type="FULL",
-                    join_alias="t",
-                )
-                .where(self.where)
+                .from_(source_table.as_("s"))
+                .join(target_table.as_("t"), on=self.on, join_type="FULL")
             )
 
-            query = exp.select(
-                "*",
-                exp.Case()
-                .when(
-                    exp.and_(
-                        *[
-                            exp.column(f"{c}_matches").eq(exp.Literal.number(1))
-                            for c in matched_columns
-                        ]
-                    ),
-                    exp.Literal.number(1),
+            query = (
+                exp.Select()
+                .with_(source_table, source_query)
+                .with_(target_table, target_query)
+                .with_(stats_table, stats_query)
+                .select(
+                    "*",
+                    exp.Case()
+                    .when(
+                        exp.and_(
+                            *[
+                                exp.column(f"{c}_matches").eq(exp.Literal.number(1))
+                                for c in matched_columns
+                            ]
+                        ),
+                        exp.Literal.number(1),
+                    )
+                    .else_(exp.Literal.number(0))
+                    .as_("row_full_match"),
                 )
-                .else_(exp.Literal.number(0))
-                .as_("row_full_match"),
-            ).from_(query.subquery("stats"))
+                .from_(stats_table)
+            )
 
             query = quote_identifiers(query, dialect=self.model_dialect or self.dialect)
             temp_table = exp.table_("diff", db="sqlmesh_temp", quoted=True)

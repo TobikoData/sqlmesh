@@ -5371,3 +5371,16 @@ def test_trailing_comments():
     model = load_sql_based_model(expressions, path=Path("./examples/sushi/models/test_model.sql"))
     assert not model.render_pre_statements()
     assert not model.render_post_statements()
+
+
+def test_staged_file_path():
+    expressions = d.parse(
+        """
+        MODEL (name test, dialect snowflake);
+
+        SELECT * FROM @a.b/c/d.csv(FILE_FORMAT => 'b.ff')
+        """
+    )
+    model = load_sql_based_model(expressions)
+    query = model.render_query()
+    assert query.sql(dialect="snowflake") == "SELECT * FROM @a.b/c/d.csv (FILE_FORMAT => 'b.ff')"

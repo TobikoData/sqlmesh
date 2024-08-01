@@ -101,8 +101,10 @@ class MetricAgg(exp.AggFunc):
         return self.this.name
 
 
-class StagedFilePath(exp.Table):
+class StagedFilePath(exp.Expression):
     """Represents paths to "staged files" in Snowflake."""
+
+    arg_types = exp.Table.arg_types.copy()
 
 
 def _parse_statement(self: Parser) -> t.Optional[exp.Expression]:
@@ -409,7 +411,7 @@ def _parse_types(
 # See: https://docs.snowflake.com/en/user-guide/querying-stage
 def _parse_table_parts(
     self: Parser, schema: bool = False, is_db_reference: bool = False
-) -> exp.Table:
+) -> exp.Table | StagedFilePath:
     index = self._index
     table = self.__parse_table_parts(schema=schema, is_db_reference=is_db_reference)  # type: ignore
 
