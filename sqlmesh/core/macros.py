@@ -1150,7 +1150,7 @@ def deduplicate(
 
     first_unique_row = window_function.eq(1)
 
-    query = exp.select("*").from_(relation, dialect=evaluator.dialect).qualify(first_unique_row)
+    query = exp.select("*").from_(relation).qualify(first_unique_row)
 
     return query
 
