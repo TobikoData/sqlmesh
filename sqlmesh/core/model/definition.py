@@ -2271,11 +2271,12 @@ def _extract_audit_expressions(
     audit_expressions = []
     if audit_names and audits:
         for audit_name in audit_names:
-            if audit_name in audits:
-                audit_expressions.append(audits[audit_name].query)
+            audit = audits.get(audit_name)
+            if audit:
+                audit_expressions.append(audit.query)
     if inline_audits:
-        for audit in inline_audits:
-            audit_expressions.append(inline_audits[audit].query)
+        for audit_name in inline_audits:
+            audit_expressions.append(inline_audits[audit_name].query)
 
     return audit_expressions
 

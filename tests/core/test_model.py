@@ -4543,8 +4543,12 @@ def test_macros_in_model_statement(sushi_context, assert_exp_eq):
 
 def test_macro_references_in_audits():
     @macro()
-    def min_value(evaluator: MacroEvaluator) -> int:
+    def zero_value(evaluator: MacroEvaluator) -> int:
         return 0
+
+    @macro()
+    def min_value(evaluator: MacroEvaluator) -> int:
+        return 1
 
     @macro()
     def not_loaded_macro(evaluator: MacroEvaluator) -> int:
@@ -4566,6 +4570,18 @@ def test_macro_references_in_audits():
     """
     )
 
+    not_zero_audit = parse(
+        """
+        AUDIT (
+    name assert_not_zero,
+    );
+    SELECT *
+    FROM @this_model
+    WHERE
+    id = @zero_value;
+    """
+    )
+
     model_expression = d.parse(
         """
         MODEL (
@@ -4584,13 +4600,26 @@ def test_macro_references_in_audits():
     """
     )
 
-    audit = load_audit(audit_expression, dialect="duckdb")
-    model = load_sql_based_model(model_expression, audits={audit.name: audit})
+    audits = {
+        "assert_max_value": load_audit(audit_expression, dialect="duckdb"),
+        "assert_not_zero": load_audit(not_zero_audit, dialect="duckdb"),
+    }
+    config = Config(
+        model_defaults=ModelDefaultsConfig(dialect="duckdb", audits=["assert_not_zero"])
+    )
+    model = load_sql_based_model(
+        model_expression, audits=audits, default_audits=config.model_defaults.audits
+    )
 
     assert len(model.audits) == 2
     assert len(model.inline_audits) == 1
+    assert len(model.python_env) == 3
+    assert config.model_defaults.audits == [("assert_not_zero", {})]
+    assert model.audits == [("assert_max_value", {}), ("assert_positive_ids", {})]
+    assert isinstance(model.inline_audits["assert_positive_ids"], ModelAudit)
     assert isinstance(model.python_env["min_value"], Executable)
     assert isinstance(model.python_env["max_value"], Executable)
+    assert isinstance(model.python_env["zero_value"], Executable)
     assert "not_loaded_macro" not in model.python_env
 
 
