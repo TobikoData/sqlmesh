@@ -584,6 +584,8 @@ def test_audit_failure_notifications(
             DeployabilityIndex.all_deployable(),
             0,
         )
+        _, kwargs = evaluator_audit_mock.call_args_list[0]
+        assert not kwargs["raise_exception"]
 
     evaluator_audit_mock.return_value = [
         AuditResult(audit=audit, model=waiter_names.model, count=0, skipped=False)
