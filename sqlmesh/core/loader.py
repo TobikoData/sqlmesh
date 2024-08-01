@@ -416,9 +416,6 @@ class SqlMeshLoader(Loader):
                     new = registry.keys() - registered
                     registered |= new
                     for name in new:
-                        if macros:
-                            macro.set_registry(macros)
-
                         model = registry[name].model(
                             path=path,
                             module_path=context_path,
