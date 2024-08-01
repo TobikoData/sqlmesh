@@ -601,7 +601,7 @@ def test_audit_failure_notifications(
     assert notify_user_mock.call_count == 0
     assert notify_mock.call_count == 0
 
-    audit = audit.model_copy(update={"blocking": False})
+    audit = audit.copy(update={"blocking": False})
     evaluator_audit_mock.return_value = [
         AuditResult(audit=audit, model=waiter_names.model, count=1, skipped=False)
     ]
@@ -611,7 +611,7 @@ def test_audit_failure_notifications(
     notify_user_mock.reset_mock()
     notify_mock.reset_mock()
 
-    audit = audit.model_copy(update={"blocking": True})
+    audit = audit.copy(update={"blocking": True})
     evaluator_audit_mock.return_value = [
         AuditResult(audit=audit, model=waiter_names.model, count=1, skipped=False)
     ]
