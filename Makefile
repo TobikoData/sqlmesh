@@ -169,6 +169,9 @@ engine-%-down:
 duckdb-test: engine-duckdb-install
 	pytest -n auto -x -m "duckdb" --junitxml=test-results/junit-duckdb.xml
 
+materialize-test:
+	pytest -n auto -m "materialize" --junitxml=test-results/junit-materialize.xml
+
 mssql-test: engine-mssql-up
 	pytest -n auto -x -m "mssql" --junitxml=test-results/junit-mssql.xml
 
