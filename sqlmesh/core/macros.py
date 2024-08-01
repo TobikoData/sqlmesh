@@ -1132,7 +1132,7 @@ def deduplicate(
             "order_by must be a list of strings, null values in columns ordered first: ['<column> <asc|desc>']"
         )
 
-    partition_clause = exp.tuple_(*[col for col in partition_by])
+    partition_clause = exp.tuple_(*partition_by)
 
     order_expressions = [
         evaluator.transform(parse_one(order_item, into=exp.Ordered, dialect=evaluator.dialect))
