@@ -1128,19 +1128,15 @@ def deduplicate(
         )
 
     if not isinstance(order_by, list):
-        raise SQLMeshError("order_by must be a list of strings: ['<column> <asc|desc>']")
+        raise SQLMeshError(
+            "order_by must be a list of strings, null values in columns ordered first: ['<column> <asc|desc>']"
+        )
 
-    partition_clause = exp.tuple_(
-        *[
-            col
-            if not isinstance(col, exp.Cast)
-            else exp.func("cast", this=col.this, to=col.args.get("to"))
-            for col in partition_by
-        ]
-    )
+    partition_clause = exp.tuple_(*[col for col in partition_by])
 
     order_expressions = [
-        evaluator.parse_one(order_item, into=exp.Ordered) for order_item in order_by
+        evaluator.transform(parse_one(order_item, into=exp.Ordered, dialect=evaluator.dialect))
+        for order_item in order_by
     ]
 
     if not order_expressions:

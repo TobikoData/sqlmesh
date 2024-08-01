@@ -909,7 +909,7 @@ It supports the following arguments, in this order:
 
 - `relation`: The table or CTE name to deduplicate
 - `partition_by`: column names, or expressions to use to identify a window of rows out of which to select one as the deduplicated row
-- `order_by`: A list of strings representing the ORDER BY clause
+- `order_by`: A list of strings representing the ORDER BY clause, null values in columns ordered first
 
 For example, the following query:
 ```sql linenums="1"
@@ -928,10 +928,8 @@ WITH "raw_data" AS (
     *                                                                                          
   FROM "my_table" AS "my_table"                                                                
   QUALIFY                                                                                      
-    ROW_NUMBER() OVER (PARTITION BY "id", CAST("event_date" AS DATE) ORDER BY "event_date"     
-DESC, "status" ASC) = 1                                                                        
+    ROW_NUMBER() OVER (PARTITION BY "id", CAST("event_date" AS DATE) ORDER BY "event_date" DESC, "status" ASC) = 1                                                                        
 )                                                                                        
-
 SELECT                                                                                         
   *                                                                                            
 FROM "raw_data" AS "raw_data"

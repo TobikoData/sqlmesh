@@ -665,141 +665,63 @@ def test_macro_first_value_ignore_respect_nulls(assert_exp_eq) -> None:
     assert_exp_eq(evaluator.transform(actual_expr), expected_sql, dialect="duckdb")
 
 
+DEDUPLICATE_SQL = """
+@deduplicate(
+    my_table,
+    [user_id, CAST(timestamp AS DATE)],
+    ['timestamp DESC', 'status ASC']
+)
+"""
+
+
 @pytest.mark.parametrize(
     "dialect, sql, expected_sql",
     [
-        (
-            "duckdb",
-            """
-        @deduplicate(
-            my_table,
-            [user_id, CAST(timestamp AS DATE)],
-            ['timestamp DESC', 'status ASC']
-        )
-        """,
-            """
-        SELECT *
-        FROM my_table
-        QUALIFY ROW_NUMBER() OVER (
-            PARTITION BY user_id, CAST(timestamp AS DATE)
-            ORDER BY timestamp DESC, status ASC NULLS LAST
-        ) = 1
-        """,
-        ),
-        (
-            "bigquery",
-            """
-        @deduplicate(
-            my_table,
-            [user_id, CAST(timestamp AS DATE)],
-            ['timestamp DESC', 'status ASC']
-        )
-        """,
-            """
-        SELECT *
-        FROM my_table
-        QUALIFY ROW_NUMBER() OVER (
-            PARTITION BY user_id, CAST(timestamp AS DATE)
-            ORDER BY timestamp DESC, status ASC
-        ) = 1
-        """,
-        ),
+        *[
+            (
+                dialect,
+                DEDUPLICATE_SQL,
+                """
+                SELECT *
+                FROM my_table
+                QUALIFY ROW_NUMBER() OVER (
+                    PARTITION BY user_id, CAST(timestamp AS DATE)
+                    ORDER BY timestamp DESC, status ASC
+                ) = 1
+                """,
+            )
+            for dialect in ["bigquery", "databricks", "snowflake", "duckdb"]
+        ],
         (
             "redshift",
+            DEDUPLICATE_SQL,
             """
-        @deduplicate(
-            my_table,
-            [user_id, CAST(timestamp AS DATE)],
-            ['timestamp DESC', 'status ASC']
-        )
-        """,
-            """
-        SELECT *
-        FROM my_table
-        QUALIFY ROW_NUMBER() OVER (
-            PARTITION BY user_id, CAST("timestamp" AS DATE)
-            ORDER BY "timestamp" DESC, status ASC
-        ) = 1
-        """,
-        ),
-        (
-            "databricks",
-            """
-        @deduplicate(
-            my_table,
-            [user_id, CAST(timestamp AS DATE)],
-            ['timestamp DESC', 'status ASC']
-        )
-        """,
-            """
-        SELECT *
-        FROM my_table
-        QUALIFY ROW_NUMBER() OVER (
-            PARTITION BY user_id, CAST(timestamp AS DATE)
-            ORDER BY timestamp DESC, status ASC
-        ) = 1
-        """,
-        ),
-        (
-            "snowflake",
-            """
-        @deduplicate(
-            my_table,
-            [user_id, CAST(timestamp AS DATE)],
-            ['timestamp DESC', 'status ASC']
-        )
-        """,
-            """
-        SELECT *
-        FROM my_table
-        QUALIFY ROW_NUMBER() OVER (
-            PARTITION BY user_id, CAST(timestamp AS DATE)
-            ORDER BY timestamp DESC, status ASC
-        ) = 1
-        """,
-        ),
-        (
-            "trino",
-            """
-        @deduplicate(
-            my_table,
-            [user_id, CAST(timestamp AS DATE)],
-            ['timestamp DESC', 'status ASC']
-        )
-        """,
-            """
-        SELECT *
-        FROM (
-            SELECT *, ROW_NUMBER() OVER (
-                PARTITION BY user_id, CAST(timestamp AS DATE)
-                ORDER BY timestamp DESC, status ASC
-            ) AS _w
+            SELECT *
             FROM my_table
-        ) as _t
-        WHERE _w = 1
-        """,
+            QUALIFY ROW_NUMBER() OVER (
+                PARTITION BY user_id, CAST("timestamp" AS DATE)
+                ORDER BY "timestamp" DESC, status ASC
+            ) = 1
+            """,
         ),
-        (
-            "postgres",
-            """
-        @deduplicate(
-            my_table,
-            [user_id, CAST(timestamp AS DATE)],
-            ['timestamp DESC', 'status ASC']
-        )
-        """,
-            """
-        SELECT *
-        FROM (
-            SELECT *, ROW_NUMBER() OVER (
-                PARTITION BY user_id, CAST(timestamp AS DATE)
-                ORDER BY timestamp DESC, status ASC
-            ) AS _w
-            FROM my_table
-        ) _t
-        WHERE _w = 1
-        """,
-        ),
+        *[
+            (
+                dialect,
+                DEDUPLICATE_SQL,
+                """
+                SELECT *
+                FROM (
+                    SELECT *, ROW_NUMBER() OVER (
+                        PARTITION BY user_id, CAST(timestamp AS DATE)
+                        ORDER BY timestamp DESC, status ASC
+                    ) AS _w
+                    FROM my_table
+                ) as _t
+                WHERE _w = 1
+                """,
+            )
+            for dialect in ["trino", "postgres"]
+        ],
     ],
 )
 def test_deduplicate(assert_exp_eq, dialect, sql, expected_sql):
@@ -820,7 +742,10 @@ def test_deduplicate_error_handling(macro_evaluator):
     # Test error handling: non-list order_by
     with pytest.raises(SQLMeshError) as e:
         macro_evaluator.evaluate(parse_one("@deduplicate(my_table, [user_id], 'timestamp DESC')"))
-    assert str(e.value.__cause__) == "order_by must be a list of strings: ['<column> <asc|desc>']"
+    assert (
+        str(e.value.__cause__)
+        == "order_by must be a list of strings, null values in columns ordered first: ['<column> <asc|desc>']"
+    )
 
     # Test error handling: empty order_by
     with pytest.raises(SQLMeshError) as e:
