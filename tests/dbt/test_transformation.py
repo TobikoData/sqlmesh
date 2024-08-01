@@ -230,6 +230,10 @@ def test_model_kind():
     ).model_kind(context) == IncrementalUnmanagedKind(disable_restatement=False)
 
     assert ModelConfig(
+        materialized=Materialization.INCREMENTAL, incremental_strategy="append", full_refresh=None
+    ).model_kind(context) == IncrementalUnmanagedKind(disable_restatement=False)
+
+    assert ModelConfig(
         materialized=Materialization.INCREMENTAL,
         incremental_strategy="insert_overwrite",
         partition_by={"field": "bar", "data_type": "int64"},

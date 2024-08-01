@@ -26,7 +26,6 @@ from sqlmesh.dbt.common import (
 from sqlmesh.dbt.relation import Policy, RelationType
 from sqlmesh.dbt.test import TestConfig
 from sqlmesh.utils import AttributeDict
-from sqlmesh.utils.conversions import ensure_bool
 from sqlmesh.utils.errors import ConfigError
 from sqlmesh.utils.pydantic import field_validator
 
@@ -143,11 +142,6 @@ class BaseModelConfig(GeneralConfig):
                 raise ConfigError(f"Invalid hook data: {hook}")
 
         return hooks
-
-    @field_validator("full_refresh", mode="before")
-    @classmethod
-    def _validate_bool(cls, v: str) -> bool:
-        return ensure_bool(v)
 
     @field_validator("grants", mode="before")
     @classmethod
