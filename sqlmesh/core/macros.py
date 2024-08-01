@@ -1100,6 +1100,63 @@ def var(
     return exp.convert(evaluator.var(var_name.this, default))
 
 
+@macro()
+def deduplicate(
+    evaluator: MacroEvaluator,
+    relation: exp.Expression,
+    partition_by: t.List[exp.Expression],
+    order_by: t.List[str],
+) -> exp.Query:
+    """Returns a QUERY to deduplicate rows within a table
+
+    Args:
+        relation: table or CTE name to deduplicate
+        partition_by: column names, or expressions to use to identify a window of rows out of which to select one as the deduplicated row
+        order_by: A list of strings representing the ORDER BY clause
+
+    Example:
+        >>> from sqlglot import parse_one
+        >>> from sqlglot.schema import MappingSchema
+        >>> from sqlmesh.core.macros import MacroEvaluator
+        >>> sql = "@deduplicate(demo.table, [user_id, cast(timestamp as date)], ['timestamp desc', 'status asc'])"
+        >>> MacroEvaluator().transform(parse_one(sql)).sql()
+        'SELECT * FROM demo.table QUALIFY ROW_NUMBER() OVER (PARTITION BY user_id, CAST(timestamp AS DATE) ORDER BY timestamp DESC, status ASC) = 1'
+    """
+    if not isinstance(partition_by, list):
+        raise SQLMeshError(
+            "partition_by must be a list of columns: [<column>, cast(<column> as <type>)]"
+        )
+
+    if not isinstance(order_by, list):
+        raise SQLMeshError(
+            "order_by must be a list of strings, optional - nulls ordering: ['<column> <asc|desc> nulls <first|last>']"
+        )
+
+    partition_clause = exp.tuple_(*partition_by)
+
+    order_expressions = [
+        evaluator.transform(parse_one(order_item, into=exp.Ordered, dialect=evaluator.dialect))
+        for order_item in order_by
+    ]
+
+    if not order_expressions:
+        raise SQLMeshError(
+            "order_by must be a list of strings, optional - nulls ordering: ['<column> <asc|desc> nulls <first|last>']"
+        )
+
+    order_clause = exp.Order(expressions=order_expressions)
+
+    window_function = exp.Window(
+        this=exp.RowNumber(), partition_by=partition_clause, order=order_clause
+    )
+
+    first_unique_row = window_function.eq(1)
+
+    query = exp.select("*").from_(relation).qualify(first_unique_row)
+
+    return query
+
+
 def normalize_macro_name(name: str) -> str:
     """Prefix macro name with @ and upcase"""
     return f"@{name.upper()}"

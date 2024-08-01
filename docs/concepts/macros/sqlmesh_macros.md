@@ -901,6 +901,40 @@ FROM rides
 GROUP BY 1
 ```
 
+### @DEDUPLICATE
+
+`@DEDUPLICATE` is used to deduplicate rows in a table based on the specified partition and order columns with a window function.
+
+It supports the following arguments, in this order:
+
+- `relation`: The table or CTE name to deduplicate
+- `partition_by`: column names, or expressions to use to identify a window of rows out of which to select one as the deduplicated row
+- `order_by`: A list of strings representing the ORDER BY clause, optional - nulls ordering: ['<column> <asc|desc> nulls <first|last>']
+
+For example, the following query:
+```sql linenums="1"
+with raw_data as (
+@deduplicate(my_table, [id, cast(event_date as date)], ['event_date DESC', 'status ASC'])
+)
+
+select * from raw_data
+```
+
+would be rendered as:
+
+```sql linenums="1"
+WITH "raw_data" AS (                                                                           
+  SELECT                                                                                       
+    *                                                                                          
+  FROM "my_table" AS "my_table"                                                                
+  QUALIFY                                                                                      
+    ROW_NUMBER() OVER (PARTITION BY "id", CAST("event_date" AS DATE) ORDER BY "event_date" DESC, "status" ASC) = 1                                                                        
+)                                                                                        
+SELECT                                                                                         
+  *                                                                                            
+FROM "raw_data" AS "raw_data"
+```
+
 ### @AND
 
 `@AND` combines a sequence of operands using the `AND` operator, filtering out any NULL expressions.
