@@ -1129,7 +1129,7 @@ def deduplicate(
 
     if not isinstance(order_by, list):
         raise SQLMeshError(
-            "order_by must be a list of strings, null values in columns ordered first: ['<column> <asc|desc>']"
+            "order_by must be a list of strings, optional - nulls ordering: ['<column> <asc|desc> nulls <first|last>']"
         )
 
     partition_clause = exp.tuple_(*partition_by)
@@ -1140,7 +1140,9 @@ def deduplicate(
     ]
 
     if not order_expressions:
-        raise SQLMeshError("At least one order_by expression is required: '<column> <asc|desc>'")
+        raise SQLMeshError(
+            "order_by must be a list of strings, optional - nulls ordering: ['<column> <asc|desc> nulls <first|last>']"
+        )
 
     order_clause = exp.Order(expressions=order_expressions)
 

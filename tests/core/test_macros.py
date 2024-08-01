@@ -669,7 +669,7 @@ DEDUPLICATE_SQL = """
 @deduplicate(
     my_table,
     [user_id, CAST(timestamp AS DATE)],
-    ['timestamp DESC', 'status ASC']
+    ['timestamp DESC', 'status ASC nulls last']
 )
 """
 
@@ -686,7 +686,7 @@ DEDUPLICATE_SQL = """
                 FROM my_table
                 QUALIFY ROW_NUMBER() OVER (
                     PARTITION BY user_id, CAST(timestamp AS DATE)
-                    ORDER BY timestamp DESC, status ASC
+                    ORDER BY timestamp DESC, status ASC NULLS LAST
                 ) = 1
                 """,
             )
@@ -700,7 +700,7 @@ DEDUPLICATE_SQL = """
             FROM my_table
             QUALIFY ROW_NUMBER() OVER (
                 PARTITION BY user_id, CAST("timestamp" AS DATE)
-                ORDER BY "timestamp" DESC, status ASC
+                ORDER BY "timestamp" DESC, status ASC NULLS LAST
             ) = 1
             """,
         ),
@@ -713,7 +713,7 @@ DEDUPLICATE_SQL = """
                 FROM (
                     SELECT *, ROW_NUMBER() OVER (
                         PARTITION BY user_id, CAST(timestamp AS DATE)
-                        ORDER BY timestamp DESC, status ASC
+                        ORDER BY timestamp DESC, status ASC NULLS LAST
                     ) AS _w
                     FROM my_table
                 ) as _t
@@ -744,7 +744,7 @@ def test_deduplicate_error_handling(macro_evaluator):
         macro_evaluator.evaluate(parse_one("@deduplicate(my_table, [user_id], 'timestamp DESC')"))
     assert (
         str(e.value.__cause__)
-        == "order_by must be a list of strings, null values in columns ordered first: ['<column> <asc|desc>']"
+        == "order_by must be a list of strings, optional - nulls ordering: ['<column> <asc|desc> nulls <first|last>']"
     )
 
     # Test error handling: empty order_by
@@ -752,5 +752,5 @@ def test_deduplicate_error_handling(macro_evaluator):
         macro_evaluator.evaluate(parse_one("@deduplicate(my_table, [user_id], [])"))
     assert (
         str(e.value.__cause__)
-        == "At least one order_by expression is required: '<column> <asc|desc>'"
+        == "order_by must be a list of strings, optional - nulls ordering: ['<column> <asc|desc> nulls <first|last>']"
     )
