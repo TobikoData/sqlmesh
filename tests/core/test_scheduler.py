@@ -4,6 +4,7 @@ import pytest
 from pytest_mock.plugin import MockerFixture
 from sqlglot import parse_one, parse
 
+from sqlmesh.core.audit import AuditResult
 from sqlmesh.core.context import Context
 from sqlmesh.core.environment import EnvironmentNamingInfo
 from sqlmesh.core.model import load_sql_based_model
@@ -15,9 +16,14 @@ from sqlmesh.core.model.kind import (
 )
 from sqlmesh.core.node import IntervalUnit
 from sqlmesh.core.scheduler import Scheduler, compute_interval_params
-from sqlmesh.core.snapshot import Snapshot, SnapshotEvaluator, SnapshotChangeCategory
+from sqlmesh.core.snapshot import (
+    Snapshot,
+    SnapshotEvaluator,
+    SnapshotChangeCategory,
+    DeployabilityIndex,
+)
 from sqlmesh.utils.date import to_datetime
-from sqlmesh.utils.errors import CircuitBreakerError
+from sqlmesh.utils.errors import CircuitBreakerError, AuditError
 
 
 @pytest.fixture
@@ -28,6 +34,11 @@ def scheduler(sushi_context_fixed_date: Context) -> Scheduler:
 @pytest.fixture
 def orders(sushi_context_fixed_date: Context) -> Snapshot:
     return sushi_context_fixed_date.get_snapshot("sushi.orders", raise_if_missing=True)
+
+
+@pytest.fixture
+def waiter_names(sushi_context_fixed_date: Context) -> Snapshot:
+    return sushi_context_fixed_date.get_snapshot("sushi.waiter_names", raise_if_missing=True)
 
 
 @pytest.mark.slow
@@ -546,3 +557,63 @@ def test_check_ready_intervals(mocker: MockerFixture):
         [[(0, 1)], [(3, 4)]],
         [(0, 1), (3, 4)],
     )
+
+
+def test_audit_failure_notifications(
+    scheduler: Scheduler, waiter_names: Snapshot, mocker: MockerFixture
+):
+    evaluator_evaluate_mock = mocker.Mock()
+    mocker.patch("sqlmesh.core.scheduler.SnapshotEvaluator.evaluate", evaluator_evaluate_mock)
+    evaluator_audit_mock = mocker.Mock()
+    mocker.patch("sqlmesh.core.scheduler.SnapshotEvaluator.audit", evaluator_audit_mock)
+    notify_user_mock = mocker.Mock()
+    mocker.patch(
+        "sqlmesh.core.notification_target.NotificationTargetManager.notify_user", notify_user_mock
+    )
+    notify_mock = mocker.Mock()
+    mocker.patch("sqlmesh.core.notification_target.NotificationTargetManager.notify", notify_mock)
+
+    audit = next(iter(waiter_names.audits))
+
+    def _evaluate():
+        scheduler.evaluate(
+            waiter_names,
+            to_datetime("2022-01-01"),
+            to_datetime("2022-01-02"),
+            to_datetime("2022-01-03"),
+            DeployabilityIndex.all_deployable(),
+            0,
+        )
+
+    evaluator_audit_mock.return_value = [
+        AuditResult(audit=audit, model=waiter_names.model, count=0, skipped=False)
+    ]
+    _evaluate()
+    assert notify_user_mock.call_count == 0
+    assert notify_mock.call_count == 0
+
+    evaluator_audit_mock.return_value = [
+        AuditResult(audit=audit, model=waiter_names.model, count=None, skipped=True)
+    ]
+    _evaluate()
+    assert notify_user_mock.call_count == 0
+    assert notify_mock.call_count == 0
+
+    audit = audit.model_copy(update={"blocking": False})
+    evaluator_audit_mock.return_value = [
+        AuditResult(audit=audit, model=waiter_names.model, count=1, skipped=False)
+    ]
+    _evaluate()
+    assert notify_user_mock.call_count == 1
+    assert notify_mock.call_count == 1
+    notify_user_mock.reset_mock()
+    notify_mock.reset_mock()
+
+    audit = audit.model_copy(update={"blocking": True})
+    evaluator_audit_mock.return_value = [
+        AuditResult(audit=audit, model=waiter_names.model, count=1, skipped=False)
+    ]
+    with pytest.raises(AuditError):
+        _evaluate()
+    assert notify_user_mock.call_count == 1
+    assert notify_mock.call_count == 1

@@ -6,6 +6,8 @@ import traceback
 import typing as t
 from datetime import datetime
 
+from sqlglot import exp
+
 from sqlmesh.core import constants as c
 from sqlmesh.core.console import Console, get_console
 from sqlmesh.core.environment import EnvironmentNamingInfo
@@ -212,25 +214,38 @@ class Scheduler:
             batch_index=batch_index,
             **kwargs,
         )
-        try:
-            self.snapshot_evaluator.audit(
-                snapshot=snapshot,
-                start=start,
-                end=end,
-                execution_time=execution_time,
-                snapshots=snapshots,
-                deployability_index=deployability_index,
-                wap_id=wap_id,
-                **kwargs,
+        audit_results = self.snapshot_evaluator.audit(
+            snapshot=snapshot,
+            start=start,
+            end=end,
+            execution_time=execution_time,
+            raise_exception=False,
+            snapshots=snapshots,
+            deployability_index=deployability_index,
+            wap_id=wap_id,
+            **kwargs,
+        )
+
+        audit_error_to_raise: t.Optional[AuditError] = None
+        for audit_result in [result for result in audit_results if result.count]:
+            error = AuditError(
+                audit_name=audit_result.audit.name,
+                model=snapshot.model_or_none,
+                count=t.cast(int, audit_result.count),
+                query=t.cast(exp.Query, audit_result.query),
+                adapter_dialect=self.snapshot_evaluator.adapter.dialect,
             )
-        except AuditError as e:
-            self.notification_target_manager.notify(NotificationEvent.AUDIT_FAILURE, e)
+            self.notification_target_manager.notify(NotificationEvent.AUDIT_FAILURE, error)
             if is_deployable and snapshot.node.owner:
                 self.notification_target_manager.notify_user(
-                    NotificationEvent.AUDIT_FAILURE, snapshot.node.owner, e
+                    NotificationEvent.AUDIT_FAILURE, snapshot.node.owner, error
                 )
+            if audit_result.audit.blocking:
+                audit_error_to_raise = error
+
+        if audit_error_to_raise:
             logger.error(f"Audit Failure: {traceback.format_exc()}")
-            raise e
+            raise audit_error_to_raise
 
         self.state_sync.add_interval(snapshot, start, end, is_dev=not is_deployable)
 
