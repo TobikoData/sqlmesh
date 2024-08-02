@@ -1,6 +1,8 @@
 # Multi-Repo guide
 
-Although mono repos are convenient and easy to use, sometimes your organization may choose to use multiple repos. SQLMesh provides native support for multiple repos and makes it easy to maintain data consistency and correctness even with multiple repos.
+Although mono repos are convenient and easy to use, sometimes your organization may choose to use multiple repos. 
+SQLMesh provides native support for multiple repos and makes it easy to maintain data consistency and correctness even with multiple repos.
+If you are wanting to separate your systems/data and provide isolation, checkout the [isolated systems guide](https://sqlmesh.readthedocs.io/en/stable/guides/isolated_systems/?h=isolated). 
 
 ## Bootstrapping multiple projects
 Setting up SQLMesh with multiple repos is quite simple. Copy the contents of this example [multi-repo project](https://github.com/TobikoData/sqlmesh/tree/main/examples/multi).
