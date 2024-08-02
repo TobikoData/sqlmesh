@@ -1,5 +1,296 @@
 # Snowflake
 
+This page provides information about how to use SQLMesh with the Snowflake SQL engine.
+
+It begins with a [Connection Quickstart](#connection-quickstart) that demonstrates how to connect to Snowflake, or you can skip directly to information about using Snowflake with the [built-in](#localbuilt-in-scheduler) or [airflow](#airflow-scheduler) schedulers.
+
+## Connection quickstart
+
+Connecting to cloud warehouses involves a few steps, so this connection quickstart provides the info you need to get up and running with Snowflake.
+
+It demonstrates connecting to Snowflake with the `snowflake-connector-python` library bundled with SQLMesh.
+
+Snowflake provides multiple methods of authorizing a connection (e.g., password, SSO, etc.). This quickstart demonstrates authorizing with a password, but configurations for other methods are [described below](#snowflake-authorization-methods).
+
+!!! tip
+    This quickstart assumes you are familiar with basic SQLMesh commands and functionality.
+
+    If you're not, work through the [SQLMesh Quickstart](../../quick_start.md) before continuing!
+
+### Prerequisites
+
+Before working through this connection quickstart, ensure that:
+
+1. You have a Snowflake account and know your username and password
+1. Your Snowflake account has at least one [warehouse](https://docs.snowflake.com/en/user-guide/warehouses-overview) available for running computations
+2. Your computer has [SQLMesh installed](../../installation.md) with the [Snowflake extra available](../../installation.md#install-extras)
+    - Install from the command line with the command `pip install "sqlmesh[snowflake]"`
+3. You have initialized a [SQLMesh example project](../../quickstart/cli#1-create-the-sqlmesh-project) on your computer
+    - Open a command line interface and navigate to the directory where the project files should go
+    - Initialize the project with the command `sqlmesh init duckdb`
+
+### Access control permissions
+
+SQLMesh must have sufficient permissions to create and access different types of database objects.
+
+SQLMesh's core functionality requires relatively broad permissions, including:
+
+1. Ability to create and delete schemas in a database
+2. Ability to create, modify, delete, and query tables and views in the schemas it creates
+
+If your project uses materialized views or dynamic tables, SQLMesh will also need permissions to create, modify, delete, and query those object types.
+
+We now describe how to grant SQLMesh appropriate permissions.
+
+#### Snowflake roles
+
+Snowflake allows you to grant permissions directly to a user, or you can create and assign permissions to a "role" that you then grant to the user.
+
+Roles provide a convenient way to bundle sets of permissions and provide them to multiple users. We create and use a role to grant our user permissions in this quickstart.
+
+The role must be granted `USAGE` on a warehouse so it can execute computations. We describe other permissions below.
+
+#### Database permissions
+The top-level object container in Snowflake is a "database" (often called a "catalog" in other engines). SQLMesh does not need permission to create databases; it may use an existing one.
+
+The simplest way to grant SQLMesh sufficient permissions for a database is to give it `OWNERSHIP` of the database, which includes all the necessary permissions.
+
+Alternatively, you may grant SQLMesh granular permissions for all the actions and objects it will work with in the database.
+
+#### Granting the permissions
+
+This section provides example code for creating a `sqlmesh` role, granting it sufficient permissions, and granting it to a user.
+
+The code must be executed by a user with `USERADMIN` level permissions or higher. We provide two versions of the code, one that grants database `OWNERSHIP` to the role and another that does not.
+
+Both examples create a role named `sqlmesh`, grant it usage of the warehouse `compute_wh`, create a database named `demo_db`, and assign the role to the user `demo_user`. The step that creates the database can be omitted if the database already exists.
+
+=== "With database ownership"
+
+    ```sql linenums="1"
+    USE ROLE useradmin; -- This code requires USERADMIN privileges or higher
+
+    CREATE ROLE sqlmesh; -- Create role for permissions
+    GRANT USAGE ON WAREHOUSE compute_wh TO ROLE sqlmesh; -- Can use warehouse
+
+    CREATE DATABASE demo_db; -- Create database for SQLMesh to use (omit if database already exists)
+    GRANT OWNERSHIP ON DATABASE demo_db TO ROLE sqlmesh; -- Role owns database
+
+    GRANT ROLE sqlmesh TO USER demo_user; -- Grant role to user
+    ALTER USER demo_user SET DEFAULT ROLE = sqlmesh; -- Make role user's default role
+    ```
+
+=== "Without database ownership"
+
+    ```sql linenums="1"
+    USE ROLE useradmin; -- This code requires USERADMIN privileges or higher
+
+    CREATE ROLE sqlmesh; -- Create role for permissions
+    CREATE DATABASE demo_db; -- Create database for SQLMesh to use (omit if database already exists)
+
+    GRANT USAGE ON WAREHOUSE compute_wh TO ROLE sqlmesh; -- Can use warehouse
+    GRANT USAGE ON DATABASE demo_db TO ROLE sqlmesh; -- Can use database
+
+    GRANT CREATE SCHEMA ON DATABASE demo_db TO ROLE sqlmesh; -- Can create SCHEMAs in database
+    GRANT USAGE ON FUTURE SCHEMAS IN DATABASE demo_db TO ROLE sqlmesh; -- Can use schemas it creates
+    GRANT CREATE TABLE ON FUTURE SCHEMAS IN DATABASE demo_db TO ROLE sqlmesh; -- Can create TABLEs in schemas
+    GRANT CREATE VIEW ON FUTURE SCHEMAS IN DATABASE demo_db TO ROLE sqlmesh; -- Can create VIEWs in schemas
+    GRANT SELECT, INSERT, TRUNCATE, UPDATE, DELETE ON FUTURE TABLES IN DATABASE demo_db TO ROLE sqlmesh; -- Can SELECT and modify TABLEs in schemas
+    GRANT REFERENCES, SELECT ON FUTURE VIEWS IN DATABASE demo_db TO ROLE sqlmesh; -- Can SELECT and modify VIEWs in schemas
+
+    GRANT ROLE sqlmesh TO USER demo_user; -- Grant role to user
+    ALTER USER demo_user SET DEFAULT ROLE = sqlmesh; -- Make role user's default role
+    ```
+
+### Get connection info
+
+Now that our user has sufficient access permissions, we're ready to gather the information needed to configure the SQLMesh connection.
+
+#### Account name
+
+Snowflake connection configurations require the `account` parameter that identifies the Snowflake account SQLMesh should connect to.
+
+Snowflake account identifiers have two components: your organization name and your account name. Both are embedded in your Snowflake web interface URL, separated by a `/`.
+
+This shows the default view when you log in to your Snowflake account, where we can see the two components of the account identifier:
+
+![Snowflake account info in web URL](./snowflake/snowflake_db-guide_account-url.png){ loading=lazy }
+
+In this example, our organization name is `idapznw`, and our account name is `wq29399`.
+
+We concatenate the two components, separated by a `-`, for the SQLMesh `account` parameter: `idapznw-wq29399`.
+
+#### Warehouse name
+
+Your Snowflake account may have more than one warehouse available - any will work for this quickstart, which runs very few computations.
+
+Some Snowflake user accounts may have a default warehouse they automatically use when connecting.
+
+The connection configuration's `warehouse` parameter is not required, but we recommend specifying the warehouse explicitly in the configuration to ensure SQLMesh's behavior doesn't change if the user's default warehouse changes.
+
+#### Database name
+
+Snowflake user accounts may have a "Default Namespace" that includes a default database they automatically use when connecting.
+
+The connection configuration's `database` parameter is not required, but we recommend specifying the database explicitly in the configuration to ensure SQLMesh's behavior doesn't change if the user's default namespace changes.
+
+### Configure the connection
+
+We now have the information we need to configure SQLMesh's connection to Snowflake.
+
+We begin by adding a new gateway named `snowflake` to our example project's config.yaml file:
+
+```yaml linenums="1" hl_lines="6-8"
+gateways:
+  local:
+    connection:
+      type: duckdb
+      database: db.db
+  snowflake:
+    connection:
+      type: snowflake
+
+default_gateway: local
+
+model_defaults:
+  dialect: duckdb
+  start: 2024-07-24
+```
+
+And we specify the `account`, `user`, `password`, `database`, and `warehouse` connection parameters using the information from above:
+
+```yaml linenums="1" hl_lines="9-13"
+gateways:
+  local:
+    connection:
+      type: duckdb
+      database: db.db
+  snowflake:
+    connection:
+      type: snowflake
+      account: idapznw-wq29399
+      user: DEMO_USER
+      password: << password here >>
+      database: DEMO_DB
+      warehouse: COMPUTE_WH
+
+default_gateway: local
+
+model_defaults:
+  dialect: duckdb
+  start: 2024-07-24
+```
+
+!!! warning
+    Best practice for storing secrets like passwords is placing them in [environment variables that the configuration file loads dynamically](../../guides/configuration.md#environment-variables). For simplicity, this guide instead places the value directly in the configuration file.
+
+    This code demonstrates how to use the environment variable `SNOWFLAKE_PASSWORD` for the configuration's `password` parameter:
+
+    ```yaml linenums="1"
+    gateways:
+      snowflake:
+        connection:
+          type: snowflake
+          password: {{ env_var('SNOWFLAKE_PASSWORD') }}
+    ```
+
+### Check connection
+
+We have now specified the `snowflake` gateway connection information, so we can confirm that SQLMesh is able to successfully connect to Snowflake. We will test the connection with the `sqlmesh info` command.
+
+First, open a command line terminal. Now enter the command `sqlmesh --gateway snowflake info`.
+
+We manually specify the `snowflake` gateway because it is not our project's default gateway:
+
+![Run sqlmesh info command in CLI](./snowflake/snowflake_db-guide_sqlmesh-info.png){ loading=lazy }
+
+The output shows that our data warehouse connection succeeded:
+
+![Successful data warehouse connection](./snowflake/snowflake_db-guide_sqlmesh-info-succeeded.png){ loading=lazy }
+
+However, the output includes a `WARNING` about using the Snowflake SQL engine for storing SQLMesh state:
+
+![Snowflake state connection warning](./snowflake/snowflake_db-guide_sqlmesh-info-warning.png){ loading=lazy }
+
+!!! warning
+    Snowflake is not designed for transactional workloads and should not be used to store SQLMesh state even in testing deployments.
+
+    Learn more about storing SQLMesh state [here](../../guides/configuration.md#state-connection).
+
+### Specify state connection
+
+We can store SQLMesh state in a different SQL engine by specifying a `state_connection` in our `snowflake` gateway.
+
+This example uses the DuckDB engine to store state in the local `snowflake_state.db` file:
+
+```yaml linenums="1" hl_lines="14-16"
+gateways:
+  local:
+    connection:
+      type: duckdb
+      database: db.db
+  snowflake:
+    connection:
+      type: snowflake
+      account: idapznw-wq29399
+      user: DEMO_USER
+      password: << your password here >>
+      database: DEMO_DB
+      warehouse: COMPUTE_WH
+    state_connection:
+      type: duckdb
+      database: snowflake_state.db
+
+default_gateway: local
+
+model_defaults:
+  dialect: duckdb
+  start: 2024-07-24
+```
+
+Now we no longer see the warning when running `sqlmesh --gateway snowflake info`, and we see a new entry `State backend connection succeeded`:
+
+![No state connection warning](./snowflake/snowflake_db-guide_sqlmesh-info-no-warning.png){ loading=lazy }
+
+### Run a `sqlmesh plan`
+
+For convenience, we can omit the `--gateway` option from our CLI commands by specifying `snowflake` as our project's `default_gateway`:
+
+```yaml linenums="1" hl_lines="18"
+gateways:
+  local:
+    connection:
+      type: duckdb
+      database: db.db
+  snowflake:
+    connection:
+      type: snowflake
+      account: idapznw-wq29399
+      user: DEMO_USER
+      password: << your password here >>
+      database: DEMO_DB
+      warehouse: COMPUTE_WH
+    state_connection:
+      type: duckdb
+      database: snowflake_state.db
+
+default_gateway: snowflake
+
+model_defaults:
+  dialect: duckdb
+  start: 2024-07-24
+```
+
+And run a `sqlmesh plan` in Snowflake:
+
+![Run sqlmesh plan in snowflake](./snowflake/snowflake_db-guide_sqlmesh-plan.png){ loading=lazy }
+
+And confirm that our schemas and objects exist in the Snowflake catalog:
+
+![Sqlmesh plan objects in snowflake](./snowflake/snowflake_db-guide_sqlmesh-plan-objects.png){ loading=lazy }
+
+Congratulations - your SQLMesh project is up and running on Snowflake!
+
 ## Local/Built-in Scheduler
 **Engine Adapter Type**: `snowflake`
 
@@ -13,10 +304,10 @@ pip install "sqlmesh[snowflake]"
 | Option                   | Description                                                                                                                                                                    |  Type  | Required |
 |--------------------------|--------------------------------------------------------------------------------------------------------------------------------------------------------------------------------|:------:|:--------:|
 | `type`                   | Engine type name - must be `snowflake`                                                                                                                                         | string |    Y     |
+| `account`                | The Snowflake account name                                                                                                                                                     | string |    Y     |
 | `user`                   | The Snowflake username                                                                                                                                                         | string |    N     |
 | `password`               | The Snowflake password                                                                                                                                                         | string |    N     |
 | `authenticator`          | The Snowflake authenticator method                                                                                                                                             | string |    N     |
-| `account`                | The Snowflake account name                                                                                                                                                     | string |    Y     |
 | `warehouse`              | The Snowflake warehouse name                                                                                                                                                   | string |    N     |
 | `database`               | The Snowflake database name                                                                                                                                                    | string |    N     |
 | `role`                   | The Snowflake role name                                                                                                                                                        | string |    N     |
@@ -27,9 +318,11 @@ pip install "sqlmesh[snowflake]"
 | `session_parameters`     | The optional session parameters to set for the connection.                                                                                                                     | dict   |    N     |
 
 
-#### Lowercase object names
+### Lowercase object names
 
-Snowflake object names are case-insensitive by default. If you have intentionally created an object with a case-sensitive lowercase name, specify it with outer single and inner double quotes.
+Snowflake object names are case-insensitive by default, and Snowflake automatically normalizes them to uppercase. For example, the command `CREATE SCHEMA sqlmesh` will generate a schema named `SQLMESH` in Snowflake.
+
+If you need to create an object with a case-sensitive lowercase name, the name must be double-quoted in SQL code. In the SQLMesh configuration file, it also requires outer single quotes.
 
 For example, a connection to the database `"my_db"` would include:
 
@@ -37,10 +330,16 @@ For example, a connection to the database `"my_db"` would include:
 connection:
   type: snowflake
   <other connection options>
-  database: '"my_db"'
+  database: '"my_db"' # outer single and inner double quotes
 ```
 
-### Snowflake SSO Authorization
+### Snowflake authorization methods
+
+The simplest (but arguably least secure) method of authorizing a connection with Snowflake is with a username and password.
+
+This section describes how to configure other authorization methods.
+
+#### Snowflake SSO Authorization
 
 SQLMesh supports Snowflake SSO authorization connections using the `externalbrowser` authenticator method. For example:
 
@@ -57,7 +356,7 @@ gateways:
       role: ************
 ```
 
-### Snowflake OAuth Authorization
+#### Snowflake OAuth Authorization
 
 SQLMesh supports Snowflake OAuth authorization connections using the `oauth` authenticator method. For example:
 
@@ -92,11 +391,13 @@ SQLMesh supports Snowflake OAuth authorization connections using the `oauth` aut
     )
     ```
 
-### Snowflake Private Key Authorization
+#### Snowflake Private Key Authorization
 
-SQLMesh supports Snowflake private key authorization connections by providing the private key as a path, Base64-encoded DER format (representing the key bytes), a plain-text PEM format, or as bytes (Python Only). `account` and `user` are required. For example:
+SQLMesh supports Snowflake private key authorization connections by providing the private key as a path, Base64-encoded DER format (representing the key bytes), a plain-text PEM format, or as bytes (Python Only).
 
-#### Private Key Path
+The `account` and `user` parameters are required for each of these methods.
+
+__Private Key Path__
 
 Note: `private_key_passphrase` is only needed if the key was encrypted with a passphrase.
 
@@ -132,7 +433,7 @@ Note: `private_key_passphrase` is only needed if the key was encrypted with a pa
     ```
 
 
-#### Private Key PEM
+__Private Key PEM__
 
 Note: `private_key_passphrase` is only needed if the key was encrypted with a passphrase.
 
@@ -174,7 +475,7 @@ Note: `private_key_passphrase` is only needed if the key was encrypted with a pa
     ```
 
 
-#### Private Key Base64 
+__Private Key Base64__
 
 Note: This is base64 encoding of the bytes of the key itself and not the PEM file contents.
 
@@ -207,7 +508,7 @@ Note: This is base64 encoding of the bytes of the key itself and not the PEM fil
     )
     ```
 
-#### Private Key Bytes
+__Private Key Bytes__
 
 === "YAML"
 
@@ -222,21 +523,21 @@ Note: This is base64 encoding of the bytes of the key itself and not the PEM fil
         ModelDefaultsConfig,
         SnowflakeConnectionConfig,
     )
-    
+
     from cryptography.hazmat.primitives import serialization
-    
+
     key = """-----BEGIN PRIVATE KEY-----
     ...
     -----END PRIVATE KEY-----""".encode()
-    
+
     p_key= serialization.load_pem_private_key(key, password=None)
-    
+
     pkb = p_key.private_bytes(
         encoding=serialization.Encoding.DER,
         format=serialization.PrivateFormat.PKCS8,
         encryption_algorithm=serialization.NoEncryption(),
     )
-    
+
     config = Config(
         model_defaults=ModelDefaultsConfig(dialect="snowflake"),
         gateways={
@@ -279,10 +580,11 @@ sqlmesh_airflow = SQLMeshAirflow(
 
 ## Configuring Virtual Warehouses
 
-The Snowflake Virtual Warehouse can be specified on a per-model basis using the `session_properties` attribute of the model definition:
-```sql
+The Snowflake Virtual Warehouse a model should use can be specified in the `session_properties` attribute of the model definition:
+
+```sql linenums="1"
 MODEL (
-  name model_name,
+  name schema_name.model_name,
   session_properties (
     'warehouse' = TEST_WAREHOUSE,
   ),
