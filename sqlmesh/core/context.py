@@ -1720,7 +1720,8 @@ class GenericContext(BaseContext, t.Generic[C]):
 
     def close(self) -> None:
         """Releases all resources allocated by this context."""
-        self.snapshot_evaluator.close()
+        if self._snapshot_evaluator:
+            self._snapshot_evaluator.close()
         if self._state_sync:
             self._state_sync.close()
 
