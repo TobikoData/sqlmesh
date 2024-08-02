@@ -123,8 +123,9 @@ class Loader(abc.ABC):
         self._config_mtimes = {path: max(mtimes) for path, mtimes in config_mtimes.items()}
 
         macros, jinja_macros = self._load_scripts()
+        audits = self._load_audits(macros=macros, jinja_macros=jinja_macros)
         models = self._load_models(
-            macros, jinja_macros, context.gateway or context.config.default_gateway
+            macros, jinja_macros, context.gateway or context.config.default_gateway, audits or None
         )
 
         for model in models.values():
@@ -146,7 +147,7 @@ class Loader(abc.ABC):
             macros=macros,
             jinja_macros=jinja_macros,
             models=models,
-            audits=self._load_audits(macros=macros, jinja_macros=jinja_macros),
+            audits=audits,
             metrics=expand_metrics(metrics),
             dag=self._dag,
         )
@@ -171,7 +172,11 @@ class Loader(abc.ABC):
 
     @abc.abstractmethod
     def _load_models(
-        self, macros: MacroRegistry, jinja_macros: JinjaMacroRegistry, gateway: t.Optional[str]
+        self,
+        macros: MacroRegistry,
+        jinja_macros: JinjaMacroRegistry,
+        gateway: t.Optional[str],
+        audits: t.Optional[t.Dict[str, Audit]],
     ) -> UniqueKeyDict[str, Model]:
         """Loads all models."""
 
@@ -312,20 +317,27 @@ class SqlMeshLoader(Loader):
         return macros, jinja_macros
 
     def _load_models(
-        self, macros: MacroRegistry, jinja_macros: JinjaMacroRegistry, gateway: t.Optional[str]
+        self,
+        macros: MacroRegistry,
+        jinja_macros: JinjaMacroRegistry,
+        gateway: t.Optional[str],
+        audits: t.Optional[t.Dict[str, Audit]] = None,
     ) -> UniqueKeyDict[str, Model]:
         """
         Loads all of the models within the model directory with their associated
         audits into a Dict and creates the dag
         """
-        models = self._load_sql_models(macros, jinja_macros)
+        models = self._load_sql_models(macros, jinja_macros, audits)
         models.update(self._load_external_models(gateway))
         models.update(self._load_python_models())
 
         return models
 
     def _load_sql_models(
-        self, macros: MacroRegistry, jinja_macros: JinjaMacroRegistry
+        self,
+        macros: MacroRegistry,
+        jinja_macros: JinjaMacroRegistry,
+        audits: t.Optional[t.Dict[str, Audit]] = None,
     ) -> UniqueKeyDict[str, Model]:
         """Loads the sql models into a Dict"""
         models: UniqueKeyDict[str, Model] = UniqueKeyDict("models")
@@ -357,6 +369,8 @@ class SqlMeshLoader(Loader):
                         defaults=config.model_defaults.dict(),
                         macros=macros,
                         jinja_macros=jinja_macros,
+                        audits=audits,
+                        default_audits=config.model_defaults.audits,
                         path=Path(path).absolute(),
                         module_path=context_path,
                         dialect=config.model_defaults.dialect,
