@@ -227,7 +227,7 @@ class Scheduler:
         )
 
         audit_error_to_raise: t.Optional[AuditError] = None
-        for audit_result in [result for result in audit_results if result.count]:
+        for audit_result in (result for result in audit_results if result.count):
             error = AuditError(
                 audit_name=audit_result.audit.name,
                 model=snapshot.model_or_none,
