@@ -11,6 +11,7 @@ from sqlmesh.core.model import load_sql_based_model
 from sqlmesh.core.engine_adapter import SnowflakeEngineAdapter
 from sqlmesh.core.model.definition import SqlModel
 from sqlmesh.utils.errors import SQLMeshError
+from sqlmesh.utils import optional_import
 from tests.core.engine_adapter import to_sql_calls
 
 pytestmark = [pytest.mark.engine, pytest.mark.snowflake]
@@ -358,4 +359,41 @@ def test_set_current_schema(make_mocked_engine_adapter: t.Callable):
         'USE SCHEMA "foo"',
         'USE SCHEMA "FOO"."foo"',
         'USE SCHEMA "FOO"."fOo"',
+    ]
+
+
+def test_replace_query_snowpark_dataframe(
+    mocker: MockerFixture, make_mocked_engine_adapter: t.Callable
+):
+    if not optional_import("snowflake.snowpark"):
+        pytest.skip("Snowpark not available in this environment")
+
+    from snowflake.snowpark.session import Session
+    from snowflake.snowpark.dataframe import DataFrame as SnowparkDataFrame
+
+    session = Session.builder.config("local_testing", True).create()
+    df: SnowparkDataFrame = session.create_dataframe([(1, "name")], schema=["ID", "NAME"])
+    assert isinstance(df, SnowparkDataFrame)
+
+    mocker.patch("sqlmesh.core.engine_adapter.base.random_id", return_value="e6wjkjj6")
+    spy = mocker.spy(df, "createOrReplaceTempView")
+
+    adapter: SnowflakeEngineAdapter = make_mocked_engine_adapter(SnowflakeEngineAdapter)
+    adapter._default_catalog = "foo"
+
+    adapter.replace_query(
+        table_name="foo",
+        query_or_df=df,
+        columns_to_types={"ID": exp.DataType.build("INT"), "NAME": exp.DataType.build("VARCHAR")},
+    )
+
+    # the Snowflake library generates "CREATE TEMPORARY VIEW" from a direct DataFrame call
+    # which doesnt pass through our EngineAdapter so we cant capture it
+    spy.assert_called()
+    assert "__temp_foo_e6wjkjj6" in spy.call_args[0][0]
+
+    # verify that DROP VIEW is called instead of DROP TABLE
+    assert to_sql_calls(adapter) == [
+        'CREATE OR REPLACE TABLE "foo" AS SELECT CAST("ID" AS INT) AS "ID", CAST("NAME" AS VARCHAR) AS "NAME" FROM (SELECT CAST("ID" AS INT) AS "ID", CAST("NAME" AS VARCHAR) AS "NAME" FROM "__temp_foo_e6wjkjj6") AS "_subquery"',
+        'DROP VIEW IF EXISTS "__temp_foo_e6wjkjj6"',
     ]
