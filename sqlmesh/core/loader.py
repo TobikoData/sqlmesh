@@ -30,7 +30,7 @@ from sqlmesh.core.model import model as model_registry
 from sqlmesh.utils import UniqueKeyDict
 from sqlmesh.utils.dag import DAG
 from sqlmesh.utils.errors import ConfigError
-from sqlmesh.utils.jinja import JinjaMacroRegistry, MacroExtractor
+from sqlmesh.utils.jinja import CallCache, JinjaMacroRegistry, MacroExtractor
 from sqlmesh.utils.metaprogramming import import_python_file
 from sqlmesh.utils.yaml import YAML
 
@@ -249,6 +249,8 @@ class SqlMeshLoader(Loader):
         macros_max_mtime: t.Optional[float] = None
 
         for context_path, config in self._context.configs.items():
+            call_cache = CallCache(context_path / c.CACHE)
+
             for path in self._glob_paths(context_path / c.MACROS, config=config, extension=".py"):
                 if import_python_file(path, context_path):
                     self._track_file(path)
@@ -268,7 +270,7 @@ class SqlMeshLoader(Loader):
                     else macro_file_mtime
                 )
                 with open(path, "r", encoding="utf-8") as file:
-                    jinja_macros.add_macros(extractor.extract(file.read()))
+                    jinja_macros.add_macros(extractor.extract(file.read(), call_cache=call_cache))
 
         self._macros_max_mtime = macros_max_mtime
 
@@ -297,6 +299,7 @@ class SqlMeshLoader(Loader):
         models: UniqueKeyDict[str, Model] = UniqueKeyDict("models")
         for context_path, config in self._context.configs.items():
             cache = SqlMeshLoader._Cache(self, context_path)
+            call_cache = CallCache(context_path / c.CACHE)
             variables = self._variables(config)
 
             for path in self._glob_paths(context_path / c.MODELS, config=config, extension=".sql"):
@@ -330,6 +333,7 @@ class SqlMeshLoader(Loader):
                         default_catalog=self._context.default_catalog,
                         variables=variables,
                         infer_names=config.model_naming.infer_names,
+                        call_cache=call_cache,
                     )
 
                 model = cache.get_or_load_model(path, _load)

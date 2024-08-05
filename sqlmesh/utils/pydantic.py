@@ -32,6 +32,7 @@ PYDANTIC_MAJOR_VERSION, PYDANTIC_MINOR_VERSION = [int(p) for p in pydantic.__ver
 
 
 if PYDANTIC_MAJOR_VERSION >= 2:
+    PRIVATE_FIELDS = "__pydantic_private__"
 
     def field_validator(*args: t.Any, **kwargs: t.Any) -> t.Callable[[t.Any], t.Any]:
         # Pydantic v2 doesn't support "always" argument. The validator behaves as if "always" is True.
@@ -47,6 +48,7 @@ if PYDANTIC_MAJOR_VERSION >= 2:
         return pydantic.field_serializer(*args, **kwargs)  # type: ignore
 
 else:
+    PRIVATE_FIELDS = "__private_attribute_values__"
 
     def field_validator(*args: t.Any, **kwargs: t.Any) -> t.Callable[[t.Any], t.Any]:
         mode = kwargs.pop("mode", "after")

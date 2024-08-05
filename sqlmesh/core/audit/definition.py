@@ -27,6 +27,7 @@ from sqlmesh.utils.date import TimeLike
 from sqlmesh.utils.errors import AuditConfigError, SQLMeshError, raise_config_error
 from sqlmesh.utils.hashing import hash_data
 from sqlmesh.utils.jinja import (
+    CallCache,
     JinjaMacroRegistry,
     extract_macro_references_and_variables,
 )
@@ -472,6 +473,7 @@ def load_audit(
     dialect: t.Optional[str] = None,
     default_catalog: t.Optional[str] = None,
     variables: t.Optional[t.Dict[str, t.Any]] = None,
+    call_cache: t.Optional[CallCache] = None,
 ) -> Audit:
     """Load an audit from a parsed SQLMesh audit file.
 
@@ -527,12 +529,15 @@ def load_audit(
     extra_kwargs: t.Dict[str, t.Any] = {}
     if is_standalone:
         jinja_macro_refrences, used_variables = extract_macro_references_and_variables(
+            call_cache,
             *(gen(s) for s in statements),
             gen(query),
         )
         jinja_macros = (jinja_macros or JinjaMacroRegistry()).trim(jinja_macro_refrences)
         for jinja_macro in jinja_macros.root_macros.values():
-            used_variables.update(extract_macro_references_and_variables(jinja_macro.definition)[1])
+            used_variables.update(
+                extract_macro_references_and_variables(call_cache, jinja_macro.definition)[1]
+            )
 
         extra_kwargs["jinja_macros"] = jinja_macros
         extra_kwargs["python_env"] = _python_env(

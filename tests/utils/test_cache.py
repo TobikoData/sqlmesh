@@ -14,7 +14,7 @@ class _TestEntry(PydanticModel):
 
 
 def test_file_cache(tmp_path: Path, mocker: MockerFixture):
-    cache = FileCache(tmp_path, _TestEntry)
+    cache: FileCache[_TestEntry] = FileCache(tmp_path)
 
     test_entry_a = _TestEntry(value="value_a")
     test_entry_b = _TestEntry(value="value_b")

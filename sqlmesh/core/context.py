@@ -35,7 +35,6 @@ from __future__ import annotations
 
 import abc
 import collections
-import gc
 import logging
 import time
 import traceback
@@ -500,7 +499,6 @@ class GenericContext(BaseContext, t.Generic[C]):
         """Load all files in the context's path."""
         load_start_ts = time.perf_counter()
         with sys_path(*self.configs):
-            gc.disable()
             project = self._loader.load(self, update_schemas)
             self._macros = project.macros
             self._jinja_macros = project.jinja_macros
@@ -514,7 +512,6 @@ class GenericContext(BaseContext, t.Generic[C]):
                 else:
                     self._audits[name] = audit
             self.dag = project.dag
-            gc.enable()
 
             duplicates = set(self._models) & set(self._standalone_audits)
             if duplicates:
