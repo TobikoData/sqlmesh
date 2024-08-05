@@ -799,12 +799,11 @@ class SnapshotEvaluator:
         evaluation_strategy = _evaluation_strategy(snapshot, self.adapter)
 
         for is_table_deployable, table_name in table_names:
-            table = exp.to_table(table_name)
-            if table.db != snapshot.physical_schema:
-                raise SQLMeshError(
-                    f"Table '{table_name}' is not a part of the physical schema '{snapshot.physical_schema}' and so can't be dropped."
-                )
-            evaluation_strategy.delete(table_name, is_table_deployable=is_table_deployable)
+            evaluation_strategy.delete(
+                table_name,
+                is_table_deployable=is_table_deployable,
+                physical_schema=snapshot.physical_schema,
+            )
 
             if on_complete is not None:
                 on_complete(table_name)
@@ -1225,6 +1224,7 @@ class MaterializableStrategy(PromotableStrategy):
         self.adapter.alter_table(alter_expressions)
 
     def delete(self, name: str, **kwargs: t.Any) -> None:
+        _check_table_db_is_physical_schema(name, kwargs["physical_schema"])
         self.adapter.drop_table(name)
         logger.info("Dropped table '%s'", name)
 
@@ -1792,6 +1792,7 @@ class EngineManagedStrategy(MaterializableStrategy):
 
     def delete(self, name: str, **kwargs: t.Any) -> None:
         # a dev preview table is created as a normal table, so it needs to be dropped as a normal table
+        _check_table_db_is_physical_schema(name, kwargs["physical_schema"])
         if kwargs["is_table_deployable"]:
             self.adapter.drop_managed_table(name)
             logger.info("Dropped managed table '%s'", name)
@@ -1824,4 +1825,12 @@ def _check_destructive_schema_change(
             return
         raise SQLMeshError(
             f"{warning_msg} To allow this, change the model's `on_destructive_change` setting to `warn` or `allow` or include it in the plan's `--allow-destructive-model` option."
+        )
+
+
+def _check_table_db_is_physical_schema(table_name: str, physical_schema: str) -> None:
+    table = exp.to_table(table_name)
+    if table.db != physical_schema:
+        raise SQLMeshError(
+            f"Table '{table_name}' is not a part of the physical schema '{physical_schema}' and so can't be dropped."
         )
