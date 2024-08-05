@@ -32,8 +32,9 @@ from sqlmesh.core.model import (
     TimeColumn,
     ViewKind,
     load_sql_based_model,
+    ExternalModel,
 )
-from sqlmesh.core.model.kind import OnDestructiveChange
+from sqlmesh.core.model.kind import OnDestructiveChange, ExternalKind
 from sqlmesh.core.node import IntervalUnit
 from sqlmesh.core.snapshot import (
     DeployabilityIndex,
@@ -426,6 +427,29 @@ def test_cleanup(mocker: MockerFixture, adapter_mock, make_snapshot):
             call(f"sqlmesh__default.test_model__{snapshot.version}"),
         ]
     )
+
+
+def test_cleanup_external_model(mocker: MockerFixture, adapter_mock, make_snapshot):
+    evaluator = SnapshotEvaluator(adapter_mock)
+
+    def create_and_cleanup_external_model(name: str, dev_table_only: bool):
+        model = ExternalModel(
+            name=name,
+            kind=ExternalKind(),
+        )
+
+        snapshot = make_snapshot(model)
+        snapshot.categorize_as(SnapshotChangeCategory.BREAKING)
+        snapshot.version = "test_version"
+
+        evaluator.promote([snapshot], EnvironmentNamingInfo(name="test_env"))
+        evaluator.cleanup(
+            [SnapshotTableCleanupTask(snapshot=snapshot.table_info, dev_table_only=dev_table_only)]
+        )
+        return snapshot
+
+    create_and_cleanup_external_model("catalog.test_schema.test_model", True)
+    adapter_mock.drop_table.assert_not_called()
 
 
 @pytest.mark.parametrize("view_exists", [True, False])
