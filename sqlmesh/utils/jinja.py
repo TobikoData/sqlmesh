@@ -4,8 +4,10 @@ import importlib
 import json
 import re
 import typing as t
+import zlib
 from collections import defaultdict
 from enum import Enum
+from pathlib import Path
 
 from jinja2 import Environment, Template, nodes
 from sqlglot import Dialect, Expression, Parser, TokenType
@@ -13,7 +15,8 @@ from sqlglot import Dialect, Expression, Parser, TokenType
 from sqlmesh.core import constants as c
 from sqlmesh.core import dialect as d
 from sqlmesh.utils import AttributeDict
-from sqlmesh.utils.pydantic import PydanticModel, field_serializer, field_validator
+from sqlmesh.utils.cache import FileCache
+from sqlmesh.utils.pydantic import PRIVATE_FIELDS, PydanticModel, field_serializer, field_validator
 
 SQLMESH_JINJA_PACKAGE = "sqlmesh.utils.jinja"
 
@@ -26,6 +29,37 @@ def environment(**kwargs: t.Any) -> Environment:
 
 
 ENVIRONMENT = environment()
+
+CallNames = t.Tuple[t.Tuple[str, ...], nodes.Call]
+
+
+class CallCache:
+    """File-based cache implementation for extract calls from jinja
+
+    Args:
+        path: The path to the cache folder.
+    """
+
+    def __init__(self, path: Path):
+        self.path = path
+        self._file_cache: FileCache[t.List[CallNames]] = FileCache(path, prefix="call")
+
+    def get_or_load(
+        self, name: str, entry_id: str = "", *, loader: t.Callable
+    ) -> t.List[CallNames]:
+        """Returns an existing cached model definition or loads and caches a new one.
+
+        Args:
+            name: The name of the entry.
+            entry_id: The unique entry identifier. Used for cache invalidation.
+            loader: Used to load a new model definition when no cached instance was found.
+
+        Returns:
+            The model definition.
+        """
+        return self._file_cache.get_or_load(
+            str(zlib.crc32(name.encode("utf-8"))), entry_id, loader=loader
+        )
 
 
 class MacroReference(PydanticModel, frozen=True):
@@ -55,7 +89,9 @@ class MacroReturnVal(Exception):
 
 
 class MacroExtractor(Parser):
-    def extract(self, jinja: str, dialect: str = "") -> t.Dict[str, MacroInfo]:
+    def extract(
+        self, jinja: str, dialect: str = "", *, call_cache: CallCache
+    ) -> t.Dict[str, MacroInfo]:
         """Extract a dictionary of macro definitions from a jinja string.
 
         Args:
@@ -87,7 +123,9 @@ class MacroExtractor(Parser):
                 macro_str = self._find_sql(macro_start, self._next)
                 macros[name] = MacroInfo(
                     definition=macro_str,
-                    depends_on=list(extract_macro_references_and_variables(macro_str)[0]),
+                    depends_on=list(
+                        extract_macro_references_and_variables(call_cache, macro_str)[0]
+                    ),
                 )
 
             self._advance()
@@ -119,9 +157,7 @@ def render_jinja(query: str, methods: t.Optional[t.Dict[str, t.Any]] = None) -> 
     return ENVIRONMENT.from_string(query).render(methods or {})
 
 
-def find_call_names(
-    node: nodes.Node, vars_in_scope: t.Set[str]
-) -> t.Iterator[t.Tuple[t.Tuple[str, ...], nodes.Call]]:
+def find_call_names(node: nodes.Node, vars_in_scope: t.Set[str]) -> t.Iterator[CallNames]:
     vars_in_scope = vars_in_scope.copy()
     for child_node in node.iter_child_nodes():
         if "target" in child_node.fields:
@@ -142,17 +178,23 @@ def find_call_names(
         yield from find_call_names(child_node, vars_in_scope)
 
 
-def extract_call_names(jinja_str: str) -> t.List[t.Tuple[t.Tuple[str, ...], nodes.Call]]:
-    return list(find_call_names(ENVIRONMENT.parse(jinja_str), set()))
+def extract_call_names(jinja_str: str, cache: t.Optional[CallCache]) -> t.List[CallNames]:
+    def load() -> t.List[CallNames]:
+        return list(find_call_names(ENVIRONMENT.parse(jinja_str), set()))
+
+    if cache:
+        return cache.get_or_load(jinja_str, loader=load)
+    return load()
 
 
 def extract_macro_references_and_variables(
+    call_cache: t.Optional[CallCache],
     *jinja_strs: str,
 ) -> t.Tuple[t.Set[MacroReference], t.Set[str]]:
     macro_references = set()
     variables = set()
     for jinja_str in jinja_strs:
-        for call_name, node in extract_call_names(jinja_str):
+        for call_name, node in extract_call_names(jinja_str, call_cache):
             if call_name[0] == c.VAR:
                 args = [jinja_call_arg_name(arg) for arg in node.args]
                 if args and args[0]:
@@ -193,6 +235,13 @@ class JinjaMacroRegistry(PydanticModel):
 
     _parser_cache: t.Dict[t.Tuple[t.Optional[str], str], Template] = {}
     __environment: t.Optional[Environment] = None
+
+    def __getstate__(self) -> t.Dict[t.Any, t.Any]:
+        state = super().__getstate__()
+        private = state[PRIVATE_FIELDS]
+        private["_parser_cache"] = {}
+        private["_JinjaMacroRegistry__environment"] = None
+        return state
 
     @field_validator("global_objs", mode="before")
     @classmethod

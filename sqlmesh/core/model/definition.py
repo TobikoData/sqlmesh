@@ -34,10 +34,11 @@ from sqlmesh.utils.date import TimeLike, make_inclusive, to_datetime, to_time_co
 from sqlmesh.utils.errors import ConfigError, SQLMeshError, raise_config_error
 from sqlmesh.utils.hashing import hash_data
 from sqlmesh.utils.jinja import (
+    CallCache,
     JinjaMacroRegistry,
     extract_macro_references_and_variables,
 )
-from sqlmesh.utils.pydantic import field_validator, field_validator_v1_args
+from sqlmesh.utils.pydantic import PRIVATE_FIELDS, field_validator, field_validator_v1_args
 from sqlmesh.utils.metaprogramming import (
     Executable,
     build_env,
@@ -125,8 +126,17 @@ class _Model(ModelMeta, frozen=True):
     post_statements_: t.Optional[t.List[exp.Expression]] = Field(
         default=None, alias="post_statements"
     )
+    _data_hash: t.Optional[str] = None
+    _metadata_hash: t.Optional[str] = None
 
     _expressions_validator = expression_validator
+
+    def __getstate__(self) -> t.Dict[t.Any, t.Any]:
+        state = super().__getstate__()
+        private = state[PRIVATE_FIELDS]
+        private["_data_hash"] = None
+        private["_metadata_hash"] = None
+        return state
 
     def render(
         self,
@@ -798,7 +808,9 @@ class _Model(ModelMeta, frozen=True):
         Returns:
             The data hash for the node.
         """
-        return hash_data(self._data_hash_values)
+        if self._data_hash is None:
+            self._data_hash = hash_data(self._data_hash_values)
+        return self._data_hash
 
     @property
     def _data_hash_values(self) -> t.List[str]:
@@ -850,62 +862,64 @@ class _Model(ModelMeta, frozen=True):
         """
         from sqlmesh.core.audit import BUILT_IN_AUDITS
 
-        metadata = [
-            self.dialect,
-            self.owner,
-            self.description,
-            json.dumps(self.column_descriptions, sort_keys=True),
-            self.cron,
-            str(self.start) if self.start else None,
-            str(self.end) if self.end else None,
-            str(self.retention) if self.retention else None,
-            str(self.batch_size) if self.batch_size is not None else None,
-            str(self.batch_concurrency) if self.batch_concurrency is not None else None,
-            json.dumps(self.mapping_schema, sort_keys=True),
-            *sorted(self.tags),
-            *sorted(ref.json(sort_keys=True) for ref in self.all_references),
-            *self.kind.metadata_hash_values,
-            self.project,
-            str(self.allow_partials),
-            gen(self.session_properties_) if self.session_properties_ else None,
-        ]
+        if self._metadata_hash is None:
+            metadata = [
+                self.dialect,
+                self.owner,
+                self.description,
+                json.dumps(self.column_descriptions, sort_keys=True),
+                self.cron,
+                str(self.start) if self.start else None,
+                str(self.end) if self.end else None,
+                str(self.retention) if self.retention else None,
+                str(self.batch_size) if self.batch_size is not None else None,
+                str(self.batch_concurrency) if self.batch_concurrency is not None else None,
+                json.dumps(self.mapping_schema, sort_keys=True),
+                *sorted(self.tags),
+                *sorted(ref.json(sort_keys=True) for ref in self.all_references),
+                *self.kind.metadata_hash_values,
+                self.project,
+                str(self.allow_partials),
+                gen(self.session_properties_) if self.session_properties_ else None,
+            ]
 
-        for audit_name, audit_args in sorted(self.audits, key=lambda a: a[0]):
-            metadata.append(audit_name)
-            audit = None
-            if audit_name in BUILT_IN_AUDITS:
-                for arg_name, arg_value in audit_args.items():
-                    metadata.append(arg_name)
-                    metadata.append(gen(arg_value))
-            elif audit_name in self.inline_audits:
-                audit = self.inline_audits[audit_name]
-            elif audit_name in audits:
-                audit = audits[audit_name]
-            else:
-                raise SQLMeshError(f"Unexpected audit name '{audit_name}'.")
+            for audit_name, audit_args in sorted(self.audits, key=lambda a: a[0]):
+                metadata.append(audit_name)
+                audit = None
+                if audit_name in BUILT_IN_AUDITS:
+                    for arg_name, arg_value in audit_args.items():
+                        metadata.append(arg_name)
+                        metadata.append(gen(arg_value))
+                elif audit_name in self.inline_audits:
+                    audit = self.inline_audits[audit_name]
+                elif audit_name in audits:
+                    audit = audits[audit_name]
+                else:
+                    raise SQLMeshError(f"Unexpected audit name '{audit_name}'.")
 
-            if audit:
-                query = (
-                    audit.render_query(self, **t.cast(t.Dict[str, t.Any], audit_args))
-                    or audit.query
-                )
-                metadata.extend(
-                    [
-                        gen(query),
-                        audit.dialect,
-                        str(audit.skip),
-                        str(audit.blocking),
-                    ]
-                )
+                if audit:
+                    query = (
+                        audit.render_query(self, **t.cast(t.Dict[str, t.Any], audit_args))
+                        or audit.query
+                    )
+                    metadata.extend(
+                        [
+                            gen(query),
+                            audit.dialect,
+                            str(audit.skip),
+                            str(audit.blocking),
+                        ]
+                    )
 
-        for key, value in (self.virtual_properties or {}).items():
-            metadata.append(key)
-            metadata.append(gen(value))
+            for key, value in (self.virtual_properties or {}).items():
+                metadata.append(key)
+                metadata.append(gen(value))
 
-        metadata.extend(gen(s) for s in self.signals)
-        metadata.extend(self._additional_metadata)
+            metadata.extend(gen(s) for s in self.signals)
+            metadata.extend(self._additional_metadata)
 
-        return hash_data(metadata)
+            self._metadata_hash = hash_data(metadata)
+        return self._metadata_hash
 
     @property
     def is_model(self) -> bool:
@@ -958,6 +972,12 @@ class _SqlBasedModel(_Model):
 
     _expression_validator = expression_validator
 
+    def __getstate__(self) -> t.Dict[t.Any, t.Any]:
+        state = super().__getstate__()
+        private = state[PRIVATE_FIELDS]
+        private["_SqlBasedModel__statement_renderers"] = {}
+        return state
+
     @field_validator("inline_audits_", mode="before")
     @field_validator_v1_args
     def _inline_audits_validator(cls, v: t.Any, values: t.Dict[str, t.Any]) -> t.Any:
@@ -994,6 +1014,13 @@ class SqlModel(_SqlBasedModel):
     source_type: Literal["sql"] = "sql"
 
     _columns_to_types: t.Optional[t.Dict[str, exp.DataType]] = None
+
+    def __getstate__(self) -> t.Dict[t.Any, t.Any]:
+        state = super().__getstate__()
+        private = state[PRIVATE_FIELDS]
+        private["_columns_to_types"] = None
+        private.pop("_query_renderer", None)
+        return state
 
     def render_query(
         self,
@@ -1489,6 +1516,7 @@ def load_sql_based_model(
     default_catalog: t.Optional[str] = None,
     variables: t.Optional[t.Dict[str, t.Any]] = None,
     infer_names: t.Optional[bool] = False,
+    call_cache: t.Optional[CallCache] = None,
     **kwargs: t.Any,
 ) -> Model:
     """Load a model from a parsed SQLMesh model SQL file.
@@ -1508,6 +1536,7 @@ def load_sql_based_model(
         physical_schema_override: The physical schema override for the model.
         default_catalog: The default catalog if no model catalog is configured.
         variables: The variables to pass to the model.
+        call_cache: Jinja call file cache.
         kwargs: Additional kwargs to pass to the loader.
     """
     if not expressions:
@@ -1559,7 +1588,7 @@ def load_sql_based_model(
 
     # Extract the query and any pre/post statements
     query_or_seed_insert, pre_statements, post_statements, inline_audits = (
-        _split_sql_model_statements(expressions[1:], path, dialect)
+        _split_sql_model_statements(expressions[1:], path, call_cache, dialect=dialect)
     )
 
     meta_fields: t.Dict[str, t.Any] = {
@@ -1593,6 +1622,7 @@ def load_sql_based_model(
         )
 
     jinja_macro_references, used_variables = extract_macro_references_and_variables(
+        call_cache,
         *(gen(e) for e in pre_statements),
         *(gen(e) for e in post_statements),
         *([gen(query_or_seed_insert)] if query_or_seed_insert is not None else []),
@@ -1600,7 +1630,9 @@ def load_sql_based_model(
 
     jinja_macros = (jinja_macros or JinjaMacroRegistry()).trim(jinja_macro_references)
     for jinja_macro in jinja_macros.root_macros.values():
-        used_variables.update(extract_macro_references_and_variables(jinja_macro.definition)[1])
+        used_variables.update(
+            extract_macro_references_and_variables(call_cache, jinja_macro.definition)[1]
+        )
 
     common_kwargs = dict(
         pre_statements=pre_statements,
@@ -1993,7 +2025,10 @@ INSERT_SEED_MACRO_CALL = d.parse_one("@INSERT_SEED()")
 
 
 def _split_sql_model_statements(
-    expressions: t.List[exp.Expression], path: Path, dialect: t.Optional[str] = None
+    expressions: t.List[exp.Expression],
+    path: Path,
+    call_cache: t.Optional[CallCache],
+    dialect: t.Optional[str] = None,
 ) -> t.Tuple[
     t.Optional[exp.Expression],
     t.List[exp.Expression],
@@ -2024,7 +2059,9 @@ def _split_sql_model_statements(
         expr = expressions[idx]
 
         if isinstance(expr, d.Audit):
-            loaded_audit = load_audit([expr, expressions[idx + 1]], dialect=dialect)
+            loaded_audit = load_audit(
+                [expr, expressions[idx + 1]], dialect=dialect, call_cache=call_cache
+            )
             assert isinstance(loaded_audit, ModelAudit)
             inline_audits[loaded_audit.name] = loaded_audit
             idx += 2

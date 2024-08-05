@@ -97,8 +97,8 @@ class Selector:
                 subdag.update(self._dag.downstream(fqn))
 
         models: UniqueKeyDict[str, Model] = UniqueKeyDict("models")
-
         all_model_fqns = set(self._models) | set(env_models)
+        needs_update = False
         for fqn in all_model_fqns:
             model: t.Optional[Model] = None
             if fqn not in all_selected_models and fqn in env_models:
@@ -108,14 +108,33 @@ class Selector:
                 # Selected modified or removed model.
                 model = self._models[fqn]
 
-            if model:
-                # model.copy() can't be used here due to a cached state that can be a part of a model instance.
-                if model.fqn in subdag:
-                    model = type(model).parse_obj(model.dict(exclude={"mapping_schema"}))
+            if model and model.fqn in subdag:
+                if model.mapping_schema:
+                    for dep in model.depends_on:
+                        if dep in env_models:
+                            parent = env_models[dep]
+                            schema: t.Optional[t.Dict] = model.mapping_schema
+                            for part in parent.fully_qualified_table.parts:
+                                if schema:
+                                    schema = schema.get(part.sql())
+
+                            if schema and schema != {
+                                c: t.sql(dialect=model.dialect)
+                                for c, t in (parent.columns_to_types or {}).items()
+                            }:
+                                # model.copy() can't be used here due to a cached state that can be a part of a model instance.
+                                model = type(model).parse_obj(
+                                    model.dict(exclude={"mapping_schema"})
+                                )
+                                needs_update = True
+                                print("no match!")
+                                raise
+
                     dag.add(model.fqn, model.depends_on)
                 models[model.fqn] = model
 
-        update_model_schemas(dag, models, self._context_path)
+        if needs_update:
+            update_model_schemas(dag, models, self._context_path)
 
         return models
 
