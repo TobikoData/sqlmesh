@@ -909,7 +909,7 @@ It supports the following arguments, in this order:
 
 - `relation`: The table or CTE name to deduplicate
 - `partition_by`: column names, or expressions to use to identify a window of rows out of which to select one as the deduplicated row
-- `order_by`: A list of strings representing the ORDER BY clause, optional - nulls ordering: ['<column> <asc|desc> nulls <first|last>']
+- `order_by`: A list of strings representing the ORDER BY clause, optional - you can add nulls ordering like this: ['status desc nulls last']
 
 For example, the following query:
 ```sql linenums="1"

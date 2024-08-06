@@ -10,6 +10,7 @@ from functools import reduce
 from itertools import chain
 from pathlib import Path
 from string import Template
+from datetime import datetime
 
 import sqlglot
 from jinja2 import Environment
@@ -1155,6 +1156,108 @@ def deduplicate(
     query = exp.select("*").from_(relation).qualify(first_unique_row)
 
     return query
+
+
+# TODO: add support for macro to render as a date as an arg for start and end date
+@macro()
+def date_spine(
+    evaluator: MacroEvaluator,
+    datepart: exp.Expression,
+    start_date: exp.Expression,
+    end_date: exp.Expression,
+) -> exp.Query:
+    """Returns a QUERY to build a date spine with the given datepart, and range of start_date and end_date. Useful for joining as a date lookup table.
+
+    Args:
+        datepart: The datepart to use for the date spine: day, week, month, year
+        start_date: The start date for the date spine
+        end_date: The end date for the date spine
+
+    Example Usage:
+        @date_spine(day, '2022-01-01', '2023-01-01')
+
+    Example Output:
+        SELECT
+            UNNEST(
+            GENERATE_SERIES(CAST('2022-01-01' AS DATE), CAST('2023-01-01' AS DATE), INTERVAL '1' DAY)) AS "date_day"
+        ORDER BY
+            "date_day"
+    """
+    if datepart.name not in ("day", "week", "month", "year"):
+        raise SQLMeshError(
+            f"Invalid datepart '{datepart.name}'. Expected: 'day', 'week', 'month', or 'year'"
+        )
+
+    try:
+        start_date_obj = datetime.strptime(start_date.name, "%Y-%m-%d").date()
+        end_date_obj = datetime.strptime(end_date.name, "%Y-%m-%d").date()
+    except Exception as e:
+        raise SQLMeshError(
+            f"Invalid date format - start_date and end_date must be in format: YYYY-MM-DD. Error: {e}"
+        )
+
+    if start_date_obj > end_date_obj:
+        raise SQLMeshError(
+            f"Invalid date range - start_date '{start_date.name}' is after end_date '{end_date.name}'."
+        )
+
+    alias_name = f"date_{datepart.name}"
+
+    if evaluator.dialect == "bigquery":
+        # function specific to bigquery only
+        generate_series_clause = exp.func(
+            "unnest",
+            (exp.func("generate_date_array", start_date, end_date, datepart.name)),
+            alias_name,
+        )
+
+    else:
+        generate_series_clause = exp.func(
+            "unnest",
+            (exp.func("generate_series", start_date, end_date, datepart.name)),
+            f"date_{datepart.name}",
+        )
+        # print(generate_series_clause.sql())
+
+    query = exp.select(generate_series_clause).order_by(alias_name)
+
+    # query = exp.select(f"unnest(generate_series(DATE {start_date}, DATE {end_date}, INTERVAL '1 {datepart.name}')) as date_{datepart.name}").order_by(f"date_{datepart.name}")
+
+    # dialect_query = evaluator.transform(parse_one(query, dialect=evaluator.dialect))
+
+    return query
+
+
+# use generator functions where applicable
+# duckdb, databricks, postgres, snowflake, trino, redshift
+# SELECT
+#   DATEADD(DAY, SEQ4(), '2019-01-01') AS DATE_DAY
+# FROM
+#   TABLE(GENERATOR(ROWCOUNT => 366))
+# WHERE
+#   DATEADD(DAY, SEQ4(), '2019-01-01') <= '2020-01-01'
+# ORDER BY
+#   DATE_DAY;
+
+
+# for bigquery, this is a built in function that will likely be more performant
+# SELECT
+#   DATE AS DATE_DAY
+# FROM
+#   UNNEST(GENERATE_DATE_ARRAY('2019-01-01', '2020-01-01')) AS DATE
+# ORDER BY
+#   DATE;
+
+# sql server
+# WITH Tally AS (
+#   SELECT TOP (DATEDIFF(DAY, '2019-01-01', '2020-01-01') + 1)
+#     ROW_NUMBER() OVER (ORDER BY (SELECT NULL)) - 1 AS n
+#   FROM master.dbo.spt_values -- This is a system table with many rows, used to generate a sequence
+# )
+# SELECT DATEADD(DAY, n, '2019-01-01') AS DATE_DAY
+# FROM Tally
+# ORDER BY DATE_DAY;
+# raycast://extensions/raycast/raycast-ai/ai-chat?context=%7B%22id%22:%22600A968F-6B6C-454C-9DD7-13154CB4E21B%22%7D
 
 
 def normalize_macro_name(name: str) -> str:
