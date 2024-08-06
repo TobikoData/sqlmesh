@@ -1159,6 +1159,7 @@ def deduplicate(
 
 
 # TODO: add support for macro to render as a date as an arg for start and end date
+# TODO: add support to make the end date exclusive as an option
 @macro()
 def date_spine(
     evaluator: MacroEvaluator,
@@ -1202,30 +1203,48 @@ def date_spine(
         )
 
     alias_name = f"date_{datepart.name}"
+    start_date_column = exp.cast(start_date, "DATE", dialect=evaluator.dialect)
+    end_date_column = exp.cast(end_date, "DATE", dialect=evaluator.dialect)
 
     if evaluator.dialect == "bigquery":
         # function specific to bigquery only
         generate_series_clause = exp.func(
             "unnest",
-            (exp.func("generate_date_array", start_date, end_date, datepart.name)),
-            alias_name,
+            (exp.func("generate_date_array", start_date, end_date, f"INTERVAL 1 {datepart.name}")),
+        ).as_(alias_name)
+        query = (
+            exp.select(exp.column(alias_name))
+            .from_(generate_series_clause)
+            .order_by(exp.column(alias_name))
         )
-
     else:
         generate_series_clause = exp.func(
-            "unnest",
-            (exp.func("generate_series", start_date, end_date, datepart.name)),
-            f"date_{datepart.name}",
-        )
-        # print(generate_series_clause.sql())
+            "explode",  # transpiles to unnest for most query engines
+            (
+                exp.func(
+                    "generate_series",
+                    start_date_column,
+                    end_date_column,
+                    exp.to_interval(f"1 {datepart.name}"),
+                )
+            ),
+        ).as_(alias_name)
+        query = exp.select(generate_series_clause).order_by(exp.column(alias_name))
 
-    query = exp.select(generate_series_clause).order_by(alias_name)
-
-    # query = exp.select(f"unnest(generate_series(DATE {start_date}, DATE {end_date}, INTERVAL '1 {datepart.name}')) as date_{datepart.name}").order_by(f"date_{datepart.name}")
+    print(generate_series_clause.sql())
 
     # dialect_query = evaluator.transform(parse_one(query, dialect=evaluator.dialect))
 
     return query
+
+    # query = exp.select(exp.column(alias_name)).from_(generate_series_clause).order_by(exp.column(alias_name))
+    # elif evaluator.dialect == "duckdb":
+    #     # this works with duckdb
+    #     generate_series_clause = exp.func(
+    #         "unnest",
+    #         (exp.func("generate_series", start_date_column, end_date_column, exp.to_interval(f"1 {datepart.name}"))),
+    #     ).as_(alias_name)
+    #     query = exp.select(exp.column(alias_name)).from_(generate_series_clause).order_by(exp.column(alias_name))
 
 
 # use generator functions where applicable
