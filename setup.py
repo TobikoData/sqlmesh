@@ -134,6 +134,8 @@ setup(
             # https://github.com/dbt-labs/dbt-snowflake/blob/main/dev-requirements.txt#L12
             "cryptography~=42.0.4",
             "snowflake-connector-python[pandas,secure-local-storage]",
+            # as at 2024-08-05, snowflake-snowpark-python is only available up to Python 3.11
+            "snowflake-snowpark-python; python_version<'3.12'",
         ],
         "trino": [
             "trino",
