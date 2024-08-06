@@ -1838,13 +1838,13 @@ def create_seed_model(
 def create_python_model(
     name: str,
     entrypoint: str,
-    module_path: Path,
     python_env: t.Dict[str, Executable],
     *,
     macros: t.Optional[MacroRegistry] = None,
     jinja_macros: t.Optional[JinjaMacroRegistry] = None,
     defaults: t.Optional[t.Dict[str, t.Any]] = None,
     path: Path = Path(),
+    module_path: Path = Path(),
     time_column_format: str = c.DEFAULT_TIME_COLUMN_FORMAT,
     depends_on: t.Optional[t.Set[str]] = None,
     physical_schema_override: t.Optional[t.Dict[str, str]] = None,
@@ -1869,16 +1869,27 @@ def create_python_model(
     pre_statements = kwargs.get("pre_statements", None) or []
     post_statements = kwargs.get("post_statements", None) or []
 
-    python_env.update(
-        _python_env(
-            expressions=[*pre_statements, *post_statements],
-            jinja_macro_references=None,
-            module_path=module_path,
-            macros=macros or macro.get_registry(),
-            variables=variables,
-            path=path,
+    if pre_statements or post_statements:
+        jinja_macro_references, used_variables = extract_macro_references_and_variables(
+            *(gen(e) for e in pre_statements),
+            *(gen(e) for e in post_statements),
         )
-    )
+
+        jinja_macros = (jinja_macros or JinjaMacroRegistry()).trim(jinja_macro_references)
+        for jinja_macro in jinja_macros.root_macros.values():
+            used_variables.update(extract_macro_references_and_variables(jinja_macro.definition)[1])
+
+        python_env.update(
+            _python_env(
+                [*pre_statements, *post_statements],
+                jinja_macro_references,
+                module_path,
+                macros or macro.get_registry(),
+                variables=variables,
+                used_variables=used_variables,
+                path=path,
+            )
+        )
 
     parsed_depends_on, referenced_variables = (
         _parse_dependencies(python_env, entrypoint) if python_env is not None else (set(), set())
