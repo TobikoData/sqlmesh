@@ -965,7 +965,7 @@ def test_python_model_jinja_pre_post_statements():
         ],
         post_statements=[
             "JINJA_STATEMENT_BEGIN;\nCREATE INDEX {{test_macro('idx')}} ON db.test_model(id);\nJINJA_END;",
-            "DROP TABLE x2;",
+            parse_one("DROP TABLE x2;"),
         ],
     )
     def model_with_statements(context, **kwargs):

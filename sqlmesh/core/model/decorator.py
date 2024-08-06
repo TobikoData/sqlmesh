@@ -127,7 +127,9 @@ class model(registry_decorator):
         for key in ("pre_statements", "post_statements"):
             statements = common_kwargs.get(key)
             if statements:
-                common_kwargs[key] = [parse_one(s, dialect=dialect) for s in statements]
+                common_kwargs[key] = [
+                    parse_one(s, dialect=dialect) if isinstance(s, str) else s for s in statements
+                ]
 
         if self.is_sql:
             query = MacroFunc(this=exp.Anonymous(this=entrypoint))
