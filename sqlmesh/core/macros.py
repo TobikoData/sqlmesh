@@ -1166,8 +1166,8 @@ def date_spine(
     datepart: exp.Expression,
     start_date: exp.Expression,
     end_date: exp.Expression,
-) -> exp.Query:
-    """Returns a QUERY to build a date spine with the given datepart, and range of start_date and end_date. Useful for joining as a date lookup table.
+) -> exp.Expression:
+    """Returns an aliased QUERY to build a date spine with the given datepart, and range of start_date and end_date. Useful for joining as a date lookup table.
 
     Args:
         datepart: The datepart to use for the date spine: day, week, month, year
@@ -1207,7 +1207,7 @@ def date_spine(
     end_date_column = exp.cast(end_date, "DATE", dialect=evaluator.dialect)
 
     if evaluator.dialect == "bigquery":
-        # Construct the UNNEST function correctly for BigQuery
+        # BigQuery uses UNNEST and GENERATE_DATE_ARRAY in the FROM clause
         generate_series_clause = exp.func(
             "unnest",
             exp.func(
@@ -1216,10 +1216,8 @@ def date_spine(
                 end_date,
                 exp.Interval(this=exp.Literal.number(1), unit=datepart.name),
             ),
-        ).as_(alias_name)
-        query = (
-            exp.select(alias_name).from_(generate_series_clause).order_by(exp.column(alias_name))
         )
+        query = exp.select(alias_name).from_(generate_series_clause.as_(alias_name))
     else:
         generate_series_clause = exp.func(
             "explode",  # transpiles to unnest for most query engines
@@ -1231,12 +1229,8 @@ def date_spine(
                     exp.Interval(this=exp.Literal.number(1), unit=datepart.name),
                 )
             ),
-        ).as_(alias_name)
-        query = exp.select(generate_series_clause).order_by(exp.column(alias_name))
-
-    print(generate_series_clause.sql())
-
-    # dialect_query = evaluator.transform(parse_one(query, dialect=evaluator.dialect))
+        )
+        query = exp.select(generate_series_clause.as_(alias_name))
 
     return query
 
