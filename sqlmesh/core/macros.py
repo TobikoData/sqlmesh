@@ -1166,7 +1166,7 @@ def date_spine(
     datepart: exp.Expression,
     start_date: exp.Expression,
     end_date: exp.Expression,
-) -> exp.Expression:
+) -> exp.Alias:
     """Returns an aliased QUERY to build a date spine with the given datepart, and range of start_date and end_date. Useful for joining as a date lookup table.
 
     Args:
@@ -1217,7 +1217,7 @@ def date_spine(
                 exp.Interval(this=exp.Literal.number(1), unit=datepart.name),
             ),
         )
-        query = exp.select(alias_name).from_(generate_series_clause.as_(alias_name))
+        query = exp.select(alias_name).from_(generate_series_clause).as_(alias_name)
     else:
         generate_series_clause = exp.func(
             "explode",  # transpiles to unnest for most query engines
@@ -1230,7 +1230,7 @@ def date_spine(
                 )
             ),
         )
-        query = exp.select(generate_series_clause.as_(alias_name))
+        query = exp.select(generate_series_clause).as_(alias_name)
 
     return query
 
