@@ -1207,15 +1207,18 @@ def date_spine(
     end_date_column = exp.cast(end_date, "DATE", dialect=evaluator.dialect)
 
     if evaluator.dialect == "bigquery":
-        # function specific to bigquery only
+        # Construct the UNNEST function correctly for BigQuery
         generate_series_clause = exp.func(
             "unnest",
-            (exp.func("generate_date_array", start_date, end_date, f"INTERVAL 1 {datepart.name}")),
+            exp.func(
+                "generate_date_array",
+                start_date,
+                end_date,
+                exp.Interval(this=exp.Literal.number(1), unit=datepart.name),
+            ),
         ).as_(alias_name)
         query = (
-            exp.select(exp.column(alias_name))
-            .from_(generate_series_clause)
-            .order_by(exp.column(alias_name))
+            exp.select(alias_name).from_(generate_series_clause).order_by(exp.column(alias_name))
         )
     else:
         generate_series_clause = exp.func(
@@ -1225,7 +1228,7 @@ def date_spine(
                     "generate_series",
                     start_date_column,
                     end_date_column,
-                    exp.to_interval(f"1 {datepart.name}"),
+                    exp.Interval(this=exp.Literal.number(1), unit=datepart.name),
                 )
             ),
         ).as_(alias_name)
