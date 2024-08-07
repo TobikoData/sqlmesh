@@ -27,7 +27,7 @@ Before working through this connection quickstart, ensure that:
     - Install from the command line with the command `pip install "sqlmesh[snowflake]"`
 3. You have initialized a [SQLMesh example project](../../quickstart/cli#1-create-the-sqlmesh-project) on your computer
     - Open a command line interface and navigate to the directory where the project files should go
-    - Initialize the project with the command `sqlmesh init duckdb`
+    - Initialize the project with the command `sqlmesh init snowflake`
 
 ### Access control permissions
 
@@ -138,33 +138,25 @@ The connection configuration's `database` parameter is not required, but we reco
 
 We now have the information we need to configure SQLMesh's connection to Snowflake.
 
-We begin by adding a new gateway named `snowflake` to our example project's config.yaml file:
+We start the configuration by adding a gateway named `snowflake` to our example project's config.yaml file and making it our `default_gateway`:
 
-```yaml linenums="1" hl_lines="6-8"
+```yaml linenums="1" hl_lines="2-6"
 gateways:
-  local:
-    connection:
-      type: duckdb
-      database: db.db
   snowflake:
     connection:
       type: snowflake
 
-default_gateway: local
+default_gateway: snowflake
 
 model_defaults:
-  dialect: duckdb
+  dialect: snowflake
   start: 2024-07-24
 ```
 
 And we specify the `account`, `user`, `password`, `database`, and `warehouse` connection parameters using the information from above:
 
-```yaml linenums="1" hl_lines="9-13"
+```yaml linenums="1" hl_lines="5-9"
 gateways:
-  local:
-    connection:
-      type: duckdb
-      database: db.db
   snowflake:
     connection:
       type: snowflake
@@ -174,10 +166,10 @@ gateways:
       database: DEMO_DB
       warehouse: COMPUTE_WH
 
-default_gateway: local
+default_gateway: snowflake
 
 model_defaults:
-  dialect: duckdb
+  dialect: snowflake
   start: 2024-07-24
 ```
 
@@ -186,7 +178,7 @@ model_defaults:
 
     This code demonstrates how to use the environment variable `SNOWFLAKE_PASSWORD` for the configuration's `password` parameter:
 
-    ```yaml linenums="1"
+    ```yaml linenums="1" hl_lines="5"
     gateways:
       snowflake:
         connection:
@@ -198,9 +190,7 @@ model_defaults:
 
 We have now specified the `snowflake` gateway connection information, so we can confirm that SQLMesh is able to successfully connect to Snowflake. We will test the connection with the `sqlmesh info` command.
 
-First, open a command line terminal. Now enter the command `sqlmesh --gateway snowflake info`.
-
-We manually specify the `snowflake` gateway because it is not our project's default gateway:
+First, open a command line terminal. Now enter the command `sqlmesh info`:
 
 ![Run sqlmesh info command in CLI](./snowflake/snowflake_db-guide_sqlmesh-info.png){ loading=lazy }
 
@@ -223,45 +213,8 @@ We can store SQLMesh state in a different SQL engine by specifying a `state_conn
 
 This example uses the DuckDB engine to store state in the local `snowflake_state.db` file:
 
-```yaml linenums="1" hl_lines="14-16"
+```yaml linenums="1" hl_lines="10-12"
 gateways:
-  local:
-    connection:
-      type: duckdb
-      database: db.db
-  snowflake:
-    connection:
-      type: snowflake
-      account: idapznw-wq29399
-      user: DEMO_USER
-      password: << your password here >>
-      database: DEMO_DB
-      warehouse: COMPUTE_WH
-    state_connection:
-      type: duckdb
-      database: snowflake_state.db
-
-default_gateway: local
-
-model_defaults:
-  dialect: duckdb
-  start: 2024-07-24
-```
-
-Now we no longer see the warning when running `sqlmesh --gateway snowflake info`, and we see a new entry `State backend connection succeeded`:
-
-![No state connection warning](./snowflake/snowflake_db-guide_sqlmesh-info-no-warning.png){ loading=lazy }
-
-### Run a `sqlmesh plan`
-
-For convenience, we can omit the `--gateway` option from our CLI commands by specifying `snowflake` as our project's `default_gateway`:
-
-```yaml linenums="1" hl_lines="18"
-gateways:
-  local:
-    connection:
-      type: duckdb
-      database: db.db
   snowflake:
     connection:
       type: snowflake
@@ -277,11 +230,17 @@ gateways:
 default_gateway: snowflake
 
 model_defaults:
-  dialect: duckdb
+  dialect: snowflake
   start: 2024-07-24
 ```
 
-And run a `sqlmesh plan` in Snowflake:
+Now we no longer see the warning when running `sqlmesh info`, and we see a new entry `State backend connection succeeded`:
+
+![No state connection warning](./snowflake/snowflake_db-guide_sqlmesh-info-no-warning.png){ loading=lazy }
+
+### Run a `sqlmesh plan`
+
+Now we're ready to run a `sqlmesh plan` in Snowflake:
 
 ![Run sqlmesh plan in snowflake](./snowflake/snowflake_db-guide_sqlmesh-plan.png){ loading=lazy }
 
