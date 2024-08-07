@@ -4,7 +4,7 @@ import logging
 import typing as t
 from datetime import date, datetime
 from pathlib import Path
-from unittest.mock import patch
+from unittest.mock import patch, PropertyMock
 
 import pandas as pd
 import pytest
@@ -18,6 +18,8 @@ from sqlmesh.core import dialect as d
 from sqlmesh.core.audit import ModelAudit, load_audit
 from sqlmesh.core.config import (
     Config,
+    DuckDBConnectionConfig,
+    GatewayConfig,
     NameInferenceConfig,
     ModelDefaultsConfig,
 )
@@ -2154,6 +2156,47 @@ def test_model_cache(tmp_path: Path, mocker: MockerFixture):
     assert cache.get_or_load("test_model", "test_entry_a", loader=loader).dict() == model.dict()
 
     assert loader.call_count == 2
+
+
+@pytest.mark.slow
+def test_model_cache_gateway(tmp_path: Path, mocker: MockerFixture):
+    init_example_project(tmp_path, dialect="duckdb")
+
+    db_path = str(tmp_path / "db.db")
+    config = Config(
+        gateways={
+            "main": GatewayConfig(connection=DuckDBConnectionConfig(database=db_path)),
+            "secondary": GatewayConfig(connection=DuckDBConnectionConfig()),
+        },
+        model_defaults=ModelDefaultsConfig(dialect="duckdb"),
+    )
+    Context(paths=tmp_path, config=config)
+
+    patched_cache_put = mocker.patch("sqlmesh.utils.cache.FileCache.put")
+
+    Context(paths=tmp_path, config=config)
+    assert patched_cache_put.call_count == 0
+
+    Context(paths=tmp_path, config=config, gateway="secondary")
+    assert patched_cache_put.call_count == 4
+
+
+@pytest.mark.slow
+def test_model_cache_default_catalog(tmp_path: Path, mocker: MockerFixture):
+    init_example_project(tmp_path, dialect="duckdb")
+    Context(paths=tmp_path)
+
+    patched_cache_put = mocker.patch("sqlmesh.utils.cache.FileCache.put")
+
+    Context(paths=tmp_path)
+    assert patched_cache_put.call_count == 0
+
+    with patch(
+        "sqlmesh.core.engine_adapter.base.EngineAdapter.default_catalog",
+        PropertyMock(return_value=None),
+    ):
+        Context(paths=tmp_path)
+        assert patched_cache_put.call_count == 4
 
 
 def test_model_ctas_query():

@@ -704,7 +704,7 @@ def test_default_catalog_connections(copy_to_temp_path: t.Callable):
         "sqlmesh.core.engine_adapter.base.EngineAdapter.default_catalog",
         PropertyMock(return_value=None),
     ):
-        context = Context(paths="examples/sushi")
+        context = Context(paths=copy_to_temp_path("examples/sushi"))
         assert context.default_catalog is None
 
     # Verify that providing a catalog gets set as default catalog
