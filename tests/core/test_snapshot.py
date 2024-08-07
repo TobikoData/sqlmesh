@@ -3,6 +3,7 @@ import typing as t
 from copy import deepcopy
 from datetime import datetime, timedelta
 from pathlib import Path
+import freezegun
 
 import pytest
 from _pytest.monkeypatch import MonkeyPatch
@@ -333,9 +334,11 @@ def test_missing_intervals_end_bounded_with_lookback(make_snapshot):
         == []
     )
 
-    midday_snapshot: Snapshot = make_snapshot(
+
+def test_missing_intervals_with_lookback_consistent_between_plan_and_run(make_snapshot):
+    snapshot: Snapshot = make_snapshot(
         SqlModel(
-            name="test_model",
+            name="test4",
             kind=IncrementalByTimeRangeKind(time_column="ds", lookback=2),
             cron="0 12 * * *",
             start="2024-08-01",
@@ -343,13 +346,32 @@ def test_missing_intervals_end_bounded_with_lookback(make_snapshot):
         )
     )
 
-    midday_snapshot.add_interval("2024-08-01", "2024-08-05")
+    snapshot.add_interval("2024-08-01", "2024-08-05")
+    assert snapshot.intervals == [(1722470400000, 1722902400000)]
+
+    # simulates `sqlmesh plan`
+    with freezegun.freeze_time("2024-08-07 04:25:00"):
+        assert (
+            snapshot.missing_intervals(
+                start=to_datetime("2024-08-01"),
+                end=1722988800000,  # datetime.datetime(2024, 8, 7, 0, 0, tzinfo=datetime.timezone.utc)
+                execution_time=None,
+                deployability_index=DeployabilityIndex.all_deployable(),
+                ignore_cron=False,
+                end_bounded=True,
+            )
+            == []
+        )
+
+    # simulate sqlmesh run
     assert (
-        midday_snapshot.missing_intervals(
-            "2024-08-01",
-            "2024-08-07",
-            execution_time=to_datetime("2024-08-07 00:59:00"),
-            end_bounded=True,
+        snapshot.missing_intervals(
+            start=to_datetime("2024-08-01"),
+            end=to_datetime("2024-08-07 04:29:00"),
+            execution_time=to_datetime("2024-08-07 04:29:00"),
+            deployability_index=DeployabilityIndex.all_deployable(),
+            ignore_cron=False,
+            end_bounded=False,
         )
         == []
     )
@@ -468,6 +490,51 @@ def test_missing_intervals_past_end_date_with_lookback(make_snapshot):
     # running way in the future, no missing intervals because subtracting 2 days for lookback still exceeds the models end date
     end_time = to_timestamp("2024-01-01")
     assert snapshot.missing_intervals(start_time, end_time, execution_time=end_time) == []
+
+
+def test_missing_intervals_with_end_date_and_lookback_consistent_between_plan_and_run(
+    make_snapshot,
+):
+    snapshot: Snapshot = make_snapshot(  # type: ignore
+        SqlModel(
+            name="test4",
+            kind=IncrementalByTimeRangeKind(time_column=TimeColumn(column="ds"), lookback=2),
+            cron="@daily",
+            query=parse_one("SELECT 1, ds FROM name"),
+            start="2024-07-01",
+            end="2024-07-29",
+        )
+    )
+
+    snapshot.add_interval(to_timestamp("2024-07-01"), to_timestamp("2024-07-30"))
+    assert snapshot.intervals == [(1719792000000, 1722297600000)]
+
+    # simulate sqlmesh plan
+    with freezegun.freeze_time("2024-08-07 03:45:00"):
+        assert (
+            snapshot.missing_intervals(
+                start=to_datetime("2023-07-01"),
+                end="2024-07-29",
+                execution_time=None,
+                deployability_index=DeployabilityIndex.all_deployable(),
+                ignore_cron=False,
+                end_bounded=True,
+            )
+            == []
+        )
+
+    # simulate sqlmesh run
+    assert (
+        snapshot.missing_intervals(
+            start=to_datetime("2023-07-01"),
+            end="2024-07-29",
+            execution_time=to_datetime("2024-08-07 03:59:00"),
+            deployability_index=DeployabilityIndex.all_deployable(),
+            ignore_cron=False,
+            end_bounded=False,
+        )
+        == []
+    )
 
 
 def test_incremental_time_self_reference(make_snapshot):

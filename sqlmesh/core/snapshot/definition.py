@@ -916,7 +916,7 @@ class Snapshot(PydanticModel, SnapshotInfoMixin):
             tuple(intervals),
             start_ts,
             end_ts,
-            end_ts if end_bounded else upper_bound_ts,
+            upper_bound_ts,
             lookback,
             model_end_ts,
         )
