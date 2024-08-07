@@ -542,7 +542,7 @@ class SqlMeshLoader(Loader):
                     # default catalog), and it is retained in cached model's fully
                     # qualified name
                     self._loader._context.default_catalog or "",
-                    # gateway can change at runtime, and it is retained in a cached
+                    # gateway is configurable, and it is retained in a cached
                     # model's python environment if the @gateway macro variable is
                     # used in the model
                     self._loader._context.gateway
