@@ -48,10 +48,10 @@ Before working through this connection quickstart, ensure that:
 1. You have a Databricks account with access to an appropriate Databricks Workspace
     - The Workspace must support authenticating with [personal access tokens](https://docs.databricks.com/en/dev-tools/auth/pat.html) (Databricks [Community Edition workspaces do not](https://docs.databricks.com/en/admin/access-control/tokens.html))
     - Your account must have Workspace Access and Create Compute permissions (these permissions are enabled by default)
-2. Your computer has [SQLMesh installed](../../installation.md) with the [Databricks add-on available](../../installation.md#install-extras)
+2. Your computer has [SQLMesh installed](../../installation.md) with the [Databricks extra available](../../installation.md#install-extras)
     - Install from the command line with the command `pip install "sqlmesh[databricks]"`
 3. You have initialized a [SQLMesh example project](../../quickstart/cli#1-create-the-sqlmesh-project) on your computer
-    - Open a command line interface and navigate to the directory where the project should go
+    - Open a command line interface and navigate to the directory where the project files should go
     - Initialize the project with the command `sqlmesh init duckdb`
 
 ### Get connection info
@@ -101,14 +101,14 @@ The final piece of information we need for the `config.yaml` file is your person
 
     Best practice for storing secrets like access tokens is placing them in [environment variables that the configuration file loads dynamically](../../guides/configuration.md#environment-variables). For simplicity, this guide instead places the value directly in the configuration file.
 
-    This code demonstrates how to use the environment variable `DATABRICKS_SERVER_HOSTNAME` for the configuration's `server_hostname` parameter:
+    This code demonstrates how to use the environment variable `DATABRICKS_ACCESS_TOKEN` for the configuration's `access_token` parameter:
 
     ```yaml linenums="1"
     gateways:
       databricks:
           connection:
             type: databricks
-            server_hostname: {{ env_var('DATABRICKS_SERVER_HOSTNAME') }}
+            access_token: {{ env_var('DATABRICKS_ACCESS_TOKEN') }}
     ```
 
 <br></br>
@@ -141,14 +141,14 @@ Click the copy button and paste the token into the `access_token` key:
 
     Best practice for storing secrets like access tokens is placing them in [environment variables that the configuration file loads dynamically](../../guides/configuration.md#environment-variables). For simplicity, this guide instead places the value directly in the configuration file.
 
-    This code demonstrates how to use the environment variable `DATABRICKS_SERVER_HOSTNAME` for the configuration's `server_hostname` parameter:
+    This code demonstrates how to use the environment variable `DATABRICKS_ACCESS_TOKEN` for the configuration's `access_token` parameter:
 
     ```yaml linenums="1"
     gateways:
       databricks:
           connection:
             type: databricks
-            server_hostname: {{ env_var('DATABRICKS_SERVER_HOSTNAME') }}
+            access_token: {{ env_var('DATABRICKS_ACCESS_TOKEN') }}
     ```
 
 ### Check connection
@@ -192,11 +192,11 @@ For convenience, we can omit the `--gateway` option from our CLI commands by spe
 
 ![Specify databricks as default gateway](./databricks/db-guide_default-gateway.png){ loading=lazy }
 
-And run `sqlmesh plan` in Databricks:
+And run a `sqlmesh plan` in Databricks:
 
 ![Run sqlmesh plan in databricks](./databricks/db-guide_sqlmesh-plan.png){ loading=lazy }
 
-And confirm that our schemas and objects exist in our Databricks catalog:
+And confirm that our schemas and objects exist in the Databricks catalog:
 
 ![Sqlmesh plan objects in databricks](./databricks/db-guide_sqlmesh-plan-objects.png){ loading=lazy }
 
