@@ -538,9 +538,14 @@ class SqlMeshLoader(Loader):
                 [
                     str(max(m for m in mtimes if m is not None)),
                     self._loader._context.config.fingerprint,
-                    # We need to check default catalog since the provided config could not change but the
-                    # gateway we are using could change, therefore potentially changing the default catalog
-                    # which would then invalidate the cached model definition.
+                    # default catalog can change outside sqlmesh (e.g., DB user's
+                    # default catalog), and it is retained in cached model's fully
+                    # qualified name
                     self._loader._context.default_catalog or "",
+                    # gateway is configurable, and it is retained in a cached
+                    # model's python environment if the @gateway macro variable is
+                    # used in the model
+                    self._loader._context.gateway
+                    or self._loader._context.config.default_gateway_name,
                 ]
             )
