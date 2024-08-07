@@ -824,6 +824,18 @@ class _Model(ModelMeta, frozen=True):
             data.append(key)
             data.append(gen(value))
 
+        for statement in (*self.pre_statements, *self.post_statements):
+            statement_exprs: t.List[exp.Expression] = []
+            if not isinstance(statement, d.MacroDef):
+                rendered = self._statement_renderer(statement).render()
+                if self._is_metadata_statement(statement):
+                    continue
+                if rendered:
+                    statement_exprs = rendered
+                else:
+                    statement_exprs = [statement]
+            data.extend(gen(e) for e in statement_exprs)
+
         return data  # type: ignore
 
     def metadata_hash(self, audits: t.Dict[str, ModelAudit]) -> str:
@@ -908,7 +920,23 @@ class _Model(ModelMeta, frozen=True):
         if metadata_only_macros:
             additional_metadata.append(str(metadata_only_macros))
 
+        for statement in (*self.pre_statements, *self.post_statements):
+            if self._is_metadata_statement(statement):
+                additional_metadata.append(gen(statement))
+
         return additional_metadata
+
+    def _is_metadata_statement(self, statement: exp.Expression) -> bool:
+        if isinstance(statement, d.MacroDef):
+            return True
+        if isinstance(statement, d.MacroFunc):
+            target_macro = macro.get_registry().get(statement.name)
+            if target_macro:
+                return target_macro.metadata_only
+            target_macro = self.python_env.get(statement.name)
+            if target_macro:
+                return bool(target_macro.is_metadata)
+        return False
 
     @property
     def full_depends_on(self) -> t.Set[str]:
@@ -951,46 +979,6 @@ class _SqlBasedModel(_Model):
     @property
     def inline_audits(self) -> t.Dict[str, ModelAudit]:
         return self.inline_audits_
-
-    @property
-    def _data_hash_values(self) -> t.List[str]:
-        data_hash_values = super()._data_hash_values
-
-        for statement in (*self.pre_statements, *self.post_statements):
-            statement_exprs: t.List[exp.Expression] = []
-            if not isinstance(statement, d.MacroDef):
-                rendered = self._statement_renderer(statement).render()
-                if self._is_metadata_statement(statement):
-                    continue
-                if rendered:
-                    statement_exprs = rendered
-                else:
-                    statement_exprs = [statement]
-            data_hash_values.extend(gen(e) for e in statement_exprs)
-
-        return data_hash_values
-
-    @property
-    def _additional_metadata(self) -> t.List[str]:
-        additional_metadata = super()._additional_metadata
-
-        for statement in (*self.pre_statements, *self.post_statements):
-            if self._is_metadata_statement(statement):
-                additional_metadata.append(gen(statement))
-
-        return additional_metadata
-
-    def _is_metadata_statement(self, statement: exp.Expression) -> bool:
-        if isinstance(statement, d.MacroDef):
-            return True
-        if isinstance(statement, d.MacroFunc):
-            target_macro = macro.get_registry().get(statement.name)
-            if target_macro:
-                return target_macro.metadata_only
-            target_macro = self.python_env.get(statement.name)
-            if target_macro:
-                return bool(target_macro.is_metadata)
-        return False
 
 
 class SqlModel(_SqlBasedModel):
