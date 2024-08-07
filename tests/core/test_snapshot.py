@@ -333,6 +333,27 @@ def test_missing_intervals_end_bounded_with_lookback(make_snapshot):
         == []
     )
 
+    midday_snapshot: Snapshot = make_snapshot(
+        SqlModel(
+            name="test_model",
+            kind=IncrementalByTimeRangeKind(time_column="ds", lookback=2),
+            cron="0 12 * * *",
+            start="2024-08-01",
+            query=parse_one("SELECT ds FROM parent.tbl"),
+        )
+    )
+
+    midday_snapshot.add_interval("2024-08-01", "2024-08-05")
+    assert (
+        midday_snapshot.missing_intervals(
+            "2024-08-01",
+            "2024-08-07",
+            execution_time=to_datetime("2024-08-07 00:59:00"),
+            end_bounded=True,
+        )
+        == []
+    )
+
 
 def test_missing_intervals_end_bounded_with_ignore_cron(make_snapshot):
     snapshot = make_snapshot(
