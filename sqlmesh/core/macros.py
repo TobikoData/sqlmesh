@@ -1169,11 +1169,8 @@ def date_spine(
 
     Args:
         datepart: The datepart to use for the date spine: day, week, month, year
-        start_date: The start date for the date spine
-        end_date: The end date for the date spine
-
-    Example Usage:
-        @date_spine(day, '2022-01-01', '2023-01-01')
+        start_date: The start date for the date spine in format YYYY-MM-DD
+        end_date: The end date for the date spine in format YYYY-MM-DD
 
     Example:
         >>> from sqlglot import parse_one
