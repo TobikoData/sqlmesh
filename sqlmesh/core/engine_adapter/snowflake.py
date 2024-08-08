@@ -408,7 +408,7 @@ class SnowflakeEngineAdapter(GetCurrentCatalogFromFunctionMixin):
         """
         Reference: https://docs.snowflake.com/en/sql-reference/sql/alter-table-column#syntax
         """
-        if len(column_comments) == 0:
+        if not column_comments:
             return
 
         table = exp.to_table(table_name)
