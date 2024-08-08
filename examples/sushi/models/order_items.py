@@ -99,4 +99,4 @@ def execute(
                 .rename(columns={"index": "id"})
             )
 
-        yield pd.concat(dfs)
+        yield pd.concat(dfs).reset_index(drop=True)
