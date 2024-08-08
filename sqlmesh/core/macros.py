@@ -1158,15 +1158,13 @@ def deduplicate(
     return query
 
 
-# TODO: add support for macro to render as a date as an arg for start and end date
-# TODO: add support to make the end date exclusive as an option
 @macro()
 def date_spine(
     evaluator: MacroEvaluator,
     datepart: exp.Expression,
     start_date: exp.Expression,
     end_date: exp.Expression,
-) -> exp.Alias:
+) -> t.Union[exp.Alias, exp.Select]:
     """Returns an aliased QUERY to build a date spine with the given datepart, and range of start_date and end_date. Useful for joining as a date lookup table.
 
     Args:
@@ -1177,12 +1175,14 @@ def date_spine(
     Example Usage:
         @date_spine(day, '2022-01-01', '2023-01-01')
 
-    Example Output:
-        SELECT
-            UNNEST(
-            GENERATE_SERIES(CAST('2022-01-01' AS DATE), CAST('2023-01-01' AS DATE), INTERVAL '1' DAY)) AS "date_day"
-        ORDER BY
-            "date_day"
+    Example:
+        >>> from sqlglot import parse_one
+        >>> from sqlglot.schema import MappingSchema
+        >>> from sqlmesh.core.macros import MacroEvaluator
+        >>> sql = "@date_spine('week', '2022-01-20', '2024-12-16')"
+        >>> MacroEvaluator().transform(parse_one(sql)).sql()
+        'SELECT UNNEST(GENERATE_SERIES(CAST(\'2022-01-20\' AS DATE), CAST(\'2024-12-16\' AS DATE), (7 * INTERVAL \'1\' DAY))) AS "date_week"'
+
     """
     if datepart.name not in ("day", "week", "month", "year"):
         raise SQLMeshError(
@@ -1205,6 +1205,7 @@ def date_spine(
     alias_name = f"date_{datepart.name}"
     start_date_column = exp.cast(start_date, "DATE", dialect=evaluator.dialect)
     end_date_column = exp.cast(end_date, "DATE", dialect=evaluator.dialect)
+    date_interval = exp.Interval(this=exp.Literal.number(1), unit=datepart.name)
 
     if evaluator.dialect == "bigquery":
         # BigQuery uses UNNEST and GENERATE_DATE_ARRAY in the FROM clause
@@ -1214,10 +1215,79 @@ def date_spine(
                 "generate_date_array",
                 start_date,
                 end_date,
-                exp.Interval(this=exp.Literal.number(1), unit=datepart.name),
+                date_interval,
             ),
         )
-        query = exp.select(alias_name).from_(generate_series_clause).as_(alias_name)
+        bigquery_query = exp.select(alias_name).from_(generate_series_clause).as_(alias_name)
+        return bigquery_query
+    elif evaluator.dialect == "postgres":
+        generate_series_clause = exp.func(
+            "generate_series",
+            start_date_column,
+            end_date_column,
+            date_interval,
+        )
+        postgres_query = exp.select(generate_series_clause).as_(alias_name)
+        return postgres_query
+    elif evaluator.dialect == "snowflake":
+        subquery_clause = exp.select(
+            start_date_column.as_("start_date"), end_date_column.as_("end_date")
+        )
+        date_interval_clause = exp.func(
+            "dateadd",
+            exp.Literal.string(datepart.name),
+            exp.Window(this=exp.RowNumber(), order=exp.Order(expressions=[exp.Literal.number(0)]))
+            - 1,
+            exp.column("start_date"),
+        )
+        select_clause = date_interval_clause.as_(alias_name)
+        join_clause = exp.func(
+            "table",
+            exp.func(
+                "generator",
+                exp.Kwarg(
+                    this=exp.Literal.string("rowcount"), expression=exp.Literal.number(10000)
+                ),
+            ),
+        ).as_("x")
+        qualify_clause = exp.GTE(this=exp.column("end_date"), expression=exp.column(alias_name))
+        snowflake_query = (
+            exp.subquery(subquery_clause)
+            .select(select_clause)
+            .join(join_clause)
+            .qualify(qualify_clause)
+        )
+        return snowflake_query
+    elif evaluator.dialect == "redshift":
+        subquery_clause = exp.select(
+            exp.func(
+                "generate_series",
+                exp.Literal.number(0),
+                exp.func(
+                    "datediff",
+                    this=end_date_column,
+                    expression=start_date_column,
+                    unit=exp.Literal.string(datepart.name.upper()),
+                ),
+            ).as_("intervals")
+        )
+        dateadd_clause = exp.cast(
+            exp.TsOrDsAdd(
+                this=start_date_column,
+                expression=exp.column("intervals"),
+                unit=exp.Literal.string(datepart.name.upper()),
+                return_type=exp.DataType.build("DATE"),
+            ),
+            to=exp.DataType.Type("DATE"),
+        )
+        where_clause = exp.LTE(this=dateadd_clause, expression=end_date_column)
+        redshift_query = (
+            exp.subquery(subquery_clause)
+            .select(dateadd_clause.as_(alias_name))
+            .where(where_clause)
+            .order_by(exp.column(alias_name))
+        )
+        return redshift_query
     else:
         generate_series_clause = exp.func(
             "explode",  # transpiles to unnest for most query engines
@@ -1226,54 +1296,12 @@ def date_spine(
                     "generate_series",
                     start_date_column,
                     end_date_column,
-                    exp.Interval(this=exp.Literal.number(1), unit=datepart.name),
+                    date_interval,
                 )
             ),
         )
         query = exp.select(generate_series_clause).as_(alias_name)
-
-    return query
-
-    # query = exp.select(exp.column(alias_name)).from_(generate_series_clause).order_by(exp.column(alias_name))
-    # elif evaluator.dialect == "duckdb":
-    #     # this works with duckdb
-    #     generate_series_clause = exp.func(
-    #         "unnest",
-    #         (exp.func("generate_series", start_date_column, end_date_column, exp.to_interval(f"1 {datepart.name}"))),
-    #     ).as_(alias_name)
-    #     query = exp.select(exp.column(alias_name)).from_(generate_series_clause).order_by(exp.column(alias_name))
-
-
-# use generator functions where applicable
-# duckdb, databricks, postgres, snowflake, trino, redshift
-# SELECT
-#   DATEADD(DAY, SEQ4(), '2019-01-01') AS DATE_DAY
-# FROM
-#   TABLE(GENERATOR(ROWCOUNT => 366))
-# WHERE
-#   DATEADD(DAY, SEQ4(), '2019-01-01') <= '2020-01-01'
-# ORDER BY
-#   DATE_DAY;
-
-
-# for bigquery, this is a built in function that will likely be more performant
-# SELECT
-#   DATE AS DATE_DAY
-# FROM
-#   UNNEST(GENERATE_DATE_ARRAY('2019-01-01', '2020-01-01')) AS DATE
-# ORDER BY
-#   DATE;
-
-# sql server
-# WITH Tally AS (
-#   SELECT TOP (DATEDIFF(DAY, '2019-01-01', '2020-01-01') + 1)
-#     ROW_NUMBER() OVER (ORDER BY (SELECT NULL)) - 1 AS n
-#   FROM master.dbo.spt_values -- This is a system table with many rows, used to generate a sequence
-# )
-# SELECT DATEADD(DAY, n, '2019-01-01') AS DATE_DAY
-# FROM Tally
-# ORDER BY DATE_DAY;
-# raycast://extensions/raycast/raycast-ai/ai-chat?context=%7B%22id%22:%22600A968F-6B6C-454C-9DD7-13154CB4E21B%22%7D
+        return query
 
 
 def normalize_macro_name(name: str) -> str:
