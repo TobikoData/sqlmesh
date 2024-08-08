@@ -8,8 +8,10 @@ import inspect
 from sqlglot import exp
 from sqlglot.dialects.dialect import DialectType
 
+from sqlmesh.core.macros import MacroRegistry
+from sqlmesh.utils.jinja import JinjaMacroRegistry
 from sqlmesh.core import constants as c
-from sqlmesh.core.dialect import MacroFunc
+from sqlmesh.core.dialect import MacroFunc, parse_one
 from sqlmesh.core.model.definition import (
     Model,
     create_python_model,
@@ -75,6 +77,8 @@ class model(registry_decorator):
         module_path: Path,
         path: Path,
         defaults: t.Optional[t.Dict[str, t.Any]] = None,
+        macros: t.Optional[MacroRegistry] = None,
+        jinja_macros: t.Optional[JinjaMacroRegistry] = None,
         dialect: t.Optional[str] = None,
         time_column_format: str = c.DEFAULT_TIME_COLUMN_FORMAT,
         physical_schema_override: t.Optional[t.Dict[str, str]] = None,
@@ -123,7 +127,9 @@ class model(registry_decorator):
         for key in ("pre_statements", "post_statements"):
             statements = common_kwargs.get(key)
             if statements:
-                common_kwargs[key] = [exp.maybe_parse(s, dialect=dialect) for s in statements]
+                common_kwargs[key] = [
+                    parse_one(s, dialect=dialect) if isinstance(s, str) else s for s in statements
+                ]
 
         if self.is_sql:
             query = MacroFunc(this=exp.Anonymous(this=entrypoint))
@@ -132,5 +138,12 @@ class model(registry_decorator):
             )
 
         return create_python_model(
-            self.name, entrypoint, columns=self.columns, dialect=dialect, **common_kwargs
+            self.name,
+            entrypoint,
+            module_path=module_path,
+            macros=macros,
+            jinja_macros=jinja_macros,
+            columns=self.columns,
+            dialect=dialect,
+            **common_kwargs,
         )

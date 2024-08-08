@@ -117,6 +117,14 @@ class _Model(ModelMeta, frozen=True):
     mapping_schema: t.Dict[str, t.Any] = {}
 
     _full_depends_on: t.Optional[t.Set[str]] = None
+    __statement_renderers: t.Dict[int, ExpressionRenderer] = {}
+
+    pre_statements_: t.Optional[t.List[exp.Expression]] = Field(
+        default=None, alias="pre_statements"
+    )
+    post_statements_: t.Optional[t.List[exp.Expression]] = Field(
+        default=None, alias="post_statements"
+    )
 
     _expressions_validator = expression_validator
 
@@ -335,7 +343,17 @@ class _Model(ModelMeta, frozen=True):
         Returns:
             The list of rendered expressions.
         """
-        return []
+        return self._render_statements(
+            self.pre_statements,
+            start=start,
+            end=end,
+            execution_time=execution_time,
+            snapshots=snapshots,
+            expand=expand,
+            deployability_index=deployability_index,
+            engine_adapter=engine_adapter,
+            **kwargs,
+        )
 
     def render_post_statements(
         self,
@@ -367,7 +385,58 @@ class _Model(ModelMeta, frozen=True):
         Returns:
             The list of rendered expressions.
         """
-        return []
+        return self._render_statements(
+            self.post_statements,
+            start=start,
+            end=end,
+            execution_time=execution_time,
+            snapshots=snapshots,
+            expand=expand,
+            deployability_index=deployability_index,
+            engine_adapter=engine_adapter,
+            **kwargs,
+        )
+
+    @property
+    def pre_statements(self) -> t.List[exp.Expression]:
+        return self.pre_statements_ or []
+
+    @property
+    def post_statements(self) -> t.List[exp.Expression]:
+        return self.post_statements_ or []
+
+    @property
+    def macro_definitions(self) -> t.List[d.MacroDef]:
+        """All macro definitions from the list of expressions."""
+        return [s for s in self.pre_statements + self.post_statements if isinstance(s, d.MacroDef)]
+
+    def _render_statements(
+        self,
+        statements: t.Iterable[exp.Expression],
+        **kwargs: t.Any,
+    ) -> t.List[exp.Expression]:
+        rendered = (
+            self._statement_renderer(statement).render(**kwargs)
+            for statement in statements
+            if not isinstance(statement, d.MacroDef)
+        )
+        return [r for expressions in rendered if expressions for r in expressions]
+
+    def _statement_renderer(self, expression: exp.Expression) -> ExpressionRenderer:
+        expression_key = id(expression)
+        if expression_key not in self.__statement_renderers:
+            self.__statement_renderers[expression_key] = ExpressionRenderer(
+                expression,
+                self.dialect,
+                self.macro_definitions,
+                path=self._path,
+                jinja_macro_registry=self.jinja_macros,
+                python_env=self.python_env,
+                only_execution_time=self.kind.only_execution_time,
+                default_catalog=self.default_catalog,
+                model_fqn=self.fqn,
+            )
+        return self.__statement_renderers[expression_key]
 
     def render_signals(
         self,
@@ -755,6 +824,18 @@ class _Model(ModelMeta, frozen=True):
             data.append(key)
             data.append(gen(value))
 
+        for statement in (*self.pre_statements, *self.post_statements):
+            statement_exprs: t.List[exp.Expression] = []
+            if not isinstance(statement, d.MacroDef):
+                rendered = self._statement_renderer(statement).render()
+                if self._is_metadata_statement(statement):
+                    continue
+                if rendered:
+                    statement_exprs = rendered
+                else:
+                    statement_exprs = [statement]
+            data.extend(gen(e) for e in statement_exprs)
+
         return data  # type: ignore
 
     def metadata_hash(self, audits: t.Dict[str, ModelAudit]) -> str:
@@ -839,7 +920,23 @@ class _Model(ModelMeta, frozen=True):
         if metadata_only_macros:
             additional_metadata.append(str(metadata_only_macros))
 
+        for statement in (*self.pre_statements, *self.post_statements):
+            if self._is_metadata_statement(statement):
+                additional_metadata.append(gen(statement))
+
         return additional_metadata
+
+    def _is_metadata_statement(self, statement: exp.Expression) -> bool:
+        if isinstance(statement, d.MacroDef):
+            return True
+        if isinstance(statement, d.MacroFunc):
+            target_macro = macro.get_registry().get(statement.name)
+            if target_macro:
+                return target_macro.metadata_only
+            target_macro = self.python_env.get(statement.name)
+            if target_macro:
+                return bool(target_macro.is_metadata)
+        return False
 
     @property
     def full_depends_on(self) -> t.Set[str]:
@@ -857,15 +954,7 @@ class _Model(ModelMeta, frozen=True):
 
 
 class _SqlBasedModel(_Model):
-    pre_statements_: t.Optional[t.List[exp.Expression]] = Field(
-        default=None, alias="pre_statements"
-    )
-    post_statements_: t.Optional[t.List[exp.Expression]] = Field(
-        default=None, alias="post_statements"
-    )
     inline_audits_: t.Dict[str, t.Any] = Field(default={}, alias="inline_audits")
-
-    __statement_renderers: t.Dict[int, ExpressionRenderer] = {}
 
     _expression_validator = expression_validator
 
@@ -887,138 +976,9 @@ class _SqlBasedModel(_Model):
 
         return inline_audits
 
-    def render_pre_statements(
-        self,
-        *,
-        start: t.Optional[TimeLike] = None,
-        end: t.Optional[TimeLike] = None,
-        execution_time: t.Optional[TimeLike] = None,
-        snapshots: t.Optional[t.Collection[Snapshot]] = None,
-        expand: t.Iterable[str] = tuple(),
-        deployability_index: t.Optional[DeployabilityIndex] = None,
-        engine_adapter: t.Optional[EngineAdapter] = None,
-        **kwargs: t.Any,
-    ) -> t.List[exp.Expression]:
-        return self._render_statements(
-            self.pre_statements,
-            start=start,
-            end=end,
-            execution_time=execution_time,
-            snapshots=snapshots,
-            expand=expand,
-            deployability_index=deployability_index,
-            engine_adapter=engine_adapter,
-            **kwargs,
-        )
-
-    def render_post_statements(
-        self,
-        *,
-        start: t.Optional[TimeLike] = None,
-        end: t.Optional[TimeLike] = None,
-        execution_time: t.Optional[TimeLike] = None,
-        snapshots: t.Optional[t.Collection[Snapshot]] = None,
-        expand: t.Iterable[str] = tuple(),
-        deployability_index: t.Optional[DeployabilityIndex] = None,
-        engine_adapter: t.Optional[EngineAdapter] = None,
-        **kwargs: t.Any,
-    ) -> t.List[exp.Expression]:
-        return self._render_statements(
-            self.post_statements,
-            start=start,
-            end=end,
-            execution_time=execution_time,
-            snapshots=snapshots,
-            expand=expand,
-            deployability_index=deployability_index,
-            engine_adapter=engine_adapter,
-            **kwargs,
-        )
-
-    @property
-    def pre_statements(self) -> t.List[exp.Expression]:
-        return self.pre_statements_ or []
-
-    @property
-    def post_statements(self) -> t.List[exp.Expression]:
-        return self.post_statements_ or []
-
-    @property
-    def macro_definitions(self) -> t.List[d.MacroDef]:
-        """All macro definitions from the list of expressions."""
-        return [s for s in self.pre_statements + self.post_statements if isinstance(s, d.MacroDef)]
-
     @property
     def inline_audits(self) -> t.Dict[str, ModelAudit]:
         return self.inline_audits_
-
-    def _render_statements(
-        self,
-        statements: t.Iterable[exp.Expression],
-        **kwargs: t.Any,
-    ) -> t.List[exp.Expression]:
-        rendered = (
-            self._statement_renderer(statement).render(**kwargs)
-            for statement in statements
-            if not isinstance(statement, d.MacroDef)
-        )
-        return [r for expressions in rendered if expressions for r in expressions]
-
-    def _statement_renderer(self, expression: exp.Expression) -> ExpressionRenderer:
-        expression_key = id(expression)
-        if expression_key not in self.__statement_renderers:
-            self.__statement_renderers[expression_key] = ExpressionRenderer(
-                expression,
-                self.dialect,
-                self.macro_definitions,
-                path=self._path,
-                jinja_macro_registry=self.jinja_macros,
-                python_env=self.python_env,
-                only_execution_time=self.kind.only_execution_time,
-                default_catalog=self.default_catalog,
-                model_fqn=self.fqn,
-            )
-        return self.__statement_renderers[expression_key]
-
-    @property
-    def _data_hash_values(self) -> t.List[str]:
-        data_hash_values = super()._data_hash_values
-
-        for statement in (*self.pre_statements, *self.post_statements):
-            statement_exprs: t.List[exp.Expression] = []
-            if not isinstance(statement, d.MacroDef):
-                rendered = self._statement_renderer(statement).render()
-                if self._is_metadata_statement(statement):
-                    continue
-                if rendered:
-                    statement_exprs = rendered
-                else:
-                    statement_exprs = [statement]
-            data_hash_values.extend(gen(e) for e in statement_exprs)
-
-        return data_hash_values
-
-    @property
-    def _additional_metadata(self) -> t.List[str]:
-        additional_metadata = super()._additional_metadata
-
-        for statement in (*self.pre_statements, *self.post_statements):
-            if self._is_metadata_statement(statement):
-                additional_metadata.append(gen(statement))
-
-        return additional_metadata
-
-    def _is_metadata_statement(self, statement: exp.Expression) -> bool:
-        if isinstance(statement, d.MacroDef):
-            return True
-        if isinstance(statement, d.MacroFunc):
-            target_macro = macro.get_registry().get(statement.name)
-            if target_macro:
-                return target_macro.metadata_only
-            target_macro = self.python_env.get(statement.name)
-            if target_macro:
-                return bool(target_macro.is_metadata)
-        return False
 
 
 class SqlModel(_SqlBasedModel):
@@ -1868,8 +1828,11 @@ def create_python_model(
     entrypoint: str,
     python_env: t.Dict[str, Executable],
     *,
+    macros: t.Optional[MacroRegistry] = None,
+    jinja_macros: t.Optional[JinjaMacroRegistry] = None,
     defaults: t.Optional[t.Dict[str, t.Any]] = None,
     path: Path = Path(),
+    module_path: Path = Path(),
     time_column_format: str = c.DEFAULT_TIME_COLUMN_FORMAT,
     depends_on: t.Optional[t.Set[str]] = None,
     physical_schema_override: t.Optional[t.Dict[str, str]] = None,
@@ -1890,6 +1853,32 @@ def create_python_model(
     """
     # Find dependencies for python models by parsing code if they are not explicitly defined
     # Also remove self-references that are found
+
+    pre_statements = kwargs.get("pre_statements", None) or []
+    post_statements = kwargs.get("post_statements", None) or []
+
+    if pre_statements or post_statements:
+        jinja_macro_references, used_variables = extract_macro_references_and_variables(
+            *(gen(e) for e in pre_statements),
+            *(gen(e) for e in post_statements),
+        )
+
+        jinja_macros = (jinja_macros or JinjaMacroRegistry()).trim(jinja_macro_references)
+        for jinja_macro in jinja_macros.root_macros.values():
+            used_variables.update(extract_macro_references_and_variables(jinja_macro.definition)[1])
+
+        python_env.update(
+            _python_env(
+                [*pre_statements, *post_statements],
+                jinja_macro_references,
+                module_path,
+                macros or macro.get_registry(),
+                variables=variables,
+                used_variables=used_variables,
+                path=path,
+            )
+        )
+
     parsed_depends_on, referenced_variables = (
         _parse_dependencies(python_env, entrypoint) if python_env is not None else (set(), set())
     )
@@ -1909,6 +1898,7 @@ def create_python_model(
         depends_on=depends_on,
         entrypoint=entrypoint,
         python_env=python_env,
+        jinja_macros=jinja_macros,
         physical_schema_override=physical_schema_override,
         **kwargs,
     )
