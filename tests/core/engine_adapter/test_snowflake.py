@@ -151,6 +151,35 @@ def test_comments(make_mocked_engine_adapter: t.Callable, mocker: MockerFixture)
     ]
 
 
+def test_multiple_column_comments(make_mocked_engine_adapter: t.Callable, mocker: MockerFixture):
+    adapter = make_mocked_engine_adapter(SnowflakeEngineAdapter)
+
+    adapter.create_table(
+        "test_table",
+        {"a": exp.DataType.build("INT"), "b": exp.DataType.build("INT")},
+        column_descriptions={"a": "a column description", "b": "b column description"},
+    )
+
+    adapter.create_view(
+        "test_view",
+        parse_one("SELECT a, b FROM test_table"),
+        column_descriptions={"a": "a column description", "b": "b column description"},
+    )
+
+    adapter._create_column_comments(
+        "test_table",
+        {"a": "a column description changed", "b": "b column description changed"},
+    )
+
+    sql_calls = to_sql_calls(adapter)
+    assert sql_calls == [
+        """CREATE TABLE IF NOT EXISTS "test_table" ("a" INT COMMENT 'a column description', "b" INT COMMENT 'b column description')""",
+        """CREATE OR REPLACE VIEW "test_view" AS SELECT "a", "b" FROM "test_table\"""",
+        """ALTER VIEW "test_view" ALTER COLUMN "a" COMMENT 'a column description', COLUMN "b" COMMENT 'b column description'""",
+        """ALTER TABLE "test_table" ALTER COLUMN "a" COMMENT 'a column description changed', COLUMN "b" COMMENT 'b column description changed'""",
+    ]
+
+
 def test_df_to_source_queries_use_schema(
     make_mocked_engine_adapter: t.Callable, mocker: MockerFixture
 ):

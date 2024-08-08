@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import contextlib
+import logging
 import typing as t
 
 import pandas as pd
@@ -22,6 +23,7 @@ from sqlmesh.core.schema_diff import SchemaDiffer
 from sqlmesh.utils import optional_import
 from sqlmesh.utils.errors import SQLMeshError
 
+logger = logging.getLogger(__name__)
 snowpark = optional_import("snowflake.snowpark")
 
 if t.TYPE_CHECKING:
@@ -396,3 +398,36 @@ class SnowflakeEngineAdapter(GetCurrentCatalogFromFunctionMixin):
         comment_sql = exp.Literal.string(truncated_comment).sql(dialect=self.dialect)
 
         return f"ALTER {table_kind} {table_sql} ALTER COLUMN {column_sql} COMMENT {comment_sql}"
+
+    def _create_column_comments(
+        self,
+        table_name: TableName,
+        column_comments: t.Dict[str, str],
+        table_kind: str = "TABLE",
+    ) -> None:
+        """
+        Reference: https://docs.snowflake.com/en/sql-reference/sql/alter-table-column#syntax
+        """
+        if len(column_comments) == 0:
+            return
+
+        table = exp.to_table(table_name)
+        table_sql = self._to_sql(table)
+
+        list_comment_sql = []
+        for column_name, column_comment in column_comments.items():
+            column_sql = exp.column(column_name).sql(dialect=self.dialect, identify=True)
+
+            truncated_comment = self._truncate_column_comment(column_comment)
+            comment_sql = exp.Literal.string(truncated_comment).sql(dialect=self.dialect)
+
+            list_comment_sql.append(f"COLUMN {column_sql} COMMENT {comment_sql}")
+
+        combined_sql = f"ALTER {table_kind} {table_sql} ALTER {', '.join(list_comment_sql)}"
+        try:
+            self.execute(combined_sql)
+        except Exception:
+            logger.warning(
+                f"Column comments for table '{table.alias_or_name}' not registered - this may be due to limited permissions.",
+                exc_info=True,
+            )
