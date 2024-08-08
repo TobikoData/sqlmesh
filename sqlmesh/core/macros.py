@@ -1178,7 +1178,7 @@ def date_spine(
         >>> from sqlmesh.core.macros import MacroEvaluator
         >>> sql = "@date_spine('week', '2022-01-20', '2024-12-16')"
         >>> MacroEvaluator().transform(parse_one(sql)).sql()
-        'SELECT UNNEST(GENERATE_SERIES(CAST(\'2022-01-20\' AS DATE), CAST(\'2024-12-16\' AS DATE), (7 * INTERVAL \'1\' DAY))) AS "date_week"'
+        'SELECT UNNEST(GENERATE_SERIES(CAST(\'2022-01-20\' AS DATE), CAST(\'2024-12-16\' AS DATE), (INTERVAL \'1\' WEEK))) AS "date_week"'
 
     """
     if datepart.name not in ("day", "week", "month", "year"):
