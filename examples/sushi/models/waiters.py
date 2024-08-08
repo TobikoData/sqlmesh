@@ -41,14 +41,27 @@ def entrypoint(evaluator: MacroEvaluator) -> exp.Select:
         # There are tests which force not having a default catalog so we check here if one is defined
         # and add it to the name if it is
         default_catalog = evaluator.default_catalog
+        parent_snapshot_name = parent_snapshots[0].name
+        parent_snapshot_catalog = parent_snapshot_name.split(".")[0].strip('"')
+
         if default_catalog:
             # make sure we don't double quote the default catalog
             default_catalog = default_catalog.strip('"')
+
+            # Snowflake normalizes unquoted names to uppercase, which can cause case mismatches with
+            # default_catalog due to sqlmesh's default normalization behavior. SQLMesh addresses this
+            # by rewriting the default catalog name on the fly in snowflake `_to_sql()`. This model
+            # code manually extracts default_catalog name, so we manually lowercase the default_catalog
+            # if the parent catalog name is an uppercase version of the default catalog name.
+            default_catalog = (
+                default_catalog.lower()
+                if parent_snapshot_catalog == default_catalog.lower()
+                else default_catalog
+            )
+
             name = ".".join([f'"{default_catalog}"', name])
 
-        assert (
-            parent_snapshots[0].name == name
-        ), f"Snapshot Name: {parent_snapshots[0].name}, Name: {name}"
+        assert parent_snapshot_name == name, f"Snapshot Name: {parent_snapshot_name}, Name: {name}"
 
     excluded = {"id", "customer_id", "start_ts", "end_ts"}
     projections = []
