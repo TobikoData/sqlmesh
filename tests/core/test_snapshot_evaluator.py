@@ -4,6 +4,7 @@ from unittest.mock import call, patch
 
 import logging
 import pytest
+import pandas as pd
 from pathlib import Path
 from pytest_mock.plugin import MockerFixture
 from sqlglot import expressions as exp
@@ -20,7 +21,7 @@ from sqlmesh.core.engine_adapter.shared import (
     InsertOverwriteStrategy,
 )
 from sqlmesh.core.environment import EnvironmentNamingInfo
-from sqlmesh.core.macros import RuntimeStage, macro
+from sqlmesh.core.macros import RuntimeStage, macro, MacroEvaluator, MacroFunc
 from sqlmesh.core.model import (
     Model,
     FullKind,
@@ -33,6 +34,7 @@ from sqlmesh.core.model import (
     ViewKind,
     load_sql_based_model,
     ExternalModel,
+    model,
 )
 from sqlmesh.core.model.kind import OnDestructiveChange, ExternalKind
 from sqlmesh.core.node import IntervalUnit
@@ -2204,6 +2206,68 @@ def test_create_post_statements_use_deployable_table(
     expected_call = f'CREATE INDEX IF NOT EXISTS "test_idx" ON "sqlmesh__test_schema"."test_schema__test_model__{snapshot.version}" /* test_schema.test_model */("a" NULLS FIRST)'
 
     evaluator.create([snapshot], {}, DeployabilityIndex.none_deployable())
+
+    call_args = adapter_mock.execute.call_args_list
+    pre_calls = call_args[0][0][0]
+    assert len(pre_calls) == 1
+    assert pre_calls[0].sql(dialect="postgres") == expected_call
+
+    post_calls = call_args[1][0][0]
+    assert len(post_calls) == 1
+    assert post_calls[0].sql(dialect="postgres") == expected_call
+
+
+def test_create_pre_post_statements_python_model(
+    mocker: MockerFixture, adapter_mock, make_snapshot
+):
+    evaluator = SnapshotEvaluator(adapter_mock)
+
+    @macro()
+    def create_index(
+        evaluator: MacroEvaluator,
+        index_name: str,
+        model_name: str,
+        column: str,
+    ):
+        if evaluator.runtime_stage == "creating":
+            return f"CREATE INDEX IF NOT EXISTS {index_name} ON {model_name}({column});"
+
+    @model(
+        "db.test_model",
+        kind="full",
+        columns={"id": "string", "name": "string"},
+        pre_statements=["CREATE INDEX IF NOT EXISTS idx ON db.test_model(id);"],
+        post_statements=["@CREATE_INDEX('idx', 'db.test_model', id)"],
+    )
+    def model_with_statements(context, **kwargs):
+        return pd.DataFrame(
+            [
+                {
+                    "id": context.var("1"),
+                    "name": context.var("var"),
+                }
+            ]
+        )
+
+    python_model = model.get_registry()["db.test_model"].model(
+        module_path=Path("."),
+        path=Path("."),
+        macros=macro.get_registry(),
+        dialect="postgres",
+    )
+
+    assert len(python_model.python_env) == 3
+    assert len(python_model.pre_statements) == 1
+    assert len(python_model.post_statements) == 1
+    assert isinstance(python_model.python_env["create_index"], Executable)
+    assert isinstance(python_model.pre_statements[0], exp.Create)
+    assert isinstance(python_model.post_statements[0], MacroFunc)
+
+    snapshot = make_snapshot(python_model)
+    snapshot.categorize_as(SnapshotChangeCategory.BREAKING)
+
+    evaluator.create([snapshot], {}, DeployabilityIndex.none_deployable())
+    expected_call = f'CREATE INDEX IF NOT EXISTS "idx" ON "sqlmesh__db"."db__test_model__{snapshot.version}" /* db.test_model */("id")'
 
     call_args = adapter_mock.execute.call_args_list
     pre_calls = call_args[0][0][0]
