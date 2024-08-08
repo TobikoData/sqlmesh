@@ -371,7 +371,7 @@ def test_missing_intervals_end_bounded_with_ignore_cron(make_snapshot):
 
 
 def test_missing_intervals_past_end_date_with_lookback(make_snapshot):
-    snapshot: Snapshot = make_snapshot(
+    snapshot: Snapshot = make_snapshot(  # type: ignore
         SqlModel(
             name="test_model",
             kind=IncrementalByTimeRangeKind(time_column=TimeColumn(column="ds"), lookback=2),

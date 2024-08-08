@@ -11,7 +11,7 @@ For more information regarding what a context can do, see `sqlmesh.core.context.
 Creating and applying a plan against the staging environment.
 ```python
 from sqlmesh.core.context import Context
-context = Context(path="example", config="local_config")
+context = Context(paths="example", config="local_config")
 plan = context.plan("staging")
 context.apply(plan)
 ```
@@ -19,14 +19,14 @@ context.apply(plan)
 Running audits on your data.
 ```python
 from sqlmesh.core.context import Context
-context = Context(path="example", config="local_config")
+context = Context(paths="example", config="local_config")
 context.audit("yesterday", "now")
 ```
 
 Running tests on your models.
 ```python
 from sqlmesh.core.context import Context
-context = Context(path="example")
+context = Context(paths="example")
 context.test()
 ```
 """
@@ -1720,8 +1720,10 @@ class GenericContext(BaseContext, t.Generic[C]):
 
     def close(self) -> None:
         """Releases all resources allocated by this context."""
-        self.snapshot_evaluator.close()
-        self.state_sync.close()
+        if self._snapshot_evaluator:
+            self._snapshot_evaluator.close()
+        if self._state_sync:
+            self._state_sync.close()
 
     def _run(
         self,

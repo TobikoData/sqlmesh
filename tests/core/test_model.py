@@ -4,7 +4,7 @@ import logging
 import typing as t
 from datetime import date, datetime
 from pathlib import Path
-from unittest.mock import patch
+from unittest.mock import patch, PropertyMock
 
 import pandas as pd
 import pytest
@@ -15,9 +15,11 @@ from sqlmesh.cli.example_project import init_example_project
 
 from sqlmesh.core import constants as c
 from sqlmesh.core import dialect as d
-from sqlmesh.core.audit import ModelAudit
+from sqlmesh.core.audit import ModelAudit, load_audit
 from sqlmesh.core.config import (
     Config,
+    DuckDBConnectionConfig,
+    GatewayConfig,
     NameInferenceConfig,
     ModelDefaultsConfig,
 )
@@ -2154,6 +2156,47 @@ def test_model_cache(tmp_path: Path, mocker: MockerFixture):
     assert cache.get_or_load("test_model", "test_entry_a", loader=loader).dict() == model.dict()
 
     assert loader.call_count == 2
+
+
+@pytest.mark.slow
+def test_model_cache_gateway(tmp_path: Path, mocker: MockerFixture):
+    init_example_project(tmp_path, dialect="duckdb")
+
+    db_path = str(tmp_path / "db.db")
+    config = Config(
+        gateways={
+            "main": GatewayConfig(connection=DuckDBConnectionConfig(database=db_path)),
+            "secondary": GatewayConfig(connection=DuckDBConnectionConfig()),
+        },
+        model_defaults=ModelDefaultsConfig(dialect="duckdb"),
+    )
+    Context(paths=tmp_path, config=config)
+
+    patched_cache_put = mocker.patch("sqlmesh.utils.cache.FileCache.put")
+
+    Context(paths=tmp_path, config=config)
+    assert patched_cache_put.call_count == 0
+
+    Context(paths=tmp_path, config=config, gateway="secondary")
+    assert patched_cache_put.call_count == 4
+
+
+@pytest.mark.slow
+def test_model_cache_default_catalog(tmp_path: Path, mocker: MockerFixture):
+    init_example_project(tmp_path, dialect="duckdb")
+    Context(paths=tmp_path)
+
+    patched_cache_put = mocker.patch("sqlmesh.utils.cache.FileCache.put")
+
+    Context(paths=tmp_path)
+    assert patched_cache_put.call_count == 0
+
+    with patch(
+        "sqlmesh.core.engine_adapter.base.EngineAdapter.default_catalog",
+        PropertyMock(return_value=None),
+    ):
+        Context(paths=tmp_path)
+        assert patched_cache_put.call_count == 4
 
 
 def test_model_ctas_query():
@@ -4539,6 +4582,88 @@ def test_macros_in_model_statement(sushi_context, assert_exp_eq):
     assert model.time_column.column == exp.column("a", quoted=True)
     assert model.start == "2023-01-01"
     assert model.session_properties == {"foo": exp.column("bar_baz", quoted=False)}
+
+
+def test_macro_references_in_audits():
+    @macro()
+    def zero_value(evaluator: MacroEvaluator) -> int:
+        return 0
+
+    @macro()
+    def min_value(evaluator: MacroEvaluator) -> int:
+        return 1
+
+    @macro()
+    def not_loaded_macro(evaluator: MacroEvaluator) -> int:
+        return 10
+
+    @macro()
+    def max_value(evaluator: MacroEvaluator) -> int:
+        return 1000
+
+    audit_expression = parse(
+        """
+        AUDIT (
+    name assert_max_value,
+    );
+    SELECT *
+    FROM @this_model
+    WHERE
+    id > @max_value;
+    """
+    )
+
+    not_zero_audit = parse(
+        """
+        AUDIT (
+    name assert_not_zero,
+    );
+    SELECT *
+    FROM @this_model
+    WHERE
+    id = @zero_value;
+    """
+    )
+
+    model_expression = d.parse(
+        """
+        MODEL (
+            name db.audit_model,
+            audits (assert_max_value, assert_positive_ids),
+        );
+        SELECT 1 as id;
+
+        AUDIT (
+    name assert_positive_ids,
+    );
+    SELECT *
+    FROM @this_model
+    WHERE
+    id < @min_value;
+    """
+    )
+
+    audits = {
+        "assert_max_value": load_audit(audit_expression, dialect="duckdb"),
+        "assert_not_zero": load_audit(not_zero_audit, dialect="duckdb"),
+    }
+    config = Config(
+        model_defaults=ModelDefaultsConfig(dialect="duckdb", audits=["assert_not_zero"])
+    )
+    model = load_sql_based_model(
+        model_expression, audits=audits, default_audits=config.model_defaults.audits
+    )
+
+    assert len(model.audits) == 2
+    assert len(model.inline_audits) == 1
+    assert len(model.python_env) == 3
+    assert config.model_defaults.audits == [("assert_not_zero", {})]
+    assert model.audits == [("assert_max_value", {}), ("assert_positive_ids", {})]
+    assert isinstance(model.inline_audits["assert_positive_ids"], ModelAudit)
+    assert isinstance(model.python_env["min_value"], Executable)
+    assert isinstance(model.python_env["max_value"], Executable)
+    assert isinstance(model.python_env["zero_value"], Executable)
+    assert "not_loaded_macro" not in model.python_env
 
 
 def test_python_model_dialect():

@@ -204,9 +204,11 @@ class SnowflakeEngineAdapter(GetCurrentCatalogFromFunctionMixin):
             target_table or "pandas", quoted=False
         )  # write_pandas() re-quotes everything without checking if its already quoted
 
+        is_snowpark_dataframe = snowpark and isinstance(df, snowpark.dataframe.DataFrame)
+
         def query_factory() -> Query:
-            if snowpark and isinstance(df, snowpark.dataframe.DataFrame):
-                df.createOrReplaceTempView(temp_table.sql(dialect=self.dialect, identify=True))
+            if is_snowpark_dataframe:
+                df.createOrReplaceTempView(temp_table.sql(dialect=self.dialect, identify=True))  # type: ignore
             elif isinstance(df, pd.DataFrame):
                 from snowflake.connector.pandas_tools import write_pandas
 
@@ -258,13 +260,15 @@ class SnowflakeEngineAdapter(GetCurrentCatalogFromFunctionMixin):
 
             return exp.select(*self._casted_columns(columns_to_types)).from_(temp_table)
 
+        def cleanup() -> None:
+            if is_snowpark_dataframe:
+                self.drop_view(temp_table)
+            else:
+                self.drop_table(temp_table)
+
         # the cleanup_func technically isnt needed because the temp table gets dropped when the session ends
         # but boy does it make our multi-adapter integration tests easier to write
-        return [
-            SourceQuery(
-                query_factory=query_factory, cleanup_func=lambda: self.drop_table(temp_table)
-            )
-        ]
+        return [SourceQuery(query_factory=query_factory, cleanup_func=cleanup)]
 
     def _fetch_native_df(
         self, query: t.Union[exp.Expression, str], quote_identifiers: bool = False

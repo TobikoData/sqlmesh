@@ -9,6 +9,7 @@ from freezegun import freeze_time
 
 from sqlmesh.cli.example_project import init_example_project
 from sqlmesh.cli.main import cli
+from sqlmesh.core.context import Context
 
 FREEZE_TIME = "2023-01-01 00:00:00"
 
@@ -642,3 +643,20 @@ def test_table_name(runner, tmp_path):
         )
     assert result.exit_code == 0
     assert result.output.startswith("db.sqlmesh__sqlmesh_example.sqlmesh_example__full_model__")
+
+
+def test_info_on_new_project_does_not_create_state_sync(runner, tmp_path):
+    create_example_project(tmp_path)
+
+    # Invoke the info command
+    result = runner.invoke(cli, ["--log-file-dir", tmp_path, "--paths", tmp_path, "info"])
+    assert result.exit_code == 0
+
+    context = Context(paths=tmp_path)
+
+    # Confirm that the state sync tables haven't been created
+    assert not context.engine_adapter.table_exists("sqlmesh._snapshots")
+    assert not context.engine_adapter.table_exists("sqlmesh._environments")
+    assert not context.engine_adapter.table_exists("sqlmesh._intervals")
+    assert not context.engine_adapter.table_exists("sqlmesh._plan_dags")
+    assert not context.engine_adapter.table_exists("sqlmesh._versions")

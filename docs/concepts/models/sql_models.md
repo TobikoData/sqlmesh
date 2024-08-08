@@ -112,7 +112,7 @@ The following example demonstrates how the above `db.customers` model can be def
 from sqlglot import exp
 
 from sqlmesh.core.model import model
-from sqlmesh.core.macro import MacroEvaluator
+from sqlmesh.core.macros import MacroEvaluator
 
 @model(
     "db.customers",
