@@ -1177,8 +1177,8 @@ def date_spine(
         >>> from sqlglot.schema import MappingSchema
         >>> from sqlmesh.core.macros import MacroEvaluator
         >>> sql = "@date_spine('week', '2022-01-20', '2024-12-16')"
-        >>> MacroEvaluator().transform(parse_one(sql)).sql()
-        'SELECT UNNEST(GENERATE_SERIES(CAST(\'2022-01-20\' AS DATE), CAST(\'2024-12-16\' AS DATE), (INTERVAL \'1\' WEEK))) AS "date_week"'
+        >>> MacroEvaluator(dialect='duckdb').transform(parse_one(sql)).sql()
+        'SELECT UNNEST(GENERATE_SERIES(CAST(\'2022-01-20\' AS DATE), CAST(\'2024-12-16\' AS DATE), (7 *INTERVAL \'1\' DAY))) AS "date_week"'
 
     """
     if datepart.name not in ("day", "week", "month", "year"):
@@ -1285,7 +1285,7 @@ def date_spine(
             .order_by(exp.column(alias_name))
         )
         return redshift_query
-    else:
+    elif evaluator.dialect in ("duckdb", "spark", "databricks"):
         generate_series_clause = exp.func(
             "explode",  # transpiles to unnest for most query engines
             (
@@ -1299,6 +1299,8 @@ def date_spine(
         )
         query = exp.select(generate_series_clause).as_(alias_name)
         return query
+    else:
+        raise SQLMeshError(f"Unsupported dialect: {evaluator.dialect}")
 
 
 def normalize_macro_name(name: str) -> str:
