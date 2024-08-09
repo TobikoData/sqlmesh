@@ -10,7 +10,7 @@ install-doc:
 	pip3 install -r ./docs/requirements.txt
 
 install-engine-test:
-	pip3 install -e ".[dev,web,slack,mysql,postgres,databricks,redshift,bigquery,snowflake,trino,mssql]"
+	pip3 install -e ".[dev,web,slack,mysql,postgres,databricks,redshift,bigquery,snowflake,trino,mssql,materialize]"
 
 install-pre-commit:
 	pre-commit install
@@ -168,6 +168,9 @@ engine-%-down:
 
 duckdb-test: engine-duckdb-install
 	pytest -n auto -x -m "duckdb" --junitxml=test-results/junit-duckdb.xml
+
+materialize-test:
+	pytest -n auto -m "materialize" --junitxml=test-results/junit-materialize.xml
 
 mssql-test: engine-mssql-up
 	pytest -n auto -x -m "mssql" --junitxml=test-results/junit-mssql.xml

@@ -203,6 +203,78 @@ class BaseDuckDBConnectionConfig(ConnectionConfig):
         return init
 
 
+class MaterializeConnectionConfig(ConnectionConfig):
+    """
+    Materialize Connection Configuration.
+
+    Args:
+        host: The hostname of the Materialize instance.
+        user: The username to use for authentication.
+        password: The password to use for authentication.
+        database: The name of the database to connect to.
+        port: The port number of the Materialize instance. Default is 6875.
+        sslmode: The SSL mode to use for the connection. Default is 'disable'.
+        connect_timeout: The number of seconds before the connection to the server will timeout.
+        application_name: The name of the application connecting to Materialize.
+        cluster: The name of the cluster to connect to.
+    """
+
+    host: str
+    user: str
+    password: str
+    database: str
+    port: int = 6875
+    sslmode: str = "disable"
+    connect_timeout: int = 10
+    application_name: t.Optional[str] = None
+    cluster: t.Optional[str] = None
+
+    concurrent_tasks: int = 4
+    register_comments: bool = True
+    pre_ping: bool = True
+
+    type_: Literal["materialize"] = Field(alias="type", default="materialize")
+
+    @property
+    def _connection_kwargs_keys(self) -> t.Set[str]:
+        return {
+            "host",
+            "user",
+            "password",
+            "database",
+            "port",
+            "sslmode",
+            "connect_timeout",
+            "application_name",
+        }
+
+    @property
+    def _engine_adapter(self) -> t.Type[EngineAdapter]:
+        return engine_adapter.MaterializeEngineAdapter
+
+    @property
+    def _connection_factory(self) -> t.Callable:
+        from psycopg2 import connect
+
+        # TODO: Look into improving this
+        def connection(*args, **kwargs):  # type: ignore
+            conn = connect(*args, **kwargs)
+            conn.autocommit = True
+            return conn
+
+        return connection
+
+    @property
+    def _static_connection_kwargs(self) -> t.Dict[str, t.Any]:
+        kwargs = {}
+        options_list = ["--auto_route_introspection_queries=on", "--welcome_message=off"]
+        if self.cluster:
+            options_list.insert(0, f"--cluster={self.cluster}")
+        kwargs["options"] = " ".join(options_list)
+
+        return kwargs
+
+
 class MotherDuckConnectionConfig(BaseDuckDBConnectionConfig):
     """Configuration for the MotherDuck connection.
 

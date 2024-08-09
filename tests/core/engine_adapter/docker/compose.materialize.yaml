@@ -1,0 +1,19 @@
+services:
+  materialize:
+    image: materialize/materialized:latest
+    container_name: materialize
+    command:
+      - '--cluster-replica-sizes={"25cc": {"workers": 1, "scale": 1, "credits_per_hour": "1"}, "50cc": {"workers": 1, "scale": 1, "credits_per_hour": "1"}}'
+      - --bootstrap-default-cluster-replica-size=25cc
+      - --bootstrap-builtin-system-cluster-replica-size=25cc
+      - --bootstrap-builtin-introspection-cluster-replica-size=25cc
+      - --bootstrap-builtin-support-cluster-replica-size=25cc
+      - --bootstrap-builtin-probe-cluster-replica-size=25cc
+      - --availability-zone=test1
+      - --availability-zone=test2
+      - --system-parameter-default=max_tables=1000
+      - --all-features
+    ports:
+      - 6875:6875
+      - 6877:6877
+      - 6878:6878

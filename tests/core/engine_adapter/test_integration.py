@@ -218,7 +218,7 @@ class TestContext:
         table_kind: str = "BASE TABLE",
         snowflake_capitalize_ids: bool = True,
     ) -> str:
-        if self.dialect in ["postgres", "redshift"]:
+        if self.dialect in ["postgres", "redshift", "materialize"]:
             query = f"""
                 SELECT
                     pgc.relname,
@@ -312,7 +312,7 @@ class TestContext:
         snowflake_capitalize_ids: bool = True,
     ) -> t.Dict[str, str]:
         comment_index = 1
-        if self.dialect in ["postgres", "redshift"]:
+        if self.dialect in ["postgres", "redshift", "materialize"]:
             query = f"""
                 SELECT
                     cols.column_name,
@@ -619,6 +619,15 @@ def config() -> Config:
                 pytest.mark.engine,
                 pytest.mark.spark,
                 pytest.mark.xdist_group("engine_integration_spark"),
+            ],
+        ),
+        pytest.param(
+            "materialize",
+            marks=[
+                pytest.mark.docker,
+                pytest.mark.engine,
+                pytest.mark.materialize,
+                pytest.mark.xdist_group("engine_integration_materialize"),
             ],
         ),
         pytest.param(
