@@ -296,10 +296,10 @@ def test_missing_intervals_partial(make_snapshot):
     start = "2023-01-01"
     end_ts = to_timestamp(start) + 1000
     assert snapshot.missing_intervals(start, end_ts) == [
-        (to_timestamp(start), to_timestamp("2023-01-02")),
+        (to_timestamp(start), end_ts),
     ]
     assert snapshot.missing_intervals(start, end_ts, execution_time=end_ts) == [
-        (to_timestamp(start), end_ts),
+        (to_timestamp(start), end_ts)
     ]
     assert snapshot.missing_intervals(start, start) == [
         (to_timestamp(start), to_timestamp("2023-01-02")),
@@ -325,13 +325,11 @@ def test_missing_intervals_end_bounded_with_lookback(make_snapshot):
     snapshot.intervals = [(to_timestamp(start), to_timestamp(end))]
 
     execution_ts = to_timestamp("2023-01-03")
-    assert snapshot.missing_intervals(start, start, execution_time=execution_ts) == [
-        (to_timestamp(start), to_timestamp(end)),
+    assert snapshot.missing_intervals(start, start, execution_time=execution_ts) == []
+    assert snapshot.missing_intervals(start, end, execution_time=execution_ts) == [
+        (to_timestamp("2023-01-01"), to_timestamp("2023-01-02")),
+        (to_timestamp("2023-01-02"), to_timestamp("2023-01-03")),
     ]
-    assert (
-        snapshot.missing_intervals(start, start, execution_time=execution_ts, end_bounded=True)
-        == []
-    )
 
 
 def test_missing_intervals_end_bounded_with_ignore_cron(make_snapshot):
@@ -490,59 +488,38 @@ def test_lookback(snapshot: Snapshot, make_snapshot):
     ]
 
     snapshot.add_interval("2023-01-01", "2023-01-04")
-    assert snapshot.missing_intervals("2023-01-01", "2023-01-02") == []
+    assert snapshot.missing_intervals("2023-01-01", "2023-01-04") == []
+    assert snapshot.missing_intervals("2023-01-01", "2023-01-05") == [
+        (to_timestamp("2023-01-03"), to_timestamp("2023-01-04")),
+        (to_timestamp("2023-01-04"), to_timestamp("2023-01-05")),
+        (to_timestamp("2023-01-05"), to_timestamp("2023-01-06")),
+    ]
 
     snapshot.add_interval("2023-01-06", "2023-01-07")
-    assert snapshot.missing_intervals("2023-01-03", "2023-01-03") == [
-        (to_timestamp("2023-01-03"), to_timestamp("2023-01-04")),
-    ]
-    assert snapshot.missing_intervals("2023-01-04", "2023-01-04") == [
-        (to_timestamp("2023-01-04"), to_timestamp("2023-01-05")),
-    ]
+    assert snapshot.missing_intervals("2023-01-03", "2023-01-03") == []
     assert snapshot.missing_intervals("2023-01-05", "2023-01-05") == [
         (to_timestamp("2023-01-05"), to_timestamp("2023-01-06")),
     ]
-    assert snapshot.missing_intervals("2023-01-03", "2023-01-05") == [
-        (to_timestamp("2023-01-03"), to_timestamp("2023-01-04")),
-        (to_timestamp("2023-01-04"), to_timestamp("2023-01-05")),
+    assert snapshot.missing_intervals("2023-01-06", "2023-01-07") == []
+    assert snapshot.missing_intervals("2023-01-05", "2023-01-08") == [
         (to_timestamp("2023-01-05"), to_timestamp("2023-01-06")),
-    ]
-    snapshot.add_interval("2023-01-05", "2023-01-05")
-    assert snapshot.missing_intervals("2023-01-03", "2023-01-06") == [
         (to_timestamp("2023-01-06"), to_timestamp("2023-01-07")),
-    ]
-
-    assert snapshot.missing_intervals("2023-01-29", "2023-01-29") == [
-        (to_timestamp("2023-01-29"), to_timestamp("2023-01-30")),
+        (to_timestamp("2023-01-07"), to_timestamp("2023-01-08")),
+        (to_timestamp("2023-01-08"), to_timestamp("2023-01-09")),
     ]
 
     snapshot.add_interval("2023-01-28", "2023-01-29")
     assert snapshot.missing_intervals("2023-01-27", "2023-01-27", "2023-01-30 05:00:00") == [
         (to_timestamp("2023-01-27"), to_timestamp("2023-01-28")),
     ]
-    assert snapshot.missing_intervals("2023-01-28", "2023-01-28", "2023-01-30 05:00:00") == [
-        (to_timestamp("2023-01-28"), to_timestamp("2023-01-29")),
-    ]
-    assert snapshot.missing_intervals("2023-01-29", "2023-01-29", "2023-01-30 05:00:00") == [
-        (to_timestamp("2023-01-29"), to_timestamp("2023-01-30")),
-    ]
-    assert snapshot.missing_intervals("2023-01-27", "2023-01-29", "2023-01-30 05:00:00") == [
-        (to_timestamp("2023-01-27"), to_timestamp("2023-01-28")),
+    assert snapshot.missing_intervals("2023-01-28", "2023-01-29", "2023-01-31 05:00:00") == []
+    assert snapshot.missing_intervals("2023-01-28", "2023-01-30", "2023-01-31 05:00:00") == [
         (to_timestamp("2023-01-28"), to_timestamp("2023-01-29")),
         (to_timestamp("2023-01-29"), to_timestamp("2023-01-30")),
+        (to_timestamp("2023-01-30"), to_timestamp("2023-01-31")),
     ]
 
-    snapshot.add_interval("2023-01-28", "2023-01-30")
-    assert snapshot.missing_intervals("2023-01-27", "2023-01-27", "2023-01-30 05:00:00") == [
-        (to_timestamp("2023-01-27"), to_timestamp("2023-01-28")),
-    ]
-    assert snapshot.missing_intervals("2023-01-28", "2023-01-28", "2023-01-30 05:00:00") == []
-    assert snapshot.missing_intervals("2023-01-29", "2023-01-29", "2023-01-30 05:00:00") == []
-    assert snapshot.missing_intervals("2023-01-27", "2023-01-29", "2023-01-30 05:00:00") == [
-        (to_timestamp("2023-01-27"), to_timestamp("2023-01-28")),
-    ]
-
-    assert snapshot.missing_intervals("2023-01-30", "2023-01-30", "2023-01-30") == []
+    assert snapshot.missing_intervals("2023-01-28", "2023-01-30", "2023-01-31 04:00:00") == []
 
 
 def test_seed_intervals(make_snapshot):
@@ -628,7 +605,7 @@ def test_missing_interval_smaller_than_interval_unit(make_snapshot):
     )
 
     assert snapshot_partial.missing_intervals("2020-01-01 00:00:05", "2020-01-01 23:59:59") == [
-        (to_timestamp("2020-01-01"), to_timestamp("2020-01-02"))
+        (to_timestamp("2020-01-01"), to_timestamp("2020-01-01 23:59:59"))
     ]
     assert snapshot_partial.missing_intervals("2020-01-01 00:00:00", "2020-01-02 00:00:00") == [
         (to_timestamp("2020-01-01"), to_timestamp("2020-01-02"))
