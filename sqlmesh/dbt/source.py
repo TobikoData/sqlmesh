@@ -44,6 +44,7 @@ class SourceConfig(GeneralConfig):
     loaded_at_field: t.Optional[str] = None
     quoting: t.Dict[str, t.Optional[bool]] = {}
     external: t.Optional[t.Dict[str, t.Any]] = {}
+    source_meta: t.Optional[t.Dict[str, t.Any]] = {}
     columns: t.Dict[str, ColumnConfig] = {}
 
     _canonical_name: t.Optional[str] = None
@@ -93,5 +94,7 @@ class SourceConfig(GeneralConfig):
                 "identifier": self.table_name,
                 "type": RelationType.External.value,
                 "quote_policy": AttributeDict(self.quoting),
+                "external": self.external,
+                "source_meta": self.source_meta,
             }
         )
