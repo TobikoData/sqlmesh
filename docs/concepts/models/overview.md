@@ -207,7 +207,7 @@ Learn more about these properties and their default values in the [model configu
 :   Project specifies the name of the project the model belongs to. Used in multi-repo SQLMesh deployments.
 
 ### kind
-:   Kind specifies what [kind](model_kinds.md) a model is. A model's kind determines how it is computed and stored. The default kind is `VIEW`, which means a view is created and your query is run each time that view is accessed. See [below](#incremental-model-properties) for properties that apply to incremental model kinds.
+:   Kind specifies what [kind](model_kinds.md) a model is. A model's kind determines how it is computed and stored. The default kind is `VIEW` for SQL models, which means a view is created and your query is run each time that view is accessed. On the other hand, the default kind for Python models is `FULL`, which means that a table is created and the Python code is executed each time the model is evaluated. See [below](#incremental-model-properties) for properties that apply to incremental model kinds.
 
 ### audits
 :   Audits specifies which [audits](../audits.md) should run after the model is evaluated.
