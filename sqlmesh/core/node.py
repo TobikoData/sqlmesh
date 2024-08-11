@@ -166,7 +166,7 @@ class _Node(PydanticModel):
 
     Args:
         name: The name of the node.
-        description: The name of the project this node belongs to, used in multi-repo deployments.
+        project: The name of the project this node belongs to, used in multi-repo deployments.
         description: The optional node description.
         owner: The owner of the node.
         start: The earliest date that the node will be executed for. If this is None,
