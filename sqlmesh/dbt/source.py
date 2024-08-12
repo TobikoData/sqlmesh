@@ -46,9 +46,6 @@ class SourceConfig(GeneralConfig):
     external: t.Optional[t.Dict[str, t.Any]] = {}
     columns: t.Dict[str, ColumnConfig] = {}
 
-    # Databricks
-    file_format: t.Optional[str] = None
-
     _canonical_name: t.Optional[str] = None
 
     _FIELD_UPDATE_STRATEGY: t.ClassVar[t.Dict[str, UpdateStrategy]] = {
@@ -90,8 +87,10 @@ class SourceConfig(GeneralConfig):
     @property
     def relation_info(self) -> AttributeDict:
         extras = {}
-        if self.file_format:
-            extras["Provider"] = self.file_format
+        if self.external and self.external.get("file_format", None):
+            # Databricks specific functionality
+            extras["metadata"] = {"Provider": self.external["file_format"]}
+
         return AttributeDict(
             {
                 "database": self.database,
