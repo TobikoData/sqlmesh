@@ -117,6 +117,37 @@ def execute(
     context.fetchdf("CREATE INDEX idx ON example.pre_post_statements (id);")
 ```
 
+Alternatively, you can set the `pre_statements` and `post_statements` arguments to a list of SQL strings and/or SQLGlot expressions to define the model's pre/post-statements.
+
+``` python linenums="1" hl_lines="6-7"
+def execute(
+    context: ExecutionContext,
+    start: datetime,
+    end: datetime,
+    execution_time: datetime,
+    pre_statements=["SET GLOBAL parameter = 'value';"],
+    post_statements=["@CREATE_INDEX('example.pre_post_statements', id)"],
+    **kwargs: t.Any,
+) -> pd.DataFrame:
+
+    return pd.DataFrame([
+        {"id": 1, "name": "name"}
+    ])
+
+```
+
+Within these pre/post-statements, you can also use SQLMesh or Jinja macros to achieve more nuanced control. For example, a macro that creates an index based on the runtime stage:
+
+``` python linenums="1"
+@macro()
+def create_index(
+    evaluator: MacroEvaluator,
+    model_name: str,
+    column: str,
+):
+    if evaluator.runtime_stage == "creating":
+        return f"CREATE INDEX idx ON {model_name}({column});"
+```
 
 ## Dependencies
 In order to fetch data from an upstream model, you first get the table name using `context`'s `table` method. This returns the appropriate table name for the current runtime [environment](../environments.md):
