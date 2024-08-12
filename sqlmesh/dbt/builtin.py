@@ -211,12 +211,6 @@ def generate_source(sources: t.Dict[str, t.Any], api: Api) -> t.Callable:
         if relation_info is None:
             logger.debug("Could not resolve source package='%s' name='%s'", package, name)
             return None
-        external_location = relation_info["source_meta"].get("external_location", None)
-        if external_location:
-            relation_info["external"] = external_location.replace(
-                "{name}", relation_info.identifier
-            )
-
         return _relation_info_to_relation(relation_info, api.Relation, api.quote_policy)
 
     return source

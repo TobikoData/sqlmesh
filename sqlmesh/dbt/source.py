@@ -87,6 +87,15 @@ class SourceConfig(GeneralConfig):
 
     @property
     def relation_info(self) -> AttributeDict:
+        external_location = (
+            self.source_meta.get("external_location", None) if self.source_meta else None
+        )
+        external = (
+            {"external": external_location.replace("{name}", self.table_name)}
+            if external_location
+            else {}
+        )
+
         return AttributeDict(
             {
                 "database": self.database,
@@ -94,7 +103,6 @@ class SourceConfig(GeneralConfig):
                 "identifier": self.table_name,
                 "type": RelationType.External.value,
                 "quote_policy": AttributeDict(self.quoting),
-                "external": self.external,
-                "source_meta": self.source_meta,
+                **external,
             }
         )
