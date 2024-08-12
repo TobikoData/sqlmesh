@@ -25,6 +25,10 @@ probe_port() {
     done
 }
 
+clickhouse_ready() {
+    probe_port 8123
+}
+
 postgres_ready() {
     probe_port 5432
 }

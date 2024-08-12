@@ -166,6 +166,9 @@ engine-%-down:
 # Docker Engines #
 ##################
 
+clickhouse-test: engine-clickhouse-up
+	pytest -n auto -x -m "clickhouse" --junitxml=test-results/junit-clickhouse.xml
+
 duckdb-test: engine-duckdb-install
 	pytest -n auto -x -m "duckdb" --junitxml=test-results/junit-duckdb.xml
 

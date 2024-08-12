@@ -75,6 +75,14 @@ gateways:
       password: mysql
       port: 3306
       charset: utf8
+  inttest_clickhouse:
+    connection:
+      type: clickhouse
+      host: localhost
+      user: default
+      concurrent_tasks: 1
+    state_connection:
+      type: duckdb
 
   # Cloud databases
   inttest_snowflake:

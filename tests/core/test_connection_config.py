@@ -6,6 +6,7 @@ from _pytest.fixtures import FixtureRequest
 
 from sqlmesh.core.config.connection import (
     BigQueryConnectionConfig,
+    ClickhouseConnectionConfig,
     ConnectionConfig,
     DuckDBAttachOptions,
     DuckDBConnectionConfig,
@@ -622,3 +623,13 @@ def test_mysql(make_config):
     )
     assert isinstance(config, MySQLConnectionConfig)
     assert config.is_recommended_for_state_sync is True
+
+
+def test_clickhouse(make_config):
+    config = make_config(
+        type="clickhouse",
+        host="localhost",
+        user="default",
+    )
+    assert isinstance(config, ClickhouseConnectionConfig)
+    assert config.is_recommended_for_state_sync is False
