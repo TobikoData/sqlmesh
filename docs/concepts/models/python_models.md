@@ -90,7 +90,39 @@ Optional pre/post-statements allow you to execute SQL commands before and after 
 
 For example, pre/post-statements might modify settings or create indexes. However, be careful not to run any statement that could conflict with the execution of another statement if models run concurrently, such as creating a physical table.
 
-Pre- and post-statements are issued with the SQLMesh [`fetchdf` method](../../reference/cli.md#fetchdf) [described above](#execution-context).
+You can set the `pre_statements` and `post_statements` arguments to a list of SQL strings and/or SQLGlot expressions to define the model's pre/post-statements.
+
+``` python linenums="1" hl_lines="6-7"
+def execute(
+    context: ExecutionContext,
+    start: datetime,
+    end: datetime,
+    execution_time: datetime,
+    pre_statements=["SET GLOBAL parameter = 'value';"],
+    post_statements=["@CREATE_INDEX('example.pre_post_statements', id)"],
+    **kwargs: t.Any,
+) -> pd.DataFrame:
+
+    return pd.DataFrame([
+        {"id": 1, "name": "name"}
+    ])
+
+```
+
+Within these pre/post-statements, you can also use SQLMesh or Jinja macros. For example, a macro that creates an index based on the runtime stage:
+
+``` python linenums="1"
+@macro()
+def create_index(
+    evaluator: MacroEvaluator,
+    model_name: str,
+    column: str,
+):
+    if evaluator.runtime_stage == "creating":
+        return f"CREATE INDEX idx ON {model_name}({column});"
+```
+
+Alternatively, pre- and post-statements can be issued with the SQLMesh [`fetchdf` method](../../reference/cli.md#fetchdf) [described above](#execution-context).
 
 Pre-statements may be specified anywhere in the function body before it `return`s or `yield`s. Post-statements must execute after the function completes, so instead of `return`ing a value the function must `yield` the value. The post-statement must be specified after the `yield`.
 
@@ -115,38 +147,6 @@ def execute(
 
     # post-statement
     context.fetchdf("CREATE INDEX idx ON example.pre_post_statements (id);")
-```
-
-Alternatively, you can set the `pre_statements` and `post_statements` arguments to a list of SQL strings and/or SQLGlot expressions to define the model's pre/post-statements.
-
-``` python linenums="1" hl_lines="6-7"
-def execute(
-    context: ExecutionContext,
-    start: datetime,
-    end: datetime,
-    execution_time: datetime,
-    pre_statements=["SET GLOBAL parameter = 'value';"],
-    post_statements=["@CREATE_INDEX('example.pre_post_statements', id)"],
-    **kwargs: t.Any,
-) -> pd.DataFrame:
-
-    return pd.DataFrame([
-        {"id": 1, "name": "name"}
-    ])
-
-```
-
-Within these pre/post-statements, you can also use SQLMesh or Jinja macros to achieve more nuanced control. For example, a macro that creates an index based on the runtime stage:
-
-``` python linenums="1"
-@macro()
-def create_index(
-    evaluator: MacroEvaluator,
-    model_name: str,
-    column: str,
-):
-    if evaluator.runtime_stage == "creating":
-        return f"CREATE INDEX idx ON {model_name}({column});"
 ```
 
 ## Dependencies
