@@ -260,8 +260,7 @@ class SparkEngineAdapter(GetCurrentCatalogFromFunctionMixin, HiveMetastoreTableP
 
         def query_factory() -> Query:
             temp_table = self._get_temp_table(target_table or "spark", table_only=True)
-            df.createOrReplaceGlobalTempView(temp_table.sql(dialect=self.dialect))  # type: ignore
-            temp_table.set("db", "global_temp")
+            df.createOrReplaceTempView(temp_table.sql(dialect=self.dialect))  # type: ignore
             return exp.select(*self._casted_columns(columns_to_types)).from_(temp_table)
 
         if self._use_spark_session:
@@ -324,21 +323,27 @@ class SparkEngineAdapter(GetCurrentCatalogFromFunctionMixin, HiveMetastoreTableP
         # Therefore just doing except Exception for now.
         except Exception:
             return []
-        return [
-            DataObject(
-                catalog=self.get_current_catalog(),
-                # This varies between Spark and Databricks
-                schema=(row.asDict() if not isinstance(row, dict) else row).get("namespace")
-                or row["database"],
-                name=row["tableName"],
-                type=(
-                    DataObjectType.VIEW
-                    if "Type: VIEW" in row["information"]
-                    else DataObjectType.TABLE
-                ),
+        data_objects = []
+        catalog = self.get_current_catalog()
+        for row in results:  # type: ignore
+            row_dict = row.asDict() if not isinstance(row, dict) else row
+            schema = row_dict.get("namespace") or row_dict.get("database")
+            # if schema is not present then that means it is a session temp view and can be skipped
+            if not schema:
+                continue
+            data_objects.append(
+                DataObject(
+                    catalog=catalog,
+                    schema=schema,
+                    name=row_dict["tableName"],
+                    type=(
+                        DataObjectType.VIEW
+                        if "Type: VIEW" in row_dict["information"]
+                        else DataObjectType.TABLE
+                    ),
+                )
             )
-            for row in results  # type: ignore
-        ]
+        return data_objects
 
     def get_current_catalog(self) -> t.Optional[str]:
         if self._use_spark_session:
