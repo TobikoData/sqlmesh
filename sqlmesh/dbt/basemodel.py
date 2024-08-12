@@ -48,6 +48,9 @@ class Materialization(str, Enum):
     # Snowflake, https://docs.getdbt.com/reference/resource-configs/snowflake-configs#dynamic-tables
     DYNAMIC_TABLE = "dynamic_table"
 
+    # Databricks
+    EXTERNAL = "external"
+
 
 class SnapshotStrategy(str, Enum):
     """DBT snapshot strategies"""
