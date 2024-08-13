@@ -20,8 +20,5 @@ from sqlmesh.core.state_sync.base import (
     Versions as Versions,
 )
 from sqlmesh.core.state_sync.cache import CachingStateSync as CachingStateSync
-from sqlmesh.core.state_sync.common import (
-    CommonStateSyncMixin as CommonStateSyncMixin,
-    cleanup_expired_views as cleanup_expired_views,
-)
+from sqlmesh.core.state_sync.common import cleanup_expired_views as cleanup_expired_views
 from sqlmesh.core.state_sync.engine_adapter import EngineAdapterStateSync as EngineAdapterStateSync

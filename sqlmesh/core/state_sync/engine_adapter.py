@@ -24,6 +24,7 @@ import typing as t
 from collections import defaultdict
 from copy import deepcopy
 from pathlib import Path
+from datetime import datetime
 
 import pandas as pd
 from sqlglot import __version__ as SQLGLOT_VERSION
@@ -51,6 +52,7 @@ from sqlmesh.core.snapshot import (
     SnapshotTableCleanupTask,
     SnapshotTableInfo,
     fingerprint_from_node,
+    start_date,
 )
 from sqlmesh.core.snapshot.definition import (
     Interval,
@@ -58,11 +60,17 @@ from sqlmesh.core.snapshot.definition import (
     merge_intervals,
     remove_interval,
 )
-from sqlmesh.core.state_sync.base import MIGRATIONS, SCHEMA_VERSION, StateSync, Versions
-from sqlmesh.core.state_sync.common import CommonStateSyncMixin, transactional
+from sqlmesh.core.state_sync.base import (
+    MIGRATIONS,
+    SCHEMA_VERSION,
+    PromotionResult,
+    StateSync,
+    Versions,
+)
+from sqlmesh.core.state_sync.common import transactional
 from sqlmesh.utils import major_minor, random_id, unique
 from sqlmesh.utils.dag import DAG
-from sqlmesh.utils.date import TimeLike, now_timestamp, time_like_to_str
+from sqlmesh.utils.date import TimeLike, now, now_timestamp, time_like_to_str, to_timestamp
 from sqlmesh.utils.errors import SQLMeshError
 from sqlmesh.utils.pydantic import parse_obj_as
 
@@ -84,7 +92,7 @@ except ImportError:
     )
 
 
-class EngineAdapterStateSync(CommonStateSyncMixin, StateSync):
+class EngineAdapterStateSync(StateSync):
     """Manages state of nodes and snapshot with an existing engine adapter.
 
     This state sync is convenient to use because it requires no additional setup.
@@ -125,7 +133,10 @@ class EngineAdapterStateSync(CommonStateSyncMixin, StateSync):
             "version": exp.DataType.build("text"),
             "snapshot": exp.DataType.build("text"),
             "kind_name": exp.DataType.build("text"),
-            "expiration_ts": exp.DataType.build("bigint"),
+            "updated_ts": exp.DataType.build("bigint"),
+            "unpaused_ts": exp.DataType.build("bigint"),
+            "ttl_ms": exp.DataType.build("bigint"),
+            "unrestorable": exp.DataType.build("boolean"),
         }
 
         self._environment_columns_to_types = {
@@ -163,7 +174,7 @@ class EngineAdapterStateSync(CommonStateSyncMixin, StateSync):
             "sqlmesh_version": exp.DataType.build("text"),
         }
 
-    def _fetchone(self, query: t.Union[exp.Expression, str]) -> t.Tuple:
+    def _fetchone(self, query: t.Union[exp.Expression, str]) -> t.Optional[t.Tuple]:
         return self.engine_adapter.fetchone(
             query, ignore_unsupported_errors=True, quote_identifiers=True
         )
@@ -221,6 +232,240 @@ class EngineAdapterStateSync(CommonStateSyncMixin, StateSync):
             columns_to_types=self._snapshot_columns_to_types,
         )
 
+    @transactional()
+    def promote(
+        self,
+        environment: Environment,
+        no_gaps_snapshot_names: t.Optional[t.Set[str]] = None,
+    ) -> PromotionResult:
+        """Update the environment to reflect the current state.
+
+        This method verifies that snapshots have been pushed.
+
+        Args:
+            environment: The environment to promote.
+            no_gaps_snapshot_names: A set of snapshot names to check for data gaps. If None,
+                all snapshots will be checked. The data gap check ensures that models that are already a
+                part of the target environment have no data gaps when compared against previous
+                snapshots for same models.
+
+        Returns:
+           A tuple of (added snapshot table infos, removed snapshot table infos, and environment target suffix for the removed table infos)
+        """
+        logger.info("Promoting environment '%s'", environment.name)
+
+        missing = {s.snapshot_id for s in environment.snapshots} - self.snapshots_exist(
+            environment.snapshots
+        )
+        if missing:
+            raise SQLMeshError(
+                f"Missing snapshots {missing}. Make sure to push and backfill your snapshots."
+            )
+
+        existing_environment = self._get_environment(environment.name, lock_for_update=True)
+
+        existing_table_infos = (
+            {table_info.name: table_info for table_info in existing_environment.promoted_snapshots}
+            if existing_environment
+            else {}
+        )
+        table_infos = {table_info.name: table_info for table_info in environment.promoted_snapshots}
+        views_that_changed_location: t.Set[SnapshotTableInfo] = set()
+        if existing_environment:
+            views_that_changed_location = {
+                existing_table_info
+                for name, existing_table_info in existing_table_infos.items()
+                if name in table_infos
+                and existing_table_info.qualified_view_name.for_environment(
+                    existing_environment.naming_info
+                )
+                != table_infos[name].qualified_view_name.for_environment(environment.naming_info)
+            }
+            if environment.previous_plan_id != existing_environment.plan_id:
+                raise SQLMeshError(
+                    f"Plan '{environment.plan_id}' is no longer valid for the target environment '{environment.name}'. "
+                    f"Expected previous plan ID: '{environment.previous_plan_id}', actual previous plan ID: '{existing_environment.plan_id}'. "
+                    "Please recreate the plan and try again"
+                )
+            if no_gaps_snapshot_names != set():
+                snapshots = self._get_snapshots(environment.snapshots).values()
+                self._ensure_no_gaps(
+                    snapshots,
+                    existing_environment,
+                    no_gaps_snapshot_names,
+                )
+            demoted_snapshots = set(existing_environment.snapshots) - set(environment.snapshots)
+            # Update the updated_at attribute.
+            self._update_snapshots(demoted_snapshots)
+
+        missing_models = set(existing_table_infos) - {
+            snapshot.name for snapshot in environment.promoted_snapshots
+        }
+
+        added_table_infos = set(table_infos.values())
+        if existing_environment and existing_environment.finalized_ts:
+            # Only promote new snapshots.
+            added_table_infos -= set(existing_environment.promoted_snapshots)
+
+        self._update_environment(environment)
+
+        removed = {existing_table_infos[name] for name in missing_models}.union(
+            views_that_changed_location
+        )
+
+        return PromotionResult(
+            added=sorted(added_table_infos),
+            removed=list(removed),
+            removed_environment_naming_info=(
+                existing_environment.naming_info if removed and existing_environment else None
+            ),
+        )
+
+    def _ensure_no_gaps(
+        self,
+        target_snapshots: t.Iterable[Snapshot],
+        target_environment: Environment,
+        snapshot_names: t.Optional[t.Set[str]],
+    ) -> None:
+        target_snapshots_by_name = {s.name: s for s in target_snapshots}
+
+        changed_version_prev_snapshots_by_name = {
+            s.name: s
+            for s in target_environment.snapshots
+            if s.name in target_snapshots_by_name
+            and target_snapshots_by_name[s.name].version != s.version
+        }
+
+        prev_snapshots = self._get_snapshots(
+            changed_version_prev_snapshots_by_name.values()
+        ).values()
+        cache: t.Dict[str, datetime] = {}
+
+        for prev_snapshot in prev_snapshots:
+            target_snapshot = target_snapshots_by_name[prev_snapshot.name]
+            if (
+                (snapshot_names is None or prev_snapshot.name in snapshot_names)
+                and target_snapshot.is_incremental
+                and prev_snapshot.is_incremental
+                and prev_snapshot.intervals
+            ):
+                start = to_timestamp(
+                    start_date(target_snapshot, target_snapshots_by_name.values(), cache)
+                )
+                end = prev_snapshot.intervals[-1][1]
+
+                if start < end:
+                    missing_intervals = target_snapshot.missing_intervals(
+                        start, end, end_bounded=True
+                    )
+
+                    if missing_intervals:
+                        raise SQLMeshError(
+                            f"Detected gaps in snapshot {target_snapshot.snapshot_id}: {missing_intervals}"
+                        )
+
+    @transactional()
+    def finalize(self, environment: Environment) -> None:
+        """Finalize the target environment, indicating that this environment has been
+        fully promoted and is ready for use.
+
+        Args:
+            environment: The target environment to finalize.
+        """
+        logger.info("Finalizing environment '%s'", environment.name)
+
+        environment_filter = exp.EQ(
+            this=exp.column("name"),
+            expression=exp.Literal.string(environment.name),
+        )
+
+        stored_plan_id_query = (
+            exp.select("plan_id")
+            .from_(self.environments_table)
+            .where(environment_filter, copy=False)
+            .lock(copy=False)
+        )
+        stored_plan_id_row = self._fetchone(stored_plan_id_query)
+
+        if not stored_plan_id_row:
+            raise SQLMeshError(f"Missing environment '{environment.name}' can't be finalized")
+
+        stored_plan_id = stored_plan_id_row[0]
+        if stored_plan_id != environment.plan_id:
+            raise SQLMeshError(
+                f"Plan '{environment.plan_id}' is no longer valid for the target environment '{environment.name}'. "
+                f"Stored plan ID: '{stored_plan_id}'. Please recreate the plan and try again"
+            )
+
+        environment.finalized_ts = now_timestamp()
+        self.engine_adapter.update_table(
+            self.environments_table,
+            {"finalized_ts": environment.finalized_ts},
+            where=environment_filter,
+        )
+
+    @transactional()
+    def unpause_snapshots(
+        self, snapshots: t.Collection[SnapshotInfoLike], unpaused_dt: TimeLike
+    ) -> None:
+        current_ts = now()
+
+        target_snapshot_ids = {s.snapshot_id for s in snapshots}
+        snapshots = self._get_snapshots_with_same_version(snapshots, lock_for_update=True)
+        target_snapshots_by_version = {
+            (s.name, s.version): s for s in snapshots if s.snapshot_id in target_snapshot_ids
+        }
+
+        unpaused_snapshots: t.Dict[int, t.List[SnapshotId]] = defaultdict(list)
+        paused_snapshots: t.List[SnapshotId] = []
+        unrestorable_snapshots: t.List[SnapshotId] = []
+
+        for snapshot in snapshots:
+            is_target_snapshot = snapshot.snapshot_id in target_snapshot_ids
+            if is_target_snapshot and not snapshot.unpaused_ts:
+                logger.info("Unpausing snapshot %s", snapshot.snapshot_id)
+                snapshot.set_unpaused_ts(unpaused_dt)
+                assert snapshot.unpaused_ts is not None
+                unpaused_snapshots[snapshot.unpaused_ts].append(snapshot.snapshot_id)
+            elif not is_target_snapshot:
+                target_snapshot = target_snapshots_by_version[(snapshot.name, snapshot.version)]
+                if target_snapshot.normalized_effective_from_ts:
+                    # Making sure that there are no overlapping intervals.
+                    effective_from_ts = target_snapshot.normalized_effective_from_ts
+                    logger.info(
+                        "Removing all intervals after '%s' for snapshot %s, superseded by snapshot %s",
+                        target_snapshot.effective_from,
+                        snapshot.snapshot_id,
+                        target_snapshot.snapshot_id,
+                    )
+                    self.remove_interval(
+                        [(snapshot, snapshot.get_removal_interval(effective_from_ts, current_ts))]
+                    )
+
+                if snapshot.unpaused_ts:
+                    logger.info("Pausing snapshot %s", snapshot.snapshot_id)
+                    snapshot.set_unpaused_ts(None)
+                    paused_snapshots.append(snapshot.snapshot_id)
+
+                if (
+                    not snapshot.is_forward_only
+                    and target_snapshot.is_forward_only
+                    and not snapshot.unrestorable
+                ):
+                    logger.info("Marking snapshot %s as unrestorable", snapshot.snapshot_id)
+                    snapshot.unrestorable = True
+                    unrestorable_snapshots.append(snapshot.snapshot_id)
+
+        if unpaused_snapshots:
+            for unpaused_ts, snapshot_ids in unpaused_snapshots.items():
+                self._update_snapshots(snapshot_ids, {"unpaused_ts": unpaused_ts})
+
+        if paused_snapshots:
+            self._update_snapshots(paused_snapshots, {"unpaused_ts": None})
+
+        if unrestorable_snapshots:
+            self._update_snapshots(unrestorable_snapshots, {"unrestorable": True})
+
     def _update_versions(
         self,
         schema_version: int = SCHEMA_VERSION,
@@ -265,7 +510,9 @@ class EngineAdapterStateSync(CommonStateSyncMixin, StateSync):
         expired_query = exp.select("name", "identifier", "version").from_(self.snapshots_table)
 
         if not ignore_ttl:
-            expired_query = expired_query.where(exp.column("expiration_ts") <= current_ts)
+            expired_query = expired_query.where(
+                (exp.column("updated_ts") + exp.column("ttl_ms")) <= current_ts
+            )
 
         expired_candidates = {
             SnapshotId(name=name, identifier=identifier): SnapshotNameVersion(
@@ -393,14 +640,23 @@ class EngineAdapterStateSync(CommonStateSyncMixin, StateSync):
             columns_to_types=self._environment_columns_to_types,
         )
 
-    def _update_snapshot(self, snapshot: Snapshot) -> None:
-        snapshot.updated_ts = now_timestamp()
-        for where in self._snapshot_id_filter([snapshot.snapshot_id]):
+    def _update_snapshots(
+        self,
+        snapshots: t.Iterable[SnapshotIdLike],
+        properties: t.Optional[t.Dict[str, t.Any]] = None,
+    ) -> None:
+        properties = properties or {}
+        properties["updated_ts"] = now_timestamp()
+
+        for where in self._snapshot_id_filter(snapshots):
             self.engine_adapter.update_table(
                 self.snapshots_table,
-                {"snapshot": _snapshot_to_json(snapshot), "expiration_ts": snapshot.expiration_ts},
+                properties,
                 where=where,
             )
+
+    def get_environment(self, environment: str) -> t.Optional[Environment]:
+        return self._get_environment(environment)
 
     def get_environments(self) -> t.List[Environment]:
         """Fetches all environments.
@@ -429,30 +685,11 @@ class EngineAdapterStateSync(CommonStateSyncMixin, StateSync):
             return query.lock(copy=False)
         return query
 
-    def _get_snapshots_expressions(
+    def get_snapshots(
         self,
-        snapshot_ids: t.Optional[t.Iterable[SnapshotIdLike]] = None,
-        lock_for_update: bool = False,
-        batch_size: t.Optional[int] = None,
-    ) -> t.Iterator[exp.Expression]:
-        for where in (
-            [None]
-            if snapshot_ids is None
-            else self._snapshot_id_filter(snapshot_ids, alias="snapshots", batch_size=batch_size)
-        ):
-            query = (
-                exp.select(
-                    "snapshots.snapshot",
-                    "snapshots.name",
-                    "snapshots.identifier",
-                    "snapshots.version",
-                )
-                .from_(exp.to_table(self.snapshots_table).as_("snapshots"))
-                .where(where)
-            )
-            if lock_for_update:
-                query = query.lock(copy=False)
-            yield query
+        snapshot_ids: t.Optional[t.Iterable[SnapshotIdLike]],
+    ) -> t.Dict[SnapshotId, Snapshot]:
+        return self._get_snapshots(snapshot_ids)
 
     def _get_snapshots(
         self,
@@ -475,12 +712,23 @@ class EngineAdapterStateSync(CommonStateSyncMixin, StateSync):
         model_cache = ModelCache(self._context_path / c.CACHE)
 
         for query in self._get_snapshots_expressions(snapshot_ids, lock_for_update):
-            for serialized_snapshot, name, identifier, _ in self._fetchall(query):
+            for (
+                serialized_snapshot,
+                name,
+                identifier,
+                _,
+                updated_ts,
+                unpaused_ts,
+                unrestorable,
+            ) in self._fetchall(query):
                 snapshot = parse_snapshot(
                     model_cache,
                     serialized_snapshot=serialized_snapshot,
                     name=name,
                     identifier=identifier,
+                    updated_ts=updated_ts,
+                    unpaused_ts=unpaused_ts,
+                    unrestorable=unrestorable,
                 )
                 snapshot_id = snapshot.snapshot_id
                 if snapshot_id in snapshots:
@@ -501,6 +749,34 @@ class EngineAdapterStateSync(CommonStateSyncMixin, StateSync):
             logger.error("Found duplicate snapshots in the state store.")
 
         return snapshots
+
+    def _get_snapshots_expressions(
+        self,
+        snapshot_ids: t.Optional[t.Iterable[SnapshotIdLike]] = None,
+        lock_for_update: bool = False,
+        batch_size: t.Optional[int] = None,
+    ) -> t.Iterator[exp.Expression]:
+        for where in (
+            [None]
+            if snapshot_ids is None
+            else self._snapshot_id_filter(snapshot_ids, alias="snapshots", batch_size=batch_size)
+        ):
+            query = (
+                exp.select(
+                    "snapshots.snapshot",
+                    "snapshots.name",
+                    "snapshots.identifier",
+                    "snapshots.version",
+                    "snapshots.updated_ts",
+                    "snapshots.unpaused_ts",
+                    "snapshots.unrestorable",
+                )
+                .from_(exp.to_table(self.snapshots_table).as_("snapshots"))
+                .where(where)
+            )
+            if lock_for_update:
+                query = query.lock(copy=False)
+            yield query
 
     def _get_snapshots_with_same_version(
         self,
@@ -525,7 +801,7 @@ class EngineAdapterStateSync(CommonStateSyncMixin, StateSync):
 
         for where in self._snapshot_name_version_filter(snapshots):
             query = (
-                exp.select("snapshot")
+                exp.select("snapshot", "updated_ts", "unpaused_ts", "unrestorable")
                 .from_(exp.to_table(self.snapshots_table).as_("snapshots"))
                 .where(where)
             )
@@ -534,7 +810,17 @@ class EngineAdapterStateSync(CommonStateSyncMixin, StateSync):
 
             snapshot_rows.extend(self._fetchall(query))
 
-        return [Snapshot(**json.loads(row[0])) for row in snapshot_rows]
+        return [
+            Snapshot(
+                **{
+                    **json.loads(snapshot),
+                    "updated_ts": updated_ts,
+                    "unpaused_ts": unpaused_ts,
+                    "unrestorable": unrestorable,
+                }
+            )
+            for snapshot, updated_ts, unpaused_ts, unrestorable in snapshot_rows
+        ]
 
     def _get_versions(self, lock_for_update: bool = False) -> Versions:
         no_version = Versions()
@@ -722,7 +1008,7 @@ class EngineAdapterStateSync(CommonStateSyncMixin, StateSync):
                 .from_(exp.to_table(self.intervals_table).as_("intervals"))
                 .where(where, copy=False)
                 .where(exp.to_column("is_dev").not_(), copy=False),
-            )[0]
+            )[0]  # type: ignore
 
             if max_end is None:
                 max_end = end
@@ -770,7 +1056,7 @@ class EngineAdapterStateSync(CommonStateSyncMixin, StateSync):
                 max_end_subquery.subquery(alias="max_ends")
             )
 
-            end = self._fetchone(query)[0]
+            end = self._fetchone(query)[0]  # type: ignore
 
             if greatest_common_end is None:
                 greatest_common_end = end
@@ -1370,7 +1656,10 @@ def _snapshots_to_df(snapshots: t.Iterable[Snapshot]) -> pd.DataFrame:
                 "version": snapshot.version,
                 "snapshot": _snapshot_to_json(snapshot),
                 "kind_name": snapshot.model_kind_name.value if snapshot.model_kind_name else None,
-                "expiration_ts": snapshot.expiration_ts,
+                "updated_ts": snapshot.updated_ts,
+                "unpaused_ts": snapshot.unpaused_ts,
+                "ttl_ms": snapshot.ttl_ms,
+                "unrestorable": snapshot.unrestorable,
             }
             for snapshot in snapshots
         ]
@@ -1421,7 +1710,9 @@ def _backup_table_name(table_name: TableName) -> exp.Table:
 
 
 def _snapshot_to_json(snapshot: Snapshot) -> str:
-    return snapshot.json(exclude={"intervals", "dev_intervals"})
+    return snapshot.json(
+        exclude={"intervals", "dev_intervals", "updated_ts", "unpaused_ts", "unrestorable"}
+    )
 
 
 def parse_snapshot(
@@ -1429,6 +1720,9 @@ def parse_snapshot(
     serialized_snapshot: str,
     name: str,
     identifier: str,
+    updated_ts: int,
+    unpaused_ts: t.Optional[int],
+    unrestorable: bool,
 ) -> Snapshot:
     payload = json.loads(serialized_snapshot)
 
@@ -1439,7 +1733,14 @@ def parse_snapshot(
     node._data_hash = payload["fingerprint"]["data_hash"]
     node._metadata_hash = payload["fingerprint"]["metadata_hash"]
     payload["node"] = node
-    snapshot = Snapshot(**payload)
+    snapshot = Snapshot(
+        **{
+            **payload,
+            "updated_ts": updated_ts,
+            "unpaused_ts": unpaused_ts,
+            "unrestorable": unrestorable,
+        }
+    )
 
     return snapshot
 

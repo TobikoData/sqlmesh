@@ -1623,8 +1623,8 @@ def test_migrate(state_sync: EngineAdapterStateSync, mocker: MockerFixture, tmp_
 
     assert (
         state_sync.engine_adapter.fetchone(
-            "SELECT COUNT(*) FROM sqlmesh._snapshots WHERE expiration_ts IS NULL"
-        )[0]
+            "SELECT COUNT(*) FROM sqlmesh._snapshots WHERE ttl_ms IS NULL"
+        )[0]  # type: ignore
         == 0
     )
 
@@ -2273,6 +2273,9 @@ def test_snapshot_batching(state_sync, mocker, make_snapshot):
                 "a",
                 "1",
                 "1",
+                1,
+                1,
+                False,
             ],
             [
                 make_snapshot(
@@ -2281,6 +2284,9 @@ def test_snapshot_batching(state_sync, mocker, make_snapshot):
                 "a",
                 "2",
                 "2",
+                1,
+                1,
+                False,
             ],
         ],
         [
@@ -2291,6 +2297,9 @@ def test_snapshot_batching(state_sync, mocker, make_snapshot):
                 "a",
                 "3",
                 "3",
+                1,
+                1,
+                False,
             ],
         ],
     ]

@@ -856,7 +856,7 @@ class SnapshotEvaluator:
         count, *_ = self.adapter.fetchone(
             select("COUNT(*)").from_(query.subquery("audit")),
             quote_identifiers=True,
-        )
+        )  # type: ignore
         if count and raise_exception:
             audit_error = AuditError(
                 audit_name=audit.name,

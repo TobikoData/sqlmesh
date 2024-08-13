@@ -92,7 +92,7 @@ class SnowflakeEngineAdapter(GetCurrentCatalogFromFunctionMixin):
 
     @property
     def _current_warehouse(self) -> exp.Identifier:
-        current_warehouse_str = self.fetchone("SELECT CURRENT_WAREHOUSE()")[0]
+        current_warehouse_str = self.fetchone("SELECT CURRENT_WAREHOUSE()")[0]  # type: ignore
         # The warehouse value returned by Snowflake is already normalized, so only quoting is needed.
         return quote_identifiers(exp.to_identifier(current_warehouse_str), dialect=self.dialect)
 
