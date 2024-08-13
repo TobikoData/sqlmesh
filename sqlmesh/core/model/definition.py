@@ -1015,6 +1015,7 @@ class SqlModel(_SqlBasedModel):
 
     def __getstate__(self) -> t.Dict[t.Any, t.Any]:
         state = super().__getstate__()
+        state.pop("_query_renderer", None)
         private = state[PRIVATE_FIELDS]
         private["_columns_to_types"] = None
         private.pop("_query_renderer", None)

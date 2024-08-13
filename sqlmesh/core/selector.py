@@ -108,8 +108,8 @@ class Selector:
                 # Selected modified or removed model.
                 model = self._models[fqn]
 
-            if model and model.fqn in subdag:
-                if model.mapping_schema:
+            if model:
+                if model.fqn in subdag and model.mapping_schema:
                     for dep in model.depends_on:
                         if dep in env_models:
                             parent = env_models[dep]
@@ -127,8 +127,6 @@ class Selector:
                                     model.dict(exclude={"mapping_schema"})
                                 )
                                 needs_update = True
-                                print("no match!")
-                                raise
 
                     dag.add(model.fqn, model.depends_on)
                 models[model.fqn] = model

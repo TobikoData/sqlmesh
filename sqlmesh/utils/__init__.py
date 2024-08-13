@@ -100,6 +100,9 @@ class AttributeDict(dict, t.Mapping[KEY, VALUE]):
         # Return an empty string, so that this method can be used within Jinja
         return ""
 
+    def __getstate__(self) -> t.Dict[t.Any, t.Any]:
+        return self
+
 
 class registry_decorator:
     """A decorator that registers itself."""
