@@ -458,13 +458,13 @@ class EngineAdapterStateSync(StateSync):
 
         if unpaused_snapshots:
             for unpaused_ts, snapshot_ids in unpaused_snapshots.items():
-                self._update_snapshots(snapshot_ids, {"unpaused_ts": unpaused_ts})
+                self._update_snapshots(snapshot_ids, unpaused_ts=unpaused_ts)
 
         if paused_snapshots:
-            self._update_snapshots(paused_snapshots, {"unpaused_ts": None})
+            self._update_snapshots(paused_snapshots, unpaused_ts=None)
 
         if unrestorable_snapshots:
-            self._update_snapshots(unrestorable_snapshots, {"unrestorable": True})
+            self._update_snapshots(unrestorable_snapshots, unrestorable=True)
 
     def _update_versions(
         self,
@@ -643,9 +643,9 @@ class EngineAdapterStateSync(StateSync):
     def _update_snapshots(
         self,
         snapshots: t.Iterable[SnapshotIdLike],
-        properties: t.Optional[t.Dict[str, t.Any]] = None,
+        **kwargs: t.Any,
     ) -> None:
-        properties = properties or {}
+        properties = kwargs
         properties["updated_ts"] = now_timestamp()
 
         for where in self._snapshot_id_filter(snapshots):
@@ -920,11 +920,12 @@ class EngineAdapterStateSync(StateSync):
             if snapshot_intervals.intervals or snapshot_intervals.dev_intervals:
                 intervals_to_insert.append(snapshot_intervals)
 
-        self.engine_adapter.insert_append(
-            self.intervals_table,
-            _snapshots_intervals_to_df(intervals_to_insert, is_removed=False),
-            columns_to_types=self._interval_columns_to_types,
-        )
+        if intervals_to_insert:
+            self.engine_adapter.insert_append(
+                self.intervals_table,
+                _snapshots_intervals_to_df(intervals_to_insert, is_removed=False),
+                columns_to_types=self._interval_columns_to_types,
+            )
 
     @transactional()
     def remove_interval(
