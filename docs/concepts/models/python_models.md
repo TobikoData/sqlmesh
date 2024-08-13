@@ -120,6 +120,7 @@ def create_index(
 ):
     if evaluator.runtime_stage == "creating":
         return f"CREATE INDEX idx ON {model_name}({column});"
+    return None
 ```
 
 Alternatively, pre- and post-statements can be issued with the SQLMesh [`fetchdf` method](../../reference/cli.md#fetchdf) [described above](#execution-context).
