@@ -621,13 +621,30 @@ def test_model_pre_post_statements():
     ]
     assert model.pre_statements == expected_pre
 
-    expected_post = [
-        *d.parse("@foo(bar='x', val=@this)"),
-        *d.parse("DROP TABLE x2;"),
-    ]
+    expected_post = d.parse("@foo(bar='x', val=@this); DROP TABLE x2;")
     assert model.post_statements == expected_post
 
     assert model.query == d.parse("SELECT 1 AS x")[0]
+
+    @macro()
+    def multiple_statements(evaluator):
+        return ["CREATE TABLE t1 AS SELECT 1 AS c", "CREATE TABLE t2 AS SELECT 2 AS c"]
+
+    expressions = d.parse(
+        """
+        MODEL (name db.table);
+
+        SELECT 1 AS col;
+
+        @multiple_statements()
+        """
+    )
+    model = load_sql_based_model(expressions)
+
+    expected_post = d.parse(
+        'CREATE TABLE "t1" AS SELECT 1 AS "c"; CREATE TABLE "t2" AS SELECT 2 AS "c"'
+    )
+    assert model.render_post_statements() == expected_post
 
 
 def test_seed_hydration():
