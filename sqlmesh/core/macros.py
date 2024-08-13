@@ -1181,9 +1181,10 @@ def date_spine(
         'SELECT UNNEST(GENERATE_SERIES(CAST(\'2022-01-20\' AS DATE), CAST(\'2024-12-16\' AS DATE), (7 *INTERVAL \'1\' DAY))) AS "date_week"'
 
     """
-    if datepart.name not in ("day", "week", "month", "year"):
+    datepart_name = datepart.name
+    if datepart_name not in ("day", "week", "month", "year"):
         raise SQLMeshError(
-            f"Invalid datepart '{datepart.name}'. Expected: 'day', 'week', 'month', or 'year'"
+            f"Invalid datepart '{datepart_name}'. Expected: 'day', 'week', 'month', or 'year'"
         )
 
     try:
@@ -1199,10 +1200,10 @@ def date_spine(
             f"Invalid date range - start_date '{start_date.name}' is after end_date '{end_date.name}'."
         )
 
-    alias_name = f"date_{datepart.name}"
+    alias_name = f"date_{datepart_name}"
     start_date_column = exp.cast(start_date, "DATE", dialect=evaluator.dialect)
     end_date_column = exp.cast(end_date, "DATE", dialect=evaluator.dialect)
-    date_interval = exp.Interval(this=exp.Literal.number(1), unit=datepart.name)
+    date_interval = exp.Interval(this=exp.Literal.number(1), unit=datepart_name)
 
     if evaluator.dialect == "bigquery":
         # BigQuery uses UNNEST and GENERATE_DATE_ARRAY in the FROM clause
@@ -1232,7 +1233,7 @@ def date_spine(
         )
         date_interval_clause = exp.func(
             "dateadd",
-            exp.Literal.string(datepart.name),
+            exp.Literal.string(datepart_name),
             exp.Window(this=exp.RowNumber(), order=exp.Order(expressions=[exp.Literal.number(0)]))
             - 1,
             exp.column("start_date"),
@@ -1264,7 +1265,7 @@ def date_spine(
                     "datediff",
                     this=end_date_column,
                     expression=start_date_column,
-                    unit=exp.Literal.string(datepart.name.upper()),
+                    unit=exp.Literal.string(datepart_name.upper()),
                 ),
             ).as_("intervals")
         )
@@ -1272,7 +1273,7 @@ def date_spine(
             exp.TsOrDsAdd(
                 this=start_date_column,
                 expression=exp.column("intervals"),
-                unit=exp.Literal.string(datepart.name.upper()),
+                unit=exp.Literal.string(datepart_name.upper()),
                 return_type=exp.DataType.build("DATE"),
             ),
             to=exp.DataType.Type("DATE"),
