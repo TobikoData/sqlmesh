@@ -1205,103 +1205,21 @@ def date_spine(
     end_date_column = exp.cast(end_date, "DATE", dialect=evaluator.dialect)
     date_interval = exp.Interval(this=exp.Literal.number(1), unit=datepart_name)
 
-    if evaluator.dialect == "bigquery":
-        # BigQuery uses UNNEST and GENERATE_DATE_ARRAY in the FROM clause
-        generate_series_clause = exp.func(
-            "unnest",
-            exp.func(
-                "generate_date_array",
-                start_date,
-                end_date,
-                date_interval,
-            ),
-        )
-        bigquery_query = exp.select(alias_name).from_(generate_series_clause).as_(alias_name)
-        return bigquery_query
-    elif evaluator.dialect == "postgres":
-        generate_series_clause = exp.func(
-            "generate_series",
-            start_date_column,
-            end_date_column,
-            date_interval,
-        )
-        postgres_query = exp.select(generate_series_clause).as_(alias_name)
-        return postgres_query
-    elif evaluator.dialect == "snowflake":
-        subquery_clause = exp.select(
-            start_date_column.as_("start_date"), end_date_column.as_("end_date")
-        )
-        date_interval_clause = exp.func(
-            "dateadd",
-            exp.Literal.string(datepart_name),
-            exp.Window(this=exp.RowNumber(), order=exp.Order(expressions=[exp.Literal.number(0)]))
-            - 1,
-            exp.column("start_date"),
-        )
-        select_clause = date_interval_clause.as_(alias_name)
-        join_clause = exp.func(
-            "table",
-            exp.func(
-                "generator",
-                exp.Kwarg(
-                    this=exp.Literal.string("rowcount"), expression=exp.Literal.number(10000)
-                ),
-            ),
-        ).as_("x")
-        qualify_clause = exp.GTE(this=exp.column("end_date"), expression=exp.column(alias_name))
-        snowflake_query = (
-            exp.subquery(subquery_clause)
-            .select(select_clause)
-            .join(join_clause)
-            .qualify(qualify_clause)
-        )
-        return snowflake_query
-    elif evaluator.dialect == "redshift":
-        subquery_clause = exp.select(
-            exp.func(
-                "generate_series",
-                exp.Literal.number(0),
-                exp.func(
-                    "datediff",
-                    this=end_date_column,
-                    expression=start_date_column,
-                    unit=exp.Literal.string(datepart_name.upper()),
-                ),
-            ).as_("intervals")
-        )
-        dateadd_clause = exp.cast(
-            exp.TsOrDsAdd(
-                this=start_date_column,
-                expression=exp.column("intervals"),
-                unit=exp.Literal.string(datepart_name.upper()),
-                return_type=exp.DataType.build("DATE"),
-            ),
-            to=exp.DataType.Type("DATE"),
-        )
-        where_clause = exp.LTE(this=dateadd_clause, expression=end_date_column)
-        redshift_query = (
-            exp.subquery(subquery_clause)
-            .select(dateadd_clause.as_(alias_name))
-            .where(where_clause)
-            .order_by(exp.column(alias_name))
-        )
-        return redshift_query
-    elif evaluator.dialect in ("duckdb", "spark", "databricks"):
-        generate_series_clause = exp.func(
-            "explode",  # transpiles to unnest for most query engines
-            (
-                exp.func(
-                    "generate_series",
-                    start_date_column,
-                    end_date_column,
-                    date_interval,
-                )
-            ),
-        )
-        query = exp.select(generate_series_clause).as_(alias_name)
-        return query
-    else:
-        raise SQLMeshError(f"Unsupported dialect: {evaluator.dialect}")
+    generate_date_array = exp.func(
+        "GENERATE_DATE_ARRAY",
+        start_date_column,
+        end_date_column,
+        date_interval,
+        # f"INTERVAL 1 {datepart}"
+    )
+    # print(generate_date_array.sql())
+
+    exploded = exp.func("unnest", generate_date_array)
+    # print(exploded.sql())
+
+    query = exp.select(alias_name).from_(exploded.as_(alias_name))
+
+    return query
 
 
 def normalize_macro_name(name: str) -> str:
