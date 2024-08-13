@@ -113,7 +113,7 @@ def create_plan_dag_spec(
             for s in all_snapshots.values()
             if s.snapshot_id in restatements and s.snapshot_id not in new_snapshots
         ]
-        state_sync.remove_interval(
+        state_sync.remove_intervals(
             intervals_to_remove,
             remove_shared_versions=not request.is_dev,
         )

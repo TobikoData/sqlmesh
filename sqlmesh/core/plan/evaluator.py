@@ -296,7 +296,7 @@ class BuiltInPlanEvaluator(PlanEvaluator):
         if not plan.restatements:
             return
 
-        self.state_sync.remove_interval(
+        self.state_sync.remove_intervals(
             [
                 (plan.context_diff.snapshots[s_id], interval)
                 for s_id, interval in plan.restatements.items()

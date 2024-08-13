@@ -438,7 +438,7 @@ class EngineAdapterStateSync(StateSync):
                         snapshot.snapshot_id,
                         target_snapshot.snapshot_id,
                     )
-                    self.remove_interval(
+                    self.remove_intervals(
                         [(snapshot, snapshot.get_removal_interval(effective_from_ts, current_ts))]
                     )
 
@@ -928,7 +928,7 @@ class EngineAdapterStateSync(StateSync):
             )
 
     @transactional()
-    def remove_interval(
+    def remove_intervals(
         self,
         snapshot_intervals: t.Sequence[t.Tuple[SnapshotInfoLike, Interval]],
         remove_shared_versions: bool = False,

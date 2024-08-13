@@ -308,7 +308,7 @@ def test_restatement(
     state_sync_mock.get_environment.assert_called_once()
     state_sync_mock.refresh_snapshot_intervals.assert_called_once()
 
-    state_sync_mock.remove_interval.assert_called_once_with(
+    state_sync_mock.remove_intervals.assert_called_once_with(
         [(the_snapshot, (to_timestamp("2022-01-02"), to_timestamp("2022-01-04")))],
         remove_shared_versions=True,
     )

@@ -312,6 +312,22 @@ class StateSync(StateReader, abc.ABC):
         """
 
     @abc.abstractmethod
+    def remove_intervals(
+        self,
+        snapshot_intervals: t.Sequence[t.Tuple[SnapshotInfoLike, Interval]],
+        remove_shared_versions: bool = False,
+    ) -> None:
+        """Remove an interval from a list of snapshots and sync it to the store.
+
+        Because multiple snapshots can be pointing to the same version or physical table, this method
+        can also grab all snapshots tied to the passed in version.
+
+        Args:
+            snapshot_intervals: The snapshot intervals to remove.
+            remove_shared_versions: Whether to remove intervals for snapshots that share the same version with the target snapshots.
+        """
+
+    @abc.abstractmethod
     def refresh_snapshot_intervals(self, snapshots: t.Collection[Snapshot]) -> t.List[Snapshot]:
         """Updates given snapshots with latest intervals from the state.
 
@@ -433,24 +449,6 @@ class StateSync(StateReader, abc.ABC):
             dev_intervals=intervals if is_dev else [],
         )
         self.add_snapshots_intervals([snapshot_intervals])
-
-    @abc.abstractmethod
-    def remove_interval(
-        self,
-        snapshot_intervals: t.Sequence[t.Tuple[SnapshotInfoLike, Interval]],
-        remove_shared_versions: bool = False,
-    ) -> None:
-        """Remove an interval from a list of snapshots and sync it to the store.
-
-        Because multiple snapshots can be pointing to the same version or physical table, this method
-        can also grab all snapshots tied to the passed in version.
-
-        Args:
-            snapshots: The snapshot info like object to remove intervals from.
-            start: The start of the interval to add.
-            end: The end of the interval to add.
-            all_snapshots: All snapshots can be passed in to skip fetching matching snapshot versions.
-        """
 
 
 class DelegatingStateSync(StateSync):
