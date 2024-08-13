@@ -78,6 +78,10 @@ class SparkEngineAdapter(GetCurrentCatalogFromFunctionMixin, HiveMetastoreTableP
     def _use_spark_session(self) -> bool:
         return True
 
+    @property
+    def use_serverless(self) -> bool:
+        return False
+
     @classproperty
     def _sqlglot_to_spark_primitive_mapping(self) -> t.Dict[t.Any, t.Any]:
         from pyspark.sql import types as spark_types
@@ -260,7 +264,14 @@ class SparkEngineAdapter(GetCurrentCatalogFromFunctionMixin, HiveMetastoreTableP
 
         def query_factory() -> Query:
             temp_table = self._get_temp_table(target_table or "spark", table_only=True)
-            df.createOrReplaceTempView(temp_table.sql(dialect=self.dialect))  # type: ignore
+            if self.use_serverless:
+                # Global temp views are not supported on Databricks Serverless
+                # This also means we can't mix Python SQL Connection and DB Connect since they wouldn't
+                # share the same temp objects.
+                df.createOrReplaceTempView(temp_table.sql(dialect=self.dialect))  # type: ignore
+            else:
+                df.createOrReplaceGlobalTempView(temp_table.sql(dialect=self.dialect))  # type: ignore
+                temp_table.set("db", "global_temp")
             return exp.select(*self._casted_columns(columns_to_types)).from_(temp_table)
 
         if self._use_spark_session:
@@ -327,10 +338,9 @@ class SparkEngineAdapter(GetCurrentCatalogFromFunctionMixin, HiveMetastoreTableP
         catalog = self.get_current_catalog()
         for row in results:  # type: ignore
             row_dict = row.asDict() if not isinstance(row, dict) else row
-            schema = row_dict.get("namespace") or row_dict.get("database")
-            # if schema is not present then that means it is a session temp view and can be skipped
-            if not schema:
+            if row_dict.get("isTemporary"):
                 continue
+            schema = row_dict.get("namespace") or row_dict.get("database")
             data_objects.append(
                 DataObject(
                     catalog=catalog,

@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import logging
+import os
 import typing as t
 
 import pandas as pd
@@ -74,13 +75,32 @@ class DatabricksEngineAdapter(SparkEngineAdapter):
     def _use_spark_session(self) -> bool:
         if self.can_access_spark_session(bool(self._extra_config.get("disable_spark_session"))):
             return True
-        return self.can_access_databricks_connect(
-            bool(self._extra_config.get("disable_databricks_connect"))
-        ) and {
-            "databricks_connect_server_hostname",
-            "databricks_connect_access_token",
-            "databricks_connect_cluster_id",
-        }.issubset(self._extra_config)
+        return (
+            self.can_access_databricks_connect(
+                bool(self._extra_config.get("disable_databricks_connect"))
+            )
+            and (
+                {
+                    "databricks_connect_server_hostname",
+                    "databricks_connect_access_token",
+                }.issubset(self._extra_config)
+            )
+            and (
+                "databricks_connect_cluster_id" in self._extra_config
+                or "databricks_connect_use_serverless" in self._extra_config
+            )
+        )
+
+    @property
+    def use_serverless(self) -> bool:
+        from sqlmesh import RuntimeEnv
+        from sqlmesh.utils import str_to_bool
+
+        if not self._use_spark_session:
+            return False
+        return (
+            RuntimeEnv.get().is_databricks and str_to_bool(os.environ["IS_SERVERLESS"])
+        ) or bool(self._extra_config["databricks_connect_use_serverless"])
 
     @property
     def is_spark_session_cursor(self) -> bool:
