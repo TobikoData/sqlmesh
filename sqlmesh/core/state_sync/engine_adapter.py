@@ -374,10 +374,7 @@ class EngineAdapterStateSync(StateSync):
         """
         logger.info("Finalizing environment '%s'", environment.name)
 
-        environment_filter = exp.EQ(
-            this=exp.column("name"),
-            expression=exp.Literal.string(environment.name),
-        )
+        environment_filter = exp.column("name").eq(exp.Literal.string(environment.name))
 
         stored_plan_id_query = (
             exp.select("plan_id")
