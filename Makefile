@@ -203,3 +203,6 @@ databricks-test: guard-DATABRICKS_CATALOG guard-DATABRICKS_SERVER_HOSTNAME guard
 
 redshift-test: guard-REDSHIFT_HOST guard-REDSHIFT_USER guard-REDSHIFT_PASSWORD guard-REDSHIFT_DATABASE engine-redshift-install
 	pytest -n auto -x -m "redshift" --junitxml=test-results/junit-redshift.xml
+
+clickhouse-cloud-test: guard-CLICKHOUSE_CLOUD_HOST guard-CLICKHOUSE_CLOUD_PORT guard-CLICKHOUSE_CLOUD_USERNAME guard-CLICKHOUSE_CLOUD_PASSWORD engine-clickhouse-install
+	pytest -n auto -x -m "clickhouse_cloud" --junitxml=test-results/junit-clickhouse-cloud.xml

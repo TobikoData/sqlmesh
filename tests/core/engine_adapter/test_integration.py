@@ -667,6 +667,15 @@ def config() -> Config:
                 pytest.mark.xdist_group("engine_integration_snowflake"),
             ],
         ),
+        pytest.param(
+            "clickhouse_cloud",
+            marks=[
+                pytest.mark.engine,
+                pytest.mark.remote,
+                pytest.mark.clickhouse_cloud,
+                pytest.mark.xdist_group("engine_integration_clickhouse_cloud"),
+            ],
+        ),
     ]
 )
 def mark_gateway(request) -> t.Tuple[str, str]:
