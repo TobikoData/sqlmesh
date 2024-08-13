@@ -9,8 +9,9 @@ def migrate(state_sync, **kwargs):  # type: ignore
     if state_sync.schema:
         environments_table = f"{state_sync.schema}.{environments_table}"
 
-    alter_table_exp = exp.AlterTable(
+    alter_table_exp = exp.Alter(
         this=exp.to_table(environments_table),
+        kind="TABLE",
         actions=[
             exp.ColumnDef(
                 this=exp.to_column("suffix_target"),
