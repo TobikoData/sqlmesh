@@ -622,6 +622,15 @@ def config() -> Config:
             ],
         ),
         pytest.param(
+            "clickhouse",
+            marks=[
+                pytest.mark.docker,
+                pytest.mark.engine,
+                pytest.mark.clickhouse,
+                pytest.mark.xdist_group("engine_integration_clickhouse"),
+            ],
+        ),
+        pytest.param(
             "bigquery",
             marks=[
                 pytest.mark.bigquery,

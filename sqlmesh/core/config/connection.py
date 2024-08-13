@@ -1367,10 +1367,12 @@ class TrinoConnectionConfig(ConnectionConfig):
 class ClickhouseConnectionConfig(ConnectionConfig):
     """
     Clickhouse Connection Configuration.
+
+    Property reference: https://clickhouse.com/docs/en/integrations/python#client-initialization
     """
 
     host: str
-    user: str
+    username: str
     password: t.Optional[str] = None
     port: t.Optional[int] = None
 
@@ -1384,7 +1386,7 @@ class ClickhouseConnectionConfig(ConnectionConfig):
     def _connection_kwargs_keys(self) -> t.Set[str]:
         kwargs = {
             "host",
-            "user",
+            "username",
             "port",
             "password",
         }

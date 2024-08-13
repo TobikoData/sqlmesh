@@ -79,7 +79,9 @@ gateways:
     connection:
       type: clickhouse
       host: localhost
-      user: default
+      port: 8123
+      username: clickhouse
+      password: clickhouse
       concurrent_tasks: 1
     state_connection:
       type: duckdb
