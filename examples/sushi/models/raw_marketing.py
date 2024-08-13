@@ -67,5 +67,5 @@ def execute(
         errors="coerce",
         utc=True,
     )
-    df = df.drop(columns=["status_old", "updated_at_old"])
+    df = df.drop(columns=["status_old", "updated_at_old"]).reset_index(drop=True)
     return df

@@ -51,7 +51,7 @@ from sqlmesh.core.node import IntervalUnit, _Node
 from sqlmesh.core.snapshot import Snapshot, SnapshotChangeCategory
 from sqlmesh.utils.date import TimeLike, to_datetime, to_ds, to_timestamp
 from sqlmesh.utils.errors import ConfigError, SQLMeshError
-from sqlmesh.utils.jinja import JinjaMacroRegistry, MacroInfo
+from sqlmesh.utils.jinja import JinjaMacroRegistry, MacroInfo, MacroExtractor
 from sqlmesh.utils.metaprogramming import Executable
 
 
@@ -621,13 +621,30 @@ def test_model_pre_post_statements():
     ]
     assert model.pre_statements == expected_pre
 
-    expected_post = [
-        *d.parse("@foo(bar='x', val=@this)"),
-        *d.parse("DROP TABLE x2;"),
-    ]
+    expected_post = d.parse("@foo(bar='x', val=@this); DROP TABLE x2;")
     assert model.post_statements == expected_post
 
     assert model.query == d.parse("SELECT 1 AS x")[0]
+
+    @macro()
+    def multiple_statements(evaluator):
+        return ["CREATE TABLE t1 AS SELECT 1 AS c", "CREATE TABLE t2 AS SELECT 2 AS c"]
+
+    expressions = d.parse(
+        """
+        MODEL (name db.table);
+
+        SELECT 1 AS col;
+
+        @multiple_statements()
+        """
+    )
+    model = load_sql_based_model(expressions)
+
+    expected_post = d.parse(
+        'CREATE TABLE "t1" AS SELECT 1 AS "c"; CREATE TABLE "t2" AS SELECT 2 AS "c"'
+    )
+    assert model.render_post_statements() == expected_post
 
 
 def test_seed_hydration():
@@ -947,6 +964,66 @@ def test_seed_with_special_characters_in_column(tmp_path, assert_exp_eq):
         'CAST("col!@#$" AS TEXT) AS "col!@#$" '
         """FROM (VALUES (123, 'foo')) AS t("col.", "col!@#$")""",
     )
+
+
+def test_python_model_jinja_pre_post_statements():
+    macros = """
+    {% macro test_macro(v) %}{{ v }}{% endmacro %}
+    {% macro extra_macro(v) %}{{ v + 1 }}{% endmacro %}
+    """
+
+    jinja_macros = JinjaMacroRegistry()
+    jinja_macros.add_macros(MacroExtractor().extract(macros))
+
+    @model(
+        "db.test_model",
+        kind="full",
+        columns={"id": "string", "name": "string"},
+        pre_statements=[
+            "JINJA_STATEMENT_BEGIN;\n{% set table_name = 'x' %}\nCREATE OR REPLACE TABLE {{table_name}}{{ 1 + 1 }};\nJINJA_END;"
+        ],
+        post_statements=[
+            "JINJA_STATEMENT_BEGIN;\nCREATE INDEX {{test_macro('idx')}} ON db.test_model(id);\nJINJA_END;",
+            parse_one("DROP TABLE x2;"),
+        ],
+    )
+    def model_with_statements(context, **kwargs):
+        return pd.DataFrame(
+            [
+                {
+                    "id": context.var("1"),
+                    "name": context.var("var"),
+                }
+            ]
+        )
+
+    python_model = model.get_registry()["db.test_model"].model(
+        module_path=Path("."), path=Path("."), dialect="duckdb", jinja_macros=jinja_macros
+    )
+
+    assert len(jinja_macros.root_macros) == 2
+    assert len(python_model.jinja_macros.root_macros) == 1
+    assert "test_macro" in python_model.jinja_macros.root_macros
+    assert "extra_macro" not in python_model.jinja_macros.root_macros
+
+    expected_pre = [
+        d.jinja_statement(
+            "{% set table_name = 'x' %}\nCREATE OR REPLACE TABLE {{table_name}}{{ 1 + 1 }};"
+        ),
+    ]
+    assert python_model.pre_statements == expected_pre
+    assert python_model.render_pre_statements()[0].sql() == 'CREATE OR REPLACE TABLE "x2"'
+
+    expected_post = [
+        d.jinja_statement("CREATE INDEX {{test_macro('idx')}} ON db.test_model(id);"),
+        *d.parse("DROP TABLE x2;"),
+    ]
+    assert python_model.post_statements == expected_post
+    assert (
+        python_model.render_post_statements()[0].sql()
+        == 'CREATE INDEX "idx" ON "db"."test_model"("id" NULLS LAST)'
+    )
+    assert python_model.render_post_statements()[1].sql() == 'DROP TABLE "x2"'
 
 
 def test_audits():
@@ -1640,7 +1717,14 @@ CONST = "bar"
 def test_python_model(assert_exp_eq) -> None:
     from functools import reduce
 
-    @model(name="my_model", kind="full", columns={'"COL"': "int"}, enabled=True)
+    @model(
+        name="my_model",
+        kind="full",
+        columns={'"COL"': "int"},
+        pre_statements=["CACHE TABLE x AS SELECT 1;"],
+        post_statements=["DROP TABLE x;"],
+        enabled=True,
+    )
     def my_model(context, **kwargs):
         context.table("foo")
         context.table(model_name=CONST + ".baz")
@@ -1654,6 +1738,12 @@ def test_python_model(assert_exp_eq) -> None:
         dialect="duckdb",
     )
 
+    assert list(m.pre_statements) == [
+        d.parse_one("CACHE TABLE x AS SELECT 1"),
+    ]
+    assert list(m.post_statements) == [
+        d.parse_one("DROP TABLE x"),
+    ]
     assert m.enabled
     assert m.dialect == "duckdb"
     assert m.depends_on == {'"foo"', '"bar"."baz"'}

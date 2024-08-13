@@ -7,6 +7,7 @@ from pathlib import Path
 
 from sqlglot import exp, parse
 from sqlglot.errors import SqlglotError
+from sqlglot.helper import ensure_list
 from sqlglot.optimizer.annotate_types import annotate_types
 from sqlglot.optimizer.qualify import qualify
 from sqlglot.optimizer.simplify import simplify
@@ -187,11 +188,11 @@ class BaseExpressionRenderer:
 
         for expression in expressions:
             try:
-                expression = macro_evaluator.transform(expression)  # type: ignore
+                transformed_expressions = ensure_list(macro_evaluator.transform(expression))
             except MacroEvalError as ex:
                 raise_config_error(f"Failed to resolve macro for expression. {ex}", self._path)
 
-            if expression:
+            for expression in t.cast(t.List[exp.Expression], transformed_expressions):
                 with self._normalize_and_quote(expression) as expression:
                     if hasattr(expression, "selects"):
                         for select in expression.selects:
