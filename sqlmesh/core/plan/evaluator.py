@@ -27,7 +27,7 @@ from sqlmesh.core.notification_target import (
 )
 from sqlmesh.core.plan.definition import Plan
 from sqlmesh.core.scheduler import Scheduler, SignalFactory
-from sqlmesh.core.snapshot import DeployabilityIndex, Snapshot, SnapshotEvaluator
+from sqlmesh.core.snapshot import DeployabilityIndex, Snapshot, SnapshotEvaluator, SnapshotIntervals
 from sqlmesh.core.state_sync import StateSync
 from sqlmesh.core.state_sync.base import PromotionResult
 from sqlmesh.core.user import User
@@ -526,8 +526,13 @@ class MWAAPlanEvaluator(StateBasedAirflowPlanEvaluator):
 def update_intervals_for_new_snapshots(
     snapshots: t.Collection[Snapshot], state_sync: StateSync
 ) -> None:
+    snapshots_intervals: t.List[SnapshotIntervals] = []
     for snapshot in state_sync.refresh_snapshot_intervals(snapshots):
         if snapshot.is_forward_only:
             snapshot.dev_intervals = snapshot.intervals.copy()
-            for start, end in snapshot.dev_intervals:
-                state_sync.add_interval(snapshot, start, end, is_dev=True)
+            snapshot_intervals = snapshot.snapshot_intervals
+            snapshot_intervals.intervals.clear()
+            snapshots_intervals.append(snapshot_intervals)
+
+    if snapshots_intervals:
+        state_sync.add_snapshots_intervals(snapshots_intervals)

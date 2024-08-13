@@ -122,9 +122,10 @@ class CachingStateSync(DelegatingStateSync):
         self.snapshot_cache.clear()
         return self.state_sync.delete_expired_snapshots(ignore_ttl=ignore_ttl)
 
-    def _add_snapshot_intervals(self, snapshot_intervals: SnapshotIntervals) -> None:
-        self.snapshot_cache.pop(snapshot_intervals.snapshot_id, None)
-        self.state_sync._add_snapshot_intervals(snapshot_intervals)
+    def add_snapshots_intervals(self, snapshots_intervals: t.Sequence[SnapshotIntervals]) -> None:
+        for snapshot_intervals in snapshots_intervals:
+            self.snapshot_cache.pop(snapshot_intervals.snapshot_id, None)
+        self.state_sync.add_snapshots_intervals(snapshots_intervals)
 
     def remove_interval(
         self,

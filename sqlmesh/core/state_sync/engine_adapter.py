@@ -879,7 +879,7 @@ class EngineAdapterStateSync(StateSync):
         super().add_interval(snapshot, start, end, is_dev)
 
     @transactional()
-    def _add_snapshot_intervals(self, snapshot_intervals: SnapshotIntervals) -> None:
+    def add_snapshots_intervals(self, snapshots_intervals: t.Sequence[SnapshotIntervals]) -> None:
         def remove_partial_intervals(
             intervals: t.List[Interval], snapshot_id: SnapshotId, *, is_dev: bool
         ) -> t.List[Interval]:
@@ -899,25 +899,30 @@ class EngineAdapterStateSync(StateSync):
                         "Skipping partial interval (%s, %s) for snapshot %s",
                         start_ts,
                         end_ts,
-                        snapshot_intervals.snapshot_id,
+                        snapshot_id,
                     )
             return results
 
-        snapshot_intervals = snapshot_intervals.copy(
-            update={
-                "intervals": remove_partial_intervals(
-                    snapshot_intervals.intervals, snapshot_intervals.snapshot_id, is_dev=False
-                ),
-                "dev_intervals": remove_partial_intervals(
-                    snapshot_intervals.dev_intervals, snapshot_intervals.snapshot_id, is_dev=True
-                ),
-            }
-        )
-        if not snapshot_intervals.intervals and not snapshot_intervals.dev_intervals:
-            return
+        intervals_to_insert = []
+        for snapshot_intervals in snapshots_intervals:
+            snapshot_intervals = snapshot_intervals.copy(
+                update={
+                    "intervals": remove_partial_intervals(
+                        snapshot_intervals.intervals, snapshot_intervals.snapshot_id, is_dev=False
+                    ),
+                    "dev_intervals": remove_partial_intervals(
+                        snapshot_intervals.dev_intervals,
+                        snapshot_intervals.snapshot_id,
+                        is_dev=True,
+                    ),
+                }
+            )
+            if snapshot_intervals.intervals or snapshot_intervals.dev_intervals:
+                intervals_to_insert.append(snapshot_intervals)
+
         self.engine_adapter.insert_append(
             self.intervals_table,
-            _snapshot_interval_to_df(snapshot_intervals, is_removed=False),
+            _snapshots_intervals_to_df(intervals_to_insert, is_removed=False),
             columns_to_types=self._interval_columns_to_types,
         )
 
@@ -1604,8 +1609,8 @@ def _intervals_to_df(
     )
 
 
-def _snapshot_interval_to_df(
-    snapshot_intervals: SnapshotIntervals,
+def _snapshots_intervals_to_df(
+    snapshots_intervals: t.Sequence[SnapshotIntervals],
     is_removed: bool = False,
 ) -> pd.DataFrame:
     return pd.DataFrame(
@@ -1617,6 +1622,7 @@ def _snapshot_interval_to_df(
                 is_dev=is_dev,
                 is_removed=is_removed,
             )
+            for snapshot_intervals in snapshots_intervals
             for is_dev in (False, True)
             for start_ts, end_ts in getattr(
                 snapshot_intervals, "dev_intervals" if is_dev else "intervals"
