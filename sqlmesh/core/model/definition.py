@@ -1017,9 +1017,11 @@ class SqlModel(_SqlBasedModel):
 
     def __getstate__(self) -> t.Dict[t.Any, t.Any]:
         state = super().__getstate__()
+        state["__dict__"] = state["__dict__"].copy()
+        # query renderer is very expensive to serialize
+        state["__dict__"].pop("_query_renderer", None)
         private = state[PRIVATE_FIELDS]
         private["_columns_to_types"] = None
-        private.pop("_query_renderer", None)
         return state
 
     def render_query(
