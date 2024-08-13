@@ -90,16 +90,24 @@ Optional pre/post-statements allow you to execute SQL commands before and after 
 
 For example, pre/post-statements might modify settings or create indexes. However, be careful not to run any statement that could conflict with the execution of another statement if models run concurrently, such as creating a physical table.
 
-You can set the `pre_statements` and `post_statements` arguments to a list of SQL strings and/or SQLGlot expressions to define the model's pre/post-statements.
+You can set the `pre_statements` and `post_statements` arguments to a list of SQL strings, SQLGlot expressions, or macro calls to define the model's pre/post-statements.
 
 ``` python linenums="1" hl_lines="6-7"
+@model( 
+    "db.test_model",
+    kind="full",
+    columns={
+        "id": "int",
+        "name": "text",
+    },
+    pre_statements=[exp.Cache(this=exp.Table(this=exp.Identifier(this="x")), expression=exp.Select(expressions=exp.Literal(this='1',is_string=False)))]
+    post_statements=["@CREATE_INDEX(@this_model, id)"],
+)
 def execute(
     context: ExecutionContext,
     start: datetime,
     end: datetime,
     execution_time: datetime,
-    pre_statements=["SET GLOBAL parameter = 'value';"],
-    post_statements=["@CREATE_INDEX('example.pre_post_statements', id)"],
     **kwargs: t.Any,
 ) -> pd.DataFrame:
 
@@ -109,7 +117,10 @@ def execute(
 
 ```
 
-Within these pre/post-statements, you can also use SQLMesh or Jinja macros. For example, a macro that creates an index based on the runtime stage:
+The previous example's `post_statements` called user-defined SQLMesh macro `@CREATE_INDEX(@this_model, id)`.
+
+We could define the `CREATE_INDEX` macro in the project's `macros` directory like this. The macro creates a table index on a single column, conditional on the runtime stage being `creating` (table creation time).
+
 
 ``` python linenums="1"
 @macro()
