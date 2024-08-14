@@ -92,7 +92,7 @@ For example, pre/post-statements might modify settings or create indexes. Howeve
 
 You can set the `pre_statements` and `post_statements` arguments to a list of SQL strings, SQLGlot expressions, or macro calls to define the model's pre/post-statements.
 
-``` python linenums="1" hl_lines="6-7"
+``` python linenums="1" hl_lines="8-9"
 @model( 
     "db.test_model",
     kind="full",
