@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import logging
+import os
 import typing as t
 
 import pandas as pd
@@ -11,6 +12,7 @@ from sqlmesh.core.engine_adapter.shared import (
     DataObject,
     InsertOverwriteStrategy,
     set_catalog,
+    SourceQuery,
 )
 from sqlmesh.core.engine_adapter.spark import SparkEngineAdapter
 from sqlmesh.core.schema_diff import SchemaDiffer
@@ -18,7 +20,7 @@ from sqlmesh.utils.errors import SQLMeshError
 
 if t.TYPE_CHECKING:
     from sqlmesh.core._typing import SchemaName, TableName
-    from sqlmesh.core.engine_adapter._typing import DF, PySparkSession
+    from sqlmesh.core.engine_adapter._typing import DF, PySparkSession, Query
 
 logger = logging.getLogger(__name__)
 
@@ -74,13 +76,32 @@ class DatabricksEngineAdapter(SparkEngineAdapter):
     def _use_spark_session(self) -> bool:
         if self.can_access_spark_session(bool(self._extra_config.get("disable_spark_session"))):
             return True
-        return self.can_access_databricks_connect(
-            bool(self._extra_config.get("disable_databricks_connect"))
-        ) and {
-            "databricks_connect_server_hostname",
-            "databricks_connect_access_token",
-            "databricks_connect_cluster_id",
-        }.issubset(self._extra_config)
+        return (
+            self.can_access_databricks_connect(
+                bool(self._extra_config.get("disable_databricks_connect"))
+            )
+            and (
+                {
+                    "databricks_connect_server_hostname",
+                    "databricks_connect_access_token",
+                }.issubset(self._extra_config)
+            )
+            and (
+                "databricks_connect_cluster_id" in self._extra_config
+                or "databricks_connect_use_serverless" in self._extra_config
+            )
+        )
+
+    @property
+    def use_serverless(self) -> bool:
+        from sqlmesh import RuntimeEnv
+        from sqlmesh.utils import str_to_bool
+
+        if not self._use_spark_session:
+            return False
+        return (
+            RuntimeEnv.get().is_databricks and str_to_bool(os.environ["IS_SERVERLESS"])
+        ) or bool(self._extra_config["databricks_connect_use_serverless"])
 
     @property
     def is_spark_session_cursor(self) -> bool:
@@ -116,6 +137,35 @@ class DatabricksEngineAdapter(SparkEngineAdapter):
             if catalog:
                 self.set_current_catalog(catalog)
         return self._spark
+
+    def _df_to_source_queries(
+        self,
+        df: DF,
+        columns_to_types: t.Dict[str, exp.DataType],
+        batch_size: int,
+        target_table: TableName,
+    ) -> t.List[SourceQuery]:
+        if not self._use_spark_session:
+            return super(SparkEngineAdapter, self)._df_to_source_queries(
+                df, columns_to_types, batch_size, target_table
+            )
+        df = self._ensure_pyspark_df(df, columns_to_types)
+
+        def query_factory() -> Query:
+            temp_table = self._get_temp_table(target_table or "spark", table_only=True)
+            if self.use_serverless:
+                # Global temp views are not supported on Databricks Serverless
+                # This also means we can't mix Python SQL Connection and DB Connect since they wouldn't
+                # share the same temp objects.
+                df.createOrReplaceTempView(temp_table.sql(dialect=self.dialect))  # type: ignore
+            else:
+                df.createOrReplaceGlobalTempView(temp_table.sql(dialect=self.dialect))  # type: ignore
+                temp_table.set("db", "global_temp")
+            return exp.select(*self._casted_columns(columns_to_types)).from_(temp_table)
+
+        if self._use_spark_session:
+            return [SourceQuery(query_factory=query_factory)]
+        return super()._df_to_source_queries(df, columns_to_types, batch_size, target_table)
 
     def _fetch_native_df(
         self, query: t.Union[exp.Expression, str], quote_identifiers: bool = False
