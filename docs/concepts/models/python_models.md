@@ -92,7 +92,7 @@ For example, pre/post-statements might modify settings or create indexes. Howeve
 
 You can set the `pre_statements` and `post_statements` arguments to a list of SQL strings, SQLGlot expressions, or macro calls to define the model's pre/post-statements.
 
-``` python linenums="1" hl_lines="8-9"
+``` python linenums="1" hl_lines="8-12"
 @model( 
     "db.test_model",
     kind="full",
@@ -100,7 +100,10 @@ You can set the `pre_statements` and `post_statements` arguments to a list of SQ
         "id": "int",
         "name": "text",
     },
-    pre_statements=["SET GLOBAL parameter = 'value';", exp.Cache(this=exp.Table(this=exp.Identifier(this="x")), expression=exp.Select(expressions=exp.Literal(this='1',is_string=False)))]
+    pre_statements=[
+        "SET GLOBAL parameter = 'value';",
+        exp.Cache(this=exp.table_("x"), expression=exp.select("1")),
+    ],
     post_statements=["@CREATE_INDEX(@this_model, id)"],
 )
 def execute(
