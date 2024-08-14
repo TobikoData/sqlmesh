@@ -119,7 +119,7 @@ def execute(
 
 The previous example's `post_statements` called user-defined SQLMesh macro `@CREATE_INDEX(@this_model, id)`.
 
-We could define the `CREATE_INDEX` macro in the project's `macros` directory like this. The macro creates a table index on a single column, conditional on the runtime stage being `creating` (table creation time).
+We could define the `CREATE_INDEX` macro in the project's `macros` directory like this. The macro creates a table index on a single column, conditional on the [runtime stage](../macros/macro_variables.md#runtime-variables) being `creating` (table creation time).
 
 
 ``` python linenums="1"
