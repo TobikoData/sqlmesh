@@ -486,7 +486,7 @@ def compute_interval_params(
         ignore_cron=ignore_cron,
         end_bounded=end_bounded,
     ).items():
-        if signal_factory:
+        if signal_factory and snapshot.is_model:
             for signal in snapshot.model.render_signals(
                 start=start, end=end, execution_time=execution_time
             ):
