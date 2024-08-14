@@ -90,7 +90,54 @@ Optional pre/post-statements allow you to execute SQL commands before and after 
 
 For example, pre/post-statements might modify settings or create indexes. However, be careful not to run any statement that could conflict with the execution of another statement if models run concurrently, such as creating a physical table.
 
-Pre- and post-statements are issued with the SQLMesh [`fetchdf` method](../../reference/cli.md#fetchdf) [described above](#execution-context).
+You can set the `pre_statements` and `post_statements` arguments to a list of SQL strings, SQLGlot expressions, or macro calls to define the model's pre/post-statements.
+
+``` python linenums="1" hl_lines="8-12"
+@model( 
+    "db.test_model",
+    kind="full",
+    columns={
+        "id": "int",
+        "name": "text",
+    },
+    pre_statements=[
+        "SET GLOBAL parameter = 'value';",
+        exp.Cache(this=exp.table_("x"), expression=exp.select("1")),
+    ],
+    post_statements=["@CREATE_INDEX(@this_model, id)"],
+)
+def execute(
+    context: ExecutionContext,
+    start: datetime,
+    end: datetime,
+    execution_time: datetime,
+    **kwargs: t.Any,
+) -> pd.DataFrame:
+
+    return pd.DataFrame([
+        {"id": 1, "name": "name"}
+    ])
+
+```
+
+The previous example's `post_statements` called user-defined SQLMesh macro `@CREATE_INDEX(@this_model, id)`.
+
+We could define the `CREATE_INDEX` macro in the project's `macros` directory like this. The macro creates a table index on a single column, conditional on the [runtime stage](../macros/macro_variables.md#runtime-variables) being `creating` (table creation time).
+
+
+``` python linenums="1"
+@macro()
+def create_index(
+    evaluator: MacroEvaluator,
+    model_name: str,
+    column: str,
+):
+    if evaluator.runtime_stage == "creating":
+        return f"CREATE INDEX idx ON {model_name}({column});"
+    return None
+```
+
+Alternatively, pre- and post-statements can be issued with the SQLMesh [`fetchdf` method](../../reference/cli.md#fetchdf) [described above](#execution-context).
 
 Pre-statements may be specified anywhere in the function body before it `return`s or `yield`s. Post-statements must execute after the function completes, so instead of `return`ing a value the function must `yield` the value. The post-statement must be specified after the `yield`.
 
@@ -116,7 +163,6 @@ def execute(
     # post-statement
     context.fetchdf("CREATE INDEX idx ON example.pre_post_statements (id);")
 ```
-
 
 ## Dependencies
 In order to fetch data from an upstream model, you first get the table name using `context`'s `table` method. This returns the appropriate table name for the current runtime [environment](../environments.md):

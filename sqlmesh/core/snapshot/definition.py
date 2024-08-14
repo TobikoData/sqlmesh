@@ -9,7 +9,6 @@ from functools import cached_property, lru_cache
 
 from pydantic import Field
 from sqlglot import exp
-from sqlglot.helper import seq_get
 from sqlglot.optimizer.normalize_identifiers import normalize_identifiers
 
 from sqlmesh.core import constants as c
@@ -24,6 +23,7 @@ from sqlmesh.utils.date import (
     is_date,
     make_inclusive,
     make_inclusive_end,
+    make_exclusive,
     now,
     now_timestamp,
     to_date,
@@ -856,8 +856,6 @@ class Snapshot(PydanticModel, SnapshotInfoMixin):
             return []
         if self.node.start and to_datetime(start) < to_datetime(self.node.start):
             start = self.node.start
-        if self.node.end and make_inclusive_end(end) > make_inclusive_end(self.node.end):
-            end = self.node.end
         # If the amount of time being checked is less than the size of a single interval then we
         # know that there can't being missing intervals within that range and return
         validate_date_range(start, end)
@@ -888,35 +886,33 @@ class Snapshot(PydanticModel, SnapshotInfoMixin):
         )
 
         interval_unit = self.node.interval_unit
+        upper_bound_ts = to_timestamp(execution_time or now())
 
-        execution_time = execution_time or now()
-        if end_bounded:
-            execution_time = min(to_timestamp(execution_time), end_ts)
-
-        if not allow_partials:
-            upper_bound_ts = to_timestamp(
-                self.node.cron_floor(execution_time) if not ignore_cron else execution_time
-            )
-            end_ts = min(end_ts, to_timestamp(interval_unit.cron_floor(upper_bound_ts)))
-        else:
-            upper_bound_ts = to_timestamp(execution_time)
+        if allow_partials:
             end_ts = min(end_ts, upper_bound_ts)
+        else:
+            upper_bound_ts = min(upper_bound_ts, end_ts) if end_bounded else upper_bound_ts
+
+            if not ignore_cron:
+                upper_bound_ts = to_timestamp(self.node.cron_floor(upper_bound_ts))
+
+            end_ts = min(
+                end_ts,
+                to_timestamp(interval_unit.cron_floor(upper_bound_ts)),
+            )
 
         lookback = 0
         model_end_ts: t.Optional[int] = None
 
         if self.is_model:
             lookback = self.model.lookback
-            model_end_ts = (
-                to_timestamp(make_inclusive_end(self.model.end)) if self.model.end else None
-            )
+            model_end_ts = to_timestamp(make_exclusive(self.model.end)) if self.model.end else None
 
         return compute_missing_intervals(
             interval_unit,
             tuple(intervals),
             start_ts,
             end_ts,
-            upper_bound_ts,
             lookback,
             model_end_ts,
         )
@@ -1652,7 +1648,6 @@ def compute_missing_intervals(
     intervals: t.Tuple[Interval, ...],
     start_ts: int,
     end_ts: int,
-    upper_bound_ts: int,
     lookback: int,
     model_end_ts: t.Optional[int],
 ) -> Intervals:
@@ -1663,56 +1658,64 @@ def compute_missing_intervals(
         intervals: The intervals to check what's missing.
         start_ts: Inclusive timestamp start.
         end_ts: Exclusive timestamp end.
-        upper_bound_ts: The exclusive upper bound timestamp for lookback.
         lookback: A lookback window.
-        model_end_ts: The inclusive end timestamp set on the model (if one is set)
+        model_end_ts: The exclusive end timestamp set on the model (if one is set)
 
     Returns:
         A list of all timestamps in this range.
     """
+    if start_ts == end_ts:
+        return []
+
     croniter = interval_unit.croniter(start_ts)
     timestamps = [start_ts]
 
-    # get all individual timestamps with the addition of extra lookback timestamps up to the execution date
-    # when a model has lookback, we need to check all the intervals between itself and its lookback exist.
-    intervals_beyond_end_ts = 0
     while True:
         ts = to_timestamp(croniter.get_next(estimate=True))
 
-        if ts < end_ts:
-            timestamps.append(ts)
-        elif lookback and ts < upper_bound_ts:
-            timestamps.append(ts)
-            intervals_beyond_end_ts += 1
-        else:
-            croniter.get_prev(estimate=True)
+        if ts > end_ts:
+            if len(timestamps) > 1:
+                timestamps[-1] = end_ts
+            else:
+                timestamps.append(end_ts)
             break
 
-    missing = []
-    for i in range(len(timestamps)):
-        if timestamps[i] >= end_ts:
-            break
-        current_ts = timestamps[i]
-        next_ts = (
-            timestamps[i + 1]
-            if i + 1 < len(timestamps)
-            else min(
-                to_timestamp(interval_unit.cron_next(current_ts, estimate=True)), upper_bound_ts
-            )
-        )
-        compare_ts = seq_get(timestamps, i + lookback) or timestamps[-1]
+        timestamps.append(ts)
 
+    missing = set()
+
+    for current_ts, next_ts in zip(timestamps, timestamps[1:]):
         for low, high in intervals:
-            if compare_ts < low:
-                missing.append((current_ts, next_ts))
+            if current_ts < low:
+                missing.add((current_ts, next_ts))
                 break
-            elif current_ts >= low and compare_ts < high:
+            elif current_ts >= low and next_ts <= high:
                 break
         else:
-            if model_end_ts is None or compare_ts < model_end_ts or i > intervals_beyond_end_ts + 1:
-                missing.append((current_ts, next_ts))
+            missing.add((current_ts, next_ts))
 
-    return missing
+    if missing:
+        if lookback:
+            if model_end_ts:
+                croniter = interval_unit.croniter(end_ts)
+                end_ts = to_timestamp(croniter.get_prev(estimate=True))
+
+                while model_end_ts < end_ts:
+                    end_ts = to_timestamp(croniter.get_prev(estimate=True))
+                    lookback -= 1
+
+                lookback = max(lookback, 0)
+
+            for i, (current_ts, next_ts) in enumerate(zip(timestamps, timestamps[1:])):
+                parent = timestamps[i + lookback : i + lookback + 2]
+
+                if len(parent) < 2 or tuple(parent) in missing:
+                    missing.add((current_ts, next_ts))
+
+        if model_end_ts:
+            missing = {interval for interval in missing if interval[0] < model_end_ts}
+
+    return sorted(missing)
 
 
 def earliest_start_date(

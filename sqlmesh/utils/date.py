@@ -287,10 +287,14 @@ def make_inclusive(start: TimeLike, end: TimeLike) -> Interval:
 
 
 def make_inclusive_end(end: TimeLike) -> datetime:
-    end_dt = to_datetime(end)
-    if is_date(end):
-        end_dt = end_dt + timedelta(days=1)
-    return end_dt - timedelta(microseconds=1)
+    return make_exclusive(end) - timedelta(microseconds=1)
+
+
+def make_exclusive(time: TimeLike) -> datetime:
+    dt = to_datetime(time)
+    if is_date(time):
+        dt = dt + timedelta(days=1)
+    return dt
 
 
 def validate_date_range(

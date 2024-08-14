@@ -2,6 +2,7 @@ import logging
 import typing as t
 from threading import get_ident
 
+from pyspark.errors import PySparkAttributeError
 from pyspark.sql import DataFrame, SparkSession
 from pyspark.sql.types import Row
 
@@ -92,9 +93,10 @@ class SparkSessionConnection:
             self.spark.conf.set("spark.sql.sources.partitionOverwriteMode", "dynamic")
             self.spark.conf.set("hive.exec.dynamic.partition", "true")
             self.spark.conf.set("hive.exec.dynamic.partition.mode", "nonstrict")
-        except NotImplementedError:
+        except (NotImplementedError, PySparkAttributeError):
             # Databricks Connect does not support accessing the SparkContext nor does it support
             # setting dynamic partition overwrite since it uses replace where
+            # Also Serverless jobs don't support access to spark context so we pass for that too
             pass
         if self.catalog:
             from py4j.protocol import Py4JError

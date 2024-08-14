@@ -528,6 +528,7 @@ class DatabricksConnectionConfig(ConnectionConfig):
     databricks_connect_server_hostname: t.Optional[str] = None
     databricks_connect_access_token: t.Optional[str] = None
     databricks_connect_cluster_id: t.Optional[str] = None
+    databricks_connect_use_serverless: bool = False
     force_databricks_connect: bool = False
     disable_databricks_connect: bool = False
     disable_spark_session: bool = False
@@ -550,24 +551,41 @@ class DatabricksConnectionConfig(ConnectionConfig):
             bool(values.get("disable_spark_session"))
         ):
             return values
+        databricks_connect_use_serverless = values.get("databricks_connect_use_serverless")
         server_hostname, http_path, access_token = (
             values.get("server_hostname"),
             values.get("http_path"),
             values.get("access_token"),
         )
-        if not server_hostname or not http_path or not access_token:
+        if databricks_connect_use_serverless:
+            values["force_databricks_connect"] = True
+            values["disable_databricks_connect"] = False
+        if (
+            not server_hostname or not http_path or not access_token
+        ) and not databricks_connect_use_serverless:
             raise ValueError(
                 "`server_hostname`, `http_path`, and `access_token` are required for Databricks connections when not running in a notebook"
+            )
+        if (
+            databricks_connect_use_serverless
+            and not server_hostname
+            and not values.get("databricks_connect_server_hostname")
+        ):
+            raise ValueError(
+                "`server_hostname` or `databricks_connect_server_hostname` is required when `databricks_connect_use_serverless` is set"
             )
         if DatabricksEngineAdapter.can_access_databricks_connect(
             bool(values.get("disable_databricks_connect"))
         ):
-            if not values.get("databricks_connect_server_hostname"):
-                values["databricks_connect_server_hostname"] = f"https://{server_hostname}"
             if not values.get("databricks_connect_access_token"):
                 values["databricks_connect_access_token"] = access_token
-            if not values.get("databricks_connect_cluster_id"):
-                values["databricks_connect_cluster_id"] = http_path.split("/")[-1]
+            if not values.get("databricks_connect_server_hostname"):
+                values["databricks_connect_server_hostname"] = f"https://{server_hostname}"
+            if not databricks_connect_use_serverless:
+                if not values.get("databricks_connect_cluster_id"):
+                    if t.TYPE_CHECKING:
+                        assert http_path is not None
+                    values["databricks_connect_cluster_id"] = http_path.split("/")[-1]
         return values
 
     @property
@@ -612,7 +630,7 @@ class DatabricksConnectionConfig(ConnectionConfig):
 
             return connection
 
-        from databricks import sql
+        from databricks import sql  # type: ignore
 
         return sql.connect
 
@@ -635,14 +653,27 @@ class DatabricksConnectionConfig(ConnectionConfig):
 
         from databricks.connect import DatabricksSession
 
-        return dict(
-            spark=DatabricksSession.builder.remote(
+        if t.TYPE_CHECKING:
+            assert self.databricks_connect_server_hostname is not None
+            assert self.databricks_connect_access_token is not None
+
+        if self.databricks_connect_use_serverless:
+            builder = DatabricksSession.builder.remote(
+                host=self.databricks_connect_server_hostname,
+                token=self.databricks_connect_access_token,
+                serverless=True,
+            )
+        else:
+            if t.TYPE_CHECKING:
+                assert self.databricks_connect_cluster_id is not None
+            builder = DatabricksSession.builder.remote(
                 host=self.databricks_connect_server_hostname,
                 token=self.databricks_connect_access_token,
                 cluster_id=self.databricks_connect_cluster_id,
             )
-            .userAgent("sqlmesh")
-            .getOrCreate(),
+
+        return dict(
+            spark=builder.userAgent("sqlmesh").getOrCreate(),
             catalog=self.catalog,
         )
 
