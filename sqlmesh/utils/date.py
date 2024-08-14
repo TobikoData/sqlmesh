@@ -115,27 +115,44 @@ def yesterday_timestamp() -> int:
     return to_timestamp(yesterday())
 
 
-def to_timestamp(value: TimeLike, relative_base: t.Optional[datetime] = None) -> int:
+def to_timestamp(
+    value: TimeLike,
+    relative_base: t.Optional[datetime] = None,
+    check_categorical_relative_expression: bool = True,
+) -> int:
     """
     Converts a value into an epoch millis timestamp.
 
     Args:
         value: A variety of date formats. If value is a string, it must be in iso format.
         relative_base: The datetime to reference for time expressions that are using relative terms
+        check_categorical_relative_expression: If True, takes into account the relative expressions that are categorical.
 
     Returns:
         Epoch millis timestamp.
     """
-    return int(to_datetime(value, relative_base=relative_base).timestamp() * 1000)
+    return int(
+        to_datetime(
+            value,
+            relative_base=relative_base,
+            check_categorical_relative_expression=check_categorical_relative_expression,
+        ).timestamp()
+        * 1000
+    )
 
 
 @ttl_cache()
-def to_datetime(value: TimeLike, relative_base: t.Optional[datetime] = None) -> datetime:
+def to_datetime(
+    value: TimeLike,
+    relative_base: t.Optional[datetime] = None,
+    check_categorical_relative_expression: bool = True,
+) -> datetime:
     """Converts a value into a UTC datetime object.
 
     Args:
         value: A variety of date formats. If the value is number-like, it is assumed to be millisecond epochs.
-        relative_base: The datetime to reference for time expressions that are using relative terms
+        relative_base: The datetime to reference for time expressions that are using relative terms.
+        check_categorical_relative_expression: If True, takes into account the relative expressions that are categorical.
 
     Raises:
         ValueError if value cannot be converted to a datetime.
@@ -158,7 +175,9 @@ def to_datetime(value: TimeLike, relative_base: t.Optional[datetime] = None) -> 
         if epoch is None:
             relative_base = relative_base or now()
             expression = str(value)
-            if is_catagorical_relative_expression(expression):
+            if check_categorical_relative_expression and is_categorical_relative_expression(
+                expression
+            ):
                 relative_base = relative_base.replace(hour=0, minute=0, second=0, microsecond=0)
             dt = dateparser.parse(expression, settings={"RELATIVE_BASE": relative_base})
         else:
@@ -315,7 +334,7 @@ def time_like_to_str(time_like: TimeLike) -> str:
     return to_ts(time_like)
 
 
-def is_catagorical_relative_expression(expression: str) -> bool:
+def is_categorical_relative_expression(expression: str) -> bool:
     if expression.strip().lower() in DAY_SHORTCUT_EXPRESSIONS:
         return True
     grain_kwargs = freshness_date_parser.get_kwargs(expression)

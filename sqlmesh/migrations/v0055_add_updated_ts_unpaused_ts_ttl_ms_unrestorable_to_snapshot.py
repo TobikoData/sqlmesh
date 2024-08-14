@@ -58,7 +58,11 @@ def migrate(state_sync, **kwargs):  # type: ignore
         updated_ts = parsed_snapshot.pop("updated_ts")
         unpaused_ts = parsed_snapshot.pop("unpaused_ts", None)
         ttl_ms = max(
-            to_timestamp(parsed_snapshot["ttl"], relative_base=to_datetime(updated_ts))
+            to_timestamp(
+                parsed_snapshot["ttl"],
+                relative_base=to_datetime(updated_ts),
+                check_categorical_relative_expression=False,
+            )
             - updated_ts,
             0,
         )
