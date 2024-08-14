@@ -10,6 +10,7 @@ from sqlmesh.core.environment import EnvironmentNamingInfo
 from sqlmesh.core.model import load_sql_based_model
 from sqlmesh.core.model.definition import SqlModel
 from sqlmesh.core.model.kind import (
+    FullKind,
     IncrementalByTimeRangeKind,
     IncrementalByUniqueKeyKind,
     TimeColumn,
@@ -619,3 +620,46 @@ def test_audit_failure_notifications(
         _evaluate()
     assert notify_user_mock.call_count == 1
     assert notify_mock.call_count == 1
+
+
+def test_signal_factory(mocker: MockerFixture, make_snapshot):
+    from sqlmesh.core.scheduler import signal_factory, Batch, Signal
+
+    class AlwaysReadySignal(Signal):
+        def check_intervals(self, batch: Batch) -> bool | Batch:
+            return True
+
+    signal_factory_invoked = 0
+
+    @signal_factory
+    def factory(signal_metadata):
+        nonlocal signal_factory_invoked
+        signal_factory_invoked += 1
+        assert signal_metadata.get("kind") == "foo"
+        return AlwaysReadySignal()
+
+    start = to_datetime("2023-01-01")
+    end = to_datetime("2023-01-07")
+    snapshot: Snapshot = make_snapshot(
+        SqlModel(
+            name="name",
+            kind=FullKind(),
+            owner="owner",
+            dialect="",
+            cron="@daily",
+            start=start,
+            query=parse_one("SELECT id FROM VALUES (1), (2) AS t(id)"),
+            signals=[{"kind": "foo"}],
+        ),
+    )
+    snapshot_evaluator = SnapshotEvaluator(adapter=mocker.MagicMock(), ddl_concurrent_tasks=1)
+    scheduler = Scheduler(
+        snapshots=[snapshot],
+        snapshot_evaluator=snapshot_evaluator,
+        state_sync=mocker.MagicMock(),
+        max_workers=2,
+        default_catalog=None,
+    )
+    scheduler.batches(start, end, end)
+
+    assert signal_factory_invoked > 0
