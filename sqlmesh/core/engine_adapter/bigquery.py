@@ -481,12 +481,15 @@ class BigQueryEngineAdapter(InsertOverwriteWithMergeMixin):
         catalog_name: t.Optional[str] = None,
         storage_format: t.Optional[str] = None,
         partitioned_by: t.Optional[t.List[exp.Expression]] = None,
+        partitioned_by_user_cols: t.Optional[t.List[exp.Expression]] = None,
         partition_interval_unit: t.Optional[IntervalUnit] = None,
         clustered_by: t.Optional[t.List[str]] = None,
         table_properties: t.Optional[t.Dict[str, exp.Expression]] = None,
         columns_to_types: t.Optional[t.Dict[str, exp.DataType]] = None,
         table_description: t.Optional[str] = None,
         table_kind: t.Optional[str] = None,
+        primary_key: t.Optional[t.Tuple[str, ...] | t.List[exp.Expression]] = None,
+        ordered_by: t.Optional[t.List[str]] = None,
     ) -> t.Optional[exp.Properties]:
         properties: t.List[exp.Expression] = []
 
@@ -607,7 +610,7 @@ class BigQueryEngineAdapter(InsertOverwriteWithMergeMixin):
         self,
         table_name: str,
         columns_to_types: t.Dict[str, exp.DataType],
-        primary_key: t.Optional[t.Tuple[str, ...]] = None,
+        primary_key: t.Optional[t.Tuple[str, ...] | t.List[exp.Expression]] = None,
     ) -> None:
         self.create_table(
             table_name,

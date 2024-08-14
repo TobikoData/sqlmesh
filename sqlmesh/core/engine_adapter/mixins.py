@@ -121,12 +121,15 @@ class HiveMetastoreTablePropertiesMixin(EngineAdapter):
         catalog_name: t.Optional[str] = None,
         storage_format: t.Optional[str] = None,
         partitioned_by: t.Optional[t.List[exp.Expression]] = None,
+        partitioned_by_user_cols: t.Optional[t.List[exp.Expression]] = None,
         partition_interval_unit: t.Optional[IntervalUnit] = None,
         clustered_by: t.Optional[t.List[str]] = None,
         table_properties: t.Optional[t.Dict[str, exp.Expression]] = None,
         columns_to_types: t.Optional[t.Dict[str, exp.DataType]] = None,
         table_description: t.Optional[str] = None,
         table_kind: t.Optional[str] = None,
+        primary_key: t.Optional[t.Tuple[str, ...] | t.List[exp.Expression]] = None,
+        ordered_by: t.Optional[t.List[str]] = None,
     ) -> t.Optional[exp.Properties]:
         properties: t.List[exp.Expression] = []
 
@@ -260,6 +263,7 @@ class VarcharSizeWorkaroundMixin(EngineAdapter):
         columns_to_types: t.Optional[t.Dict[str, exp.DataType]] = None,
         table_description: t.Optional[str] = None,
         table_kind: t.Optional[str] = None,
+        primary_key: t.Optional[t.Tuple[str, ...] | t.List[exp.Expression]] = None,
         **kwargs: t.Any,
     ) -> exp.Create:
         statement = super()._build_create_table_exp(

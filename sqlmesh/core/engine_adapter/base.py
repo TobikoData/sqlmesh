@@ -99,6 +99,8 @@ class EngineAdapter:
     SUPPORTS_REPLACE_TABLE = True
     DEFAULT_CATALOG_TYPE = DIALECT
     QUOTE_IDENTIFIERS_IN_VIEWS = True
+    GRAINS_AS_PRIMARY_KEY = False
+    TIME_COL_AS_ORDERED_BY = False
 
     def __init__(
         self,
@@ -406,7 +408,7 @@ class EngineAdapter:
         self,
         table_name: TableName,
         columns_to_types: t.Dict[str, exp.DataType],
-        primary_key: t.Optional[t.Tuple[str, ...]] = None,
+        primary_key: t.Optional[t.Tuple[str, ...] | t.List[exp.Expression]] = None,
         exists: bool = True,
         table_description: t.Optional[str] = None,
         column_descriptions: t.Optional[t.Dict[str, str]] = None,
@@ -500,7 +502,7 @@ class EngineAdapter:
         self,
         table_name: str,
         columns_to_types: t.Dict[str, exp.DataType],
-        primary_key: t.Optional[t.Tuple[str, ...]] = None,
+        primary_key: t.Optional[t.Tuple[str, ...] | t.List[exp.Expression]] = None,
     ) -> None:
         """Create a table to store SQLMesh internal state.
 
@@ -519,7 +521,7 @@ class EngineAdapter:
         self,
         table_name: TableName,
         columns_to_types: t.Dict[str, exp.DataType],
-        primary_key: t.Optional[t.Tuple[str, ...]] = None,
+        primary_key: t.Optional[t.Tuple[str, ...] | t.List[exp.Expression]] = None,
         exists: bool = True,
         table_description: t.Optional[str] = None,
         column_descriptions: t.Optional[t.Dict[str, str]] = None,
@@ -549,17 +551,10 @@ class EngineAdapter:
                 f"Columns to types: {columns_to_types}"
             )
 
-        primary_key_expression = (
-            [exp.PrimaryKey(expressions=[exp.to_column(k) for k in primary_key])]
-            if primary_key and self.SUPPORTS_INDEXES
-            else []
-        )
-
         schema = self._build_schema_exp(
             table,
             columns_to_types,
             column_descriptions,
-            primary_key_expression,
         )
 
         self._create_table(
@@ -568,6 +563,7 @@ class EngineAdapter:
             exists=exists,
             columns_to_types=columns_to_types,
             table_description=table_description,
+            primary_key=primary_key,
             **kwargs,
         )
 
@@ -716,6 +712,7 @@ class EngineAdapter:
         table_description: t.Optional[str] = None,
         column_descriptions: t.Optional[t.Dict[str, str]] = None,
         table_kind: t.Optional[str] = None,
+        primary_key: t.Optional[t.Tuple[str, ...] | t.List[exp.Expression]] = None,
         **kwargs: t.Any,
     ) -> None:
         self.execute(
@@ -731,6 +728,7 @@ class EngineAdapter:
                     else None
                 ),
                 table_kind=table_kind,
+                primary_key=primary_key,
                 **kwargs,
             )
         )
@@ -744,6 +742,7 @@ class EngineAdapter:
         columns_to_types: t.Optional[t.Dict[str, exp.DataType]] = None,
         table_description: t.Optional[str] = None,
         table_kind: t.Optional[str] = None,
+        primary_key: t.Optional[t.Tuple[str, ...] | t.List[exp.Expression]] = None,
         **kwargs: t.Any,
     ) -> exp.Create:
         exists = False if replace else exists
@@ -762,8 +761,9 @@ class EngineAdapter:
                 columns_to_types=columns_to_types,
                 table_description=table_description,
                 table_kind=table_kind,
+                primary_key=primary_key,
             )
-            if kwargs or table_description
+            if kwargs or table_description or primary_key
             else None
         )
         return exp.Create(
@@ -1985,12 +1985,15 @@ class EngineAdapter:
         catalog_name: t.Optional[str] = None,
         storage_format: t.Optional[str] = None,
         partitioned_by: t.Optional[t.List[exp.Expression]] = None,
+        partitioned_by_user_cols: t.Optional[t.List[exp.Expression]] = None,
         partition_interval_unit: t.Optional[IntervalUnit] = None,
         clustered_by: t.Optional[t.List[str]] = None,
         table_properties: t.Optional[t.Dict[str, exp.Expression]] = None,
         columns_to_types: t.Optional[t.Dict[str, exp.DataType]] = None,
         table_description: t.Optional[str] = None,
         table_kind: t.Optional[str] = None,
+        primary_key: t.Optional[t.Tuple[str, ...] | t.List[exp.Expression]] = None,
+        ordered_by: t.Optional[t.List[str]] = None,
     ) -> t.Optional[exp.Properties]:
         """Creates a SQLGlot table properties expression for ddl."""
         properties: t.List[exp.Expression] = []
@@ -2001,6 +2004,9 @@ class EngineAdapter:
                     this=exp.Literal.string(self._truncate_table_comment(table_description))
                 )
             )
+
+        if primary_key and self.SUPPORTS_INDEXES:
+            properties.append(exp.PrimaryKey(expressions=[exp.to_column(k) for k in primary_key]))
 
         if properties:
             return exp.Properties(expressions=properties)

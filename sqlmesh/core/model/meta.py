@@ -354,8 +354,9 @@ class ModelMeta(_Node):
 
     @property
     def partitioned_by(self) -> t.List[exp.Expression]:
+        """Columns to partition the model by, including the time column if it is not already included."""
         if self.time_column and self.time_column.column not in [
-            col for col in self._partition_by_columns
+            col for col in self.partition_by_user_columns
         ]:
             return [self.time_column.column, *self.partitioned_by_]
         return self.partitioned_by_
@@ -424,7 +425,8 @@ class ModelMeta(_Node):
         ]
 
     @property
-    def _partition_by_columns(self) -> t.List[exp.Column]:
+    def partition_by_user_columns(self) -> t.List[exp.Column]:
+        """Columns the user has specified to partition the model by."""
         return [col for expr in self.partitioned_by_ for col in expr.find_all(exp.Column)]
 
     @property

@@ -4,7 +4,7 @@ import typing as t
 import logging
 import pandas as pd
 from sqlglot import exp
-
+from sqlmesh.core.model.kind import TimeColumn
 from sqlmesh.core.dialect import to_schema
 from sqlmesh.core.engine_adapter.base import EngineAdapter
 from sqlmesh.core.engine_adapter.shared import (
@@ -26,9 +26,9 @@ logger = logging.getLogger(__name__)
 class ClickhouseEngineAdapter(EngineAdapter):
     DIALECT = "clickhouse"
     SUPPORTS_TRANSACTIONS = False
-    # TODO: indexes are implicit for MergeTree table engines via PRIMARY KEY or ORDER BY
-    # - Indexes can be manipulated with ALTER **AFTER** a table has been created, though
-    SUPPORTS_INDEXES = False
+    SUPPORTS_INDEXES = True
+    GRAINS_AS_PRIMARY_KEY = True
+    TIME_COL_AS_ORDERED_BY = True
 
     SCHEMA_DIFFER = SchemaDiffer()
 
@@ -100,9 +100,7 @@ class ClickhouseEngineAdapter(EngineAdapter):
         def query_factory() -> Query:
             # TODO: should we pick a temp table engine ourselves or use the one passed to the model?
             # - If the latter, figure out how to pass it
-            self.create_table(
-                temp_table, columns_to_types, table_properties={"engine": exp.Var(this="Log")}
-            )
+            self.create_table(temp_table, columns_to_types, storage_format=exp.Var(this="Log"))
 
             self.cursor.client.insert_df(temp_table.sql(dialect=self.dialect), df=df)
 
@@ -147,12 +145,15 @@ class ClickhouseEngineAdapter(EngineAdapter):
         catalog_name: t.Optional[str] = None,
         storage_format: t.Optional[str] = None,
         partitioned_by: t.Optional[t.List[exp.Expression]] = None,
+        partitioned_by_user_cols: t.Optional[t.List[exp.Expression]] = None,
         partition_interval_unit: t.Optional[IntervalUnit] = None,
         clustered_by: t.Optional[t.List[str]] = None,
         table_properties: t.Optional[t.Dict[str, exp.Expression]] = None,
         columns_to_types: t.Optional[t.Dict[str, exp.DataType]] = None,
         table_description: t.Optional[str] = None,
         table_kind: t.Optional[str] = None,
+        primary_key: t.Optional[t.Tuple[str, ...] | t.List[exp.Expression]] = None,
+        ordered_by: t.Optional[t.List[str]] = None,
     ) -> t.Optional[exp.Properties]:
         properties: t.List[exp.Expression] = []
 
@@ -163,26 +164,111 @@ class ClickhouseEngineAdapter(EngineAdapter):
                 )
             )
 
-        if partitioned_by:
+        # `partitioned_by` automatically includes model `time_column`, but we only want the
+        #   columns specified by the user so use `partitioned_by_user_cols` instead
+        if partitioned_by_user_cols:
             properties.append(
                 exp.PartitionedByProperty(
-                    this=exp.Schema(expressions=partitioned_by),
+                    this=exp.Schema(expressions=partitioned_by_user_cols),
                 )
             )
 
+        # table engine, default `MergeTree`
+        table_engine = "MergeTree"
+        if storage_format:
+            table_engine = (
+                storage_format.this if isinstance(storage_format, exp.Var) else storage_format
+            )
+        properties.append(exp.EngineProperty(this=table_engine))
+
+        # we make a copy of table_properties so we can pop items off below then consume the rest just before returning
+        table_properties_copy = {}
         if table_properties:
-            # TODO ENGINE PROPERTY: address parsing/quoting of user input values
-            # - bare values are parsed into column identifiers, so `quote_identifiers` incorrectly adds quotes
-            # - single-quoted values are parsed into strings that include quotes
+            table_properties = {k.upper(): v for k, v in table_properties.items()}
             table_properties_copy = table_properties.copy()
-            engine_property = table_properties_copy.pop(
-                "engine", None
-            ) or table_properties_copy.pop("ENGINE", None)
-            if engine_property:
-                properties.append(exp.EngineProperty(this=exp.Var(this="Log")))
 
-            table_properties_copy = {k.upper(): v for k, v in table_properties_copy.items()}
+        # TODO: gate this appropriately
+        if table_engine != "Log":
+            # model grains are passed as primary key cols
+            # - it is not recommended to include the time_column in the primary key, so we remove it below if present
+            # - because we may remove time_column below, we just extract columns and delay appending it to properties
+            primary_key_cols = []
+            if primary_key and self.SUPPORTS_INDEXES:
+                primary_key_cols = (
+                    primary_key[0].expressions
+                    if len(primary_key) == 1 and isinstance(primary_key[0], exp.Tuple)
+                    else primary_key
+                )
 
+            # ORDER BY can consist of columns from multiple sources, so we assemble it in parts:
+            # 1. The user may pass it via table_properties (we store in ordered_by_physical_properties)
+            # 2. If the model has a time_column, it will be in `ordered_by` (we store in ordered_by_time_col)
+            # 3. If the model has a grain, it will be in `primary_key` but must also be in ORDER BY (we store in primary_key_cols)
+            # 4. It is required for our default MergeTree engine, so if we don't have 1-3 we pass `tuple()`
+            ordered_by_physical_properties = table_properties_copy.pop("ORDER_BY", None)
+            # 1
+            ordered_by_user_cols = []
+            if ordered_by_physical_properties:
+                # Extract nested list
+                ordered_by_physical_properties = (
+                    ordered_by_physical_properties[0]
+                    if isinstance(ordered_by_physical_properties, list)
+                    else ordered_by_physical_properties
+                )
+                # Unpack Tuple columns
+                ordered_by_physical_properties = (
+                    ordered_by_physical_properties.expressions
+                    if isinstance(ordered_by_physical_properties, exp.Tuple)
+                    else ordered_by_physical_properties
+                )
+                # Ensure list
+                ordered_by_user_cols = (
+                    ordered_by_physical_properties
+                    if isinstance(ordered_by_physical_properties, list)
+                    else [ordered_by_physical_properties]
+                )
+
+            # 2
+            ordered_by_time_col = None
+            if ordered_by:
+                ordered_by_time_col = (
+                    ordered_by.column if isinstance(ordered_by, TimeColumn) else ordered_by
+                )
+                primary_key_cols = [
+                    col
+                    for col in primary_key_cols
+                    if col.alias_or_name != ordered_by_time_col.alias_or_name
+                ]
+
+            # we removed time_column from primary_key_cols so can now add the primary key property
+            if primary_key_cols:
+                properties.append(
+                    exp.PrimaryKey(expressions=[exp.to_column(k) for k in primary_key_cols])
+                )
+
+            # 3. primary key must be a leftward subset of ordered by, so we rearrange/add them to the front
+            # - time_column will always go last
+            ordered_by_cols = primary_key_cols
+            ordered_by_cols_names = [col.alias_or_name for col in ordered_by_cols]
+            for col in [*ordered_by_user_cols, ordered_by_time_col]:
+                if col and col.alias_or_name not in ordered_by_cols_names:
+                    ordered_by_cols.append(col)
+                    ordered_by_cols_names.append(col.alias_or_name)
+
+            ordered_by_expressions = (
+                exp.Tuple(expressions=[exp.to_column(k) for k in ordered_by_cols])
+                if ordered_by_cols
+                else exp.Literal(this="tuple()", is_string=False)
+            )
+            properties.append(exp.Order(expressions=[exp.Ordered(this=ordered_by_expressions)]))
+
+        on_cluster = table_properties_copy.pop("CLUSTER", None)
+        if on_cluster:
+            properties.append(
+                exp.OnCluster(this=exp.Literal(this=on_cluster.this, is_string=False))
+            )
+
+        if table_properties_copy:
             properties.extend(self._table_or_view_properties_to_expressions(table_properties_copy))
 
         if properties:
