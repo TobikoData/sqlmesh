@@ -1208,12 +1208,8 @@ def test_dbt_select_star_is_directly_modified(sushi_test_dbt_context: Context):
 
     model = context.get_model("sushi.simple_model_a")
     context.upsert_model(
-        SqlModel.parse_obj(
-            {
-                **model.dict(),
-                "query": d.parse_one("SELECT 1 AS a, 2 AS b"),
-            }
-        )
+        model,
+        query=d.parse_one("SELECT 1 AS a, 2 AS b"),
     )
 
     snapshot_a_id = context.get_snapshot("sushi.simple_model_a").snapshot_id  # type: ignore

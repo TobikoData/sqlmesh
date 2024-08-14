@@ -100,9 +100,9 @@ class OptimizedQueryCache:
                     # that prevent us from rendering it at load time. This means that we can safely set the
                     # unoptimized cache to None as well to prevent attempts to render it downstream.
                     model._query_renderer.update_cache(None, optimized=False)
+                return True
             except Exception as ex:
                 logger.warning("Failed to load a cache entry '%s': %s", name, ex)
-            return True
 
         optimized_query = model.render_query()
         new_entry = OptimizedQueryCacheEntry(optimized_rendered_query=optimized_query)

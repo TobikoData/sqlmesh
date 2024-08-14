@@ -22,7 +22,6 @@ from dbt.config.renderer import DbtProjectYamlRenderer, ProfileRenderer
 from dbt.parser.manifest import ManifestLoader
 from dbt.tracking import do_not_track
 
-from sqlmesh.core import constants as c
 from sqlmesh.dbt.basemodel import Dependencies
 from sqlmesh.dbt.builtin import BUILTIN_FILTERS, BUILTIN_GLOBALS, OVERRIDDEN_MACROS
 from sqlmesh.dbt.model import ModelConfig
@@ -34,7 +33,6 @@ from sqlmesh.dbt.test import TestConfig
 from sqlmesh.dbt.util import DBT_VERSION
 from sqlmesh.utils.errors import ConfigError
 from sqlmesh.utils.jinja import (
-    CallCache,
     MacroInfo,
     MacroReference,
     extract_call_names,
@@ -88,7 +86,6 @@ class ManifestHelper:
         self._tests_by_owner: t.Dict[str, t.List[TestConfig]] = defaultdict(list)
         self._disabled_refs: t.Optional[t.Set[str]] = None
         self._disabled_sources: t.Optional[t.Set[str]] = None
-        self._cache = CallCache(self.project_path / c.CACHE)
 
     def tests(self, package_name: t.Optional[str] = None) -> TestConfigs:
         self._load_all()
@@ -383,7 +380,7 @@ class ManifestHelper:
         # This behavior has been observed with macros like dbt.current_timestamp(), dbt_utils.slugify(), and source().
         # Here we apply our custom extractor to make a best effort to supplement references captured in the manifest.
         dependencies = Dependencies()
-        for call_name, node in extract_call_names(target, self._cache):
+        for call_name, node in extract_call_names(target):
             if call_name[0] == "config":
                 continue
             elif call_name[0] == "source":

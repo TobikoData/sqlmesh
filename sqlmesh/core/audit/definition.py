@@ -27,7 +27,6 @@ from sqlmesh.utils.date import TimeLike
 from sqlmesh.utils.errors import AuditConfigError, SQLMeshError, raise_config_error
 from sqlmesh.utils.hashing import hash_data
 from sqlmesh.utils.jinja import (
-    CallCache,
     JinjaMacroRegistry,
     extract_macro_references_and_variables,
 )
@@ -356,18 +355,19 @@ class StandaloneAudit(_Node, AuditMixin):
         Returns:
             The metadata hash for the node.
         """
-        data = [
-            self.owner,
-            self.description,
-            *sorted(self.tags),
-            str(self.sorted_python_env),
-            self.stamp,
-        ]
+        if self._metadata_hash is None:
+            data = [
+                self.owner,
+                self.description,
+                *sorted(self.tags),
+                str(self.sorted_python_env),
+                self.stamp,
+            ]
 
-        query = self.render_query(self) or self.query
-        data.append(gen(query))
-
-        return hash_data(data)
+            query = self.render_query(self) or self.query
+            data.append(gen(query))
+            self._metadata_hash = hash_data(data)
+        return self._metadata_hash
 
     def text_diff(self, other: Node) -> str:
         """Produce a text diff against another node.
@@ -482,7 +482,6 @@ def load_audit(
     dialect: t.Optional[str] = None,
     default_catalog: t.Optional[str] = None,
     variables: t.Optional[t.Dict[str, t.Any]] = None,
-    call_cache: t.Optional[CallCache] = None,
 ) -> Audit:
     """Load an audit from a parsed SQLMesh audit file.
 
@@ -538,15 +537,12 @@ def load_audit(
     extra_kwargs: t.Dict[str, t.Any] = {}
     if is_standalone:
         jinja_macro_refrences, used_variables = extract_macro_references_and_variables(
-            call_cache,
             *(gen(s) for s in statements),
             gen(query),
         )
         jinja_macros = (jinja_macros or JinjaMacroRegistry()).trim(jinja_macro_refrences)
         for jinja_macro in jinja_macros.root_macros.values():
-            used_variables.update(
-                extract_macro_references_and_variables(call_cache, jinja_macro.definition)[1]
-            )
+            used_variables.update(extract_macro_references_and_variables(jinja_macro.definition)[1])
 
         extra_kwargs["jinja_macros"] = jinja_macros
         extra_kwargs["python_env"] = _python_env(

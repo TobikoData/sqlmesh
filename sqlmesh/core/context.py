@@ -424,12 +424,20 @@ class GenericContext(BaseContext, t.Generic[C]):
             raise SQLMeshError(f"The disabled model '{model.name}' cannot be upserted")
         path = model._path
 
-        # model.copy() can't be used here due to a cached state that can be a part of a model instance.
-        model = t.cast(Model, type(model)(**{**t.cast(Model, model).dict(), **kwargs}))
+        model = model.copy(update=kwargs)
+        model._full_depends_on = None  # the query can be updated to change deps
         model._path = path
 
-        self._models.update({model.fqn: model})
         self.dag.add(model.fqn, model.depends_on)
+
+        self._models.update(
+            {
+                model.fqn: model,
+                # bust the fingerprint cache for all downstream models
+                **{fqn: self._models[fqn].copy() for fqn in self.dag.downstream(model.fqn)},
+            }
+        )
+
         update_model_schemas(
             self.dag,
             self._models,

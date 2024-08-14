@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import sys
 import typing as t
 from datetime import datetime
 from enum import Enum
@@ -16,11 +17,17 @@ from sqlmesh.utils.pydantic import (
     field_validator,
     model_validator,
     model_validator_v1_args,
+    PRIVATE_FIELDS,
 )
 
 if t.TYPE_CHECKING:
     from sqlmesh.core.audit import ModelAudit
     from sqlmesh.core.snapshot import Node
+
+    if sys.version_info >= (3, 11):
+        from typing import Self
+    else:
+        from typing_extensions import Self
 
 
 class IntervalUnit(str, Enum):
@@ -193,6 +200,8 @@ class _Node(PydanticModel):
     tags: t.List[str] = []
     stamp: t.Optional[str] = None
     _path: Path = Path()
+    _data_hash: t.Optional[str] = None
+    _metadata_hash: t.Optional[str] = None
 
     _croniter: t.Optional[CroniterCache] = None
     __inferred_interval_unit: t.Optional[IntervalUnit] = None
@@ -200,6 +209,19 @@ class _Node(PydanticModel):
     def __str__(self) -> str:
         path = f": {self._path.name}" if self._path else ""
         return f"{self.__class__.__name__}<{self.name}{path}>"
+
+    def __getstate__(self) -> t.Dict[t.Any, t.Any]:
+        state = super().__getstate__()
+        private = state[PRIVATE_FIELDS]
+        private["_data_hash"] = None
+        private["_metadata_hash"] = None
+        return state
+
+    def copy(self, **kwargs: t.Any) -> Self:
+        node = super().copy(**kwargs)
+        node._data_hash = None
+        node._metadata_hash = None
+        return node
 
     @field_validator("name", mode="before")
     @classmethod

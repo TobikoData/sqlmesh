@@ -33,11 +33,7 @@ from sqlmesh.utils import columns_to_types_all_known, str_to_bool, UniqueKeyDict
 from sqlmesh.utils.date import TimeLike, make_inclusive, to_datetime, to_time_column
 from sqlmesh.utils.errors import ConfigError, SQLMeshError, raise_config_error
 from sqlmesh.utils.hashing import hash_data
-from sqlmesh.utils.jinja import (
-    CallCache,
-    JinjaMacroRegistry,
-    extract_macro_references_and_variables,
-)
+from sqlmesh.utils.jinja import JinjaMacroRegistry, extract_macro_references_and_variables
 from sqlmesh.utils.pydantic import PRIVATE_FIELDS, field_validator, field_validator_v1_args
 from sqlmesh.utils.metaprogramming import (
     Executable,
@@ -55,6 +51,11 @@ if t.TYPE_CHECKING:
     from sqlmesh.core.engine_adapter._typing import QueryOrDF
     from sqlmesh.core.snapshot import DeployabilityIndex, Node, Snapshot
     from sqlmesh.utils.jinja import MacroReference
+
+    if sys.version_info >= (3, 11):
+        from typing import Self
+    else:
+        from typing_extensions import Self
 
 if sys.version_info >= (3, 9):
     from typing import Literal
@@ -126,17 +127,19 @@ class _Model(ModelMeta, frozen=True):
     post_statements_: t.Optional[t.List[exp.Expression]] = Field(
         default=None, alias="post_statements"
     )
-    _data_hash: t.Optional[str] = None
-    _metadata_hash: t.Optional[str] = None
 
     _expressions_validator = expression_validator
 
     def __getstate__(self) -> t.Dict[t.Any, t.Any]:
         state = super().__getstate__()
         private = state[PRIVATE_FIELDS]
-        private["_data_hash"] = None
-        private["_metadata_hash"] = None
+        private["_SqlBasedModel__statement_renderers"] = {}
         return state
+
+    def copy(self, **kwargs: t.Any) -> Self:
+        model = super().copy(**kwargs)
+        model.__statement_renderers = {}
+        return model
 
     def render(
         self,
@@ -639,7 +642,7 @@ class _Model(ModelMeta, frozen=True):
                     {col: dtype.sql(dialect=self.dialect) for col, dtype in mapping_schema.items()},
                 )
 
-    @cached_property
+    @property
     def depends_on(self) -> t.Set[str]:
         """All of the upstream dependencies referenced in the model's query, excluding self references.
 
@@ -708,7 +711,7 @@ class _Model(ModelMeta, frozen=True):
     def is_seed(self) -> bool:
         return False
 
-    @cached_property
+    @property
     def depends_on_self(self) -> bool:
         return self.fqn in self.full_depends_on
 
@@ -954,7 +957,7 @@ class _Model(ModelMeta, frozen=True):
 
     @property
     def full_depends_on(self) -> t.Set[str]:
-        if not self._full_depends_on:
+        if self._full_depends_on is None:
             depends_on = self.depends_on_ or set()
 
             query = self.render_query(optimize=False)
@@ -971,12 +974,6 @@ class _SqlBasedModel(_Model):
     inline_audits_: t.Dict[str, t.Any] = Field(default={}, alias="inline_audits")
 
     _expression_validator = expression_validator
-
-    def __getstate__(self) -> t.Dict[t.Any, t.Any]:
-        state = super().__getstate__()
-        private = state[PRIVATE_FIELDS]
-        private["_SqlBasedModel__statement_renderers"] = {}
-        return state
 
     @field_validator("inline_audits_", mode="before")
     @field_validator_v1_args
@@ -1020,9 +1017,17 @@ class SqlModel(_SqlBasedModel):
         state["__dict__"] = state["__dict__"].copy()
         # query renderer is very expensive to serialize
         state["__dict__"].pop("_query_renderer", None)
+        state["__dict__"].pop("column_descriptions", None)
         private = state[PRIVATE_FIELDS]
         private["_columns_to_types"] = None
         return state
+
+    def copy(self, **kwargs: t.Any) -> Self:
+        model = super().copy(**kwargs)
+        model.__dict__.pop("_query_renderer", None)
+        model.__dict__.pop("column_descriptions", None)
+        model._columns_to_types = None
+        return model
 
     def render_query(
         self,
@@ -1231,6 +1236,17 @@ class SeedModel(_SqlBasedModel):
     is_hydrated: bool = True
     source_type: Literal["seed"] = "seed"
 
+    def __getstate__(self) -> t.Dict[t.Any, t.Any]:
+        state = super().__getstate__()
+        state["__dict__"] = state["__dict__"].copy()
+        state["__dict__"].pop("_reader", None)
+        return state
+
+    def copy(self, **kwargs: t.Any) -> Self:
+        model = super().copy(**kwargs)
+        model.__dict__.pop("_reader", None)
+        return model
+
     def render(
         self,
         *,
@@ -1308,7 +1324,7 @@ class SeedModel(_SqlBasedModel):
             return self._path.parent / seed_path
         return seed_path
 
-    @cached_property
+    @property
     def depends_on(self) -> t.Set[str]:
         return (self.depends_on_ or set()) - {self.fqn}
 
@@ -1518,7 +1534,6 @@ def load_sql_based_model(
     default_catalog: t.Optional[str] = None,
     variables: t.Optional[t.Dict[str, t.Any]] = None,
     infer_names: t.Optional[bool] = False,
-    call_cache: t.Optional[CallCache] = None,
     **kwargs: t.Any,
 ) -> Model:
     """Load a model from a parsed SQLMesh model SQL file.
@@ -1538,7 +1553,6 @@ def load_sql_based_model(
         physical_schema_override: The physical schema override for the model.
         default_catalog: The default catalog if no model catalog is configured.
         variables: The variables to pass to the model.
-        call_cache: Jinja call file cache.
         kwargs: Additional kwargs to pass to the loader.
     """
     if not expressions:
@@ -1590,7 +1604,7 @@ def load_sql_based_model(
 
     # Extract the query and any pre/post statements
     query_or_seed_insert, pre_statements, post_statements, inline_audits = (
-        _split_sql_model_statements(expressions[1:], path, call_cache, dialect=dialect)
+        _split_sql_model_statements(expressions[1:], path, dialect=dialect)
     )
 
     meta_fields: t.Dict[str, t.Any] = {
@@ -1624,7 +1638,6 @@ def load_sql_based_model(
         )
 
     jinja_macro_references, used_variables = extract_macro_references_and_variables(
-        call_cache,
         *(gen(e) for e in pre_statements),
         *(gen(e) for e in post_statements),
         *([gen(query_or_seed_insert)] if query_or_seed_insert is not None else []),
@@ -1632,9 +1645,7 @@ def load_sql_based_model(
 
     jinja_macros = (jinja_macros or JinjaMacroRegistry()).trim(jinja_macro_references)
     for jinja_macro in jinja_macros.root_macros.values():
-        used_variables.update(
-            extract_macro_references_and_variables(call_cache, jinja_macro.definition)[1]
-        )
+        used_variables.update(extract_macro_references_and_variables(jinja_macro.definition)[1])
 
     common_kwargs = dict(
         pre_statements=pre_statements,
@@ -2029,7 +2040,6 @@ INSERT_SEED_MACRO_CALL = d.parse_one("@INSERT_SEED()")
 def _split_sql_model_statements(
     expressions: t.List[exp.Expression],
     path: Path,
-    call_cache: t.Optional[CallCache],
     dialect: t.Optional[str] = None,
 ) -> t.Tuple[
     t.Optional[exp.Expression],
@@ -2061,9 +2071,7 @@ def _split_sql_model_statements(
         expr = expressions[idx]
 
         if isinstance(expr, d.Audit):
-            loaded_audit = load_audit(
-                [expr, expressions[idx + 1]], dialect=dialect, call_cache=call_cache
-            )
+            loaded_audit = load_audit([expr, expressions[idx + 1]], dialect=dialect)
             assert isinstance(loaded_audit, ModelAudit)
             inline_audits[loaded_audit.name] = loaded_audit
             idx += 2
