@@ -100,7 +100,7 @@ You can set the `pre_statements` and `post_statements` arguments to a list of SQ
         "id": "int",
         "name": "text",
     },
-    pre_statements=[exp.Cache(this=exp.Table(this=exp.Identifier(this="x")), expression=exp.Select(expressions=exp.Literal(this='1',is_string=False)))]
+    pre_statements=["SET GLOBAL parameter = 'value';", exp.Cache(this=exp.Table(this=exp.Identifier(this="x")), expression=exp.Select(expressions=exp.Literal(this='1',is_string=False)))]
     post_statements=["@CREATE_INDEX(@this_model, id)"],
 )
 def execute(
