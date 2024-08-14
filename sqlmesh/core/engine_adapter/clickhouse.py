@@ -4,6 +4,7 @@ import typing as t
 import logging
 import pandas as pd
 from sqlglot import exp
+from sqlglot.helper import seq_get
 from sqlmesh.core.model.kind import TimeColumn
 from sqlmesh.core.dialect import to_schema
 from sqlmesh.core.engine_adapter.base import EngineAdapter
@@ -32,42 +33,60 @@ class ClickhouseEngineAdapter(EngineAdapter):
 
     SCHEMA_DIFFER = SchemaDiffer()
 
+    @property
+    def is_cloud(self) -> bool:
+        value = seq_get(
+            self.fetchone("select value from system.settings where name='cloud_mode'"), 0
+        )
+        return str(value) == "1"
+
+    @property
+    def is_cluster(self) -> bool:
+        if self.is_cloud:
+            return False
+
+        # you can set cluster config and start some instances, but unless you set up zookeeper as well,
+        # trying to create clustered tables will fail with:
+        # Code: 139. DB::Exception: There is no Zookeeper configuration in server config.
+        value = seq_get(self.fetchone("show tables in system like 'zookeeper'"), 0)
+        return str(value) == "zookeeper"
+
+    @property
+    def is_standalone(self) -> bool:
+        return not self.is_cloud and not self.is_cluster
+
     def create_schema(
         self,
         schema_name: SchemaName,
         ignore_if_exists: bool = True,
         warn_on_error: bool = True,
+        properties: t.List[exp.Expression] = [],
     ) -> None:
         """Create a Clickhouse database from a name or qualified table name.
 
         Clickhouse has a two-level naming scheme [database].[table].
         """
-        try:
-            self.execute(
-                exp.Create(
-                    this=to_schema(schema_name),
-                    kind="DATABASE",
-                    exists=ignore_if_exists,
-                )
-            )
-        except Exception as e:
-            if not warn_on_error:
-                raise
-            logger.warning("Failed to create database '%s': %s", schema_name, e)
+        return self._create_schema(
+            schema_name=schema_name,
+            ignore_if_exists=ignore_if_exists,
+            warn_on_error=warn_on_error,
+            properties=properties,
+            kind="DATABASE",
+        )
 
     def drop_schema(
         self,
         schema_name: SchemaName,
         ignore_if_not_exists: bool = True,
         cascade: bool = False,
+        **drop_args: t.Dict[str, exp.Expression],
     ) -> None:
-        self.execute(
-            exp.Drop(
-                this=to_schema(schema_name),
-                kind="DATABASE",
-                exists=ignore_if_not_exists,
-                cascade=False,
-            )
+        return self._drop_object(
+            name=schema_name,
+            exists=ignore_if_not_exists,
+            kind="DATABASE",
+            cascade=cascade,
+            **drop_args,
         )
 
     # TODO: `RENAME` is valid SQL, but `EXCHANGE` is an atomic swap

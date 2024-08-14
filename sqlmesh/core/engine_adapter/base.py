@@ -827,7 +827,7 @@ class EngineAdapter:
             table_name: The name of the table to drop.
             exists: If exists, defaults to True.
         """
-        self._drop_tablelike_object(table_name, exists)
+        self._drop_object(name=table_name, exists=exists)
 
     def drop_managed_table(self, table_name: TableName, exists: bool = True) -> None:
         """Drops a managed table.
@@ -838,20 +838,24 @@ class EngineAdapter:
         """
         raise NotImplementedError(f"Engine does not support managed tables: {type(self)}")
 
-    def _drop_tablelike_object(
-        self, table_name: TableName, exists: bool = True, kind: str = "TABLE"
+    def _drop_object(
+        self,
+        name: TableName | SchemaName,
+        exists: bool = True,
+        kind: str = "TABLE",
+        **drop_args: t.Dict[str, exp.Expression],
     ) -> None:
-        """Drops a "tablelike object".
+        """Drops an object.
 
-        A "tablelike object" could be a TABLE or a DYNAMIC TABLE or a TEMPORARY TABLE etc depending on the context.
+        A an object could be a DATABASE, SCHEMA, VIEW, TABLE, DYNAMIC TABLE, TEMPORARY TABLE etc depending on the :kind.
 
         Args:
-            table_name: The name of the table to drop.
+            name: The name of the table to drop.
             exists: If exists, defaults to True.
             kind: What kind of object to drop. Defaults to TABLE
+            **drop_args: Any extra arguments to set on the Drop expression
         """
-        drop_expression = exp.Drop(this=exp.to_table(table_name), kind=kind, exists=exists)
-        self.execute(drop_expression)
+        self.execute(exp.Drop(this=exp.to_table(name), kind=kind, exists=exists, **drop_args))
 
     def get_alter_expressions(
         self,
@@ -998,20 +1002,40 @@ class EngineAdapter:
         schema_name: SchemaName,
         ignore_if_exists: bool = True,
         warn_on_error: bool = True,
+        properties: t.List[exp.Expression] = [],
+    ) -> None:
+        return self._create_schema(
+            schema_name=schema_name,
+            ignore_if_exists=ignore_if_exists,
+            warn_on_error=warn_on_error,
+            properties=properties,
+            kind="SCHEMA",
+        )
+
+    def _create_schema(
+        self,
+        schema_name: SchemaName,
+        ignore_if_exists: bool,
+        warn_on_error: bool,
+        properties: t.List[exp.Expression],
+        kind: str,
     ) -> None:
         """Create a schema from a name or qualified table name."""
         try:
             self.execute(
                 exp.Create(
                     this=to_schema(schema_name),
-                    kind="SCHEMA",
+                    kind=kind,
                     exists=ignore_if_exists,
+                    properties=exp.Properties(  # this renders as '' (empty string) if expressions is empty
+                        expressions=properties
+                    ),
                 )
             )
         except Exception as e:
             if not warn_on_error:
                 raise
-            logger.warning("Failed to create schema '%s': %s", schema_name, e)
+            logger.warning("Failed to create %s '%s': %s", kind.lower(), schema_name, e)
 
     def drop_schema(
         self,
@@ -1019,13 +1043,8 @@ class EngineAdapter:
         ignore_if_not_exists: bool = True,
         cascade: bool = False,
     ) -> None:
-        self.execute(
-            exp.Drop(
-                this=to_schema(schema_name),
-                kind="SCHEMA",
-                exists=ignore_if_not_exists,
-                cascade=cascade,
-            )
+        return self._drop_object(
+            name=schema_name, exists=ignore_if_not_exists, kind="SCHEMA", cascade=cascade
         )
 
     def drop_view(

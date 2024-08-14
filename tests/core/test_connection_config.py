@@ -627,9 +627,7 @@ def test_mysql(make_config):
 
 def test_clickhouse(make_config):
     config = make_config(
-        type="clickhouse",
-        host="localhost",
-        user="default",
+        type="clickhouse", host="localhost", username="default", password="default"
     )
     assert isinstance(config, ClickhouseConnectionConfig)
     assert config.is_recommended_for_state_sync is False

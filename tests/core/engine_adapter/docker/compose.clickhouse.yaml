@@ -14,6 +14,12 @@ x-clickhouse-server-environment: &default-environment
   CLICKHOUSE_PASSWORD: clickhouse
 
 services:
+  standalone:
+    image: 'clickhouse/clickhouse-server:24.7'
+    environment:
+      <<: *default-environment
+    ports:
+      - 8122:8123
   clickhouse-1:
     <<: *clickhouse-server
     environment:
