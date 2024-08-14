@@ -47,7 +47,7 @@ setup(
         "requests",
         "rich[jupyter]",
         "ruamel.yaml",
-        "sqlglot[rs]~=25.11.2",
+        "sqlglot[rs]~=25.11.3",
     ],
     extras_require={
         "bigquery": [
