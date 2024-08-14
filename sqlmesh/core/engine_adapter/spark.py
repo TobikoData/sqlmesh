@@ -258,25 +258,15 @@ class SparkEngineAdapter(GetCurrentCatalogFromFunctionMixin, HiveMetastoreTableP
         batch_size: int,
         target_table: TableName,
     ) -> t.List[SourceQuery]:
-        if not self._use_spark_session:
-            return super()._df_to_source_queries(df, columns_to_types, batch_size, target_table)
         df = self._ensure_pyspark_df(df, columns_to_types)
 
         def query_factory() -> Query:
             temp_table = self._get_temp_table(target_table or "spark", table_only=True)
-            if self.use_serverless:
-                # Global temp views are not supported on Databricks Serverless
-                # This also means we can't mix Python SQL Connection and DB Connect since they wouldn't
-                # share the same temp objects.
-                df.createOrReplaceTempView(temp_table.sql(dialect=self.dialect))  # type: ignore
-            else:
-                df.createOrReplaceGlobalTempView(temp_table.sql(dialect=self.dialect))  # type: ignore
-                temp_table.set("db", "global_temp")
+            df.createOrReplaceGlobalTempView(temp_table.sql(dialect=self.dialect))  # type: ignore
+            temp_table.set("db", "global_temp")
             return exp.select(*self._casted_columns(columns_to_types)).from_(temp_table)
 
-        if self._use_spark_session:
-            return [SourceQuery(query_factory=query_factory)]
-        return super()._df_to_source_queries(df, columns_to_types, batch_size, target_table)
+        return [SourceQuery(query_factory=query_factory)]
 
     def _ensure_pyspark_df(
         self, generic_df: DF, columns_to_types: t.Optional[t.Dict[str, exp.DataType]] = None

@@ -3,7 +3,6 @@ import typing as t
 from datetime import datetime
 from unittest.mock import call
 
-import pandas as pd
 import pytest
 from pyspark.sql import types as spark_types
 from pytest_mock.plugin import MockerFixture
@@ -192,48 +191,6 @@ def test_replace_query_exists(mocker: MockerFixture, make_mocked_engine_adapter:
 
     assert to_sql_calls(adapter) == [
         "INSERT OVERWRITE TABLE `test_table` (`a`) SELECT `a` FROM `tbl`",
-    ]
-
-
-def test_replace_query_pandas_not_exists(
-    make_mocked_engine_adapter: t.Callable, mocker: MockerFixture
-):
-    mocker.patch(
-        "sqlmesh.core.engine_adapter.spark.SparkEngineAdapter.table_exists",
-        return_value=False,
-    )
-    mocker.patch("sqlmesh.core.engine_adapter.spark.SparkEngineAdapter._use_spark_session", False)
-    mocker.patch(
-        "sqlmesh.core.engine_adapter.spark.SparkEngineAdapter._ensure_fqn", side_effect=lambda x: x
-    )
-    adapter = make_mocked_engine_adapter(SparkEngineAdapter)
-    df = pd.DataFrame({"a": [1, 2, 3], "b": [4, 5, 6]})
-    adapter.replace_query(
-        "test_table", df, {"a": exp.DataType.build("int"), "b": exp.DataType.build("int")}
-    )
-
-    assert to_sql_calls(adapter) == [
-        "CREATE TABLE IF NOT EXISTS `test_table` AS SELECT CAST(`a` AS INT) AS `a`, CAST(`b` AS INT) AS `b` FROM (SELECT CAST(`a` AS INT) AS `a`, CAST(`b` AS INT) AS `b` FROM VALUES (1, 4), (2, 5), (3, 6) AS `t`(`a`, `b`)) AS `_subquery`",
-    ]
-
-
-def test_replace_query_pandas_exists(make_mocked_engine_adapter: t.Callable, mocker: MockerFixture):
-    mocker.patch(
-        "sqlmesh.core.engine_adapter.spark.SparkEngineAdapter.table_exists",
-        return_value=True,
-    )
-    mocker.patch("sqlmesh.core.engine_adapter.spark.SparkEngineAdapter._use_spark_session", False)
-    mocker.patch(
-        "sqlmesh.core.engine_adapter.spark.SparkEngineAdapter._ensure_fqn", side_effect=lambda x: x
-    )
-    adapter = make_mocked_engine_adapter(SparkEngineAdapter)
-    df = pd.DataFrame({"a": [1, 2, 3], "b": [4, 5, 6]})
-    adapter.replace_query(
-        "test_table", df, {"a": exp.DataType.build("int"), "b": exp.DataType.build("int")}
-    )
-
-    assert to_sql_calls(adapter) == [
-        "INSERT OVERWRITE TABLE `test_table` (`a`, `b`) SELECT CAST(`a` AS INT) AS `a`, CAST(`b` AS INT) AS `b` FROM VALUES (1, 4), (2, 5), (3, 6) AS `t`(`a`, `b`)",
     ]
 
 
