@@ -78,6 +78,33 @@ class Signal(abc.ABC):
 
 
 SignalFactory = t.Callable[[t.Dict[str, t.Union[str, int, float, bool]]], Signal]
+_registered_signal_factory: t.Optional[SignalFactory] = None
+
+
+def signal_factory(f: SignalFactory) -> None:
+    """Specifies a function as the SignalFactory to use for building Signal instances from model signal metadata.
+
+    Only one such function may be decorated with this decorator.
+
+    Example:
+        import typing as t
+        from sqlmesh.core.scheduler import signal_factory, Batch, Signal
+
+        class AlwaysReadySignal(Signal):
+            def check_intervals(self, batch: Batch) -> t.Union[bool, Batch]:
+                return True
+
+        @signal_factory
+        def my_signal_factory(signal_metadata: t.Dict[str, t.Union[str, int, float, bool]]) -> Signal:
+            return AlwaysReadySignal()
+    """
+
+    global _registered_signal_factory
+
+    if _registered_signal_factory is not None:
+        raise RuntimeError("only one function may be decorated with @signal_factory")
+
+    _registered_signal_factory = f
 
 
 class Scheduler:
@@ -119,7 +146,7 @@ class Scheduler:
         self.notification_target_manager = (
             notification_target_manager or NotificationTargetManager()
         )
-        self.signal_factory = signal_factory
+        self.signal_factory = signal_factory or _registered_signal_factory
 
     def batches(
         self,
