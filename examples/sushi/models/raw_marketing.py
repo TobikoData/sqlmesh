@@ -59,7 +59,15 @@ def execute(
             "updated_at": [exec_time] * num_customers,
         }
     )
-    df = df_new.merge(df_existing, on="customer_id", how="left", suffixes=(None, "_old"))
+
+    # clickhouse returns a dataframe with no columns if the query is empty, so we can't merge
+    if not df_existing.empty:
+        df = df_new.merge(df_existing, on="customer_id", how="left", suffixes=(None, "_old"))
+    else:
+        df = df_new
+        df["status_old"] = pd.NA
+        df["updated_at_old"] = pd.NA
+
     df["updated_at"] = pd.to_datetime(
         np.where(  # type: ignore
             df["status_old"] != df["status"], execution_time, df["updated_at_old"]
