@@ -425,7 +425,6 @@ class GenericContext(BaseContext, t.Generic[C]):
         path = model._path
 
         model = model.copy(update=kwargs)
-        model._full_depends_on = None  # the query can be updated to change deps
         model._path = path
 
         self.dag.add(model.fqn, model.depends_on)

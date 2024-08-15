@@ -36,7 +36,7 @@ from sqlmesh.core.audit import ModelAudit
 from sqlmesh.core.console import Console, get_console
 from sqlmesh.core.engine_adapter import EngineAdapter
 from sqlmesh.core.environment import Environment
-from sqlmesh.core.model import ModelCache, ModelKindName, OptimizedQueryCache, SeedModel
+from sqlmesh.core.model import ModelCache, ModelKindName, SeedModel
 from sqlmesh.core.snapshot import (
     Intervals,
     Node,
@@ -473,13 +473,11 @@ class EngineAdapterStateSync(CommonStateSyncMixin, StateSync):
         snapshots: t.Dict[SnapshotId, Snapshot] = {}
         duplicates: t.Dict[SnapshotId, Snapshot] = {}
         model_cache = ModelCache(self._context_path / c.CACHE)
-        optimized_query_cache = OptimizedQueryCache(self._context_path / c.CACHE)
 
         for query in self._get_snapshots_expressions(snapshot_ids, lock_for_update):
             for serialized_snapshot, name, identifier, _ in self._fetchall(query):
                 snapshot = parse_snapshot(
                     model_cache,
-                    optimized_query_cache,
                     serialized_snapshot=serialized_snapshot,
                     name=name,
                     identifier=identifier,
@@ -1427,7 +1425,6 @@ def _snapshot_to_json(snapshot: Snapshot) -> str:
 
 def parse_snapshot(
     model_cache: ModelCache,
-    optimized_query_cache: OptimizedQueryCache,
     serialized_snapshot: str,
     name: str,
     identifier: str,
@@ -1438,7 +1435,6 @@ def parse_snapshot(
         return parse_obj_as(Node, payload["node"])  # type: ignore
 
     node = model_cache.get_or_load(f"{name}_{identifier}", loader=loader)  # type: ignore
-    optimized_query_cache.with_optimized_query(node)
     node._data_hash = payload["fingerprint"]["data_hash"]
     node._metadata_hash = payload["fingerprint"]["metadata_hash"]
     payload["node"] = node

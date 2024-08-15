@@ -1027,6 +1027,8 @@ class SqlModel(_SqlBasedModel):
         model.__dict__.pop("_query_renderer", None)
         model.__dict__.pop("column_descriptions", None)
         model._columns_to_types = None
+        if kwargs.get("update", {}).keys() & {"depends_on_", "query"}:
+            model._full_depends_on = None
         return model
 
     def render_query(
