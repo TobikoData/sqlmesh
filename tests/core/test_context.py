@@ -812,3 +812,28 @@ def test_override_dialect_normalization_strategy():
 
     # The above change is applied globally so we revert it to avoid breaking other tests
     DuckDB.NORMALIZATION_STRATEGY = NormalizationStrategy.CASE_INSENSITIVE
+
+
+def test_access_self_columns_to_types_in_macro(tmp_path: pathlib.Path):
+    create_temp_file(
+        tmp_path,
+        pathlib.Path(pathlib.Path("models"), "test.sql"),
+        "MODEL(name test); SELECT 1 AS c; @post_statement()",
+    )
+    create_temp_file(
+        tmp_path,
+        pathlib.Path(pathlib.Path("macros"), "post_statement.py"),
+        """
+from sqlglot import exp
+from sqlmesh.core.macros import macro
+
+@macro()
+def post_statement(evaluator):
+    if evaluator.runtime_stage != 'loading':
+        assert evaluator.columns_to_types("test") == {"c": exp.DataType.build("int")}
+    return None
+""",
+    )
+
+    context = Context(paths=tmp_path, config=Config())
+    context.plan(auto_apply=True, no_prompts=True)
