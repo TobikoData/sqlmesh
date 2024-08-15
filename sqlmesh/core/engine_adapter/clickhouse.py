@@ -4,7 +4,6 @@ import typing as t
 import logging
 import pandas as pd
 from sqlglot import exp
-from sqlglot.helper import seq_get
 from sqlmesh.core.model.kind import TimeColumn
 from sqlmesh.core.dialect import to_schema
 from sqlmesh.core.engine_adapter.base import EngineAdapter
@@ -12,8 +11,11 @@ from sqlmesh.core.engine_adapter.shared import (
     DataObject,
     DataObjectType,
     SourceQuery,
+    CommentCreationTable,
+    CommentCreationView,
 )
 from sqlmesh.core.schema_diff import SchemaDiffer
+from functools import cached_property
 
 if t.TYPE_CHECKING:
     from sqlmesh.core._typing import SchemaName, TableName
@@ -28,19 +30,21 @@ class ClickhouseEngineAdapter(EngineAdapter):
     DIALECT = "clickhouse"
     SUPPORTS_TRANSACTIONS = False
     SUPPORTS_INDEXES = True
-    GRAINS_AS_PRIMARY_KEY = True
-    TIME_COL_AS_ORDERED_BY = True
+    AUTOMATIC_ORDERED_BY = True
+    SUPPORTS_VIEW_SCHEMA = False
+
+    # # TODO: delete this after sqlglot implements `CREATE TABLE ... AS SELECT ... COMMENT 'comment'`
+    # COMMENT_CREATION_TABLE = CommentCreationTable.UNSUPPORTED
+    # COMMENT_CREATION_VIEW = CommentCreationView.UNSUPPORTED
 
     SCHEMA_DIFFER = SchemaDiffer()
 
-    @property
+    @cached_property
     def is_cloud(self) -> bool:
-        value = seq_get(
-            self.fetchone("select value from system.settings where name='cloud_mode'"), 0
-        )
-        return str(value) == "1"
+        value = self.fetchone("select value from system.settings where name='cloud_mode'")
+        return str(value[0]) == "1"
 
-    @property
+    @cached_property
     def is_cluster(self) -> bool:
         if self.is_cloud:
             return False
@@ -48,12 +52,33 @@ class ClickhouseEngineAdapter(EngineAdapter):
         # you can set cluster config and start some instances, but unless you set up zookeeper as well,
         # trying to create clustered tables will fail with:
         # Code: 139. DB::Exception: There is no Zookeeper configuration in server config.
-        value = seq_get(self.fetchone("show tables in system like 'zookeeper'"), 0)
-        return str(value) == "zookeeper"
+        value = self.fetchone("show tables in system like 'zookeeper'")
+        return str(value[0]) == "zookeeper"
 
-    @property
+    @cached_property
     def is_standalone(self) -> bool:
         return not self.is_cloud and not self.is_cluster
+
+    @property
+    def default_cluster(self) -> str:
+        return self._extra_config.get("default_cluster")
+
+    # WORKAROUND for clickhouse-connect bug where `fetchone()` sometimes returns None
+    # - consumes all cursor rows, so will cause problems if `fetchone()` is used in
+    #     a loop to consume rows one-by-one
+    def fetchone(
+        self,
+        query: t.Union[exp.Expression, str],
+        ignore_unsupported_errors: bool = False,
+        quote_identifiers: bool = False,
+    ) -> t.Tuple:
+        with self.transaction():
+            self.execute(
+                query,
+                ignore_unsupported_errors=ignore_unsupported_errors,
+                quote_identifiers=quote_identifiers,
+            )
+            return self.cursor.fetchall()[0]
 
     def create_schema(
         self,
@@ -66,6 +91,9 @@ class ClickhouseEngineAdapter(EngineAdapter):
 
         Clickhouse has a two-level naming scheme [database].[table].
         """
+        if self.is_cluster:
+            properties.append(exp.OnCluster(this=exp.Var(this=self.default_cluster)))
+
         return self._create_schema(
             schema_name=schema_name,
             ignore_if_exists=ignore_if_exists,
@@ -86,6 +114,7 @@ class ClickhouseEngineAdapter(EngineAdapter):
             exists=ignore_if_not_exists,
             kind="DATABASE",
             cascade=cascade,
+            cluster=self.default_cluster if self.is_cluster else None,
             **drop_args,
         )
 
@@ -117,9 +146,9 @@ class ClickhouseEngineAdapter(EngineAdapter):
         temp_table = self._get_temp_table(target_table)
 
         def query_factory() -> Query:
-            # TODO: should we pick a temp table engine ourselves or use the one passed to the model?
-            # - If the latter, figure out how to pass it
-            self.create_table(temp_table, columns_to_types, storage_format=exp.Var(this="Log"))
+            self.create_table(
+                temp_table, columns_to_types, storage_format=exp.Var(this="MergeTree")
+            )
 
             self.cursor.client.insert_df(temp_table.sql(dialect=self.dialect), df=df)
 
@@ -159,6 +188,53 @@ class ClickhouseEngineAdapter(EngineAdapter):
             for row in df.itertuples()
         ]
 
+    def _create_table(
+        self,
+        table_name_or_schema: t.Union[exp.Schema, TableName],
+        expression: t.Optional[exp.Expression],
+        exists: bool = True,
+        replace: bool = False,
+        columns_to_types: t.Optional[t.Dict[str, exp.DataType]] = None,
+        table_description: t.Optional[str] = None,
+        column_descriptions: t.Optional[t.Dict[str, str]] = None,
+        table_kind: t.Optional[str] = None,
+        primary_key: t.Optional[t.Tuple[str, ...] | t.List[exp.Expression]] = None,
+        **kwargs: t.Any,
+    ) -> None:
+        """ Creates a table in the database.
+
+        Clickhouse does not fully support CTAS in "replicated" engines, which are used exclusively
+        in Clickhouse Cloud.
+
+        Therefore, we add the `EMPTY` property to the CTAS call to create a table with the proper
+        schema, then insert the data with the CTAS query.
+        """
+        self.execute(
+            self._build_create_table_exp(
+                table_name_or_schema,
+                expression=expression,
+                exists=exists,
+                replace=replace,
+                columns_to_types=columns_to_types,
+                table_description=(
+                    table_description
+                    if self.COMMENT_CREATION_TABLE.supports_schema_def and self.comments_enabled
+                    else None
+                ),
+                table_kind=table_kind,
+                primary_key=primary_key,
+                empty_ctas=(expression is not None),
+                **kwargs,
+            )
+        )
+
+        if expression:
+            self._insert_append_query(
+                table_name_or_schema.this if isinstance(table_name_or_schema, exp.Schema) else table_name_or_schema,
+                expression,
+                columns_to_types or self.columns(table_name_or_schema),
+            )
+
     def _build_table_properties_exp(
         self,
         catalog_name: t.Optional[str] = None,
@@ -173,15 +249,9 @@ class ClickhouseEngineAdapter(EngineAdapter):
         table_kind: t.Optional[str] = None,
         primary_key: t.Optional[t.Tuple[str, ...] | t.List[exp.Expression]] = None,
         ordered_by: t.Optional[t.List[str]] = None,
+        empty_ctas: bool = False,
     ) -> t.Optional[exp.Properties]:
         properties: t.List[exp.Expression] = []
-
-        if table_description:
-            properties.append(
-                exp.SchemaCommentProperty(
-                    this=exp.Literal.string(self._truncate_table_comment(table_description))
-                )
-            )
 
         # `partitioned_by` automatically includes model `time_column`, but we only want the
         #   columns specified by the user so use `partitioned_by_user_cols` instead
@@ -208,71 +278,36 @@ class ClickhouseEngineAdapter(EngineAdapter):
 
         # TODO: gate this appropriately
         if table_engine != "Log":
-            # model grains are passed as primary key cols
-            # - it is not recommended to include the time_column in the primary key, so we remove it below if present
-            # - because we may remove time_column below, we just extract columns and delay appending it to properties
-            primary_key_cols = []
-            if primary_key and self.SUPPORTS_INDEXES:
+            primary_key_raw = table_properties_copy.pop("PRIMARY_KEY", None) or primary_key
+            if primary_key_raw and self.SUPPORTS_INDEXES:
                 primary_key_cols = (
-                    primary_key[0].expressions
-                    if len(primary_key) == 1 and isinstance(primary_key[0], exp.Tuple)
-                    else primary_key
+                    primary_key_raw[0].expressions
+                    if len(primary_key_raw) == 1 and isinstance(primary_key_raw[0], exp.Tuple)
+                    else primary_key_raw
                 )
 
-            # ORDER BY can consist of columns from multiple sources, so we assemble it in parts:
-            # 1. The user may pass it via table_properties (we store in ordered_by_physical_properties)
-            # 2. If the model has a time_column, it will be in `ordered_by` (we store in ordered_by_time_col)
-            # 3. If the model has a grain, it will be in `primary_key` but must also be in ORDER BY (we store in primary_key_cols)
-            # 4. It is required for our default MergeTree engine, so if we don't have 1-3 we pass `tuple()`
-            ordered_by_physical_properties = table_properties_copy.pop("ORDER_BY", None)
-            # 1
-            ordered_by_user_cols = []
-            if ordered_by_physical_properties:
-                # Extract nested list
-                ordered_by_physical_properties = (
-                    ordered_by_physical_properties[0]
-                    if isinstance(ordered_by_physical_properties, list)
-                    else ordered_by_physical_properties
-                )
-                # Unpack Tuple columns
-                ordered_by_physical_properties = (
-                    ordered_by_physical_properties.expressions
-                    if isinstance(ordered_by_physical_properties, exp.Tuple)
-                    else ordered_by_physical_properties
-                )
-                # Ensure list
-                ordered_by_user_cols = (
-                    ordered_by_physical_properties
-                    if isinstance(ordered_by_physical_properties, list)
-                    else [ordered_by_physical_properties]
-                )
-
-            # 2
-            ordered_by_time_col = None
-            if ordered_by:
-                ordered_by_time_col = (
-                    ordered_by.column if isinstance(ordered_by, TimeColumn) else ordered_by
-                )
-                primary_key_cols = [
-                    col
-                    for col in primary_key_cols
-                    if col.alias_or_name != ordered_by_time_col.alias_or_name
-                ]
-
-            # we removed time_column from primary_key_cols so can now add the primary key property
-            if primary_key_cols:
                 properties.append(
                     exp.PrimaryKey(expressions=[exp.to_column(k) for k in primary_key_cols])
                 )
 
-            # 3. primary key must be a leftward subset of ordered by, so we rearrange/add them to the front
-            # - time_column will always go last
-            ordered_by_cols = primary_key_cols
-            ordered_by_cols_names = [col.alias_or_name for col in ordered_by_cols]
-            for col in [*ordered_by_user_cols, ordered_by_time_col]:
-                if col and col.alias_or_name not in ordered_by_cols_names:
-                    ordered_by_cols.append(col)
-                    ordered_by_cols_names.append(col.alias_or_name)
+            ordered_by_raw = table_properties_copy.pop("ORDER_BY", None) or ordered_by
+            ordered_by_cols = []
+            if ordered_by_raw:
+                for col in ordered_by_raw:
+                    if col:
+                        col = col[0] if isinstance(col, list) and len(col) == 1 else col
+                        col = col.column if isinstance(col, TimeColumn) else col
+                        col = col.this if isinstance(col, exp.Alias) else col
+                        ordered_by_cols.append(col)
+
+                # we have to dedupe by name because we can get the same column parsed in
+                #   different ways (e.g., the time column both from `time_column` and `grains`)
+                ordered_by_cols_names = []
+                ordered_by_cols_dedupe = []
+                for col in ordered_by_cols:
+                    if col.name not in ordered_by_cols_names:
+                        ordered_by_cols_names.append(col.name)
+                        ordered_by_cols_dedupe.append(col)
 
             ordered_by_expressions = (
                 exp.Tuple(expressions=[exp.to_column(k) for k in ordered_by_cols])
@@ -281,16 +316,67 @@ class ClickhouseEngineAdapter(EngineAdapter):
             )
             properties.append(exp.Order(expressions=[exp.Ordered(this=ordered_by_expressions)]))
 
-        on_cluster = table_properties_copy.pop("CLUSTER", None)
-        if on_cluster:
-            properties.append(
-                exp.OnCluster(this=exp.Literal(this=on_cluster.this, is_string=False))
-            )
+        if self.is_cluster:
+            on_cluster = table_properties_copy.pop("CLUSTER", None) or self.default_cluster
+            if on_cluster:
+                properties.append(
+                    exp.OnCluster(
+                        this=exp.Literal(
+                            this=on_cluster.this
+                            if isinstance(on_cluster, exp.Expression)
+                            else on_cluster,
+                            is_string=False,
+                        )
+                    )
+                )
+
+        if empty_ctas:
+            properties.append(exp.EmptyProperty())
 
         if table_properties_copy:
             properties.extend(self._table_or_view_properties_to_expressions(table_properties_copy))
 
+        if table_description:
+            properties.append(
+                exp.SchemaCommentProperty(
+                    this=exp.Literal.string(self._truncate_table_comment(table_description))
+                )
+            )
+
         if properties:
             return exp.Properties(expressions=properties)
 
+        return None
+
+    def _build_view_properties_exp(
+        self,
+        view_properties: t.Optional[t.Dict[str, exp.Expression]] = None,
+        table_description: t.Optional[str] = None,
+        **kwargs: t.Any
+    ) -> t.Optional[exp.Properties]:
+        """Creates a SQLGlot table properties expression for view"""
+        properties: t.List[exp.Expression] = []
+
+        view_properties_copy = view_properties.copy()
+
+        # "view_properties" is model.virtual_properties during view promotion but model.physical_properties elsewhen
+        # - in the promotion call to create_view, the cluster won't be in view_properties so we pass the
+        #     model.physical_properties["CLUSTER"] value to the "physical_cluster" kwarg
+        on_cluster = view_properties_copy.pop("CLUSTER", None) or kwargs.pop("physical_cluster", None) or self.default_cluster
+        if self.is_cluster:
+            properties.append(
+                exp.OnCluster(this=exp.Literal(this=on_cluster, is_string=False))
+            )
+
+        properties.extend(self._table_or_view_properties_to_expressions(view_properties_copy))
+
+        if table_description:
+            properties.append(
+                exp.SchemaCommentProperty(
+                    this=exp.Literal.string(self._truncate_table_comment(table_description))
+                )
+            )
+
+        if properties:
+            return exp.Properties(expressions=properties)
         return None

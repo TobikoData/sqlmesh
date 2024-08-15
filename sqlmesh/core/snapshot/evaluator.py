@@ -1058,9 +1058,8 @@ class EvaluationStrategy(abc.ABC):
             table_properties=model.physical_properties,
             table_description=model.description,
             column_descriptions=model.column_descriptions,
-            primary_key=model.grains if self.adapter.GRAINS_AS_PRIMARY_KEY else None,
-            ordered_by=model.time_column
-            if model.time_column and self.adapter.TIME_COL_AS_ORDERED_BY
+            ordered_by=[*model.grains, model.time_column if model.time_column else None]
+            if self.adapter.AUTOMATIC_ORDERED_BY
             else None,
         )
 
@@ -1151,6 +1150,7 @@ class PromotableStrategy(EvaluationStrategy):
             table_description=model.description if is_prod else None,
             column_descriptions=model.column_descriptions if is_prod else None,
             view_properties=model.virtual_properties,
+            physical_cluster=model.physical_properties.get("CLUSTER"),
         )
 
     def demote(self, view_name: str, **kwargs: t.Any) -> None:
@@ -1191,9 +1191,8 @@ class MaterializableStrategy(PromotableStrategy):
                 table_properties=model.physical_properties,
                 table_description=model.description if is_table_deployable else None,
                 column_descriptions=model.column_descriptions if is_table_deployable else None,
-                primary_key=model.grains if self.adapter.GRAINS_AS_PRIMARY_KEY else None,
-                ordered_by=model.time_column
-                if model.time_column and self.adapter.TIME_COL_AS_ORDERED_BY
+                ordered_by=[model.grains, model.time_column if model.time_column else None]
+                if self.adapter.AUTOMATIC_ORDERED_BY
                 else None,
             )
 
@@ -1218,9 +1217,8 @@ class MaterializableStrategy(PromotableStrategy):
                 table_properties=model.physical_properties,
                 table_description=model.description if is_table_deployable else None,
                 column_descriptions=model.column_descriptions if is_table_deployable else None,
-                primary_key=model.grains if self.adapter.GRAINS_AS_PRIMARY_KEY else None,
-                ordered_by=model.time_column
-                if model.time_column and self.adapter.TIME_COL_AS_ORDERED_BY
+                ordered_by=[model.grains, model.time_column if model.time_column else None]
+                if self.adapter.AUTOMATIC_ORDERED_BY
                 else None,
             )
 
@@ -1429,9 +1427,8 @@ class SCDType2Strategy(MaterializableStrategy):
                 table_properties=model.physical_properties,
                 table_description=model.description if is_table_deployable else None,
                 column_descriptions=model.column_descriptions if is_table_deployable else None,
-                primary_key=model.grains if self.adapter.GRAINS_AS_PRIMARY_KEY else None,
-                ordered_by=model.time_column
-                if model.time_column and self.adapter.TIME_COL_AS_ORDERED_BY
+                ordered_by=[model.grains, model.time_column if model.time_column else None]
+                if self.adapter.AUTOMATIC_ORDERED_BY
                 else None,
             )
         else:

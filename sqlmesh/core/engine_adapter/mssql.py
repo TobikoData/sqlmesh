@@ -143,6 +143,7 @@ class MSSQLEngineAdapter(
         schema_name: SchemaName,
         ignore_if_not_exists: bool = True,
         cascade: bool = False,
+        **drop_args: t.Dict[str, exp.Expression],
     ) -> None:
         """
         MsSql doesn't support CASCADE clause and drops schemas unconditionally.

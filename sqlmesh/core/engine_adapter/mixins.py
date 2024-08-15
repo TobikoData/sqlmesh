@@ -186,6 +186,7 @@ class HiveMetastoreTablePropertiesMixin(EngineAdapter):
         self,
         view_properties: t.Optional[t.Dict[str, exp.Expression]] = None,
         table_description: t.Optional[str] = None,
+        **kwargs: t.Any
     ) -> t.Optional[exp.Properties]:
         """Creates a SQLGlot table properties expression for view"""
         properties: t.List[exp.Expression] = []

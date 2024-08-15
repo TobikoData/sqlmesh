@@ -89,6 +89,7 @@ class EngineAdapter:
     INSERT_OVERWRITE_STRATEGY = InsertOverwriteStrategy.DELETE_INSERT
     SUPPORTS_MATERIALIZED_VIEWS = False
     SUPPORTS_MATERIALIZED_VIEW_SCHEMA = False
+    SUPPORTS_VIEW_SCHEMA = True
     SUPPORTS_CLONING = False
     SUPPORTS_MANAGED_MODELS = False
     SCHEMA_DIFFER = SchemaDiffer()
@@ -99,8 +100,7 @@ class EngineAdapter:
     SUPPORTS_REPLACE_TABLE = True
     DEFAULT_CATALOG_TYPE = DIALECT
     QUOTE_IDENTIFIERS_IN_VIEWS = True
-    GRAINS_AS_PRIMARY_KEY = False
-    TIME_COL_AS_ORDERED_BY = False
+    AUTOMATIC_ORDERED_BY = False
 
     def __init__(
         self,
@@ -177,6 +177,18 @@ class EngineAdapter:
         if not default_catalog:
             raise SQLMeshError("Could not determine a default catalog despite it being supported.")
         return default_catalog
+
+    @property
+    def is_cloud(self) -> bool:
+        return False
+
+    @property
+    def is_cluster(self) -> bool:
+        return False
+
+    @property
+    def is_standalone(self) -> bool:
+        return True
 
     def _get_source_queries(
         self,
@@ -946,6 +958,9 @@ class EngineAdapter:
             if not self.SUPPORTS_MATERIALIZED_VIEW_SCHEMA and isinstance(schema, exp.Schema):
                 schema = schema.this
 
+        if not self.SUPPORTS_VIEW_SCHEMA and isinstance(schema, exp.Schema):
+            schema = schema.this
+
         create_view_properties = self._build_view_properties_exp(
             view_properties,
             (
@@ -953,6 +968,7 @@ class EngineAdapter:
                 if self.COMMENT_CREATION_VIEW.supports_schema_def and self.comments_enabled
                 else None
             ),
+            physical_cluster=create_kwargs.pop("physical_cluster", None),
         )
         if create_view_properties:
             for view_property in create_view_properties.expressions:
@@ -1042,6 +1058,7 @@ class EngineAdapter:
         schema_name: SchemaName,
         ignore_if_not_exists: bool = True,
         cascade: bool = False,
+        **drop_args: t.Dict[str, exp.Expression],
     ) -> None:
         return self._drop_object(
             name=schema_name, exists=ignore_if_not_exists, kind="SCHEMA", cascade=cascade
@@ -2035,6 +2052,7 @@ class EngineAdapter:
         self,
         view_properties: t.Optional[t.Dict[str, exp.Expression]] = None,
         table_description: t.Optional[str] = None,
+        **kwargs: t.Any
     ) -> t.Optional[exp.Properties]:
         """Creates a SQLGlot table properties expression for view"""
         properties: t.List[exp.Expression] = []
