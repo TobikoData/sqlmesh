@@ -22,7 +22,7 @@ from sqlmesh.schedulers.airflow.client import AirflowClient
 from sqlmesh.schedulers.airflow.mwaa_client import MWAAClient
 from sqlmesh.utils.errors import ConfigError
 from sqlmesh.utils.hashing import md5
-from sqlmesh.utils.pydantic import model_validator, model_validator_v1_args
+from sqlmesh.utils.pydantic import model_validator, model_validator_v1_args, field_validator
 
 if t.TYPE_CHECKING:
     from google.auth.transport.requests import AuthorizedSession
@@ -200,6 +200,18 @@ class _BaseAirflowSchedulerConfig(_EngineAdapterStateSyncSchedulerConfig):
         return self.default_catalog_override or default_catalog
 
 
+def _max_snapshot_ids_per_request_validator(v: t.Any) -> t.Optional[int]:
+    logger.warning(
+        "The `max_snapshot_ids_per_request` field is deprecated and will be removed in a future release."
+    )
+    return None
+
+
+max_snapshot_ids_per_request_validator: t.Any = field_validator(
+    "max_snapshot_ids_per_request", mode="before"
+)(_max_snapshot_ids_per_request_validator)
+
+
 class AirflowSchedulerConfig(_BaseAirflowSchedulerConfig, BaseConfig):
     """The Airflow Scheduler configuration.
 
@@ -213,7 +225,7 @@ class AirflowSchedulerConfig(_BaseAirflowSchedulerConfig, BaseConfig):
             whether a DAG has been created.
         backfill_concurrent_tasks: The number of concurrent tasks used for model backfilling during plan application.
         ddl_concurrent_tasks: The number of concurrent tasks used for DDL operations (table / view creation, deletion, etc).
-        max_snapshot_ids_per_request: The maximum number of snapshot IDs that can be sent in a single HTTP GET request to the Airflow Webserver.
+        max_snapshot_ids_per_request: The maximum number of snapshot IDs that can be sent in a single HTTP GET request to the Airflow Webserver (Deprecated).
         use_state_connection: Whether to use the `state_connection` configuration to access the SQLMesh state.
         default_catalog_override: Overrides the default catalog value for this project. If specified, this value takes precedence
             over the default catalog value set on the Airflow side.
@@ -238,6 +250,7 @@ class AirflowSchedulerConfig(_BaseAirflowSchedulerConfig, BaseConfig):
     type_: Literal["airflow"] = Field(alias="type", default="airflow")
 
     _concurrent_tasks_validator = concurrent_tasks_validator
+    _max_snapshot_ids_per_request_validator = max_snapshot_ids_per_request_validator
 
     def get_client(self, console: t.Optional[Console] = None) -> AirflowClient:
         session = Session()
@@ -250,7 +263,6 @@ class AirflowSchedulerConfig(_BaseAirflowSchedulerConfig, BaseConfig):
             session=session,
             airflow_url=self.airflow_url,
             console=console,
-            snapshot_ids_batch_size=self.max_snapshot_ids_per_request,
         )
 
 
@@ -265,7 +277,7 @@ class CloudComposerSchedulerConfig(_BaseAirflowSchedulerConfig, BaseConfig, extr
             whether a DAG has been created.
         backfill_concurrent_tasks: The number of concurrent tasks used for model backfilling during plan application.
         ddl_concurrent_tasks: The number of concurrent tasks used for DDL operations (table / view creation, deletion, etc).
-        max_snapshot_ids_per_request: The maximum number of snapshot IDs that can be sent in a single HTTP GET request to the Airflow Webserver.
+        max_snapshot_ids_per_request: The maximum number of snapshot IDs that can be sent in a single HTTP GET request to the Airflow Webserver (Deprecated).
         use_state_connection: Whether to use the `state_connection` configuration to access the SQLMesh state.
         default_catalog_override: Overrides the default catalog value for this project. If specified, this value takes precedence
             over the default catalog value set on the Airflow side.
@@ -287,6 +299,7 @@ class CloudComposerSchedulerConfig(_BaseAirflowSchedulerConfig, BaseConfig, extr
     type_: Literal["cloud_composer"] = Field(alias="type", default="cloud_composer")
 
     _concurrent_tasks_validator = concurrent_tasks_validator
+    _max_snapshot_ids_per_request_validator = max_snapshot_ids_per_request_validator
 
     def __init__(self, **data: t.Any) -> None:
         super().__init__(**data)
@@ -309,7 +322,6 @@ class CloudComposerSchedulerConfig(_BaseAirflowSchedulerConfig, BaseConfig, extr
             airflow_url=self.airflow_url,
             session=self.session,
             console=console,
-            snapshot_ids_batch_size=self.max_snapshot_ids_per_request,
         )
 
     @model_validator(mode="before")

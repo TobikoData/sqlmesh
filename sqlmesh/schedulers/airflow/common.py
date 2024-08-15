@@ -100,6 +100,11 @@ class EnvironmentsResponse(PydanticModel):
     environments: t.List[Environment]
 
 
+class SnapshotsRequest(PydanticModel):
+    snapshot_ids: t.Optional[t.List[SnapshotId]] = None
+    check_existence: bool = False
+
+
 class SnapshotsResponse(PydanticModel):
     snapshots: t.List[Snapshot]
 
@@ -118,6 +123,11 @@ class ExistingModelsResponse(PydanticModel):
 
 class InvalidateEnvironmentResponse(PydanticModel):
     name: str
+
+
+class MaxIntervalEndPerModelRequest(PydanticModel):
+    models: t.Optional[t.List[str]] = None
+    ensure_finalized_snapshots: bool = False
 
 
 class IntervalEndResponse(PydanticModel):
