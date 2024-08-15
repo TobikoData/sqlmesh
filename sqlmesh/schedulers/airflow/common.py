@@ -132,7 +132,7 @@ class MaxIntervalEndPerModelRequest(PydanticModel):
 
 class IntervalEndResponse(PydanticModel):
     environment: str
-    interval_end_per_model: t.Optional[t.Dict[str, int]] = None
+    interval_end_per_model: t.Dict[str, int]
 
 
 def dag_id_for_snapshot_info(info: SnapshotInfoLike) -> str:

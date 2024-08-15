@@ -999,10 +999,10 @@ class EngineAdapterStateSync(StateSync):
         environment: str,
         models: t.Optional[t.Set[str]] = None,
         ensure_finalized_snapshots: bool = False,
-    ) -> t.Optional[t.Dict[str, int]]:
+    ) -> t.Dict[str, int]:
         env = self._get_environment(environment)
         if not env:
-            return None
+            return {}
 
         snapshots = (
             env.snapshots if not ensure_finalized_snapshots else env.finalized_or_current_snapshots

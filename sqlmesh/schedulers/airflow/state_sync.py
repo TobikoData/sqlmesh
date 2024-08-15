@@ -72,7 +72,7 @@ class HttpStateSync(StateSync):
         environment: str,
         models: t.Optional[t.Set[str]] = None,
         ensure_finalized_snapshots: bool = False,
-    ) -> t.Optional[t.Dict[str, int]]:
+    ) -> t.Dict[str, int]:
         """Returns the max interval end per model for the given environment.
 
         Args:

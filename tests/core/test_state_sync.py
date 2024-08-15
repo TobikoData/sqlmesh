@@ -2034,8 +2034,8 @@ def test_max_interval_end_per_model(
 
     environment_name = "test_max_interval_end_for_environment"
 
-    assert state_sync.max_interval_end_per_model(environment_name) is None
-    assert state_sync.max_interval_end_per_model(environment_name, {snapshot_a.name}) is None
+    assert state_sync.max_interval_end_per_model(environment_name) == {}
+    assert state_sync.max_interval_end_per_model(environment_name, {snapshot_a.name}) == {}
 
     state_sync.promote(
         Environment(
@@ -2103,8 +2103,8 @@ def test_max_interval_end_per_model_ensure_finalized_snapshots(
 
     environment_name = "test_max_interval_end_for_environment"
 
-    assert state_sync.max_interval_end_per_model(environment_name) is None
-    assert state_sync.max_interval_end_per_model(environment_name, {snapshot_a.name}) is None
+    assert state_sync.max_interval_end_per_model(environment_name) == {}
+    assert state_sync.max_interval_end_per_model(environment_name, {snapshot_a.name}) == {}
 
     state_sync.promote(
         Environment(

@@ -263,7 +263,7 @@ class AirflowClient(BaseAirflowClient):
         environment: str,
         models: t.Optional[t.Collection[str]],
         ensure_finalized_snapshots: bool,
-    ) -> t.Optional[t.Dict[str, int]]:
+    ) -> t.Dict[str, int]:
         max_interval_end_per_model_request = common.MaxIntervalEndPerModelRequest(
             models=models, ensure_finalized_snapshots=ensure_finalized_snapshots
         )
