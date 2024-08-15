@@ -1175,7 +1175,7 @@ def date_spine(
     datepart: exp.Expression,
     start_date: exp.Expression,
     end_date: exp.Expression,
-) -> t.Union[exp.Alias, exp.Select]:
+) -> exp.Select:
     """Returns an aliased QUERY to build a date spine with the given datepart, and range of start_date and end_date. Useful for joining as a date lookup table.
 
     Args:
@@ -1188,18 +1188,22 @@ def date_spine(
         >>> from sqlglot.schema import MappingSchema
         >>> from sqlmesh.core.macros import MacroEvaluator
         >>> sql = "@date_spine('week', '2022-01-20', '2024-12-16')"
-        >>> MacroEvaluator(dialect='duckdb').transform(parse_one(sql)).sql()
-        'SELECT UNNEST(GENERATE_SERIES(CAST(\'2022-01-20\' AS DATE), CAST(\'2024-12-16\' AS DATE), (7 *INTERVAL \'1\' DAY))) AS "date_week"'
+        >>> MacroEvaluator().transform(parse_one(sql)).sql()
+        'SELECT "_exploded"."date_week" AS "date_week" FROM UNNEST(CAST(GENERATE_SERIES(CAST(\'2022-01-20\' AS DATE), CAST(\'2024-12-16\' AS DATE), (7 * INTERVAL \'1\' DAY)) AS DATE[])) AS "_exploded"("date_week")'
 
     """
-    if datepart.name not in ("day", "week", "month", "year"):
+    datepart_name = datepart.name
+    start_date_name = start_date.name
+    end_date_name = end_date.name
+
+    if datepart_name not in ("day", "week", "month", "quarter", "year"):
         raise SQLMeshError(
-            f"Invalid datepart '{datepart.name}'. Expected: 'day', 'week', 'month', or 'year'"
+            f"Invalid datepart '{datepart_name}'. Expected: 'day', 'week', 'month', 'quarter', or 'year'"
         )
 
     try:
-        start_date_obj = datetime.strptime(start_date.name, "%Y-%m-%d").date()
-        end_date_obj = datetime.strptime(end_date.name, "%Y-%m-%d").date()
+        start_date_obj = datetime.strptime(start_date_name, "%Y-%m-%d").date()
+        end_date_obj = datetime.strptime(end_date_name, "%Y-%m-%d").date()
     except Exception as e:
         raise SQLMeshError(
             f"Invalid date format - start_date and end_date must be in format: YYYY-MM-DD. Error: {e}"
@@ -1207,111 +1211,34 @@ def date_spine(
 
     if start_date_obj > end_date_obj:
         raise SQLMeshError(
-            f"Invalid date range - start_date '{start_date.name}' is after end_date '{end_date.name}'."
+            f"Invalid date range - start_date '{start_date_name}' is after end_date '{end_date_name}'."
         )
 
-    alias_name = f"date_{datepart.name}"
+    alias_name = f"date_{datepart_name}"
     start_date_column = exp.cast(start_date, "DATE", dialect=evaluator.dialect)
     end_date_column = exp.cast(end_date, "DATE", dialect=evaluator.dialect)
-    date_interval = exp.Interval(this=exp.Literal.number(1), unit=datepart.name)
-
-    if evaluator.dialect == "bigquery":
-        # BigQuery uses UNNEST and GENERATE_DATE_ARRAY in the FROM clause
-        generate_series_clause = exp.func(
-            "unnest",
-            exp.func(
-                "generate_date_array",
-                start_date,
-                end_date,
-                date_interval,
-            ),
-        )
-        bigquery_query = exp.select(alias_name).from_(generate_series_clause).as_(alias_name)
-        return bigquery_query
-    elif evaluator.dialect == "postgres":
-        generate_series_clause = exp.func(
-            "generate_series",
-            start_date_column,
-            end_date_column,
-            date_interval,
-        )
-        postgres_query = exp.select(generate_series_clause).as_(alias_name)
-        return postgres_query
-    elif evaluator.dialect == "snowflake":
-        subquery_clause = exp.select(
-            start_date_column.as_("start_date"), end_date_column.as_("end_date")
-        )
-        date_interval_clause = exp.func(
-            "dateadd",
-            exp.Literal.string(datepart.name),
-            exp.Window(this=exp.RowNumber(), order=exp.Order(expressions=[exp.Literal.number(0)]))
-            - 1,
-            exp.column("start_date"),
-        )
-        select_clause = date_interval_clause.as_(alias_name)
-        join_clause = exp.func(
-            "table",
-            exp.func(
-                "generator",
-                exp.Kwarg(
-                    this=exp.Literal.string("rowcount"), expression=exp.Literal.number(10000)
-                ),
-            ),
-        ).as_("x")
-        qualify_clause = exp.GTE(this=exp.column("end_date"), expression=exp.column(alias_name))
-        snowflake_query = (
-            exp.subquery(subquery_clause)
-            .select(select_clause)
-            .join(join_clause)
-            .qualify(qualify_clause)
-        )
-        return snowflake_query
-    elif evaluator.dialect == "redshift":
-        subquery_clause = exp.select(
-            exp.func(
-                "generate_series",
-                exp.Literal.number(0),
-                exp.func(
-                    "datediff",
-                    this=end_date_column,
-                    expression=start_date_column,
-                    unit=exp.Literal.string(datepart.name.upper()),
-                ),
-            ).as_("intervals")
-        )
-        dateadd_clause = exp.cast(
-            exp.TsOrDsAdd(
-                this=start_date_column,
-                expression=exp.column("intervals"),
-                unit=exp.Literal.string(datepart.name.upper()),
-                return_type=exp.DataType.build("DATE"),
-            ),
-            to=exp.DataType.Type("DATE"),
-        )
-        where_clause = exp.LTE(this=dateadd_clause, expression=end_date_column)
-        redshift_query = (
-            exp.subquery(subquery_clause)
-            .select(dateadd_clause.as_(alias_name))
-            .where(where_clause)
-            .order_by(exp.column(alias_name))
-        )
-        return redshift_query
-    elif evaluator.dialect in ("duckdb", "spark", "databricks"):
-        generate_series_clause = exp.func(
-            "explode",  # transpiles to unnest for most query engines
-            (
-                exp.func(
-                    "generate_series",
-                    start_date_column,
-                    end_date_column,
-                    date_interval,
-                )
-            ),
-        )
-        query = exp.select(generate_series_clause).as_(alias_name)
-        return query
+    if datepart_name == "quarter" and evaluator.dialect in (
+        "spark",
+        "spark2",
+        "databricks",
+        "postgres",
+    ):
+        date_interval = exp.Interval(this=exp.Literal.number(3), unit=exp.var("month"))
     else:
-        raise SQLMeshError(f"Unsupported dialect: {evaluator.dialect}")
+        date_interval = exp.Interval(this=exp.Literal.number(1), unit=exp.var(datepart_name))
+
+    generate_date_array = exp.func(
+        "GENERATE_DATE_ARRAY",
+        start_date_column,
+        end_date_column,
+        date_interval,
+    )
+
+    exploded = exp.alias_(exp.func("unnest", generate_date_array), "_exploded", table=[alias_name])
+
+    query = exp.select(alias_name).from_(exploded)
+
+    return query
 
 
 def normalize_macro_name(name: str) -> str:
