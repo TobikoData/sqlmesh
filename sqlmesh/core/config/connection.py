@@ -1375,6 +1375,7 @@ class ClickhouseConnectionConfig(ConnectionConfig):
     username: str
     password: t.Optional[str] = None
     port: t.Optional[int] = None
+    default_cluster: str = "default"
 
     concurrent_tasks: int = 1
     register_comments: bool = True
@@ -1402,6 +1403,13 @@ class ClickhouseConnectionConfig(ConnectionConfig):
 
         return connect
 
+    @property
+    def _extra_engine_config(self) -> t.Dict[str, t.Any]:
+        return {
+            k: v
+            for k, v in self.dict().items()
+            if k == "default_cluster"
+        }
 
 CONNECTION_CONFIG_TO_TYPE = {
     # Map all subclasses of ConnectionConfig to the value of their `type_` field.
