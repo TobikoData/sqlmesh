@@ -406,7 +406,11 @@ class MacroEvaluator:
 
     def columns_to_types(self, model_name: TableName | exp.Column) -> t.Dict[str, exp.DataType]:
         """Returns the columns-to-types mapping corresponding to the specified model."""
-        if self._schema is None or self._schema.empty:
+
+        # We only return this dummy schema at load time, because if we don't actually know the
+        # target model's schema at creation/evaluation time, returning a dummy schema could lead
+        # to unintelligible errors when the query is executed
+        if (self._schema is None or self._schema.empty) and self.runtime_stage == "loading":
             self.columns_to_types_called = True
             return {"__schema_unavailable_at_load__": exp.DataType.build("unknown")}
 
@@ -415,9 +419,16 @@ class MacroEvaluator:
             default_catalog=self.default_catalog,
             dialect=self.dialect,
         )
-        columns_to_types = self._schema.find(
-            exp.to_table(normalized_model_name), ensure_data_types=True
+        model_name = exp.to_table(normalized_model_name)
+
+        columns_to_types = (
+            self._schema.find(model_name, ensure_data_types=True) if self._schema else None
         )
+        if columns_to_types is None:
+            snapshot = self.get_snapshot(model_name)
+            if snapshot and snapshot.node.is_model:
+                columns_to_types = snapshot.node.columns_to_types  # type: ignore
+
         if columns_to_types is None:
             raise SQLMeshError(f"Schema for model '{model_name}' can't be statically determined.")
 

@@ -109,6 +109,7 @@ class Loader(abc.ABC):
         self._dag = DAG()
 
         self._load_materializations()
+        self._load_signals()
 
         config_mtimes: t.Dict[Path, t.List[float]] = defaultdict(list)
         for context_path, config in self._context.configs.items():
@@ -188,6 +189,9 @@ class Loader(abc.ABC):
 
     def _load_materializations(self) -> None:
         """Loads custom materializations."""
+
+    def _load_signals(self) -> None:
+        """Loads signals for the built-in scheduler."""
 
     def _load_metrics(self) -> UniqueKeyDict[str, MetricMeta]:
         return UniqueKeyDict("metrics")
@@ -442,6 +446,17 @@ class SqlMeshLoader(Loader):
         for context_path, config in self._context.configs.items():
             for path in self._glob_paths(
                 context_path / c.MATERIALIZATIONS,
+                ignore_patterns=config.ignore_patterns,
+                extension=".py",
+            ):
+                if os.path.getsize(path):
+                    import_python_file(path, context_path)
+
+    def _load_signals(self) -> None:
+        """Loads signals for the built-in scheduler."""
+        for context_path, config in self._context.configs.items():
+            for path in self._glob_paths(
+                context_path / c.SIGNALS,
                 ignore_patterns=config.ignore_patterns,
                 extension=".py",
             ):

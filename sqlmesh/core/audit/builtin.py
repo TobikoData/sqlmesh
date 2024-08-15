@@ -341,7 +341,7 @@ WHERE @AND(
       @patterns,
       c -> NOT REGEXP_LIKE(@column, c)
     ),
-    (l, r) -> l OR r
+    (l, r) -> l AND r
   ),
   @condition,
 )
@@ -375,14 +375,15 @@ match_like_pattern_list = ModelAudit(
     query="""
 SELECT *
 FROM @this_model
-WHERE @condition AND (
+WHERE @AND(
   @REDUCE(
     @EACH(
       @patterns,
       c -> NOT @column LIKE c
     ),
-    (l, r) -> l OR r
-  )
+    (l, r) -> l AND r
+  ),
+  @condition,
 )
     """,
 )
