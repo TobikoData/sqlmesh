@@ -804,6 +804,7 @@ def test_fingerprint_jinja_macros(model: Model):
 
     fingerprint = fingerprint_from_node(model, nodes={})
     assert fingerprint == original_fingerprint
+    model = model.copy()
 
     model.jinja_macros.root_macros["test_macro"] = MacroInfo(
         definition="{% macro test_macro() %}b{% endmacro %}", depends_on=[]
@@ -822,7 +823,7 @@ def test_fingerprint_jinja_macros_global_objs(model: Model, global_obj_key: str)
         }
     )
     fingerprint = fingerprint_from_node(model, nodes={})
-
+    model = model.copy()
     model.jinja_macros.global_objs[global_obj_key] = AttributeDict({"test": "test"})
     updated_fingerprint = fingerprint_from_node(model, nodes={})
     assert updated_fingerprint.data_hash != fingerprint.data_hash

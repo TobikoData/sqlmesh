@@ -1,20 +1,19 @@
 from __future__ import annotations
 
+import logging
 import typing as t
 from pathlib import Path
 
 from sqlglot import exp
 from sqlglot.optimizer.simplify import gen
 
-from sqlmesh.core.model.definition import Model, SqlModel
+from sqlmesh.core.model.definition import Model, SqlModel, _Model
 from sqlmesh.utils.cache import FileCache
 from sqlmesh.utils.hashing import crc32
-from sqlmesh.utils.pydantic import PydanticModel
 
+from dataclasses import dataclass
 
-class SqlModelCacheEntry(PydanticModel):
-    model: SqlModel
-    full_depends_on: t.Set[str]
+logger = logging.getLogger(__name__)
 
 
 class ModelCache:
@@ -26,9 +25,8 @@ class ModelCache:
 
     def __init__(self, path: Path):
         self.path = path
-        self._file_cache: FileCache[SqlModelCacheEntry] = FileCache(
+        self._file_cache: FileCache[Model] = FileCache(
             path,
-            SqlModelCacheEntry,
             prefix="model_definition",
         )
 
@@ -44,22 +42,20 @@ class ModelCache:
             The model definition.
         """
         cache_entry = self._file_cache.get(name, entry_id)
-        if cache_entry:
-            model = cache_entry.model
-            model._full_depends_on = cache_entry.full_depends_on
-            return model
+        if isinstance(cache_entry, _Model):
+            return cache_entry
 
-        loaded_model = loader()
-        if isinstance(loaded_model, SqlModel):
-            new_entry = SqlModelCacheEntry(
-                model=loaded_model, full_depends_on=loaded_model.full_depends_on
-            )
-            self._file_cache.put(name, entry_id, value=new_entry)
+        model = loader()
+        if isinstance(model, SqlModel):
+            # make sure we preload full_depends_on
+            model.full_depends_on
+            self._file_cache.put(name, entry_id, value=model)
 
-        return loaded_model
+        return model
 
 
-class OptimizedQueryCacheEntry(PydanticModel):
+@dataclass
+class OptimizedQueryCacheEntry:
     optimized_rendered_query: t.Optional[exp.Expression]
 
 
@@ -73,7 +69,7 @@ class OptimizedQueryCache:
     def __init__(self, path: Path):
         self.path = path
         self._file_cache: FileCache[OptimizedQueryCacheEntry] = FileCache(
-            path, OptimizedQueryCacheEntry, prefix="optimized_query"
+            path, prefix="optimized_query"
         )
 
     def with_optimized_query(self, model: Model) -> bool:
@@ -94,16 +90,19 @@ class OptimizedQueryCache:
         cache_entry = self._file_cache.get(name)
 
         if cache_entry:
-            if cache_entry.optimized_rendered_query:
-                model._query_renderer.update_cache(
-                    cache_entry.optimized_rendered_query, optimized=True
-                )
-            else:
-                # If the optimized rendered query is None, then there are likely adapter calls in the query
-                # that prevent us from rendering it at load time. This means that we can safely set the
-                # unoptimized cache to None as well to prevent attempts to render it downstream.
-                model._query_renderer.update_cache(None, optimized=False)
-            return True
+            try:
+                if cache_entry.optimized_rendered_query:
+                    model._query_renderer.update_cache(
+                        cache_entry.optimized_rendered_query, optimized=True
+                    )
+                else:
+                    # If the optimized rendered query is None, then there are likely adapter calls in the query
+                    # that prevent us from rendering it at load time. This means that we can safely set the
+                    # unoptimized cache to None as well to prevent attempts to render it downstream.
+                    model._query_renderer.update_cache(None, optimized=False)
+                return True
+            except Exception as ex:
+                logger.warning("Failed to load a cache entry '%s': %s", name, ex)
 
         optimized_query = model.render_query()
         new_entry = OptimizedQueryCacheEntry(optimized_rendered_query=optimized_query)

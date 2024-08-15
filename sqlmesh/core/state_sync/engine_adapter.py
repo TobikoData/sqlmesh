@@ -1434,7 +1434,10 @@ def parse_snapshot(
     def loader() -> Node:
         return parse_obj_as(Node, payload["node"])  # type: ignore
 
-    payload["node"] = model_cache.get_or_load(f"{name}_{identifier}", loader=loader)  # type: ignore
+    node = model_cache.get_or_load(f"{name}_{identifier}", loader=loader)  # type: ignore
+    node._data_hash = payload["fingerprint"]["data_hash"]
+    node._metadata_hash = payload["fingerprint"]["metadata_hash"]
+    payload["node"] = node
     snapshot = Snapshot(**payload)
 
     return snapshot

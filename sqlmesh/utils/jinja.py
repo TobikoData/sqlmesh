@@ -13,7 +13,7 @@ from sqlglot import Dialect, Expression, Parser, TokenType
 from sqlmesh.core import constants as c
 from sqlmesh.core import dialect as d
 from sqlmesh.utils import AttributeDict
-from sqlmesh.utils.pydantic import PydanticModel, field_serializer, field_validator
+from sqlmesh.utils.pydantic import PRIVATE_FIELDS, PydanticModel, field_serializer, field_validator
 
 SQLMESH_JINJA_PACKAGE = "sqlmesh.utils.jinja"
 
@@ -26,6 +26,8 @@ def environment(**kwargs: t.Any) -> Environment:
 
 
 ENVIRONMENT = environment()
+
+CallNames = t.Tuple[t.Tuple[str, ...], nodes.Call]
 
 
 class MacroReference(PydanticModel, frozen=True):
@@ -119,9 +121,7 @@ def render_jinja(query: str, methods: t.Optional[t.Dict[str, t.Any]] = None) -> 
     return ENVIRONMENT.from_string(query).render(methods or {})
 
 
-def find_call_names(
-    node: nodes.Node, vars_in_scope: t.Set[str]
-) -> t.Iterator[t.Tuple[t.Tuple[str, ...], nodes.Call]]:
+def find_call_names(node: nodes.Node, vars_in_scope: t.Set[str]) -> t.Iterator[CallNames]:
     vars_in_scope = vars_in_scope.copy()
     for child_node in node.iter_child_nodes():
         if "target" in child_node.fields:
@@ -142,7 +142,7 @@ def find_call_names(
         yield from find_call_names(child_node, vars_in_scope)
 
 
-def extract_call_names(jinja_str: str) -> t.List[t.Tuple[t.Tuple[str, ...], nodes.Call]]:
+def extract_call_names(jinja_str: str) -> t.List[CallNames]:
     return list(find_call_names(ENVIRONMENT.parse(jinja_str), set()))
 
 
@@ -193,6 +193,13 @@ class JinjaMacroRegistry(PydanticModel):
 
     _parser_cache: t.Dict[t.Tuple[t.Optional[str], str], Template] = {}
     __environment: t.Optional[Environment] = None
+
+    def __getstate__(self) -> t.Dict[t.Any, t.Any]:
+        state = super().__getstate__()
+        private = state[PRIVATE_FIELDS]
+        private["_parser_cache"] = {}
+        private["_JinjaMacroRegistry__environment"] = None
+        return state
 
     @field_validator("global_objs", mode="before")
     @classmethod

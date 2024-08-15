@@ -35,7 +35,6 @@ from __future__ import annotations
 
 import abc
 import collections
-import gc
 import logging
 import time
 import traceback
@@ -425,12 +424,19 @@ class GenericContext(BaseContext, t.Generic[C]):
             raise SQLMeshError(f"The disabled model '{model.name}' cannot be upserted")
         path = model._path
 
-        # model.copy() can't be used here due to a cached state that can be a part of a model instance.
-        model = t.cast(Model, type(model)(**{**t.cast(Model, model).dict(), **kwargs}))
+        model = model.copy(update=kwargs)
         model._path = path
 
-        self._models.update({model.fqn: model})
         self.dag.add(model.fqn, model.depends_on)
+
+        self._models.update(
+            {
+                model.fqn: model,
+                # bust the fingerprint cache for all downstream models
+                **{fqn: self._models[fqn].copy() for fqn in self.dag.downstream(model.fqn)},
+            }
+        )
+
         update_model_schemas(
             self.dag,
             self._models,
@@ -500,7 +506,6 @@ class GenericContext(BaseContext, t.Generic[C]):
         """Load all files in the context's path."""
         load_start_ts = time.perf_counter()
         with sys_path(*self.configs):
-            gc.disable()
             project = self._loader.load(self, update_schemas)
             self._macros = project.macros
             self._jinja_macros = project.jinja_macros
@@ -514,7 +519,6 @@ class GenericContext(BaseContext, t.Generic[C]):
                 else:
                     self._audits[name] = audit
             self.dag = project.dag
-            gc.enable()
 
             duplicates = set(self._models) & set(self._standalone_audits)
             if duplicates:
