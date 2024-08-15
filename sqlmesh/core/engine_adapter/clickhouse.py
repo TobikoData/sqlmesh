@@ -11,8 +11,6 @@ from sqlmesh.core.engine_adapter.shared import (
     DataObject,
     DataObjectType,
     SourceQuery,
-    CommentCreationTable,
-    CommentCreationView,
 )
 from sqlmesh.core.schema_diff import SchemaDiffer
 from functools import cached_property
@@ -109,12 +107,14 @@ class ClickhouseEngineAdapter(EngineAdapter):
         cascade: bool = False,
         **drop_args: t.Dict[str, exp.Expression],
     ) -> None:
+        cluster = drop_args.pop("cluster", None)
+
         return self._drop_object(
             name=schema_name,
             exists=ignore_if_not_exists,
             kind="DATABASE",
             cascade=cascade,
-            cluster=self.default_cluster if self.is_cluster else None,
+            cluster=cluster or (self.default_cluster if self.is_cluster else None),
             **drop_args,
         )
 
