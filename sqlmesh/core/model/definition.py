@@ -1242,7 +1242,9 @@ class SeedModel(_SqlBasedModel):
             for column in date_columns:
                 df[column] = df[column].dt.date
 
-            df[bool_columns] = df[bool_columns].apply(lambda i: str_to_bool(str(i)))
+            for column in bool_columns:
+                df[column] = df[column].apply(lambda i: str_to_bool(str(i)))
+
             df.loc[:, string_columns] = df[string_columns].mask(
                 cond=lambda x: x.notna(),  # type: ignore
                 other=df[string_columns].astype(str),  # type: ignore
