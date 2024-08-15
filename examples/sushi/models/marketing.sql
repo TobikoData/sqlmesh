@@ -12,4 +12,15 @@ SELECT
   status::TEXT AS status,
   updated_at::TIMESTAMP AS updated_at
 FROM
-  sushi.raw_marketing
+  sushi.raw_marketing;
+
+@assert_has_columns(
+    sushi.marketing,
+    {
+        customer_id: 'int',
+        status: 'text',
+        updated_at: 'timestamp',
+        valid_from: 'timestamp',
+        valid_to: 'timestamp',
+    }
+)
