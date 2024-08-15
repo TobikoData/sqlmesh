@@ -626,7 +626,7 @@ def test_signal_factory(mocker: MockerFixture, make_snapshot):
     from sqlmesh.core.scheduler import signal_factory, Batch, Signal
 
     class AlwaysReadySignal(Signal):
-        def check_intervals(self, batch: Batch) -> bool | Batch:
+        def check_intervals(self, batch: Batch):
             return True
 
     signal_factory_invoked = 0
