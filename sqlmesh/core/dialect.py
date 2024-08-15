@@ -7,6 +7,7 @@ import typing as t
 from contextlib import contextmanager
 from difflib import unified_diff
 from enum import Enum, auto
+from functools import lru_cache
 
 import pandas as pd
 from sqlglot import Dialect, Generator, ParseError, Parser, Tokenizer, TokenType, exp
@@ -956,6 +957,7 @@ def set_default_catalog(
     return table
 
 
+@lru_cache(maxsize=None)
 def normalize_model_name(
     table: str | exp.Table | exp.Column,
     default_catalog: t.Optional[str],

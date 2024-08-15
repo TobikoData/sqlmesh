@@ -11,11 +11,10 @@ from sqlglot import __version__ as SQLGLOT_VERSION
 from sqlmesh.utils import sanitize_name
 from sqlmesh.utils.date import to_datetime
 from sqlmesh.utils.errors import SQLMeshError
-from sqlmesh.utils.pydantic import PydanticModel
 
 logger = logging.getLogger(__name__)
 
-T = t.TypeVar("T", bound=PydanticModel)
+T = t.TypeVar("T")
 
 
 SQLGLOT_VERSION_TUPLE = tuple(SQLGLOT_VERSION.split("."))
@@ -33,14 +32,8 @@ class FileCache(t.Generic[T]):
             stored in the same cache folder.
     """
 
-    def __init__(
-        self,
-        path: Path,
-        entry_class: t.Type[T],
-        prefix: t.Optional[str] = None,
-    ):
+    def __init__(self, path: Path, prefix: t.Optional[str] = None):
         self._path = path / prefix if prefix else path
-        self._entry_class = entry_class
 
         from sqlmesh.core.state_sync.base import SCHEMA_VERSION
 
@@ -79,7 +72,7 @@ class FileCache(t.Generic[T]):
             The entry.
         """
         cached_entry = self.get(name, entry_id)
-        if cached_entry:
+        if cached_entry is not None:
             return cached_entry
 
         loaded_entry = loader()
@@ -100,7 +93,7 @@ class FileCache(t.Generic[T]):
         if cache_entry_path.exists():
             with gzip.open(cache_entry_path, "rb") as fd:
                 try:
-                    return self._entry_class.parse_obj(pickle.load(fd))
+                    return pickle.load(fd)
                 except Exception as ex:
                     logger.warning("Failed to load a cache entry '%s': %s", name, ex)
 
@@ -119,7 +112,7 @@ class FileCache(t.Generic[T]):
             raise SQLMeshError(f"Cache path '{self._path}' is not a directory.")
 
         with gzip.open(self._cache_entry_path(name, entry_id), "wb", compresslevel=1) as fd:
-            pickle.dump(value.dict(exclude_none=False), fd)
+            pickle.dump(value, fd)
 
     def _cache_entry_path(self, name: str, entry_id: str = "") -> Path:
         entry_file_name = "__".join(p for p in (self._cache_version, name, entry_id) if p)

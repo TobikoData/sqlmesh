@@ -185,6 +185,68 @@ def test_select_models(mocker: MockerFixture, make_snapshot, default_catalog: t.
     )
 
 
+def test_select_change_schema(mocker: MockerFixture, make_snapshot):
+    parent = SqlModel(
+        name="db.parent",
+        query=d.parse_one("SELECT 1 AS a"),
+    )
+    child = SqlModel(
+        name="db.child",
+        query=d.parse_one("SELECT * FROM db.parent"),
+        mapping_schema={'"db"': {'"parent"': {"a": "INT"}}},
+    )
+
+    parent_snapshot = make_snapshot(parent)
+    parent_snapshot.categorize_as(SnapshotChangeCategory.BREAKING)
+    child_snapshot = make_snapshot(child)
+    child_snapshot.categorize_as(SnapshotChangeCategory.BREAKING)
+
+    env_name = "test_env"
+
+    state_reader_mock = mocker.Mock()
+    state_reader_mock.get_environment.return_value = Environment(
+        name=env_name,
+        snapshots=[s.table_info for s in (parent_snapshot, child_snapshot)],
+        start_at="2023-01-01",
+        end_at="2023-02-01",
+        plan_id="test_plan_id",
+    )
+    state_reader_mock.get_snapshots.return_value = {
+        parent_snapshot.snapshot_id: parent_snapshot,
+        child_snapshot.snapshot_id: child_snapshot,
+    }
+
+    local_models: UniqueKeyDict[str, Model] = UniqueKeyDict("models")
+    local_parent = parent.copy(update={"query": parent.query.select("2 as b", append=False)})  # type: ignore
+    local_models[local_parent.fqn] = local_parent
+    local_child = child.copy(update={"mapping_schema": {'"db"': {'"parent"': {"b": "INT"}}}})
+    local_models[local_child.fqn] = local_child
+
+    selector = Selector(state_reader_mock, local_models)
+
+    selected = selector.select_models(["db.parent"], env_name)
+    assert selected[local_child.fqn].data_hash != child.data_hash
+
+    _assert_models_equal(
+        selected,
+        {
+            local_parent.fqn: local_parent,
+            local_child.fqn: local_child,
+        },
+    )
+
+    selected = selector.select_models(["db.child"], env_name)
+    assert selected[local_child.fqn].data_hash == child.data_hash
+
+    _assert_models_equal(
+        selected,
+        {
+            parent.fqn: parent,
+            child.fqn: child,
+        },
+    )
+
+
 def test_select_models_missing_env(mocker: MockerFixture, make_snapshot):
     model = SqlModel(name="test_model", query=d.parse_one("SELECT 1 AS a"))
 

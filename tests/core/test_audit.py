@@ -628,7 +628,7 @@ def test_pattern_audits(model: Model):
     rendered_query = builtin.match_regex_pattern_list_audit.render_query(
         model,
         column=exp.to_column("a"),
-        patterns=["^\d.*", ".*!$"],
+        patterns=[r"^\d.*", ".*!$"],
     )
     assert (
         rendered_query.sql()
@@ -638,7 +638,7 @@ def test_pattern_audits(model: Model):
     rendered_query = builtin.not_match_regex_pattern_list_audit.render_query(
         model,
         column=exp.to_column("a"),
-        patterns=["^\d.*", ".*!$"],
+        patterns=[r"^\d.*", ".*!$"],
     )
     assert (
         rendered_query.sql()

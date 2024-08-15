@@ -5599,3 +5599,18 @@ def test_staged_file_path():
     model = load_sql_based_model(expressions)
     query = model.render_query()
     assert query.sql(dialect="snowflake") == "SELECT * FROM @a.b/c/d.csv (FILE_FORMAT => 'b.ff')"
+
+
+def test_cache():
+    expressions = d.parse(
+        """
+        MODEL (name test);
+
+        SELECT 1 x
+        FROM y
+
+        """
+    )
+    model = load_sql_based_model(expressions)
+    assert model.depends_on == {'"y"'}
+    assert model.copy(update={"depends_on_": {'"z"'}}).depends_on == {'"z"', '"y"'}

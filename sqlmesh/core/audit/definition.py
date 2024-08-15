@@ -355,18 +355,19 @@ class StandaloneAudit(_Node, AuditMixin):
         Returns:
             The metadata hash for the node.
         """
-        data = [
-            self.owner,
-            self.description,
-            *sorted(self.tags),
-            str(self.sorted_python_env),
-            self.stamp,
-        ]
+        if self._metadata_hash is None:
+            data = [
+                self.owner,
+                self.description,
+                *sorted(self.tags),
+                str(self.sorted_python_env),
+                self.stamp,
+            ]
 
-        query = self.render_query(self) or self.query
-        data.append(gen(query))
-
-        return hash_data(data)
+            query = self.render_query(self) or self.query
+            data.append(gen(query))
+            self._metadata_hash = hash_data(data)
+        return self._metadata_hash
 
     def text_diff(self, other: Node) -> str:
         """Produce a text diff against another node.
