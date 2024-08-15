@@ -624,6 +624,48 @@ def test_chi_square_audit(model: Model):
     )
 
 
+def test_pattern_audits(model: Model):
+    rendered_query = builtin.match_regex_pattern_list_audit.render_query(
+        model,
+        column=exp.to_column("a"),
+        patterns=["^\d.*", ".*!$"],
+    )
+    assert (
+        rendered_query.sql()
+        == """SELECT * FROM (SELECT * FROM "db"."test_model" AS "test_model" WHERE "ds" BETWEEN \'1970-01-01\' AND \'1970-01-01\') AS "_q_0" WHERE (NOT REGEXP_LIKE("a", \'^\\d.*\') AND NOT REGEXP_LIKE("a", \'.*!$\')) AND TRUE"""
+    )
+
+    rendered_query = builtin.not_match_regex_pattern_list_audit.render_query(
+        model,
+        column=exp.to_column("a"),
+        patterns=["^\d.*", ".*!$"],
+    )
+    assert (
+        rendered_query.sql()
+        == """SELECT * FROM (SELECT * FROM "db"."test_model" AS "test_model" WHERE "ds" BETWEEN \'1970-01-01\' AND \'1970-01-01\') AS "_q_0" WHERE (REGEXP_LIKE("a", \'^\\d.*\') OR REGEXP_LIKE("a", \'.*!$\')) AND TRUE"""
+    )
+
+    rendered_query = builtin.match_like_pattern_list.render_query(
+        model,
+        column=exp.to_column("a"),
+        patterns=["jim%", "pam%"],
+    )
+    assert (
+        rendered_query.sql()
+        == """SELECT * FROM (SELECT * FROM "db"."test_model" AS "test_model" WHERE "ds" BETWEEN \'1970-01-01\' AND \'1970-01-01\') AS "_q_0" WHERE (NOT "a" LIKE \'jim%\' AND NOT "a" LIKE \'pam%\') AND TRUE"""
+    )
+
+    rendered_query = builtin.not_match_like_pattern_list_audit.render_query(
+        model,
+        column=exp.to_column("a"),
+        patterns=["jim%", "pam%"],
+    )
+    assert (
+        rendered_query.sql()
+        == """SELECT * FROM (SELECT * FROM "db"."test_model" AS "test_model" WHERE "ds" BETWEEN \'1970-01-01\' AND \'1970-01-01\') AS "_q_0" WHERE ("a" LIKE \'jim%\' OR "a" LIKE \'pam%\') AND TRUE"""
+    )
+
+
 def test_standalone_audit(model: Model, assert_exp_eq):
     audit = StandaloneAudit(
         name="test_audit", query=parse_one(f"SELECT * FROM {model.name} WHERE col IS NULL")
