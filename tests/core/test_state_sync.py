@@ -2035,6 +2035,7 @@ def test_max_interval_end_per_model(
     environment_name = "test_max_interval_end_for_environment"
 
     assert state_sync.max_interval_end_per_model(environment_name) is None
+    assert state_sync.max_interval_end_per_model(environment_name, {snapshot_a.name}) is None
 
     state_sync.promote(
         Environment(
@@ -2047,10 +2048,28 @@ def test_max_interval_end_per_model(
         )
     )
 
+    assert state_sync.max_interval_end_per_model(environment_name, {snapshot_a.name}) == {
+        snapshot_a.name: to_timestamp("2023-01-04")
+    }
+
+    assert state_sync.max_interval_end_per_model(environment_name, {snapshot_b.name}) == {
+        snapshot_b.name: to_timestamp("2023-01-03")
+    }
+
+    assert state_sync.max_interval_end_per_model(
+        environment_name, {snapshot_a.name, snapshot_b.name}
+    ) == {
+        snapshot_a.name: to_timestamp("2023-01-04"),
+        snapshot_b.name: to_timestamp("2023-01-03"),
+    }
+
     assert state_sync.max_interval_end_per_model(environment_name) == {
         snapshot_a.name: to_timestamp("2023-01-04"),
         snapshot_b.name: to_timestamp("2023-01-03"),
     }
+
+    assert state_sync.max_interval_end_per_model(environment_name, {"missing"}) == {}
+    assert state_sync.max_interval_end_per_model(environment_name, set()) == {}
 
 
 def test_max_interval_end_per_model_ensure_finalized_snapshots(
@@ -2085,6 +2104,7 @@ def test_max_interval_end_per_model_ensure_finalized_snapshots(
     environment_name = "test_max_interval_end_for_environment"
 
     assert state_sync.max_interval_end_per_model(environment_name) is None
+    assert state_sync.max_interval_end_per_model(environment_name, {snapshot_a.name}) is None
 
     state_sync.promote(
         Environment(
@@ -2097,9 +2117,32 @@ def test_max_interval_end_per_model_ensure_finalized_snapshots(
         )
     )
 
+    assert (
+        state_sync.max_interval_end_per_model(
+            environment_name, {snapshot_a.name}, ensure_finalized_snapshots=True
+        )
+        == {}
+    )
+
+    assert state_sync.max_interval_end_per_model(
+        environment_name, {snapshot_b.name}, ensure_finalized_snapshots=True
+    ) == {snapshot_b.name: to_timestamp("2023-01-03")}
+
+    assert state_sync.max_interval_end_per_model(
+        environment_name, {snapshot_a.name, snapshot_b.name}, ensure_finalized_snapshots=True
+    ) == {snapshot_b.name: to_timestamp("2023-01-03")}
+
     assert state_sync.max_interval_end_per_model(
         environment_name, ensure_finalized_snapshots=True
     ) == {snapshot_b.name: to_timestamp("2023-01-03")}
+
+    assert (
+        state_sync.max_interval_end_per_model(
+            environment_name, {"missing"}, ensure_finalized_snapshots=True
+        )
+        == {}
+    )
+    assert state_sync.max_interval_end_per_model(environment_name, set()) == {}
 
 
 def test_get_snapshots(mocker):

@@ -548,6 +548,51 @@ def test_parent_cron_after_child(init_and_plan_context: t.Callable):
         ]
 
 
+@freeze_time("2023-01-08 00:00:00")
+def test_cron_not_aligned_with_day_boundary(init_and_plan_context: t.Callable):
+    context, plan = init_and_plan_context("examples/sushi")
+
+    model = context.get_model("sushi.waiter_revenue_by_day")
+    model = SqlModel.parse_obj(
+        {
+            **model.dict(),
+            "cron": "0 12 * * *",
+        }
+    )
+    context.upsert_model(model)
+
+    plan = context.plan("prod", no_prompts=True, skip_tests=True)
+    context.apply(plan)
+
+    waiter_revenue_by_day_snapshot = context.get_snapshot(model.name, raise_if_missing=True)
+    assert waiter_revenue_by_day_snapshot.intervals == [
+        (to_timestamp("2023-01-01"), to_timestamp("2023-01-07"))
+    ]
+
+    model = add_projection_to_model(t.cast(SqlModel, model), literal=True)
+    context.upsert_model(model)
+
+    waiter_revenue_by_day_snapshot = context.get_snapshot(
+        "sushi.waiter_revenue_by_day", raise_if_missing=True
+    )
+
+    with freeze_time("2023-01-08 00:10:00"):  # Past model's cron.
+        plan = context.plan("dev", select_models=[model.name], no_prompts=True, skip_tests=True)
+        assert plan.missing_intervals == [
+            SnapshotIntervals(
+                snapshot_id=waiter_revenue_by_day_snapshot.snapshot_id,
+                intervals=[
+                    (to_timestamp("2023-01-01"), to_timestamp("2023-01-02")),
+                    (to_timestamp("2023-01-02"), to_timestamp("2023-01-03")),
+                    (to_timestamp("2023-01-03"), to_timestamp("2023-01-04")),
+                    (to_timestamp("2023-01-04"), to_timestamp("2023-01-05")),
+                    (to_timestamp("2023-01-05"), to_timestamp("2023-01-06")),
+                    (to_timestamp("2023-01-06"), to_timestamp("2023-01-07")),
+                ],
+            ),
+        ]
+
+
 @freeze_time("2023-01-08 15:00:00")
 def test_forward_only_parent_created_in_dev_child_created_in_prod(
     init_and_plan_context: t.Callable,

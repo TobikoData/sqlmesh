@@ -997,6 +997,7 @@ class EngineAdapterStateSync(StateSync):
     def max_interval_end_per_model(
         self,
         environment: str,
+        models: t.Optional[t.Set[str]] = None,
         ensure_finalized_snapshots: bool = False,
     ) -> t.Optional[t.Dict[str, int]]:
         env = self._get_environment(environment)
@@ -1006,6 +1007,11 @@ class EngineAdapterStateSync(StateSync):
         snapshots = (
             env.snapshots if not ensure_finalized_snapshots else env.finalized_or_current_snapshots
         )
+        if models is not None:
+            snapshots = [s for s in snapshots if s.name in models]
+
+        if not snapshots:
+            return {}
 
         table_alias = "intervals"
         name_col = exp.column("name", table=table_alias)

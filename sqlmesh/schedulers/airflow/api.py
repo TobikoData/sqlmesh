@@ -75,9 +75,11 @@ def get_environments() -> Response:
 @check_authentication
 def max_interval_end_per_model(name: str) -> Response:
     with util.scoped_state_sync() as state_sync:
+        models = json.loads(request.args["models"]) if "models" in request.args else None
         ensure_finalized_snapshots = "ensure_finalized_snapshots" in request.args
         interval_end_per_model = state_sync.max_interval_end_per_model(
             name,
+            set(models) if models is not None else None,
             ensure_finalized_snapshots=ensure_finalized_snapshots,
         )
         response = common.IntervalEndResponse(

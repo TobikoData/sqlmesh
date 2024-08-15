@@ -143,12 +143,14 @@ class StateReader(abc.ABC):
     def max_interval_end_per_model(
         self,
         environment: str,
+        models: t.Optional[t.Set[str]] = None,
         ensure_finalized_snapshots: bool = False,
     ) -> t.Optional[t.Dict[str, int]]:
         """Returns the max interval end per model for the given environment.
 
         Args:
             environment: The target environment.
+            models: The models to get the max interval end for. If None, all models are considered.
             ensure_finalized_snapshots: Whether to use snapshots from the latest finalized environment state,
                 or to use whatever snapshots are in the current environment state even if the environment is not finalized.
 

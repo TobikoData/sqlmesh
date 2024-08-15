@@ -291,13 +291,18 @@ class AirflowClient(BaseAirflowClient):
     def max_interval_end_per_model(
         self,
         environment: str,
+        models: t.Optional[t.Collection[str]],
         ensure_finalized_snapshots: bool,
     ) -> t.Optional[t.Dict[str, int]]:
         flags = ["ensure_finalized_snapshots"] if ensure_finalized_snapshots else []
+        params = {}
+        if models is not None:
+            params["models"] = _json_query_param(list(models))
 
         response = self._get(
             f"{ENVIRONMENTS_PATH}/{environment}/max_interval_end_per_model",
             *flags,
+            **params,
         )
         return common.IntervalEndResponse.parse_obj(response).interval_end_per_model
 

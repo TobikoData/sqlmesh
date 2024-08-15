@@ -388,13 +388,37 @@ def test_max_interval_end_per_model(
     max_interval_end_mock.return_value = max_interval_end_response_mock
 
     client = AirflowClient(airflow_url=common.AIRFLOW_LOCAL_URL, session=requests.Session())
-    result = client.max_interval_end_per_model("test_environment", ensure_finalized_snapshots)
+    result = client.max_interval_end_per_model(
+        "test_environment", {"a.b.c"}, ensure_finalized_snapshots
+    )
 
     assert result == response.interval_end_per_model
 
-    flags = "?ensure_finalized_snapshots" if ensure_finalized_snapshots else ""
+    flags = "ensure_finalized_snapshots&" if ensure_finalized_snapshots else ""
     max_interval_end_mock.assert_called_once_with(
-        f"http://localhost:8080/sqlmesh/api/v1/environments/test_environment/max_interval_end_per_model{flags}"
+        f"http://localhost:8080/sqlmesh/api/v1/environments/test_environment/max_interval_end_per_model?{flags}models=%5B%22a.b.c%22%5D"
+    )
+
+
+def test_max_interval_end_per_model_no_models(mocker: MockerFixture, snapshot: Snapshot):
+    response = common.IntervalEndResponse(
+        environment="test_environment",
+        interval_end_per_model={"model_name": to_timestamp("2023-01-01")},
+    )
+
+    max_interval_end_response_mock = mocker.Mock()
+    max_interval_end_response_mock.status_code = 200
+    max_interval_end_response_mock.json.return_value = response.dict()
+    max_interval_end_mock = mocker.patch("requests.Session.get")
+    max_interval_end_mock.return_value = max_interval_end_response_mock
+
+    client = AirflowClient(airflow_url=common.AIRFLOW_LOCAL_URL, session=requests.Session())
+    result = client.max_interval_end_per_model("test_environment", None, False)
+
+    assert result == response.interval_end_per_model
+
+    max_interval_end_mock.assert_called_once_with(
+        "http://localhost:8080/sqlmesh/api/v1/environments/test_environment/max_interval_end_per_model"
     )
 
 
