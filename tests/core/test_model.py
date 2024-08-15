@@ -3533,6 +3533,40 @@ def test_scd_type_2_by_column_overrides():
     assert scd_type_2_model.kind == _model_kind_validator(None, model_kind_dict, {})
 
 
+def test_scd_type_2_python_model() -> None:
+    @model(
+        "test_scd_type_2_python_model",
+        kind=dict(
+            name=ModelKindName.SCD_TYPE_2_BY_TIME,
+            unique_key="a",
+            updated_at_name="b",
+            updated_at_as_valid_from=True,
+        ),
+        columns={"a": "string", "b": "string"},
+    )
+    def scd_type_2_model(context, **kwargs):
+        return pd.DataFrame(
+            [
+                {
+                    "a": "val1",
+                    "b": "2024-01-01",
+                }
+            ]
+        )
+
+    python_model = model.get_registry()["test_scd_type_2_python_model"].model(
+        module_path=Path("."),
+        path=Path("."),
+    )
+
+    assert python_model.columns_to_types == {
+        "a": exp.DataType.build("string"),
+        "b": exp.DataType.build("string"),
+        "valid_from": exp.DataType.build("TIMESTAMP"),
+        "valid_to": exp.DataType.build("TIMESTAMP"),
+    }
+
+
 @pytest.mark.parametrize(
     "input_columns,expected_columns",
     [

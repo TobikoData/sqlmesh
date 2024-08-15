@@ -1398,12 +1398,10 @@ WITH "source" AS (
       CAST("name" AS VARCHAR) AS "name",
       CAST("price" AS DOUBLE) AS "price",
       CAST("test_updated_at" AS TIMESTAMPTZ) AS "test_updated_at",
-      CAST("test_valid_from" AS TIMESTAMPTZ) AS "test_valid_from",
-      CAST("test_valid_to" AS TIMESTAMPTZ) AS "test_valid_to"
     FROM (VALUES
       (1, 4, 'muffins', 4.0, '2020-01-01 10:00:00'),
       (2, 5, 'chips', 5.0, '2020-01-02 15:00:00'),
-      (3, 6, 'soda', 6.0, '2020-01-03 12:00:00')) AS "t"("id1", "id2", "name", "price", "test_updated_at", "test_valid_from", "test_valid_to")
+      (3, 6, 'soda', 6.0, '2020-01-03 12:00:00')) AS "t"("id1", "id2", "name", "price", "test_updated_at")
   ) AS "raw_source"
 ), "static" AS (
   SELECT
