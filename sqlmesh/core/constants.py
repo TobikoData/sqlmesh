@@ -47,6 +47,7 @@ MATERIALIZATIONS = "materializations"
 METRICS = "metrics"
 MODELS = "models"
 SEEDS = "seeds"
+SIGNALS = "signals"
 TESTS = "tests"
 
 EXTERNAL_MODELS_YAML = "external_models.yaml"
