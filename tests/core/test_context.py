@@ -26,7 +26,6 @@ from sqlmesh.core.config import (
 from sqlmesh.core.context import Context
 from sqlmesh.core.dialect import parse, schema_
 from sqlmesh.core.environment import Environment
-from sqlmesh.core.macros import macro
 from sqlmesh.core.model import load_sql_based_model, model
 from sqlmesh.core.model.kind import ModelKindName
 from sqlmesh.core.plan import BuiltInPlanEvaluator, PlanBuilder
