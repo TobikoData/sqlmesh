@@ -6,10 +6,10 @@ from sqlmesh.core.model.seed import CsvSettings, Seed
 
 
 def test_read():
-    content = """key,value,ds
-1,one,2022-01-01
-2,two,2022-01-02
-3,three,2022-01-03
+    content = """key,value,ds,bool
+1,one,2022-01-01,true
+2,two,2022-01-02,false
+3,three,2022-01-03,true
 """
     seed = Seed(content=content)
     # Since we provide "snowflake" as the dialect, all identifiers are expected to
@@ -20,13 +20,14 @@ def test_read():
         "KEY": exp.DataType.build("bigint"),
         "VALUE": exp.DataType.build("text"),
         "DS": exp.DataType.build("text"),
+        "BOOL": exp.DataType.build("boolean"),
     }
-
     expected_df = pd.DataFrame(
         data={
             "KEY": [1, 2, 3],
             "VALUE": ["one", "two", "three"],
             "DS": ["2022-01-01", "2022-01-02", "2022-01-03"],
+            "BOOL": [True, False, True],
         }
     )
     dfs = seed_reader.read(batch_size=2)
