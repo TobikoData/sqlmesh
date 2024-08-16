@@ -312,10 +312,19 @@ def test_remove_interval(state_sync: EngineAdapterStateSync, make_snapshot: t.Ca
     state_sync.add_interval(snapshot_a, "2020-01-01", "2020-01-10")
     state_sync.add_interval(snapshot_b, "2020-01-11", "2020-01-30")
 
-    state_sync.remove_interval(
-        [(snapshot_a, snapshot_a.inclusive_exclusive("2020-01-15", "2020-01-17"))],
-        remove_shared_versions=True,
-    )
+    num_of_removals = 4
+    for _ in range(num_of_removals):
+        state_sync.remove_interval(
+            [(snapshot_a, snapshot_a.inclusive_exclusive("2020-01-15", "2020-01-17"))],
+            remove_shared_versions=True,
+        )
+
+    remove_records_count = state_sync.engine_adapter.fetchone(
+        "SELECT COUNT(*) FROM sqlmesh._intervals WHERE name = '\"a\"' AND version = 'a' AND is_removed"
+    )[0]
+    assert (
+        remove_records_count == num_of_removals * 4
+    )  # (1 dev record + 1 prod record) * 2 snapshots
 
     snapshots = state_sync.get_snapshots([snapshot_a, snapshot_b])
 
