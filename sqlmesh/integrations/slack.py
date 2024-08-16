@@ -35,7 +35,11 @@ class SlackMessageComposer:
 
     def __init__(self, initial_message: t.Optional[TSlackMessage] = None) -> None:
         """Initialize the Slack message builder"""
-        self.slack_message = initial_message or {"blocks": [], "attachments": [{"blocks": []}]}
+        self.slack_message: TSlackMessage = initial_message or {
+            "text": "",
+            "blocks": [],
+            "attachments": [{"blocks": []}],
+        }
 
     def add_primary_blocks(self, *blocks: TSlackBlock) -> "SlackMessageComposer":
         """Add blocks to the message. Blocks are always displayed"""
