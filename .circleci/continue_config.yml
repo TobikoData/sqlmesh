@@ -315,6 +315,7 @@ workflows:
                 - mssql
                 - trino
                 - spark
+                - clickhouse
       - engine_tests_cloud:
           name: cloud_engine_<< matrix.engine >>
           context:
@@ -328,6 +329,7 @@ workflows:
                 - databricks
                 - redshift
                 - bigquery
+                - clickhouse_cloud
           filters:
             branches:
               only:

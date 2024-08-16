@@ -1,6 +1,3 @@
-<!-- TODO: I dumped this from the docker image so I could see the full extent of the default config to decide what needed to be overridden -->
-<!-- It needs to be removed at some point -->
-
 <!--
   NOTE: User and query level settings are set up in "users.xml" file.
   If you have accidentally specified user-level settings here, server won't start.
