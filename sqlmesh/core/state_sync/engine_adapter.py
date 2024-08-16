@@ -657,6 +657,7 @@ class EngineAdapterStateSync(CommonStateSyncMixin, StateSync):
                             exp.select("name", "identifier", "version")
                             .from_(self.intervals_table)
                             .where(where)
+                            .distinct()
                         )
                     ]
                 )
