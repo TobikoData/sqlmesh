@@ -58,7 +58,7 @@ class FileCache(t.Generic[T]):
         threshold = to_datetime("1 week ago").timestamp()
         # delete all old cache files
         for file in self._path.glob("*"):
-            if not file.stem.startswith(self._cache_version) or file.stat().st_mtime < threshold:
+            if not file.stem.startswith(self._cache_version) or file.stat().st_atime < threshold:
                 file.unlink(missing_ok=True)
 
     def get_or_load(self, name: str, entry_id: str = "", *, loader: t.Callable[[], T]) -> T:
@@ -114,6 +114,15 @@ class FileCache(t.Generic[T]):
 
         with gzip.open(self._cache_entry_path(name, entry_id), "wb", compresslevel=1) as fd:
             pickle.dump(value, fd)
+
+    def exists(self, name: str, entry_id: str = "") -> bool:
+        """Returns true if the cache entry with the given name and ID exists, false otherwise.
+
+        Args:
+            name: The name of the entry.
+            entry_id: The unique entry identifier. Used for cache invalidation.
+        """
+        return self._cache_entry_path(name, entry_id).exists()
 
     def clear(self) -> None:
         try:

@@ -695,11 +695,13 @@ class EngineAdapterStateSync(StateSync):
         self,
         snapshot_ids: t.Optional[t.Iterable[SnapshotIdLike]],
     ) -> t.Dict[SnapshotId, Snapshot]:
+        if snapshot_ids is None:
+            raise SQLMeshError("Must provide snapshot IDs to fetch snapshots.")
         return self._get_snapshots(snapshot_ids)
 
     def _get_snapshots(
         self,
-        snapshot_ids: t.Optional[t.Iterable[SnapshotIdLike]] = None,
+        snapshot_ids: t.Iterable[SnapshotIdLike],
         lock_for_update: bool = False,
         hydrate_intervals: bool = True,
     ) -> t.Dict[SnapshotId, Snapshot]:
@@ -715,7 +717,7 @@ class EngineAdapterStateSync(StateSync):
         """
         duplicates: t.Dict[SnapshotId, Snapshot] = {}
 
-        def _loader(snapshot_ids_to_load: t.Optional[t.Set[SnapshotId]]) -> t.Collection[Snapshot]:
+        def _loader(snapshot_ids_to_load: t.Set[SnapshotId]) -> t.Collection[Snapshot]:
             fetched_snapshots: t.Dict[SnapshotId, Snapshot] = {}
             for query in self._get_snapshots_expressions(snapshot_ids_to_load, lock_for_update):
                 for (
@@ -744,16 +746,9 @@ class EngineAdapterStateSync(StateSync):
                         fetched_snapshots[snapshot_id] = snapshot
             return fetched_snapshots.values()
 
-        if snapshot_ids is not None:
-            snapshots, cached_snapshots = self._snapshot_cache.get_or_load(
-                {s.snapshot_id for s in snapshot_ids}, _loader
-            )
-        else:
-            cached_snapshots = set()
-            snapshots = {}
-            for snapshot in _loader(None):
-                snapshots[snapshot.snapshot_id] = snapshot
-                self._snapshot_cache.put(snapshot)
+        snapshots, cached_snapshots = self._snapshot_cache.get_or_load(
+            {s.snapshot_id for s in snapshot_ids}, _loader
+        )
 
         if cached_snapshots:
             cached_snapshots_in_state: t.Set[SnapshotId] = set()
@@ -791,14 +786,12 @@ class EngineAdapterStateSync(StateSync):
 
     def _get_snapshots_expressions(
         self,
-        snapshot_ids: t.Optional[t.Iterable[SnapshotIdLike]] = None,
+        snapshot_ids: t.Iterable[SnapshotIdLike],
         lock_for_update: bool = False,
         batch_size: t.Optional[int] = None,
     ) -> t.Iterator[exp.Expression]:
-        for where in (
-            [None]
-            if snapshot_ids is None
-            else self._snapshot_id_filter(snapshot_ids, alias="snapshots", batch_size=batch_size)
+        for where in self._snapshot_id_filter(
+            snapshot_ids, alias="snapshots", batch_size=batch_size
         ):
             query = (
                 exp.select(
@@ -1737,7 +1730,7 @@ def parse_snapshot(
     unpaused_ts: t.Optional[int],
     unrestorable: bool,
 ) -> Snapshot:
-    snapshot = Snapshot(
+    return Snapshot(
         **{
             **json.loads(serialized_snapshot),
             "updated_ts": updated_ts,
@@ -1745,9 +1738,6 @@ def parse_snapshot(
             "unrestorable": unrestorable,
         }
     )
-    snapshot.node._data_hash = snapshot.fingerprint.data_hash
-    snapshot.node._metadata_hash = snapshot.fingerprint.metadata_hash
-    return snapshot
 
 
 class LazilyParsedSnapshots:

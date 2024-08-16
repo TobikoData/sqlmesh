@@ -81,14 +81,8 @@ class OptimizedQueryCache:
         if not isinstance(model, SqlModel):
             return False
 
-        hash_data = _mapping_schema_hash_data(model.mapping_schema)
-        hash_data.append(gen(model.query))
-        hash_data.append(str([(k, v) for k, v in model.sorted_python_env]))
-        hash_data.extend(model.jinja_macros.data_hash_values)
-
-        name = f"{model.name}_{crc32(hash_data)}"
+        name = self._entry_name(model)
         cache_entry = self._file_cache.get(name)
-
         if cache_entry:
             try:
                 if cache_entry.optimized_rendered_query:
@@ -104,11 +98,31 @@ class OptimizedQueryCache:
             except Exception as ex:
                 logger.warning("Failed to load a cache entry '%s': %s", name, ex)
 
+        self._put(name, model)
+        return False
+
+    def put(self, model: Model) -> None:
+        if not isinstance(model, SqlModel):
+            return
+
+        name = self._entry_name(model)
+        if self._file_cache.exists(name):
+            return
+
+        self._put(name, model)
+
+    def _put(self, name: str, model: SqlModel) -> None:
         optimized_query = model.render_query()
         new_entry = OptimizedQueryCacheEntry(optimized_rendered_query=optimized_query)
         self._file_cache.put(name, value=new_entry)
 
-        return False
+    @staticmethod
+    def _entry_name(model: SqlModel) -> str:
+        hash_data = _mapping_schema_hash_data(model.mapping_schema)
+        hash_data.append(gen(model.query))
+        hash_data.append(str([(k, v) for k, v in model.sorted_python_env]))
+        hash_data.extend(model.jinja_macros.data_hash_values)
+        return f"{model.name}_{crc32(hash_data)}"
 
 
 def _mapping_schema_hash_data(schema: t.Dict[str, t.Any]) -> t.List[str]:
