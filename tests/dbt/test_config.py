@@ -340,9 +340,11 @@ def test_variables(assert_exp_eq, sushi_test_project):
 def test_source_config(sushi_test_project: Project):
     source_configs = sushi_test_project.packages["sushi"].sources
     assert set(source_configs) == {
-        "streaming.items",
         "streaming.orders",
+        "parquet_file.items",
         "streaming.order_items",
+        "streaming.items",
+        "parquet_file.orders",
     }
 
     expected_config = {
@@ -357,6 +359,11 @@ def test_source_config(sushi_test_project: Project):
     assert (
         source_configs["streaming.order_items"].canonical_name(sushi_test_project.context)
         == "raw.order_items"
+    )
+
+    assert (
+        source_configs["parquet_file.orders"].canonical_name(sushi_test_project.context)
+        == "read_parquet('path/to/external/orders.parquet')"
     )
 
 

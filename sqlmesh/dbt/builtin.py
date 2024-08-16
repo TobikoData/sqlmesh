@@ -211,7 +211,6 @@ def generate_source(sources: t.Dict[str, t.Any], api: Api) -> t.Callable:
         if relation_info is None:
             logger.debug("Could not resolve source package='%s' name='%s'", package, name)
             return None
-
         return _relation_info_to_relation(relation_info, api.Relation, api.quote_policy)
 
     return source
