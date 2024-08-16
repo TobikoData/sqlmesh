@@ -1062,7 +1062,7 @@ class EvaluationStrategy(abc.ABC):
                 *(model.grains if model.grains else []),
                 *([model.time_column.column] if model.time_column else []),
             ]
-            if self.adapter.AUTOMATIC_ORDERED_BY
+            if self.adapter.auto_order_by
             else None,
         )
 
@@ -1198,7 +1198,7 @@ class MaterializableStrategy(PromotableStrategy):
                     *(model.grains if model.grains else []),
                     *([model.time_column.column] if model.time_column else []),
                 ]
-                if self.adapter.AUTOMATIC_ORDERED_BY
+                if self.adapter.auto_order_by
                 else None,
             )
 
@@ -1227,7 +1227,7 @@ class MaterializableStrategy(PromotableStrategy):
                     *(model.grains if model.grains else []),
                     *([model.time_column.column] if model.time_column else []),
                 ]
-                if self.adapter.AUTOMATIC_ORDERED_BY
+                if self.adapter.auto_order_by
                 else None,
             )
 
@@ -1440,7 +1440,7 @@ class SCDType2Strategy(MaterializableStrategy):
                     *(model.grains if model.grains else []),
                     *([model.time_column.column] if model.time_column else []),
                 ]
-                if self.adapter.AUTOMATIC_ORDERED_BY
+                if self.adapter.auto_order_by
                 else None,
             )
         else:

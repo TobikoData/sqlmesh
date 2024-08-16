@@ -101,7 +101,6 @@ class EngineAdapter:
     SUPPORTS_REPLACE_TABLE = True
     DEFAULT_CATALOG_TYPE = DIALECT
     QUOTE_IDENTIFIERS_IN_VIEWS = True
-    AUTOMATIC_ORDERED_BY = False
 
     def __init__(
         self,
@@ -182,6 +181,10 @@ class EngineAdapter:
     @property
     def engine_run_mode(self) -> EngineRunMode:
         return EngineRunMode.SINGLE_MODE_ENGINE
+
+    @property
+    def auto_order_by(self) -> bool:
+        return False
 
     def _get_source_queries(
         self,

@@ -30,7 +30,6 @@ logger = logging.getLogger(__name__)
 class ClickhouseEngineAdapter(EngineAdapterWithIndexSupport, LogicalMergeMixin):
     DIALECT = "clickhouse"
     SUPPORTS_TRANSACTIONS = False
-    AUTOMATIC_ORDERED_BY = True
     SUPPORTS_VIEW_SCHEMA = False
     COMMENT_CREATION_VIEW = CommentCreationView.COMMENT_COMMAND_ONLY
 
@@ -52,6 +51,10 @@ class ClickhouseEngineAdapter(EngineAdapterWithIndexSupport, LogicalMergeMixin):
     @property
     def cluster(self) -> t.Optional[str]:
         return self._extra_config.get("cluster")
+
+    @property
+    def auto_order_by(self) -> bool:
+        return self._extra_config.get("auto_order_by")  # type: ignore
 
     # Workaround for clickhouse-connect cursor bug
     # - cursor does not reset row index correctly on `close()`, so `fetchone()` and `fetchmany()`
@@ -255,12 +258,15 @@ class ClickhouseEngineAdapter(EngineAdapterWithIndexSupport, LogicalMergeMixin):
         )
 
         if expression and table_kind != "VIEW":
-            self._insert_append_query(
+            table_name = (
                 table_name_or_schema.this
                 if isinstance(table_name_or_schema, exp.Schema)
-                else table_name_or_schema,
-                expression,
-                columns_to_types or self.columns(table_name_or_schema),
+                else table_name_or_schema
+            )
+            self._insert_append_query(
+                table_name,
+                expression,  # type: ignore
+                columns_to_types or self.columns(table_name),
             )
 
     def _build_table_properties_exp(
@@ -308,7 +314,7 @@ class ClickhouseEngineAdapter(EngineAdapterWithIndexSupport, LogicalMergeMixin):
             primary_key_raw = table_properties_copy.pop("PRIMARY_KEY", None)
             if primary_key_raw and self.SUPPORTS_INDEXES:
                 primary_key_raw = (
-                    primary_key_raw[0] if isinstance(primary_key_raw, list) else primary_key_raw
+                    primary_key_raw[0] if isinstance(primary_key_raw, list) else primary_key_raw  # type: ignore
                 )
                 primary_key_cols = (
                     primary_key_raw.expressions
@@ -316,9 +322,10 @@ class ClickhouseEngineAdapter(EngineAdapterWithIndexSupport, LogicalMergeMixin):
                     else primary_key_raw
                 )
 
-                properties.append(
-                    exp.PrimaryKey(expressions=[exp.to_column(k) for k in primary_key_cols])
-                )
+                if primary_key_cols:
+                    properties.append(
+                        exp.PrimaryKey(expressions=[exp.to_column(k) for k in primary_key_cols])  # type: ignore
+                    )
 
             ordered_by_raw = table_properties_copy.pop("ORDER_BY", None) or ordered_by
             ordered_by_cols = []
@@ -342,10 +349,10 @@ class ClickhouseEngineAdapter(EngineAdapterWithIndexSupport, LogicalMergeMixin):
                         ordered_by_cols_dedupe.append(col)
 
             ordered_by_expressions = (
-                exp.Tuple(expressions=[exp.to_column(k) for k in ordered_by_cols])
+                exp.Tuple(expressions=[exp.to_column(k) for k in ordered_by_cols])  # type: ignore
                 if ordered_by_cols
-                # default tuple() if no columns provided
-                else exp.Literal(this="tuple()", is_string=False)
+                # default () if no columns provided
+                else exp.Literal(this="()", is_string=False)
             )
             properties.append(exp.Order(expressions=[exp.Ordered(this=ordered_by_expressions)]))
 
