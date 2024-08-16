@@ -1,6 +1,6 @@
 MODEL (
   name sushi.marketing,
-  kind SCD_TYPE_2(unique_key customer_id, time_data_type Nullable(Datetime64)),
+  kind SCD_TYPE_2(unique_key customer_id),
   owner jen,
   cron '@daily',
   grain customer_id,
@@ -10,7 +10,7 @@ MODEL (
 SELECT
   customer_id::INT AS customer_id, -- customer_id uniquely identifies customers \
   status::TEXT AS status,
-  updated_at AS updated_at
+  updated_at::TIMESTAMP AS updated_at
 FROM
   sushi.raw_marketing;
 
