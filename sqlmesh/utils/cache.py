@@ -3,6 +3,7 @@ from __future__ import annotations
 import gzip
 import logging
 import pickle
+import shutil
 import typing as t
 from pathlib import Path
 
@@ -113,6 +114,12 @@ class FileCache(t.Generic[T]):
 
         with gzip.open(self._cache_entry_path(name, entry_id), "wb", compresslevel=1) as fd:
             pickle.dump(value, fd)
+
+    def clear(self) -> None:
+        try:
+            shutil.rmtree(str(self._path.absolute()))
+        except Exception:
+            pass
 
     def _cache_entry_path(self, name: str, entry_id: str = "") -> Path:
         entry_file_name = "__".join(p for p in (self._cache_version, name, entry_id) if p)

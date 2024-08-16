@@ -201,6 +201,7 @@ def test_duplicates(state_sync: EngineAdapterStateSync, make_snapshot: t.Callabl
     state_sync._push_snapshots([snapshot_a])
     state_sync._push_snapshots([snapshot_b])
     state_sync._push_snapshots([snapshot_c])
+    state_sync._snapshot_cache.clear()
     assert (
         state_sync.get_snapshots([snapshot_a])[snapshot_a.snapshot_id].updated_ts
         == snapshot_b.updated_ts
@@ -1823,6 +1824,7 @@ def test_seed_hydration(
     assert snapshot.model.is_hydrated
     assert snapshot.model.seed.content == "header\n1\n2"
 
+    state_sync._snapshot_cache.clear()
     stored_snapshot = state_sync.get_snapshots([snapshot.snapshot_id])[snapshot.snapshot_id]
     assert isinstance(stored_snapshot.model, SeedModel)
     assert not stored_snapshot.model.is_hydrated
@@ -2262,3 +2264,31 @@ def test_seed_model_metadata_update(
 
     state_sync.push_snapshots([new_snapshot])
     assert len(state_sync.get_snapshots([new_snapshot, snapshot])) == 2
+
+
+def test_snapshot_cache(
+    state_sync: EngineAdapterStateSync, make_snapshot: t.Callable, mocker: MockerFixture
+):
+    cache_mock = mocker.Mock()
+    state_sync._snapshot_cache = cache_mock
+
+    snapshot = make_snapshot(SqlModel(name="a", query=parse_one("select 1")))
+    cache_mock.get_or_load.return_value = ({snapshot.snapshot_id: snapshot}, {snapshot.snapshot_id})
+
+    # Use _push_snapshots to bypass cache.
+    state_sync._push_snapshots([snapshot])
+
+    assert state_sync.get_snapshots([snapshot.snapshot_id]) == {snapshot.snapshot_id: snapshot}
+    cache_mock.get_or_load.assert_called_once_with({snapshot.snapshot_id}, mocker.ANY)
+
+    # Update the snapshot in the state and make sure this update is reflected on the cached instance.
+    assert snapshot.unpaused_ts is None
+    assert not snapshot.unrestorable
+    state_sync._update_snapshots([snapshot.snapshot_id], unpaused_ts=1, unrestorable=True)
+    new_snapshot = state_sync.get_snapshots([snapshot.snapshot_id])[snapshot.snapshot_id]
+    assert new_snapshot.unpaused_ts == 1
+    assert new_snapshot.unrestorable
+
+    # If the record was deleted from the state, the cached version should not be returned.
+    state_sync.delete_snapshots([snapshot.snapshot_id])
+    assert state_sync.get_snapshots([snapshot.snapshot_id]) == {}
