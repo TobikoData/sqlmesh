@@ -1036,7 +1036,7 @@ class TerminalConsole(Console):
         if schema_diff.target_alias:
             target_name = schema_diff.target_alias.upper()
 
-        first_line = f"\n[b]Schema Diff Between '[yellow]{source_name}[/yellow]' and '[green]{target_name}[/green]'"
+        first_line = f"\n[b]Schema Diff Between '[#0248ff]{source_name}[/#0248ff]' and '[green]{target_name}[/green]'"
         if schema_diff.model_name:
             first_line = (
                 first_line + f" environments for model '[blue]{schema_diff.model_name}[/blue]'"
@@ -1130,7 +1130,7 @@ class TerminalConsole(Console):
                         keys.append(col)
 
                 column_styles = {
-                    environments[0]: "yellow",
+                    environments[0]: "#0248ff",
                     environments[1]: "green",
                 }
 
@@ -1144,9 +1144,9 @@ class TerminalConsole(Console):
                     ]
                     column_table.columns = column_table.columns.str.split("__").str[0]
 
-                    table = Table(show_header=True, header_style="bold cyan")
+                    table = Table(show_header=True)
                     for column_name in column_table.columns:
-                        style = column_styles.get(column_name, "bold cyan")
+                        style = column_styles.get(column_name, "")
                         table.add_column(column_name, style=style, header_style=style)
 
                     for _, row in column_table.iterrows():
