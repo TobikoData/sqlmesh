@@ -6,6 +6,7 @@ import pandas as pd
 from sqlglot import exp
 from sqlmesh.core.model.kind import TimeColumn
 from sqlmesh.core.dialect import to_schema
+from sqlmesh.core.engine_adapter.mixins import LogicalMergeMixin
 from sqlmesh.core.engine_adapter.base import EngineAdapterWithIndexSupport
 from sqlmesh.core.engine_adapter.shared import (
     DataObject,
@@ -26,7 +27,7 @@ if t.TYPE_CHECKING:
 logger = logging.getLogger(__name__)
 
 
-class ClickhouseEngineAdapter(EngineAdapterWithIndexSupport):
+class ClickhouseEngineAdapter(EngineAdapterWithIndexSupport, LogicalMergeMixin):
     DIALECT = "clickhouse"
     SUPPORTS_TRANSACTIONS = False
     AUTOMATIC_ORDERED_BY = True
@@ -108,7 +109,7 @@ class ClickhouseEngineAdapter(EngineAdapterWithIndexSupport):
             name=schema_name,
             exists=ignore_if_not_exists,
             kind="DATABASE",
-            cascade=cascade,
+            cascade=None,
             cluster=exp.OnCluster(this=exp.to_identifier(self.default_cluster))
             if self.engine_run_mode.is_cluster
             else None,
@@ -169,7 +170,15 @@ class ClickhouseEngineAdapter(EngineAdapterWithIndexSupport):
             exp.select(
                 exp.column("database").as_("schema_name"),
                 exp.column("name"),
-                exp.column("engine").as_("type"),
+                exp.case(exp.column("engine"))
+                .when(
+                    exp.Literal.string("View"),
+                    exp.Literal.string("view"),
+                )
+                .else_(
+                    exp.Literal.string("table"),
+                )
+                .as_("type"),
             )
             .from_("system.tables")
             .where(exp.column("database").eq(to_schema(schema_name).db))
@@ -246,7 +255,7 @@ class ClickhouseEngineAdapter(EngineAdapterWithIndexSupport):
             )
         )
 
-        if expression:
+        if expression and table_kind != "VIEW":
             self._insert_append_query(
                 table_name_or_schema.this
                 if isinstance(table_name_or_schema, exp.Schema)
@@ -377,7 +386,7 @@ class ClickhouseEngineAdapter(EngineAdapterWithIndexSupport):
         """Creates a SQLGlot table properties expression for view"""
         properties: t.List[exp.Expression] = []
 
-        view_properties_copy = view_properties.copy()
+        view_properties_copy = view_properties.copy() if view_properties else {}
 
         # `view_properties`` is model.virtual_properties during view promotion but model.physical_properties elsewhen
         # - in the create_view promotion call, the cluster won't be in `view_properties`` so we pass the
@@ -409,7 +418,8 @@ class ClickhouseEngineAdapter(EngineAdapterWithIndexSupport):
     ) -> exp.Comment | str:
         table_sql = table.sql(dialect=self.dialect, identify=True)
 
-        on_cluster = kwargs.get("ON_CLUSTER", None) or " "
+        on_cluster = kwargs.get("ON_CLUSTER", None)
+        on_cluster_sql = " "
         if on_cluster and self.engine_run_mode.is_cluster:
             on_cluster_sql = f" ON CLUSTER {exp.to_identifier(on_cluster)} "
 
@@ -429,7 +439,8 @@ class ClickhouseEngineAdapter(EngineAdapterWithIndexSupport):
         table_sql = table.sql(dialect=self.dialect, identify=True)
         column_sql = exp.to_column(column_name).sql(dialect=self.dialect, identify=True)
 
-        on_cluster = kwargs.get("ON_CLUSTER", None) or " "
+        on_cluster = kwargs.get("ON_CLUSTER", None)
+        on_cluster_sql = " "
         if on_cluster and self.engine_run_mode.is_cluster:
             on_cluster_sql = f" ON CLUSTER {exp.to_identifier(on_cluster)} "
 
