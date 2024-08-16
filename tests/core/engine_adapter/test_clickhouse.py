@@ -12,16 +12,10 @@ pytestmark = [pytest.mark.clickhouse, pytest.mark.engine]
 @pytest.fixture
 def adapter(make_mocked_engine_adapter, mocker) -> ClickhouseEngineAdapter:
     mocker.patch.object(
-        ClickhouseEngineAdapter, "engine_run_mode", new_callable=mocker.PropertyMock(return_value=EngineRunMode.STANDALONE)
+        ClickhouseEngineAdapter,
+        "engine_run_mode",
+        new_callable=mocker.PropertyMock(return_value=EngineRunMode.STANDALONE),
     )
-    # mocker.patch.object(
-    #     EngineRunMode, "is_cluster", new_callable=mocker.PropertyMock(return_value=False)
-    # )
-    # mocker.patch.object(
-    #     EngineRunMode,
-    #     "is_standalone",
-    #     new_callable=mocker.PropertyMock(return_value=True),
-    # )
 
     adapter = make_mocked_engine_adapter(ClickhouseEngineAdapter)
 
@@ -39,7 +33,9 @@ def test_create_schema(adapter: ClickhouseEngineAdapter, mocker):
     adapter.create_schema("foo")
 
     mocker.patch.object(
-        ClickhouseEngineAdapter, "engine_run_mode", new_callable=mocker.PropertyMock(return_value=EngineRunMode.CLUSTER)
+        ClickhouseEngineAdapter,
+        "engine_run_mode",
+        new_callable=mocker.PropertyMock(return_value=EngineRunMode.CLUSTER),
     )
     adapter.create_schema("foo")
 
@@ -59,7 +55,9 @@ def test_drop_schema(adapter: ClickhouseEngineAdapter, mocker):
     adapter.drop_schema("foo")
 
     mocker.patch.object(
-        ClickhouseEngineAdapter, "engine_run_mode", new_callable=mocker.PropertyMock(return_value=EngineRunMode.CLUSTER)
+        ClickhouseEngineAdapter,
+        "engine_run_mode",
+        new_callable=mocker.PropertyMock(return_value=EngineRunMode.CLUSTER),
     )
     adapter.drop_schema("foo")
 

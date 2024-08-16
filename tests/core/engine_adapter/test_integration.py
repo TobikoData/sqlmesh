@@ -288,6 +288,8 @@ class TestContext:
                     schema_name = '{schema_name}'
                     AND {kind}_name = '{table_name}'
             """
+        elif self.dialect == "clickhouse":
+            query = f"SELECT name, comment FROM system.tables WHERE database = '{schema_name}' AND name = '{table_name}'"
 
         result = self.engine_adapter.fetchall(query)
 
@@ -366,9 +368,9 @@ class TestContext:
                     AND table_name = '{table_name}'
                 ;
             """
-        elif self.dialect in ["spark", "databricks"]:
+        elif self.dialect in ["spark", "databricks", "clickhouse"]:
             query = f"DESCRIBE TABLE {schema_name}.{table_name}"
-            comment_index = 2
+            comment_index = 2 if self.dialect in ["spark", "databricks"] else 4
         elif self.dialect == "trino":
             query = f"SHOW COLUMNS FROM {schema_name}.{table_name}"
             comment_index = 3
@@ -2177,6 +2179,7 @@ def test_dialects(ctx: TestContext):
             {
                 "default": None,
                 "bigquery": pd.NaT,
+                "clickhouse": pd.NaT,
                 "databricks": pd.NaT,
                 "duckdb": pd.NaT,
                 "motherduck": pd.NaT,
@@ -2190,6 +2193,7 @@ def test_dialects(ctx: TestContext):
             None,
             {
                 "default": datetime(2020, 1, 1).date(),
+                "clickhouse": pd.Timestamp("2020-01-01"),
                 "duckdb": pd.Timestamp("2020-01-01"),
             },
         ),
@@ -2233,6 +2237,13 @@ def test_to_time_column(
 ):
     if ctx.test_type != "query":
         pytest.skip("Time column tests only need to run for query")
+
+    if ctx.dialect == "clickhouse":
+        time_column_type = (
+            exp.DataType.build("Nullable(DateTime64)", dialect="clickhouse")
+            if time_column_type.is_type(exp.DataType.Type.TIMESTAMP)
+            else time_column_type
+        )
 
     time_column = to_time_column(time_column, time_column_type, time_column_format)
     df = ctx.engine_adapter.fetchdf(exp.select(time_column).as_("the_col"))
