@@ -1116,7 +1116,45 @@ class TerminalConsole(Console):
         if show_sample:
             self.console.print("\n[b][blue]COMMON ROWS[/blue] sample data differences:[/b]")
             if row_diff.joined_sample.shape[0] > 0:
-                self.console.print(row_diff.joined_sample.to_string(index=False), end="\n\n")
+
+                keys, columns = [], []
+                source_prefix = f"{row_diff.source_alias.upper()}__"
+                target_prefix = f"{row_diff.target_alias.upper()}__"
+
+                for col in row_diff.joined_sample.columns:
+
+                    if source_prefix in col:
+                        column_name = col.split(source_prefix)[1]
+                        columns.append([column_name, col, target_prefix + column_name])
+                    elif target_prefix not in col:
+                        keys.append(col)
+
+                column_styles = {
+                    row_diff.source_alias.upper(): "yellow",
+                    row_diff.target_alias.upper(): "green",
+                }
+
+                for column in columns:
+                    # Select the key and comparison columns and filter out identical-valued rows
+                    column_table = row_diff.joined_sample[keys + column[1:]]
+                    column_table = column_table[column_table[column[1]] != column_table[column[2]]]
+                    column_table.columns = column_table.columns.str.split("__").str[0]
+
+                    table = Table(show_header=True, header_style="bold cyan")
+
+                    for column_name in column_table.columns:
+                        style = column_styles.get(column_name, "bold cyan")
+                        table.add_column(column_name, style=style, header_style=style)
+
+                    for _, row in column_table.iterrows():
+                        table.add_row(*[str(cell) for cell in row])
+
+                    self.console.print(
+                        f"Column: [underline][bold cyan]{column[0]}[/bold cyan][/underline]",
+                        table,
+                        end="\n",
+                    )
+
             else:
                 self.console.print("  All joined rows match")
 
