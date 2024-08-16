@@ -116,7 +116,7 @@ class MySQLEngineAdapter(
         ]
 
     def _build_create_comment_table_exp(
-        self, table: exp.Table, table_comment: str, table_kind: str, **kwargs: t.Any
+        self, table: exp.Table, table_comment: str, table_kind: str
     ) -> exp.Comment | str:
         table_sql = table.sql(dialect=self.dialect, identify=True)
 
@@ -130,7 +130,6 @@ class MySQLEngineAdapter(
         table_name: TableName,
         column_comments: t.Dict[str, str],
         table_kind: str = "TABLE",
-        **kwargs: t.Any,
     ) -> None:
         table = exp.to_table(table_name)
         table_sql = table.sql(dialect=self.dialect, identify=True)

@@ -217,7 +217,6 @@ class EngineAdapter:
         columns_to_types: t.Dict[str, exp.DataType],
         batch_size: int,
         target_table: TableName,
-        **kwargs: t.Any,
     ) -> t.List[SourceQuery]:
         assert isinstance(df, pd.DataFrame)
         num_rows = len(df.index)
@@ -585,13 +584,13 @@ class EngineAdapter:
             and self.COMMENT_CREATION_TABLE.is_comment_command_only
             and self.comments_enabled
         ):
-            self._create_table_comment(table_name, table_description, **kwargs)
+            self._create_table_comment(table_name, table_description)
         if (
             column_descriptions
             and self.COMMENT_CREATION_TABLE.is_comment_command_only
             and self.comments_enabled
         ):
-            self._create_column_comments(table_name, column_descriptions, **kwargs)
+            self._create_column_comments(table_name, column_descriptions)
 
     def _build_schema_exp(
         self,
@@ -710,9 +709,9 @@ class EngineAdapter:
             and self.COMMENT_CREATION_TABLE.is_comment_command_only
             and self.comments_enabled
         ):
-            self._create_table_comment(table_name, table_description, **kwargs)
+            self._create_table_comment(table_name, table_description)
         if column_descriptions and schema is None and self.comments_enabled:
-            self._create_column_comments(table_name, column_descriptions, **kwargs)
+            self._create_column_comments(table_name, column_descriptions)
 
     def _create_table(
         self,
@@ -829,7 +828,7 @@ class EngineAdapter:
             )
         )
 
-    def drop_table(self, table_name: TableName, exists: bool = True, **kwargs: t.Any) -> None:
+    def drop_table(self, table_name: TableName, exists: bool = True) -> None:
         """Drops a table.
 
         Args:
@@ -838,9 +837,7 @@ class EngineAdapter:
         """
         self._drop_object(name=table_name, exists=exists)
 
-    def drop_managed_table(
-        self, table_name: TableName, exists: bool = True, **kwargs: t.Any
-    ) -> None:
+    def drop_managed_table(self, table_name: TableName, exists: bool = True) -> None:
         """Drops a managed table.
 
         Args:
@@ -994,7 +991,7 @@ class EngineAdapter:
             and self.COMMENT_CREATION_VIEW.is_comment_command_only
             and self.comments_enabled
         ):
-            self._create_table_comment(view_name, table_description, "VIEW", **create_kwargs)
+            self._create_table_comment(view_name, table_description, "VIEW")
         # Register column comments with commands if the engine doesn't support doing it in
         # CREATE or we couldn't do it in the CREATE schema definition because we don't have
         # columns_to_types
@@ -1009,7 +1006,7 @@ class EngineAdapter:
             )
             and self.comments_enabled
         ):
-            self._create_column_comments(view_name, column_descriptions, "VIEW", **create_kwargs)
+            self._create_column_comments(view_name, column_descriptions, "VIEW")
 
     @set_catalog()
     def create_schema(
@@ -2002,7 +1999,7 @@ class EngineAdapter:
             try:
                 yield table
             finally:
-                self.drop_table(table, **kwargs)
+                self.drop_table(table)
 
     def _table_or_view_properties_to_expressions(
         self, table_or_view_properties: t.Optional[t.Dict[str, exp.Expression]] = None
@@ -2162,7 +2159,6 @@ class EngineAdapter:
         columns_to_types: t.Optional[t.Dict[str, exp.DataType]],
         key: t.Sequence[exp.Expression],
         is_unique_key: bool,
-        **kwargs: t.Any,
     ) -> None:
         if columns_to_types is None:
             columns_to_types = self.columns(target_table)
@@ -2172,9 +2168,7 @@ class EngineAdapter:
         column_names = list(columns_to_types or [])
 
         with self.transaction():
-            self.ctas(
-                temp_table, source_table, columns_to_types=columns_to_types, exists=False, **kwargs
-            )
+            self.ctas(temp_table, source_table, columns_to_types=columns_to_types, exists=False)
 
             try:
                 delete_query = exp.select(key_exp).from_(temp_table)
@@ -2199,10 +2193,10 @@ class EngineAdapter:
 
                 self.execute(insert_statement)
             finally:
-                self.drop_table(temp_table, **kwargs)
+                self.drop_table(temp_table)
 
     def _build_create_comment_table_exp(
-        self, table: exp.Table, table_comment: str, table_kind: str, **kwargs: t.Any
+        self, table: exp.Table, table_comment: str, table_kind: str
     ) -> exp.Comment | str:
         return exp.Comment(
             this=table,
@@ -2211,14 +2205,12 @@ class EngineAdapter:
         )
 
     def _create_table_comment(
-        self, table_name: TableName, table_comment: str, table_kind: str = "TABLE", **kwargs: t.Any
+        self, table_name: TableName, table_comment: str, table_kind: str = "TABLE"
     ) -> None:
         table = exp.to_table(table_name)
 
         try:
-            self.execute(
-                self._build_create_comment_table_exp(table, table_comment, table_kind, **kwargs)
-            )
+            self.execute(self._build_create_comment_table_exp(table, table_comment, table_kind))
         except Exception:
             logger.warning(
                 f"Table comment for '{table.alias_or_name}' not registered - this may be due to limited permissions.",
@@ -2231,7 +2223,6 @@ class EngineAdapter:
         column_name: str,
         column_comment: str,
         table_kind: str = "TABLE",
-        **kwargs: t.Any,
     ) -> exp.Comment | str:
         return exp.Comment(
             this=exp.column(column_name, *reversed(table.parts)),  # type: ignore
@@ -2244,15 +2235,12 @@ class EngineAdapter:
         table_name: TableName,
         column_comments: t.Dict[str, str],
         table_kind: str = "TABLE",
-        **kwargs: t.Any,
     ) -> None:
         table = exp.to_table(table_name)
 
         for col, comment in column_comments.items():
             try:
-                self.execute(
-                    self._build_create_comment_column_exp(table, col, comment, table_kind, **kwargs)
-                )
+                self.execute(self._build_create_comment_column_exp(table, col, comment, table_kind))
             except Exception:
                 logger.warning(
                     f"Column comments for column '{col}' in table '{table.alias_or_name}' not registered - this may be due to limited permissions.",

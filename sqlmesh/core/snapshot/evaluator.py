@@ -1200,7 +1200,6 @@ class MaterializableStrategy(PromotableStrategy):
                 ]
                 if self.adapter.AUTOMATIC_ORDERED_BY
                 else None,
-                #**kwargs,
             )
 
             # Only sql models have queries that can be tested.
@@ -1230,7 +1229,6 @@ class MaterializableStrategy(PromotableStrategy):
                 ]
                 if self.adapter.AUTOMATIC_ORDERED_BY
                 else None,
-                #**kwargs
             )
 
     def migrate(
@@ -1444,7 +1442,6 @@ class SCDType2Strategy(MaterializableStrategy):
                 ]
                 if self.adapter.AUTOMATIC_ORDERED_BY
                 else None,
-                #**kwargs,
             )
         else:
             # We assume that the data type for `updated_at_name` matches the data type that is defined for
@@ -1757,7 +1754,6 @@ class EngineManagedStrategy(MaterializableStrategy):
                 table_properties=model.physical_properties,
                 table_description=model.description,
                 column_descriptions=model.column_descriptions,
-                #**kwargs,
             )
         elif not is_table_deployable:
             # Only create the dev preview table as a normal table.
@@ -1794,7 +1790,6 @@ class EngineManagedStrategy(MaterializableStrategy):
                 table_properties=model.physical_properties,
                 table_description=model.description,
                 column_descriptions=model.column_descriptions,
-                #**kwargs,
             )
         elif not is_snapshot_deployable:
             # Snapshot isnt deployable; update the preview table instead
