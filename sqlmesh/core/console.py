@@ -287,6 +287,8 @@ def make_progress_bar(message: str, console: t.Optional[RichConsole] = None) -> 
 class TerminalConsole(Console):
     """A rich based implementation of the console."""
 
+    TABLE_DIFF_SOURCE_BLUE = "#0248ff"
+
     def __init__(
         self,
         console: t.Optional[RichConsole] = None,
@@ -1036,7 +1038,7 @@ class TerminalConsole(Console):
         if schema_diff.target_alias:
             target_name = schema_diff.target_alias.upper()
 
-        first_line = f"\n[b]Schema Diff Between '[#0248ff]{source_name}[/#0248ff]' and '[green]{target_name}[/green]'"
+        first_line = f"\n[b]Schema Diff Between '[{self.TABLE_DIFF_SOURCE_BLUE}]{source_name}[/{self.TABLE_DIFF_SOURCE_BLUE}]' and '[green]{target_name}[/green]'"
         if schema_diff.model_name:
             first_line = (
                 first_line + f" environments for model '[blue]{schema_diff.model_name}[/blue]'"
@@ -1130,7 +1132,7 @@ class TerminalConsole(Console):
                         keys.append(col)
 
                 column_styles = {
-                    environments[0]: "#0248ff",
+                    environments[0]: self.TABLE_DIFF_SOURCE_BLUE,
                     environments[1]: "green",
                 }
 
