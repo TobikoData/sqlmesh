@@ -1116,32 +1116,35 @@ class TerminalConsole(Console):
         if show_sample:
             self.console.print("\n[b][blue]COMMON ROWS[/blue] sample data differences:[/b]")
             if row_diff.joined_sample.shape[0] > 0:
-
-                keys, columns = [], []
-                source_prefix = f"{row_diff.source_alias.upper()}__"
-                target_prefix = f"{row_diff.target_alias.upper()}__"
-
+                keys: list[str] = []
+                columns: list[str] = []
+                environments: list[str] = []
                 for col in row_diff.joined_sample.columns:
-
-                    if source_prefix in col:
-                        column_name = col.split(source_prefix)[1]
-                        columns.append([column_name, col, target_prefix + column_name])
-                    elif target_prefix not in col:
+                    if "__" in col:
+                        column_parts = col.split("__")
+                        if len(environments) < 2:
+                            environments.append(column_parts[0])
+                        if column_parts[1] not in columns:
+                            columns.append(column_parts[1])
+                    else:
                         keys.append(col)
 
                 column_styles = {
-                    row_diff.source_alias.upper(): "yellow",
-                    row_diff.target_alias.upper(): "green",
+                    environments[0]: "yellow",
+                    environments[1]: "green",
                 }
 
                 for column in columns:
-                    # Select the key and comparison columns and filter out identical-valued rows
-                    column_table = row_diff.joined_sample[keys + column[1:]]
-                    column_table = column_table[column_table[column[1]] != column_table[column[2]]]
+                    column_table = row_diff.joined_sample[
+                        keys + [environments[0] + "__" + column, environments[1] + "__" + column]
+                    ]
+                    column_table = column_table[
+                        column_table[environments[0] + "__" + column]
+                        != column_table[environments[1] + "__" + column]
+                    ]
                     column_table.columns = column_table.columns.str.split("__").str[0]
 
                     table = Table(show_header=True, header_style="bold cyan")
-
                     for column_name in column_table.columns:
                         style = column_styles.get(column_name, "bold cyan")
                         table.add_column(column_name, style=style, header_style=style)
@@ -1150,7 +1153,7 @@ class TerminalConsole(Console):
                         table.add_row(*[str(cell) for cell in row])
 
                     self.console.print(
-                        f"Column: [underline][bold cyan]{column[0]}[/bold cyan][/underline]",
+                        f"Column: [underline][bold cyan]{column}[/bold cyan][/underline]",
                         table,
                         end="\n",
                     )
