@@ -151,7 +151,9 @@ class SnowflakeEngineAdapter(GetCurrentCatalogFromFunctionMixin):
             **kwargs,
         )
 
-    def drop_managed_table(self, table_name: TableName, exists: bool = True) -> None:
+    def drop_managed_table(
+        self, table_name: TableName, exists: bool = True, **kwargs: t.Any
+    ) -> None:
         self._drop_object(table_name, exists, kind=self.MANAGED_TABLE_KIND)
 
     def _build_table_properties_exp(
@@ -166,7 +168,6 @@ class SnowflakeEngineAdapter(GetCurrentCatalogFromFunctionMixin):
         columns_to_types: t.Optional[t.Dict[str, exp.DataType]] = None,
         table_description: t.Optional[str] = None,
         table_kind: t.Optional[str] = None,
-        primary_key: t.Optional[t.Tuple[str, ...] | t.List[exp.Expression]] = None,
         ordered_by: t.Optional[t.List[str]] = None,
     ) -> t.Optional[exp.Properties]:
         properties: t.List[exp.Expression] = []
@@ -204,6 +205,7 @@ class SnowflakeEngineAdapter(GetCurrentCatalogFromFunctionMixin):
         columns_to_types: t.Dict[str, exp.DataType],
         batch_size: int,
         target_table: TableName,
+        **kwargs: t.Any,
     ) -> t.List[SourceQuery]:
         temp_table = self._get_temp_table(
             target_table or "pandas", quoted=False
@@ -396,6 +398,7 @@ class SnowflakeEngineAdapter(GetCurrentCatalogFromFunctionMixin):
         table_name: TableName,
         column_comments: t.Dict[str, str],
         table_kind: str = "TABLE",
+        **kwargs: t.Any,
     ) -> None:
         """
         Reference: https://docs.snowflake.com/en/sql-reference/sql/alter-table-column#syntax

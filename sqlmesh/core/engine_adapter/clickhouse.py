@@ -6,11 +6,13 @@ import pandas as pd
 from sqlglot import exp
 from sqlmesh.core.model.kind import TimeColumn
 from sqlmesh.core.dialect import to_schema
-from sqlmesh.core.engine_adapter.base import EngineAdapter
+from sqlmesh.core.engine_adapter.base import EngineAdapterWithIndexSupport
 from sqlmesh.core.engine_adapter.shared import (
     DataObject,
     DataObjectType,
+    EngineRunMode,
     SourceQuery,
+    CommentCreationView,
 )
 from sqlmesh.core.schema_diff import SchemaDiffer
 from functools import cached_property
@@ -24,46 +26,40 @@ if t.TYPE_CHECKING:
 logger = logging.getLogger(__name__)
 
 
-class ClickhouseEngineAdapter(EngineAdapter):
+class ClickhouseEngineAdapter(EngineAdapterWithIndexSupport):
     DIALECT = "clickhouse"
     SUPPORTS_TRANSACTIONS = False
-    SUPPORTS_INDEXES = True
     AUTOMATIC_ORDERED_BY = True
     SUPPORTS_VIEW_SCHEMA = False
-
-    # # TODO: delete this after sqlglot implements `CREATE TABLE ... AS SELECT ... COMMENT 'comment'`
-    # COMMENT_CREATION_TABLE = CommentCreationTable.UNSUPPORTED
-    # COMMENT_CREATION_VIEW = CommentCreationView.UNSUPPORTED
+    COMMENT_CREATION_VIEW = CommentCreationView.COMMENT_COMMAND_ONLY
 
     SCHEMA_DIFFER = SchemaDiffer()
 
     @cached_property
-    def is_cloud(self) -> bool:
-        value = self.fetchone("select value from system.settings where name='cloud_mode'")
-        return str(value[0]) == "1"
-
-    @cached_property
-    def is_cluster(self) -> bool:
-        if self.is_cloud:
-            return False
-
+    def engine_run_mode(self) -> EngineRunMode:
+        cloud_query_value = self.fetchone(
+            "select value from system.settings where name='cloud_mode'"
+        )
+        if str(cloud_query_value[0]) == "1":
+            return EngineRunMode.CLOUD
         # you can set cluster config and start some instances, but unless you set up zookeeper as well,
         # trying to create clustered tables will fail with:
         # Code: 139. DB::Exception: There is no Zookeeper configuration in server config.
-        value = self.fetchone("show tables in system like 'zookeeper'")
-        return str(value[0]) == "zookeeper"
-
-    @cached_property
-    def is_standalone(self) -> bool:
-        return not self.is_cloud and not self.is_cluster
+        cluster_query_value = self.fetchone("show tables in system like 'zookeeper'")
+        if str(cluster_query_value[0]) == "zookeeper":
+            return EngineRunMode.CLUSTER
+        return EngineRunMode.STANDALONE
 
     @property
     def default_cluster(self) -> str:
         return self._extra_config.get("default_cluster")
 
-    # WORKAROUND for clickhouse-connect bug where `fetchone()` sometimes returns None
-    # - consumes all cursor rows, so will cause problems if `fetchone()` is used in
-    #     a loop to consume rows one-by-one
+    # Workaround for clickhouse-connect cursor bug
+    # - cursor does not reset row index correctly on `close()`, so `fetchone()` and `fetchmany()`
+    #     return the wrong (or no) rows after the very first cursor query that returns rows
+    #     in the connection
+    # - cursor does reset the data rows correctly on `close()`, so `fetchall()` works because it
+    #     doesn't use the row index at all
     def fetchone(
         self,
         query: t.Union[exp.Expression, str],
@@ -89,9 +85,10 @@ class ClickhouseEngineAdapter(EngineAdapter):
 
         Clickhouse has a two-level naming scheme [database].[table].
         """
-        if self.is_cluster:
-            properties.append(exp.OnCluster(this=exp.Var(this=self.default_cluster)))
+        if self.engine_run_mode.is_cluster:
+            properties.append(exp.OnCluster(this=exp.to_identifier(self.default_cluster)))
 
+        # can't call super() because it will try to set a catalog
         return self._create_schema(
             schema_name=schema_name,
             ignore_if_exists=ignore_if_exists,
@@ -107,14 +104,14 @@ class ClickhouseEngineAdapter(EngineAdapter):
         cascade: bool = False,
         **drop_args: t.Dict[str, exp.Expression],
     ) -> None:
-        cluster = drop_args.pop("cluster", None)
-
         return self._drop_object(
             name=schema_name,
             exists=ignore_if_not_exists,
             kind="DATABASE",
             cascade=cascade,
-            cluster=cluster or (self.default_cluster if self.is_cluster else None),
+            cluster=exp.OnCluster(this=exp.to_identifier(self.default_cluster))
+            if self.engine_run_mode.is_cluster
+            else None,
             **drop_args,
         )
 
@@ -142,12 +139,13 @@ class ClickhouseEngineAdapter(EngineAdapter):
         columns_to_types: t.Dict[str, exp.DataType],
         batch_size: int,
         target_table: TableName,
+        **kwargs: t.Any,
     ) -> t.List[SourceQuery]:
-        temp_table = self._get_temp_table(target_table)
+        temp_table = self._get_temp_table(target_table, **kwargs)
 
         def query_factory() -> Query:
             self.create_table(
-                temp_table, columns_to_types, storage_format=exp.Var(this="MergeTree")
+                temp_table, columns_to_types, storage_format=exp.Var(this="MergeTree"), **kwargs
             )
 
             self.cursor.client.insert_df(temp_table.sql(dialect=self.dialect), df=df)
@@ -156,7 +154,8 @@ class ClickhouseEngineAdapter(EngineAdapter):
 
         return [
             SourceQuery(
-                query_factory=query_factory, cleanup_func=lambda: self.drop_table(temp_table)
+                query_factory=query_factory,
+                cleanup_func=lambda: self.drop_table(temp_table, **kwargs),
             )
         ]
 
@@ -188,6 +187,27 @@ class ClickhouseEngineAdapter(EngineAdapter):
             for row in df.itertuples()
         ]
 
+    def create_table_like(
+        self,
+        target_table_name: TableName,
+        source_table_name: TableName,
+        exists: bool = True,
+        **kwargs: t.Any,
+    ) -> None:
+        """
+        Create a table like another table or view.
+        """
+        target_table = exp.to_table(target_table_name)
+        source_table = exp.to_table(source_table_name)
+        on_cluster_sql = kwargs.get("ON_CLUSTER", None) or (
+            self.default_cluster if self.engine_run_mode.is_cluster else None
+        )
+        on_cluster_sql = (
+            f" ON CLUSTER {exp.to_identifier(on_cluster_sql)} " if on_cluster_sql else " "
+        )
+        create_sql = f"CREATE TABLE{' IF NOT EXISTS' if exists else ''} {target_table}{on_cluster_sql}AS {source_table}"
+        self.execute(create_sql)
+
     def _create_table(
         self,
         table_name_or_schema: t.Union[exp.Schema, TableName],
@@ -198,10 +218,9 @@ class ClickhouseEngineAdapter(EngineAdapter):
         table_description: t.Optional[str] = None,
         column_descriptions: t.Optional[t.Dict[str, str]] = None,
         table_kind: t.Optional[str] = None,
-        primary_key: t.Optional[t.Tuple[str, ...] | t.List[exp.Expression]] = None,
         **kwargs: t.Any,
     ) -> None:
-        """ Creates a table in the database.
+        """Creates a table in the database.
 
         Clickhouse does not fully support CTAS in "replicated" engines, which are used exclusively
         in Clickhouse Cloud.
@@ -222,7 +241,6 @@ class ClickhouseEngineAdapter(EngineAdapter):
                     else None
                 ),
                 table_kind=table_kind,
-                primary_key=primary_key,
                 empty_ctas=(expression is not None),
                 **kwargs,
             )
@@ -230,7 +248,9 @@ class ClickhouseEngineAdapter(EngineAdapter):
 
         if expression:
             self._insert_append_query(
-                table_name_or_schema.this if isinstance(table_name_or_schema, exp.Schema) else table_name_or_schema,
+                table_name_or_schema.this
+                if isinstance(table_name_or_schema, exp.Schema)
+                else table_name_or_schema,
                 expression,
                 columns_to_types or self.columns(table_name_or_schema),
             )
@@ -247,7 +267,6 @@ class ClickhouseEngineAdapter(EngineAdapter):
         columns_to_types: t.Optional[t.Dict[str, exp.DataType]] = None,
         table_description: t.Optional[str] = None,
         table_kind: t.Optional[str] = None,
-        primary_key: t.Optional[t.Tuple[str, ...] | t.List[exp.Expression]] = None,
         ordered_by: t.Optional[t.List[str]] = None,
         empty_ctas: bool = False,
     ) -> t.Optional[exp.Properties]:
@@ -270,15 +289,15 @@ class ClickhouseEngineAdapter(EngineAdapter):
             )
         properties.append(exp.EngineProperty(this=table_engine))
 
-        # we make a copy of table_properties so we can pop items off below then consume the rest just before returning
+        # copy of table_properties so we can pop items off below then consume the rest later
         table_properties_copy = {}
         if table_properties:
-            table_properties = {k.upper(): v for k, v in table_properties.items()}
             table_properties_copy = table_properties.copy()
+            table_properties_copy = {k.upper(): v for k, v in table_properties_copy.items()}
 
         # TODO: gate this appropriately
         if table_engine != "Log":
-            primary_key_raw = table_properties_copy.pop("PRIMARY_KEY", None) or primary_key
+            primary_key_raw = table_properties_copy.pop("PRIMARY_KEY", None)
             if primary_key_raw and self.SUPPORTS_INDEXES:
                 primary_key_cols = (
                     primary_key_raw[0].expressions
@@ -296,6 +315,7 @@ class ClickhouseEngineAdapter(EngineAdapter):
                 for col in ordered_by_raw:
                     if col:
                         col = col[0] if isinstance(col, list) and len(col) == 1 else col
+                        assert not isinstance(col, list)
                         col = col.column if isinstance(col, TimeColumn) else col
                         col = col.this if isinstance(col, exp.Alias) else col
                         ordered_by_cols.append(col)
@@ -312,23 +332,23 @@ class ClickhouseEngineAdapter(EngineAdapter):
             ordered_by_expressions = (
                 exp.Tuple(expressions=[exp.to_column(k) for k in ordered_by_cols])
                 if ordered_by_cols
+                # default tuple() if no columns provided
                 else exp.Literal(this="tuple()", is_string=False)
             )
             properties.append(exp.Order(expressions=[exp.Ordered(this=ordered_by_expressions)]))
 
-        if self.is_cluster:
+        if self.engine_run_mode.is_cluster:
             on_cluster = table_properties_copy.pop("CLUSTER", None) or self.default_cluster
-            if on_cluster:
-                properties.append(
-                    exp.OnCluster(
-                        this=exp.Literal(
-                            this=on_cluster.this
-                            if isinstance(on_cluster, exp.Expression)
-                            else on_cluster,
-                            is_string=False,
-                        )
+            properties.append(
+                exp.OnCluster(
+                    this=exp.Literal(
+                        this=on_cluster.this
+                        if isinstance(on_cluster, exp.Expression)
+                        else on_cluster,
+                        is_string=False,
                     )
                 )
+            )
 
         if empty_ctas:
             properties.append(exp.EmptyProperty())
@@ -352,23 +372,26 @@ class ClickhouseEngineAdapter(EngineAdapter):
         self,
         view_properties: t.Optional[t.Dict[str, exp.Expression]] = None,
         table_description: t.Optional[str] = None,
-        **kwargs: t.Any
+        **kwargs: t.Any,
     ) -> t.Optional[exp.Properties]:
         """Creates a SQLGlot table properties expression for view"""
         properties: t.List[exp.Expression] = []
 
         view_properties_copy = view_properties.copy()
 
-        # "view_properties" is model.virtual_properties during view promotion but model.physical_properties elsewhen
-        # - in the promotion call to create_view, the cluster won't be in view_properties so we pass the
+        # `view_properties`` is model.virtual_properties during view promotion but model.physical_properties elsewhen
+        # - in the create_view promotion call, the cluster won't be in `view_properties`` so we pass the
         #     model.physical_properties["CLUSTER"] value to the "physical_cluster" kwarg
-        on_cluster = view_properties_copy.pop("CLUSTER", None) or kwargs.pop("physical_cluster", None) or self.default_cluster
-        if self.is_cluster:
-            properties.append(
-                exp.OnCluster(this=exp.Literal(this=on_cluster, is_string=False))
+        if self.engine_run_mode.is_cluster:
+            on_cluster = (
+                view_properties_copy.pop("CLUSTER", None)
+                or kwargs.pop("physical_cluster", None)
+                or self.default_cluster
             )
+            properties.append(exp.OnCluster(this=exp.Var(this=on_cluster)))
 
-        properties.extend(self._table_or_view_properties_to_expressions(view_properties_copy))
+        if view_properties_copy:
+            properties.extend(self._table_or_view_properties_to_expressions(view_properties_copy))
 
         if table_description:
             properties.append(
@@ -380,3 +403,37 @@ class ClickhouseEngineAdapter(EngineAdapter):
         if properties:
             return exp.Properties(expressions=properties)
         return None
+
+    def _build_create_comment_table_exp(
+        self, table: exp.Table, table_comment: str, table_kind: str, **kwargs: t.Any
+    ) -> exp.Comment | str:
+        table_sql = table.sql(dialect=self.dialect, identify=True)
+
+        on_cluster = kwargs.get("ON_CLUSTER", None) or " "
+        if on_cluster and self.engine_run_mode.is_cluster:
+            on_cluster_sql = f" ON CLUSTER {exp.to_identifier(on_cluster)} "
+
+        truncated_comment = self._truncate_table_comment(table_comment)
+        comment_sql = exp.Literal.string(truncated_comment).sql(dialect=self.dialect)
+
+        return f"ALTER TABLE {table_sql}{on_cluster_sql}MODIFY COMMENT {comment_sql}"
+
+    def _build_create_comment_column_exp(
+        self,
+        table: exp.Table,
+        column_name: str,
+        column_comment: str,
+        table_kind: str = "TABLE",
+        **kwargs: t.Any,
+    ) -> exp.Comment | str:
+        table_sql = table.sql(dialect=self.dialect, identify=True)
+        column_sql = exp.to_column(column_name).sql(dialect=self.dialect, identify=True)
+
+        on_cluster = kwargs.get("ON_CLUSTER", None) or " "
+        if on_cluster and self.engine_run_mode.is_cluster:
+            on_cluster_sql = f" ON CLUSTER {exp.to_identifier(on_cluster)} "
+
+        truncated_comment = self._truncate_table_comment(column_comment)
+        comment_sql = exp.Literal.string(truncated_comment).sql(dialect=self.dialect)
+
+        return f"ALTER TABLE {table_sql}{on_cluster_sql}COMMENT COLUMN {column_sql} {comment_sql}"

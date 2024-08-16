@@ -128,7 +128,6 @@ class HiveMetastoreTablePropertiesMixin(EngineAdapter):
         columns_to_types: t.Optional[t.Dict[str, exp.DataType]] = None,
         table_description: t.Optional[str] = None,
         table_kind: t.Optional[str] = None,
-        primary_key: t.Optional[t.Tuple[str, ...] | t.List[exp.Expression]] = None,
         ordered_by: t.Optional[t.List[str]] = None,
     ) -> t.Optional[exp.Properties]:
         properties: t.List[exp.Expression] = []
@@ -186,7 +185,7 @@ class HiveMetastoreTablePropertiesMixin(EngineAdapter):
         self,
         view_properties: t.Optional[t.Dict[str, exp.Expression]] = None,
         table_description: t.Optional[str] = None,
-        **kwargs: t.Any
+        **kwargs: t.Any,
     ) -> t.Optional[exp.Properties]:
         """Creates a SQLGlot table properties expression for view"""
         properties: t.List[exp.Expression] = []
@@ -264,7 +263,6 @@ class VarcharSizeWorkaroundMixin(EngineAdapter):
         columns_to_types: t.Optional[t.Dict[str, exp.DataType]] = None,
         table_description: t.Optional[str] = None,
         table_kind: t.Optional[str] = None,
-        primary_key: t.Optional[t.Tuple[str, ...] | t.List[exp.Expression]] = None,
         **kwargs: t.Any,
     ) -> exp.Create:
         statement = super()._build_create_table_exp(

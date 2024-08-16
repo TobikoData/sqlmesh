@@ -188,6 +188,7 @@ class MSSQLEngineAdapter(
         columns_to_types: t.Dict[str, exp.DataType],
         batch_size: int,
         target_table: TableName,
+        **kwargs: t.Any,
     ) -> t.List[SourceQuery]:
         assert isinstance(df, pd.DataFrame)
         temp_table = self._get_temp_table(target_table or "pandas")

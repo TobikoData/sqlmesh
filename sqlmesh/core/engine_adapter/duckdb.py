@@ -53,6 +53,7 @@ class DuckDBEngineAdapter(LogicalMergeMixin, GetCurrentCatalogFromFunctionMixin)
         columns_to_types: t.Dict[str, exp.DataType],
         batch_size: int,
         target_table: TableName,
+        **kwargs: t.Any,
     ) -> t.List[SourceQuery]:
         temp_table = self._get_temp_table(target_table)
         temp_table_sql = (

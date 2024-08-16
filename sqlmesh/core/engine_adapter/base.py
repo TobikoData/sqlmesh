@@ -33,6 +33,7 @@ from sqlmesh.core.engine_adapter.shared import (
     CommentCreationTable,
     CommentCreationView,
     DataObject,
+    EngineRunMode,
     InsertOverwriteStrategy,
     SourceQuery,
     set_catalog,
@@ -179,16 +180,8 @@ class EngineAdapter:
         return default_catalog
 
     @property
-    def is_cloud(self) -> bool:
-        return False
-
-    @property
-    def is_cluster(self) -> bool:
-        return False
-
-    @property
-    def is_standalone(self) -> bool:
-        return True
+    def engine_run_mode(self) -> EngineRunMode:
+        return EngineRunMode.SINGLE_MODE_ENGINE
 
     def _get_source_queries(
         self,
@@ -224,6 +217,7 @@ class EngineAdapter:
         columns_to_types: t.Dict[str, exp.DataType],
         batch_size: int,
         target_table: TableName,
+        **kwargs: t.Any,
     ) -> t.List[SourceQuery]:
         assert isinstance(df, pd.DataFrame)
         num_rows = len(df.index)
@@ -420,7 +414,7 @@ class EngineAdapter:
         self,
         table_name: TableName,
         columns_to_types: t.Dict[str, exp.DataType],
-        primary_key: t.Optional[t.Tuple[str, ...] | t.List[exp.Expression]] = None,
+        primary_key: t.Optional[t.Tuple[str, ...]] = None,
         exists: bool = True,
         table_description: t.Optional[str] = None,
         column_descriptions: t.Optional[t.Dict[str, str]] = None,
@@ -514,7 +508,7 @@ class EngineAdapter:
         self,
         table_name: str,
         columns_to_types: t.Dict[str, exp.DataType],
-        primary_key: t.Optional[t.Tuple[str, ...] | t.List[exp.Expression]] = None,
+        primary_key: t.Optional[t.Tuple[str, ...]] = None,
     ) -> None:
         """Create a table to store SQLMesh internal state.
 
@@ -533,7 +527,7 @@ class EngineAdapter:
         self,
         table_name: TableName,
         columns_to_types: t.Dict[str, exp.DataType],
-        primary_key: t.Optional[t.Tuple[str, ...] | t.List[exp.Expression]] = None,
+        primary_key: t.Optional[t.Tuple[str, ...]] = None,
         exists: bool = True,
         table_description: t.Optional[str] = None,
         column_descriptions: t.Optional[t.Dict[str, str]] = None,
@@ -563,10 +557,17 @@ class EngineAdapter:
                 f"Columns to types: {columns_to_types}"
             )
 
+        primary_key_expression = (
+            [exp.PrimaryKey(expressions=[exp.to_column(k) for k in primary_key])]
+            if primary_key and self.SUPPORTS_INDEXES
+            else []
+        )
+
         schema = self._build_schema_exp(
             table,
             columns_to_types,
             column_descriptions,
+            primary_key_expression,
         )
 
         self._create_table(
@@ -575,7 +576,6 @@ class EngineAdapter:
             exists=exists,
             columns_to_types=columns_to_types,
             table_description=table_description,
-            primary_key=primary_key,
             **kwargs,
         )
 
@@ -585,13 +585,13 @@ class EngineAdapter:
             and self.COMMENT_CREATION_TABLE.is_comment_command_only
             and self.comments_enabled
         ):
-            self._create_table_comment(table_name, table_description)
+            self._create_table_comment(table_name, table_description, **kwargs)
         if (
             column_descriptions
             and self.COMMENT_CREATION_TABLE.is_comment_command_only
             and self.comments_enabled
         ):
-            self._create_column_comments(table_name, column_descriptions)
+            self._create_column_comments(table_name, column_descriptions, **kwargs)
 
     def _build_schema_exp(
         self,
@@ -710,9 +710,9 @@ class EngineAdapter:
             and self.COMMENT_CREATION_TABLE.is_comment_command_only
             and self.comments_enabled
         ):
-            self._create_table_comment(table_name, table_description)
+            self._create_table_comment(table_name, table_description, **kwargs)
         if column_descriptions and schema is None and self.comments_enabled:
-            self._create_column_comments(table_name, column_descriptions)
+            self._create_column_comments(table_name, column_descriptions, **kwargs)
 
     def _create_table(
         self,
@@ -724,7 +724,6 @@ class EngineAdapter:
         table_description: t.Optional[str] = None,
         column_descriptions: t.Optional[t.Dict[str, str]] = None,
         table_kind: t.Optional[str] = None,
-        primary_key: t.Optional[t.Tuple[str, ...] | t.List[exp.Expression]] = None,
         **kwargs: t.Any,
     ) -> None:
         self.execute(
@@ -740,7 +739,6 @@ class EngineAdapter:
                     else None
                 ),
                 table_kind=table_kind,
-                primary_key=primary_key,
                 **kwargs,
             )
         )
@@ -754,7 +752,6 @@ class EngineAdapter:
         columns_to_types: t.Optional[t.Dict[str, exp.DataType]] = None,
         table_description: t.Optional[str] = None,
         table_kind: t.Optional[str] = None,
-        primary_key: t.Optional[t.Tuple[str, ...] | t.List[exp.Expression]] = None,
         **kwargs: t.Any,
     ) -> exp.Create:
         exists = False if replace else exists
@@ -773,9 +770,8 @@ class EngineAdapter:
                 columns_to_types=columns_to_types,
                 table_description=table_description,
                 table_kind=table_kind,
-                primary_key=primary_key,
             )
-            if kwargs or table_description or primary_key
+            if kwargs or table_description
             else None
         )
         return exp.Create(
@@ -792,6 +788,7 @@ class EngineAdapter:
         target_table_name: TableName,
         source_table_name: TableName,
         exists: bool = True,
+        **kwargs: t.Any,
     ) -> None:
         """Create a table to store SQLMesh internal state based on the definition of another table, including any
         column attributes and indexes defined in the original table.
@@ -832,7 +829,7 @@ class EngineAdapter:
             )
         )
 
-    def drop_table(self, table_name: TableName, exists: bool = True) -> None:
+    def drop_table(self, table_name: TableName, exists: bool = True, **kwargs: t.Any) -> None:
         """Drops a table.
 
         Args:
@@ -841,7 +838,9 @@ class EngineAdapter:
         """
         self._drop_object(name=table_name, exists=exists)
 
-    def drop_managed_table(self, table_name: TableName, exists: bool = True) -> None:
+    def drop_managed_table(
+        self, table_name: TableName, exists: bool = True, **kwargs: t.Any
+    ) -> None:
         """Drops a managed table.
 
         Args:
@@ -855,7 +854,7 @@ class EngineAdapter:
         name: TableName | SchemaName,
         exists: bool = True,
         kind: str = "TABLE",
-        **drop_args: t.Dict[str, exp.Expression],
+        **drop_args: t.Any,
     ) -> None:
         """Drops an object.
 
@@ -995,7 +994,7 @@ class EngineAdapter:
             and self.COMMENT_CREATION_VIEW.is_comment_command_only
             and self.comments_enabled
         ):
-            self._create_table_comment(view_name, table_description, "VIEW")
+            self._create_table_comment(view_name, table_description, "VIEW", **create_kwargs)
         # Register column comments with commands if the engine doesn't support doing it in
         # CREATE or we couldn't do it in the CREATE schema definition because we don't have
         # columns_to_types
@@ -1010,7 +1009,7 @@ class EngineAdapter:
             )
             and self.comments_enabled
         ):
-            self._create_column_comments(view_name, column_descriptions, "VIEW")
+            self._create_column_comments(view_name, column_descriptions, "VIEW", **create_kwargs)
 
     @set_catalog()
     def create_schema(
@@ -2003,7 +2002,7 @@ class EngineAdapter:
             try:
                 yield table
             finally:
-                self.drop_table(table)
+                self.drop_table(table, **kwargs)
 
     def _table_or_view_properties_to_expressions(
         self, table_or_view_properties: t.Optional[t.Dict[str, exp.Expression]] = None
@@ -2028,7 +2027,6 @@ class EngineAdapter:
         columns_to_types: t.Optional[t.Dict[str, exp.DataType]] = None,
         table_description: t.Optional[str] = None,
         table_kind: t.Optional[str] = None,
-        primary_key: t.Optional[t.Tuple[str, ...] | t.List[exp.Expression]] = None,
         ordered_by: t.Optional[t.List[str]] = None,
     ) -> t.Optional[exp.Properties]:
         """Creates a SQLGlot table properties expression for ddl."""
@@ -2041,9 +2039,6 @@ class EngineAdapter:
                 )
             )
 
-        if primary_key and self.SUPPORTS_INDEXES:
-            properties.append(exp.PrimaryKey(expressions=[exp.to_column(k) for k in primary_key]))
-
         if properties:
             return exp.Properties(expressions=properties)
         return None
@@ -2052,7 +2047,7 @@ class EngineAdapter:
         self,
         view_properties: t.Optional[t.Dict[str, exp.Expression]] = None,
         table_description: t.Optional[str] = None,
-        **kwargs: t.Any
+        **kwargs: t.Any,
     ) -> t.Optional[exp.Properties]:
         """Creates a SQLGlot table properties expression for view"""
         properties: t.List[exp.Expression] = []
@@ -2167,6 +2162,7 @@ class EngineAdapter:
         columns_to_types: t.Optional[t.Dict[str, exp.DataType]],
         key: t.Sequence[exp.Expression],
         is_unique_key: bool,
+        **kwargs: t.Any,
     ) -> None:
         if columns_to_types is None:
             columns_to_types = self.columns(target_table)
@@ -2176,7 +2172,9 @@ class EngineAdapter:
         column_names = list(columns_to_types or [])
 
         with self.transaction():
-            self.ctas(temp_table, source_table, columns_to_types=columns_to_types, exists=False)
+            self.ctas(
+                temp_table, source_table, columns_to_types=columns_to_types, exists=False, **kwargs
+            )
 
             try:
                 delete_query = exp.select(key_exp).from_(temp_table)
@@ -2201,10 +2199,10 @@ class EngineAdapter:
 
                 self.execute(insert_statement)
             finally:
-                self.drop_table(temp_table)
+                self.drop_table(temp_table, **kwargs)
 
     def _build_create_comment_table_exp(
-        self, table: exp.Table, table_comment: str, table_kind: str
+        self, table: exp.Table, table_comment: str, table_kind: str, **kwargs: t.Any
     ) -> exp.Comment | str:
         return exp.Comment(
             this=table,
@@ -2213,12 +2211,14 @@ class EngineAdapter:
         )
 
     def _create_table_comment(
-        self, table_name: TableName, table_comment: str, table_kind: str = "TABLE"
+        self, table_name: TableName, table_comment: str, table_kind: str = "TABLE", **kwargs: t.Any
     ) -> None:
         table = exp.to_table(table_name)
 
         try:
-            self.execute(self._build_create_comment_table_exp(table, table_comment, table_kind))
+            self.execute(
+                self._build_create_comment_table_exp(table, table_comment, table_kind, **kwargs)
+            )
         except Exception:
             logger.warning(
                 f"Table comment for '{table.alias_or_name}' not registered - this may be due to limited permissions.",
@@ -2226,7 +2226,12 @@ class EngineAdapter:
             )
 
     def _build_create_comment_column_exp(
-        self, table: exp.Table, column_name: str, column_comment: str, table_kind: str = "TABLE"
+        self,
+        table: exp.Table,
+        column_name: str,
+        column_comment: str,
+        table_kind: str = "TABLE",
+        **kwargs: t.Any,
     ) -> exp.Comment | str:
         return exp.Comment(
             this=exp.column(column_name, *reversed(table.parts)),  # type: ignore
@@ -2239,12 +2244,15 @@ class EngineAdapter:
         table_name: TableName,
         column_comments: t.Dict[str, str],
         table_kind: str = "TABLE",
+        **kwargs: t.Any,
     ) -> None:
         table = exp.to_table(table_name)
 
         for col, comment in column_comments.items():
             try:
-                self.execute(self._build_create_comment_column_exp(table, col, comment, table_kind))
+                self.execute(
+                    self._build_create_comment_column_exp(table, col, comment, table_kind, **kwargs)
+                )
             except Exception:
                 logger.warning(
                     f"Column comments for column '{col}' in table '{table.alias_or_name}' not registered - this may be due to limited permissions.",

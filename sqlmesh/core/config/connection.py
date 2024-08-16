@@ -1405,11 +1405,8 @@ class ClickhouseConnectionConfig(ConnectionConfig):
 
     @property
     def _extra_engine_config(self) -> t.Dict[str, t.Any]:
-        return {
-            k: v
-            for k, v in self.dict().items()
-            if k == "default_cluster"
-        }
+        return {k: v for k, v in self.dict().items() if k == "default_cluster"}
+
 
 CONNECTION_CONFIG_TO_TYPE = {
     # Map all subclasses of ConnectionConfig to the value of their `type_` field.

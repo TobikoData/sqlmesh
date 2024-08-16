@@ -192,6 +192,29 @@ class CatalogSupport(Enum):
         return self.is_requires_set_catalog or self.is_full_support
 
 
+class EngineRunMode(Enum):
+    SINGLE_MODE_ENGINE = 1
+    STANDALONE = 2
+    CLUSTER = 3
+    CLOUD = 4
+
+    @property
+    def is_single_mode_engine(self) -> bool:
+        return self == EngineRunMode.SINGLE_MODE_ENGINE
+
+    @property
+    def is_standalone(self) -> bool:
+        return self == EngineRunMode.STANDALONE
+
+    @property
+    def is_cluster(self) -> bool:
+        return self == EngineRunMode.CLUSTER
+
+    @property
+    def is_cloud(self) -> bool:
+        return self == EngineRunMode.CLOUD
+
+
 class InsertOverwriteStrategy(Enum):
     DELETE_INSERT = 1
     INSERT_OVERWRITE = 2

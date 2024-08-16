@@ -1052,13 +1052,16 @@ class EvaluationStrategy(abc.ABC):
             columns_to_types=model.columns_to_types if model.annotated else None,
             storage_format=model.storage_format,
             partitioned_by=model.partitioned_by,
-            partitioned_by_user_cols=model.partition_by_user_columns,
+            partitioned_by_user_cols=model.partitioned_by_user_columns,
             partition_interval_unit=model.interval_unit,
             clustered_by=model.clustered_by,
             table_properties=model.physical_properties,
             table_description=model.description,
             column_descriptions=model.column_descriptions,
-            ordered_by=[*model.grains, model.time_column if model.time_column else None]
+            ordered_by=[
+                *(model.grains if model.grains else []),
+                *([model.time_column.column] if model.time_column else []),
+            ]
             if self.adapter.AUTOMATIC_ORDERED_BY
             else None,
         )
@@ -1185,15 +1188,19 @@ class MaterializableStrategy(PromotableStrategy):
                 columns_to_types=model.columns_to_types_or_raise,
                 storage_format=model.storage_format,
                 partitioned_by=model.partitioned_by,
-                partitioned_by_user_cols=model.partition_by_user_columns,
+                partitioned_by_user_cols=model.partitioned_by_user_columns,
                 partition_interval_unit=model.interval_unit,
                 clustered_by=model.clustered_by,
                 table_properties=model.physical_properties,
                 table_description=model.description if is_table_deployable else None,
                 column_descriptions=model.column_descriptions if is_table_deployable else None,
-                ordered_by=[model.grains, model.time_column if model.time_column else None]
+                ordered_by=[
+                    *(model.grains if model.grains else []),
+                    *([model.time_column.column] if model.time_column else []),
+                ]
                 if self.adapter.AUTOMATIC_ORDERED_BY
                 else None,
+                #**kwargs,
             )
 
             # Only sql models have queries that can be tested.
@@ -1211,15 +1218,19 @@ class MaterializableStrategy(PromotableStrategy):
                 model.columns_to_types,
                 storage_format=model.storage_format,
                 partitioned_by=model.partitioned_by,
-                partitioned_by_user_cols=model.partition_by_user_columns,
+                partitioned_by_user_cols=model.partitioned_by_user_columns,
                 partition_interval_unit=model.interval_unit,
                 clustered_by=model.clustered_by,
                 table_properties=model.physical_properties,
                 table_description=model.description if is_table_deployable else None,
                 column_descriptions=model.column_descriptions if is_table_deployable else None,
-                ordered_by=[model.grains, model.time_column if model.time_column else None]
+                ordered_by=[
+                    *(model.grains if model.grains else []),
+                    *([model.time_column.column] if model.time_column else []),
+                ]
                 if self.adapter.AUTOMATIC_ORDERED_BY
                 else None,
+                #**kwargs
             )
 
     def migrate(
@@ -1421,15 +1432,19 @@ class SCDType2Strategy(MaterializableStrategy):
                 columns_to_types=columns_to_types,
                 storage_format=model.storage_format,
                 partitioned_by=model.partitioned_by,
-                partitioned_by_user_cols=model.partition_by_user_columns,
+                partitioned_by_user_cols=model.partitioned_by_user_columns,
                 partition_interval_unit=model.interval_unit,
                 clustered_by=model.clustered_by,
                 table_properties=model.physical_properties,
                 table_description=model.description if is_table_deployable else None,
                 column_descriptions=model.column_descriptions if is_table_deployable else None,
-                ordered_by=[model.grains, model.time_column if model.time_column else None]
+                ordered_by=[
+                    *(model.grains if model.grains else []),
+                    *([model.time_column.column] if model.time_column else []),
+                ]
                 if self.adapter.AUTOMATIC_ORDERED_BY
                 else None,
+                #**kwargs,
             )
         else:
             # We assume that the data type for `updated_at_name` matches the data type that is defined for
@@ -1742,6 +1757,7 @@ class EngineManagedStrategy(MaterializableStrategy):
                 table_properties=model.physical_properties,
                 table_description=model.description,
                 column_descriptions=model.column_descriptions,
+                #**kwargs,
             )
         elif not is_table_deployable:
             # Only create the dev preview table as a normal table.
@@ -1778,6 +1794,7 @@ class EngineManagedStrategy(MaterializableStrategy):
                 table_properties=model.physical_properties,
                 table_description=model.description,
                 column_descriptions=model.column_descriptions,
+                #**kwargs,
             )
         elif not is_snapshot_deployable:
             # Snapshot isnt deployable; update the preview table instead

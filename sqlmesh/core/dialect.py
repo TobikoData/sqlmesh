@@ -375,7 +375,7 @@ def _parse_props(self: Parser) -> t.Optional[exp.Expression]:
     if name == "when_matched":
         value: t.Optional[exp.Expression] = self._parse_when_matched()[0]
     elif name == "time_data_type":
-        #TODO: if we make *_data_type a convention to parse things into exp.DataType, we could make this more generic
+        # TODO: if we make *_data_type a convention to parse things into exp.DataType, we could make this more generic
         value = self._parse_types(schema=True)
     elif self._match(TokenType.L_PAREN):
         value = self.expression(exp.Tuple, expressions=self._parse_csv(self._parse_equality))

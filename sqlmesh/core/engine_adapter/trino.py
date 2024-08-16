@@ -181,6 +181,7 @@ class TrinoEngineAdapter(
         columns_to_types: t.Dict[str, exp.DataType],
         batch_size: int,
         target_table: TableName,
+        **kwargs: t.Any,
     ) -> t.List[SourceQuery]:
         assert isinstance(df, pd.DataFrame)
 

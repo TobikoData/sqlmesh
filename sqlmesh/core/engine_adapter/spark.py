@@ -257,6 +257,7 @@ class SparkEngineAdapter(GetCurrentCatalogFromFunctionMixin, HiveMetastoreTableP
         columns_to_types: t.Dict[str, exp.DataType],
         batch_size: int,
         target_table: TableName,
+        **kwargs: t.Any,
     ) -> t.List[SourceQuery]:
         df = self._ensure_pyspark_df(df, columns_to_types)
 
@@ -362,7 +363,8 @@ class SparkEngineAdapter(GetCurrentCatalogFromFunctionMixin, HiveMetastoreTableP
         self,
         table_name: str,
         columns_to_types: t.Dict[str, exp.DataType],
-        primary_key: t.Optional[t.Tuple[str, ...] | t.List[exp.Expression]] = None,
+        primary_key: t.Optional[t.Tuple[str, ...]] = None,
+        **kwargs: t.Any,
     ) -> None:
         self.create_table(
             table_name,
@@ -422,7 +424,6 @@ class SparkEngineAdapter(GetCurrentCatalogFromFunctionMixin, HiveMetastoreTableP
         table_description: t.Optional[str] = None,
         column_descriptions: t.Optional[t.Dict[str, str]] = None,
         table_kind: t.Optional[str] = None,
-        primary_key: t.Optional[t.Tuple[str, ...] | t.List[exp.Expression]] = None,
         **kwargs: t.Any,
     ) -> None:
         table_name = (
@@ -518,7 +519,12 @@ class SparkEngineAdapter(GetCurrentCatalogFromFunctionMixin, HiveMetastoreTableP
         return table
 
     def _build_create_comment_column_exp(
-        self, table: exp.Table, column_name: str, column_comment: str, table_kind: str = "TABLE"
+        self,
+        table: exp.Table,
+        column_name: str,
+        column_comment: str,
+        table_kind: str = "TABLE",
+        **kwargs: t.Any,
     ) -> exp.Comment | str:
         table_sql = table.sql(dialect=self.dialect, identify=True)
         column_sql = exp.column(column_name).sql(dialect=self.dialect, identify=True)
