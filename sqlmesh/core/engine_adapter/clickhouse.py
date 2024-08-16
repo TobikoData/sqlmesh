@@ -43,17 +43,15 @@ class ClickhouseEngineAdapter(EngineAdapterWithIndexSupport, LogicalMergeMixin):
         )
         if str(cloud_query_value[0]) == "1":
             return EngineRunMode.CLOUD
-        # you can set cluster config and start some instances, but unless you set up zookeeper as well,
-        # trying to create clustered tables will fail with:
-        # Code: 139. DB::Exception: There is no Zookeeper configuration in server config.
-        cluster_query_value = self.fetchone("show tables in system like 'zookeeper'")
-        if str(cluster_query_value[0]) == "zookeeper":
+        # we use the user's specification of a cluster in the connection config to determine if
+        #   the engine is in cluster mode
+        if self._extra_config.get("cluster"):
             return EngineRunMode.CLUSTER
         return EngineRunMode.STANDALONE
 
     @property
-    def default_cluster(self) -> str:
-        return self._extra_config.get("default_cluster")
+    def cluster(self) -> t.Optional[str]:
+        return self._extra_config.get("cluster")
 
     # Workaround for clickhouse-connect cursor bug
     # - cursor does not reset row index correctly on `close()`, so `fetchone()` and `fetchmany()`
@@ -87,7 +85,7 @@ class ClickhouseEngineAdapter(EngineAdapterWithIndexSupport, LogicalMergeMixin):
         Clickhouse has a two-level naming scheme [database].[table].
         """
         if self.engine_run_mode.is_cluster:
-            properties.append(exp.OnCluster(this=exp.to_identifier(self.default_cluster)))
+            properties.append(exp.OnCluster(this=exp.to_identifier(self.cluster)))
 
         # can't call super() because it will try to set a catalog
         return self._create_schema(
@@ -110,7 +108,7 @@ class ClickhouseEngineAdapter(EngineAdapterWithIndexSupport, LogicalMergeMixin):
             exists=ignore_if_not_exists,
             kind="DATABASE",
             cascade=None,
-            cluster=exp.OnCluster(this=exp.to_identifier(self.default_cluster))
+            cluster=exp.OnCluster(this=exp.to_identifier(self.cluster))
             if self.engine_run_mode.is_cluster
             else None,
             **drop_args,
@@ -131,7 +129,8 @@ class ClickhouseEngineAdapter(EngineAdapterWithIndexSupport, LogicalMergeMixin):
         return self.cursor.client.query_df(
             self._to_sql(query, quote=quote_identifiers)
             if isinstance(query, exp.Expression)
-            else query
+            else query,
+            use_extended_dtypes=True,
         )
 
     def _df_to_source_queries(
@@ -209,7 +208,7 @@ class ClickhouseEngineAdapter(EngineAdapterWithIndexSupport, LogicalMergeMixin):
         target_table = exp.to_table(target_table_name)
         source_table = exp.to_table(source_table_name)
         on_cluster_sql = kwargs.get("ON_CLUSTER", None) or (
-            self.default_cluster if self.engine_run_mode.is_cluster else None
+            self.cluster if self.engine_run_mode.is_cluster else None
         )
         on_cluster_sql = (
             f" ON CLUSTER {exp.to_identifier(on_cluster_sql)} " if on_cluster_sql else " "
@@ -294,7 +293,7 @@ class ClickhouseEngineAdapter(EngineAdapterWithIndexSupport, LogicalMergeMixin):
         table_engine = "MergeTree"
         if storage_format:
             table_engine = (
-                storage_format.this if isinstance(storage_format, exp.Var) else storage_format
+                storage_format.this if isinstance(storage_format, exp.Var) else storage_format  # type: ignore
             )
         properties.append(exp.EngineProperty(this=table_engine))
 
@@ -308,9 +307,12 @@ class ClickhouseEngineAdapter(EngineAdapterWithIndexSupport, LogicalMergeMixin):
         if table_engine != "Log":
             primary_key_raw = table_properties_copy.pop("PRIMARY_KEY", None)
             if primary_key_raw and self.SUPPORTS_INDEXES:
+                primary_key_raw = (
+                    primary_key_raw[0] if isinstance(primary_key_raw, list) else primary_key_raw
+                )
                 primary_key_cols = (
-                    primary_key_raw[0].expressions
-                    if len(primary_key_raw) == 1 and isinstance(primary_key_raw[0], exp.Tuple)
+                    primary_key_raw.expressions
+                    if isinstance(primary_key_raw, exp.Tuple)
                     else primary_key_raw
                 )
 
@@ -334,8 +336,9 @@ class ClickhouseEngineAdapter(EngineAdapterWithIndexSupport, LogicalMergeMixin):
                 ordered_by_cols_names = []
                 ordered_by_cols_dedupe = []
                 for col in ordered_by_cols:
-                    if col.name not in ordered_by_cols_names:
-                        ordered_by_cols_names.append(col.name)
+                    col_name = col.name if isinstance(col, exp.Column) else col
+                    if col_name not in ordered_by_cols_names:
+                        ordered_by_cols_names.append(col_name)
                         ordered_by_cols_dedupe.append(col)
 
             ordered_by_expressions = (
@@ -347,7 +350,7 @@ class ClickhouseEngineAdapter(EngineAdapterWithIndexSupport, LogicalMergeMixin):
             properties.append(exp.Order(expressions=[exp.Ordered(this=ordered_by_expressions)]))
 
         if self.engine_run_mode.is_cluster:
-            on_cluster = table_properties_copy.pop("CLUSTER", None) or self.default_cluster
+            on_cluster = table_properties_copy.pop("CLUSTER", None) or self.cluster
             properties.append(
                 exp.OnCluster(
                     this=exp.Literal(
@@ -395,7 +398,7 @@ class ClickhouseEngineAdapter(EngineAdapterWithIndexSupport, LogicalMergeMixin):
             on_cluster = (
                 view_properties_copy.pop("CLUSTER", None)
                 or kwargs.pop("physical_cluster", None)
-                or self.default_cluster
+                or self.cluster
             )
             properties.append(exp.OnCluster(this=exp.Var(this=on_cluster)))
 

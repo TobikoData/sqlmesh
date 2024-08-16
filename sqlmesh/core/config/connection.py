@@ -1375,7 +1375,7 @@ class ClickhouseConnectionConfig(ConnectionConfig):
     username: str
     password: t.Optional[str] = None
     port: t.Optional[int] = None
-    default_cluster: str = "default"
+    cluster: t.Optional[str] = None
 
     concurrent_tasks: int = 1
     register_comments: bool = True

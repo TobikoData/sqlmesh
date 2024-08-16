@@ -25,7 +25,7 @@ def adapter(make_mocked_engine_adapter, mocker) -> ClickhouseEngineAdapter:
 def test_create_schema(adapter: ClickhouseEngineAdapter, mocker):
     mocker.patch.object(
         ClickhouseEngineAdapter,
-        "default_cluster",
+        "cluster",
         new_callable=mocker.PropertyMock(return_value="default"),
     )
 
@@ -48,7 +48,7 @@ def test_create_schema(adapter: ClickhouseEngineAdapter, mocker):
 def test_drop_schema(adapter: ClickhouseEngineAdapter, mocker):
     mocker.patch.object(
         ClickhouseEngineAdapter,
-        "default_cluster",
+        "cluster",
         new_callable=mocker.PropertyMock(return_value="default"),
     )
 
