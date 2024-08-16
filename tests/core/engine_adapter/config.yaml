@@ -134,7 +134,7 @@ gateways:
     connection:
       type: clickhouse
       host: {{ env_var("CLICKHOUSE_CLOUD_HOST") }}
-      port: {{ env_var("CLICKHOUSE_CLOUD_PORT") }}
+      port: 8443
       username: {{ env_var("CLICKHOUSE_CLOUD_USERNAME") }}
       password: {{ env_var("CLICKHOUSE_CLOUD_PASSWORD") }}
       concurrent_tasks: 1
