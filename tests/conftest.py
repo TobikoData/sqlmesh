@@ -168,8 +168,8 @@ class SushiDataValidator:
             expected_dates = [
                 pd.to_datetime(end_date - datetime.timedelta(days=x)) for x in range(num_days_diff)
             ]
-            # all engines but duckdb fetch dates as datetime.date objects
-            if dialect and dialect != "duckdb":
+            # all engines but duckdb and clickhouse fetch dates as datetime.date objects
+            if dialect and dialect not in ("duckdb", "clickhouse"):
                 expected_dates = [x.date() for x in expected_dates]  # type: ignore
             assert list(results["event_date"].values()) == expected_dates
 

@@ -2203,6 +2203,7 @@ def test_dialects(ctx: TestContext):
             None,
             {
                 "default": pd.Timestamp("2020-01-01 00:00:00+00:00"),
+                "clickhouse": pd.Timestamp("2020-01-01 00:00:00"),
                 "mysql": pd.Timestamp("2020-01-01 00:00:00"),
                 "spark": pd.Timestamp("2020-01-01 00:00:00"),
                 "databricks": pd.Timestamp("2020-01-01 00:00:00"),
@@ -2238,12 +2239,14 @@ def test_to_time_column(
     if ctx.test_type != "query":
         pytest.skip("Time column tests only need to run for query")
 
-    if ctx.dialect == "clickhouse":
-        time_column_type = (
-            exp.DataType.build("Nullable(DateTime64)", dialect="clickhouse")
-            if time_column_type.is_type(exp.DataType.Type.TIMESTAMP)
-            else time_column_type
-        )
+    if ctx.dialect == "clickhouse" and time_column_type.is_type(exp.DataType.Type.TIMESTAMPTZ):
+        # Clickhouse does not have natively timezone-aware types and does not accept timestrings
+        #   with UTC offset "+XX:XX". Therefore, we remove the timezone offset and set a timezone-
+        #   specific data type to validate what is returned.
+        import re
+
+        time_column = re.match("^(.*?)\+", time_column).group(1)
+        time_column_type = exp.DataType.build("TIMESTAMP('UTC')", dialect="clickhouse")
 
     time_column = to_time_column(time_column, time_column_type, time_column_format)
     df = ctx.engine_adapter.fetchdf(exp.select(time_column).as_("the_col"))
@@ -2292,7 +2295,9 @@ def test_batch_size_on_incremental_by_unique_key_model(
             "event_date": exp.DataType.build("date"),
         },
     )
-    context.upsert_model(create_sql_model(name=f"{schema}.seed_model", query=seed_query))
+    context.upsert_model(
+        create_sql_model(name=f"{schema}.seed_model", query=seed_query, kind="FULL")
+    )
     context.upsert_model(
         load_sql_based_model(
             d.parse(
