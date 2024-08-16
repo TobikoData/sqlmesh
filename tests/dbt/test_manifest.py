@@ -8,6 +8,7 @@ from sqlmesh.dbt.basemodel import Dependencies
 from sqlmesh.dbt.context import DbtContext
 from sqlmesh.dbt.manifest import ManifestHelper
 from sqlmesh.dbt.profile import Profile
+from sqlmesh.dbt.builtin import Api, _relation_info_to_relation
 from sqlmesh.utils.jinja import MacroReference
 
 pytestmark = pytest.mark.dbt
@@ -151,3 +152,36 @@ def test_variable_override():
         variable_overrides={"top_waiters:limit": 1, "start": "2020-01-01"},
     )
     assert helper.models()["top_waiters"].limit_value == 1
+
+
+@pytest.mark.xdist_group("dbt_manifest")
+def test_source_meta_external_location():
+    project_path = Path("tests/fixtures/dbt/sushi_test")
+    profile = Profile.load(DbtContext(project_path))
+
+    helper = ManifestHelper(
+        project_path,
+        project_path,
+        "sushi",
+        profile.target,
+        variable_overrides={"start": "2020-01-01"},
+    )
+
+    sources = helper.sources()
+    parquet_orders = sources["parquet_file.orders"]
+    assert parquet_orders.source_meta == {
+        "external_location": "read_parquet('path/to/external/{name}.parquet')"
+    }
+    assert (
+        parquet_orders.relation_info.external == "read_parquet('path/to/external/orders.parquet')"
+    )
+
+    api = Api("duckdb")
+    relation_info = sources["parquet_file.items"].relation_info
+    assert relation_info.external == "read_parquet('path/to/external/items.parquet')"
+
+    relation = _relation_info_to_relation(
+        sources["parquet_file.items"].relation_info, api.Relation, api.quote_policy
+    )
+    assert relation.identifier == "items"
+    assert relation.render() == "read_parquet('path/to/external/items.parquet')"
