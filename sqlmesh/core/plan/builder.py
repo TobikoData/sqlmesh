@@ -69,6 +69,7 @@ class PlanBuilder:
             environment state, or to use whatever snapshots are in the current environment state even if
             the environment is not finalized.
         engine_schema_differ: Schema differ from the context engine adapter.
+        interval_end_per_model: The mapping from model FQNs to target end dates.
     """
 
     def __init__(
@@ -98,6 +99,7 @@ class PlanBuilder:
         enable_preview: bool = False,
         end_bounded: bool = False,
         ensure_finalized_snapshots: bool = False,
+        interval_end_per_model: t.Optional[t.Dict[str, int]] = None,
         console: t.Optional[Console] = None,
     ):
         self._context_diff = context_diff
@@ -111,6 +113,7 @@ class PlanBuilder:
         self._enable_preview = enable_preview
         self._end_bounded = end_bounded
         self._ensure_finalized_snapshots = ensure_finalized_snapshots
+        self._interval_end_per_model = interval_end_per_model
         self._environment_ttl = environment_ttl
         self._categorizer_config = categorizer_config or CategorizerConfig()
         self._auto_categorization_enabled = auto_categorization_enabled
@@ -272,6 +275,7 @@ class PlanBuilder:
             ignored=ignored,
             deployability_index=deployability_index,
             restatements=restatements,
+            interval_end_per_model=self._interval_end_per_model,
             models_to_backfill=models_to_backfill,
             effective_from=self._effective_from,
             execution_time=self._execution_time,

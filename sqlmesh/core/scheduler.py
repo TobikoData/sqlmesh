@@ -155,6 +155,7 @@ class Scheduler:
         execution_time: t.Optional[TimeLike] = None,
         deployability_index: t.Optional[DeployabilityIndex] = None,
         restatements: t.Optional[t.Dict[SnapshotId, SnapshotInterval]] = None,
+        interval_end_per_model: t.Optional[t.Dict[str, int]] = None,
         ignore_cron: bool = False,
         end_bounded: bool = False,
         selected_snapshots: t.Optional[t.Set[str]] = None,
@@ -175,6 +176,7 @@ class Scheduler:
             execution_time: The date/time time reference to use for execution time. Defaults to now.
             deployability_index: Determines snapshots that are deployable in the context of this evaluation.
             restatements: A set of snapshot names being restated.
+            interval_end_per_model: The mapping from model FQNs to target end dates.
             ignore_cron: Whether to ignore the node's cron schedule.
             end_bounded: If set to true, the returned intervals will be bounded by the target end date, disregarding lookback,
                 allow_partials, and other attributes that could cause the intervals to exceed the target end date.
@@ -196,6 +198,7 @@ class Scheduler:
             deployability_index=deployability_index,
             execution_time=execution_time or now(),
             restatements=restatements,
+            interval_end_per_model=interval_end_per_model,
             ignore_cron=ignore_cron,
             end_bounded=end_bounded,
             signal_factory=self.signal_factory,
@@ -283,6 +286,7 @@ class Scheduler:
         end: t.Optional[TimeLike] = None,
         execution_time: t.Optional[TimeLike] = None,
         restatements: t.Optional[t.Dict[SnapshotId, SnapshotInterval]] = None,
+        interval_end_per_model: t.Optional[t.Dict[str, int]] = None,
         ignore_cron: bool = False,
         end_bounded: bool = False,
         selected_snapshots: t.Optional[t.Set[str]] = None,
@@ -299,6 +303,7 @@ class Scheduler:
             end: The end of the run. Defaults to now.
             execution_time: The date/time time reference to use for execution time. Defaults to now.
             restatements: A dict of snapshots to restate and their intervals.
+            interval_end_per_model: The mapping from model FQNs to target end dates.
             ignore_cron: Whether to ignore the node's cron schedule.
             end_bounded: If set to true, the evaluated intervals will be bounded by the target end date, disregarding lookback,
                 allow_partials, and other attributes that could cause the intervals to exceed the target end date.
@@ -334,6 +339,7 @@ class Scheduler:
             execution_time,
             deployability_index=deployability_index,
             restatements=restatements,
+            interval_end_per_model=interval_end_per_model,
             ignore_cron=ignore_cron,
             end_bounded=end_bounded,
             selected_snapshots=selected_snapshots,
@@ -472,6 +478,7 @@ def compute_interval_params(
     deployability_index: t.Optional[DeployabilityIndex] = None,
     execution_time: t.Optional[TimeLike] = None,
     restatements: t.Optional[t.Dict[SnapshotId, SnapshotInterval]] = None,
+    interval_end_per_model: t.Optional[t.Dict[str, int]] = None,
     ignore_cron: bool = False,
     end_bounded: bool = False,
     signal_factory: t.Optional[SignalFactory] = None,
@@ -494,6 +501,7 @@ def compute_interval_params(
         deployability_index: Determines snapshots that are deployable in the context of this evaluation.
         execution_time: The date/time time reference to use for execution time.
         restatements: A dict of snapshot names being restated and their intervals.
+        interval_end_per_model: The mapping from model FQNs to target end dates.
         ignore_cron: Whether to ignore the node's cron schedule.
         end_bounded: If set to true, the returned intervals will be bounded by the target end date, disregarding lookback,
             allow_partials, and other attributes that could cause the intervals to exceed the target end date.
@@ -510,6 +518,7 @@ def compute_interval_params(
         execution_time=execution_time,
         restatements=restatements,
         deployability_index=deployability_index,
+        interval_end_per_model=interval_end_per_model,
         ignore_cron=ignore_cron,
         end_bounded=end_bounded,
     ).items():

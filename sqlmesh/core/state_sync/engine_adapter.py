@@ -994,38 +994,11 @@ class EngineAdapterStateSync(StateSync):
             s.dev_intervals = []
         return Snapshot.hydrate_with_intervals_by_version(snapshots, intervals)
 
-    def max_interval_end_for_environment(
-        self, environment: str, ensure_finalized_snapshots: bool = False
-    ) -> t.Optional[int]:
-        env = self._get_environment(environment)
-        if not env:
-            return None
-
-        max_end = None
-        snapshots = (
-            env.snapshots if not ensure_finalized_snapshots else env.finalized_or_current_snapshots
-        )
-        for where in self._snapshot_name_version_filter(snapshots, "intervals"):
-            end = self._fetchone(
-                exp.select(exp.func("MAX", exp.to_column("end_ts")))
-                .from_(exp.to_table(self.intervals_table).as_("intervals"))
-                .where(where, copy=False)
-                .where(exp.to_column("is_dev").not_(), copy=False),
-            )[0]  # type: ignore
-
-            if max_end is None:
-                max_end = end
-            elif end is not None:
-                max_end = max(max_end, end)
-
-        return max_end
-
-    def greatest_common_interval_end(
-        self, environment: str, models: t.Set[str], ensure_finalized_snapshots: bool = False
-    ) -> t.Optional[int]:
-        if not models:
-            return None
-
+    def max_interval_end_per_model(
+        self,
+        environment: str,
+        ensure_finalized_snapshots: bool = False,
+    ) -> t.Optional[t.Dict[str, int]]:
         env = self._get_environment(environment)
         if not env:
             return None
@@ -1033,40 +1006,32 @@ class EngineAdapterStateSync(StateSync):
         snapshots = (
             env.snapshots if not ensure_finalized_snapshots else env.finalized_or_current_snapshots
         )
-        snapshots = [s for s in snapshots if s.name in models]
-        if not snapshots:
-            snapshots = env.snapshots
-
-        greatest_common_end = None
 
         table_alias = "intervals"
         name_col = exp.column("name", table=table_alias)
         version_col = exp.column("version", table=table_alias)
 
+        result: t.Dict[str, int] = {}
+
         for where in self._snapshot_name_version_filter(snapshots, table_alias):
-            max_end_subquery = (
+            query = (
                 exp.select(
                     name_col,
-                    version_col,
                     exp.func("MAX", exp.column("end_ts", table=table_alias)).as_("max_end_ts"),
                 )
                 .from_(exp.to_table(self.intervals_table).as_(table_alias))
                 .where(where, copy=False)
-                .where(exp.to_column("is_dev").not_(), copy=False)
+                .where(
+                    exp.and_(exp.to_column("is_dev").not_(), exp.to_column("is_removed").not_()),
+                    copy=False,
+                )
                 .group_by(name_col, version_col, copy=False)
             )
-            query = exp.select(exp.func("MIN", exp.column("max_end_ts"))).from_(
-                max_end_subquery.subquery(alias="max_ends")
-            )
 
-            end = self._fetchone(query)[0]  # type: ignore
+            for name, max_end in self._fetchall(query):
+                result[name] = max_end
 
-            if greatest_common_end is None:
-                greatest_common_end = end
-            elif end is not None:
-                greatest_common_end = min(greatest_common_end, end)
-
-        return greatest_common_end
+        return result
 
     def recycle(self) -> None:
         self.engine_adapter.recycle()

@@ -206,6 +206,7 @@ class AirflowClient(BaseAirflowClient):
         directly_modified_snapshots: t.Optional[t.List[SnapshotId]] = None,
         indirectly_modified_snapshots: t.Optional[t.Dict[str, t.List[SnapshotId]]] = None,
         removed_snapshots: t.Optional[t.List[SnapshotId]] = None,
+        interval_end_per_model: t.Optional[t.Dict[str, int]] = None,
         execution_time: t.Optional[TimeLike] = None,
     ) -> None:
         request = common.PlanApplicationRequest(
@@ -228,6 +229,7 @@ class AirflowClient(BaseAirflowClient):
             directly_modified_snapshots=directly_modified_snapshots or [],
             indirectly_modified_snapshots=indirectly_modified_snapshots or {},
             removed_snapshots=removed_snapshots or [],
+            interval_end_per_model=interval_end_per_model,
             execution_time=execution_time,
         )
 
@@ -286,23 +288,18 @@ class AirflowClient(BaseAirflowClient):
         response = self._get(ENVIRONMENTS_PATH)
         return common.EnvironmentsResponse.parse_obj(response).environments
 
-    def max_interval_end_for_environment(
-        self, environment: str, ensure_finalized_snapshots: bool
-    ) -> t.Optional[int]:
+    def max_interval_end_per_model(
+        self,
+        environment: str,
+        ensure_finalized_snapshots: bool,
+    ) -> t.Optional[t.Dict[str, int]]:
         flags = ["ensure_finalized_snapshots"] if ensure_finalized_snapshots else []
-        response = self._get(f"{ENVIRONMENTS_PATH}/{environment}/max_interval_end", *flags)
-        return common.IntervalEndResponse.parse_obj(response).max_interval_end
 
-    def greatest_common_interval_end(
-        self, environment: str, models: t.Collection[str], ensure_finalized_snapshots: bool
-    ) -> t.Optional[int]:
-        flags = ["ensure_finalized_snapshots"] if ensure_finalized_snapshots else []
         response = self._get(
-            f"{ENVIRONMENTS_PATH}/{environment}/greatest_common_interval_end",
+            f"{ENVIRONMENTS_PATH}/{environment}/max_interval_end_per_model",
             *flags,
-            models=_json_query_param(list(models)),
         )
-        return common.IntervalEndResponse.parse_obj(response).max_interval_end
+        return common.IntervalEndResponse.parse_obj(response).interval_end_per_model
 
     def invalidate_environment(self, environment: str) -> None:
         response = self._session.delete(

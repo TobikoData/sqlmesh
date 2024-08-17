@@ -503,7 +503,7 @@ def test_hourly_model_with_lookback_no_backfill_in_dev(init_and_plan_context: t.
 
 
 @freeze_time("2023-01-08 00:00:00")
-def test_parent_cron_before_child(init_and_plan_context: t.Callable):
+def test_parent_cron_after_child(init_and_plan_context: t.Callable):
     context, plan = init_and_plan_context("examples/sushi")
 
     model = context.get_model("sushi.waiter_revenue_by_day")
@@ -517,6 +517,11 @@ def test_parent_cron_before_child(init_and_plan_context: t.Callable):
 
     plan = context.plan("prod", no_prompts=True, skip_tests=True)
     context.apply(plan)
+
+    waiter_revenue_by_day_snapshot = context.get_snapshot(model.name, raise_if_missing=True)
+    assert waiter_revenue_by_day_snapshot.intervals == [
+        (to_timestamp("2023-01-01"), to_timestamp("2023-01-07"))
+    ]
 
     top_waiters_model = context.get_model("sushi.top_waiters")
     top_waiters_model = add_projection_to_model(t.cast(SqlModel, top_waiters_model), literal=True)
