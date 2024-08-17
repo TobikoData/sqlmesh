@@ -147,11 +147,15 @@ class ClickhouseEngineAdapter(EngineAdapterWithIndexSupport, LogicalMergeMixin):
         temp_table = self._get_temp_table(target_table, **kwargs)
 
         def query_factory() -> Query:
-            self.create_table(
-                temp_table, columns_to_types, storage_format=exp.Var(this="MergeTree"), **kwargs
-            )
+            # It is possible for the factory to be called multiple times and if so then the temp table will already
+            # be created so we skip creating again. This means we are assuming the first call is the same result
+            # as later calls.
+            if not self.table_exists(temp_table):
+                self.create_table(
+                    temp_table, columns_to_types, storage_format=exp.Var(this="MergeTree"), **kwargs
+                )
 
-            self.cursor.client.insert_df(temp_table.sql(dialect=self.dialect), df=df)
+                self.cursor.client.insert_df(temp_table.sql(dialect=self.dialect), df=df)
 
             return exp.select(*self._casted_columns(columns_to_types)).from_(temp_table)
 
