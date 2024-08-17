@@ -283,6 +283,8 @@ class BaseSlackNotificationTarget(BaseNotificationTarget):
             ),
         )
 
+        composed.add_text(msg)
+
         self._send_slack_message(
             composed=composed.slack_message,
         )
@@ -318,6 +320,7 @@ class SlackWebhookNotificationTarget(BaseSlackNotificationTarget):
 
     def _send_slack_message(self, composed: slack.TSlackMessage) -> None:
         self.client.send(
+            text=composed["text"],
             blocks=composed["blocks"],
             attachments=composed["attachments"],  # type: ignore
         )
@@ -352,6 +355,7 @@ class SlackApiNotificationTarget(BaseSlackNotificationTarget):
 
         self.client.chat_postMessage(
             channel=self.channel,
+            text=composed["text"],
             blocks=composed["blocks"],
             attachments=composed["attachments"],  # type: ignore
         )
