@@ -201,6 +201,7 @@ def test_duplicates(state_sync: EngineAdapterStateSync, make_snapshot: t.Callabl
     state_sync._push_snapshots([snapshot_a])
     state_sync._push_snapshots([snapshot_b])
     state_sync._push_snapshots([snapshot_c])
+    state_sync._snapshot_cache.clear()
     assert (
         state_sync.get_snapshots([snapshot_a])[snapshot_a.snapshot_id].updated_ts
         == snapshot_b.updated_ts
@@ -1072,15 +1073,19 @@ def test_delete_expired_snapshots(state_sync: EngineAdapterStateSync, make_snaps
     new_snapshot.version = snapshot.version
     new_snapshot.updated_ts = now_ts - 11000
 
-    state_sync.push_snapshots([snapshot, new_snapshot])
-    assert set(state_sync.get_snapshots(None)) == {snapshot.snapshot_id, new_snapshot.snapshot_id}
+    all_snapshots = [snapshot, new_snapshot]
+    state_sync.push_snapshots(all_snapshots)
+    assert set(state_sync.get_snapshots(all_snapshots)) == {
+        snapshot.snapshot_id,
+        new_snapshot.snapshot_id,
+    }
 
     assert state_sync.delete_expired_snapshots() == [
         SnapshotTableCleanupTask(snapshot=snapshot.table_info, dev_table_only=True),
         SnapshotTableCleanupTask(snapshot=new_snapshot.table_info, dev_table_only=False),
     ]
 
-    assert not state_sync.get_snapshots(None)
+    assert not state_sync.get_snapshots(all_snapshots)
 
 
 def test_delete_expired_snapshots_seed(
@@ -1101,14 +1106,15 @@ def test_delete_expired_snapshots_seed(
     snapshot.categorize_as(SnapshotChangeCategory.BREAKING)
     snapshot.updated_ts = now_ts - 15000
 
-    state_sync.push_snapshots([snapshot])
-    assert set(state_sync.get_snapshots(None)) == {snapshot.snapshot_id}
+    all_snapshots = [snapshot]
+    state_sync.push_snapshots(all_snapshots)
+    assert set(state_sync.get_snapshots(all_snapshots)) == {snapshot.snapshot_id}
 
     assert state_sync.delete_expired_snapshots() == [
         SnapshotTableCleanupTask(snapshot=snapshot.table_info, dev_table_only=False),
     ]
 
-    assert not state_sync.get_snapshots(None)
+    assert not state_sync.get_snapshots(all_snapshots)
 
 
 def test_delete_expired_snapshots_batching(
@@ -1137,15 +1143,19 @@ def test_delete_expired_snapshots_batching(
     snapshot_b.categorize_as(SnapshotChangeCategory.BREAKING)
     snapshot_b.updated_ts = now_ts - 11000
 
-    state_sync.push_snapshots([snapshot_a, snapshot_b])
-    assert set(state_sync.get_snapshots(None)) == {snapshot_a.snapshot_id, snapshot_b.snapshot_id}
+    all_snapshots = [snapshot_a, snapshot_b]
+    state_sync.push_snapshots(all_snapshots)
+    assert set(state_sync.get_snapshots(all_snapshots)) == {
+        snapshot_a.snapshot_id,
+        snapshot_b.snapshot_id,
+    }
 
     assert state_sync.delete_expired_snapshots() == [
         SnapshotTableCleanupTask(snapshot=snapshot_a.table_info, dev_table_only=False),
         SnapshotTableCleanupTask(snapshot=snapshot_b.table_info, dev_table_only=False),
     ]
 
-    assert not state_sync.get_snapshots(None)
+    assert not state_sync.get_snapshots(all_snapshots)
 
 
 def test_delete_expired_snapshots_promoted(
@@ -1175,8 +1185,9 @@ def test_delete_expired_snapshots_promoted(
     )
     state_sync.promote(env)
 
+    all_snapshots = [snapshot]
     assert not state_sync.delete_expired_snapshots()
-    assert set(state_sync.get_snapshots(None)) == {snapshot.snapshot_id}
+    assert set(state_sync.get_snapshots(all_snapshots)) == {snapshot.snapshot_id}
 
     env.snapshots = []
     state_sync.promote(env)
@@ -1187,7 +1198,7 @@ def test_delete_expired_snapshots_promoted(
     assert state_sync.delete_expired_snapshots() == [
         SnapshotTableCleanupTask(snapshot=snapshot.table_info, dev_table_only=False)
     ]
-    assert not state_sync.get_snapshots(None)
+    assert not state_sync.get_snapshots(all_snapshots)
 
 
 def test_delete_expired_snapshots_dev_table_cleanup_only(
@@ -1216,14 +1227,18 @@ def test_delete_expired_snapshots_dev_table_cleanup_only(
     new_snapshot.version = snapshot.version
     new_snapshot.updated_ts = now_ts - 5000
 
-    state_sync.push_snapshots([snapshot, new_snapshot])
-    assert set(state_sync.get_snapshots(None)) == {snapshot.snapshot_id, new_snapshot.snapshot_id}
+    all_snapshots = [snapshot, new_snapshot]
+    state_sync.push_snapshots(all_snapshots)
+    assert set(state_sync.get_snapshots(all_snapshots)) == {
+        snapshot.snapshot_id,
+        new_snapshot.snapshot_id,
+    }
 
     assert state_sync.delete_expired_snapshots() == [
         SnapshotTableCleanupTask(snapshot=snapshot.table_info, dev_table_only=True)
     ]
 
-    assert set(state_sync.get_snapshots(None)) == {new_snapshot.snapshot_id}
+    assert set(state_sync.get_snapshots(all_snapshots)) == {new_snapshot.snapshot_id}
 
 
 def test_delete_expired_snapshots_shared_dev_table(
@@ -1253,11 +1268,15 @@ def test_delete_expired_snapshots_shared_dev_table(
     new_snapshot.temp_version = snapshot.temp_version_get_or_generate()
     new_snapshot.updated_ts = now_ts - 5000
 
-    state_sync.push_snapshots([snapshot, new_snapshot])
-    assert set(state_sync.get_snapshots(None)) == {snapshot.snapshot_id, new_snapshot.snapshot_id}
+    all_snapshots = [snapshot, new_snapshot]
+    state_sync.push_snapshots(all_snapshots)
+    assert set(state_sync.get_snapshots(all_snapshots)) == {
+        snapshot.snapshot_id,
+        new_snapshot.snapshot_id,
+    }
 
     assert not state_sync.delete_expired_snapshots()  # No dev table cleanup
-    assert set(state_sync.get_snapshots(None)) == {new_snapshot.snapshot_id}
+    assert set(state_sync.get_snapshots(all_snapshots)) == {new_snapshot.snapshot_id}
 
 
 def test_delete_expired_snapshots_ignore_ttl(
@@ -1737,7 +1756,13 @@ def test_migrate_rows(state_sync: EngineAdapterStateSync, mocker: MockerFixture)
 
     assert not missing_intervals(dev_snapshots, start="2023-01-08", end="2023-01-10") == 8
 
-    for s in state_sync.get_snapshots(None).values():
+    all_snapshot_ids = [
+        SnapshotId(name=name, identifier=identifier)
+        for name, identifier in state_sync.engine_adapter.fetchall(
+            "SELECT name, identifier FROM sqlmesh._snapshots"
+        )
+    ]
+    for s in state_sync.get_snapshots(all_snapshot_ids).values():
         if not s.is_symbolic:
             assert s.intervals
 
@@ -1823,6 +1848,7 @@ def test_seed_hydration(
     assert snapshot.model.is_hydrated
     assert snapshot.model.seed.content == "header\n1\n2"
 
+    state_sync._snapshot_cache.clear()
     stored_snapshot = state_sync.get_snapshots([snapshot.snapshot_id])[snapshot.snapshot_id]
     assert isinstance(stored_snapshot.model, SeedModel)
     assert not stored_snapshot.model.is_hydrated
@@ -2262,3 +2288,31 @@ def test_seed_model_metadata_update(
 
     state_sync.push_snapshots([new_snapshot])
     assert len(state_sync.get_snapshots([new_snapshot, snapshot])) == 2
+
+
+def test_snapshot_cache(
+    state_sync: EngineAdapterStateSync, make_snapshot: t.Callable, mocker: MockerFixture
+):
+    cache_mock = mocker.Mock()
+    state_sync._snapshot_cache = cache_mock
+
+    snapshot = make_snapshot(SqlModel(name="a", query=parse_one("select 1")))
+    cache_mock.get_or_load.return_value = ({snapshot.snapshot_id: snapshot}, {snapshot.snapshot_id})
+
+    # Use _push_snapshots to bypass cache.
+    state_sync._push_snapshots([snapshot])
+
+    assert state_sync.get_snapshots([snapshot.snapshot_id]) == {snapshot.snapshot_id: snapshot}
+    cache_mock.get_or_load.assert_called_once_with({snapshot.snapshot_id}, mocker.ANY)
+
+    # Update the snapshot in the state and make sure this update is reflected on the cached instance.
+    assert snapshot.unpaused_ts is None
+    assert not snapshot.unrestorable
+    state_sync._update_snapshots([snapshot.snapshot_id], unpaused_ts=1, unrestorable=True)
+    new_snapshot = state_sync.get_snapshots([snapshot.snapshot_id])[snapshot.snapshot_id]
+    assert new_snapshot.unpaused_ts == 1
+    assert new_snapshot.unrestorable
+
+    # If the record was deleted from the state, the cached version should not be returned.
+    state_sync.delete_snapshots([snapshot.snapshot_id])
+    assert state_sync.get_snapshots([snapshot.snapshot_id]) == {}

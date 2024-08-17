@@ -1997,6 +1997,7 @@ def test_multi(mocker):
 
 def test_multi_dbt(mocker):
     context = Context(paths=["examples/multi_dbt/bronze", "examples/multi_dbt/silver"])
+    context._new_state_sync().reset(default_catalog=context.default_catalog)
     plan = context.plan()
     assert len(plan.new_snapshots) == 4
     context.apply(plan)
@@ -2270,6 +2271,10 @@ def test_ignored_snapshots(context_fixture: Context, request):
     assert exp.table_("order_items", "sushi__dev", catalog) in metadata.qualified_views
 
 
+class OldPythonModel(PythonModel):
+    kind: ModelKind = ViewKind()
+
+
 def test_python_model_default_kind_change(init_and_plan_context: t.Callable):
     """
     Around 2024-07-17 Python models had their default Kind changed from VIEW to FULL in order to
@@ -2308,13 +2313,10 @@ def execute(
 
     # monkey-patch PythonModel to default to kind: View again
     # and ViewKind to allow python models again
-    with mock.patch.object(ViewKind, "supports_python_models", return_value=True):
-
-        class OldPythonModel(PythonModel):
-            kind: ModelKind = ViewKind()
-
-        with mock.patch("sqlmesh.core.model.definition.PythonModel", OldPythonModel):
-            context.load()
+    with mock.patch.object(ViewKind, "supports_python_models", return_value=True), mock.patch(
+        "sqlmesh.core.model.definition.PythonModel", OldPythonModel
+    ):
+        context.load()
 
     # check the monkey-patching worked
     model = context.get_model("sushi.python_view_model")

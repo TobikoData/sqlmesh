@@ -37,7 +37,7 @@ from sqlmesh.core.audit import ModelAudit
 from sqlmesh.core.console import Console, get_console
 from sqlmesh.core.engine_adapter import EngineAdapter
 from sqlmesh.core.environment import Environment
-from sqlmesh.core.model import ModelCache, ModelKindName, SeedModel
+from sqlmesh.core.model import ModelKindName, SeedModel
 from sqlmesh.core.snapshot import (
     Intervals,
     Node,
@@ -54,6 +54,7 @@ from sqlmesh.core.snapshot import (
     fingerprint_from_node,
     start_date,
 )
+from sqlmesh.core.snapshot.cache import SnapshotCache
 from sqlmesh.core.snapshot.definition import (
     Interval,
     _parents_from_node,
@@ -72,7 +73,6 @@ from sqlmesh.utils import major_minor, random_id, unique
 from sqlmesh.utils.dag import DAG
 from sqlmesh.utils.date import TimeLike, now, now_timestamp, time_like_to_str, to_timestamp
 from sqlmesh.utils.errors import SQLMeshError
-from sqlmesh.utils.pydantic import parse_obj_as
 
 logger = logging.getLogger(__name__)
 
@@ -119,7 +119,6 @@ class EngineAdapterStateSync(StateSync):
         # Make sure that if an empty string is provided that we treat it as None
         self.schema = schema or None
         self.engine_adapter = engine_adapter
-        self._context_path = context_path
         self.console = console or get_console()
         self.snapshots_table = exp.table_("_snapshots", db=self.schema)
         self.environments_table = exp.table_("_environments", db=self.schema)
@@ -174,6 +173,8 @@ class EngineAdapterStateSync(StateSync):
             "sqlmesh_version": exp.DataType.build("text"),
         }
 
+        self._snapshot_cache = SnapshotCache(context_path / c.CACHE)
+
     def _fetchone(self, query: t.Union[exp.Expression, str]) -> t.Optional[t.Tuple]:
         return self.engine_adapter.fetchone(
             query, ignore_unsupported_errors=True, quote_identifiers=True
@@ -212,6 +213,8 @@ class EngineAdapterStateSync(StateSync):
 
         if snapshots:
             self._push_snapshots(snapshots)
+            for snapshot in snapshots:
+                self._snapshot_cache.put(snapshot)
 
     def _push_snapshots(self, snapshots: t.Iterable[Snapshot], overwrite: bool = False) -> None:
         if overwrite:
@@ -617,9 +620,15 @@ class EngineAdapterStateSync(StateSync):
 
     def reset(self, default_catalog: t.Optional[str]) -> None:
         """Resets the state store to the state when it was first initialized."""
-        self.engine_adapter.drop_table(self.snapshots_table)
-        self.engine_adapter.drop_table(self.environments_table)
-        self.engine_adapter.drop_table(self.versions_table)
+        for table in (
+            self.snapshots_table,
+            self.environments_table,
+            self.intervals_table,
+            self.plan_dags_table,
+            self.versions_table,
+        ):
+            self.engine_adapter.drop_table(table)
+        self._snapshot_cache.clear()
         self.migrate(default_catalog)
 
     def _update_environment(self, environment: Environment) -> None:
@@ -686,11 +695,13 @@ class EngineAdapterStateSync(StateSync):
         self,
         snapshot_ids: t.Optional[t.Iterable[SnapshotIdLike]],
     ) -> t.Dict[SnapshotId, Snapshot]:
+        if snapshot_ids is None:
+            raise SQLMeshError("Must provide snapshot IDs to fetch snapshots.")
         return self._get_snapshots(snapshot_ids)
 
     def _get_snapshots(
         self,
-        snapshot_ids: t.Optional[t.Iterable[SnapshotIdLike]] = None,
+        snapshot_ids: t.Iterable[SnapshotIdLike],
         lock_for_update: bool = False,
         hydrate_intervals: bool = True,
     ) -> t.Dict[SnapshotId, Snapshot]:
@@ -704,38 +715,64 @@ class EngineAdapterStateSync(StateSync):
         Returns:
             A dictionary of snapshot ids to snapshots for ones that could be found.
         """
-        snapshots: t.Dict[SnapshotId, Snapshot] = {}
         duplicates: t.Dict[SnapshotId, Snapshot] = {}
-        model_cache = ModelCache(self._context_path / c.CACHE)
 
-        for query in self._get_snapshots_expressions(snapshot_ids, lock_for_update):
-            for (
-                serialized_snapshot,
-                name,
-                identifier,
-                _,
-                updated_ts,
-                unpaused_ts,
-                unrestorable,
-            ) in self._fetchall(query):
-                snapshot = parse_snapshot(
-                    model_cache,
-                    serialized_snapshot=serialized_snapshot,
-                    name=name,
-                    identifier=identifier,
-                    updated_ts=updated_ts,
-                    unpaused_ts=unpaused_ts,
-                    unrestorable=unrestorable,
-                )
-                snapshot_id = snapshot.snapshot_id
-                if snapshot_id in snapshots:
-                    other = duplicates.get(snapshot_id, snapshots[snapshot_id])
-                    duplicates[snapshot_id] = (
-                        snapshot if snapshot.updated_ts > other.updated_ts else other
+        def _loader(snapshot_ids_to_load: t.Set[SnapshotId]) -> t.Collection[Snapshot]:
+            fetched_snapshots: t.Dict[SnapshotId, Snapshot] = {}
+            for query in self._get_snapshots_expressions(snapshot_ids_to_load, lock_for_update):
+                for (
+                    serialized_snapshot,
+                    _,
+                    _,
+                    _,
+                    updated_ts,
+                    unpaused_ts,
+                    unrestorable,
+                ) in self._fetchall(query):
+                    snapshot = parse_snapshot(
+                        serialized_snapshot=serialized_snapshot,
+                        updated_ts=updated_ts,
+                        unpaused_ts=unpaused_ts,
+                        unrestorable=unrestorable,
                     )
-                    snapshots[snapshot_id] = duplicates[snapshot_id]
-                else:
-                    snapshots[snapshot_id] = snapshot
+                    snapshot_id = snapshot.snapshot_id
+                    if snapshot_id in fetched_snapshots:
+                        other = duplicates.get(snapshot_id, fetched_snapshots[snapshot_id])
+                        duplicates[snapshot_id] = (
+                            snapshot if snapshot.updated_ts > other.updated_ts else other
+                        )
+                        fetched_snapshots[snapshot_id] = duplicates[snapshot_id]
+                    else:
+                        fetched_snapshots[snapshot_id] = snapshot
+            return fetched_snapshots.values()
+
+        snapshots, cached_snapshots = self._snapshot_cache.get_or_load(
+            {s.snapshot_id for s in snapshot_ids}, _loader
+        )
+
+        if cached_snapshots:
+            cached_snapshots_in_state: t.Set[SnapshotId] = set()
+            for where in self._snapshot_id_filter(cached_snapshots):
+                query = (
+                    exp.select("name", "identifier", "updated_ts", "unpaused_ts", "unrestorable")
+                    .from_(exp.to_table(self.snapshots_table))
+                    .where(where)
+                )
+                if lock_for_update:
+                    query = query.lock(copy=False)
+                for name, identifier, updated_ts, unpaused_ts, unrestorable in self._fetchall(
+                    query
+                ):
+                    snapshot_id = SnapshotId(name=name, identifier=identifier)
+                    snapshot = snapshots[snapshot_id]
+                    snapshot.updated_ts = updated_ts
+                    snapshot.unpaused_ts = unpaused_ts
+                    snapshot.unrestorable = unrestorable
+                    cached_snapshots_in_state.add(snapshot_id)
+
+            missing_cached_snapshots = cached_snapshots - cached_snapshots_in_state
+            for missing_cached_snapshot_id in missing_cached_snapshots:
+                snapshots.pop(missing_cached_snapshot_id, None)
 
         if snapshots and hydrate_intervals:
             _, intervals = self._get_snapshot_intervals(snapshots.values())
@@ -749,14 +786,12 @@ class EngineAdapterStateSync(StateSync):
 
     def _get_snapshots_expressions(
         self,
-        snapshot_ids: t.Optional[t.Iterable[SnapshotIdLike]] = None,
+        snapshot_ids: t.Iterable[SnapshotIdLike],
         lock_for_update: bool = False,
         batch_size: t.Optional[int] = None,
     ) -> t.Iterator[exp.Expression]:
-        for where in (
-            [None]
-            if snapshot_ids is None
-            else self._snapshot_id_filter(snapshot_ids, alias="snapshots", batch_size=batch_size)
+        for where in self._snapshot_id_filter(
+            snapshot_ids, alias="snapshots", batch_size=batch_size
         ):
             query = (
                 exp.select(
@@ -1691,33 +1726,19 @@ def _snapshot_to_json(snapshot: Snapshot) -> str:
 
 
 def parse_snapshot(
-    model_cache: ModelCache,
     serialized_snapshot: str,
-    name: str,
-    identifier: str,
     updated_ts: int,
     unpaused_ts: t.Optional[int],
     unrestorable: bool,
 ) -> Snapshot:
-    payload = json.loads(serialized_snapshot)
-
-    def loader() -> Node:
-        return parse_obj_as(Node, payload["node"])  # type: ignore
-
-    node = model_cache.get_or_load(f"{name}_{identifier}", loader=loader)  # type: ignore
-    node._data_hash = payload["fingerprint"]["data_hash"]
-    node._metadata_hash = payload["fingerprint"]["metadata_hash"]
-    payload["node"] = node
-    snapshot = Snapshot(
+    return Snapshot(
         **{
-            **payload,
+            **json.loads(serialized_snapshot),
             "updated_ts": updated_ts,
             "unpaused_ts": unpaused_ts,
             "unrestorable": unrestorable,
         }
     )
-
-    return snapshot
 
 
 class LazilyParsedSnapshots:
