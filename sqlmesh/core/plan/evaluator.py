@@ -173,6 +173,7 @@ class BuiltInPlanEvaluator(PlanEvaluator):
             deployability_index=deployability_index,
             circuit_breaker=circuit_breaker,
             end_bounded=plan.end_bounded,
+            interval_end_per_model=plan.interval_end_per_model,
         )
         if not is_run_successful:
             raise SQLMeshError("Plan application failed.")
@@ -402,6 +403,7 @@ class StateBasedAirflowPlanEvaluator(BaseAirflowPlanEvaluator):
                 for change_source, snapshots in plan.indirectly_modified.items()
             },
             removed_snapshots=list(plan.context_diff.removed_snapshots),
+            interval_end_per_model=plan.interval_end_per_model,
             execution_time=plan.execution_time,
             allow_destructive_snapshots=plan.allow_destructive_models,
         )
@@ -480,6 +482,7 @@ class AirflowPlanEvaluator(StateBasedAirflowPlanEvaluator):
                 for change_source, snapshots in plan.indirectly_modified.items()
             },
             removed_snapshots=list(plan.context_diff.removed_snapshots),
+            interval_end_per_model=plan.interval_end_per_model,
             execution_time=plan.execution_time,
             allow_destructive_snapshots=plan.allow_destructive_models,
         )

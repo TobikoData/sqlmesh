@@ -133,6 +133,7 @@ def create_plan_dag_spec(
             execution_time=request.execution_time or now(),
             deployability_index=deployability_index_for_evaluation,
             restatements=restatements,
+            interval_end_per_model=request.interval_end_per_model,
             end_bounded=request.end_bounded,
             signal_factory=None,
         )

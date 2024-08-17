@@ -53,6 +53,7 @@ class Plan(PydanticModel, frozen=True):
 
     deployability_index: DeployabilityIndex
     restatements: t.Dict[SnapshotId, Interval]
+    interval_end_per_model: t.Optional[t.Dict[str, int]]
 
     models_to_backfill: t.Optional[t.Set[str]] = None
     effective_from: t.Optional[TimeLike] = None
@@ -162,6 +163,7 @@ class Plan(PydanticModel, frozen=True):
                 execution_time=self.execution_time,
                 restatements=self.restatements,
                 deployability_index=self.deployability_index,
+                interval_end_per_model=self.interval_end_per_model,
                 end_bounded=self.end_bounded,
             ).items()
             if snapshot.is_model and missing

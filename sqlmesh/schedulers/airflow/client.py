@@ -1,5 +1,4 @@
 import abc
-import json
 import time
 import typing as t
 import uuid
@@ -15,7 +14,6 @@ from sqlmesh.core.snapshot.definition import Interval
 from sqlmesh.core.state_sync import Versions
 from sqlmesh.core.user import User
 from sqlmesh.schedulers.airflow import common, NO_DEFAULT_CATALOG
-from sqlmesh.utils import unique
 from sqlmesh.utils.date import TimeLike
 from sqlmesh.utils.errors import (
     ApiServerError,
@@ -23,14 +21,13 @@ from sqlmesh.utils.errors import (
     SQLMeshError,
     raise_for_status,
 )
-from sqlmesh.utils.pydantic import PydanticModel
 
 DAG_RUN_PATH_TEMPLATE = "api/v1/dags/{}/dagRuns"
 
 
 PLANS_PATH = f"{common.SQLMESH_API_BASE_PATH}/plans"
 ENVIRONMENTS_PATH = f"{common.SQLMESH_API_BASE_PATH}/environments"
-SNAPSHOTS_PATH = f"{common.SQLMESH_API_BASE_PATH}/snapshots"
+SNAPSHOTS_PATH = f"{common.SQLMESH_API_BASE_PATH}/snapshots/search"
 SEEDS_PATH = f"{common.SQLMESH_API_BASE_PATH}/seeds"
 INTERVALS_PATH = f"{common.SQLMESH_API_BASE_PATH}/intervals"
 MODELS_PATH = f"{common.SQLMESH_API_BASE_PATH}/models"
@@ -179,11 +176,9 @@ class AirflowClient(BaseAirflowClient):
         session: requests.Session,
         airflow_url: str,
         console: t.Optional[Console] = None,
-        snapshot_ids_batch_size: t.Optional[int] = None,
     ):
         super().__init__(airflow_url, console)
         self._session = session
-        self._snapshot_ids_batch_size = snapshot_ids_batch_size
 
     def apply_plan(
         self,
@@ -206,6 +201,7 @@ class AirflowClient(BaseAirflowClient):
         directly_modified_snapshots: t.Optional[t.List[SnapshotId]] = None,
         indirectly_modified_snapshots: t.Optional[t.Dict[str, t.List[SnapshotId]]] = None,
         removed_snapshots: t.Optional[t.List[SnapshotId]] = None,
+        interval_end_per_model: t.Optional[t.Dict[str, int]] = None,
         execution_time: t.Optional[TimeLike] = None,
     ) -> None:
         request = common.PlanApplicationRequest(
@@ -228,44 +224,20 @@ class AirflowClient(BaseAirflowClient):
             directly_modified_snapshots=directly_modified_snapshots or [],
             indirectly_modified_snapshots=indirectly_modified_snapshots or {},
             removed_snapshots=removed_snapshots or [],
+            interval_end_per_model=interval_end_per_model,
             execution_time=execution_time,
         )
-
-        response = self._session.post(
-            urljoin(self._airflow_url, PLANS_PATH),
-            data=request.json(),
-            headers={"Content-Type": "application/json"},
-        )
-        raise_for_status(response)
+        self._post(PLANS_PATH, request.json())
 
     def get_snapshots(self, snapshot_ids: t.Optional[t.List[SnapshotId]]) -> t.List[Snapshot]:
-        output = []
-
-        if snapshot_ids is not None:
-            for ids_batch in _list_to_json(
-                unique(snapshot_ids), batch_size=self._snapshot_ids_batch_size
-            ):
-                output.extend(
-                    common.SnapshotsResponse.parse_obj(
-                        self._get(SNAPSHOTS_PATH, ids=ids_batch)
-                    ).snapshots
-                )
-            return output
-
-        return common.SnapshotsResponse.parse_obj(self._get(SNAPSHOTS_PATH)).snapshots
+        snapshots_request = common.SnapshotsRequest(snapshot_ids=snapshot_ids)
+        response = self._post(SNAPSHOTS_PATH, snapshots_request.json())
+        return common.SnapshotsResponse.parse_obj(response).snapshots
 
     def snapshots_exist(self, snapshot_ids: t.List[SnapshotId]) -> t.Set[SnapshotId]:
-        output = set()
-        for ids_batch in _list_to_json(
-            unique(snapshot_ids), batch_size=self._snapshot_ids_batch_size
-        ):
-            output |= set(
-                common.SnapshotIdsResponse.parse_obj(
-                    self._get(SNAPSHOTS_PATH, "check_existence", ids=ids_batch)
-                ).snapshot_ids
-            )
-
-        return output
+        snapshots_request = common.SnapshotsRequest(snapshot_ids=snapshot_ids, check_existence=True)
+        response = self._post(SNAPSHOTS_PATH, snapshots_request.json())
+        return set(common.SnapshotIdsResponse.parse_obj(response).snapshot_ids)
 
     def nodes_exist(self, names: t.Iterable[str], exclude_external: bool = False) -> t.Set[str]:
         flags = ["exclude_external"] if exclude_external else []
@@ -286,23 +258,20 @@ class AirflowClient(BaseAirflowClient):
         response = self._get(ENVIRONMENTS_PATH)
         return common.EnvironmentsResponse.parse_obj(response).environments
 
-    def max_interval_end_for_environment(
-        self, environment: str, ensure_finalized_snapshots: bool
-    ) -> t.Optional[int]:
-        flags = ["ensure_finalized_snapshots"] if ensure_finalized_snapshots else []
-        response = self._get(f"{ENVIRONMENTS_PATH}/{environment}/max_interval_end", *flags)
-        return common.IntervalEndResponse.parse_obj(response).max_interval_end
-
-    def greatest_common_interval_end(
-        self, environment: str, models: t.Collection[str], ensure_finalized_snapshots: bool
-    ) -> t.Optional[int]:
-        flags = ["ensure_finalized_snapshots"] if ensure_finalized_snapshots else []
-        response = self._get(
-            f"{ENVIRONMENTS_PATH}/{environment}/greatest_common_interval_end",
-            *flags,
-            models=_json_query_param(list(models)),
+    def max_interval_end_per_model(
+        self,
+        environment: str,
+        models: t.Optional[t.Collection[str]],
+        ensure_finalized_snapshots: bool,
+    ) -> t.Dict[str, int]:
+        max_interval_end_per_model_request = common.MaxIntervalEndPerModelRequest(
+            models=models, ensure_finalized_snapshots=ensure_finalized_snapshots
         )
-        return common.IntervalEndResponse.parse_obj(response).max_interval_end
+        response = self._post(
+            f"{ENVIRONMENTS_PATH}/{environment}/max_interval_end_per_model",
+            max_interval_end_per_model_request.json(),
+        )
+        return common.IntervalEndResponse.parse_obj(response).interval_end_per_model
 
     def invalidate_environment(self, environment: str) -> None:
         response = self._session.delete(
@@ -347,26 +316,22 @@ class AirflowClient(BaseAirflowClient):
         return self._get(f"api/v1/dags/{dag_id}")
 
     def _get(self, path: str, *flags: str, **params: str) -> t.Dict[str, t.Any]:
+        response = self._session.get(self._url(path, *flags, **params))
+        raise_for_status(response)
+        return response.json()
+
+    def _post(self, path: str, data: str, *flags: str, **params: str) -> t.Dict[str, t.Any]:
+        response = self._session.post(
+            self._url(path, *flags, **params),
+            data=data,
+            headers={"Content-Type": "application/json"},
+        )
+        raise_for_status(response)
+        return response.json()
+
+    def _url(self, path: str, *flags: str, **params: str) -> str:
         all_params = [*flags, *([urlencode(params)] if params else [])]
         query_string = "&".join(all_params)
         if query_string:
             path = f"{path}?{query_string}"
-        response = self._session.get(urljoin(self._airflow_url, path))
-        raise_for_status(response)
-        return response.json()
-
-
-T = t.TypeVar("T", bound=PydanticModel)
-
-
-def _list_to_json(models: t.Collection[T], batch_size: t.Optional[int] = None) -> t.List[str]:
-    serialized = [m.dict() for m in models]
-    if batch_size is not None:
-        batches = [serialized[i : i + batch_size] for i in range(0, len(serialized), batch_size)]
-    else:
-        batches = [serialized]
-    return [_json_query_param(batch) for batch in batches]
-
-
-def _json_query_param(value: t.Any) -> str:
-    return json.dumps(value, separators=(",", ":"))
+        return urljoin(self._airflow_url, path)

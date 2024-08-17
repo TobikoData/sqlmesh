@@ -70,30 +70,23 @@ def get_environments() -> Response:
     return _success(common.EnvironmentsResponse(environments=environments))
 
 
-@sqlmesh_api_v1.route("/environments/<name>/max_interval_end")
+@sqlmesh_api_v1.route("/environments/<name>/max_interval_end_per_model", methods=["POST"])
 @csrf.exempt
 @check_authentication
-def get_max_interval_end(name: str) -> Response:
+def max_interval_end_per_model(name: str) -> Response:
+    max_interval_end_per_model_request = common.MaxIntervalEndPerModelRequest.parse_obj(
+        request.json or {}
+    )
+    models = max_interval_end_per_model_request.models
     with util.scoped_state_sync() as state_sync:
-        ensure_finalized_snapshots = "ensure_finalized_snapshots" in request.args
-        max_interval_end = state_sync.max_interval_end_for_environment(
-            name, ensure_finalized_snapshots=ensure_finalized_snapshots
+        interval_end_per_model = state_sync.max_interval_end_per_model(
+            name,
+            set(models) if models is not None else None,
+            ensure_finalized_snapshots=max_interval_end_per_model_request.ensure_finalized_snapshots,
         )
-        response = common.IntervalEndResponse(environment=name, max_interval_end=max_interval_end)
-        return _success(response)
-
-
-@sqlmesh_api_v1.route("/environments/<name>/greatest_common_interval_end")
-@csrf.exempt
-@check_authentication
-def get_greatest_common_interval_end(name: str) -> Response:
-    with util.scoped_state_sync() as state_sync:
-        models = json.loads(request.args["models"]) if "models" in request.args else []
-        ensure_finalized_snapshots = "ensure_finalized_snapshots" in request.args
-        max_interval_end = state_sync.greatest_common_interval_end(
-            name, set(models), ensure_finalized_snapshots=ensure_finalized_snapshots
+        response = common.IntervalEndResponse(
+            environment=name, interval_end_per_model=interval_end_per_model
         )
-        response = common.IntervalEndResponse(environment=name, max_interval_end=max_interval_end)
         return _success(response)
 
 
@@ -110,14 +103,14 @@ def invalidate_environment(name: str) -> Response:
     return _success(common.InvalidateEnvironmentResponse(name=name))
 
 
-@sqlmesh_api_v1.route("/snapshots")
+@sqlmesh_api_v1.route("/snapshots/search", methods=["POST"])
 @csrf.exempt
 @check_authentication
 def get_snapshots() -> Response:
+    snapshots_request = common.SnapshotsRequest.parse_obj(request.json or {})
+    snapshot_ids = snapshots_request.snapshot_ids
     with util.scoped_state_sync() as state_sync:
-        snapshot_ids = _snapshot_ids_from_request()
-
-        if "check_existence" in request.args:
+        if snapshots_request.check_existence:
             existing_snapshot_ids = (
                 state_sync.snapshots_exist(snapshot_ids) if snapshot_ids is not None else set()
             )
