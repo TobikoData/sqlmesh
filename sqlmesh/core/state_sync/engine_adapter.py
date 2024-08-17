@@ -1037,6 +1037,7 @@ class EngineAdapterStateSync(StateSync):
     ) -> t.Dict[str, int]:
         env = self._get_environment(environment)
         if not env:
+            return {}
 
         snapshots = (
             env.snapshots if not ensure_finalized_snapshots else env.finalized_or_current_snapshots

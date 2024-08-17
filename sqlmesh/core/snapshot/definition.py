@@ -1196,10 +1196,6 @@ class Snapshot(PydanticModel, SnapshotInfoMixin):
         return self.expiration_ts - self.updated_ts
 
     @property
-    def ttl_ms(self) -> int:
-        return self.expiration_ts - self.updated_ts
-
-    @property
     def custom_materialization(self) -> t.Optional[str]:
         if self.is_custom:
             return t.cast(CustomKind, self.model.kind).materialization
