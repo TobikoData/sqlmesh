@@ -891,10 +891,10 @@ class Snapshot(PydanticModel, SnapshotInfoMixin):
         if allow_partials:
             end_ts = min(end_ts, upper_bound_ts)
         else:
-            upper_bound_ts = min(upper_bound_ts, end_ts) if end_bounded else upper_bound_ts
-
             if not ignore_cron:
                 upper_bound_ts = to_timestamp(self.node.cron_floor(upper_bound_ts))
+            if end_bounded:
+                upper_bound_ts = min(upper_bound_ts, end_ts)
 
             end_ts = min(
                 end_ts,
@@ -1600,6 +1600,7 @@ def missing_intervals(
     execution_time: t.Optional[TimeLike] = None,
     restatements: t.Optional[t.Dict[SnapshotId, Interval]] = None,
     deployability_index: t.Optional[DeployabilityIndex] = None,
+    interval_end_per_model: t.Optional[t.Dict[str, int]] = None,
     ignore_cron: bool = False,
     end_bounded: bool = False,
 ) -> t.Dict[Snapshot, Intervals]:
@@ -1613,7 +1614,7 @@ def missing_intervals(
         else earliest_start_date(snapshots, cache=cache, relative_to=end_date)
     )
     restatements = restatements or {}
-
+    interval_end_per_model = interval_end_per_model or {}
     deployability_index = deployability_index or DeployabilityIndex.all_deployable()
 
     for snapshot in snapshots:
@@ -1621,7 +1622,7 @@ def missing_intervals(
             continue
         interval = restatements.get(snapshot.snapshot_id)
         snapshot_start_date = start_dt
-        snapshot_end_date = end_date
+        snapshot_end_date = interval_end_per_model.get(snapshot.name, end_date)
         if interval:
             snapshot_start_date, snapshot_end_date = (to_datetime(i) for i in interval)
             snapshot = snapshot.copy()

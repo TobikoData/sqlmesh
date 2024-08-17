@@ -56,6 +56,7 @@ class PlanApplicationRequest(PydanticModel):
     directly_modified_snapshots: t.List[SnapshotId]
     indirectly_modified_snapshots: t.Dict[str, t.List[SnapshotId]]
     removed_snapshots: t.List[SnapshotId]
+    interval_end_per_model: t.Optional[t.Dict[str, int]] = None
     execution_time: t.Optional[TimeLike] = None
 
     def is_selected_for_backfill(self, model_fqn: str) -> bool:
@@ -99,6 +100,11 @@ class EnvironmentsResponse(PydanticModel):
     environments: t.List[Environment]
 
 
+class SnapshotsRequest(PydanticModel):
+    snapshot_ids: t.Optional[t.List[SnapshotId]] = None
+    check_existence: bool = False
+
+
 class SnapshotsResponse(PydanticModel):
     snapshots: t.List[Snapshot]
 
@@ -119,9 +125,14 @@ class InvalidateEnvironmentResponse(PydanticModel):
     name: str
 
 
+class MaxIntervalEndPerModelRequest(PydanticModel):
+    models: t.Optional[t.List[str]] = None
+    ensure_finalized_snapshots: bool = False
+
+
 class IntervalEndResponse(PydanticModel):
     environment: str
-    max_interval_end: t.Optional[int] = None
+    interval_end_per_model: t.Dict[str, int]
 
 
 def dag_id_for_snapshot_info(info: SnapshotInfoLike) -> str:

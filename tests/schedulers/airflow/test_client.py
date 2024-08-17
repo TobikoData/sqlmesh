@@ -1,6 +1,4 @@
 import json
-from unittest.mock import call
-from urllib.parse import urlencode
 
 import pytest
 import requests
@@ -11,9 +9,9 @@ from sqlmesh.core.config import EnvironmentSuffixTarget
 from sqlmesh.core.environment import Environment
 from sqlmesh.core.model import IncrementalByTimeRangeKind, SqlModel
 from sqlmesh.core.node import NodeType
-from sqlmesh.core.snapshot import Snapshot, SnapshotChangeCategory, SnapshotId
+from sqlmesh.core.snapshot import Snapshot, SnapshotChangeCategory
 from sqlmesh.schedulers.airflow import common
-from sqlmesh.schedulers.airflow.client import AirflowClient, _list_to_json
+from sqlmesh.schedulers.airflow.client import AirflowClient
 from sqlmesh.utils.date import to_timestamp
 
 pytestmark = pytest.mark.airflow
@@ -183,17 +181,13 @@ def test_apply_plan(mocker: MockerFixture, snapshot: Snapshot):
     common.PlanApplicationRequest.parse_raw(data["data"])
 
 
-def snapshot_url(snapshot_ids, key="ids") -> str:
-    return urlencode({key: _list_to_json(snapshot_ids)[0]})
-
-
 def test_get_snapshots(mocker: MockerFixture, snapshot: Snapshot):
     snapshots = common.SnapshotsResponse(snapshots=[snapshot])
 
     get_snapshots_response_mock = mocker.Mock()
     get_snapshots_response_mock.status_code = 200
     get_snapshots_response_mock.json.return_value = snapshots.dict()
-    get_snapshots_mock = mocker.patch("requests.Session.get")
+    get_snapshots_mock = mocker.patch("requests.Session.post")
     get_snapshots_mock.return_value = get_snapshots_response_mock
 
     client = AirflowClient(airflow_url=common.AIRFLOW_LOCAL_URL, session=requests.Session())
@@ -201,44 +195,13 @@ def test_get_snapshots(mocker: MockerFixture, snapshot: Snapshot):
 
     assert result == [snapshot]
 
-    get_snapshots_mock.assert_called_once_with(
-        f"http://localhost:8080/sqlmesh/api/v1/snapshots?{snapshot_url([snapshot.snapshot_id])}"
-    )
-
-
-def test_get_snapshots_batching(mocker: MockerFixture, snapshot: Snapshot):
-    snapshots = common.SnapshotsResponse(snapshots=[snapshot])
-
-    get_snapshots_response_mock = mocker.Mock()
-    get_snapshots_response_mock.status_code = 200
-    get_snapshots_response_mock.json.return_value = snapshots.dict()
-    get_snapshots_mock = mocker.patch("requests.Session.get")
-    get_snapshots_mock.return_value = get_snapshots_response_mock
-
-    snapshot_ids_batch_size = 40
-    first_batch_ids = [
-        SnapshotId(name=snapshot.name, identifier=str(i)) for i in range(snapshot_ids_batch_size)
-    ]
-
-    client = AirflowClient(
-        airflow_url=common.AIRFLOW_LOCAL_URL,
-        session=requests.Session(),
-        snapshot_ids_batch_size=snapshot_ids_batch_size,
-    )
-    result = client.get_snapshots([*first_batch_ids, snapshot.snapshot_id])
-
-    assert result == [snapshot] * 2
-
-    get_snapshots_mock.assert_has_calls(
-        [
-            call(f"http://localhost:8080/sqlmesh/api/v1/snapshots?{snapshot_url(first_batch_ids)}"),
-            call().json(),
-            call(
-                f"http://localhost:8080/sqlmesh/api/v1/snapshots?{snapshot_url([snapshot.snapshot_id])}"
-            ),
-            call().json(),
-        ]
-    )
+    args, data = get_snapshots_mock.call_args_list[0]
+    assert args[0] == "http://localhost:8080/sqlmesh/api/v1/snapshots/search"
+    assert data["headers"] == {"Content-Type": "application/json"}
+    assert json.loads(data["data"]) == {
+        "snapshot_ids": [snapshot.snapshot_id.dict()],
+        "check_existence": False,
+    }
 
 
 def test_snapshots_exist(mocker: MockerFixture, snapshot: Snapshot):
@@ -247,7 +210,7 @@ def test_snapshots_exist(mocker: MockerFixture, snapshot: Snapshot):
     snapshots_exist_response_mock = mocker.Mock()
     snapshots_exist_response_mock.status_code = 200
     snapshots_exist_response_mock.json.return_value = snapshot_ids.dict()
-    snapshots_exist_mock = mocker.patch("requests.Session.get")
+    snapshots_exist_mock = mocker.patch("requests.Session.post")
     snapshots_exist_mock.return_value = snapshots_exist_response_mock
 
     client = AirflowClient(airflow_url=common.AIRFLOW_LOCAL_URL, session=requests.Session())
@@ -255,46 +218,13 @@ def test_snapshots_exist(mocker: MockerFixture, snapshot: Snapshot):
 
     assert result == {snapshot.snapshot_id}
 
-    snapshots_exist_mock.assert_called_once_with(
-        f"http://localhost:8080/sqlmesh/api/v1/snapshots?check_existence&{snapshot_url([snapshot.snapshot_id])}"
-    )
-
-
-def test_snapshots_exist_batching(mocker: MockerFixture, snapshot: Snapshot):
-    snapshot_ids = common.SnapshotIdsResponse(snapshot_ids=[snapshot.snapshot_id])
-
-    snapshots_exist_response_mock = mocker.Mock()
-    snapshots_exist_response_mock.status_code = 200
-    snapshots_exist_response_mock.json.return_value = snapshot_ids.dict()
-    snapshots_exist_mock = mocker.patch("requests.Session.get")
-    snapshots_exist_mock.return_value = snapshots_exist_response_mock
-
-    snapshot_ids_batch_size = 40
-    first_batch_ids = [
-        SnapshotId(name=snapshot.name, identifier=str(i)) for i in range(snapshot_ids_batch_size)
-    ]
-
-    client = AirflowClient(
-        airflow_url=common.AIRFLOW_LOCAL_URL,
-        session=requests.Session(),
-        snapshot_ids_batch_size=snapshot_ids_batch_size,
-    )
-    result = client.snapshots_exist([*first_batch_ids, snapshot.snapshot_id])
-
-    assert result == {snapshot.snapshot_id}
-
-    snapshots_exist_mock.assert_has_calls(
-        [
-            call(
-                f"http://localhost:8080/sqlmesh/api/v1/snapshots?check_existence&{snapshot_url(first_batch_ids)}"
-            ),
-            call().json(),
-            call(
-                f"http://localhost:8080/sqlmesh/api/v1/snapshots?check_existence&{snapshot_url([snapshot.snapshot_id])}"
-            ),
-            call().json(),
-        ]
-    )
+    args, data = snapshots_exist_mock.call_args_list[0]
+    assert args[0] == "http://localhost:8080/sqlmesh/api/v1/snapshots/search"
+    assert data["headers"] == {"Content-Type": "application/json"}
+    assert json.loads(data["data"]) == {
+        "snapshot_ids": [snapshot.snapshot_id.dict()],
+        "check_existence": True,
+    }
 
 
 def test_models_exist(mocker: MockerFixture, snapshot: Snapshot):
@@ -373,55 +303,65 @@ def test_get_environments(mocker: MockerFixture, snapshot: Snapshot):
 
 
 @pytest.mark.parametrize("ensure_finalized_snapshots", [True, False])
-def test_max_interval_end_for_environment(
+def test_max_interval_end_per_model(
     mocker: MockerFixture, snapshot: Snapshot, ensure_finalized_snapshots: bool
 ):
     response = common.IntervalEndResponse(
-        environment="test_environment", max_interval_end=to_timestamp("2023-01-01")
+        environment="test_environment",
+        interval_end_per_model={"model_name": to_timestamp("2023-01-01")},
     )
 
     max_interval_end_response_mock = mocker.Mock()
     max_interval_end_response_mock.status_code = 200
     max_interval_end_response_mock.json.return_value = response.dict()
-    max_interval_end_mock = mocker.patch("requests.Session.get")
+    max_interval_end_mock = mocker.patch("requests.Session.post")
     max_interval_end_mock.return_value = max_interval_end_response_mock
 
     client = AirflowClient(airflow_url=common.AIRFLOW_LOCAL_URL, session=requests.Session())
-    result = client.max_interval_end_for_environment("test_environment", ensure_finalized_snapshots)
-
-    assert result == response.max_interval_end
-
-    flags = "?ensure_finalized_snapshots" if ensure_finalized_snapshots else ""
-    max_interval_end_mock.assert_called_once_with(
-        f"http://localhost:8080/sqlmesh/api/v1/environments/test_environment/max_interval_end{flags}"
-    )
-
-
-@pytest.mark.parametrize("ensure_finalized_snapshots", [True, False])
-def test_greatest_common_interval_end(
-    mocker: MockerFixture, snapshot: Snapshot, ensure_finalized_snapshots: bool
-):
-    response = common.IntervalEndResponse(
-        environment="test_environment", max_interval_end=to_timestamp("2023-01-01")
-    )
-
-    max_interval_end_response_mock = mocker.Mock()
-    max_interval_end_response_mock.status_code = 200
-    max_interval_end_response_mock.json.return_value = response.dict()
-    max_interval_end_mock = mocker.patch("requests.Session.get")
-    max_interval_end_mock.return_value = max_interval_end_response_mock
-
-    client = AirflowClient(airflow_url=common.AIRFLOW_LOCAL_URL, session=requests.Session())
-    result = client.greatest_common_interval_end(
+    result = client.max_interval_end_per_model(
         "test_environment", {"a.b.c"}, ensure_finalized_snapshots
     )
 
-    assert result == response.max_interval_end
+    assert result == response.interval_end_per_model
 
-    flags = "ensure_finalized_snapshots&" if ensure_finalized_snapshots else ""
-    max_interval_end_mock.assert_called_once_with(
-        f"http://localhost:8080/sqlmesh/api/v1/environments/test_environment/greatest_common_interval_end?{flags}models=%5B%22a.b.c%22%5D"
+    args, data = max_interval_end_mock.call_args_list[0]
+    assert (
+        args[0]
+        == "http://localhost:8080/sqlmesh/api/v1/environments/test_environment/max_interval_end_per_model"
     )
+    assert data["headers"] == {"Content-Type": "application/json"}
+    assert json.loads(data["data"]) == {
+        "models": ["a.b.c"],
+        "ensure_finalized_snapshots": ensure_finalized_snapshots,
+    }
+
+
+def test_max_interval_end_per_model_no_models(mocker: MockerFixture, snapshot: Snapshot):
+    response = common.IntervalEndResponse(
+        environment="test_environment",
+        interval_end_per_model={"model_name": to_timestamp("2023-01-01")},
+    )
+
+    max_interval_end_response_mock = mocker.Mock()
+    max_interval_end_response_mock.status_code = 200
+    max_interval_end_response_mock.json.return_value = response.dict()
+    max_interval_end_mock = mocker.patch("requests.Session.post")
+    max_interval_end_mock.return_value = max_interval_end_response_mock
+
+    client = AirflowClient(airflow_url=common.AIRFLOW_LOCAL_URL, session=requests.Session())
+    result = client.max_interval_end_per_model("test_environment", None, False)
+
+    assert result == response.interval_end_per_model
+
+    args, data = max_interval_end_mock.call_args_list[0]
+    assert (
+        args[0]
+        == "http://localhost:8080/sqlmesh/api/v1/environments/test_environment/max_interval_end_per_model"
+    )
+    assert data["headers"] == {"Content-Type": "application/json"}
+    assert json.loads(data["data"]) == {
+        "ensure_finalized_snapshots": False,
+    }
 
 
 def test_get_dag_run_state(mocker: MockerFixture):
