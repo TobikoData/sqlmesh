@@ -1906,3 +1906,14 @@ def test_custom_model_kind(make_snapshot):
 
     parsed_table_info = SnapshotTableInfo.parse_raw(table_info.json())
     assert parsed_table_info.custom_materialization == "MyCustomStrategy"
+
+
+def test_ttl_ms(make_snapshot):
+    snapshot = make_snapshot(
+        SqlModel(
+            name="test_model_name",
+            query=parse_one("SELECT 1"),
+        ),
+        ttl="in 1 week",
+    )
+    assert snapshot.ttl_ms == 604800000

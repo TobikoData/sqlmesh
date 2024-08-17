@@ -137,7 +137,8 @@ class MySQLEngineAdapter(
         # self.columns() only returns the column types so doesn't allow us to fully/correctly replace a column definition.
         # To get the full column definition we retrieve and parse the table's CREATE TABLE statement.
         create_table_exp = parse_one(
-            self.fetchone(f"SHOW CREATE TABLE {table_sql}")[1], dialect=self.dialect
+            self.fetchone(f"SHOW CREATE TABLE {table_sql}")[1],  # type: ignore
+            dialect=self.dialect,
         )
         col_def_exps = {
             col_def.name: col_def.copy()

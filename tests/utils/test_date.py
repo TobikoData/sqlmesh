@@ -9,7 +9,7 @@ from sqlmesh.utils.date import (
     UTC,
     TimeLike,
     date_dict,
-    is_catagorical_relative_expression,
+    is_categorical_relative_expression,
     make_inclusive,
     to_datetime,
     to_time_column,
@@ -120,7 +120,7 @@ def test_make_inclusive(start_in, end_in, start_out, end_out) -> None:
     ],
 )
 def test_is_catagorical_relative_expression(expression, result):
-    assert is_catagorical_relative_expression(expression) == result
+    assert is_categorical_relative_expression(expression) == result
 
 
 def test_to_ts():

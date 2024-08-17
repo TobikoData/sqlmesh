@@ -312,7 +312,7 @@ class StateSync(StateReader, abc.ABC):
         """
 
     @abc.abstractmethod
-    def remove_interval(
+    def remove_intervals(
         self,
         snapshot_intervals: t.Sequence[t.Tuple[SnapshotInfoLike, Interval]],
         remove_shared_versions: bool = False,
@@ -323,10 +323,8 @@ class StateSync(StateReader, abc.ABC):
         can also grab all snapshots tied to the passed in version.
 
         Args:
-            snapshots: The snapshot info like object to remove intervals from.
-            start: The start of the interval to add.
-            end: The end of the interval to add.
-            all_snapshots: All snapshots can be passed in to skip fetching matching snapshot versions.
+            snapshot_intervals: The snapshot intervals to remove.
+            remove_shared_versions: Whether to remove intervals for snapshots that share the same version with the target snapshots.
         """
 
     @abc.abstractmethod
@@ -417,11 +415,11 @@ class StateSync(StateReader, abc.ABC):
         """Rollback to previous backed up state."""
 
     @abc.abstractmethod
-    def _add_snapshot_intervals(self, snapshot_intervals: SnapshotIntervals) -> None:
+    def add_snapshots_intervals(self, snapshots_intervals: t.Sequence[SnapshotIntervals]) -> None:
         """Add snapshot intervals to state
 
         Args:
-            snapshot_intervals: The snapshot intervals to add.
+            snapshots_intervals: The intervals to add.
         """
 
     def add_interval(
@@ -450,7 +448,7 @@ class StateSync(StateReader, abc.ABC):
             intervals=intervals if not is_dev else [],
             dev_intervals=intervals if is_dev else [],
         )
-        self._add_snapshot_intervals(snapshot_intervals)
+        self.add_snapshots_intervals([snapshot_intervals])
 
 
 class DelegatingStateSync(StateSync):
