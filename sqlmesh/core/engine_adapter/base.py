@@ -1760,7 +1760,7 @@ class EngineAdapter:
         query: t.Union[exp.Expression, str],
         ignore_unsupported_errors: bool = False,
         quote_identifiers: bool = False,
-    ) -> t.Tuple:
+    ) -> t.Optional[t.Tuple]:
         with self.transaction():
             self.execute(
                 query,

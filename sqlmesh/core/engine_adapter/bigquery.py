@@ -233,7 +233,7 @@ class BigQueryEngineAdapter(InsertOverwriteWithMergeMixin):
         query: t.Union[exp.Expression, str],
         ignore_unsupported_errors: bool = False,
         quote_identifiers: bool = False,
-    ) -> t.Tuple:
+    ) -> t.Optional[t.Tuple]:
         """
         BigQuery's `fetchone` method doesn't call execute and therefore would not benefit from the execute
         configuration we have in place. Therefore this implementation calls execute instead.
@@ -246,7 +246,7 @@ class BigQueryEngineAdapter(InsertOverwriteWithMergeMixin):
         try:
             return next(self._query_data)
         except StopIteration:
-            return ()
+            return None
 
     def fetchall(
         self,

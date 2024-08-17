@@ -356,7 +356,7 @@ class SparkEngineAdapter(GetCurrentCatalogFromFunctionMixin, HiveMetastoreTableP
     def get_current_database(self) -> str:
         if self._use_spark_session:
             return self.spark.catalog.currentDatabase()
-        return self.fetchone(exp.select(exp.func("current_database")))[0]
+        return self.fetchone(exp.select(exp.func("current_database")))[0]  # type: ignore
 
     def create_state_table(
         self,

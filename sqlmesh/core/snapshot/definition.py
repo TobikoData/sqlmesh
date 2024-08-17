@@ -1185,7 +1185,15 @@ class Snapshot(PydanticModel, SnapshotInfoMixin):
 
     @property
     def expiration_ts(self) -> int:
-        return to_timestamp(self.ttl, relative_base=to_datetime(self.updated_ts))
+        return to_timestamp(
+            self.ttl,
+            relative_base=to_datetime(self.updated_ts),
+            check_categorical_relative_expression=False,
+        )
+
+    @property
+    def ttl_ms(self) -> int:
+        return self.expiration_ts - self.updated_ts
 
     @property
     def custom_materialization(self) -> t.Optional[str]:
