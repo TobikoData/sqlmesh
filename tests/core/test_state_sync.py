@@ -321,7 +321,7 @@ def test_remove_interval(state_sync: EngineAdapterStateSync, make_snapshot: t.Ca
 
     remove_records_count = state_sync.engine_adapter.fetchone(
         "SELECT COUNT(*) FROM sqlmesh._intervals WHERE name = '\"a\"' AND version = 'a' AND is_removed"
-    )[0]
+    )[0]  # type: ignore
     assert (
         remove_records_count == num_of_removals * 4
     )  # (1 dev record + 1 prod record) * 2 snapshots
