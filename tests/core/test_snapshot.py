@@ -35,6 +35,7 @@ from sqlmesh.core.snapshot import (
     DeployabilityIndex,
     QualifiedViewName,
     Snapshot,
+    SnapshotId,
     SnapshotChangeCategory,
     SnapshotFingerprint,
     SnapshotTableInfo,
@@ -43,6 +44,7 @@ from sqlmesh.core.snapshot import (
     has_paused_forward_only,
     missing_intervals,
 )
+from sqlmesh.core.snapshot.cache import SnapshotCache
 from sqlmesh.core.snapshot.categorizer import categorize_change
 from sqlmesh.core.snapshot.definition import display_name
 from sqlmesh.utils import AttributeDict
@@ -1917,3 +1919,48 @@ def test_ttl_ms(make_snapshot):
         ttl="in 1 week",
     )
     assert snapshot.ttl_ms == 604800000
+
+
+def test_snapshot_cache(make_snapshot, tmp_path):
+    cache_path = tmp_path / "snapshot_cache"
+    cache = SnapshotCache(cache_path)
+
+    snapshot = make_snapshot(
+        SqlModel(
+            name="test_model_name",
+            query=parse_one("SELECT 1"),
+        )
+    )
+
+    loader_called_times = 0
+
+    def _loader(snapshot_ids: t.Set[SnapshotId]) -> t.Collection[Snapshot]:
+        nonlocal loader_called_times
+        loader_called_times += 1
+        return [snapshot]
+
+    assert cache.get_or_load([snapshot.snapshot_id], _loader) == (
+        {snapshot.snapshot_id: snapshot},
+        set(),
+    )
+    assert cache.get_or_load([snapshot.snapshot_id], _loader) == (
+        {snapshot.snapshot_id: snapshot},
+        {snapshot.snapshot_id},
+    )
+    assert cache.get_or_load([snapshot.snapshot_id], _loader) == (
+        {snapshot.snapshot_id: snapshot},
+        {snapshot.snapshot_id},
+    )
+    assert loader_called_times == 1
+
+    cached_snapshot = cache.get_or_load([snapshot.snapshot_id], _loader)[0][snapshot.snapshot_id]
+    assert cached_snapshot.model._query_renderer._optimized_cache is not None
+    assert cached_snapshot.model._data_hash is not None
+    assert cached_snapshot.model._metadata_hash is not None
+
+    cache.clear()
+    assert cache.get_or_load([snapshot.snapshot_id], _loader) == (
+        {snapshot.snapshot_id: snapshot},
+        set(),
+    )
+    assert loader_called_times == 2
