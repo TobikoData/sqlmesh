@@ -329,7 +329,7 @@ workflows:
                 - databricks
                 - redshift
                 - bigquery
-                #- clickhouse_cloud
+                - clickhouse-cloud
           # filters:
           #   branches:
           #     only:
