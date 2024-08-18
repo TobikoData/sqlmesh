@@ -286,15 +286,6 @@ class ClickhouseEngineAdapter(EngineAdapterWithIndexSupport, LogicalMergeMixin):
     ) -> t.Optional[exp.Properties]:
         properties: t.List[exp.Expression] = []
 
-        # `partitioned_by` automatically includes model `time_column`, but we only want the
-        #   columns specified by the user so use `partitioned_by_user_cols` instead
-        if partitioned_by_user_cols:
-            properties.append(
-                exp.PartitionedByProperty(
-                    this=exp.Schema(expressions=partitioned_by_user_cols),
-                )
-            )
-
         # table engine, default `MergeTree`
         table_engine = "MergeTree"
         if storage_format:
@@ -310,22 +301,6 @@ class ClickhouseEngineAdapter(EngineAdapterWithIndexSupport, LogicalMergeMixin):
 
         # TODO: gate this appropriately
         if table_engine != "Log":
-            primary_key_raw = table_properties_copy.pop("PRIMARY_KEY", None)
-            if primary_key_raw and self.SUPPORTS_INDEXES:
-                primary_key_raw = (
-                    primary_key_raw[0] if isinstance(primary_key_raw, list) else primary_key_raw  # type: ignore
-                )
-                primary_key_cols = (
-                    primary_key_raw.expressions
-                    if isinstance(primary_key_raw, exp.Tuple)
-                    else primary_key_raw
-                )
-
-                if primary_key_cols:
-                    properties.append(
-                        exp.PrimaryKey(expressions=[exp.to_column(k) for k in primary_key_cols])  # type: ignore
-                    )
-
             ordered_by_raw = table_properties_copy.pop("ORDER_BY", None)
             ordered_by_cols = []
             if ordered_by_raw:
@@ -354,6 +329,28 @@ class ClickhouseEngineAdapter(EngineAdapterWithIndexSupport, LogicalMergeMixin):
                 else exp.Literal(this="()", is_string=False)
             )
             properties.append(exp.Order(expressions=[exp.Ordered(this=ordered_by_expressions)]))
+
+            primary_key_raw = table_properties_copy.pop("PRIMARY_KEY", None)
+            if primary_key_raw and self.SUPPORTS_INDEXES:
+                primary_key_cols = (
+                    primary_key_raw.expressions
+                    if isinstance(primary_key_raw, exp.Tuple)
+                    else primary_key_raw
+                )
+
+                if primary_key_cols:
+                    properties.append(
+                        exp.PrimaryKey(expressions=[exp.to_column(k) for k in primary_key_cols])  # type: ignore
+                    )
+
+        # `partitioned_by` automatically includes model `time_column`, but we only want the
+        #   columns specified by the user so use `partitioned_by_user_cols` instead
+        if partitioned_by_user_cols:
+            properties.append(
+                exp.PartitionedByProperty(
+                    this=exp.Schema(expressions=partitioned_by_user_cols),
+                )
+            )
 
         if self.engine_run_mode.is_cluster:
             on_cluster = table_properties_copy.pop("CLUSTER", None) or self.cluster

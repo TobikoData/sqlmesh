@@ -5,6 +5,8 @@ from sqlmesh.core.model.kind import ModelKindName
 from sqlmesh.core.engine_adapter.shared import EngineRunMode
 from tests.core.engine_adapter import to_sql_calls
 from sqlmesh.core.dialect import parse
+from sqlglot import exp
+import typing as t
 
 pytestmark = [pytest.mark.clickhouse, pytest.mark.engine]
 
@@ -143,3 +145,32 @@ def test_nullable_datatypes_in_model_query(adapter: ClickhouseEngineAdapter):
     assert rendered_columns_to_types["data"] == "Nullable(JSON)"
     assert rendered_columns_to_types["ts"] == "DateTime64"
     assert rendered_columns_to_types["other"] == "Tuple(UInt16, String)"
+
+
+def test_create_table_properties(make_mocked_engine_adapter: t.Callable, mocker):
+    adapter = make_mocked_engine_adapter(ClickhouseEngineAdapter)
+
+    mocker.patch(
+        "sqlmesh.core.engine_adapter.ClickhouseEngineAdapter.fetchone",
+        return_value="1",
+    )
+
+    columns_to_types = {
+        "cola": exp.DataType.build("INT", dialect="clickhouse"),
+        "colb": exp.DataType.build("TEXT", dialect="clickhouse"),
+        "colc": exp.DataType.build("TEXT", dialect="clickhouse"),
+    }
+    adapter.create_table(
+        "test_table",
+        columns_to_types,
+        partitioned_by_user_cols=[exp.to_column("colb")],
+        storage_format="ReplicatedMergeTree",
+        table_properties={
+            "ORDER_BY": [exp.to_column("cola"), exp.to_column("colb")],
+            "PRIMARY_KEY": [exp.to_column("cola"), exp.to_column("colb")],
+        },
+    )
+
+    assert to_sql_calls(adapter) == [
+        'CREATE TABLE IF NOT EXISTS "test_table" ("cola" Int32, "colb" String, "colc" String) ENGINE=ReplicatedMergeTree ORDER BY ("cola", "colb") PRIMARY KEY ("cola", "colb") PARTITION BY ("colb")',
+    ]
