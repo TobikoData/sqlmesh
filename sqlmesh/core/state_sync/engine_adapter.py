@@ -1325,10 +1325,17 @@ class EngineAdapterStateSync(StateSync):
     ) -> t.Dict[SnapshotId, SnapshotTableInfo]:
         logger.info("Migrating snapshot rows...")
         raw_snapshots = {
-            SnapshotId(name=name, identifier=identifier): json.loads(raw_snapshot)
+            SnapshotId(name=name, identifier=identifier): {
+                **json.loads(raw_snapshot),
+                "updated_ts": updated_ts,
+                "unpaused_ts": unpaused_ts,
+                "unrestorable": unrestorable,
+            }
             for where in (self._snapshot_id_filter(snapshots) if snapshots is not None else [None])
-            for name, identifier, raw_snapshot in self._fetchall(
-                exp.select("name", "identifier", "snapshot")
+            for name, identifier, raw_snapshot, updated_ts, unpaused_ts, unrestorable in self._fetchall(
+                exp.select(
+                    "name", "identifier", "snapshot", "updated_ts", "unpaused_ts", "unrestorable"
+                )
                 .from_(self.snapshots_table)
                 .where(where)
                 .lock()

@@ -73,7 +73,7 @@ def migrate(state_sync, **kwargs):  # type: ignore
                 "name": name,
                 "identifier": identifier,
                 "version": version,
-                "snapshot": snapshot,
+                "snapshot": json.dumps(parsed_snapshot),
                 "kind_name": kind_name,
                 "updated_ts": updated_ts,
                 "unpaused_ts": unpaused_ts,
