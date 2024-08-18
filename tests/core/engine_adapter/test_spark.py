@@ -641,7 +641,7 @@ def test_scd_type_2_by_time(
     COALESCE(`id`, '')
 ), `joined` AS (
   SELECT
-    `source`.`_exists`,
+    `source`.`_exists` AS `_exists`,
     `latest`.`id` AS `t_id`,
     `latest`.`name` AS `t_name`,
     `latest`.`price` AS `t_price`,
@@ -657,7 +657,7 @@ def test_scd_type_2_by_time(
     ON COALESCE(`latest`.`id`, '') = COALESCE(`source`.`id`, '')
   UNION ALL
   SELECT
-    `source`.`_exists`,
+    `source`.`_exists` AS `_exists`,
     `latest`.`id` AS `t_id`,
     `latest`.`name` AS `t_name`,
     `latest`.`price` AS `t_price`,

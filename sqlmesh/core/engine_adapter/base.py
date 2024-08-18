@@ -1060,7 +1060,10 @@ class EngineAdapter:
         **drop_args: t.Dict[str, exp.Expression],
     ) -> None:
         return self._drop_object(
-            name=schema_name, exists=ignore_if_not_exists, kind="SCHEMA", cascade=cascade
+            name=schema_name,
+            exists=ignore_if_not_exists,
+            kind="SCHEMA",
+            cascade=cascade,
         )
 
     def drop_view(
@@ -1598,7 +1601,7 @@ class EngineAdapter:
                 .with_(
                     "joined",
                     exp.select(
-                        exp.column("_exists", table="source"),
+                        exp.column("_exists", table="source").as_("_exists"),
                         *(
                             exp.column(col, table="latest").as_(prefixed_columns_to_types[i].this)
                             for i, col in enumerate(columns_to_types)
@@ -1621,7 +1624,7 @@ class EngineAdapter:
                     )
                     .union(
                         exp.select(
-                            exp.column("_exists", table="source"),
+                            exp.column("_exists", table="source").as_("_exists"),
                             *(
                                 exp.column(col, table="latest").as_(
                                     prefixed_columns_to_types[i].this
@@ -2221,11 +2224,7 @@ class EngineAdapter:
             )
 
     def _build_create_comment_column_exp(
-        self,
-        table: exp.Table,
-        column_name: str,
-        column_comment: str,
-        table_kind: str = "TABLE",
+        self, table: exp.Table, column_name: str, column_comment: str, table_kind: str = "TABLE"
     ) -> exp.Comment | str:
         return exp.Comment(
             this=exp.column(column_name, *reversed(table.parts)),  # type: ignore

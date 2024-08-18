@@ -96,6 +96,7 @@ class ClickhouseEngineAdapter(EngineAdapterWithIndexSupport, LogicalMergeMixin):
             ignore_if_exists=ignore_if_exists,
             warn_on_error=warn_on_error,
             properties=properties,
+            # sqlglot transpiles CREATE SCHEMA to CREATE DATABASE, but this text is used in an error message
             kind="DATABASE",
         )
 
@@ -104,12 +105,12 @@ class ClickhouseEngineAdapter(EngineAdapterWithIndexSupport, LogicalMergeMixin):
         schema_name: SchemaName,
         ignore_if_not_exists: bool = True,
         cascade: bool = False,
-        **drop_args: t.Dict[str, exp.Expression],
+        **drop_args: t.Any,
     ) -> None:
         return self._drop_object(
             name=schema_name,
             exists=ignore_if_not_exists,
-            kind="DATABASE",
+            kind="SCHEMA",
             cascade=None,
             cluster=exp.OnCluster(this=exp.to_identifier(self.cluster))
             if self.engine_run_mode.is_cluster

@@ -1348,7 +1348,7 @@ def test_scd_type_2_by_time(ctx: TestContext):
         valid_from_col=exp.column("valid_from", quoted=True),
         valid_to_col=exp.column("valid_to", quoted=True),
         updated_at_col=exp.column("updated_at", quoted=True),
-        execution_time="2023-01-01",
+        execution_time="2023-01-01 00:00:00",
         updated_at_as_valid_from=False,
         columns_to_types=input_schema,
     )
@@ -1408,7 +1408,7 @@ def test_scd_type_2_by_time(ctx: TestContext):
         valid_from_col=exp.column("valid_from", quoted=True),
         valid_to_col=exp.column("valid_to", quoted=True),
         updated_at_col=exp.column("updated_at", quoted=True),
-        execution_time="2023-01-05",
+        execution_time="2023-01-05 00:00:00",
         updated_at_as_valid_from=False,
         columns_to_types=input_schema,
     )
@@ -1561,7 +1561,7 @@ def test_scd_type_2_by_column(ctx: TestContext):
         check_columns=[exp.to_column("name"), exp.to_column("status")],
         valid_from_col=exp.column("valid_from", quoted=True),
         valid_to_col=exp.column("valid_to", quoted=True),
-        execution_time="2023-01-05",
+        execution_time="2023-01-05 00:00:00",
         execution_time_as_valid_from=False,
         columns_to_types=ctx.columns_to_types,
     )
