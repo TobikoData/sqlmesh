@@ -83,7 +83,7 @@ class _EngineAdapterStateSyncSchedulerConfig(_SchedulerConfig):
             context.config.get_state_connection(context.gateway) or context._connection_config
         )
         engine_adapter = state_connection.create_engine_adapter()
-        if not engine_adapter.SUPPORTS_ROW_LEVEL_OP:
+        if state_connection.is_forbidden_for_state_sync:
             raise ConfigError(
                 f"The {engine_adapter.DIALECT.upper()} engine cannot be used to store SQLMesh state - please specify a different `state_connection` engine."
                 + " See https://sqlmesh.readthedocs.io/en/stable/reference/configuration/#gateways for more information."

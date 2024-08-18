@@ -177,7 +177,6 @@ def test_evaluate(mocker: MockerFixture, adapter_mock, make_snapshot):
         clustered_by=[],
         table_properties={},
         table_description=None,
-        ordered_by=[exp.to_column("a", quoted=True)],
     )
 
     adapter_mock.create_table.assert_has_calls(
@@ -630,7 +629,6 @@ def test_evaluate_incremental_unmanaged_no_intervals(
         storage_format=None,
         table_description=None,
         table_properties={},
-        ordered_by=[],
     )
 
 
@@ -1179,7 +1177,6 @@ def test_create_clone_in_dev(mocker: MockerFixture, adapter_mock, make_snapshot)
         table_properties={},
         table_description=None,
         column_descriptions=None,
-        ordered_by=[exp.to_column("ds", quoted=True)],
     )
 
     adapter_mock.clone_table.assert_called_once_with(
@@ -1288,7 +1285,6 @@ def test_create_clone_in_dev_self_referencing(mocker: MockerFixture, adapter_moc
         table_properties={},
         table_description=None,
         column_descriptions=None,
-        ordered_by=[exp.to_column("ds", quoted=True)],
     )
 
     # Make sure the dry run references the correct ("...__schema_migration_source") table.
@@ -1403,7 +1399,6 @@ def test_forward_only_snapshot_for_added_model(mocker: MockerFixture, adapter_mo
         clustered_by=[],
         table_properties={},
         table_description=None,
-        ordered_by=[exp.to_column("ds", quoted=True)],
     )
     adapter_mock.create_table.assert_has_calls(
         [
@@ -1455,7 +1450,6 @@ def test_create_scd_type_2_by_time(adapter_mock, make_snapshot):
         clustered_by=[],
         table_properties={},
         table_description=None,
-        ordered_by=[],
     )
 
     adapter_mock.create_table.assert_has_calls(
@@ -1505,7 +1499,6 @@ def test_create_ctas_scd_type_2_by_time(adapter_mock, make_snapshot):
         clustered_by=[],
         table_properties={},
         table_description=None,
-        ordered_by=[],
     )
 
     adapter_mock.ctas.assert_has_calls(
@@ -1623,7 +1616,6 @@ def test_create_scd_type_2_by_column(adapter_mock, make_snapshot):
         clustered_by=[],
         table_properties={},
         table_description=None,
-        ordered_by=[],
     )
 
     adapter_mock.create_table.assert_has_calls(
@@ -1673,7 +1665,6 @@ def test_create_ctas_scd_type_2_by_column(adapter_mock, make_snapshot):
         clustered_by=[],
         table_properties={},
         table_description=None,
-        ordered_by=[],
     )
 
     adapter_mock.ctas.assert_has_calls(
@@ -1852,7 +1843,6 @@ def test_create_incremental_by_unique_no_intervals(adapter_mock, make_snapshot):
         storage_format=None,
         table_description=None,
         table_properties={},
-        ordered_by=[],
     )
 
 
@@ -1886,7 +1876,6 @@ def test_create_seed(mocker: MockerFixture, adapter_mock, make_snapshot):
         clustered_by=[],
         table_properties={},
         table_description=None,
-        ordered_by=[],
     )
 
     adapter_mock.replace_query.assert_called_once_with(
@@ -1971,7 +1960,6 @@ def test_create_seed_on_error(mocker: MockerFixture, adapter_mock, make_snapshot
         clustered_by=[],
         table_properties={},
         table_description=None,
-        ordered_by=[],
     )
 
     adapter_mock.drop_table.assert_called_once_with(f"sqlmesh__db.db__seed__{snapshot.version}")
@@ -2028,7 +2016,6 @@ def test_create_seed_no_intervals(mocker: MockerFixture, adapter_mock, make_snap
         clustered_by=[],
         table_properties={},
         table_description=None,
-        ordered_by=[],
     )
 
 
@@ -2434,7 +2421,6 @@ def test_create_managed(adapter_mock, make_snapshot, mocker: MockerFixture):
         table_properties=model.physical_properties,
         table_description=None,
         column_descriptions=None,
-        ordered_by=[],
     )
 
     # second call to evaluation_strategy.create(), is_table_deployable=True and is_snapshot_deployable=True triggers a managed table
@@ -2515,7 +2501,6 @@ def test_evaluate_managed(adapter_mock, make_snapshot, mocker: MockerFixture):
         table_properties=model.physical_properties,
         table_description=model.description,
         column_descriptions=model.column_descriptions,
-        ordered_by=[],
     )
 
 

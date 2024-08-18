@@ -52,10 +52,6 @@ class ClickhouseEngineAdapter(EngineAdapterWithIndexSupport, LogicalMergeMixin):
     def cluster(self) -> t.Optional[str]:
         return self._extra_config.get("cluster")
 
-    @property
-    def auto_order_by(self) -> bool:
-        return self._extra_config.get("auto_order_by")  # type: ignore
-
     # Workaround for clickhouse-connect cursor bug
     # - cursor does not reset row index correctly on `close()`, so `fetchone()` and `fetchmany()`
     #     return the wrong (or no) rows after the very first cursor query that returns rows
@@ -153,7 +149,7 @@ class ClickhouseEngineAdapter(EngineAdapterWithIndexSupport, LogicalMergeMixin):
             # as later calls.
             if not self.table_exists(temp_table):
                 self.create_table(
-                    temp_table, columns_to_types, storage_format=exp.Var(this="MergeTree"), **kwargs
+                    temp_table, columns_to_types, storage_format=exp.var("MergeTree"), **kwargs
                 )
 
                 self.cursor.client.insert_df(temp_table.sql(dialect=self.dialect), df=df)
@@ -286,7 +282,6 @@ class ClickhouseEngineAdapter(EngineAdapterWithIndexSupport, LogicalMergeMixin):
         columns_to_types: t.Optional[t.Dict[str, exp.DataType]] = None,
         table_description: t.Optional[str] = None,
         table_kind: t.Optional[str] = None,
-        ordered_by: t.Optional[t.List[str]] = None,
         empty_ctas: bool = False,
     ) -> t.Optional[exp.Properties]:
         properties: t.List[exp.Expression] = []
@@ -309,10 +304,9 @@ class ClickhouseEngineAdapter(EngineAdapterWithIndexSupport, LogicalMergeMixin):
         properties.append(exp.EngineProperty(this=table_engine))
 
         # copy of table_properties so we can pop items off below then consume the rest later
-        table_properties_copy = {}
-        if table_properties:
-            table_properties_copy = table_properties.copy()
-            table_properties_copy = {k.upper(): v for k, v in table_properties_copy.items()}
+        table_properties_copy = {
+            k.upper(): v for k, v in (table_properties.copy() if table_properties else {}).items()
+        }
 
         # TODO: gate this appropriately
         if table_engine != "Log":
@@ -332,7 +326,7 @@ class ClickhouseEngineAdapter(EngineAdapterWithIndexSupport, LogicalMergeMixin):
                         exp.PrimaryKey(expressions=[exp.to_column(k) for k in primary_key_cols])  # type: ignore
                     )
 
-            ordered_by_raw = table_properties_copy.pop("ORDER_BY", None) or ordered_by
+            ordered_by_raw = table_properties_copy.pop("ORDER_BY", None)
             ordered_by_cols = []
             if ordered_by_raw:
                 for col in ordered_by_raw:
@@ -412,7 +406,7 @@ class ClickhouseEngineAdapter(EngineAdapterWithIndexSupport, LogicalMergeMixin):
                 or kwargs.pop("physical_cluster", None)
                 or self.cluster
             )
-            properties.append(exp.OnCluster(this=exp.Var(this=on_cluster)))
+            properties.append(exp.OnCluster(this=exp.var(on_cluster)))
 
         if view_properties_copy:
             properties.extend(self._table_or_view_properties_to_expressions(view_properties_copy))

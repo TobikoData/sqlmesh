@@ -96,7 +96,6 @@ class EngineAdapter:
     SCHEMA_DIFFER = SchemaDiffer()
     SUPPORTS_TUPLE_IN = True
     CATALOG_SUPPORT = CatalogSupport.UNSUPPORTED
-    SUPPORTS_ROW_LEVEL_OP = True
     HAS_VIEW_BINDING = False
     SUPPORTS_REPLACE_TABLE = True
     DEFAULT_CATALOG_TYPE = DIALECT
@@ -181,10 +180,6 @@ class EngineAdapter:
     @property
     def engine_run_mode(self) -> EngineRunMode:
         return EngineRunMode.SINGLE_MODE_ENGINE
-
-    @property
-    def auto_order_by(self) -> bool:
-        return False
 
     def _get_source_queries(
         self,
@@ -2030,7 +2025,6 @@ class EngineAdapter:
         columns_to_types: t.Optional[t.Dict[str, exp.DataType]] = None,
         table_description: t.Optional[str] = None,
         table_kind: t.Optional[str] = None,
-        ordered_by: t.Optional[t.List[str]] = None,
     ) -> t.Optional[exp.Properties]:
         """Creates a SQLGlot table properties expression for ddl."""
         properties: t.List[exp.Expression] = []

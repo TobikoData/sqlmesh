@@ -1058,12 +1058,6 @@ class EvaluationStrategy(abc.ABC):
             table_properties=model.physical_properties,
             table_description=model.description,
             column_descriptions=model.column_descriptions,
-            ordered_by=[
-                *(model.grains if model.grains else []),
-                *([model.time_column.column] if model.time_column else []),
-            ]
-            if self.adapter.auto_order_by
-            else None,
         )
 
 
@@ -1194,12 +1188,6 @@ class MaterializableStrategy(PromotableStrategy):
                 table_properties=model.physical_properties,
                 table_description=model.description if is_table_deployable else None,
                 column_descriptions=model.column_descriptions if is_table_deployable else None,
-                ordered_by=[
-                    *(model.grains if model.grains else []),
-                    *([model.time_column.column] if model.time_column else []),
-                ]
-                if self.adapter.auto_order_by
-                else None,
             )
 
             # Only sql models have queries that can be tested.
@@ -1223,12 +1211,6 @@ class MaterializableStrategy(PromotableStrategy):
                 table_properties=model.physical_properties,
                 table_description=model.description if is_table_deployable else None,
                 column_descriptions=model.column_descriptions if is_table_deployable else None,
-                ordered_by=[
-                    *(model.grains if model.grains else []),
-                    *([model.time_column.column] if model.time_column else []),
-                ]
-                if self.adapter.auto_order_by
-                else None,
             )
 
     def migrate(
@@ -1436,12 +1418,6 @@ class SCDType2Strategy(MaterializableStrategy):
                 table_properties=model.physical_properties,
                 table_description=model.description if is_table_deployable else None,
                 column_descriptions=model.column_descriptions if is_table_deployable else None,
-                ordered_by=[
-                    *(model.grains if model.grains else []),
-                    *([model.time_column.column] if model.time_column else []),
-                ]
-                if self.adapter.auto_order_by
-                else None,
             )
         else:
             # We assume that the data type for `updated_at_name` matches the data type that is defined for

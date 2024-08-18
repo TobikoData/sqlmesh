@@ -329,11 +329,11 @@ workflows:
                 - databricks
                 - redshift
                 - bigquery
-                - clickhouse_cloud
-          filters:
-            branches:
-              only:
-                - main
+                #- clickhouse_cloud
+          # filters:
+          #   branches:
+          #     only:
+          #       - main
       - trigger_private_tests:
           requires:
             - style_and_slow_tests

@@ -39,6 +39,13 @@ else:
 logger = logging.getLogger(__name__)
 
 RECOMMENDED_STATE_SYNC_ENGINES = {"postgres", "gcp_postgres", "mysql", "duckdb"}
+FORBIDDEN_STATE_SYNC_ENGINES = {
+    # Do not support row-level operations
+    "spark",
+    "trino",
+    # Nullable types are problematic
+    "clickhouse",
+}
 
 
 class ConnectionConfig(abc.ABC, BaseConfig):
@@ -86,6 +93,11 @@ class ConnectionConfig(abc.ABC, BaseConfig):
     def is_recommended_for_state_sync(self) -> bool:
         """Whether this connection is recommended for being used as a state sync for production state syncs"""
         return self.type_ in RECOMMENDED_STATE_SYNC_ENGINES
+
+    @property
+    def is_forbidden_for_state_sync(self) -> bool:
+        """Whether this connection is forbidden from being used as a state sync for production state syncs"""
+        return self.type_ in FORBIDDEN_STATE_SYNC_ENGINES
 
     @property
     def _connection_factory_with_kwargs(self) -> t.Callable[[], t.Any]:
@@ -1376,9 +1388,6 @@ class ClickhouseConnectionConfig(ConnectionConfig):
     password: t.Optional[str] = None
     port: t.Optional[int] = None
     cluster: t.Optional[str] = None
-    auto_order_by: bool = False
-    # TODO: disable SCD and warn if this setting is 0 on the server
-    join_use_nulls: int = 1
 
     concurrent_tasks: int = 1
     register_comments: bool = True
@@ -1393,7 +1402,6 @@ class ClickhouseConnectionConfig(ConnectionConfig):
             "username",
             "port",
             "password",
-            "join_use_nulls",
         }
         return kwargs
 
@@ -1409,7 +1417,7 @@ class ClickhouseConnectionConfig(ConnectionConfig):
 
     @property
     def _extra_engine_config(self) -> t.Dict[str, t.Any]:
-        return {k: v for k, v in self.dict().items() if k in ("auto_order_by", "cluster")}
+        return {k: v for k, v in self.dict().items() if k == "cluster"}
 
 
 CONNECTION_CONFIG_TO_TYPE = {
