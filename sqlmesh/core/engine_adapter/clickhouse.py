@@ -110,7 +110,7 @@ class ClickhouseEngineAdapter(EngineAdapterWithIndexSupport, LogicalMergeMixin):
         return self._drop_object(
             name=schema_name,
             exists=ignore_if_not_exists,
-            kind="SCHEMA",
+            kind="DATABASE",
             cascade=None,
             cluster=exp.OnCluster(this=exp.to_identifier(self.cluster))
             if self.engine_run_mode.is_cluster
