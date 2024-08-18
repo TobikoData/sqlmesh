@@ -1377,6 +1377,8 @@ class ClickhouseConnectionConfig(ConnectionConfig):
     port: t.Optional[int] = None
     cluster: t.Optional[str] = None
     auto_order_by: bool = False
+    # TODO: disable SCD and warn if this setting is 0 on the server
+    join_use_nulls: int = 1
 
     concurrent_tasks: int = 1
     register_comments: bool = True
@@ -1391,6 +1393,7 @@ class ClickhouseConnectionConfig(ConnectionConfig):
             "username",
             "port",
             "password",
+            "join_use_nulls",
         }
         return kwargs
 
