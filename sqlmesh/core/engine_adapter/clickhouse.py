@@ -35,6 +35,8 @@ class ClickhouseEngineAdapter(EngineAdapterWithIndexSupport, LogicalMergeMixin):
 
     SCHEMA_DIFFER = SchemaDiffer()
 
+    DEFAULT_TABLE_ENGINE = "MergeTree"
+
     @cached_property
     def engine_run_mode(self) -> EngineRunMode:
         cloud_query_value = self.fetchone(
@@ -113,14 +115,6 @@ class ClickhouseEngineAdapter(EngineAdapterWithIndexSupport, LogicalMergeMixin):
             else None,
             **drop_args,
         )
-
-    # TODO: `RENAME` is valid SQL, but `EXCHANGE` is an atomic swap
-    # def _rename_table(
-    #     self,
-    #     old_table_name: TableName,
-    #     new_table_name: TableName,
-    # ) -> None:
-    #     self.execute(f"EXCHANGE TABLES {old_table_name} AND {new_table_name}")
 
     def _fetch_native_df(
         self, query: t.Union[exp.Expression, str], quote_identifiers: bool = False
@@ -286,8 +280,7 @@ class ClickhouseEngineAdapter(EngineAdapterWithIndexSupport, LogicalMergeMixin):
     ) -> t.Optional[exp.Properties]:
         properties: t.List[exp.Expression] = []
 
-        # table engine, default `MergeTree`
-        table_engine = "MergeTree"
+        table_engine = self.DEFAULT_TABLE_ENGINE
         if storage_format:
             table_engine = (
                 storage_format.this if isinstance(storage_format, exp.Var) else storage_format  # type: ignore
@@ -301,6 +294,7 @@ class ClickhouseEngineAdapter(EngineAdapterWithIndexSupport, LogicalMergeMixin):
 
         # TODO: gate this appropriately
         if table_engine != "Log":
+            # TODO: remove vestiges of auto order by
             ordered_by_raw = table_properties_copy.pop("ORDER_BY", None)
             ordered_by_cols = []
             if ordered_by_raw:
