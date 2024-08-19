@@ -1136,7 +1136,7 @@ def test_select_models(init_and_plan_context: t.Callable):
 
     # Select one of the modified models.
     plan_builder = context.plan_builder(
-        "dev", select_models=["+*waiter_revenue_by_day"], skip_tests=True
+        "dev", select_models=["*waiter_revenue_by_day"], skip_tests=True
     )
     snapshot = plan_builder._context_diff.snapshots[waiter_revenue_by_day_snapshot_id]
     plan_builder.set_choice(snapshot, SnapshotChangeCategory.BREAKING)
@@ -1185,6 +1185,77 @@ def test_select_models(init_and_plan_context: t.Callable):
 
 
 @freeze_time("2023-01-08 15:00:00")
+def test_select_unchanged_model_for_backfill(init_and_plan_context: t.Callable):
+    context, plan = init_and_plan_context("examples/sushi")
+    context.apply(plan)
+
+    # Modify 2 models.
+    model = context.get_model("sushi.waiter_revenue_by_day")
+    kwargs = {
+        **model.dict(),
+        # Make a breaking change.
+        "query": model.query.order_by("waiter_id"),  # type: ignore
+    }
+    context.upsert_model(SqlModel.parse_obj(kwargs))
+
+    model = context.get_model("sushi.customer_revenue_by_day")
+    context.upsert_model(add_projection_to_model(t.cast(SqlModel, model)))
+
+    expected_intervals = [
+        (to_timestamp("2023-01-01"), to_timestamp("2023-01-02")),
+        (to_timestamp("2023-01-02"), to_timestamp("2023-01-03")),
+        (to_timestamp("2023-01-03"), to_timestamp("2023-01-04")),
+        (to_timestamp("2023-01-04"), to_timestamp("2023-01-05")),
+        (to_timestamp("2023-01-05"), to_timestamp("2023-01-06")),
+        (to_timestamp("2023-01-06"), to_timestamp("2023-01-07")),
+        (to_timestamp("2023-01-07"), to_timestamp("2023-01-08")),
+    ]
+
+    waiter_revenue_by_day_snapshot_id = context.get_snapshot(
+        "sushi.waiter_revenue_by_day", raise_if_missing=True
+    ).snapshot_id
+
+    # Select one of the modified models.
+    plan_builder = context.plan_builder(
+        "dev", select_models=["*waiter_revenue_by_day"], skip_tests=True
+    )
+    snapshot = plan_builder._context_diff.snapshots[waiter_revenue_by_day_snapshot_id]
+    plan_builder.set_choice(snapshot, SnapshotChangeCategory.BREAKING)
+    plan = plan_builder.build()
+
+    assert plan.missing_intervals == [
+        SnapshotIntervals(
+            snapshot_id=waiter_revenue_by_day_snapshot_id,
+            intervals=expected_intervals,
+        ),
+    ]
+
+    context.apply(plan)
+
+    # Make sure that we only create a view for the selected model.
+    schema_objects = context.engine_adapter.get_data_objects("sushi__dev")
+    assert {o.name for o in schema_objects} == {"waiter_revenue_by_day"}
+
+    # Now select a model downstream from the previously modified one in order to backfill it.
+    plan = context.plan("dev", select_models=["*top_waiters"], skip_tests=True, no_prompts=True)
+
+    assert plan.missing_intervals == [
+        SnapshotIntervals(
+            snapshot_id=context.get_snapshot(
+                "sushi.top_waiters", raise_if_missing=True
+            ).snapshot_id,
+            intervals=expected_intervals,
+        ),
+    ]
+
+    context.apply(plan)
+
+    # Make sure that a view has been created for the downstream selected model.
+    schema_objects = context.engine_adapter.get_data_objects("sushi__dev")
+    assert {o.name for o in schema_objects} == {"waiter_revenue_by_day", "top_waiters"}
+
+
+@freeze_time("2023-01-08 15:00:00")
 def test_select_models_for_backfill(init_and_plan_context: t.Callable):
     context, _ = init_and_plan_context("examples/sushi")
 
@@ -1199,7 +1270,7 @@ def test_select_models_for_backfill(init_and_plan_context: t.Callable):
     ]
 
     plan = context.plan(
-        "dev", backfill_models=["*waiter_revenue_by_day"], no_prompts=True, skip_tests=True
+        "dev", backfill_models=["+*waiter_revenue_by_day"], no_prompts=True, skip_tests=True
     )
 
     assert plan.missing_intervals == [

@@ -2217,7 +2217,7 @@ def test_models_selected_for_backfill(make_snapshot, mocker: MockerFixture):
     assert not plan.is_selected_for_backfill('"b"')
     assert plan.models_to_backfill == {'"a"'}
     assert {i.snapshot_id for i in plan.missing_intervals} == {snapshot_a.snapshot_id}
-    assert not plan.environment.promoted_snapshot_ids
+    assert plan.environment.promoted_snapshot_ids == [snapshot_a.snapshot_id]
 
     plan = PlanBuilder(context_diff, schema_differ, is_dev=True, backfill_models={'"b"'}).build()
     assert plan.is_selected_for_backfill('"a"')
