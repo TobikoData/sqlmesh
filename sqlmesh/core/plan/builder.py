@@ -276,6 +276,7 @@ class PlanBuilder:
             deployability_index=deployability_index,
             restatements=restatements,
             interval_end_per_model=self._interval_end_per_model,
+            selected_models_to_backfill=self._backfill_models,
             models_to_backfill=models_to_backfill,
             effective_from=self._effective_from,
             execution_time=self._execution_time,
