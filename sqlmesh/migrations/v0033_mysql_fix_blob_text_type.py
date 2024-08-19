@@ -28,8 +28,9 @@ def migrate(state_sync, **kwargs):  # type: ignore
     ]
 
     for table_name, column_name in targets:
-        alter_table_exp = exp.AlterTable(
+        alter_table_exp = exp.Alter(
             this=exp.to_table(table_name),
+            kind="TABLE",
             actions=[
                 exp.AlterColumn(
                     this=exp.to_column(column_name),

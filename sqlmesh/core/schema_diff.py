@@ -252,10 +252,11 @@ class TableAlterOperation(PydanticModel):
 
     def expression(
         self, table_name: t.Union[str, exp.Table], array_element_selector: str
-    ) -> exp.AlterTable:
+    ) -> exp.Alter:
         if self.is_alter_type:
-            return exp.AlterTable(
+            return exp.Alter(
                 this=exp.to_table(table_name),
+                kind="TABLE",
                 actions=[
                     exp.AlterColumn(
                         this=self.column(array_element_selector),
@@ -264,14 +265,14 @@ class TableAlterOperation(PydanticModel):
                 ],
             )
         elif self.is_add:
-            alter_table = exp.AlterTable(this=exp.to_table(table_name))
+            alter_table = exp.Alter(this=exp.to_table(table_name), kind="TABLE")
             column = self.column_def(array_element_selector)
             alter_table.set("actions", [column])
             if self.add_position:
                 column.set("position", self.add_position.column_position_node)
             return alter_table
         elif self.is_drop:
-            alter_table = exp.AlterTable(this=exp.to_table(table_name))
+            alter_table = exp.Alter(this=exp.to_table(table_name), kind="TABLE")
             drop_column = exp.Drop(this=self.column(array_element_selector), kind="COLUMN")
             alter_table.set("actions", [drop_column])
             return alter_table
@@ -622,7 +623,7 @@ class SchemaDiffer(PydanticModel):
 
     def compare_structs(
         self, table_name: t.Union[str, exp.Table], current: exp.DataType, new: exp.DataType
-    ) -> t.List[exp.AlterTable]:
+    ) -> t.List[exp.Alter]:
         """
         Compares two schemas represented as structs.
 
@@ -643,7 +644,7 @@ class SchemaDiffer(PydanticModel):
         table_name: TableName,
         current: t.Dict[str, exp.DataType],
         new: t.Dict[str, exp.DataType],
-    ) -> t.List[exp.AlterTable]:
+    ) -> t.List[exp.Alter]:
         """
         Compares two schemas represented as dictionaries of column names and types.
 
@@ -659,7 +660,7 @@ class SchemaDiffer(PydanticModel):
         )
 
 
-def has_drop_alteration(alter_expressions: t.List[exp.AlterTable]) -> bool:
+def has_drop_alteration(alter_expressions: t.List[exp.Alter]) -> bool:
     return any(
         isinstance(action, exp.Drop)
         for actions in alter_expressions

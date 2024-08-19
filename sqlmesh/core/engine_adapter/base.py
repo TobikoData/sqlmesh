@@ -861,7 +861,7 @@ class EngineAdapter:
         self,
         current_table_name: TableName,
         target_table_name: TableName,
-    ) -> t.List[exp.AlterTable]:
+    ) -> t.List[exp.Alter]:
         """
         Determines the alter statements needed to change the current table into the structure of the target table.
         """
@@ -873,7 +873,7 @@ class EngineAdapter:
 
     def alter_table(
         self,
-        alter_expressions: t.List[exp.AlterTable],
+        alter_expressions: t.List[exp.Alter],
     ) -> None:
         """
         Performs the alter statements to change the current table into the structure of the target table.

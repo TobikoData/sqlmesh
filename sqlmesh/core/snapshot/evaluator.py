@@ -1811,7 +1811,7 @@ def _intervals(snapshot: Snapshot, deployability_index: DeployabilityIndex) -> I
 
 def _check_destructive_schema_change(
     snapshot: Snapshot,
-    alter_expressions: t.List[exp.AlterTable],
+    alter_expressions: t.List[exp.Alter],
     allow_destructive_snapshots: t.Set[str],
 ) -> None:
     if snapshot.needs_destructive_check(allow_destructive_snapshots) and has_drop_alteration(
