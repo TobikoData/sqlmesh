@@ -9,6 +9,7 @@ from pytest_mock.plugin import MockerFixture
 from sqlglot.expressions import to_table
 
 import tests.utils.test_date as test_date
+from sqlmesh.core.dialect import normalize_model_name
 from sqlmesh.core import constants as c
 from sqlmesh.utils.errors import SQLMeshError
 from sqlmesh.utils.metaprogramming import (
@@ -42,7 +43,7 @@ def test_print_exception(mocker: MockerFixture):
 
     expected_message = f"""Traceback (most recent call last):
 
-  File "{__file__}", line 39, in test_print_exception
+  File "{__file__}", line 40, in test_print_exception
     eval("test_fun()", env)
 
   File "<string>", line 1, in <module>
@@ -109,6 +110,7 @@ def main_func(y: int) -> int:
     MyClass()
     DataClass(x=y)
     noop_metadata()
+    normalize_model_name("test")
 
     def closure(z: int) -> int:
         return z + Z
@@ -123,6 +125,7 @@ def test_func_globals() -> None:
         "DataClass": DataClass,
         "MyClass": MyClass,
         "noop_metadata": noop_metadata,
+        "normalize_model_name": normalize_model_name,
         "other_func": other_func,
         "sqlglot": sqlglot,
     }
@@ -155,6 +158,7 @@ def test_normalize_source() -> None:
     MyClass()
     DataClass(x=y)
     noop_metadata()
+    normalize_model_name('test')
 
     def closure(z: int):
         return z + Z
@@ -195,6 +199,7 @@ def test_serialize_env() -> None:
     MyClass()
     DataClass(x=y)
     noop_metadata()
+    normalize_model_name('test')
 
     def closure(z: int):
         return z + Z
@@ -251,6 +256,10 @@ class DataClass:
             payload="""def noop_metadata():
     return None""",
             is_metadata=True,
+        ),
+        "normalize_model_name": Executable(
+            payload="from sqlmesh.core.dialect import normalize_model_name",
+            kind=ExecutableKind.IMPORT,
         ),
         "other_func": Executable(
             name="other_func",
