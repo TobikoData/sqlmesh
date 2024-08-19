@@ -3,8 +3,8 @@ from __future__ import annotations
 import typing as t
 import logging
 import pandas as pd
+import re
 from sqlglot import exp
-from sqlmesh.core.model.kind import TimeColumn
 from sqlmesh.core.dialect import to_schema
 from sqlmesh.core.engine_adapter.mixins import LogicalMergeMixin
 from sqlmesh.core.engine_adapter.base import EngineAdapterWithIndexSupport
@@ -36,6 +36,7 @@ class ClickhouseEngineAdapter(EngineAdapterWithIndexSupport, LogicalMergeMixin):
     SCHEMA_DIFFER = SchemaDiffer()
 
     DEFAULT_TABLE_ENGINE = "MergeTree"
+    ORDER_BY_TABLE_ENGINE_REGEX = "^.*?MergeTree.*$"
 
     @cached_property
     def engine_run_mode(self) -> EngineRunMode:
@@ -292,29 +293,24 @@ class ClickhouseEngineAdapter(EngineAdapterWithIndexSupport, LogicalMergeMixin):
             k.upper(): v for k, v in (table_properties.copy() if table_properties else {}).items()
         }
 
-        # TODO: gate this appropriately
-        if table_engine != "Log":
-            # TODO: remove vestiges of auto order by
+        if bool(re.search(self.ORDER_BY_TABLE_ENGINE_REGEX, table_engine)):
             ordered_by_raw = table_properties_copy.pop("ORDER_BY", None)
             ordered_by_cols = []
             if ordered_by_raw:
-                for col in ordered_by_raw:
-                    if col:
-                        col = col[0] if isinstance(col, list) and len(col) == 1 else col
-                        assert not isinstance(col, list)
-                        col = col.column if isinstance(col, TimeColumn) else col
-                        col = col.this if isinstance(col, exp.Alias) else col
+                # ORDER_BY: col
+                if isinstance(ordered_by_raw, exp.Column):
+                    ordered_by_cols.append(ordered_by_raw)
+                # ORDER_BY: 'col'
+                elif isinstance(ordered_by_raw, exp.Literal):
+                    ordered_by_cols.append(ordered_by_raw.this)
+                # ORDER_BY: (col1, col2) or ('col1', 'col2')
+                elif isinstance(ordered_by_raw, exp.Tuple):
+                    for col in ordered_by_raw.expressions:
+                        col = col.this if isinstance(col, exp.Literal) else col
                         ordered_by_cols.append(col)
-
-                # we have to dedupe by name because we can get the same column parsed in
-                #   different ways (e.g., the time column both from `time_column` and `grains`)
-                ordered_by_cols_names = []
-                ordered_by_cols_dedupe = []
-                for col in ordered_by_cols:
-                    col_name = col.name if isinstance(col, exp.Column) else col
-                    if col_name not in ordered_by_cols_names:
-                        ordered_by_cols_names.append(col_name)
-                        ordered_by_cols_dedupe.append(col)
+                # python list of columns
+                elif isinstance(ordered_by_raw, list):
+                    ordered_by_cols.extend(ordered_by_raw)
 
             ordered_by_expressions = (
                 exp.Tuple(expressions=[exp.to_column(k) for k in ordered_by_cols])  # type: ignore
@@ -325,12 +321,22 @@ class ClickhouseEngineAdapter(EngineAdapterWithIndexSupport, LogicalMergeMixin):
             properties.append(exp.Order(expressions=[exp.Ordered(this=ordered_by_expressions)]))
 
             primary_key_raw = table_properties_copy.pop("PRIMARY_KEY", None)
-            if primary_key_raw and self.SUPPORTS_INDEXES:
-                primary_key_cols = (
-                    primary_key_raw.expressions
-                    if isinstance(primary_key_raw, exp.Tuple)
-                    else primary_key_raw
-                )
+            if primary_key_raw:
+                primary_key_cols = []
+                # PRIMARY_KEY: col
+                if isinstance(primary_key_raw, exp.Column):
+                    primary_key_cols.append(primary_key_raw)
+                # PRIMARY_KEY: 'col'
+                elif isinstance(primary_key_raw, exp.Literal):
+                    primary_key_cols.append(primary_key_raw.this)
+                # PRIMARY_KEY: (col1, col2) or ('col1', 'col2')
+                elif isinstance(primary_key_raw, exp.Tuple):
+                    for col in primary_key_raw.expressions:
+                        col = col.this if isinstance(col, exp.Literal) else col
+                        primary_key_cols.append(col)
+                # python list of columns
+                elif isinstance(primary_key_raw, list):
+                    primary_key_cols.extend(primary_key_raw)
 
                 if primary_key_cols:
                     properties.append(
@@ -346,15 +352,19 @@ class ClickhouseEngineAdapter(EngineAdapterWithIndexSupport, LogicalMergeMixin):
                 )
             )
 
+        on_cluster = (
+            table_properties_copy.pop("CLUSTER", None)
+            or table_properties_copy.pop("ON_CLUSTER", None)
+            or self.cluster
+        )
         if self.engine_run_mode.is_cluster:
-            on_cluster = table_properties_copy.pop("CLUSTER", None) or self.cluster
+            on_cluster = (
+                on_cluster.alias_or_name if isinstance(on_cluster, exp.Column) else on_cluster
+            )
             properties.append(
                 exp.OnCluster(
-                    this=exp.Literal(
-                        this=on_cluster.this
-                        if isinstance(on_cluster, exp.Expression)
-                        else on_cluster,
-                        is_string=False,
+                    this=exp.var(
+                        on_cluster.this if isinstance(on_cluster, exp.Literal) else on_cluster
                     )
                 )
             )
@@ -394,6 +404,7 @@ class ClickhouseEngineAdapter(EngineAdapterWithIndexSupport, LogicalMergeMixin):
         if self.engine_run_mode.is_cluster:
             on_cluster = (
                 view_properties_copy.pop("CLUSTER", None)
+                or view_properties_copy.pop("ON_CLUSTER", None)
                 or kwargs.pop("physical_cluster", None)
                 or self.cluster
             )
