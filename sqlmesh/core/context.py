@@ -178,7 +178,9 @@ class BaseContext(abc.ABC):
 
         # We generate SQL for the default dialect because the table name may be used in a
         # fetchdf call and so the quotes need to be correct (eg. backticks for bigquery)
-        return parse_one(self._model_tables[model_name]).sql(dialect=self.default_dialect)
+        return parse_one(self._model_tables[model_name]).sql(
+            dialect=self.default_dialect, identify=True
+        )
 
     def fetchdf(
         self, query: t.Union[exp.Expression, str], quote_identifiers: bool = False
