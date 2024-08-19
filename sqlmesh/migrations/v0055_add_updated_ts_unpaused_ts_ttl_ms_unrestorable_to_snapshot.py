@@ -19,8 +19,9 @@ def migrate(state_sync, **kwargs):  # type: ignore
     index_type = index_text_type(engine_adapter.dialect)
 
     add_column_exps = [
-        exp.AlterTable(
+        exp.Alter(
             this=exp.to_table(snapshots_table),
+            kind="TABLE",
             actions=[
                 exp.ColumnDef(
                     this=exp.to_column(column_name),
@@ -30,8 +31,9 @@ def migrate(state_sync, **kwargs):  # type: ignore
         )
         for column_name in ["updated_ts", "unpaused_ts", "ttl_ms"]
     ] + [
-        exp.AlterTable(
+        exp.Alter(
             this=exp.to_table(snapshots_table),
+            kind="TABLE",
             actions=[
                 exp.ColumnDef(
                     this=exp.to_column("unrestorable"),
@@ -42,8 +44,9 @@ def migrate(state_sync, **kwargs):  # type: ignore
     ]
     engine_adapter.execute(add_column_exps)
 
-    drop_column_exp = exp.AlterTable(
+    drop_column_exp = exp.Alter(
         this=exp.to_table(snapshots_table),
+        kind="TABLE",
         actions=[exp.Drop(this=exp.to_column("expiration_ts"), kind="COLUMN")],
     )
     engine_adapter.execute(drop_column_exp)

@@ -17,8 +17,9 @@ def migrate(state_sync, **kwargs):  # type: ignore
 
     index_type = index_text_type(engine_adapter.dialect)
 
-    alter_table_exp = exp.AlterTable(
+    alter_table_exp = exp.Alter(
         this=exp.to_table(snapshots_table),
+        kind="TABLE",
         actions=[
             exp.ColumnDef(
                 this=exp.to_column("kind_name"),
