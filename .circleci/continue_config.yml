@@ -330,11 +330,10 @@ workflows:
                 - redshift
                 - bigquery
                 - clickhouse-cloud
-          # TODO: uncomment before merge to main
-          # filters:
-          #   branches:
-          #     only:
-          #       - main
+          filters:
+            branches:
+              only:
+                - main
       - trigger_private_tests:
           requires:
             - style_and_slow_tests
