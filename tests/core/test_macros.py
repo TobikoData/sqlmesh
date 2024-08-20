@@ -760,7 +760,15 @@ def test_deduplicate_error_handling(macro_evaluator):
     "dialect, date_part",
     [
         (dialect, date_part)
-        for dialect in ["duckdb", "snowflake", "postgres", "spark", "bigquery"]
+        for dialect in [
+            "duckdb",
+            "snowflake",
+            "postgres",
+            "spark",
+            "bigquery",
+            "databricks",
+            "redshift",
+        ]
         for date_part in ["day", "week", "month", "quarter", "year"]
     ],
 )
@@ -777,66 +785,161 @@ def test_date_spine(assert_exp_eq, dialect, date_part):
 
     # Generate the expected SQL based on the dialect and date_part
     if dialect == "duckdb":
+        if date_part == "week":
+            interval = "7 * INTERVAL '1' DAY"
+        elif date_part == "quarter":
+            interval = "90 * INTERVAL '1' DAY"
+        else:
+            interval = f"INTERVAL '1' {date_part.upper()}"
+        if date_part == "week":
+            expected_sql = f"""
+            SELECT
+                date_{date_part}
+            FROM
+                UNNEST(
+                    CAST(
+                        GENERATE_SERIES(
+                            CAST('2022-01-01' AS DATE),
+                            CAST('2024-12-31' AS DATE),
+                            ({interval})
+                        ) AS DATE[]
+                    )
+                ) AS _exploded(date_{date_part})
+            """
+        elif date_part == "quarter":
+            expected_sql = f"""
+            SELECT
+                date_{date_part}
+            FROM
+                UNNEST(
+                    CAST(
+                        GENERATE_SERIES(
+                            CAST('2022-01-01' AS DATE),
+                            CAST('2024-12-31' AS DATE),
+                            (90 * INTERVAL '1' DAY)
+                        ) AS DATE[]
+                    )
+                ) AS _exploded(date_{date_part})
+            """
+        else:
+            expected_sql = f"""
+            SELECT
+                date_{date_part}
+            FROM
+                UNNEST(
+                    CAST(
+                        GENERATE_SERIES(
+                            CAST('2022-01-01' AS DATE),
+                            CAST('2024-12-31' AS DATE),
+                            INTERVAL '1' {date_part}
+                        ) AS DATE[]
+                    )
+                ) AS _exploded(date_{date_part})
+            """
+    elif dialect == "snowflake":
         expected_sql = f"""
         SELECT
             date_{date_part}
-        FROM UNNEST(CAST(GENERATE_SERIES(CAST('2022-01-01' AS DATE), CAST('2024-12-31' AS DATE), INTERVAL '1' {date_part}) AS
-        DATE[])) AS _exploded(date_{date_part})
-        """
-    elif dialect == "snowflake":
-        expected_sql = f"""
-        WITH "RAW_DATA" AS (
-        SELECT
-        "_EXPLODED"."date_{date_part}" AS "date_{date_part}"
         FROM (
-        SELECT
-        DATEADD({date_part.upper()}, CAST("_EXPLODED"."date_{date_part}" AS INT), CAST('2022-01-01' AS DATE)) AS
-        "date_{date_part}"
-        FROM TABLE(
-        FLATTEN(
-        INPUT => ARRAY_GENERATE_RANGE(
-        0,
-        (
-        (
-        DATEDIFF({date_part.upper()}, CAST('2022-01-01' AS DATE), CAST('2024-12-31' AS DATE)) + 1 - 1
-        ) + 1 - 1
-        ) + 1
-        )
-        )
-        ) AS "_EXPLODED"("SEQ", "KEY", "PATH", "INDEX", "date_{date_part}", "THIS")
-        ) AS "_EXPLODED"
-        )
-        SELECT
-        "RAW_DATA"."date_{date_part}" AS "date_{date_part}"
-        FROM "RAW_DATA" AS "RAW_DATA"
+            SELECT
+                DATEADD(
+                    {date_part.upper()},
+                    CAST(date_{date_part} AS INT),
+                    CAST('2022-01-01' AS DATE)
+                ) AS date_{date_part}
+            FROM
+                TABLE(
+                    FLATTEN(
+                        INPUT => ARRAY_GENERATE_RANGE(
+                            0,
+                            (
+                                DATEDIFF(
+                                    {date_part.upper()},
+                                    CAST('2022-01-01' AS DATE),
+                                    CAST('2024-12-31' AS DATE)
+                                ) + 1 - 1
+                            ) + 1
+                        )
+                    )
+                ) AS _exploded(seq, key, path, index, date_{date_part}, this)
+        ) AS _exploded(date_{date_part})
         """
     elif dialect == "postgres":
         interval = "3 MONTH" if date_part == "quarter" else f"1 {date_part.upper()}"
         expected_sql = f"""
-        WITH "raw_data" AS (
         SELECT
-        "date_{date_part}"
+            date_{date_part}
         FROM (
-        SELECT
-        CAST("value" AS DATE)
-        FROM GENERATE_SERIES(CAST('2022-01-01' AS DATE), CAST('2024-12-31' AS DATE), INTERVAL '{interval}') AS "value"
-        ) AS "_exploded"("date_{date_part}")
-        )
-        SELECT
-        *
-        FROM "raw_data" AS "raw_data"
+            SELECT
+                CAST(value AS DATE)
+            FROM
+                GENERATE_SERIES(
+                    CAST('2022-01-01' AS DATE),
+                    CAST('2024-12-31' AS DATE),
+                    INTERVAL '{interval}'
+                ) AS value
+        ) AS _exploded(date_{date_part})
         """
     elif dialect == "spark":
         interval = "3 MONTH" if date_part == "quarter" else f"1 {date_part.upper()}"
         expected_sql = f"""
-        SELECT "_exploded"."date_{date_part}" AS "date_{date_part}"
-        FROM UNNEST(SEQUENCE(CAST('2022-01-01' AS DATE), CAST('2024-12-31' AS DATE), INTERVAL {interval})) AS "_exploded"("date_{date_part}")
+        SELECT
+            date_{date_part}
+        FROM
+            EXPLODE(
+                SEQUENCE(
+                    CAST('2022-01-01' AS DATE),
+                    CAST('2024-12-31' AS DATE),
+                    INTERVAL {interval}
+                )
+            ) AS _exploded(date_{date_part})
         """
-    elif dialect == "bigquery":
+    elif dialect == "databricks":
         interval = "3 MONTH" if date_part == "quarter" else f"1 {date_part.upper()}"
         expected_sql = f"""
-        SELECT date_{date_part}
-        FROM UNNEST(GENERATE_DATE_ARRAY(DATE('2022-01-01'), DATE('2024-12-31'), INTERVAL {interval})) AS date_{date_part}
+        SELECT
+            date_{date_part}
+        FROM
+            EXPLODE(
+                SEQUENCE(
+                    CAST('2022-01-01' AS DATE),
+                    CAST('2024-12-31' AS DATE),
+                    INTERVAL {interval}
+                )
+            ) AS _exploded(date_{date_part})
+        """
+    elif dialect == "bigquery":
+        expected_sql = f"""
+        SELECT
+            date_{date_part}
+        FROM
+            UNNEST(
+                GENERATE_DATE_ARRAY(
+                    CAST('2022-01-01' AS DATE),
+                    CAST('2024-12-31' AS DATE),
+                    INTERVAL '1' {date_part}
+                )
+            ) AS date_{date_part}
+        """
+    elif dialect == "redshift":
+        expected_sql = f"""
+        WITH RECURSIVE _generated_dates(date_{date_part}) AS (
+            SELECT
+                CAST('2022-01-01' AS DATE) AS date_{date_part}
+            UNION ALL
+            SELECT
+                CAST(DATEADD({date_part}, 1, date_{date_part}) AS DATE)
+            FROM _generated_dates
+            WHERE
+                CAST(DATEADD({date_part}, 1, date_{date_part}) AS DATE) <= CAST('2024-12-31' AS DATE)
+        )
+        SELECT
+            date_{date_part}
+        FROM (
+            SELECT
+                date_{date_part}
+            FROM _generated_dates 
+        ) AS _generated_dates
         """
     assert_exp_eq(evaluator.transform(parse_one(date_spine_macro)), expected_sql, dialect=dialect)
 

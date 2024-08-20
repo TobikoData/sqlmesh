@@ -909,7 +909,7 @@ It supports the following arguments, in this order:
 
 - `relation`: The table or CTE name to deduplicate
 - `partition_by`: column names, or expressions to use to identify a window of rows out of which to select one as the deduplicated row
-- `order_by`: A list of strings representing the ORDER BY clause, optional - you can add nulls ordering like this: ['status desc nulls last']
+- `order_by`: A list of strings representing the ORDER BY clause, optional - you can add nulls ordering like this: ['<column_name> desc nulls last']
 
 For example, the following query:
 ```sql linenums="1"
@@ -937,7 +937,7 @@ FROM "raw_data" AS "raw_data"
 
 ### @DATE_SPINE
 
-`@DATE_SPINE` returns the SQL required to build a date spine. The spine will include the start_date (if it is aligned to the datepart), AND it will include the end_date. This is different from the `date_spine` macro in `dbt-utils` which will NOT include the end_date. It's typically used to join in unique, hard-coded, date ranges to join with other tables/views, so people don't have to constantly adjust date ranges in `where` clauses across many SQL models.
+`@DATE_SPINE` returns the SQL required to build a date spine. The spine will include the start_date (if it is aligned to the datepart), AND it will include the end_date. This is different from the [`date_spine`](https://github.com/dbt-labs/dbt-utils?tab=readme-ov-file#date_spine-source) macro in `dbt-utils` which will NOT include the end_date. It's typically used to join in unique, hard-coded, date ranges to with other tables/views, so people don't have to constantly adjust date ranges in `where` clauses across many SQL models.
 
 It supports the following arguments, in this order:
 

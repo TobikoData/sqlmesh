@@ -1189,7 +1189,7 @@ def date_spine(
         >>> from sqlmesh.core.macros import MacroEvaluator
         >>> sql = "@date_spine('week', '2022-01-20', '2024-12-16')"
         >>> MacroEvaluator().transform(parse_one(sql)).sql()
-        'SELECT date_week FROM UNNEST(GENERATE_DATE_ARRAY(CAST(\'2022-01-20\' AS DATE), CAST(\'2024-12-16\' AS DATE), INTERVAL \'1\' WEEK)) AS _exploded(date_week)'
+        "SELECT date_week FROM UNNEST(GENERATE_DATE_ARRAY(CAST(\'2022-01-20\' AS DATE), CAST(\'2024-12-16\' AS DATE), INTERVAL \'1\' WEEK)) AS _exploded(date_week)"
     """
     datepart_name = datepart.name.lower()
     start_date_name = start_date.name
