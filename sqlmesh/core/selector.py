@@ -6,6 +6,8 @@ import typing as t
 from collections import defaultdict
 from pathlib import Path
 
+from sqlglot import exp
+
 from sqlmesh.core.dialect import normalize_model_name
 from sqlmesh.core.environment import Environment
 from sqlmesh.core.loader import update_model_schemas
@@ -97,25 +99,49 @@ class Selector:
                 subdag.update(self._dag.downstream(fqn))
 
         models: UniqueKeyDict[str, Model] = UniqueKeyDict("models")
-
         all_model_fqns = set(self._models) | set(env_models)
-        for fqn in all_model_fqns:
-            model: t.Optional[Model] = None
+        needs_update = False
+
+        def get_model(fqn: str) -> t.Optional[Model]:
             if fqn not in all_selected_models and fqn in env_models:
                 # Unselected modified or added model.
-                model = env_models[fqn]
-            elif fqn in all_selected_models and fqn in self._models:
+                return env_models[fqn]
+            if fqn in all_selected_models and fqn in self._models:
                 # Selected modified or removed model.
-                model = self._models[fqn]
+                return self._models[fqn]
+            return None
 
-            if model:
-                # model.copy() can't be used here due to a cached state that can be a part of a model instance.
-                if model.fqn in subdag:
-                    model = type(model).parse_obj(model.dict(exclude={"mapping_schema"}))
-                    dag.add(model.fqn, model.depends_on)
-                models[model.fqn] = model
+        for fqn in all_model_fqns:
+            model = get_model(fqn)
 
-        update_model_schemas(dag, models, self._context_path)
+            if not model:
+                continue
+
+            if model.fqn in subdag:
+                dag.add(model.fqn, model.depends_on)
+
+                for dep in model.depends_on:
+                    schema = model.mapping_schema
+
+                    for part in exp.to_table(dep).parts:
+                        schema = schema.get(part.sql()) or {}
+
+                    parent = get_model(dep)
+
+                    parent_schema = {
+                        c: t.sql(dialect=model.dialect)
+                        for c, t in ((parent and parent.columns_to_types) or {}).items()
+                    }
+
+                    if schema != parent_schema:
+                        model = model.copy(update={"mapping_schema": {}})
+                        needs_update = True
+                        break
+
+            models[model.fqn] = model
+
+        if needs_update:
+            update_model_schemas(dag, models, self._context_path)
 
         return models
 

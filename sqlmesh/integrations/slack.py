@@ -27,6 +27,7 @@ class TSlackBlocks(TypedDict):
 
 class TSlackMessage(TSlackBlocks):
     attachments: t.List[TSlackBlocks]
+    text: str
 
 
 class SlackMessageComposer:
@@ -34,7 +35,11 @@ class SlackMessageComposer:
 
     def __init__(self, initial_message: t.Optional[TSlackMessage] = None) -> None:
         """Initialize the Slack message builder"""
-        self.slack_message = initial_message or {"blocks": [], "attachments": [{"blocks": []}]}
+        self.slack_message: TSlackMessage = initial_message or {
+            "text": "",
+            "blocks": [],
+            "attachments": [{"blocks": []}],
+        }
 
     def add_primary_blocks(self, *blocks: TSlackBlock) -> "SlackMessageComposer":
         """Add blocks to the message. Blocks are always displayed"""
@@ -50,6 +55,14 @@ class SlackMessageComposer:
         self.slack_message["attachments"][0]["blocks"].extend(blocks)
         if len(self.slack_message["attachments"][0]["blocks"]) >= SLACK_MAX_ATTACHMENTS_BLOCKS:
             raise ValueError("Too many attachments")
+        return self
+
+    def add_text(self, text: str) -> "SlackMessageComposer":
+        """Add text to the message
+
+        This text is used in places where content cannot be rendered such as: system push notifications, assistive technology such as screen readers, etc.
+        """
+        self.slack_message["text"] = normalize_message(text)
         return self
 
     def _introspect(self) -> "SlackMessageComposer":

@@ -140,34 +140,22 @@ class StateReader(abc.ABC):
         """
 
     @abc.abstractmethod
-    def max_interval_end_for_environment(
-        self, environment: str, ensure_finalized_snapshots: bool = False
-    ) -> t.Optional[int]:
-        """Returns the max interval end for the given environment.
+    def max_interval_end_per_model(
+        self,
+        environment: str,
+        models: t.Optional[t.Set[str]] = None,
+        ensure_finalized_snapshots: bool = False,
+    ) -> t.Dict[str, int]:
+        """Returns the max interval end per model for the given environment.
 
         Args:
-            environment: The environment.
+            environment: The target environment.
+            models: The models to get the max interval end for. If None, all models are considered.
             ensure_finalized_snapshots: Whether to use snapshots from the latest finalized environment state,
                 or to use whatever snapshots are in the current environment state even if the environment is not finalized.
 
         Returns:
-            A timestamp or None if no interval or environment exists.
-        """
-
-    @abc.abstractmethod
-    def greatest_common_interval_end(
-        self, environment: str, models: t.Set[str], ensure_finalized_snapshots: bool = False
-    ) -> t.Optional[int]:
-        """Returns the greatest common interval end for given models in the target environment.
-
-        Args:
-            environment: The environment.
-            models: The model FQNs to select intervals from.
-            ensure_finalized_snapshots: Whether to use snapshots from the latest finalized environment state,
-                or to use whatever snapshots are in the current environment state even if the environment is not finalized.
-
-        Returns:
-            A timestamp or None if no interval or environment exists.
+            A dictionary of model FQNs to their respective interval ends in milliseconds since epoch.
         """
 
     @abc.abstractmethod
@@ -312,7 +300,7 @@ class StateSync(StateReader, abc.ABC):
         """
 
     @abc.abstractmethod
-    def remove_interval(
+    def remove_intervals(
         self,
         snapshot_intervals: t.Sequence[t.Tuple[SnapshotInfoLike, Interval]],
         remove_shared_versions: bool = False,
@@ -323,10 +311,8 @@ class StateSync(StateReader, abc.ABC):
         can also grab all snapshots tied to the passed in version.
 
         Args:
-            snapshots: The snapshot info like object to remove intervals from.
-            start: The start of the interval to add.
-            end: The end of the interval to add.
-            all_snapshots: All snapshots can be passed in to skip fetching matching snapshot versions.
+            snapshot_intervals: The snapshot intervals to remove.
+            remove_shared_versions: Whether to remove intervals for snapshots that share the same version with the target snapshots.
         """
 
     @abc.abstractmethod
@@ -417,11 +403,11 @@ class StateSync(StateReader, abc.ABC):
         """Rollback to previous backed up state."""
 
     @abc.abstractmethod
-    def _add_snapshot_intervals(self, snapshot_intervals: SnapshotIntervals) -> None:
+    def add_snapshots_intervals(self, snapshots_intervals: t.Sequence[SnapshotIntervals]) -> None:
         """Add snapshot intervals to state
 
         Args:
-            snapshot_intervals: The snapshot intervals to add.
+            snapshots_intervals: The intervals to add.
         """
 
     def add_interval(
@@ -450,7 +436,7 @@ class StateSync(StateReader, abc.ABC):
             intervals=intervals if not is_dev else [],
             dev_intervals=intervals if is_dev else [],
         )
-        self._add_snapshot_intervals(snapshot_intervals)
+        self.add_snapshots_intervals([snapshot_intervals])
 
 
 class DelegatingStateSync(StateSync):

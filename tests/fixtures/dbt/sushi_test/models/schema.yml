@@ -23,3 +23,10 @@ sources:
       - name: items
       - name: orders
       - name: order_items
+
+  - name: parquet_file
+    meta:
+      external_location: "read_parquet('path/to/external/{name}.parquet')"
+    tables:
+      - name: items
+      - name: orders

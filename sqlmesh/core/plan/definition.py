@@ -53,8 +53,12 @@ class Plan(PydanticModel, frozen=True):
 
     deployability_index: DeployabilityIndex
     restatements: t.Dict[SnapshotId, Interval]
+    interval_end_per_model: t.Optional[t.Dict[str, int]]
 
+    selected_models_to_backfill: t.Optional[t.Set[str]] = None
+    """Models that have been explicitly selected for backfill by a user."""
     models_to_backfill: t.Optional[t.Set[str]] = None
+    """All models that should be backfilled as part of this plan."""
     effective_from: t.Optional[TimeLike] = None
     execution_time: t.Optional[TimeLike] = None
 
@@ -162,6 +166,7 @@ class Plan(PydanticModel, frozen=True):
                 execution_time=self.execution_time,
                 restatements=self.restatements,
                 deployability_index=self.deployability_index,
+                interval_end_per_model=self.interval_end_per_model,
                 end_bounded=self.end_bounded,
             ).items()
             if snapshot.is_model and missing
@@ -181,17 +186,19 @@ class Plan(PydanticModel, frozen=True):
         snapshots = [s.table_info for s in self.snapshots.values()]
         promoted_snapshot_ids = None
         if self.is_dev and not self.include_unmodified:
-            promotable_snapshot_ids = self.context_diff.promotable_snapshot_ids.copy()
-            if self.models_to_backfill is not None:
+            if self.selected_models_to_backfill is not None:
                 # Only promote models that have been explicitly selected for backfill.
-                promotable_snapshot_ids &= {
+                promotable_snapshot_ids = {
                     *self.context_diff.previously_promoted_snapshot_ids,
                     *[
                         snapshots_by_name[m].snapshot_id
-                        for m in self.models_to_backfill
+                        for m in self.selected_models_to_backfill
                         if m in snapshots_by_name
                     ],
                 }
+            else:
+                promotable_snapshot_ids = self.context_diff.promotable_snapshot_ids.copy()
+
             promoted_snapshot_ids = [
                 s.snapshot_id for s in snapshots if s.snapshot_id in promotable_snapshot_ids
             ]

@@ -77,7 +77,7 @@ def test_generate_table_name_in_dialect(mocker: MockerFixture):
         "sqlmesh.core.context.GenericContext._model_tables",
         PropertyMock(return_value={'"project-id"."dataset"."table"': '"project-id".dataset.table'}),
     )
-    assert context.table('"project-id"."dataset"."table"') == "`project-id`.dataset.table"
+    assert context.table('"project-id"."dataset"."table"') == "`project-id`.`dataset`.`table`"
 
 
 def test_config_not_found(copy_to_temp_path: t.Callable):
@@ -596,8 +596,9 @@ def test_plan_start_ahead_of_end(copy_to_temp_path):
     with freezegun.freeze_time("2024-01-02 00:00:00"):
         context = Context(paths=path, gateway="duckdb_persistent")
         context.plan("prod", no_prompts=True, auto_apply=True)
-        assert context.state_sync.max_interval_end_for_environment("prod") == to_timestamp(
-            "2024-01-02"
+        assert all(
+            i == to_timestamp("2024-01-02")
+            for i in context.state_sync.max_interval_end_per_model("prod").values()
         )
         context.close()
     with freezegun.freeze_time("2024-01-03 00:00:00"):
@@ -619,8 +620,9 @@ def test_plan_start_ahead_of_end(copy_to_temp_path):
         # Since the new start is ahead of the latest end loaded for prod, the table is deployed as empty
         # This isn't considered a gap since prod has not loaded these intervals yet
         # As a results the max interval end is unchanged and the table is empty
-        assert context.state_sync.max_interval_end_for_environment("prod") == to_timestamp(
-            "2024-01-02"
+        assert all(
+            i == to_timestamp("2024-01-02")
+            for i in context.state_sync.max_interval_end_per_model("prod").values()
         )
         assert context.engine_adapter.fetchone("SELECT COUNT(*) FROM sushi.hourly")[0] == 0
         context.close()
@@ -740,9 +742,9 @@ def test_load_external_models(copy_to_temp_path):
     assert "prod_raw.model1" not in external_model_names
 
     # get physical table names of external models using table
-    assert context.table("raw.model1") == "memory.raw.model1"
-    assert context.table("raw.demographics") == "memory.raw.demographics"
-    assert context.table("raw.model2") == "memory.raw.model2"
+    assert context.table("raw.model1") == '"memory"."raw"."model1"'
+    assert context.table("raw.demographics") == '"memory"."raw"."demographics"'
+    assert context.table("raw.model2") == '"memory"."raw"."model2"'
 
 
 def test_load_gateway_specific_external_models(copy_to_temp_path):

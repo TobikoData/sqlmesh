@@ -201,6 +201,7 @@ def test_duplicates(state_sync: EngineAdapterStateSync, make_snapshot: t.Callabl
     state_sync._push_snapshots([snapshot_a])
     state_sync._push_snapshots([snapshot_b])
     state_sync._push_snapshots([snapshot_c])
+    state_sync._snapshot_cache.clear()
     assert (
         state_sync.get_snapshots([snapshot_a])[snapshot_a.snapshot_id].updated_ts
         == snapshot_b.updated_ts
@@ -312,10 +313,19 @@ def test_remove_interval(state_sync: EngineAdapterStateSync, make_snapshot: t.Ca
     state_sync.add_interval(snapshot_a, "2020-01-01", "2020-01-10")
     state_sync.add_interval(snapshot_b, "2020-01-11", "2020-01-30")
 
-    state_sync.remove_interval(
-        [(snapshot_a, snapshot_a.inclusive_exclusive("2020-01-15", "2020-01-17"))],
-        remove_shared_versions=True,
-    )
+    num_of_removals = 4
+    for _ in range(num_of_removals):
+        state_sync.remove_intervals(
+            [(snapshot_a, snapshot_a.inclusive_exclusive("2020-01-15", "2020-01-17"))],
+            remove_shared_versions=True,
+        )
+
+    remove_records_count = state_sync.engine_adapter.fetchone(
+        "SELECT COUNT(*) FROM sqlmesh._intervals WHERE name = '\"a\"' AND version = 'a' AND is_removed"
+    )[0]  # type: ignore
+    assert (
+        remove_records_count == num_of_removals * 4
+    )  # (1 dev record + 1 prod record) * 2 snapshots
 
     snapshots = state_sync.get_snapshots([snapshot_a, snapshot_b])
 
@@ -360,7 +370,7 @@ def test_remove_interval_missing_snapshot(
         (to_timestamp("2020-01-01"), to_timestamp("2020-01-31")),
     ]
 
-    state_sync.remove_interval(
+    state_sync.remove_intervals(
         [(snapshot_a, snapshot_a.inclusive_exclusive("2020-01-15", "2020-01-17"))],
         remove_shared_versions=True,
     )
@@ -455,11 +465,11 @@ def test_compact_intervals(
 
     state_sync.add_interval(snapshot, "2020-01-01", "2020-01-10")
     state_sync.add_interval(snapshot, "2020-01-11", "2020-01-15")
-    state_sync.remove_interval(
+    state_sync.remove_intervals(
         [(snapshot, snapshot.inclusive_exclusive("2020-01-05", "2020-01-12"))]
     )
     state_sync.add_interval(snapshot, "2020-01-12", "2020-01-16")
-    state_sync.remove_interval(
+    state_sync.remove_intervals(
         [(snapshot, snapshot.inclusive_exclusive("2020-01-14", "2020-01-16"))]
     )
 
@@ -1063,15 +1073,19 @@ def test_delete_expired_snapshots(state_sync: EngineAdapterStateSync, make_snaps
     new_snapshot.version = snapshot.version
     new_snapshot.updated_ts = now_ts - 11000
 
-    state_sync.push_snapshots([snapshot, new_snapshot])
-    assert set(state_sync.get_snapshots(None)) == {snapshot.snapshot_id, new_snapshot.snapshot_id}
+    all_snapshots = [snapshot, new_snapshot]
+    state_sync.push_snapshots(all_snapshots)
+    assert set(state_sync.get_snapshots(all_snapshots)) == {
+        snapshot.snapshot_id,
+        new_snapshot.snapshot_id,
+    }
 
     assert state_sync.delete_expired_snapshots() == [
         SnapshotTableCleanupTask(snapshot=snapshot.table_info, dev_table_only=True),
         SnapshotTableCleanupTask(snapshot=new_snapshot.table_info, dev_table_only=False),
     ]
 
-    assert not state_sync.get_snapshots(None)
+    assert not state_sync.get_snapshots(all_snapshots)
 
 
 def test_delete_expired_snapshots_seed(
@@ -1092,14 +1106,15 @@ def test_delete_expired_snapshots_seed(
     snapshot.categorize_as(SnapshotChangeCategory.BREAKING)
     snapshot.updated_ts = now_ts - 15000
 
-    state_sync.push_snapshots([snapshot])
-    assert set(state_sync.get_snapshots(None)) == {snapshot.snapshot_id}
+    all_snapshots = [snapshot]
+    state_sync.push_snapshots(all_snapshots)
+    assert set(state_sync.get_snapshots(all_snapshots)) == {snapshot.snapshot_id}
 
     assert state_sync.delete_expired_snapshots() == [
         SnapshotTableCleanupTask(snapshot=snapshot.table_info, dev_table_only=False),
     ]
 
-    assert not state_sync.get_snapshots(None)
+    assert not state_sync.get_snapshots(all_snapshots)
 
 
 def test_delete_expired_snapshots_batching(
@@ -1128,15 +1143,19 @@ def test_delete_expired_snapshots_batching(
     snapshot_b.categorize_as(SnapshotChangeCategory.BREAKING)
     snapshot_b.updated_ts = now_ts - 11000
 
-    state_sync.push_snapshots([snapshot_a, snapshot_b])
-    assert set(state_sync.get_snapshots(None)) == {snapshot_a.snapshot_id, snapshot_b.snapshot_id}
+    all_snapshots = [snapshot_a, snapshot_b]
+    state_sync.push_snapshots(all_snapshots)
+    assert set(state_sync.get_snapshots(all_snapshots)) == {
+        snapshot_a.snapshot_id,
+        snapshot_b.snapshot_id,
+    }
 
     assert state_sync.delete_expired_snapshots() == [
         SnapshotTableCleanupTask(snapshot=snapshot_a.table_info, dev_table_only=False),
         SnapshotTableCleanupTask(snapshot=snapshot_b.table_info, dev_table_only=False),
     ]
 
-    assert not state_sync.get_snapshots(None)
+    assert not state_sync.get_snapshots(all_snapshots)
 
 
 def test_delete_expired_snapshots_promoted(
@@ -1166,8 +1185,9 @@ def test_delete_expired_snapshots_promoted(
     )
     state_sync.promote(env)
 
+    all_snapshots = [snapshot]
     assert not state_sync.delete_expired_snapshots()
-    assert set(state_sync.get_snapshots(None)) == {snapshot.snapshot_id}
+    assert set(state_sync.get_snapshots(all_snapshots)) == {snapshot.snapshot_id}
 
     env.snapshots = []
     state_sync.promote(env)
@@ -1178,7 +1198,7 @@ def test_delete_expired_snapshots_promoted(
     assert state_sync.delete_expired_snapshots() == [
         SnapshotTableCleanupTask(snapshot=snapshot.table_info, dev_table_only=False)
     ]
-    assert not state_sync.get_snapshots(None)
+    assert not state_sync.get_snapshots(all_snapshots)
 
 
 def test_delete_expired_snapshots_dev_table_cleanup_only(
@@ -1207,14 +1227,18 @@ def test_delete_expired_snapshots_dev_table_cleanup_only(
     new_snapshot.version = snapshot.version
     new_snapshot.updated_ts = now_ts - 5000
 
-    state_sync.push_snapshots([snapshot, new_snapshot])
-    assert set(state_sync.get_snapshots(None)) == {snapshot.snapshot_id, new_snapshot.snapshot_id}
+    all_snapshots = [snapshot, new_snapshot]
+    state_sync.push_snapshots(all_snapshots)
+    assert set(state_sync.get_snapshots(all_snapshots)) == {
+        snapshot.snapshot_id,
+        new_snapshot.snapshot_id,
+    }
 
     assert state_sync.delete_expired_snapshots() == [
         SnapshotTableCleanupTask(snapshot=snapshot.table_info, dev_table_only=True)
     ]
 
-    assert set(state_sync.get_snapshots(None)) == {new_snapshot.snapshot_id}
+    assert set(state_sync.get_snapshots(all_snapshots)) == {new_snapshot.snapshot_id}
 
 
 def test_delete_expired_snapshots_shared_dev_table(
@@ -1244,11 +1268,15 @@ def test_delete_expired_snapshots_shared_dev_table(
     new_snapshot.temp_version = snapshot.temp_version_get_or_generate()
     new_snapshot.updated_ts = now_ts - 5000
 
-    state_sync.push_snapshots([snapshot, new_snapshot])
-    assert set(state_sync.get_snapshots(None)) == {snapshot.snapshot_id, new_snapshot.snapshot_id}
+    all_snapshots = [snapshot, new_snapshot]
+    state_sync.push_snapshots(all_snapshots)
+    assert set(state_sync.get_snapshots(all_snapshots)) == {
+        snapshot.snapshot_id,
+        new_snapshot.snapshot_id,
+    }
 
     assert not state_sync.delete_expired_snapshots()  # No dev table cleanup
-    assert set(state_sync.get_snapshots(None)) == {new_snapshot.snapshot_id}
+    assert set(state_sync.get_snapshots(all_snapshots)) == {new_snapshot.snapshot_id}
 
 
 def test_delete_expired_snapshots_ignore_ttl(
@@ -1614,8 +1642,8 @@ def test_migrate(state_sync: EngineAdapterStateSync, mocker: MockerFixture, tmp_
 
     assert (
         state_sync.engine_adapter.fetchone(
-            "SELECT COUNT(*) FROM sqlmesh._snapshots WHERE expiration_ts IS NULL"
-        )[0]
+            "SELECT COUNT(*) FROM sqlmesh._snapshots WHERE ttl_ms IS NULL"
+        )[0]  # type: ignore
         == 0
     )
 
@@ -1728,7 +1756,13 @@ def test_migrate_rows(state_sync: EngineAdapterStateSync, mocker: MockerFixture)
 
     assert not missing_intervals(dev_snapshots, start="2023-01-08", end="2023-01-10") == 8
 
-    for s in state_sync.get_snapshots(None).values():
+    all_snapshot_ids = [
+        SnapshotId(name=name, identifier=identifier)
+        for name, identifier in state_sync.engine_adapter.fetchall(
+            "SELECT name, identifier FROM sqlmesh._snapshots"
+        )
+    ]
+    for s in state_sync.get_snapshots(all_snapshot_ids).values():
         if not s.is_symbolic:
             assert s.intervals
 
@@ -1814,6 +1848,7 @@ def test_seed_hydration(
     assert snapshot.model.is_hydrated
     assert snapshot.model.seed.content == "header\n1\n2"
 
+    state_sync._snapshot_cache.clear()
     stored_snapshot = state_sync.get_snapshots([snapshot.snapshot_id])[snapshot.snapshot_id]
     assert isinstance(stored_snapshot.model, SeedModel)
     assert not stored_snapshot.model.is_hydrated
@@ -1914,7 +1949,7 @@ def test_cache(state_sync, make_snapshot, mocker):
         mock.assert_called()
 
     # clear the cache by removing intervals
-    cache.remove_interval([(snapshot, snapshot.inclusive_exclusive("2020-01-01", "2020-01-01"))])
+    cache.remove_intervals([(snapshot, snapshot.inclusive_exclusive("2020-01-01", "2020-01-01"))])
 
     # prime the cache
     assert cache.get_snapshots([snapshot.snapshot_id]) == {snapshot.snapshot_id: snapshot}
@@ -1994,7 +2029,7 @@ def test_cleanup_expired_views(
     ]
 
 
-def test_max_interval_end_for_environment(
+def test_max_interval_end_per_model(
     state_sync: EngineAdapterStateSync, make_snapshot: t.Callable
 ) -> None:
     snapshot_a = make_snapshot(
@@ -2019,11 +2054,14 @@ def test_max_interval_end_for_environment(
 
     state_sync.add_interval(snapshot_a, "2023-01-01", "2023-01-01")
     state_sync.add_interval(snapshot_a, "2023-01-02", "2023-01-02")
+    state_sync.add_interval(snapshot_a, "2023-01-03", "2023-01-03")
     state_sync.add_interval(snapshot_b, "2023-01-01", "2023-01-01")
+    state_sync.add_interval(snapshot_b, "2023-01-02", "2023-01-02")
 
     environment_name = "test_max_interval_end_for_environment"
 
-    assert state_sync.max_interval_end_for_environment(environment_name) is None
+    assert state_sync.max_interval_end_per_model(environment_name) == {}
+    assert state_sync.max_interval_end_per_model(environment_name, {snapshot_a.name}) == {}
 
     state_sync.promote(
         Environment(
@@ -2036,12 +2074,31 @@ def test_max_interval_end_for_environment(
         )
     )
 
-    assert state_sync.max_interval_end_for_environment(environment_name) == to_timestamp(
-        "2023-01-03"
-    )
+    assert state_sync.max_interval_end_per_model(environment_name, {snapshot_a.name}) == {
+        snapshot_a.name: to_timestamp("2023-01-04")
+    }
+
+    assert state_sync.max_interval_end_per_model(environment_name, {snapshot_b.name}) == {
+        snapshot_b.name: to_timestamp("2023-01-03")
+    }
+
+    assert state_sync.max_interval_end_per_model(
+        environment_name, {snapshot_a.name, snapshot_b.name}
+    ) == {
+        snapshot_a.name: to_timestamp("2023-01-04"),
+        snapshot_b.name: to_timestamp("2023-01-03"),
+    }
+
+    assert state_sync.max_interval_end_per_model(environment_name) == {
+        snapshot_a.name: to_timestamp("2023-01-04"),
+        snapshot_b.name: to_timestamp("2023-01-03"),
+    }
+
+    assert state_sync.max_interval_end_per_model(environment_name, {"missing"}) == {}
+    assert state_sync.max_interval_end_per_model(environment_name, set()) == {}
 
 
-def test_max_interval_end_for_environment_ensure_finalized_snapshots(
+def test_max_interval_end_per_model_ensure_finalized_snapshots(
     state_sync: EngineAdapterStateSync, make_snapshot: t.Callable
 ) -> None:
     snapshot_a = make_snapshot(
@@ -2066,155 +2123,52 @@ def test_max_interval_end_for_environment_ensure_finalized_snapshots(
 
     state_sync.add_interval(snapshot_a, "2023-01-01", "2023-01-01")
     state_sync.add_interval(snapshot_a, "2023-01-02", "2023-01-02")
+    state_sync.add_interval(snapshot_a, "2023-01-03", "2023-01-03")
     state_sync.add_interval(snapshot_b, "2023-01-01", "2023-01-01")
+    state_sync.add_interval(snapshot_b, "2023-01-02", "2023-01-02")
 
     environment_name = "test_max_interval_end_for_environment"
+
+    assert state_sync.max_interval_end_per_model(environment_name) == {}
+    assert state_sync.max_interval_end_per_model(environment_name, {snapshot_a.name}) == {}
+
+    state_sync.promote(
+        Environment(
+            name=environment_name,
+            snapshots=[snapshot_a.table_info, snapshot_b.table_info],
+            start_at="2023-01-01",
+            end_at="2023-01-03",
+            plan_id="test_plan_id",
+            previous_finalized_snapshots=[snapshot_b.table_info],
+        )
+    )
 
     assert (
-        state_sync.max_interval_end_for_environment(
-            environment_name, ensure_finalized_snapshots=True
+        state_sync.max_interval_end_per_model(
+            environment_name, {snapshot_a.name}, ensure_finalized_snapshots=True
         )
-        is None
+        == {}
     )
 
-    state_sync.promote(
-        Environment(
-            name=environment_name,
-            snapshots=[snapshot_a.table_info, snapshot_b.table_info],
-            start_at="2023-01-01",
-            end_at="2023-01-03",
-            plan_id="test_plan_id",
-            previous_finalized_snapshots=[snapshot_b.table_info],
-        )
-    )
-
-    assert state_sync.max_interval_end_for_environment(
-        environment_name, ensure_finalized_snapshots=True
-    ) == to_timestamp("2023-01-02")
-
-
-def test_greatest_common_interval_end(
-    state_sync: EngineAdapterStateSync, make_snapshot: t.Callable
-) -> None:
-    snapshot_a = make_snapshot(
-        SqlModel(
-            name="a",
-            cron="@daily",
-            query=parse_one("select 1, ds"),
-        ),
-    )
-    snapshot_a.categorize_as(SnapshotChangeCategory.BREAKING)
-
-    snapshot_b = make_snapshot(
-        SqlModel(
-            name="b",
-            cron="@daily",
-            query=parse_one("select 2, ds"),
-        ),
-    )
-    snapshot_b.categorize_as(SnapshotChangeCategory.BREAKING)
-
-    state_sync.push_snapshots([snapshot_a, snapshot_b])
-
-    state_sync.add_interval(snapshot_a, "2023-01-01", "2023-01-01")
-    state_sync.add_interval(snapshot_a, "2023-01-02", "2023-01-02")
-    state_sync.add_interval(snapshot_a, "2023-01-03", "2023-01-03")
-    state_sync.add_interval(snapshot_b, "2023-01-01", "2023-01-01")
-    state_sync.add_interval(snapshot_b, "2023-01-02", "2023-01-02")
-
-    environment_name = "test_max_interval_end_for_environment"
-
-    assert state_sync.greatest_common_interval_end(environment_name, {snapshot_a.name}) is None
-
-    state_sync.promote(
-        Environment(
-            name=environment_name,
-            snapshots=[snapshot_a.table_info, snapshot_b.table_info],
-            start_at="2023-01-01",
-            end_at="2023-01-03",
-            plan_id="test_plan_id",
-            previous_finalized_snapshots=[snapshot_b.table_info],
-        )
-    )
-
-    assert state_sync.greatest_common_interval_end(
-        environment_name, {snapshot_a.name}
-    ) == to_timestamp("2023-01-04")
-
-    assert state_sync.greatest_common_interval_end(
-        environment_name, {snapshot_b.name}
-    ) == to_timestamp("2023-01-03")
-
-    assert state_sync.greatest_common_interval_end(
-        environment_name, {snapshot_a.name, snapshot_b.name}
-    ) == to_timestamp("2023-01-03")
-
-    assert state_sync.greatest_common_interval_end(environment_name, {"missing"}) == to_timestamp(
-        "2023-01-03"
-    )
-    assert state_sync.greatest_common_interval_end(environment_name, set()) is None
-
-
-def test_greatest_common_interval_end_ensure_finalized_snapshots(
-    state_sync: EngineAdapterStateSync, make_snapshot: t.Callable
-) -> None:
-    snapshot_a = make_snapshot(
-        SqlModel(
-            name="a",
-            cron="@daily",
-            query=parse_one("select 1, ds"),
-        ),
-    )
-    snapshot_a.categorize_as(SnapshotChangeCategory.BREAKING)
-
-    snapshot_b = make_snapshot(
-        SqlModel(
-            name="b",
-            cron="@daily",
-            query=parse_one("select 2, ds"),
-        ),
-    )
-    snapshot_b.categorize_as(SnapshotChangeCategory.BREAKING)
-
-    state_sync.push_snapshots([snapshot_a, snapshot_b])
-
-    state_sync.add_interval(snapshot_a, "2023-01-01", "2023-01-01")
-    state_sync.add_interval(snapshot_a, "2023-01-02", "2023-01-02")
-    state_sync.add_interval(snapshot_a, "2023-01-03", "2023-01-03")
-    state_sync.add_interval(snapshot_b, "2023-01-01", "2023-01-01")
-    state_sync.add_interval(snapshot_b, "2023-01-02", "2023-01-02")
-
-    environment_name = "test_max_interval_end_for_environment"
-
-    assert state_sync.greatest_common_interval_end(environment_name, {snapshot_a.name}) is None
-
-    state_sync.promote(
-        Environment(
-            name=environment_name,
-            snapshots=[snapshot_a.table_info, snapshot_b.table_info],
-            start_at="2023-01-01",
-            end_at="2023-01-03",
-            plan_id="test_plan_id",
-            previous_finalized_snapshots=[snapshot_b.table_info],
-        )
-    )
-
-    assert state_sync.greatest_common_interval_end(
-        environment_name, {snapshot_a.name}, ensure_finalized_snapshots=True
-    ) == to_timestamp("2023-01-03")
-
-    assert state_sync.greatest_common_interval_end(
+    assert state_sync.max_interval_end_per_model(
         environment_name, {snapshot_b.name}, ensure_finalized_snapshots=True
-    ) == to_timestamp("2023-01-03")
+    ) == {snapshot_b.name: to_timestamp("2023-01-03")}
 
-    assert state_sync.greatest_common_interval_end(
+    assert state_sync.max_interval_end_per_model(
         environment_name, {snapshot_a.name, snapshot_b.name}, ensure_finalized_snapshots=True
-    ) == to_timestamp("2023-01-03")
+    ) == {snapshot_b.name: to_timestamp("2023-01-03")}
 
-    assert state_sync.greatest_common_interval_end(
-        environment_name, {"missing"}, ensure_finalized_snapshots=True
-    ) == to_timestamp("2023-01-03")
-    assert state_sync.greatest_common_interval_end(environment_name, set()) is None
+    assert state_sync.max_interval_end_per_model(
+        environment_name, ensure_finalized_snapshots=True
+    ) == {snapshot_b.name: to_timestamp("2023-01-03")}
+
+    assert (
+        state_sync.max_interval_end_per_model(
+            environment_name, {"missing"}, ensure_finalized_snapshots=True
+        )
+        == {}
+    )
+    assert state_sync.max_interval_end_per_model(environment_name, set()) == {}
 
 
 def test_get_snapshots(mocker):
@@ -2264,6 +2218,9 @@ def test_snapshot_batching(state_sync, mocker, make_snapshot):
                 "a",
                 "1",
                 "1",
+                1,
+                1,
+                False,
             ],
             [
                 make_snapshot(
@@ -2272,6 +2229,9 @@ def test_snapshot_batching(state_sync, mocker, make_snapshot):
                 "a",
                 "2",
                 "2",
+                1,
+                1,
+                False,
             ],
         ],
         [
@@ -2282,6 +2242,9 @@ def test_snapshot_batching(state_sync, mocker, make_snapshot):
                 "a",
                 "3",
                 "3",
+                1,
+                1,
+                False,
             ],
         ],
     ]
@@ -2325,3 +2288,31 @@ def test_seed_model_metadata_update(
 
     state_sync.push_snapshots([new_snapshot])
     assert len(state_sync.get_snapshots([new_snapshot, snapshot])) == 2
+
+
+def test_snapshot_cache(
+    state_sync: EngineAdapterStateSync, make_snapshot: t.Callable, mocker: MockerFixture
+):
+    cache_mock = mocker.Mock()
+    state_sync._snapshot_cache = cache_mock
+
+    snapshot = make_snapshot(SqlModel(name="a", query=parse_one("select 1")))
+    cache_mock.get_or_load.return_value = ({snapshot.snapshot_id: snapshot}, {snapshot.snapshot_id})
+
+    # Use _push_snapshots to bypass cache.
+    state_sync._push_snapshots([snapshot])
+
+    assert state_sync.get_snapshots([snapshot.snapshot_id]) == {snapshot.snapshot_id: snapshot}
+    cache_mock.get_or_load.assert_called_once_with({snapshot.snapshot_id}, mocker.ANY)
+
+    # Update the snapshot in the state and make sure this update is reflected on the cached instance.
+    assert snapshot.unpaused_ts is None
+    assert not snapshot.unrestorable
+    state_sync._update_snapshots([snapshot.snapshot_id], unpaused_ts=1, unrestorable=True)
+    new_snapshot = state_sync.get_snapshots([snapshot.snapshot_id])[snapshot.snapshot_id]
+    assert new_snapshot.unpaused_ts == 1
+    assert new_snapshot.unrestorable
+
+    # If the record was deleted from the state, the cached version should not be returned.
+    state_sync.delete_snapshots([snapshot.snapshot_id])
+    assert state_sync.get_snapshots([snapshot.snapshot_id]) == {}

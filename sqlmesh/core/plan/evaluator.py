@@ -27,7 +27,7 @@ from sqlmesh.core.notification_target import (
 )
 from sqlmesh.core.plan.definition import Plan
 from sqlmesh.core.scheduler import Scheduler, SignalFactory
-from sqlmesh.core.snapshot import DeployabilityIndex, Snapshot, SnapshotEvaluator
+from sqlmesh.core.snapshot import DeployabilityIndex, Snapshot, SnapshotEvaluator, SnapshotIntervals
 from sqlmesh.core.state_sync import StateSync
 from sqlmesh.core.state_sync.base import PromotionResult
 from sqlmesh.core.user import User
@@ -173,6 +173,7 @@ class BuiltInPlanEvaluator(PlanEvaluator):
             deployability_index=deployability_index,
             circuit_breaker=circuit_breaker,
             end_bounded=plan.end_bounded,
+            interval_end_per_model=plan.interval_end_per_model,
         )
         if not is_run_successful:
             raise SQLMeshError("Plan application failed.")
@@ -296,7 +297,7 @@ class BuiltInPlanEvaluator(PlanEvaluator):
         if not plan.restatements:
             return
 
-        self.state_sync.remove_interval(
+        self.state_sync.remove_intervals(
             [
                 (plan.context_diff.snapshots[s_id], interval)
                 for s_id, interval in plan.restatements.items()
@@ -402,6 +403,7 @@ class StateBasedAirflowPlanEvaluator(BaseAirflowPlanEvaluator):
                 for change_source, snapshots in plan.indirectly_modified.items()
             },
             removed_snapshots=list(plan.context_diff.removed_snapshots),
+            interval_end_per_model=plan.interval_end_per_model,
             execution_time=plan.execution_time,
             allow_destructive_snapshots=plan.allow_destructive_models,
         )
@@ -480,6 +482,7 @@ class AirflowPlanEvaluator(StateBasedAirflowPlanEvaluator):
                 for change_source, snapshots in plan.indirectly_modified.items()
             },
             removed_snapshots=list(plan.context_diff.removed_snapshots),
+            interval_end_per_model=plan.interval_end_per_model,
             execution_time=plan.execution_time,
             allow_destructive_snapshots=plan.allow_destructive_models,
         )
@@ -526,8 +529,13 @@ class MWAAPlanEvaluator(StateBasedAirflowPlanEvaluator):
 def update_intervals_for_new_snapshots(
     snapshots: t.Collection[Snapshot], state_sync: StateSync
 ) -> None:
+    snapshots_intervals: t.List[SnapshotIntervals] = []
     for snapshot in state_sync.refresh_snapshot_intervals(snapshots):
         if snapshot.is_forward_only:
             snapshot.dev_intervals = snapshot.intervals.copy()
-            for start, end in snapshot.dev_intervals:
-                state_sync.add_interval(snapshot, start, end, is_dev=True)
+            snapshot_intervals = snapshot.snapshot_intervals
+            snapshot_intervals.intervals.clear()
+            snapshots_intervals.append(snapshot_intervals)
+
+    if snapshots_intervals:
+        state_sync.add_snapshots_intervals(snapshots_intervals)

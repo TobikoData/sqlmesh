@@ -856,7 +856,7 @@ class SnapshotEvaluator:
         count, *_ = self.adapter.fetchone(
             select("COUNT(*)").from_(query.subquery("audit")),
             quote_identifiers=True,
-        )
+        )  # type: ignore
         if count and raise_exception:
             audit_error = AuditError(
                 audit_name=audit.name,
@@ -1811,7 +1811,7 @@ def _intervals(snapshot: Snapshot, deployability_index: DeployabilityIndex) -> I
 
 def _check_destructive_schema_change(
     snapshot: Snapshot,
-    alter_expressions: t.List[exp.AlterTable],
+    alter_expressions: t.List[exp.Alter],
     allow_destructive_snapshots: t.Set[str],
 ) -> None:
     if snapshot.needs_destructive_check(allow_destructive_snapshots) and has_drop_alteration(

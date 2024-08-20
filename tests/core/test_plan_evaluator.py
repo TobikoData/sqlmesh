@@ -109,6 +109,7 @@ def test_airflow_evaluator(sushi_plan: Plan, mocker: MockerFixture):
         indirectly_modified_snapshots={},
         removed_snapshots=[],
         execution_time=None,
+        interval_end_per_model=None,
     )
 
     airflow_client_mock.wait_for_dag_run_completion.assert_called_once()
@@ -172,7 +173,7 @@ def test_update_intervals_for_new_snapshots(
         query=parse_one("SELECT 1::INT AS one"),
     )
     snapshot = make_snapshot(model)
-    snapshot.change_category = change_category
+    snapshot.categorize_as(change_category)
 
     snapshot.add_interval("2023-01-01", "2023-01-01")
 
@@ -185,12 +186,12 @@ def test_update_intervals_for_new_snapshots(
 
     if change_category == SnapshotChangeCategory.FORWARD_ONLY:
         assert snapshot.dev_intervals == [(to_timestamp("2023-01-01"), to_timestamp("2023-01-02"))]
-        state_sync_mock.add_interval.assert_called_once_with(
-            snapshot, to_timestamp("2023-01-01"), to_timestamp("2023-01-02"), is_dev=True
-        )
+        expected_intervals = snapshot.snapshot_intervals
+        expected_intervals.intervals.clear()
+        state_sync_mock.add_snapshots_intervals.assert_called_once_with([expected_intervals])
     else:
         assert not snapshot.dev_intervals
-        state_sync_mock.add_interval.assert_not_called()
+        state_sync_mock.add_snapshots_intervals.assert_not_called()
 
 
 def test_state_based_airflow_evaluator_with_restatements(

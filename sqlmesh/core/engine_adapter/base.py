@@ -861,7 +861,7 @@ class EngineAdapter:
         self,
         current_table_name: TableName,
         target_table_name: TableName,
-    ) -> t.List[exp.AlterTable]:
+    ) -> t.List[exp.Alter]:
         """
         Determines the alter statements needed to change the current table into the structure of the target table.
         """
@@ -873,7 +873,7 @@ class EngineAdapter:
 
     def alter_table(
         self,
-        alter_expressions: t.List[exp.AlterTable],
+        alter_expressions: t.List[exp.Alter],
     ) -> None:
         """
         Performs the alter statements to change the current table into the structure of the target table.
@@ -1328,12 +1328,22 @@ class EngineAdapter:
         column_descriptions: t.Optional[t.Dict[str, str]] = None,
         truncate: bool = False,
     ) -> None:
-        source_queries, columns_to_types = self._get_source_queries_and_columns_to_types(
-            source_table, columns_to_types, target_table=target_table, batch_size=0
-        )
-        columns_to_types = columns_to_types or self.columns(target_table)
+        def remove_managed_columns(
+            cols_to_types: t.Dict[str, exp.DataType],
+        ) -> t.Dict[str, exp.DataType]:
+            return {
+                k: v for k, v in cols_to_types.items() if k not in {valid_from_name, valid_to_name}
+            }
+
         valid_from_name = valid_from_col.name
         valid_to_name = valid_to_col.name
+        unmanaged_columns_to_types = (
+            remove_managed_columns(columns_to_types) if columns_to_types else None
+        )
+        source_queries, unmanaged_columns_to_types = self._get_source_queries_and_columns_to_types(
+            source_table, unmanaged_columns_to_types, target_table=target_table, batch_size=0
+        )
+        columns_to_types = columns_to_types or self.columns(target_table)
         updated_at_name = updated_at_col.name if updated_at_col else None
         if (
             valid_from_name not in columns_to_types
@@ -1343,6 +1353,9 @@ class EngineAdapter:
             columns_to_types = self.columns(target_table)
         if not columns_to_types:
             raise SQLMeshError(f"Could not get columns_to_types. Does {target_table} exist?")
+        unmanaged_columns_to_types = unmanaged_columns_to_types or remove_managed_columns(
+            columns_to_types
+        )
         if not unique_key:
             raise SQLMeshError("unique_key must be provided for SCD Type 2")
         if check_columns and updated_at_col:
@@ -1361,13 +1374,9 @@ class EngineAdapter:
             raise SQLMeshError(
                 f"Column {updated_at_name} not found in {target_table}. Table must contain an `updated_at` timestamp for SCD Type 2"
             )
-
-        unmanaged_columns = [
-            col for col in columns_to_types if col not in {valid_from_name, valid_to_name}
-        ]
         time_data_type = columns_to_types[valid_from_name]
         select_source_columns: t.List[t.Union[str, exp.Alias]] = [
-            col for col in unmanaged_columns if col != updated_at_name
+            col for col in unmanaged_columns_to_types if col != updated_at_name
         ]
         table_columns = [exp.column(c, quoted=True) for c in columns_to_types]
         if updated_at_name:
@@ -1381,7 +1390,7 @@ class EngineAdapter:
         # If we want to change this, then we just need to check the expressions in unique_key and pull out the
         # column names and then remove them from the unmanaged_columns
         if check_columns and check_columns == exp.Star():
-            check_columns = [exp.column(col) for col in unmanaged_columns]
+            check_columns = [exp.column(col) for col in unmanaged_columns_to_types]
         execution_ts = to_time_column(execution_time, time_data_type)
         if updated_at_as_valid_from:
             if not updated_at_col:
@@ -1491,7 +1500,7 @@ class EngineAdapter:
                 prefixed_col.this.set("this", f"t_{prefixed_col.name}")
                 prefixed_columns_to_types.append(prefixed_col)
             prefixed_unmanaged_columns = []
-            for column in unmanaged_columns:
+            for column in unmanaged_columns_to_types:
                 prefixed_col = exp.column(column).copy()
                 prefixed_col.this.set("this", f"t_{prefixed_col.name}")
                 prefixed_unmanaged_columns.append(prefixed_col)
@@ -1563,7 +1572,10 @@ class EngineAdapter:
                             exp.column(col, table="latest").as_(prefixed_columns_to_types[i].this)
                             for i, col in enumerate(columns_to_types)
                         ),
-                        *(exp.column(col, table="source").as_(col) for col in unmanaged_columns),
+                        *(
+                            exp.column(col, table="source").as_(col)
+                            for col in unmanaged_columns_to_types
+                        ),
                     )
                     .from_("latest")
                     .join(
@@ -1587,7 +1599,7 @@ class EngineAdapter:
                             ),
                             *(
                                 exp.column(col, table="source").as_(col)
-                                for col in unmanaged_columns
+                                for col in unmanaged_columns_to_types
                             ),
                         )
                         .from_("latest")
@@ -1615,7 +1627,7 @@ class EngineAdapter:
                                 exp.column(prefixed_unmanaged_columns[i].this, table="joined"),
                                 exp.column(col, table="joined"),
                             ).as_(col)
-                            for i, col in enumerate(unmanaged_columns)
+                            for i, col in enumerate(unmanaged_columns_to_types)
                         ),
                         valid_from_case_stmt,
                         valid_to_case_stmt,
@@ -1638,7 +1650,7 @@ class EngineAdapter:
                 .with_(
                     "inserted_rows",
                     exp.select(
-                        *unmanaged_columns,
+                        *unmanaged_columns_to_types,
                         insert_valid_from_start.as_(valid_from_col.this),  # type: ignore
                         to_time_column(exp.null(), time_data_type).as_(valid_to_col.this),
                     )
@@ -1748,7 +1760,7 @@ class EngineAdapter:
         query: t.Union[exp.Expression, str],
         ignore_unsupported_errors: bool = False,
         quote_identifiers: bool = False,
-    ) -> t.Tuple:
+    ) -> t.Optional[t.Tuple]:
         with self.transaction():
             self.execute(
                 query,

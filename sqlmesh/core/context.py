@@ -35,7 +35,6 @@ from __future__ import annotations
 
 import abc
 import collections
-import gc
 import logging
 import time
 import traceback
@@ -179,7 +178,9 @@ class BaseContext(abc.ABC):
 
         # We generate SQL for the default dialect because the table name may be used in a
         # fetchdf call and so the quotes need to be correct (eg. backticks for bigquery)
-        return parse_one(self._model_tables[model_name]).sql(dialect=self.default_dialect)
+        return parse_one(self._model_tables[model_name]).sql(
+            dialect=self.default_dialect, identify=True
+        )
 
     def fetchdf(
         self, query: t.Union[exp.Expression, str], quote_identifiers: bool = False
@@ -425,12 +426,19 @@ class GenericContext(BaseContext, t.Generic[C]):
             raise SQLMeshError(f"The disabled model '{model.name}' cannot be upserted")
         path = model._path
 
-        # model.copy() can't be used here due to a cached state that can be a part of a model instance.
-        model = t.cast(Model, type(model)(**{**t.cast(Model, model).dict(), **kwargs}))
+        model = model.copy(update=kwargs)
         model._path = path
 
-        self._models.update({model.fqn: model})
         self.dag.add(model.fqn, model.depends_on)
+
+        self._models.update(
+            {
+                model.fqn: model,
+                # bust the fingerprint cache for all downstream models
+                **{fqn: self._models[fqn].copy() for fqn in self.dag.downstream(model.fqn)},
+            }
+        )
+
         update_model_schemas(
             self.dag,
             self._models,
@@ -500,7 +508,6 @@ class GenericContext(BaseContext, t.Generic[C]):
         """Load all files in the context's path."""
         load_start_ts = time.perf_counter()
         with sys_path(*self.configs):
-            gc.disable()
             project = self._loader.load(self, update_schemas)
             self._macros = project.macros
             self._jinja_macros = project.jinja_macros
@@ -514,7 +521,6 @@ class GenericContext(BaseContext, t.Generic[C]):
                 else:
                     self._audits[name] = audit
             self.dag = project.dag
-            gc.enable()
 
             duplicates = set(self._models) & set(self._standalone_audits)
             if duplicates:
@@ -1126,31 +1132,27 @@ class GenericContext(BaseContext, t.Generic[C]):
 
         # If no end date is specified, use the max interval end from prod
         # to prevent unintended evaluation of the entire DAG.
+        default_end: t.Optional[int] = None
+        max_interval_end_per_model: t.Optional[t.Dict[str, int]] = None
         if not run:
+            models_for_interval_end: t.Optional[t.Set[str]] = None
             if backfill_models is not None:
-                # Only consider selected models for the default end value.
-                models_for_default_end = backfill_models.copy()
-                for name in backfill_models:
-                    if name not in snapshots:
+                models_for_interval_end = set()
+                models_stack = list(backfill_models)
+                while models_stack:
+                    next_model = models_stack.pop()
+                    if next_model not in snapshots:
                         continue
-                    snapshot = snapshots[name]
-                    snapshot_id = snapshot.snapshot_id
-                    if (
-                        snapshot_id in context_diff.added
-                        and snapshot_id in context_diff.new_snapshots
-                    ):
-                        # If the selected model is a newly added model, then we should narrow down the intervals
-                        # that should be considered for the default plan end value by including its parents.
-                        models_for_default_end |= {s.name for s in snapshot.parents}
-                default_end = self.state_sync.greatest_common_interval_end(
-                    c.PROD,
-                    models_for_default_end,
-                    ensure_finalized_snapshots=self.config.plan.use_finalized_state,
-                )
-            else:
-                default_end = self.state_sync.max_interval_end_for_environment(
-                    c.PROD, ensure_finalized_snapshots=self.config.plan.use_finalized_state
-                )
+                    models_for_interval_end.add(next_model)
+                    models_stack.extend([s.name for s in snapshots[next_model].parents])
+
+            max_interval_end_per_model = self.state_sync.max_interval_end_per_model(
+                c.PROD,
+                models=models_for_interval_end,
+                ensure_finalized_snapshots=self.config.plan.use_finalized_state,
+            )
+            if max_interval_end_per_model:
+                default_end = max(max_interval_end_per_model.values())
         else:
             default_end = None
 
@@ -1186,6 +1188,7 @@ class GenericContext(BaseContext, t.Generic[C]):
             end_bounded=not run,
             ensure_finalized_snapshots=self.config.plan.use_finalized_state,
             engine_schema_differ=self.engine_adapter.SCHEMA_DIFFER,
+            interval_end_per_model=max_interval_end_per_model,
             console=self.console,
         )
 

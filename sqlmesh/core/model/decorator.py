@@ -23,6 +23,7 @@ from sqlmesh.utils import registry_decorator
 from sqlmesh.utils.errors import ConfigError
 from sqlmesh.utils.metaprogramming import build_env, serialize_env
 
+
 logger = logging.getLogger(__name__)
 
 

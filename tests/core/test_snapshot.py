@@ -35,6 +35,7 @@ from sqlmesh.core.snapshot import (
     DeployabilityIndex,
     QualifiedViewName,
     Snapshot,
+    SnapshotId,
     SnapshotChangeCategory,
     SnapshotFingerprint,
     SnapshotTableInfo,
@@ -43,6 +44,7 @@ from sqlmesh.core.snapshot import (
     has_paused_forward_only,
     missing_intervals,
 )
+from sqlmesh.core.snapshot.cache import SnapshotCache
 from sqlmesh.core.snapshot.categorizer import categorize_change
 from sqlmesh.core.snapshot.definition import display_name
 from sqlmesh.utils import AttributeDict
@@ -804,6 +806,7 @@ def test_fingerprint_jinja_macros(model: Model):
 
     fingerprint = fingerprint_from_node(model, nodes={})
     assert fingerprint == original_fingerprint
+    model = model.copy()
 
     model.jinja_macros.root_macros["test_macro"] = MacroInfo(
         definition="{% macro test_macro() %}b{% endmacro %}", depends_on=[]
@@ -822,7 +825,7 @@ def test_fingerprint_jinja_macros_global_objs(model: Model, global_obj_key: str)
         }
     )
     fingerprint = fingerprint_from_node(model, nodes={})
-
+    model = model.copy()
     model.jinja_macros.global_objs[global_obj_key] = AttributeDict({"test": "test"})
     updated_fingerprint = fingerprint_from_node(model, nodes={})
     assert updated_fingerprint.data_hash != fingerprint.data_hash
@@ -1905,3 +1908,59 @@ def test_custom_model_kind(make_snapshot):
 
     parsed_table_info = SnapshotTableInfo.parse_raw(table_info.json())
     assert parsed_table_info.custom_materialization == "MyCustomStrategy"
+
+
+def test_ttl_ms(make_snapshot):
+    snapshot = make_snapshot(
+        SqlModel(
+            name="test_model_name",
+            query=parse_one("SELECT 1"),
+        ),
+        ttl="in 1 week",
+    )
+    assert snapshot.ttl_ms == 604800000
+
+
+def test_snapshot_cache(make_snapshot, tmp_path):
+    cache_path = tmp_path / "snapshot_cache"
+    cache = SnapshotCache(cache_path)
+
+    snapshot = make_snapshot(
+        SqlModel(
+            name="test_model_name",
+            query=parse_one("SELECT 1"),
+        )
+    )
+
+    loader_called_times = 0
+
+    def _loader(snapshot_ids: t.Set[SnapshotId]) -> t.Collection[Snapshot]:
+        nonlocal loader_called_times
+        loader_called_times += 1
+        return [snapshot]
+
+    assert cache.get_or_load([snapshot.snapshot_id], _loader) == (
+        {snapshot.snapshot_id: snapshot},
+        set(),
+    )
+    assert cache.get_or_load([snapshot.snapshot_id], _loader) == (
+        {snapshot.snapshot_id: snapshot},
+        {snapshot.snapshot_id},
+    )
+    assert cache.get_or_load([snapshot.snapshot_id], _loader) == (
+        {snapshot.snapshot_id: snapshot},
+        {snapshot.snapshot_id},
+    )
+    assert loader_called_times == 1
+
+    cached_snapshot = cache.get_or_load([snapshot.snapshot_id], _loader)[0][snapshot.snapshot_id]
+    assert cached_snapshot.model._query_renderer._optimized_cache is not None
+    assert cached_snapshot.model._data_hash is not None
+    assert cached_snapshot.model._metadata_hash is not None
+
+    cache.clear()
+    assert cache.get_or_load([snapshot.snapshot_id], _loader) == (
+        {snapshot.snapshot_id: snapshot},
+        set(),
+    )
+    assert loader_called_times == 2

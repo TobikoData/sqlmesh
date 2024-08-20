@@ -33,11 +33,8 @@ from sqlmesh.utils import columns_to_types_all_known, str_to_bool, UniqueKeyDict
 from sqlmesh.utils.date import TimeLike, make_inclusive, to_datetime, to_time_column
 from sqlmesh.utils.errors import ConfigError, SQLMeshError, raise_config_error
 from sqlmesh.utils.hashing import hash_data
-from sqlmesh.utils.jinja import (
-    JinjaMacroRegistry,
-    extract_macro_references_and_variables,
-)
-from sqlmesh.utils.pydantic import field_validator, field_validator_v1_args
+from sqlmesh.utils.jinja import JinjaMacroRegistry, extract_macro_references_and_variables
+from sqlmesh.utils.pydantic import PRIVATE_FIELDS, field_validator, field_validator_v1_args
 from sqlmesh.utils.metaprogramming import (
     Executable,
     build_env,
@@ -54,6 +51,11 @@ if t.TYPE_CHECKING:
     from sqlmesh.core.engine_adapter._typing import QueryOrDF
     from sqlmesh.core.snapshot import DeployabilityIndex, Node, Snapshot
     from sqlmesh.utils.jinja import MacroReference
+
+    if sys.version_info >= (3, 11):
+        from typing import Self
+    else:
+        from typing_extensions import Self
 
 if sys.version_info >= (3, 9):
     from typing import Literal
@@ -127,6 +129,17 @@ class _Model(ModelMeta, frozen=True):
     )
 
     _expressions_validator = expression_validator
+
+    def __getstate__(self) -> t.Dict[t.Any, t.Any]:
+        state = super().__getstate__()
+        private = state[PRIVATE_FIELDS]
+        private["_SqlBasedModel__statement_renderers"] = {}
+        return state
+
+    def copy(self, **kwargs: t.Any) -> Self:
+        model = super().copy(**kwargs)
+        model.__statement_renderers = {}
+        return model
 
     def render(
         self,
@@ -629,7 +642,7 @@ class _Model(ModelMeta, frozen=True):
                     {col: dtype.sql(dialect=self.dialect) for col, dtype in mapping_schema.items()},
                 )
 
-    @cached_property
+    @property
     def depends_on(self) -> t.Set[str]:
         """All of the upstream dependencies referenced in the model's query, excluding self references.
 
@@ -698,7 +711,7 @@ class _Model(ModelMeta, frozen=True):
     def is_seed(self) -> bool:
         return False
 
-    @cached_property
+    @property
     def depends_on_self(self) -> bool:
         return self.fqn in self.full_depends_on
 
@@ -798,7 +811,9 @@ class _Model(ModelMeta, frozen=True):
         Returns:
             The data hash for the node.
         """
-        return hash_data(self._data_hash_values)
+        if self._data_hash is None:
+            self._data_hash = hash_data(self._data_hash_values)
+        return self._data_hash
 
     @property
     def _data_hash_values(self) -> t.List[str]:
@@ -850,62 +865,64 @@ class _Model(ModelMeta, frozen=True):
         """
         from sqlmesh.core.audit import BUILT_IN_AUDITS
 
-        metadata = [
-            self.dialect,
-            self.owner,
-            self.description,
-            json.dumps(self.column_descriptions, sort_keys=True),
-            self.cron,
-            str(self.start) if self.start else None,
-            str(self.end) if self.end else None,
-            str(self.retention) if self.retention else None,
-            str(self.batch_size) if self.batch_size is not None else None,
-            str(self.batch_concurrency) if self.batch_concurrency is not None else None,
-            json.dumps(self.mapping_schema, sort_keys=True),
-            *sorted(self.tags),
-            *sorted(ref.json(sort_keys=True) for ref in self.all_references),
-            *self.kind.metadata_hash_values,
-            self.project,
-            str(self.allow_partials),
-            gen(self.session_properties_) if self.session_properties_ else None,
-        ]
+        if self._metadata_hash is None:
+            metadata = [
+                self.dialect,
+                self.owner,
+                self.description,
+                json.dumps(self.column_descriptions, sort_keys=True),
+                self.cron,
+                str(self.start) if self.start else None,
+                str(self.end) if self.end else None,
+                str(self.retention) if self.retention else None,
+                str(self.batch_size) if self.batch_size is not None else None,
+                str(self.batch_concurrency) if self.batch_concurrency is not None else None,
+                json.dumps(self.mapping_schema, sort_keys=True),
+                *sorted(self.tags),
+                *sorted(ref.json(sort_keys=True) for ref in self.all_references),
+                *self.kind.metadata_hash_values,
+                self.project,
+                str(self.allow_partials),
+                gen(self.session_properties_) if self.session_properties_ else None,
+            ]
 
-        for audit_name, audit_args in sorted(self.audits, key=lambda a: a[0]):
-            metadata.append(audit_name)
-            audit = None
-            if audit_name in BUILT_IN_AUDITS:
-                for arg_name, arg_value in audit_args.items():
-                    metadata.append(arg_name)
-                    metadata.append(gen(arg_value))
-            elif audit_name in self.inline_audits:
-                audit = self.inline_audits[audit_name]
-            elif audit_name in audits:
-                audit = audits[audit_name]
-            else:
-                raise SQLMeshError(f"Unexpected audit name '{audit_name}'.")
+            for audit_name, audit_args in sorted(self.audits, key=lambda a: a[0]):
+                metadata.append(audit_name)
+                audit = None
+                if audit_name in BUILT_IN_AUDITS:
+                    for arg_name, arg_value in audit_args.items():
+                        metadata.append(arg_name)
+                        metadata.append(gen(arg_value))
+                elif audit_name in self.inline_audits:
+                    audit = self.inline_audits[audit_name]
+                elif audit_name in audits:
+                    audit = audits[audit_name]
+                else:
+                    raise SQLMeshError(f"Unexpected audit name '{audit_name}'.")
 
-            if audit:
-                query = (
-                    audit.render_query(self, **t.cast(t.Dict[str, t.Any], audit_args))
-                    or audit.query
-                )
-                metadata.extend(
-                    [
-                        gen(query),
-                        audit.dialect,
-                        str(audit.skip),
-                        str(audit.blocking),
-                    ]
-                )
+                if audit:
+                    query = (
+                        audit.render_query(self, **t.cast(t.Dict[str, t.Any], audit_args))
+                        or audit.query
+                    )
+                    metadata.extend(
+                        [
+                            gen(query),
+                            audit.dialect,
+                            str(audit.skip),
+                            str(audit.blocking),
+                        ]
+                    )
 
-        for key, value in (self.virtual_properties or {}).items():
-            metadata.append(key)
-            metadata.append(gen(value))
+            for key, value in (self.virtual_properties or {}).items():
+                metadata.append(key)
+                metadata.append(gen(value))
 
-        metadata.extend(gen(s) for s in self.signals)
-        metadata.extend(self._additional_metadata)
+            metadata.extend(gen(s) for s in self.signals)
+            metadata.extend(self._additional_metadata)
 
-        return hash_data(metadata)
+            self._metadata_hash = hash_data(metadata)
+        return self._metadata_hash
 
     @property
     def is_model(self) -> bool:
@@ -940,7 +957,7 @@ class _Model(ModelMeta, frozen=True):
 
     @property
     def full_depends_on(self) -> t.Set[str]:
-        if not self._full_depends_on:
+        if self._full_depends_on is None:
             depends_on = self.depends_on_ or set()
 
             query = self.render_query(optimize=False)
@@ -994,6 +1011,25 @@ class SqlModel(_SqlBasedModel):
     source_type: Literal["sql"] = "sql"
 
     _columns_to_types: t.Optional[t.Dict[str, exp.DataType]] = None
+
+    def __getstate__(self) -> t.Dict[t.Any, t.Any]:
+        state = super().__getstate__()
+        state["__dict__"] = state["__dict__"].copy()
+        # query renderer is very expensive to serialize
+        state["__dict__"].pop("_query_renderer", None)
+        state["__dict__"].pop("column_descriptions", None)
+        private = state[PRIVATE_FIELDS]
+        private["_columns_to_types"] = None
+        return state
+
+    def copy(self, **kwargs: t.Any) -> Self:
+        model = super().copy(**kwargs)
+        model.__dict__.pop("_query_renderer", None)
+        model.__dict__.pop("column_descriptions", None)
+        model._columns_to_types = None
+        if kwargs.get("update", {}).keys() & {"depends_on_", "query"}:
+            model._full_depends_on = None
+        return model
 
     def render_query(
         self,
@@ -1202,6 +1238,17 @@ class SeedModel(_SqlBasedModel):
     is_hydrated: bool = True
     source_type: Literal["seed"] = "seed"
 
+    def __getstate__(self) -> t.Dict[t.Any, t.Any]:
+        state = super().__getstate__()
+        state["__dict__"] = state["__dict__"].copy()
+        state["__dict__"].pop("_reader", None)
+        return state
+
+    def copy(self, **kwargs: t.Any) -> Self:
+        model = super().copy(**kwargs)
+        model.__dict__.pop("_reader", None)
+        return model
+
     def render(
         self,
         *,
@@ -1242,7 +1289,9 @@ class SeedModel(_SqlBasedModel):
             for column in date_columns:
                 df[column] = df[column].dt.date
 
-            df[bool_columns] = df[bool_columns].apply(lambda i: str_to_bool(str(i)))
+            for column in bool_columns:
+                df[column] = df[column].apply(lambda i: str_to_bool(str(i)))
+
             df.loc[:, string_columns] = df[string_columns].mask(
                 cond=lambda x: x.notna(),  # type: ignore
                 other=df[string_columns].astype(str),  # type: ignore
@@ -1277,7 +1326,7 @@ class SeedModel(_SqlBasedModel):
             return self._path.parent / seed_path
         return seed_path
 
-    @cached_property
+    @property
     def depends_on(self) -> t.Set[str]:
         return (self.depends_on_ or set()) - {self.fqn}
 
@@ -1557,7 +1606,7 @@ def load_sql_based_model(
 
     # Extract the query and any pre/post statements
     query_or_seed_insert, pre_statements, post_statements, inline_audits = (
-        _split_sql_model_statements(expressions[1:], path, dialect)
+        _split_sql_model_statements(expressions[1:], path, dialect=dialect)
     )
 
     meta_fields: t.Dict[str, t.Any] = {
@@ -1991,7 +2040,9 @@ INSERT_SEED_MACRO_CALL = d.parse_one("@INSERT_SEED()")
 
 
 def _split_sql_model_statements(
-    expressions: t.List[exp.Expression], path: Path, dialect: t.Optional[str] = None
+    expressions: t.List[exp.Expression],
+    path: Path,
+    dialect: t.Optional[str] = None,
 ) -> t.Tuple[
     t.Optional[exp.Expression],
     t.List[exp.Expression],

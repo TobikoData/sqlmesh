@@ -1466,7 +1466,7 @@ def test_scd_type_2_by_column(ctx: TestContext):
         valid_to_col=exp.column("valid_to", quoted=True),
         execution_time="2023-01-01",
         execution_time_as_valid_from=False,
-        columns_to_types=input_schema,
+        columns_to_types=ctx.columns_to_types,
     )
     results = ctx.get_metadata_results()
     assert len(results.views) == 0
@@ -1535,7 +1535,7 @@ def test_scd_type_2_by_column(ctx: TestContext):
         valid_to_col=exp.column("valid_to", quoted=True),
         execution_time="2023-01-05",
         execution_time_as_valid_from=False,
-        columns_to_types=input_schema,
+        columns_to_types=ctx.columns_to_types,
     )
     results = ctx.get_metadata_results()
     assert len(results.views) == 0

@@ -242,7 +242,7 @@ test_config = config"""
         return df
 
     def _get_duckdb_now(self, adapter: DuckDBEngineAdapter) -> datetime.datetime:
-        return adapter.fetchone("SELECT now()")[0]
+        return adapter.fetchone("SELECT now()")[0]  # type: ignore
 
     def _init_test(
         self,

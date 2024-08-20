@@ -75,8 +75,11 @@ class TrinoEngineAdapter(
     def get_catalog_type(self, catalog: t.Optional[str]) -> str:
         row: t.Tuple = tuple()
         if catalog:
-            row = self.fetchone(
-                f"select connector_name from system.metadata.catalogs where catalog_name='{catalog}'"
+            row = (
+                self.fetchone(
+                    f"select connector_name from system.metadata.catalogs where catalog_name='{catalog}'"
+                )
+                or ()
             )
         return seq_get(row, 0) or self.DEFAULT_CATALOG_TYPE
 

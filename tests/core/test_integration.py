@@ -503,7 +503,7 @@ def test_hourly_model_with_lookback_no_backfill_in_dev(init_and_plan_context: t.
 
 
 @freeze_time("2023-01-08 00:00:00")
-def test_parent_cron_before_child(init_and_plan_context: t.Callable):
+def test_parent_cron_after_child(init_and_plan_context: t.Callable):
     context, plan = init_and_plan_context("examples/sushi")
 
     model = context.get_model("sushi.waiter_revenue_by_day")
@@ -517,6 +517,11 @@ def test_parent_cron_before_child(init_and_plan_context: t.Callable):
 
     plan = context.plan("prod", no_prompts=True, skip_tests=True)
     context.apply(plan)
+
+    waiter_revenue_by_day_snapshot = context.get_snapshot(model.name, raise_if_missing=True)
+    assert waiter_revenue_by_day_snapshot.intervals == [
+        (to_timestamp("2023-01-01"), to_timestamp("2023-01-07"))
+    ]
 
     top_waiters_model = context.get_model("sushi.top_waiters")
     top_waiters_model = add_projection_to_model(t.cast(SqlModel, top_waiters_model), literal=True)
@@ -538,6 +543,51 @@ def test_parent_cron_before_child(init_and_plan_context: t.Callable):
                     (to_timestamp("2023-01-05"), to_timestamp("2023-01-06")),
                     (to_timestamp("2023-01-06"), to_timestamp("2023-01-07")),
                     (to_timestamp("2023-01-07"), to_timestamp("2023-01-08")),
+                ],
+            ),
+        ]
+
+
+@freeze_time("2023-01-08 00:00:00")
+def test_cron_not_aligned_with_day_boundary(init_and_plan_context: t.Callable):
+    context, plan = init_and_plan_context("examples/sushi")
+
+    model = context.get_model("sushi.waiter_revenue_by_day")
+    model = SqlModel.parse_obj(
+        {
+            **model.dict(),
+            "cron": "0 12 * * *",
+        }
+    )
+    context.upsert_model(model)
+
+    plan = context.plan("prod", no_prompts=True, skip_tests=True)
+    context.apply(plan)
+
+    waiter_revenue_by_day_snapshot = context.get_snapshot(model.name, raise_if_missing=True)
+    assert waiter_revenue_by_day_snapshot.intervals == [
+        (to_timestamp("2023-01-01"), to_timestamp("2023-01-07"))
+    ]
+
+    model = add_projection_to_model(t.cast(SqlModel, model), literal=True)
+    context.upsert_model(model)
+
+    waiter_revenue_by_day_snapshot = context.get_snapshot(
+        "sushi.waiter_revenue_by_day", raise_if_missing=True
+    )
+
+    with freeze_time("2023-01-08 00:10:00"):  # Past model's cron.
+        plan = context.plan("dev", select_models=[model.name], no_prompts=True, skip_tests=True)
+        assert plan.missing_intervals == [
+            SnapshotIntervals(
+                snapshot_id=waiter_revenue_by_day_snapshot.snapshot_id,
+                intervals=[
+                    (to_timestamp("2023-01-01"), to_timestamp("2023-01-02")),
+                    (to_timestamp("2023-01-02"), to_timestamp("2023-01-03")),
+                    (to_timestamp("2023-01-03"), to_timestamp("2023-01-04")),
+                    (to_timestamp("2023-01-04"), to_timestamp("2023-01-05")),
+                    (to_timestamp("2023-01-05"), to_timestamp("2023-01-06")),
+                    (to_timestamp("2023-01-06"), to_timestamp("2023-01-07")),
                 ],
             ),
         ]
@@ -1086,7 +1136,7 @@ def test_select_models(init_and_plan_context: t.Callable):
 
     # Select one of the modified models.
     plan_builder = context.plan_builder(
-        "dev", select_models=["+*waiter_revenue_by_day"], skip_tests=True
+        "dev", select_models=["*waiter_revenue_by_day"], skip_tests=True
     )
     snapshot = plan_builder._context_diff.snapshots[waiter_revenue_by_day_snapshot_id]
     plan_builder.set_choice(snapshot, SnapshotChangeCategory.BREAKING)
@@ -1135,6 +1185,77 @@ def test_select_models(init_and_plan_context: t.Callable):
 
 
 @freeze_time("2023-01-08 15:00:00")
+def test_select_unchanged_model_for_backfill(init_and_plan_context: t.Callable):
+    context, plan = init_and_plan_context("examples/sushi")
+    context.apply(plan)
+
+    # Modify 2 models.
+    model = context.get_model("sushi.waiter_revenue_by_day")
+    kwargs = {
+        **model.dict(),
+        # Make a breaking change.
+        "query": model.query.order_by("waiter_id"),  # type: ignore
+    }
+    context.upsert_model(SqlModel.parse_obj(kwargs))
+
+    model = context.get_model("sushi.customer_revenue_by_day")
+    context.upsert_model(add_projection_to_model(t.cast(SqlModel, model)))
+
+    expected_intervals = [
+        (to_timestamp("2023-01-01"), to_timestamp("2023-01-02")),
+        (to_timestamp("2023-01-02"), to_timestamp("2023-01-03")),
+        (to_timestamp("2023-01-03"), to_timestamp("2023-01-04")),
+        (to_timestamp("2023-01-04"), to_timestamp("2023-01-05")),
+        (to_timestamp("2023-01-05"), to_timestamp("2023-01-06")),
+        (to_timestamp("2023-01-06"), to_timestamp("2023-01-07")),
+        (to_timestamp("2023-01-07"), to_timestamp("2023-01-08")),
+    ]
+
+    waiter_revenue_by_day_snapshot_id = context.get_snapshot(
+        "sushi.waiter_revenue_by_day", raise_if_missing=True
+    ).snapshot_id
+
+    # Select one of the modified models.
+    plan_builder = context.plan_builder(
+        "dev", select_models=["*waiter_revenue_by_day"], skip_tests=True
+    )
+    snapshot = plan_builder._context_diff.snapshots[waiter_revenue_by_day_snapshot_id]
+    plan_builder.set_choice(snapshot, SnapshotChangeCategory.BREAKING)
+    plan = plan_builder.build()
+
+    assert plan.missing_intervals == [
+        SnapshotIntervals(
+            snapshot_id=waiter_revenue_by_day_snapshot_id,
+            intervals=expected_intervals,
+        ),
+    ]
+
+    context.apply(plan)
+
+    # Make sure that we only create a view for the selected model.
+    schema_objects = context.engine_adapter.get_data_objects("sushi__dev")
+    assert {o.name for o in schema_objects} == {"waiter_revenue_by_day"}
+
+    # Now select a model downstream from the previously modified one in order to backfill it.
+    plan = context.plan("dev", select_models=["*top_waiters"], skip_tests=True, no_prompts=True)
+
+    assert plan.missing_intervals == [
+        SnapshotIntervals(
+            snapshot_id=context.get_snapshot(
+                "sushi.top_waiters", raise_if_missing=True
+            ).snapshot_id,
+            intervals=expected_intervals,
+        ),
+    ]
+
+    context.apply(plan)
+
+    # Make sure that a view has been created for the downstream selected model.
+    schema_objects = context.engine_adapter.get_data_objects("sushi__dev")
+    assert {o.name for o in schema_objects} == {"waiter_revenue_by_day", "top_waiters"}
+
+
+@freeze_time("2023-01-08 15:00:00")
 def test_select_models_for_backfill(init_and_plan_context: t.Callable):
     context, _ = init_and_plan_context("examples/sushi")
 
@@ -1149,7 +1270,7 @@ def test_select_models_for_backfill(init_and_plan_context: t.Callable):
     ]
 
     plan = context.plan(
-        "dev", backfill_models=["*waiter_revenue_by_day"], no_prompts=True, skip_tests=True
+        "dev", backfill_models=["+*waiter_revenue_by_day"], no_prompts=True, skip_tests=True
     )
 
     assert plan.missing_intervals == [
@@ -1208,12 +1329,8 @@ def test_dbt_select_star_is_directly_modified(sushi_test_dbt_context: Context):
 
     model = context.get_model("sushi.simple_model_a")
     context.upsert_model(
-        SqlModel.parse_obj(
-            {
-                **model.dict(),
-                "query": d.parse_one("SELECT 1 AS a, 2 AS b"),
-            }
-        )
+        model,
+        query=d.parse_one("SELECT 1 AS a, 2 AS b"),
     )
 
     snapshot_a_id = context.get_snapshot("sushi.simple_model_a").snapshot_id  # type: ignore
@@ -1951,6 +2068,7 @@ def test_multi(mocker):
 
 def test_multi_dbt(mocker):
     context = Context(paths=["examples/multi_dbt/bronze", "examples/multi_dbt/silver"])
+    context._new_state_sync().reset(default_catalog=context.default_catalog)
     plan = context.plan()
     assert len(plan.new_snapshots) == 4
     context.apply(plan)
@@ -2224,6 +2342,10 @@ def test_ignored_snapshots(context_fixture: Context, request):
     assert exp.table_("order_items", "sushi__dev", catalog) in metadata.qualified_views
 
 
+class OldPythonModel(PythonModel):
+    kind: ModelKind = ViewKind()
+
+
 def test_python_model_default_kind_change(init_and_plan_context: t.Callable):
     """
     Around 2024-07-17 Python models had their default Kind changed from VIEW to FULL in order to
@@ -2262,13 +2384,10 @@ def execute(
 
     # monkey-patch PythonModel to default to kind: View again
     # and ViewKind to allow python models again
-    with mock.patch.object(ViewKind, "supports_python_models", return_value=True):
-
-        class OldPythonModel(PythonModel):
-            kind: ModelKind = ViewKind()
-
-        with mock.patch("sqlmesh.core.model.definition.PythonModel", OldPythonModel):
-            context.load()
+    with mock.patch.object(ViewKind, "supports_python_models", return_value=True), mock.patch(
+        "sqlmesh.core.model.definition.PythonModel", OldPythonModel
+    ):
+        context.load()
 
     # check the monkey-patching worked
     model = context.get_model("sushi.python_view_model")
