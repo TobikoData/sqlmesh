@@ -853,7 +853,7 @@ class EngineAdapter:
     ) -> None:
         """Drops an object.
 
-        A an object could be a DATABASE, SCHEMA, VIEW, TABLE, DYNAMIC TABLE, TEMPORARY TABLE etc depending on the :kind.
+        An object could be a DATABASE, SCHEMA, VIEW, TABLE, DYNAMIC TABLE, TEMPORARY TABLE etc depending on the :kind.
 
         Args:
             name: The name of the table to drop.
@@ -1059,6 +1059,7 @@ class EngineAdapter:
             exists=ignore_if_not_exists,
             kind="SCHEMA",
             cascade=cascade,
+            **drop_args,
         )
 
     def drop_view(

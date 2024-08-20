@@ -330,10 +330,10 @@ workflows:
                 - redshift
                 - bigquery
                 - clickhouse-cloud
-          filters:
-            branches:
-              only:
-                - main
+          # filters:
+          #   branches:
+          #     only:
+          #       - main
       - trigger_private_tests:
           requires:
             - style_and_slow_tests

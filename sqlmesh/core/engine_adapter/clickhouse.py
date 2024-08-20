@@ -312,13 +312,15 @@ class ClickhouseEngineAdapter(EngineAdapterWithIndexSupport, LogicalMergeMixin):
                 elif isinstance(ordered_by_raw, list):
                     ordered_by_cols.extend(ordered_by_raw)
 
-            ordered_by_expressions = (
-                exp.Tuple(expressions=[exp.to_column(k) for k in ordered_by_cols])  # type: ignore
-                if ordered_by_cols
-                # default () if no columns provided
-                else exp.Literal(this="()", is_string=False)
+            properties.append(
+                exp.Order(
+                    expressions=[
+                        exp.Ordered(
+                            this=exp.Tuple(expressions=[exp.to_column(k) for k in ordered_by_cols])
+                        )
+                    ]
+                )
             )
-            properties.append(exp.Order(expressions=[exp.Ordered(this=ordered_by_expressions)]))
 
             primary_key_raw = table_properties_copy.pop("PRIMARY_KEY", None)
             if primary_key_raw:

@@ -2243,6 +2243,7 @@ def test_to_time_column(
     if ctx.test_type != "query":
         pytest.skip("Time column tests only need to run for query")
 
+    # TODO: can this be cleaned up after recent sqlglot updates?
     if ctx.dialect == "clickhouse" and time_column_type.is_type(exp.DataType.Type.TIMESTAMPTZ):
         # Clickhouse does not have natively timezone-aware types and does not accept timestrings
         #   with UTC offset "+XX:XX". Therefore, we remove the timezone offset and set a timezone-
