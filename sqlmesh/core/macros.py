@@ -1176,10 +1176,10 @@ def date_spine(
     start_date: exp.Expression,
     end_date: exp.Expression,
 ) -> exp.Select:
-    """Returns an aliased QUERY to build a date spine with the given datepart, and range of start_date and end_date. Useful for joining as a date lookup table.
+    """Returns an QUERY to build a date spine with the given datepart, and range of start_date and end_date. Useful for joining as a date lookup table.
 
     Args:
-        datepart: The datepart to use for the date spine: day, week, month, year
+        datepart: The datepart to use for the date spine - day, week, month, quarter, year
         start_date: The start date for the date spine in format YYYY-MM-DD
         end_date: The end date for the date spine in format YYYY-MM-DD
 
@@ -1189,10 +1189,9 @@ def date_spine(
         >>> from sqlmesh.core.macros import MacroEvaluator
         >>> sql = "@date_spine('week', '2022-01-20', '2024-12-16')"
         >>> MacroEvaluator().transform(parse_one(sql)).sql()
-        'SELECT "_exploded"."date_week" AS "date_week" FROM UNNEST(CAST(GENERATE_SERIES(CAST(\'2022-01-20\' AS DATE), CAST(\'2024-12-16\' AS DATE), (7 * INTERVAL \'1\' DAY)) AS DATE[])) AS "_exploded"("date_week")'
-
+        'SELECT date_week FROM UNNEST(GENERATE_DATE_ARRAY(CAST(\'2022-01-20\' AS DATE), CAST(\'2024-12-16\' AS DATE), INTERVAL \'1\' WEEK)) AS _exploded(date_week)'
     """
-    datepart_name = datepart.name
+    datepart_name = datepart.name.lower()
     start_date_name = start_date.name
     end_date_name = end_date.name
 
@@ -1215,8 +1214,8 @@ def date_spine(
         )
 
     alias_name = f"date_{datepart_name}"
-    start_date_column = exp.cast(start_date, "DATE", dialect=evaluator.dialect)
-    end_date_column = exp.cast(end_date, "DATE", dialect=evaluator.dialect)
+    start_date_column = exp.cast(start_date, "DATE")
+    end_date_column = exp.cast(end_date, "DATE")
     if datepart_name == "quarter" and evaluator.dialect in (
         "spark",
         "spark2",
@@ -1236,9 +1235,7 @@ def date_spine(
 
     exploded = exp.alias_(exp.func("unnest", generate_date_array), "_exploded", table=[alias_name])
 
-    query = exp.select(alias_name).from_(exploded)
-
-    return query
+    return exp.select(alias_name).from_(exploded)
 
 
 def normalize_macro_name(name: str) -> str:

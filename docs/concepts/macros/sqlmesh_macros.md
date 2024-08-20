@@ -935,6 +935,39 @@ SELECT
 FROM "raw_data" AS "raw_data"
 ```
 
+### @DATE_SPINE
+
+`@DATE_SPINE` returns the SQL required to build a date spine. The spine will include the start_date (if it is aligned to the datepart), AND it will include the end_date. This is different from the `date_spine` macro in `dbt-utils` which will NOT include the end_date. It's typically used to join in unique, hard-coded, date ranges to join with other tables/views, so people don't have to constantly adjust date ranges in `where` clauses across many SQL models.
+
+It supports the following arguments, in this order:
+
+- `datepart`: The datepart to use for the date spine - day, week, month, quarter, year
+- `start_date`: The start date for the date spine in format YYYY-MM-DD
+- `end_date`: The end date for the date spine in format YYYY-MM-DD
+
+For example, the following query:
+```sql linenums="1"
+WITH discount_promotion_dates AS (
+  @date_spine('day', '2024-01-01', '2024-01-16')
+)
+
+SELECT * FROM discount_promotion_dates
+```
+
+would be rendered as:
+
+```sql linenums="1"
+WITH "discount_promotion_dates" AS (                                                                             
+  SELECT                                                                                                         
+    "_exploded"."date_day" AS "date_day"                                                                         
+  FROM UNNEST(CAST(GENERATE_SERIES(CAST('2024-01-01' AS DATE), CAST('2024-01-16' AS DATE), INTERVAL '1' DAY) AS  
+DATE[])) AS "_exploded"("date_day")                                                                              
+)                                                                                                                
+SELECT                                                                                                           
+  "discount_promotion_dates"."date_day" AS "date_day"                                                            
+FROM "discount_promotion_dates" AS "discount_promotion_dates"
+```
+
 ### @AND
 
 `@AND` combines a sequence of operands using the `AND` operator, filtering out any NULL expressions.
