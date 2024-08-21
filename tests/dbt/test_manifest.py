@@ -131,6 +131,26 @@ def test_tests_referencing_disabled_models():
 
 
 @pytest.mark.xdist_group("dbt_manifest")
+def test_call_cache():
+    project_path = Path("tests/fixtures/dbt/sushi_test")
+    profile = Profile.load(DbtContext(project_path))
+    helper = ManifestHelper(
+        project_path,
+        project_path,
+        "sushi",
+        profile.target,
+        variable_overrides={"start": "2020-01-01"},
+    )
+
+    unused = "0000"
+    helper._call_cache.put("", value={unused: "unused"})
+    helper._load_all()
+    calls = set(helper._call_cache.get("").keys())
+    assert len(calls) >= 300
+    assert unused not in calls
+
+
+@pytest.mark.xdist_group("dbt_manifest")
 def test_variable_override():
     project_path = Path("tests/fixtures/dbt/sushi_test")
     profile = Profile.load(DbtContext(project_path))

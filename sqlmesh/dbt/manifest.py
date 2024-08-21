@@ -22,6 +22,7 @@ from dbt.config.renderer import DbtProjectYamlRenderer, ProfileRenderer
 from dbt.parser.manifest import ManifestLoader
 from dbt.tracking import do_not_track
 
+from sqlmesh.core import constants as c
 from sqlmesh.dbt.basemodel import Dependencies
 from sqlmesh.dbt.builtin import BUILTIN_FILTERS, BUILTIN_GLOBALS, OVERRIDDEN_MACROS
 from sqlmesh.dbt.model import ModelConfig
@@ -31,6 +32,7 @@ from sqlmesh.dbt.source import SourceConfig
 from sqlmesh.dbt.target import TargetConfig
 from sqlmesh.dbt.test import TestConfig
 from sqlmesh.dbt.util import DBT_VERSION
+from sqlmesh.utils.cache import FileCache
 from sqlmesh.utils.errors import ConfigError
 from sqlmesh.utils.jinja import (
     MacroInfo,
@@ -42,6 +44,7 @@ from sqlmesh.utils.jinja import (
 if t.TYPE_CHECKING:
     from dbt.contracts.graph.manifest import Macro, Manifest
     from dbt.contracts.graph.nodes import ManifestNode, SourceDefinition
+    from sqlmesh.utils.jinja import CallNames
 
 logger = logging.getLogger(__name__)
 
@@ -86,6 +89,9 @@ class ManifestHelper:
         self._tests_by_owner: t.Dict[str, t.List[TestConfig]] = defaultdict(list)
         self._disabled_refs: t.Optional[t.Set[str]] = None
         self._disabled_sources: t.Optional[t.Set[str]] = None
+        self._call_cache: FileCache[t.Dict[str, t.List[CallNames]]] = FileCache(
+            self.project_path / c.CACHE, "jinja_calls"
+        )
 
     def tests(self, package_name: t.Optional[str] = None) -> TestConfigs:
         self._load_all()
@@ -119,11 +125,16 @@ class ManifestHelper:
     def _load_all(self) -> None:
         if self._is_loaded:
             return
+
+        self._calls = {k: (v, False) for k, v in (self._call_cache.get("") or {}).items()}
+
         self._load_macros()
         self._load_sources()
         self._load_tests()
         self._load_models_and_seeds()
         self._is_loaded = True
+
+        self._call_cache.put("", value={k: v for k, (v, used) in self._calls.items() if used})
 
     def _load_sources(self) -> None:
         for source in self._manifest.sources.values():
@@ -380,7 +391,7 @@ class ManifestHelper:
         # This behavior has been observed with macros like dbt.current_timestamp(), dbt_utils.slugify(), and source().
         # Here we apply our custom extractor to make a best effort to supplement references captured in the manifest.
         dependencies = Dependencies()
-        for call_name, node in extract_call_names(target):
+        for call_name, node in extract_call_names(target, cache=self._calls):
             if call_name[0] == "config":
                 continue
             elif call_name[0] == "source":
