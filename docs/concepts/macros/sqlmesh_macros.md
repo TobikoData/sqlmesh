@@ -968,6 +968,11 @@ SELECT
 FROM "discount_promotion_dates" AS "discount_promotion_dates"
 ```
 
+Note: This is DuckDB SQL and other dialects will be transpiled accordingly. 
+- Recursive CTEs (common table expressions) may be slow, so `Redshift / MySQL / MSSQL` users will be affected.
+- For `MSSQL` in particular, there's a recursion limit of approximately 100. If this becomes a problem, you can add an `OPTION (MAXRECURSION 0)` clause after the date spine macro logic to remove the limit. This applies for long date ranges.
+
+
 ### @AND
 
 `@AND` combines a sequence of operands using the `AND` operator, filtering out any NULL expressions.

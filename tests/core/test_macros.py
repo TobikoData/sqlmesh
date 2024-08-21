@@ -786,56 +786,25 @@ def test_date_spine(assert_exp_eq, dialect, date_part):
     # Generate the expected SQL based on the dialect and date_part
     if dialect == "duckdb":
         if date_part == "week":
-            interval = "7 * INTERVAL '1' DAY"
+            interval = "(7 * INTERVAL '1' DAY)"
         elif date_part == "quarter":
-            interval = "90 * INTERVAL '1' DAY"
+            interval = "(90 * INTERVAL '1' DAY)"
         else:
             interval = f"INTERVAL '1' {date_part.upper()}"
-        if date_part == "week":
-            expected_sql = f"""
-            SELECT
-                date_{date_part}
-            FROM
-                UNNEST(
-                    CAST(
-                        GENERATE_SERIES(
-                            CAST('2022-01-01' AS DATE),
-                            CAST('2024-12-31' AS DATE),
-                            ({interval})
-                        ) AS DATE[]
-                    )
-                ) AS _exploded(date_{date_part})
-            """
-        elif date_part == "quarter":
-            expected_sql = f"""
-            SELECT
-                date_{date_part}
-            FROM
-                UNNEST(
-                    CAST(
-                        GENERATE_SERIES(
-                            CAST('2022-01-01' AS DATE),
-                            CAST('2024-12-31' AS DATE),
-                            (90 * INTERVAL '1' DAY)
-                        ) AS DATE[]
-                    )
-                ) AS _exploded(date_{date_part})
-            """
-        else:
-            expected_sql = f"""
-            SELECT
-                date_{date_part}
-            FROM
-                UNNEST(
-                    CAST(
-                        GENERATE_SERIES(
-                            CAST('2022-01-01' AS DATE),
-                            CAST('2024-12-31' AS DATE),
-                            INTERVAL '1' {date_part}
-                        ) AS DATE[]
-                    )
-                ) AS _exploded(date_{date_part})
-            """
+        expected_sql = f"""
+        SELECT
+            date_{date_part}
+        FROM
+            UNNEST(
+                CAST(
+                    GENERATE_SERIES(
+                        CAST('2022-01-01' AS DATE),
+                        CAST('2024-12-31' AS DATE),
+                        {interval}
+                    ) AS DATE[]
+                )
+            ) AS _exploded(date_{date_part})
+        """
     elif dialect == "snowflake":
         expected_sql = f"""
         SELECT
