@@ -4,7 +4,7 @@ import typing as t
 import logging
 import pandas as pd
 import re
-from sqlglot import exp
+from sqlglot import exp, maybe_parse
 from sqlmesh.core.dialect import to_schema
 from sqlmesh.core.engine_adapter.mixins import LogicalMergeMixin
 from sqlmesh.core.engine_adapter.base import EngineAdapterWithIndexSupport
@@ -293,57 +293,55 @@ class ClickhouseEngineAdapter(EngineAdapterWithIndexSupport, LogicalMergeMixin):
             k.upper(): v for k, v in (table_properties.copy() if table_properties else {}).items()
         }
 
-        if bool(re.search(self.ORDER_BY_TABLE_ENGINE_REGEX, table_engine)):
-            ordered_by_raw = table_properties_copy.pop("ORDER_BY", None)
-            ordered_by_cols = []
+        mergetree_engine = bool(re.search(self.ORDER_BY_TABLE_ENGINE_REGEX, table_engine))
+        ordered_by_raw = table_properties_copy.pop("ORDER_BY", None)
+        if mergetree_engine:
+            ordered_by_exprs = []
             if ordered_by_raw:
-                # ORDER_BY: col
-                if isinstance(ordered_by_raw, exp.Column):
-                    ordered_by_cols.append(ordered_by_raw)
-                # ORDER_BY: 'col'
-                elif isinstance(ordered_by_raw, exp.Literal):
-                    ordered_by_cols.append(ordered_by_raw.this)
-                # ORDER_BY: (col1, col2) or ('col1', 'col2')
-                elif isinstance(ordered_by_raw, exp.Tuple):
-                    for col in ordered_by_raw.expressions:
-                        col = col.this if isinstance(col, exp.Literal) else col
-                        ordered_by_cols.append(col)
-                # python list of columns
-                elif isinstance(ordered_by_raw, list):
-                    ordered_by_cols.extend(ordered_by_raw)
+                ordered_by_vals = []
+
+                if isinstance(ordered_by_raw, exp.Tuple):
+                    ordered_by_vals = ordered_by_raw.expressions
+                if isinstance(ordered_by_raw, exp.Paren):
+                    ordered_by_vals = [ordered_by_raw.this]
+
+                if not ordered_by_vals:
+                    ordered_by_vals = (
+                        ordered_by_raw if isinstance(ordered_by_raw, list) else [ordered_by_raw]
+                    )
+
+                for col in ordered_by_vals:
+                    ordered_by_exprs.append(
+                        col
+                        if isinstance(col, exp.Column)
+                        else maybe_parse(
+                            col.name if isinstance(col, exp.Literal) else col,
+                            dialect=self.dialect,
+                            into=exp.Ordered,
+                        )
+                    )
+
+            properties.append(exp.Order(expressions=[exp.Tuple(expressions=ordered_by_exprs)]))
+
+        primary_key = table_properties_copy.pop("PRIMARY_KEY", None)
+        if mergetree_engine and primary_key:
+            primary_key_vals = []
+            if isinstance(primary_key, exp.Tuple):
+                primary_key_vals = primary_key.expressions
+            if isinstance(ordered_by_raw, exp.Paren):
+                primary_key_vals = [primary_key.this]
+
+            if not primary_key_vals:
+                primary_key_vals = primary_key if isinstance(primary_key, list) else [primary_key]
 
             properties.append(
-                exp.Order(
+                exp.PrimaryKey(
                     expressions=[
-                        exp.Ordered(
-                            this=exp.Tuple(expressions=[exp.to_column(k) for k in ordered_by_cols])
-                        )
+                        exp.to_column(k.name if isinstance(k, exp.Literal) else k)
+                        for k in primary_key_vals
                     ]
                 )
             )
-
-            primary_key_raw = table_properties_copy.pop("PRIMARY_KEY", None)
-            if primary_key_raw:
-                primary_key_cols = []
-                # PRIMARY_KEY: col
-                if isinstance(primary_key_raw, exp.Column):
-                    primary_key_cols.append(primary_key_raw)
-                # PRIMARY_KEY: 'col'
-                elif isinstance(primary_key_raw, exp.Literal):
-                    primary_key_cols.append(primary_key_raw.this)
-                # PRIMARY_KEY: (col1, col2) or ('col1', 'col2')
-                elif isinstance(primary_key_raw, exp.Tuple):
-                    for col in primary_key_raw.expressions:
-                        col = col.this if isinstance(col, exp.Literal) else col
-                        primary_key_cols.append(col)
-                # python list of columns
-                elif isinstance(primary_key_raw, list):
-                    primary_key_cols.extend(primary_key_raw)
-
-                if primary_key_cols:
-                    properties.append(
-                        exp.PrimaryKey(expressions=[exp.to_column(k) for k in primary_key_cols])  # type: ignore
-                    )
 
         # `partitioned_by` automatically includes model `time_column`, but we only want the
         #   columns specified by the user so use `partitioned_by_user_cols` instead

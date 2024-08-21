@@ -118,33 +118,90 @@ def test_nullable_datatypes_in_model_columns(adapter: ClickhouseEngineAdapter):
     assert rendered_columns_to_types["other"] == "Tuple(UInt16, String)"
 
 
-def test_nullable_datatypes_in_model_query(adapter: ClickhouseEngineAdapter):
-    model = load_sql_based_model(
-        parse(
-            """
+def test_model_properties(adapter: ClickhouseEngineAdapter):
+    def build_properties_sql(storage_format="", order_by="", primary_key=""):
+        model = load_sql_based_model(
+            parse(
+                f"""
         MODEL (
-            name foo
+            name foo,
+            {storage_format}
+            physical_properties (
+              {order_by}
+              {primary_key}
+            ),
         );
 
         select
-            id::Int64,
-            data::Nullable(JSON),
-            ts::DateTime64,
-            other::Tuple(Uint16, String)
-        from bar
+            *
+        from bar;
     """,
-            default_dialect="clickhouse",
+                default_dialect="clickhouse",
+            )
         )
+
+        return adapter._build_table_properties_exp(
+            storage_format=model.storage_format, table_properties=model.physical_properties
+        ).sql("clickhouse")
+
+    # no order by or primary key because table engine is not part of "MergeTree" engine family
+    assert (
+        build_properties_sql(
+            storage_format="storage_format Log,",
+            order_by="ORDER_BY = a,",
+            primary_key="PRIMARY_KEY = a,",
+        )
+        == "ENGINE=Log"
     )
 
-    rendered_columns_to_types = {
-        k: v.sql(dialect="clickhouse") for k, v in model.columns_to_types_or_raise.items()
-    }
+    assert (
+        build_properties_sql(
+            storage_format="storage_format ReplicatedMergeTree,",
+            order_by="ORDER_BY = a,",
+            primary_key="PRIMARY_KEY = a,",
+        )
+        == "ENGINE=ReplicatedMergeTree ORDER BY (a) PRIMARY KEY (a)"
+    )
 
-    assert rendered_columns_to_types["id"] == "Int64"
-    assert rendered_columns_to_types["data"] == "Nullable(JSON)"
-    assert rendered_columns_to_types["ts"] == "DateTime64"
-    assert rendered_columns_to_types["other"] == "Tuple(UInt16, String)"
+    assert (
+        build_properties_sql(order_by="ORDER_BY = a,", primary_key="PRIMARY_KEY = a,")
+        == "ENGINE=MergeTree ORDER BY (a) PRIMARY KEY (a)"
+    )
+
+    assert (
+        build_properties_sql(order_by='ORDER_BY = "a",', primary_key='PRIMARY_KEY = "a",')
+        == 'ENGINE=MergeTree ORDER BY ("a") PRIMARY KEY ("a")'
+    )
+
+    assert (
+        build_properties_sql(order_by="ORDER_BY = (a),", primary_key="PRIMARY_KEY = (a)")
+        == "ENGINE=MergeTree ORDER BY (a) PRIMARY KEY (a)"
+    )
+
+    assert build_properties_sql(order_by="ORDER_BY = a + 1,") == "ENGINE=MergeTree ORDER BY (a + 1)"
+
+    assert (
+        build_properties_sql(order_by="ORDER_BY = (a + 1),") == "ENGINE=MergeTree ORDER BY (a + 1)"
+    )
+
+    assert (
+        build_properties_sql(order_by="ORDER_BY = (a, b + 1),", primary_key="PRIMARY_KEY = (a, b)")
+        == "ENGINE=MergeTree ORDER BY (a, b + 1) PRIMARY KEY (a, b)"
+    )
+
+    assert (
+        build_properties_sql(
+            order_by="ORDER_BY = 'timestamp with fill to toStartOfDay(toDateTime64(\\'2024-07-11\\', 3)) step toIntervalDay(1) interpolate(price as price)',"
+        )
+        == "ENGINE=MergeTree ORDER BY (timestamp WITH FILL TO toStartOfDay(toDateTime64('2024-07-11', 3)) STEP toIntervalDay(1) INTERPOLATE (price AS price))"
+    )
+
+    assert (
+        build_properties_sql(
+            order_by="ORDER_BY = (\"a\", 'timestamp with fill to toStartOfDay(toDateTime64(\\'2024-07-11\\', 3)) step toIntervalDay(1) interpolate(price as price)'),"
+        )
+        == "ENGINE=MergeTree ORDER BY (\"a\", timestamp WITH FILL TO toStartOfDay(toDateTime64('2024-07-11', 3)) STEP toIntervalDay(1) INTERPOLATE (price AS price))"
+    )
 
 
 def test_create_table_properties(make_mocked_engine_adapter: t.Callable, mocker):
