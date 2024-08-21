@@ -705,6 +705,14 @@ def cleanup(ctx: TestContext):
         ctx.cleanup()
 
 
+def test_connection(ctx: TestContext):
+    if ctx.test_type != "query":
+        pytest.skip("Connection tests only need to run once so we skip anything not query")
+    cursor_from_connection = ctx.engine_adapter.connection.cursor()
+    cursor_from_connection.execute("SELECT 1")
+    assert cursor_from_connection.fetchone()[0] == 1
+
+
 def test_catalog_operations(ctx: TestContext):
     if (
         ctx.engine_adapter.CATALOG_SUPPORT.is_unsupported
