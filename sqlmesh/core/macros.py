@@ -1176,7 +1176,7 @@ def date_spine(
     start_date: exp.Expression,
     end_date: exp.Expression,
 ) -> exp.Select:
-    """Returns an QUERY to build a date spine with the given datepart, and range of start_date and end_date. Useful for joining as a date lookup table.
+    """Returns a query that produces a date spine with the given datepart, and range of start_date and end_date. Useful for joining as a date lookup table.
 
     Args:
         datepart: The datepart to use for the date spine - day, week, month, quarter, year
