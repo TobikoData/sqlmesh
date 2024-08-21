@@ -4,6 +4,7 @@ import importlib
 import json
 import re
 import typing as t
+import zlib
 from collections import defaultdict
 from enum import Enum
 
@@ -142,8 +143,21 @@ def find_call_names(node: nodes.Node, vars_in_scope: t.Set[str]) -> t.Iterator[C
         yield from find_call_names(child_node, vars_in_scope)
 
 
-def extract_call_names(jinja_str: str) -> t.List[CallNames]:
-    return list(find_call_names(ENVIRONMENT.parse(jinja_str), set()))
+def extract_call_names(
+    jinja_str: str, cache: t.Optional[t.Dict[str, t.Tuple[t.List[CallNames], bool]]] = None
+) -> t.List[CallNames]:
+    def parse() -> t.List[CallNames]:
+        return list(find_call_names(ENVIRONMENT.parse(jinja_str), set()))
+
+    if cache is not None:
+        key = str(zlib.crc32(jinja_str.encode("utf-8")))
+        if key in cache:
+            names = cache[key][0]
+        else:
+            names = parse()
+        cache[key] = (names, True)
+        return names
+    return parse()
 
 
 def extract_macro_references_and_variables(
