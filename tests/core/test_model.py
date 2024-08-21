@@ -627,8 +627,8 @@ def test_model_pre_post_statements():
     assert model.query == d.parse("SELECT 1 AS x")[0]
 
     @macro()
-    def multiple_statements(evaluator):
-        return ["CREATE TABLE t1 AS SELECT 1 AS c", "CREATE TABLE t2 AS SELECT 2 AS c"]
+    def multiple_statements(evaluator, t1_value=exp.Literal.number(1)):
+        return [f"CREATE TABLE t1 AS SELECT {t1_value} AS c", "CREATE TABLE t2 AS SELECT 2 AS c"]
 
     expressions = d.parse(
         """
@@ -645,6 +645,7 @@ def test_model_pre_post_statements():
         'CREATE TABLE "t1" AS SELECT 1 AS "c"; CREATE TABLE "t2" AS SELECT 2 AS "c"'
     )
     assert model.render_post_statements() == expected_post
+    assert "exp" in model.python_env
 
 
 def test_seed_hydration():
