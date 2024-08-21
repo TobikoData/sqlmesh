@@ -1241,6 +1241,7 @@ def test_select_unchanged_model_for_backfill(init_and_plan_context: t.Callable):
     # Now select a model downstream from the previously modified one in order to backfill it.
     plan = context.plan("dev", select_models=["*top_waiters"], skip_tests=True, no_prompts=True)
 
+    assert not plan.has_changes
     assert plan.missing_intervals == [
         SnapshotIntervals(
             snapshot_id=context.get_snapshot(
