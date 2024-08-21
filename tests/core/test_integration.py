@@ -1194,7 +1194,9 @@ def test_select_unchanged_model_for_backfill(init_and_plan_context: t.Callable):
     kwargs = {
         **model.dict(),
         # Make a breaking change.
-        "query": model.query.order_by("waiter_id"),  # type: ignore
+        "query": d.parse_one(
+            f"{model.query.sql(dialect='duckdb')} ORDER BY waiter_id", dialect="duckdb"
+        ),
     }
     context.upsert_model(SqlModel.parse_obj(kwargs))
 
@@ -1239,6 +1241,7 @@ def test_select_unchanged_model_for_backfill(init_and_plan_context: t.Callable):
     # Now select a model downstream from the previously modified one in order to backfill it.
     plan = context.plan("dev", select_models=["*top_waiters"], skip_tests=True, no_prompts=True)
 
+    assert not plan.has_changes
     assert plan.missing_intervals == [
         SnapshotIntervals(
             snapshot_id=context.get_snapshot(
