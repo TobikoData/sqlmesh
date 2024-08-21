@@ -76,6 +76,9 @@ def func_globals(func: t.Callable) -> t.Dict[str, t.Any]:
 
         func_args = next(node for node in ast.walk(root_node) if isinstance(node, ast.arguments))
         arg_defaults = (d for d in func_args.defaults + func_args.kw_defaults if d is not None)
+
+        # ast.Name corresponds to variable references, such as foo or x.foo. The former is
+        # represented as Name(id=foo), and the latter as Attribute(value=Name(id=x) attr=foo)
         arg_globals = [
             n.id for default in arg_defaults for n in ast.walk(default) if isinstance(n, ast.Name)
         ]
