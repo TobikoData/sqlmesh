@@ -909,7 +909,7 @@ It supports the following arguments, in this order:
 
 - `relation`: The table or CTE name to deduplicate
 - `partition_by`: column names, or expressions to use to identify a window of rows out of which to select one as the deduplicated row
-- `order_by`: A list of strings representing the ORDER BY clause, optional - nulls ordering: ['<column> <asc|desc> nulls <first|last>']
+- `order_by`: A list of strings representing the ORDER BY clause, optional - you can add nulls ordering like this: ['<column_name> desc nulls last']
 
 For example, the following query:
 ```sql linenums="1"
@@ -934,6 +934,44 @@ SELECT
   *                                                                                            
 FROM "raw_data" AS "raw_data"
 ```
+
+### @DATE_SPINE
+
+`@DATE_SPINE` returns the SQL required to build a date spine. The spine will include the start_date (if it is aligned to the datepart), AND it will include the end_date. This is different from the [`date_spine`](https://github.com/dbt-labs/dbt-utils?tab=readme-ov-file#date_spine-source) macro in `dbt-utils` which will NOT include the end_date. It's typically used to join in unique, hard-coded, date ranges to with other tables/views, so people don't have to constantly adjust date ranges in `where` clauses across many SQL models.
+
+It supports the following arguments, in this order:
+
+- `datepart`: The datepart to use for the date spine - day, week, month, quarter, year
+- `start_date`: The start date for the date spine in format YYYY-MM-DD
+- `end_date`: The end date for the date spine in format YYYY-MM-DD
+
+For example, the following query:
+```sql linenums="1"
+WITH discount_promotion_dates AS (
+  @date_spine('day', '2024-01-01', '2024-01-16')
+)
+
+SELECT * FROM discount_promotion_dates
+```
+
+would be rendered as:
+
+```sql linenums="1"
+WITH "discount_promotion_dates" AS (                                                                             
+  SELECT                                                                                                         
+    "_exploded"."date_day" AS "date_day"                                                                         
+  FROM UNNEST(CAST(GENERATE_SERIES(CAST('2024-01-01' AS DATE), CAST('2024-01-16' AS DATE), INTERVAL '1' DAY) AS  
+DATE[])) AS "_exploded"("date_day")                                                                              
+)                                                                                                                
+SELECT                                                                                                           
+  "discount_promotion_dates"."date_day" AS "date_day"                                                            
+FROM "discount_promotion_dates" AS "discount_promotion_dates"
+```
+
+Note: This is DuckDB SQL and other dialects will be transpiled accordingly. 
+- Recursive CTEs (common table expressions) will be used for `Redshift / MySQL / MSSQL`.
+- For `MSSQL` in particular, there's a recursion limit of approximately 100. If this becomes a problem, you can add an `OPTION (MAXRECURSION 0)` clause after the date spine macro logic to remove the limit. This applies for long date ranges.
+
 
 ### @AND
 

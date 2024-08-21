@@ -10,6 +10,7 @@ from functools import reduce
 from itertools import chain
 from pathlib import Path
 from string import Template
+from datetime import datetime
 
 import sqlglot
 from jinja2 import Environment
@@ -1166,6 +1167,75 @@ def deduplicate(
     query = exp.select("*").from_(relation).qualify(first_unique_row)
 
     return query
+
+
+@macro()
+def date_spine(
+    evaluator: MacroEvaluator,
+    datepart: exp.Expression,
+    start_date: exp.Expression,
+    end_date: exp.Expression,
+) -> exp.Select:
+    """Returns a query that produces a date spine with the given datepart, and range of start_date and end_date. Useful for joining as a date lookup table.
+
+    Args:
+        datepart: The datepart to use for the date spine - day, week, month, quarter, year
+        start_date: The start date for the date spine in format YYYY-MM-DD
+        end_date: The end date for the date spine in format YYYY-MM-DD
+
+    Example:
+        >>> from sqlglot import parse_one
+        >>> from sqlglot.schema import MappingSchema
+        >>> from sqlmesh.core.macros import MacroEvaluator
+        >>> sql = "@date_spine('week', '2022-01-20', '2024-12-16')"
+        >>> MacroEvaluator().transform(parse_one(sql)).sql()
+        "SELECT date_week FROM UNNEST(GENERATE_DATE_ARRAY(CAST(\'2022-01-20\' AS DATE), CAST(\'2024-12-16\' AS DATE), INTERVAL \'1\' WEEK)) AS _exploded(date_week)"
+    """
+    datepart_name = datepart.name.lower()
+    start_date_name = start_date.name
+    end_date_name = end_date.name
+
+    if datepart_name not in ("day", "week", "month", "quarter", "year"):
+        raise SQLMeshError(
+            f"Invalid datepart '{datepart_name}'. Expected: 'day', 'week', 'month', 'quarter', or 'year'"
+        )
+
+    try:
+        start_date_obj = datetime.strptime(start_date_name, "%Y-%m-%d").date()
+        end_date_obj = datetime.strptime(end_date_name, "%Y-%m-%d").date()
+    except Exception as e:
+        raise SQLMeshError(
+            f"Invalid date format - start_date and end_date must be in format: YYYY-MM-DD. Error: {e}"
+        )
+
+    if start_date_obj > end_date_obj:
+        raise SQLMeshError(
+            f"Invalid date range - start_date '{start_date_name}' is after end_date '{end_date_name}'."
+        )
+
+    alias_name = f"date_{datepart_name}"
+    start_date_column = exp.cast(start_date, "DATE")
+    end_date_column = exp.cast(end_date, "DATE")
+    if datepart_name == "quarter" and evaluator.dialect in (
+        "spark",
+        "spark2",
+        "databricks",
+        "postgres",
+    ):
+        date_interval = exp.Interval(this=exp.Literal.number(3), unit=exp.var("month"))
+    else:
+        date_interval = exp.Interval(this=exp.Literal.number(1), unit=exp.var(datepart_name))
+
+    generate_date_array = exp.func(
+        "GENERATE_DATE_ARRAY",
+        start_date_column,
+        end_date_column,
+        date_interval,
+    )
+
+    exploded = exp.alias_(exp.func("unnest", generate_date_array), "_exploded", table=[alias_name])
+
+    return exp.select(alias_name).from_(exploded)
 
 
 def normalize_macro_name(name: str) -> str:
