@@ -754,3 +754,192 @@ def test_deduplicate_error_handling(macro_evaluator):
         str(e.value.__cause__)
         == "order_by must be a list of strings, optional - nulls ordering: ['<column> <asc|desc> nulls <first|last>']"
     )
+
+
+@pytest.mark.parametrize(
+    "dialect, date_part",
+    [
+        (dialect, date_part)
+        for dialect in [
+            "duckdb",
+            "snowflake",
+            "postgres",
+            "spark",
+            "bigquery",
+            "databricks",
+            "redshift",
+        ]
+        for date_part in ["day", "week", "month", "quarter", "year"]
+    ],
+)
+def test_date_spine(assert_exp_eq, dialect, date_part):
+    date_spine_macro = f"""
+        @date_spine(
+            '{date_part}',
+            '2022-01-01',
+            '2024-12-31'
+        )
+        """
+    schema = MappingSchema({}, dialect=dialect)
+    evaluator = MacroEvaluator(schema=schema, dialect=dialect)
+
+    # Generate the expected SQL based on the dialect and date_part
+    if dialect == "duckdb":
+        if date_part == "week":
+            interval = "(7 * INTERVAL '1' DAY)"
+        elif date_part == "quarter":
+            interval = "(90 * INTERVAL '1' DAY)"
+        else:
+            interval = f"INTERVAL '1' {date_part.upper()}"
+        expected_sql = f"""
+        SELECT
+            date_{date_part}
+        FROM
+            UNNEST(
+                CAST(
+                    GENERATE_SERIES(
+                        CAST('2022-01-01' AS DATE),
+                        CAST('2024-12-31' AS DATE),
+                        {interval}
+                    ) AS DATE[]
+                )
+            ) AS _exploded(date_{date_part})
+        """
+    elif dialect == "snowflake":
+        expected_sql = f"""
+        SELECT
+            date_{date_part}
+        FROM (
+            SELECT
+                DATEADD(
+                    {date_part.upper()},
+                    CAST(date_{date_part} AS INT),
+                    CAST('2022-01-01' AS DATE)
+                ) AS date_{date_part}
+            FROM
+                TABLE(
+                    FLATTEN(
+                        INPUT => ARRAY_GENERATE_RANGE(
+                            0,
+                            (
+                                DATEDIFF(
+                                    {date_part.upper()},
+                                    CAST('2022-01-01' AS DATE),
+                                    CAST('2024-12-31' AS DATE)
+                                ) + 1 - 1
+                            ) + 1
+                        )
+                    )
+                ) AS _exploded(seq, key, path, index, date_{date_part}, this)
+        ) AS _exploded(date_{date_part})
+        """
+    elif dialect == "postgres":
+        interval = "3 MONTH" if date_part == "quarter" else f"1 {date_part.upper()}"
+        expected_sql = f"""
+        SELECT
+            date_{date_part}
+        FROM (
+            SELECT
+                CAST(value AS DATE)
+            FROM
+                GENERATE_SERIES(
+                    CAST('2022-01-01' AS DATE),
+                    CAST('2024-12-31' AS DATE),
+                    INTERVAL '{interval}'
+                ) AS value
+        ) AS _exploded(date_{date_part})
+        """
+    elif dialect == "spark":
+        interval = "3 MONTH" if date_part == "quarter" else f"1 {date_part.upper()}"
+        expected_sql = f"""
+        SELECT
+            date_{date_part}
+        FROM
+            EXPLODE(
+                SEQUENCE(
+                    CAST('2022-01-01' AS DATE),
+                    CAST('2024-12-31' AS DATE),
+                    INTERVAL {interval}
+                )
+            ) AS _exploded(date_{date_part})
+        """
+    elif dialect == "databricks":
+        interval = "3 MONTH" if date_part == "quarter" else f"1 {date_part.upper()}"
+        expected_sql = f"""
+        SELECT
+            date_{date_part}
+        FROM
+            EXPLODE(
+                SEQUENCE(
+                    CAST('2022-01-01' AS DATE),
+                    CAST('2024-12-31' AS DATE),
+                    INTERVAL {interval}
+                )
+            ) AS _exploded(date_{date_part})
+        """
+    elif dialect == "bigquery":
+        expected_sql = f"""
+        SELECT
+            date_{date_part}
+        FROM
+            UNNEST(
+                GENERATE_DATE_ARRAY(
+                    CAST('2022-01-01' AS DATE),
+                    CAST('2024-12-31' AS DATE),
+                    INTERVAL '1' {date_part}
+                )
+            ) AS date_{date_part}
+        """
+    elif dialect == "redshift":
+        expected_sql = f"""
+        WITH RECURSIVE _generated_dates(date_{date_part}) AS (
+            SELECT
+                CAST('2022-01-01' AS DATE) AS date_{date_part}
+            UNION ALL
+            SELECT
+                CAST(DATEADD({date_part}, 1, date_{date_part}) AS DATE)
+            FROM _generated_dates
+            WHERE
+                CAST(DATEADD({date_part}, 1, date_{date_part}) AS DATE) <= CAST('2024-12-31' AS DATE)
+        )
+        SELECT
+            date_{date_part}
+        FROM (
+            SELECT
+                date_{date_part}
+            FROM _generated_dates 
+        ) AS _generated_dates
+        """
+    assert_exp_eq(evaluator.transform(parse_one(date_spine_macro)), expected_sql, dialect=dialect)
+
+
+def test_date_spine_error_handling(macro_evaluator):
+    # Test error handling: invalid datepart
+    with pytest.raises(SQLMeshError) as e:
+        macro_evaluator.evaluate(parse_one("@date_spine('invalid', '2022-01-01', '2024-12-31')"))
+    assert (
+        str(e.value.__cause__)
+        == "Invalid datepart 'invalid'. Expected: 'day', 'week', 'month', 'quarter', or 'year'"
+    )
+
+    # Test error handling: invalid start_date format
+    with pytest.raises(SQLMeshError) as e:
+        macro_evaluator.evaluate(parse_one("@date_spine('day', '2022/01/01', '2024-12-31')"))
+    assert str(e.value.__cause__).startswith(
+        "Invalid date format - start_date and end_date must be in format: YYYY-MM-DD"
+    )
+
+    # Test error handling: invalid end_date format
+    with pytest.raises(SQLMeshError) as e:
+        macro_evaluator.evaluate(parse_one("@date_spine('day', '2022-01-01', '2024/12/31')"))
+    assert str(e.value.__cause__).startswith(
+        "Invalid date format - start_date and end_date must be in format: YYYY-MM-DD"
+    )
+
+    # Test error handling: start_date after end_date
+    with pytest.raises(SQLMeshError) as e:
+        macro_evaluator.evaluate(parse_one("@date_spine('day', '2024-12-31', '2022-01-01')"))
+    assert (
+        str(e.value.__cause__)
+        == "Invalid date range - start_date '2024-12-31' is after end_date '2022-01-01'."
+    )
