@@ -145,6 +145,10 @@ class EngineAdapter:
         return self._connection_pool.get_cursor()
 
     @property
+    def connection(self) -> t.Any:
+        return self._connection_pool.get()
+
+    @property
     def spark(self) -> t.Optional[PySparkSession]:
         return None
 
