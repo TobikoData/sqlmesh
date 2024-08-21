@@ -6,6 +6,8 @@ import pandas as pd
 import pytest
 import sqlglot
 from pytest_mock.plugin import MockerFixture
+from sqlglot import exp
+from sqlglot import exp as expressions
 from sqlglot.expressions import to_table
 
 import tests.utils.test_date as test_date
@@ -43,7 +45,7 @@ def test_print_exception(mocker: MockerFixture):
 
     expected_message = f"""Traceback (most recent call last):
 
-  File "{__file__}", line 40, in test_print_exception
+  File "{__file__}", line 42, in test_print_exception
     eval("test_fun()", env)
 
   File "<string>", line 1, in <module>
@@ -104,7 +106,7 @@ def noop_metadata() -> None:
 setattr(noop_metadata, c.SQLMESH_METADATA, True)
 
 
-def main_func(y: int) -> int:
+def main_func(y: int, foo=exp.true(), *, bar=expressions.Literal.number(1) + 2) -> int:
     """DOC STRING"""
     sqlglot.parse_one("1")
     MyClass()
@@ -128,6 +130,8 @@ def test_func_globals() -> None:
         "normalize_model_name": normalize_model_name,
         "other_func": other_func,
         "sqlglot": sqlglot,
+        "exp": exp,
+        "expressions": exp,
     }
     assert func_globals(other_func) == {
         "X": 1,
@@ -153,7 +157,8 @@ def test_func_globals() -> None:
 def test_normalize_source() -> None:
     assert (
         normalize_source(main_func)
-        == """def main_func(y: int):
+        == """def main_func(y: int, foo=exp.true(), *, bar=expressions.Literal.number(1) + 2
+    ):
     sqlglot.parse_one('1')
     MyClass()
     DataClass(x=y)
@@ -194,7 +199,8 @@ def test_serialize_env() -> None:
             name="main_func",
             alias="MAIN",
             path="test_metaprogramming.py",
-            payload="""def main_func(y: int):
+            payload="""def main_func(y: int, foo=exp.true(), *, bar=expressions.Literal.number(1) + 2
+    ):
     sqlglot.parse_one('1')
     MyClass()
     DataClass(x=y)
@@ -245,6 +251,10 @@ class DataClass:
         ),
         "pd": Executable(payload="import pandas as pd", kind=ExecutableKind.IMPORT),
         "sqlglot": Executable(kind=ExecutableKind.IMPORT, payload="import sqlglot"),
+        "exp": Executable(kind=ExecutableKind.IMPORT, payload="import sqlglot.expressions as exp"),
+        "expressions": Executable(
+            kind=ExecutableKind.IMPORT, payload="import sqlglot.expressions as expressions"
+        ),
         "my_lambda": Executable(
             name="my_lambda",
             path="test_metaprogramming.py",

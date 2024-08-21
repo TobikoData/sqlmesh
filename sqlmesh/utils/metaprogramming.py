@@ -72,11 +72,21 @@ def func_globals(func: t.Callable) -> t.Dict[str, t.Any]:
     variables = {}
 
     if hasattr(func, "__code__"):
-        code = func.__code__
+        root_node = parse_source(func)
 
-        for var in list(_code_globals(code)) + decorators(func):
-            if var in func.__globals__:
-                ref = func.__globals__[var]
+        func_args = next(node for node in ast.walk(root_node) if isinstance(node, ast.arguments))
+        arg_defaults = (d for d in func_args.defaults + func_args.kw_defaults if d is not None)
+
+        # ast.Name corresponds to variable references, such as foo or x.foo. The former is
+        # represented as Name(id=foo), and the latter as Attribute(value=Name(id=x) attr=foo)
+        arg_globals = [
+            n.id for default in arg_defaults for n in ast.walk(default) if isinstance(n, ast.Name)
+        ]
+
+        code = func.__code__
+        for var in arg_globals + list(_code_globals(code)) + decorators(func, root_node=root_node):
+            ref = func.__globals__.get(var)
+            if ref:
                 variables[var] = ref
 
         if func.__closure__:
@@ -177,9 +187,9 @@ def _decorator_name(decorator: ast.expr) -> str:
     return ""
 
 
-def decorators(func: t.Callable) -> t.List[str]:
+def decorators(func: t.Callable, root_node: t.Optional[ast.Module] = None) -> t.List[str]:
     """Finds a list of all the decorators of a callable."""
-    root_node = parse_source(func)
+    root_node = root_node or parse_source(func)
     decorators = []
 
     for node in ast.walk(root_node):
