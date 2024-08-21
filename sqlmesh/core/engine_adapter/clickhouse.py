@@ -270,7 +270,6 @@ class ClickhouseEngineAdapter(EngineAdapterWithIndexSupport, LogicalMergeMixin):
         catalog_name: t.Optional[str] = None,
         storage_format: t.Optional[str] = None,
         partitioned_by: t.Optional[t.List[exp.Expression]] = None,
-        partitioned_by_user_cols: t.Optional[t.List[exp.Expression]] = None,
         partition_interval_unit: t.Optional[IntervalUnit] = None,
         clustered_by: t.Optional[t.List[str]] = None,
         table_properties: t.Optional[t.Dict[str, exp.Expression]] = None,
@@ -343,12 +342,10 @@ class ClickhouseEngineAdapter(EngineAdapterWithIndexSupport, LogicalMergeMixin):
                 )
             )
 
-        # `partitioned_by` automatically includes model `time_column`, but we only want the
-        #   columns specified by the user so use `partitioned_by_user_cols` instead
-        if partitioned_by_user_cols:
+        if partitioned_by:
             properties.append(
                 exp.PartitionedByProperty(
-                    this=exp.Schema(expressions=partitioned_by_user_cols),
+                    this=exp.Schema(expressions=partitioned_by),
                 )
             )
 

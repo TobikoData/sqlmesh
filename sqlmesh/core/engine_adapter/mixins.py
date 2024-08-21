@@ -121,7 +121,6 @@ class HiveMetastoreTablePropertiesMixin(EngineAdapter):
         catalog_name: t.Optional[str] = None,
         storage_format: t.Optional[str] = None,
         partitioned_by: t.Optional[t.List[exp.Expression]] = None,
-        partitioned_by_user_cols: t.Optional[t.List[exp.Expression]] = None,
         partition_interval_unit: t.Optional[IntervalUnit] = None,
         clustered_by: t.Optional[t.List[str]] = None,
         table_properties: t.Optional[t.Dict[str, exp.Expression]] = None,

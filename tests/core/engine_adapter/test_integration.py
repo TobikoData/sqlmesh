@@ -1807,6 +1807,34 @@ def test_sushi(mark_gateway: t.Tuple[str, str], ctx: TestContext):
 
         context._models.update({cust_rev_by_day_key: cust_rev_by_day_model_tbl_props})
 
+    # Clickhouse requires columns used as keys to be non-Nullable, but all transpiled columns are nullable by default
+    if ctx.dialect == "clickhouse":
+        models_to_modify = {
+            '"items"',
+            '"orders"',
+            '"order_items"',
+            '"customer_revenue_by_day"',
+            '"customer_revenue_lifetime"',
+            '"waiter_revenue_by_day"',
+            '"waiter_as_customer_by_day"',
+        }
+        for model in models_to_modify:
+            model_key = [key for key in context._models if model in key][0]
+            model_columns = context._models[model_key].columns_to_types
+            updated_model_columns = {
+                k: exp.DataType.build(v.sql(), dialect="clickhouse", nullable=False)
+                for k, v in model_columns.items()
+            }
+
+            model_model_cols_to_types = context._models[model_key].copy(
+                update={
+                    "columns_to_types": updated_model_columns,
+                    "columns_to_types_": updated_model_columns,
+                    "columns_to_types_or_raise": updated_model_columns,
+                }
+            )
+            context._models.update({model_key: model_model_cols_to_types})
+
     plan: Plan = context.plan(
         environment="test_prod",
         start=start,
@@ -2063,6 +2091,10 @@ def test_init_project(ctx: TestContext, mark_gateway: t.Tuple[str, str], tmp_pat
         ],
         personal_paths=[pathlib.Path("~/.sqlmesh/config.yaml").expanduser()],
     )
+    # ensure default dialect comes from init_example_project and not ~/.sqlmesh/config.yaml
+    if config.model_defaults.dialect != ctx.dialect:
+        config.model_defaults = config.model_defaults.copy(update={"dialect": ctx.dialect})
+
     _, gateway = mark_gateway
     context = Context(paths=tmp_path, config=config, gateway=gateway)
     ctx.engine_adapter = context.engine_adapter

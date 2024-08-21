@@ -355,9 +355,11 @@ class ModelMeta(_Node):
     @property
     def partitioned_by(self) -> t.List[exp.Expression]:
         """Columns to partition the model by, including the time column if it is not already included."""
-        if self.time_column and self.time_column.column not in [
-            col for col in self.partitioned_by_user_columns
-        ]:
+        if (
+            self.time_column
+            and self.time_column.column not in [col for col in self._partition_by_columns]
+            and self.dialect not in NO_PARTITIONED_TIME_COLUMN_DIALECTS
+        ):
             return [self.time_column.column, *self.partitioned_by_]
         return self.partitioned_by_
 
@@ -425,8 +427,7 @@ class ModelMeta(_Node):
         ]
 
     @property
-    def partitioned_by_user_columns(self) -> t.List[exp.Column]:
-        """Columns the user has specified to partition the model by."""
+    def _partition_by_columns(self) -> t.List[exp.Column]:
         return [col for expr in self.partitioned_by_ for col in expr.find_all(exp.Column)]
 
     @property
@@ -457,3 +458,7 @@ class ModelMeta(_Node):
     @property
     def on_destructive_change(self) -> OnDestructiveChange:
         return getattr(self.kind, "on_destructive_change", OnDestructiveChange.ALLOW)
+
+
+# dialects for which time_column should not automatically be added to partitioned_by
+NO_PARTITIONED_TIME_COLUMN_DIALECTS = {"clickhouse"}

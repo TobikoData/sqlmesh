@@ -220,7 +220,7 @@ def test_create_table_properties(make_mocked_engine_adapter: t.Callable, mocker)
     adapter.create_table(
         "test_table",
         columns_to_types,
-        partitioned_by_user_cols=[exp.to_column("colb")],
+        partitioned_by=[exp.to_column("colb")],
         storage_format="ReplicatedMergeTree",
         table_properties={
             "ORDER_BY": [exp.to_column("cola"), exp.to_column("colb")],
