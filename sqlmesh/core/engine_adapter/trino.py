@@ -28,8 +28,6 @@ from sqlmesh.core.schema_diff import SchemaDiffer
 from sqlmesh.utils.date import TimeLike
 
 if t.TYPE_CHECKING:
-    from trino.dbapi import Connection as TrinoConnection
-
     from sqlmesh.core._typing import SchemaName, TableName
     from sqlmesh.core.engine_adapter._typing import DF, QueryOrDF
 
@@ -62,10 +60,6 @@ class TrinoEngineAdapter(
             exp.DataType.build("TIMESTAMP", dialect=DIALECT).this: [(3,)],
         },
     )
-
-    @property
-    def connection(self) -> TrinoConnection:
-        return self.cursor.connection
 
     def set_current_catalog(self, catalog: str) -> None:
         """Sets the catalog name of the current connection."""

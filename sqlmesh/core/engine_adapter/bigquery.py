@@ -26,7 +26,6 @@ if t.TYPE_CHECKING:
     from google.cloud import bigquery
     from google.cloud.bigquery import StandardSqlDataType
     from google.cloud.bigquery.client import Client as BigQueryClient
-    from google.cloud.bigquery.client import Connection as BigQueryConnection
     from google.cloud.bigquery.job.base import _AsyncJob as BigQueryQueryResult
     from google.cloud.bigquery.table import Table as BigQueryTable
 
@@ -89,10 +88,6 @@ class BigQueryEngineAdapter(InsertOverwriteWithMergeMixin):
     @property
     def client(self) -> BigQueryClient:
         return self.connection._client
-
-    @property
-    def connection(self) -> BigQueryConnection:
-        return self.cursor.connection
 
     @property
     def _job_params(self) -> t.Dict[str, t.Any]:
