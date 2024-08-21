@@ -1194,7 +1194,9 @@ def test_select_unchanged_model_for_backfill(init_and_plan_context: t.Callable):
     kwargs = {
         **model.dict(),
         # Make a breaking change.
-        "query": model.query.order_by("waiter_id"),  # type: ignore
+        "query": d.parse_one(
+            f"{model.query.sql(dialect='duckdb')} ORDER BY waiter_id", dialect="duckdb"
+        ),
     }
     context.upsert_model(SqlModel.parse_obj(kwargs))
 
