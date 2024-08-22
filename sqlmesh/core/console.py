@@ -1132,8 +1132,8 @@ class TerminalConsole(Console):
                     else:
                         keys.append(col)
 
-                assert len(list(environments.keys())) == 2
-                source_env, target_env = list(environments.keys())
+                assert len(environments) == 2
+                source_env, target_env = environments
 
                 column_styles = {
                     source_env: self.TABLE_DIFF_SOURCE_BLUE,
@@ -1142,16 +1142,20 @@ class TerminalConsole(Console):
 
                 for column in columns:
                     # Create a table with the joined keys and comparison columns
-                    column_table = sample[
-                        keys + [source_env + "__" + column, target_env + "__" + column]
-                    ]
+                    source_column = source_env + "__" + column
+                    target_column = target_env + "__" + column
+                    column_table = sample[keys + [source_column, target_column]]
 
                     # Filter to keep the rows where the values differ
                     column_table = column_table[
-                        column_table[source_env + "__" + column]
-                        != column_table[target_env + "__" + column]
+                        column_table[source_column] != column_table[target_column]
                     ]
-                    column_table.columns = column_table.columns.str.split("__").str[0]
+                    column_table = column_table.rename(
+                        columns={
+                            source_column: source_env,
+                            target_column: target_env,
+                        }
+                    )
 
                     table = Table(show_header=True)
                     for column_name in column_table.columns:
