@@ -273,6 +273,7 @@ class DbtContext:
         dependency_context.seeds = seeds
         dependency_context.models = models
         dependency_context.variables = variables
+        dependency_context._refs = {**dependency_context._seeds, **dependency_context._models}  # type: ignore
 
         return dependency_context
 
