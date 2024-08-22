@@ -2083,6 +2083,33 @@ def test_init_project(ctx: TestContext, mark_gateway: t.Tuple[str, str], tmp_pat
     if ctx.test_type != "query":
         pytest.skip("Init example project end-to-end tests only need to run for query")
 
+    object_names = {
+        "base_schema": ["sqlmesh"],
+        "view_schema": ["sqlmesh_example"],
+        "physical_schema": ["sqlmesh__sqlmesh_example"],
+        "dev_schema": ["sqlmesh_example__test_dev"],
+        "views": ["full_model", "incremental_model", "seed_model"],
+    }
+
+    # normalize object names for snowflake
+    if ctx.dialect == "snowflake":
+        import re
+
+        def _normalize_snowflake(name: str, prefix_regex: str = "(sqlmesh__)(.*)"):
+            match = re.search(prefix_regex, name)
+            if match:
+                return f"{match.group(1)}{match.group(2).upper()}"
+            return name.upper()
+
+        object_names = {
+            "base_schema": object_names["base_schema"],
+            **{
+                k: [_normalize_snowflake(name) for name in v]
+                for k, v in object_names.items()
+                if k != "base_schema"
+            },
+        }
+
     init_example_project(tmp_path, ctx.dialect)
     config = load_config_from_paths(
         Config,
@@ -2101,26 +2128,22 @@ def test_init_project(ctx: TestContext, mark_gateway: t.Tuple[str, str], tmp_pat
 
     # clean up any leftover schemas from previous runs (requires context)
     for schema in [
-        "sqlmesh_example",
-        "sqlmesh_example__test_dev",
-        "sqlmesh__sqlmesh_example",
-        "sqlmesh",
+        *object_names["base_schema"],
+        *object_names["view_schema"],
+        *object_names["physical_schema"],
+        *object_names["dev_schema"],
     ]:
         context.engine_adapter.drop_schema(schema, ignore_if_not_exists=True, cascade=True)
 
     # apply prod plan
     context.plan(auto_apply=True, no_prompts=True)
 
-    prod_schema_results = ctx.get_metadata_results("sqlmesh_example")
-    assert sorted(prod_schema_results.views) == [
-        "full_model",
-        "incremental_model",
-        "seed_model",
-    ]
+    prod_schema_results = ctx.get_metadata_results(object_names["view_schema"][0])
+    assert sorted(prod_schema_results.views) == object_names["views"]
     assert len(prod_schema_results.materialized_views) == 0
     assert len(prod_schema_results.tables) == len(prod_schema_results.non_temp_tables) == 0
 
-    physical_layer_results = ctx.get_metadata_results("sqlmesh__sqlmesh_example")
+    physical_layer_results = ctx.get_metadata_results(object_names["physical_schema"][0])
     assert len(physical_layer_results.views) == 0
     assert len(physical_layer_results.materialized_views) == 0
     assert len(physical_layer_results.tables) == len(physical_layer_results.non_temp_tables) == 6
@@ -2143,11 +2166,7 @@ def test_init_project(ctx: TestContext, mark_gateway: t.Tuple[str, str], tmp_pat
         environment, dialect=ctx.dialect
     )
     dev_schema_results = ctx.get_metadata_results(schema_name)
-    assert sorted(dev_schema_results.views) == [
-        "full_model",
-        "incremental_model",
-        "seed_model",
-    ]
+    assert sorted(dev_schema_results.views) == object_names["views"]
     assert len(dev_schema_results.materialized_views) == 0
     assert len(dev_schema_results.tables) == len(dev_schema_results.non_temp_tables) == 0
 
