@@ -1116,33 +1116,40 @@ class TerminalConsole(Console):
             self.console.print("  No columns with same name and data type in both tables")
 
         if show_sample:
+            sample = row_diff.joined_sample
             self.console.print("\n[b][blue]COMMON ROWS[/blue] sample data differences:[/b]")
-            if row_diff.joined_sample.shape[0] > 0:
+            if sample.shape[0] > 0:
                 keys: list[str] = []
-                columns: list[str] = []
-                environments: list[str] = []
-                for col in row_diff.joined_sample.columns:
+                columns: dict[str, None] = {}
+                environments: dict[str, None] = {}
+
+                # Extract environment, key and column names from the joined sample
+                for col in sample.columns:
                     if "__" in col:
                         column_parts = col.split("__")
-                        if len(environments) < 2:
-                            environments.append(column_parts[0])
-                        if column_parts[1] not in columns:
-                            columns.append(column_parts[1])
+                        environments[column_parts[0]] = None
+                        columns["__".join(column_parts[1:])] = None
                     else:
                         keys.append(col)
 
+                assert len(list(environments.keys())) == 2
+                source_env, target_env = list(environments.keys())
+
                 column_styles = {
-                    environments[0]: self.TABLE_DIFF_SOURCE_BLUE,
-                    environments[1]: "green",
+                    source_env: self.TABLE_DIFF_SOURCE_BLUE,
+                    target_env: "green",
                 }
 
                 for column in columns:
-                    column_table = row_diff.joined_sample[
-                        keys + [environments[0] + "__" + column, environments[1] + "__" + column]
+                    # Create a table with the joined keys and comparison columns
+                    column_table = sample[
+                        keys + [source_env + "__" + column, target_env + "__" + column]
                     ]
+
+                    # Filter to keep the rows where the values differ
                     column_table = column_table[
-                        column_table[environments[0] + "__" + column]
-                        != column_table[environments[1] + "__" + column]
+                        column_table[source_env + "__" + column]
+                        != column_table[target_env + "__" + column]
                     ]
                     column_table.columns = column_table.columns.str.split("__").str[0]
 
