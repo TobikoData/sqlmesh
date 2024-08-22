@@ -111,7 +111,7 @@ Python model kind `name` enum value: [ModelKindName.INCREMENTAL_BY_TIME_RANGE](h
 
 #### Incremental by unique key
 
-Configuration options for [`INCREMENTAL_BY_UNIQUE_KEY` models](../concepts/models/model_kinds.md#incremental_by_unique_key) (in addition to [general model properties](#general-model-properties) and [incremental model properties](#incremental-models)).
+Configuration options for [`INCREMENTAL_BY_UNIQUE_KEY` models](../concepts/models/model_kinds.md#incremental_by_unique_key) (in addition to [general model properties](#general-model-properties) and [incremental model properties](#incremental-models)). Batch concurrency cannot be set for incremental by unique key models because they cannot safely be run in parallel.
 
 | Option         | Description                                                                                                                                                                                                                                                                                                                      | Type              | Required |
 |----------------|----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------|-------------------|----------|
