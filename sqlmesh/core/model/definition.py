@@ -1676,7 +1676,7 @@ def load_sql_based_model(
             # Macro functions are allowed in place of model queries only when there are no
             # other statements in the model definition, otherwise they would be ambiguous
             isinstance(query_or_seed_insert, d.MacroFunc)
-            and (query_or_seed_insert.this.name.lower() == "union" or len(expressions[1:]) == 1)
+            and (query_or_seed_insert.this.name.lower() == "union" or len(expressions) == 2)
         )
     ):
         return create_sql_model(
