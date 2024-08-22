@@ -431,7 +431,9 @@ class QueryRenderer(BaseExpressionRenderer):
             if not query:
                 return None
             if not isinstance(query, exp.Query):
-                raise_config_error(f"Query needs to be a SELECT or a UNION {query}.", self._path)
+                raise_config_error(
+                    f"Model query needs to be a SELECT or a UNION, got {query}.", self._path
+                )
                 raise
 
             if optimize:
