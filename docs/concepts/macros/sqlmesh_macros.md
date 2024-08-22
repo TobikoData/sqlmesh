@@ -1597,6 +1597,8 @@ Accessing the schema of an upstream model can be useful for various reasons. For
 
 Thus, leveraging `columns_to_types` can also enable one to write code according to the [DRY](https://en.wikipedia.org/wiki/Don%27t_repeat_yourself) principle, as a single macro function can implement the transformations instead of creating a different macro for each model of interest.
 
+Note: there may be models whose schema is not available when the project is being loaded, in which case a special placeholder column will be returned, aptly named: `__schema_unavailable_at_load__`. In some cases, the macro's implementation will need to account for this placeholder in order to avoid issues due to the schema being unavailable.
+
 #### Accessing snapshots
 
 After a SQLMesh project has been successfully loaded, its snapshots can be accessed in Python macro functions and Python models that generate SQL through the `get_snapshot` method of `MacroEvaluator`.
