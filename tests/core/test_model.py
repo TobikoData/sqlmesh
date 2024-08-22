@@ -376,12 +376,40 @@ def test_no_query():
         );
 
         @DEF(x, 1)
-    """
+        """
     )
 
     with pytest.raises(ConfigError) as ex:
-        load_sql_based_model(expressions, path=Path("test_location"))
-    assert "have a SELECT" in str(ex.value)
+        model = load_sql_based_model(expressions, path=Path("test_location"))
+        model.validate_definition()
+
+    assert "Model query needs to be a SELECT or a UNION, got @DEF(x, 1)." in str(ex.value)
+
+
+def test_single_macro_as_query(assert_exp_eq):
+    @macro()
+    def select_query(evaluator, *projections):
+        return exp.select(*[f'{p} AS "{p}"' for p in projections])
+
+    expressions = d.parse(
+        """
+        MODEL (
+            name test
+        );
+
+        @SELECT_QUERY(1, 2, 3)
+        """
+    )
+    model = load_sql_based_model(expressions)
+    assert_exp_eq(
+        model.render_query(),
+        """
+        SELECT
+          1 AS "1",
+          2 AS "2",
+          3 AS "3"
+        """,
+    )
 
 
 def test_partition_key_is_missing_in_query():
