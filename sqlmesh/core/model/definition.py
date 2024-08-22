@@ -1673,8 +1673,10 @@ def load_sql_based_model(
     if query_or_seed_insert is not None and (
         isinstance(query_or_seed_insert, (exp.Query, d.JinjaQuery))
         or (
+            # Macro functions are allowed in place of model queries only when there are no
+            # other statements in the model definition, otherwise they would be ambiguous
             isinstance(query_or_seed_insert, d.MacroFunc)
-            and query_or_seed_insert.this.name.lower() == "union"
+            and (query_or_seed_insert.this.name.lower() == "union" or len(expressions[1:]) == 1)
         )
     ):
         return create_sql_model(
@@ -1745,9 +1747,6 @@ def create_sql_model(
         used_variables: The set of variable names used by this model.
     """
     if not isinstance(query, (exp.Query, d.JinjaQuery, d.MacroFunc)):
-        # Users are not expected to pass in a single MacroFunc instance for a model's query;
-        # this is an implementation detail which allows us to create python models that return
-        # SQL, either in the form of SQLGlot expressions or just plain strings.
         raise_config_error(
             "A query is required and must be a SELECT statement, a UNION statement, or a JINJA_QUERY block",
             path,
@@ -2081,7 +2080,10 @@ def _split_sql_model_statements(
             if (
                 isinstance(expr, (exp.Query, d.JinjaQuery))
                 or expr == INSERT_SEED_MACRO_CALL
-                or (isinstance(expr, d.MacroFunc) and expr.this.name.lower() == "union")
+                or (
+                    isinstance(expr, d.MacroFunc)
+                    and (expr.this.name.lower() == "union" or length == 1)
+                )
             ):
                 query_positions.append((expr, idx))
             sql_statements.append(expr)
