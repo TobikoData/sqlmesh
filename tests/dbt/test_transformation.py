@@ -1168,3 +1168,23 @@ def test_snowflake_dynamic_table():
     for required_property in ["target_lag", "snowflake_warehouse"]:
         with pytest.raises(ConfigError, match=r".*must be set for dynamic tables"):
             model.copy(update={required_property: None}).to_sqlmesh(context)
+
+
+@pytest.mark.xdist_group("dbt_manifest")
+def test_refs_in_jinja_globals(sushi_test_project: Project, mocker: MockerFixture):
+    context = sushi_test_project.context
+
+    sqlmesh_model = t.cast(
+        SqlModel,
+        sushi_test_project.packages["sushi"].models["simple_model_b"].to_sqlmesh(context),
+    )
+    assert set(sqlmesh_model.jinja_macros.global_objs["refs"].keys()) == {"simple_model_a"}  # type: ignore
+
+    sqlmesh_model = t.cast(
+        SqlModel,
+        sushi_test_project.packages["sushi"].models["top_waiters"].to_sqlmesh(context),
+    )
+    assert set(sqlmesh_model.jinja_macros.global_objs["refs"].keys()) == {  # type: ignore
+        "waiter_revenue_by_day",
+        "sushi.waiter_revenue_by_day",
+    }
