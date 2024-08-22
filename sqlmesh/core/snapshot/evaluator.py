@@ -1146,8 +1146,6 @@ class PromotableStrategy(EvaluationStrategy):
             table_description=model.description if is_prod else None,
             column_descriptions=model.column_descriptions if is_prod else None,
             view_properties=model.virtual_properties,
-            physical_cluster=model.physical_properties.get("CLUSTER")
-            or model.physical_properties.get("ON_CLUSTER"),
         )
 
     def demote(self, view_name: str, **kwargs: t.Any) -> None:
