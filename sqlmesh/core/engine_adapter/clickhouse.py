@@ -206,12 +206,9 @@ class ClickhouseEngineAdapter(EngineAdapterWithIndexSupport, LogicalMergeMixin):
         """
         target_table = exp.to_table(target_table_name)
         source_table = exp.to_table(source_table_name)
-        on_cluster_sql = kwargs.get("ON_CLUSTER", None) or (
-            self.cluster if self.engine_run_mode.is_cluster else None
-        )
-        on_cluster_sql = (
-            f" ON CLUSTER {exp.to_identifier(on_cluster_sql)} " if on_cluster_sql else " "
-        )
+        on_cluster_sql = " "
+        if self.engine_run_mode.is_cluster:
+            on_cluster_sql = f" ON CLUSTER {exp.to_identifier(self.cluster)} "
         create_sql = f"CREATE TABLE{' IF NOT EXISTS' if exists else ''} {target_table}{on_cluster_sql}AS {source_table}"
         self.execute(create_sql)
 
@@ -229,31 +226,36 @@ class ClickhouseEngineAdapter(EngineAdapterWithIndexSupport, LogicalMergeMixin):
     ) -> None:
         """Creates a table in the database.
 
-        Clickhouse does not fully support CTAS in "replicated" engines, which are used exclusively
-        in Clickhouse Cloud.
+        Clickhouse Cloud requires doing CTAS in two steps.
 
-        Therefore, we add the `EMPTY` property to the CTAS call to create a table with the proper
+        First, we add the `EMPTY` property to the CTAS call to create a table with the proper
         schema, then insert the data with the CTAS query.
         """
-        self.execute(
-            self._build_create_table_exp(
-                table_name_or_schema,
-                expression=expression,
-                exists=exists,
-                replace=replace,
-                columns_to_types=columns_to_types,
-                table_description=(
-                    table_description
-                    if self.COMMENT_CREATION_TABLE.supports_schema_def and self.comments_enabled
-                    else None
-                ),
-                table_kind=table_kind,
-                empty_ctas=(expression is not None),
-                **kwargs,
-            )
+        super()._create_table(
+            table_name_or_schema,
+            expression,
+            exists,
+            replace,
+            columns_to_types,
+            table_description,
+            column_descriptions,
+            table_kind,
+            empty_ctas=(self.engine_run_mode.is_cloud and expression is not None),
+            **kwargs,
         )
 
-        if expression and table_kind != "VIEW":
+        # execute the second INSERT step if on cloud and creating a table
+        # - Additional clause is to avoid clickhouse-connect HTTP client bug where CTAS LIMIT 0
+        #     returns a success code but malformed response
+        if (
+            self.engine_run_mode.is_cloud
+            and table_kind != "VIEW"
+            and expression
+            and not (
+                expression.args.get("limit") is not None
+                and expression.args["limit"].expression.this == "0"
+            )
+        ):
             table_name = (
                 table_name_or_schema.this
                 if isinstance(table_name_or_schema, exp.Schema)
@@ -349,22 +351,8 @@ class ClickhouseEngineAdapter(EngineAdapterWithIndexSupport, LogicalMergeMixin):
                 )
             )
 
-        on_cluster = (
-            table_properties_copy.pop("CLUSTER", None)
-            or table_properties_copy.pop("ON_CLUSTER", None)
-            or self.cluster
-        )
         if self.engine_run_mode.is_cluster:
-            on_cluster = (
-                on_cluster.alias_or_name if isinstance(on_cluster, exp.Column) else on_cluster
-            )
-            properties.append(
-                exp.OnCluster(
-                    this=exp.var(
-                        on_cluster.this if isinstance(on_cluster, exp.Literal) else on_cluster
-                    )
-                )
-            )
+            properties.append(exp.OnCluster(this=exp.var(self.cluster)))
 
         if empty_ctas:
             properties.append(exp.EmptyProperty())
@@ -399,13 +387,7 @@ class ClickhouseEngineAdapter(EngineAdapterWithIndexSupport, LogicalMergeMixin):
         # - in the create_view promotion call, the cluster won't be in `view_properties`` so we pass the
         #     model.physical_properties["CLUSTER"] value to the "physical_cluster" kwarg
         if self.engine_run_mode.is_cluster:
-            on_cluster = (
-                view_properties_copy.pop("CLUSTER", None)
-                or view_properties_copy.pop("ON_CLUSTER", None)
-                or kwargs.pop("physical_cluster", None)
-                or self.cluster
-            )
-            properties.append(exp.OnCluster(this=exp.var(on_cluster)))
+            properties.append(exp.OnCluster(this=exp.var(self.cluster)))
 
         if view_properties_copy:
             properties.extend(self._table_or_view_properties_to_expressions(view_properties_copy))
@@ -426,10 +408,9 @@ class ClickhouseEngineAdapter(EngineAdapterWithIndexSupport, LogicalMergeMixin):
     ) -> exp.Comment | str:
         table_sql = table.sql(dialect=self.dialect, identify=True)
 
-        on_cluster = kwargs.get("ON_CLUSTER", None)
         on_cluster_sql = " "
-        if on_cluster and self.engine_run_mode.is_cluster:
-            on_cluster_sql = f" ON CLUSTER {exp.to_identifier(on_cluster)} "
+        if self.engine_run_mode.is_cluster:
+            on_cluster_sql = f" ON CLUSTER {exp.to_identifier(self.cluster)} "
 
         truncated_comment = self._truncate_table_comment(table_comment)
         comment_sql = exp.Literal.string(truncated_comment).sql(dialect=self.dialect)
@@ -447,10 +428,9 @@ class ClickhouseEngineAdapter(EngineAdapterWithIndexSupport, LogicalMergeMixin):
         table_sql = table.sql(dialect=self.dialect, identify=True)
         column_sql = exp.to_column(column_name).sql(dialect=self.dialect, identify=True)
 
-        on_cluster = kwargs.get("ON_CLUSTER", None)
         on_cluster_sql = " "
-        if on_cluster and self.engine_run_mode.is_cluster:
-            on_cluster_sql = f" ON CLUSTER {exp.to_identifier(on_cluster)} "
+        if self.engine_run_mode.is_cluster:
+            on_cluster_sql = f" ON CLUSTER {exp.to_identifier(self.cluster)} "
 
         truncated_comment = self._truncate_table_comment(column_comment)
         comment_sql = exp.Literal.string(truncated_comment).sql(dialect=self.dialect)
