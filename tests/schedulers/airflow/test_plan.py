@@ -1,4 +1,5 @@
 import typing as t
+import json
 from datetime import datetime
 from unittest import mock
 
@@ -525,7 +526,7 @@ def test_plan_dag_state(snapshot: Snapshot, sushi_context: Context, random_name)
     environment_name = random_name()
     environment = Environment(
         name=environment_name,
-        snapshots=[snapshot.table_info],
+        snapshots=[json.loads(snapshot.table_info.json())],
         start_at=to_timestamp("2022-01-01"),
         end_at=None,
         plan_id="test_plan_id",

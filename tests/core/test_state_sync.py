@@ -1065,6 +1065,9 @@ def test_delete_expired_environments(state_sync: EngineAdapterStateSync, make_sn
     env_b = env_a.copy(update={"name": "test_environment_b", "expiration_ts": now_ts + 1000})
     state_sync.promote(env_b)
 
+    env_a = Environment(**json.loads(env_a.json()))
+    env_b = Environment(**json.loads(env_b.json()))
+
     assert state_sync.get_environment(env_a.name) == env_a
     assert state_sync.get_environment(env_b.name) == env_b
 
