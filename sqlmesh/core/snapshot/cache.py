@@ -37,6 +37,8 @@ class SnapshotCache:
                 if snapshot.is_model:
                     self._optimized_query_cache.with_optimized_query(snapshot.model)
                 self._update_node_hash_cache(snapshot)
+                snapshot.intervals = []
+                snapshot.dev_intervals = []
                 snapshots[s_id] = snapshot
                 cache_hits.add(s_id)
 
