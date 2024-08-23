@@ -25,6 +25,7 @@ cp -r ./examples/sushi $TMP_DIR
 pushd $SUSHI_DIR
 rm -rf ./data/*
 sqlmesh --gateway $GATEWAY_NAME plan --no-prompts --auto-apply
+rm -rf .cache
 popd
 
 # Switch back to the starting state of the repository
