@@ -1266,14 +1266,13 @@ class SeedModel(_SqlBasedModel):
     def render_seed(self) -> t.Iterator[QueryOrDF]:
         self._ensure_hydrated()
 
-        columns = []
         date_columns = []
         datetime_columns = []
         bool_columns = []
         string_columns = []
 
-        for name, tpe in (self.columns_to_types_ or {}).items():
-            columns.append(name)
+        columns_to_types = self.columns_to_types_ or {}
+        for name, tpe in columns_to_types.items():
             if tpe.this in (exp.DataType.Type.DATE, exp.DataType.Type.DATE32):
                 date_columns.append(name)
             elif tpe.this in exp.DataType.TEMPORAL_TYPES:
@@ -1285,7 +1284,7 @@ class SeedModel(_SqlBasedModel):
 
         for df in self._reader.read(batch_size=self.kind.batch_size):
             rename_dict = {}
-            for column in columns:
+            for column in columns_to_types:
                 if column not in df:
                     normalized_name = normalize_identifiers(column, dialect=self.dialect).name
                     if normalized_name in df:
