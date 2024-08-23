@@ -70,3 +70,12 @@ def test_lazy_loading(sushi_context):
     assert all(
         isinstance(snapshot, SnapshotTableInfo) for snapshot in env.previous_finalized_snapshots
     )
+
+    with pytest.raises(ValueError, match="Must be a list of SnapshotTableInfo dicts or objects"):
+        Environment(**{**env.dict(), **{"snapshots": [1, 2, 3]}})
+
+    with pytest.raises(ValueError, match="Must be a list of SnapshotId dicts or objects"):
+        Environment(**{**env.dict(), **{"promoted_snapshot_ids": [1, 2, 3]}})
+
+    with pytest.raises(ValueError, match="Must be a list of SnapshotTableInfo dicts or objects"):
+        Environment(**{**env.dict(), **{"previous_finalized_snapshots": [1, 2, 3]}})

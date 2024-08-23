@@ -14,10 +14,7 @@ from sqlmesh.utils.date import TimeLike, now_timestamp
 from sqlmesh.utils.pydantic import PydanticModel, field_validator
 
 T = t.TypeVar("T", bound="EnvironmentNamingInfo")
-
-
-SnapshotTableInfoOrJsonList = t.Union[t.List[t.Dict], t.List[SnapshotTableInfo]]
-SnapshotIdOrJsonList = t.Union[t.List[t.Dict], t.List[SnapshotId]]
+PydanticType = t.TypeVar("PydanticType", bound="PydanticModel")
 
 
 class EnvironmentNamingInfo(PydanticModel):
@@ -106,49 +103,45 @@ class Environment(EnvironmentNamingInfo):
         previous_finalized_snapshots: Snapshots that were part of this environment last time it was finalized.
     """
 
-    snapshots_: SnapshotTableInfoOrJsonList = Field(alias="snapshots")
+    snapshots_: t.List[t.Any] = Field(alias="snapshots")
     start_at: TimeLike
     end_at: t.Optional[TimeLike] = None
     plan_id: str
     previous_plan_id: t.Optional[str] = None
     expiration_ts: t.Optional[int] = None
     finalized_ts: t.Optional[int] = None
-    promoted_snapshot_ids_: t.Optional[SnapshotIdOrJsonList] = Field(
+    promoted_snapshot_ids_: t.Optional[t.List[t.Any]] = Field(
         default=None, alias="promoted_snapshot_ids"
     )
-    previous_finalized_snapshots_: t.Optional[SnapshotTableInfoOrJsonList] = Field(
+    previous_finalized_snapshots_: t.Optional[t.List[t.Any]] = Field(
         default=None, alias="previous_finalized_snapshots"
     )
 
     @field_validator("snapshots_", "previous_finalized_snapshots_", mode="before")
     @classmethod
-    def _load_snapshots(
-        cls, v: str | SnapshotTableInfoOrJsonList | None
-    ) -> SnapshotTableInfoOrJsonList | None:
+    def _load_snapshots(cls, v: str | t.List[t.Any] | None) -> t.List[t.Any] | None:
         if isinstance(v, str):
             return json.loads(v)
+        if v and not isinstance(v[0], dict | SnapshotTableInfo):
+            raise ValueError("Must be a list of SnapshotTableInfo dicts or objects")
         return v
 
     @field_validator("promoted_snapshot_ids_", mode="before")
     @classmethod
-    def _load_snapshot_ids(cls, v: str | SnapshotIdOrJsonList) -> SnapshotIdOrJsonList:
+    def _load_snapshot_ids(cls, v: str | t.List[t.Any] | None) -> t.List[t.Any] | None:
         if isinstance(v, str):
             return json.loads(v)
+        if v and not isinstance(v[0], dict | SnapshotId):
+            raise ValueError("Must be a list of SnapshotId dicts or objects")
         return v
 
     @property
     def snapshots(self) -> t.List[SnapshotTableInfo]:
-        if self.snapshots_ and isinstance(self.snapshots_[0], dict):
-            self.snapshots_ = [SnapshotTableInfo.parse_obj(obj) for obj in self.snapshots_]
-        return t.cast(t.List[SnapshotTableInfo], self.snapshots_)
+        return self._convert_list_to_models_and_store("snapshots_", SnapshotTableInfo)
 
     @property
     def promoted_snapshot_ids(self) -> t.List[SnapshotId]:
-        if self.promoted_snapshot_ids_ and isinstance(self.promoted_snapshot_ids_[0], dict):
-            self.promoted_snapshot_ids_ = [
-                SnapshotId.parse_obj(obj) for obj in self.promoted_snapshot_ids_
-            ]
-        return t.cast(t.List[SnapshotId], self.promoted_snapshot_ids_)
+        return self._convert_list_to_models_and_store("promoted_snapshot_ids_", SnapshotId)
 
     @property
     def promoted_snapshots(self) -> t.List[SnapshotTableInfo]:
@@ -160,13 +153,9 @@ class Environment(EnvironmentNamingInfo):
 
     @property
     def previous_finalized_snapshots(self) -> t.List[SnapshotTableInfo]:
-        if self.previous_finalized_snapshots_ and isinstance(
-            self.previous_finalized_snapshots_[0], dict
-        ):
-            self.previous_finalized_snapshots_ = [
-                SnapshotTableInfo.parse_obj(obj) for obj in self.previous_finalized_snapshots_
-            ]
-        return t.cast(t.List[SnapshotTableInfo], self.previous_finalized_snapshots_)
+        return self._convert_list_to_models_and_store(
+            "previous_finalized_snapshots_", SnapshotTableInfo
+        )
 
     @property
     def finalized_or_current_snapshots(self) -> t.List[SnapshotTableInfo]:
@@ -188,3 +177,12 @@ class Environment(EnvironmentNamingInfo):
     @property
     def expired(self) -> bool:
         return self.expiration_ts is not None and self.expiration_ts <= now_timestamp()
+
+    def _convert_list_to_models_and_store(
+        self, field: str, type_: t.Type[PydanticType]
+    ) -> t.List[PydanticType]:
+        value = getattr(self, field)
+        if value and not isinstance(value[0], type_):
+            value = [type_.parse_obj(obj) for obj in value]
+            setattr(self, field, value)
+        return t.cast(t.List[PydanticType], value)
