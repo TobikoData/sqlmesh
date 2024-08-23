@@ -122,7 +122,7 @@ class Environment(EnvironmentNamingInfo):
     def _load_snapshots(cls, v: str | t.List[t.Any] | None) -> t.List[t.Any] | None:
         if isinstance(v, str):
             return json.loads(v)
-        if v and not isinstance(v[0], dict | SnapshotTableInfo):
+        if v and not isinstance(v[0], (dict, SnapshotTableInfo)):
             raise ValueError("Must be a list of SnapshotTableInfo dicts or objects")
         return v
 
@@ -131,7 +131,7 @@ class Environment(EnvironmentNamingInfo):
     def _load_snapshot_ids(cls, v: str | t.List[t.Any] | None) -> t.List[t.Any] | None:
         if isinstance(v, str):
             return json.loads(v)
-        if v and not isinstance(v[0], dict | SnapshotId):
+        if v and not isinstance(v[0], (dict, SnapshotId)):
             raise ValueError("Must be a list of SnapshotId dicts or objects")
         return v
 
