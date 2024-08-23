@@ -19,7 +19,7 @@ from sqlmesh.utils.errors import MissingDependencyError
 
 logger = logging.getLogger(__name__)
 
-SKIP_LOAD_COMMANDS = ("create_external_models", "migrate", "rollback")
+SKIP_LOAD_COMMANDS = ("create_external_models", "migrate", "rollback", "run")
 
 
 def _sqlmesh_version() -> str:
