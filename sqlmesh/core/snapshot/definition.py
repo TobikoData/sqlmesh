@@ -1207,6 +1207,14 @@ class Snapshot(PydanticModel, SnapshotInfoMixin):
         if not self.version:
             raise SQLMeshError(f"Snapshot {self.snapshot_id} has not been versioned yet.")
 
+    def __getstate__(self) -> t.Dict[t.Any, t.Any]:
+        state = super().__getstate__()
+        state["__dict__"] = state["__dict__"].copy()
+        # Don't store intervals.
+        state["__dict__"]["intervals"] = []
+        state["__dict__"]["dev_intervals"] = []
+        return state
+
 
 class SnapshotTableCleanupTask(PydanticModel):
     snapshot: SnapshotTableInfo
