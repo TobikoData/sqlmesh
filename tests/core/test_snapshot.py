@@ -1,3 +1,4 @@
+import pickle
 import json
 import typing as t
 from copy import deepcopy
@@ -1931,6 +1932,8 @@ def test_snapshot_cache(make_snapshot, tmp_path):
             query=parse_one("SELECT 1"),
         )
     )
+    snapshot.add_interval("2024-01-01", "2024-01-02")
+    snapshot.add_interval("2024-01-01", "2024-01-02", is_dev=True)
 
     loader_called_times = 0
 
@@ -1957,6 +1960,8 @@ def test_snapshot_cache(make_snapshot, tmp_path):
     assert cached_snapshot.model._query_renderer._optimized_cache is not None
     assert cached_snapshot.model._data_hash is not None
     assert cached_snapshot.model._metadata_hash is not None
+    assert not cached_snapshot.intervals
+    assert not cached_snapshot.dev_intervals
 
     cache.clear()
     assert cache.get_or_load([snapshot.snapshot_id], _loader) == (
@@ -1964,3 +1969,21 @@ def test_snapshot_cache(make_snapshot, tmp_path):
         set(),
     )
     assert loader_called_times == 2
+
+
+def test_snapshot_pickle_intervals(make_snapshot):
+    snapshot = make_snapshot(
+        SqlModel(
+            name="test_model_name",
+            query=parse_one("SELECT 1"),
+        )
+    )
+    snapshot.add_interval("2023-01-01", "2023-01-02")
+    snapshot.add_interval("2023-01-01", "2023-01-02", is_dev=True)
+
+    assert len(snapshot.intervals) > 0
+    assert len(snapshot.dev_intervals) > 0
+
+    loaded_snapshot = pickle.loads(pickle.dumps(snapshot))
+    assert not loaded_snapshot.intervals
+    assert not loaded_snapshot.dev_intervals
