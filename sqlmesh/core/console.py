@@ -287,6 +287,8 @@ def make_progress_bar(message: str, console: t.Optional[RichConsole] = None) -> 
 class TerminalConsole(Console):
     """A rich based implementation of the console."""
 
+    TABLE_DIFF_SOURCE_BLUE = "#0248ff"
+
     def __init__(
         self,
         console: t.Optional[RichConsole] = None,
@@ -1036,7 +1038,7 @@ class TerminalConsole(Console):
         if schema_diff.target_alias:
             target_name = schema_diff.target_alias.upper()
 
-        first_line = f"\n[b]Schema Diff Between '[yellow]{source_name}[/yellow]' and '[green]{target_name}[/green]'"
+        first_line = f"\n[b]Schema Diff Between '[{self.TABLE_DIFF_SOURCE_BLUE}]{source_name}[/{self.TABLE_DIFF_SOURCE_BLUE}]' and '[green]{target_name}[/green]'"
         if schema_diff.model_name:
             first_line = (
                 first_line + f" environments for model '[blue]{schema_diff.model_name}[/blue]'"
@@ -1114,9 +1116,61 @@ class TerminalConsole(Console):
             self.console.print("  No columns with same name and data type in both tables")
 
         if show_sample:
+            sample = row_diff.joined_sample
             self.console.print("\n[b][blue]COMMON ROWS[/blue] sample data differences:[/b]")
-            if row_diff.joined_sample.shape[0] > 0:
-                self.console.print(row_diff.joined_sample.to_string(index=False), end="\n\n")
+            if sample.shape[0] > 0:
+                keys: list[str] = []
+                columns: dict[str, None] = {}
+                environments: dict[str, None] = {}
+
+                # Extract environment, key and column names from the joined sample
+                for col in sample.columns:
+                    if "__" in col:
+                        column_parts = col.split("__")
+                        environments[column_parts[0]] = None
+                        columns["__".join(column_parts[1:])] = None
+                    else:
+                        keys.append(col)
+
+                assert len(environments) == 2
+                source_env, target_env = environments
+
+                column_styles = {
+                    source_env: self.TABLE_DIFF_SOURCE_BLUE,
+                    target_env: "green",
+                }
+
+                for column in columns:
+                    # Create a table with the joined keys and comparison columns
+                    source_column = source_env + "__" + column
+                    target_column = target_env + "__" + column
+                    column_table = sample[keys + [source_column, target_column]]
+
+                    # Filter to keep the rows where the values differ
+                    column_table = column_table[
+                        column_table[source_column] != column_table[target_column]
+                    ]
+                    column_table = column_table.rename(
+                        columns={
+                            source_column: source_env,
+                            target_column: target_env,
+                        }
+                    )
+
+                    table = Table(show_header=True)
+                    for column_name in column_table.columns:
+                        style = column_styles.get(column_name, "")
+                        table.add_column(column_name, style=style, header_style=style)
+
+                    for _, row in column_table.iterrows():
+                        table.add_row(*[str(cell) for cell in row])
+
+                    self.console.print(
+                        f"Column: [underline][bold cyan]{column}[/bold cyan][/underline]",
+                        table,
+                        end="\n",
+                    )
+
             else:
                 self.console.print("  All joined rows match")
 
