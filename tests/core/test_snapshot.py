@@ -1987,3 +1987,5 @@ def test_snapshot_pickle_intervals(make_snapshot):
     loaded_snapshot = pickle.loads(pickle.dumps(snapshot))
     assert not loaded_snapshot.intervals
     assert not loaded_snapshot.dev_intervals
+    assert len(snapshot.intervals) > 0
+    assert len(snapshot.dev_intervals) > 0
