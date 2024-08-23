@@ -813,6 +813,7 @@ def test_seed_case_sensitive_columns(tmp_path):
         f"""
         MODEL (
             name db.seed,
+            dialect postgres,
             kind SEED (
               path '{str(model_csv_path)}',
             ),
