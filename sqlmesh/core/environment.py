@@ -16,6 +16,10 @@ from sqlmesh.utils.pydantic import PydanticModel, field_validator
 T = t.TypeVar("T", bound="EnvironmentNamingInfo")
 
 
+SnapshotTableInfoOrJsonList = t.Union[t.List[t.Dict], t.List[SnapshotTableInfo]]
+SnapshotIdOrJsonList = t.Union[t.List[t.Dict], t.List[SnapshotId]]
+
+
 class EnvironmentNamingInfo(PydanticModel):
     """
     Information required for creating an object within an environment
@@ -102,31 +106,49 @@ class Environment(EnvironmentNamingInfo):
         previous_finalized_snapshots: Snapshots that were part of this environment last time it was finalized.
     """
 
-    snapshots: t.List[SnapshotTableInfo]
+    snapshots_: SnapshotTableInfoOrJsonList = Field(alias="snapshots")
     start_at: TimeLike
     end_at: t.Optional[TimeLike] = None
     plan_id: str
     previous_plan_id: t.Optional[str] = None
     expiration_ts: t.Optional[int] = None
     finalized_ts: t.Optional[int] = None
-    promoted_snapshot_ids: t.Optional[t.List[SnapshotId]] = None
-    previous_finalized_snapshots: t.Optional[t.List[SnapshotTableInfo]] = None
+    promoted_snapshot_ids_: t.Optional[SnapshotIdOrJsonList] = Field(
+        default=None, alias="promoted_snapshot_ids"
+    )
+    previous_finalized_snapshots_: t.Optional[SnapshotTableInfoOrJsonList] = Field(
+        default=None, alias="previous_finalized_snapshots"
+    )
 
-    @field_validator("snapshots", "previous_finalized_snapshots", mode="before")
+    @field_validator("snapshots_", "previous_finalized_snapshots_", mode="before")
     @classmethod
-    def _convert_snapshots(
-        cls, v: str | t.List[SnapshotTableInfo] | None
-    ) -> t.List[SnapshotTableInfo] | None:
+    def _load_snapshots(
+        cls, v: str | SnapshotTableInfoOrJsonList | None
+    ) -> SnapshotTableInfoOrJsonList | None:
         if isinstance(v, str):
-            return [SnapshotTableInfo.parse_obj(obj) for obj in json.loads(v)]
+            return json.loads(v)
         return v
 
-    @field_validator("promoted_snapshot_ids", mode="before")
+    @field_validator("promoted_snapshot_ids_", mode="before")
     @classmethod
-    def _convert_snapshot_ids(cls, v: str | t.List[SnapshotId]) -> t.List[SnapshotId]:
+    def _load_snapshot_ids(cls, v: str | SnapshotIdOrJsonList) -> SnapshotIdOrJsonList:
         if isinstance(v, str):
-            return [SnapshotId.parse_obj(obj) for obj in json.loads(v)]
+            return json.loads(v)
         return v
+
+    @property
+    def snapshots(self) -> t.List[SnapshotTableInfo]:
+        if self.snapshots_ and isinstance(self.snapshots_[0], dict):
+            self.snapshots_ = [SnapshotTableInfo.parse_obj(obj) for obj in self.snapshots_]
+        return t.cast(t.List[SnapshotTableInfo], self.snapshots_)
+
+    @property
+    def promoted_snapshot_ids(self) -> t.List[SnapshotId]:
+        if self.promoted_snapshot_ids_ and isinstance(self.promoted_snapshot_ids_[0], dict):
+            self.promoted_snapshot_ids_ = [
+                SnapshotId.parse_obj(obj) for obj in self.promoted_snapshot_ids_
+            ]
+        return t.cast(t.List[SnapshotId], self.promoted_snapshot_ids_)
 
     @property
     def promoted_snapshots(self) -> t.List[SnapshotTableInfo]:
@@ -135,6 +157,16 @@ class Environment(EnvironmentNamingInfo):
 
         promoted_snapshot_ids = set(self.promoted_snapshot_ids)
         return [s for s in self.snapshots if s.snapshot_id in promoted_snapshot_ids]
+
+    @property
+    def previous_finalized_snapshots(self) -> t.List[SnapshotTableInfo]:
+        if self.previous_finalized_snapshots_ and isinstance(
+            self.previous_finalized_snapshots_[0], dict
+        ):
+            self.previous_finalized_snapshots_ = [
+                SnapshotTableInfo.parse_obj(obj) for obj in self.previous_finalized_snapshots_
+            ]
+        return t.cast(t.List[SnapshotTableInfo], self.previous_finalized_snapshots_)
 
     @property
     def finalized_or_current_snapshots(self) -> t.List[SnapshotTableInfo]:

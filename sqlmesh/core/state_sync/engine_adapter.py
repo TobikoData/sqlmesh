@@ -1495,7 +1495,7 @@ class EngineAdapterStateSync(StateSync):
             ]
 
             if snapshots != environment.snapshots:
-                environment.snapshots = snapshots
+                environment.snapshots_ = snapshots
                 updated_environments.append(environment)
                 if environment.name == c.PROD:
                     updated_prod_environment = environment
@@ -1690,7 +1690,10 @@ def _environment_to_df(environment: Environment) -> pd.DataFrame:
             {
                 "name": environment.name,
                 "snapshots": json.dumps(
-                    [snapshot.dict(mode="json") for snapshot in environment.snapshots]
+                    [
+                        s.dict(mode="json") if isinstance(s, SnapshotTableInfo) else s
+                        for s in environment.snapshots_
+                    ]
                 ),
                 "start_at": time_like_to_str(environment.start_at),
                 "end_at": time_like_to_str(environment.end_at) if environment.end_at else None,
@@ -1699,7 +1702,12 @@ def _environment_to_df(environment: Environment) -> pd.DataFrame:
                 "expiration_ts": environment.expiration_ts,
                 "finalized_ts": environment.finalized_ts,
                 "promoted_snapshot_ids": (
-                    json.dumps([s.dict() for s in environment.promoted_snapshot_ids])
+                    json.dumps(
+                        [
+                            s.dict() if isinstance(s, SnapshotId) else s
+                            for s in environment.promoted_snapshot_ids
+                        ]
+                    )
                     if environment.promoted_snapshot_ids is not None
                     else None
                 ),
@@ -1708,8 +1716,8 @@ def _environment_to_df(environment: Environment) -> pd.DataFrame:
                 "previous_finalized_snapshots": (
                     json.dumps(
                         [
-                            snapshot.dict(mode="json")
-                            for snapshot in environment.previous_finalized_snapshots
+                            s.dict(mode="json") if isinstance(s, SnapshotTableInfo) else s
+                            for s in environment.previous_finalized_snapshots
                         ]
                     )
                     if environment.previous_finalized_snapshots is not None

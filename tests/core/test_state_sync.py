@@ -1215,7 +1215,7 @@ def test_delete_expired_snapshots_promoted(
     assert not state_sync.delete_expired_snapshots()
     assert set(state_sync.get_snapshots(all_snapshots)) == {snapshot.snapshot_id}
 
-    env.snapshots = []
+    env.snapshots_ = []
     state_sync.promote(env)
 
     now_timestamp_mock = mocker.patch("sqlmesh.core.state_sync.engine_adapter.now_timestamp")

@@ -64,7 +64,7 @@ def test_apply_plan_create_backfill_promote(
         airflow_client.apply_plan([snapshot], environment, random_name())
 
     # Verify full environment demotion.
-    environment.snapshots = []
+    environment.snapshots_ = []
     environment.previous_plan_id = environment.plan_id
     environment.plan_id = "new_plan_id"
     _apply_plan_and_block(airflow_client, [], environment)
