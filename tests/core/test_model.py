@@ -799,6 +799,62 @@ def test_seed_provided_columns():
     }
 
 
+def test_seed_case_sensitive_columns(tmp_path):
+    model_csv_path = (tmp_path / "model.csv").absolute()
+
+    with open(model_csv_path, "w", encoding="utf-8") as fd:
+        fd.write(
+            """camelCaseId,camelCaseBool,camelCaseString,normalisedCaseDate,camelCaseTimestamp
+1,false,Alice,2022-01-01,2022-01-01
+"""
+        )
+
+    expressions = d.parse(
+        f"""
+        MODEL (
+            name db.seed,
+            kind SEED (
+              path '{str(model_csv_path)}',
+            ),
+            columns (
+              'camelCaseId' int,
+              'camelCaseBool' boolean,
+              'camelCaseString' text,
+              'camelCaseTimestamp' timestamp
+            )
+        );
+    """
+    )
+
+    model = load_sql_based_model(expressions, path=Path("./examples/sushi/models/test_model.sql"))
+
+    assert isinstance(model.kind, SeedKind)
+    assert model.seed is not None
+    assert len(model.seed.content) > 0
+    assert model.columns_to_types == {
+        "camelCaseId": exp.DataType.build("int"),
+        "camelCaseBool": exp.DataType.build("boolean"),
+        "camelCaseString": exp.DataType.build("text"),
+        "camelCaseTimestamp": exp.DataType.build("TIMESTAMP"),
+    }
+    df = next(model.render(context=None))
+
+    assert df["camelCaseId"].dtype == "int64"
+    assert df["camelCaseId"].iloc[0] == 1
+
+    assert df["camelCaseBool"].dtype == "bool"
+    assert not df["camelCaseBool"].iloc[0]
+
+    assert df["camelCaseString"].dtype == "object"
+    assert df["camelCaseString"].iloc[0] == "Alice"
+
+    assert df["normalisedcasedate"].dtype == "object"
+    assert df["normalisedcasedate"].iloc[0] == "2022-01-01"
+
+    assert df["camelCaseTimestamp"].dtype == "datetime64[ns]"
+    assert df["camelCaseTimestamp"].iloc[0] == pd.Timestamp("2022-01-01 00:00:00")
+
+
 def test_seed_csv_settings():
     expressions = d.parse(
         """
