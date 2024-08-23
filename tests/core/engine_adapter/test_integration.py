@@ -898,6 +898,10 @@ def test_ctas(ctx: TestContext):
         assert table_description == "test table description"
         assert column_comments == {"id": "test id column description"}
 
+    # ensure we don't hit clickhouse INSERT with LIMIT 0 bug on CTAS
+    if ctx.dialect == "clickhouse":
+        ctx.engine_adapter.ctas(table, exp.select("1").limit(0))
+
 
 def test_create_view(ctx: TestContext):
     input_data = pd.DataFrame(
@@ -2083,8 +2087,8 @@ def test_init_project(ctx: TestContext, mark_gateway: t.Tuple[str, str], tmp_pat
     if ctx.test_type != "query":
         pytest.skip("Init example project end-to-end tests only need to run for query")
 
+    state_schema = "sqlmesh"
     object_names = {
-        "base_schema": ["sqlmesh"],
         "view_schema": ["sqlmesh_example"],
         "physical_schema": ["sqlmesh__sqlmesh_example"],
         "dev_schema": ["sqlmesh_example__test_dev"],
@@ -2102,12 +2106,7 @@ def test_init_project(ctx: TestContext, mark_gateway: t.Tuple[str, str], tmp_pat
             return name.upper()
 
         object_names = {
-            "base_schema": object_names["base_schema"],
-            **{
-                k: [_normalize_snowflake(name) for name in v]
-                for k, v in object_names.items()
-                if k != "base_schema"
-            },
+            k: [_normalize_snowflake(name) for name in v] for k, v in object_names.items()
         }
 
     init_example_project(tmp_path, ctx.dialect)
@@ -2128,7 +2127,7 @@ def test_init_project(ctx: TestContext, mark_gateway: t.Tuple[str, str], tmp_pat
 
     # clean up any leftover schemas from previous runs (requires context)
     for schema in [
-        *object_names["base_schema"],
+        state_schema,
         *object_names["view_schema"],
         *object_names["physical_schema"],
         *object_names["dev_schema"],
