@@ -119,7 +119,7 @@ class _Model(ModelMeta, frozen=True):
     mapping_schema: t.Dict[str, t.Any] = {}
 
     _full_depends_on: t.Optional[t.Set[str]] = None
-    __statement_renderers: t.Dict[int, ExpressionRenderer] = {}
+    _statement_renderer_cache: t.Dict[int, ExpressionRenderer] = {}
 
     pre_statements_: t.Optional[t.List[exp.Expression]] = Field(
         default=None, alias="pre_statements"
@@ -133,12 +133,12 @@ class _Model(ModelMeta, frozen=True):
     def __getstate__(self) -> t.Dict[t.Any, t.Any]:
         state = super().__getstate__()
         private = state[PRIVATE_FIELDS]
-        private["_SqlBasedModel__statement_renderers"] = {}
+        private["_statement_renderer_cache"] = {}
         return state
 
     def copy(self, **kwargs: t.Any) -> Self:
         model = super().copy(**kwargs)
-        model.__statement_renderers = {}
+        model._statement_renderer_cache = {}
         return model
 
     def render(
@@ -437,8 +437,8 @@ class _Model(ModelMeta, frozen=True):
 
     def _statement_renderer(self, expression: exp.Expression) -> ExpressionRenderer:
         expression_key = id(expression)
-        if expression_key not in self.__statement_renderers:
-            self.__statement_renderers[expression_key] = ExpressionRenderer(
+        if expression_key not in self._statement_renderer_cache:
+            self._statement_renderer_cache[expression_key] = ExpressionRenderer(
                 expression,
                 self.dialect,
                 self.macro_definitions,
@@ -449,7 +449,7 @@ class _Model(ModelMeta, frozen=True):
                 default_catalog=self.default_catalog,
                 model_fqn=self.fqn,
             )
-        return self.__statement_renderers[expression_key]
+        return self._statement_renderer_cache[expression_key]
 
     def render_signals(
         self,
