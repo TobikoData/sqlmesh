@@ -1628,9 +1628,14 @@ def missing_intervals(
     for snapshot in snapshots:
         if not snapshot.evaluatable:
             continue
-        interval = restatements.get(snapshot.snapshot_id)
         snapshot_start_date = start_dt
-        snapshot_end_date = interval_end_per_model.get(snapshot.name, end_date)
+        snapshot_end_date: TimeLike = end_date
+
+        existing_interval_end = interval_end_per_model.get(snapshot.name)
+        if existing_interval_end and existing_interval_end > to_timestamp(snapshot_start_date):
+            snapshot_end_date = existing_interval_end
+
+        interval = restatements.get(snapshot.snapshot_id)
         if interval:
             snapshot_start_date, snapshot_end_date = (to_datetime(i) for i in interval)
             snapshot = snapshot.copy()

@@ -1989,3 +1989,60 @@ def test_snapshot_pickle_intervals(make_snapshot):
     assert not loaded_snapshot.dev_intervals
     assert len(snapshot.intervals) > 0
     assert len(snapshot.dev_intervals) > 0
+
+
+def test_missing_intervals_interval_end_per_model(make_snapshot):
+    snapshot_a = make_snapshot(
+        SqlModel(
+            name="a",
+            start="2023-01-04",
+            query=parse_one("SELECT 1"),
+        ),
+        version="a",
+    )
+
+    snapshot_b = make_snapshot(
+        SqlModel(
+            name="b",
+            start="2023-01-04",
+            query=parse_one("SELECT 2"),
+        ),
+        version="b",
+    )
+
+    assert missing_intervals(
+        [snapshot_a, snapshot_b],
+        start="2023-01-04",
+        end="2023-01-10",
+        interval_end_per_model={
+            snapshot_a.name: to_timestamp("2023-01-09"),
+            snapshot_b.name: to_timestamp("2023-01-06"),
+        },
+    ) == {
+        snapshot_a: [
+            (to_timestamp("2023-01-04"), to_timestamp("2023-01-05")),
+            (to_timestamp("2023-01-05"), to_timestamp("2023-01-06")),
+            (to_timestamp("2023-01-06"), to_timestamp("2023-01-07")),
+            (to_timestamp("2023-01-07"), to_timestamp("2023-01-08")),
+            (to_timestamp("2023-01-08"), to_timestamp("2023-01-09")),
+        ],
+        snapshot_b: [
+            (to_timestamp("2023-01-04"), to_timestamp("2023-01-05")),
+            (to_timestamp("2023-01-05"), to_timestamp("2023-01-06")),
+        ],
+    }
+
+    assert missing_intervals(
+        [snapshot_a, snapshot_b],
+        start="2023-01-08",
+        end="2023-01-08",
+        interval_end_per_model={
+            snapshot_a.name: to_timestamp("2023-01-09"),
+            snapshot_b.name: to_timestamp(
+                "2023-01-06"
+            ),  # The interval end is before the start. This should be ignored.
+        },
+    ) == {
+        snapshot_a: [(to_timestamp("2023-01-08"), to_timestamp("2023-01-09"))],
+        snapshot_b: [(to_timestamp("2023-01-08"), to_timestamp("2023-01-09"))],
+    }
