@@ -2423,3 +2423,45 @@ def test_plan_start_when_preview_enabled(make_snapshot, mocker: MockerFixture):
         enable_preview=True,
     )
     assert plan_builder.build().start == default_start_for_preview
+
+
+def test_interval_end_per_model(make_snapshot):
+    snapshot = make_snapshot(SqlModel(name="a", query=parse_one("select 1, ds")))
+    snapshot.categorize_as(SnapshotChangeCategory.BREAKING)
+
+    new_snapshot = make_snapshot(SqlModel(name="a", query=parse_one("select 2, ds")))
+
+    context_diff = ContextDiff(
+        environment="test_environment",
+        is_new_environment=True,
+        is_unfinalized_environment=False,
+        normalize_environment_name=True,
+        create_from="prod",
+        added=set(),
+        removed_snapshots={},
+        modified_snapshots={new_snapshot.name: (new_snapshot, snapshot)},
+        snapshots={new_snapshot.snapshot_id: new_snapshot},
+        new_snapshots={new_snapshot.snapshot_id: new_snapshot},
+        previous_plan_id=None,
+        previously_promoted_snapshot_ids=set(),
+        previous_finalized_snapshots=None,
+    )
+
+    plan_builder = PlanBuilder(
+        context_diff,
+        DuckDBEngineAdapter.SCHEMA_DIFFER,
+        interval_end_per_model={snapshot.name: to_timestamp("2023-01-09")},
+    )
+    assert plan_builder.build().interval_end_per_model == {
+        snapshot.name: to_timestamp("2023-01-09")
+    }
+
+    # User-provided end should take precedence.
+    plan_builder = PlanBuilder(
+        context_diff,
+        DuckDBEngineAdapter.SCHEMA_DIFFER,
+        interval_end_per_model={snapshot.name: to_timestamp("2023-01-09")},
+        end="2023-01-10",
+        is_dev=True,
+    )
+    assert plan_builder.build().interval_end_per_model is None
