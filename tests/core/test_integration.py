@@ -1259,6 +1259,22 @@ def test_select_unchanged_model_for_backfill(init_and_plan_context: t.Callable):
 
 
 @freeze_time("2023-01-08 15:00:00")
+def test_max_interval_end_per_model_not_applied_when_end_is_provided(
+    init_and_plan_context: t.Callable,
+):
+    context, plan = init_and_plan_context("examples/sushi")
+    context.apply(plan)
+
+    with freeze_time("2023-01-09 00:00:00"):
+        context.run()
+
+        plan = context.plan(
+            no_prompts=True, restate_models=["*"], start="2023-01-09", end="2023-01-09"
+        )
+        context.apply(plan)
+
+
+@freeze_time("2023-01-08 15:00:00")
 def test_select_models_for_backfill(init_and_plan_context: t.Callable):
     context, _ = init_and_plan_context("examples/sushi")
 

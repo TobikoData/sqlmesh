@@ -257,6 +257,12 @@ class PlanBuilder:
             dag, earliest_interval_start(filtered_snapshots.values())
         )
 
+        interval_end_per_model = self._interval_end_per_model
+        if interval_end_per_model and self.override_end:
+            # If the end date was provided explicitly by a user, then interval end for each individual
+            # model should be ignored.
+            interval_end_per_model = None
+
         plan = Plan(
             context_diff=self._context_diff,
             plan_id=self._plan_id,
@@ -275,7 +281,7 @@ class PlanBuilder:
             ignored=ignored,
             deployability_index=deployability_index,
             restatements=restatements,
-            interval_end_per_model=self._interval_end_per_model,
+            interval_end_per_model=interval_end_per_model,
             selected_models_to_backfill=self._backfill_models,
             models_to_backfill=models_to_backfill,
             effective_from=self._effective_from,
