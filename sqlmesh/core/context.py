@@ -1134,7 +1134,7 @@ class GenericContext(BaseContext, t.Generic[C]):
         # to prevent unintended evaluation of the entire DAG.
         default_end: t.Optional[int] = None
         max_interval_end_per_model: t.Optional[t.Dict[str, int]] = None
-        if not run:
+        if not run and not end:
             models_for_interval_end: t.Optional[t.Set[str]] = None
             if backfill_models is not None:
                 models_for_interval_end = set()
