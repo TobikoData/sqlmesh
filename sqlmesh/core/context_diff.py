@@ -87,7 +87,7 @@ class ContextDiff(PydanticModel):
         environment = environment.lower()
         env = state_reader.get_environment(environment)
 
-        if env is None:
+        if env is None or env.expired:
             env = state_reader.get_environment(create_from.lower())
             is_new_environment = True
             previously_promoted_snapshot_ids = set()

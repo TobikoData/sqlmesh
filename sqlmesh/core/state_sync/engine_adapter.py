@@ -284,19 +284,20 @@ class EngineAdapterStateSync(StateSync):
                 )
                 != table_infos[name].qualified_view_name.for_environment(environment.naming_info)
             }
-            if environment.previous_plan_id != existing_environment.plan_id:
-                raise SQLMeshError(
-                    f"Plan '{environment.plan_id}' is no longer valid for the target environment '{environment.name}'. "
-                    f"Expected previous plan ID: '{environment.previous_plan_id}', actual previous plan ID: '{existing_environment.plan_id}'. "
-                    "Please recreate the plan and try again"
-                )
-            if no_gaps_snapshot_names != set():
-                snapshots = self._get_snapshots(environment.snapshots).values()
-                self._ensure_no_gaps(
-                    snapshots,
-                    existing_environment,
-                    no_gaps_snapshot_names,
-                )
+            if not existing_environment.expired:
+                if environment.previous_plan_id != existing_environment.plan_id:
+                    raise SQLMeshError(
+                        f"Plan '{environment.plan_id}' is no longer valid for the target environment '{environment.name}'. "
+                        f"Expected previous plan ID: '{environment.previous_plan_id}', actual previous plan ID: '{existing_environment.plan_id}'. "
+                        "Please recreate the plan and try again"
+                    )
+                if no_gaps_snapshot_names != set():
+                    snapshots = self._get_snapshots(environment.snapshots).values()
+                    self._ensure_no_gaps(
+                        snapshots,
+                        existing_environment,
+                        no_gaps_snapshot_names,
+                    )
             demoted_snapshots = set(existing_environment.snapshots) - set(environment.snapshots)
             # Update the updated_at attribute.
             self._update_snapshots(demoted_snapshots)
