@@ -14,6 +14,7 @@ from sqlmesh.utils.date import TimeLike, now_timestamp
 from sqlmesh.utils.pydantic import PydanticModel, field_validator
 
 T = t.TypeVar("T", bound="EnvironmentNamingInfo")
+PydanticType = t.TypeVar("PydanticType", bound="PydanticModel")
 
 
 class EnvironmentNamingInfo(PydanticModel):
@@ -102,31 +103,51 @@ class Environment(EnvironmentNamingInfo):
         previous_finalized_snapshots: Snapshots that were part of this environment last time it was finalized.
     """
 
-    snapshots: t.List[SnapshotTableInfo]
+    snapshots_: t.List[t.Any] = Field(alias="snapshots")
     start_at: TimeLike
     end_at: t.Optional[TimeLike] = None
     plan_id: str
     previous_plan_id: t.Optional[str] = None
     expiration_ts: t.Optional[int] = None
     finalized_ts: t.Optional[int] = None
-    promoted_snapshot_ids: t.Optional[t.List[SnapshotId]] = None
-    previous_finalized_snapshots: t.Optional[t.List[SnapshotTableInfo]] = None
+    promoted_snapshot_ids_: t.Optional[t.List[t.Any]] = Field(
+        default=None, alias="promoted_snapshot_ids"
+    )
+    previous_finalized_snapshots_: t.Optional[t.List[t.Any]] = Field(
+        default=None, alias="previous_finalized_snapshots"
+    )
 
-    @field_validator("snapshots", "previous_finalized_snapshots", mode="before")
+    @field_validator("snapshots_", "previous_finalized_snapshots_", mode="before")
     @classmethod
-    def _convert_snapshots(
-        cls, v: str | t.List[SnapshotTableInfo] | None
-    ) -> t.List[SnapshotTableInfo] | None:
+    def _load_snapshots(cls, v: str | t.List[t.Any] | None) -> t.List[t.Any] | None:
         if isinstance(v, str):
-            return [SnapshotTableInfo.parse_obj(obj) for obj in json.loads(v)]
+            return json.loads(v)
+        if v and not isinstance(next(iter(v)), (dict, SnapshotTableInfo)):
+            raise ValueError("Must be a list of SnapshotTableInfo dicts or objects")
         return v
 
-    @field_validator("promoted_snapshot_ids", mode="before")
+    @field_validator("promoted_snapshot_ids_", mode="before")
     @classmethod
-    def _convert_snapshot_ids(cls, v: str | t.List[SnapshotId]) -> t.List[SnapshotId]:
+    def _load_snapshot_ids(cls, v: str | t.List[t.Any] | None) -> t.List[t.Any] | None:
         if isinstance(v, str):
-            return [SnapshotId.parse_obj(obj) for obj in json.loads(v)]
+            return json.loads(v)
+        if v and not isinstance(next(iter(v)), (dict, SnapshotId)):
+            raise ValueError("Must be a list of SnapshotId dicts or objects")
         return v
+
+    @property
+    def snapshots(self) -> t.List[SnapshotTableInfo]:
+        return self._convert_list_to_models_and_store("snapshots_", SnapshotTableInfo)
+
+    def snapshot_dicts(self) -> t.List[dict]:
+        return self._convert_list_to_dicts(self.snapshots_)
+
+    @property
+    def promoted_snapshot_ids(self) -> t.List[SnapshotId]:
+        return self._convert_list_to_models_and_store("promoted_snapshot_ids_", SnapshotId)
+
+    def promoted_snapshot_id_dicts(self) -> t.List[dict]:
+        return self._convert_list_to_dicts(self.promoted_snapshot_ids_)
 
     @property
     def promoted_snapshots(self) -> t.List[SnapshotTableInfo]:
@@ -135,6 +156,15 @@ class Environment(EnvironmentNamingInfo):
 
         promoted_snapshot_ids = set(self.promoted_snapshot_ids)
         return [s for s in self.snapshots if s.snapshot_id in promoted_snapshot_ids]
+
+    @property
+    def previous_finalized_snapshots(self) -> t.List[SnapshotTableInfo]:
+        return self._convert_list_to_models_and_store(
+            "previous_finalized_snapshots_", SnapshotTableInfo
+        )
+
+    def previous_finalized_snapshot_dicts(self) -> t.List[dict]:
+        return self._convert_list_to_dicts(self.previous_finalized_snapshots_)
 
     @property
     def finalized_or_current_snapshots(self) -> t.List[SnapshotTableInfo]:
@@ -156,3 +186,17 @@ class Environment(EnvironmentNamingInfo):
     @property
     def expired(self) -> bool:
         return self.expiration_ts is not None and self.expiration_ts <= now_timestamp()
+
+    def _convert_list_to_models_and_store(
+        self, field: str, type_: t.Type[PydanticType]
+    ) -> t.List[PydanticType]:
+        value = getattr(self, field)
+        if value and not isinstance(value[0], type_):
+            value = [type_.parse_obj(obj) for obj in value]
+            setattr(self, field, value)
+        return t.cast(t.List[PydanticType], value)
+
+    def _convert_list_to_dicts(self, value: t.Optional[t.List[t.Any]]) -> t.List[dict]:
+        if not value:
+            return []
+        return value if isinstance(value[0], dict) else [v.dict() for v in value]

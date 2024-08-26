@@ -1065,6 +1065,9 @@ def test_delete_expired_environments(state_sync: EngineAdapterStateSync, make_sn
     env_b = env_a.copy(update={"name": "test_environment_b", "expiration_ts": now_ts + 1000})
     state_sync.promote(env_b)
 
+    env_a = Environment(**json.loads(env_a.json()))
+    env_b = Environment(**json.loads(env_b.json()))
+
     assert state_sync.get_environment(env_a.name) == env_a
     assert state_sync.get_environment(env_b.name) == env_b
 
@@ -1215,7 +1218,7 @@ def test_delete_expired_snapshots_promoted(
     assert not state_sync.delete_expired_snapshots()
     assert set(state_sync.get_snapshots(all_snapshots)) == {snapshot.snapshot_id}
 
-    env.snapshots = []
+    env.snapshots_ = []
     state_sync.promote(env)
 
     now_timestamp_mock = mocker.patch("sqlmesh.core.state_sync.engine_adapter.now_timestamp")
