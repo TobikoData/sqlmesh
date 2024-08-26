@@ -604,7 +604,7 @@ def format_model_expressions(
     Returns:
         A string representing the formatted model.
     """
-    if len(expressions) == 1:
+    if len(expressions) == 1 and isinstance(expressions[0], (Audit, Metric, Model)):
         return expressions[0].sql(pretty=True, dialect=dialect)
 
     *statements, query = expressions

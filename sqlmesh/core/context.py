@@ -60,6 +60,9 @@ from sqlmesh.core.config.loader import C
 from sqlmesh.core.console import Console, get_console
 from sqlmesh.core.context_diff import ContextDiff
 from sqlmesh.core.dialect import (
+    Audit as AuditMeta,
+    Metric as MetricMeta,
+    Model as ModelMeta,
     format_model_expressions,
     normalize_model_name,
     pandas_to_sql,
@@ -870,7 +873,7 @@ class GenericContext(BaseContext, t.Generic[C]):
                 expressions = parse(
                     file.read(), default_dialect=self.config_for_node(target).dialect
                 )
-                if transpile:
+                if transpile and isinstance(expressions[0], (AuditMeta, MetricMeta, ModelMeta)):
                     for prop in expressions[0].expressions:
                         if prop.name.lower() == "dialect":
                             prop.replace(
