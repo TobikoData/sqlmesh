@@ -1145,7 +1145,11 @@ class GenericContext(BaseContext, t.Generic[C]):
                     if next_model not in snapshots:
                         continue
                     models_for_interval_end.add(next_model)
-                    models_stack.extend([s.name for s in snapshots[next_model].parents])
+                    models_stack.extend(
+                        s.name
+                        for s in snapshots[next_model].parents
+                        if s.name not in models_for_interval_end
+                    )
 
             max_interval_end_per_model = self.state_sync.max_interval_end_per_model(
                 c.PROD,
