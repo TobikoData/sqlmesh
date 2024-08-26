@@ -122,7 +122,7 @@ class Environment(EnvironmentNamingInfo):
     def _load_snapshots(cls, v: str | t.List[t.Any] | None) -> t.List[t.Any] | None:
         if isinstance(v, str):
             return json.loads(v)
-        if v and not isinstance(v[0], (dict, SnapshotTableInfo)):
+        if v and not isinstance(next(iter(v)), (dict, SnapshotTableInfo)):
             raise ValueError("Must be a list of SnapshotTableInfo dicts or objects")
         return v
 
@@ -131,7 +131,7 @@ class Environment(EnvironmentNamingInfo):
     def _load_snapshot_ids(cls, v: str | t.List[t.Any] | None) -> t.List[t.Any] | None:
         if isinstance(v, str):
             return json.loads(v)
-        if v and not isinstance(v[0], (dict, SnapshotId)):
+        if v and not isinstance(next(iter(v)), (dict, SnapshotId)):
             raise ValueError("Must be a list of SnapshotId dicts or objects")
         return v
 
@@ -139,9 +139,15 @@ class Environment(EnvironmentNamingInfo):
     def snapshots(self) -> t.List[SnapshotTableInfo]:
         return self._convert_list_to_models_and_store("snapshots_", SnapshotTableInfo)
 
+    def snapshot_dicts(self) -> t.List[dict]:
+        return self._convert_list_to_dicts(self.snapshots_)
+
     @property
     def promoted_snapshot_ids(self) -> t.List[SnapshotId]:
         return self._convert_list_to_models_and_store("promoted_snapshot_ids_", SnapshotId)
+
+    def promoted_snapshot_id_dicts(self) -> t.List[dict]:
+        return self._convert_list_to_dicts(self.promoted_snapshot_ids_)
 
     @property
     def promoted_snapshots(self) -> t.List[SnapshotTableInfo]:
@@ -156,6 +162,9 @@ class Environment(EnvironmentNamingInfo):
         return self._convert_list_to_models_and_store(
             "previous_finalized_snapshots_", SnapshotTableInfo
         )
+
+    def previous_finalized_snapshot_dicts(self) -> t.List[dict]:
+        return self._convert_list_to_dicts(self.previous_finalized_snapshots_)
 
     @property
     def finalized_or_current_snapshots(self) -> t.List[SnapshotTableInfo]:
@@ -186,3 +195,8 @@ class Environment(EnvironmentNamingInfo):
             value = [type_.parse_obj(obj) for obj in value]
             setattr(self, field, value)
         return t.cast(t.List[PydanticType], value)
+
+    def _convert_list_to_dicts(self, value: t.Optional[t.List[t.Any]]) -> t.List[dict]:
+        if not value:
+            return []
+        return value if isinstance(value[0], dict) else [v.dict() for v in value]

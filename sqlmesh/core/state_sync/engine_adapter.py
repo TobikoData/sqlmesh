@@ -1689,12 +1689,7 @@ def _environment_to_df(environment: Environment) -> pd.DataFrame:
         [
             {
                 "name": environment.name,
-                "snapshots": json.dumps(
-                    [
-                        s.dict(mode="json") if isinstance(s, SnapshotTableInfo) else s
-                        for s in environment.snapshots_
-                    ]
-                ),
+                "snapshots": json.dumps(environment.snapshot_dicts()),
                 "start_at": time_like_to_str(environment.start_at),
                 "end_at": time_like_to_str(environment.end_at) if environment.end_at else None,
                 "plan_id": environment.plan_id,
@@ -1702,24 +1697,14 @@ def _environment_to_df(environment: Environment) -> pd.DataFrame:
                 "expiration_ts": environment.expiration_ts,
                 "finalized_ts": environment.finalized_ts,
                 "promoted_snapshot_ids": (
-                    json.dumps(
-                        [
-                            s.dict() if isinstance(s, SnapshotId) else s
-                            for s in environment.promoted_snapshot_ids
-                        ]
-                    )
+                    json.dumps(environment.promoted_snapshot_id_dicts())
                     if environment.promoted_snapshot_ids is not None
                     else None
                 ),
                 "suffix_target": environment.suffix_target.value,
                 "catalog_name_override": environment.catalog_name_override,
                 "previous_finalized_snapshots": (
-                    json.dumps(
-                        [
-                            s.dict(mode="json") if isinstance(s, SnapshotTableInfo) else s
-                            for s in environment.previous_finalized_snapshots
-                        ]
-                    )
+                    json.dumps(environment.previous_finalized_snapshot_dicts())
                     if environment.previous_finalized_snapshots is not None
                     else None
                 ),
