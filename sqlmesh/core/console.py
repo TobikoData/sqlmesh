@@ -1121,20 +1121,28 @@ class TerminalConsole(Console):
             if sample.shape[0] > 0:
                 keys: list[str] = []
                 columns: dict[str, list[str]] = {}
-                source_env = row_diff.source_alias.upper() if row_diff.source_alias else "SOURCE"
-                target_env = row_diff.target_alias.upper() if row_diff.target_alias else "TARGET"
+                source_prefix, source_name = (
+                    (f"{source_name}__", source_name)
+                    if source_name != row_diff.source
+                    else ("s__", "SOURCE")
+                )
+                target_prefix, target_name = (
+                    (f"{target_name}__", target_name)
+                    if target_name != row_diff.target
+                    else ("t__", "TARGET")
+                )
 
                 # Extract key and column names from the joined sample
                 for column in row_diff.joined_sample.columns:
-                    if f"{source_env}__" in column:
-                        column_name = "__".join(column.split(f"{source_env}__")[1:])
-                        columns[column_name] = [column, f"{target_env}__{column_name}"]
-                    elif f"{target_env}__" not in column:
+                    if source_prefix in column:
+                        column_name = "__".join(column.split(source_prefix)[1:])
+                        columns[column_name] = [column, target_prefix + column_name]
+                    elif target_prefix not in column:
                         keys.append(column)
 
                 column_styles = {
-                    source_env: self.TABLE_DIFF_SOURCE_BLUE,
-                    target_env: "green",
+                    source_name: self.TABLE_DIFF_SOURCE_BLUE,
+                    target_name: "green",
                 }
 
                 for column, [source_column, target_column] in columns.items():
@@ -1147,8 +1155,8 @@ class TerminalConsole(Console):
                     ]
                     column_table = column_table.rename(
                         columns={
-                            source_column: source_env,
-                            target_column: target_env,
+                            source_column: source_name,
+                            target_column: target_name,
                         }
                     )
 

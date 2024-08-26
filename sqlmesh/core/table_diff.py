@@ -436,12 +436,18 @@ class TableDiff:
                     c: c.split("__")[1] if c.split("__")[1] in index_cols else c
                     for c in joined_sample_cols
                 }
-                if self.source != self.source_alias and self.target != self.target_alias:
+
+                if (
+                    self.source_alias
+                    and self.target_alias
+                    and self.source != self.source_alias
+                    and self.target != self.target_alias
+                ):
                     joined_renamed_cols = {
                         c: (
                             n.replace(
                                 "s__",
-                                f"{self.source_alias.upper() if self.source_alias else 'SOURCE'}__",
+                                f"{self.source_alias.upper()}__",
                             )
                             if n.startswith("s__")
                             else n
@@ -452,7 +458,7 @@ class TableDiff:
                         c: (
                             n.replace(
                                 "t__",
-                                f"{self.target_alias.upper() if self.target_alias else 'TARGET'}__",
+                                f"{self.target_alias.upper()}__",
                             )
                             if n.startswith("t__")
                             else n
