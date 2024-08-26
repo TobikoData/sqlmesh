@@ -40,7 +40,7 @@ import time
 import traceback
 import typing as t
 import unittest.result
-from datetime import timedelta
+from datetime import date, timedelta
 from functools import cached_property
 from io import StringIO
 from pathlib import Path
@@ -1133,6 +1133,7 @@ class GenericContext(BaseContext, t.Generic[C]):
         # If no end date is specified, use the max interval end from prod
         # to prevent unintended evaluation of the entire DAG.
         default_end: t.Optional[int] = None
+        default_start: t.Optional[date] = None
         max_interval_end_per_model: t.Optional[t.Dict[str, int]] = None
         if not run and not end:
             models_for_interval_end: t.Optional[t.Set[str]] = None
@@ -1153,10 +1154,9 @@ class GenericContext(BaseContext, t.Generic[C]):
             )
             if max_interval_end_per_model:
                 default_end = max(max_interval_end_per_model.values())
-        else:
-            default_end = None
-
-        default_start = to_date(default_end) - timedelta(days=1) if default_end and is_dev else None
+                default_start = to_date(min(max_interval_end_per_model.values())) - timedelta(
+                    days=1
+                )
 
         return PlanBuilder(
             context_diff=context_diff,
