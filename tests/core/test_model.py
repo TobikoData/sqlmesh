@@ -339,7 +339,7 @@ def test_no_model_statement(tmp_path: Path):
     expressions = d.parse("SELECT 1 AS x")
     with pytest.raises(
         ConfigError,
-        match="The MODEL statement is required as the first statement in the definition, unless model name inference is activated. at '.'",
+        match="The MODEL statement is required as the first statement in the definition, unless model name inference is enabled. at '.'",
     ):
         load_sql_based_model(expressions)
 
