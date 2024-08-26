@@ -1563,10 +1563,14 @@ def load_sql_based_model(
     dialect = dialect or ""
     meta = expressions[0]
     if not isinstance(meta, d.Model):
-        raise_config_error(
-            "MODEL statement is required as the first statement in the definition",
-            path,
-        )
+        if not infer_names:
+            raise_config_error(
+                "The MODEL statement is required as the first statement in the definition, "
+                "unless model name inference is enabled.",
+                path,
+            )
+        meta = d.Model(expressions=[])  # Dummy meta node
+        expressions.insert(0, meta)
 
     unrendered_signals = None
     model_audits = None
@@ -1576,6 +1580,7 @@ def load_sql_based_model(
 
         if prop.name.lower() == "audits":
             model_audits = prop.args.get("value")
+
     meta_python_env = _python_env(
         expressions=meta,
         jinja_macro_references=None,
@@ -1595,6 +1600,7 @@ def load_sql_based_model(
         quote_identifiers=False,
         normalize_identifiers=False,
     )
+
     rendered_meta_exprs = meta_renderer.render()
     if rendered_meta_exprs is None or len(rendered_meta_exprs) != 1:
         raise_config_error(
@@ -1602,6 +1608,7 @@ def load_sql_based_model(
             path,
         )
         raise
+
     rendered_meta = rendered_meta_exprs[0]
 
     # Extract the query and any pre/post statements

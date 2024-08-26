@@ -61,6 +61,7 @@ from sqlmesh.core.console import Console, get_console
 from sqlmesh.core.context_diff import ContextDiff
 from sqlmesh.core.dialect import (
     format_model_expressions,
+    is_meta_expression,
     normalize_model_name,
     pandas_to_sql,
     parse,
@@ -870,7 +871,7 @@ class GenericContext(BaseContext, t.Generic[C]):
                 expressions = parse(
                     file.read(), default_dialect=self.config_for_node(target).dialect
                 )
-                if transpile:
+                if transpile and is_meta_expression(expressions[0]):
                     for prop in expressions[0].expressions:
                         if prop.name.lower() == "dialect":
                             prop.replace(

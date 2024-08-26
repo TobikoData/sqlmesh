@@ -604,7 +604,7 @@ def format_model_expressions(
     Returns:
         A string representing the formatted model.
     """
-    if len(expressions) == 1:
+    if len(expressions) == 1 and is_meta_expression(expressions[0]):
         return expressions[0].sql(pretty=True, dialect=dialect)
 
     *statements, query = expressions
@@ -1130,3 +1130,7 @@ def extract_audit(v: exp.Expression) -> t.Tuple[str, t.Dict[str, exp.Expression]
             )
         kwargs[arg.left.name.lower()] = arg.right
     return func.lower(), kwargs
+
+
+def is_meta_expression(v: t.Any) -> bool:
+    return isinstance(v, (Audit, Metric, Model))
