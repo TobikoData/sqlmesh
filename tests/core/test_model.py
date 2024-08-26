@@ -343,7 +343,7 @@ def test_no_model_statement(tmp_path: Path):
     ):
         load_sql_based_model(expressions)
 
-    # Name inference is activated => MODEL (...) not required
+    # Name inference is enabled => MODEL (...) not required
     init_example_project(tmp_path, dialect="duckdb")
 
     test_sql_file = tmp_path / "models/test_schema/test_model.sql"
