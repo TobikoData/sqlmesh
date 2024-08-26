@@ -1566,7 +1566,7 @@ def load_sql_based_model(
         if not infer_names:
             raise_config_error(
                 "The MODEL statement is required as the first statement in the definition, "
-                "unless model name inference is activated.",
+                "unless model name inference is enabled.",
                 path,
             )
         meta = d.Model(expressions=[])  # Dummy meta node
