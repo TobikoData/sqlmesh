@@ -549,13 +549,40 @@ def test_parent_cron_after_child(init_and_plan_context: t.Callable):
 
 
 @freeze_time("2023-01-08 00:00:00")
-def test_cron_not_aligned_with_day_boundary(init_and_plan_context: t.Callable):
+@pytest.mark.parametrize(
+    "forward_only, expected_intervals",
+    [
+        (
+            False,
+            [
+                (to_timestamp("2023-01-01"), to_timestamp("2023-01-02")),
+                (to_timestamp("2023-01-02"), to_timestamp("2023-01-03")),
+                (to_timestamp("2023-01-03"), to_timestamp("2023-01-04")),
+                (to_timestamp("2023-01-04"), to_timestamp("2023-01-05")),
+                (to_timestamp("2023-01-05"), to_timestamp("2023-01-06")),
+                (to_timestamp("2023-01-06"), to_timestamp("2023-01-07")),
+            ],
+        ),
+        (
+            True,
+            [
+                (to_timestamp("2023-01-06"), to_timestamp("2023-01-07")),
+            ],
+        ),
+    ],
+)
+def test_cron_not_aligned_with_day_boundary(
+    init_and_plan_context: t.Callable,
+    forward_only: bool,
+    expected_intervals: t.List[t.Tuple[int, int]],
+):
     context, plan = init_and_plan_context("examples/sushi")
 
     model = context.get_model("sushi.waiter_revenue_by_day")
     model = SqlModel.parse_obj(
         {
             **model.dict(),
+            "kind": model.kind.copy(update={"forward_only": forward_only}),
             "cron": "0 12 * * *",
         }
     )
@@ -577,18 +604,13 @@ def test_cron_not_aligned_with_day_boundary(init_and_plan_context: t.Callable):
     )
 
     with freeze_time("2023-01-08 00:10:00"):  # Past model's cron.
-        plan = context.plan("dev", select_models=[model.name], no_prompts=True, skip_tests=True)
+        plan = context.plan(
+            "dev", select_models=[model.name], no_prompts=True, skip_tests=True, enable_preview=True
+        )
         assert plan.missing_intervals == [
             SnapshotIntervals(
                 snapshot_id=waiter_revenue_by_day_snapshot.snapshot_id,
-                intervals=[
-                    (to_timestamp("2023-01-01"), to_timestamp("2023-01-02")),
-                    (to_timestamp("2023-01-02"), to_timestamp("2023-01-03")),
-                    (to_timestamp("2023-01-03"), to_timestamp("2023-01-04")),
-                    (to_timestamp("2023-01-04"), to_timestamp("2023-01-05")),
-                    (to_timestamp("2023-01-05"), to_timestamp("2023-01-06")),
-                    (to_timestamp("2023-01-06"), to_timestamp("2023-01-07")),
-                ],
+                intervals=expected_intervals,
             ),
         ]
 
