@@ -1249,6 +1249,7 @@ class GenericContext(BaseContext, t.Generic[C]):
             sync: If True, the call blocks until the environment is deleted. Otherwise, the environment will
                 be deleted asynchronously by the janitor process.
         """
+        name = Environment.sanitize_name(name)
         self.state_sync.invalidate_environment(name)
         if sync:
             self._cleanup_environments()
