@@ -818,10 +818,10 @@ def test_seed_case_sensitive_columns(tmp_path):
               path '{str(model_csv_path)}',
             ),
             columns (
-              'camelCaseId' int,
-              'camelCaseBool' boolean,
-              'camelCaseString' text,
-              'camelCaseTimestamp' timestamp
+              "camelCaseId" int,
+              "camelCaseBool" boolean,
+              "camelCaseString" text,
+              "camelCaseTimestamp" timestamp
             )
         );
     """
