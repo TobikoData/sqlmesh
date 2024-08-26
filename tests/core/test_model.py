@@ -334,18 +334,31 @@ def test_partitioned_by(
         ] == partition_by_output
 
 
-def test_no_model_statement():
-    expressions = d.parse(
-        """
-        SELECT 1 AS x
-    """
-    )
-
+def test_no_model_statement(tmp_path: Path):
+    # No name inference => MODEL (...) is required
+    expressions = d.parse("SELECT 1 AS x")
     with pytest.raises(
         ConfigError,
-        match="MODEL statement is required as the first statement in the definition at '.",
+        match="The MODEL statement is required as the first statement in the definition, unless model name inference is enabled. at '.'",
     ):
         load_sql_based_model(expressions)
+
+    # Name inference is enabled => MODEL (...) not required
+    init_example_project(tmp_path, dialect="duckdb")
+
+    test_sql_file = tmp_path / "models/test_schema/test_model.sql"
+    test_sql_file.parent.mkdir(parents=True, exist_ok=True)
+    test_sql_file.write_text("SELECT 1 AS c")
+
+    config = Config(
+        model_defaults=ModelDefaultsConfig(dialect="duckdb"),
+        model_naming=NameInferenceConfig(infer_names=True),
+    )
+    context = Context(paths=tmp_path, config=config)
+
+    model = context.get_model("test_schema.test_model")
+    assert isinstance(model, SqlModel)
+    assert model.name == "test_schema.test_model"
 
 
 def test_unordered_model_statements():
