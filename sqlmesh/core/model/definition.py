@@ -1698,7 +1698,7 @@ def load_sql_based_model(
         except Exception as ex:
             raise_config_error(
                 f"The model definition must either have a SELECT query, a JINJA_QUERY block, or a valid Seed kind. {ex}.",
-                path
+                path,
             )
             raise
 
