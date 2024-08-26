@@ -550,13 +550,19 @@ def test_plan_dag_state(snapshot: Snapshot, sushi_context: Context, random_name)
 
     plan_dag_state = PlanDagState.from_state_sync(sushi_context.state_sync)
 
+    def get_hydrated_dag_specs():
+        state_plan_dag_specs = plan_dag_state.get_dag_specs()
+        for state_plan_dag_spec in state_plan_dag_specs:
+            state_plan_dag_spec.environment.snapshots
+        return state_plan_dag_specs
+
     assert not plan_dag_state.get_dag_specs()
 
     plan_dag_state.add_dag_spec(plan_dag_spec)
-    assert plan_dag_state.get_dag_specs() == [plan_dag_spec]
+    assert get_hydrated_dag_specs() == [plan_dag_spec]
 
     plan_dag_state.delete_dag_specs([])
-    assert plan_dag_state.get_dag_specs() == [plan_dag_spec]
+    assert get_hydrated_dag_specs() == [plan_dag_spec]
 
     plan_dag_state.delete_dag_specs(
         [common.plan_application_dag_id(environment_name, "test_request_id")]
