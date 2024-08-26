@@ -1120,33 +1120,28 @@ class TerminalConsole(Console):
             self.console.print("\n[b][blue]COMMON ROWS[/blue] sample data differences:[/b]")
             if sample.shape[0] > 0:
                 keys: list[str] = []
-                columns: dict[str, None] = {}
-                environments: dict[str, None] = {}
+                columns: dict[str, list[str]] = {}
+                source_env = row_diff.source_alias.upper() if row_diff.source_alias else "SOURCE"
+                target_env = row_diff.target_alias.upper() if row_diff.target_alias else "TARGET"
 
-                # Extract environment, key and column names from the joined sample
-                for col in sample.columns:
-                    if "__" in col:
-                        column_parts = col.split("__")
-                        environments[column_parts[0]] = None
-                        columns["__".join(column_parts[1:])] = None
-                    else:
-                        keys.append(col)
-
-                assert len(environments) == 2
-                source_env, target_env = environments
+                # Extract key and column names from the joined sample
+                for column in row_diff.joined_sample.columns:
+                    if f"{source_env}__" in column:
+                        column_name = "__".join(column.split(f"{source_env}__")[1:])
+                        columns[column_name] = [column, f"{target_env}__{column_name}"]
+                    elif f"{target_env}__" not in column:
+                        keys.append(column)
 
                 column_styles = {
                     source_env: self.TABLE_DIFF_SOURCE_BLUE,
                     target_env: "green",
                 }
 
-                for column in columns:
+                for column, [source_column, target_column] in columns.items():
                     # Create a table with the joined keys and comparison columns
-                    source_column = source_env + "__" + column
-                    target_column = target_env + "__" + column
-                    column_table = sample[keys + [source_column, target_column]]
+                    column_table = row_diff.joined_sample[keys + [source_column, target_column]]
 
-                    # Filter to keep the rows where the values differ
+                    # Filter out identical-valued rows
                     column_table = column_table[
                         column_table[source_column] != column_table[target_column]
                     ]

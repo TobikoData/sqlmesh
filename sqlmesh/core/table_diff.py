@@ -440,7 +440,8 @@ class TableDiff:
                     joined_renamed_cols = {
                         c: (
                             n.replace(
-                                "s__", f"{self.source_alias.upper() if self.source_alias else ''}__"
+                                "s__",
+                                f"{self.source_alias.upper() if self.source_alias else 'SOURCE'}__",
                             )
                             if n.startswith("s__")
                             else n
@@ -450,7 +451,8 @@ class TableDiff:
                     joined_renamed_cols = {
                         c: (
                             n.replace(
-                                "t__", f"{self.target_alias.upper() if self.target_alias else ''}__"
+                                "t__",
+                                f"{self.target_alias.upper() if self.target_alias else 'TARGET'}__",
                             )
                             if n.startswith("t__")
                             else n
