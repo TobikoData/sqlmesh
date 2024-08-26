@@ -862,6 +862,32 @@ def test_promote_snapshots_parent_plan_id_mismatch(
         state_sync.promote(stale_new_environment)
 
 
+def test_promote_environment_expired(state_sync: EngineAdapterStateSync, make_snapshot: t.Callable):
+    snapshot = make_snapshot(
+        SqlModel(
+            name="a",
+            query=parse_one("select 1, ds"),
+        ),
+    )
+    snapshot.categorize_as(SnapshotChangeCategory.BREAKING)
+
+    state_sync.push_snapshots([snapshot])
+    promote_snapshots(state_sync, [snapshot], "dev")
+    state_sync.invalidate_environment("dev")
+
+    new_environment = Environment(
+        name="dev",
+        snapshots=[snapshot.table_info],
+        start_at="2022-01-01",
+        end_at="2022-01-01",
+        plan_id="new_plan_id",
+        previous_plan_id=None,  # No previous plan ID since it's technically a new environment
+    )
+
+    # This call shouldn't fail.
+    state_sync.promote(new_environment)
+
+
 def test_promote_snapshots_no_gaps(state_sync: EngineAdapterStateSync, make_snapshot: t.Callable):
     model = SqlModel(
         name="a",

@@ -10,7 +10,7 @@ from sqlmesh.core import constants as c
 from sqlmesh.core.config import EnvironmentSuffixTarget
 from sqlmesh.core.snapshot import SnapshotId, SnapshotTableInfo
 from sqlmesh.utils import word_characters_only
-from sqlmesh.utils.date import TimeLike
+from sqlmesh.utils.date import TimeLike, now_timestamp
 from sqlmesh.utils.pydantic import PydanticModel, field_validator
 
 T = t.TypeVar("T", bound="EnvironmentNamingInfo")
@@ -152,3 +152,7 @@ class Environment(EnvironmentNamingInfo):
             catalog_name_override=self.catalog_name_override,
             normalize_name=self.normalize_name,
         )
+
+    @property
+    def expired(self) -> bool:
+        return self.expiration_ts is not None and self.expiration_ts <= now_timestamp()

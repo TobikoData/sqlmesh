@@ -1559,6 +1559,37 @@ def test_restatement_plan_ignores_changes(init_and_plan_context: t.Callable):
     context.apply(plan)
 
 
+@freeze_time("2023-01-08 15:00:00")
+def test_plan_against_expired_environment(init_and_plan_context: t.Callable):
+    context, plan = init_and_plan_context("examples/sushi")
+    context.apply(plan)
+
+    model = context.get_model("sushi.waiter_revenue_by_day")
+    context.upsert_model(add_projection_to_model(t.cast(SqlModel, model)))
+
+    modified_models = {model.fqn, context.get_model("sushi.top_waiters").fqn}
+
+    plan = context.plan("dev", no_prompts=True)
+    assert plan.has_changes
+    assert set(plan.context_diff.modified_snapshots) == modified_models
+    assert plan.missing_intervals
+    context.apply(plan)
+
+    # Make sure there are no changes when comparing against the existing environment.
+    plan = context.plan("dev", no_prompts=True)
+    assert not plan.has_changes
+    assert not plan.context_diff.modified_snapshots
+    assert not plan.missing_intervals
+
+    # Invalidate the environment and make sure that the plan detects the changes.
+    context.invalidate_environment("dev")
+    plan = context.plan("dev", no_prompts=True)
+    assert plan.has_changes
+    assert set(plan.context_diff.modified_snapshots) == modified_models
+    assert not plan.missing_intervals
+    context.apply(plan)
+
+
 def test_plan_twice_with_star_macro_yields_no_diff(tmp_path: Path):
     init_example_project(tmp_path, dialect="duckdb")
 
