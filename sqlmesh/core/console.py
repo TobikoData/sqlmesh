@@ -33,7 +33,7 @@ from sqlmesh.core.snapshot import (
 )
 from sqlmesh.core.test import ModelTest
 from sqlmesh.utils import rich as srich
-from sqlmesh.utils.date import time_like_to_str, to_date, yesterday_ds
+from sqlmesh.utils.date import time_like_to_str, to_date, yesterday_ds, to_datetime
 
 if t.TYPE_CHECKING:
     import ipywidgets as widgets
@@ -912,6 +912,9 @@ class TerminalConsole(Console):
             backfill = self._limit_model_names(backfill, self.verbose)
         self._print(backfill)
 
+    def _validate_date_input(self, date_str: str) -> None:
+        self._print(f"Entered value is calculated as '{to_datetime(date_str)}'")
+
     def _prompt_effective_from(
         self, plan_builder: PlanBuilder, auto_apply: bool, default_catalog: t.Optional[str]
     ) -> None:
@@ -920,6 +923,7 @@ class TerminalConsole(Console):
                 "Enter the effective date (eg. '1 year', '2020-01-01') to apply forward-only changes retroactively or blank to only apply them going forward once changes are deployed to prod"
             )
             if effective_from:
+                self._validate_date_input(effective_from)
                 plan_builder.set_effective_from(effective_from)
 
     def _prompt_backfill(
@@ -949,6 +953,7 @@ class TerminalConsole(Console):
                     f"Enter the {backfill_or_preview} start date (eg. '1 year', '2020-01-01') or blank to backfill {blank_meaning}",
                 )
                 if start:
+                    self._validate_date_input(start)
                     plan_builder.set_start(start)
                 elif default_start:
                     plan_builder.set_start(default_start)
@@ -962,6 +967,7 @@ class TerminalConsole(Console):
                     f"Enter the {backfill_or_preview} end date (eg. '1 month ago', '2020-01-01') or blank to {backfill_or_preview} up until {blank_meaning}",
                 )
                 if end:
+                    self._validate_date_input(end)
                     plan_builder.set_end(end)
 
             plan = plan_builder.build()
