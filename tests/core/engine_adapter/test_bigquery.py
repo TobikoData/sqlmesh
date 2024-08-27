@@ -651,7 +651,7 @@ def test_select_partitions_expr():
             "{{ adapter.resolve_identifier(this) }}",
             "date",
             granularity="day",
-            database="{{ target.database }}",
+            catalog="{{ target.database }}",
         )
         == "SELECT MAX(PARSE_DATE('%Y%m%d', partition_id)) FROM `{{ target.database }}`.`{{ adapter.resolve_schema(this) }}`.INFORMATION_SCHEMA.PARTITIONS WHERE table_name = '{{ adapter.resolve_identifier(this) }}' AND NOT partition_id IS NULL AND partition_id <> '__NULL__'"
     )
