@@ -1,5 +1,5 @@
 <p align="center">
-  <img src="sqlmesh.png" alt="SQLMesh logo">
+  <img src="sqlmesh.png" alt="SQLMesh logo" width="50%" height="50%">
 </p>
 
 SQLMesh is a next-generation data transformation and modeling framework that is backwards compatible with dbt. It aims to be easy to use, correct, and efficient.
