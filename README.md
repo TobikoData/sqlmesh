@@ -6,7 +6,7 @@ SQLMesh is a next-generation data transformation and modeling framework that is 
 
 SQLMesh enables data teams to efficiently run and deploy data transformations written in SQL or Python.
 
-It is more than just a [dbt alternative](https://sqlmesh.readthedocs.io/en/stable/faq/faq/?h=dbt#how-is-this-different-from-dbt).
+It is more than just a [dbt alternative](https://tobikodata.com/reduce_costs_with_cron_and_partitions.html).
 
 <p align="center">
   <img src="architecture_diagram.png" alt="Architecture Diagram">
