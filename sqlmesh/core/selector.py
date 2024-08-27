@@ -68,6 +68,9 @@ class Selector:
             A dictionary of models.
         """
         target_env = self._state_reader.get_environment(Environment.sanitize_name(target_env_name))
+        if target_env and target_env.expired:
+            target_env = None
+
         if not target_env and fallback_env_name:
             target_env = self._state_reader.get_environment(
                 Environment.sanitize_name(fallback_env_name)
