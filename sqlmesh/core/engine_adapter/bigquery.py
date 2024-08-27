@@ -331,7 +331,7 @@ class BigQueryEngineAdapter(InsertOverwriteWithMergeMixin):
         table_ = exp.to_table(table).copy()
 
         if not table_.catalog:
-            table_.set("catalog", exp.to_identifier(self.client.project))
+            table_.set("catalog", exp.to_identifier(self.default_catalog))
 
         return bigquery.Table(
             table_ref=self._table_name(table_),
@@ -389,6 +389,7 @@ class BigQueryEngineAdapter(InsertOverwriteWithMergeMixin):
                 partition_type_sql,
                 granularity=granularity,
                 agg_func="ARRAY_AGG",
+                database=temp_table_name.catalog or self.default_catalog,
             )
 
             self.execute(
@@ -675,7 +676,7 @@ class BigQueryEngineAdapter(InsertOverwriteWithMergeMixin):
         # The BigQuery Client's list_tables method does not support filtering by table name, so we have to
         # resort to using SQL instead.
         schema = to_schema(schema_name)
-        catalog = schema.catalog or self.get_current_catalog()
+        catalog = schema.catalog or self.default_catalog
         query = exp.select(
             exp.column("table_catalog").as_("catalog"),
             exp.column("table_name").as_("name"),
