@@ -14,6 +14,7 @@ from sqlmesh.core.model import Model, SqlModel
 from sqlmesh.core.selector import Selector
 from sqlmesh.core.snapshot import SnapshotChangeCategory
 from sqlmesh.utils import UniqueKeyDict
+from sqlmesh.utils.date import now_timestamp
 
 
 @pytest.mark.parametrize(
@@ -181,6 +182,81 @@ def test_select_models(mocker: MockerFixture, make_snapshot, default_catalog: t.
                 update={"mapping_schema": added_model_schema}
             ),
             removed_model.fqn: removed_model,
+        },
+    )
+
+
+def test_select_models_expired_environment(mocker: MockerFixture, make_snapshot):
+    modified_model_v1 = SqlModel(
+        name="db.modified_model",
+        query=d.parse_one("SELECT a + 1 FROM db.added_model"),
+    )
+    modified_model_v2 = SqlModel(
+        name="db.modified_model",
+        query=d.parse_one("SELECT a + 2 FROM db.added_model"),
+    )
+    removed_model = SqlModel(
+        name="db.removed_model",
+        query=d.parse_one("SELECT a FROM db.added_model"),
+    )
+    standalone_audit = StandaloneAudit(
+        name="test_audit", query=d.parse_one("SELECT * FROM added_model WHERE a IS NULL")
+    )
+
+    modified_model_v1_snapshot = make_snapshot(modified_model_v1)
+    modified_model_v1_snapshot.categorize_as(SnapshotChangeCategory.BREAKING)
+    removed_model_snapshot = make_snapshot(removed_model)
+    removed_model_snapshot.categorize_as(SnapshotChangeCategory.BREAKING)
+    standalone_audit_snapshot = make_snapshot(standalone_audit)
+    standalone_audit_snapshot.categorize_as(SnapshotChangeCategory.BREAKING)
+
+    prod_env = Environment(
+        name="prod",
+        snapshots=[modified_model_v1_snapshot.table_info],
+        start_at="2023-01-01",
+        end_at="2023-02-01",
+        plan_id="test_plan_id",
+    )
+
+    env_name = "test_env"
+    dev_env = Environment(
+        name=env_name,
+        snapshots=[modified_model_v1_snapshot.table_info, removed_model_snapshot.table_info],
+        start_at="2023-01-01",
+        end_at="2023-02-01",
+        plan_id="test_plan_id",
+    )
+
+    state_reader_mock = mocker.Mock()
+    state_reader_mock.get_environment.side_effect = (
+        lambda name: prod_env if name == "prod" else dev_env
+    )
+
+    all_snapshots = {
+        modified_model_v1_snapshot.snapshot_id: modified_model_v1_snapshot,
+        removed_model_snapshot.snapshot_id: removed_model_snapshot,
+    }
+    state_reader_mock.get_snapshots.side_effect = lambda snapshots: {
+        s.snapshot_id: all_snapshots[s.snapshot_id] for s in snapshots
+    }
+
+    local_models: UniqueKeyDict[str, Model] = UniqueKeyDict("models")
+    local_models[modified_model_v2.fqn] = modified_model_v2
+    selector = Selector(state_reader_mock, local_models)
+
+    _assert_models_equal(
+        selector.select_models(["*.modified_model"], env_name, fallback_env_name="prod"),
+        {
+            removed_model.fqn: removed_model,
+            modified_model_v2.fqn: modified_model_v2,
+        },
+    )
+
+    dev_env.expiration_ts = now_timestamp() - 1
+    _assert_models_equal(
+        selector.select_models(["*.modified_model"], env_name, fallback_env_name="prod"),
+        {
+            modified_model_v2.fqn: modified_model_v2,
         },
     )
 
