@@ -672,6 +672,7 @@ class PlanBuilder:
             and not self._include_unmodified
             and self._context_diff.is_new_environment
             and not self._context_diff.has_snapshot_changes
+            and not self._backfill_models
         ):
             raise NoChangesPlanError(
                 "No changes were detected. Make a change or run with --include-unmodified to create a new environment without changes."
