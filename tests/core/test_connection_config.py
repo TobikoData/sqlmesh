@@ -584,6 +584,9 @@ def test_bigquery(make_config):
     assert config.get_catalog() == "project"
     assert config.is_recommended_for_state_sync is False
 
+    with pytest.raises(ConfigError, match="you must also specify the `project` field"):
+        make_config(type="bigquery", execution_project="execution_project")
+
 
 def test_postgres(make_config):
     config = make_config(
