@@ -90,7 +90,7 @@ def migrate(state_sync, **kwargs):  # type: ignore
         columns_to_types=environments_columns_to_types,
     )
 
-    # Recreate the itnervals table and its indexes.
+    # Recreate the intervals table and its indexes.
     engine_adapter.create_table(
         new_intervals_table, intervals_columns_to_types, primary_key=("id",)
     )
