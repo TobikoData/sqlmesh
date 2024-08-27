@@ -75,3 +75,12 @@ def test_pre_ping(mocker: MockerFixture, make_mocked_engine_adapter: t.Callable)
     ]
 
     adapter._connection_pool.get().ping.assert_called_once_with(reconnect=False)
+
+
+def test_create_table_like(make_mocked_engine_adapter: t.Callable):
+    adapter = make_mocked_engine_adapter(MySQLEngineAdapter)
+
+    adapter.create_table_like("target_table", "source_table")
+    adapter.cursor.execute.assert_called_once_with(
+        "CREATE TABLE IF NOT EXISTS `target_table` LIKE `source_table`"
+    )

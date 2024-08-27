@@ -13,6 +13,7 @@ from sqlmesh.core.engine_adapter.shared import set_catalog
 from sqlmesh.core.schema_diff import SchemaDiffer
 
 if t.TYPE_CHECKING:
+    from sqlmesh.core._typing import TableName
     from sqlmesh.core.engine_adapter._typing import DF
 
 logger = logging.getLogger(__name__)
@@ -70,3 +71,25 @@ class PostgresEngineAdapter(
         if not self._connection_pool.is_transaction_active:
             self._connection_pool.commit()
         return df
+
+    def create_table_like(
+        self,
+        target_table_name: TableName,
+        source_table_name: TableName,
+        exists: bool = True,
+    ) -> None:
+        self.execute(
+            exp.Create(
+                this=exp.Schema(
+                    this=exp.to_table(target_table_name),
+                    expressions=[
+                        exp.LikeProperty(
+                            this=exp.to_table(source_table_name),
+                            expressions=[exp.Property(this="INCLUDING", value=exp.Var(this="ALL"))],
+                        )
+                    ],
+                ),
+                kind="TABLE",
+                exists=exists,
+            )
+        )

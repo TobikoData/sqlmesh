@@ -1272,6 +1272,7 @@ class EngineAdapterStateSync(StateSync):
     def state_type(self) -> str:
         return self.engine_adapter.dialect
 
+    @transactional()
     def _backup_state(self) -> None:
         for table in (
             self.snapshots_table,
@@ -1281,12 +1282,10 @@ class EngineAdapterStateSync(StateSync):
             self.plan_dags_table,
         ):
             if self.engine_adapter.table_exists(table):
-                with self.engine_adapter.transaction():
-                    backup_name = _backup_table_name(table)
-                    self.engine_adapter.drop_table(backup_name)
-                    self.engine_adapter.ctas(
-                        backup_name, exp.select("*").from_(table), exists=False
-                    )
+                backup_name = _backup_table_name(table)
+                self.engine_adapter.drop_table(backup_name)
+                self.engine_adapter.create_table_like(backup_name, table)
+                self.engine_adapter.insert_append(backup_name, exp.select("*").from_(table))
 
     def _apply_migrations(
         self,

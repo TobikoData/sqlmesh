@@ -162,5 +162,26 @@ class MySQLEngineAdapter(
                         exc_info=True,
                     )
 
+    def create_table_like(
+        self,
+        target_table_name: TableName,
+        source_table_name: TableName,
+        exists: bool = True,
+    ) -> None:
+        self.execute(
+            exp.Create(
+                this=exp.to_table(target_table_name),
+                kind="TABLE",
+                exists=exists,
+                properties=exp.Properties(
+                    expressions=[
+                        exp.LikeProperty(
+                            this=exp.to_table(source_table_name),
+                        ),
+                    ],
+                ),
+            )
+        )
+
     def ping(self) -> None:
         self._connection_pool.get().ping(reconnect=False)

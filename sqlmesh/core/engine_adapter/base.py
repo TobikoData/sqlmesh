@@ -781,22 +781,14 @@ class EngineAdapter:
         source_table_name: TableName,
         exists: bool = True,
     ) -> None:
+        """Create a table to store SQLMesh internal state based on the definition of another table, including any
+        column attributes and indexes defined in the original table.
+
+        Args:
+            target_table_name: The name of the table to create. Can be fully qualified or just table name.
+            source_table_name: The name of the table to base the new table on.
         """
-        Create a table like another table or view.
-        """
-        target_table = exp.to_table(target_table_name)
-        source_table = exp.to_table(source_table_name)
-        create_expression = exp.Create(
-            this=target_table,
-            kind="TABLE",
-            exists=exists,
-            properties=exp.Properties(
-                expressions=[
-                    exp.LikeProperty(this=source_table),
-                ]
-            ),
-        )
-        self.execute(create_expression)
+        self.create_table(target_table_name, self.columns(source_table_name), exists=exists)
 
     def clone_table(
         self,
