@@ -448,7 +448,7 @@ class ModelConfig(BaseModelConfig):
             "{{ adapter.resolve_identifier(this) }}",
             data_type,
             granularity=self.partition_by.get("granularity"),
-            database="{{ target.database }}",
+            catalog="{{ target.database }}",
         )
 
         data_type = data_type.upper()

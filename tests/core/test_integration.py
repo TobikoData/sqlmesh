@@ -51,6 +51,7 @@ from sqlmesh.core.snapshot import (
     SnapshotTableInfo,
 )
 from sqlmesh.utils.date import TimeLike, now, to_date, to_datetime, to_timestamp
+from sqlmesh.utils.errors import NoChangesPlanError
 from tests.conftest import DuckDBMetadata, SushiDataValidator
 
 
@@ -1625,6 +1626,22 @@ def test_plan_twice_with_star_macro_yields_no_diff(tmp_path: Path):
     new_plan = new_context.plan(no_prompts=True)
     assert not new_plan.has_changes
     assert not new_plan.new_snapshots
+
+
+@freeze_time("2023-01-08 15:00:00")
+def test_create_environment_no_changes_with_selector(init_and_plan_context: t.Callable):
+    context, plan = init_and_plan_context("examples/sushi")
+    context.apply(plan)
+
+    with pytest.raises(NoChangesPlanError):
+        context.plan("dev", no_prompts=True)
+
+    plan = context.plan("dev", no_prompts=True, select_models=["*top_waiters"])
+    assert not plan.missing_intervals
+    context.apply(plan)
+
+    schema_objects = context.engine_adapter.get_data_objects("sushi__dev")
+    assert {o.name for o in schema_objects} == {"top_waiters"}
 
 
 @pytest.mark.parametrize(

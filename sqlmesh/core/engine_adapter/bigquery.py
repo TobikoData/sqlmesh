@@ -331,7 +331,7 @@ class BigQueryEngineAdapter(InsertOverwriteWithMergeMixin):
         table_ = exp.to_table(table).copy()
 
         if not table_.catalog:
-            table_.set("catalog", exp.to_identifier(self.client.project))
+            table_.set("catalog", exp.to_identifier(self.default_catalog))
 
         return bigquery.Table(
             table_ref=self._table_name(table_),
@@ -389,6 +389,7 @@ class BigQueryEngineAdapter(InsertOverwriteWithMergeMixin):
                 partition_type_sql,
                 granularity=granularity,
                 agg_func="ARRAY_AGG",
+                catalog=temp_table_name.catalog or self.default_catalog,
             )
 
             self.execute(
@@ -675,7 +676,7 @@ class BigQueryEngineAdapter(InsertOverwriteWithMergeMixin):
         # The BigQuery Client's list_tables method does not support filtering by table name, so we have to
         # resort to using SQL instead.
         schema = to_schema(schema_name)
-        catalog = schema.catalog or self.get_current_catalog()
+        catalog = schema.catalog or self.default_catalog
         query = exp.select(
             exp.column("table_catalog").as_("catalog"),
             exp.column("table_name").as_("name"),
@@ -795,7 +796,7 @@ def select_partitions_expr(
     data_type: t.Union[str, exp.DataType],
     granularity: t.Optional[str] = None,
     agg_func: str = "MAX",
-    database: t.Optional[str] = None,
+    catalog: t.Optional[str] = None,
 ) -> str:
     """Generates a SQL expression that aggregates partition values for a table.
 
@@ -805,14 +806,14 @@ def select_partitions_expr(
         data_type: The data type of the partition column.
         granularity: The granularity of the partition. Supported values are: 'day', 'month', 'year' and 'hour'.
         agg_func: The aggregation function to use.
-        database: The database (BigQuery project ID) of the table.
+        catalog: The catalog (BigQuery project ID) of the table.
 
     Returns:
         A SELECT statement that aggregates partition values for a table.
     """
     partitions_table_name = f"`{schema}`.INFORMATION_SCHEMA.PARTITIONS"
-    if database:
-        partitions_table_name = f"`{database}`.{partitions_table_name}"
+    if catalog:
+        partitions_table_name = f"`{catalog}`.{partitions_table_name}"
 
     if isinstance(data_type, exp.DataType):
         data_type = data_type.sql(dialect="bigquery")

@@ -27,6 +27,7 @@ from sqlmesh.utils.pydantic import (
     field_validator,
     model_validator,
     model_validator_v1_args,
+    field_validator_v1_args,
 )
 
 if sys.version_info >= (3, 9):
@@ -739,6 +740,19 @@ class BigQueryConnectionConfig(ConnectionConfig):
     pre_ping: Literal[False] = False
 
     type_: Literal["bigquery"] = Field(alias="type", default="bigquery")
+
+    @field_validator("execution_project")
+    @field_validator_v1_args
+    def validate_execution_project(
+        cls,
+        v: t.Optional[str],
+        values: t.Dict[str, t.Any],
+    ) -> t.Optional[str]:
+        if v and not values.get("project"):
+            raise ConfigError(
+                "If the `execution_project` field is specified, you must also specify the `project` field to provide a default object location."
+            )
+        return v
 
     @property
     def _connection_kwargs_keys(self) -> t.Set[str]:
