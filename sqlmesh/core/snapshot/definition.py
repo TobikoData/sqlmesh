@@ -769,25 +769,14 @@ class Snapshot(PydanticModel, SnapshotInfoMixin):
         Returns:
             A [start, end) pair.
         """
-        interval_unit = self.node.interval_unit
-        start_ts = to_timestamp(interval_unit.cron_floor(start))
-        if start_ts < to_timestamp(start) and not self.model.allow_partials:
-            start_ts = to_timestamp(interval_unit.cron_next(start_ts))
-
-        if is_date(end):
-            end = to_datetime(end) + timedelta(days=1)
-        end_ts = to_timestamp(interval_unit.cron_floor(end) if not allow_partial else end)
-        if end_ts < start_ts and to_timestamp(end) > to_timestamp(start) and not strict:
-            # This can happen when the interval unit is coarser than the size of the input interval.
-            # For example, if the interval unit is monthly, but the input interval is only 1 hour long.
-            return (start_ts, end_ts)
-
-        if (strict and start_ts >= end_ts) or (start_ts > end_ts):
-            raise ValueError(
-                f"`end` ({to_datetime(end_ts)}) must be greater than `start` ({to_datetime(start_ts)})"
-            )
-
-        return (start_ts, end_ts)
+        return inclusive_exclusive(
+            start,
+            end,
+            self.node.interval_unit,
+            model_allow_partials=self.is_model and self.model.allow_partials,
+            strict=strict,
+            allow_partial=allow_partial,
+        )
 
     def merge_intervals(self, other: t.Union[Snapshot, SnapshotIntervals]) -> None:
         """Inherits intervals from the target snapshot.
@@ -1738,6 +1727,48 @@ def compute_missing_intervals(
             missing = {interval for interval in missing if interval[0] < model_end_ts}
 
     return sorted(missing)
+
+
+@lru_cache(maxsize=None)
+def inclusive_exclusive(
+    start: TimeLike,
+    end: TimeLike,
+    interval_unit: IntervalUnit,
+    model_allow_partials: bool,
+    strict: bool = True,
+    allow_partial: bool = False,
+) -> Interval:
+    """Transform the inclusive start and end into a [start, end) pair.
+
+    Args:
+        start: The start date/time of the interval (inclusive)
+        end: The end date/time of the interval (inclusive)
+        interval_unit: The interval unit.
+        model_allow_partials: Whether or not the model allows partials.
+        strict: Whether to fail when the inclusive start is the same as the exclusive end.
+        allow_partial: Whether the interval can be partial or not.
+
+    Returns:
+        A [start, end) pair.
+    """
+    start_ts = to_timestamp(interval_unit.cron_floor(start))
+    if start_ts < to_timestamp(start) and not model_allow_partials:
+        start_ts = to_timestamp(interval_unit.cron_next(start_ts))
+
+    if is_date(end):
+        end = to_datetime(end) + timedelta(days=1)
+    end_ts = to_timestamp(interval_unit.cron_floor(end) if not allow_partial else end)
+    if end_ts < start_ts and to_timestamp(end) > to_timestamp(start) and not strict:
+        # This can happen when the interval unit is coarser than the size of the input interval.
+        # For example, if the interval unit is monthly, but the input interval is only 1 hour long.
+        return (start_ts, end_ts)
+
+    if (strict and start_ts >= end_ts) or (start_ts > end_ts):
+        raise ValueError(
+            f"`end` ({to_datetime(end_ts)}) must be greater than `start` ({to_datetime(start_ts)})"
+        )
+
+    return (start_ts, end_ts)
 
 
 def earliest_start_date(
