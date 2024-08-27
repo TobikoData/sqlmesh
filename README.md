@@ -23,7 +23,7 @@ Virtual data environments with a toggle to show the disco deck slides in order
 * TODO: include a couple bullets that summarize the features
 * Virtual Data Environments
     * Plan / Apply workflow like [Terraform](https://www.terraform.io/) to understand potential impact of changes
-    * Automatic [column level lineage](https://tobikodata.com/automatically-detecting-breaking-changes-in-sql-queries.html) and data contracts
+    * Automatic [column level lineage](https://sqlmesh.readthedocs.io/en/stable/guides/ui/?h=column+lineage#lineage-module) and data contracts
     * Easy to use [CI/CD bot](https://sqlmesh.readthedocs.io/en/stable/integrations/github/)
 
     <details>
