@@ -13,7 +13,12 @@ It is more than just a [dbt alternative](https://sqlmesh.readthedocs.io/en/stabl
 </p>
 
 ## Core Features
-TODO: add a beautiful gif with screen.studio showing impact analysis in action
+<p align="center">
+  <img src="sqlmesh_plan_mode.gif" alt="SQLMesh Plan Mode">
+</p>
+
+> Get instant SQL impact analysis of your changes, whether in the CLI or in [SQLMesh Plan Mode](https://sqlmesh.readthedocs.io/en/stable/guides/ui/?h=plan+mode#working-with-an-ide)
+
 Virtual data environments with a toggle to show the disco deck slides in order
 * TODO: include a couple bullets that summarize the features
 * Virtual Data Environments
