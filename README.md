@@ -25,7 +25,97 @@ Virtual data environments with a toggle to show the disco deck slides in order
     * Plan / Apply workflow like [Terraform](https://www.terraform.io/) to understand potential impact of changes
     * Automatic [column level lineage](https://tobikodata.com/automatically-detecting-breaking-changes-in-sql-queries.html) and data contracts
     * Easy to use [CI/CD bot](https://sqlmesh.readthedocs.io/en/stable/integrations/github/)
-* Efficiency and Testing
+
+    <details>
+    <summary>Efficiency and Testing</summary>
+
+    Running this command will generate a unit test file in the `tests/` folder: `test_stg_payments.yaml`
+
+    Runs a live query to generate the expected output of the model
+
+    ```bash
+    sqlmesh create_test tcloud_demo.stg_payments --query tcloud_demo.seed_raw_payments "select * from tcloud_demo.seed_raw_payments limit 5" 
+
+    # run the unit test
+    sqlmesh test
+    ```
+
+    ```sql
+    MODEL (
+      name tcloud_demo.stg_payments,
+      cron '@daily',
+      grain payment_id,
+      audits (UNIQUE_VALUES(columns = (
+          payment_id
+      )), NOT_NULL(columns = (
+          payment_id
+      )))
+    );
+
+    SELECT
+        id AS payment_id,
+        order_id,
+        payment_method,
+        amount / 100 AS amount, /* `amount` is currently stored in cents, so we convert it to dollars */
+        'new_column' AS new_column, /* non-breaking change example  */
+    FROM tcloud_demo.seed_raw_payments
+    ```
+
+    ```yaml
+    test_stg_payments:
+    model: tcloud_demo.stg_payments
+    inputs:
+        tcloud_demo.seed_raw_payments:
+        - id: 66
+        order_id: 58
+        payment_method: coupon
+        amount: 1800
+        - id: 27
+        order_id: 24
+        payment_method: coupon
+        amount: 2600
+        - id: 30
+        order_id: 25
+        payment_method: coupon
+        amount: 1600
+        - id: 109
+        order_id: 95
+        payment_method: coupon
+        amount: 2400
+        - id: 3
+        order_id: 3
+        payment_method: coupon
+        amount: 100
+    outputs:
+        query:
+        - payment_id: 66
+        order_id: 58
+        payment_method: coupon
+        amount: 18.0
+        new_column: new_column
+        - payment_id: 27
+        order_id: 24
+        payment_method: coupon
+        amount: 26.0
+        new_column: new_column
+        - payment_id: 30
+        order_id: 25
+        payment_method: coupon
+        amount: 16.0
+        new_column: new_column
+        - payment_id: 109
+        order_id: 95
+        payment_method: coupon
+        amount: 24.0
+        new_column: new_column
+        - payment_id: 3
+        order_id: 3
+        payment_method: coupon
+        amount: 1.0
+        new_column: new_column
+    ```
+    </details>
+
     * Never builds a table [more than once](https://tobikodata.com/simplicity-or-efficiency-how-dbt-makes-you-choose.html)
     * Partition-based [incremental models](https://tobikodata.com/correctly-loading-incremental-data-at-scale.html)
     * [Unit tests](https://tobikodata.com/we-need-even-greater-expectations.html) and audits
@@ -38,7 +128,6 @@ Virtual data environments with a toggle to show the disco deck slides in order
     * Compile time error checking and can transpile 10+ different SQL dialects
     * Definitions using [simply SQL](https://sqlmesh.readthedocs.io/en/stable/concepts/models/sql_models/#sql-based-definition) (no need for redundant and confusing Jinja + YAML)
     * [Self documenting queries](https://tobikodata.com/metadata-everywhere.html) using native SQL Comments
-
 
 For more information, check out the [website](https://sqlmesh.com) and [documentation](https://sqlmesh.readthedocs.io/en/stable/).
 
