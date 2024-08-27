@@ -46,9 +46,11 @@ For more information, check out the [website](https://sqlmesh.com) and [document
 Install SQLMesh through [pypi](https://pypi.org/project/sqlmesh/) by running:
 
 ```bash
-pip install sqlmesh
 mkdir sqlmesh-example
 cd sqlmesh-example
+python -m venv .env
+source .env/bin/activate
+pip install sqlmesh
 sqlmesh init duckdb # get started right away with a local duckdb instance
 ```
 
