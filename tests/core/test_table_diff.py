@@ -6,6 +6,7 @@ from sqlmesh.core import dialect as d
 from sqlmesh.core.context import Context
 from sqlmesh.core.config import AutoCategorizationMode, CategorizerConfig
 from sqlmesh.core.model import SqlModel, load_sql_based_model
+from sqlmesh.core.table_diff import TableDiff
 
 
 @pytest.mark.slow
@@ -134,8 +135,27 @@ def test_data_diff_decimals(sushi_context_fixed_date):
         on=["key"],
         decimals=4,
     )
-    assert diff.row_diff().full_match_count == 2
-    assert diff.row_diff().partial_match_count == 1
+
+    row_diff = diff.row_diff()
+    joined_sample_columns = row_diff.joined_sample.columns
+    assert row_diff.full_match_count == 2
+    assert row_diff.partial_match_count == 1
+    assert "s__value" in joined_sample_columns
+    assert "t__value" in joined_sample_columns
+
+    table_diff = TableDiff(
+        adapter=engine_adapter,
+        source="table_diff_source",
+        target="table_diff_target",
+        source_alias="dev",
+        target_alias="prod",
+        on=["key"],
+        decimals=4,
+    )
+
+    aliased_joined_sample = table_diff.row_diff().joined_sample.columns
+    assert "DEV__value" in aliased_joined_sample
+    assert "PROD__value" in aliased_joined_sample
 
 
 @pytest.mark.slow
