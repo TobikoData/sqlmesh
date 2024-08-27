@@ -9,7 +9,7 @@ SQLMesh enables data teams to efficiently run and deploy data transformations wr
 It is more than just a [dbt alternative](https://tobikodata.com/reduce_costs_with_cron_and_partitions.html).
 
 <p align="center">
-  <img src="architecture_diagram.png" alt="Architecture Diagram">
+  <img src="architecture_diagram.png" alt="Architecture Diagram" width="120%" height="120%">
 </p>
 
 ## Core Features
