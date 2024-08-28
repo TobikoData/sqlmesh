@@ -13,9 +13,7 @@ It is more than just a [dbt alternative](https://tobikodata.com/reduce_costs_wit
 </p>
 
 ## Core Features
-<p align="center">
-  <img src="sqlmesh_plan_mode.gif" alt="SQLMesh Plan Mode">
-</p>
+![SQLMesh Plan Mode](https://storage.googleapis.com/sqlmesh-public-assets/sqlmesh_plan_mode_public.gif)
 
 > Get instant SQL impact analysis of your changes, whether in the CLI or in [SQLMesh Plan Mode](https://sqlmesh.readthedocs.io/en/stable/guides/ui/?h=plan+mode#working-with-an-ide)
 
