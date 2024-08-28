@@ -359,11 +359,12 @@ def serialize_env(env: t.Dict[str, t.Any], path: Path) -> t.Dict[str, Executable
             name = v.__name__
             name = k if name == "<lambda>" else name
 
-            # We can't call getfile on built-in callables
+            # getfile raises a `TypeError` for built-in modules, classes, or functions
             # https://docs.python.org/3/library/inspect.html#inspect.getfile
-            file_path = (
-                Path(inspect.getfile(inspect.unwrap(v))) if not inspect.isbuiltin(v) else None
-            )
+            try:
+                file_path = Path(inspect.getfile(v))
+            except TypeError:
+                file_path = None
 
             if _is_relative_to(file_path, path):
                 serialized[k] = Executable(

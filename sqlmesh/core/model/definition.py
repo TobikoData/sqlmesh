@@ -17,6 +17,7 @@ from sqlglot import diff, exp
 from sqlglot.diff import Insert, Keep
 from sqlglot.helper import ensure_list
 from sqlglot.optimizer.simplify import gen
+from sqlglot.optimizer.normalize_identifiers import normalize_identifiers
 from sqlglot.schema import MappingSchema, nested_set
 from sqlglot.time import format_time
 
@@ -1270,7 +1271,8 @@ class SeedModel(_SqlBasedModel):
         bool_columns = []
         string_columns = []
 
-        for name, tpe in (self.columns_to_types_ or {}).items():
+        columns_to_types = self.columns_to_types_ or {}
+        for name, tpe in columns_to_types.items():
             if tpe.this in (exp.DataType.Type.DATE, exp.DataType.Type.DATE32):
                 date_columns.append(name)
             elif tpe.this in exp.DataType.TEMPORAL_TYPES:
@@ -1281,6 +1283,15 @@ class SeedModel(_SqlBasedModel):
                 string_columns.append(name)
 
         for df in self._reader.read(batch_size=self.kind.batch_size):
+            rename_dict = {}
+            for column in columns_to_types:
+                if column not in df:
+                    normalized_name = normalize_identifiers(column, dialect=self.dialect).name
+                    if normalized_name in df:
+                        rename_dict[normalized_name] = column
+            if rename_dict:
+                df.rename(columns=rename_dict, inplace=True)
+
             # convert all date/time types to native pandas timestamp
             for column in [*date_columns, *datetime_columns]:
                 df[column] = pd.to_datetime(df[column])

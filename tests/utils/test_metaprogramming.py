@@ -1,4 +1,5 @@
 import typing as t
+from contextlib import contextmanager
 from dataclasses import dataclass
 from pathlib import Path
 
@@ -45,7 +46,7 @@ def test_print_exception(mocker: MockerFixture):
 
     expected_message = f"""Traceback (most recent call last):
 
-  File "{__file__}", line 42, in test_print_exception
+  File "{__file__}", line 43, in test_print_exception
     eval("test_fun()", env)
 
   File "<string>", line 1, in <module>
@@ -106,6 +107,11 @@ def noop_metadata() -> None:
 setattr(noop_metadata, c.SQLMESH_METADATA, True)
 
 
+@contextmanager
+def test_context_manager():
+    yield
+
+
 def main_func(y: int, foo=exp.true(), *, bar=expressions.Literal.number(1) + 2) -> int:
     """DOC STRING"""
     sqlglot.parse_one("1")
@@ -116,6 +122,9 @@ def main_func(y: int, foo=exp.true(), *, bar=expressions.Literal.number(1) + 2) 
 
     def closure(z: int) -> int:
         return z + Z
+
+    with test_context_manager():
+        pass
 
     return closure(y) + other_func(Y)
 
@@ -132,6 +141,7 @@ def test_func_globals() -> None:
         "sqlglot": sqlglot,
         "exp": exp,
         "expressions": exp,
+        "test_context_manager": test_context_manager,
     }
     assert func_globals(other_func) == {
         "X": 1,
@@ -167,6 +177,8 @@ def test_normalize_source() -> None:
 
     def closure(z: int):
         return z + Z
+    with test_context_manager():
+        pass
     return closure(y) + other_func(Y)"""
     )
 
@@ -194,6 +206,7 @@ def test_serialize_env() -> None:
     build_env(main_func, env=env, name="MAIN", path=path)
     env = serialize_env(env, path=path)  # type: ignore
 
+    assert prepare_env(env)
     assert env == {
         "MAIN": Executable(
             name="main_func",
@@ -209,11 +222,19 @@ def test_serialize_env() -> None:
 
     def closure(z: int):
         return z + Z
+    with test_context_manager():
+        pass
     return closure(y) + other_func(Y)""",
         ),
         "X": Executable(payload="1", kind=ExecutableKind.VALUE),
         "Y": Executable(payload="2", kind=ExecutableKind.VALUE),
         "Z": Executable(payload="3", kind=ExecutableKind.VALUE),
+        "_GeneratorContextManager": Executable(
+            payload="from contextlib import _GeneratorContextManager", kind=ExecutableKind.IMPORT
+        ),
+        "contextmanager": Executable(
+            payload="from contextlib import contextmanager", kind=ExecutableKind.IMPORT
+        ),
         "KLASS_X": Executable(payload="1", kind=ExecutableKind.VALUE),
         "KLASS_Y": Executable(payload="2", kind=ExecutableKind.VALUE),
         "KLASS_Z": Executable(payload="3", kind=ExecutableKind.VALUE),
@@ -255,6 +276,14 @@ class DataClass:
         "expressions": Executable(
             kind=ExecutableKind.IMPORT, payload="import sqlglot.expressions as expressions"
         ),
+        "func": Executable(
+            payload="""@contextmanager
+def test_context_manager():
+    yield""",
+            name="test_context_manager",
+            path="test_metaprogramming.py",
+            alias="func",
+        ),
         "my_lambda": Executable(
             name="my_lambda",
             path="test_metaprogramming.py",
@@ -282,4 +311,9 @@ class DataClass:
     my_lambda()
     return X + a""",
         ),
+        "test_context_manager": Executable(
+            payload="from tests.utils.test_metaprogramming import test_context_manager",
+            kind=ExecutableKind.IMPORT,
+        ),
+        "wraps": Executable(payload="from functools import wraps", kind=ExecutableKind.IMPORT),
     }
