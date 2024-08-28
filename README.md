@@ -15,7 +15,7 @@ It is more than just a [dbt alternative](https://tobikodata.com/reduce_costs_wit
 ## Core Features
 <img src="https://github.com/TobikoData/sqlmesh-public-assets/blob/main/sqlmesh_plan_mode.gif" alt="SQLMesh Plan Mode">
 
-> Get instant SQL impact analysis of your changes, whether in the CLI or in [SQLMesh Plan Mode](https://github.com/TobikoData/sqlmesh-public-assets/blob/main/sqlmesh_plan_mode.gif)
+> Get instant SQL impact analysis of your changes, whether in the CLI or in [SQLMesh Plan Mode](https://sqlmesh.readthedocs.io/en/stable/guides/ui/?h=modes#working-with-an-ide)
 
   <details>
   <summary><b>Virtual Data Environments</b></summary>
