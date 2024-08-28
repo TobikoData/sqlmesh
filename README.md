@@ -15,7 +15,7 @@ It is more than just a [dbt alternative](https://tobikodata.com/reduce_costs_wit
 ## Core Features
 <img src="https://storage.googleapis.com/sqlmesh-public-assets/sqlmesh_plan_mode_public.gif" alt="SQLMesh Plan Mode">
 
-> Get instant SQL impact analysis of your changes, whether in the CLI or in [SQLMesh Plan Mode](https://sqlmesh.readthedocs.io/en/stable/guides/ui/?h=plan+mode#working-with-an-ide)
+> Get instant SQL impact analysis of your changes, whether in the CLI or in [SQLMesh Plan Mode](https://github.com/TobikoData/sqlmesh-public-assets/blob/main/sqlmesh_plan_mode.gif)
 
   <details>
   <summary><b>Virtual Data Environments</b></summary>
@@ -129,7 +129,7 @@ Write SQL in any dialect and SQLMesh will transpile it to your target SQL dialec
 <img src="transpile_example.png" alt="Transpile Example">
 </details>
 
-* Compile time error checking and can transpile 10+ different SQL dialects
+* Compile time error checking and can transpile [10+ different SQL dialects](https://sqlmesh.readthedocs.io/en/stable/integrations/overview/#execution-engines)
 * Definitions using [simply SQL](https://sqlmesh.readthedocs.io/en/stable/concepts/models/sql_models/#sql-based-definition) (no need for redundant and confusing Jinja + YAML)
 * [Self documenting queries](https://tobikodata.com/metadata-everywhere.html) using native SQL Comments
 
