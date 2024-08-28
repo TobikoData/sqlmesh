@@ -75,48 +75,6 @@ class ClickhouseEngineAdapter(EngineAdapterWithIndexSupport, LogicalMergeMixin):
             )
             return self.cursor.fetchall()[0]
 
-    def create_schema(
-        self,
-        schema_name: SchemaName,
-        ignore_if_exists: bool = True,
-        warn_on_error: bool = True,
-        properties: t.List[exp.Expression] = [],
-    ) -> None:
-        """Create a Clickhouse database from a name or qualified table name.
-
-        Clickhouse has a two-level naming scheme [database].[table].
-        """
-        if self.engine_run_mode.is_cluster:
-            properties.append(exp.OnCluster(this=exp.to_identifier(self.cluster)))
-
-        # can't call super() because it will try to set a catalog
-        return self._create_schema(
-            schema_name=schema_name,
-            ignore_if_exists=ignore_if_exists,
-            warn_on_error=warn_on_error,
-            properties=properties,
-            # sqlglot transpiles CREATE SCHEMA to CREATE DATABASE, but this text is used in an error message
-            kind="DATABASE",
-        )
-
-    def drop_schema(
-        self,
-        schema_name: SchemaName,
-        ignore_if_not_exists: bool = True,
-        cascade: bool = False,
-        **drop_args: t.Any,
-    ) -> None:
-        return self._drop_object(
-            name=schema_name,
-            exists=ignore_if_not_exists,
-            kind="DATABASE",
-            cascade=None,
-            cluster=exp.OnCluster(this=exp.to_identifier(self.cluster))
-            if self.engine_run_mode.is_cluster
-            else None,
-            **drop_args,
-        )
-
     def _fetch_native_df(
         self, query: t.Union[exp.Expression, str], quote_identifiers: bool = False
     ) -> pd.DataFrame:
@@ -194,23 +152,30 @@ class ClickhouseEngineAdapter(EngineAdapterWithIndexSupport, LogicalMergeMixin):
             for row in df.itertuples()
         ]
 
-    def create_table_like(
+    def create_schema(
         self,
-        target_table_name: TableName,
-        source_table_name: TableName,
-        exists: bool = True,
-        **kwargs: t.Any,
+        schema_name: SchemaName,
+        ignore_if_exists: bool = True,
+        warn_on_error: bool = True,
+        properties: t.List[exp.Expression] = [],
     ) -> None:
+        """Create a Clickhouse database from a name or qualified table name.
+
+        Clickhouse has a two-level naming scheme [database].[table].
         """
-        Create a table like another table or view.
-        """
-        target_table = exp.to_table(target_table_name)
-        source_table = exp.to_table(source_table_name)
-        on_cluster_sql = " "
+        properties_copy = properties.copy()
         if self.engine_run_mode.is_cluster:
-            on_cluster_sql = f" ON CLUSTER {exp.to_identifier(self.cluster)} "
-        create_sql = f"CREATE TABLE{' IF NOT EXISTS' if exists else ''} {target_table}{on_cluster_sql}AS {source_table}"
-        self.execute(create_sql)
+            properties_copy.append(exp.OnCluster(this=exp.to_identifier(self.cluster)))
+
+        # can't call super() because it will try to set a catalog
+        return self._create_schema(
+            schema_name=schema_name,
+            ignore_if_exists=ignore_if_exists,
+            warn_on_error=warn_on_error,
+            properties=properties_copy,
+            # sqlglot transpiles CREATE SCHEMA to CREATE DATABASE, but this text is used in an error message
+            kind="DATABASE",
+        )
 
     def _create_table(
         self,
@@ -266,6 +231,61 @@ class ClickhouseEngineAdapter(EngineAdapterWithIndexSupport, LogicalMergeMixin):
                 expression,  # type: ignore
                 columns_to_types or self.columns(table_name),
             )
+
+    def _rename_table(
+        self,
+        old_table_name: TableName,
+        new_table_name: TableName,
+    ) -> None:
+        old_table_sql = exp.to_table(old_table_name).sql(dialect=self.dialect, identify=True)
+        new_table_sql = exp.to_table(new_table_name).sql(dialect=self.dialect, identify=True)
+
+        self.execute(f"RENAME TABLE {old_table_sql} TO {new_table_sql}{self._on_cluster_sql()}")
+
+    def alter_table(
+        self,
+        alter_expressions: t.List[exp.Alter],
+    ) -> None:
+        """
+        Performs the alter statements to change the current table into the structure of the target table.
+        """
+        with self.transaction():
+            for alter_expression in alter_expressions:
+                if self.engine_run_mode.is_cluster:
+                    alter_expression.set(
+                        "cluster", exp.OnCluster(this=exp.to_identifier(self.cluster))
+                    )
+                self.execute(alter_expression)
+
+    def _drop_object(
+        self,
+        name: TableName | SchemaName,
+        exists: bool = True,
+        kind: str = "TABLE",
+        **drop_args: t.Any,
+    ) -> None:
+        """Drops an object.
+
+        An object could be a DATABASE, SCHEMA, VIEW, TABLE, DYNAMIC TABLE, TEMPORARY TABLE etc depending on the :kind.
+
+        Args:
+            name: The name of the table to drop.
+            exists: If exists, defaults to True.
+            kind: What kind of object to drop. Defaults to TABLE
+            **drop_args: Any extra arguments to set on the Drop expression
+        """
+        drop_args.pop("cascade", None)
+        self.execute(
+            exp.Drop(
+                this=exp.to_table(name),
+                kind=kind,
+                exists=exists,
+                cluster=exp.OnCluster(this=exp.to_identifier(self.cluster))
+                if self.engine_run_mode.is_cluster
+                else None,
+                **drop_args,
+            )
+        )
 
     def _build_table_properties_exp(
         self,
@@ -352,7 +372,7 @@ class ClickhouseEngineAdapter(EngineAdapterWithIndexSupport, LogicalMergeMixin):
             )
 
         if self.engine_run_mode.is_cluster:
-            properties.append(exp.OnCluster(this=exp.var(self.cluster)))
+            properties.append(exp.OnCluster(this=exp.to_identifier(self.cluster)))
 
         if empty_ctas:
             properties.append(exp.EmptyProperty())
@@ -383,11 +403,8 @@ class ClickhouseEngineAdapter(EngineAdapterWithIndexSupport, LogicalMergeMixin):
 
         view_properties_copy = view_properties.copy() if view_properties else {}
 
-        # `view_properties`` is model.virtual_properties during view promotion but model.physical_properties elsewhen
-        # - in the create_view promotion call, the cluster won't be in `view_properties`` so we pass the
-        #     model.physical_properties["CLUSTER"] value to the "physical_cluster" kwarg
         if self.engine_run_mode.is_cluster:
-            properties.append(exp.OnCluster(this=exp.var(self.cluster)))
+            properties.append(exp.OnCluster(this=exp.to_identifier(self.cluster)))
 
         if view_properties_copy:
             properties.extend(self._table_or_view_properties_to_expressions(view_properties_copy))
@@ -408,14 +425,10 @@ class ClickhouseEngineAdapter(EngineAdapterWithIndexSupport, LogicalMergeMixin):
     ) -> exp.Comment | str:
         table_sql = table.sql(dialect=self.dialect, identify=True)
 
-        on_cluster_sql = " "
-        if self.engine_run_mode.is_cluster:
-            on_cluster_sql = f" ON CLUSTER {exp.to_identifier(self.cluster)} "
-
         truncated_comment = self._truncate_table_comment(table_comment)
         comment_sql = exp.Literal.string(truncated_comment).sql(dialect=self.dialect)
 
-        return f"ALTER TABLE {table_sql}{on_cluster_sql}MODIFY COMMENT {comment_sql}"
+        return f"ALTER TABLE {table_sql}{self._on_cluster_sql()}MODIFY COMMENT {comment_sql}"
 
     def _build_create_comment_column_exp(
         self,
@@ -428,11 +441,13 @@ class ClickhouseEngineAdapter(EngineAdapterWithIndexSupport, LogicalMergeMixin):
         table_sql = table.sql(dialect=self.dialect, identify=True)
         column_sql = exp.to_column(column_name).sql(dialect=self.dialect, identify=True)
 
-        on_cluster_sql = " "
-        if self.engine_run_mode.is_cluster:
-            on_cluster_sql = f" ON CLUSTER {exp.to_identifier(self.cluster)} "
-
         truncated_comment = self._truncate_table_comment(column_comment)
         comment_sql = exp.Literal.string(truncated_comment).sql(dialect=self.dialect)
 
-        return f"ALTER TABLE {table_sql}{on_cluster_sql}COMMENT COLUMN {column_sql} {comment_sql}"
+        return f"ALTER TABLE {table_sql}{self._on_cluster_sql()}COMMENT COLUMN {column_sql} {comment_sql}"
+
+    def _on_cluster_sql(self) -> str:
+        if self.engine_run_mode.is_cluster:
+            cluster_name = exp.to_identifier(self.cluster, quoted=True).sql(dialect=self.dialect)  #  type: ignore
+            return f" ON CLUSTER {cluster_name} "
+        return ""

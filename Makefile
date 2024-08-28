@@ -169,6 +169,9 @@ engine-%-down:
 clickhouse-test: engine-clickhouse-up
 	pytest -n auto -x -m "clickhouse" --junitxml=test-results/junit-clickhouse.xml
 
+clickhouse-cluster-test: engine-clickhouse-up
+	pytest -n auto -x -m "clickhouse_cluster" --junitxml=test-results/junit-clickhouse-cluster.xml
+
 duckdb-test: engine-duckdb-install
 	pytest -n auto -x -m "duckdb" --junitxml=test-results/junit-duckdb.xml
 

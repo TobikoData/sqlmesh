@@ -17,7 +17,7 @@ def test_columns(make_mocked_engine_adapter: t.Callable):
     resp = adapter.columns("db.table")
     adapter.cursor.execute.assert_called_once_with(
         'SELECT "attname" AS "column_name", '
-        '"pg_catalog".FORMAT_TYPE("atttypid", "atttypmod") AS "data_type" '
+        '"pg_catalog".format_type("atttypid", "atttypmod") AS "data_type" '
         'FROM "pg_catalog"."pg_attribute" '
         'JOIN "pg_catalog"."pg_class" ON "pg_class"."oid" = "attrelid" '
         'JOIN "pg_catalog"."pg_namespace" ON "pg_namespace"."oid" = "relnamespace" '

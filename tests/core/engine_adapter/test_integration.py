@@ -633,6 +633,15 @@ def config() -> Config:
             ],
         ),
         pytest.param(
+            "clickhouse_cluster",
+            marks=[
+                pytest.mark.docker,
+                pytest.mark.engine,
+                pytest.mark.clickhouse_cluster,
+                pytest.mark.xdist_group("engine_integration_clickhouse_cluster"),
+            ],
+        ),
+        pytest.param(
             "bigquery",
             marks=[
                 pytest.mark.bigquery,
@@ -1830,14 +1839,24 @@ def test_sushi(mark_gateway: t.Tuple[str, str], ctx: TestContext):
                 for k, v in model_columns.items()
             }
 
-            model_model_cols_to_types = context._models[model_key].copy(
+            model_ch_cols_to_types = context._models[model_key].copy(
                 update={
                     "columns_to_types": updated_model_columns,
                     "columns_to_types_": updated_model_columns,
                     "columns_to_types_or_raise": updated_model_columns,
                 }
             )
-            context._models.update({model_key: model_model_cols_to_types})
+            context._models.update({model_key: model_ch_cols_to_types})
+
+        # create raw schema and view
+        if gateway == "inttest_clickhouse_cluster":
+            context.engine_adapter.execute("CREATE DATABASE IF NOT EXISTS raw ON CLUSTER cluster1;")
+            context.engine_adapter.execute(
+                "DROP VIEW IF EXISTS raw.demographics ON CLUSTER cluster1;"
+            )
+            context.engine_adapter.execute(
+                "CREATE VIEW raw.demographics ON CLUSTER cluster1 AS SELECT 1 AS customer_id, '00000' AS zip;"
+            )
 
     plan: Plan = context.plan(
         environment="test_prod",

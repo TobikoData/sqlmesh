@@ -85,6 +85,18 @@ gateways:
       concurrent_tasks: 1
     state_connection:
       type: duckdb
+  inttest_clickhouse_cluster:
+    connection:
+      type: clickhouse
+      host: localhost
+      port: 8123
+      username: clickhouse
+      password: clickhouse
+      cluster: cluster1
+      concurrent_tasks: 1
+    state_connection:
+      type: duckdb
+
 
   # Cloud databases
   inttest_snowflake:

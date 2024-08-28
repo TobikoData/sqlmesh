@@ -7,6 +7,7 @@ from tests.core.engine_adapter import to_sql_calls
 from sqlmesh.core.dialect import parse
 from sqlglot import exp
 import typing as t
+from sqlmesh.core.schema_diff import SchemaDiffer
 
 pytestmark = [pytest.mark.clickhouse, pytest.mark.engine]
 
@@ -31,7 +32,7 @@ def test_create_schema(adapter: ClickhouseEngineAdapter, mocker):
         new_callable=mocker.PropertyMock(return_value="default"),
     )
 
-    # ON CLUSTER not added because is_cluster=False
+    # ON CLUSTER not added because engine_run_mode.is_cluster=False
     adapter.create_schema("foo")
 
     mocker.patch.object(
@@ -54,6 +55,7 @@ def test_drop_schema(adapter: ClickhouseEngineAdapter, mocker):
         new_callable=mocker.PropertyMock(return_value="default"),
     )
 
+    # ON CLUSTER not added because engine_run_mode.is_cluster=False
     adapter.drop_schema("foo")
 
     mocker.patch.object(
@@ -66,6 +68,106 @@ def test_drop_schema(adapter: ClickhouseEngineAdapter, mocker):
     assert to_sql_calls(adapter) == [
         'DROP DATABASE IF EXISTS "foo"',
         'DROP DATABASE IF EXISTS "foo" ON CLUSTER "default"',
+    ]
+
+
+def test_create_table(adapter: ClickhouseEngineAdapter, mocker):
+    mocker.patch.object(
+        ClickhouseEngineAdapter,
+        "cluster",
+        new_callable=mocker.PropertyMock(return_value="default"),
+    )
+
+    # ON CLUSTER not added because engine_run_mode.is_cluster=False
+    adapter.create_table("foo", {"a": exp.DataType.build("Int8", dialect=adapter.dialect)})
+    # adapter.create_table_like("target", "source")
+
+    mocker.patch.object(
+        ClickhouseEngineAdapter,
+        "engine_run_mode",
+        new_callable=mocker.PropertyMock(return_value=EngineRunMode.CLUSTER),
+    )
+    adapter.create_table("foo", {"a": exp.DataType.build("Int8", dialect=adapter.dialect)})
+    # adapter.create_table_like("target", "source")
+
+    assert to_sql_calls(adapter) == [
+        'CREATE TABLE IF NOT EXISTS "foo" ("a" Int8) ENGINE=MergeTree ORDER BY ()',
+        # "CREATE TABLE IF NOT EXISTS target AS source",
+        'CREATE TABLE IF NOT EXISTS "foo" ON CLUSTER "default" ("a" Int8) ENGINE=MergeTree ORDER BY ()',
+        # "CREATE TABLE IF NOT EXISTS target AS source",
+    ]
+
+
+def test_rename_table(adapter: ClickhouseEngineAdapter, mocker):
+    mocker.patch.object(
+        ClickhouseEngineAdapter,
+        "cluster",
+        new_callable=mocker.PropertyMock(return_value="default"),
+    )
+
+    # ON CLUSTER not added because engine_run_mode.is_cluster=False
+    adapter.rename_table(exp.to_table("foo"), exp.to_table("bar"))
+
+    mocker.patch.object(
+        ClickhouseEngineAdapter,
+        "engine_run_mode",
+        new_callable=mocker.PropertyMock(return_value=EngineRunMode.CLUSTER),
+    )
+    adapter.rename_table(exp.to_table("foo"), exp.to_table("bar"))
+
+    assert to_sql_calls(adapter) == [
+        'RENAME TABLE "foo" TO "bar"',
+        'RENAME TABLE "foo" TO "bar" ON CLUSTER "default" ',
+    ]
+
+
+def test_alter_table(
+    adapter: ClickhouseEngineAdapter,
+    mocker,
+):
+    adapter.SCHEMA_DIFFER = SchemaDiffer()
+    current_table_name = "test_table"
+    current_table = {"a": "Int8", "b": "String", "c": "Int8"}
+    target_table_name = "target_table"
+    target_table = {
+        "a": "Int8",
+        "b": "String",
+        "f": "String",
+    }
+
+    def table_columns(table_name: str) -> t.Dict[str, exp.DataType]:
+        if table_name == current_table_name:
+            return {
+                k: exp.DataType.build(v, dialect=adapter.dialect) for k, v in current_table.items()
+            }
+        else:
+            return {
+                k: exp.DataType.build(v, dialect=adapter.dialect) for k, v in target_table.items()
+            }
+
+    adapter.columns = table_columns  # type: ignore
+
+    # ON CLUSTER not added because engine_run_mode.is_cluster=False
+    adapter.alter_table(adapter.get_alter_expressions(current_table_name, target_table_name))
+
+    mocker.patch.object(
+        ClickhouseEngineAdapter,
+        "cluster",
+        new_callable=mocker.PropertyMock(return_value="default"),
+    )
+    mocker.patch.object(
+        ClickhouseEngineAdapter,
+        "engine_run_mode",
+        new_callable=mocker.PropertyMock(return_value=EngineRunMode.CLUSTER),
+    )
+
+    adapter.alter_table(adapter.get_alter_expressions(current_table_name, target_table_name))
+
+    assert to_sql_calls(adapter) == [
+        'ALTER TABLE "test_table" DROP COLUMN "c"',
+        'ALTER TABLE "test_table" ADD COLUMN "f" String',
+        'ALTER TABLE "test_table" ON CLUSTER "default" DROP COLUMN "c"',
+        'ALTER TABLE "test_table" ON CLUSTER "default" ADD COLUMN "f" String',
     ]
 
 

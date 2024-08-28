@@ -316,6 +316,7 @@ workflows:
                 - trino
                 - spark
                 - clickhouse
+                - clickhouse-cluster
       - engine_tests_cloud:
           name: cloud_engine_<< matrix.engine >>
           context:
