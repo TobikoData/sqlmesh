@@ -80,3 +80,12 @@ def test_comments(make_mocked_engine_adapter: t.Callable, mocker: MockerFixture)
         """COMMENT ON TABLE "test_table" IS '\\'""",
         """COMMENT ON COLUMN "test_table"."a" IS '\\'""",
     ]
+
+
+def test_create_table_like(make_mocked_engine_adapter: t.Callable):
+    adapter = make_mocked_engine_adapter(PostgresEngineAdapter)
+
+    adapter.create_table_like("target_table", "source_table")
+    adapter.cursor.execute.assert_called_once_with(
+        'CREATE TABLE IF NOT EXISTS "target_table" (LIKE "source_table" INCLUDING ALL)'
+    )

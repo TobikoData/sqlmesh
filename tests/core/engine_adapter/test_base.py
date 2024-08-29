@@ -2375,12 +2375,19 @@ def test_replace_query_self_referencing_not_exists_known(
     ]
 
 
-def test_create_table_like(make_mocked_engine_adapter: t.Callable):
+def test_create_table_like(make_mocked_engine_adapter: t.Callable, mocker: MockerFixture):
     adapter = make_mocked_engine_adapter(EngineAdapter)
+
+    columns_to_types = {
+        "cola": exp.DataType.build("INT"),
+        "colb": exp.DataType.build("TEXT"),
+    }
+    columns_mock = mocker.patch.object(adapter, "columns")
+    columns_mock.return_value = columns_to_types
 
     adapter.create_table_like("target_table", "source_table")
     adapter.cursor.execute.assert_called_once_with(
-        'CREATE TABLE IF NOT EXISTS "target_table" LIKE "source_table"'
+        'CREATE TABLE IF NOT EXISTS "target_table" ("cola" INT, "colb" TEXT)'
     )
 
 
