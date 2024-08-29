@@ -1,5 +1,5 @@
 <p align="center">
-  <img src="sqlmesh.png" alt="SQLMesh logo" width="50%" height="50%">
+  <img src="docs/readme/sqlmesh.png" alt="SQLMesh logo" width="50%" height="50%">
 </p>
 
 SQLMesh is a next-generation data transformation and modeling framework that is backwards compatible with dbt. It aims to be easy to use, correct, and efficient.
@@ -9,7 +9,7 @@ SQLMesh enables data teams to efficiently run and deploy data transformations wr
 It is more than just a [dbt alternative](https://tobikodata.com/reduce_costs_with_cron_and_partitions.html).
 
 <p align="center">
-  <img src="architecture_diagram.png" alt="Architecture Diagram" width="100%" height="100%">
+  <img src="docs/readme/architecture_diagram.png" alt="Architecture Diagram" width="100%" height="100%">
 </p>
 
 ## Core Features
@@ -19,7 +19,7 @@ It is more than just a [dbt alternative](https://tobikodata.com/reduce_costs_wit
 
   <details>
   <summary><b>Virtual Data Environments</b></summary>
-      
+
   * See a full diagram of how [Virtual Data Environments](https://whimsical.com/virtual-data-environments-MCT8ngSxFHict4wiL48ymz) work
   * [Watch this video to learn more](https://www.youtube.com/watch?v=weJH3eM0rzc)
 
@@ -37,7 +37,7 @@ Running this command will generate a unit test file in the `tests/` folder: `tes
 Runs a live query to generate the expected output of the model
 
 ```bash
-sqlmesh create_test tcloud_demo.stg_payments --query tcloud_demo.seed_raw_payments "select * from tcloud_demo.seed_raw_payments limit 5" 
+sqlmesh create_test tcloud_demo.stg_payments --query tcloud_demo.seed_raw_payments "select * from tcloud_demo.seed_raw_payments limit 5"
 
 # run the unit test
 sqlmesh test
@@ -126,7 +126,7 @@ outputs:
 <details>
 <summary><b>Take SQL Anywhere</b></summary>
 Write SQL in any dialect and SQLMesh will transpile it to your target SQL dialect on the fly before sending it to the warehouse.
-<img src="transpile_example.png" alt="Transpile Example">
+<img src="docs/readme/transpile_example.png" alt="Transpile Example">
 </details>
 
 * Compile time error checking and can transpile [10+ different SQL dialects](https://sqlmesh.readthedocs.io/en/stable/integrations/overview/#execution-engines)
@@ -159,4 +159,3 @@ We want to ship better data with you. Connect with us in the following ways:
 
 ## Contribution
 Contributions in the form of issues or pull requests are greatly appreciated. [Read more](https://sqlmesh.readthedocs.io/en/stable/development/) on how to contribute to SQLMesh open source.
-
