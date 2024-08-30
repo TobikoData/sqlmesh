@@ -47,6 +47,10 @@ class UncategorizedPlanError(PlanError):
     pass
 
 
+class ConflictingPlanError(PlanError):
+    pass
+
+
 class MissingContextException(Exception):
     pass
 

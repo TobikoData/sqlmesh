@@ -16,7 +16,7 @@ from sqlmesh.integrations.github.cicd.controller import (
     GithubCheckConclusion,
     GithubCheckStatus,
 )
-from sqlmesh.utils.errors import PlanError, TestError
+from sqlmesh.utils.errors import ConflictingPlanError, PlanError, TestError
 
 pytest_plugins = ["tests.integrations.github.cicd.fixtures"]
 pytestmark = [
@@ -788,7 +788,7 @@ def test_pr_update_failure(
         )
 
 
-def test_prod_update_failure(
+def make_test_prod_update_failure_case(
     github_client,
     make_controller,
     make_mock_check_run,
@@ -796,6 +796,8 @@ def test_prod_update_failure(
     make_pull_request_review,
     tmp_path: pathlib.Path,
     mocker: MockerFixture,
+    to_raise_on_prod_plan: Exception,
+    expect_prod_sync_conclusion: GithubCheckConclusion,
 ):
     """
     Scenario:
@@ -842,7 +844,7 @@ def test_prod_update_failure(
 
     def raise_on_prod_plan(plan: Plan):
         if plan.environment.name == c.PROD:
-            raise PlanError("Failed to update Prod environment")
+            raise to_raise_on_prod_plan
 
     controller._context.apply = mocker.MagicMock(side_effect=lambda plan: raise_on_prod_plan(plan))
 
@@ -875,7 +877,7 @@ def test_prod_update_failure(
     assert GithubCheckStatus(prod_checks_runs[0]["status"]).is_queued
     assert GithubCheckStatus(prod_checks_runs[1]["status"]).is_in_progress
     assert GithubCheckStatus(prod_checks_runs[2]["status"]).is_completed
-    assert GithubCheckConclusion(prod_checks_runs[2]["conclusion"]).is_action_required
+    assert GithubCheckConclusion(prod_checks_runs[2]["conclusion"]) == expect_prod_sync_conclusion
 
     assert "SQLMesh - Run Unit Tests" in controller._check_run_mapping
     test_checks_runs = controller._check_run_mapping["SQLMesh - Run Unit Tests"].all_kwargs
@@ -919,8 +921,104 @@ def test_prod_update_failure(
         output = f.read()
         assert (
             output
-            == "run_unit_tests=success\nhas_required_approval=success\ncreated_pr_environment=true\npr_environment_name=hello_world_2\npr_environment_synced=success\nprod_plan_preview=success\nprod_environment_synced=action_required\n"
+            == f"run_unit_tests=success\nhas_required_approval=success\ncreated_pr_environment=true\npr_environment_name=hello_world_2\npr_environment_synced=success\nprod_plan_preview=success\nprod_environment_synced={expect_prod_sync_conclusion.value}\n"
         )
+
+
+def test_prod_update_failure(
+    github_client,
+    make_controller,
+    make_mock_check_run,
+    make_mock_issue_comment,
+    make_pull_request_review,
+    tmp_path: pathlib.Path,
+    mocker: MockerFixture,
+):
+    """
+    Scenario:
+    - PR is not merged
+    - PR has been approved by a required reviewer
+    - Tests passed
+    - PR Merge Method defined
+    - Delete environment is enabled
+    - Prod environment update failed
+    """
+
+    make_test_prod_update_failure_case(
+        github_client=github_client,
+        make_controller=make_controller,
+        make_mock_check_run=make_mock_check_run,
+        make_mock_issue_comment=make_mock_issue_comment,
+        make_pull_request_review=make_pull_request_review,
+        tmp_path=tmp_path,
+        mocker=mocker,
+        to_raise_on_prod_plan=PlanError("Failed to update Prod environment"),
+        expect_prod_sync_conclusion=GithubCheckConclusion.ACTION_REQUIRED,
+    )
+
+
+def test_prod_update_conflict(
+    github_client,
+    make_controller,
+    make_mock_check_run,
+    make_mock_issue_comment,
+    make_pull_request_review,
+    tmp_path: pathlib.Path,
+    mocker: MockerFixture,
+):
+    """
+    Scenario:
+    - PR is not merged
+    - PR has been approved by a required reviewer
+    - Tests passed
+    - PR Merge Method defined
+    - Delete environment is enabled
+    - Prod environment update conflicted
+    """
+
+    make_test_prod_update_failure_case(
+        github_client=github_client,
+        make_controller=make_controller,
+        make_mock_check_run=make_mock_check_run,
+        make_mock_issue_comment=make_mock_issue_comment,
+        make_pull_request_review=make_pull_request_review,
+        tmp_path=tmp_path,
+        mocker=mocker,
+        to_raise_on_prod_plan=ConflictingPlanError("Plan a conflicts with plan b"),
+        expect_prod_sync_conclusion=GithubCheckConclusion.SKIPPED,
+    )
+
+
+def test_prod_update_exception(
+    github_client,
+    make_controller,
+    make_mock_check_run,
+    make_mock_issue_comment,
+    make_pull_request_review,
+    tmp_path: pathlib.Path,
+    mocker: MockerFixture,
+):
+    """
+    Scenario:
+    - PR is not merged
+    - PR has been approved by a required reviewer
+    - Tests passed
+    - PR Merge Method defined
+    - Delete environment is enabled
+    - Prod environment update fails with an unknown exception
+    """
+
+    make_test_prod_update_failure_case(
+        github_client=github_client,
+        make_controller=make_controller,
+        make_mock_check_run=make_mock_check_run,
+        make_mock_issue_comment=make_mock_issue_comment,
+        make_pull_request_review=make_pull_request_review,
+        tmp_path=tmp_path,
+        mocker=mocker,
+        to_raise_on_prod_plan=RuntimeError("boom"),
+        expect_prod_sync_conclusion=GithubCheckConclusion.FAILURE,
+    )
 
 
 def test_comment_command_invalid(
