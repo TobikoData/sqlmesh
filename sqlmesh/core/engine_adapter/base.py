@@ -1455,11 +1455,12 @@ class EngineAdapter:
                 )
             row_value_check = exp.or_(*row_check_conditions)
             unique_key_conditions = []
-            for col in unique_key:
-                t_col = col.copy()
-                t_col.this.set("this", f"t_{col.name}")
+            for key in unique_key:
+                t_key = key.copy()
+                for col in t_key.find_all(exp.Column):
+                    col.this.set("this", f"t_{col.name}")
                 unique_key_conditions.extend(
-                    [t_col.is_(exp.Null()).not_(), col.is_(exp.Null()).not_()]
+                    [t_key.is_(exp.Null()).not_(), key.is_(exp.Null()).not_()]
                 )
             unique_key_check = exp.and_(*unique_key_conditions)
             # unique_key_check is saying "if the row is updated"
