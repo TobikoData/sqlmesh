@@ -921,7 +921,7 @@ def make_test_prod_update_failure_case(
         output = f.read()
         assert (
             output
-            == "run_unit_tests=success\nhas_required_approval=success\ncreated_pr_environment=true\npr_environment_name=hello_world_2\npr_environment_synced=success\nprod_plan_preview=success\nprod_environment_synced=action_required\n"
+            == f"run_unit_tests=success\nhas_required_approval=success\ncreated_pr_environment=true\npr_environment_name=hello_world_2\npr_environment_synced=success\nprod_plan_preview=success\nprod_environment_synced={expect_prod_sync_conclusion.value}\n"
         )
 
 
