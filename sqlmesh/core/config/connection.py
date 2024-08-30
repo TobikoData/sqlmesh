@@ -13,7 +13,7 @@ from functools import partial
 from pydantic import Field
 from sqlglot import exp
 from sqlglot.helper import subclasses
-
+from functools import cached_property
 from sqlmesh.core import engine_adapter
 from sqlmesh.core.config.base import BaseConfig
 from sqlmesh.core.config.common import (
@@ -1427,7 +1427,21 @@ class ClickhouseConnectionConfig(ConnectionConfig):
 
     @property
     def _extra_engine_config(self) -> t.Dict[str, t.Any]:
-        return {"cluster": self.cluster}
+        return {"cluster": self.cluster, "cloud_mode": self._cloud_mode}
+
+    @cached_property
+    def _cloud_mode(self) -> bool:
+        # determine if connecting to cloud by querying system settings
+        conn = self._connection_factory(
+            **{k: v for k, v in self.dict().items() if k in self._connection_kwargs_keys}
+        )
+        cur = conn.cursor()
+        cur.execute("select value from system.settings where name='cloud_mode'")
+        cloud_mode = cur.fetchall()[0][0]
+        cur.close()
+        conn.close()
+
+        return cloud_mode == "1"
 
     @property
     def _static_connection_kwargs(self) -> t.Dict[str, t.Any]:
@@ -1440,7 +1454,13 @@ class ClickhouseConnectionConfig(ConnectionConfig):
         if compress and self.compression_method:
             compress = self.compression_method
 
-        return {"compress": compress, "client_name": f"SQLMesh/{__version__}"}
+        system_settings = {"mutations_sync": "2", "insert_distributed_sync": "1"}
+
+        if self.cluster or self._cloud_mode:
+            system_settings["database_replicated_enforce_synchronous_settings"] = "1"
+            system_settings["insert_quorum"] = "auto"
+
+        return {"compress": compress, "client_name": f"SQLMesh/{__version__}", **system_settings}
 
 
 CONNECTION_CONFIG_TO_TYPE = {
