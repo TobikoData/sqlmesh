@@ -422,7 +422,7 @@ class ModelConfig(BaseModelConfig):
                     "target_lag": self.target_lag,
                 }
 
-        return create_sql_model(
+        model = create_sql_model(
             self.canonical_name(context),
             query,
             dialect=model_dialect,
@@ -431,6 +431,12 @@ class ModelConfig(BaseModelConfig):
             **optional_kwargs,
             **model_kwargs,
         )
+        # Prepopulate the _full_depends_on cache with dependencies sourced directly from the manifest.
+        # This ensures that we bypass query rendering that would otherwise be required to extract additional
+        # dependencies from the model's SQL.
+        # Note: any table dependencies that are not referenced using the `ref` macro will not be included.
+        model._full_depends_on = model.depends_on_
+        return model
 
     def _dbt_max_partition_blob(self) -> t.Optional[str]:
         """Returns a SQL blob which declares the _dbt_max_partition variable. Only applicable to BigQuery."""
