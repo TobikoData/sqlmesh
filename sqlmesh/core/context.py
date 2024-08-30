@@ -860,17 +860,18 @@ class GenericContext(BaseContext, t.Generic[C]):
         self,
         transpile: t.Optional[str] = None,
         append_newline: t.Optional[bool] = None,
+        *,
+        check: t.Optional[bool] = None,
         **kwargs: t.Any,
-    ) -> None:
+    ) -> bool:
         """Format all SQL models and audits."""
         format_targets = {**self._models, **self._audits}
         for target in format_targets.values():
             if not target._path.suffix == ".sql":
                 continue
             with open(target._path, "r+", encoding="utf-8") as file:
-                expressions = parse(
-                    file.read(), default_dialect=self.config_for_node(target).dialect
-                )
+                before = file.read()
+                expressions = parse(before, default_dialect=self.config_for_node(target).dialect)
                 if transpile and is_meta_expression(expressions[0]):
                     for prop in expressions[0].expressions:
                         if prop.name.lower() == "dialect":
@@ -882,15 +883,18 @@ class GenericContext(BaseContext, t.Generic[C]):
                             )
                 format = self.config_for_node(target).format
                 opts = {**format.generator_options, **kwargs}
-                file.seek(0)
-                file.write(
-                    format_model_expressions(expressions, transpile or target.dialect, **opts)
-                )
+                after = format_model_expressions(expressions, transpile or target.dialect, **opts)
                 if append_newline is None:
                     append_newline = format.append_newline
                 if append_newline:
-                    file.write("\n")
-                file.truncate()
+                    after += "\n"
+                if not check:
+                    file.seek(0)
+                    file.write(after)
+                    file.truncate()
+                elif before != after:
+                    return False
+        return True
 
     @python_api_analytics
     def plan(

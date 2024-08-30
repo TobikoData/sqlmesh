@@ -437,3 +437,32 @@ options:
   --read READ    The input dialect of the sql string.
   --write WRITE  The output dialect of the sql string.
 ```
+
+#### format
+```
+%format [--transpile TRANSPILE] [--append-newline] [--normalize]
+              [--pad PAD] [--indent INDENT]
+              [--normalize-functions NORMALIZE_FUNCTIONS] [--leading-comma]
+              [--max-text-width MAX_TEXT_WIDTH] [--check]
+
+Format all SQL models and audits.
+
+options:
+  --transpile TRANSPILE, -t TRANSPILE
+                        Transpile project models to the specified dialect.
+  --append-newline      Whether or not to append a newline to the end of the
+                        file.
+  --normalize           Whether or not to normalize identifiers to lowercase.
+  --pad PAD             Determines the pad size in a formatted string.
+  --indent INDENT       Determines the indentation size in a formatted string.
+  --normalize-functions NORMALIZE_FUNCTIONS
+                        Whether or not to normalize all function names.
+                        Possible values are: 'upper', 'lower'
+  --leading-comma       Determines whether or not the comma is leading or
+                        trailing in select expressions. Default is trailing.
+  --max-text-width MAX_TEXT_WIDTH
+                        The max number of characters in a segment before
+                        creating new lines in pretty mode.
+  --check               Whether or not to check formatting (but not actually
+                        format anything).
+```

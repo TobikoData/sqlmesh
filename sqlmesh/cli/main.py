@@ -255,12 +255,19 @@ def evaluate(
     type=int,
     help="The max number of characters in a segment before creating new lines in pretty mode.",
 )
+@click.option(
+    "--check",
+    is_flag=True,
+    help="Whether or not to check formatting (but not actually format anything).",
+    default=None,
+)
 @click.pass_context
 @error_handler
 @cli_analytics
 def format(ctx: click.Context, **kwargs: t.Any) -> None:
     """Format all SQL models and audits."""
-    ctx.obj.format(**{k: v for k, v in kwargs.items() if v is not None})
+    if not ctx.obj.format(**{k: v for k, v in kwargs.items() if v is not None}):
+        ctx.exit(1)
 
 
 @cli.command("diff")
