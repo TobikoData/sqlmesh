@@ -952,7 +952,7 @@ def test_prod_update_failure(
         make_pull_request_review=make_pull_request_review,
         tmp_path=tmp_path,
         mocker=mocker,
-        raise_on_prod_plan=PlanError("Failed to update Prod environment"),
+        to_raise_on_prod_plan=PlanError("Failed to update Prod environment"),
         expect_prod_sync_conclusion=GithubCheckConclusion.ACTION_REQUIRED,
     )
 
@@ -984,7 +984,7 @@ def test_prod_update_conflict(
         make_pull_request_review=make_pull_request_review,
         tmp_path=tmp_path,
         mocker=mocker,
-        raise_on_prod_plan=ConflictingPlanError("Plan a conflicts with plan b"),
+        to_raise_on_prod_plan=ConflictingPlanError("Plan a conflicts with plan b"),
         expect_prod_sync_conclusion=GithubCheckConclusion.SKIPPED,
     )
 
@@ -1016,7 +1016,7 @@ def test_prod_update_exception(
         make_pull_request_review=make_pull_request_review,
         tmp_path=tmp_path,
         mocker=mocker,
-        raise_on_prod_plan=RuntimeError("boom"),
+        to_raise_on_prod_plan=RuntimeError("boom"),
         expect_prod_sync_conclusion=GithubCheckConclusion.FAILURE,
     )
 
