@@ -72,7 +72,7 @@ from sqlmesh.core.state_sync.common import transactional
 from sqlmesh.utils import major_minor, random_id, unique
 from sqlmesh.utils.dag import DAG
 from sqlmesh.utils.date import TimeLike, now, now_timestamp, time_like_to_str, to_timestamp
-from sqlmesh.utils.errors import SQLMeshError
+from sqlmesh.utils.errors import ConflictingPlanError, SQLMeshError
 
 logger = logging.getLogger(__name__)
 
@@ -286,7 +286,7 @@ class EngineAdapterStateSync(StateSync):
             }
             if not existing_environment.expired:
                 if environment.previous_plan_id != existing_environment.plan_id:
-                    raise SQLMeshError(
+                    raise ConflictingPlanError(
                         f"Plan '{environment.plan_id}' is no longer valid for the target environment '{environment.name}'. "
                         f"Expected previous plan ID: '{environment.previous_plan_id}', actual previous plan ID: '{existing_environment.plan_id}'. "
                         "Please recreate the plan and try again"
