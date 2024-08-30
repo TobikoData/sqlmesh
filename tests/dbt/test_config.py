@@ -789,3 +789,22 @@ def test_variable_override():
         variables={"yet_another_var": 2, "start": "2021-01-01"},
     )
     assert project.packages["sushi"].variables["yet_another_var"] == 2
+
+
+def test_depends_on(assert_exp_eq, sushi_test_project):
+    # Case 1: using an undefined variable without a default value
+    context = sushi_test_project.context
+
+    model_config = ModelConfig(
+        alias="sushi.test",
+        sql="SELECT * FROM {{ ref('waiter_revenue_by_day') }} JOIN other_table",
+        dependencies=Dependencies(refs=["waiter_revenue_by_day"]),
+    )
+
+    sqlmesh_model = model_config.to_sqlmesh(context)
+    assert sqlmesh_model.depends_on_ == {'"memory"."sushi"."waiter_revenue_by_day_v2"'}
+    assert sqlmesh_model.depends_on == {'"memory"."sushi"."waiter_revenue_by_day_v2"'}
+    assert sqlmesh_model.full_depends_on == {'"memory"."sushi"."waiter_revenue_by_day_v2"'}
+
+    # Make sure the query wasn't rendered
+    assert not sqlmesh_model._query_renderer._cache
