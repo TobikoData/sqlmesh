@@ -1719,6 +1719,198 @@ SELECT CAST("id" AS INT) AS "id", CAST("name" AS VARCHAR) AS "name", CAST("price
     )
 
 
+def test_scd_type_2_by_column_composite_key(make_mocked_engine_adapter: t.Callable):
+    adapter = make_mocked_engine_adapter(EngineAdapter)
+
+    adapter.scd_type_2_by_column(
+        target_table="target",
+        source_table=t.cast(exp.Select, parse_one("SELECT id_a, id_b, name, price FROM source")),
+        unique_key=[exp.func("CONCAT", exp.column("id_a"), exp.column("id_b"))],
+        valid_from_col=exp.column("test_VALID_from", quoted=True),
+        valid_to_col=exp.column("test_valid_to", quoted=True),
+        check_columns=[exp.column("name"), exp.column("price")],
+        columns_to_types={
+            "id_a": exp.DataType.build("VARCHAR"),
+            "id_b": exp.DataType.build("VARCHAR"),
+            "name": exp.DataType.build("VARCHAR"),
+            "price": exp.DataType.build("DOUBLE"),
+            "test_VALID_from": exp.DataType.build("TIMESTAMP"),
+            "test_valid_to": exp.DataType.build("TIMESTAMP"),
+        },
+        execution_time=datetime(2020, 1, 1, 0, 0, 0),
+    )
+
+    assert (
+        adapter.cursor.execute.call_args[0][0]
+        == parse_one(
+            """
+CREATE OR REPLACE TABLE "target" AS
+WITH "source" AS (
+  SELECT DISTINCT ON (CONCAT("id_a", "id_b"))
+    TRUE AS "_exists",
+    "id_a",
+    "id_b",
+    "name",
+    "price",
+  FROM (
+    SELECT
+      "id_a",
+      "id_b",
+      "name",
+      "price"
+    FROM "source"
+  ) AS "raw_source"
+), "static" AS (
+  SELECT
+    "id_a",
+    "id_b",
+    "name",
+    "price",
+    "test_VALID_from",
+    "test_valid_to",
+    TRUE AS "_exists"
+  FROM "target"
+  WHERE
+    NOT "test_valid_to" IS NULL
+), "latest" AS (
+  SELECT
+    "id_a",
+    "id_b",
+    "name",
+    "price",
+    "test_VALID_from",
+    "test_valid_to",
+    TRUE AS "_exists"
+  FROM "target"
+  WHERE
+    "test_valid_to" IS NULL
+), "deleted" AS (
+  SELECT
+    "static"."id_a",
+    "static"."id_b",
+    "static"."name",
+    "static"."price",
+    "static"."test_VALID_from",
+    "static"."test_valid_to"
+  FROM "static"
+  LEFT JOIN "latest"
+    ON CONCAT("static"."id_a", "static"."id_b") = CONCAT("latest"."id_a", "latest"."id_b")
+  WHERE
+    "latest"."test_valid_to" IS NULL
+), "latest_deleted" AS (
+  SELECT
+    TRUE AS "_exists",
+    CONCAT("id_a", "id_b") AS "_key0",
+    MAX("test_valid_to") AS "test_valid_to"
+  FROM "deleted"
+  GROUP BY
+    CONCAT("id_a", "id_b")
+), "joined" AS (
+  SELECT
+    "source"."_exists" AS "_exists",
+    "latest"."id_a" AS "t_id_a",
+    "latest"."id_b" AS "t_id_b",
+    "latest"."name" AS "t_name",
+    "latest"."price" AS "t_price",
+    "latest"."test_VALID_from" AS "t_test_VALID_from",
+    "latest"."test_valid_to" AS "t_test_valid_to",
+    "source"."id_a" AS "id_a",
+    "source"."id_b" AS "id_b",
+    "source"."name" AS "name",
+    "source"."price" AS "price"
+  FROM "latest"
+  LEFT JOIN "source"
+    ON CONCAT("latest"."id_a", "latest"."id_b") = CONCAT("source"."id_a", "source"."id_b")
+  UNION ALL
+  SELECT
+    "source"."_exists" AS "_exists",
+    "latest"."id_a" AS "t_id_a",
+    "latest"."id_b" AS "t_id_b",
+    "latest"."name" AS "t_name",
+    "latest"."price" AS "t_price",
+    "latest"."test_VALID_from" AS "t_test_VALID_from",
+    "latest"."test_valid_to" AS "t_test_valid_to",
+    "source"."id_a" AS "id_a",
+    "source"."id_b" AS "id_b",
+    "source"."name" AS "name",
+    "source"."price" AS "price"
+  FROM "latest"
+  RIGHT JOIN "source"
+    ON CONCAT("latest"."id_a", "latest"."id_b") = CONCAT("source"."id_a", "source"."id_b")
+  WHERE
+    "latest"."_exists" IS NULL
+), "updated_rows" AS (
+  SELECT
+    COALESCE("joined"."t_id_a", "joined"."id_a") AS "id_a",
+    COALESCE("joined"."t_id_b", "joined"."id_b") AS "id_b",
+    COALESCE("joined"."t_name", "joined"."name") AS "name",
+    COALESCE("joined"."t_price", "joined"."price") AS "price",
+    COALESCE("t_test_VALID_from", CAST('1970-01-01 00:00:00' AS TIMESTAMP)) AS "test_VALID_from",
+    CASE
+      WHEN "joined"."_exists" IS NULL
+      OR (
+        (
+          NOT CONCAT("t_id_a", "t_id_b") IS NULL AND NOT CONCAT("id_a", "id_b") IS NULL
+        )
+        AND (
+          "name" <> "t_name"
+          OR (
+            "t_name" IS NULL AND NOT "name" IS NULL
+          )
+          OR (
+            NOT "t_name" IS NULL AND "name" IS NULL
+          )
+          OR "price" <> "t_price"
+          OR (
+            "t_price" IS NULL AND NOT "price" IS NULL
+          )
+          OR (
+            NOT "t_price" IS NULL AND "price" IS NULL
+          )
+        )
+      )
+      THEN CAST('2020-01-01 00:00:00' AS TIMESTAMP)
+      ELSE "t_test_valid_to"
+    END AS "test_valid_to"
+  FROM "joined"
+  LEFT JOIN "latest_deleted"
+    ON CONCAT("joined"."id_a", "joined"."id_b") = "latest_deleted"."_key0"
+), "inserted_rows" AS (
+  SELECT
+    "id_a",
+    "id_b",
+    "name",
+    "price",
+    CAST('2020-01-01 00:00:00' AS TIMESTAMP) AS "test_VALID_from",
+    CAST(NULL AS TIMESTAMP) AS "test_valid_to"
+  FROM "joined"
+  WHERE
+    (
+      NOT CONCAT("t_id_a", "t_id_b") IS NULL AND NOT CONCAT("id_a", "id_b") IS NULL
+    )
+    AND (
+      "name" <> "t_name"
+      OR (
+        "t_name" IS NULL AND NOT "name" IS NULL
+      )
+      OR (
+        NOT "t_name" IS NULL AND "name" IS NULL
+      )
+      OR "price" <> "t_price"
+      OR (
+        "t_price" IS NULL AND NOT "price" IS NULL
+      )
+      OR (
+        NOT "t_price" IS NULL AND "price" IS NULL
+      )
+    )
+)
+SELECT CAST("id_a" AS VARCHAR) AS "id_a", CAST("id_b" AS VARCHAR) AS "id_b", CAST("name" AS VARCHAR) AS "name", CAST("price" AS DOUBLE) AS "price", CAST("test_VALID_from" AS TIMESTAMP) AS "test_VALID_from", CAST("test_valid_to" AS TIMESTAMP) AS "test_valid_to" FROM (SELECT "id_a", "id_b", "name", "price", "test_VALID_from", "test_valid_to" FROM "static" UNION ALL SELECT "id_a", "id_b", "name", "price", "test_VALID_from", "test_valid_to" FROM "updated_rows" UNION ALL SELECT "id_a", "id_b", "name", "price", "test_VALID_from", "test_valid_to" FROM "inserted_rows") AS "_subquery"
+    """
+        ).sql()
+    )
+
+
 def test_scd_type_2_truncate(make_mocked_engine_adapter: t.Callable):
     adapter = make_mocked_engine_adapter(EngineAdapter)
 
