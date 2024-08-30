@@ -168,8 +168,8 @@ class SushiDataValidator:
             expected_dates = [
                 pd.to_datetime(end_date - datetime.timedelta(days=x)) for x in range(num_days_diff)
             ]
-            # all engines but duckdb fetch dates as datetime.date objects
-            if dialect and dialect != "duckdb":
+            # all engines but duckdb and clickhouse fetch dates as datetime.date objects
+            if dialect and dialect not in ("duckdb", "clickhouse"):
                 expected_dates = [x.date() for x in expected_dates]  # type: ignore
             assert list(results["event_date"].values()) == expected_dates
 
@@ -435,9 +435,11 @@ def make_mocked_engine_adapter(mocker: MockerFixture) -> t.Callable:
 @pytest.fixture
 def copy_to_temp_path(tmp_path: Path) -> t.Callable:
     def ignore(src, names):
+        # do not copy any sub-dirs if current dir is named one of these
         if Path(src).name in {".cache", "__pycache__", "logs", "data", "target"}:
             return names
-        return []
+        # do not copy sub-dirs named ".cache" for any current dir
+        return [name for name in names if name == ".cache"]
 
     def _make_function(
         paths: t.Union[t.Union[str, Path], t.Collection[t.Union[str, Path]]],

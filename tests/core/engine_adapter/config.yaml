@@ -75,6 +75,28 @@ gateways:
       password: mysql
       port: 3306
       charset: utf8
+  inttest_clickhouse:
+    connection:
+      type: clickhouse
+      host: localhost
+      port: 8123
+      username: clickhouse
+      password: clickhouse
+      concurrent_tasks: 1
+    state_connection:
+      type: duckdb
+  inttest_clickhouse_cluster:
+    connection:
+      type: clickhouse
+      host: localhost
+      port: 8123
+      username: clickhouse
+      password: clickhouse
+      cluster: cluster1
+      concurrent_tasks: 1
+    state_connection:
+      type: duckdb
+
 
   # Cloud databases
   inttest_snowflake:
@@ -116,6 +138,17 @@ gateways:
       type: bigquery
       method: service-account
       keyfile: {{ env_var('BIGQUERY_KEYFILE') }}
+      concurrent_tasks: 1
+    state_connection:
+      type: duckdb
+
+  inttest_clickhouse_cloud:
+    connection:
+      type: clickhouse
+      host: {{ env_var("CLICKHOUSE_CLOUD_HOST") }}
+      port: 8443
+      username: {{ env_var("CLICKHOUSE_CLOUD_USERNAME") }}
+      password: {{ env_var("CLICKHOUSE_CLOUD_PASSWORD") }}
       concurrent_tasks: 1
     state_connection:
       type: duckdb

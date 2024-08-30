@@ -1,0 +1,40 @@
+<clickhouse>
+    <logger>
+        <console>1</console>
+        <level>warning</level>
+    </logger>
+    <listen_host>0.0.0.0</listen_host>
+    <remote_servers>
+        <cluster1>
+            <shard>
+                <replica>
+                    <host>clickhouse-1</host>
+                    <port>9000</port>
+                </replica>
+                <replica>
+                    <host>clickhouse-2</host>
+                    <port>9000</port>
+                </replica>
+                <replica>
+                    <host>clickhouse-3</host>
+                    <port>9000</port>
+                </replica>
+            </shard>
+        </cluster1>
+    </remote_servers>
+    <macros>
+        <shard>01</shard>
+        <replica from_env="MACRO_REPLICA" />
+        <cluster>cluster1</cluster>
+    </macros>
+    <zookeeper>
+        <node index="1">
+            <host>keeper</host>
+            <port>2181</port>
+        </node>
+    </zookeeper>
+    <jdbc_bridge>
+        <host>jdbc-bridge</host>
+        <port>9019</port>
+    </jdbc_bridge>
+</clickhouse>

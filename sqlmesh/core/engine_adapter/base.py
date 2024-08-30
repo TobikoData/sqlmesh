@@ -33,6 +33,7 @@ from sqlmesh.core.engine_adapter.shared import (
     CommentCreationTable,
     CommentCreationView,
     DataObject,
+    EngineRunMode,
     InsertOverwriteStrategy,
     SourceQuery,
     set_catalog,
@@ -89,12 +90,12 @@ class EngineAdapter:
     INSERT_OVERWRITE_STRATEGY = InsertOverwriteStrategy.DELETE_INSERT
     SUPPORTS_MATERIALIZED_VIEWS = False
     SUPPORTS_MATERIALIZED_VIEW_SCHEMA = False
+    SUPPORTS_VIEW_SCHEMA = True
     SUPPORTS_CLONING = False
     SUPPORTS_MANAGED_MODELS = False
     SCHEMA_DIFFER = SchemaDiffer()
     SUPPORTS_TUPLE_IN = True
     CATALOG_SUPPORT = CatalogSupport.UNSUPPORTED
-    SUPPORTS_ROW_LEVEL_OP = True
     HAS_VIEW_BINDING = False
     SUPPORTS_REPLACE_TABLE = True
     DEFAULT_CATALOG_TYPE = DIALECT
@@ -175,6 +176,10 @@ class EngineAdapter:
         if not default_catalog:
             raise SQLMeshError("Could not determine a default catalog despite it being supported.")
         return default_catalog
+
+    @property
+    def engine_run_mode(self) -> EngineRunMode:
+        return EngineRunMode.SINGLE_MODE_ENGINE
 
     def _get_source_queries(
         self,
@@ -780,6 +785,7 @@ class EngineAdapter:
         target_table_name: TableName,
         source_table_name: TableName,
         exists: bool = True,
+        **kwargs: t.Any,
     ) -> None:
         """Create a table to store SQLMesh internal state based on the definition of another table, including any
         column attributes and indexes defined in the original table.
@@ -827,7 +833,7 @@ class EngineAdapter:
             table_name: The name of the table to drop.
             exists: If exists, defaults to True.
         """
-        self._drop_tablelike_object(table_name, exists)
+        self._drop_object(name=table_name, exists=exists)
 
     def drop_managed_table(self, table_name: TableName, exists: bool = True) -> None:
         """Drops a managed table.
@@ -838,20 +844,24 @@ class EngineAdapter:
         """
         raise NotImplementedError(f"Engine does not support managed tables: {type(self)}")
 
-    def _drop_tablelike_object(
-        self, table_name: TableName, exists: bool = True, kind: str = "TABLE"
+    def _drop_object(
+        self,
+        name: TableName | SchemaName,
+        exists: bool = True,
+        kind: str = "TABLE",
+        **drop_args: t.Any,
     ) -> None:
-        """Drops a "tablelike object".
+        """Drops an object.
 
-        A "tablelike object" could be a TABLE or a DYNAMIC TABLE or a TEMPORARY TABLE etc depending on the context.
+        An object could be a DATABASE, SCHEMA, VIEW, TABLE, DYNAMIC TABLE, TEMPORARY TABLE etc depending on the :kind.
 
         Args:
-            table_name: The name of the table to drop.
+            name: The name of the table to drop.
             exists: If exists, defaults to True.
             kind: What kind of object to drop. Defaults to TABLE
+            **drop_args: Any extra arguments to set on the Drop expression
         """
-        drop_expression = exp.Drop(this=exp.to_table(table_name), kind=kind, exists=exists)
-        self.execute(drop_expression)
+        self.execute(exp.Drop(this=exp.to_table(name), kind=kind, exists=exists, **drop_args))
 
     def get_alter_expressions(
         self,
@@ -942,6 +952,9 @@ class EngineAdapter:
             if not self.SUPPORTS_MATERIALIZED_VIEW_SCHEMA and isinstance(schema, exp.Schema):
                 schema = schema.this
 
+        if not self.SUPPORTS_VIEW_SCHEMA and isinstance(schema, exp.Schema):
+            schema = schema.this
+
         create_view_properties = self._build_view_properties_exp(
             view_properties,
             (
@@ -949,6 +962,7 @@ class EngineAdapter:
                 if self.COMMENT_CREATION_VIEW.supports_schema_def and self.comments_enabled
                 else None
             ),
+            physical_cluster=create_kwargs.pop("physical_cluster", None),
         )
         if create_view_properties:
             for view_property in create_view_properties.expressions:
@@ -998,34 +1012,54 @@ class EngineAdapter:
         schema_name: SchemaName,
         ignore_if_exists: bool = True,
         warn_on_error: bool = True,
+        properties: t.List[exp.Expression] = [],
+    ) -> None:
+        return self._create_schema(
+            schema_name=schema_name,
+            ignore_if_exists=ignore_if_exists,
+            warn_on_error=warn_on_error,
+            properties=properties,
+            kind="SCHEMA",
+        )
+
+    def _create_schema(
+        self,
+        schema_name: SchemaName,
+        ignore_if_exists: bool,
+        warn_on_error: bool,
+        properties: t.List[exp.Expression],
+        kind: str,
     ) -> None:
         """Create a schema from a name or qualified table name."""
         try:
             self.execute(
                 exp.Create(
                     this=to_schema(schema_name),
-                    kind="SCHEMA",
+                    kind=kind,
                     exists=ignore_if_exists,
+                    properties=exp.Properties(  # this renders as '' (empty string) if expressions is empty
+                        expressions=properties
+                    ),
                 )
             )
         except Exception as e:
             if not warn_on_error:
                 raise
-            logger.warning("Failed to create schema '%s': %s", schema_name, e)
+            logger.warning("Failed to create %s '%s': %s", kind.lower(), schema_name, e)
 
     def drop_schema(
         self,
         schema_name: SchemaName,
         ignore_if_not_exists: bool = True,
         cascade: bool = False,
+        **drop_args: t.Dict[str, exp.Expression],
     ) -> None:
-        self.execute(
-            exp.Drop(
-                this=to_schema(schema_name),
-                kind="SCHEMA",
-                exists=ignore_if_not_exists,
-                cascade=cascade,
-            )
+        return self._drop_object(
+            name=schema_name,
+            exists=ignore_if_not_exists,
+            kind="SCHEMA",
+            cascade=cascade,
+            **drop_args,
         )
 
     def drop_view(
@@ -1563,7 +1597,7 @@ class EngineAdapter:
                 .with_(
                     "joined",
                     exp.select(
-                        exp.column("_exists", table="source"),
+                        exp.column("_exists", table="source").as_("_exists"),
                         *(
                             exp.column(col, table="latest").as_(prefixed_columns_to_types[i].this)
                             for i, col in enumerate(columns_to_types)
@@ -1586,7 +1620,7 @@ class EngineAdapter:
                     )
                     .union(
                         exp.select(
-                            exp.column("_exists", table="source"),
+                            exp.column("_exists", table="source").as_("_exists"),
                             *(
                                 exp.column(col, table="latest").as_(
                                     prefixed_columns_to_types[i].this
@@ -2010,6 +2044,7 @@ class EngineAdapter:
         self,
         view_properties: t.Optional[t.Dict[str, exp.Expression]] = None,
         table_description: t.Optional[str] = None,
+        **kwargs: t.Any,
     ) -> t.Optional[exp.Properties]:
         """Creates a SQLGlot table properties expression for view"""
         properties: t.List[exp.Expression] = []

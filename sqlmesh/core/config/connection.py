@@ -39,6 +39,13 @@ else:
 logger = logging.getLogger(__name__)
 
 RECOMMENDED_STATE_SYNC_ENGINES = {"postgres", "gcp_postgres", "mysql", "duckdb"}
+FORBIDDEN_STATE_SYNC_ENGINES = {
+    # Do not support row-level operations
+    "spark",
+    "trino",
+    # Nullable types are problematic
+    "clickhouse",
+}
 
 
 class ConnectionConfig(abc.ABC, BaseConfig):
@@ -84,8 +91,13 @@ class ConnectionConfig(abc.ABC, BaseConfig):
 
     @property
     def is_recommended_for_state_sync(self) -> bool:
-        """Whether this connection is recommended for being used as a state sync for production state syncs"""
+        """Whether this engine is recommended for being used as a state sync for production state syncs"""
         return self.type_ in RECOMMENDED_STATE_SYNC_ENGINES
+
+    @property
+    def is_forbidden_for_state_sync(self) -> bool:
+        """Whether this engine is forbidden from being used as a state sync"""
+        return self.type_ in FORBIDDEN_STATE_SYNC_ENGINES
 
     @property
     def _connection_factory_with_kwargs(self) -> t.Callable[[], t.Any]:
@@ -1362,6 +1374,73 @@ class TrinoConnectionConfig(ConnectionConfig):
             "verify": self.cert if self.cert is not None else self.verify,
             "source": "sqlmesh",
         }
+
+
+class ClickhouseConnectionConfig(ConnectionConfig):
+    """
+    Clickhouse Connection Configuration.
+
+    Property reference: https://clickhouse.com/docs/en/integrations/python#client-initialization
+    """
+
+    host: str
+    username: str
+    password: t.Optional[str] = None
+    port: t.Optional[int] = None
+    cluster: t.Optional[str] = None
+    connect_timeout: int = 10
+    send_receive_timeout: int = 300
+    verify: bool = True
+    query_limit: int = 0
+    use_compression: bool = True
+    compression_method: t.Optional[str] = None
+
+    concurrent_tasks: int = 1
+    register_comments: bool = True
+    pre_ping: bool = False
+
+    type_: Literal["clickhouse"] = Field(alias="type", default="clickhouse")
+
+    @property
+    def _connection_kwargs_keys(self) -> t.Set[str]:
+        kwargs = {
+            "host",
+            "username",
+            "port",
+            "password",
+            "connect_timeout",
+            "send_receive_timeout",
+            "verify",
+            "query_limit",
+        }
+        return kwargs
+
+    @property
+    def _engine_adapter(self) -> t.Type[EngineAdapter]:
+        return engine_adapter.ClickhouseEngineAdapter
+
+    @property
+    def _connection_factory(self) -> t.Callable:
+        from clickhouse_connect.dbapi import connect  # type: ignore
+
+        return connect
+
+    @property
+    def _extra_engine_config(self) -> t.Dict[str, t.Any]:
+        return {"cluster": self.cluster}
+
+    @property
+    def _static_connection_kwargs(self) -> t.Dict[str, t.Any]:
+        from sqlmesh import __version__
+
+        # False = no compression
+        # True = Clickhouse default compression method
+        # string = specific compression method
+        compress: bool | str = self.use_compression
+        if compress and self.compression_method:
+            compress = self.compression_method
+
+        return {"compress": compress, "client_name": f"SQLMesh/{__version__}"}
 
 
 CONNECTION_CONFIG_TO_TYPE = {

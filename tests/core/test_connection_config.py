@@ -6,6 +6,7 @@ from _pytest.fixtures import FixtureRequest
 
 from sqlmesh.core.config.connection import (
     BigQueryConnectionConfig,
+    ClickhouseConnectionConfig,
     ConnectionConfig,
     DuckDBAttachOptions,
     DuckDBConnectionConfig,
@@ -622,3 +623,46 @@ def test_mysql(make_config):
     )
     assert isinstance(config, MySQLConnectionConfig)
     assert config.is_recommended_for_state_sync is True
+
+
+def test_clickhouse(make_config):
+    from sqlmesh import __version__
+
+    config = make_config(
+        type="clickhouse",
+        host="localhost",
+        username="default",
+        password="default",
+        cluster="default",
+        use_compression=True,
+    )
+    assert isinstance(config, ClickhouseConnectionConfig)
+    assert config.cluster == "default"
+    assert config.use_compression
+    assert config._static_connection_kwargs["compress"]
+    assert config._static_connection_kwargs["client_name"] == f"SQLMesh/{__version__}"
+    assert config.is_recommended_for_state_sync is False
+    assert config.is_forbidden_for_state_sync
+
+    config2 = make_config(
+        type="clickhouse",
+        host="localhost",
+        username="default",
+        password="default",
+        compression_method="lz4",
+    )
+
+    assert config2.use_compression
+    assert config2._static_connection_kwargs["compress"] == "lz4"
+
+    config3 = make_config(
+        type="clickhouse",
+        host="localhost",
+        username="default",
+        password="default",
+        use_compression=False,
+        compression_method="lz4",
+    )
+
+    assert not config3.use_compression
+    assert not config3._static_connection_kwargs["compress"]

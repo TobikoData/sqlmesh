@@ -10,7 +10,7 @@ install-doc:
 	pip3 install -r ./docs/requirements.txt
 
 install-engine-test:
-	pip3 install -e ".[dev,web,slack,mysql,postgres,databricks,redshift,bigquery,snowflake,trino,mssql]"
+	pip3 install -e ".[dev,web,slack,mysql,postgres,databricks,redshift,bigquery,snowflake,trino,mssql,clickhouse]"
 
 install-pre-commit:
 	pre-commit install
@@ -86,9 +86,9 @@ dev-publish: ui-build clean-build publish
 jupyter-example:
 	jupyter lab tests/slows/jupyter/example_outputs.ipynb
 
-engine-up: engine-mssql-up engine-mysql-up engine-postgres-up engine-spark-up engine-trino-up
+engine-up: engine-clickhouse-up engine-mssql-up engine-mysql-up engine-postgres-up engine-spark-up engine-trino-up
 
-engine-down: engine-mssql-down engine-mysql-down engine-postgres-down engine-spark-down engine-trino-down
+engine-down: engine-clickhouse-down engine-mssql-down engine-mysql-down engine-postgres-down engine-spark-down engine-trino-down
 
 fast-test:
 	pytest -n auto -m "fast and not cicdonly"
@@ -166,6 +166,12 @@ engine-%-down:
 # Docker Engines #
 ##################
 
+clickhouse-test: engine-clickhouse-up
+	pytest -n auto -x -m "clickhouse" --junitxml=test-results/junit-clickhouse.xml
+
+clickhouse-cluster-test: engine-clickhouse-up
+	pytest -n auto -x -m "clickhouse_cluster" --junitxml=test-results/junit-clickhouse-cluster.xml
+
 duckdb-test: engine-duckdb-install
 	pytest -n auto -x -m "duckdb" --junitxml=test-results/junit-duckdb.xml
 
@@ -200,3 +206,6 @@ databricks-test: guard-DATABRICKS_CATALOG guard-DATABRICKS_SERVER_HOSTNAME guard
 
 redshift-test: guard-REDSHIFT_HOST guard-REDSHIFT_USER guard-REDSHIFT_PASSWORD guard-REDSHIFT_DATABASE engine-redshift-install
 	pytest -n auto -x -m "redshift" --junitxml=test-results/junit-redshift.xml
+
+clickhouse-cloud-test: guard-CLICKHOUSE_CLOUD_HOST guard-CLICKHOUSE_CLOUD_USERNAME guard-CLICKHOUSE_CLOUD_PASSWORD engine-clickhouse-install
+	pytest -n auto -x -m "clickhouse_cloud" --junitxml=test-results/junit-clickhouse-cloud.xml

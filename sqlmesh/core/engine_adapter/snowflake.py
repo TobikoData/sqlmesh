@@ -152,7 +152,7 @@ class SnowflakeEngineAdapter(GetCurrentCatalogFromFunctionMixin):
         )
 
     def drop_managed_table(self, table_name: TableName, exists: bool = True) -> None:
-        self._drop_tablelike_object(table_name, exists, kind=self.MANAGED_TABLE_KIND)
+        self._drop_object(table_name, exists, kind=self.MANAGED_TABLE_KIND)
 
     def _build_table_properties_exp(
         self,

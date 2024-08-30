@@ -1069,7 +1069,7 @@ WITH "source" AS (
     COALESCE("name", '')
 ), "joined" AS (
   SELECT
-    "source"."_exists",
+    "source"."_exists" AS "_exists",
     "latest"."id" AS "t_id",
     "latest"."name" AS "t_name",
     "latest"."price" AS "t_price",
@@ -1090,7 +1090,7 @@ WITH "source" AS (
     AND COALESCE("latest"."name", '') = COALESCE("source"."name", '')
   UNION ALL
   SELECT
-    "source"."_exists",
+    "source"."_exists" AS "_exists",
     "latest"."id" AS "t_id",
     "latest"."name" AS "t_name",
     "latest"."price" AS "t_price",
@@ -1261,7 +1261,7 @@ WITH "source" AS (
     COALESCE("id", '')
 ), "joined" AS (
   SELECT
-    "source"."_exists",
+    "source"."_exists" AS "_exists",
     "latest"."id" AS "t_id",
     "latest"."name" AS "t_name",
     "latest"."price" AS "t_price",
@@ -1277,7 +1277,7 @@ WITH "source" AS (
     ON COALESCE("latest"."id", '') = COALESCE("source"."id", '')
   UNION ALL
   SELECT
-    "source"."_exists",
+    "source"."_exists" AS "_exists",
     "latest"."id" AS "t_id",
     "latest"."name" AS "t_name",
     "latest"."price" AS "t_price",
@@ -1455,7 +1455,7 @@ WITH "source" AS (
     "id2"
 ), "joined" AS (
   SELECT
-    "source"."_exists",
+    "source"."_exists" AS "_exists",
     "latest"."id1" AS "t_id1",
     "latest"."id2" AS "t_id2",
     "latest"."name" AS "t_name",
@@ -1473,7 +1473,7 @@ WITH "source" AS (
     ON "latest"."id1" = "source"."id1" AND "latest"."id2" = "source"."id2"
   UNION ALL
   SELECT
-    "source"."_exists",
+    "source"."_exists" AS "_exists",
     "latest"."id1" AS "t_id1",
     "latest"."id2" AS "t_id2",
     "latest"."name" AS "t_name",
@@ -1621,7 +1621,7 @@ WITH "source" AS (
     "id"
 ), "joined" AS (
   SELECT
-    "source"."_exists",
+    "source"."_exists" AS "_exists",
     "latest"."id" AS "t_id",
     "latest"."name" AS "t_name",
     "latest"."price" AS "t_price",
@@ -1635,7 +1635,7 @@ WITH "source" AS (
     ON "latest"."id" = "source"."id"
   UNION ALL
   SELECT
-    "source"."_exists",
+    "source"."_exists" AS "_exists",
     "latest"."id" AS "t_id",
     "latest"."name" AS "t_name",
     "latest"."price" AS "t_price",
@@ -1804,7 +1804,7 @@ WITH "source" AS (
     "id"
 ), "joined" AS (
   SELECT
-    "source"."_exists",
+    "source"."_exists" AS "_exists",
     "latest"."id" AS "t_id",
     "latest"."name" AS "t_name",
     "latest"."price" AS "t_price",
@@ -1818,7 +1818,7 @@ WITH "source" AS (
     ON "latest"."id" = "source"."id"
   UNION ALL
   SELECT
-    "source"."_exists",
+    "source"."_exists" AS "_exists",
     "latest"."id" AS "t_id",
     "latest"."name" AS "t_name",
     "latest"."price" AS "t_price",
@@ -1984,7 +1984,7 @@ WITH "source" AS (
     "id"
 ), "joined" AS (
   SELECT
-    "source"."_exists",
+    "source"."_exists" AS "_exists",
     "latest"."id" AS "t_id",
     "latest"."name" AS "t_name",
     "latest"."price" AS "t_price",
@@ -1998,7 +1998,7 @@ WITH "source" AS (
     ON "latest"."id" = "source"."id"
   UNION ALL
   SELECT
-    "source"."_exists",
+    "source"."_exists" AS "_exists",
     "latest"."id" AS "t_id",
     "latest"."name" AS "t_name",
     "latest"."price" AS "t_price",
@@ -2179,7 +2179,7 @@ WITH "source" AS (
     "id"
 ), "joined" AS (
   SELECT
-    "source"."_exists",
+    "source"."_exists" AS "_exists",
     "latest"."id" AS "t_id",
     "latest"."name" AS "t_name",
     "latest"."price" AS "t_price",
@@ -2193,7 +2193,7 @@ WITH "source" AS (
     ON "latest"."id" = "source"."id"
   UNION ALL
   SELECT
-    "source"."_exists",
+    "source"."_exists" AS "_exists",
     "latest"."id" AS "t_id",
     "latest"."name" AS "t_name",
     "latest"."price" AS "t_price",

@@ -288,6 +288,8 @@ class TestContext:
                     schema_name = '{schema_name}'
                     AND {kind}_name = '{table_name}'
             """
+        elif self.dialect == "clickhouse":
+            query = f"SELECT name, comment FROM system.tables WHERE database = '{schema_name}' AND name = '{table_name}'"
 
         result = self.engine_adapter.fetchall(query)
 
@@ -366,9 +368,9 @@ class TestContext:
                     AND table_name = '{table_name}'
                 ;
             """
-        elif self.dialect in ["spark", "databricks"]:
+        elif self.dialect in ["spark", "databricks", "clickhouse"]:
             query = f"DESCRIBE TABLE {schema_name}.{table_name}"
-            comment_index = 2
+            comment_index = 2 if self.dialect in ["spark", "databricks"] else 4
         elif self.dialect == "trino":
             query = f"SHOW COLUMNS FROM {schema_name}.{table_name}"
             comment_index = 3
@@ -622,6 +624,24 @@ def config() -> Config:
             ],
         ),
         pytest.param(
+            "clickhouse",
+            marks=[
+                pytest.mark.docker,
+                pytest.mark.engine,
+                pytest.mark.clickhouse,
+                pytest.mark.xdist_group("engine_integration_clickhouse"),
+            ],
+        ),
+        pytest.param(
+            "clickhouse_cluster",
+            marks=[
+                pytest.mark.docker,
+                pytest.mark.engine,
+                pytest.mark.clickhouse_cluster,
+                pytest.mark.xdist_group("engine_integration_clickhouse_cluster"),
+            ],
+        ),
+        pytest.param(
             "bigquery",
             marks=[
                 pytest.mark.bigquery,
@@ -656,6 +676,15 @@ def config() -> Config:
                 pytest.mark.remote,
                 pytest.mark.snowflake,
                 pytest.mark.xdist_group("engine_integration_snowflake"),
+            ],
+        ),
+        pytest.param(
+            "clickhouse_cloud",
+            marks=[
+                pytest.mark.engine,
+                pytest.mark.remote,
+                pytest.mark.clickhouse_cloud,
+                pytest.mark.xdist_group("engine_integration_clickhouse_cloud"),
             ],
         ),
     ]
@@ -877,6 +906,10 @@ def test_ctas(ctx: TestContext):
 
         assert table_description == "test table description"
         assert column_comments == {"id": "test id column description"}
+
+    # ensure we don't hit clickhouse INSERT with LIMIT 0 bug on CTAS
+    if ctx.dialect == "clickhouse":
+        ctx.engine_adapter.ctas(table, exp.select("1").limit(0))
 
 
 def test_create_view(ctx: TestContext):
@@ -1299,6 +1332,8 @@ def test_merge(ctx: TestContext):
 
 
 def test_scd_type_2_by_time(ctx: TestContext):
+    if ctx.dialect == "clickhouse":
+        pytest.skip("SCD models not yet supported for Clickhouse.")
     time_type = exp.DataType.build("timestamp")
 
     ctx.columns_to_types = {
@@ -1328,7 +1363,7 @@ def test_scd_type_2_by_time(ctx: TestContext):
         valid_from_col=exp.column("valid_from", quoted=True),
         valid_to_col=exp.column("valid_to", quoted=True),
         updated_at_col=exp.column("updated_at", quoted=True),
-        execution_time="2023-01-01",
+        execution_time="2023-01-01 00:00:00",
         updated_at_as_valid_from=False,
         columns_to_types=input_schema,
     )
@@ -1388,7 +1423,7 @@ def test_scd_type_2_by_time(ctx: TestContext):
         valid_from_col=exp.column("valid_from", quoted=True),
         valid_to_col=exp.column("valid_to", quoted=True),
         updated_at_col=exp.column("updated_at", quoted=True),
-        execution_time="2023-01-05",
+        execution_time="2023-01-05 00:00:00",
         updated_at_as_valid_from=False,
         columns_to_types=input_schema,
     )
@@ -1442,6 +1477,8 @@ def test_scd_type_2_by_time(ctx: TestContext):
 
 
 def test_scd_type_2_by_column(ctx: TestContext):
+    if ctx.dialect == "clickhouse":
+        pytest.skip("SCD models not yet supported for Clickhouse.")
     time_type = exp.DataType.build("timestamp")
 
     ctx.columns_to_types = {
@@ -1541,7 +1578,7 @@ def test_scd_type_2_by_column(ctx: TestContext):
         check_columns=[exp.to_column("name"), exp.to_column("status")],
         valid_from_col=exp.column("valid_from", quoted=True),
         valid_to_col=exp.column("valid_to", quoted=True),
-        execution_time="2023-01-05",
+        execution_time="2023-01-05 00:00:00",
         execution_time_as_valid_from=False,
         columns_to_types=ctx.columns_to_types,
     )
@@ -1782,6 +1819,44 @@ def test_sushi(mark_gateway: t.Tuple[str, str], ctx: TestContext):
         )
 
         context._models.update({cust_rev_by_day_key: cust_rev_by_day_model_tbl_props})
+
+    # Clickhouse requires columns used as keys to be non-Nullable, but all transpiled columns are nullable by default
+    if ctx.dialect == "clickhouse":
+        models_to_modify = {
+            '"items"',
+            '"orders"',
+            '"order_items"',
+            '"customer_revenue_by_day"',
+            '"customer_revenue_lifetime"',
+            '"waiter_revenue_by_day"',
+            '"waiter_as_customer_by_day"',
+        }
+        for model in models_to_modify:
+            model_key = [key for key in context._models if model in key][0]
+            model_columns = context._models[model_key].columns_to_types
+            updated_model_columns = {
+                k: exp.DataType.build(v.sql(), dialect="clickhouse", nullable=False)
+                for k, v in model_columns.items()
+            }
+
+            model_ch_cols_to_types = context._models[model_key].copy(
+                update={
+                    "columns_to_types": updated_model_columns,
+                    "columns_to_types_": updated_model_columns,
+                    "columns_to_types_or_raise": updated_model_columns,
+                }
+            )
+            context._models.update({model_key: model_ch_cols_to_types})
+
+        # create raw schema and view
+        if gateway == "inttest_clickhouse_cluster":
+            context.engine_adapter.execute("CREATE DATABASE IF NOT EXISTS raw ON CLUSTER cluster1;")
+            context.engine_adapter.execute(
+                "DROP VIEW IF EXISTS raw.demographics ON CLUSTER cluster1;"
+            )
+            context.engine_adapter.execute(
+                "CREATE VIEW raw.demographics ON CLUSTER cluster1 AS SELECT 1 AS customer_id, '00000' AS zip;"
+            )
 
     plan: Plan = context.plan(
         environment="test_prod",
@@ -2031,6 +2106,28 @@ def test_init_project(ctx: TestContext, mark_gateway: t.Tuple[str, str], tmp_pat
     if ctx.test_type != "query":
         pytest.skip("Init example project end-to-end tests only need to run for query")
 
+    state_schema = "sqlmesh"
+    object_names = {
+        "view_schema": ["sqlmesh_example"],
+        "physical_schema": ["sqlmesh__sqlmesh_example"],
+        "dev_schema": ["sqlmesh_example__test_dev"],
+        "views": ["full_model", "incremental_model", "seed_model"],
+    }
+
+    # normalize object names for snowflake
+    if ctx.dialect == "snowflake":
+        import re
+
+        def _normalize_snowflake(name: str, prefix_regex: str = "(sqlmesh__)(.*)"):
+            match = re.search(prefix_regex, name)
+            if match:
+                return f"{match.group(1)}{match.group(2).upper()}"
+            return name.upper()
+
+        object_names = {
+            k: [_normalize_snowflake(name) for name in v] for k, v in object_names.items()
+        }
+
     init_example_project(tmp_path, ctx.dialect)
     config = load_config_from_paths(
         Config,
@@ -2039,32 +2136,32 @@ def test_init_project(ctx: TestContext, mark_gateway: t.Tuple[str, str], tmp_pat
         ],
         personal_paths=[pathlib.Path("~/.sqlmesh/config.yaml").expanduser()],
     )
+    # ensure default dialect comes from init_example_project and not ~/.sqlmesh/config.yaml
+    if config.model_defaults.dialect != ctx.dialect:
+        config.model_defaults = config.model_defaults.copy(update={"dialect": ctx.dialect})
+
     _, gateway = mark_gateway
     context = Context(paths=tmp_path, config=config, gateway=gateway)
     ctx.engine_adapter = context.engine_adapter
 
     # clean up any leftover schemas from previous runs (requires context)
     for schema in [
-        "sqlmesh_example",
-        "sqlmesh_example__test_dev",
-        "sqlmesh__sqlmesh_example",
-        "sqlmesh",
+        state_schema,
+        *object_names["view_schema"],
+        *object_names["physical_schema"],
+        *object_names["dev_schema"],
     ]:
         context.engine_adapter.drop_schema(schema, ignore_if_not_exists=True, cascade=True)
 
     # apply prod plan
     context.plan(auto_apply=True, no_prompts=True)
 
-    prod_schema_results = ctx.get_metadata_results("sqlmesh_example")
-    assert sorted(prod_schema_results.views) == [
-        "full_model",
-        "incremental_model",
-        "seed_model",
-    ]
+    prod_schema_results = ctx.get_metadata_results(object_names["view_schema"][0])
+    assert sorted(prod_schema_results.views) == object_names["views"]
     assert len(prod_schema_results.materialized_views) == 0
     assert len(prod_schema_results.tables) == len(prod_schema_results.non_temp_tables) == 0
 
-    physical_layer_results = ctx.get_metadata_results("sqlmesh__sqlmesh_example")
+    physical_layer_results = ctx.get_metadata_results(object_names["physical_schema"][0])
     assert len(physical_layer_results.views) == 0
     assert len(physical_layer_results.materialized_views) == 0
     assert len(physical_layer_results.tables) == len(physical_layer_results.non_temp_tables) == 6
@@ -2087,11 +2184,7 @@ def test_init_project(ctx: TestContext, mark_gateway: t.Tuple[str, str], tmp_pat
         environment, dialect=ctx.dialect
     )
     dev_schema_results = ctx.get_metadata_results(schema_name)
-    assert sorted(dev_schema_results.views) == [
-        "full_model",
-        "incremental_model",
-        "seed_model",
-    ]
+    assert sorted(dev_schema_results.views) == object_names["views"]
     assert len(dev_schema_results.materialized_views) == 0
     assert len(dev_schema_results.tables) == len(dev_schema_results.non_temp_tables) == 0
 
@@ -2159,6 +2252,7 @@ def test_dialects(ctx: TestContext):
             {
                 "default": None,
                 "bigquery": pd.NaT,
+                "clickhouse": pd.NaT,
                 "databricks": pd.NaT,
                 "duckdb": pd.NaT,
                 "motherduck": pd.NaT,
@@ -2172,6 +2266,7 @@ def test_dialects(ctx: TestContext):
             None,
             {
                 "default": datetime(2020, 1, 1).date(),
+                "clickhouse": pd.Timestamp("2020-01-01"),
                 "duckdb": pd.Timestamp("2020-01-01"),
             },
         ),
@@ -2181,6 +2276,7 @@ def test_dialects(ctx: TestContext):
             None,
             {
                 "default": pd.Timestamp("2020-01-01 00:00:00+00:00"),
+                "clickhouse": pd.Timestamp("2020-01-01 00:00:00"),
                 "mysql": pd.Timestamp("2020-01-01 00:00:00"),
                 "spark": pd.Timestamp("2020-01-01 00:00:00"),
                 "databricks": pd.Timestamp("2020-01-01 00:00:00"),
@@ -2215,6 +2311,16 @@ def test_to_time_column(
 ):
     if ctx.test_type != "query":
         pytest.skip("Time column tests only need to run for query")
+
+    # TODO: can this be cleaned up after recent sqlglot updates?
+    if ctx.dialect == "clickhouse" and time_column_type.is_type(exp.DataType.Type.TIMESTAMPTZ):
+        # Clickhouse does not have natively timezone-aware types and does not accept timestrings
+        #   with UTC offset "+XX:XX". Therefore, we remove the timezone offset and set a timezone-
+        #   specific data type to validate what is returned.
+        import re
+
+        time_column = re.match("^(.*?)\+", time_column).group(1)
+        time_column_type = exp.DataType.build("TIMESTAMP('UTC')", dialect="clickhouse")
 
     time_column = to_time_column(time_column, time_column_type, time_column_format)
     df = ctx.engine_adapter.fetchdf(exp.select(time_column).as_("the_col"))
@@ -2263,7 +2369,9 @@ def test_batch_size_on_incremental_by_unique_key_model(
             "event_date": exp.DataType.build("date"),
         },
     )
-    context.upsert_model(create_sql_model(name=f"{schema}.seed_model", query=seed_query))
+    context.upsert_model(
+        create_sql_model(name=f"{schema}.seed_model", query=seed_query, kind="FULL")
+    )
     context.upsert_model(
         load_sql_based_model(
             d.parse(

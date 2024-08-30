@@ -166,6 +166,7 @@ class BigQueryEngineAdapter(InsertOverwriteWithMergeMixin):
         schema_name: SchemaName,
         ignore_if_exists: bool = True,
         warn_on_error: bool = True,
+        properties: t.List[exp.Expression] = [],
     ) -> None:
         """Create a schema from a name or qualified table name."""
         from google.api_core.exceptions import Conflict
@@ -565,6 +566,7 @@ class BigQueryEngineAdapter(InsertOverwriteWithMergeMixin):
         self,
         view_properties: t.Optional[t.Dict[str, exp.Expression]] = None,
         table_description: t.Optional[str] = None,
+        **kwargs: t.Any,
     ) -> t.Optional[exp.Properties]:
         """Creates a SQLGlot table properties expression for view"""
         properties: t.List[exp.Expression] = []

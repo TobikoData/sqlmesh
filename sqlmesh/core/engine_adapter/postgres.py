@@ -77,6 +77,7 @@ class PostgresEngineAdapter(
         target_table_name: TableName,
         source_table_name: TableName,
         exists: bool = True,
+        **kwargs: t.Any,
     ) -> None:
         self.execute(
             exp.Create(

@@ -1,0 +1,47 @@
+x-clickhouse-server: &clickhouse-server
+  image: 'clickhouse/clickhouse-server:24.7'
+  volumes:
+    # note: this is deliberately published as docker_related_config.xml to replace the file already in the image
+    # which tries to do things like configure ipv6 and throw thousands of errors
+    - ./clickhouse/config.xml:/etc/clickhouse-server/config.d/docker_related_config.xml
+  depends_on:
+    - keeper
+    - jdbc-bridge
+
+x-clickhouse-server-environment: &default-environment
+  CLICKHOUSE_DEFAULT_ACCESS_MANAGEMENT: '1'
+  CLICKHOUSE_USER: clickhouse
+  CLICKHOUSE_PASSWORD: clickhouse
+
+services:
+  standalone:
+    image: 'clickhouse/clickhouse-server:24.7'
+    environment:
+      <<: *default-environment
+    ports:
+      - 8122:8123
+  clickhouse-1:
+    <<: *clickhouse-server
+    environment:
+      <<: *default-environment
+      MACRO_REPLICA: '01'
+    ports:
+      - 8123:8123
+  clickhouse-2:
+    <<: *clickhouse-server
+    environment:
+      <<: *default-environment
+      MACRO_REPLICA: '02'
+  clickhouse-3:
+    <<: *clickhouse-server
+    environment:
+      <<: *default-environment
+      MACRO_REPLICA: '03'
+  keeper:
+    image: clickhouse/clickhouse-keeper:24.7
+    volumes:
+      - ./clickhouse/keeper.xml:/etc/clickhouse-keeper/keeper_config.d/keeper.xml
+  # This is just so you can use a client like DBeaver without seeing this error everywhere:
+  # DB::Exception: clickhouse-jdbc-bridge is not running. Please, start it manually
+  jdbc-bridge:
+    image: clickhouse/jdbc-bridge:2.1
