@@ -1,7 +1,4 @@
-from __future__ import annotations
-
 from pathlib import Path
-import typing as t
 
 import pytest
 
@@ -11,7 +8,7 @@ from web.server.settings import Settings, get_loaded_context, get_settings
 
 
 @pytest.fixture
-def project_tmp_path(tmp_path: Path) -> t.Generator[Path, None, None]:
+def project_tmp_path(tmp_path: Path):
     def get_settings_override() -> Settings:
         return Settings(project_path=tmp_path)
 
@@ -28,7 +25,7 @@ config = Config(model_defaults=ModelDefaultsConfig(dialect=''))
 
 
 @pytest.fixture
-def project_context(project_tmp_path: Path) -> t.Generator[Context, None, None]:
+def project_context(project_tmp_path: Path):
     context = Context(paths=project_tmp_path, console=api_console)
 
     def get_loaded_context_override() -> Context:
@@ -40,7 +37,7 @@ def project_context(project_tmp_path: Path) -> t.Generator[Context, None, None]:
 
 
 @pytest.fixture
-def web_sushi_context(sushi_context: Context) -> t.Generator[Context, None, None]:
+def web_sushi_context(sushi_context: Context):
     def get_context_override() -> Context:
         sushi_context.console = api_console
         return sushi_context
