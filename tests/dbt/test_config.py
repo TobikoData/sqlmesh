@@ -748,6 +748,7 @@ def test_connection_args(tmp_path):
 @pytest.mark.cicdonly
 def test_db_type_to_relation_class():
     from dbt.adapters.bigquery.relation import BigQueryRelation
+    from dbt.adapters.clickhouse.relation import ClickHouseRelation
     from dbt.adapters.databricks.relation import DatabricksRelation
     from dbt.adapters.duckdb.relation import DuckDBRelation
     from dbt.adapters.redshift import RedshiftRelation
@@ -755,6 +756,7 @@ def test_db_type_to_relation_class():
     from dbt.adapters.trino.relation import TrinoRelation
 
     assert (TARGET_TYPE_TO_CONFIG_CLASS["bigquery"].relation_class) == BigQueryRelation
+    assert (TARGET_TYPE_TO_CONFIG_CLASS["clickhouse"].relation_class) == ClickHouseRelation
     assert (TARGET_TYPE_TO_CONFIG_CLASS["databricks"].relation_class) == DatabricksRelation
     assert (TARGET_TYPE_TO_CONFIG_CLASS["duckdb"].relation_class) == DuckDBRelation
     assert (TARGET_TYPE_TO_CONFIG_CLASS["redshift"].relation_class) == RedshiftRelation
@@ -765,12 +767,14 @@ def test_db_type_to_relation_class():
 @pytest.mark.cicdonly
 def test_db_type_to_column_class():
     from dbt.adapters.bigquery import BigQueryColumn
+    from dbt.adapters.clickhouse.column import ClickHouseColumn
     from dbt.adapters.databricks.column import DatabricksColumn
     from dbt.adapters.snowflake import SnowflakeColumn
     from dbt.adapters.sqlserver.sqlserver_column import SQLServerColumn
     from dbt.adapters.trino.column import TrinoColumn
 
     assert (TARGET_TYPE_TO_CONFIG_CLASS["bigquery"].column_class) == BigQueryColumn
+    assert (TARGET_TYPE_TO_CONFIG_CLASS["clickhouse"].column_class) == ClickHouseColumn
     assert (TARGET_TYPE_TO_CONFIG_CLASS["databricks"].column_class) == DatabricksColumn
     assert (TARGET_TYPE_TO_CONFIG_CLASS["duckdb"].column_class) == Column
     assert (TARGET_TYPE_TO_CONFIG_CLASS["snowflake"].column_class) == SnowflakeColumn
