@@ -692,3 +692,6 @@ class PlanBuilder:
                 )
             )
         )
+
+
+PB = t.TypeVar("PB", bound=PlanBuilder)

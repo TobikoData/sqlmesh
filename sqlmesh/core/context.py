@@ -79,6 +79,7 @@ from sqlmesh.core.notification_target import (
     NotificationTargetManager,
 )
 from sqlmesh.core.plan import Plan, PlanBuilder
+from sqlmesh.core.plan.builder import PB
 from sqlmesh.core.reference import ReferenceGraph
 from sqlmesh.core.scheduler import Scheduler
 from sqlmesh.core.schema_loader import create_external_models_file
@@ -276,7 +277,7 @@ class ExecutionContext(BaseContext):
         )
 
 
-class GenericContext(BaseContext, t.Generic[C]):
+class GenericContext(BaseContext, t.Generic[C, PB]):
     """Encapsulates a SQLMesh environment supplying convenient functions to perform various tasks.
 
     Args:
@@ -292,10 +293,13 @@ class GenericContext(BaseContext, t.Generic[C]):
         load: Whether or not to automatically load all models and macros (default True).
         console: The rich instance used for printing out CLI command results.
         users: A list of users to make known to SQLMesh.
-        config_type: The type of config object to use (default Config).
     """
 
     CONFIG_TYPE: t.Type[C]
+    """The type of config object to use (default: Config)."""
+
+    PLAN_BUILDER_TYPE: t.Type[PB]
+    """The type of plan builder object to use (default: PlanBuilder)."""
 
     def __init__(
         self,
@@ -505,7 +509,7 @@ class GenericContext(BaseContext, t.Generic[C]):
         if self._loader.reload_needed():
             self.load()
 
-    def load(self, update_schemas: bool = True) -> GenericContext[C]:
+    def load(self, update_schemas: bool = True) -> GenericContext[C, PB]:
         """Load all files in the context's path."""
         load_start_ts = time.perf_counter()
         with sys_path(*self.configs):
@@ -1163,7 +1167,7 @@ class GenericContext(BaseContext, t.Generic[C]):
                     days=1
                 )
 
-        return PlanBuilder(
+        return self.PLAN_BUILDER_TYPE(
             context_diff=context_diff,
             start=start,
             end=end,
@@ -2016,5 +2020,6 @@ class GenericContext(BaseContext, t.Generic[C]):
         )
 
 
-class Context(GenericContext[Config]):
+class Context(GenericContext[Config, PlanBuilder]):
     CONFIG_TYPE = Config
+    PLAN_BUILDER_TYPE = PlanBuilder
