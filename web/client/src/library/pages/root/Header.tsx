@@ -17,11 +17,13 @@ export default function Header(): JSX.Element {
           title="Home"
         >
           <LogoSqlMesh
-            style={{ height: '24px' }}
+            style={{ height: '20px' }}
             mode={mode}
           />
         </a>
-        <span className="inline-block mx-1 text-xs font-bold">by</span>
+        <span className="inline-block mx-1.5 text-xs font-bold pt-[3px]">
+          by
+        </span>
         <a
           href="https://tobikodata.com/"
           target="_blank"
