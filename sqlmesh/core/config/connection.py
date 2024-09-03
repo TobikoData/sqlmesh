@@ -1492,11 +1492,11 @@ class ClickhouseConnectionConfig(ConnectionConfig):
     username: str
     password: t.Optional[str] = None
     port: t.Optional[int] = None
+    secure: bool = False
     cluster: t.Optional[str] = None
     connect_timeout: int = 10
     send_receive_timeout: int = 300
     verify: bool = True
-    query_limit: int = 0
     use_compression: bool = True
     compression_method: t.Optional[str] = None
     connection_settings: t.Optional[t.Dict[str, t.Any]] = None
@@ -1519,6 +1519,7 @@ class ClickhouseConnectionConfig(ConnectionConfig):
             "host",
             "username",
             "port",
+            "secure",
             "password",
             "connect_timeout",
             "send_receive_timeout",
