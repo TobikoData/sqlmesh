@@ -6,4 +6,5 @@ node_modules/
 /playwright-report/
 /playwright/.cache/
 dist
+/public/favicons/
 tsconfig.tsbuildinfo
