@@ -627,8 +627,8 @@ def _update_model_schemas_parallel(
                 if entry_name:
                     optimized_query_cache.with_optimized_query(model, entry_name)
 
-                process_models(completed_model=model)
                 _update_schema_with_model(schema, model)
+                process_models(completed_model=model)
 
 
 _optimized_query_cache: t.Optional[OptimizedQueryCache] = None

@@ -98,7 +98,7 @@ class BaseExpressionRenderer:
         """
 
         should_cache = self._should_cache(
-            runtime_stage, start, end, execution_time, *kwargs.values()
+            runtime_stage, start, end, execution_time, not normalize_identifiers, *kwargs.values()
         )
 
         if should_cache and self._cache:
@@ -402,10 +402,10 @@ class QueryRenderer(BaseExpressionRenderer):
         """
 
         should_cache = self._should_cache(
-            runtime_stage, start, end, execution_time, *kwargs.values()
+            runtime_stage, start, end, execution_time, not optimize, *kwargs.values()
         )
 
-        if should_cache and self._optimized_cache and optimize:
+        if should_cache and self._optimized_cache:
             query = self._optimized_cache
         else:
             try:
