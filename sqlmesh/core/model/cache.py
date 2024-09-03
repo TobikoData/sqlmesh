@@ -102,16 +102,17 @@ class OptimizedQueryCache:
         self._put(name, model)
         return False
 
-    def put(self, model: Model, name: t.Optional[str] = None) -> None:
+    def put(self, model: Model) -> t.Optional[str]:
         if not isinstance(model, SqlModel):
-            return
+            return None
 
-        name = self._entry_name(model) if name is None else name
+        name = self._entry_name(model)
 
         if self._file_cache.exists(name):
-            return
+            return name
 
         self._put(name, model)
+        return name
 
     def _put(self, name: str, model: SqlModel) -> None:
         optimized_query = model.render_query()

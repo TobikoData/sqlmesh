@@ -45,98 +45,6 @@ if t.TYPE_CHECKING:
 logger = logging.getLogger(__name__)
 
 
-_cache = None
-
-
-def _initializer(optimized_query_cache: OptimizedQueryCache) -> None:
-    global _cache
-    _cache = optimized_query_cache
-
-
-def _load_cache(model: Model) -> t.Tuple[str, t.Optional[str]]:
-    assert _cache
-    if isinstance(model, SqlModel):
-        entry_name = _cache._entry_name(model)
-        _cache.put(model, entry_name)
-    else:
-        entry_name = None
-    return model.fqn, entry_name
-
-
-# TODO: consider moving this to context
-def update_model_schemas(
-    dag: DAG[str],
-    models: UniqueKeyDict[str, Model],
-    context_path: Path,
-) -> None:
-    schema = MappingSchema(normalize=False)
-    optimized_query_cache: OptimizedQueryCache = OptimizedQueryCache(context_path / c.CACHE)
-
-    def update_schema(model: Model) -> None:
-        columns_to_types = model.columns_to_types
-        if columns_to_types:
-            try:
-                schema.add_table(
-                    model.fqn, columns_to_types, dialect=model.dialect, normalize=False
-                )
-            except SchemaError as e:
-                if "nesting level:" in str(e):
-                    logger.error(
-                        "SQLMesh requires all model names and references to have the same level of nesting."
-                    )
-                raise
-
-    if not hasattr(os, "fork") or "PYTEST_CURRENT_TEST" in os.environ:
-        for name in dag.sorted:
-            model = models.get(name)
-
-            # External models don't exist in the context, so we need to skip them
-            if not model:
-                continue
-
-            model.update_schema(schema)
-            optimized_query_cache.with_optimized_query(model)
-            update_schema(model)
-    else:
-        futures = set()
-        graph = {
-            model: {dep for dep in deps if dep in models}
-            for model, deps in dag._dag.items()
-            if model in models
-        }
-
-        def process_models(completed_model: t.Optional[Model] = None) -> None:
-            for name in list(graph):
-                deps = graph[name]
-
-                if completed_model:
-                    deps.discard(completed_model.fqn)
-
-                if not deps:
-                    del graph[name]
-                    model = models[name]
-                    model.update_schema(schema)
-                    futures.add(executor.submit(_load_cache, model))
-
-        with ProcessPoolExecutor(
-            mp_context=mp.get_context("fork"),
-            initializer=_initializer,
-            initargs=(optimized_query_cache,),
-        ) as executor:
-            process_models()
-
-            while futures:
-                for future in as_completed(futures):
-                    futures.remove(future)
-                    fqn, entry_name = future.result()
-                    model = models[fqn]
-                    if entry_name:
-                        optimized_query_cache.with_optimized_query(model, entry_name)
-
-                    process_models(completed_model=model)
-                    update_schema(model)
-
-
 @dataclass
 class LoadedProject:
     macros: MacroRegistry
@@ -630,3 +538,111 @@ class SqlMeshLoader(Loader):
                     or self._loader._context.config.default_gateway_name,
                 ]
             )
+
+
+# TODO: consider moving this to context
+def update_model_schemas(
+    dag: DAG[str],
+    models: UniqueKeyDict[str, Model],
+    context_path: Path,
+) -> None:
+    schema = MappingSchema(normalize=False)
+    optimized_query_cache: OptimizedQueryCache = OptimizedQueryCache(context_path / c.CACHE)
+
+    if not hasattr(os, "fork") or "PYTEST_CURRENT_TEST" in os.environ:
+        _update_model_schemas_sequential(dag, models, schema, optimized_query_cache)
+    else:
+        _update_model_schemas_parallel(dag, models, schema, optimized_query_cache)
+
+
+def _update_schema_with_model(schema: MappingSchema, model: Model) -> None:
+    columns_to_types = model.columns_to_types
+    if columns_to_types:
+        try:
+            schema.add_table(model.fqn, columns_to_types, dialect=model.dialect, normalize=False)
+        except SchemaError as e:
+            if "nesting level:" in str(e):
+                logger.error(
+                    "SQLMesh requires all model names and references to have the same level of nesting."
+                )
+            raise
+
+
+def _update_model_schemas_sequential(
+    dag: DAG[str],
+    models: UniqueKeyDict[str, Model],
+    schema: MappingSchema,
+    optimized_query_cache: OptimizedQueryCache,
+) -> None:
+    for name in dag.sorted:
+        model = models.get(name)
+
+        # External models don't exist in the context, so we need to skip them
+        if not model:
+            continue
+
+        model.update_schema(schema)
+        optimized_query_cache.with_optimized_query(model)
+        _update_schema_with_model(schema, model)
+
+
+def _update_model_schemas_parallel(
+    dag: DAG[str],
+    models: UniqueKeyDict[str, Model],
+    schema: MappingSchema,
+    optimized_query_cache: OptimizedQueryCache,
+) -> None:
+    futures = set()
+    graph = {
+        model: {dep for dep in deps if dep in models}
+        for model, deps in dag._dag.items()
+        if model in models
+    }
+
+    def process_models(completed_model: t.Optional[Model] = None) -> None:
+        for name in list(graph):
+            deps = graph[name]
+
+            if completed_model:
+                deps.discard(completed_model.fqn)
+
+            if not deps:
+                del graph[name]
+                model = models[name]
+                model.update_schema(schema)
+                futures.add(executor.submit(_load_optimized_query_cache, model))
+
+    with ProcessPoolExecutor(
+        mp_context=mp.get_context("fork"),
+        initializer=_init_optimized_query_cache,
+        initargs=(optimized_query_cache,),
+    ) as executor:
+        process_models()
+
+        while futures:
+            for future in as_completed(futures):
+                futures.remove(future)
+                fqn, entry_name = future.result()
+                model = models[fqn]
+                if entry_name:
+                    optimized_query_cache.with_optimized_query(model, entry_name)
+
+                process_models(completed_model=model)
+                _update_schema_with_model(schema, model)
+
+
+_optimized_query_cache: t.Optional[OptimizedQueryCache] = None
+
+
+def _init_optimized_query_cache(optimized_query_cache: OptimizedQueryCache) -> None:
+    global _optimized_query_cache
+    _optimized_query_cache = optimized_query_cache
+
+
+def _load_optimized_query_cache(model: Model) -> t.Tuple[str, t.Optional[str]]:
+    assert _optimized_query_cache
+    if isinstance(model, SqlModel):
+        entry_name = _optimized_query_cache.put(model)
+    else:
+        entry_name = None
+    return model.fqn, entry_name
