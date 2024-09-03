@@ -8,10 +8,13 @@ from web.server.main import app
 
 pytestmark = pytest.mark.web
 
-client = TestClient(app)
+
+@pytest.fixture
+def client() -> TestClient:
+    return TestClient(app)
 
 
-def test_get_lineage(web_sushi_context: Context) -> None:
+def test_get_lineage(client: TestClient, web_sushi_context: Context) -> None:
     response = client.get("/api/lineage/sushi.waiters/event_date")
 
     assert response.status_code == 200
@@ -74,7 +77,7 @@ FROM (VALUES
     }
 
 
-def test_get_lineage_managed_columns(web_sushi_context: Context) -> None:
+def test_get_lineage_managed_columns(client: TestClient, web_sushi_context: Context) -> None:
     # Get lineage of managed column
     response = client.get("/api/lineage/sushi.marketing/valid_from")
     assert response.status_code == 200
@@ -91,7 +94,7 @@ FROM "memory"."sushi"."raw_marketing" AS "raw_marketing"''',
     }
 
 
-def test_get_lineage_single_model(project_context: Context) -> None:
+def test_get_lineage_single_model(client: TestClient, project_context: Context) -> None:
     project_tmp_path = project_context.path
     models_dir = project_tmp_path / "models"
     models_dir.mkdir()
@@ -106,7 +109,7 @@ def test_get_lineage_single_model(project_context: Context) -> None:
     assert response_json['"bar"']["col"]["models"] == {}
 
 
-def test_get_lineage_external_model(project_context: Context) -> None:
+def test_get_lineage_external_model(client: TestClient, project_context: Context) -> None:
     project_tmp_path = project_context.path
     models_dir = project_tmp_path / "models"
     models_dir.mkdir()
@@ -126,7 +129,7 @@ def test_get_lineage_external_model(project_context: Context) -> None:
     assert response_json['"baz"']["col"]["models"] == {'"external_table"': ["col"]}
 
 
-def test_get_lineage_cte(project_context: Context) -> None:
+def test_get_lineage_cte(client: TestClient, project_context: Context) -> None:
     project_tmp_path = project_context.path
     models_dir = project_tmp_path / "models"
     models_dir.mkdir()
@@ -167,7 +170,7 @@ def test_get_lineage_cte(project_context: Context) -> None:
     assert response_json['"baz"']["col"]["models"] == {'"external_table"': ["col"]}
 
 
-def test_get_lineage_cte_downstream(project_context: Context) -> None:
+def test_get_lineage_cte_downstream(client: TestClient, project_context: Context) -> None:
     project_tmp_path = project_context.path
     models_dir = project_tmp_path / "models"
     models_dir.mkdir()
@@ -208,7 +211,7 @@ def test_get_lineage_cte_downstream(project_context: Context) -> None:
     assert response_json['"baz"']["col"]["models"] == {'"external_table"': ["col"]}
 
 
-def test_get_lineage_join(project_context: Context) -> None:
+def test_get_lineage_join(client: TestClient, project_context: Context) -> None:
     project_tmp_path = project_context.path
     models_dir = project_tmp_path / "models"
     models_dir.mkdir()
@@ -237,7 +240,7 @@ def test_get_lineage_join(project_context: Context) -> None:
     assert response_json['"baz"']["price"]["models"] == {'"external_baz"': ["price"]}
 
 
-def test_get_lineage_multiple_columns(project_context: Context) -> None:
+def test_get_lineage_multiple_columns(client: TestClient, project_context: Context) -> None:
     project_tmp_path = project_context.path
     models_dir = project_tmp_path / "models"
     models_dir.mkdir()
@@ -262,7 +265,7 @@ def test_get_lineage_multiple_columns(project_context: Context) -> None:
     assert response_json['"bar"']["multiplier"]["models"] == {'"external_bar"': ["multiplier"]}
 
 
-def test_get_lineage_union(project_context: Context) -> None:
+def test_get_lineage_union(client: TestClient, project_context: Context) -> None:
     project_tmp_path = project_context.path
     models_dir = project_tmp_path / "models"
     models_dir.mkdir()
@@ -297,7 +300,7 @@ def test_get_lineage_union(project_context: Context) -> None:
     assert response_json['"foo"']["col"]["models"] == {'"bar"': ["col"], '"baz"': ["col"]}
 
 
-def test_get_lineage_union_downstream(project_context: Context) -> None:
+def test_get_lineage_union_downstream(client: TestClient, project_context: Context) -> None:
     project_tmp_path = project_context.path
     models_dir = project_tmp_path / "models"
     models_dir.mkdir()
@@ -343,7 +346,7 @@ def test_get_lineage_union_downstream(project_context: Context) -> None:
     assert response_json['"qwe"']["col"]["models"] == {'"external_qwe"': ["col"]}
 
 
-def test_get_lineage_cte_union(project_context: Context) -> None:
+def test_get_lineage_cte_union(client: TestClient, project_context: Context) -> None:
     project_tmp_path = project_context.path
     models_dir = project_tmp_path / "models"
     models_dir.mkdir()
@@ -386,7 +389,7 @@ def test_get_lineage_cte_union(project_context: Context) -> None:
     assert response_json['"baz"']["col"]["models"] == {'"external_baz"': ["col"]}
 
 
-def test_get_lineage_cte_union_downstream(project_context: Context) -> None:
+def test_get_lineage_cte_union_downstream(client: TestClient, project_context: Context) -> None:
     project_tmp_path = project_context.path
     models_dir = project_tmp_path / "models"
     models_dir.mkdir()
@@ -436,7 +439,9 @@ def test_get_lineage_cte_union_downstream(project_context: Context) -> None:
     assert response_json['"qwe"']["col"]["models"] == {'"external_qwe"': ["col"]}
 
 
-def test_get_lineage_cte_downstream_union_downstream(project_context: Context) -> None:
+def test_get_lineage_cte_downstream_union_downstream(
+    client: TestClient, project_context: Context
+) -> None:
     project_tmp_path = project_context.path
     models_dir = project_tmp_path / "models"
     models_dir.mkdir()
@@ -485,7 +490,9 @@ def test_get_lineage_cte_downstream_union_downstream(project_context: Context) -
     }
 
 
-def test_get_lineage_nested_cte_union_downstream(project_context: Context) -> None:
+def test_get_lineage_nested_cte_union_downstream(
+    client: TestClient, project_context: Context
+) -> None:
     project_tmp_path = project_context.path
     models_dir = project_tmp_path / "models"
     models_dir.mkdir()
@@ -539,7 +546,7 @@ def test_get_lineage_nested_cte_union_downstream(project_context: Context) -> No
     }
 
 
-def test_get_lineage_subquery(project_context: Context) -> None:
+def test_get_lineage_subquery(client: TestClient, project_context: Context) -> None:
     project_tmp_path = project_context.path
     models_dir = project_tmp_path / "models"
     models_dir.mkdir()
@@ -577,7 +584,7 @@ def test_get_lineage_subquery(project_context: Context) -> None:
     assert response_json['"baz"']["col"]["models"] == {'"external_table"': ["col"]}
 
 
-def test_get_lineage_cte_name_collision(project_context: Context) -> None:
+def test_get_lineage_cte_name_collision(client: TestClient, project_context: Context) -> None:
     project_tmp_path = project_context.path
     models_dir = project_tmp_path / "models"
     models_dir.mkdir()
@@ -622,7 +629,9 @@ def test_get_lineage_cte_name_collision(project_context: Context) -> None:
     assert response_json['"baz"']["col"]["models"] == {'"external_table"': ["col"]}
 
 
-def test_get_lineage_derived_table_alias_collision(project_context: Context) -> None:
+def test_get_lineage_derived_table_alias_collision(
+    client: TestClient, project_context: Context
+) -> None:
     project_tmp_path = project_context.path
     models_dir = project_tmp_path / "models"
     models_dir.mkdir()
@@ -661,7 +670,7 @@ def test_get_lineage_derived_table_alias_collision(project_context: Context) -> 
     assert response_json['"baz"']["col"]["models"] == {'"external_table"': ["col"]}
 
 
-def test_get_lineage_constants(project_context: Context) -> None:
+def test_get_lineage_constants(client: TestClient, project_context: Context) -> None:
     project_tmp_path = project_context.path
     models_dir = project_tmp_path / "models"
     models_dir.mkdir()
@@ -699,7 +708,7 @@ def test_get_lineage_constants(project_context: Context) -> None:
     assert response_json['"bar"']["col"]["models"] == {'"external_table"': ["col"]}
 
 
-def test_get_lineage_quoted_columns(project_context: Context) -> None:
+def test_get_lineage_quoted_columns(client: TestClient, project_context: Context) -> None:
     project_tmp_path = project_context.path
     models_dir = project_tmp_path / "models"
     models_dir.mkdir()
