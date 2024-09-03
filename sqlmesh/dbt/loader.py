@@ -167,7 +167,7 @@ class DbtLoader(Loader):
 
                 self._projects.append(project)
 
-                if project.context.target.database != self._context.default_catalog:
+                if project.context.target.database != (self._context.default_catalog or ""):
                     raise ConfigError(
                         "Project default catalog does not match context default catalog"
                     )
