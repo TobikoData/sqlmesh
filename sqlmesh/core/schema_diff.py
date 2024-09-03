@@ -301,6 +301,8 @@ class SchemaDiffer(PydanticModel):
             specific position in the set of existing columns.
         support_nested_operations: Whether the engine for which the diff is being computed supports modifications to
             nested data types like STRUCTs and ARRAYs.
+        support_nested_drop: Whether the engine for which the diff is being computed supports removing individual
+            columns of nested STRUCTs.
         compatible_types: Types that are compatible and automatically coerced in actions like UNION ALL. Dict key is data
             type, and value is the set of types that are compatible with it.
         support_coercing_compatible_types: Whether or not the engine for which the diff is being computed supports direct
@@ -321,6 +323,7 @@ class SchemaDiffer(PydanticModel):
 
     support_positional_add: bool = False
     support_nested_operations: bool = False
+    support_nested_drop: bool = False
     array_element_selector: str = ""
     compatible_types: t.Dict[exp.DataType, t.Set[exp.DataType]] = {}
     support_coercing_compatible_types: bool = False
@@ -523,12 +526,15 @@ class SchemaDiffer(PydanticModel):
         current_type = exp.DataType.build(current_type, copy=False)
         if self.support_nested_operations:
             if new_type.this == current_type.this == exp.DataType.Type.STRUCT:
-                return self._get_operations(
+                operations = self._get_operations(
                     columns,
                     current_type,
                     new_type,
                     root_struct,
                 )
+                if not operations[0].op == TableAlterOperationType.DROP or self.support_nested_drop:
+                    return operations
+
             if new_type.this == current_type.this == exp.DataType.Type.ARRAY:
                 # Some engines (i.e. Snowflake) don't support defining types on arrays
                 if not new_type.expressions or not current_type.expressions:
@@ -536,12 +542,17 @@ class SchemaDiffer(PydanticModel):
                 new_array_type = new_type.expressions[0]
                 current_array_type = current_type.expressions[0]
                 if new_array_type.this == current_array_type.this == exp.DataType.Type.STRUCT:
-                    return self._get_operations(
+                    operations = self._get_operations(
                         columns,
                         current_array_type,
                         new_array_type,
                         root_struct,
                     )
+                    if (
+                        not operations[0].op == TableAlterOperationType.DROP
+                        or self.support_nested_drop
+                    ):
+                        return operations
         if self._is_coerceable_type(current_type, new_type):
             return []
         elif self._is_compatible_type(current_type, new_type):

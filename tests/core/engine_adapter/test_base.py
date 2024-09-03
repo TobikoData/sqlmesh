@@ -474,6 +474,7 @@ def test_comments(make_mocked_engine_adapter: t.Callable, mocker: MockerFixture)
             {
                 "support_positional_add": True,
                 "support_nested_operations": True,
+                "support_nested_drop": True,
                 "array_element_selector": "element",
             },
             {
@@ -630,6 +631,7 @@ def test_comments(make_mocked_engine_adapter: t.Callable, mocker: MockerFixture)
             {
                 "support_positional_add": True,
                 "support_nested_operations": True,
+                "support_nested_drop": True,
                 "array_element_selector": "element",
             },
             {
@@ -659,6 +661,7 @@ def test_comments(make_mocked_engine_adapter: t.Callable, mocker: MockerFixture)
             {
                 "support_positional_add": True,
                 "support_nested_operations": True,
+                "support_nested_drop": True,
                 "array_element_selector": "element",
             },
             {
@@ -715,6 +718,7 @@ def test_comments(make_mocked_engine_adapter: t.Callable, mocker: MockerFixture)
         (
             {
                 "support_nested_operations": True,
+                "support_nested_drop": True,
                 "array_element_selector": "element",
             },
             {
@@ -772,6 +776,7 @@ def test_comments(make_mocked_engine_adapter: t.Callable, mocker: MockerFixture)
         (
             {
                 "support_nested_operations": True,
+                "support_nested_drop": True,
                 "array_element_selector": "element",
             },
             {

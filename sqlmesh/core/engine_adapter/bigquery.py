@@ -51,8 +51,6 @@ class BigQueryEngineAdapter(InsertOverwriteWithMergeMixin):
     MAX_TABLE_COMMENT_LENGTH = 1024
     MAX_COLUMN_COMMENT_LENGTH = 1024
 
-    # SQL is not supported for adding columns to structs: https://cloud.google.com/bigquery/docs/managing-table-schemas#api_1
-    # Can explore doing this with the API in the future
     SCHEMA_DIFFER = SchemaDiffer(
         compatible_types={
             exp.DataType.build("INT64", dialect=DIALECT): {
@@ -83,6 +81,8 @@ class BigQueryEngineAdapter(InsertOverwriteWithMergeMixin):
                 exp.DataType.build("BYTES", dialect=DIALECT).this,
             },
         },
+        support_nested_operations=True,
+        support_nested_drop=False,
     )
 
     @property
@@ -224,6 +224,21 @@ class BigQueryEngineAdapter(InsertOverwriteWithMergeMixin):
                 columns["_PARTITIONDATE"] = exp.DataType.build("DATE")
         return columns
 
+    def alter_table(
+        self,
+        alter_expressions: t.List[exp.Alter],
+    ) -> None:
+        """
+        Performs the alter statements to change the current table into the structure of the target table,
+        and uses the API to add columns to structs, where SQL is not supported.
+        """
+
+        alter_expressions = self.__add_nested_columns(alter_expressions)
+        if alter_expressions:
+            with self.transaction():
+                for alter_expression in alter_expressions:
+                    self.execute(alter_expression)
+
     def fetchone(
         self,
         query: t.Union[exp.Expression, str],
@@ -260,6 +275,63 @@ class BigQueryEngineAdapter(InsertOverwriteWithMergeMixin):
             quote_identifiers=quote_identifiers,
         )
         return list(self._query_data)
+
+    def __add_nested_columns(
+        self,
+        alter_expressions: t.List[exp.Alter],
+    ) -> t.List[exp.Alter]:
+        """
+        Add nested columns for the given alter expressions using the BigQuery API directly.
+        """
+        from google.cloud import bigquery
+
+        fields_to_add: t.Dict[str, list[tuple]] = {}
+        nested_alter_expressions = []
+        for alter_expression in alter_expressions:
+            action = alter_expression.args["actions"][0]
+
+            if (
+                isinstance(action, exp.ColumnDef)
+                and isinstance(action.this, exp.Dot)
+                and isinstance(action.kind, exp.DataType)
+            ):
+                record = action.this.this.sql()
+                field = action.this.expression.sql()
+                data_type = action.kind.sql(dialect="bigquery")
+                fields_to_add.setdefault(record, []).append((data_type, field))
+                nested_alter_expressions.append(alter_expression)
+
+        if nested_alter_expressions:
+            table = self._get_table(nested_alter_expressions[0].this)
+            original_schema = table.schema
+            new_schema = []
+            for field in original_schema:
+                current_fields = list(field.fields)
+                if field.name in fields_to_add:
+                    for new_field in fields_to_add[field.name]:
+                        current_fields.append(
+                            bigquery.SchemaField(new_field[1], new_field[0], mode="NULLABLE")
+                        )
+                if current_fields:
+                    new_schema.append(
+                        bigquery.SchemaField(
+                            field.name, "RECORD", mode="NULLABLE", fields=tuple(current_fields)
+                        )
+                    )
+                else:
+                    new_schema.append(
+                        bigquery.SchemaField(field.name, field.field_type, mode="NULLABLE")
+                    )
+
+            if new_schema != original_schema:
+                table.schema = new_schema
+                table = self.client.update_table(table, ["schema"])
+
+        return [
+            expression
+            for expression in alter_expressions
+            if expression not in nested_alter_expressions
+        ]
 
     def __load_pandas_to_table(
         self,
