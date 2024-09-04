@@ -303,8 +303,9 @@ def diff(ctx: click.Context, environment: t.Optional[str] = None) -> None:
 )
 @click.option(
     "--skip-backfill",
+    "--dry-run",
     is_flag=True,
-    help="Skip the backfill step.",
+    help="Skip the backfill step and only create a virtual update for the plan.",
 )
 @click.option(
     "--forward-only",
