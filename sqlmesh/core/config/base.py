@@ -36,6 +36,15 @@ def update_field(
 
         The updated field
     """
+
+    def _update_pydantic_config(old: BaseConfig, new: BaseConfig) -> PydanticModel:
+        if type(new) != type(old):
+            raise ConfigError(
+                "NESTED_UPDATE behavior requires both values to have the same type. "
+                f"{type(old)} and {type(new)} were given instead."
+            )
+        return old.update_with(new)
+
     if not old:
         return new
 
@@ -78,18 +87,20 @@ def update_field(
 
         return combined
     if update_strategy == UpdateStrategy.NESTED_UPDATE:
-        if not isinstance(old, BaseConfig):
+        if not isinstance(old, BaseConfig) and not isinstance(old, dict):
             raise ConfigError(
-                f"NESTED_UPDATE behavior requires a config object. {type(old)} was given instead."
+                f"NESTED_UPDATE behavior requires a config object and a dict of config objects as values. {type(old)} was given instead."
             )
 
-        if type(new) != type(old):
-            raise ConfigError(
-                "NESTED_UPDATE behavior requires both values to have the same type. "
-                f"{type(old)} and {type(new)} were given instead."
-            )
+        if isinstance(old, dict):
+            for k, pydantic_model in new.items():
+                if k in old:
+                    old[k] = _update_pydantic_config(old[k], pydantic_model)
+                else:
+                    old[k] = pydantic_model
 
-        return old.update_with(new)
+            return old
+        return _update_pydantic_config(old, new)
 
     raise ConfigError(f"Unknown update strategy {update_strategy}.")
 

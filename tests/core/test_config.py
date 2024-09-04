@@ -12,6 +12,8 @@ from sqlmesh.core.config import (
     DuckDBConnectionConfig,
     GatewayConfig,
     ModelDefaultsConfig,
+    BigQueryConnectionConfig,
+    MotherDuckConnectionConfig,
 )
 from sqlmesh.core.config.connection import DuckDBAttachOptions
 from sqlmesh.core.config.feature_flag import DbtFeatureFlag, FeatureFlag
@@ -305,6 +307,73 @@ def test_load_config_from_env_invalid_variable_name():
             match="Invalid SQLMesh configuration variable 'sqlmesh__'.",
         ):
             load_config_from_env()
+
+
+def test_load_yaml_config_env_var_gateway_override(tmp_path_factory):
+    config_path = tmp_path_factory.mktemp("yaml_config") / "config.yaml"
+    with open(config_path, "w", encoding="utf-8") as fd:
+        fd.write(
+            """
+gateways:
+    testing:
+        connection:
+            type: motherduck
+            database: blah
+model_defaults:
+    dialect: bigquery
+        """
+        )
+    with mock.patch.dict(
+        os.environ,
+        {
+            "SQLMESH__GATEWAYS__TESTING__STATE_CONNECTION__TYPE": "bigquery",
+            "SQLMESH__DEFAULT_GATEWAY": "testing",
+        },
+    ):
+        assert load_config_from_paths(
+            Config,
+            project_paths=[config_path],
+        ) == Config(
+            gateways={
+                "testing": GatewayConfig(
+                    connection=MotherDuckConnectionConfig(database="blah"),
+                    state_connection=BigQueryConnectionConfig(),
+                ),
+            },
+            model_defaults=ModelDefaultsConfig(dialect="bigquery"),
+            default_gateway="testing",
+        )
+
+
+def test_load_py_config_env_var_gateway_override(tmp_path_factory):
+    config_path = tmp_path_factory.mktemp("python_config") / "config.py"
+    with open(config_path, "w", encoding="utf-8") as fd:
+        fd.write(
+            """from sqlmesh.core.config import Config, DuckDBConnectionConfig, GatewayConfig, ModelDefaultsConfig
+config = Config(gateways={"duckdb_gateway": GatewayConfig(connection=DuckDBConnectionConfig())}, model_defaults=ModelDefaultsConfig(dialect=''))
+        """
+        )
+    with mock.patch.dict(
+        os.environ,
+        {
+            "SQLMESH__GATEWAYS__DUCKDB_GATEWAY__STATE_CONNECTION__TYPE": "bigquery",
+            "SQLMESH__DEFAULT_GATEWAY": "duckdb_gateway",
+        },
+    ):
+        config = load_config_from_paths(
+            Config,
+            project_paths=[config_path],
+        )
+        assert config == Config(
+            gateways={  # type: ignore
+                "duckdb_gateway": GatewayConfig(
+                    connection=DuckDBConnectionConfig(),
+                    state_connection=BigQueryConnectionConfig(),
+                ),
+            },
+            model_defaults=ModelDefaultsConfig(dialect=""),
+            default_gateway="duckdb_gateway",
+        )
 
 
 def test_load_config_from_python_module_missing_config(tmp_path):
