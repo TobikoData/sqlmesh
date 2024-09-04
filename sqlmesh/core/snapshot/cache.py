@@ -3,7 +3,12 @@ from __future__ import annotations
 import typing as t
 
 from pathlib import Path
-from sqlmesh.core.model.cache import OptimizedQueryCache
+from sqlmesh.core.model.cache import (
+    OptimizedQueryCache,
+    optimized_query_cache_pool,
+    load_optimized_query_cache,
+)
+from sqlmesh.core import constants as c
 from sqlmesh.core.snapshot.definition import Snapshot, SnapshotId
 from sqlmesh.utils.cache import FileCache
 
@@ -31,12 +36,10 @@ class SnapshotCache:
         """
         snapshots = {}
         cache_hits: t.Set[SnapshotId] = set()
+
         for s_id in snapshot_ids:
             snapshot = self._snapshot_cache.get(self._entry_name(s_id))
             if snapshot:
-                if snapshot.is_model:
-                    self._optimized_query_cache.with_optimized_query(snapshot.model)
-                self._update_node_hash_cache(snapshot)
                 snapshot.intervals = []
                 snapshot.dev_intervals = []
                 snapshots[s_id] = snapshot
@@ -46,15 +49,37 @@ class SnapshotCache:
         if snapshot_ids_to_load:
             loaded_snapshots = loader(snapshot_ids_to_load)
             for snapshot in loaded_snapshots:
-                self._update_node_hash_cache(snapshot)
-                self.put(snapshot)
                 snapshots[snapshot.snapshot_id] = snapshot
+
+        if c.CAN_FORK:
+            with optimized_query_cache_pool(self._optimized_query_cache) as executor:
+                for key, entry_name in executor.map(
+                    load_optimized_query_cache,
+                    (
+                        (snapshot.model, s_id)
+                        for s_id, snapshot in snapshots.items()
+                        if snapshot.is_model
+                    ),
+                ):
+                    if entry_name:
+                        self._optimized_query_cache.with_optimized_query(
+                            snapshots[key].model, entry_name
+                        )
+
+        for snapshot in snapshots.values():
+            self._update_node_hash_cache(snapshot)
+
+            if snapshot.is_model and not c.CAN_FORK:
+                self._optimized_query_cache.with_optimized_query(snapshot.model)
+
+            entry_name = self._entry_name(snapshot.snapshot_id)
+            if not self._snapshot_cache.exists(entry_name):
+                self.put(entry_name, value=snapshot)
 
         return snapshots, cache_hits
 
     def put(self, snapshot: Snapshot) -> None:
         if snapshot.is_model:
-            self._optimized_query_cache.put(snapshot.model)
             # make sure we preload full_depends_on
             snapshot.model.full_depends_on
         self._snapshot_cache.put(self._entry_name(snapshot.snapshot_id), value=snapshot)

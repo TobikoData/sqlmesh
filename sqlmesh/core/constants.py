@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import datetime
+import os
 from pathlib import Path
 
 SQLMESH = "sqlmesh"
@@ -28,6 +29,7 @@ DEFAULT_TIME_COLUMN_FORMAT = "%Y-%m-%d"
 MAX_MODEL_DEFINITION_SIZE = 10000
 """Maximum number of characters in a model definition"""
 
+CAN_FORK = hasattr(os, "fork") and "PYTEST_CURRENT_TEST" not in os.environ
 EPOCH = datetime.date(1970, 1, 1)
 
 DEFAULT_MAX_LIMIT = 1000

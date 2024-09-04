@@ -1,7 +1,9 @@
 from __future__ import annotations
 
 import logging
+import multiprocessing as mp
 import typing as t
+from concurrent.futures import ProcessPoolExecutor
 from pathlib import Path
 
 from sqlglot import exp
@@ -14,6 +16,8 @@ from sqlmesh.utils.hashing import crc32
 from dataclasses import dataclass
 
 logger = logging.getLogger(__name__)
+
+T = t.TypeVar("T")
 
 
 class ModelCache:
@@ -126,6 +130,48 @@ class OptimizedQueryCache:
         hash_data.append(str([(k, v) for k, v in model.sorted_python_env]))
         hash_data.extend(model.jinja_macros.data_hash_values)
         return f"{model.name}_{crc32(hash_data)}"
+
+
+def optimized_query_cache_pool(optimized_query_cache: OptimizedQueryCache) -> ProcessPoolExecutor:
+    return ProcessPoolExecutor(
+        mp_context=mp.get_context("fork"),
+        initializer=_init_optimized_query_cache,
+        initargs=(optimized_query_cache,),
+    )
+
+
+@t.overload
+def load_optimized_query_cache(
+    model_or_tuple: t.Tuple[Model, T],
+) -> t.Tuple[T, t.Optional[str]]: ...
+
+
+@t.overload
+def load_optimized_query_cache(model_or_tuple: Model) -> t.Tuple[str, t.Optional[str]]: ...
+
+
+def load_optimized_query_cache(model_or_tuple):  # type: ignore
+    assert _optimized_query_cache
+
+    if isinstance(model_or_tuple, _Model):
+        model = model_or_tuple
+        key = None
+    else:
+        model, key = model_or_tuple
+
+    if isinstance(model, SqlModel):
+        entry_name = _optimized_query_cache.put(model)
+    else:
+        entry_name = None
+    return key or model.fqn, entry_name
+
+
+_optimized_query_cache: t.Optional[OptimizedQueryCache] = None
+
+
+def _init_optimized_query_cache(optimized_query_cache: OptimizedQueryCache) -> None:
+    global _optimized_query_cache
+    _optimized_query_cache = optimized_query_cache
 
 
 def _mapping_schema_hash_data(schema: t.Dict[str, t.Any]) -> t.List[str]:
