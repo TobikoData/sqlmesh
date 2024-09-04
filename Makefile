@@ -91,13 +91,13 @@ engine-up: engine-clickhouse-up engine-mssql-up engine-mysql-up engine-postgres-
 engine-down: engine-clickhouse-down engine-mssql-down engine-mysql-down engine-postgres-down engine-spark-down engine-trino-down
 
 fast-test:
-	pytest -n auto -m "fast and not cicdonly"
+	pytest -n auto -m "fast and not cicdonly" && pytest -m "isolated"
 
 slow-test:
-	pytest -n auto -m "(fast or slow) and not cicdonly"
+	pytest -n auto -m "(fast or slow) and not cicdonly" && pytest -m "isolated"
 
 cicd-test:
-	pytest -n auto -m "fast or slow" --junitxml=test-results/junit-cicd.xml
+	pytest -n auto -m "fast or slow" --junitxml=test-results/junit-cicd.xml && pytest -m "isolated"
 
 core-fast-test:
 	pytest -n auto -m "fast and not web and not github and not dbt and not airflow and not jupyter"

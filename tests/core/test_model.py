@@ -283,7 +283,7 @@ def test_model_qualification():
         )
 
         model = load_sql_based_model(expressions)
-        model.render_query(optimize=True)
+        model.render_query(needs_optimization=True)
         assert (
             mock_logger.call_args[0][0]
             == "%s for model '%s', the column may not exist or is ambiguous"
@@ -2575,7 +2575,7 @@ def test_update_schema():
 
     logger = logging.getLogger("sqlmesh.core.renderer")
     with patch.object(logger, "warning") as mock_logger:
-        model.render_query(optimize=True)
+        model.render_query(needs_optimization=True)
         assert mock_logger.call_args[0][0] == missing_schema_warning_msg(
             '"db"."table"', ('"table_b"',)
         )
@@ -2586,7 +2586,7 @@ def test_update_schema():
         '"table_a"': {"a": "INT"},
         '"table_b"': {"b": "INT"},
     }
-    model.render_query(optimize=True)
+    model.render_query(needs_optimization=True)
 
 
 def test_missing_schema_warnings():
@@ -2609,27 +2609,27 @@ def test_missing_schema_warnings():
     # star, no schema, no deps
     with patch.object(logger, "warning") as mock_logger:
         model = load_sql_based_model(d.parse("MODEL (name test); SELECT * FROM (SELECT 1 a) x"))
-        model.render_query(optimize=True)
+        model.render_query(needs_optimization=True)
         mock_logger.assert_not_called()
 
     # star, full schema
     with patch.object(logger, "warning") as mock_logger:
         model = load_sql_based_model(d.parse("MODEL (name test); SELECT * FROM a CROSS JOIN b"))
         model.update_schema(full_schema)
-        model.render_query(optimize=True)
+        model.render_query(needs_optimization=True)
         mock_logger.assert_not_called()
 
     # star, partial schema
     with patch.object(logger, "warning") as mock_logger:
         model = load_sql_based_model(d.parse("MODEL (name test); SELECT * FROM a CROSS JOIN b"))
         model.update_schema(partial_schema)
-        model.render_query(optimize=True)
+        model.render_query(needs_optimization=True)
         assert mock_logger.call_args[0][0] == missing_schema_warning_msg('"test"', ('"b"',))
 
     # star, no schema
     with patch.object(logger, "warning") as mock_logger:
         model = load_sql_based_model(d.parse("MODEL (name test); SELECT * FROM b JOIN a"))
-        model.render_query(optimize=True)
+        model.render_query(needs_optimization=True)
         assert mock_logger.call_args[0][0] == missing_schema_warning_msg('"test"', ('"a"', '"b"'))
 
     # no star, full schema
@@ -2638,7 +2638,7 @@ def test_missing_schema_warnings():
             d.parse("MODEL (name test); SELECT x::INT FROM a CROSS JOIN b")
         )
         model.update_schema(full_schema)
-        model.render_query(optimize=True)
+        model.render_query(needs_optimization=True)
         mock_logger.assert_not_called()
 
     # no star, partial schema
@@ -2647,7 +2647,7 @@ def test_missing_schema_warnings():
             d.parse("MODEL (name test); SELECT x::INT FROM a CROSS JOIN b")
         )
         model.update_schema(partial_schema)
-        model.render_query(optimize=True)
+        model.render_query(needs_optimization=True)
         mock_logger.assert_not_called()
 
     # no star, empty schema
@@ -2655,7 +2655,7 @@ def test_missing_schema_warnings():
         model = load_sql_based_model(
             d.parse("MODEL (name test); SELECT x::INT FROM a CROSS JOIN b")
         )
-        model.render_query(optimize=True)
+        model.render_query(needs_optimization=True)
         mock_logger.assert_not_called()
 
 
@@ -5773,41 +5773,3 @@ def test_cache():
     model = load_sql_based_model(expressions)
     assert model.depends_on == {'"y"'}
     assert model.copy(update={"depends_on_": {'"z"'}}).depends_on == {'"z"', '"y"'}
-
-
-def test_parallel_load(assert_exp_eq, mocker):
-    import os
-    from sqlmesh.core import loader
-
-    pytest_current_test = os.environ.pop("PYTEST_CURRENT_TEST")
-    try:
-        spy = mocker.spy(loader, "_update_model_schemas_parallel")
-        context = Context(paths="examples/sushi")
-
-        if hasattr(os, "fork"):
-            spy.assert_called()
-
-        assert_exp_eq(
-            context.render("sushi.customers"),
-            """
-    WITH "current_marketing" AS (
-      SELECT
-        "marketing"."customer_id" AS "customer_id",
-        "marketing"."status" AS "status"
-      FROM "memory"."sushi"."marketing" AS "marketing"
-      WHERE
-        "marketing"."valid_to" IS NULL
-    )
-    SELECT DISTINCT
-      CAST("o"."customer_id" AS INT) AS "customer_id", /* this comment should not be registered */
-      "m"."status" AS "status",
-      "d"."zip" AS "zip"
-    FROM "memory"."sushi"."orders" AS "o"
-    LEFT JOIN "current_marketing" AS "m"
-      ON "m"."customer_id" = "o"."customer_id"
-    LEFT JOIN "memory"."raw"."demographics" AS "d"
-      ON "d"."customer_id" = "o"."customer_id"
-            """,
-        )
-    finally:
-        os.environ["PYTEST_CURRENT_TEST"] = pytest_current_test

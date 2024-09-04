@@ -961,7 +961,7 @@ class _Model(ModelMeta, frozen=True):
         if self._full_depends_on is None:
             depends_on = self.depends_on_ or set()
 
-            query = self.render_query(optimize=False)
+            query = self.render_query(needs_optimization=False)
             if query is not None:
                 depends_on |= d.find_tables(
                     query, default_catalog=self.default_catalog, dialect=self.dialect
