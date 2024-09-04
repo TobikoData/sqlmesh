@@ -2019,10 +2019,6 @@ class GenericContext(BaseContext, t.Generic[C]):
         )
 
 
-class OtherPlanBuilder(PlanBuilder):
-    pass
-
-
 class Context(GenericContext[Config]):
     CONFIG_TYPE = Config
     PLAN_BUILDER_TYPE = OtherPlanBuilder
