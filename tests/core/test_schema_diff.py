@@ -458,13 +458,19 @@ def test_schema_diff_calculate_type_transitions():
             "STRUCT<id INT, info STRUCT<col_a INT, col_b INT, col_c INT>>",
             "STRUCT<id INT, info STRUCT<col_a INT, col_b INT>>",
             [
-                TableAlterOperation.alter_type(
+                TableAlterOperation.drop(
                     [
                         TableAlterColumn.struct("info"),
                     ],
-                    "STRUCT<col_a INT, col_b INT>",
+                    expected_table_struct="STRUCT<id INT>",
+                    column_type="STRUCT<col_a INT, col_b INT, col_c INT>",
+                ),
+                TableAlterOperation.add(
+                    [
+                        TableAlterColumn.struct("info"),
+                    ],
                     expected_table_struct="STRUCT<id INT, info STRUCT<col_a INT, col_b INT>>",
-                    current_type="STRUCT<col_a INT, col_b INT>",
+                    column_type="STRUCT<col_a INT, col_b INT>",
                 ),
             ],
             dict(
@@ -580,13 +586,19 @@ def test_schema_diff_calculate_type_transitions():
             "STRUCT<id INT, info STRUCT<col_a INT, col_b INT, col_c INT>>",
             "STRUCT<id INT, info STRUCT<col_a INT, col_b TEXT, col_d INT>>",
             [
-                TableAlterOperation.alter_type(
+                TableAlterOperation.drop(
                     [
                         TableAlterColumn.struct("info"),
                     ],
-                    "STRUCT<col_a INT, col_b TEXT, col_d INT>",
+                    expected_table_struct="STRUCT<id INT>",
+                    column_type="STRUCT<col_a INT, col_b INT, col_c INT>",
+                ),
+                TableAlterOperation.add(
+                    [
+                        TableAlterColumn.struct("info"),
+                    ],
                     expected_table_struct="STRUCT<id INT, info STRUCT<col_a INT, col_b TEXT, col_d INT>>",
-                    current_type="STRUCT<col_a INT, col_b TEXT, col_d INT>",
+                    column_type="STRUCT<col_a INT, col_b TEXT, col_d INT>",
                 ),
             ],
             dict(

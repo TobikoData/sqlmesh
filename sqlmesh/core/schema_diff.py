@@ -454,6 +454,15 @@ class SchemaDiffer(PydanticModel):
         )
         return operations
 
+    def _requires_drop_alteration(
+        self, current_struct: exp.DataType, new_struct: exp.DataType
+    ) -> bool:
+        for current_pos, current_kwarg in enumerate(current_struct.expressions.copy()):
+            new_pos, _ = self._get_matching_kwarg(current_kwarg, new_struct, current_pos)
+            if new_pos is None:
+                return True
+        return False
+
     def _resolve_drop_operation(
         self,
         parent_columns: t.List[TableAlterColumn],
@@ -526,14 +535,15 @@ class SchemaDiffer(PydanticModel):
         current_type = exp.DataType.build(current_type, copy=False)
         if self.support_nested_operations:
             if new_type.this == current_type.this == exp.DataType.Type.STRUCT:
-                operations = self._get_operations(
-                    columns,
-                    current_type,
-                    new_type,
-                    root_struct,
-                )
-                if not operations[0].op == TableAlterOperationType.DROP or self.support_nested_drop:
-                    return operations
+                if self.support_nested_drop or not self._requires_drop_alteration(
+                    current_type, new_type
+                ):
+                    return self._get_operations(
+                        columns,
+                        current_type,
+                        new_type,
+                        root_struct,
+                    )
 
             if new_type.this == current_type.this == exp.DataType.Type.ARRAY:
                 # Some engines (i.e. Snowflake) don't support defining types on arrays
@@ -542,17 +552,15 @@ class SchemaDiffer(PydanticModel):
                 new_array_type = new_type.expressions[0]
                 current_array_type = current_type.expressions[0]
                 if new_array_type.this == current_array_type.this == exp.DataType.Type.STRUCT:
-                    operations = self._get_operations(
-                        columns,
-                        current_array_type,
-                        new_array_type,
-                        root_struct,
-                    )
-                    if (
-                        not operations[0].op == TableAlterOperationType.DROP
-                        or self.support_nested_drop
+                    if self.support_nested_drop or not self._requires_drop_alteration(
+                        current_array_type, new_array_type
                     ):
-                        return operations
+                        return self._get_operations(
+                            columns,
+                            current_array_type,
+                            new_array_type,
+                            root_struct,
+                        )
         if self._is_coerceable_type(current_type, new_type):
             return []
         elif self._is_compatible_type(current_type, new_type):
