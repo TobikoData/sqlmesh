@@ -237,12 +237,10 @@ class BigQueryEngineAdapter(InsertOverwriteWithMergeMixin):
         nested_fields, non_nested_expressions = self._split_alter_expressions(alter_expressions)
 
         if nested_fields:
-            self._update_table_schema(nested_fields, alter_expressions[0].this)
+            self._update_table_schema_nested_fields(nested_fields, alter_expressions[0].this)
 
         if non_nested_expressions:
-            with self.transaction():
-                for alter_expression in non_nested_expressions:
-                    self.execute(alter_expression)
+            super().alter_table(non_nested_expressions)
 
     def fetchone(
         self,
@@ -288,7 +286,7 @@ class BigQueryEngineAdapter(InsertOverwriteWithMergeMixin):
         """
         Returns a dictionary of the nested fields to add and a list of the non-nested alter expressions.
         """
-        fields_to_add: t.Dict[str, list[t.Tuple[str, str]]] = defaultdict(list)
+        nested_fields_to_add: t.Dict[str, list[t.Tuple[str, str]]] = defaultdict(list)
         non_nested_expressions = []
 
         for alter_expression in alter_expressions:
@@ -301,17 +299,17 @@ class BigQueryEngineAdapter(InsertOverwriteWithMergeMixin):
                 record = action.this.this.sql(dialect="bigquery")
                 field = action.this.expression.sql(dialect="bigquery")
                 data_type = action.kind.sql(dialect="bigquery")
-                fields_to_add[record].append((data_type, field))
+                nested_fields_to_add[record].append((data_type, field))
             else:
                 non_nested_expressions.append(alter_expression)
 
-        return fields_to_add, non_nested_expressions
+        return nested_fields_to_add, non_nested_expressions
 
-    def _update_table_schema(
-        self, fields_to_add: t.Dict[str, list[t.Tuple[str, str]]], table_name: str
+    def _update_table_schema_nested_fields(
+        self, nested_fields_to_add: t.Dict[str, list[t.Tuple[str, str]]], table_name: str
     ) -> None:
         """
-        Update the BigQuery table schema by adding the new nested fields.
+        Updates a BigQuery table schema by adding the new nested fields provided.
         """
         from google.cloud import bigquery
 
@@ -321,8 +319,8 @@ class BigQueryEngineAdapter(InsertOverwriteWithMergeMixin):
 
         for field in original_schema:
             current_fields = list(field.fields)
-            if field.name in fields_to_add:
-                for new_field in fields_to_add[field.name]:
+            if field.name in nested_fields_to_add:
+                for new_field in nested_fields_to_add[field.name]:
                     current_fields.append(
                         bigquery.SchemaField(new_field[1], new_field[0], mode="NULLABLE")
                     )
