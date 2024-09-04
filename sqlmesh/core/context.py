@@ -2021,4 +2021,4 @@ class GenericContext(BaseContext, t.Generic[C]):
 
 class Context(GenericContext[Config]):
     CONFIG_TYPE = Config
-    PLAN_BUILDER_TYPE = OtherPlanBuilder
+    PLAN_BUILDER_TYPE = PlanBuilder
