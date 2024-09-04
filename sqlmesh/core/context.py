@@ -297,7 +297,7 @@ class GenericContext(BaseContext, t.Generic[C]):
     CONFIG_TYPE: t.Type[C]
     """The type of config object to use (default: Config)."""
 
-    PLAN_BUILDER_TYPE: t.Type[PlanBuilder]
+    PLAN_BUILDER_TYPE = PlanBuilder
     """The type of plan builder object to use (default: PlanBuilder)."""
 
     def __init__(
@@ -2021,4 +2021,3 @@ class GenericContext(BaseContext, t.Generic[C]):
 
 class Context(GenericContext[Config]):
     CONFIG_TYPE = Config
-    PLAN_BUILDER_TYPE = PlanBuilder
