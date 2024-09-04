@@ -292,10 +292,13 @@ class GenericContext(BaseContext, t.Generic[C]):
         load: Whether or not to automatically load all models and macros (default True).
         console: The rich instance used for printing out CLI command results.
         users: A list of users to make known to SQLMesh.
-        config_type: The type of config object to use (default Config).
     """
 
     CONFIG_TYPE: t.Type[C]
+    """The type of config object to use (default: Config)."""
+
+    PLAN_BUILDER_TYPE = PlanBuilder
+    """The type of plan builder object to use (default: PlanBuilder)."""
 
     def __init__(
         self,
@@ -1163,7 +1166,7 @@ class GenericContext(BaseContext, t.Generic[C]):
                     days=1
                 )
 
-        return PlanBuilder(
+        return self.PLAN_BUILDER_TYPE(
             context_diff=context_diff,
             start=start,
             end=end,
