@@ -4564,6 +4564,32 @@ def test_variables_python_sql_model(mocker: MockerFixture) -> None:
     )
 
 
+def test_columns_python_sql_model() -> None:
+    @model(
+        "test_columns_python_model",
+        is_sql=True,
+        kind="full",
+        columns={"d": "Date", "s": "String", "dt": "DateTime"},
+    )
+    def model_with_columns(evaluator, **kwargs):
+        return exp.select("*").from_("fake")
+    
+    python_sql_model = model.get_registry()["test_columns_python_model"].model(
+        module_path=Path("."),
+        path=Path("."),
+    )
+
+    columns_to_types = python_sql_model.columns_to_types
+
+    assert columns_to_types is not None
+    assert isinstance(columns_to_types["d"], exp.DataType)
+    assert columns_to_types["d"].this == exp.DataType.Type.DATE
+    assert isinstance(columns_to_types["s"], exp.DataType)
+    assert columns_to_types["s"].this == exp.DataType.Type.TEXT
+    assert isinstance(columns_to_types["dt"], exp.DataType)
+    assert columns_to_types["dt"].this == exp.DataType.Type.DATETIME
+
+
 def test_named_variables_python_model(mocker: MockerFixture) -> None:
     @model(
         "test_named_variables_python_model",
