@@ -4573,7 +4573,7 @@ def test_columns_python_sql_model() -> None:
     )
     def model_with_columns(evaluator, **kwargs):
         return exp.select("*").from_("fake")
-    
+
     python_sql_model = model.get_registry()["test_columns_python_model"].model(
         module_path=Path("."),
         path=Path("."),
