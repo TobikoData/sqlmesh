@@ -79,7 +79,6 @@ from sqlmesh.core.notification_target import (
     NotificationTargetManager,
 )
 from sqlmesh.core.plan import Plan, PlanBuilder
-from sqlmesh.core.plan.builder import PB
 from sqlmesh.core.reference import ReferenceGraph
 from sqlmesh.core.scheduler import Scheduler
 from sqlmesh.core.schema_loader import create_external_models_file
@@ -277,7 +276,7 @@ class ExecutionContext(BaseContext):
         )
 
 
-class GenericContext(BaseContext, t.Generic[C, PB]):
+class GenericContext(BaseContext, t.Generic[C]):
     """Encapsulates a SQLMesh environment supplying convenient functions to perform various tasks.
 
     Args:
@@ -298,7 +297,7 @@ class GenericContext(BaseContext, t.Generic[C, PB]):
     CONFIG_TYPE: t.Type[C]
     """The type of config object to use (default: Config)."""
 
-    PLAN_BUILDER_TYPE: t.Type[PB]
+    PLAN_BUILDER_TYPE: t.Type[PlanBuilder]
     """The type of plan builder object to use (default: PlanBuilder)."""
 
     def __init__(
@@ -509,7 +508,7 @@ class GenericContext(BaseContext, t.Generic[C, PB]):
         if self._loader.reload_needed():
             self.load()
 
-    def load(self, update_schemas: bool = True) -> GenericContext[C, PB]:
+    def load(self, update_schemas: bool = True) -> GenericContext[C]:
         """Load all files in the context's path."""
         load_start_ts = time.perf_counter()
         with sys_path(*self.configs):
@@ -2020,6 +2019,10 @@ class GenericContext(BaseContext, t.Generic[C, PB]):
         )
 
 
-class Context(GenericContext[Config, PlanBuilder]):
+class OtherPlanBuilder(PlanBuilder):
+    pass
+
+
+class Context(GenericContext[Config]):
     CONFIG_TYPE = Config
-    PLAN_BUILDER_TYPE = PlanBuilder
+    PLAN_BUILDER_TYPE = OtherPlanBuilder
