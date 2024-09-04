@@ -134,6 +134,8 @@ class model(registry_decorator):
 
         if self.is_sql:
             query = MacroFunc(this=exp.Anonymous(this=entrypoint))
+            if self.columns:
+                common_kwargs["columns"] = self.columns
             return create_sql_model(
                 self.name, query, module_path=module_path, dialect=dialect, **common_kwargs
             )
