@@ -5747,3 +5747,41 @@ def test_cache():
     model = load_sql_based_model(expressions)
     assert model.depends_on == {'"y"'}
     assert model.copy(update={"depends_on_": {'"z"'}}).depends_on == {'"z"', '"y"'}
+
+
+def test_parallel_load(assert_exp_eq, mocker):
+    import os
+    from sqlmesh.core import loader
+
+    pytest_current_test = os.environ.pop("PYTEST_CURRENT_TEST")
+    try:
+        spy = mocker.spy(loader, "_update_model_schemas_parallel")
+        context = Context(paths="examples/sushi")
+
+        if hasattr(os, "fork"):
+            spy.assert_called()
+
+        assert_exp_eq(
+            context.render("sushi.customers"),
+            """
+    WITH "current_marketing" AS (
+      SELECT
+        "marketing"."customer_id" AS "customer_id",
+        "marketing"."status" AS "status"
+      FROM "memory"."sushi"."marketing" AS "marketing"
+      WHERE
+        "marketing"."valid_to" IS NULL
+    )
+    SELECT DISTINCT
+      CAST("o"."customer_id" AS INT) AS "customer_id", /* this comment should not be registered */
+      "m"."status" AS "status",
+      "d"."zip" AS "zip"
+    FROM "memory"."sushi"."orders" AS "o"
+    LEFT JOIN "current_marketing" AS "m"
+      ON "m"."customer_id" = "o"."customer_id"
+    LEFT JOIN "memory"."raw"."demographics" AS "d"
+      ON "d"."customer_id" = "o"."customer_id"
+            """,
+        )
+    finally:
+        os.environ["PYTEST_CURRENT_TEST"] = pytest_current_test
