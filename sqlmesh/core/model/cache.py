@@ -72,16 +72,17 @@ class OptimizedQueryCache:
             path, prefix="optimized_query"
         )
 
-    def with_optimized_query(self, model: Model) -> bool:
+    def with_optimized_query(self, model: Model, name: t.Optional[str] = None) -> bool:
         """Adds an optimized query to the model's in-memory cache.
 
         Args:
             model: The model to add the optimized query to.
+            name: The cache entry name of the model.
         """
         if not isinstance(model, SqlModel):
             return False
 
-        name = self._entry_name(model)
+        name = self._entry_name(model) if name is None else name
         cache_entry = self._file_cache.get(name)
         if cache_entry:
             try:
@@ -101,15 +102,17 @@ class OptimizedQueryCache:
         self._put(name, model)
         return False
 
-    def put(self, model: Model) -> None:
+    def put(self, model: Model) -> t.Optional[str]:
         if not isinstance(model, SqlModel):
-            return
+            return None
 
         name = self._entry_name(model)
+
         if self._file_cache.exists(name):
-            return
+            return name
 
         self._put(name, model)
+        return name
 
     def _put(self, name: str, model: SqlModel) -> None:
         optimized_query = model.render_query()

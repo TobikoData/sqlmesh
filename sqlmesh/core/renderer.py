@@ -77,6 +77,7 @@ class BaseExpressionRenderer:
         table_mapping: t.Optional[t.Dict[str, str]] = None,
         deployability_index: t.Optional[DeployabilityIndex] = None,
         runtime_stage: RuntimeStage = RuntimeStage.LOADING,
+        normalize_identifiers: bool = True,
         **kwargs: t.Any,
     ) -> t.List[t.Optional[exp.Expression]]:
         """Renders a expression, expanding macros with provided kwargs
@@ -89,6 +90,7 @@ class BaseExpressionRenderer:
             table_mapping: Table mapping of physical locations. Takes precedence over snapshot mappings.
             deployability_index: Determines snapshots that are deployable in the context of this evaluation.
             runtime_stage: Indicates the current runtime stage, for example if we're still loading the project, etc.
+            normalize_identifiers: Whether or not to normalize and quote identifiers.
             kwargs: Additional kwargs to pass to the renderer.
 
         Returns:
@@ -96,7 +98,7 @@ class BaseExpressionRenderer:
         """
 
         should_cache = self._should_cache(
-            runtime_stage, start, end, execution_time, *kwargs.values()
+            runtime_stage, start, end, execution_time, not normalize_identifiers, *kwargs.values()
         )
 
         if should_cache and self._cache:
@@ -193,7 +195,7 @@ class BaseExpressionRenderer:
                 raise_config_error(f"Failed to resolve macro for expression. {ex}", self._path)
 
             for expression in t.cast(t.List[exp.Expression], transformed_expressions):
-                with self._normalize_and_quote(expression) as expression:
+                with self._normalize_and_quote(expression, normalize_identifiers) as expression:
                     if hasattr(expression, "selects"):
                         for select in expression.selects:
                             if not isinstance(select, exp.Alias) and select.output_name not in (
@@ -295,8 +297,8 @@ class BaseExpressionRenderer:
             return expression
 
     @contextmanager
-    def _normalize_and_quote(self, query: E) -> t.Iterator[E]:
-        if self._normalize_identifiers:
+    def _normalize_and_quote(self, query: E, normalize_identifiers: bool = True) -> t.Iterator[E]:
+        if self._normalize_identifiers and normalize_identifiers:
             with d.normalize_and_quote(
                 query, self._dialect, self._default_catalog, quote=self._quote_identifiers
             ) as query:
@@ -400,10 +402,10 @@ class QueryRenderer(BaseExpressionRenderer):
         """
 
         should_cache = self._should_cache(
-            runtime_stage, start, end, execution_time, *kwargs.values()
+            runtime_stage, start, end, execution_time, not optimize, *kwargs.values()
         )
 
-        if should_cache and self._optimized_cache and optimize:
+        if should_cache and self._optimized_cache:
             query = self._optimized_cache
         else:
             try:
@@ -415,6 +417,7 @@ class QueryRenderer(BaseExpressionRenderer):
                     table_mapping=table_mapping,
                     deployability_index=deployability_index,
                     runtime_stage=runtime_stage,
+                    normalize_identifiers=optimize,
                     **kwargs,
                 )
             except ParsetimeAdapterCallError:
