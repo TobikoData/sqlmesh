@@ -2,8 +2,9 @@ from __future__ import annotations
 
 import logging
 import multiprocessing as mp
+import os
 import typing as t
-from concurrent.futures import ProcessPoolExecutor
+from concurrent.futures import Executor, ProcessPoolExecutor, ThreadPoolExecutor
 from pathlib import Path
 
 from sqlglot import exp
@@ -132,12 +133,33 @@ class OptimizedQueryCache:
         return f"{model.name}_{crc32(hash_data)}"
 
 
-def optimized_query_cache_pool(optimized_query_cache: OptimizedQueryCache) -> ProcessPoolExecutor:
-    return ProcessPoolExecutor(
-        mp_context=mp.get_context("fork"),
-        initializer=_init_optimized_query_cache,
-        initargs=(optimized_query_cache,),
-    )
+def optimized_query_cache_pool(optimized_query_cache: OptimizedQueryCache) -> Executor:
+    if hasattr(os, "sched_getaffinity"):
+        # Factors in the number of available CPUs even if the process is bound to a subset of them
+        # (e.g. via taskset) to avoid oversubscribing the system and causing kill signals
+        max_workers = len(os.sched_getaffinity(0))  # type: ignore
+    else:
+        # Fall back to the number of CPUs if the affinity is not available
+        max_workers = os.cpu_count() or 1
+
+    # Override the number of workers with the SQLMESH_MAX_PROCESSES environment variable if set
+    max_workers = max(1, int(os.getenv("SQLMESH_MAX_PROCESSES", max_workers)))
+
+    mp_options = {
+        "max_workers": max_workers,
+        "mp_context": mp.get_context("fork"),
+        "initializer": _init_optimized_query_cache,
+        "initargs": (optimized_query_cache,),
+    }
+
+    mp_cls: t.Type[Executor]
+    if max_workers > 1:
+        mp_cls = ProcessPoolExecutor
+    else:
+        mp_cls = ThreadPoolExecutor
+        del mp_options["mp_context"]
+
+    return mp_cls(**mp_options)
 
 
 @t.overload
