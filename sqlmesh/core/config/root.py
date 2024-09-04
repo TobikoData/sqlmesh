@@ -118,7 +118,7 @@ class Config(BaseConfig):
     disable_anonymized_analytics: bool = False
 
     _FIELD_UPDATE_STRATEGY: t.ClassVar[t.Dict[str, UpdateStrategy]] = {
-        "gateways": UpdateStrategy.KEY_UPDATE,
+        "gateways": UpdateStrategy.NESTED_UPDATE,
         "notification_targets": UpdateStrategy.EXTEND,
         "ignore_patterns": UpdateStrategy.EXTEND,
         "users": UpdateStrategy.EXTEND,
