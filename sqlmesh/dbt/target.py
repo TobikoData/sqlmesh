@@ -13,7 +13,6 @@ from sqlmesh.core.config.connection import (
     BigQueryConnectionConfig,
     BigQueryConnectionMethod,
     BigQueryPriority,
-    ClickhouseConnectionConfig,
     ConnectionConfig,
     DatabricksConnectionConfig,
     DuckDBConnectionConfig,
@@ -1039,7 +1038,6 @@ class AthenaConfig(TargetConfig):
 
 
 TARGET_TYPE_TO_CONFIG_CLASS: t.Dict[str, t.Type[TargetConfig]] = {
-    "clickhouse": ClickhouseConfig,
     "databricks": DatabricksConfig,
     "duckdb": DuckDbConfig,
     "postgres": PostgresConfig,
