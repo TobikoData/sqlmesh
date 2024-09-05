@@ -1367,7 +1367,7 @@ class EngineAdapter:
         truncate: bool = False,
         **kwargs: t.Any,
     ) -> None:
-        self._scd_type_2(
+        with self._build_scd_type_2_query_and_cols(
             target_table=target_table,
             source_table=source_table,
             unique_key=unique_key,
@@ -1401,7 +1401,7 @@ class EngineAdapter:
         truncate: bool = False,
         **kwargs: t.Any,
     ) -> None:
-        self._scd_type_2(
+        with self._build_scd_type_2_query_and_cols(
             target_table=target_table,
             source_table=source_table,
             unique_key=unique_key,
@@ -1418,7 +1418,8 @@ class EngineAdapter:
             **kwargs,
         )
 
-    def _scd_type_2(
+    @contextlib.contextmanager
+    def _build_scd_type_2_query_and_cols(
         self,
         target_table: TableName,
         source_table: QueryOrDF,
@@ -1432,8 +1433,6 @@ class EngineAdapter:
         updated_at_as_valid_from: bool = False,
         execution_time_as_valid_from: bool = False,
         columns_to_types: t.Optional[t.Dict[str, exp.DataType]] = None,
-        table_description: t.Optional[str] = None,
-        column_descriptions: t.Optional[t.Dict[str, str]] = None,
         truncate: bool = False,
         **kwargs: t.Any,
     ) -> None:
@@ -1608,7 +1607,10 @@ class EngineAdapter:
                     )
                     .else_(updated_at_col),
                 )
-                .when(prefixed_valid_from_col.is_(exp.Null()), update_valid_from_start)
+                .when(
+                    prefixed_valid_from_col.is_(exp.Null()),
+                    update_valid_from_start,
+                )
                 .else_(prefixed_valid_from_col)
             ).as_(valid_from_col.this)
 

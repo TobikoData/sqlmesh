@@ -379,6 +379,14 @@ def to_time_column(
                 nullable=nullable or time_column_type.args.get("nullable", False),
             )
 
+    # type comparisons should be on inner type if type is a nested Nullable
+    time_column_is_type = (
+        time_column_type.expressions[0]
+        if time_column_type.is_type(exp.DataType.Type.NULLABLE, check_nullable=True)
+        and time_column_type.expressions
+        else time_column_type
+    )
+
     if isinstance(time_column, exp.Null):
         return exp.cast(time_column, to=time_column_type)
     if time_column_type.is_type(exp.DataType.Type.DATE, exp.DataType.Type.DATE32):
