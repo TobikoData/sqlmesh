@@ -95,7 +95,6 @@ setup(
             "custom-materializations",
         ],
         "cicdtest": [
-            "dbt-clickhouse",
             "dbt-databricks",
             "dbt-redshift",
             "dbt-sqlserver>=1.7.0",

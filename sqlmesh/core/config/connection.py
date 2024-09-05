@@ -1387,15 +1387,13 @@ class ClickhouseConnectionConfig(ConnectionConfig):
     username: str
     password: t.Optional[str] = None
     port: t.Optional[int] = None
-    secure: bool = False
     cluster: t.Optional[str] = None
     connect_timeout: int = 10
     send_receive_timeout: int = 300
     verify: bool = True
+    query_limit: int = 0
     use_compression: bool = True
     compression_method: t.Optional[str] = None
-    connection_settings: t.Optional[t.Dict[str, t.Any]] = None
-    query_limit: int = 0
 
     concurrent_tasks: int = 1
     register_comments: bool = True
@@ -1409,7 +1407,6 @@ class ClickhouseConnectionConfig(ConnectionConfig):
             "host",
             "username",
             "port",
-            "secure",
             "password",
             "connect_timeout",
             "send_receive_timeout",
@@ -1457,18 +1454,13 @@ class ClickhouseConnectionConfig(ConnectionConfig):
         if compress and self.compression_method:
             compress = self.compression_method
 
-        # TODO: enable when clickhouse_connect handles `settings` dict incorrectly
-        #  - their `Connection` class needs to pop `settings` kwarg and pass it as a named arg to
-        #      `create_client`, otherwise it gets passed to both named and kwargs and errors
-        # connection_settings = self.connection_settings.copy() if self.connection_settings else {}
-        # connection_settings["mutations_sync"] = connection_settings.get("mutations_sync") or 2,
-        # connection_settings["insert_distributed_sync"] = connection_settings.get("insert_distributed_sync") or 1
+        system_settings = {"mutations_sync": "2", "insert_distributed_sync": "1"}
 
-        # if self.cluster or self._cloud_mode:
-        #     connection_settings["database_replicated_enforce_synchronous_settings"] = connection_settings.get("database_replicated_enforce_synchronous_settings") or 1
-        #     connection_settings["insert_quorum"] = connection_settings.get("insert_quorum") or "auto"
+        if self.cluster or self._cloud_mode:
+            system_settings["database_replicated_enforce_synchronous_settings"] = "1"
+            system_settings["insert_quorum"] = "auto"
 
-        return {"compress": compress, "client_name": f"SQLMesh/{__version__}"}
+        return {"compress": compress, "client_name": f"SQLMesh/{__version__}", **system_settings}
 
 
 CONNECTION_CONFIG_TO_TYPE = {

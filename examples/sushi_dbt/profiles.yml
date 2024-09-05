@@ -53,19 +53,4 @@ sushi:
       database: "{{ env_var('TRINO_DATABASE') }}"
       schema: sushi
       threads: 1
-    clickhouse:
-      type: clickhouse
-      host: "{{ env_var('CLICKHOUSE_HOST') }}"
-      port: 8123
-      user: "{{ env_var('CLICKHOUSE_USER') }}"
-      password: "{{ env_var('CLICKHOUSE_PASSWORD') }}"
-      threads: 1
-    clickhouse_cluster:
-      type: clickhouse
-      host: "{{ env_var('CLICKHOUSE_HOST') }}"
-      port: 8123
-      user: "{{ env_var('CLICKHOUSE_USER') }}"
-      password: "{{ env_var('CLICKHOUSE_PASSWORD') }}"
-      cluster: "{{ env_var('CLICKHOUSE_CLUSTER') }}"
-      threads: 1
   target: in_memory
