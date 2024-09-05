@@ -42,6 +42,8 @@ from sqlmesh.core.snapshot import (
     DeployabilityIndex,
     Intervals,
     Snapshot,
+    SnapshotDataVersion,
+    SnapshotFingerprint,
     SnapshotChangeCategory,
     SnapshotEvaluator,
     SnapshotTableCleanupTask,
@@ -2519,4 +2521,91 @@ def test_cleanup_managed(adapter_mock, make_snapshot, mocker: MockerFixture):
     )
     adapter_mock.drop_managed_table.assert_called_once_with(
         "sqlmesh__test_schema.test_schema__test_model__1556851963"
+    )
+
+
+def test_create_managed_forward_only_with_previous_version_doesnt_clone(
+    adapter_mock, make_snapshot
+):
+    evaluator = SnapshotEvaluator(adapter_mock)
+
+    model = load_sql_based_model(
+        parse(  # type: ignore
+            """
+            MODEL (
+                name test_schema.test_model,
+                kind MANAGED
+            );
+
+            select a, b from foo;
+            """
+        )
+    )
+
+    snapshot: Snapshot = make_snapshot(model)
+    snapshot.categorize_as(SnapshotChangeCategory.FORWARD_ONLY)
+    snapshot.previous_versions = (
+        SnapshotDataVersion(
+            fingerprint=SnapshotFingerprint(
+                data_hash="test_data_hash",
+                metadata_hash="test_metadata_hash",
+            ),
+            version="test_version",
+            change_category=SnapshotChangeCategory.FORWARD_ONLY,
+        ),
+    )
+
+    evaluator.create(target_snapshots=[snapshot], snapshots={})
+
+    # We dont clone managed tables to create dev previews, we use normal tables
+    adapter_mock.clone_table.assert_not_called()
+    adapter_mock.create_managed_table.assert_not_called()
+    adapter_mock.create_table.assert_not_called()
+
+    # The table gets created using ctas() because the model column types arent known
+    adapter_mock.ctas.assert_called_once()
+    assert adapter_mock.ctas.call_args_list[0].args[0] == snapshot.table_name(is_deployable=False)
+
+
+def test_migrate_managed(adapter_mock, make_snapshot, mocker: MockerFixture):
+    evaluator = SnapshotEvaluator(adapter_mock)
+
+    model = load_sql_based_model(
+        parse(  # type: ignore
+            """
+            MODEL (
+                name test_schema.test_model,
+                kind MANAGED
+            );
+
+            select a, b from foo;
+            """
+        )
+    )
+    snapshot: Snapshot = make_snapshot(model)
+    snapshot.categorize_as(SnapshotChangeCategory.FORWARD_ONLY)
+
+    # no schema changes - no-op
+    adapter_mock.get_alter_expressions.return_value = []
+    evaluator.migrate(target_snapshots=[snapshot], snapshots={})
+
+    adapter_mock.create_table.assert_not_called()
+    adapter_mock.create_managed_table.assert_not_called()
+    adapter_mock.ctas.assert_not_called()
+
+    # schema changes - existing managed table replaced
+    adapter_mock.get_alter_expressions.return_value = [exp.Alter()]
+    evaluator.migrate(target_snapshots=[snapshot], snapshots={})
+
+    adapter_mock.create_table.assert_not_called()
+    adapter_mock.ctas.assert_not_called()
+    adapter_mock.create_managed_table.assert_called_with(
+        table_name=snapshot.table_name(),
+        query=mocker.ANY,
+        columns_to_types=model.columns_to_types,
+        partitioned_by=model.partitioned_by,
+        clustered_by=model.clustered_by,
+        table_properties=model.physical_properties,
+        table_description=model.description,
+        column_descriptions=model.column_descriptions,
     )

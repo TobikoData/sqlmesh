@@ -667,6 +667,7 @@ class SnapshotEvaluator:
                 and snapshot.is_materialized
                 and snapshot.previous_versions
                 and self.adapter.SUPPORTS_CLONING
+                and evaluation_strategy.allow_clone_for_dev_preview(snapshot)
             ):
                 target_table_name = snapshot.table_name(is_deployable=False)
                 tmp_table_name = f"{target_table_name}__schema_migration_source"
@@ -1058,6 +1059,14 @@ class EvaluationStrategy(abc.ABC):
             table_description=model.description,
             column_descriptions=model.column_descriptions,
         )
+
+    def allow_clone_for_dev_preview(self, snapshot: Snapshot) -> bool:
+        """
+        When creating tables to preview forward-only changes in dev environments,
+        should clones of existing tables be used (if the adapter supports it),
+        or should new tables be created
+        """
+        return True
 
 
 class SymbolicStrategy(EvaluationStrategy):
@@ -1786,9 +1795,30 @@ class EngineManagedStrategy(MaterializableStrategy):
         snapshot: Snapshot,
         **kwargs: t.Any,
     ) -> None:
-        # Not entirely true, many engines support modifying some of the metadata fields on a managed table
-        # eg Snowflake allows you to ALTER DYNAMIC TABLE foo SET WAREHOUSE=my_other_wh;
-        raise ConfigError(f"Cannot mutate managed table: {target_table_name}")
+        potential_alter_expressions = self.adapter.get_alter_expressions(
+            target_table_name, source_table_name
+        )
+        if len(potential_alter_expressions) > 0:
+            # this can happen when a forward-only change is applied directly to prod without going via a dev environment first
+            # in the normal case, the current prod snapshot is mutated via ALTER statements to match the schema of the dev preview table
+            # However, since we cant change the schema of a managed model, we have to create a new one instead
+            logger.info(
+                "Creating new managed table: %s to migrate %s to the schema of %s",
+                target_table_name,
+                snapshot.model.name,
+                source_table_name,
+            )
+
+            self.create(
+                table_name=target_table_name,
+                model=snapshot.model,
+                is_table_deployable=True,
+                is_snapshot_deployable=True,
+                # note: these are the same render kwargs that ViewStrategy uses for migrate() since it also has to render a query
+                render_kwargs=dict(
+                    execution_time=now(), engine_adapter=self.adapter, snapshots=kwargs["snapshots"]
+                ),
+            )
 
     def delete(self, name: str, **kwargs: t.Any) -> None:
         # a dev preview table is created as a normal table, so it needs to be dropped as a normal table
@@ -1799,6 +1829,11 @@ class EngineManagedStrategy(MaterializableStrategy):
         else:
             self.adapter.drop_table(name)
             logger.info("Dropped dev preview for managed table '%s'", name)
+
+    def allow_clone_for_dev_preview(self, snapshot: Snapshot) -> bool:
+        # You can't clone a managed table to a normal table (only to another managed table), so we can't use clones to
+        # create dev preview tables
+        return False
 
 
 def _intervals(snapshot: Snapshot, deployability_index: DeployabilityIndex) -> Intervals:
