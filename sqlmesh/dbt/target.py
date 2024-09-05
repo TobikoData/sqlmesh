@@ -862,7 +862,7 @@ class ClickhouseConfig(TargetConfig):
       verify: [True] # Validate TLS certificate if using TLS/SSL
       cluster: [<empty string>] # If set, certain DDL/table operations will be executed with the `ON CLUSTER` clause using this cluster.
       custom_settings: [{}] # A dictionary/mapping of custom ClickHouse settings for the connection - default is empty.
-      schema: [default] # ClickHouse database for dbt models, not used by SQLMesh
+      schema: [default] # ClickHouse database for dbt models
       driver: [http] # http or native.  If not set this will be autodetermined based on port setting, not used by SQLMesh
       retries: [1] # Number of times to retry a "retriable" database exception (such as a 503 'Service Unavailable' error), not used by SQLMesh
       compression: [<empty string>] # Use gzip compression if truthy (http), or compression type for a native connection, not used by SQLMesh
@@ -891,7 +891,7 @@ class ClickhouseConfig(TargetConfig):
 
     # Not used by SQLMesh
     driver: t.Optional[str] = None
-    schema_: str = "default"
+    schema_: str = Field(default="default", alias="schema")
     retries: int = 1
     database_engine: t.Optional[str] = None
     cluster_mode: bool = False
@@ -900,7 +900,7 @@ class ClickhouseConfig(TargetConfig):
     check_exchange: bool = True
     use_lw_deletes: bool = False
     allow_automatic_deduplication: bool = False
-    tcp_keepalive: t.Union[bool, tuple[int, int, int], list[int]] = False
+    tcp_keepalive: t.Union[bool, t.Tuple[int, int, int], t.List[int]] = False
     database: str = ""
     local_suffix: str = "local"
     local_db_prefix: str = ""

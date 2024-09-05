@@ -59,6 +59,7 @@ sushi:
       port: 8123
       user: "{{ env_var('CLICKHOUSE_USER') }}"
       password: "{{ env_var('CLICKHOUSE_PASSWORD') }}"
+      schema: sushi
       threads: 1
     clickhouse_cluster:
       type: clickhouse
@@ -67,5 +68,6 @@ sushi:
       user: "{{ env_var('CLICKHOUSE_USER') }}"
       password: "{{ env_var('CLICKHOUSE_PASSWORD') }}"
       cluster: "{{ env_var('CLICKHOUSE_CLUSTER') }}"
+      schema: sushi
       threads: 1
   target: in_memory
