@@ -39,6 +39,7 @@ class DatabricksEngineAdapter(SparkEngineAdapter):
     SCHEMA_DIFFER = SchemaDiffer(
         support_positional_add=True,
         support_nested_operations=True,
+        support_nested_drop=True,
         array_element_selector="element",
         parameterized_type_defaults={
             exp.DataType.build("DECIMAL", dialect=DIALECT).this: [(10, 0), (0,)],

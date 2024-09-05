@@ -407,7 +407,11 @@ def test_schema_diff_calculate_type_transitions():
                     "INT",
                 ),
             ],
-            dict(support_positional_add=True, support_nested_operations=True),
+            dict(
+                support_positional_add=True,
+                support_nested_operations=True,
+                support_nested_drop=True,
+            ),
         ),
         # Remove a column from the end of a struct
         (
@@ -423,7 +427,11 @@ def test_schema_diff_calculate_type_transitions():
                     "INT",
                 ),
             ],
-            dict(support_positional_add=True, support_nested_operations=True),
+            dict(
+                support_positional_add=True,
+                support_nested_operations=True,
+                support_nested_drop=True,
+            ),
         ),
         # Remove a column from the middle of a struct
         (
@@ -439,7 +447,36 @@ def test_schema_diff_calculate_type_transitions():
                     "INT",
                 ),
             ],
-            dict(support_positional_add=True, support_nested_operations=True),
+            dict(
+                support_positional_add=True,
+                support_nested_operations=True,
+                support_nested_drop=True,
+            ),
+        ),
+        # Remove a column from a struct where nested drop is not supported
+        (
+            "STRUCT<id INT, info STRUCT<col_a INT, col_b INT, col_c INT>>",
+            "STRUCT<id INT, info STRUCT<col_a INT, col_b INT>>",
+            [
+                TableAlterOperation.drop(
+                    [
+                        TableAlterColumn.struct("info"),
+                    ],
+                    expected_table_struct="STRUCT<id INT>",
+                    column_type="STRUCT<col_a INT, col_b INT, col_c INT>",
+                ),
+                TableAlterOperation.add(
+                    [
+                        TableAlterColumn.struct("info"),
+                    ],
+                    expected_table_struct="STRUCT<id INT, info STRUCT<col_a INT, col_b INT>>",
+                    column_type="STRUCT<col_a INT, col_b INT>",
+                ),
+            ],
+            dict(
+                support_nested_operations=True,
+                support_nested_drop=False,
+            ),
         ),
         # Remove two columns from the start of a struct
         (
@@ -463,7 +500,11 @@ def test_schema_diff_calculate_type_transitions():
                     "INT",
                 ),
             ],
-            dict(support_positional_add=True, support_nested_operations=True),
+            dict(
+                support_positional_add=True,
+                support_nested_operations=True,
+                support_nested_drop=True,
+            ),
         ),
         # Change a column type in a struct
         (
@@ -534,6 +575,35 @@ def test_schema_diff_calculate_type_transitions():
             dict(
                 support_positional_add=True,
                 support_nested_operations=True,
+                support_nested_drop=True,
+                compatible_types={
+                    exp.DataType.build("INT"): {exp.DataType.build("TEXT")},
+                },
+            ),
+        ),
+        # Add, remove and change a column from a struct where nested drop is not supported
+        (
+            "STRUCT<id INT, info STRUCT<col_a INT, col_b INT, col_c INT>>",
+            "STRUCT<id INT, info STRUCT<col_a INT, col_b TEXT, col_d INT>>",
+            [
+                TableAlterOperation.drop(
+                    [
+                        TableAlterColumn.struct("info"),
+                    ],
+                    expected_table_struct="STRUCT<id INT>",
+                    column_type="STRUCT<col_a INT, col_b INT, col_c INT>",
+                ),
+                TableAlterOperation.add(
+                    [
+                        TableAlterColumn.struct("info"),
+                    ],
+                    expected_table_struct="STRUCT<id INT, info STRUCT<col_a INT, col_b TEXT, col_d INT>>",
+                    column_type="STRUCT<col_a INT, col_b TEXT, col_d INT>",
+                ),
+            ],
+            dict(
+                support_nested_operations=True,
+                support_nested_drop=False,
                 compatible_types={
                     exp.DataType.build("INT"): {exp.DataType.build("TEXT")},
                 },
@@ -581,7 +651,11 @@ def test_schema_diff_calculate_type_transitions():
                     position=TableAlterColumnPosition.last("nest_col_a"),
                 ),
             ],
-            dict(support_positional_add=True, support_nested_operations=True),
+            dict(
+                support_positional_add=True,
+                support_nested_operations=True,
+                support_nested_drop=True,
+            ),
         ),
         # #####################
         # # Array Struct Tests
@@ -617,7 +691,11 @@ def test_schema_diff_calculate_type_transitions():
                     "INT",
                 ),
             ],
-            dict(support_positional_add=True, support_nested_operations=True),
+            dict(
+                support_positional_add=True,
+                support_nested_operations=True,
+                support_nested_drop=True,
+            ),
         ),
         # Alter column type in array of structs
         (
@@ -754,6 +832,7 @@ def test_schema_diff_calculate_type_transitions():
             dict(
                 support_positional_add=True,
                 support_nested_operations=True,
+                support_nested_drop=True,
             ),
         ),
         # Type with precision to same type with no precision and no default is DROP/ADD

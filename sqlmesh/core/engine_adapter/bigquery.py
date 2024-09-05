@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import logging
 import typing as t
+from collections import defaultdict
 
 import pandas as pd
 from sqlglot import exp
@@ -51,8 +52,6 @@ class BigQueryEngineAdapter(InsertOverwriteWithMergeMixin):
     MAX_TABLE_COMMENT_LENGTH = 1024
     MAX_COLUMN_COMMENT_LENGTH = 1024
 
-    # SQL is not supported for adding columns to structs: https://cloud.google.com/bigquery/docs/managing-table-schemas#api_1
-    # Can explore doing this with the API in the future
     SCHEMA_DIFFER = SchemaDiffer(
         compatible_types={
             exp.DataType.build("INT64", dialect=DIALECT): {
@@ -83,6 +82,8 @@ class BigQueryEngineAdapter(InsertOverwriteWithMergeMixin):
                 exp.DataType.build("BYTES", dialect=DIALECT).this,
             },
         },
+        support_nested_operations=True,
+        support_nested_drop=False,
     )
 
     @property
@@ -224,6 +225,23 @@ class BigQueryEngineAdapter(InsertOverwriteWithMergeMixin):
                 columns["_PARTITIONDATE"] = exp.DataType.build("DATE")
         return columns
 
+    def alter_table(
+        self,
+        alter_expressions: t.List[exp.Alter],
+    ) -> None:
+        """
+        Performs the alter statements to change the current table into the structure of the target table,
+        and uses the API to add columns to structs, where SQL is not supported.
+        """
+
+        nested_fields, non_nested_expressions = self._split_alter_expressions(alter_expressions)
+
+        if nested_fields:
+            self._update_table_schema_nested_fields(nested_fields, alter_expressions[0].this)
+
+        if non_nested_expressions:
+            super().alter_table(non_nested_expressions)
+
     def fetchone(
         self,
         query: t.Union[exp.Expression, str],
@@ -260,6 +278,64 @@ class BigQueryEngineAdapter(InsertOverwriteWithMergeMixin):
             quote_identifiers=quote_identifiers,
         )
         return list(self._query_data)
+
+    def _split_alter_expressions(
+        self,
+        alter_expressions: t.List[exp.Alter],
+    ) -> t.Tuple[t.Dict[str, list[t.Tuple[str, str]]], t.List[exp.Alter]]:
+        """
+        Returns a dictionary of the nested fields to add and a list of the non-nested alter expressions.
+        """
+        nested_fields_to_add: t.Dict[str, list[t.Tuple[str, str]]] = defaultdict(list)
+        non_nested_expressions = []
+
+        for alter_expression in alter_expressions:
+            action = alter_expression.args["actions"][0]
+            if (
+                isinstance(action, exp.ColumnDef)
+                and isinstance(action.this, exp.Dot)
+                and isinstance(action.kind, exp.DataType)
+            ):
+                record = action.this.this.sql(dialect="bigquery")
+                field = action.this.expression.sql(dialect="bigquery")
+                data_type = action.kind.sql(dialect="bigquery")
+                nested_fields_to_add[record].append((data_type, field))
+            else:
+                non_nested_expressions.append(alter_expression)
+
+        return nested_fields_to_add, non_nested_expressions
+
+    def _update_table_schema_nested_fields(
+        self, nested_fields_to_add: t.Dict[str, list[t.Tuple[str, str]]], table_name: str
+    ) -> None:
+        """
+        Updates a BigQuery table schema by adding the new nested fields provided.
+        """
+        from google.cloud import bigquery
+
+        table = self._get_table(table_name)
+        original_schema = table.schema
+        new_schema = []
+
+        for field in original_schema:
+            current_fields = list(field.fields)
+            if field.name in nested_fields_to_add:
+                current_fields.extend(
+                    bigquery.SchemaField(new_field[1], new_field[0], mode="NULLABLE")
+                    for new_field in nested_fields_to_add[field.name]
+                )
+            if current_fields:
+                new_schema.append(
+                    bigquery.SchemaField(
+                        field.name, "RECORD", mode="NULLABLE", fields=tuple(current_fields)
+                    )
+                )
+            else:
+                new_schema.append(field)
+
+        if new_schema != original_schema:
+            table.schema = new_schema
+            self.client.update_table(table, ["schema"])
 
     def __load_pandas_to_table(
         self,
