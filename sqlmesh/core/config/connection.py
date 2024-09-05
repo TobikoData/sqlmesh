@@ -13,6 +13,7 @@ from functools import partial
 from pydantic import Field
 from sqlglot import exp
 from sqlglot.helper import subclasses
+
 from sqlmesh.core import engine_adapter
 from sqlmesh.core.config.base import BaseConfig
 from sqlmesh.core.config.common import (
