@@ -50,7 +50,7 @@ def execute(
     **kwargs: t.Any,
 ) -> t.Generator[pd.DataFrame, None, None]:
     orders_table = context.table("sushi.orders")
-    engine_dialect = context.engine_adapter.dialect
+    default_dialect = context.default_dialect
 
     items_table = get_items_table(context)
 
@@ -62,7 +62,7 @@ def execute(
         # Generate query with sqlglot dialect/quoting
         orders = context.fetchdf(
             exp.select("*")
-            .from_(orders_table, dialect=engine_dialect)
+            .from_(orders_table, dialect=default_dialect)
             .where(f"event_date = CAST('{to_ds(dt)}' AS DATE)"),
             quote_identifiers=True,
         )
@@ -73,7 +73,7 @@ def execute(
         # Generate query with sqlglot dialect/quoting
         items = context.fetchdf(
             exp.select("*")
-            .from_(items_table, dialect=engine_dialect)
+            .from_(items_table, dialect=default_dialect)
             .where(f"event_date = CAST('{to_ds(dt)}' AS DATE)"),
             quote_identifiers=True,
         )
