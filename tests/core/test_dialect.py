@@ -207,7 +207,9 @@ def test_format_body_macros():
     Model ( name foo );
     @WITH(TRUE) x AS (SELECT 1)
     SELECT col::int
-    FROM foo @ORDER_BY(@include_order_by)
+    FROM foo
+    WHERE @MY_MACRO() /* my macro comment */
+@ORDER_BY(@include_order_by)
     @EACH( @columns,
     item -> @'@iteaoeuatnoehutoenahuoanteuhonateuhaoenthuaoentuhaeotnhaoem'),      @'@foo'
     """
@@ -224,6 +226,8 @@ def test_format_body_macros():
 SELECT
   col::INT
 FROM foo
+WHERE
+  @MY_MACRO() /* my macro comment */
 @ORDER_BY(@include_order_by)
   @EACH(@columns, item -> @'@iteaoeuatnoehutoenahuoanteuhonateuhaoenthuaoentuhaeotnhaoem'),
   @'@foo'"""
