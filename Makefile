@@ -91,13 +91,13 @@ engine-up: engine-mssql-up engine-mysql-up engine-postgres-up engine-spark-up en
 engine-down: engine-mssql-down engine-mysql-down engine-postgres-down engine-spark-down engine-trino-down
 
 fast-test:
-	pytest -n auto -m "fast and not cicdonly"
+	pytest -n auto -m "fast and not cicdonly" && pytest -m "isolated"
 
 slow-test:
-	pytest -n auto -m "(fast or slow) and not cicdonly"
+	pytest -n auto -m "(fast or slow) and not cicdonly" && pytest -m "isolated"
 
 cicd-test:
-	pytest -n auto -m "fast or slow" --junitxml=test-results/junit-cicd.xml
+	pytest -n auto -m "fast or slow" --junitxml=test-results/junit-cicd.xml && pytest -m "isolated"
 
 core-fast-test:
 	pytest -n auto -m "fast and not web and not github and not dbt and not airflow and not jupyter"
@@ -199,4 +199,7 @@ databricks-test: guard-DATABRICKS_CATALOG guard-DATABRICKS_SERVER_HOSTNAME guard
 	pytest -n auto -x -m "databricks" --junitxml=test-results/junit-databricks.xml
 
 redshift-test: guard-REDSHIFT_HOST guard-REDSHIFT_USER guard-REDSHIFT_PASSWORD guard-REDSHIFT_DATABASE engine-redshift-install
-	pytest -n auto -x -m "redshift" --junitxml=test-results/junit-redshift.xml
+	pytest -n auto -x -m "redshift" --retries 3 --junitxml=test-results/junit-redshift.xml
+
+clickhouse-cloud-test: guard-CLICKHOUSE_CLOUD_HOST guard-CLICKHOUSE_CLOUD_USERNAME guard-CLICKHOUSE_CLOUD_PASSWORD engine-clickhouse-install
+	pytest -n auto -x -m "clickhouse_cloud" --retries 3 --junitxml=test-results/junit-clickhouse-cloud.xml
