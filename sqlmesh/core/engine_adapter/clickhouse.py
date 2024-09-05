@@ -40,7 +40,10 @@ class ClickhouseEngineAdapter(EngineAdapterWithIndexSupport, LogicalMergeMixin):
 
     @cached_property
     def engine_run_mode(self) -> EngineRunMode:
-        if self._extra_config.get("cloud_mode"):
+        cloud_query_value = self.fetchone(
+            "select value from system.settings where name='cloud_mode'"
+        )
+        if str(cloud_query_value[0]) == "1":
             return EngineRunMode.CLOUD
         # we use the user's specification of a cluster in the connection config to determine if
         #   the engine is in cluster mode

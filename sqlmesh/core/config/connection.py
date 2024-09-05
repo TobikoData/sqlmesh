@@ -13,7 +13,7 @@ from functools import partial
 from pydantic import Field
 from sqlglot import exp
 from sqlglot.helper import subclasses
-from functools import cached_property
+
 from sqlmesh.core import engine_adapter
 from sqlmesh.core.config.base import BaseConfig
 from sqlmesh.core.config.common import (
@@ -1430,21 +1430,7 @@ class ClickhouseConnectionConfig(ConnectionConfig):
 
     @property
     def _extra_engine_config(self) -> t.Dict[str, t.Any]:
-        return {"cluster": self.cluster, "cloud_mode": self._cloud_mode}
-
-    @cached_property
-    def _cloud_mode(self) -> bool:
-        # determine if connecting to cloud by querying system settings
-        conn = self._connection_factory(
-            **{k: v for k, v in self.dict().items() if k in self._connection_kwargs_keys}
-        )
-        cur = conn.cursor()
-        cur.execute("select value from system.settings where name='cloud_mode'")
-        cloud_mode = cur.fetchall()[0][0]
-        cur.close()
-        conn.close()
-
-        return cloud_mode == "1"
+        return {"cluster": self.cluster}
 
     @property
     def _static_connection_kwargs(self) -> t.Dict[str, t.Any]:
@@ -1456,17 +1442,6 @@ class ClickhouseConnectionConfig(ConnectionConfig):
         compress: bool | str = self.use_compression
         if compress and self.compression_method:
             compress = self.compression_method
-
-        # TODO: enable when clickhouse_connect handles `settings` dict incorrectly
-        #  - their `Connection` class needs to pop `settings` kwarg and pass it as a named arg to
-        #      `create_client`, otherwise it gets passed to both named and kwargs and errors
-        # connection_settings = self.connection_settings.copy() if self.connection_settings else {}
-        # connection_settings["mutations_sync"] = connection_settings.get("mutations_sync") or 2,
-        # connection_settings["insert_distributed_sync"] = connection_settings.get("insert_distributed_sync") or 1
-
-        # if self.cluster or self._cloud_mode:
-        #     connection_settings["database_replicated_enforce_synchronous_settings"] = connection_settings.get("database_replicated_enforce_synchronous_settings") or 1
-        #     connection_settings["insert_quorum"] = connection_settings.get("insert_quorum") or "auto"
 
         return {"compress": compress, "client_name": f"SQLMesh/{__version__}"}
 
