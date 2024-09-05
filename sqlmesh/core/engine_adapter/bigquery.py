@@ -320,10 +320,10 @@ class BigQueryEngineAdapter(InsertOverwriteWithMergeMixin):
         for field in original_schema:
             current_fields = list(field.fields)
             if field.name in nested_fields_to_add:
-                for new_field in nested_fields_to_add[field.name]:
-                    current_fields.append(
-                        bigquery.SchemaField(new_field[1], new_field[0], mode="NULLABLE")
-                    )
+                current_fields.extend(
+                    bigquery.SchemaField(new_field[1], new_field[0], mode="NULLABLE")
+                    for new_field in nested_fields_to_add[field.name]
+                )
             if current_fields:
                 new_schema.append(
                     bigquery.SchemaField(
@@ -331,9 +331,7 @@ class BigQueryEngineAdapter(InsertOverwriteWithMergeMixin):
                     )
                 )
             else:
-                new_schema.append(
-                    bigquery.SchemaField(field.name, field.field_type, mode="NULLABLE")
-                )
+                new_schema.append(field)
 
         if new_schema != original_schema:
             table.schema = new_schema
