@@ -691,8 +691,8 @@ def test_scd_type_2_by_time(
       ELSE `t_test_valid_from`
     END AS `test_valid_from`,
     CASE
-      WHEN `test_updated_at` > `t_test_updated_at`
-      THEN `test_updated_at`
+      WHEN `joined`.`test_updated_at` > `joined`.`t_test_updated_at`
+      THEN `joined`.`test_updated_at`
       WHEN `joined`.`_exists` IS NULL
       THEN CAST('2020-01-01 00:00:00' AS TIMESTAMP)
       ELSE `t_test_valid_to`
@@ -710,7 +710,7 @@ def test_scd_type_2_by_time(
     CAST(NULL AS TIMESTAMP) AS `test_valid_to`
   FROM `joined`
   WHERE
-    `test_updated_at` > `t_test_updated_at`
+    `joined`.`test_updated_at` > `joined`.`t_test_updated_at`
 )
 INSERT OVERWRITE TABLE `db`.`target` (
   `id`,

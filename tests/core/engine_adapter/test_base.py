@@ -1203,8 +1203,8 @@ WITH "source" AS (
       ELSE "t_test_valid_from"
     END AS "test_valid_from",
     CASE
-      WHEN "test_UPDATED_at" > "t_test_UPDATED_at"
-      THEN "test_UPDATED_at"
+      WHEN "joined"."test_UPDATED_at" > "joined"."t_test_UPDATED_at"
+      THEN "joined"."test_UPDATED_at"
       WHEN "joined"."_exists" IS NULL
       THEN CAST('2020-01-01 00:00:00' AS TIMESTAMP)
       ELSE "t_test_valid_to"
@@ -1225,7 +1225,7 @@ WITH "source" AS (
     CAST(NULL AS TIMESTAMP) AS "test_valid_to"
   FROM "joined"
   WHERE
-    "test_UPDATED_at" > "t_test_UPDATED_at"
+    "joined"."test_UPDATED_at" > "joined"."t_test_UPDATED_at"
 )
 SELECT
   CAST("id" AS INT) AS "id",
@@ -1385,8 +1385,8 @@ WITH "source" AS (
       ELSE "t_test_valid_from"
     END AS "test_valid_from",
     CASE
-      WHEN "test_updated_at" > "t_test_updated_at"
-      THEN "test_updated_at"
+      WHEN "joined"."test_updated_at" > "joined"."t_test_updated_at"
+      THEN "joined"."test_updated_at"
       ELSE "t_test_valid_to"
     END AS "test_valid_to"
   FROM "joined"
@@ -1402,7 +1402,7 @@ WITH "source" AS (
     CAST(NULL AS TIMESTAMP) AS "test_valid_to"
   FROM "joined"
   WHERE
-    "test_updated_at" > "t_test_updated_at"
+    "joined"."test_updated_at" > "joined"."t_test_updated_at"
 )
 SELECT
   CAST("id" AS INT) AS "id",
@@ -1584,8 +1584,8 @@ WITH "source" AS (
       ELSE "t_test_valid_from"
     END AS "test_valid_from",
     CASE
-      WHEN "test_updated_at" > "t_test_updated_at"
-      THEN "test_updated_at"
+      WHEN "joined"."test_updated_at" > "joined"."t_test_updated_at"
+      THEN "joined"."test_updated_at"
       WHEN "joined"."_exists" IS NULL
       THEN CAST('2020-01-01 00:00:00+00:00' AS TIMESTAMPTZ)
       ELSE "t_test_valid_to"
@@ -1605,7 +1605,7 @@ WITH "source" AS (
     CAST(NULL AS TIMESTAMPTZ) AS "test_valid_to"
   FROM "joined"
   WHERE
-    "test_updated_at" > "t_test_updated_at"
+    "joined"."test_updated_at" > "joined"."t_test_updated_at"
 )
 SELECT CAST("id1" AS INT) AS "id1", CAST("id2" AS INT) AS "id2", CAST("name" AS VARCHAR) AS "name", CAST("price" AS DOUBLE) AS "price", CAST("test_updated_at" AS TIMESTAMPTZ) AS "test_updated_at", CAST("test_valid_from" AS TIMESTAMPTZ) AS "test_valid_from", CAST("test_valid_to" AS TIMESTAMPTZ) AS "test_valid_to" FROM (SELECT "id1", "id2", "name", "price", "test_updated_at", "test_valid_from", "test_valid_to" FROM "static" UNION ALL SELECT "id1", "id2", "name", "price", "test_updated_at", "test_valid_from", "test_valid_to" FROM "updated_rows" UNION ALL SELECT "id1", "id2", "name", "price", "test_updated_at", "test_valid_from", "test_valid_to" FROM "inserted_rows") AS "_subquery"
 """
@@ -1733,22 +1733,22 @@ WITH "source" AS (
       WHEN "joined"."_exists" IS NULL
       OR (
         (
-          NOT "t_id" IS NULL AND NOT "id" IS NULL
+          NOT "joined"."t_id" IS NULL AND NOT "joined"."id" IS NULL
         )
         AND (
-          "name" <> "t_name"
+          "joined"."name" <> "joined"."t_name"
           OR (
-            "t_name" IS NULL AND NOT "name" IS NULL
+            "joined"."t_name" IS NULL AND NOT "joined"."name" IS NULL
           )
           OR (
-            NOT "t_name" IS NULL AND "name" IS NULL
+            NOT "joined"."t_name" IS NULL AND "joined"."name" IS NULL
           )
-          OR "price" <> "t_price"
+          OR "joined"."price" <> "joined"."t_price"
           OR (
-            "t_price" IS NULL AND NOT "price" IS NULL
+            "joined"."t_price" IS NULL AND NOT "joined"."price" IS NULL
           )
           OR (
-            NOT "t_price" IS NULL AND "price" IS NULL
+            NOT "joined"."t_price" IS NULL AND "joined"."price" IS NULL
           )
         )
       )
@@ -1768,22 +1768,22 @@ WITH "source" AS (
   FROM "joined"
   WHERE
     (
-      NOT "t_id" IS NULL AND NOT "id" IS NULL
+      NOT "joined"."t_id" IS NULL AND NOT "joined"."id" IS NULL
     )
     AND (
-      "name" <> "t_name"
+      "joined"."name" <> "joined"."t_name"
       OR (
-        "t_name" IS NULL AND NOT "name" IS NULL
+        "joined"."t_name" IS NULL AND NOT "joined"."name" IS NULL
       )
       OR (
-        NOT "t_name" IS NULL AND "name" IS NULL
+        NOT "joined"."t_name" IS NULL AND "joined"."name" IS NULL
       )
-      OR "price" <> "t_price"
+      OR "joined"."price" <> "joined"."t_price"
       OR (
-        "t_price" IS NULL AND NOT "price" IS NULL
+        "joined"."t_price" IS NULL AND NOT "joined"."price" IS NULL
       )
       OR (
-        NOT "t_price" IS NULL AND "price" IS NULL
+        NOT "joined"."t_price" IS NULL AND "joined"."price" IS NULL
       )
     )
 )
@@ -1927,19 +1927,19 @@ WITH "source" AS (
           NOT CONCAT("t_id_a", "t_id_b") IS NULL AND NOT CONCAT("id_a", "id_b") IS NULL
         )
         AND (
-          "name" <> "t_name"
+          "joined"."name" <> "joined"."t_name"
           OR (
-            "t_name" IS NULL AND NOT "name" IS NULL
+            "joined"."t_name" IS NULL AND NOT "joined"."name" IS NULL
           )
           OR (
-            NOT "t_name" IS NULL AND "name" IS NULL
+            NOT "joined"."t_name" IS NULL AND "joined"."name" IS NULL
           )
-          OR "price" <> "t_price"
+          OR "joined"."price" <> "joined"."t_price"
           OR (
-            "t_price" IS NULL AND NOT "price" IS NULL
+            "joined"."t_price" IS NULL AND NOT "joined"."price" IS NULL
           )
           OR (
-            NOT "t_price" IS NULL AND "price" IS NULL
+            NOT "joined"."t_price" IS NULL AND "joined"."price" IS NULL
           )
         )
       )
@@ -1963,19 +1963,19 @@ WITH "source" AS (
       NOT CONCAT("t_id_a", "t_id_b") IS NULL AND NOT CONCAT("id_a", "id_b") IS NULL
     )
     AND (
-      "name" <> "t_name"
+      "joined"."name" <> "joined"."t_name"
       OR (
-        "t_name" IS NULL AND NOT "name" IS NULL
+        "joined"."t_name" IS NULL AND NOT "joined"."name" IS NULL
       )
       OR (
-        NOT "t_name" IS NULL AND "name" IS NULL
+        NOT "joined"."t_name" IS NULL AND "joined"."name" IS NULL
       )
-      OR "price" <> "t_price"
+      OR "joined"."price" <> "joined"."t_price"
       OR (
-        "t_price" IS NULL AND NOT "price" IS NULL
+        "joined"."t_price" IS NULL AND NOT "joined"."price" IS NULL
       )
       OR (
-        NOT "t_price" IS NULL AND "price" IS NULL
+        NOT "joined"."t_price" IS NULL AND "joined"."price" IS NULL
       )
     )
 )
@@ -2108,22 +2108,22 @@ WITH "source" AS (
       WHEN "joined"."_exists" IS NULL
       OR (
         (
-          NOT "t_id" IS NULL AND NOT "id" IS NULL
+          NOT "joined"."t_id" IS NULL AND NOT "joined"."id" IS NULL
         )
         AND (
-          "name" <> "t_name"
+          "joined"."name" <> "joined"."t_name"
           OR (
-            "t_name" IS NULL AND NOT "name" IS NULL
+            "joined"."t_name" IS NULL AND NOT "joined"."name" IS NULL
           )
           OR (
-            NOT "t_name" IS NULL AND "name" IS NULL
+            NOT "joined"."t_name" IS NULL AND "joined"."name" IS NULL
           )
-          OR "price" <> "t_price"
+          OR "joined"."price" <> "joined"."t_price"
           OR (
-            "t_price" IS NULL AND NOT "price" IS NULL
+            "joined"."t_price" IS NULL AND NOT "joined"."price" IS NULL
           )
           OR (
-            NOT "t_price" IS NULL AND "price" IS NULL
+            NOT "joined"."t_price" IS NULL AND "joined"."price" IS NULL
           )
         )
       )
@@ -2143,22 +2143,22 @@ WITH "source" AS (
   FROM "joined"
   WHERE
     (
-      NOT "t_id" IS NULL AND NOT "id" IS NULL
+      NOT "joined"."t_id" IS NULL AND NOT "joined"."id" IS NULL
     )
     AND (
-      "name" <> "t_name"
+      "joined"."name" <> "joined"."t_name"
       OR (
-        "t_name" IS NULL AND NOT "name" IS NULL
+        "joined"."t_name" IS NULL AND NOT "joined"."name" IS NULL
       )
       OR (
-        NOT "t_name" IS NULL AND "name" IS NULL
+        NOT "joined"."t_name" IS NULL AND "joined"."name" IS NULL
       )
-      OR "price" <> "t_price"
+      OR "joined"."price" <> "joined"."t_price"
       OR (
-        "t_price" IS NULL AND NOT "price" IS NULL
+        "joined"."t_price" IS NULL AND NOT "joined"."price" IS NULL
       )
       OR (
-        NOT "t_price" IS NULL AND "price" IS NULL
+        NOT "joined"."t_price" IS NULL AND "joined"."price" IS NULL
       )
     )
 )
@@ -2288,29 +2288,29 @@ WITH "source" AS (
       WHEN "joined"."_exists" IS NULL
       OR (
         (
-          NOT "t_id" IS NULL AND NOT "id" IS NULL
+          NOT "joined"."t_id" IS NULL AND NOT "joined"."id" IS NULL
         )
         AND (
-          "id" <> "t_id"
+          "joined"."id" <> "joined"."t_id"
           OR (
-            "t_id" IS NULL AND NOT "id" IS NULL
+            "joined"."t_id" IS NULL AND NOT "joined"."id" IS NULL
           )
           OR (
-            NOT "t_id" IS NULL AND "id" IS NULL
+            NOT "joined"."t_id" IS NULL AND "joined"."id" IS NULL
           )
-          OR "name" <> "t_name"
+          OR "joined"."name" <> "joined"."t_name"
           OR (
-            "t_name" IS NULL AND NOT "name" IS NULL
-          )
-          OR (
-            NOT "t_name" IS NULL AND "name" IS NULL
-          )
-          OR "price" <> "t_price"
-          OR (
-            "t_price" IS NULL AND NOT "price" IS NULL
+            "joined"."t_name" IS NULL AND NOT "joined"."name" IS NULL
           )
           OR (
-            NOT "t_price" IS NULL AND "price" IS NULL
+            NOT "joined"."t_name" IS NULL AND "joined"."name" IS NULL
+          )
+          OR "joined"."price" <> "joined"."t_price"
+          OR (
+            "joined"."t_price" IS NULL AND NOT "joined"."price" IS NULL
+          )
+          OR (
+            NOT "joined"."t_price" IS NULL AND "joined"."price" IS NULL
           )
         )
       )
@@ -2330,29 +2330,29 @@ WITH "source" AS (
   FROM "joined"
   WHERE
     (
-      NOT "t_id" IS NULL AND NOT "id" IS NULL
+      NOT "joined"."t_id" IS NULL AND NOT "joined"."id" IS NULL
     )
     AND (
-      "id" <> "t_id"
+      "joined"."id" <> "joined"."t_id"
       OR (
-        "t_id" IS NULL AND NOT "id" IS NULL
+        "joined"."t_id" IS NULL AND NOT "joined"."id" IS NULL
       )
       OR (
-        NOT "t_id" IS NULL AND "id" IS NULL
+        NOT "joined"."t_id" IS NULL AND "joined"."id" IS NULL
       )
-      OR "name" <> "t_name"
+      OR "joined"."name" <> "joined"."t_name"
       OR (
-        "t_name" IS NULL AND NOT "name" IS NULL
-      )
-      OR (
-        NOT "t_name" IS NULL AND "name" IS NULL
-      )
-      OR "price" <> "t_price"
-      OR (
-        "t_price" IS NULL AND NOT "price" IS NULL
+        "joined"."t_name" IS NULL AND NOT "joined"."name" IS NULL
       )
       OR (
-        NOT "t_price" IS NULL AND "price" IS NULL
+        NOT "joined"."t_name" IS NULL AND "joined"."name" IS NULL
+      )
+      OR "joined"."price" <> "joined"."t_price"
+      OR (
+        "joined"."t_price" IS NULL AND NOT "joined"."price" IS NULL
+      )
+      OR (
+        NOT "joined"."t_price" IS NULL AND "joined"."price" IS NULL
       )
     )
 )
@@ -2481,22 +2481,22 @@ WITH "source" AS (
     COALESCE("t_test_valid_from", CAST('1970-01-01 00:00:00' AS TIMESTAMP)) AS "test_valid_from",
     CASE
       WHEN (
-        NOT "t_id" IS NULL AND NOT "id" IS NULL
+        NOT "joined"."t_id" IS NULL AND NOT "joined"."id" IS NULL
       )
       AND (
-        "name" <> "t_name"
+        "joined"."name" <> "joined"."t_name"
         OR (
-          "t_name" IS NULL AND NOT "name" IS NULL
+          "joined"."t_name" IS NULL AND NOT "joined"."name" IS NULL
         )
         OR (
-          NOT "t_name" IS NULL AND "name" IS NULL
+          NOT "joined"."t_name" IS NULL AND "joined"."name" IS NULL
         )
-        OR "price" <> "t_price"
+        OR "joined"."price" <> "joined"."t_price"
         OR (
-          "t_price" IS NULL AND NOT "price" IS NULL
+          "joined"."t_price" IS NULL AND NOT "joined"."price" IS NULL
         )
         OR (
-          NOT "t_price" IS NULL AND "price" IS NULL
+          NOT "joined"."t_price" IS NULL AND "joined"."price" IS NULL
         )
       )
       THEN CAST('2020-01-01 00:00:00' AS TIMESTAMP)
@@ -2515,22 +2515,22 @@ WITH "source" AS (
   FROM "joined"
   WHERE
     (
-      NOT "t_id" IS NULL AND NOT "id" IS NULL
+      NOT "joined"."t_id" IS NULL AND NOT "joined"."id" IS NULL
     )
     AND (
-      "name" <> "t_name"
+      "joined"."name" <> "joined"."t_name"
       OR (
-        "t_name" IS NULL AND NOT "name" IS NULL
+        "joined"."t_name" IS NULL AND NOT "joined"."name" IS NULL
       )
       OR (
-        NOT "t_name" IS NULL AND "name" IS NULL
+        NOT "joined"."t_name" IS NULL AND "joined"."name" IS NULL
       )
-      OR "price" <> "t_price"
+      OR "joined"."price" <> "joined"."t_price"
       OR (
-        "t_price" IS NULL AND NOT "price" IS NULL
+        "joined"."t_price" IS NULL AND NOT "joined"."price" IS NULL
       )
       OR (
-        NOT "t_price" IS NULL AND "price" IS NULL
+        NOT "joined"."t_price" IS NULL AND "joined"."price" IS NULL
       )
     )
 )

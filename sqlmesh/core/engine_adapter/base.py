@@ -1313,7 +1313,7 @@ class EngineAdapter:
         truncate: bool = False,
         **kwargs: t.Any,
     ) -> None:
-        self._scd_type_2(
+        with self._build_scd_type_2_query_and_cols(
             target_table=target_table,
             source_table=source_table,
             unique_key=unique_key,
@@ -1324,10 +1324,15 @@ class EngineAdapter:
             invalidate_hard_deletes=invalidate_hard_deletes,
             updated_at_as_valid_from=updated_at_as_valid_from,
             columns_to_types=columns_to_types,
-            table_description=table_description,
-            column_descriptions=column_descriptions,
             truncate=truncate,
-        )
+        ) as (query, columns_to_types_scd):
+            self.replace_query(
+                target_table,
+                query,
+                columns_to_types=columns_to_types_scd,
+                table_description=table_description,
+                column_descriptions=column_descriptions,
+            )
 
     def scd_type_2_by_column(
         self,
@@ -1346,7 +1351,7 @@ class EngineAdapter:
         truncate: bool = False,
         **kwargs: t.Any,
     ) -> None:
-        self._scd_type_2(
+        with self._build_scd_type_2_query_and_cols(
             target_table=target_table,
             source_table=source_table,
             unique_key=unique_key,
@@ -1357,12 +1362,18 @@ class EngineAdapter:
             columns_to_types=columns_to_types,
             invalidate_hard_deletes=invalidate_hard_deletes,
             execution_time_as_valid_from=execution_time_as_valid_from,
-            table_description=table_description,
-            column_descriptions=column_descriptions,
             truncate=truncate,
-        )
+        ) as (query, columns_to_types_scd):
+            self.replace_query(
+                target_table,
+                query,
+                columns_to_types=columns_to_types_scd,
+                table_description=table_description,
+                column_descriptions=column_descriptions,
+            )
 
-    def _scd_type_2(
+    @contextlib.contextmanager
+    def _build_scd_type_2_query_and_cols(
         self,
         target_table: TableName,
         source_table: QueryOrDF,
@@ -1376,10 +1387,8 @@ class EngineAdapter:
         updated_at_as_valid_from: bool = False,
         execution_time_as_valid_from: bool = False,
         columns_to_types: t.Optional[t.Dict[str, exp.DataType]] = None,
-        table_description: t.Optional[str] = None,
-        column_descriptions: t.Optional[t.Dict[str, str]] = None,
         truncate: bool = False,
-    ) -> None:
+    ) -> t.Iterator[tuple[exp.Union, dict[str, exp.DataType]]]:
         def remove_managed_columns(
             cols_to_types: t.Dict[str, exp.DataType],
         ) -> t.Dict[str, exp.DataType]:
@@ -1466,23 +1475,29 @@ class EngineAdapter:
         if check_columns:
             row_check_conditions = []
             for col in check_columns:
-                t_col = col.copy()
+                col_qualified = col.copy()
+                col_qualified.set("table", exp.parse_identifier("joined"))
+
+                t_col = col_qualified.copy()
                 t_col.this.set("this", f"t_{col.name}")
+
                 row_check_conditions.extend(
                     [
-                        col.neq(t_col),
-                        exp.and_(t_col.is_(exp.Null()), col.is_(exp.Null()).not_()),
-                        exp.and_(t_col.is_(exp.Null()).not_(), col.is_(exp.Null())),
+                        col_qualified.neq(t_col),
+                        exp.and_(t_col.is_(exp.Null()), col_qualified.is_(exp.Null()).not_()),
+                        exp.and_(t_col.is_(exp.Null()).not_(), col_qualified.is_(exp.Null())),
                     ]
                 )
             row_value_check = exp.or_(*row_check_conditions)
             unique_key_conditions = []
             for key in unique_key:
-                t_key = key.copy()
+                key_qualified = key.copy()
+                key_qualified.set("table", exp.parse_identifier("joined"))
+                t_key = key_qualified.copy()
                 for col in t_key.find_all(exp.Column):
                     col.this.set("this", f"t_{col.name}")
                 unique_key_conditions.extend(
-                    [t_key.is_(exp.Null()).not_(), key.is_(exp.Null()).not_()]
+                    [t_key.is_(exp.Null()).not_(), key_qualified.is_(exp.Null()).not_()]
                 )
             unique_key_check = exp.and_(*unique_key_conditions)
             # unique_key_check is saying "if the row is updated"
@@ -1509,11 +1524,15 @@ class EngineAdapter:
             ).as_(valid_from_col.this)
         else:
             assert updated_at_col is not None
-            prefixed_updated_at_col = updated_at_col.copy()
-            prefixed_updated_at_col.this.set("this", f"t_{updated_at_col.name}")
-            updated_row_filter = updated_at_col > prefixed_updated_at_col
+            updated_at_col_qualified = updated_at_col.copy()
+            updated_at_col_qualified.set("table", exp.parse_identifier("joined"))
+            prefixed_updated_at_col = updated_at_col_qualified.copy()
+            prefixed_updated_at_col.this.set("this", f"t_{updated_at_col_qualified.name}")
+            updated_row_filter = updated_at_col_qualified > prefixed_updated_at_col
 
-            valid_to_case_stmt_builder = exp.Case().when(updated_row_filter, updated_at_col)
+            valid_to_case_stmt_builder = exp.Case().when(
+                updated_row_filter, updated_at_col_qualified
+            )
             if delete_check:
                 valid_to_case_stmt_builder = valid_to_case_stmt_builder.when(
                     delete_check, execution_ts
@@ -1536,7 +1555,10 @@ class EngineAdapter:
                     )
                     .else_(updated_at_col),
                 )
-                .when(prefixed_valid_from_col.is_(exp.Null()), update_valid_from_start)
+                .when(
+                    prefixed_valid_from_col.is_(exp.Null()),
+                    update_valid_from_start,
+                )
                 .else_(prefixed_valid_from_col)
             ).as_(valid_from_col.this)
 
@@ -1712,13 +1734,7 @@ class EngineAdapter:
                 )
             )
 
-            self.replace_query(
-                target_table,
-                query,
-                columns_to_types=columns_to_types,
-                table_description=table_description,
-                column_descriptions=column_descriptions,
-            )
+            yield query, columns_to_types
 
     def merge(
         self,

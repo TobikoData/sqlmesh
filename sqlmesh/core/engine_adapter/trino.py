@@ -1,8 +1,7 @@
 from __future__ import annotations
-
+from contextlib import contextmanager
 import typing as t
 from functools import lru_cache
-
 import pandas as pd
 from pandas.api.types import is_datetime64_any_dtype  # type: ignore
 from sqlglot import exp
@@ -208,7 +207,8 @@ class TrinoEngineAdapter(
             table, columns_to_types, column_descriptions, expressions, is_view
         )
 
-    def _scd_type_2(
+    @contextmanager
+    def _build_scd_type_2_query_and_cols(
         self,
         target_table: TableName,
         source_table: QueryOrDF,
@@ -222,14 +222,12 @@ class TrinoEngineAdapter(
         updated_at_as_valid_from: bool = False,
         execution_time_as_valid_from: bool = False,
         columns_to_types: t.Optional[t.Dict[str, exp.DataType]] = None,
-        table_description: t.Optional[str] = None,
-        column_descriptions: t.Optional[t.Dict[str, str]] = None,
         truncate: bool = False,
-    ) -> None:
+    ) -> t.Iterator[tuple[exp.Union, dict[str, exp.DataType]]]:
         if columns_to_types and self.current_catalog_type == "delta_lake":
             columns_to_types = self._to_delta_ts(columns_to_types)
 
-        return super()._scd_type_2(
+        with super()._build_scd_type_2_query_and_cols(
             target_table,
             source_table,
             unique_key,
@@ -242,10 +240,9 @@ class TrinoEngineAdapter(
             updated_at_as_valid_from,
             execution_time_as_valid_from,
             columns_to_types,
-            table_description,
-            column_descriptions,
             truncate,
-        )
+        ) as (query, columns_to_types_scd):
+            yield query, columns_to_types_scd
 
     # delta_lake only supports two timestamp data types. This method converts other
     # timestamp types to those two for use in DDL statements. Trino/delta automatically
