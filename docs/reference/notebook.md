@@ -95,7 +95,7 @@ options:
 %plan [--start START] [--end END] [--execution-time EXECUTION_TIME]
             [--create-from CREATE_FROM] [--skip-tests]
             [--restate-model [RESTATE_MODEL ...]] [--no-gaps]
-            [--skip-backfill] [--forward-only]
+            [--skip-backfill, --dry-run] [--forward-only]
             [--effective-from EFFECTIVE_FROM] [--no-prompts] [--auto-apply]
             [--no-auto-categorization] [--include-unmodified]
             [--select-model [SELECT_MODEL ...]]
@@ -127,7 +127,8 @@ options:
   --no-gaps, -g         Ensure that new snapshots have no data gaps when
                         comparing to existing snapshots for matching models in
                         the target environment.
-  --skip-backfill       Skip the backfill step.
+  --skip-backfill, --dry-run
+                        Skip the backfill step and only create a virtual update for the plan.
   --forward-only        Create a plan for forward-only changes.
   --effective-from EFFECTIVE_FROM
                         The effective date from which to apply forward-only
