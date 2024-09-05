@@ -20,7 +20,5 @@ FROM
         customer_id: 'int',
         status: 'text',
         updated_at: 'timestamp',
-        valid_from: 'timestamp',
-        valid_to: 'timestamp',
     }
 )
