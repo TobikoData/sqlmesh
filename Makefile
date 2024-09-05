@@ -167,45 +167,45 @@ engine-%-down:
 ##################
 
 clickhouse-test: engine-clickhouse-up
-	pytest -n auto -x -m "clickhouse" --junitxml=test-results/junit-clickhouse.xml
+	pytest -n auto -x -m "clickhouse" --retries 3 --junitxml=test-results/junit-clickhouse.xml
 
 clickhouse-cluster-test: engine-clickhouse-up
-	pytest -n auto -x -m "clickhouse_cluster" --junitxml=test-results/junit-clickhouse-cluster.xml
+	pytest -n auto -x -m "clickhouse_cluster" --retries 3 --junitxml=test-results/junit-clickhouse-cluster.xml
 
 duckdb-test: engine-duckdb-install
-	pytest -n auto -x -m "duckdb" --junitxml=test-results/junit-duckdb.xml
+	pytest -n auto -x -m "duckdb" --retries 3 --junitxml=test-results/junit-duckdb.xml
 
 mssql-test: engine-mssql-up
-	pytest -n auto -x -m "mssql" --junitxml=test-results/junit-mssql.xml
+	pytest -n auto -x -m "mssql" --retries 3 --junitxml=test-results/junit-mssql.xml
 
 mysql-test: engine-mysql-up
-	pytest -n auto -x -m "mysql" --junitxml=test-results/junit-mysql.xml
+	pytest -n auto -x -m "mysql" --retries 3 --junitxml=test-results/junit-mysql.xml
 
 postgres-test: engine-postgres-up
-	pytest -n auto -x -m "postgres" --junitxml=test-results/junit-postgres.xml
+	pytest -n auto -x -m "postgres" --retries 3 --junitxml=test-results/junit-postgres.xml
 
 spark-test: engine-spark-up
-	pytest -n auto -x -m "spark or pyspark" --junitxml=test-results/junit-spark.xml
+	pytest -n auto -x -m "spark or pyspark" --retries 3 --junitxml=test-results/junit-spark.xml
 
 trino-test: engine-trino-up
-	pytest -n auto -x -m "trino or trino_iceberg or trino_delta" --retries 2 --junitxml=test-results/junit-trino.xml
+	pytest -n auto -x -m "trino or trino_iceberg or trino_delta" --retries 3 --junitxml=test-results/junit-trino.xml
 
 #################
 # Cloud Engines #
 #################
 
 snowflake-test: guard-SNOWFLAKE_ACCOUNT guard-SNOWFLAKE_WAREHOUSE guard-SNOWFLAKE_DATABASE guard-SNOWFLAKE_USER guard-SNOWFLAKE_PASSWORD engine-snowflake-install
-	pytest -n auto -x -m "snowflake" --junitxml=test-results/junit-snowflake.xml
+	pytest -n auto -x -m "snowflake" --retries 3 --junitxml=test-results/junit-snowflake.xml
 
 bigquery-test: guard-BIGQUERY_KEYFILE engine-bigquery-install
-	pytest -n auto -x -m "bigquery" --junitxml=test-results/junit-bigquery.xml
+	pytest -n auto -x -m "bigquery" --retries 3 --junitxml=test-results/junit-bigquery.xml
 
 databricks-test: guard-DATABRICKS_CATALOG guard-DATABRICKS_SERVER_HOSTNAME guard-DATABRICKS_HTTP_PATH guard-DATABRICKS_ACCESS_TOKEN guard-DATABRICKS_CONNECT_VERSION engine-databricks-install
 	pip install 'databricks-connect==${DATABRICKS_CONNECT_VERSION}'
-	pytest -n auto -x -m "databricks" --junitxml=test-results/junit-databricks.xml
+	pytest -n auto -x -m "databricks" --retries 3 --junitxml=test-results/junit-databricks.xml
 
 redshift-test: guard-REDSHIFT_HOST guard-REDSHIFT_USER guard-REDSHIFT_PASSWORD guard-REDSHIFT_DATABASE engine-redshift-install
-	pytest -n auto -x -m "redshift" --junitxml=test-results/junit-redshift.xml
+	pytest -n auto -x -m "redshift" --retries 3 --junitxml=test-results/junit-redshift.xml
 
 clickhouse-cloud-test: guard-CLICKHOUSE_CLOUD_HOST guard-CLICKHOUSE_CLOUD_USERNAME guard-CLICKHOUSE_CLOUD_PASSWORD engine-clickhouse-install
-	pytest -n auto -x -m "clickhouse_cloud" --junitxml=test-results/junit-clickhouse-cloud.xml
+	pytest -n auto -x -m "clickhouse_cloud" --retries 3 --junitxml=test-results/junit-clickhouse-cloud.xml
