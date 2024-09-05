@@ -16,10 +16,10 @@ This section describes the other root level configuration parameters.
 
 Configuration options for SQLMesh project directories.
 
-| Option            | Description                                                                                                        |     Type     | Required |
-| ----------------- | ------------------------------------------------------------------------------------------------------------------ | :----------: | :------: |
-| `ignore_patterns` | Files that match glob patterns specified in this list are ignored when scanning the project folder (Default: `[]`) | list[string] |    N     |
-| `project`         | The project name of this config. Used for [multi-repo setups](../guides/multi_repo.md).                            | string       |    N     |
+| Option             | Description                                                                                                        |     Type     | Required |
+| ------------------ | ------------------------------------------------------------------------------------------------------------------ | :----------: | :------: |
+| `ignore_patterns`  | Files that match glob patterns specified in this list are ignored when scanning the project folder (Default: `[]`) | list[string] |    N     |
+| `project`          | The project name of this config. Used for [multi-repo setups](../guides/multi_repo.md).                            | string       |    N     |
 
 ### Environments
 
@@ -291,3 +291,8 @@ You can disable collection of anonymized usage information with these methods:
 
 - Set the root `disable_anonymized_analytics: true` key in your SQLMesh project configuration file
 - Execute SQLMesh commands with an environment variable `SQLMESH__DISABLE_ANONYMIZED_ANALYTICS` set to `1`, `true`, `t`, `yes`, or `y`
+
+## Parallel loading
+SQLMesh by default uses all of your cores when loading models and snapshots. It takes advantage of `fork` which is not available on Windows. The default is to use the same number of workers as cores on your machine if fork is available.
+
+You can override this setting by setting the environment variable `MAX_FORK_WORKERS`. A value of 1 will disable forking and load things sequentially.

@@ -376,7 +376,7 @@ class QueryRenderer(BaseExpressionRenderer):
         table_mapping: t.Optional[t.Dict[str, str]] = None,
         deployability_index: t.Optional[DeployabilityIndex] = None,
         expand: t.Iterable[str] = tuple(),
-        optimize: bool = True,
+        needs_optimization: bool = True,
         runtime_stage: RuntimeStage = RuntimeStage.LOADING,
         **kwargs: t.Any,
     ) -> t.Optional[exp.Query]:
@@ -393,7 +393,8 @@ class QueryRenderer(BaseExpressionRenderer):
             expand: Expand referenced models as subqueries. This is used to bypass backfills when running queries
                 that depend on materialized tables.  Model definitions are inlined and can thus be run end to
                 end on the fly.
-            optimize: Whether to optimize the query.
+            needs_optimization: Whether or not an optimization should be attempted
+                (if passing False, it still may return a cached optimized query).
             runtime_stage: Indicates the current runtime stage, for example if we're still loading the project, etc.
             kwargs: Additional kwargs to pass to the renderer.
 
@@ -402,7 +403,7 @@ class QueryRenderer(BaseExpressionRenderer):
         """
 
         should_cache = self._should_cache(
-            runtime_stage, start, end, execution_time, not optimize, *kwargs.values()
+            runtime_stage, start, end, execution_time, *kwargs.values()
         )
 
         if should_cache and self._optimized_cache:
@@ -417,7 +418,7 @@ class QueryRenderer(BaseExpressionRenderer):
                     table_mapping=table_mapping,
                     deployability_index=deployability_index,
                     runtime_stage=runtime_stage,
-                    normalize_identifiers=optimize,
+                    normalize_identifiers=needs_optimization,
                     **kwargs,
                 )
             except ParsetimeAdapterCallError:
@@ -439,7 +440,7 @@ class QueryRenderer(BaseExpressionRenderer):
                 )
                 raise
 
-            if optimize:
+            if needs_optimization:
                 deps = d.find_tables(
                     query, default_catalog=self._default_catalog, dialect=self._dialect
                 )
@@ -449,7 +450,7 @@ class QueryRenderer(BaseExpressionRenderer):
                 if should_cache:
                     self._optimized_cache = query
 
-        if optimize:
+        if needs_optimization:
             query = self._resolve_tables(
                 query,
                 snapshots=snapshots,

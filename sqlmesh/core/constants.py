@@ -1,6 +1,8 @@
 from __future__ import annotations
 
 import datetime
+import os
+import typing as t
 from pathlib import Path
 
 SQLMESH = "sqlmesh"
@@ -27,6 +29,21 @@ DEFAULT_TIME_COLUMN_FORMAT = "%Y-%m-%d"
 """Default time column format"""
 MAX_MODEL_DEFINITION_SIZE = 10000
 """Maximum number of characters in a model definition"""
+
+
+# The maximum number of fork processes, used for loading projects
+# None means default to process pool, 1 means don't fork, :N is number of processes
+# Factors in the number of available CPUs even if the process is bound to a subset of them
+# (e.g. via taskset) to avoid oversubscribing the system and causing kill signals
+if hasattr(os, "fork"):
+    try:
+        MAX_FORK_WORKERS: t.Optional[int] = int(os.getenv("MAX_FORK_WORKERS"))  # type: ignore
+    except TypeError:
+        MAX_FORK_WORKERS = (
+            len(os.sched_getaffinity(0)) if hasattr(os, "sched_getaffinity") else None
+        )
+else:
+    MAX_FORK_WORKERS = 1
 
 EPOCH = datetime.date(1970, 1, 1)
 

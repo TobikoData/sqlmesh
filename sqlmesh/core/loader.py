@@ -3,11 +3,10 @@ from __future__ import annotations
 import abc
 import linecache
 import logging
-import multiprocessing as mp
 import os
 import typing as t
 from collections import defaultdict
-from concurrent.futures import ProcessPoolExecutor, as_completed
+from concurrent.futures import as_completed
 from dataclasses import dataclass
 from pathlib import Path
 
@@ -25,10 +24,10 @@ from sqlmesh.core.model import (
     ModelCache,
     OptimizedQueryCache,
     SeedModel,
-    SqlModel,
     create_external_model,
     load_sql_based_model,
 )
+from sqlmesh.core.model.cache import optimized_query_cache_pool, load_optimized_query_cache
 from sqlmesh.core.model import model as model_registry
 from sqlmesh.utils import UniqueKeyDict
 from sqlmesh.utils.dag import DAG
@@ -549,7 +548,7 @@ def update_model_schemas(
     schema = MappingSchema(normalize=False)
     optimized_query_cache: OptimizedQueryCache = OptimizedQueryCache(context_path / c.CACHE)
 
-    if not hasattr(os, "fork") or "PYTEST_CURRENT_TEST" in os.environ:
+    if c.MAX_FORK_WORKERS == 1:
         _update_model_schemas_sequential(dag, models, schema, optimized_query_cache)
     else:
         _update_model_schemas_parallel(dag, models, schema, optimized_query_cache)
@@ -610,13 +609,9 @@ def _update_model_schemas_parallel(
                 del graph[name]
                 model = models[name]
                 model.update_schema(schema)
-                futures.add(executor.submit(_load_optimized_query_cache, model))
+                futures.add(executor.submit(load_optimized_query_cache, model))
 
-    with ProcessPoolExecutor(
-        mp_context=mp.get_context("fork"),
-        initializer=_init_optimized_query_cache,
-        initargs=(optimized_query_cache,),
-    ) as executor:
+    with optimized_query_cache_pool(optimized_query_cache) as executor:
         process_models()
 
         while futures:
@@ -629,20 +624,3 @@ def _update_model_schemas_parallel(
 
                 _update_schema_with_model(schema, model)
                 process_models(completed_model=model)
-
-
-_optimized_query_cache: t.Optional[OptimizedQueryCache] = None
-
-
-def _init_optimized_query_cache(optimized_query_cache: OptimizedQueryCache) -> None:
-    global _optimized_query_cache
-    _optimized_query_cache = optimized_query_cache
-
-
-def _load_optimized_query_cache(model: Model) -> t.Tuple[str, t.Optional[str]]:
-    assert _optimized_query_cache
-    if isinstance(model, SqlModel):
-        entry_name = _optimized_query_cache.put(model)
-    else:
-        entry_name = None
-    return model.fqn, entry_name
