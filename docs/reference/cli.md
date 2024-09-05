@@ -287,7 +287,8 @@ Options:
   --no-gaps                       Ensure that new snapshots have no data gaps
                                   when comparing to existing snapshots for
                                   matching models in the target environment.
-  --skip-backfill                 Skip the backfill step.
+  --skip-backfill, --dry-run      Skip the backfill step and only create a
+                                  virtual update for the plan.
   --forward-only                  Create a plan for forward-only changes.
   --allow-destructive-model TEXT  Allow destructive forward-only changes to
                                   models whose names match the expression.

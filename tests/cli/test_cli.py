@@ -214,13 +214,12 @@ def test_plan_restate_model(runner, tmp_path):
     assert_backfill_success(result)
 
 
-def test_plan_skip_backfill(runner, tmp_path):
+@pytest.mark.parametrize("flag", ["--skip-backfill", "--dry-run"])
+def test_plan_skip_backfill(runner, tmp_path, flag):
     create_example_project(tmp_path)
 
     # plan for `prod` errors if `--skip-backfill` is passed without --no-gaps
-    result = runner.invoke(
-        cli, ["--log-file-dir", tmp_path, "--paths", tmp_path, "plan", "--skip-backfill"]
-    )
+    result = runner.invoke(cli, ["--log-file-dir", tmp_path, "--paths", tmp_path, "plan", flag])
     assert result.exit_code == 1
     assert (
         "Error: When targeting the production environment either the backfill should not be skipped or the lack of data gaps should be enforced (--no-gaps flag)."
@@ -231,7 +230,7 @@ def test_plan_skip_backfill(runner, tmp_path):
     # Input: `y` to perform virtual update
     result = runner.invoke(
         cli,
-        ["--log-file-dir", tmp_path, "--paths", tmp_path, "plan", "--skip-backfill", "--no-gaps"],
+        ["--log-file-dir", tmp_path, "--paths", tmp_path, "plan", flag, "--no-gaps"],
         input="y\n",
     )
     assert result.exit_code == 0
@@ -562,15 +561,16 @@ def test_run_no_prod(runner, tmp_path):
     assert "Error: Environment 'prod' was not found." in result.output
 
 
+@pytest.mark.parametrize("flag", ["--skip-backfill", "--dry-run"])
 @freeze_time(FREEZE_TIME)
-def test_run_dev(runner, tmp_path):
+def test_run_dev(runner, tmp_path, flag):
     create_example_project(tmp_path)
 
     # Create dev environment but DO NOT backfill
     # Input: `y` for virtual update
     runner.invoke(
         cli,
-        ["--log-file-dir", tmp_path, "--paths", tmp_path, "plan", "dev", "--skip-backfill"],
+        ["--log-file-dir", tmp_path, "--paths", tmp_path, "plan", "dev", flag],
         input="y\n",
     )
 

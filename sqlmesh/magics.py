@@ -325,8 +325,9 @@ class SQLMeshMagics(Magics):
     )
     @argument(
         "--skip-backfill",
+        "--dry-run",
         action="store_true",
-        help="Skip the backfill step.",
+        help="Skip the backfill step and only create a virtual update for the plan.",
     )
     @argument(
         "--forward-only",
