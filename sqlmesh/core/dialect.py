@@ -584,8 +584,10 @@ def _macro_func_sql(self: Generator, expression: MacroFunc) -> str:
     expression = expression.this
     name = expression.name
     if name in KEYWORD_MACROS:
-        return _macro_keyword_func_sql(self, expression)
-    return f"@{name}({self.format_args(*expression.expressions)})"
+        sql = _macro_keyword_func_sql(self, expression)
+    else:
+        sql = f"@{name}({self.format_args(*expression.expressions)})"
+    return self.maybe_comment(sql, expression)
 
 
 def _override(klass: t.Type[Tokenizer | Parser], func: t.Callable) -> None:
