@@ -53,8 +53,13 @@ def test_format_files(tmp_path: pathlib.Path):
         == 'SELECT * FROM @this_model WHERE "CaseSensitive_item_id" < 0'
     )
 
+    assert not context.format(check=True)
+
     # Transpile project to BigQuery
     context.format(transpile="bigquery")
+
+    # Ensure format check is successful
+    assert context.format(transpile="bigquery", check=True)
 
     # Ensure transpilation success AND model specific dialect is mutated
     upd1 = f1.read_text(encoding="utf-8")

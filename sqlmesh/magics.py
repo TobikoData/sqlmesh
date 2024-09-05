@@ -735,12 +735,18 @@ class SQLMeshMagics(Magics):
         type=int,
         help="The max number of characters in a segment before creating new lines in pretty mode.",
     )
+    @argument(
+        "--check",
+        action="store_true",
+        help="Whether or not to check formatting (but not actually format anything).",
+        default=None,
+    )
     @line_magic
     @pass_sqlmesh_context
-    def format(self, context: Context, line: str) -> None:
+    def format(self, context: Context, line: str) -> bool:
         """Format all SQL models and audits."""
         args = parse_argstring(self.format, line)
-        context.format(**{k: v for k, v in vars(args).items() if v is not None})
+        return context.format(**{k: v for k, v in vars(args).items() if v is not None})
 
     @magic_arguments()
     @argument("environment", type=str, help="The environment to diff local state against.")

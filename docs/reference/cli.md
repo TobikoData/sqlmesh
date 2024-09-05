@@ -184,6 +184,8 @@ Options:
                               trailing.
   --max-text-width INTEGER    The max number of characters in a segment before
                               creating new lines in pretty mode.
+  --check                     Whether or not to check formatting (but not
+                              actually format anything).
   --help                      Show this message and exit.
 ```
 
