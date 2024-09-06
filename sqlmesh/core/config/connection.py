@@ -48,6 +48,7 @@ class ConnectionConfig(abc.ABC, BaseConfig):
     concurrent_tasks: int
     register_comments: bool
     pre_ping: bool
+    pretty_sql: bool = False
 
     @property
     @abc.abstractmethod
@@ -119,6 +120,7 @@ class ConnectionConfig(abc.ABC, BaseConfig):
             cursor_init=self._cursor_init,
             register_comments=register_comments_override or self.register_comments,
             pre_ping=self.pre_ping,
+            pretty_sql=self.pretty_sql,
             **self._extra_engine_config,
         )
 

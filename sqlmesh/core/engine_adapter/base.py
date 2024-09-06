@@ -115,6 +115,7 @@ class EngineAdapter:
         execute_log_level: int = logging.DEBUG,
         register_comments: bool = True,
         pre_ping: bool = False,
+        pretty_sql: bool = False,
         **kwargs: t.Any,
     ):
         self.dialect = dialect.lower() or self.DIALECT
@@ -127,6 +128,7 @@ class EngineAdapter:
         self._extra_config = kwargs
         self._register_comments = register_comments
         self._pre_ping = pre_ping
+        self._pretty_sql = pretty_sql
 
     def with_log_level(self, level: int) -> EngineAdapter:
         adapter = self.__class__(
@@ -2044,7 +2046,6 @@ class EngineAdapter:
         to_sql_kwargs = (
             {"unsupported_level": ErrorLevel.IGNORE} if ignore_unsupported_errors else {}
         )
-
         with self.transaction():
             for e in ensure_list(expressions):
                 sql = t.cast(
@@ -2209,7 +2210,7 @@ class EngineAdapter:
         """
         sql_gen_kwargs = {
             "dialect": self.dialect,
-            "pretty": False,
+            "pretty": self._pretty_sql,
             "comments": False,
             **self._sql_gen_kwargs,
             **kwargs,
