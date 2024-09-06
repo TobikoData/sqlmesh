@@ -1313,7 +1313,7 @@ class EngineAdapter:
         truncate: bool = False,
         **kwargs: t.Any,
     ) -> None:
-        with self._build_scd_type_2_query_and_cols(
+        self._scd_type_2(
             target_table=target_table,
             source_table=source_table,
             unique_key=unique_key,
@@ -1324,15 +1324,10 @@ class EngineAdapter:
             invalidate_hard_deletes=invalidate_hard_deletes,
             updated_at_as_valid_from=updated_at_as_valid_from,
             columns_to_types=columns_to_types,
+            table_description=table_description,
+            column_descriptions=column_descriptions,
             truncate=truncate,
-        ) as (query, columns_to_types_scd):
-            self.replace_query(
-                target_table,
-                query,
-                columns_to_types=columns_to_types_scd,
-                table_description=table_description,
-                column_descriptions=column_descriptions,
-            )
+        )
 
     def scd_type_2_by_column(
         self,
@@ -1351,7 +1346,7 @@ class EngineAdapter:
         truncate: bool = False,
         **kwargs: t.Any,
     ) -> None:
-        with self._build_scd_type_2_query_and_cols(
+        self._scd_type_2(
             target_table=target_table,
             source_table=source_table,
             unique_key=unique_key,
@@ -1362,18 +1357,12 @@ class EngineAdapter:
             columns_to_types=columns_to_types,
             invalidate_hard_deletes=invalidate_hard_deletes,
             execution_time_as_valid_from=execution_time_as_valid_from,
+            table_description=table_description,
+            column_descriptions=column_descriptions,
             truncate=truncate,
-        ) as (query, columns_to_types_scd):
-            self.replace_query(
-                target_table,
-                query,
-                columns_to_types=columns_to_types_scd,
-                table_description=table_description,
-                column_descriptions=column_descriptions,
-            )
+        )
 
-    @contextlib.contextmanager
-    def _build_scd_type_2_query_and_cols(
+    def _scd_type_2(
         self,
         target_table: TableName,
         source_table: QueryOrDF,
@@ -1387,8 +1376,10 @@ class EngineAdapter:
         updated_at_as_valid_from: bool = False,
         execution_time_as_valid_from: bool = False,
         columns_to_types: t.Optional[t.Dict[str, exp.DataType]] = None,
+        table_description: t.Optional[str] = None,
+        column_descriptions: t.Optional[t.Dict[str, str]] = None,
         truncate: bool = False,
-    ) -> t.Iterator[tuple[exp.Union, dict[str, exp.DataType]]]:
+    ) -> None:
         def remove_managed_columns(
             cols_to_types: t.Dict[str, exp.DataType],
         ) -> t.Dict[str, exp.DataType]:
@@ -1734,7 +1725,13 @@ class EngineAdapter:
                 )
             )
 
-            yield query, columns_to_types
+            self.replace_query(
+                target_table,
+                self._inject_query_settings(query),
+                columns_to_types=columns_to_types,
+                table_description=table_description,
+                column_descriptions=column_descriptions,
+            )
 
     def merge(
         self,
@@ -2308,6 +2305,9 @@ class EngineAdapter:
         new_table_name: TableName,
     ) -> None:
         self.execute(exp.rename_table(old_table_name, new_table_name))
+
+    def _inject_query_settings(self, query: Query) -> Query:
+        return query
 
     def ping(self) -> None:
         try:

@@ -1,6 +1,5 @@
 from __future__ import annotations
 
-from contextlib import contextmanager
 import typing as t
 import logging
 import pandas as pd
@@ -18,11 +17,10 @@ from sqlmesh.core.engine_adapter.shared import (
 )
 from sqlmesh.core.schema_diff import SchemaDiffer
 from functools import cached_property
-from sqlmesh.utils.date import TimeLike
 
 if t.TYPE_CHECKING:
     from sqlmesh.core._typing import SchemaName, TableName
-    from sqlmesh.core.engine_adapter._typing import DF, Query, QueryOrDF
+    from sqlmesh.core.engine_adapter._typing import DF, Query
 
     from sqlmesh.core.node import IntervalUnit
 
@@ -296,67 +294,26 @@ class ClickhouseEngineAdapter(EngineAdapterWithIndexSupport, LogicalMergeMixin):
             this=exp.Schema(expressions=partitioned_by),
         )
 
-    @contextmanager
-    def _build_scd_type_2_query_and_cols(
-        self,
-        target_table: TableName,
-        source_table: QueryOrDF,
-        unique_key: t.Sequence[exp.Expression],
-        valid_from_col: exp.Column,
-        valid_to_col: exp.Column,
-        execution_time: TimeLike,
-        invalidate_hard_deletes: bool = True,
-        updated_at_col: t.Optional[exp.Column] = None,
-        check_columns: t.Optional[t.Union[exp.Star, t.Sequence[exp.Column]]] = None,
-        updated_at_as_valid_from: bool = False,
-        execution_time_as_valid_from: bool = False,
-        columns_to_types: t.Optional[t.Dict[str, exp.DataType]] = None,
-        truncate: bool = False,
-    ) -> t.Iterator[tuple[exp.Union, dict[str, exp.DataType]]]:
-        with super()._build_scd_type_2_query_and_cols(
-            target_table=target_table,
-            source_table=source_table,
-            unique_key=unique_key,
-            valid_from_col=valid_from_col,
-            valid_to_col=valid_to_col,
-            execution_time=execution_time,
-            invalidate_hard_deletes=invalidate_hard_deletes,
-            updated_at_col=updated_at_col,
-            check_columns=check_columns,
-            updated_at_as_valid_from=updated_at_as_valid_from,
-            execution_time_as_valid_from=execution_time_as_valid_from,
-            columns_to_types=columns_to_types,
-            truncate=truncate,
-        ) as (query, columns_to_types_scd):
-            # add `join_use_nulls` setting so empty cells in a join are filled with NULL instead of default data type value
-            query.expression.set(
-                "settings",
-                (query.expression.args.get("settings") or [])
-                + [
-                    exp.EQ(
-                        this=exp.var("join_use_nulls"),
-                        expression=exp.Literal(this="1", is_string=False),
-                    )
-                ],
-            )
-            yield query, columns_to_types_scd
-
-    def _order_projections_and_filter(
+    def _inject_query_settings(
         self,
         query: Query,
-        columns_to_types: t.Dict[str, exp.DataType],
-        where: t.Optional[exp.Expression] = None,
-        coerce_types: bool = False,
     ) -> Query:
-        query = super()._order_projections_and_filter(query, columns_to_types, where, coerce_types)
+        # Add `join_use_nulls` setting so empty cells in a join are filled with NULL instead of default data type value
+        #
+        # A query's settings are locally scoped, so we can add this here without impacting the behavior of any other
+        # subqueries or the outer query.
+        # https://github.com/ClickHouse/ClickHouse/issues/63078#issuecomment-2081284070
+        query.set(
+            "settings",
+            (query.args.get("settings") or [])
+            + [
+                exp.EQ(
+                    this=exp.var("join_use_nulls"),
+                    expression=exp.Literal(this="1", is_string=False),
+                )
+            ],
+        )
 
-        # move Select settings to outer query
-        settings = []
-        for sel in query.find_all(exp.Select):
-            setting = sel.args.pop("settings", None)
-            if setting:
-                settings.extend(setting)
-        query.set("settings", (query.args.pop("settings", None) or []) + settings)
         return query
 
     def _build_table_properties_exp(
