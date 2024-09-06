@@ -322,6 +322,28 @@ def test_override_builtin_audit_blocking_mode():
     assert new_snapshot.audits[0].name == "not_null"
     assert new_snapshot.audits[0].blocking is False
 
+    context = Context(config=Config())
+    context.upsert_model(
+        load_sql_based_model(
+            parse(
+                """
+                MODEL(
+                    name db.x,
+                    kind FULL,
+                    audits (
+                        not_null_non_blocking(columns := [c], blocking := true)
+                    )
+                );
+
+                SELECT NULL AS c
+                """
+            )
+        )
+    )
+
+    with pytest.raises(SQLMeshError):
+        context.plan(auto_apply=True, no_prompts=True)
+
 
 def test_python_model_empty_df_raises(sushi_context, capsys):
     @model(
