@@ -314,6 +314,31 @@ def _parse_join(
     return macro
 
 
+def _parse_select(
+    self: Parser,
+    nested: bool = False,
+    table: bool = False,
+    parse_subquery_alias: bool = True,
+    parse_set_operation: bool = True,
+) -> t.Optional[exp.Expression]:
+    select = self.__parse_select(  # type: ignore
+        nested=nested,
+        table=table,
+        parse_subquery_alias=parse_subquery_alias,
+        parse_set_operation=parse_set_operation,
+    )
+
+    if (
+        not select
+        and not parse_set_operation
+        and self._match_pair(TokenType.PARAMETER, TokenType.VAR, advance=False)
+    ):
+        self._advance()
+        return _parse_macro(self)
+
+    return select
+
+
 def _parse_where(self: Parser, skip_where_token: bool = False) -> t.Optional[exp.Expression]:
     macro = _parse_matching_macro(self, "WHERE")
     if not macro:
@@ -846,6 +871,7 @@ def extend_sqlglot() -> None:
                 MacroDef,
             )
 
+    _override(Parser, _parse_select)
     _override(Parser, _parse_statement)
     _override(Parser, _parse_join)
     _override(Parser, _parse_order)

@@ -89,6 +89,10 @@ def macro_evaluator() -> MacroEvaluator:
     ):
         return sum([a1, a2])
 
+    @macro()
+    def test_select_macro(evaluator):
+        return "SELECT 1 AS col"
+
     return MacroEvaluator(
         "hive",
         {"test": Executable(name="test", payload="def test(_):\n    return 'test'")},
@@ -907,7 +911,7 @@ def test_date_spine(assert_exp_eq, dialect, date_part):
         FROM (
             SELECT
                 date_{date_part}
-            FROM _generated_dates 
+            FROM _generated_dates
         ) AS _generated_dates
         """
     assert_exp_eq(evaluator.transform(parse_one(date_spine_macro)), expected_sql, dialect=dialect)
@@ -943,3 +947,10 @@ def test_date_spine_error_handling(macro_evaluator):
         str(e.value.__cause__)
         == "Invalid date range - start_date '2024-12-31' is after end_date '2022-01-01'."
     )
+
+
+def test_macro_union(assert_exp_eq, macro_evaluator: MacroEvaluator):
+    sql = "SELECT 1 AS col UNION ALL @TEST_SELECT_MACRO()"
+    expected_sql = "SELECT 1 AS col UNION ALL SELECT 1 AS col"
+
+    assert_exp_eq(macro_evaluator.transform(parse_one(sql)), expected_sql)
