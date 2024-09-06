@@ -223,7 +223,7 @@ def test_nullable_datatypes_in_model_columns(adapter: ClickhouseEngineAdapter):
 
 
 def test_model_properties(adapter: ClickhouseEngineAdapter):
-    def build_properties_sql(storage_format="", order_by="", primary_key=""):
+    def build_properties_sql(storage_format="", order_by="", primary_key="", properties=""):
         model = load_sql_based_model(
             parse(
                 f"""
@@ -233,6 +233,7 @@ def test_model_properties(adapter: ClickhouseEngineAdapter):
             physical_properties (
               {order_by}
               {primary_key}
+              {properties}
             ),
         );
 
@@ -291,6 +292,15 @@ def test_model_properties(adapter: ClickhouseEngineAdapter):
     assert (
         build_properties_sql(order_by="ORDER_BY = (a, b + 1),", primary_key="PRIMARY_KEY = (a, b)")
         == "ENGINE=MergeTree ORDER BY (a, b + 1) PRIMARY KEY (a, b)"
+    )
+
+    assert (
+        build_properties_sql(
+            order_by="ORDER_BY = (a, b + 1),",
+            primary_key="PRIMARY_KEY = (a, b),",
+            properties="PROP1 = 1, PROP2 = '2'",
+        )
+        == "ENGINE=MergeTree ORDER BY (a, b + 1) PRIMARY KEY (a, b) SETTINGS PROP1 = 1 SETTINGS PROP2 = '2'"
     )
 
     assert (

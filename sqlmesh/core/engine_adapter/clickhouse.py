@@ -405,7 +405,21 @@ class ClickhouseEngineAdapter(EngineAdapterWithIndexSupport, LogicalMergeMixin):
             properties.append(exp.EmptyProperty())
 
         if table_properties_copy:
-            properties.extend(self._table_or_view_properties_to_expressions(table_properties_copy))
+            properties.extend(
+                [
+                    exp.SettingsProperty(
+                        expressions=[
+                            exp.EQ(
+                                this=exp.var(k),
+                                expression=v
+                                if isinstance(v, exp.Expression)
+                                else exp.Literal(this=v, is_string=isinstance(v, str)),
+                            )
+                        ]
+                    )
+                    for k, v in table_properties_copy.items()
+                ]
+            )
 
         if table_description:
             properties.append(
@@ -434,7 +448,21 @@ class ClickhouseEngineAdapter(EngineAdapterWithIndexSupport, LogicalMergeMixin):
             properties.append(exp.OnCluster(this=exp.to_identifier(self.cluster)))
 
         if view_properties_copy:
-            properties.extend(self._table_or_view_properties_to_expressions(view_properties_copy))
+            properties.extend(
+                [
+                    exp.SettingsProperty(
+                        expressions=[
+                            exp.EQ(
+                                this=exp.var(k),
+                                expression=v
+                                if isinstance(v, exp.Expression)
+                                else exp.Literal(this=v, is_string=isinstance(v, str)),
+                            )
+                        ]
+                    )
+                    for k, v in view_properties_copy.items()
+                ]
+            )
 
         if table_description:
             properties.append(
