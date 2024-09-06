@@ -1,6 +1,5 @@
 from __future__ import annotations
 
-from contextlib import contextmanager
 import typing as t
 import logging
 import pandas as pd
@@ -21,7 +20,7 @@ from sqlmesh.core.schema_diff import SchemaDiffer
 
 if t.TYPE_CHECKING:
     from sqlmesh.core._typing import SchemaName, TableName
-    from sqlmesh.core.engine_adapter._typing import DF, Query, QueryOrDF
+    from sqlmesh.core.engine_adapter._typing import DF, Query
 
     from sqlmesh.core.node import IntervalUnit
 

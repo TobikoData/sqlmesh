@@ -213,8 +213,7 @@ class TrinoEngineAdapter(
             table, columns_to_types, column_descriptions, expressions, is_view
         )
 
-    @contextmanager
-    def _build_scd_type_2_query_and_cols(
+    def _scd_type_2(
         self,
         target_table: TableName,
         source_table: QueryOrDF,
@@ -228,13 +227,15 @@ class TrinoEngineAdapter(
         updated_at_as_valid_from: bool = False,
         execution_time_as_valid_from: bool = False,
         columns_to_types: t.Optional[t.Dict[str, exp.DataType]] = None,
+        table_description: t.Optional[str] = None,
+        column_descriptions: t.Optional[t.Dict[str, str]] = None,
         truncate: bool = False,
         **kwargs: t.Any,
     ) -> None:
         if columns_to_types and self.current_catalog_type == "delta_lake":
             columns_to_types = self._to_delta_ts(columns_to_types)
 
-        with super()._build_scd_type_2_query_and_cols(
+        return super()._scd_type_2(
             target_table,
             source_table,
             unique_key,
@@ -247,6 +248,8 @@ class TrinoEngineAdapter(
             updated_at_as_valid_from,
             execution_time_as_valid_from,
             columns_to_types,
+            table_description,
+            column_descriptions,
             truncate,
             **kwargs,
         )
