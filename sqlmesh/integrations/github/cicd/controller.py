@@ -665,7 +665,9 @@ class GithubController:
         """
 
         def conclusion_handler(
-            conclusion: GithubCheckConclusion, result: unittest.result.TestResult, output: str
+            conclusion: GithubCheckConclusion,
+            result: t.Optional[unittest.result.TestResult],
+            output: t.Optional[str],
         ) -> t.Tuple[GithubCheckConclusion, str, t.Optional[str]]:
             if result:
                 # Clear out console

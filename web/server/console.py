@@ -238,7 +238,7 @@ class ApiConsole(TerminalConsole):
         )
 
     def log_test_results(
-        self, result: unittest.result.TestResult, output: str, target_dialect: str
+        self, result: unittest.result.TestResult, output: t.Optional[str], target_dialect: str
     ) -> None:
         if result.wasSuccessful():
             self.log_event(

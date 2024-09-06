@@ -215,7 +215,7 @@ class Console(abc.ABC):
 
     @abc.abstractmethod
     def log_test_results(
-        self, result: unittest.result.TestResult, output: str, target_dialect: str
+        self, result: unittest.result.TestResult, output: t.Optional[str], target_dialect: str
     ) -> None:
         """Display the test result and output.
 
@@ -985,7 +985,7 @@ class TerminalConsole(Console):
             plan_builder.apply()
 
     def log_test_results(
-        self, result: unittest.result.TestResult, output: str, target_dialect: str
+        self, result: unittest.result.TestResult, output: t.Optional[str], target_dialect: str
     ) -> None:
         divider_length = 70
         if result.wasSuccessful():
@@ -1477,7 +1477,7 @@ class NotebookMagicConsole(TerminalConsole):
         self.display(radio)
 
     def log_test_results(
-        self, result: unittest.result.TestResult, output: str, target_dialect: str
+        self, result: unittest.result.TestResult, output: t.Optional[str], target_dialect: str
     ) -> None:
         import ipywidgets as widgets
 
@@ -1786,7 +1786,7 @@ class MarkdownConsole(CaptureTerminalConsole):
             self._print("\n```")
 
     def log_test_results(
-        self, result: unittest.result.TestResult, output: str, target_dialect: str
+        self, result: unittest.result.TestResult, output: t.Optional[str], target_dialect: str
     ) -> None:
         # import ipywidgets as widgets
         if result.wasSuccessful():
@@ -2079,7 +2079,7 @@ class DebuggerTerminalConsole(TerminalConsole):
             self._write(f"  Modified: {modified}")
 
     def log_test_results(
-        self, result: unittest.result.TestResult, output: str, target_dialect: str
+        self, result: unittest.result.TestResult, output: t.Optional[str], target_dialect: str
     ) -> None:
         self._write("Test Results:", result)
 
