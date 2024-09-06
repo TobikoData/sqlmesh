@@ -41,7 +41,7 @@ if hasattr(os, "fork") and not mp.current_process().daemon:
         MAX_FORK_WORKERS: t.Optional[int] = int(os.getenv("MAX_FORK_WORKERS"))  # type: ignore
     except TypeError:
         MAX_FORK_WORKERS = (
-            len(os.sched_getaffinity(0)) if hasattr(os, "sched_getaffinity") else None
+            len(os.sched_getaffinity(0)) if hasattr(os, "sched_getaffinity") else None  # type: ignore
         )
 else:
     MAX_FORK_WORKERS = 1
