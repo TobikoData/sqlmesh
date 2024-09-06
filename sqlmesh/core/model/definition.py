@@ -559,16 +559,28 @@ class _Model(ModelMeta, frozen=True):
 
         referenced_audits = []
 
-        for audit_name, _ in self.audits + default_audits:
+        for audit_name, audit_args in self.audits + default_audits:
             if audit_name in self.inline_audits:
                 referenced_audits.append(self.inline_audits[audit_name])
             elif audit_name in audits:
                 referenced_audits.append(audits[audit_name])
-            elif audit_name not in BUILT_IN_AUDITS:
-                raise_config_error(
-                    f"Unknown audit '{audit_name}' referenced in model '{self.name}'",
-                    self._path,
-                )
+            else:
+                audit = BUILT_IN_AUDITS.get(audit_name)
+                if not audit:
+                    raise_config_error(
+                        f"Unknown audit '{audit_name}' referenced in model '{self.name}'",
+                        self._path,
+                    )
+
+                # Builtin audits are generally not included in order to reduce fingerprint size,
+                # but those that override `blocking` need to be included because otherwise doing
+                # `audit.blocking` will always return the builtin audit's default value
+                blocking = audit_args.get("blocking")
+                if blocking:
+                    referenced_audits.append(
+                        audit.copy(update={"blocking": blocking == exp.true()})  # type: ignore
+                    )
+
         return referenced_audits
 
     def text_diff(self, other: Node) -> str:

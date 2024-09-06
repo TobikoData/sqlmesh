@@ -292,6 +292,37 @@ def test_plan_execution_time():
     )
 
 
+def test_override_builtin_audit_blocking_mode():
+    context = Context(config=Config())
+    context.upsert_model(
+        load_sql_based_model(
+            parse(
+                """
+                MODEL(
+                    name db.x,
+                    kind FULL,
+                    audits (
+                        not_null(columns := [c], blocking := false),
+                        unique_values(columns := [c]),
+                    )
+                );
+
+                SELECT NULL AS c
+                """
+            )
+        )
+    )
+
+    plan = context.plan(auto_apply=True, no_prompts=True)
+    new_snapshot = next(iter(plan.context_diff.new_snapshots.values()))
+
+    # Even though there are two builtin audits referenced in the above definition, we only
+    # store the one that overrides `blocking` in the snapshot; the other one isn't needed
+    assert len(new_snapshot.audits) == 1
+    assert new_snapshot.audits[0].name == "not_null"
+    assert new_snapshot.audits[0].blocking is False
+
+
 def test_python_model_empty_df_raises(sushi_context, capsys):
     @model(
         "memory.sushi.test_model",
