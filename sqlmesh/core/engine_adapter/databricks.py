@@ -100,7 +100,7 @@ class DatabricksEngineAdapter(SparkEngineAdapter):
         if not self._use_spark_session:
             return False
         return (
-            RuntimeEnv.get().is_databricks and str_to_bool(os.environ["IS_SERVERLESS"])
+            RuntimeEnv.get().is_databricks and str_to_bool(os.environ.get("IS_SERVERLESS", "False"))
         ) or bool(self._extra_config["databricks_connect_use_serverless"])
 
     @property
