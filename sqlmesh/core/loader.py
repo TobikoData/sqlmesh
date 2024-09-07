@@ -123,6 +123,11 @@ class Loader(abc.ABC):
         )
         return project
 
+    def load_signals(self, context: GenericContext) -> None:
+        """Loads signals for the built-in scheduler."""
+        self._context = context
+        self._load_signals()
+
     def reload_needed(self) -> bool:
         """
         Checks for any modifications to the files the macros and models depend on

@@ -327,6 +327,7 @@ class GenericContext(BaseContext, t.Generic[C]):
         self._metrics: UniqueKeyDict[str, Metric] = UniqueKeyDict("metrics")
         self._jinja_macros = JinjaMacroRegistry()
         self._default_catalog: t.Optional[str] = None
+        self._loaded: bool = False
 
         self.path, self.config = t.cast(t.Tuple[Path, C], next(iter(self.configs.items())))
 
@@ -550,6 +551,7 @@ class GenericContext(BaseContext, t.Generic[C]):
             project_name=self.config.project,
         )
 
+        self._loaded = True
         return self
 
     @python_api_analytics
@@ -585,6 +587,11 @@ class GenericContext(BaseContext, t.Generic[C]):
             engine_type=self.snapshot_evaluator.adapter.dialect,
             state_sync_type=self.state_sync.state_type(),
         )
+
+        if not self._loaded:
+            # Signals should be loaded to run correctly.
+            with sys_path(*self.configs):
+                self._loader.load_signals(self)
 
         success = False
         try:
