@@ -589,7 +589,7 @@ class GenericContext(BaseContext, t.Generic[C]):
         )
 
         if not self._loaded:
-            # Signals should be loade to run correctly.
+            # Signals should be loaded to run correctly.
             with sys_path(*self.configs):
                 self._loader.load_signals(self)
 
