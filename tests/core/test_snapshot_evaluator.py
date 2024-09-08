@@ -51,7 +51,7 @@ from sqlmesh.core.snapshot import (
 from sqlmesh.core.snapshot.evaluator import CustomMaterialization
 from sqlmesh.utils.concurrency import NodeExecutionFailedError
 from sqlmesh.utils.date import to_timestamp
-from sqlmesh.utils.errors import AuditError, ConfigError
+from sqlmesh.utils.errors import AuditError, ConfigError, SQLMeshError
 from sqlmesh.utils.metaprogramming import Executable
 
 
@@ -2524,7 +2524,7 @@ def test_cleanup_managed(adapter_mock, make_snapshot, mocker: MockerFixture):
     )
 
 
-def test_create_managed_forward_only_with_previous_version_doesnt_clone(
+def test_create_managed_forward_only_with_previous_version_doesnt_clone_for_dev_preview(
     adapter_mock, make_snapshot
 ):
     evaluator = SnapshotEvaluator(adapter_mock)
@@ -2593,19 +2593,16 @@ def test_migrate_managed(adapter_mock, make_snapshot, mocker: MockerFixture):
     adapter_mock.create_managed_table.assert_not_called()
     adapter_mock.ctas.assert_not_called()
 
-    # schema changes - existing managed table replaced
+    # schema changes - exception thrown
     adapter_mock.get_alter_expressions.return_value = [exp.Alter()]
-    evaluator.migrate(target_snapshots=[snapshot], snapshots={})
+
+    with pytest.raises(NodeExecutionFailedError, match=r".*Execution failed for node*") as exc_info:
+        evaluator.migrate(target_snapshots=[snapshot], snapshots={})
+
+    cause = exc_info.value.__cause__
+    assert isinstance(cause, SQLMeshError)
+    assert "cannot be treated as forward only" in str(cause)
 
     adapter_mock.create_table.assert_not_called()
     adapter_mock.ctas.assert_not_called()
-    adapter_mock.create_managed_table.assert_called_with(
-        table_name=snapshot.table_name(),
-        query=mocker.ANY,
-        columns_to_types=model.columns_to_types,
-        partitioned_by=model.partitioned_by,
-        clustered_by=model.clustered_by,
-        table_properties=model.physical_properties,
-        table_description=model.description,
-        column_descriptions=model.column_descriptions,
-    )
+    adapter_mock.create_managed_table.assert_not_called()
