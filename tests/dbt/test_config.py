@@ -767,7 +767,7 @@ def test_db_type_to_column_class():
     from dbt.adapters.bigquery import BigQueryColumn
     from dbt.adapters.databricks.column import DatabricksColumn
     from dbt.adapters.snowflake import SnowflakeColumn
-    from dbt.adapters.sqlserver.sql_server_column import SQLServerColumn
+    from dbt.adapters.sqlserver.sqlserver_column import SQLServerColumn
     from dbt.adapters.trino.column import TrinoColumn
 
     assert (TARGET_TYPE_TO_CONFIG_CLASS["bigquery"].column_class) == BigQueryColumn

@@ -689,7 +689,12 @@ class MSSQLConfig(TargetConfig):
 
     @classproperty
     def column_class(cls) -> t.Type[Column]:
-        from dbt.adapters.sqlserver.sql_server_column import SQLServerColumn
+        try:
+            # 1.8.0+
+            from dbt.adapters.sqlserver.sqlserver_column import SQLServerColumn
+        except ImportError:
+            # <1.8.0
+            from dbt.adapters.sqlserver.sql_server_column import SQLServerColumn  # type: ignore
 
         return SQLServerColumn
 
