@@ -1163,11 +1163,7 @@
             "title": "Normalize Name",
             "default": true
           },
-          "snapshots": {
-            "items": { "$ref": "#/components/schemas/SnapshotTableInfo" },
-            "type": "array",
-            "title": "Snapshots"
-          },
+          "snapshots": { "items": {}, "type": "array", "title": "Snapshots" },
           "start_at": {
             "anyOf": [
               { "type": "string", "format": "date" },
@@ -1203,23 +1199,11 @@
             "title": "Finalized Ts"
           },
           "promoted_snapshot_ids": {
-            "anyOf": [
-              {
-                "items": { "$ref": "#/components/schemas/SnapshotId" },
-                "type": "array"
-              },
-              { "type": "null" }
-            ],
+            "anyOf": [{ "items": {}, "type": "array" }, { "type": "null" }],
             "title": "Promoted Snapshot Ids"
           },
           "previous_finalized_snapshots": {
-            "anyOf": [
-              {
-                "items": { "$ref": "#/components/schemas/SnapshotTableInfo" },
-                "type": "array"
-              },
-              { "type": "null" }
-            ],
+            "anyOf": [{ "items": {}, "type": "array" }, { "type": "null" }],
             "title": "Previous Finalized Snapshots"
           }
         },
@@ -1549,25 +1533,6 @@
         "additionalProperties": false,
         "type": "object",
         "title": "ModelDetails"
-      },
-      "ModelKindName": {
-        "type": "string",
-        "enum": [
-          "INCREMENTAL_BY_TIME_RANGE",
-          "INCREMENTAL_BY_UNIQUE_KEY",
-          "INCREMENTAL_BY_PARTITION",
-          "INCREMENTAL_UNMANAGED",
-          "FULL",
-          "SCD_TYPE_2",
-          "SCD_TYPE_2_BY_TIME",
-          "SCD_TYPE_2_BY_COLUMN",
-          "VIEW",
-          "EMBEDDED",
-          "SEED",
-          "EXTERNAL"
-        ],
-        "title": "ModelKindName",
-        "description": "The kind of model, determining how this data is computed and stored in the warehouse."
       },
       "ModelType": {
         "type": "string",
@@ -2139,113 +2104,6 @@
         "enum": [1, 2, 3, 4, 5, 6],
         "title": "SnapshotChangeCategory",
         "description": "Values are ordered by decreasing severity and that ordering is required.\n\nBREAKING: The change requires that snapshot modified and downstream dependencies be rebuilt\nNON_BREAKING: The change requires that only the snapshot modified be rebuilt\nFORWARD_ONLY: The change requires no rebuilding\nINDIRECT_BREAKING: The change was caused indirectly and is breaking.\nINDIRECT_NON_BREAKING: The change was caused indirectly by a non-breaking change.\nMETADATA: The change was caused by a metadata update."
-      },
-      "SnapshotDataVersion": {
-        "properties": {
-          "fingerprint": { "$ref": "#/components/schemas/SnapshotFingerprint" },
-          "version": { "type": "string", "title": "Version" },
-          "temp_version": {
-            "anyOf": [{ "type": "string" }, { "type": "null" }],
-            "title": "Temp Version"
-          },
-          "change_category": {
-            "anyOf": [
-              { "$ref": "#/components/schemas/SnapshotChangeCategory" },
-              { "type": "null" }
-            ]
-          },
-          "physical_schema": {
-            "anyOf": [{ "type": "string" }, { "type": "null" }],
-            "title": "Physical Schema"
-          }
-        },
-        "additionalProperties": false,
-        "type": "object",
-        "required": ["fingerprint", "version"],
-        "title": "SnapshotDataVersion"
-      },
-      "SnapshotFingerprint": {
-        "properties": {
-          "data_hash": { "type": "string", "title": "Data Hash" },
-          "metadata_hash": { "type": "string", "title": "Metadata Hash" },
-          "parent_data_hash": {
-            "type": "string",
-            "title": "Parent Data Hash",
-            "default": "0"
-          },
-          "parent_metadata_hash": {
-            "type": "string",
-            "title": "Parent Metadata Hash",
-            "default": "0"
-          }
-        },
-        "additionalProperties": false,
-        "type": "object",
-        "required": ["data_hash", "metadata_hash"],
-        "title": "SnapshotFingerprint"
-      },
-      "SnapshotId": {
-        "properties": {
-          "name": { "type": "string", "title": "Name" },
-          "identifier": { "type": "string", "title": "Identifier" }
-        },
-        "additionalProperties": false,
-        "type": "object",
-        "required": ["name", "identifier"],
-        "title": "SnapshotId"
-      },
-      "SnapshotTableInfo": {
-        "properties": {
-          "name": { "type": "string", "title": "Name" },
-          "temp_version": {
-            "anyOf": [{ "type": "string" }, { "type": "null" }],
-            "title": "Temp Version"
-          },
-          "change_category": {
-            "anyOf": [
-              { "$ref": "#/components/schemas/SnapshotChangeCategory" },
-              { "type": "null" }
-            ]
-          },
-          "fingerprint": { "$ref": "#/components/schemas/SnapshotFingerprint" },
-          "previous_versions": {
-            "items": { "$ref": "#/components/schemas/SnapshotDataVersion" },
-            "type": "array",
-            "title": "Previous Versions",
-            "default": []
-          },
-          "base_table_name_override": {
-            "anyOf": [{ "type": "string" }, { "type": "null" }],
-            "title": "Base Table Name Override"
-          },
-          "version": { "type": "string", "title": "Version" },
-          "physical_schema": { "type": "string", "title": "Physical Schema" },
-          "parents": {
-            "items": { "$ref": "#/components/schemas/SnapshotId" },
-            "type": "array",
-            "title": "Parents"
-          },
-          "kind_name": {
-            "anyOf": [
-              { "$ref": "#/components/schemas/ModelKindName" },
-              { "type": "null" }
-            ]
-          },
-          "node_type": {
-            "allOf": [{ "$ref": "#/components/schemas/NodeType" }],
-            "default": "model"
-          }
-        },
-        "additionalProperties": false,
-        "type": "object",
-        "required": [
-          "name",
-          "fingerprint",
-          "version",
-          "physical_schema",
-          "parents"
-        ],
-        "title": "SnapshotTableInfo"
       },
       "Status": {
         "type": "string",

@@ -14,7 +14,7 @@ export default function PageNavigation(): JSX.Element {
   return (
     <div
       className={clsx(
-        'relative min-w-[10rem] px-2 min-h-8 max-h-8 w-full flex items-center',
+        'relative min-w-[10rem] px-2 min-h-[2rem] max-h-[2rem] w-full flex items-center',
         modules.showHistoryNavigation ? 'justify-between' : 'justify-end',
         isFetchingModels && 'overflow-hidden',
       )}

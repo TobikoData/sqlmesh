@@ -28,33 +28,41 @@ async def watch_project() -> None:
         (settings.project_path / c.METRICS).resolve(),
         (settings.project_path / c.SEEDS).resolve(),
     ]
-    ignore_entity_patterns = context.config.ignore_patterns if context else c.IGNORE_PATTERNS
-    ignore_entity_patterns.append("^\\.DS_Store$")
-    ignore_entity_patterns.append("^.*\\.db(\\.wal)?$")
-    ignore_paths = [str((settings.project_path / c.CACHE).resolve())]
-    watch_filter = DefaultFilter(
-        ignore_paths=ignore_paths, ignore_entity_patterns=ignore_entity_patterns
+    watch_filter = DefaultFilter()
+    watch_filter.ignore_dirs = (*watch_filter.ignore_dirs, ".env")
+    watch_filter.ignore_entity_patterns = (
+        *watch_filter.ignore_entity_patterns,
+        *(context.config.ignore_patterns if context else c.IGNORE_PATTERNS),
+        "^.*\\.db(\\.wal)?$",
+    )
+    watch_filter.ignore_paths = (
+        *watch_filter.ignore_paths,
+        (settings.project_path / c.CACHE).resolve(),
     )
     async for entries in awatch(
-        settings.project_path, watch_filter=watch_filter, force_polling=True
+        settings.project_path,
+        watch_filter=watch_filter,
     ):
         changes: t.List[models.ArtifactChange] = []
         directories: t.Dict[str, models.Directory] = {}
         for change, path_str in entries:
             path = Path(path_str)
+            relative_path = path.relative_to(settings.project_path)
             try:
-                relative_path = path.relative_to(settings.project_path)
-                if change == Change.modified and path.is_dir():
-                    directory = await _get_directory(path, settings)
-                    directories[directory.path] = directory
-                elif change == Change.deleted or not path.exists():
+                if change == Change.deleted or not path.exists():
                     changes.append(
                         models.ArtifactChange(
                             change=Change.deleted,
                             path=str(relative_path),
                         )
                     )
-                elif change == Change.modified and path.is_file():
+                if change == Change.added:
+                    directory = await _get_directory(path.parent, settings)
+                    directories[directory.path] = directory
+                elif path.is_dir() and change == Change.modified:
+                    directory = await _get_directory(path, settings)
+                    directories[directory.path] = directory
+                elif path.is_file() and change == Change.modified:
                     changes.append(
                         models.ArtifactChange(
                             type=models.ArtifactType.file,
@@ -90,7 +98,7 @@ async def watch_project() -> None:
                 models.Modules.PLANS,
                 models.Modules.LINEAGE,
             }
-        ):
+        ) and (changes or directories):
             api_console.log_event(
                 event=models.EventName.FILE,
                 data={"changes": changes, "directories": directories},
