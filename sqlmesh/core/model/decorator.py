@@ -4,6 +4,7 @@ import logging
 import typing as t
 from pathlib import Path
 import inspect
+import re
 
 from sqlglot import exp
 from sqlglot.dialects.dialect import DialectType
@@ -82,7 +83,7 @@ class model(registry_decorator):
         jinja_macros: t.Optional[JinjaMacroRegistry] = None,
         dialect: t.Optional[str] = None,
         time_column_format: str = c.DEFAULT_TIME_COLUMN_FORMAT,
-        physical_schema_override: t.Optional[t.Dict[str, str]] = None,
+        physical_schema_mapping: t.Optional[t.Dict[re.Pattern, str]] = None,
         project: str = "",
         default_catalog: t.Optional[str] = None,
         variables: t.Optional[t.Dict[str, t.Any]] = None,
@@ -117,7 +118,7 @@ class model(registry_decorator):
             path=path,
             time_column_format=time_column_format,
             python_env=serialize_env(env, path=module_path),
-            physical_schema_override=physical_schema_override,
+            physical_schema_mapping=physical_schema_mapping,
             project=project,
             default_catalog=default_catalog,
             variables=variables,

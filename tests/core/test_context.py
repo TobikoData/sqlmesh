@@ -1,6 +1,7 @@
 import logging
 import pathlib
 import typing as t
+import re
 from datetime import date, timedelta
 from tempfile import TemporaryDirectory
 from unittest.mock import PropertyMock, call, patch
@@ -556,12 +557,12 @@ def test_physical_schema_override(copy_to_temp_path: t.Callable) -> None:
 
     project_path = copy_to_temp_path("examples/sushi")
     no_mapping_context = Context(paths=project_path)
-    assert no_mapping_context.config.physical_schema_override == {}
+    assert no_mapping_context.config.physical_schema_mapping == {}
     assert get_schemas(no_mapping_context) == {"sqlmesh__sushi", "sqlmesh__raw"}
     assert get_view_schemas(no_mapping_context) == {"sushi", "raw"}
     no_mapping_fingerprints = get_sushi_fingerprints(no_mapping_context)
     context = Context(paths=project_path, config="map_config")
-    assert context.config.physical_schema_override == {"sushi": "company_internal"}
+    assert context.config.physical_schema_mapping == {re.compile("^sushi$"): "company_internal"}
     assert get_schemas(context) == {"company_internal", "sqlmesh__raw"}
     assert get_view_schemas(context) == {"sushi", "raw"}
     sushi_fingerprints = get_sushi_fingerprints(context)
@@ -570,6 +571,52 @@ def test_physical_schema_override(copy_to_temp_path: t.Callable) -> None:
         == len(no_mapping_fingerprints)
         == len(no_mapping_fingerprints - sushi_fingerprints)
     )
+
+
+@pytest.mark.slow
+def test_physical_schema_mapping(tmp_path: pathlib.Path) -> None:
+    create_temp_file(
+        tmp_path,
+        pathlib.Path(pathlib.Path("models"), "a.sql"),
+        "MODEL(name foo_staging.model_a); SELECT 1;",
+    )
+
+    create_temp_file(
+        tmp_path,
+        pathlib.Path(pathlib.Path("models"), "b.sql"),
+        "MODEL(name testone.model_b); SELECT 1;",
+    )
+
+    create_temp_file(
+        tmp_path,
+        pathlib.Path(pathlib.Path("models"), "c.sql"),
+        "MODEL(name untouched.model_c); SELECT 1;",
+    )
+
+    ctx = Context(
+        config=Config(
+            model_defaults=ModelDefaultsConfig(dialect="duckdb"),
+            physical_schema_mapping={
+                # anything ending with 'staging' becomes 'overridden_staging'
+                "^.*staging$": "overridden_staging",
+                # anything starting with 'test' becomes 'testing'
+                "^test.*": "testing",
+            },
+        ),
+        paths=tmp_path,
+    )
+
+    ctx.load()
+
+    physical_schemas = [snapshot.physical_schema for snapshot in sorted(ctx.snapshots.values())]
+
+    view_schemas = [
+        snapshot.qualified_view_name.schema_name for snapshot in sorted(ctx.snapshots.values())
+    ]
+
+    assert len(physical_schemas) == len(view_schemas) == 3
+    assert physical_schemas == ["overridden_staging", "testing", "sqlmesh__untouched"]
+    assert view_schemas == ["foo_staging", "testone", "untouched"]
 
 
 @pytest.mark.slow

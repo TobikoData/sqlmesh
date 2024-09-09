@@ -486,6 +486,16 @@ environment_catalog_mapping:
         )
 
 
+def test_physical_schema_mapping_mutually_exclusive_with_physical_schema_override() -> None:
+    Config(physical_schema_override={"foo": "bar"})
+    Config(physical_schema_mapping={"^foo$": "bar"})
+
+    with pytest.raises(
+        ConfigError, match=r"Only one.*physical_schema_override.*physical_schema_mapping"
+    ):
+        Config(physical_schema_override={"foo": "bar"}, physical_schema_mapping={"^foo$": "bar"})
+
+
 def test_load_feature_flag(tmp_path_factory):
     config_path = tmp_path_factory.mktemp("yaml_config") / "config.yaml"
     with open(config_path, "w", encoding="utf-8") as fd:
@@ -635,7 +645,7 @@ def test_load_model_defaults_audits(tmp_path):
             """
 model_defaults:
     dialect: ''
-    audits: 
+    audits:
         - assert_positive_order_ids
         - does_not_exceed_threshold(column := id, threshold := 1000)
         """

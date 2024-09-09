@@ -188,7 +188,7 @@ class SQLMeshMagics(Magics):
                 path=model._path,
                 dialect=config.dialect,
                 time_column_format=config.time_column_format,
-                physical_schema_override=context.config.physical_schema_override,
+                physical_schema_mapping=context.config.physical_schema_mapping,
                 default_catalog=context.default_catalog,
             )
 

@@ -5,6 +5,7 @@ import json
 import logging
 import sys
 import types
+import re
 import typing as t
 from functools import cached_property
 from pathlib import Path
@@ -1555,7 +1556,7 @@ def load_sql_based_model(
     default_audits: t.List[AuditReference] = [],
     python_env: t.Optional[t.Dict[str, Executable]] = None,
     dialect: t.Optional[str] = None,
-    physical_schema_override: t.Optional[t.Dict[str, str]] = None,
+    physical_schema_mapping: t.Optional[t.Dict[re.Pattern, str]] = None,
     default_catalog: t.Optional[str] = None,
     variables: t.Optional[t.Dict[str, t.Any]] = None,
     infer_names: t.Optional[bool] = False,
@@ -1575,7 +1576,7 @@ def load_sql_based_model(
             from the macro registry.
         dialect: The default dialect if no model dialect is configured.
             The format must adhere to Python's strftime codes.
-        physical_schema_override: The physical schema override for the model.
+        physical_schema_mapping: A mapping of regular expressions to match against the model schema to produce the corresponding physical schema
         default_catalog: The default catalog if no model catalog is configured.
         variables: The variables to pass to the model.
         kwargs: Additional kwargs to pass to the loader.
@@ -1692,7 +1693,7 @@ def load_sql_based_model(
         python_env=python_env,
         jinja_macros=jinja_macros,
         jinja_macro_references=jinja_macro_references,
-        physical_schema_override=physical_schema_override,
+        physical_schema_mapping=physical_schema_mapping,
         default_catalog=default_catalog,
         variables=variables,
         used_variables=used_variables,
@@ -1749,7 +1750,7 @@ def create_sql_model(
     jinja_macros: t.Optional[JinjaMacroRegistry] = None,
     jinja_macro_references: t.Optional[t.Set[MacroReference]] = None,
     dialect: t.Optional[str] = None,
-    physical_schema_override: t.Optional[t.Dict[str, str]] = None,
+    physical_schema_mapping: t.Optional[t.Dict[re.Pattern, str]] = None,
     variables: t.Optional[t.Dict[str, t.Any]] = None,
     used_variables: t.Optional[t.Set[str]] = None,
     **kwargs: t.Any,
@@ -1773,7 +1774,7 @@ def create_sql_model(
         jinja_macros: The registry of Jinja macros.
         jinja_macro_references: The set of Jinja macros referenced by this model.
         dialect: The default dialect if no model dialect is configured.
-        physical_schema_override: The physical schema override.
+        physical_schema_mapping: A mapping of regular expressions to match against the model schema to produce the corresponding physical schema
         variables: User-defined variables.
         used_variables: The set of variable names used by this model.
     """
@@ -1812,7 +1813,7 @@ def create_sql_model(
         query=query,
         pre_statements=pre_statements,
         post_statements=post_statements,
-        physical_schema_override=physical_schema_override,
+        physical_schema_mapping=physical_schema_mapping,
         **kwargs,
     )
 
@@ -1832,7 +1833,7 @@ def create_seed_model(
     python_env: t.Optional[t.Dict[str, Executable]] = None,
     jinja_macros: t.Optional[JinjaMacroRegistry] = None,
     jinja_macro_references: t.Optional[t.Set[MacroReference]] = None,
-    physical_schema_override: t.Optional[t.Dict[str, str]] = None,
+    physical_schema_mapping: t.Optional[t.Dict[re.Pattern, str]] = None,
     variables: t.Optional[t.Dict[str, t.Any]] = None,
     used_variables: t.Optional[t.Set[str]] = None,
     **kwargs: t.Any,
@@ -1853,7 +1854,7 @@ def create_seed_model(
             from the macro registry.
         jinja_macros: The registry of Jinja macros.
         jinja_macro_references: The set of Jinja macros referenced by this model.
-        physical_schema_override: The physical schema override.
+        physical_schema_mapping: A mapping of regular expressions to match against the model schema to produce the corresponding physical schema
         variables: User-defined variables.
         used_variables: The set of variable names used by this model.
     """
@@ -1897,7 +1898,7 @@ def create_seed_model(
         jinja_macros=jinja_macros,
         pre_statements=pre_statements,
         post_statements=post_statements,
-        physical_schema_override=physical_schema_override,
+        physical_schema_mapping=physical_schema_mapping,
         **kwargs,
     )
 
@@ -1914,7 +1915,7 @@ def create_python_model(
     module_path: Path = Path(),
     time_column_format: str = c.DEFAULT_TIME_COLUMN_FORMAT,
     depends_on: t.Optional[t.Set[str]] = None,
-    physical_schema_override: t.Optional[t.Dict[str, str]] = None,
+    physical_schema_mapping: t.Optional[t.Dict[re.Pattern, str]] = None,
     variables: t.Optional[t.Dict[str, t.Any]] = None,
     **kwargs: t.Any,
 ) -> Model:
@@ -1978,7 +1979,7 @@ def create_python_model(
         entrypoint=entrypoint,
         python_env=python_env,
         jinja_macros=jinja_macros,
-        physical_schema_override=physical_schema_override,
+        physical_schema_mapping=physical_schema_mapping,
         **kwargs,
     )
 
@@ -2024,7 +2025,7 @@ def _create_model(
     jinja_macro_references: t.Optional[t.Set[MacroReference]] = None,
     depends_on: t.Optional[t.Set[str]] = None,
     dialect: t.Optional[str] = None,
-    physical_schema_override: t.Optional[t.Dict[str, str]] = None,
+    physical_schema_mapping: t.Optional[t.Dict[re.Pattern, str]] = None,
     **kwargs: t.Any,
 ) -> Model:
     _validate_model_fields(klass, {"name", *kwargs} - {"grain", "table_properties"}, path)
@@ -2034,7 +2035,15 @@ def _create_model(
     )
 
     dialect = dialect or ""
-    physical_schema_override = physical_schema_override or {}
+
+    physical_schema_mapping = physical_schema_mapping or {}
+    model_schema_name = exp.to_table(name, dialect=dialect).db
+    physical_schema_override: t.Optional[str] = None
+
+    for re_pattern, override_schema in physical_schema_mapping.items():
+        if re.match(re_pattern, model_schema_name):
+            physical_schema_override = override_schema
+            break
 
     raw_kind = kwargs.pop("kind", None)
     if raw_kind:
@@ -2050,9 +2059,7 @@ def _create_model(
                 "jinja_macros": jinja_macros or JinjaMacroRegistry(),
                 "dialect": dialect,
                 "depends_on": depends_on,
-                "physical_schema_override": physical_schema_override.get(
-                    exp.to_table(name, dialect=dialect).db
-                ),
+                "physical_schema_override": physical_schema_override,
                 **kwargs,
             },
         )
