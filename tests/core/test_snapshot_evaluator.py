@@ -2601,7 +2601,7 @@ def test_migrate_managed(adapter_mock, make_snapshot, mocker: MockerFixture):
 
     cause = exc_info.value.__cause__
     assert isinstance(cause, SQLMeshError)
-    assert "cannot be treated as forward only" in str(cause)
+    assert "cannot be updated" in str(cause)
 
     adapter_mock.create_table.assert_not_called()
     adapter_mock.ctas.assert_not_called()

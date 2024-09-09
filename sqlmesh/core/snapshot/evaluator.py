@@ -1794,7 +1794,7 @@ class EngineManagedStrategy(MaterializableStrategy):
         if len(potential_alter_expressions) > 0:
             # this can happen if a user changes a managed model and deliberately overrides a plan to be forward only, eg `sqlmesh plan --forward-only`
             raise SQLMeshError(
-                f"Managed table '{target_table_name}' cannot be treated as forward only because its schema cannot be changed without a full rebuild"
+                f"The schema of the managed model '{target_table_name}' cannot be updated in a forward-only fashion."
             )
 
     def delete(self, name: str, **kwargs: t.Any) -> None:
