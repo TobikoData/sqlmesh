@@ -1,5 +1,5 @@
 <p align="center">
-  <img src="docs/readme/sqlmesh.png" alt="SQLMesh logo" width="50%" height="50%">
+  <img src="https://github.com/TobikoData/sqlmesh/blob/main/docs/readme/sqlmesh.png?raw=true" alt="SQLMesh logo" width="50%" height="50%">
 </p>
 
 SQLMesh is a next-generation data transformation and modeling framework that is backwards compatible with dbt. It aims to be easy to use, correct, and efficient.
@@ -9,11 +9,11 @@ SQLMesh enables data teams to efficiently run and deploy data transformations wr
 It is more than just a [dbt alternative](https://tobikodata.com/reduce_costs_with_cron_and_partitions.html).
 
 <p align="center">
-  <img src="docs/readme/architecture_diagram.png" alt="Architecture Diagram" width="100%" height="100%">
+  <img src="https://github.com/TobikoData/sqlmesh/blob/main/docs/readme/architecture_diagram.png?raw=true" alt="Architecture Diagram" width="100%" height="100%">
 </p>
 
 ## Core Features
-<img src="https://github.com/TobikoData/sqlmesh-public-assets/blob/main/sqlmesh_plan_mode.gif" alt="SQLMesh Plan Mode">
+<img src="https://github.com/TobikoData/sqlmesh-public-assets/blob/main/sqlmesh_plan_mode.gif?raw=true" alt="SQLMesh Plan Mode">
 
 > Get instant SQL impact analysis of your changes, whether in the CLI or in [SQLMesh Plan Mode](https://sqlmesh.readthedocs.io/en/stable/guides/ui/?h=modes#working-with-an-ide)
 
@@ -126,7 +126,7 @@ outputs:
 <details>
 <summary><b>Take SQL Anywhere</b></summary>
 Write SQL in any dialect and SQLMesh will transpile it to your target SQL dialect on the fly before sending it to the warehouse.
-<img src="docs/readme/transpile_example.png" alt="Transpile Example">
+<img src="https://github.com/TobikoData/sqlmesh/blob/main/docs/readme/transpile_example.png?raw=true" alt="Transpile Example">
 </details>
 
 * Compile time error checking and can transpile [10+ different SQL dialects](https://sqlmesh.readthedocs.io/en/stable/integrations/overview/#execution-engines)
