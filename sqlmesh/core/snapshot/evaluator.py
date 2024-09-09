@@ -667,6 +667,8 @@ class SnapshotEvaluator:
                 and snapshot.is_materialized
                 and snapshot.previous_versions
                 and self.adapter.SUPPORTS_CLONING
+                # managed models cannot have their schema mutated because theyre based on queries, so clone + alter wont work
+                and not snapshot.is_managed
             ):
                 target_table_name = snapshot.table_name(is_deployable=False)
                 tmp_table_name = f"{target_table_name}__schema_migration_source"
@@ -1786,9 +1788,14 @@ class EngineManagedStrategy(MaterializableStrategy):
         snapshot: Snapshot,
         **kwargs: t.Any,
     ) -> None:
-        # Not entirely true, many engines support modifying some of the metadata fields on a managed table
-        # eg Snowflake allows you to ALTER DYNAMIC TABLE foo SET WAREHOUSE=my_other_wh;
-        raise ConfigError(f"Cannot mutate managed table: {target_table_name}")
+        potential_alter_expressions = self.adapter.get_alter_expressions(
+            target_table_name, source_table_name
+        )
+        if len(potential_alter_expressions) > 0:
+            # this can happen if a user changes a managed model and deliberately overrides a plan to be forward only, eg `sqlmesh plan --forward-only`
+            raise SQLMeshError(
+                f"The schema of the managed model '{target_table_name}' cannot be updated in a forward-only fashion."
+            )
 
     def delete(self, name: str, **kwargs: t.Any) -> None:
         # a dev preview table is created as a normal table, so it needs to be dropped as a normal table
