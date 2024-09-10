@@ -895,11 +895,10 @@ class EngineAdapter:
         columns_to_types: t.Optional[t.Dict[str, exp.DataType]] = None,
         replace: bool = True,
         materialized: bool = False,
+        materialized_properties: t.Optional[t.Dict[str, t.Any]] = None,
         table_description: t.Optional[str] = None,
         column_descriptions: t.Optional[t.Dict[str, str]] = None,
         view_properties: t.Optional[t.Dict[str, exp.Expression]] = None,
-        partitioned_by: t.Optional[t.List[exp.Expression]] = None,
-        clustered_by: t.Optional[t.List[str]] = None,
         **create_kwargs: t.Any,
     ) -> None:
         """Create a view with a query or dataframe.
@@ -913,17 +912,14 @@ class EngineAdapter:
             columns_to_types: Columns to use in the view statement.
             replace: Whether or not to replace an existing view defaults to True.
             materialized: Whether to create a a materialized view. Only used for engines that support this feature.
+            materialized_properties: Optional materialized view properties to add to the view.
             table_description: Optional table description from MODEL DDL.
             column_descriptions: Optional column descriptions from model query.
             view_properties: Optional view properties to add to the view.
             create_kwargs: Additional kwargs to pass into the Create expression
-            partitioned_by: The partition columns or engine specific expressions, only applicable in certain engines and if `materialized=True`. (eg. (ds, hour))
-            clustered_by: The cluster columns, only applicable in certain engines and if `materialized=True`. (eg. (ds, hour))
         """
-        if (partitioned_by or clustered_by) and not materialized:
-            raise SQLMeshError(
-                "Partitioned by and clustered by are only supported for materialized views"
-            )
+        if materialized_properties and not materialized:
+            raise SQLMeshError("Materialized properties are only supported for materialized views")
 
         if isinstance(query_or_df, pd.DataFrame):
             values: t.List[t.Tuple[t.Any, ...]] = list(
@@ -964,13 +960,22 @@ class EngineAdapter:
         if not self.SUPPORTS_VIEW_SCHEMA and isinstance(schema, exp.Schema):
             schema = schema.this
 
-        for materialized_property in (
-            self._build_table_properties_exp(
-                partitioned_by=partitioned_by, clustered_by=clustered_by
-            )
-            or []
-        ):
-            properties.append("expressions", materialized_property)
+        if materialized_properties:
+            partitioned_by = materialized_properties.pop("partitioned_by", None)
+            clustered_by = materialized_properties.pop("clustered_by", None)
+            if partitioned_by:
+                materialized_properties["catalog_name"] = exp.to_table(view_name).catalog
+                properties.append(
+                    "expressions",
+                    self._build_partitioned_by_exp(
+                        partitioned_by, **(materialized_properties or {})
+                    ),
+                )
+            if clustered_by:
+                properties.append(
+                    "expressions",
+                    self._build_clustered_by_exp(clustered_by, **(materialized_properties or {})),
+                )
 
         create_view_properties = self._build_view_properties_exp(
             view_properties,
@@ -2031,6 +2036,24 @@ class EngineAdapter:
             exp.Property(this=key, value=value.copy())
             for key, value in table_or_view_properties.items()
         ]
+
+    def _build_partitioned_by_exp(
+        self,
+        partitioned_by: t.List[exp.Expression],
+        *,
+        partition_interval_unit: t.Optional[IntervalUnit] = None,
+        columns_to_types: t.Optional[t.Dict[str, exp.DataType]] = None,
+        catalog_name: t.Optional[str] = None,
+        **kwargs: t.Any,
+    ) -> t.Union[exp.PartitionedByProperty, exp.Property]:
+        raise NotImplementedError("This engine does not support partitioning.")
+
+    def _build_clustered_by_exp(
+        self,
+        clustered_by: t.List[str],
+        **kwargs: t.Any,
+    ) -> exp.Cluster:
+        raise NotImplementedError("This engine does not support clustering.")
 
     def _build_table_properties_exp(
         self,

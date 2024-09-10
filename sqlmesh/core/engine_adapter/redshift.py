@@ -127,11 +127,10 @@ class RedshiftEngineAdapter(
         columns_to_types: t.Optional[t.Dict[str, exp.DataType]] = None,
         replace: bool = True,
         materialized: bool = False,
+        materialized_properties: t.Optional[t.Dict[str, t.Any]] = None,
         table_description: t.Optional[str] = None,
         column_descriptions: t.Optional[t.Dict[str, str]] = None,
         view_properties: t.Optional[t.Dict[str, exp.Expression]] = None,
-        partitioned_by: t.Optional[t.List[exp.Expression]] = None,
-        clustered_by: t.Optional[t.List[str]] = None,
         **create_kwargs: t.Any,
     ) -> None:
         """
@@ -145,12 +144,11 @@ class RedshiftEngineAdapter(
             columns_to_types,
             replace,
             materialized,
+            materialized_properties,
             table_description=table_description,
             column_descriptions=column_descriptions,
             no_schema_binding=create_kwargs.pop("no_schema_binding", True),
             view_properties=view_properties,
-            partitioned_by=partitioned_by,
-            clustered_by=clustered_by,
             **create_kwargs,
         )
 

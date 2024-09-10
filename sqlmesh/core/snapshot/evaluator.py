@@ -1593,12 +1593,21 @@ class ViewStrategy(PromotableStrategy):
             return
 
         logger.info("Creating view '%s'", table_name)
+        materialized = self._is_materialized_view(model)
+        materialized_properties = None
+        if materialized:
+            materialized_properties = {
+                "partitioned_by": model.partitioned_by,
+                "clustered_by": model.clustered_by,
+                "partition_interval_unit": model.interval_unit,
+            }
         self.adapter.create_view(
             table_name,
             model.render_query_or_raise(**render_kwargs),
             # Make sure we never replace the view during creation to avoid race conditions in engines with no late binding support.
             replace=False,
             materialized=self._is_materialized_view(model),
+            materialized_properties=materialized_properties,
             view_properties=model.physical_properties,
             table_description=model.description if is_table_deployable else None,
             column_descriptions=model.column_descriptions if is_table_deployable else None,

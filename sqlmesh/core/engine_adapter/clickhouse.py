@@ -287,6 +287,15 @@ class ClickhouseEngineAdapter(EngineAdapterWithIndexSupport, LogicalMergeMixin):
             )
         )
 
+    def _build_partitioned_by_exp(
+        self,
+        partitioned_by: t.List[exp.Expression],
+        **kwargs: t.Any,
+    ) -> t.Union[exp.PartitionedByProperty, exp.Property]:
+        return exp.PartitionedByProperty(
+            this=exp.Schema(expressions=partitioned_by),
+        )
+
     def _build_table_properties_exp(
         self,
         catalog_name: t.Optional[str] = None,
@@ -365,11 +374,7 @@ class ClickhouseEngineAdapter(EngineAdapterWithIndexSupport, LogicalMergeMixin):
             )
 
         if partitioned_by:
-            properties.append(
-                exp.PartitionedByProperty(
-                    this=exp.Schema(expressions=partitioned_by),
-                )
-            )
+            properties.append(self._build_partitioned_by_exp(partitioned_by))
 
         if self.engine_run_mode.is_cluster:
             properties.append(exp.OnCluster(this=exp.to_identifier(self.cluster)))
