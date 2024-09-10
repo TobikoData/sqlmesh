@@ -67,6 +67,7 @@ def test_builtin_evaluator_push(sushi_context: Context, make_snapshot):
     evaluator = BuiltInPlanEvaluator(
         sushi_context.state_sync,
         sushi_context.snapshot_evaluator,
+        sushi_context.create_scheduler,
         sushi_context.default_catalog,
         console=sushi_context.console,
     )

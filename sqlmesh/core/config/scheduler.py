@@ -137,10 +137,9 @@ class BuiltInSchedulerConfig(_EngineAdapterStateSyncSchedulerConfig, BaseConfig)
         return BuiltInPlanEvaluator(
             state_sync=context.state_sync,
             snapshot_evaluator=context.snapshot_evaluator,
+            create_scheduler=context.create_scheduler,
             default_catalog=self.get_default_catalog(context),
-            backfill_concurrent_tasks=context.concurrent_tasks,
             console=context.console,
-            notification_target_manager=context.notification_target_manager,
         )
 
     def get_default_catalog(self, context: GenericContext) -> t.Optional[str]:

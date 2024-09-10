@@ -23,10 +23,9 @@ from sqlmesh.core import constants as c
 from sqlmesh.core.console import Console, get_console
 from sqlmesh.core.notification_target import (
     NotificationTarget,
-    NotificationTargetManager,
 )
 from sqlmesh.core.plan.definition import Plan
-from sqlmesh.core.scheduler import Scheduler, SignalFactory
+from sqlmesh.core.scheduler import Scheduler
 from sqlmesh.core.snapshot import DeployabilityIndex, Snapshot, SnapshotEvaluator, SnapshotIntervals
 from sqlmesh.core.state_sync import StateSync
 from sqlmesh.core.state_sync.base import PromotionResult
@@ -61,19 +60,15 @@ class BuiltInPlanEvaluator(PlanEvaluator):
         self,
         state_sync: StateSync,
         snapshot_evaluator: SnapshotEvaluator,
+        create_scheduler: t.Callable[[t.Iterable[Snapshot]], Scheduler],
         default_catalog: t.Optional[str],
-        backfill_concurrent_tasks: int = 1,
         console: t.Optional[Console] = None,
-        notification_target_manager: t.Optional[NotificationTargetManager] = None,
-        signal_factory: t.Optional[SignalFactory] = None,
     ):
         self.state_sync = state_sync
         self.snapshot_evaluator = snapshot_evaluator
+        self.create_scheduler = create_scheduler
         self.default_catalog = default_catalog
-        self.backfill_concurrent_tasks = backfill_concurrent_tasks
         self.console = console or get_console()
-        self.notification_target_manager = notification_target_manager
-        self.signal_factory = signal_factory
 
     def evaluate(
         self,
@@ -153,16 +148,7 @@ class BuiltInPlanEvaluator(PlanEvaluator):
             return
 
         snapshots = plan.snapshots
-        scheduler = Scheduler(
-            snapshots.values(),
-            self.snapshot_evaluator,
-            self.state_sync,
-            default_catalog=self.default_catalog,
-            max_workers=self.backfill_concurrent_tasks,
-            console=self.console,
-            notification_target_manager=self.notification_target_manager,
-            signal_factory=self.signal_factory,
-        )
+        scheduler = self.create_scheduler(snapshots.values())
         is_run_successful = scheduler.run(
             plan.environment_naming_info,
             plan.start,

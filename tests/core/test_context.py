@@ -208,7 +208,10 @@ def test_diff(sushi_context: Context, mocker: MockerFixture):
     success = sushi_context.run(start=yesterday, end=yesterday)
 
     plan_evaluator = BuiltInPlanEvaluator(
-        sushi_context.state_sync, sushi_context.snapshot_evaluator, sushi_context.default_catalog
+        sushi_context.state_sync,
+        sushi_context.snapshot_evaluator,
+        sushi_context.create_scheduler,
+        sushi_context.default_catalog,
     )
 
     plan = PlanBuilder(
