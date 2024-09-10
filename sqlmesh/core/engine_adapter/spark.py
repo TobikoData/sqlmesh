@@ -379,6 +379,8 @@ class SparkEngineAdapter(GetCurrentCatalogFromFunctionMixin, HiveMetastoreTableP
         table_description: t.Optional[str] = None,
         column_descriptions: t.Optional[t.Dict[str, str]] = None,
         view_properties: t.Optional[t.Dict[str, exp.Expression]] = None,
+        partitioned_by: t.Optional[t.List[exp.Expression]] = None,
+        clustered_by: t.Optional[t.List[str]] = None,
         **create_kwargs: t.Any,
     ) -> None:
         """Create a view with a query or dataframe.
@@ -395,6 +397,9 @@ class SparkEngineAdapter(GetCurrentCatalogFromFunctionMixin, HiveMetastoreTableP
             table_description: Optional table description from MODEL DDL.
             column_descriptions: Optional column descriptions from model query.
             create_kwargs: Additional kwargs to pass into the Create expression
+            view_properties: Optional view properties to add to the view.
+            partitioned_by: The partition columns or engine specific expressions, only applicable in certain engines and if `materialized=True`. (eg. (ds, hour))
+            clustered_by: The cluster columns, only applicable in certain engines and if `materialized=True`. (eg. (ds, hour))
         """
         pyspark_df = self.try_get_pyspark_df(query_or_df)
         if pyspark_df:
@@ -408,6 +413,8 @@ class SparkEngineAdapter(GetCurrentCatalogFromFunctionMixin, HiveMetastoreTableP
             table_description,
             column_descriptions,
             view_properties=view_properties,
+            partitioned_by=partitioned_by,
+            clustered_by=clustered_by,
             **create_kwargs,
         )
 

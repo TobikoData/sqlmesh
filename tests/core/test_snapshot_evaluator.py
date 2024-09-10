@@ -13,7 +13,7 @@ from sqlglot import parse, parse_one, select
 from sqlmesh.core.audit import ModelAudit, StandaloneAudit
 from sqlmesh.core import dialect as d
 from sqlmesh.core.dialect import schema_, to_schema
-from sqlmesh.core.engine_adapter import EngineAdapter, create_engine_adapter
+from sqlmesh.core.engine_adapter import EngineAdapter, create_engine_adapter, BigQueryEngineAdapter
 from sqlmesh.core.engine_adapter.base import MERGE_SOURCE_ALIAS, MERGE_TARGET_ALIAS
 from sqlmesh.core.engine_adapter.shared import (
     DataObject,
@@ -509,6 +509,45 @@ def test_evaluate_materialized_view(
             table_description=None,
             column_descriptions={},
         )
+
+
+def test_evaluate_materialized_view_with_partitioned_by_cluster_by(
+    mocker: MockerFixture, adapter_mock, make_snapshot
+):
+    execute_mock = mocker.Mock()
+    # Use an engine adapter that supports cluster by/partitioned by
+    adapter = BigQueryEngineAdapter(lambda: mocker.Mock())
+    adapter.table_exists = lambda *args, **kwargs: False  # type: ignore
+    adapter.get_data_objects = lambda *args, **kwargs: []  # type: ignore
+    adapter._execute = execute_mock  # type: ignore
+    evaluator = SnapshotEvaluator(adapter)
+
+    model = SqlModel(
+        name="test_schema.test_model",
+        kind=ViewKind(
+            materialized=True,
+        ),
+        partitioned_by=[exp.to_column("a")],
+        clustered_by=[exp.to_column("b")],
+        query=parse_one("SELECT a, b FROM tbl"),
+    )
+
+    snapshot = make_snapshot(model)
+    snapshot.categorize_as(SnapshotChangeCategory.BREAKING)
+    snapshot.add_interval("2023-01-01", "2023-01-01")
+
+    evaluator.create(
+        [snapshot],
+        snapshots={},
+    )
+
+    execute_mock.assert_has_calls(
+        [
+            call(
+                "CREATE MATERIALIZED VIEW `sqlmesh__test_schema`.`test_schema__test_model__2383078413` PARTITION BY `a` CLUSTER BY `b` AS SELECT `a` AS `a`, `b` AS `b` FROM `tbl` AS `tbl`"
+            ),
+        ]
+    )
 
 
 def test_evaluate_materialized_view_with_execution_time_macro(

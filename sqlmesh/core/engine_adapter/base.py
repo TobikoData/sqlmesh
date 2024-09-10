@@ -898,6 +898,8 @@ class EngineAdapter:
         table_description: t.Optional[str] = None,
         column_descriptions: t.Optional[t.Dict[str, str]] = None,
         view_properties: t.Optional[t.Dict[str, exp.Expression]] = None,
+        partitioned_by: t.Optional[t.List[exp.Expression]] = None,
+        clustered_by: t.Optional[t.List[str]] = None,
         **create_kwargs: t.Any,
     ) -> None:
         """Create a view with a query or dataframe.
@@ -915,7 +917,14 @@ class EngineAdapter:
             column_descriptions: Optional column descriptions from model query.
             view_properties: Optional view properties to add to the view.
             create_kwargs: Additional kwargs to pass into the Create expression
+            partitioned_by: The partition columns or engine specific expressions, only applicable in certain engines and if `materialized=True`. (eg. (ds, hour))
+            clustered_by: The cluster columns, only applicable in certain engines and if `materialized=True`. (eg. (ds, hour))
         """
+        if (partitioned_by or clustered_by) and not materialized:
+            raise SQLMeshError(
+                "Partitioned by and clustered by are only supported for materialized views"
+            )
+
         if isinstance(query_or_df, pd.DataFrame):
             values: t.List[t.Tuple[t.Any, ...]] = list(
                 query_or_df.itertuples(index=False, name=None)
@@ -954,6 +963,14 @@ class EngineAdapter:
 
         if not self.SUPPORTS_VIEW_SCHEMA and isinstance(schema, exp.Schema):
             schema = schema.this
+
+        for materialized_property in (
+            self._build_table_properties_exp(
+                partitioned_by=partitioned_by, clustered_by=clustered_by
+            )
+            or []
+        ):
+            properties.append("expressions", materialized_property)
 
         create_view_properties = self._build_view_properties_exp(
             view_properties,
