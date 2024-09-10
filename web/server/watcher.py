@@ -76,12 +76,25 @@ async def watch_project() -> None:
                 if context:
                     in_paths = any(is_relative_to(path, p) for p in paths)
                     is_modified_new_file = (
-                        change == Change.modified and path not in context._loader._path_mtimes
+                        change == Change.modified
+                        and (
+                            path not in context._sqlmesh_loader._path_mtimes
+                            if context._sqlmesh_loader
+                            else True
+                        )
+                        and (
+                            path not in context._dbt_loader._path_mtimes
+                            if context._dbt_loader
+                            else True
+                        )
                     )
                     should_track_file = path.is_file() and in_paths
                     should_reset_mtime = Change.added or is_modified_new_file
                     if should_track_file and should_reset_mtime:
-                        context._loader._path_mtimes[path] = 0
+                        if context._sqlmesh_loader:
+                            context._sqlmesh_loader._path_mtimes[path] = 0
+                        if context._dbt_loader:
+                            context._dbt_loader._path_mtimes[path] = 0
 
             except Exception:
                 error = ApiException(

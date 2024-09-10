@@ -331,6 +331,23 @@ class GenericContext(BaseContext, t.Generic[C]):
 
         self.path, self.config = t.cast(t.Tuple[Path, C], next(iter(self.configs.items())))
 
+        self._dbt_loader = None
+        self._sqlmesh_loader = None
+        self.dbt_configs = {}
+        self.sqlmesh_configs = {}
+        for path, config in self.configs.items():
+            project_type = c.DBT if config.loader.__name__.lower().startswith(c.DBT) else c.NATIVE
+
+            if project_type == c.DBT:
+                self.dbt_configs[path] = config
+                if not self._dbt_loader:
+                    self._dbt_loader = config.loader(**config.loader_kwargs)
+            else:
+                self.sqlmesh_configs[path] = config
+                if not self._sqlmesh_loader:
+                    self._sqlmesh_loader = config.loader(**config.loader_kwargs)
+
+        self.project_type = "hybrid" if self._dbt_loader and self._sqlmesh_loader else project_type
         self._all_dialects: t.Set[str] = {self.config.dialect or ""}
 
         # This allows overriding the default dialect's normalization strategy, so for example
@@ -364,7 +381,7 @@ class GenericContext(BaseContext, t.Generic[C]):
         self._provided_state_sync: t.Optional[StateSync] = state_sync
         self._state_sync: t.Optional[StateSync] = None
 
-        self._loader = (loader or self.config.loader)(**self.config.loader_kwargs)
+        self._loader = self._sqlmesh_loader or self._dbt_loader
 
         # Should we dedupe notification_targets? If so how?
         self.notification_targets = (notification_targets or []) + self.config.notification_targets
@@ -517,41 +534,63 @@ class GenericContext(BaseContext, t.Generic[C]):
 
     def refresh(self) -> None:
         """Refresh all models that have been updated."""
-        if self._loader.reload_needed():
+        if (self._dbt_loader and self._dbt_loader.reload_needed()) or (
+            self._sqlmesh_loader and self._sqlmesh_loader.reload_needed()
+        ):
             self.load()
 
     def load(self, update_schemas: bool = True) -> GenericContext[C]:
         """Load all files in the context's path."""
         load_start_ts = time.perf_counter()
-        with sys_path(*self.configs):
-            project = self._loader.load(self, update_schemas)
-            self._macros = project.macros
-            self._jinja_macros = project.jinja_macros
-            self._models = project.models
-            self._metrics = project.metrics
-            self._standalone_audits.clear()
-            self._audits.clear()
+
+        projects = []
+        if self._dbt_loader and self.dbt_configs:
+            with sys_path(*self.dbt_configs):
+                project = self._dbt_loader.load(self, update_schemas)
+                projects.append(project)
+
+        if self._sqlmesh_loader and self.sqlmesh_configs:
+            with sys_path(*self.sqlmesh_configs):
+                projects.append(self._sqlmesh_loader.load(self, update_schemas))
+
+        self._standalone_audits.clear()
+        self._audits.clear()
+        for project in projects:
+            self._macros.update(
+                {key: value for key, value in project.macros.items() if key not in self._macros}
+            )
+            self._jinja_macros = self._jinja_macros.merge(project.jinja_macros)
+            self._models.update(
+                {key: value for key, value in project.models.items() if key not in self._models}
+            )
+            self._metrics.update(
+                {key: value for key, value in project.metrics.items() if key not in self._metrics}
+            )
+
             for name, audit in project.audits.items():
                 if isinstance(audit, StandaloneAudit):
                     self._standalone_audits[name] = audit
                 else:
                     self._audits[name] = audit
-            self.dag = project.dag
 
-            duplicates = set(self._models) & set(self._standalone_audits)
-            if duplicates:
-                raise ConfigError(
-                    f"Models and Standalone audits cannot have the same name: {duplicates}"
-                )
+        self.dag = (
+            DAG({**projects[0].dag.graph, **projects[1].dag.graph})
+            if len(projects) == 2
+            else project.dag
+        )
 
-            self._all_dialects = {m.dialect for m in self._models.values() if m.dialect} | {
-                self.default_dialect or ""
-            }
+        duplicates = set(self._models) & set(self._standalone_audits)
+        if duplicates:
+            raise ConfigError(
+                f"Models and Standalone audits cannot have the same name: {duplicates}"
+            )
+
+        self._all_dialects = {m.dialect for m in self._models.values() if m.dialect} | {
+            self.default_dialect or ""
+        }
 
         analytics.collector.on_project_loaded(
-            project_type=(
-                c.DBT if type(self._loader).__name__.lower().startswith(c.DBT) else c.NATIVE
-            ),
+            project_type=self.project_type,
             models_count=len(self._models),
             audits_count=len(self._audits),
             standalone_audits_count=len(self._standalone_audits),
@@ -601,8 +640,13 @@ class GenericContext(BaseContext, t.Generic[C]):
 
         if not self._loaded:
             # Signals should be loaded to run correctly.
-            with sys_path(*self.configs):
-                self._loader.load_signals(self)
+            if self._sqlmesh_loader:
+                with sys_path(*self.sqlmesh_configs):
+                    self._sqlmesh_loader.load_signals(self)
+
+            if self._dbt_loader:
+                with sys_path(*self.dbt_configs):
+                    self._dbt_loader.load_signals(self)
 
         success = False
         try:

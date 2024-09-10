@@ -155,7 +155,7 @@ class DbtLoader(Loader):
 
             self._projects = []
 
-            for path, config in self._context.configs.items():
+            for path, config in self._context.dbt_configs.items():
                 project = Project.load(
                     DbtContext(
                         project_root=path,
