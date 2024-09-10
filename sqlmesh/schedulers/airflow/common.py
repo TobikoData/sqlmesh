@@ -5,6 +5,7 @@ import typing as t
 from sqlmesh.core import constants as c
 from sqlmesh.core.environment import Environment
 from sqlmesh.core.notification_target import NotificationTarget
+from sqlmesh.core.plan.definition import EvaluatablePlan
 from sqlmesh.core.scheduler import Interval
 from sqlmesh.core.snapshot import (
     DeployabilityIndex,
@@ -14,7 +15,6 @@ from sqlmesh.core.snapshot import (
     SnapshotIntervals,
     SnapshotTableInfo,
 )
-from sqlmesh.core.snapshot.definition import Interval as SnapshotInterval
 from sqlmesh.core.user import User
 from sqlmesh.utils import sanitize_name
 from sqlmesh.utils.date import TimeLike
@@ -37,30 +37,11 @@ SQLMESH_API_BASE_PATH: str = f"{c.SQLMESH}/api/v1"
 
 
 class PlanApplicationRequest(PydanticModel):
-    request_id: str
-    new_snapshots: t.List[Snapshot]
-    environment: Environment
-    no_gaps: bool
-    skip_backfill: bool
-    restatements: t.Dict[str, SnapshotInterval]
+    plan: EvaluatablePlan
     notification_targets: t.List[NotificationTarget]
     backfill_concurrent_tasks: int
     ddl_concurrent_tasks: int
     users: t.List[User]
-    is_dev: bool
-    allow_destructive_snapshots: t.Set[str] = set()
-    forward_only: bool
-    models_to_backfill: t.Optional[t.Set[str]] = None
-    end_bounded: bool
-    ensure_finalized_snapshots: bool
-    directly_modified_snapshots: t.List[SnapshotId]
-    indirectly_modified_snapshots: t.Dict[str, t.List[SnapshotId]]
-    removed_snapshots: t.List[SnapshotId]
-    interval_end_per_model: t.Optional[t.Dict[str, int]] = None
-    execution_time: t.Optional[TimeLike] = None
-
-    def is_selected_for_backfill(self, model_fqn: str) -> bool:
-        return self.models_to_backfill is None or model_fqn in self.models_to_backfill
 
 
 class BackfillIntervalsPerSnapshot(PydanticModel):

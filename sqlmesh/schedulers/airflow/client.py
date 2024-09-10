@@ -9,12 +9,11 @@ import requests
 from sqlmesh.core.console import Console
 from sqlmesh.core.environment import Environment
 from sqlmesh.core.notification_target import NotificationTarget
+from sqlmesh.core.plan.definition import EvaluatablePlan
 from sqlmesh.core.snapshot import Snapshot, SnapshotId
-from sqlmesh.core.snapshot.definition import Interval
 from sqlmesh.core.state_sync import Versions
 from sqlmesh.core.user import User
 from sqlmesh.schedulers.airflow import common, NO_DEFAULT_CATALOG
-from sqlmesh.utils.date import TimeLike
 from sqlmesh.utils.errors import (
     ApiServerError,
     NotFoundError,
@@ -182,50 +181,18 @@ class AirflowClient(BaseAirflowClient):
 
     def apply_plan(
         self,
-        new_snapshots: t.Iterable[Snapshot],
-        environment: Environment,
-        request_id: str,
-        no_gaps: bool = False,
-        skip_backfill: bool = False,
-        restatements: t.Optional[t.Dict[SnapshotId, Interval]] = None,
+        plan: EvaluatablePlan,
         notification_targets: t.Optional[t.List[NotificationTarget]] = None,
         backfill_concurrent_tasks: int = 1,
         ddl_concurrent_tasks: int = 1,
         users: t.Optional[t.List[User]] = None,
-        is_dev: bool = False,
-        allow_destructive_snapshots: t.Set[str] = set(),
-        forward_only: bool = False,
-        models_to_backfill: t.Optional[t.Set[str]] = None,
-        end_bounded: bool = False,
-        ensure_finalized_snapshots: bool = False,
-        directly_modified_snapshots: t.Optional[t.List[SnapshotId]] = None,
-        indirectly_modified_snapshots: t.Optional[t.Dict[str, t.List[SnapshotId]]] = None,
-        removed_snapshots: t.Optional[t.List[SnapshotId]] = None,
-        interval_end_per_model: t.Optional[t.Dict[str, int]] = None,
-        execution_time: t.Optional[TimeLike] = None,
     ) -> None:
         request = common.PlanApplicationRequest(
-            new_snapshots=list(new_snapshots),
-            environment=environment,
-            no_gaps=no_gaps,
-            skip_backfill=skip_backfill,
-            request_id=request_id,
-            restatements={s.name: i for s, i in (restatements or {}).items()},
+            plan=plan,
             notification_targets=notification_targets or [],
             backfill_concurrent_tasks=backfill_concurrent_tasks,
             ddl_concurrent_tasks=ddl_concurrent_tasks,
             users=users or [],
-            is_dev=is_dev,
-            allow_destructive_snapshots=allow_destructive_snapshots,
-            forward_only=forward_only,
-            models_to_backfill=models_to_backfill,
-            end_bounded=end_bounded,
-            ensure_finalized_snapshots=ensure_finalized_snapshots,
-            directly_modified_snapshots=directly_modified_snapshots or [],
-            indirectly_modified_snapshots=indirectly_modified_snapshots or {},
-            removed_snapshots=removed_snapshots or [],
-            interval_end_per_model=interval_end_per_model,
-            execution_time=execution_time,
         )
         self._post(PLANS_PATH, request.json())
 

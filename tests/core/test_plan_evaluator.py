@@ -71,7 +71,7 @@ def test_builtin_evaluator_push(sushi_context: Context, make_snapshot):
         sushi_context.default_catalog,
         console=sushi_context.console,
     )
-    evaluator._push(plan)
+    evaluator._push(plan.to_evaluatable(), plan.snapshots)
 
     assert (
         len(sushi_context.state_sync.get_snapshots([new_model_snapshot, new_view_model_snapshot]))
@@ -86,31 +86,17 @@ def test_airflow_evaluator(sushi_plan: Plan, mocker: MockerFixture):
     airflow_client_mock.wait_for_dag_run_completion.return_value = True
     airflow_client_mock.wait_for_first_dag_run.return_value = "test_plan_application_dag_run_id"
 
+    evaluatable_plan = sushi_plan.to_evaluatable()
+
     evaluator = AirflowPlanEvaluator(airflow_client_mock)
-    evaluator.evaluate(sushi_plan)
+    evaluator.evaluate(evaluatable_plan)
 
     airflow_client_mock.apply_plan.assert_called_once_with(
-        sushi_plan.new_snapshots,
-        sushi_plan.environment,
-        mocker.ANY,
-        no_gaps=False,
+        evaluatable_plan,
         notification_targets=[],
-        restatements={},
         backfill_concurrent_tasks=1,
         ddl_concurrent_tasks=1,
-        skip_backfill=False,
         users=[],
-        is_dev=True,
-        allow_destructive_snapshots=set(),
-        forward_only=False,
-        models_to_backfill=None,
-        end_bounded=False,
-        ensure_finalized_snapshots=False,
-        directly_modified_snapshots=[],
-        indirectly_modified_snapshots={},
-        removed_snapshots=[],
-        execution_time=None,
-        interval_end_per_model=None,
     )
 
     airflow_client_mock.wait_for_dag_run_completion.assert_called_once()
@@ -125,7 +111,7 @@ def test_airflow_evaluator_plan_application_dag_fails(sushi_plan: Plan, mocker: 
     evaluator = AirflowPlanEvaluator(airflow_client_mock)
 
     with pytest.raises(SQLMeshError):
-        evaluator.evaluate(sushi_plan)
+        evaluator.evaluate(sushi_plan.to_evaluatable())
 
     airflow_client_mock.apply_plan.assert_called_once()
     airflow_client_mock.wait_for_dag_run_completion.assert_called_once()
@@ -152,7 +138,7 @@ def test_mwaa_evaluator(sushi_plan: Plan, mocker: MockerFixture):
     )
 
     evaluator = MWAAPlanEvaluator(mwaa_client_mock, state_sync_mock)
-    evaluator.evaluate(sushi_plan)
+    evaluator.evaluate(sushi_plan.to_evaluatable())
 
     plan_dag_state_mock.add_dag_spec.assert_called_once_with(plan_dag_spec_mock)
 
@@ -226,7 +212,7 @@ def test_state_based_airflow_evaluator_with_restatements(
     )
 
     evaluator = MWAAPlanEvaluator(mwaa_client_mock, state_sync_mock)
-    evaluator.evaluate(plan)
+    evaluator.evaluate(plan.to_evaluatable())
 
     plan_application_request = create_plan_dag_spec_mock.call_args[0][0]
-    assert plan_application_request.restatements.keys() == {model_fqn, downstream_model_fqn}
+    assert plan_application_request.plan.restatements.keys() == {model_fqn, downstream_model_fqn}

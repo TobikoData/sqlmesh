@@ -10,7 +10,7 @@ from sse_starlette.sse import ServerSentEvent
 
 from sqlmesh.core.console import TerminalConsole
 from sqlmesh.core.environment import EnvironmentNamingInfo
-from sqlmesh.core.plan.definition import Plan
+from sqlmesh.core.plan.definition import EvaluatablePlan
 from sqlmesh.core.snapshot import Snapshot, SnapshotInfoLike
 from sqlmesh.core.test import ModelTest
 from sqlmesh.utils.date import now_timestamp
@@ -28,7 +28,7 @@ class ApiConsole(TerminalConsole):
         self.current_task_status: t.Dict[str, t.Dict[str, t.Any]] = {}
         self.queue: asyncio.Queue = asyncio.Queue()
 
-    def start_plan_evaluation(self, plan: Plan) -> None:
+    def start_plan_evaluation(self, plan: EvaluatablePlan) -> None:
         self.plan_apply_stage_tracker = (
             self.plan_apply_stage_tracker
             or models.PlanApplyStageTracker(environment=plan.environment.name)

@@ -24,9 +24,15 @@ from sqlmesh.core.console import Console, get_console
 from sqlmesh.core.notification_target import (
     NotificationTarget,
 )
-from sqlmesh.core.plan.definition import Plan
+from sqlmesh.core.plan.definition import EvaluatablePlan
 from sqlmesh.core.scheduler import Scheduler
-from sqlmesh.core.snapshot import DeployabilityIndex, Snapshot, SnapshotEvaluator, SnapshotIntervals
+from sqlmesh.core.snapshot import (
+    DeployabilityIndex,
+    Snapshot,
+    SnapshotEvaluator,
+    SnapshotIntervals,
+    SnapshotId,
+)
 from sqlmesh.core.state_sync import StateSync
 from sqlmesh.core.state_sync.base import PromotionResult
 from sqlmesh.core.user import User
@@ -41,7 +47,7 @@ logger = logging.getLogger(__name__)
 class PlanEvaluator(abc.ABC):
     @abc.abstractmethod
     def evaluate(
-        self, plan: Plan, circuit_breaker: t.Optional[t.Callable[[], bool]] = None
+        self, plan: EvaluatablePlan, circuit_breaker: t.Optional[t.Callable[[], bool]] = None
     ) -> None:
         """Evaluates a plan by pushing snapshots and backfilling data.
 
@@ -72,7 +78,7 @@ class BuiltInPlanEvaluator(PlanEvaluator):
 
     def evaluate(
         self,
-        plan: Plan,
+        plan: EvaluatablePlan,
         circuit_breaker: t.Optional[t.Callable[[], bool]] = None,
     ) -> None:
         self.console.start_plan_evaluation(plan)
@@ -84,10 +90,13 @@ class BuiltInPlanEvaluator(PlanEvaluator):
         )
 
         try:
-            snapshots = plan.snapshots
-            all_names = {
-                s.name for s in snapshots.values() if plan.is_selected_for_backfill(s.name)
-            }
+            new_snapshots = {s.snapshot_id: s for s in plan.new_snapshots}
+            stored_snapshots = self.state_sync.get_snapshots(plan.environment.snapshots)
+            snapshots = {**new_snapshots, **stored_snapshots}
+            snapshots_by_name = {s.name: s for s in snapshots.values()}
+
+            all_names = {name for name in snapshots_by_name if plan.is_selected_for_backfill(name)}
+
             deployability_index_for_evaluation = DeployabilityIndex.create(snapshots)
             deployability_index_for_creation = deployability_index_for_evaluation
             if plan.is_dev:
@@ -103,23 +112,27 @@ class BuiltInPlanEvaluator(PlanEvaluator):
                 after_promote_snapshots = all_names - before_promote_snapshots
                 deployability_index_for_evaluation = DeployabilityIndex.all_deployable()
 
-            self._push(plan, deployability_index_for_creation)
+            self._push(plan, snapshots, deployability_index_for_creation)
             update_intervals_for_new_snapshots(plan.new_snapshots, self.state_sync)
-            self._restate(plan)
+            self._restate(plan, snapshots_by_name)
             self._backfill(
                 plan,
+                snapshots_by_name,
                 before_promote_snapshots,
                 deployability_index_for_evaluation,
                 circuit_breaker=circuit_breaker,
             )
-            promotion_result = self._promote(plan, before_promote_snapshots)
+            promotion_result = self._promote(plan, snapshots, before_promote_snapshots)
             self._backfill(
                 plan,
+                snapshots_by_name,
                 after_promote_snapshots,
                 deployability_index_for_evaluation,
                 circuit_breaker=circuit_breaker,
             )
-            self._update_views(plan, promotion_result, deployability_index_for_evaluation)
+            self._update_views(
+                plan, snapshots, promotion_result, deployability_index_for_evaluation
+            )
 
             if not plan.requires_backfill:
                 self.console.log_success("Virtual Update executed successfully")
@@ -133,7 +146,8 @@ class BuiltInPlanEvaluator(PlanEvaluator):
 
     def _backfill(
         self,
-        plan: Plan,
+        plan: EvaluatablePlan,
+        snapshots_by_name: t.Dict[str, Snapshot],
         selected_snapshots: t.Set[str],
         deployability_index: DeployabilityIndex,
         circuit_breaker: t.Optional[t.Callable[[], bool]] = None,
@@ -147,14 +161,16 @@ class BuiltInPlanEvaluator(PlanEvaluator):
         if not plan.requires_backfill or not selected_snapshots:
             return
 
-        snapshots = plan.snapshots
-        scheduler = self.create_scheduler(snapshots.values())
+        scheduler = self.create_scheduler(snapshots_by_name.values())
         is_run_successful = scheduler.run(
-            plan.environment_naming_info,
+            plan.environment,
             plan.start,
             plan.end,
             execution_time=plan.execution_time,
-            restatements=plan.restatements,
+            restatements={
+                snapshots_by_name[name].snapshot_id: interval
+                for name, interval in plan.restatements.items()
+            },
             selected_snapshots=selected_snapshots,
             deployability_index=deployability_index,
             circuit_breaker=circuit_breaker,
@@ -164,7 +180,12 @@ class BuiltInPlanEvaluator(PlanEvaluator):
         if not is_run_successful:
             raise SQLMeshError("Plan application failed.")
 
-    def _push(self, plan: Plan, deployability_index: t.Optional[DeployabilityIndex] = None) -> None:
+    def _push(
+        self,
+        plan: EvaluatablePlan,
+        snapshots: t.Dict[SnapshotId, Snapshot],
+        deployability_index: t.Optional[DeployabilityIndex] = None,
+    ) -> None:
         """Push the snapshots to the state sync.
 
         As a part of plan pushing, snapshot tables are created.
@@ -175,21 +196,21 @@ class BuiltInPlanEvaluator(PlanEvaluator):
         """
         snapshots_to_create = [
             s
-            for s in plan.snapshots.values()
+            for s in snapshots.values()
             if s.is_model and not s.is_symbolic and plan.is_selected_for_backfill(s.name)
         ]
         snapshots_to_create_count = len(snapshots_to_create)
 
         if snapshots_to_create_count > 0:
             self.console.start_creation_progress(
-                snapshots_to_create_count, plan.environment_naming_info, self.default_catalog
+                snapshots_to_create_count, plan.environment, self.default_catalog
             )
 
         completed = False
         try:
             self.snapshot_evaluator.create(
                 snapshots_to_create,
-                plan.snapshots,
+                snapshots,
                 allow_destructive_snapshots=plan.allow_destructive_models,
                 deployability_index=deployability_index,
                 on_complete=self.console.update_creation_progress,
@@ -205,7 +226,10 @@ class BuiltInPlanEvaluator(PlanEvaluator):
         )
 
     def _promote(
-        self, plan: Plan, no_gaps_snapshot_names: t.Optional[t.Set[str]] = None
+        self,
+        plan: EvaluatablePlan,
+        snapshots: t.Dict[SnapshotId, Snapshot],
+        no_gaps_snapshot_names: t.Optional[t.Set[str]] = None,
     ) -> PromotionResult:
         """Promote a plan.
 
@@ -221,8 +245,8 @@ class BuiltInPlanEvaluator(PlanEvaluator):
 
         if not plan.is_dev:
             self.snapshot_evaluator.migrate(
-                [s for s in plan.snapshots.values() if s.is_paused],
-                plan.snapshots,
+                [s for s in snapshots.values() if s.is_paused],
+                snapshots,
                 plan.allow_destructive_models,
             )
             if not plan.ensure_finalized_snapshots:
@@ -235,7 +259,8 @@ class BuiltInPlanEvaluator(PlanEvaluator):
 
     def _update_views(
         self,
-        plan: Plan,
+        plan: EvaluatablePlan,
+        snapshots: t.Dict[SnapshotId, Snapshot],
         promotion_result: PromotionResult,
         deployability_index: t.Optional[DeployabilityIndex] = None,
     ) -> None:
@@ -263,7 +288,7 @@ class BuiltInPlanEvaluator(PlanEvaluator):
         completed = False
         try:
             self.snapshot_evaluator.promote(
-                [plan.context_diff.snapshots[s.snapshot_id] for s in promotion_result.added],
+                [snapshots[s.snapshot_id] for s in promotion_result.added],
                 environment.naming_info,
                 deployability_index=deployability_index,
                 on_complete=lambda s: self.console.update_promotion_progress(s, True),
@@ -279,15 +304,12 @@ class BuiltInPlanEvaluator(PlanEvaluator):
         finally:
             self.console.stop_promotion_progress(success=completed)
 
-    def _restate(self, plan: Plan) -> None:
+    def _restate(self, plan: EvaluatablePlan, snapshots_by_name: t.Dict[str, Snapshot]) -> None:
         if not plan.restatements:
             return
 
         self.state_sync.remove_intervals(
-            [
-                (plan.context_diff.snapshots[s_id], interval)
-                for s_id, interval in plan.restatements.items()
-            ],
+            [(snapshots_by_name[name], interval) for name, interval in plan.restatements.items()],
             remove_shared_versions=not plan.is_dev,
         )
 
@@ -308,7 +330,7 @@ class BaseAirflowPlanEvaluator(PlanEvaluator):
         self.console = console or get_console()
 
     def evaluate(
-        self, plan: Plan, circuit_breaker: t.Optional[t.Callable[[], bool]] = None
+        self, plan: EvaluatablePlan, circuit_breaker: t.Optional[t.Callable[[], bool]] = None
     ) -> None:
         plan_request_id = plan.plan_id
         self._apply_plan(plan, plan_request_id)
@@ -322,7 +344,7 @@ class BaseAirflowPlanEvaluator(PlanEvaluator):
 
         if self.blocking:
             plan_application_dag_id = airflow_common.plan_application_dag_id(
-                plan.environment_naming_info.name, plan_request_id
+                plan.environment.name, plan_request_id
             )
 
             self.console.log_status_update(
@@ -354,7 +376,7 @@ class BaseAirflowPlanEvaluator(PlanEvaluator):
     def client(self) -> BaseAirflowClient:
         raise NotImplementedError
 
-    def _apply_plan(self, plan: Plan, plan_request_id: str) -> None:
+    def _apply_plan(self, plan: EvaluatablePlan, plan_request_id: str) -> None:
         raise NotImplementedError
 
 
@@ -364,34 +386,15 @@ class StateBasedAirflowPlanEvaluator(BaseAirflowPlanEvaluator):
     notification_targets: t.Optional[t.List[NotificationTarget]]
     users: t.Optional[t.List[User]]
 
-    def _apply_plan(self, plan: Plan, plan_request_id: str) -> None:
+    def _apply_plan(self, plan: EvaluatablePlan, plan_request_id: str) -> None:
         from sqlmesh.schedulers.airflow.plan import PlanDagState, create_plan_dag_spec
 
         plan_application_request = airflow_common.PlanApplicationRequest(
-            new_snapshots=plan.new_snapshots,
-            environment=plan.environment,
-            no_gaps=plan.no_gaps,
-            skip_backfill=plan.skip_backfill,
-            request_id=plan_request_id,
-            restatements={s.name: i for s, i in (plan.restatements or {}).items()},
+            plan=plan,
             notification_targets=self.notification_targets or [],
             backfill_concurrent_tasks=self.backfill_concurrent_tasks,
             ddl_concurrent_tasks=self.ddl_concurrent_tasks,
             users=self.users or [],
-            is_dev=plan.is_dev,
-            forward_only=plan.forward_only,
-            models_to_backfill=plan.models_to_backfill,
-            end_bounded=plan.end_bounded,
-            ensure_finalized_snapshots=plan.ensure_finalized_snapshots,
-            directly_modified_snapshots=list(plan.directly_modified),
-            indirectly_modified_snapshots={
-                change_source.name: list(snapshots)
-                for change_source, snapshots in plan.indirectly_modified.items()
-            },
-            removed_snapshots=list(plan.context_diff.removed_snapshots),
-            interval_end_per_model=plan.interval_end_per_model,
-            execution_time=plan.execution_time,
-            allow_destructive_snapshots=plan.allow_destructive_models,
         )
         plan_dag_spec = create_plan_dag_spec(plan_application_request, self.state_sync)
         PlanDagState.from_state_sync(self.state_sync).add_dag_spec(plan_dag_spec)
@@ -441,36 +444,17 @@ class AirflowPlanEvaluator(StateBasedAirflowPlanEvaluator):
             raise SQLMeshError("State Sync is not configured")
         return self._state_sync
 
-    def _apply_plan(self, plan: Plan, plan_request_id: str) -> None:
+    def _apply_plan(self, plan: EvaluatablePlan, plan_request_id: str) -> None:
         if self._state_sync is not None:
             super()._apply_plan(plan, plan_request_id)
             return
 
         self._airflow_client.apply_plan(
-            plan.new_snapshots,
-            plan.environment,
-            plan_request_id,
-            no_gaps=plan.no_gaps,
-            skip_backfill=plan.skip_backfill,
-            restatements=plan.restatements,
+            plan,
             notification_targets=self.notification_targets,
             backfill_concurrent_tasks=self.backfill_concurrent_tasks,
             ddl_concurrent_tasks=self.ddl_concurrent_tasks,
             users=self.users,
-            is_dev=plan.is_dev,
-            forward_only=plan.forward_only,
-            models_to_backfill=plan.models_to_backfill,
-            end_bounded=plan.end_bounded,
-            ensure_finalized_snapshots=plan.ensure_finalized_snapshots,
-            directly_modified_snapshots=list(plan.directly_modified),
-            indirectly_modified_snapshots={
-                change_source.name: list(snapshots)
-                for change_source, snapshots in plan.indirectly_modified.items()
-            },
-            removed_snapshots=list(plan.context_diff.removed_snapshots),
-            interval_end_per_model=plan.interval_end_per_model,
-            execution_time=plan.execution_time,
-            allow_destructive_snapshots=plan.allow_destructive_models,
         )
 
 

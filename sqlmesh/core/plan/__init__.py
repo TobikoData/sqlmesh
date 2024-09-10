@@ -1,6 +1,7 @@
 from sqlmesh.core.plan.builder import PlanBuilder as PlanBuilder
 from sqlmesh.core.plan.definition import (
     Plan as Plan,
+    EvaluatablePlan as EvaluatablePlan,
     PlanStatus as PlanStatus,
     SnapshotIntervals as SnapshotIntervals,
 )

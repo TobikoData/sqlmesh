@@ -17,6 +17,7 @@ from sqlmesh.core.model import (
     create_sql_model,
 )
 from sqlmesh.core.node import NodeType
+from sqlmesh.core.plan.definition import EvaluatablePlan
 from sqlmesh.core.snapshot import (
     DeployabilityIndex,
     Snapshot,
@@ -26,7 +27,7 @@ from sqlmesh.core.snapshot import (
 )
 from sqlmesh.schedulers.airflow import common
 from sqlmesh.schedulers.airflow.plan import PlanDagState, create_plan_dag_spec
-from sqlmesh.utils.date import to_datetime, to_timestamp
+from sqlmesh.utils.date import to_datetime, to_timestamp, now
 from sqlmesh.utils.errors import SQLMeshError
 
 pytestmark = pytest.mark.airflow
@@ -104,17 +105,14 @@ def test_create_plan_dag_spec(
         catalog_name_override="test_catalog",
     )
 
-    plan_request = common.PlanApplicationRequest(
-        request_id="test_request_id",
+    plan = EvaluatablePlan(
+        start=new_environment.start_at,
+        end=new_environment.end_at,
         new_snapshots=[the_snapshot],
         environment=new_environment,
         no_gaps=True,
         skip_backfill=False,
         restatements={},
-        notification_targets=[],
-        backfill_concurrent_tasks=1,
-        ddl_concurrent_tasks=1,
-        users=[],
         is_dev=False,
         forward_only=True,
         models_to_backfill=None,
@@ -124,6 +122,16 @@ def test_create_plan_dag_spec(
         indirectly_modified_snapshots={},
         removed_snapshots=[],
         interval_end_per_model=None,
+        allow_destructive_models=set(),
+        requires_backfill=True,
+    )
+
+    plan_request = common.PlanApplicationRequest(
+        plan=plan,
+        notification_targets=[],
+        backfill_concurrent_tasks=1,
+        ddl_concurrent_tasks=1,
+        users=[],
     )
 
     deleted_snapshot = SnapshotTableInfo(
@@ -160,7 +168,7 @@ def test_create_plan_dag_spec(
         plan_spec = create_plan_dag_spec(plan_request, state_sync_mock)
 
     assert plan_spec == common.PlanDagSpec(
-        request_id="test_request_id",
+        request_id="test_plan_id",
         environment=new_environment,
         new_snapshots=[the_snapshot],
         backfill_intervals_per_snapshot=[
@@ -234,8 +242,9 @@ def test_restatement(
 
     the_snapshot.add_interval("2022-01-01", "2022-01-07")
 
-    plan_request = common.PlanApplicationRequest(
-        request_id="test_request_id",
+    plan = EvaluatablePlan(
+        start=new_environment.start_at,
+        end=new_environment.end_at,
         new_snapshots=[],
         environment=new_environment,
         no_gaps=True,
@@ -246,10 +255,6 @@ def test_restatement(
                 to_timestamp("2022-01-04"),
             )
         },
-        notification_targets=[],
-        backfill_concurrent_tasks=1,
-        ddl_concurrent_tasks=1,
-        users=[],
         is_dev=False,
         forward_only=True,
         models_to_backfill=None,
@@ -259,6 +264,16 @@ def test_restatement(
         indirectly_modified_snapshots={},
         removed_snapshots=[],
         interval_end_per_model=None,
+        allow_destructive_models=set(),
+        requires_backfill=True,
+    )
+
+    plan_request = common.PlanApplicationRequest(
+        plan=plan,
+        notification_targets=[],
+        backfill_concurrent_tasks=1,
+        ddl_concurrent_tasks=1,
+        users=[],
     )
     old_environment = Environment(
         name=environment_name,
@@ -280,7 +295,7 @@ def test_restatement(
         plan_spec = create_plan_dag_spec(plan_request, state_sync_mock)
 
     assert plan_spec == common.PlanDagSpec(
-        request_id="test_request_id",
+        request_id="test_plan_id",
         environment=new_environment,
         new_snapshots=[],
         backfill_intervals_per_snapshot=[
@@ -352,17 +367,14 @@ def test_select_models_for_backfill(mocker: MockerFixture, random_name, make_sna
         suffix_target=EnvironmentSuffixTarget.TABLE,
     )
 
-    plan_request = common.PlanApplicationRequest(
-        request_id="test_request_id",
+    plan = EvaluatablePlan(
+        start=new_environment.start_at,
+        end=new_environment.end_at,
         new_snapshots=[snapshot_a, snapshot_b],
         environment=new_environment,
         no_gaps=True,
         skip_backfill=False,
         restatements={},
-        notification_targets=[],
-        backfill_concurrent_tasks=1,
-        ddl_concurrent_tasks=1,
-        users=[],
         is_dev=False,
         forward_only=True,
         models_to_backfill={snapshot_b.name},
@@ -372,6 +384,16 @@ def test_select_models_for_backfill(mocker: MockerFixture, random_name, make_sna
         indirectly_modified_snapshots={},
         removed_snapshots=[],
         interval_end_per_model=None,
+        allow_destructive_models=set(),
+        requires_backfill=True,
+    )
+
+    plan_request = common.PlanApplicationRequest(
+        plan=plan,
+        notification_targets=[],
+        backfill_concurrent_tasks=1,
+        ddl_concurrent_tasks=1,
+        users=[],
     )
 
     state_sync_mock = mocker.Mock()
@@ -387,7 +409,7 @@ def test_select_models_for_backfill(mocker: MockerFixture, random_name, make_sna
         plan_spec = create_plan_dag_spec(plan_request, state_sync_mock)
 
     assert plan_spec == common.PlanDagSpec(
-        request_id="test_request_id",
+        request_id="test_plan_id",
         environment=new_environment,
         new_snapshots=[snapshot_a, snapshot_b],
         backfill_intervals_per_snapshot=[
@@ -429,17 +451,14 @@ def test_create_plan_dag_spec_duplicated_snapshot(
         plan_id="test_plan_id",
     )
 
-    plan_request = common.PlanApplicationRequest(
-        request_id="test_request_id",
+    plan = EvaluatablePlan(
+        start=new_environment.start_at,
+        end=new_environment.end_at,
         new_snapshots=[snapshot],
         environment=new_environment,
         no_gaps=False,
         skip_backfill=False,
         restatements={},
-        notification_targets=[],
-        backfill_concurrent_tasks=1,
-        ddl_concurrent_tasks=1,
-        users=[],
         is_dev=False,
         forward_only=False,
         models_to_backfill=None,
@@ -449,6 +468,16 @@ def test_create_plan_dag_spec_duplicated_snapshot(
         indirectly_modified_snapshots={},
         removed_snapshots=[],
         interval_end_per_model=None,
+        allow_destructive_models=set(),
+        requires_backfill=True,
+    )
+
+    plan_request = common.PlanApplicationRequest(
+        plan=plan,
+        notification_targets=[],
+        backfill_concurrent_tasks=1,
+        ddl_concurrent_tasks=1,
+        users=[],
     )
 
     dag_run_mock = mocker.Mock()
@@ -483,17 +512,14 @@ def test_create_plan_dag_spec_unbounded_end(
         plan_id="test_plan_id",
     )
 
-    plan_request = common.PlanApplicationRequest(
-        request_id="test_request_id",
+    plan = EvaluatablePlan(
+        start=new_environment.start_at,
+        end=now(),
         new_snapshots=[],
         environment=new_environment,
         no_gaps=True,
         skip_backfill=False,
         restatements={},
-        notification_targets=[],
-        backfill_concurrent_tasks=1,
-        ddl_concurrent_tasks=1,
-        users=[],
         is_dev=False,
         forward_only=False,
         models_to_backfill=None,
@@ -503,6 +529,16 @@ def test_create_plan_dag_spec_unbounded_end(
         indirectly_modified_snapshots={},
         removed_snapshots=[],
         interval_end_per_model=None,
+        allow_destructive_models=set(),
+        requires_backfill=True,
+    )
+
+    plan_request = common.PlanApplicationRequest(
+        plan=plan,
+        notification_targets=[],
+        backfill_concurrent_tasks=1,
+        ddl_concurrent_tasks=1,
+        users=[],
     )
 
     state_sync_mock = mocker.Mock()
@@ -531,7 +567,7 @@ def test_plan_dag_state(snapshot: Snapshot, sushi_context: Context, random_name)
         plan_id="test_plan_id",
     )
     plan_dag_spec = common.PlanDagSpec(
-        request_id="test_request_id",
+        request_id="test_plan_id",
         environment=environment,
         new_snapshots=[],
         backfill_intervals_per_snapshot=[],
@@ -565,6 +601,6 @@ def test_plan_dag_state(snapshot: Snapshot, sushi_context: Context, random_name)
     assert get_hydrated_dag_specs() == [plan_dag_spec]
 
     plan_dag_state.delete_dag_specs(
-        [common.plan_application_dag_id(environment_name, "test_request_id")]
+        [common.plan_application_dag_id(environment_name, "test_plan_id")]
     )
     assert not plan_dag_state.get_dag_specs()
