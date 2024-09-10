@@ -231,7 +231,7 @@ def push_plan(context: Context, plan: Plan) -> None:
     plan_evaluator = BuiltInPlanEvaluator(
         context.state_sync,
         context.snapshot_evaluator,
-        context._create_scheduler,
+        context.create_scheduler,
         context.default_catalog,
     )
     plan_evaluator._push(plan)
