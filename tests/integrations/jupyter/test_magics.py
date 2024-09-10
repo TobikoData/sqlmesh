@@ -235,7 +235,7 @@ def test_diff(sushi_context, notebook, convert_all_html_output_to_text, get_all_
 
     assert not output.stdout
     assert not output.stderr
-    assert len(output.outputs) == 1
+    assert len(output.outputs) == 2
     assert convert_all_html_output_to_text(output) == [
         "Summary of differences against `prod`:",
         "Models:\n└── Directly Modified:\n    └── sqlmesh_example.test",

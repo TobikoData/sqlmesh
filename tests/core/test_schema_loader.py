@@ -148,7 +148,7 @@ def test_gateway_specific_external_models(tmpdir: Path):
     dev_context.load()
 
     dev_models = dev_context.models
-    assert len(dev_models) == 2
+    assert len(dev_models) == 1
     dev_model = t.cast(ExternalModel, dev_models['"memory"."landing"."dev_source"'])
     assert dev_model.gateway == "dev"
 

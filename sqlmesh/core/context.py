@@ -555,6 +555,9 @@ class GenericContext(BaseContext, t.Generic[C]):
 
         self._standalone_audits.clear()
         self._audits.clear()
+        self._macros.clear()
+        self._models.clear()
+        self._metrics.clear()
         for project in projects:
             self._macros.update(
                 {key: value for key, value in project.macros.items() if key not in self._macros}
