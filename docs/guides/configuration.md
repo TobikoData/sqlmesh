@@ -198,20 +198,21 @@ The rest of this page provides additional detail for some of the configuration o
 
 SQLMesh creates schemas, physical tables, and views in the data warehouse/engine. Learn more about why and how SQLMesh creates schema in the ["Why does SQLMesh create schemas?" FAQ](../faq/faq.md#schema-question).
 
-The default SQLMesh behavior described in the FAQ is appropriate for most deployments, but you can override where SQLMesh creates physical tables and views with the `physical_schema_override`, `environment_suffix_target`, and `environment_catalog_mapping` configuration options. These options are in the [environments](../reference/configuration.md#environments) section of the configuration reference page.
+The default SQLMesh behavior described in the FAQ is appropriate for most deployments, but you can override where SQLMesh creates physical tables and views with the `physical_schema_mapping`, `environment_suffix_target`, and `environment_catalog_mapping` configuration options. These options are in the [environments](../reference/configuration.md#environments) section of the configuration reference page.
 
 #### Physical table schemas
 By default, SQLMesh creates physical tables for a model with a naming convention of `sqlmesh__[model schema]`.
 
-This can be overridden on a per-schema basis using the `physical_schema_override` option, which removes the `sqlmesh__` prefix and uses the name you provide.
+This can be overridden on a per-schema basis using the `physical_schema_mapping` option, which removes the `sqlmesh__` prefix and uses the [regex pattern](https://docs.python.org/3/library/re.html#regular-expression-syntax) you provide to map the schemas defined in your model to their corresponding physical schemas.
 
-This example configuration overrides the default physical schemas for the `my_schema` model schema:
+This example configuration overrides the default physical schemas for the `my_schema` model schema and any model schemas starting with `dev`:
 
 === "YAML"
 
     ```yaml linenums="1"
-    physical_schema_override:
-      my_schema: my_new_schema
+    physical_schema_mapping:
+      '^my_schema$': my_new_schema,
+      '^dev.*': development
     ```
 
 === "Python"
@@ -221,13 +222,23 @@ This example configuration overrides the default physical schemas for the `my_sc
 
     config = Config(
         model_defaults=ModelDefaultsConfig(dialect=<dialect>),
-        physical_schema_override={"my_schema":"my_new_schema"},
+        physical_schema_mapping={
+            "^my_schema$": "my_new_schema",
+            '^dev.*': "development"
+        },
     )
     ```
 
-If you had a model name of `my_schema.table`, the physical table would be created as `my_new_schema.table_<fingerprint>` instead of the default behavior of `sqlmesh__my_schema.table_<fingerprint>`.
+This config causes the following mapping behaviour:
 
-This key only applies to the _physical tables_ that SQLMesh creates - the views are still created in `my_schema` (prod) or `my_schema__<env>`.
+| Model name            | Default physical location                 | Resolved physical location
+| --------------------- | ----------------------------------------- | ------------------------------------ |
+| `my_schema.my_table`  | `sqlmesh__my_schema.table_<fingerprint>`  | `my_new_schema.table_<fingerprint>`  |
+| `dev_schema.my_table` | `sqlmesh__dev_schema.table_<fingerprint>` | `development.table_<fingerprint>`    |
+| `other.my_table`      | `sqlmesh__other.table_<fingerprint>`      | `sqlmesh__other.table_<fingerprint>` |
+
+
+This only applies to the _physical tables_ that SQLMesh creates - the views are still created in `my_schema` (prod) or `my_schema__<env>`.
 
 #### Disable environment-specific schemas
 

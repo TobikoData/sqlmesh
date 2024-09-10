@@ -4,6 +4,7 @@ import pickle
 import re
 import typing as t
 import zlib
+import logging
 
 from pydantic import Field
 from sqlglot import exp
@@ -41,6 +42,8 @@ from sqlmesh.utils.pydantic import (
     model_validator_v1_args,
 )
 
+logger = logging.getLogger(__name__)
+
 
 class Config(BaseConfig):
     """An object used by a Context to configure your SQLMesh project.
@@ -65,7 +68,7 @@ class Config(BaseConfig):
         loader_kwargs: Key-value arguments to pass to the loader instance.
         env_vars: A dictionary of environmental variable names and values.
         model_defaults: Default values for model definitions.
-        physical_schema_override: A mapping from model schema names to names of schemas in which physical tables for corresponding models will be placed.
+        physical_schema_mapping: A mapping from regular expressions to names of schemas in which physical tables for corresponding models will be placed.
         environment_suffix_target: Indicates whether to append the environment name to the schema or table name.
         environment_catalog_mapping: A mapping from regular expressions to catalog names. The catalog name is used to determine the target catalog for a given environment.
         default_target_environment: The name of the environment that will be the default target for the `sqlmesh plan` and `sqlmesh run` commands.
@@ -99,7 +102,7 @@ class Config(BaseConfig):
     loader_kwargs: t.Dict[str, t.Any] = {}
     env_vars: t.Dict[str, str] = {}
     username: str = ""
-    physical_schema_override: t.Dict[str, str] = {}
+    physical_schema_mapping: t.Dict[re.Pattern, str] = {}
     environment_suffix_target: EnvironmentSuffixTarget = Field(
         default=EnvironmentSuffixTarget.default
     )
@@ -146,7 +149,7 @@ class Config(BaseConfig):
         except Exception:
             return value
 
-    @field_validator("environment_catalog_mapping", mode="before")
+    @field_validator("environment_catalog_mapping", "physical_schema_mapping", mode="before")
     @classmethod
     def _validate_regex_keys(
         cls, value: t.Dict[str | re.Pattern, t.Any]
@@ -171,16 +174,38 @@ class Config(BaseConfig):
                     f"The `{plan_deprecated}` config is deprecated. Please use the `plan.{plan_deprecated}` config instead."
                 )
 
+        if "physical_schema_override" in values:
+            logger.warning(
+                "`physical_schema_override` is deprecated. Please use `physical_schema_mapping` instead"
+            )
+
+            if "physical_schema_mapping" in values:
+                raise ConfigError(
+                    "Only one of `physical_schema_override` and `physical_schema_mapping` can be specified"
+                )
+
+            physical_schema_override: t.Dict[str, str] = values.pop("physical_schema_override")
+            # translate physical_schema_override to physical_schema_mapping
+            values["physical_schema_mapping"] = {
+                f"^{k}$": v for k, v in physical_schema_override.items()
+            }
+
         return values
 
     @model_validator(mode="after")
     @model_validator_v1_args
     def _normalize_fields_after(cls, values: t.Dict[str, t.Any]) -> t.Dict[str, t.Any]:
         dialect = values["model_defaults"].dialect
-        values["environment_catalog_mapping"] = {
-            k: normalize_identifiers(v, dialect=dialect).name
-            for k, v in values.get("environment_catalog_mapping", {}).items()
-        }
+
+        def _normalize_identifiers(key: str) -> None:
+            values[key] = {
+                k: normalize_identifiers(v, dialect=dialect).name
+                for k, v in values.get(key, {}).items()
+            }
+
+        _normalize_identifiers("environment_catalog_mapping")
+        _normalize_identifiers("physical_schema_mapping")
+
         return values
 
     def get_default_test_connection(
