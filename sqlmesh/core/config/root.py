@@ -68,7 +68,6 @@ class Config(BaseConfig):
         loader_kwargs: Key-value arguments to pass to the loader instance.
         env_vars: A dictionary of environmental variable names and values.
         model_defaults: Default values for model definitions.
-        physical_schema_override: (Deprecated) A mapping from model schema names to names of schemas in which physical tables for corresponding models will be placed.
         physical_schema_mapping: A mapping from regular expressions to names of schemas in which physical tables for corresponding models will be placed.
         environment_suffix_target: Indicates whether to append the environment name to the schema or table name.
         environment_catalog_mapping: A mapping from regular expressions to catalog names. The catalog name is used to determine the target catalog for a given environment.
