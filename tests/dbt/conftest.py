@@ -11,7 +11,7 @@ from sqlmesh.dbt.project import Project
 
 @pytest.fixture()
 def sushi_test_project(sushi_test_dbt_context: Context) -> Project:
-    return sushi_test_dbt_context._loader._load_projects()[0]  # type: ignore
+    return sushi_test_dbt_context._dbt_loader._load_projects()[0]  # type: ignore
 
 
 @pytest.fixture()

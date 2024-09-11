@@ -331,21 +331,22 @@ class GenericContext(BaseContext, t.Generic[C]):
 
         self.path, self.config = t.cast(t.Tuple[Path, C], next(iter(self.configs.items())))
 
-        self._dbt_loader = None
-        self._sqlmesh_loader = None
-        self.dbt_configs = {}
-        self.sqlmesh_configs = {}
+        # Separate loader and configurations for different project types (dbt, native, hybrid)
+        self._dbt_loader: t.Optional[Loader] = None
+        self._sqlmesh_loader: t.Optional[Loader] = None
+        self.dbt_configs: t.Dict[Path, C] = {}
+        self.sqlmesh_configs: t.Dict[Path, C] = {}
         for path, config in self.configs.items():
             project_type = c.DBT if config.loader.__name__.lower().startswith(c.DBT) else c.NATIVE
 
             if project_type == c.DBT:
                 self.dbt_configs[path] = config
                 if not self._dbt_loader:
-                    self._dbt_loader = config.loader(**config.loader_kwargs)
+                    self._dbt_loader = (loader or config.loader)(**config.loader_kwargs)
             else:
                 self.sqlmesh_configs[path] = config
                 if not self._sqlmesh_loader:
-                    self._sqlmesh_loader = config.loader(**config.loader_kwargs)
+                    self._sqlmesh_loader = (loader or config.loader)(**config.loader_kwargs)
 
         self.project_type = c.HYBRID if self._dbt_loader and self._sqlmesh_loader else project_type
         self._all_dialects: t.Set[str] = {self.config.dialect or ""}
@@ -380,8 +381,6 @@ class GenericContext(BaseContext, t.Generic[C]):
 
         self._provided_state_sync: t.Optional[StateSync] = state_sync
         self._state_sync: t.Optional[StateSync] = None
-
-        self._loader = self._sqlmesh_loader or self._dbt_loader
 
         # Should we dedupe notification_targets? If so how?
         self.notification_targets = (notification_targets or []) + self.config.notification_targets
@@ -546,8 +545,7 @@ class GenericContext(BaseContext, t.Generic[C]):
         projects = []
         if self._dbt_loader and self.dbt_configs:
             with sys_path(*self.dbt_configs):
-                project = self._dbt_loader.load(self, update_schemas)
-                projects.append(project)
+                projects.append(self._dbt_loader.load(self, update_schemas))
 
         if self._sqlmesh_loader and self.sqlmesh_configs:
             with sys_path(*self.sqlmesh_configs):
@@ -559,10 +557,10 @@ class GenericContext(BaseContext, t.Generic[C]):
         self._models.clear()
         self._metrics.clear()
         for project in projects:
+            self._jinja_macros = self._jinja_macros.merge(project.jinja_macros)
             self._macros.update(
                 {key: value for key, value in project.macros.items() if key not in self._macros}
             )
-            self._jinja_macros = self._jinja_macros.merge(project.jinja_macros)
             self._models.update(
                 {key: value for key, value in project.models.items() if key not in self._models}
             )
@@ -579,7 +577,7 @@ class GenericContext(BaseContext, t.Generic[C]):
         self.dag = (
             DAG({**projects[0].dag.graph, **projects[1].dag.graph})
             if len(projects) == 2
-            else project.dag
+            else projects[0].dag
         )
 
         duplicates = set(self._models) & set(self._standalone_audits)
