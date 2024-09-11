@@ -326,5 +326,5 @@ class ClusteredByMixin(EngineAdapter):
         self,
         clustered_by: t.List[str],
         **kwargs: t.Any,
-    ) -> exp.Cluster:
+    ) -> t.Optional[exp.Cluster]:
         return exp.Cluster(expressions=[exp.column(col) for col in clustered_by])

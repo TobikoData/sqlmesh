@@ -178,8 +178,8 @@ class SnowflakeEngineAdapter(GetCurrentCatalogFromFunctionMixin, ClusteredByMixi
                 )
             )
 
-        if clustered_by:
-            properties.append(self._build_clustered_by_exp(clustered_by))
+        if clustered_by and (clustered_by_prop := self._build_clustered_by_exp(clustered_by)):
+            properties.append(clustered_by_prop)
 
         if table_properties:
             table_properties = {k.upper(): v for k, v in table_properties.items()}

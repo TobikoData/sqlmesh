@@ -560,7 +560,7 @@ class BigQueryEngineAdapter(InsertOverwriteWithMergeMixin, ClusteredByMixin):
         partition_interval_unit: t.Optional[IntervalUnit] = None,
         columns_to_types: t.Optional[t.Dict[str, exp.DataType]] = None,
         **kwargs: t.Any,
-    ) -> exp.PartitionedByProperty:
+    ) -> t.Optional[exp.PartitionedByProperty]:
         if len(partitioned_by) > 1:
             raise SQLMeshError("BigQuery only supports partitioning by a single column")
 
@@ -610,17 +610,17 @@ class BigQueryEngineAdapter(InsertOverwriteWithMergeMixin, ClusteredByMixin):
     ) -> t.Optional[exp.Properties]:
         properties: t.List[exp.Expression] = []
 
-        if partitioned_by:
-            properties.append(
-                self._build_partitioned_by_exp(
-                    partitioned_by,
-                    partition_interval_unit=partition_interval_unit,
-                    columns_to_types=columns_to_types,
-                )
+        if partitioned_by and (
+            partitioned_by_prop := self._build_partitioned_by_exp(
+                partitioned_by,
+                partition_interval_unit=partition_interval_unit,
+                columns_to_types=columns_to_types,
             )
+        ):
+            properties.append(partitioned_by_prop)
 
-        if clustered_by:
-            properties.append(self._build_clustered_by_exp(clustered_by))
+        if clustered_by and (clustered_by_exp := self._build_clustered_by_exp(clustered_by)):
+            properties.append(clustered_by_exp)
 
         if table_description:
             properties.append(

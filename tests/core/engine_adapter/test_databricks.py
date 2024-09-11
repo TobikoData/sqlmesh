@@ -8,6 +8,7 @@ from sqlglot import exp, parse_one
 
 from sqlmesh.core import dialect as d
 from sqlmesh.core.engine_adapter import DatabricksEngineAdapter
+from sqlmesh.core.node import IntervalUnit
 from tests.core.engine_adapter import to_sql_calls
 
 pytestmark = [pytest.mark.databricks, pytest.mark.engine]
@@ -135,4 +136,26 @@ def test_insert_overwrite_by_partition_query(
         "CREATE TABLE `test_schema`.`temp_test_table_abcdefgh` AS SELECT CAST(`a` AS INT) AS `a`, CAST(`ds` AS TIMESTAMP) AS `ds`, CAST(`b` AS BOOLEAN) AS `b` FROM (SELECT `a`, `ds`, `b` FROM `tbl`) AS `_subquery`",
         "INSERT INTO `test_schema`.`test_table` REPLACE WHERE CONCAT_WS('__SQLMESH_DELIM__', DATE_TRUNC('MONTH', `ds`), `b`) IN (SELECT DISTINCT CONCAT_WS('__SQLMESH_DELIM__', DATE_TRUNC('MONTH', `ds`), `b`) FROM `test_schema`.`temp_test_table_abcdefgh`) SELECT `a`, `ds`, `b` FROM `test_schema`.`temp_test_table_abcdefgh`",
         "DROP TABLE IF EXISTS `test_schema`.`temp_test_table_abcdefgh`",
+    ]
+
+
+def test_materialized_view_properties(make_mocked_engine_adapter: t.Callable):
+    adapter = make_mocked_engine_adapter(DatabricksEngineAdapter)
+
+    adapter.create_view(
+        "test_table",
+        parse_one("SELECT 1"),
+        materialized=True,
+        materialized_properties={
+            "partitioned_by": [exp.column("ds")],
+            # Clustered by is not supported so we are confirming it is ignored
+            "clustered_by": ["a"],
+            "partition_interval_unit": IntervalUnit.DAY,
+        },
+    )
+
+    sql_calls = to_sql_calls(adapter)
+    # https://docs.databricks.com/en/sql/language-manual/sql-ref-syntax-ddl-create-materialized-view.html#syntax
+    assert sql_calls == [
+        "CREATE OR REPLACE MATERIALIZED VIEW test_table PARTITIONED BY (ds) AS SELECT 1",
     ]

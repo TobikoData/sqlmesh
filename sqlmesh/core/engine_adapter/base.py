@@ -963,17 +963,19 @@ class EngineAdapter:
         if materialized_properties:
             partitioned_by = materialized_properties.pop("partitioned_by", None)
             clustered_by = materialized_properties.pop("clustered_by", None)
-            if partitioned_by:
+            if partitioned_by and (
+                partitioned_by_prop := self._build_partitioned_by_exp(
+                    partitioned_by, **materialized_properties
+                )
+            ):
                 materialized_properties["catalog_name"] = exp.to_table(view_name).catalog
-                properties.append(
-                    "expressions",
-                    self._build_partitioned_by_exp(partitioned_by, **materialized_properties),
+                properties.append("expressions", partitioned_by_prop)
+            if clustered_by and (
+                clustered_by_prop := self._build_clustered_by_exp(
+                    clustered_by, **materialized_properties
                 )
-            if clustered_by:
-                properties.append(
-                    "expressions",
-                    self._build_clustered_by_exp(clustered_by, **materialized_properties),
-                )
+            ):
+                properties.append("expressions", clustered_by_prop)
 
         create_view_properties = self._build_view_properties_exp(
             view_properties,
@@ -2043,15 +2045,15 @@ class EngineAdapter:
         columns_to_types: t.Optional[t.Dict[str, exp.DataType]] = None,
         catalog_name: t.Optional[str] = None,
         **kwargs: t.Any,
-    ) -> t.Union[exp.PartitionedByProperty, exp.Property]:
-        raise NotImplementedError("This engine does not support partitioning.")
+    ) -> t.Optional[t.Union[exp.PartitionedByProperty, exp.Property]]:
+        return None
 
     def _build_clustered_by_exp(
         self,
         clustered_by: t.List[str],
         **kwargs: t.Any,
-    ) -> exp.Cluster:
-        raise NotImplementedError("This engine does not support clustering.")
+    ) -> t.Optional[exp.Cluster]:
+        return None
 
     def _build_table_properties_exp(
         self,

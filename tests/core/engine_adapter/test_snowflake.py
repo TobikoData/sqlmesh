@@ -10,6 +10,7 @@ from sqlmesh.core.dialect import normalize_model_name
 from sqlmesh.core.model import load_sql_based_model
 from sqlmesh.core.engine_adapter import SnowflakeEngineAdapter
 from sqlmesh.core.model.definition import SqlModel
+from sqlmesh.core.node import IntervalUnit
 from sqlmesh.utils.errors import SQLMeshError
 from sqlmesh.utils import optional_import
 from tests.core.engine_adapter import to_sql_calls
@@ -425,4 +426,26 @@ def test_replace_query_snowpark_dataframe(
     assert to_sql_calls(adapter) == [
         'CREATE OR REPLACE TABLE "foo" AS SELECT CAST("ID" AS INT) AS "ID", CAST("NAME" AS VARCHAR) AS "NAME" FROM (SELECT CAST("ID" AS INT) AS "ID", CAST("NAME" AS VARCHAR) AS "NAME" FROM "__temp_foo_e6wjkjj6") AS "_subquery"',
         'DROP VIEW IF EXISTS "__temp_foo_e6wjkjj6"',
+    ]
+
+
+def test_materialized_view_properties(make_mocked_engine_adapter: t.Callable):
+    adapter = make_mocked_engine_adapter(SnowflakeEngineAdapter)
+
+    adapter.create_view(
+        "test_table",
+        parse_one("SELECT 1"),
+        materialized=True,
+        materialized_properties={
+            # Partitioned by is not supported so we are confirming it is ignored
+            "partitioned_by": [exp.column("ds")],
+            "clustered_by": ["a"],
+            "partition_interval_unit": IntervalUnit.DAY,
+        },
+    )
+
+    sql_calls = to_sql_calls(adapter)
+    # https://docs.snowflake.com/en/sql-reference/sql/create-materialized-view#syntax
+    assert sql_calls == [
+        'CREATE OR REPLACE MATERIALIZED VIEW "test_table" CLUSTER BY ("a") AS SELECT 1',
     ]
