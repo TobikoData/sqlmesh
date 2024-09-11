@@ -8,11 +8,12 @@ from tenacity import retry, stop_after_attempt, wait_fixed
 from sqlmesh.core import constants as c
 from sqlmesh.core.environment import Environment
 from sqlmesh.core.model import IncrementalByTimeRangeKind, Model, SqlModel
+from sqlmesh.core.plan import EvaluatablePlan
 from sqlmesh.core.snapshot import Snapshot, SnapshotChangeCategory
 from sqlmesh.schedulers.airflow import common
 from sqlmesh.schedulers.airflow.client import AirflowClient
 from sqlmesh.utils import random_id
-from sqlmesh.utils.date import yesterday
+from sqlmesh.utils.date import yesterday, now
 from sqlmesh.utils.errors import SQLMeshError
 
 pytestmark = [
@@ -61,7 +62,7 @@ def test_apply_plan_create_backfill_promote(
 
     # Make sure that the same Snapshot can't be added again.
     with pytest.raises(SQLMeshError, match=r"Snapshots.*already exist.*"):
-        airflow_client.apply_plan([snapshot], environment, random_name())
+        airflow_client.apply_plan(_create_evaluatable_plan([snapshot], environment))
 
     # Verify full environment demotion.
     environment.snapshots_ = []
@@ -77,18 +78,42 @@ def _apply_plan_and_block(
     environment: Environment,
     is_dev: t.Optional[bool] = None,
 ) -> None:
-    if is_dev is None:
-        is_dev = environment.name != c.PROD
+    plan = _create_evaluatable_plan(new_snapshots, environment, is_dev)
+    airflow_client.apply_plan(plan)
 
-    plan_request_id = random_id()
-    airflow_client.apply_plan(new_snapshots, environment, plan_request_id, is_dev=is_dev)
-
-    plan_application_dag_id = common.plan_application_dag_id(environment.name, plan_request_id)
+    plan_application_dag_id = common.plan_application_dag_id(environment.name, plan.plan_id)
     plan_application_dag_run_id = airflow_client.wait_for_first_dag_run(
         plan_application_dag_id, DAG_CREATION_WAIT_INTERVAL, DAG_CREATION_RETRY_ATTEMPTS
     )
     assert airflow_client.wait_for_dag_run_completion(
         plan_application_dag_id, plan_application_dag_run_id, DAG_RUN_POLL_INTERVAL
+    )
+
+
+def _create_evaluatable_plan(
+    new_snapshots: t.List[Snapshot],
+    environment: Environment,
+    is_dev: t.Optional[bool] = None,
+) -> EvaluatablePlan:
+    if is_dev is None:
+        is_dev = environment.name != c.PROD
+    return EvaluatablePlan(
+        start=environment.start_at,
+        end=environment.end_at or now(),
+        new_snapshots=new_snapshots,
+        environment=environment,
+        no_gaps=False,
+        skip_backfill=False,
+        restatements={},
+        is_dev=is_dev,
+        allow_destructive_models=set(),
+        forward_only=False,
+        end_bounded=True,
+        ensure_finalized_snapshots=False,
+        directly_modified_snapshots=[],
+        indirectly_modified_snapshots={},
+        removed_snapshots=[],
+        requires_backfill=True,
     )
 
 

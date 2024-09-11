@@ -224,8 +224,8 @@ def test_diff(sushi_context: Context, mocker: MockerFixture):
     # https://github.com/pydantic/pydantic/issues/8016
     assert str(plan) != ""
 
-    promotion_result = plan_evaluator._promote(plan)
-    plan_evaluator._update_views(plan, promotion_result)
+    promotion_result = plan_evaluator._promote(plan.to_evaluatable(), plan.snapshots)
+    plan_evaluator._update_views(plan.to_evaluatable(), plan.snapshots, promotion_result)
 
     sushi_context.upsert_model("sushi.customers", query=parse_one("select 1 as customer_id"))
     sushi_context.diff("test")

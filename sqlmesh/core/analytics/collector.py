@@ -17,7 +17,7 @@ from sqlmesh.utils.yaml import load as yaml_load
 
 if t.TYPE_CHECKING:
     from sqlmesh.cicd.config import CICDBotConfig
-    from sqlmesh.core.plan import Plan
+    from sqlmesh.core.plan import EvaluatablePlan
     from sqlmesh.core.snapshot import Snapshot
 
 
@@ -146,7 +146,7 @@ class AnalyticsCollector:
     def on_plan_apply_start(
         self,
         *,
-        plan: Plan,
+        plan: EvaluatablePlan,
         engine_type: t.Optional[str],
         state_sync_type: t.Optional[str],
         scheduler_type: str,
@@ -172,11 +172,15 @@ class AnalyticsCollector:
                 "forward_only": plan.forward_only,
                 "ensure_finalized_snapshots": plan.ensure_finalized_snapshots,
                 "has_restatements": bool(plan.restatements),
-                "directly_modified_count": len(plan.directly_modified),
+                "directly_modified_count": len(plan.directly_modified_snapshots),
                 "indirectly_modified_count": len(
-                    {s_id for s_ids in plan.indirectly_modified.values() for s_id in s_ids}
+                    {
+                        s_id
+                        for s_ids in plan.indirectly_modified_snapshots.values()
+                        for s_id in s_ids
+                    }
                 ),
-                "environment_name_hash": _anonymize(plan.environment_naming_info.name),
+                "environment_name_hash": _anonymize(plan.environment.name),
             },
         )
 

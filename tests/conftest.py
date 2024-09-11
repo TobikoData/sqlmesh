@@ -234,9 +234,9 @@ def push_plan(context: Context, plan: Plan) -> None:
         context.create_scheduler,
         context.default_catalog,
     )
-    plan_evaluator._push(plan)
-    promotion_result = plan_evaluator._promote(plan)
-    plan_evaluator._update_views(plan, promotion_result)
+    plan_evaluator._push(plan.to_evaluatable(), plan.snapshots)
+    promotion_result = plan_evaluator._promote(plan.to_evaluatable(), plan.snapshots)
+    plan_evaluator._update_views(plan.to_evaluatable(), plan.snapshots, promotion_result)
 
 
 @pytest.fixture()

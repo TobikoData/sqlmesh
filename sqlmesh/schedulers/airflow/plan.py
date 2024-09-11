@@ -83,14 +83,15 @@ class PlanDagState:
 def create_plan_dag_spec(
     request: common.PlanApplicationRequest, state_sync: StateSync
 ) -> common.PlanDagSpec:
-    new_snapshots = {s.snapshot_id: s for s in request.new_snapshots}
-    stored_snapshots = state_sync.get_snapshots([*new_snapshots, *request.environment.snapshots])
+    plan = request.plan
+    new_snapshots = {s.snapshot_id: s for s in plan.new_snapshots}
+    stored_snapshots = state_sync.get_snapshots([*new_snapshots, *plan.environment.snapshots])
     all_snapshots = {**new_snapshots, **stored_snapshots}
 
     all_snaphots_by_name = {s.name: s for s in all_snapshots.values()}
     restatements = {
         all_snaphots_by_name[n].snapshot_id: i
-        for n, i in request.restatements.items()
+        for n, i in plan.restatements.items()
         if n in all_snaphots_by_name
     }
 
@@ -104,10 +105,10 @@ def create_plan_dag_spec(
     update_intervals_for_new_snapshots(new_snapshots.values(), state_sync)
 
     now_dt = now()
-    end = request.environment.end_at or now_dt
-    unpaused_dt = end if not request.is_dev and not request.restatements else None
+    end = plan.environment.end_at or now_dt
+    unpaused_dt = end if not plan.is_dev and not plan.restatements else None
 
-    if request.restatements:
+    if plan.restatements:
         intervals_to_remove = [
             (s, restatements[s.snapshot_id])
             for s in all_snapshots.values()
@@ -115,26 +116,26 @@ def create_plan_dag_spec(
         ]
         state_sync.remove_intervals(
             intervals_to_remove,
-            remove_shared_versions=not request.is_dev,
+            remove_shared_versions=not plan.is_dev,
         )
         for s, interval in intervals_to_remove:
             all_snapshots[s.snapshot_id].remove_interval(interval)
 
     deployability_index_for_creation = DeployabilityIndex.create(all_snapshots)
     deployability_index_for_evaluation = (
-        deployability_index_for_creation if request.is_dev else DeployabilityIndex.all_deployable()
+        deployability_index_for_creation if plan.is_dev else DeployabilityIndex.all_deployable()
     )
 
-    if not request.skip_backfill:
+    if not plan.skip_backfill:
         backfill_batches = scheduler.compute_interval_params(
-            [s for s in all_snapshots.values() if request.is_selected_for_backfill(s.name)],
-            start=request.environment.start_at,
+            [s for s in all_snapshots.values() if plan.is_selected_for_backfill(s.name)],
+            start=plan.environment.start_at,
             end=end,
-            execution_time=request.execution_time or now(),
+            execution_time=plan.execution_time or now(),
             deployability_index=deployability_index_for_evaluation,
             restatements=restatements,
-            interval_end_per_model=request.interval_end_per_model,
-            end_bounded=request.end_bounded,
+            interval_end_per_model=plan.interval_end_per_model,
+            end_bounded=plan.end_bounded,
             signal_factory=None,
         )
     else:
@@ -144,7 +145,7 @@ def create_plan_dag_spec(
         common.BackfillIntervalsPerSnapshot(
             snapshot_id=s.snapshot_id,
             intervals=intervals,
-            before_promote=request.is_dev or deployability_index_for_creation.is_representative(s),
+            before_promote=plan.is_dev or deployability_index_for_creation.is_representative(s),
         )
         for s, intervals in backfill_batches.items()
     ]
@@ -155,37 +156,37 @@ def create_plan_dag_spec(
             for s in all_snapshots.values()
             if deployability_index_for_creation.is_representative(s)
         }
-        if request.no_gaps and not request.is_dev
+        if plan.no_gaps and not plan.is_dev
         else None
-        if request.no_gaps
+        if plan.no_gaps
         else set()
     )
 
     return common.PlanDagSpec(
-        request_id=request.request_id,
-        environment=request.environment,
-        new_snapshots=request.new_snapshots,
+        request_id=plan.plan_id,
+        environment=plan.environment,
+        new_snapshots=plan.new_snapshots,
         backfill_intervals_per_snapshot=backfill_intervals_per_snapshot,
-        demoted_snapshots=_get_demoted_snapshots(request.environment, state_sync),
+        demoted_snapshots=_get_demoted_snapshots(plan.environment, state_sync),
         unpaused_dt=unpaused_dt,
-        no_gaps=request.no_gaps,
+        no_gaps=plan.no_gaps,
         notification_targets=request.notification_targets,
         backfill_concurrent_tasks=request.backfill_concurrent_tasks,
         ddl_concurrent_tasks=request.ddl_concurrent_tasks,
         users=request.users,
-        is_dev=request.is_dev,
-        allow_destructive_snapshots=request.allow_destructive_snapshots,
-        forward_only=request.forward_only,
+        is_dev=plan.is_dev,
+        allow_destructive_snapshots=plan.allow_destructive_models,
+        forward_only=plan.forward_only,
         dag_start_ts=to_timestamp(now_dt),
         deployability_index=deployability_index_for_evaluation,
         deployability_index_for_creation=deployability_index_for_creation,
         no_gaps_snapshot_names=no_gaps_snapshot_names,
-        models_to_backfill=request.models_to_backfill,
-        ensure_finalized_snapshots=request.ensure_finalized_snapshots,
-        directly_modified_snapshots=request.directly_modified_snapshots,
-        indirectly_modified_snapshots=request.indirectly_modified_snapshots,
-        removed_snapshots=request.removed_snapshots,
-        execution_time=request.execution_time,
+        models_to_backfill=plan.models_to_backfill,
+        ensure_finalized_snapshots=plan.ensure_finalized_snapshots,
+        directly_modified_snapshots=plan.directly_modified_snapshots,
+        indirectly_modified_snapshots=plan.indirectly_modified_snapshots,
+        removed_snapshots=plan.removed_snapshots,
+        execution_time=plan.execution_time,
     )
 
 

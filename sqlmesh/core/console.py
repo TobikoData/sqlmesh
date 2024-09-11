@@ -40,7 +40,7 @@ if t.TYPE_CHECKING:
 
     from sqlglot.dialects.dialect import DialectType
     from sqlmesh.core.context_diff import ContextDiff
-    from sqlmesh.core.plan import Plan, PlanBuilder
+    from sqlmesh.core.plan import Plan, EvaluatablePlan, PlanBuilder
     from sqlmesh.core.table_diff import RowDiff, SchemaDiff
 
     LayoutWidget = t.TypeVar("LayoutWidget", bound=t.Union[widgets.VBox, widgets.HBox])
@@ -64,7 +64,7 @@ class Console(abc.ABC):
     INDIRECTLY_MODIFIED_DISPLAY_THRESHOLD = 10
 
     @abc.abstractmethod
-    def start_plan_evaluation(self, plan: Plan) -> None:
+    def start_plan_evaluation(self, plan: EvaluatablePlan) -> None:
         """Indicates that a new evaluation has begun."""
 
     @abc.abstractmethod
@@ -335,7 +335,7 @@ class TerminalConsole(Console):
     def _confirm(self, message: str, **kwargs: t.Any) -> bool:
         return Confirm.ask(message, console=self.console, **kwargs)
 
-    def start_plan_evaluation(self, plan: Plan) -> None:
+    def start_plan_evaluation(self, plan: EvaluatablePlan) -> None:
         pass
 
     def stop_plan_evaluation(self) -> None:
@@ -1985,7 +1985,7 @@ class DebuggerTerminalConsole(TerminalConsole):
     def _write(self, msg: t.Any, *args: t.Any, **kwargs: t.Any) -> None:
         self.console.log(msg, *args, **kwargs)
 
-    def start_plan_evaluation(self, plan: Plan) -> None:
+    def start_plan_evaluation(self, plan: EvaluatablePlan) -> None:
         self._write("Starting plan", plan.plan_id)
 
     def stop_plan_evaluation(self) -> None:

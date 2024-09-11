@@ -230,9 +230,65 @@ class Plan(PydanticModel, frozen=True):
         """Returns True if a model with the given FQN should be backfilled as part of this plan."""
         return self.models_to_backfill is None or model_fqn in self.models_to_backfill
 
+    def to_evaluatable(self) -> EvaluatablePlan:
+        return EvaluatablePlan(
+            start=self.start,
+            end=self.end,
+            new_snapshots=self.new_snapshots,
+            environment=self.environment,
+            no_gaps=self.no_gaps,
+            skip_backfill=self.skip_backfill,
+            restatements={s.name: i for s, i in self.restatements.items()},
+            is_dev=self.is_dev,
+            allow_destructive_models=self.allow_destructive_models,
+            forward_only=self.forward_only,
+            end_bounded=self.end_bounded,
+            ensure_finalized_snapshots=self.ensure_finalized_snapshots,
+            directly_modified_snapshots=sorted(self.directly_modified),
+            indirectly_modified_snapshots={
+                s.name: sorted(snapshot_ids) for s, snapshot_ids in self.indirectly_modified.items()
+            },
+            removed_snapshots=sorted(self.context_diff.removed_snapshots),
+            requires_backfill=self.requires_backfill,
+            models_to_backfill=self.models_to_backfill,
+            interval_end_per_model=self.interval_end_per_model,
+            execution_time=self.execution_time,
+        )
+
     @cached_property
     def _earliest_interval_start(self) -> datetime:
         return earliest_interval_start(self.snapshots.values())
+
+
+class EvaluatablePlan(PydanticModel):
+    """A serializable version of a plan that can be evaluated."""
+
+    start: TimeLike
+    end: TimeLike
+    new_snapshots: t.List[Snapshot]
+    environment: Environment
+    no_gaps: bool
+    skip_backfill: bool
+    restatements: t.Dict[str, Interval]
+    is_dev: bool
+    allow_destructive_models: t.Set[str]
+    forward_only: bool
+    end_bounded: bool
+    ensure_finalized_snapshots: bool
+    directly_modified_snapshots: t.List[SnapshotId]
+    indirectly_modified_snapshots: t.Dict[str, t.List[SnapshotId]]
+    removed_snapshots: t.List[SnapshotId]
+    requires_backfill: bool
+    models_to_backfill: t.Optional[t.Set[str]] = None
+    interval_end_per_model: t.Optional[t.Dict[str, int]] = None
+    execution_time: t.Optional[TimeLike] = None
+
+    def is_selected_for_backfill(self, model_fqn: str) -> bool:
+        return self.models_to_backfill is None or model_fqn in self.models_to_backfill
+
+    @property
+    def plan_id(self) -> str:
+        return self.environment.plan_id
 
 
 class PlanStatus(str, Enum):

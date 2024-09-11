@@ -9,6 +9,7 @@ from sqlmesh.core.config import EnvironmentSuffixTarget
 from sqlmesh.core.environment import Environment
 from sqlmesh.core.model import IncrementalByTimeRangeKind, SqlModel
 from sqlmesh.core.node import NodeType
+from sqlmesh.core.plan import EvaluatablePlan
 from sqlmesh.core.snapshot import Snapshot, SnapshotChangeCategory
 from sqlmesh.schedulers.airflow import common
 from sqlmesh.schedulers.airflow.client import AirflowClient
@@ -57,19 +58,28 @@ def test_apply_plan(mocker: MockerFixture, snapshot: Snapshot):
         promoted_snapshot_ids=[snapshot.snapshot_id],
     )
 
-    request_id = "test_request_id"
+    plan = EvaluatablePlan(
+        start=environment.start_at,
+        end=environment.end_at,
+        new_snapshots=[snapshot],
+        environment=environment,
+        no_gaps=False,
+        skip_backfill=False,
+        restatements={snapshot.name: (to_timestamp("2024-01-01"), to_timestamp("2024-01-02"))},
+        is_dev=False,
+        allow_destructive_models=set(),
+        forward_only=False,
+        end_bounded=False,
+        ensure_finalized_snapshots=False,
+        directly_modified_snapshots=[snapshot.snapshot_id],
+        indirectly_modified_snapshots={},
+        removed_snapshots=[],
+        requires_backfill=True,
+        models_to_backfill={'"test_model"'},
+    )
 
     client = AirflowClient(airflow_url=common.AIRFLOW_LOCAL_URL, session=requests.Session())
-    client.apply_plan(
-        [snapshot],
-        environment,
-        request_id,
-        models_to_backfill={'"test_model"'},
-        directly_modified_snapshots=[snapshot.snapshot_id],
-        restatements={
-            snapshot.snapshot_id: (to_timestamp("2024-01-01"), to_timestamp("2024-01-02"))
-        },
-    )
+    client.apply_plan(plan)
 
     apply_plan_mock.assert_called_once()
     args, data = apply_plan_mock.call_args_list[0]
@@ -77,105 +87,111 @@ def test_apply_plan(mocker: MockerFixture, snapshot: Snapshot):
     assert args[0] == "http://localhost:8080/sqlmesh/api/v1/plans"
     assert data["headers"] == {"Content-Type": "application/json"}
     assert json.loads(data["data"]) == {
-        "new_snapshots": [
-            {
-                "created_ts": 1665014400000,
-                "ttl": "in 1 week",
-                "fingerprint": snapshot.fingerprint.dict(),
-                "intervals": [],
-                "dev_intervals": [],
-                "node": {
-                    "audits": [],
-                    "clustered_by": [],
-                    "cron": "@daily",
-                    "dialect": "spark",
-                    "pre_statements": ["@DEF(key, " "'value')"],
-                    "kind": {
-                        "name": "INCREMENTAL_BY_TIME_RANGE",
-                        "time_column": {"column": "`ds`"},
-                        "forward_only": False,
-                        "on_destructive_change": "ERROR",
-                        "disable_restatement": False,
-                        "dialect": "spark",
-                    },
-                    "mapping_schema": {},
-                    "inline_audits": {},
-                    "name": "test_model",
-                    "partitioned_by": ["`a`"],
-                    "query": "SELECT a, ds FROM tbl",
-                    "references": [],
-                    "project": "",
-                    "storage_format": "parquet",
-                    "jinja_macros": {
-                        "create_builtins_module": "sqlmesh.utils.jinja",
-                        "global_objs": {},
-                        "packages": {},
-                        "root_macros": {},
-                        "top_level_packages": [],
-                    },
-                    "source_type": "sql",
-                    "tags": [],
-                    "grains": [],
-                    "allow_partials": False,
-                    "signals": [],
-                    "enabled": True,
-                },
-                "audits": [],
-                "name": '"test_model"',
-                "parents": [],
-                "previous_versions": [],
-                "updated_ts": 1665014400000,
-                "version": snapshot.version,
-                "change_category": snapshot.change_category,
-                "migrated": False,
-                "unrestorable": False,
-            }
-        ],
-        "environment": {
-            "name": "test_env",
-            "snapshots": [
+        "plan": {
+            "start": "2022-01-01",
+            "end": "2022-01-01",
+            "new_snapshots": [
                 {
+                    "created_ts": 1665014400000,
+                    "ttl": "in 1 week",
                     "fingerprint": snapshot.fingerprint.dict(),
+                    "intervals": [],
+                    "dev_intervals": [],
+                    "node": {
+                        "audits": [],
+                        "clustered_by": [],
+                        "cron": "@daily",
+                        "dialect": "spark",
+                        "pre_statements": ["@DEF(key, " "'value')"],
+                        "kind": {
+                            "name": "INCREMENTAL_BY_TIME_RANGE",
+                            "time_column": {"column": "`ds`"},
+                            "forward_only": False,
+                            "on_destructive_change": "ERROR",
+                            "disable_restatement": False,
+                            "dialect": "spark",
+                        },
+                        "mapping_schema": {},
+                        "inline_audits": {},
+                        "name": "test_model",
+                        "partitioned_by": ["`a`"],
+                        "query": "SELECT a, ds FROM tbl",
+                        "references": [],
+                        "project": "",
+                        "storage_format": "parquet",
+                        "jinja_macros": {
+                            "create_builtins_module": "sqlmesh.utils.jinja",
+                            "global_objs": {},
+                            "packages": {},
+                            "root_macros": {},
+                            "top_level_packages": [],
+                        },
+                        "source_type": "sql",
+                        "tags": [],
+                        "grains": [],
+                        "allow_partials": False,
+                        "signals": [],
+                        "enabled": True,
+                    },
+                    "audits": [],
                     "name": '"test_model"',
-                    "node_type": NodeType.MODEL,
-                    "previous_versions": [],
-                    "version": snapshot.version,
-                    "physical_schema": "sqlmesh__default",
-                    "change_category": snapshot.change_category,
                     "parents": [],
-                    "kind_name": "INCREMENTAL_BY_TIME_RANGE",
+                    "previous_versions": [],
+                    "updated_ts": 1665014400000,
+                    "version": snapshot.version,
+                    "change_category": snapshot.change_category,
+                    "migrated": False,
+                    "unrestorable": False,
                 }
             ],
-            "start_at": "2022-01-01",
-            "end_at": "2022-01-01",
-            "plan_id": "test_plan_id",
-            "previous_plan_id": "previous_plan_id",
-            "promoted_snapshot_ids": [
-                {
-                    "name": '"test_model"',
-                    "identifier": snapshot.identifier,
-                }
-            ],
-            "suffix_target": "schema",
-            "normalize_name": True,
+            "environment": {
+                "name": "test_env",
+                "snapshots": [
+                    {
+                        "fingerprint": snapshot.fingerprint.dict(),
+                        "name": '"test_model"',
+                        "node_type": NodeType.MODEL,
+                        "previous_versions": [],
+                        "version": snapshot.version,
+                        "physical_schema": "sqlmesh__default",
+                        "change_category": snapshot.change_category,
+                        "parents": [],
+                        "kind_name": "INCREMENTAL_BY_TIME_RANGE",
+                    }
+                ],
+                "start_at": "2022-01-01",
+                "end_at": "2022-01-01",
+                "plan_id": "test_plan_id",
+                "previous_plan_id": "previous_plan_id",
+                "promoted_snapshot_ids": [
+                    {
+                        "name": '"test_model"',
+                        "identifier": snapshot.identifier,
+                    }
+                ],
+                "suffix_target": "schema",
+                "normalize_name": True,
+            },
+            "no_gaps": False,
+            "skip_backfill": False,
+            "is_dev": False,
+            "forward_only": False,
+            "allow_destructive_models": [],
+            "models_to_backfill": ['"test_model"'],
+            "end_bounded": False,
+            "ensure_finalized_snapshots": False,
+            "directly_modified_snapshots": [{"identifier": "844700562", "name": '"test_model"'}],
+            "indirectly_modified_snapshots": {},
+            "removed_snapshots": [],
+            "restatements": {
+                '"test_model"': [to_timestamp("2024-01-01"), to_timestamp("2024-01-02")]
+            },
+            "requires_backfill": True,
         },
-        "no_gaps": False,
-        "skip_backfill": False,
         "notification_targets": [],
-        "request_id": request_id,
         "backfill_concurrent_tasks": 1,
         "ddl_concurrent_tasks": 1,
         "users": [],
-        "is_dev": False,
-        "forward_only": False,
-        "allow_destructive_snapshots": [],
-        "models_to_backfill": ['"test_model"'],
-        "end_bounded": False,
-        "ensure_finalized_snapshots": False,
-        "directly_modified_snapshots": [{"identifier": "844700562", "name": '"test_model"'}],
-        "indirectly_modified_snapshots": {},
-        "removed_snapshots": [],
-        "restatements": {'"test_model"': [to_timestamp("2024-01-01"), to_timestamp("2024-01-02")]},
     }
 
     common.PlanApplicationRequest.parse_raw(data["data"])

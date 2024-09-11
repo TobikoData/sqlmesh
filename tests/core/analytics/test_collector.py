@@ -169,7 +169,10 @@ def test_on_plan_apply(
 
     plan_id = plan.plan_id
     collector.on_plan_apply_start(
-        plan=plan, engine_type="bigquery", state_sync_type="mysql", scheduler_type="builtin"
+        plan=plan.to_evaluatable(),
+        engine_type="bigquery",
+        state_sync_type="mysql",
+        scheduler_type="builtin",
     )
     collector.on_plan_apply_end(plan_id=plan_id)
     collector.on_plan_apply_end(plan_id=plan_id, error=SQLMeshError("test_error"))
