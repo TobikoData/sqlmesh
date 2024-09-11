@@ -15,7 +15,7 @@ from web.server.settings import (
     get_settings,
     invalidate_context_cache,
 )
-from web.server.utils import is_relative_to
+from web.server.utils import ensure_list, is_relative_to
 
 
 async def watch_project() -> None:
@@ -28,20 +28,19 @@ async def watch_project() -> None:
         (settings.project_path / c.METRICS).resolve(),
         (settings.project_path / c.SEEDS).resolve(),
     ]
-    watch_filter = DefaultFilter()
-    watch_filter.ignore_dirs = (*watch_filter.ignore_dirs, ".env")
-    watch_filter.ignore_entity_patterns = (
-        *watch_filter.ignore_entity_patterns,
-        *(context.config.ignore_patterns if context else c.IGNORE_PATTERNS),
-        "^.*\\.db(\\.wal)?$",
-    )
-    watch_filter.ignore_paths = (
-        *watch_filter.ignore_paths,
-        (settings.project_path / c.CACHE).resolve(),
-    )
+    ignore_dirs = ensure_list(".env")
+    ignore_paths = ensure_list((settings.project_path / c.CACHE).resolve())
+    ignore_entity_patterns = context.config.ignore_patterns if context else c.IGNORE_PATTERNS
+    ignore_entity_patterns.append("^.*\\.db(\\.wal)?$")
+
     async for entries in awatch(
         settings.project_path,
-        watch_filter=watch_filter,
+        watch_filter=DefaultFilter(
+            ignore_paths=ensure_list(DefaultFilter.ignore_paths) + ignore_paths,
+            ignore_entity_patterns=ensure_list(DefaultFilter.ignore_entity_patterns)
+            + ignore_entity_patterns,
+            ignore_dirs=ensure_list(DefaultFilter.ignore_dirs) + ignore_dirs,
+        ),
     ):
         changes: t.List[models.ArtifactChange] = []
         directories: t.Dict[str, models.Directory] = {}
@@ -56,7 +55,7 @@ async def watch_project() -> None:
                             path=str(relative_path),
                         )
                     )
-                if change == Change.added:
+                elif change == Change.added:
                     directory = await _get_directory(path.parent, settings)
                     directories[directory.path] = directory
                 elif path.is_dir() and change == Change.modified:
