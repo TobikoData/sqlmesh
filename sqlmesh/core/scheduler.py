@@ -26,7 +26,7 @@ from sqlmesh.core.snapshot.definition import Interval as SnapshotInterval
 from sqlmesh.core.snapshot.definition import SnapshotId
 from sqlmesh.core.state_sync import StateSync
 from sqlmesh.utils import format_exception
-from sqlmesh.utils.concurrency import concurrent_apply_to_dag
+from sqlmesh.utils.concurrency import concurrent_apply_to_dag, NodeExecutionFailedError
 from sqlmesh.utils.dag import DAG
 from sqlmesh.utils.date import (
     TimeLike,
@@ -347,13 +347,59 @@ class Scheduler:
         if not batches:
             return True
 
-        dag = self._dag(batches)
-
         self.console.start_evaluation_progress(
             {snapshot: len(intervals) for snapshot, intervals in batches.items()},
             environment_naming_info,
             self.default_catalog,
         )
+
+        errors, skipped_intervals = self.run_batches(
+            batches=batches,
+            deployability_index=deployability_index,
+            execution_time=execution_time,
+            circuit_breaker=circuit_breaker,
+        )
+
+        self.console.stop_evaluation_progress(success=not errors)
+
+        skipped_snapshots = {i[0] for i in skipped_intervals}
+        for skipped in skipped_snapshots:
+            log_message = f"SKIPPED snapshot {skipped}\n"
+            self.console.log_status_update(log_message)
+            logger.info(log_message)
+
+        for error in errors:
+            if isinstance(error.__cause__, CircuitBreakerError):
+                raise error.__cause__
+            sid = error.node[0]
+            formatted_exception = "".join(format_exception(error.__cause__ or error))
+            log_message = f"FAILED processing snapshot {sid}\n{formatted_exception}"
+            self.console.log_error(log_message)
+            # Log with INFO level to prevent duplicate messages in the console.
+            logger.info(log_message)
+
+        return not errors
+
+    def run_batches(
+        self,
+        batches: SnapshotToBatches,
+        deployability_index: DeployabilityIndex,
+        execution_time: t.Optional[TimeLike] = None,
+        circuit_breaker: t.Optional[t.Callable[[], bool]] = None,
+    ) -> t.Tuple[t.List[NodeExecutionFailedError[SchedulingUnit]], t.List[SchedulingUnit]]:
+        """Runs precomputed batches of missing intervals.
+
+        Args:
+            batches: The batches of snapshots and intervals to evaluate.
+            deployability_index: Determines snapshots that are deployable in the context of this evaluation.
+            execution_time: The date/time time reference to use for execution time.
+            circuit_breaker: An optional handler which checks if the run should be aborted.
+
+        Returns:
+            A tuple of errors and skipped intervals.
+        """
+        execution_time = execution_time or now()
+        dag = self._dag(batches)
 
         snapshots_by_name = {snapshot.name: snapshot for snapshot in self.snapshots.values()}
 
@@ -383,7 +429,7 @@ class Scheduler:
 
         try:
             with self.snapshot_evaluator.concurrent_context():
-                errors, skipped_intervals = concurrent_apply_to_dag(
+                return concurrent_apply_to_dag(
                     dag,
                     evaluate_node,
                     self.max_workers,
@@ -391,26 +437,6 @@ class Scheduler:
                 )
         finally:
             self.state_sync.recycle()
-
-        self.console.stop_evaluation_progress(success=not errors)
-
-        skipped_snapshots = {i[0] for i in skipped_intervals}
-        for skipped in skipped_snapshots:
-            log_message = f"SKIPPED snapshot {skipped}\n"
-            self.console.log_status_update(log_message)
-            logger.info(log_message)
-
-        for error in errors:
-            if isinstance(error.__cause__, CircuitBreakerError):
-                raise error.__cause__
-            sid = error.node[0]
-            formatted_exception = "".join(format_exception(error.__cause__ or error))
-            log_message = f"FAILED processing snapshot {sid}\n{formatted_exception}"
-            self.console.log_error(log_message)
-            # Log with INFO level to prevent duplicate messages in the console.
-            logger.info(log_message)
-
-        return not errors
 
     def _dag(self, batches: SnapshotToBatches) -> DAG[SchedulingUnit]:
         """Builds a DAG of snapshot intervals to be evaluated.
