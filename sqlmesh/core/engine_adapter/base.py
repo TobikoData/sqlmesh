@@ -967,14 +967,12 @@ class EngineAdapter:
                 materialized_properties["catalog_name"] = exp.to_table(view_name).catalog
                 properties.append(
                     "expressions",
-                    self._build_partitioned_by_exp(
-                        partitioned_by, **(materialized_properties or {})
-                    ),
+                    self._build_partitioned_by_exp(partitioned_by, **materialized_properties),
                 )
             if clustered_by:
                 properties.append(
                     "expressions",
-                    self._build_clustered_by_exp(clustered_by, **(materialized_properties or {})),
+                    self._build_clustered_by_exp(clustered_by, **materialized_properties),
                 )
 
         create_view_properties = self._build_view_properties_exp(

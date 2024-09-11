@@ -1611,8 +1611,6 @@ class ViewStrategy(PromotableStrategy):
             view_properties=model.physical_properties,
             table_description=model.description if is_table_deployable else None,
             column_descriptions=model.column_descriptions if is_table_deployable else None,
-            partitioned_by=model.partitioned_by,
-            clustered_by=model.clustered_by,
         )
 
     def migrate(

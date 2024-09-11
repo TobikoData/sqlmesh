@@ -137,15 +137,14 @@ class HiveMetastoreTablePropertiesMixin(EngineAdapter):
                     *(exp.Literal.string(e.sql(dialect=self.dialect)) for e in partitioned_by)
                 ),
             )
-        else:
-            for expr in partitioned_by:
-                if not isinstance(expr, exp.Column):
-                    raise SQLMeshError(
-                        f"PARTITIONED BY contains non-column value '{expr.sql(dialect=self.dialect)}'."
-                    )
-            return exp.PartitionedByProperty(
-                this=exp.Schema(expressions=partitioned_by),
-            )
+        for expr in partitioned_by:
+            if not isinstance(expr, exp.Column):
+                raise SQLMeshError(
+                    f"PARTITIONED BY contains non-column value '{expr.sql(dialect=self.dialect)}'."
+                )
+        return exp.PartitionedByProperty(
+            this=exp.Schema(expressions=partitioned_by),
+        )
 
     def _build_table_properties_exp(
         self,

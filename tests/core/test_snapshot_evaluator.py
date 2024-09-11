@@ -780,6 +780,7 @@ def test_create_view_non_deployable_snapshot(mocker: MockerFixture, adapter_mock
         table_description=None,
         materialized=False,
         replace=False,
+        materialized_properties=None,
     )
 
 
@@ -811,6 +812,11 @@ def test_create_materialized_view(mocker: MockerFixture, adapter_mock, make_snap
 
     common_kwargs = dict(
         materialized=True,
+        materialized_properties={
+            "clustered_by": [],
+            "partition_interval_unit": IntervalUnit.DAY,
+            "partitioned_by": [],
+        },
         view_properties={},
         table_description=None,
         replace=False,
@@ -864,6 +870,11 @@ def test_create_view_with_properties(mocker: MockerFixture, adapter_mock, make_s
         materialized=True,
         view_properties={
             "key": exp.convert("value"),
+        },
+        materialized_properties={
+            "clustered_by": [],
+            "partition_interval_unit": IntervalUnit.DAY,
+            "partitioned_by": [],
         },
         table_description=None,
         replace=False,
