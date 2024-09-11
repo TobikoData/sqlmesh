@@ -9,7 +9,7 @@ from sqlglot import exp
 from sqlglot.transforms import remove_precision_parameterized_types
 
 from sqlmesh.core.dialect import to_schema
-from sqlmesh.core.engine_adapter.mixins import InsertOverwriteWithMergeMixin
+from sqlmesh.core.engine_adapter.mixins import InsertOverwriteWithMergeMixin, ClusteredByMixin
 from sqlmesh.core.engine_adapter.shared import (
     CatalogSupport,
     DataObject,
@@ -38,7 +38,7 @@ logger = logging.getLogger(__name__)
 
 
 @set_catalog()
-class BigQueryEngineAdapter(InsertOverwriteWithMergeMixin):
+class BigQueryEngineAdapter(InsertOverwriteWithMergeMixin, ClusteredByMixin):
     """
     BigQuery Engine Adapter using the `google-cloud-bigquery` library's DB API.
     """
@@ -553,6 +553,49 @@ class BigQueryEngineAdapter(InsertOverwriteWithMergeMixin):
             value=exp.Literal.string(trunc_method(description)),
         )
 
+    def _build_partitioned_by_exp(
+        self,
+        partitioned_by: t.List[exp.Expression],
+        *,
+        partition_interval_unit: t.Optional[IntervalUnit] = None,
+        columns_to_types: t.Optional[t.Dict[str, exp.DataType]] = None,
+        **kwargs: t.Any,
+    ) -> t.Optional[exp.PartitionedByProperty]:
+        if len(partitioned_by) > 1:
+            raise SQLMeshError("BigQuery only supports partitioning by a single column")
+
+        this = partitioned_by[0]
+        if (
+            isinstance(this, exp.Column)
+            and partition_interval_unit is not None
+            and not partition_interval_unit.is_minute
+        ):
+            column_type: t.Optional[exp.DataType] = (columns_to_types or {}).get(this.name)
+
+            if column_type == exp.DataType.build(
+                "date", dialect=self.dialect
+            ) and partition_interval_unit in (
+                IntervalUnit.MONTH,
+                IntervalUnit.YEAR,
+            ):
+                trunc_func = "DATE_TRUNC"
+            elif column_type == exp.DataType.build("timestamp", dialect=self.dialect):
+                trunc_func = "TIMESTAMP_TRUNC"
+            elif column_type == exp.DataType.build("datetime", dialect=self.dialect):
+                trunc_func = "DATETIME_TRUNC"
+            else:
+                trunc_func = ""
+
+            if trunc_func:
+                this = exp.func(
+                    trunc_func,
+                    this,
+                    exp.var(partition_interval_unit.value.upper()),
+                    dialect=self.dialect,
+                )
+
+        return exp.PartitionedByProperty(this=this)
+
     def _build_table_properties_exp(
         self,
         catalog_name: t.Optional[str] = None,
@@ -567,45 +610,17 @@ class BigQueryEngineAdapter(InsertOverwriteWithMergeMixin):
     ) -> t.Optional[exp.Properties]:
         properties: t.List[exp.Expression] = []
 
-        if partitioned_by:
-            if len(partitioned_by) > 1:
-                raise SQLMeshError("BigQuery only supports partitioning by a single column")
+        if partitioned_by and (
+            partitioned_by_prop := self._build_partitioned_by_exp(
+                partitioned_by,
+                partition_interval_unit=partition_interval_unit,
+                columns_to_types=columns_to_types,
+            )
+        ):
+            properties.append(partitioned_by_prop)
 
-            this = partitioned_by[0]
-
-            if (
-                isinstance(this, exp.Column)
-                and partition_interval_unit is not None
-                and not partition_interval_unit.is_minute
-            ):
-                column_type: t.Optional[exp.DataType] = (columns_to_types or {}).get(this.name)
-
-                if column_type == exp.DataType.build(
-                    "date", dialect=self.dialect
-                ) and partition_interval_unit in (
-                    IntervalUnit.MONTH,
-                    IntervalUnit.YEAR,
-                ):
-                    trunc_func = "DATE_TRUNC"
-                elif column_type == exp.DataType.build("timestamp", dialect=self.dialect):
-                    trunc_func = "TIMESTAMP_TRUNC"
-                elif column_type == exp.DataType.build("datetime", dialect=self.dialect):
-                    trunc_func = "DATETIME_TRUNC"
-                else:
-                    trunc_func = ""
-
-                if trunc_func:
-                    this = exp.func(
-                        trunc_func,
-                        this,
-                        exp.var(partition_interval_unit.value.upper()),
-                        dialect=self.dialect,
-                    )
-
-            properties.append(exp.PartitionedByProperty(this=this))
-
-        if clustered_by:
-            properties.append(exp.Cluster(expressions=[exp.column(col) for col in clustered_by]))
+        if clustered_by and (clustered_by_exp := self._build_clustered_by_exp(clustered_by)):
+            properties.append(clustered_by_exp)
 
         if table_description:
             properties.append(

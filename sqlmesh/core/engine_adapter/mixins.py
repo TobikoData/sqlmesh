@@ -116,6 +116,36 @@ class HiveMetastoreTablePropertiesMixin(EngineAdapter):
     MAX_TABLE_COMMENT_LENGTH = 4000
     MAX_COLUMN_COMMENT_LENGTH = 4000
 
+    def _build_partitioned_by_exp(
+        self,
+        partitioned_by: t.List[exp.Expression],
+        *,
+        catalog_name: t.Optional[str] = None,
+        **kwargs: t.Any,
+    ) -> t.Union[exp.PartitionedByProperty, exp.Property]:
+        if (
+            self.dialect == "trino"
+            and self.get_catalog_type(catalog_name or self.get_current_catalog()) == "iceberg"
+        ):
+            # On the Trino Iceberg catalog, the table property is called "partitioning" - not "partitioned_by"
+            # In addition, partition column transform expressions like `day(col)` or `bucket(col, 5)` are allowed
+            # Also, column names and transforms need to be strings and supplied as an ARRAY[varchar]
+            # ref: https://trino.io/docs/current/connector/iceberg.html#table-properties
+            return exp.Property(
+                this=exp.var("PARTITIONING"),
+                value=exp.array(
+                    *(exp.Literal.string(e.sql(dialect=self.dialect)) for e in partitioned_by)
+                ),
+            )
+        for expr in partitioned_by:
+            if not isinstance(expr, exp.Column):
+                raise SQLMeshError(
+                    f"PARTITIONED BY contains non-column value '{expr.sql(dialect=self.dialect)}'."
+                )
+        return exp.PartitionedByProperty(
+            this=exp.Schema(expressions=partitioned_by),
+        )
+
     def _build_table_properties_exp(
         self,
         catalog_name: t.Optional[str] = None,
@@ -134,37 +164,13 @@ class HiveMetastoreTablePropertiesMixin(EngineAdapter):
             properties.append(exp.FileFormatProperty(this=exp.Var(this=storage_format)))
 
         if partitioned_by:
-            if (
-                self.dialect == "trino"
-                and self.get_catalog_type(catalog_name or self.get_current_catalog()) == "iceberg"
-            ):
-                # On the Trino Iceberg catalog, the table property is called "partitioning" - not "partitioned_by"
-                # In addition, partition column transform expressions like `day(col)` or `bucket(col, 5)` are allowed
-                # Also, column names and transforms need to be strings and supplied as an ARRAY[varchar]
-                # ref: https://trino.io/docs/current/connector/iceberg.html#table-properties
-                properties.append(
-                    exp.Property(
-                        this=exp.var("PARTITIONING"),
-                        value=exp.array(
-                            *(
-                                exp.Literal.string(e.sql(dialect=self.dialect))
-                                for e in partitioned_by
-                            )
-                        ),
-                    )
+            properties.append(
+                self._build_partitioned_by_exp(
+                    partitioned_by,
+                    partition_interval_unit=partition_interval_unit,
+                    catalog_name=catalog_name,
                 )
-            else:
-                for expr in partitioned_by:
-                    if not isinstance(expr, exp.Column):
-                        raise SQLMeshError(
-                            f"PARTITIONED BY contains non-column value '{expr.sql(dialect=self.dialect)}'."
-                        )
-
-                properties.append(
-                    exp.PartitionedByProperty(
-                        this=exp.Schema(expressions=partitioned_by),
-                    )
-                )
+            )
 
         if table_description:
             properties.append(
@@ -313,3 +319,12 @@ class VarcharSizeWorkaroundMixin(EngineAdapter):
                 self.drop_view(temp_view_name)
 
         return statement
+
+
+class ClusteredByMixin(EngineAdapter):
+    def _build_clustered_by_exp(
+        self,
+        clustered_by: t.List[str],
+        **kwargs: t.Any,
+    ) -> t.Optional[exp.Cluster]:
+        return exp.Cluster(expressions=[exp.column(col) for col in clustered_by])

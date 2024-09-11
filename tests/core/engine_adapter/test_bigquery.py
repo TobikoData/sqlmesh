@@ -755,3 +755,29 @@ def test_view_properties(make_mocked_engine_adapter: t.Callable, mocker: MockerF
         "CREATE OR REPLACE VIEW `test_table` OPTIONS (description='some description', labels=[('test-view-label', 'label-view-value')]) AS SELECT 1",
         "CREATE OR REPLACE VIEW `test_table` AS SELECT 1",
     ]
+
+
+def test_materialized_view_properties(
+    make_mocked_engine_adapter: t.Callable, mocker: MockerFixture
+):
+    adapter = make_mocked_engine_adapter(BigQueryEngineAdapter)
+    execute_mock = mocker.patch(
+        "sqlmesh.core.engine_adapter.bigquery.BigQueryEngineAdapter.execute"
+    )
+
+    adapter.create_view(
+        "test_table",
+        parse_one("SELECT 1"),
+        materialized=True,
+        materialized_properties={
+            "partitioned_by": [exp.column("ds")],
+            "clustered_by": ["a"],
+            "partition_interval_unit": IntervalUnit.DAY,
+        },
+    )
+
+    sql_calls = _to_sql_calls(execute_mock)
+    # https://cloud.google.com/bigquery/docs/materialized-views-create#example_1
+    assert sql_calls == [
+        "CREATE OR REPLACE MATERIALIZED VIEW `test_table` PARTITION BY `ds` CLUSTER BY `a` AS SELECT 1",
+    ]

@@ -3381,6 +3381,55 @@ def test_view_model_data_hash():
     assert view_model_hash != materialized_view_model_hash
 
 
+def test_view_materialized_partition_by_clustered_by():
+    materialized_view_model_expressions = d.parse(
+        """
+        MODEL (
+            name db.table,
+            kind VIEW (
+              materialized true
+            ),
+            partitioned_by ds,
+            clustered_by a
+        );
+        SELECT 1;
+        """
+    )
+    materialized_view_model = load_sql_based_model(materialized_view_model_expressions)
+    assert materialized_view_model.partitioned_by == [exp.column("ds", quoted=True)]
+    assert materialized_view_model.clustered_by == ["a"]
+
+
+def test_view_non_materialized_partition_by():
+    view_model_expressions = d.parse(
+        """
+        MODEL (
+            name db.table,
+            kind VIEW,
+            partitioned_by ds,
+        );
+        SELECT 1;
+        """
+    )
+    with pytest.raises(ConfigError, match=r".*partitioned_by_ field cannot be set for ViewKind.*"):
+        load_sql_based_model(view_model_expressions)
+
+
+def test_view_non_materialized_clustered_by():
+    view_model_expressions = d.parse(
+        """
+        MODEL (
+            name db.table,
+            kind VIEW,
+            clustered_by ds,
+        );
+        SELECT 1;
+        """
+    )
+    with pytest.raises(ConfigError, match=r".*clustered_by field cannot be set for ViewKind.*"):
+        load_sql_based_model(view_model_expressions)
+
+
 def test_seed_model_data_hash():
     expressions = d.parse(
         """
