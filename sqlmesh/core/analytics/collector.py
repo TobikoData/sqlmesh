@@ -136,7 +136,7 @@ class AnalyticsCollector:
             "project_name_hash": _anonymize(project_name),
         }
 
-        if project_type == c.DBT:
+        if project_type in {c.DBT, c.HYBRID}:
             from dbt.version import __version__ as dbt_version
 
             event_data["dbt_version"] = dbt_version

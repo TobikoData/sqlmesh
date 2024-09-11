@@ -347,7 +347,7 @@ class GenericContext(BaseContext, t.Generic[C]):
                 if not self._sqlmesh_loader:
                     self._sqlmesh_loader = config.loader(**config.loader_kwargs)
 
-        self.project_type = "hybrid" if self._dbt_loader and self._sqlmesh_loader else project_type
+        self.project_type = c.HYBRID if self._dbt_loader and self._sqlmesh_loader else project_type
         self._all_dialects: t.Set[str] = {self.config.dialect or ""}
 
         # This allows overriding the default dialect's normalization strategy, so for example
