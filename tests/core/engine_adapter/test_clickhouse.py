@@ -354,7 +354,7 @@ def test_inject_query_setting(make_mocked_engine_adapter: t.Callable, mocker: Mo
     query = exp.select("col1").from_("table")
 
     assert (
-        adapter._inject_query_setting(query.copy()).sql(adapter.dialect)
+        adapter.inject_query_setting(query.copy()).sql(adapter.dialect)
         == "SELECT col1 FROM table SETTINGS join_use_nulls = 1"
     )
 
@@ -371,7 +371,7 @@ def test_inject_query_setting(make_mocked_engine_adapter: t.Callable, mocker: Mo
     )
 
     assert (
-        adapter._inject_query_setting(query_with_setting, check_server_default=True)
+        adapter.inject_query_setting(query_with_setting, check_server_default=True)
         == query_with_setting
     )
 
@@ -382,7 +382,7 @@ def test_inject_query_setting(make_mocked_engine_adapter: t.Callable, mocker: Mo
     )
 
     assert (
-        adapter._inject_query_setting(query, check_server_default=True).sql(adapter.dialect)
+        adapter.inject_query_setting(query, check_server_default=True).sql(adapter.dialect)
         == "SELECT col1 FROM table SETTINGS join_use_nulls = 0"
     )
 

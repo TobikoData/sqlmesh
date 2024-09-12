@@ -294,7 +294,7 @@ class ClickhouseEngineAdapter(EngineAdapterWithIndexSupport, LogicalMergeMixin):
             this=exp.Schema(expressions=partitioned_by),
         )
 
-    def _inject_query_setting(
+    def inject_query_setting(
         self,
         query: Query,
         setting_name: str = "join_use_nulls",

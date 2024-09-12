@@ -332,7 +332,7 @@ class TableDiff:
                 .join(target_table.as_("t"), on=self.on, join_type="FULL")
             )
 
-            query = (
+            base_query = (
                 exp.Select()
                 .with_(source_table, source_query)
                 .with_(target_table, target_query)
@@ -355,7 +355,9 @@ class TableDiff:
                 .from_(stats_table)
             )
 
-            query = quote_identifiers(query, dialect=self.model_dialect or self.dialect)
+            query = self.adapter.inject_query_setting(
+                quote_identifiers(base_query.copy(), dialect=self.model_dialect or self.dialect)
+            )
             temp_table = exp.table_("diff", db="sqlmesh_temp", quoted=True)
 
             with self.adapter.temp_table(query, name=temp_table) as table:
