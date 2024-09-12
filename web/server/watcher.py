@@ -16,6 +16,7 @@ from web.server.settings import (
     invalidate_context_cache,
 )
 from web.server.utils import is_relative_to
+from sqlglot.helper import ensure_list
 
 
 async def watch_project() -> None:
@@ -28,33 +29,40 @@ async def watch_project() -> None:
         (settings.project_path / c.METRICS).resolve(),
         (settings.project_path / c.SEEDS).resolve(),
     ]
+    ignore_dirs = [".env"]
+    ignore_paths: t.List[t.Union[str, Path]] = [(settings.project_path / c.CACHE).resolve()]
     ignore_entity_patterns = context.config.ignore_patterns if context else c.IGNORE_PATTERNS
-    ignore_entity_patterns.append("^\\.DS_Store$")
     ignore_entity_patterns.append("^.*\\.db(\\.wal)?$")
-    ignore_paths = [str((settings.project_path / c.CACHE).resolve())]
-    watch_filter = DefaultFilter(
-        ignore_paths=ignore_paths, ignore_entity_patterns=ignore_entity_patterns
-    )
+
     async for entries in awatch(
-        settings.project_path, watch_filter=watch_filter, force_polling=True
+        settings.project_path,
+        watch_filter=DefaultFilter(
+            ignore_paths=ensure_list(DefaultFilter.ignore_paths) + ignore_paths,
+            ignore_entity_patterns=ensure_list(DefaultFilter.ignore_entity_patterns)
+            + ignore_entity_patterns,
+            ignore_dirs=ensure_list(DefaultFilter.ignore_dirs) + ignore_dirs,
+        ),
     ):
         changes: t.List[models.ArtifactChange] = []
         directories: t.Dict[str, models.Directory] = {}
         for change, path_str in entries:
             path = Path(path_str)
+            relative_path = path.relative_to(settings.project_path)
             try:
-                relative_path = path.relative_to(settings.project_path)
-                if change == Change.modified and path.is_dir():
-                    directory = await _get_directory(path, settings)
-                    directories[directory.path] = directory
-                elif change == Change.deleted or not path.exists():
+                if change == Change.deleted or not path.exists():
                     changes.append(
                         models.ArtifactChange(
                             change=Change.deleted,
                             path=str(relative_path),
                         )
                     )
-                elif change == Change.modified and path.is_file():
+                elif change == Change.added:
+                    directory = await _get_directory(path.parent, settings)
+                    directories[directory.path] = directory
+                elif path.is_dir() and change == Change.modified:
+                    directory = await _get_directory(path, settings)
+                    directories[directory.path] = directory
+                elif path.is_file() and change == Change.modified:
                     changes.append(
                         models.ArtifactChange(
                             type=models.ArtifactType.file,
@@ -90,7 +98,7 @@ async def watch_project() -> None:
                 models.Modules.PLANS,
                 models.Modules.LINEAGE,
             }
-        ):
+        ) and (changes or directories):
             api_console.log_event(
                 event=models.EventName.FILE,
                 data={"changes": changes, "directories": directories},

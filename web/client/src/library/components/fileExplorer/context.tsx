@@ -158,7 +158,7 @@ export default function FileExplorerProvider({
   }
 
   function renameArtifact(artifact: ModelArtifact, newName?: string): void {
-    newName = newName?.trim()
+    newName = newName?.replaceAll('/', '').trim()
 
     const parentArtifacts = artifact.parent?.artifacts ?? []
     const isDuplicate = parentArtifacts.some(a => a.name === newName)
@@ -300,7 +300,11 @@ export default function FileExplorerProvider({
         artifact.rename(artifact.copyName())
       }
 
-      const new_path = [target.path, artifact.name].join('/')
+      let new_path = [target.path, artifact.name].join('/')
+
+      while (new_path.startsWith('/')) {
+        new_path = new_path.slice(1).trim()
+      }
 
       if (artifact instanceof ModelDirectory) {
         moveArtifactCallbacks.push(() => {
