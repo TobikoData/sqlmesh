@@ -316,11 +316,10 @@ class ClickhouseEngineAdapter(EngineAdapterWithIndexSupport, LogicalMergeMixin):
         inject_setting = True
         if check_server_default:
             user_settings = query.args.get("settings")
-            query_has_setting = user_settings and [
+            if user_settings and [
                 isinstance(setting, exp.EQ) and setting.this.this == setting_name
                 for setting in user_settings
-            ]
-            if query_has_setting:
+            ]:
                 inject_setting = False
             else:
                 server_setting = self.fetchone(
