@@ -1,0 +1,8 @@
+dbt_repo:
+
+  target: prod
+  outputs:
+    prod:
+      type: duckdb
+      threads: 1
+      schema: dbt_repo

@@ -1,0 +1,8 @@
+version: 2
+
+sources:
+  - name: sqlmesh_repo
+    schema: sqlmesh_repo
+    tables:
+      - name: a
+      - name: b

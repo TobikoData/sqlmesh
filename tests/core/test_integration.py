@@ -2164,6 +2164,28 @@ def test_multi_dbt(mocker):
     validate_apply_basics(context, c.PROD, plan.snapshots.values())
 
 
+def test_multi_hybrid(mocker):
+    context = Context(
+        paths=["examples/multi_hybrid/dbt_repo", "examples/multi_hybrid/sqlmesh_repo"]
+    )
+    context._new_state_sync().reset(default_catalog=context.default_catalog)
+    plan = context.plan()
+
+    assert len(plan.new_snapshots) == 5
+
+    context.apply(plan)
+
+    sqlmesh_model_a = context.get_model("sqlmesh_repo.a")
+    dbt_model_c = context.get_model("dbt_repo.c")
+
+    sqlmesh_rendered = 'SELECT ROUND(CAST(("col_a" / NULLIF(100, 0)) AS DECIMAL(16, 2)), 2) AS "col_a", "col_b" AS "col_b" FROM "memory"."dbt_repo"."e" AS "e"'
+    dbt_rendered = 'SELECT DISTINCT ROUND(CAST(("col_a" / NULLIF(100, 0)) AS DECIMAL(16, 2)), 2) AS "rounded_col_a" FROM "memory"."sqlmesh_repo"."b" AS "b"'
+    assert sqlmesh_model_a.render_query().sql() == sqlmesh_rendered
+    assert dbt_model_c.render_query().sql() == dbt_rendered
+
+    validate_apply_basics(context, c.PROD, plan.snapshots.values())
+
+
 def test_incremental_time_self_reference(
     mocker: MockerFixture, sushi_context: Context, sushi_data_validator: SushiDataValidator
 ):
